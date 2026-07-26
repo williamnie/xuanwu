@@ -1,20 +1,22 @@
 import {
   listPiGuardianAlerts,
   resolvePiGuardianAlert,
+  updatePiGuardianAlert,
   upsertPiGuardianAlert
 } from "../db/repositories/pi/guardianAlerts.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { CodexProcessOwnership, ProcessTreeEntry } from "../providers/codex/processLifecycle.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { collectDarwinPhysicalFootprints } from "./darwinProcessMemory.ts";
 
 export const PROCESS_GROUP_MEMORY_CONTRACT = "runner-process-group-memory.v1" as const;
 export const PROCESS_GROUP_MEMORY_SAMPLE_INTERVAL_MS = 1_000;
 export const PROCESS_GROUP_MEMORY_FRESHNESS_MS = 5_000;
 export const PROCESS_GROUP_MEMORY_METRIC_DEFINITIONS = {
-  footprint_bytes: "macOS footprint summed per observed PID; shared pages may be counted by more than one process",
+  footprint_bytes: "macOS footprint (phys_footprint) from non-suspending proc_pid_rusage, summed per observed PID",
   process_rss_bytes: "process.memoryUsage().rss for the runner main process only",
   ps_rss_bytes: "resident set reported by macOS ps for each runner descendant; process-group values are summed",
-  probes_excluded: ["ps", "footprint"]
+  probes_excluded: ["ps", "/usr/bin/footprint"]
 } as const;
 export const PROCESS_GROUP_MEMORY_BUDGETS = {
   consecutive: { hard: 3, soft: 6 },
@@ -43,7 +45,7 @@ type RuntimeOwnership = { idle_ttl_ms?: number; owners: string[]; process?: Code
 type ProcessMemoryUsage = ReturnType<typeof process.memoryUsage>;
 type ProcessGroupMemoryOptions = {
   activeRuns?: () => number;
-  footprint?: (pids: number[]) => Promise<Map<number, number>>;
+  footprint?: false | ((pids: number[]) => Promise<Map<number, number>>);
   footprintIntervalMs?: number;
   inspect?: () => ProcessTreeEntry[];
   memoryUsage?: () => ProcessMemoryUsage;
@@ -75,6 +77,7 @@ export class ProcessGroupMemoryObserver {
   private consecutiveHard = 0;
   private consecutiveSoft = 0;
   private footprint?: FootprintState;
+  private footprintAttempted = false;
   private footprintInFlight = false;
   private history: Array<{ phase: ProcessMemoryPhase; rss_bytes: number; sampled_at: string }> = [];
   private healthyNotified = false;
@@ -125,8 +128,8 @@ export class ProcessGroupMemoryObserver {
       freshness: { age_ms: 0, stale_after_ms: PROCESS_GROUP_MEMORY_FRESHNESS_MS, status: "fresh" },
       phase,
       aggregate: {
-        footprint_bytes: this.footprint?.bytes ?? null,
-        footprint_main_bytes: this.footprint?.main_bytes ?? null,
+        footprint_bytes: positiveBytes(this.footprint?.bytes),
+        footprint_main_bytes: positiveBytes(this.footprint?.main_bytes),
         footprint_observed_at: this.footprint?.observed_at ?? "",
         footprint_process_count: this.footprint?.process_count ?? 0,
         process_count: rows.length,
@@ -149,6 +152,10 @@ export class ProcessGroupMemoryObserver {
       top_by_rss: publicProcesses([...rows].sort((left, right) => right.rss_bytes - left.rss_bytes).slice(0, 10)),
       recently_exited: this.recentExited.slice(-10),
       budget,
+      measurement: {
+        physical_memory_probe: this.options.footprint === false ? "disabled" : this.footprintAttempted ? "ready" : "pending",
+        source: budget.measurement_source
+      },
       metric_definitions: PROCESS_GROUP_MEMORY_METRIC_DEFINITIONS
     };
     this.maybeAlert(phase, budget, rows);
@@ -232,12 +239,13 @@ export class ProcessGroupMemoryObserver {
       : PROCESS_GROUP_MEMORY_BUDGETS.idle_group_rss_p95_bytes;
     const main = PROCESS_GROUP_MEMORY_BUDGETS.idle_main_rss_bytes;
     const postRun = this.postRunStatus(phase, groupRSS, now);
-    const hardExceeded = measurement.group_bytes > group.hard
+    const measurementPending = this.options.footprint !== false && !this.footprintAttempted;
+    const hardExceeded = !measurementPending && (measurement.group_bytes > group.hard
       || (phase !== "run" && measurement.main_bytes > main.hard)
-      || postRun.hard_exceeded;
-    const softExceeded = measurement.group_bytes > group.soft
+      || postRun.hard_exceeded);
+    const softExceeded = !measurementPending && (measurement.group_bytes > group.soft
       || (phase !== "run" && measurement.main_bytes > main.soft)
-      || postRun.soft_exceeded;
+      || postRun.soft_exceeded);
     this.consecutiveHard = hardExceeded ? this.consecutiveHard + 1 : 0;
     this.consecutiveSoft = softExceeded ? this.consecutiveSoft + 1 : 0;
     const alertingHard = this.consecutiveHard >= PROCESS_GROUP_MEMORY_BUDGETS.consecutive.hard;
@@ -254,9 +262,10 @@ export class ProcessGroupMemoryObserver {
       measured_group_bytes: measurement.group_bytes,
       measured_main_bytes: measurement.main_bytes,
       measurement_source: measurement.source,
+      measurement_ready: !measurementPending,
       post_run: postRun.public,
       soft_bytes: group.soft,
-      status: alertingHard ? "hard_exceeded" : alertingSoft ? "soft_exceeded" : hardExceeded ? "hard_pending" : softExceeded ? "soft_pending" : "within_budget"
+      status: measurementPending ? "measurement_pending" : alertingHard ? "hard_exceeded" : alertingSoft ? "soft_exceeded" : hardExceeded ? "hard_pending" : softExceeded ? "soft_pending" : "within_budget"
     };
   }
 
@@ -368,6 +377,7 @@ export class ProcessGroupMemoryObserver {
   }
 
   private maybeRefreshFootprint(rows: ObservedProcess[], now: Date): void {
+    if (this.options.footprint === false) return;
     if (this.footprintInFlight) return;
     const previous = Date.parse(this.footprint?.observed_at ?? "");
     if (Number.isFinite(previous) && now.getTime() - previous < (this.options.footprintIntervalMs ?? 60_000)) return;
@@ -384,7 +394,10 @@ export class ProcessGroupMemoryObserver {
         observed_at: this.now().toISOString(),
         process_count: valid.length
       };
-    }).catch(() => {}).finally(() => { this.footprintInFlight = false; });
+    }).catch(() => {}).finally(() => {
+      this.footprintAttempted = true;
+      this.footprintInFlight = false;
+    });
   }
 
   private inspect(): ProcessTreeEntry[] { return (this.options.inspect ?? inspectMemoryProcessTable)(); }
@@ -403,13 +416,56 @@ export function writeProcessGroupMemoryAlert(database: RunnerDatabase, alert: Pr
     sample: alert.sample
   };
   console.warn(JSON.stringify(event));
+  upsertCanonicalProcessGroupMemoryAlert(database, alert, event);
+}
+
+const PROCESS_GROUP_MEMORY_ALERT_TYPE = "runner_process_group_memory_budget";
+const PROCESS_GROUP_MEMORY_ALERT_GROUP = "runner-memory";
+
+function upsertCanonicalProcessGroupMemoryAlert(
+  database: RunnerDatabase,
+  alert: ProcessMemoryBudgetAlert,
+  event: Record<string, unknown>
+): void {
+  const active = ["open", "acked"].flatMap((status) => listPiGuardianAlerts(database, {
+    alertType: PROCESS_GROUP_MEMORY_ALERT_TYPE,
+    status
+  }));
+  const canonical = active.find((item) => item.run_group_id === PROCESS_GROUP_MEMORY_ALERT_GROUP);
+  const peakSeverity = highestMemorySeverity([
+    ...active.map((item) => item.severity),
+    alert.level === "hard" ? "urgent" : "high"
+  ]);
+  const previousPeak = highestMemorySeverity(active.map((item) => item.severity));
+  const previousPeakAcked = active.some((item) => item.status === "acked" && severityRank(item.severity) === severityRank(previousPeak));
+  const status = previousPeakAcked && severityRank(peakSeverity) <= severityRank(previousPeak) ? "acked" : "open";
+  const evidence = { ...event, incident_peak_level: peakSeverity === "urgent" ? "hard" : "soft" };
+  for (const legacy of active.filter((item) => item.id !== canonical?.id)) {
+    resolvePiGuardianAlert(database, legacy.id, {
+      evidence_json: {
+        event: "runner.process_group_memory_alert_consolidated",
+        canonical_run_group_id: PROCESS_GROUP_MEMORY_ALERT_GROUP
+      },
+      message: "Runner process-group memory alert consolidated into the canonical incident"
+    });
+  }
+  if (canonical) {
+    updatePiGuardianAlert(database, canonical.id, {
+      evidence_json: evidence,
+      message: "Runner process-group memory budget exceeded",
+      severity: peakSeverity,
+      status,
+      watchdog_seen_at: String(alert.sample.sampled_at ?? new Date().toISOString())
+    });
+    return;
+  }
   upsertPiGuardianAlert(database, {
-    alert_type: "runner_process_group_memory_budget",
-    evidence_json: event,
-    message: `Runner process-group memory ${alert.level} budget exceeded during ${alert.phase}`,
-    run_group_id: `runner-memory:${alert.phase}:${alert.level}`,
-    severity: alert.level === "hard" ? "urgent" : "high",
-    status: "open"
+    alert_type: PROCESS_GROUP_MEMORY_ALERT_TYPE,
+    evidence_json: evidence,
+    message: "Runner process-group memory budget exceeded",
+    run_group_id: PROCESS_GROUP_MEMORY_ALERT_GROUP,
+    severity: peakSeverity,
+    status
   });
 }
 
@@ -446,15 +502,7 @@ export function inspectMemoryProcessTable(): ProcessTreeEntry[] {
 }
 
 export async function collectMacOSFootprint(pids: number[]): Promise<Map<number, number>> {
-  if (process.platform !== "darwin" || pids.length === 0) return new Map();
-  const child = Bun.spawn(["/usr/bin/footprint", "-f", "bytes", "--noCategories", ...pids.map(String)], {
-    stderr: "ignore", stdout: "pipe"
-  });
-  const text = await new Response(child.stdout).text();
-  if (await child.exited !== 0) return new Map();
-  const values = new Map<number, number>();
-  for (const match of text.matchAll(/\[(\d+)\].*?Footprint:\s*(\d+)\s+B/g)) values.set(Number(match[1]), Number(match[2]));
-  return values;
+  return await collectDarwinPhysicalFootprints(pids);
 }
 
 function parseMemoryProcessRow(line: string): ProcessTreeEntry | undefined {
@@ -467,8 +515,9 @@ function parseMemoryProcessRow(line: string): ProcessTreeEntry | undefined {
 }
 
 function processStartedAt(row: ProcessTreeEntry): string {
+  if (!row.command.includes("\t")) return "unknown";
   const [value] = row.command.split("\t", 1);
-  return value && /^\w{3}\s+\w{3}/.test(value) ? value : "unknown";
+  return value?.trim() && value !== "unknown" ? value : "unknown";
 }
 
 function rawCommand(command: string): string { return command.includes("\t") ? command.slice(command.indexOf("\t") + 1) : command; }
@@ -535,3 +584,15 @@ function isMemoryProbe(command: string): boolean {
   return value.includes("ps -axo pid=,ppid=,pgid=,rss=,lstart=,command=") || value.includes("/usr/bin/footprint -f bytes --noCategories");
 }
 function isProcessRow(value: ProcessTreeEntry | undefined): value is ProcessTreeEntry { return value !== undefined; }
+
+function positiveBytes(value: number | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function highestMemorySeverity(values: string[]): string {
+  return values.reduce((highest, value) => severityRank(value) > severityRank(highest) ? value : highest, "high");
+}
+
+function severityRank(value: string): number {
+  return value === "urgent" ? 2 : value === "high" ? 1 : 0;
+}

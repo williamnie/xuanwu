@@ -90,7 +90,10 @@ test('advanced Runtime status exposes process-group memory freshness, roles, P95
   assert.match(settingsSource, /memory\.freshness/);
   assert.match(settingsSource, /memory\.roles/);
   assert.match(settingsSource, /Top PID by macOS ps RSS/);
-  assert.match(settingsSource, /Group footprint/);
+  assert.match(settingsSource, /Budget measurement/);
+  assert.match(settingsSource, /Physical footprint/);
+  assert.match(settingsSource, /physical_memory_probe/);
+  assert.match(settingsSource, /measurement_source/);
   assert.match(settingsSource, /array buffers/);
   assert.match(settingsSource, /rss_p95_bytes/);
   assert.match(settingsSource, /no auto-restart/);

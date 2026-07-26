@@ -5,7 +5,7 @@
 - 报告 schema：`xuanwu.capacity-benchmark.v1`
 - 基准环境：macOS 15.7.7、arm64、12 logical CPUs、24 GiB RAM、Bun 1.3.10
 
-> **历史基线，不是当前 Runner 内存预算 authority。** 本文及 2026-07-18 JSON 中的 `1 GiB` 单进程 ceiling 仅保留为历史对照，不得恢复或用于放行。当前门禁以 `PROCESS_GROUP_MEMORY_BUDGETS`、`/api/system/status.process_group_memory` 和带 baseline Evidence/review 的 `memory-run` 报告为准，同时保留 macOS `ps` RSS、`footprint` 与进程内 RSS 三种口径。
+> **历史基线，不是当前 Runner 内存预算 authority。** 本文及 2026-07-18 JSON 中的 `1 GiB` 单进程 ceiling 仅保留为历史对照，不得恢复或用于放行。当前门禁以 `PROCESS_GROUP_MEMORY_BUDGETS`、`/api/system/status.process_group_memory` 和带 baseline Evidence/review 的 `memory-run` 报告为准。macOS 预算权威值由非挂起的 `proc_pid_rusage(RUSAGE_INFO_V4).phys_footprint` 提供；进程内 RSS、进程组 RSS P95、heap/external/array buffer 继续作为诊断与回归口径。只有内核物理测量不可用时才显式回退到 RSS，且 API 必须暴露 `measurement_source`，不得把不可用的 footprint 写成 `0`。
 
 ## 结论
 

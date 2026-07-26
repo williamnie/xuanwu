@@ -29,12 +29,16 @@ describe("server entrypoint wiring", () => {
     expect(source).not.toContain('from "./providers/');
   });
 
-  test("keeps invasive process-table and footprint probes off the Core HTTP event loop", () => {
-    const source = readFileSync(join(import.meta.dir, "runtime", "core.ts"), "utf8");
+  test("uses non-suspending physical memory and lifecycle-owned descendants off the Core HTTP loop", () => {
+    const core = readFileSync(join(import.meta.dir, "runtime", "core.ts"), "utf8");
+    const darwinMemory = readFileSync(join(import.meta.dir, "observability", "darwinProcessMemory.ts"), "utf8");
 
-    expect(source).toContain("footprint: async () => new Map()");
-    expect(source).toContain("inspect: () => [{");
-    expect(source).toContain("rss_bytes: process.memoryUsage.rss()");
+    expect(core).toContain("inspect: () => runtimeMemoryRows(runtimeStartedAt, providerRuntime())");
+    expect(core).toContain("ownership.processes.map");
+    expect(core).not.toContain("Bun.spawnSync");
+    expect(core).not.toContain("/usr/bin/footprint");
+    expect(darwinMemory).toContain("proc_pid_rusage");
+    expect(darwinMemory).not.toContain("Bun.spawn");
   });
 
 });

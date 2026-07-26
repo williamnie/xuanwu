@@ -245,6 +245,9 @@ function ProcessGroupMemoryStatus({ memory }) {
   if (!memory || memory.freshness?.status === 'unavailable') return null;
   const roles = Array.isArray(memory.roles) ? memory.roles : [];
   const top = Array.isArray(memory.top_by_rss) ? memory.top_by_rss.slice(0, 5) : [];
+  const measurementSource = memory.budget?.measurement_source || memory.measurement?.source || 'unknown';
+  const measuredGroup = memory.budget?.measured_group_bytes;
+  const measuredMain = memory.budget?.measured_main_bytes;
   return (
     <div style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', background: 'var(--bg-secondary)' }}>
       <div style={{ display: 'flex', gap: '12px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
@@ -254,7 +257,10 @@ function ProcessGroupMemoryStatus({ memory }) {
         </span>
       </div>
       <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '8px' }}>
-        Group footprint {formatMiB(memory.aggregate?.footprint_bytes)} · main heap {formatMiB(memory.main?.heap_used_bytes)} · external {formatMiB(memory.main?.external_bytes)} · array buffers {formatMiB(memory.main?.array_buffers_bytes)}
+        Budget measurement {measurementSource} · group {formatMiB(measuredGroup)} · main {formatMiB(measuredMain)} · probe {memory.measurement?.physical_memory_probe || 'unknown'}
+      </div>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '6px' }}>
+        Physical footprint {formatMiB(memory.aggregate?.footprint_bytes)} · RSS {formatMiB(memory.aggregate?.rss_bytes)} · RSS P95 {formatMiB(memory.aggregate?.rss_p95_bytes)} · main heap {formatMiB(memory.main?.heap_used_bytes)} · external {formatMiB(memory.main?.external_bytes)} · array buffers {formatMiB(memory.main?.array_buffers_bytes)}
       </div>
       <div style={{ display: 'grid', gap: '8px', marginTop: '10px' }}>
         {roles.map(role => (
@@ -281,7 +287,8 @@ function ProcessGroupMemoryStatus({ memory }) {
 
 function processGroupMemorySummary(memory) {
   if (!memory || memory.freshness?.status === 'unavailable') return 'unavailable';
-  return `${memory.phase || 'unknown'} · RSS ${formatMiB(memory.aggregate?.rss_bytes)} · P95 ${formatMiB(memory.aggregate?.rss_p95_bytes)} · ${memory.budget?.status || 'unknown'}`;
+  const source = memory.budget?.measurement_source || memory.measurement?.source || 'unknown';
+  return `${memory.phase || 'unknown'} · ${source} ${formatMiB(memory.budget?.measured_group_bytes)} · RSS P95 ${formatMiB(memory.aggregate?.rss_p95_bytes)} · ${memory.budget?.status || 'unknown'}`;
 }
 
 function memoryBudgetOk(memory) {

@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  collectMacOSFootprint,
   PROCESS_GROUP_MEMORY_BUDGETS,
   PROCESS_GROUP_MEMORY_CONTRACT,
   ProcessGroupMemoryObserver,
@@ -13,6 +14,7 @@ import {
 import type { ProcessTreeEntry } from "../providers/codex/processLifecycle.ts";
 import { openDatabase } from "../db/database.ts";
 import { listPiGuardianAlerts } from "../db/repositories/pi.ts";
+import { ackPiGuardianAlert, upsertPiGuardianAlert } from "../db/repositories/pi/guardianAlerts.ts";
 
 const MIB = 1024 * 1024;
 
@@ -22,7 +24,7 @@ describe("runner process-group memory observer", () => {
     const rows = fixtureRows(200, 130);
     const observer = new ProcessGroupMemoryObserver({
       activeRuns: () => 0,
-      footprint: async (pids) => new Map(pids.map((pid) => [pid, pid === 50 ? 190 * MIB : 100 * MIB])),
+      footprint: false,
       footprintIntervalMs: 0,
       inspect: () => rows,
       memoryUsage: () => memoryUsage(198),
@@ -98,6 +100,7 @@ describe("runner process-group memory observer", () => {
 
     expect(snapshot).toMatchObject({
       aggregate: { footprint_bytes: 270 * MIB, rss_p95_bytes: 330 * MIB },
+      measurement: { physical_memory_probe: "ready", source: "footprint" },
       budget: {
         measured_group_bytes: 270 * MIB,
         measured_main_bytes: 190 * MIB,
@@ -105,6 +108,39 @@ describe("runner process-group memory observer", () => {
         status: "within_budget"
       }
     });
+  });
+
+  test("keeps the budget pending until the first physical measurement completes", async () => {
+    let complete!: (value: Map<number, number>) => void;
+    const observer = new ProcessGroupMemoryObserver({
+      footprint: () => new Promise((resolve) => { complete = resolve; }),
+      inspect: () => fixtureRows(300, 50),
+      memoryUsage: () => memoryUsage(300),
+      now: tickingClock(),
+      runnerPid: 50
+    });
+
+    expect((observer.sample() as Snapshot).budget).toMatchObject({
+      measurement_ready: false,
+      status: "measurement_pending"
+    });
+    complete(new Map([[50, 180 * MIB], [100, 70 * MIB]]));
+    await Bun.sleep(0);
+    expect((observer.sample() as Snapshot).budget).toMatchObject({
+      measured_group_bytes: 250 * MIB,
+      measurement_ready: true,
+      measurement_source: "footprint",
+      status: "within_budget"
+    });
+  });
+
+  test("collects macOS physical footprint without invoking the suspending footprint executable", async () => {
+    const values = await collectMacOSFootprint([process.pid]);
+    if (process.platform !== "darwin") {
+      expect(values.size).toBe(0);
+      return;
+    }
+    expect(values.get(process.pid)).toBeGreaterThan(0);
   });
 
   test("uses RSS only for descendants that appeared after the last footprint instead of discarding physical memory", async () => {
@@ -137,7 +173,7 @@ describe("runner process-group memory observer", () => {
     let nowMs = Date.parse("2026-07-20T00:00:00.000Z");
     const observer = new ProcessGroupMemoryObserver({
       activeRuns: () => activeRuns,
-      footprint: async () => new Map(),
+      footprint: false,
       inspect: () => fixtureRows(180, groupMiB - 180),
       memoryUsage: () => memoryUsage(180),
       now: () => new Date(nowMs),
@@ -190,7 +226,7 @@ describe("runner process-group memory observer", () => {
       const stored = listPiGuardianAlerts(database, { alertType: "runner_process_group_memory_budget" });
       expect(stored).toHaveLength(1);
       expect(stored[0]).toMatchObject({
-        run_group_id: "runner-memory:idle:hard",
+        run_group_id: "runner-memory",
         severity: "urgent",
         status: "open",
         ui_visible: 1
@@ -204,17 +240,83 @@ describe("runner process-group memory observer", () => {
     }
   });
 
+  test("consolidates soft and hard transitions into one incident and reopens only on escalation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "runner-memory-levels-"));
+    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root });
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      writeProcessGroupMemoryAlert(database, {
+        budget: { status: "soft_exceeded" }, level: "soft", phase: "idle", sample: {}
+      });
+      let incident = listPiGuardianAlerts(database, { alertType: "runner_process_group_memory_budget" })[0]!;
+      expect(incident).toMatchObject({ run_group_id: "runner-memory", severity: "high", status: "open" });
+      ackPiGuardianAlert(database, incident.id);
+
+      writeProcessGroupMemoryAlert(database, {
+        budget: { status: "soft_exceeded" }, level: "soft", phase: "idle", sample: {}
+      });
+      incident = listPiGuardianAlerts(database, { alertType: "runner_process_group_memory_budget" })[0]!;
+      expect(incident).toMatchObject({ severity: "high", status: "acked" });
+
+      writeProcessGroupMemoryAlert(database, {
+        budget: { status: "hard_exceeded" }, level: "hard", phase: "idle", sample: {}
+      });
+      const active = [
+        ...listPiGuardianAlerts(database, { alertType: "runner_process_group_memory_budget", status: "open" }),
+        ...listPiGuardianAlerts(database, { alertType: "runner_process_group_memory_budget", status: "acked" })
+      ];
+      expect(active).toHaveLength(1);
+      expect(active[0]).toMatchObject({ run_group_id: "runner-memory", severity: "urgent", status: "open" });
+    } finally {
+      warn.mockRestore();
+      database.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("consolidates legacy per-level incidents without losing an acknowledgement of the peak", async () => {
+    const root = await mkdtemp(join(tmpdir(), "runner-memory-legacy-"));
+    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root });
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      upsertPiGuardianAlert(database, {
+        alert_type: "runner_process_group_memory_budget", evidence_json: {}, message: "legacy soft",
+        run_group_id: "runner-memory:idle:soft", severity: "high", status: "open"
+      });
+      upsertPiGuardianAlert(database, {
+        alert_type: "runner_process_group_memory_budget", evidence_json: {}, message: "legacy hard",
+        run_group_id: "runner-memory:idle:hard", severity: "urgent", status: "acked"
+      });
+
+      writeProcessGroupMemoryAlert(database, {
+        budget: { status: "soft_exceeded" }, level: "soft", phase: "idle", sample: {}
+      });
+
+      const active = listPiGuardianAlerts(database, { alertType: "runner_process_group_memory_budget", status: "acked" });
+      expect(active).toHaveLength(1);
+      expect(active[0]).toMatchObject({ run_group_id: "runner-memory", severity: "urgent" });
+      expect(listPiGuardianAlerts(database, { alertType: "runner_process_group_memory_budget", status: "resolved" }))
+        .toHaveLength(2);
+    } finally {
+      warn.mockRestore();
+      database.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("resolves open and acknowledged memory incidents after a healthy sample", async () => {
     const root = await mkdtemp(join(tmpdir(), "runner-memory-recovery-"));
     const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root });
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
-      for (const phase of ["idle", "run"] as const) {
-        writeProcessGroupMemoryAlert(database, {
-          budget: { status: "hard_exceeded" }, level: "hard", phase, sample: {}
-        });
-      }
-      database.sqlite.run("update pi_guardian_alerts set status='acked' where run_group_id='runner-memory:run:hard'");
+      upsertPiGuardianAlert(database, {
+        alert_type: "runner_process_group_memory_budget", evidence_json: {}, message: "open memory alert",
+        run_group_id: "runner-memory", severity: "urgent", status: "open"
+      });
+      upsertPiGuardianAlert(database, {
+        alert_type: "runner_process_group_memory_budget", evidence_json: {}, message: "legacy acked alert",
+        run_group_id: "runner-memory:run:hard", severity: "urgent", status: "acked"
+      });
 
       const resolved = resolveRecoveredProcessGroupMemoryAlerts(database, {
         budget: { status: "within_budget" }, phase: "idle", sampled_at: "2026-07-21T03:46:49Z"
@@ -255,6 +357,7 @@ type Snapshot = {
   aggregate: Record<string, unknown>;
   budget: Record<string, unknown>;
   main: Record<string, unknown>;
+  measurement: Record<string, unknown>;
   recently_exited: Array<Record<string, unknown>>;
   roles: Array<Record<string, unknown>>;
   top_by_rss: Array<Record<string, unknown>>;

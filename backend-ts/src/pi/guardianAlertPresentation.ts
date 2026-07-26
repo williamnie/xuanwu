@@ -109,10 +109,10 @@ const ALERT_COPY: Record<string, AlertCopy> = {
   },
   runner_process_group_memory_budget: {
     component: "Runner 内存监控",
-    description: "Runner 进程组在当前阶段连续超过内存预算。该事件可能是短时峰值。",
-    piAction: "PI 会持续采样；内存恢复到预算内后自动归档，不会重复弹出历史峰值。",
+    description: "Runner 与已登记 Provider 子进程的权威内存测量连续超过当前阶段预算。",
+    piAction: "PI 会持续使用非挂起采样复核；恢复到预算内后自动归档，同一事件只保留一个可升级告警。",
     title: "Runner 内存超过预算",
-    userAction: "若连续 15 分钟未恢复，请打开系统状态检查占用最高的进程，必要时重启 Runner。"
+    userAction: "若连续 15 分钟未恢复，请在系统状态核对测量来源、权威值与占用最高的进程；确认没有活跃运行后再重启 Runner。"
   },
   scheduler_stalled: {
     component: "Supervisor 调度器",

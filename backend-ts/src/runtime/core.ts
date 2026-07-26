@@ -43,28 +43,19 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
   const codexOwnershipFile = join(config.stateDir, "codex-process-ownership.json");
   const processReconciliation = await reconcileStaleCodexProcessOwnership(codexOwnershipFile);
   const providers = executorProviders(config, bus, codexOwnershipFile);
+  const runtimeStartedAt = new Date().toISOString();
+  const providerRuntime = () => (providers.codex as ReturnType<typeof createCodexExecutorProvider> | undefined)?.runtimeSnapshot();
   const processGroupMemory = new ProcessGroupMemoryObserver({
     activeRuns: () => database.sqlite.query<{ count: number }, []>(
       "select count(*) as count from issue_runs where ended_at=''"
     ).get()?.count ?? 0,
-    // `footprint` suspends the inspected process on macOS. Running it from the
-    // Core against its own PID can stall Bun's HTTP accept loop permanently.
-    // Keep the lightweight RSS/process-tree budget in-process; an external
-    // observer may collect footprint without making the target its own parent.
-    footprint: async () => new Map(),
-    // Do not synchronously allocate and parse the full system `ps -axo`
-    // command table every second on the HTTP event loop. The in-process guard
-    // needs Core RSS; descendant diagnostics belong in an external observer.
-    inspect: () => [{
-      command: "unknown\tcodex-issue-runner-core",
-      pgid: process.pid,
-      pid: process.pid,
-      ppid: process.ppid,
-      rss_bytes: process.memoryUsage.rss()
-    }],
+    // The observer uses non-suspending proc_pid_rusage for physical footprint.
+    // Keep process discovery allocation-free on the HTTP loop while retaining
+    // provider descendants from the lifecycle-owned runtime snapshot.
+    inspect: () => runtimeMemoryRows(runtimeStartedAt, providerRuntime()),
     onAlert: (alert) => writeProcessGroupMemoryAlert(database, alert),
     onRecovery: (recovery) => resolveRecoveredProcessGroupMemoryAlerts(database, recovery),
-    providerRuntime: () => (providers.codex as ReturnType<typeof createCodexExecutorProvider> | undefined)?.runtimeSnapshot()
+    providerRuntime
   });
   processGroupMemory.start();
   const sessionReconciliation = reconcileStaleAgentSessions(database, processReconciliation);
@@ -131,6 +122,29 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
     },
     lifecycle_reconciliation: sessionReconciliation
   }, null, 2));
+}
+
+function runtimeMemoryRows(
+  runtimeStartedAt: string,
+  runtime: ReturnType<ReturnType<typeof createCodexExecutorProvider>["runtimeSnapshot"]>
+) {
+  const root = {
+    command: `${runtimeStartedAt}\tcodex-issue-runner-core`,
+    pgid: process.pid,
+    pid: process.pid,
+    ppid: process.ppid,
+    rss_bytes: process.memoryUsage.rss()
+  };
+  const ownership = runtime?.process;
+  if (!ownership) return [root];
+  return [root, ...ownership.processes.map((row) => ({
+    ...row,
+    command: `${ownership.started_at}\t${rawProcessCommand(row.command)}`
+  }))];
+}
+
+function rawProcessCommand(command: string): string {
+  return command.includes("\t") ? command.slice(command.indexOf("\t") + 1) : command;
 }
 
 function executorProviders(config: ReturnType<typeof loadConfig>, bus?: EventBus, codexOwnershipFile = "") {
