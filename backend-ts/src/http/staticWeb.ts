@@ -27,8 +27,15 @@ export async function staticWebResponse(request: Request, webDir: string): Promi
 function staticTarget(root: string, pathname: string): string | undefined {
   const candidate = resolveRequestPath(root, pathname);
   if (isRegularFile(candidate)) return candidate;
+  // A missing build asset is not an SPA route. Returning index.html here gives
+  // module requests a misleading 200 text/html response and hides stale chunks.
+  if (isAssetPath(pathname)) return undefined;
   const index = join(root, "index.html");
   return isRegularFile(index) ? index : undefined;
+}
+
+function isAssetPath(pathname: string): boolean {
+  return pathname === "/assets" || pathname.startsWith("/assets/");
 }
 
 function fileResponse(request: Request, path: string): Response {

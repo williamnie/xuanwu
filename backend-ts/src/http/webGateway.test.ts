@@ -27,6 +27,10 @@ describe("Web Gateway", () => {
     expect(asset.status).toBe(200);
     expect(asset.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
     expect(await asset.text()).toBe("asset-ok");
+
+    const missingAsset = await handle(new Request("http://runner.local/assets/app-oldbuild.js"));
+    expect(missingAsset.status).toBe(404);
+    expect(missingAsset.headers.get("content-type")).not.toContain("text/html");
   });
 
   test("preserves method, query, auth, error body, upload and download", async () => {

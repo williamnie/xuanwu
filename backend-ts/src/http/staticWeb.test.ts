@@ -30,6 +30,7 @@ describe("Bun static web UI", () => {
 
     const root = await handle(new Request(`${BASE_URL}/`));
     const asset = await handle(new Request(`${BASE_URL}/assets/app.js`));
+    const missingAsset = await handle(new Request(`${BASE_URL}/assets/old-build.js`));
     const spaRoute = await handle(new Request(`${BASE_URL}/issues/42`));
     const apiMissing = await handle(new Request(`${BASE_URL}/api/nope`));
 
@@ -39,6 +40,8 @@ describe("Bun static web UI", () => {
     expect(asset.status).toBe(200);
     expect(asset.headers.get("content-type")).toContain("javascript");
     expect(await asset.text()).toContain("console.log");
+    expect(missingAsset.status).toBe(404);
+    expect(missingAsset.headers.get("content-type")).not.toContain("text/html");
     expect(spaRoute.status).toBe(200);
     expect(await spaRoute.text()).toContain("runner ui");
     expect(apiMissing.status).toBe(404);
