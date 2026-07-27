@@ -405,7 +405,12 @@
   padding: 22px clamp(18px, 3vw, 42px) 40px;
 }
 
-.run-detail-content.provider-active { overflow: hidden; padding: 0; }
+.run-detail-content.provider-active {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
 
 .run-summary-layout {
   display: grid;
