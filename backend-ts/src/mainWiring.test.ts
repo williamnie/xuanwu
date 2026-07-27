@@ -44,8 +44,11 @@ describe("server entrypoint wiring", () => {
     const core = readFileSync(join(import.meta.dir, "runtime", "core.ts"), "utf8");
     const darwinMemory = readFileSync(join(import.meta.dir, "observability", "darwinProcessMemory.ts"), "utf8");
 
-    expect(core).toContain("inspect: () => runtimeMemoryRows(runtimeStartedAt, providerRuntime())");
+    expect(core).toContain("inspect: () => runtimeMemoryRows(runtimeStartedAt, providerRuntime(), agenticClient.activity())");
+    expect(core).toContain("agenticActivity: agenticClient.activity");
+    expect(core).toContain("reclaimMemory: () => Bun.gc(true)");
     expect(core).toContain("ownership.processes.map");
+    expect(core).toContain("codex-issue-runner-agentic");
     expect(core).not.toContain("Bun.spawnSync");
     expect(core).not.toContain("/usr/bin/footprint");
     expect(darwinMemory).toContain("proc_pid_rusage");

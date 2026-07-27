@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   collectMacOSFootprint,
+  PROCESS_GROUP_MEMORY_AGENTIC_IDLE_GRACE_MS,
   PROCESS_GROUP_MEMORY_BUDGETS,
   PROCESS_GROUP_MEMORY_CONTRACT,
   ProcessGroupMemoryObserver,
@@ -19,6 +20,158 @@ import { ackPiGuardianAlert, upsertPiGuardianAlert } from "../db/repositories/pi
 const MIB = 1024 * 1024;
 
 describe("runner process-group memory observer", () => {
+  test("treats Agentic RPC work and its idle grace as active workload instead of idle", async () => {
+    let nowMs = Date.parse("2026-07-27T03:00:00.000Z");
+    let activity = { in_flight: 1, last_activity_at: new Date(nowMs).toISOString() };
+    const observer = new ProcessGroupMemoryObserver({
+      activeRuns: () => 0,
+      agenticActivity: () => activity,
+      footprint: async () => new Map([[50, 300 * MIB]]),
+      inspect: () => [fixtureRows(300, 0)[0]!],
+      memoryUsage: () => memoryUsage(300),
+      now: () => new Date(nowMs),
+      runnerPid: 50
+    });
+
+    observer.sample();
+    await Bun.sleep(0);
+    let snapshot = observer.sample() as Snapshot;
+    expect(snapshot).toMatchObject({
+      phase: "run",
+      activity: { agentic_in_flight: 1, issue_runs: 0, status: "active" },
+      budget: {
+        hard_bytes: 700 * MIB,
+        main_hard_bytes: null,
+        measured_main_bytes: 300 * MIB,
+        status: "within_budget"
+      }
+    });
+
+    activity = { in_flight: 0, last_activity_at: new Date(nowMs).toISOString() };
+    nowMs += PROCESS_GROUP_MEMORY_AGENTIC_IDLE_GRACE_MS - 1;
+    snapshot = observer.sample() as Snapshot;
+    expect(snapshot).toMatchObject({
+      phase: "run",
+      activity: { agentic_in_flight: 0, status: "cooldown" },
+      budget: { status: "within_budget" }
+    });
+  });
+
+  test("reclaims once and requires a fresh physical measurement when active work becomes idle", async () => {
+    let nowMs = Date.parse("2026-07-27T03:00:00.000Z");
+    let activity = { in_flight: 1, last_activity_at: new Date(nowMs).toISOString() };
+    let footprintMiB = 300;
+    let reclaims = 0;
+    const observer = new ProcessGroupMemoryObserver({
+      activeRuns: () => 0,
+      agenticActivity: () => activity,
+      footprint: async () => new Map([[50, footprintMiB * MIB]]),
+      footprintIntervalMs: 0,
+      inspect: () => [fixtureRows(300, 0)[0]!],
+      memoryUsage: () => memoryUsage(300),
+      now: () => new Date(nowMs),
+      reclaimMemory: () => {
+        reclaims += 1;
+        footprintMiB = 180;
+      },
+      runnerPid: 50
+    });
+
+    observer.sample();
+    await Bun.sleep(0);
+    expect((observer.sample() as Snapshot).phase).toBe("run");
+
+    activity = { in_flight: 0, last_activity_at: new Date(nowMs).toISOString() };
+    nowMs += PROCESS_GROUP_MEMORY_AGENTIC_IDLE_GRACE_MS + 1;
+    const pending = observer.sample() as Snapshot;
+    expect(reclaims).toBe(1);
+    expect(pending).toMatchObject({
+      phase: "idle",
+      activity: { status: "idle" },
+      budget: { measurement_ready: false, status: "measurement_pending" }
+    });
+
+    await Bun.sleep(0);
+    expect((observer.sample() as Snapshot).budget).toMatchObject({ status: "measurement_pending" });
+    await Bun.sleep(0);
+    const settled = observer.sample() as Snapshot;
+    expect(reclaims).toBe(1);
+    expect(settled).toMatchObject({
+      aggregate: { footprint_bytes: 180 * MIB },
+      budget: { measured_main_bytes: 180 * MIB, status: "within_budget" },
+      phase: "idle"
+    });
+  });
+
+  test("discards an in-flight pre-reclaim footprint before accepting the idle measurement", async () => {
+    let nowMs = Date.parse("2026-07-27T03:00:00.000Z");
+    let activity = { in_flight: 1, last_activity_at: new Date(nowMs).toISOString() };
+    const measurements: Array<(value: Map<number, number>) => void> = [];
+    const observer = new ProcessGroupMemoryObserver({
+      activeRuns: () => 0,
+      agenticActivity: () => activity,
+      footprint: () => new Promise((resolve) => { measurements.push(resolve); }),
+      inspect: () => [fixtureRows(300, 0)[0]!],
+      memoryUsage: () => memoryUsage(300),
+      now: () => new Date(nowMs),
+      reclaimMemory: () => {},
+      runnerPid: 50
+    });
+
+    observer.sample();
+    expect(measurements).toHaveLength(1);
+    activity = { in_flight: 0, last_activity_at: new Date(nowMs).toISOString() };
+    nowMs += PROCESS_GROUP_MEMORY_AGENTIC_IDLE_GRACE_MS + 1;
+    expect((observer.sample() as Snapshot).budget.status).toBe("measurement_pending");
+
+    measurements[0]!(new Map([[50, 300 * MIB]]));
+    await Bun.sleep(0);
+    expect((observer.sample() as Snapshot).budget.status).toBe("measurement_pending");
+    expect(measurements).toHaveLength(2);
+
+    measurements[1]!(new Map([[50, 180 * MIB]]));
+    await Bun.sleep(0);
+    const settled = observer.sample() as Snapshot;
+    expect(settled).toMatchObject({
+      aggregate: { footprint_bytes: 180 * MIB },
+      budget: { measured_main_bytes: 180 * MIB, status: "within_budget" },
+      phase: "idle"
+    });
+  });
+
+  test("defers the post-run reclaim through usage work and performs it on true idle", () => {
+    let nowMs = Date.parse("2026-07-27T03:00:00.000Z");
+    let activity = { in_flight: 1, last_activity_at: new Date(nowMs).toISOString() };
+    let rows = [fixtureRows(200, 0)[0]!];
+    let reclaims = 0;
+    const observer = new ProcessGroupMemoryObserver({
+      activeRuns: () => 0,
+      agenticActivity: () => activity,
+      footprint: false,
+      inspect: () => rows,
+      memoryUsage: () => memoryUsage(200),
+      now: () => new Date(nowMs),
+      reclaimMemory: () => { reclaims += 1; },
+      runnerPid: 50
+    });
+
+    expect((observer.sample() as Snapshot).phase).toBe("run");
+    activity = { in_flight: 0, last_activity_at: new Date(nowMs).toISOString() };
+    nowMs += PROCESS_GROUP_MEMORY_AGENTIC_IDLE_GRACE_MS + 1;
+    rows = [
+      fixtureRows(200, 0)[0]!,
+      row(70, 50, 20, "Mon Jul 20 00:02:00 2026\t__usage-index-worker")
+    ];
+    expect((observer.sample() as Snapshot).phase).toBe("usage");
+    expect(reclaims).toBe(0);
+
+    rows = [fixtureRows(180, 0)[0]!];
+    expect((observer.sample() as Snapshot).phase).toBe("idle");
+    expect(reclaims).toBe(1);
+    observer.sample();
+    expect(reclaims).toBe(1);
+  });
+
   test("aggregates the runner tree by safe role and owner without exposing commands, tokens, or paths", async () => {
     const alerts: ProcessMemoryBudgetAlert[] = [];
     const rows = fixtureRows(200, 130);
@@ -54,6 +207,32 @@ describe("runner process-group memory observer", () => {
     expect(JSON.stringify(snapshot)).not.toContain("runtime-secret");
     expect(JSON.stringify(snapshot)).not.toContain("/Users/private");
     expect(JSON.stringify(alerts)).not.toContain("runtime-secret");
+  });
+
+  test("includes the split Agentic Worker in the authoritative physical process group", async () => {
+    const rows = [
+      row(50, 1, 200, "Mon Jul 20 00:00:00 2026\tcodex-issue-runner-core"),
+      row(60, 50, 170, "Mon Jul 20 00:01:00 2026\tcodex-issue-runner-agentic")
+    ];
+    const observer = new ProcessGroupMemoryObserver({
+      agenticActivity: () => ({ in_flight: 1, last_activity_at: "2026-07-27T03:00:00.000Z" }),
+      footprint: async () => new Map([[50, 190 * MIB], [60, 150 * MIB]]),
+      inspect: () => rows,
+      memoryUsage: () => memoryUsage(200),
+      now: () => new Date("2026-07-27T03:00:00.000Z"),
+      runnerPid: 50
+    });
+
+    observer.sample();
+    await Bun.sleep(0);
+    const snapshot = observer.sample() as Snapshot;
+    expect(snapshot).toMatchObject({
+      aggregate: { footprint_bytes: 340 * MIB, footprint_process_count: 2, process_count: 2 },
+      budget: { measured_group_bytes: 340 * MIB, measurement_source: "footprint", status: "within_budget" },
+      phase: "run"
+    });
+    expect(snapshot.roles).toContainEqual(expect.objectContaining({ process_count: 1, role: "agentic-worker" }));
+    expect(snapshot.top_by_rss).toContainEqual(expect.objectContaining({ owner: "runner:agentic", pid: 60 }));
   });
 
   test("tracks PID reuse and retains observed short-lived descendants", () => {
@@ -146,7 +325,10 @@ describe("runner process-group memory observer", () => {
   test("uses RSS only for descendants that appeared after the last footprint instead of discarding physical memory", async () => {
     let rows = fixtureRows(200, 130);
     const observer = new ProcessGroupMemoryObserver({
-      footprint: async (pids) => new Map(pids.map((pid) => [pid, pid === 50 ? 190 * MIB : 80 * MIB])),
+      footprint: async (pids) => new Map(pids.map((pid) => [
+        pid,
+        pid === 50 ? 190 * MIB : pid === 100 ? 80 * MIB : 10 * MIB
+      ])),
       footprintIntervalMs: 60_000,
       inspect: () => rows,
       memoryUsage: () => memoryUsage(198),
@@ -163,6 +345,12 @@ describe("runner process-group memory observer", () => {
       measured_group_bytes: 280 * MIB,
       measured_main_bytes: 190 * MIB,
       measurement_source: "footprint+rss",
+      status: "within_budget"
+    });
+    await Bun.sleep(0);
+    expect((observer.sample() as Snapshot).budget).toMatchObject({
+      measured_group_bytes: 280 * MIB,
+      measurement_source: "footprint",
       status: "within_budget"
     });
   });
@@ -354,6 +542,7 @@ function tickingClock(): () => Date {
 }
 
 type Snapshot = {
+  activity: Record<string, unknown>;
   aggregate: Record<string, unknown>;
   budget: Record<string, unknown>;
   main: Record<string, unknown>;
@@ -361,4 +550,5 @@ type Snapshot = {
   recently_exited: Array<Record<string, unknown>>;
   roles: Array<Record<string, unknown>>;
   top_by_rss: Array<Record<string, unknown>>;
+  phase: string;
 };

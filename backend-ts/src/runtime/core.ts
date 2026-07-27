@@ -58,13 +58,15 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     activeRuns: () => database.sqlite.query<{ count: number }, []>(
       "select count(*) as count from issue_runs where ended_at=''"
     ).get()?.count ?? 0,
+    agenticActivity: agenticClient.activity,
     // The observer uses non-suspending proc_pid_rusage for physical footprint.
     // Keep process discovery allocation-free on the HTTP loop while retaining
     // provider descendants from the lifecycle-owned runtime snapshot.
-    inspect: () => runtimeMemoryRows(runtimeStartedAt, providerRuntime()),
+    inspect: () => runtimeMemoryRows(runtimeStartedAt, providerRuntime(), agenticClient.activity()),
     onAlert: (alert) => writeProcessGroupMemoryAlert(database, alert),
     onRecovery: (recovery) => resolveRecoveredProcessGroupMemoryAlerts(database, recovery),
-    providerRuntime
+    providerRuntime,
+    reclaimMemory: () => Bun.gc(true)
   });
   processGroupMemory.start();
   const sessionReconciliation = reconcileStaleAgentSessions(
@@ -142,7 +144,8 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
 
 function runtimeMemoryRows(
   runtimeStartedAt: string,
-  runtime: ReturnType<ReturnType<typeof createCodexExecutorProvider>["runtimeSnapshot"]>
+  runtime: ReturnType<ReturnType<typeof createCodexExecutorProvider>["runtimeSnapshot"]>,
+  agentic: ReturnType<AgenticWorkerClient["activity"]>
 ) {
   const root = {
     command: `${runtimeStartedAt}\tcodex-issue-runner-core`,
@@ -151,9 +154,19 @@ function runtimeMemoryRows(
     ppid: process.ppid,
     rss_bytes: process.memoryUsage.rss()
   };
+  const rows = [root];
+  if (Number.isSafeInteger(agentic.worker_pid) && agentic.worker_pid! > 0 && agentic.worker_pid !== process.pid) {
+    rows.push({
+      command: `${agentic.worker_started_at || "unknown"}\tcodex-issue-runner-agentic`,
+      pgid: agentic.worker_pid!,
+      pid: agentic.worker_pid!,
+      ppid: process.pid,
+      rss_bytes: Math.max(0, agentic.worker_rss_bytes ?? 0)
+    });
+  }
   const ownership = runtime?.process;
-  if (!ownership) return [root];
-  return [root, ...ownership.processes.map((row) => ({
+  if (!ownership) return rows;
+  return [...rows, ...ownership.processes.map((row) => ({
     ...row,
     command: `${ownership.started_at}\t${rawProcessCommand(row.command)}`
   }))];

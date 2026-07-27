@@ -18,7 +18,16 @@ export type AgenticCommunicationDecisionResult = AgentCommunicationDecision;
 export type AgenticSupervisorDecisionRequest = { context: IssueSupervisorRecoveryContext };
 export type AgenticSupervisorDecisionResult = PiSupervisorDecisionRuntimeResult;
 
+export type AgenticActivitySnapshot = {
+  in_flight: number;
+  last_activity_at: string;
+  worker_pid?: number;
+  worker_rss_bytes?: number;
+  worker_started_at?: string;
+};
+
 export type AgenticWorkerClient = {
+  activity(): AgenticActivitySnapshot;
   decideCommunication(input: AgenticCommunicationDecisionRequest): Promise<AgenticCommunicationDecisionResult>;
   decideSupervisor(context: IssueSupervisorRecoveryContext): Promise<AgenticSupervisorDecisionResult>;
   health(): Promise<{ ok: boolean; role: "agentic" }>;

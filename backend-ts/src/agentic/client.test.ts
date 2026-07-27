@@ -2,6 +2,46 @@ import { describe, expect, test } from "bun:test";
 import { createHttpAgenticWorkerClient } from "./client.ts";
 
 describe("Agentic Worker HTTP client", () => {
+  test("publishes in-flight and settled activity around Agentic RPC work", async () => {
+    const originalFetch = globalThis.fetch;
+    let release!: () => void;
+    let nowMs = Date.parse("2026-07-27T03:00:00.000Z");
+    try {
+      globalThis.fetch = (() => new Promise<Response>((resolve) => {
+        release = () => resolve(Response.json({ ok: true, result: { accepted: true } }, {
+          headers: {
+            "x-codex-runner-agentic-pid": "3010",
+            "x-codex-runner-agentic-rss-bytes": "188743680",
+            "x-codex-runner-agentic-started-at": "2026-07-27T02:59:00.000Z"
+          }
+        }));
+      })) as typeof fetch;
+      const client = createHttpAgenticWorkerClient({
+        addr: "127.0.0.1:3010",
+        now: () => new Date(nowMs)
+      });
+
+      const request = client.runProjectCycle({ maxActions: 1, projectId: "demo" });
+      expect(client.activity()).toEqual({
+        in_flight: 1,
+        last_activity_at: "2026-07-27T03:00:00.000Z"
+      });
+
+      nowMs += 45_000;
+      release();
+      await expect(request).resolves.toEqual({ accepted: true });
+      expect(client.activity()).toEqual({
+        in_flight: 0,
+        last_activity_at: "2026-07-27T03:00:45.000Z",
+        worker_pid: 3010,
+        worker_rss_bytes: 188743680,
+        worker_started_at: "2026-07-27T02:59:00.000Z"
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("sends authenticated bounded RPC requests", async () => {
     const originalFetch = globalThis.fetch;
     const calls: Array<{ body: unknown; headers: Headers; url: string }> = [];

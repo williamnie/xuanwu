@@ -31,6 +31,8 @@ try {
   core = spawnRole("core", corePort);
   web = spawnRole("web", webPort);
   await Promise.all([waitForHealth(coreUrl), waitForHealth(webUrl)]);
+  const initialAgenticHealth = await timedStatus(`${coreUrl}/api/system/agentic-health`, { authorization: AUTHORIZATION });
+  const memoryAuthority = await waitForMemoryAuthority(coreUrl);
 
   const slowRequest = fetch(`${coreUrl}/api/system/test/block`, { headers: { authorization: AUTHORIZATION } });
   await Bun.sleep(100);
@@ -83,6 +85,8 @@ try {
       && webDbFdOpen === false
       && coreDbFdOpen === true
       && agenticDbFdOpen === true
+      && initialAgenticHealth.status === 200
+      && memoryAuthority.ok
       && coreWhileAgenticPaused.status === 200
       && coreWhileAgenticPaused.elapsed_ms < 250
       && coreWhileAgenticDown.status === 200
@@ -114,6 +118,7 @@ try {
       unavailable_elapsed_ms: agenticUnavailable.elapsed_ms,
       unavailable_status: agenticUnavailable.status
     },
+    memory_authority: memoryAuthority,
     static_latency_ms: { asset: assetStats, index: indexStats, samples },
     core_restart: {
       api_recovered_status: recovered.status,
@@ -194,6 +199,42 @@ async function waitForHealth(baseUrl: string): Promise<void> {
     await Bun.sleep(50);
   }
   throw new Error(`service did not become healthy: ${baseUrl}`);
+}
+
+async function waitForMemoryAuthority(baseUrl: string): Promise<{
+  activity_status: string;
+  budget_status: string;
+  measurement_source: string;
+  ok: boolean;
+  roles: string[];
+}> {
+  const deadline = Date.now() + 30_000;
+  let latest = { activity_status: "", budget_status: "", measurement_source: "", ok: false, roles: [] as string[] };
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${baseUrl}/api/system/status`, {
+        headers: { authorization: AUTHORIZATION },
+        signal: AbortSignal.timeout(5_000)
+      });
+      const status = await response.json() as Record<string, any>;
+      const memory = status.process_group_memory ?? {};
+      latest = {
+        activity_status: String(memory.activity?.status ?? ""),
+        budget_status: String(memory.budget?.status ?? ""),
+        measurement_source: String(memory.budget?.measurement_source ?? ""),
+        ok: response.ok
+          && memory.measurement?.physical_memory_probe === "ready"
+          && memory.budget?.measurement_source === "footprint"
+          && memory.budget?.status === "within_budget"
+          && Array.isArray(memory.roles)
+          && memory.roles.some((role: Record<string, unknown>) => role.role === "agentic-worker"),
+        roles: Array.isArray(memory.roles) ? memory.roles.map((role: Record<string, unknown>) => String(role.role)) : []
+      };
+      if (latest.ok) return latest;
+    } catch {}
+    await Bun.sleep(100);
+  }
+  return latest;
 }
 
 async function timedGet(url: string): Promise<number> {

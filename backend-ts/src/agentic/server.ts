@@ -19,12 +19,15 @@ import {
   type AgenticRpcResponse,
   type AgenticSupervisorDecisionRequest
 } from "./protocol.ts";
+import { createAgenticIdleMemoryReclaimer } from "./activity.ts";
 
 const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
+const AGENTIC_STARTED_AT = new Date().toISOString();
 
 export async function startAgenticServer(config: RunnerConfig, database: RunnerDatabase) {
   const address = parseListenAddress(config.addr);
   const authToken = await loadAuthToken(config);
+  const idleMemory = createAgenticIdleMemoryReclaimer();
   return Bun.serve({
     hostname: address.hostname,
     idleTimeout: 255,
@@ -32,11 +35,15 @@ export async function startAgenticServer(config: RunnerConfig, database: RunnerD
     fetch: async (request) => {
       const auth = requireBearerAuth(request, authToken);
       if (auth) return auth;
+      const tracksActivity = request.method === "POST";
+      if (tracksActivity) idleMemory.requestStarted();
       try {
         return await routeAgenticRequest(database, request);
       } catch (error) {
         const status = error instanceof HttpError ? error.status : 500;
         return rpcResponse({ error: safeError(error), ok: false }, status);
+      } finally {
+        if (tracksActivity) idleMemory.requestFinished();
       }
     }
   });
@@ -45,7 +52,7 @@ export async function startAgenticServer(config: RunnerConfig, database: RunnerD
 export async function routeAgenticRequest(db: RunnerDatabase, request: Request): Promise<Response> {
   const path = new URL(request.url).pathname;
   if (request.method === "GET" && path === AGENTIC_HEALTH_PATH) {
-    return Response.json({ ok: true, role: "agentic" });
+    return agenticResponse({ ok: true, role: "agentic" });
   }
   if (request.method !== "POST") return rpcResponse({ error: "not found", ok: false }, 404);
   if (path === AGENTIC_PROJECT_CYCLE_PATH) {
@@ -93,7 +100,19 @@ async function requestBody<T>(request: Request): Promise<T> {
 }
 
 function rpcResponse<T>(body: AgenticRpcResponse<T>, status = 200): Response {
-  return Response.json(body, { status });
+  return agenticResponse(body, status);
+}
+
+function agenticResponse(body: unknown, status = 200): Response {
+  return Response.json(body, { headers: agenticRuntimeHeaders(), status });
+}
+
+function agenticRuntimeHeaders(): Record<string, string> {
+  return {
+    "x-codex-runner-agentic-pid": String(process.pid),
+    "x-codex-runner-agentic-rss-bytes": String(process.memoryUsage.rss()),
+    "x-codex-runner-agentic-started-at": AGENTIC_STARTED_AT
+  };
 }
 
 function requiredString(value: unknown, label: string): string {

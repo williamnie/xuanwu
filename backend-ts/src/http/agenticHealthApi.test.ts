@@ -4,6 +4,7 @@ import { createDefaultRouter } from "./server.ts";
 
 function client(health: AgenticWorkerClient["health"]): AgenticWorkerClient {
   return {
+    activity: () => ({ in_flight: 0, last_activity_at: "" }),
     decideCommunication: async () => ({ action: "skip", reason: "unused" }),
     decideSupervisor: async () => ({ decision: { action: "skip", reason: "unused" }, session: {} } as never),
     health,

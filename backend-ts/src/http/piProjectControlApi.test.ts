@@ -37,6 +37,7 @@ describe("Bun project PI control API", () => {
       insertProject(database, "demo");
       const router = createDefaultRouter({
         agenticClient: {
+          activity: () => ({ in_flight: 0, last_activity_at: "" }),
           decideCommunication: async () => ({ decision: "suppress", message: "", rationale: "test" }),
           decideSupervisor: async () => { throw new Error("not used"); },
           health: async () => ({ ok: true, role: "agentic" }),

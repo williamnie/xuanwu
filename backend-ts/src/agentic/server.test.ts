@@ -19,6 +19,9 @@ describe("Agentic Worker narrow RPC server", () => {
       const health = await routeAgenticRequest(db, new Request("http://127.0.0.1/health"));
       expect(health.status).toBe(200);
       expect(await health.json()).toEqual({ ok: true, role: "agentic" });
+      expect(Number(health.headers.get("x-codex-runner-agentic-pid"))).toBe(process.pid);
+      expect(Number(health.headers.get("x-codex-runner-agentic-rss-bytes"))).toBeGreaterThan(0);
+      expect(health.headers.get("x-codex-runner-agentic-started-at")).toBeTruthy();
 
       const missing = await routeAgenticRequest(db, new Request("http://127.0.0.1/api/projects"));
       expect(missing.status).toBe(404);

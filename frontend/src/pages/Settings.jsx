@@ -260,6 +260,9 @@ function ProcessGroupMemoryStatus({ memory }) {
         Budget measurement {measurementSource} · group {formatMiB(measuredGroup)} · main {formatMiB(measuredMain)} · probe {memory.measurement?.physical_memory_probe || 'unknown'}
       </div>
       <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '6px' }}>
+        Activity {memory.activity?.status || 'unknown'} · issue runs {memory.activity?.issue_runs || 0} · Agentic in-flight {memory.activity?.agentic_in_flight || 0} · idle grace {formatDurationMs(memory.activity?.idle_grace_ms)}
+      </div>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '6px' }}>
         Physical footprint {formatMiB(memory.aggregate?.footprint_bytes)} · RSS {formatMiB(memory.aggregate?.rss_bytes)} · RSS P95 {formatMiB(memory.aggregate?.rss_p95_bytes)} · main heap {formatMiB(memory.main?.heap_used_bytes)} · external {formatMiB(memory.main?.external_bytes)} · array buffers {formatMiB(memory.main?.array_buffers_bytes)}
       </div>
       <div style={{ display: 'grid', gap: '8px', marginTop: '10px' }}>
@@ -303,6 +306,12 @@ function formatMiB(bytes) {
 function formatMemorySampleTime(value) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleTimeString() : 'unknown';
+}
+
+function formatDurationMs(value) {
+  const milliseconds = Number(value);
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return 'n/a';
+  return `${(milliseconds / 1000).toFixed(0)}s`;
 }
 
 function SecurityWarnings({ warnings }) {

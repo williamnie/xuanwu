@@ -6,12 +6,14 @@ import {
 } from "../db/repositories/pi/guardianAlerts.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { CodexProcessOwnership, ProcessTreeEntry } from "../providers/codex/processLifecycle.ts";
+import type { AgenticActivitySnapshot } from "../agentic/protocol.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { collectDarwinPhysicalFootprints } from "./darwinProcessMemory.ts";
 
 export const PROCESS_GROUP_MEMORY_CONTRACT = "runner-process-group-memory.v1" as const;
 export const PROCESS_GROUP_MEMORY_SAMPLE_INTERVAL_MS = 1_000;
 export const PROCESS_GROUP_MEMORY_FRESHNESS_MS = 5_000;
+export const PROCESS_GROUP_MEMORY_AGENTIC_IDLE_GRACE_MS = 90_000;
 export const PROCESS_GROUP_MEMORY_METRIC_DEFINITIONS = {
   footprint_bytes: "macOS footprint (phys_footprint) from non-suspending proc_pid_rusage, summed per observed PID",
   process_rss_bytes: "process.memoryUsage().rss for the runner main process only",
@@ -45,6 +47,8 @@ type RuntimeOwnership = { idle_ttl_ms?: number; owners: string[]; process?: Code
 type ProcessMemoryUsage = ReturnType<typeof process.memoryUsage>;
 type ProcessGroupMemoryOptions = {
   activeRuns?: () => number;
+  agenticActivity?: () => AgenticActivitySnapshot;
+  agenticIdleGraceMs?: number;
   footprint?: false | ((pids: number[]) => Promise<Map<number, number>>);
   footprintIntervalMs?: number;
   inspect?: () => ProcessTreeEntry[];
@@ -53,6 +57,7 @@ type ProcessGroupMemoryOptions = {
   onAlert?: (alert: ProcessMemoryBudgetAlert) => void;
   onRecovery?: (recovery: ProcessMemoryBudgetRecovery) => void;
   providerRuntime?: () => RuntimeOwnership;
+  reclaimMemory?: () => void;
   runnerPid?: number;
   sampleIntervalMs?: number;
 };
@@ -78,9 +83,11 @@ export class ProcessGroupMemoryObserver {
   private consecutiveSoft = 0;
   private footprint?: FootprintState;
   private footprintAttempted = false;
+  private footprintGeneration = 0;
   private footprintInFlight = false;
   private history: Array<{ phase: ProcessMemoryPhase; rss_bytes: number; sampled_at: string }> = [];
   private healthyNotified = false;
+  private idleReclaimPending = false;
   private idleBaselineBytes?: number;
   private lastRunObservedAt?: number;
   private lastProcesses = new Map<string, ObservedProcess & { last_seen_at: string; peak_rss_bytes: number }>();
@@ -105,8 +112,14 @@ export class ProcessGroupMemoryObserver {
   sample(): Record<string, unknown> {
     const now = this.now();
     const rows = this.observedTree(this.inspect(), now);
+    const activity = this.activity(now);
+    const phase = this.phase(rows, activity.active);
+    if (phase === "run") this.idleReclaimPending = true;
+    if (phase === "idle" && this.idleReclaimPending) {
+      this.reclaimIdleMemory();
+      this.idleReclaimPending = false;
+    }
     const memory = this.memoryUsage();
-    const phase = this.phase(rows);
     const groupRSS = rows.reduce((total, row) => total + row.rss_bytes, 0);
     if (phase === "run") this.lastRunObservedAt = now.getTime();
     this.history.push({ phase, rss_bytes: groupRSS, sampled_at: now.toISOString() });
@@ -127,6 +140,7 @@ export class ProcessGroupMemoryObserver {
       sampled_at: sampledAt,
       freshness: { age_ms: 0, stale_after_ms: PROCESS_GROUP_MEMORY_FRESHNESS_MS, status: "fresh" },
       phase,
+      activity: activity.public,
       aggregate: {
         footprint_bytes: positiveBytes(this.footprint?.bytes),
         footprint_main_bytes: positiveBytes(this.footprint?.main_bytes),
@@ -221,9 +235,47 @@ export class ProcessGroupMemoryObserver {
     this.lastProcesses = current;
   }
 
-  private phase(rows: ObservedProcess[]): ProcessMemoryPhase {
-    if ((this.options.activeRuns?.() ?? 0) > 0) return "run";
+  private activity(now: Date): { active: boolean; public: Record<string, unknown> } {
+    const issueRuns = Math.max(0, this.options.activeRuns?.() ?? 0);
+    const agentic = this.options.agenticActivity?.() ?? { in_flight: 0, last_activity_at: "" };
+    const inFlight = Math.max(0, Number.isFinite(agentic.in_flight) ? Math.trunc(agentic.in_flight) : 0);
+    const lastActivityMs = Date.parse(agentic.last_activity_at);
+    const graceMs = this.options.agenticIdleGraceMs ?? PROCESS_GROUP_MEMORY_AGENTIC_IDLE_GRACE_MS;
+    const ageMs = Number.isFinite(lastActivityMs) ? Math.max(0, now.getTime() - lastActivityMs) : null;
+    const inCooldown = inFlight === 0 && ageMs !== null && ageMs <= graceMs;
+    const active = issueRuns > 0 || inFlight > 0 || inCooldown;
+    return {
+      active,
+      public: {
+        agentic_in_flight: inFlight,
+        agentic_last_activity_at: agentic.last_activity_at,
+        agentic_last_activity_age_ms: ageMs,
+        idle_grace_ms: graceMs,
+        issue_runs: issueRuns,
+        status: issueRuns > 0 || inFlight > 0 ? "active" : inCooldown ? "cooldown" : "idle"
+      }
+    };
+  }
+
+  private phase(rows: ObservedProcess[], active: boolean): ProcessMemoryPhase {
+    if (active) return "run";
     return rows.some((row) => row.role === "usage-index") ? "usage" : "idle";
+  }
+
+  private reclaimIdleMemory(): void {
+    try {
+      this.options.reclaimMemory?.();
+      if (this.options.reclaimMemory) {
+        this.footprintGeneration += 1;
+        this.footprint = undefined;
+        this.footprintAttempted = false;
+      }
+    } catch (error) {
+      console.error(JSON.stringify({
+        event: "runner.process_group_memory_reclaim_failed",
+        error: redactSensitiveText(error instanceof Error ? error.message : String(error))
+      }));
+    }
   }
 
   private budgetStatus(
@@ -380,10 +432,17 @@ export class ProcessGroupMemoryObserver {
     if (this.options.footprint === false) return;
     if (this.footprintInFlight) return;
     const previous = Date.parse(this.footprint?.observed_at ?? "");
-    if (Number.isFinite(previous) && now.getTime() - previous < (this.options.footprintIntervalMs ?? 60_000)) return;
+    const currentIdentities = new Set(rows.map((row) => row.identity));
+    const measuredIdentities = new Set(this.footprint?.by_identity.keys() ?? []);
+    const membershipChanged = currentIdentities.size !== measuredIdentities.size
+      || [...currentIdentities].some((identity) => !measuredIdentities.has(identity));
+    if (!membershipChanged && Number.isFinite(previous)
+      && now.getTime() - previous < (this.options.footprintIntervalMs ?? 60_000)) return;
     const expected = new Map(rows.map((row) => [row.pid, row.identity]));
+    const generation = this.footprintGeneration;
     this.footprintInFlight = true;
     void (this.options.footprint ?? collectMacOSFootprint)([...expected.keys()]).then((values) => {
+      if (generation !== this.footprintGeneration) return;
       const live = new Map(this.observedTree(this.inspect(), this.now()).map((row) => [row.pid, row.identity]));
       const valid = [...values].filter(([pid]) => live.get(pid) === expected.get(pid));
       const validValues = new Map(valid);
@@ -395,7 +454,7 @@ export class ProcessGroupMemoryObserver {
         process_count: valid.length
       };
     }).catch(() => {}).finally(() => {
-      this.footprintAttempted = true;
+      if (generation === this.footprintGeneration) this.footprintAttempted = true;
       this.footprintInFlight = false;
     });
   }
@@ -539,6 +598,7 @@ function descendantTree(rows: ProcessTreeEntry[], rootPID: number): ProcessTreeE
 
 function processRole(command: string, providerOwned: boolean): string {
   const value = rawCommand(command).toLowerCase();
+  if (value.includes("codex-issue-runner-agentic")) return "agentic-worker";
   if (value.includes("__usage-index-worker")) return "usage-index";
   if (value.includes("app-server")) return "codex-app-server";
   if (value.includes("code-mode-host")) return "tool-host";
@@ -547,7 +607,9 @@ function processRole(command: string, providerOwned: boolean): string {
 }
 
 function genericOwner(command: string): string {
-  return rawCommand(command).includes("__usage-index-worker") ? "runner:usage-index" : "runner:child";
+  const value = rawCommand(command);
+  if (value.includes("codex-issue-runner-agentic")) return "runner:agentic";
+  return value.includes("__usage-index-worker") ? "runner:usage-index" : "runner:child";
 }
 
 function safeOwner(owners: string[]): string {
