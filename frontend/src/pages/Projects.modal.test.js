@@ -43,8 +43,23 @@ test('project modal is viewport-centered and uses a custom compact disclosure', 
   assert.doesNotMatch(source, /settings-project-panel animate-fade-in/);
   assert.match(css, /\.project-config-modal-create\s*\{[\s\S]*?max-width:\s*640px/);
   assert.match(css, /\.settings-project-panel > \.modal-overlay\s*\{[\s\S]*?padding:\s*24px/);
+  assert.match(ruleFor('.settings-project-panel > .modal-overlay'), /backdrop-filter:\s*none/);
   assert.match(editorSource, /<details className="project-settings-advanced">/);
   assert.match(readFileSync(new URL('./ProjectSettingsEditor.css', import.meta.url), 'utf8'), /summary:focus-visible[\s\S]*?box-shadow:\s*inset 3px 0 0 var\(--primary\)/);
+});
+
+test('project deletion uses an in-app confirmation instead of a browser dialog', () => {
+  assert.doesNotMatch(source, /window\.(?:alert|confirm)\s*\(/);
+  assert.match(source, /onClick=\{\(\) => handleOpenDeleteModal\(proj\)\}/);
+  assert.match(source, /className="modal-content project-delete-modal"/);
+  assert.match(source, /role="alertdialog"/);
+  assert.match(source, /将同时删除 \{deleteProjectIssueCount\} 个关联 Issue/);
+  assert.match(source, /projectsApi\.deleteProject\(projectToDelete\.id\)/);
+
+  const modalRule = ruleFor('.project-delete-modal');
+  assert.match(modalRule, /max-width:\s*480px/);
+  assert.match(modalRule, /overflow:\s*hidden/);
+  assert.match(css, /\.project-delete-confirm-button\s*\{[\s\S]*?background:\s*var\(--error\)/);
 });
 
 test('project cards keep operational information and edit locally inside Settings', () => {

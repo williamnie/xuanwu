@@ -65,7 +65,8 @@
 }
 
 .settings-project-panel > .modal-overlay {
-  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   background: rgba(21, 28, 25, 0.34);
   padding: 24px;
 }
@@ -341,6 +342,109 @@
   color: var(--error);
 }
 
+.project-delete-modal {
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--error) 22%, var(--border-color));
+  border-radius: 16px;
+  box-shadow: 0 24px 72px rgba(15, 24, 21, 0.2), 0 2px 8px rgba(15, 24, 21, 0.08);
+  max-width: 480px;
+  overflow: hidden;
+  padding: 0;
+  width: min(480px, calc(100vw - 48px));
+}
+
+.project-delete-modal-header {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 26px 26px 18px;
+}
+
+.project-delete-modal-icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--error) 10%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--error) 18%, var(--border-color));
+  border-radius: 10px;
+  color: var(--error);
+  display: flex;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.project-delete-modal-eyebrow {
+  color: var(--error);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  margin: 2px 0 7px;
+}
+
+.project-delete-modal-header h2 {
+  font-size: 1.16rem;
+  font-weight: 800;
+  line-height: 1.25;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.project-delete-modal-header p {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 8px 0 0;
+}
+
+.project-delete-modal-project {
+  background: color-mix(in srgb, var(--bg-secondary) 62%, var(--bg-card));
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0 26px 22px;
+  padding: 11px 13px;
+}
+
+.project-delete-modal-project span {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.project-delete-modal-project code {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.project-delete-modal-actions {
+  background: color-mix(in srgb, var(--bg-secondary) 48%, var(--bg-card));
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 16px 26px 20px;
+}
+
+.project-delete-modal-actions .btn {
+  min-height: 40px;
+  padding-inline: 18px;
+}
+
+.project-delete-confirm-button {
+  background: var(--error);
+  border: 1px solid var(--error);
+  color: white;
+}
+
+.project-delete-confirm-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error) 88%, black);
+  border-color: color-mix(in srgb, var(--error) 88%, black);
+}
+
 @media (max-width: 1100px) {
   .projects-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -366,7 +470,8 @@
   }
 
   .project-config-modal,
-  .project-config-modal-create {
+  .project-config-modal-create,
+  .project-delete-modal {
     --project-modal-inline-padding: 20px;
 
     max-height: calc(100dvh - 24px);
@@ -389,6 +494,22 @@
   }
 
   .project-config-modal-footer .btn {
+    flex: 1 1 0;
+  }
+
+  .project-delete-modal-header {
+    padding: 22px 20px 16px;
+  }
+
+  .project-delete-modal-project {
+    margin: 0 20px 20px;
+  }
+
+  .project-delete-modal-actions {
+    padding: 14px 20px 18px;
+  }
+
+  .project-delete-modal-actions .btn {
     flex: 1 1 0;
   }
 }

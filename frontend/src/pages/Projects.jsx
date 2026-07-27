@@ -38,6 +38,8 @@ export default function Projects() {
     syncing: false,
     syncResult: null,
     modalMode: '',
+    deleteProjectId: '',
+    deletingProjectId: '',
     resumingHoldProjectId: '',
     selectedProjectId: '',
   });
@@ -46,10 +48,16 @@ export default function Projects() {
     syncing,
     syncResult,
     modalMode,
+    deleteProjectId,
+    deletingProjectId,
     resumingHoldProjectId,
     selectedProjectId,
   } = ui;
   const selectedProject = projects.find(project => project.id === selectedProjectId) || null;
+  const deleteProject = projects.find(project => project.id === deleteProjectId) || null;
+  const deleteProjectIssueCount = deleteProject
+    ? issues.filter(issue => issue.project_id === deleteProject.id).length
+    : 0;
 
   const closeModal = () => {
     updateUi(draft => {
@@ -94,14 +102,39 @@ export default function Projects() {
     });
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('确定要删除该项目吗？关联的 Issue 也会被删除！')) {
-      try {
-        await projectsApi.deleteProject(id);
-        refreshData(['projects', 'issues']);
-      } catch (err) {
-        message.error(err.message || '删除失败');
-      }
+  const handleOpenDeleteModal = (project) => {
+    updateUi(draft => {
+      draft.deleteProjectId = project.id;
+    });
+  };
+
+  const closeDeleteModal = () => {
+    if (deletingProjectId) return;
+    updateUi(draft => {
+      draft.deleteProjectId = '';
+    });
+  };
+
+  const handleDelete = async () => {
+    if (!deleteProject || deletingProjectId) return;
+    const projectToDelete = deleteProject;
+
+    updateUi(draft => {
+      draft.deletingProjectId = projectToDelete.id;
+    });
+    try {
+      await projectsApi.deleteProject(projectToDelete.id);
+      updateUi(draft => {
+        draft.deleteProjectId = '';
+      });
+      message.success(`项目 ${projectToDelete.name} 已删除`);
+      await refreshData(['projects', 'issues']);
+    } catch (err) {
+      message.error(err.message || '删除失败');
+    } finally {
+      updateUi(draft => {
+        draft.deletingProjectId = '';
+      });
     }
   };
 
@@ -283,7 +316,7 @@ export default function Projects() {
                       </button>
                       <button
                         className="btn btn-secondary btn-danger project-card-icon-btn project-card-delete-btn"
-                        onClick={() => handleDelete(proj.id)}
+                        onClick={() => handleOpenDeleteModal(proj)}
                         aria-label={`删除 ${proj.name}`}
                         title="删除"
                       >
@@ -330,6 +363,56 @@ export default function Projects() {
               }}
               project={selectedProject}
             />
+          </div>
+        </div>
+      )}
+
+      {deleteProject && (
+        <div className="modal-overlay">
+          <div
+            aria-describedby="project-delete-dialog-description"
+            aria-labelledby="project-delete-dialog-title"
+            aria-modal="true"
+            className="modal-content project-delete-modal"
+            role="alertdialog"
+          >
+            <div className="project-delete-modal-header">
+              <div className="project-delete-modal-icon" aria-hidden="true">
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <div className="project-delete-modal-eyebrow">危险操作</div>
+                <h2 id="project-delete-dialog-title">删除 {deleteProject.name}？</h2>
+                <p id="project-delete-dialog-description">
+                  将同时删除 {deleteProjectIssueCount} 个关联 Issue，且无法从界面恢复。
+                </p>
+              </div>
+            </div>
+
+            <div className="project-delete-modal-project">
+              <span>项目路径</span>
+              <code>{deleteProject.cwd}</code>
+            </div>
+
+            <div className="project-delete-modal-actions">
+              <button
+                className="btn btn-secondary"
+                disabled={Boolean(deletingProjectId)}
+                onClick={closeDeleteModal}
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                className="btn project-delete-confirm-button"
+                disabled={Boolean(deletingProjectId)}
+                onClick={handleDelete}
+                type="button"
+              >
+                <Trash2 size={14} />
+                {deletingProjectId ? '正在删除…' : '确认删除'}
+              </button>
+            </div>
           </div>
         </div>
       )}
