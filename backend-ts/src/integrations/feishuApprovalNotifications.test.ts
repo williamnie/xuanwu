@@ -86,6 +86,35 @@ describe("Feishu approval notification queue", () => {
     }
   });
 
+  test("uses the project Feishu fallback for scoped destructive command approval", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issue = createIssue(db, { project_id: "demo", title: "Local video cleanup", status: "in_progress" });
+      upsertAgentSession(db, { issue_id: issue.id, project_id: "demo", provider: "codex", provider_session_id: "thread-rm" });
+      const config = buildFeishuConnectorConfig({
+        appId: "cli_fixture",
+        appSecret: "fixture-secret",
+        defaultChatId: "oc_default"
+      });
+
+      const queued = queueFeishuApprovalNotification(
+        db,
+        approvalEvent("approval-rm", "thread-rm", "rm -rf *.mp4"),
+        { config, requireConfigured: true }
+      );
+      await flushAgentCommunicationTestMessages(db);
+
+      expect(queued).toMatchObject({ queued: true });
+      expect(listSyncOutbox(db, { source: "feishu" })).toEqual([
+        expect.objectContaining({
+          approval_action_id: "approval-rm",
+          content: expect.stringContaining("rm -rf *.mp4"),
+          target_chat_id: "oc_default"
+        })
+      ]);
+    } finally { db.close(); }
+  });
+
   test("records lifecycle, dispatches one IM notification, and resolves Codex from approval id", async () => {
     const db = await fixtureDatabase();
     const resolutions: Array<{ decision: string; id: string; scope: string }> = [];

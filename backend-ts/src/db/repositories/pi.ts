@@ -24,3 +24,4 @@ export * from "./pi/notificationPreferences.ts";
 export * from "./pi/recoveryAttempts.ts";
 export * from "./pi/issueCompletionWatches.ts";
 export * from "./pi/issueCompletionWatchAdmin.ts";
+export * from "./pi/mcpApprovalGrants.ts";

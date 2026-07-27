@@ -5,8 +5,10 @@ import {
   getPiAction,
   getPiMemoryItem,
   getPiApprovalRequest,
+  createPiNotificationIntent,
   listPiActions,
   listPiApprovalRequests,
+  listPiNotificationIntents,
   markPiApprovalDelivered,
   upsertPiApprovalRequest
 } from "../db/repositories/pi.ts";
@@ -80,7 +82,7 @@ export function attachFeishuNotificationObservers(input: {
         dispatchIfQueued(input, result);
       }
       if (event.type === "pi.action_pending") {
-        const result = queueFeishuPiActionPendingNotification(input.database, event);
+        const result = queueFeishuPiActionPendingNotification(input.database, event, { config: input.config });
         dispatchIfQueued(input, result);
       }
       if (event.type === "pi.needs_user") {
@@ -192,22 +194,38 @@ export function queueFeishuMemoryCandidateNotification(db: RunnerDatabase, event
   return queueResult(result);
 }
 
-export function queueFeishuPiActionPendingNotification(db: RunnerDatabase, event: AppEvent): QueueResult {
+export function queueFeishuPiActionPendingNotification(
+  db: RunnerDatabase,
+  event: AppEvent,
+  options: { config?: FeishuConnectorConfig } = {}
+): QueueResult {
   const payload = parseObject(event.payload);
   const actionID = safeText(payload.action_id);
   if (actionID === "") return { queued: false, reason: "missing_action_id" };
+  const action = getPiAction(db, actionID);
   const issue = event.issueId ? getIssue(db, event.issueId) : null;
   const target = issue ? feishuTargetForIssue(db, issue.id) : null;
   const fallback = feishuTargetForConversation(db, safeText(event.conversationId));
-  const finalTarget = target ?? fallback;
-  if (!finalTarget) return { queued: false, reason: "missing_feishu_target" };
   const issueID = issue?.id ?? event.issueId ?? 0;
   const projectID = issue?.project_id ?? safeText(event.projectId);
+  const projectFallback = feishuFallbackTargetForProject(options.config, projectID);
+  const finalTarget = target ?? fallback ?? projectFallback;
+  if (!finalTarget) {
+    recordUnroutablePiActionNotification(db, {
+      actionID,
+      actionType: safeText(payload.action_type),
+      conversationID: safeText(event.conversationId),
+      issueID,
+      projectID
+    });
+    return { queued: false, reason: "missing_feishu_target" };
+  }
   const result = routeNotification(db, {
     approvalActionID: piActionApprovalActionID(actionID),
     content: formatPiActionPendingNotification({
+      actionDetail: piActionNotificationDetail(action?.payload_json),
       actionID,
-      actionType: safeText(payload.action_type),
+      actionType: safeText(payload.action_type) || action?.action_type || "",
       issueID: event.issueId
     }),
     conversationID: finalTarget.threadID || finalTarget.chatID,
@@ -232,6 +250,79 @@ export function queueFeishuPiActionPendingNotification(db: RunnerDatabase, event
   return queueResult(result);
 }
 
+function piActionNotificationDetail(payloadJSON: string | undefined): string {
+  if (!payloadJSON) return "";
+  const payload = parseObject(payloadJSON);
+  const provider = safeText(payload.provider_id);
+  const tool = safeText(payload.tool_name);
+  const capability = safeText(payload.capability_id);
+  const permission = safeText(payload.permission);
+  const target = provider && tool ? `${provider}:${tool}` : capability;
+  const input = parseObject(payload.input);
+  const inputText = Object.keys(input).length > 0 ? redactSensitiveText(JSON.stringify(input)) : "";
+  return [target ? `目标 ${target}` : "", permission ? `权限 ${permission}` : "", inputText ? `输入 ${inputText}` : ""]
+    .filter(Boolean)
+    .join("；");
+}
+
+export function queuePendingPiActionNotifications(
+  db: RunnerDatabase,
+  config?: FeishuConnectorConfig
+): { failed: number; queued: number; scanned: number; skipped: number } {
+  const intents = new Map(listPiNotificationIntents(db, { kind: "pi_action_pending" })
+    .map((intent) => [intent.source_event_id, intent]));
+  const summary = { failed: 0, queued: 0, scanned: 0, skipped: 0 };
+  for (const action of listPiActions(db, { status: "pending" })) {
+    summary.scanned += 1;
+    const existing = intents.get(action.id);
+    if (existing && existing.state !== "failed") {
+      summary.skipped += 1;
+      continue;
+    }
+    const result = queueFeishuPiActionPendingNotification(db, {
+      conversationId: action.conversation_id,
+      issueId: action.issue_id || undefined,
+      payload: JSON.stringify({ action_id: action.id, action_type: action.action_type, status: action.status }),
+      projectId: action.project_id,
+      type: "pi.action_pending"
+    }, { config });
+    if (result.queued) summary.queued += 1;
+    else if (result.reason === "missing_feishu_target") summary.failed += 1;
+    else summary.skipped += 1;
+  }
+  return summary;
+}
+
+function recordUnroutablePiActionNotification(db: RunnerDatabase, input: {
+  actionID: string;
+  actionType: string;
+  conversationID: string;
+  issueID: number;
+  projectID: string;
+}): void {
+  createPiNotificationIntent(db, {
+    conversation_id: input.conversationID,
+    decision: "send_now",
+    error: "missing_feishu_target",
+    idempotency_key: `pi_action_pending:${input.actionID}:feishu`,
+    issue_id: input.issueID,
+    kind: "pi_action_pending",
+    payload_json: {
+      action_id: input.actionID,
+      action_type: input.actionType,
+      issue_id: input.issueID
+    },
+    project_id: input.projectID,
+    requires_user: 1,
+    severity: "actionable",
+    source_event_id: input.actionID,
+    source_event_type: "pi.action_pending",
+    state: "failed",
+    summary: `PI action ${input.actionID} pending approval; Feishu target missing`,
+    target_channel: "feishu"
+  });
+}
+
 export function queueFeishuApprovalNotification(
   db: RunnerDatabase,
   event: AppEvent,
@@ -247,7 +338,7 @@ export function queueFeishuApprovalNotification(
   if (options.requireConfigured && !feishuConfigured(options.config)) {
     return { queued: false, reason: "feishu_not_configured" };
   }
-  const target = feishuTargetForIssue(db, issue.id);
+  const target = feishuTargetForIssue(db, issue.id) ?? feishuFallbackTargetForProject(options.config, issue.project_id);
   if (!target) return { queued: false, reason: "missing_feishu_link" };
   const result = routeNotification(db, {
     approvalActionID: approvalID,

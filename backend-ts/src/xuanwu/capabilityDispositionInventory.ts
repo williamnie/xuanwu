@@ -314,6 +314,11 @@ export const TABLE_DISPOSITIONS = [
     live_rows: 0, delete_preconditions: []
   },
   {
+    name: "pi_mcp_approval_grants", disposition: "keep", target: "Project-scoped MCP approval policy",
+    source_of_truth: "pi_mcp_approval_grants", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
     name: "pi_mcp_capabilities", disposition: "keep", target: "Capability registry",
     source_of_truth: "pi_mcp_capabilities", retention: "R2_DURABLE", runtime_origin: "source_schema",
     live_rows: 0, delete_preconditions: []
@@ -622,6 +627,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/pi/mcp/discovery/results", family: "capability-policy" },
   { method: "POST", path: "/api/pi/mcp/discovery/scan", family: "capability-policy" },
   { method: "GET", path: "/api/pi/mcp/discovery/sources", family: "capability-policy" },
+  { method: "DELETE", path: "/api/pi/mcp/approval-grants/:id", family: "capability-policy" },
   { method: "POST", path: "/api/pi/mcp/servers", family: "capability-policy" },
   { method: "DELETE", path: "/api/pi/mcp/servers/:id", family: "capability-policy" },
   { method: "PATCH", path: "/api/pi/mcp/servers/:id", family: "capability-policy" },
@@ -780,7 +786,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "capability-connectors", disposition: "keep", target: "Capability and connector runtime", source_of_truth: "registered provider/tool manifests and audited calls",
-    source_files: ["backend-ts/src/pi/browserConnectorHealth.ts", "backend-ts/src/pi/browserToolCall.ts", "backend-ts/src/pi/browserToolProvider.ts", "backend-ts/src/pi/builtinToolRegistry.ts", "backend-ts/src/pi/cliConnectorHealth.ts", "backend-ts/src/pi/cliConnectorManifest.ts", "backend-ts/src/pi/cliConnectorProvider.ts", "backend-ts/src/pi/cliConnectorToolCall.ts", "backend-ts/src/pi/cliRawEventSync.ts", "backend-ts/src/pi/cliToolRunner.ts", "backend-ts/src/pi/cliToolRunnerSupport.ts", "backend-ts/src/pi/httpToolCall.ts", "backend-ts/src/pi/httpToolProvider.ts", "backend-ts/src/pi/mcpActionTools.ts", "backend-ts/src/pi/mcpResourceRead.ts", "backend-ts/src/pi/mcpToolCall.ts", "backend-ts/src/pi/mcpToolDefinitions.ts", "backend-ts/src/pi/mcpToolProvider.ts", "backend-ts/src/pi/mcpTransport.ts", "backend-ts/src/pi/piRuntimeTools.ts", "backend-ts/src/pi/readOnlyRuntimeTools.ts", "backend-ts/src/pi/readOnlyToolInvocation.ts", "backend-ts/src/pi/repoReadActionTools.ts", "backend-ts/src/pi/repoReadActions.ts", "backend-ts/src/pi/toolCallAudit.ts", "backend-ts/src/pi/toolProviderEnvelope.ts", "backend-ts/src/pi/toolRegistrySnapshot.ts"]
+    source_files: ["backend-ts/src/pi/browserConnectorHealth.ts", "backend-ts/src/pi/browserToolCall.ts", "backend-ts/src/pi/browserToolProvider.ts", "backend-ts/src/pi/builtinToolRegistry.ts", "backend-ts/src/pi/cliConnectorHealth.ts", "backend-ts/src/pi/cliConnectorManifest.ts", "backend-ts/src/pi/cliConnectorProvider.ts", "backend-ts/src/pi/cliConnectorToolCall.ts", "backend-ts/src/pi/cliRawEventSync.ts", "backend-ts/src/pi/cliToolRunner.ts", "backend-ts/src/pi/cliToolRunnerSupport.ts", "backend-ts/src/pi/httpToolCall.ts", "backend-ts/src/pi/httpToolProvider.ts", "backend-ts/src/pi/mcpActionTools.ts", "backend-ts/src/pi/mcpApprovalExpiry.ts", "backend-ts/src/pi/mcpResourceRead.ts", "backend-ts/src/pi/mcpToolCall.ts", "backend-ts/src/pi/mcpToolDefinitions.ts", "backend-ts/src/pi/mcpToolProvider.ts", "backend-ts/src/pi/mcpTransport.ts", "backend-ts/src/pi/piRuntimeTools.ts", "backend-ts/src/pi/readOnlyRuntimeTools.ts", "backend-ts/src/pi/readOnlyToolInvocation.ts", "backend-ts/src/pi/repoReadActionTools.ts", "backend-ts/src/pi/repoReadActions.ts", "backend-ts/src/pi/toolCallAudit.ts", "backend-ts/src/pi/toolProviderEnvelope.ts", "backend-ts/src/pi/toolRegistrySnapshot.ts"]
   },
   {
     id: "guardian-attention", disposition: "merge", target: "Attention detection, routing and delivery", source_of_truth: "Guardian authorities projected into Attention",

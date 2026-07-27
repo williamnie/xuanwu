@@ -13,6 +13,10 @@ test('Connections exposes MCP discovery and enablement management without secret
   assert.match(panelSource, /Manual MCP servers/);
   assert.match(panelSource, /Capabilities/);
   assert.match(panelSource, /发现不等于启用/);
+  assert.match(panelSource, /仅高危操作询问/);
+  assert.match(panelSource, /每次写入都询问/);
+  assert.match(panelSource, /只读，禁止写入/);
+  assert.match(panelSource, /持续授权/);
   assert.match(panelSource, /connectorsApi\.scanPiMcpDiscovery/);
   assert.match(panelSource, /connectorsApi\.introspectPiMcpServer/);
   assert.match(panelSource, /\[redacted\]/);
@@ -20,6 +24,7 @@ test('Connections exposes MCP discovery and enablement management without secret
   assert.match(connectorsSource, /scanPiMcpDiscovery:/);
   assert.match(connectorsSource, /\/api\/pi\/mcp\/discovery\/scan/);
   assert.match(connectorsSource, /patchPiMcpCapability:/);
+  assert.match(connectorsSource, /revokePiMcpApprovalGrant:/);
 });
 
 test('MCP lifecycle labels distinguish discovered, enabled, ready, degraded, and disabled', () => {

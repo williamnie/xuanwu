@@ -49,6 +49,7 @@ for (const line of input.split(/\r?\n/).map((item) => item.trim()).filter(Boolea
           }
         },
         {
+          annotations: { destructiveHint: true, openWorldHint: false },
           description: "Write isolated Agent-05 fixture state. Must remain approval-gated.",
           inputSchema: {
             additionalProperties: false,

@@ -1,7 +1,11 @@
 import type { RunnerDatabase } from "../database.ts";
 
 export type PiMcpTransportType = "stdio" | "http" | "sse" | "streamable_http";
+export const PI_MCP_APPROVAL_MODES = ["dangerous_only", "every_write", "read_only"] as const;
+export type PiMcpApprovalMode = (typeof PI_MCP_APPROVAL_MODES)[number];
 export type PiMcpServerInput = {
+  approval_granted_at?: string;
+  approval_mode?: PiMcpApprovalMode;
   args?: string[];
   command?: string;
   cwd?: string;
@@ -39,6 +43,7 @@ export type PiMcpServer = Required<Omit<PiMcpServerInput,
 };
 
 type ServerRow = {
+  approval_granted_at: string; approval_mode: PiMcpApprovalMode;
   args_json: string; command: string; created_at: string; cwd: string; description: string;
   diagnostics_json: string; enabled: number; env_json: string; headers_json: string; id: string;
   last_introspected_at: string; last_scan_at: string; metadata_json: string; name: string;
@@ -63,8 +68,8 @@ export function upsertPiMcpServer(db: RunnerDatabase, input: PiMcpServerInput): 
     `insert into pi_mcp_servers
       (id, name, description, source, source_path, transport_type, command, args_json, cwd, env_json,
        url, headers_json, enabled, status, readiness, risk_level, diagnostics_json, redaction_json,
-       metadata_json, last_scan_at, last_introspected_at, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       metadata_json, last_scan_at, last_introspected_at, approval_mode, approval_granted_at, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(id) do update set
       name=excluded.name, description=excluded.description, source=excluded.source, source_path=excluded.source_path,
       transport_type=excluded.transport_type, command=excluded.command, args_json=excluded.args_json, cwd=excluded.cwd,
@@ -72,7 +77,8 @@ export function upsertPiMcpServer(db: RunnerDatabase, input: PiMcpServerInput): 
       status=excluded.status, readiness=excluded.readiness, risk_level=excluded.risk_level,
       diagnostics_json=excluded.diagnostics_json, redaction_json=excluded.redaction_json,
       metadata_json=excluded.metadata_json, last_scan_at=excluded.last_scan_at,
-      last_introspected_at=excluded.last_introspected_at, updated_at=excluded.updated_at`,
+      last_introspected_at=excluded.last_introspected_at, approval_mode=excluded.approval_mode,
+      approval_granted_at=excluded.approval_granted_at, updated_at=excluded.updated_at`,
     serverValues(record, now)
   );
   return getPiMcpServer(db, record.id)!;
@@ -95,6 +101,8 @@ function normalizedServer(input: PiMcpServerInput, existing?: PiMcpServer): PiMc
   const env = stringRecord(input.env ?? existing?.env ?? {});
   const headers = stringRecord(input.headers ?? existing?.headers ?? {});
   return {
+    approval_granted_at: clean(input.approval_granted_at ?? existing?.approval_granted_at),
+    approval_mode: approvalMode(input.approval_mode ?? existing?.approval_mode),
     args: stringList(input.args ?? existing?.args ?? []), command: clean(input.command ?? existing?.command),
     cwd: clean(input.cwd ?? existing?.cwd), description: clean(input.description ?? existing?.description),
     diagnostics: input.diagnostics ?? existing?.diagnostics ?? [], enabled: input.enabled ?? existing?.enabled ?? false,
@@ -114,17 +122,26 @@ function serverValues(input: PiMcpServerInput & { id: string }, now: string): an
     JSON.stringify(input.env ?? {}), input.url ?? "", JSON.stringify(input.headers ?? {}), input.enabled ? 1 : 0,
     input.status ?? "discovered", input.readiness ?? "not_introspected", input.risk_level ?? "medium",
     JSON.stringify(input.diagnostics ?? []), JSON.stringify(input.redaction ?? {}), JSON.stringify(input.metadata ?? {}),
-    input.last_scan_at ?? "", input.last_introspected_at ?? "", now, now];
+    input.last_scan_at ?? "", input.last_introspected_at ?? "", input.approval_mode ?? "dangerous_only",
+    input.approval_granted_at ?? "", now, now];
 }
 
 function serverFromRow(row: ServerRow): PiMcpServer {
-  return { args: json(row.args_json, []), command: row.command, created_at: row.created_at, cwd: row.cwd,
+  return { approval_granted_at: row.approval_granted_at, approval_mode: approvalMode(row.approval_mode),
+    args: json(row.args_json, []), command: row.command, created_at: row.created_at, cwd: row.cwd,
     description: row.description, diagnostics: json(row.diagnostics_json, []), enabled: row.enabled === 1,
     env: json(row.env_json, {}), headers: json(row.headers_json, {}), id: row.id,
     last_introspected_at: row.last_introspected_at, last_scan_at: row.last_scan_at, metadata: json(row.metadata_json, {}),
     name: row.name, readiness: row.readiness, redaction: json(row.redaction_json, {}), risk_level: row.risk_level,
     source: row.source, source_path: row.source_path, status: row.status, transport_type: row.transport_type,
     updated_at: row.updated_at, url: row.url };
+}
+
+export function approvalMode(value: unknown): PiMcpApprovalMode {
+  const mode = clean(value);
+  return (PI_MCP_APPROVAL_MODES as readonly string[]).includes(mode)
+    ? mode as PiMcpApprovalMode
+    : "dangerous_only";
 }
 
 export function normalizeID(value: unknown): string {

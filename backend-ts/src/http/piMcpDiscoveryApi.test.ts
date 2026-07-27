@@ -122,7 +122,7 @@ describe("PI MCP discovery API", () => {
       expect(introspection.capabilities).toEqual(expect.arrayContaining([
         expect.objectContaining({ id: `${serverID}:tool:echo`, enabled: false, permission: "read", read_only: true }),
         expect.objectContaining({ id: `${serverID}:resource:guide`, enabled: false, permission: "read", read_only: true }),
-        expect.objectContaining({ id: `${serverID}:tool:mutate`, enabled: false, requires_confirmation: true, risk_level: "high" })
+        expect.objectContaining({ id: `${serverID}:tool:mutate`, enabled: false, permission: "write", requires_confirmation: false, risk_level: "medium" })
       ]));
       expect(JSON.stringify(introspection)).not.toContain("secret-token-value");
 

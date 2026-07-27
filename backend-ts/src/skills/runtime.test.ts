@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
@@ -7,6 +7,7 @@ import { createContextBundle } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
 import { listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
+import { resolvePiActionDecision } from "../http/piActionDecision.ts";
 import { runDomainSkillAndMarkProposal } from "../pi/domainSkillRun.ts";
 import type { WorkflowStage } from "../workflows/manifest.ts";
 import { DEFAULT_DOMAIN_SKILL_ID } from "./builtinDomainProposal.ts";
@@ -127,14 +128,14 @@ describe("controlled skill runtime", () => {
     }
   });
 
-  test("denies auto-execution of granted write tools and records tool audit", async () => {
+  test("routes granted write tools into the governed pending Action chain", async () => {
     const db = await openFixture();
     const handler: SkillRuntimeHandler = async (_input, context) => {
       await context.invokeTool("issue_create_proposal", { project_id: "demo", title: "must not write" });
       return { action_proposals: [] };
     };
     try {
-      await expectRuntimeError(executeSkillRuntime({
+      const result = await executeSkillRuntime({
         auditContext: { conversationID: "skill-permission-test" },
         db,
         handlers: { "test:write": handler },
@@ -144,20 +145,62 @@ describe("controlled skill runtime", () => {
           permissions: { max_tool_permission: "write" },
           required_tools: ["issue_create_proposal"]
         })
-      }), "approval_required");
-
-      expect(listPiActions(db)).toEqual([]);
-      const audit = listPiActionEvents(db, { conversationId: "skill-permission-test" })
-        .find((event) => event.event_type === "tool_call_audit");
-      expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({
-        error: { type: "approval_required" },
-        provider_id: "skill-runtime",
-        status: "denied",
-        tool: "issue_create_proposal"
       });
+
+      expect(result.run.status).toBe("succeeded");
+      expect(listPiActions(db)).toEqual([
+        expect.objectContaining({ action_type: "issue.create", gate_decision: "ask", status: "pending" })
+      ]);
+      expect(listPiActionEvents(db, { conversationId: "skill-permission-test" }).map((event) => event.event_type))
+        .toEqual(expect.arrayContaining(["candidate", "gate_decision", "pending_approval"]));
       expect(completedPayload(db, "skill-run-write-denied")).toMatchObject({
-        error_code: "approval_required",
-        status: "failed"
+        status: "succeeded"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("executes a granted CLI write tool only after the pending Action is approved", async () => {
+    const db = await openFixture();
+    const connector = await writeCliWriteFixture();
+    seedProject(db, "skill-write-project", connector.root);
+    const handler: SkillRuntimeHandler = async (_input, context) => ({
+      action_proposals: [],
+      invocation: await context.invokeTool("skill-write-cli:write-marker", {
+        marker: connector.marker,
+        value: "approved"
+      })
+    });
+    try {
+      const result = await executeSkillRuntime<Record<string, unknown>>({
+        auditContext: { conversationID: "skill-cli-write", projectID: "skill-write-project" },
+        cliConnectorDirs: [connector.dir],
+        db,
+        handlers: { "test:cli-write": handler },
+        input: { inbox_item: { evidence_refs: ["external_event:1"] } },
+        runID: "skill-run-cli-write",
+        skill: fixtureSkill("cli-write", "test:cli-write", {
+          permissions: { max_tool_permission: "write" },
+          required_tools: ["skill-write-cli:write-marker"]
+        })
+      });
+
+      const [pending] = listPiActions(db, { status: "pending" });
+      expect(result.output).toMatchObject({ invocation: { decision: "ask", status: "pending" } });
+      expect(pending).toMatchObject({ action_type: "assistant.tool.call", gate_decision: "ask" });
+      expect(await Bun.file(connector.marker).exists()).toBe(false);
+
+      const completed = await resolvePiActionDecision({ database: db }, {
+        actionID: pending.id,
+        actor: "test:user",
+        decision: "approve"
+      });
+      expect(completed.status).toBe("completed");
+      expect(await Bun.file(connector.marker).text()).toBe("approved");
+      expect(JSON.parse(completed.result_json)).toMatchObject({
+        output: { marker: connector.marker, value: "approved" },
+        status: "succeeded"
       });
     } finally {
       db.close();
@@ -252,6 +295,61 @@ async function openFixture(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-skill-runtime-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
+}
+
+async function writeCliWriteFixture(): Promise<{ dir: string; marker: string; root: string }> {
+  const root = await mkdtemp(join(tmpdir(), "codex-runner-skill-write-"));
+  tempRoots.push(root);
+  const dir = join(root, "connectors");
+  const marker = join(root, "approved.txt");
+  const script = join(dir, "write-marker.mjs");
+  await mkdir(dir, { recursive: true });
+  await writeFile(script, `
+import { writeFile } from "node:fs/promises";
+const mode = process.argv[2];
+if (mode === "health") console.log(JSON.stringify({ ok: true }));
+else {
+  await writeFile(process.argv[3], process.argv[4], "utf8");
+  console.log(JSON.stringify({ marker: process.argv[3], value: process.argv[4] }));
+}
+`, "utf8");
+  await writeFile(join(dir, "skill-write-cli.json"), JSON.stringify({
+    commands: [{
+      command: { args: [script, "write", "{{input.marker}}", "{{input.value}}"], executable: process.execPath },
+      description: "Write a marker file for the governed Skill runtime test.",
+      exit_codes: { success: [0] },
+      input_schema: {
+        properties: { marker: { type: "string" }, value: { type: "string" } },
+        required: ["marker", "value"],
+        type: "object"
+      },
+      name: "write-marker",
+      output_schema: {
+        properties: { marker: { type: "string" }, value: { type: "string" } },
+        type: "object"
+      },
+      permission: "write",
+      stdout: { mode: "json" }
+    }],
+    health: {
+      command: { args: [script, "health"], executable: process.execPath },
+      exit_codes: { success: [0] },
+      stdout: { mode: "json" }
+    },
+    id: "skill-write-cli",
+    kind: "cli",
+    manifest_version: "pi-cli-connector.v0",
+    name: "Skill Write CLI"
+  }, null, 2), "utf8");
+  return { dir, marker, root };
+}
+
+function seedProject(db: RunnerDatabase, id: string, cwd: string): void {
+  const now = "2026-07-27T00:00:00.000Z";
+  db.sqlite.run(
+    `insert into projects (id, name, cwd, provider, created_at, updated_at) values (?, ?, ?, ?, ?, ?)`,
+    [id, id, cwd, "codex", now, now]
+  );
 }
 
 function seedInboxItem(db: RunnerDatabase, primaryIntent: string) {

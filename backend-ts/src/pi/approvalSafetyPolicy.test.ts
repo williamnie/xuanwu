@@ -2,12 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { evaluateApprovalSafetyPolicy } from "./approvalSafetyPolicy.ts";
 
 describe("approval safety policy deny-list", () => {
-  test("denies deterministic high-risk approval requests", () => {
+  test("hard-denies out-of-scope risks but sends scoped destructive actions to review", () => {
     const cases: Array<[string, string]> = [
       ["sudo ls", "pi_approval_deny_privilege_escalation"],
       ["su - root", "pi_approval_deny_privilege_escalation"],
-      ["rm -rf dist", "pi_approval_deny_destructive_filesystem"],
-      ["git reset HEAD~1", "pi_approval_deny_destructive_git"],
       ["cat /etc/passwd", "pi_approval_deny_system_path"],
       ["cat ~/.ssh/id_rsa", "pi_approval_deny_secret_access"],
       ["cat .env.local", "pi_approval_deny_secret_access"],
@@ -19,6 +17,15 @@ describe("approval safety policy deny-list", () => {
     for (const [command, ruleID] of cases) {
       expect(commandDecision(command)).toMatchObject({ decision: "deny", rule_id: ruleID });
     }
+    expect(commandDecision("rm -rf *.mp4")).toMatchObject({
+      decision: "ask", rule_id: "pi_approval_ask_destructive_filesystem"
+    });
+    expect(commandDecision("git reset HEAD~1")).toMatchObject({
+      decision: "ask", rule_id: "pi_approval_ask_destructive_git"
+    });
+    expect(commandDecision("rm -rf ../other")).toMatchObject({
+      decision: "deny", rule_id: "pi_approval_deny_cross_workspace"
+    });
   });
 
   test("redacts secrets and local paths from deny reasons", () => {

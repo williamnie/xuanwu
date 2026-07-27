@@ -63,17 +63,17 @@ describe("approval fast policy", () => {
     });
   });
 
-  test("denies allow-list misses and paths that normalize outside cwd", () => {
+  test("asks for current-workspace allow-list misses and denies paths outside cwd", () => {
     expect(commandDecision("python scripts/release.py")).toMatchObject({
-      decision: "deny-now",
+      decision: "ask-user",
       rule_id: "pi_approval_deny_allowlist_miss"
     });
     expect(commandDecision("npm run lint -- --fix")).toMatchObject({
-      decision: "deny-now",
+      decision: "ask-user",
       rule_id: "pi_approval_deny_allowlist_miss"
     });
     expect(commandDecision("cat $(pwd)/README.md")).toMatchObject({
-      decision: "deny-now",
+      decision: "ask-user",
       rule_id: "pi_approval_deny_allowlist_miss"
     });
 
@@ -82,7 +82,18 @@ describe("approval fast policy", () => {
       params: { changes: [{ path: "./src/../../outside.txt" }], cwd: "/workspace/demo" }
     })).toMatchObject({
       decision: "deny-now",
-      rule_id: "pi_approval_deny_allowlist_miss"
+      rule_id: "pi_approval_deny_cross_workspace"
+    });
+  });
+
+  test("routes scoped destructive commands to user approval", () => {
+    expect(commandDecision("rm -rf *.mp4")).toMatchObject({
+      decision: "ask-user",
+      rule_id: "pi_approval_ask_destructive_filesystem"
+    });
+    expect(commandDecision("rm -rf ../outside")).toMatchObject({
+      decision: "deny-now",
+      rule_id: "pi_approval_deny_cross_workspace"
     });
   });
 

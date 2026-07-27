@@ -2,6 +2,11 @@ import { listPiMcpCapabilities, patchPiMcpCapability, replacePiMcpCapabilitiesFo
 import { deletePiMcpServer, getPiMcpServer, listPiMcpServers, normalizeID, patchPiMcpServer, redactionFor, upsertPiMcpServer, type PiMcpServer, type PiMcpServerInput } from "../db/repositories/piMcpServers.ts";
 import { listMcpDiscoverySources, scanMcpDiscoverySources } from "../mcp/discovery/detectors.ts";
 import { introspectMcpServer } from "../mcp/discovery/introspector.ts";
+import {
+  listPiMcpApprovalGrants,
+  revokePiMcpApprovalGrant,
+  revokePiMcpApprovalGrants
+} from "../db/repositories/pi.ts";
 import type { McpDiscoveryServer, McpDiscoveryTransport } from "../mcp/discovery/types.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
@@ -18,6 +23,7 @@ export function registerPiMcpDiscoveryRoutes(router: Router, context: PiMcpDisco
   router.delete("/api/pi/mcp/servers/:id", (request) => deleteServerResponse(context, request));
   router.post("/api/pi/mcp/servers/:id/introspect", (request) => introspectResponse(context, request));
   router.patch("/api/pi/mcp/capabilities/:id", (request) => patchCapabilityResponse(context, request));
+  router.delete("/api/pi/mcp/approval-grants/:id", (request) => revokeGrantResponse(context, request));
 }
 
 function sourcesResponse(): Response {
@@ -35,7 +41,8 @@ async function scanResponse(context: PiMcpDiscoveryContext, request: Request): P
 function resultsResponse(context: PiMcpDiscoveryContext): Response {
   const servers = listPiMcpServers(context.database).map(publicServer);
   const capabilities = listPiMcpCapabilities(context.database).map(publicCapability);
-  return json(redactSecrets({ capabilities, servers }));
+  const approval_grants = listPiMcpApprovalGrants(context.database).map(publicApprovalGrant);
+  return json(redactSecrets({ approval_grants, capabilities, servers }));
 }
 
 async function createServerResponse(context: PiMcpDiscoveryContext, request: Request): Promise<Response> {
@@ -45,7 +52,13 @@ async function createServerResponse(context: PiMcpDiscoveryContext, request: Req
 }
 
 async function patchServerResponse(context: PiMcpDiscoveryContext, request: Request): Promise<Response> {
-  const server = patchPiMcpServer(context.database, pathID(request, "servers"), patchInput(objectValue(await parseJsonBody(request))));
+  const id = pathID(request, "servers");
+  const body = objectValue(await parseJsonBody(request));
+  const patch = patchInput(body);
+  if (patch.enabled === false || body.transport !== undefined) {
+    revokePiMcpApprovalGrants(context.database, { serverID: id });
+  }
+  const server = patchPiMcpServer(context.database, id, patch);
   if (!server) throw new HttpError(404, "MCP server 不存在");
   return json(redactSecrets({ server: publicServer(server) }));
 }
@@ -60,6 +73,10 @@ function introspectResponse(context: PiMcpDiscoveryContext, request: Request): R
   const server = getPiMcpServer(context.database, id);
   if (!server) throw new HttpError(404, "MCP server 不存在");
   const result = introspectMcpServer(server);
+  // Introspection is the authority for tool schemas and annotations. Revoke
+  // project grants before replacing that contract so stale grants never remain
+  // visible or reusable after a server upgrade.
+  revokePiMcpApprovalGrants(context.database, { serverID: id });
   const capabilities = replacePiMcpCapabilitiesForServer(context.database, id, result.capabilities);
   const updated = patchPiMcpServer(context.database, id, {
     diagnostics: result.diagnostics, last_introspected_at: new Date().toISOString(), metadata: { ...server.metadata, server_info: result.serverInfo ?? {} },
@@ -69,9 +86,22 @@ function introspectResponse(context: PiMcpDiscoveryContext, request: Request): R
 }
 
 async function patchCapabilityResponse(context: PiMcpDiscoveryContext, request: Request): Promise<Response> {
-  const capability = patchPiMcpCapability(context.database, pathID(request, "capabilities"), capabilityPatch(objectValue(await parseJsonBody(request))));
+  const id = pathID(request, "capabilities");
+  const body = objectValue(await parseJsonBody(request));
+  if (body.enabled === false || body.permission !== undefined || body.risk_level !== undefined ||
+      body.read_only !== undefined || body.requires_confirmation !== undefined) {
+    revokePiMcpApprovalGrants(context.database, { capabilityID: id });
+  }
+  const capability = patchPiMcpCapability(context.database, id, capabilityPatch(body));
   if (!capability) throw new HttpError(404, "MCP capability 不存在");
   return json(redactSecrets({ capability: publicCapability(capability) }));
+}
+
+function revokeGrantResponse(context: PiMcpDiscoveryContext, request: Request): Response {
+  if (!revokePiMcpApprovalGrant(context.database, pathID(request, "approval-grants"))) {
+    throw new HttpError(404, "MCP approval grant 不存在");
+  }
+  return json({ ok: true });
 }
 
 function serverInput(server: McpDiscoveryServer, now: string): PiMcpServerInput {
@@ -94,7 +124,15 @@ function manualServerInput(body: Record<string, unknown>): PiMcpServerInput {
 
 function patchInput(body: Record<string, unknown>): Partial<PiMcpServerInput> {
   const transport = body.transport === undefined ? undefined : transportInput(objectValue(body.transport));
-  return { ...(body.enabled === undefined ? {} : { enabled: body.enabled === true }), ...(body.name === undefined ? {} : { name: stringInput(body.name) }),
+  const approvalMode = stringInput(body.approval_mode ?? body.approvalMode);
+  if (approvalMode && !["dangerous_only", "every_write", "read_only"].includes(approvalMode)) {
+    throw new HttpError(400, "approval_mode 不合法");
+  }
+  const grantsApproval = body.enabled === true || approvalMode !== "";
+  return { ...(body.enabled === undefined ? {} : { enabled: body.enabled === true }),
+    ...(approvalMode ? { approval_mode: approvalMode as "dangerous_only" | "every_write" | "read_only" } : {}),
+    ...(grantsApproval ? { approval_granted_at: new Date().toISOString() } : {}),
+    ...(body.name === undefined ? {} : { name: stringInput(body.name) }),
     ...(transport ? transportFields(transport) : {}) };
 }
 
@@ -125,6 +163,17 @@ function publicServer(server: PiMcpServer): Record<string, unknown> {
 
 function publicCapability(capability: unknown): unknown {
   return capability;
+}
+
+function publicApprovalGrant(grant: ReturnType<typeof listPiMcpApprovalGrants>[number]): Record<string, unknown> {
+  return {
+    capability_id: grant.capability_id,
+    created_at: grant.created_at,
+    granted_by: grant.granted_by,
+    id: grant.id,
+    project_id: grant.project_id,
+    reason: grant.reason
+  };
 }
 
 function pathID(request: Request, marker: string): string {

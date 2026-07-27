@@ -65,7 +65,9 @@ export default function AttentionSection() {
 
   const items = useMemo(() => summary?.section?.items || [], [summary]);
   const filteredItems = useMemo(() => typeFilter ? items.filter(item => item.type === typeFilter) : items, [items, typeFilter]);
-  const groups = useMemo(() => groupAttentionByPriority(filteredItems), [filteredItems]);
+  const pushedApprovals = useMemo(() => filteredItems.filter(isPushedApproval), [filteredItems]);
+  const primaryItems = useMemo(() => filteredItems.filter(item => !isPushedApproval(item)), [filteredItems]);
+  const groups = useMemo(() => groupAttentionByPriority(primaryItems), [primaryItems]);
   const submit = async (item, action) => {
     if (submitting) return;
     setSubmitting(`${item.id}:${action}`);
@@ -98,7 +100,9 @@ export default function AttentionSection() {
         reason: `Command Center user ${decision}d ${target.kind}`,
         scope: 'turn',
       });
-      toast.success(decision === 'approve' ? 'Decision 已批准并进入唯一 Action Gate 执行链' : 'Decision 已拒绝并记录审计');
+      toast.success(decision === 'approve_always'
+        ? '当前项目持续授权已记录，本次动作已进入执行链'
+        : decision === 'approve' ? 'Decision 已批准并进入唯一 Action Gate 执行链' : 'Decision 已拒绝并记录审计');
       setApproval({ detail: null, error: '', loading: false });
       await load({ silent: true });
     } catch (resolveError) {
@@ -111,8 +115,8 @@ export default function AttentionSection() {
       <header className="attention-section-header">
         <div>
           <div className="attention-section-kicker"><BellRing size={15} /> Attention</div>
-          <h3>这里只放真正需要你处理的事项</h3>
-          <p>PI 能处理的运行告警会自动恢复并进入日报；这里只保留审批、输入、验收或已耗尽恢复预算的问题。</p>
+          <h3>这里只放未送达或必须兜底处理的事项</h3>
+          <p>高危审批优先推送飞书；页面是失败兜底与审计入口，已推送事项默认折叠。</p>
         </div>
         <div className="attention-section-header-actions">
           <select aria-label="Attention 类型筛选" className="attention-type-filter" onChange={event => setTypeFilter(event.target.value)} value={typeFilter}>
@@ -128,18 +132,31 @@ export default function AttentionSection() {
       {!error && summary ? <PiOperationsSummary operations={summary.section.operations} recentHistory={summary.section.recent_history} /> : null}
 
       {error ? <State error={error} onRetry={() => load()} /> : loading && !summary ? <State loading /> : filteredItems.length === 0 ? <State filtered={Boolean(typeFilter)} /> : (
-        <div className="attention-priority-groups">
+        <><div className="attention-priority-groups">
           {ATTENTION_PRIORITIES.map(priority => groups[priority].length > 0 ? (
             <div className="attention-priority-group" data-priority={priority} key={priority}>
               <div className="attention-priority-heading"><strong>{priority.toUpperCase()}</strong><span>{groups[priority].length} 项</span></div>
               {groups[priority].map(item => <AttentionCard item={item} key={item.id} onReviewApproval={reviewApproval} onSubmit={submit} submitting={submitting} />)}
             </div>
           ) : null)}
-        </div>
+        </div><PushedApprovalFallback items={pushedApprovals} onReviewApproval={reviewApproval} onSubmit={submit} submitting={submitting} /></>
       )}
       {approval.loading || approval.error || approval.detail ? <ApprovalDetail approval={approval} onClose={() => setApproval({ detail: null, error: '', loading: false })} onResolve={resolveApproval} submitting={submitting} /> : null}
     </section>
   );
+}
+
+function isPushedApproval(item) {
+  const delivery = item?.details?.notification?.delivery;
+  return item?.type === 'approval_required' && delivery === 'sent';
+}
+
+function PushedApprovalFallback({ items, onReviewApproval, onSubmit, submitting }) {
+  if (!items.length) return null;
+  return <details className="attention-pushed-approvals">
+    <summary><ShieldCheck size={13} /> 已推送飞书，页面仅保留 {items.length} 条兜底记录</summary>
+    <div>{items.map(item => <AttentionCard item={item} key={item.id} onReviewApproval={onReviewApproval} onSubmit={onSubmit} submitting={submitting} />)}</div>
+  </details>;
 }
 
 function AttentionCard({ item, onReviewApproval, onSubmit, submitting }) {
@@ -218,6 +235,7 @@ function ApprovalDetail({ approval, onClose, onResolve, submitting }) {
         {target.status === 'pending' || target.status === 'proposed' || target.status === 'delivered' || target.status === 'resolve_failed' ? <footer>
           <span>旧 API 只翻译到此确定性 command；每个外部写仍经同一 Action Gate。</span>
           <button disabled={Boolean(submitting)} onClick={() => onResolve('reject', target)} type="button"><ShieldX size={14} />拒绝</button>
+          {target.kind === 'pi_action' && target.action_type === 'mcp.tool.call' && target.project_id ? <button disabled={Boolean(submitting)} onClick={() => onResolve('approve_always', target)} type="button"><ShieldCheck size={14} />当前项目始终允许</button> : null}
           <button className="approve" disabled={Boolean(submitting)} onClick={() => onResolve('approve', target)} type="button"><ShieldCheck size={14} />批准一次</button>
         </footer> : null}
       </div>)}

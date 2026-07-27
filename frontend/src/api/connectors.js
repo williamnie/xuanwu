@@ -56,4 +56,8 @@ export const connectorsApi = {
     method: 'PATCH',
     body: JSON.stringify(patch),
   }),
+
+  revokePiMcpApprovalGrant: (id) => request(`/api/pi/mcp/approval-grants/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  }),
 };

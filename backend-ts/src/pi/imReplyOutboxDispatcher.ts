@@ -82,8 +82,10 @@ async function sendFeishuMessage(
   const piActionID = piActionIDFromApprovalActionID(approvalID);
   let card: Record<string, unknown> | undefined;
   if (piActionID !== "" && options.sender.sendInteractiveCard) {
+    const piAction = getPiAction(options.database, piActionID);
     card = buildFeishuPiActionCard({
       actionID: piActionID,
+      actionType: piAction?.action_type,
       issueID: outbox.issue_id,
       text: outbox.content
     });

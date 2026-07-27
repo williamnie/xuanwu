@@ -22,6 +22,11 @@ export type ApprovalFastDecision =
       resolver_decision: ApprovalDecision;
       rule_id: ApprovalSafetyRuleID | ApprovalUnknownRuleID;
       session_grant: ApprovalFastSessionGrant;
+    }
+  | {
+      decision: "ask-user";
+      reason: string;
+      rule_id: ApprovalSafetyRuleID | ApprovalUnknownRuleID;
     };
 
 export type ApprovalFastInput = ApprovalSafetyInput & {
@@ -58,14 +63,15 @@ const DISABLED_SESSION_GRANT: ApprovalFastSessionGrant = {
 };
 
 export function evaluateApprovalFastPolicy(input: ApprovalFastInput): ApprovalFastDecision {
-  const safetyDecision = fastDenyDecision(evaluateApprovalSafetyPolicy(input));
+  const safetyDecision = fastSafetyDecision(evaluateApprovalSafetyPolicy(input));
   if (safetyDecision) return safetyDecision;
   return allowListDecision(input);
 }
 
-function fastDenyDecision(decision: ApprovalSafetyDecision): ApprovalFastDecision | null {
-  if (decision.decision !== "deny") return null;
-  return denyNow(decision.reason, decision.rule_id);
+function fastSafetyDecision(decision: ApprovalSafetyDecision): ApprovalFastDecision | null {
+  if (decision.decision === "deny") return denyNow(decision.reason, decision.rule_id);
+  if (decision.decision === "ask") return askUser(decision.reason, decision.rule_id);
+  return null;
 }
 
 function allowListDecision(input: ApprovalFastInput): ApprovalFastDecision {
@@ -76,7 +82,12 @@ function allowListDecision(input: ApprovalFastInput): ApprovalFastDecision {
   const parsed = parseCodexApprovalRequest({ jsonRpcId: input.jsonRpcId, method: input.method, params: input.params });
   if (parsed.parse_status !== "ok") return denyNow("approval request is ambiguous", "pi_approval_deny_ambiguous_request");
   const match = allowListMatch(parsed, cache);
-  if (!match) return denyNow("approval request is not an exact low-risk allow-list match", "pi_approval_deny_allowlist_miss");
+  if (!match) {
+    if (parsed.request_type === "command" || parsed.request_type === "fileChange") {
+      return askUser("approval request requires explicit user confirmation", "pi_approval_deny_allowlist_miss");
+    }
+    return denyNow("approval request is not an exact low-risk allow-list match", "pi_approval_deny_allowlist_miss");
+  }
   return {
     decision: "approve-now",
     reason: match.reason,
@@ -192,4 +203,11 @@ function denyNow(
     rule_id,
     session_grant: DISABLED_SESSION_GRANT
   };
+}
+
+function askUser(
+  reason: string,
+  rule_id: ApprovalSafetyRuleID | ApprovalUnknownRuleID
+): ApprovalFastDecision {
+  return { decision: "ask-user", reason, rule_id };
 }

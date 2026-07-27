@@ -21,11 +21,11 @@
 
 统计：
 
-- 85 张表：keep=53、merge=22、migrate=8、delete=2（83 张 current source + 2 张 captured live-only legacy）
-- 242 条用户 API route（以 `API_ROUTE_DISPOSITIONS` 的 family 映射为准）
+- 86 张表：keep=54、merge=22、migrate=8、delete=2（84 张 current source + 2 张 captured live-only legacy）
+- 241 条用户 API route（以 `API_ROUTE_DISPOSITIONS` 的 family 映射为准）
 - 32 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
 - 15 个后台调度/启动单元：keep=4、merge=8、migrate=3、delete=0
-- 143 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
+- 144 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
 
 ## 2. live reference 证据
 
@@ -95,6 +95,7 @@ sqlite3 -readonly "$LIVE_DB" "select name from sqlite_master where type='table' 
 | `pi_heartbeat_runs` | **merge** | Automation execution audit | pi_heartbeat_runs; not a core Run | `R3_AUDIT` | 0 |
 | `pi_issue_completion_watch_items` | **merge** | Automation execution Evidence | pi_issue_completion_watch_items | `R3_AUDIT` | 0 |
 | `pi_issue_completion_watches` | **migrate** | Automation completion watch | pi_issue_completion_watches until Automation parity | `R3_AUDIT` | 0 |
+| `pi_mcp_approval_grants` | **keep** | Project-scoped MCP approval policy | pi_mcp_approval_grants | `R3_AUDIT` | 0 |
 | `pi_mcp_capabilities` | **keep** | Capability registry | pi_mcp_capabilities | `R2_DURABLE` | 0 |
 | `pi_mcp_servers` | **keep** | Capability registry | pi_mcp_servers | `R4_SENSITIVE` | 4 |
 | `pi_memory_items` | **keep** | Supporting knowledge store | pi_memory_items | `R4_SENSITIVE` | 1 |
@@ -242,6 +243,7 @@ GET /api/pi/mcp/discovery/results
 POST /api/pi/mcp/discovery/scan
 GET /api/pi/mcp/discovery/sources
 POST /api/pi/mcp/servers
+DELETE /api/pi/mcp/approval-grants/:id
 DELETE /api/pi/mcp/servers/:id
 PATCH /api/pi/mcp/servers/:id
 POST /api/pi/mcp/servers/:id/introspect
@@ -444,13 +446,13 @@ GET /api/issues/:id/runs
 
 ## 8. PI 模块清单
 
-`backend-ts/src/pi` 的 143 个非 `*.test.ts` 模块全部在下面 family 中逐项列出；测试保证没有漏项或重复归属。
+`backend-ts/src/pi` 的 144 个非 `*.test.ts` 模块全部在下面 family 中逐项列出；测试保证没有漏项或重复归属。
 
 | family | 文件数 | 结论 | 目标 | source of truth |
 | --- | ---: | --- | --- | --- |
 | `action-permission-gate` | 17 | **keep** | Deterministic permission and external-effect gate | Action Proposal/Approval plus pi_action_events |
 | `automation` | 11 | **migrate** | `automation_definitions/runs/events` execution pipeline | legacy pi_automations, heartbeats, and watches until W2/G4 |
-| `capability-connectors` | 27 | **keep** | Capability and connector runtime | registered provider/tool manifests and audited calls |
+| `capability-connectors` | 28 | **keep** | Capability and connector runtime | registered provider/tool manifests and audited calls |
 | `guardian-attention` | 25 | **merge** | Attention detection, routing and delivery | Guardian authorities projected into Attention |
 | `intake-context` | 8 | **merge** | Attention intake and Evidence context | external events, context bundles and intake audit |
 | `memory` | 4 | **keep** | Supporting knowledge store | pi_memory_items |
@@ -517,6 +519,7 @@ backend-ts/src/pi/cliToolRunnerSupport.ts
 backend-ts/src/pi/httpToolCall.ts
 backend-ts/src/pi/httpToolProvider.ts
 backend-ts/src/pi/mcpActionTools.ts
+backend-ts/src/pi/mcpApprovalExpiry.ts
 backend-ts/src/pi/mcpResourceRead.ts
 backend-ts/src/pi/mcpToolCall.ts
 backend-ts/src/pi/mcpToolDefinitions.ts
@@ -734,4 +737,4 @@ bunx tsc --ignoreConfig --noEmit --target ES2022 --module ESNext \
   src/xuanwu/capabilityDispositionInventory.test.ts
 ```
 
-测试会验证：83 张 current source table + 2 张 captured live-only table = 85；242 条唯一用户 API route 全覆盖；32 个 JSX 页面组件与 143 个 PI 模块恰好归属一次；12 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。
+测试会验证：84 张 current source table + 2 张 captured live-only table = 86；241 条唯一用户 API route 全覆盖；32 个 JSX 页面组件与 144 个 PI 模块恰好归属一次；12 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。

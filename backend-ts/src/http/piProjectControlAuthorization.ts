@@ -34,6 +34,7 @@ function managerAuthorizedActions(projectID: string): PiGatePolicy["authorizedAc
     { action_type: "mcp.registry.list", project_id: projectID }, { action_type: "mcp.capability.read", project_id: projectID },
     { action_type: "mcp.requirement.recommend", project_id: projectID },
     { action_type: "mcp.resource.list", project_id: projectID }, { action_type: "mcp.resource.read", project_id: projectID },
+    { action_type: "mcp.tool.call", project_id: projectID },
     { action_type: "work.enqueue", project_id: projectID }
   ];
   return actions;

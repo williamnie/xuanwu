@@ -1,4 +1,5 @@
 import { redactSensitiveText } from "../util/redact.ts";
+import { resolve } from "node:path";
 
 export type ApprovalSafetyInput = {
   method: string;
@@ -7,8 +8,8 @@ export type ApprovalSafetyInput = {
 
 export type ApprovalSafetyRuleID =
   | "pi_approval_deny_cross_workspace"
-  | "pi_approval_deny_destructive_filesystem"
-  | "pi_approval_deny_destructive_git"
+  | "pi_approval_ask_destructive_filesystem"
+  | "pi_approval_ask_destructive_git"
   | "pi_approval_deny_privilege_escalation"
   | "pi_approval_deny_remote_script_execution"
   | "pi_approval_deny_secret_access"
@@ -16,12 +17,13 @@ export type ApprovalSafetyRuleID =
 
 export type ApprovalSafetyDecision =
   | { decision: "none" }
-  | { decision: "deny"; reason: string; rule_id: ApprovalSafetyRuleID };
+  | { decision: "ask" | "deny"; reason: string; rule_id: ApprovalSafetyRuleID };
 
 type ApprovalSafetyContext = {
   command: string;
   cwd: string;
   path: string;
+  paths: string[];
 };
 
 type RuleMatch = {
@@ -50,20 +52,20 @@ const REASON_MAX_LENGTH = 240;
 
 export function evaluateApprovalSafetyPolicy(input: ApprovalSafetyInput): ApprovalSafetyDecision {
   const context = approvalSafetyContext(input);
-  const match = firstRuleMatch(context);
-  if (!match) return { decision: "none" };
+  const denied = firstHardDenyRuleMatch(context);
+  if (denied) return { decision: "deny", reason: policyReason(denied), rule_id: denied.rule_id };
+  const review = firstReviewRuleMatch(context);
+  if (!review) return { decision: "none" };
   return {
-    decision: "deny",
-    reason: denyReason(match),
-    rule_id: match.rule_id
+    decision: "ask",
+    reason: policyReason(review),
+    rule_id: review.rule_id
   };
 }
 
-function firstRuleMatch(context: ApprovalSafetyContext): RuleMatch | null {
+function firstHardDenyRuleMatch(context: ApprovalSafetyContext): RuleMatch | null {
   return [
     privilegeEscalationRule(context),
-    destructiveFilesystemRule(context),
-    destructiveGitRule(context),
     remoteScriptRule(context),
     secretAccessRule(context),
     systemPathRule(context),
@@ -71,15 +73,19 @@ function firstRuleMatch(context: ApprovalSafetyContext): RuleMatch | null {
   ].find(Boolean) ?? null;
 }
 
+function firstReviewRuleMatch(context: ApprovalSafetyContext): RuleMatch | null {
+  return [destructiveFilesystemRule(context), destructiveGitRule(context)].find(Boolean) ?? null;
+}
+
 function approvalSafetyContext(input: ApprovalSafetyInput): ApprovalSafetyContext {
   const params = input.params ?? {};
   const item = recordValue(params.item);
+  const paths = [cleanString(params.path ?? item.path), ...changesPaths(params), ...changesPaths(item)].filter(Boolean);
   return {
     command: cleanString(params.command ?? item.command),
     cwd: cleanString(params.cwd ?? params.workingDirectory ?? params.workspace ?? item.cwd),
-    path: [cleanString(params.path ?? item.path), ...changesPaths(params), ...changesPaths(item)]
-      .filter(Boolean)
-      .join(" ")
+    path: paths.join(" "),
+    paths
   };
 }
 
@@ -91,13 +97,13 @@ function privilegeEscalationRule(context: ApprovalSafetyContext): RuleMatch | nu
 
 function destructiveFilesystemRule(context: ApprovalSafetyContext): RuleMatch | null {
   return RM_RF_PATTERN.test(context.command)
-    ? rule("pi_approval_deny_destructive_filesystem", "destructive filesystem command", context.command)
+    ? rule("pi_approval_ask_destructive_filesystem", "destructive filesystem command requires user approval", context.command)
     : null;
 }
 
 function destructiveGitRule(context: ApprovalSafetyContext): RuleMatch | null {
   return GIT_RESET_PATTERN.test(context.command) || GIT_FORCE_PUSH_PATTERN.test(context.command)
-    ? rule("pi_approval_deny_destructive_git", "destructive git command", context.command)
+    ? rule("pi_approval_ask_destructive_git", "destructive git command requires user approval", context.command)
     : null;
 }
 
@@ -127,6 +133,11 @@ function crossWorkspaceRule(context: ApprovalSafetyContext): RuleMatch | null {
   }
   const cwd = normalizeAbsolutePath(context.cwd);
   if (cwd === "") return null;
+  const relativeOutside = context.paths.find((path) => {
+    if (path.startsWith("/")) return false;
+    return !isPathWithin(normalizeAbsolutePath(resolve(cwd, path)), cwd);
+  });
+  if (relativeOutside) return rule("pi_approval_deny_cross_workspace", "cross workspace path access", relativeOutside);
   const outside = absolutePaths(targetText(context)).find((path) => !isPathWithin(path, cwd));
   return outside ? rule("pi_approval_deny_cross_workspace", "cross workspace path access", outside) : null;
 }
@@ -158,7 +169,7 @@ function rule(rule_id: ApprovalSafetyRuleID, label: string, evidence: string): R
   return { evidence, label, rule_id };
 }
 
-function denyReason(match: RuleMatch): string {
+function policyReason(match: RuleMatch): string {
   return truncateReason(`${match.label}: ${redactApprovalText(match.evidence)}`);
 }
 

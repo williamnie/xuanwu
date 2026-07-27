@@ -4,6 +4,7 @@ import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import type { PiGuardianDirectFeishuOptions } from "../integrations/feishuGuardianAlerts.ts";
 import { ROUTABLE_INTENT_SQL, suppressUnroutableLifecycleIntents } from "./guardianWatchdogMaintenance.ts";
 import { writeGuardianWatchdogAlerts, type WatchdogAlertWriteResult } from "./guardianWatchdogAlerts.ts";
+import { expirePendingMcpApprovals } from "./mcpApprovalExpiry.ts";
 
 export type PiGuardianWatchdogComponent =
   "approval" | "coordinator" | "digest" | "inbox" | "outbox" | "pi_runtime" | "scheduler";
@@ -62,6 +63,7 @@ export async function runPiGuardianWatchdogOnce(
   const probes = input.checks ?? DEFAULT_CHECKS;
   const summary: PiGuardianWatchdogSummary = { alerts: 0, checks: [], errors: 0, scanned: 0 };
   const errors: string[] = [];
+  expirePendingMcpApprovals(db, context.now);
   suppressUnroutableLifecycleIntents(db);
   for (const probe of probes) {
     summary.scanned += 1;

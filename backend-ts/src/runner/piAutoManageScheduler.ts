@@ -3,6 +3,7 @@ import type { RunnerConfig } from "../config/env.ts";
 import { isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
 import { queueReadyFeishuDigestNotifications } from "../integrations/feishuLifecycleNotifications.ts";
+import { queuePendingPiActionNotifications } from "../integrations/feishuNotifications.ts";
 import type { PiGuardianDirectFeishuOptions } from "../integrations/feishuGuardianAlerts.ts";
 import type { FeishuMessageClient } from "../integrations/feishuClient.ts";
 import { createFeishuMessageClient } from "../integrations/feishuClient.ts";
@@ -286,6 +287,12 @@ export async function runGuardianControlPlaneCycle(
 export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<AgenticCycleResult> {
   const cycleStartedAt = performance.now();
   const projects = await timedSchedulePhase("projects", () => runPiAutoManageCycle(input));
+  if (input.config) {
+    await timedSchedulePhase("pending_action_notifications", () => queuePendingPiActionNotifications(
+      input.database,
+      input.config?.integrations.feishu
+    ));
+  }
   const agentCommunications = await timedSchedulePhase("agent_communications", () => runAgentCommunicationGatewayOnce(input.database, {
     decide: input.agentCommunicationDecider,
     now: optionalDate(input.watchdogNow)

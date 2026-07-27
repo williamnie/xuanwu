@@ -20,6 +20,7 @@ import {
 import { normalizePiActionEnvelope } from "./actionEnvelope.ts";
 import { publishGateEvent, publishPiActionEvent, recordPiActionAuditEvent } from "./actionAudit.ts";
 import { actionRecordMetadata } from "./actionRecordMetadata.ts";
+import { mcpApprovalExpiresAt } from "./mcpApprovalExpiry.ts";
 
 export type PiActionRequest = {
   actionType: string;
@@ -104,6 +105,9 @@ function persistGateDecision(
     gate_decision: decision.decision,
     gate_reason: decision.reason,
     result_json: JSON.stringify(result),
+    lease_expires_at: decision.decision === "ask"
+      ? mcpApprovalExpiresAt(action.action_type, action.created_at, action.lease_expires_at)
+      : action.lease_expires_at,
     status: nextStatus
   });
   recordPiActionAuditEvent(db, next, "gate_decision", {

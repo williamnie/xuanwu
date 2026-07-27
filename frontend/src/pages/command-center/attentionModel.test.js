@@ -42,7 +42,7 @@ test('Command Center Attention has grouped cards, canonical source links, empty 
   assert.match(page, /controlAttention/);
   assert.match(page, /await load\(\{ silent: true \}\)/);
   assert.match(page, /当前没有需要你介入的事项/);
-  assert.match(page, /这里只放真正需要你处理的事项/);
+  assert.match(page, /这里只放未送达或必须兜底处理的事项/);
   assert.match(page, /PI 自动运维/);
   assert.match(page, /需要你做什么/);
   assert.match(page, /我知道了，不再显示/);
@@ -54,6 +54,9 @@ test('Command Center Attention has grouped cards, canonical source links, empty 
   assert.match(page, /resolveApproval/);
   assert.match(page, /getAttention/);
   assert.match(page, /decision_ref/);
+  assert.match(page, /approve_always/);
+  assert.match(page, /已推送飞书，页面仅保留/);
+  assert.match(page, /isPushedApproval/);
   assert.match(page, /subscribeToEvents/);
   assert.match(page, /Attention 类型筛选/);
   assert.match(api, /\/api\/command-center\/attention\/\$\{encodeURIComponent\(id\)\}\/actions/);

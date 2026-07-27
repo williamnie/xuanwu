@@ -10,6 +10,10 @@ import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts
 import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
 import { HttpError } from "./errors.ts";
 import { dispatchPiAction, type ProjectLoopStarter } from "./piActionDispatch.ts";
+import { grantPiMcpCapabilityApproval } from "../db/repositories/pi.ts";
+import { readMcpCapability, readMcpServer } from "../mcp/registry.ts";
+import { mcpCapabilityFingerprint } from "../mcp/approvalPolicy.ts";
+import { getPiMcpCapability } from "../db/repositories/piMcpCapabilities.ts";
 
 export type PiActionDecisionContext = {
   bus?: EventBus;
@@ -18,7 +22,7 @@ export type PiActionDecisionContext = {
   startProjectLoop?: ProjectLoopStarter;
 };
 
-export type PiActionResolveDecision = "approve" | "reject" | "request_changes" | "snooze";
+export type PiActionResolveDecision = "approve" | "approve_always" | "reject" | "request_changes" | "snooze";
 
 export type PiActionResolveInput = {
   actionID: string;
@@ -34,6 +38,9 @@ export async function resolvePiActionDecision(
   input: PiActionResolveInput
 ): Promise<PiAction> {
   if (input.decision === "approve") return approveAction(context, input.actionID, actor(input.actor));
+  if (input.decision === "approve_always") {
+    return approveAlwaysMcpAction(context, input.actionID, actor(input.actor), input.reason);
+  }
   if (input.decision === "reject") return rejectAction(context, input.actionID, actor(input.actor), input.reason);
   if (input.decision === "request_changes") {
     return requestChangesAction(context, input.actionID, actor(input.actor), input.comment || input.reason);
@@ -42,11 +49,51 @@ export async function resolvePiActionDecision(
 }
 
 async function approveAction(context: PiActionDecisionContext, id: string, actorID: string): Promise<PiAction> {
-  const action = requireAction(context.database, id);
+  const action = requireCurrentApprovableAction(context.database, id);
   if (isTerminal(action) || action.status === "executing") return action;
   assertApprovableGate(action);
+  assertCurrentMcpCapability(context.database, action);
   const approved = action.status === "approved" ? action : approvePendingAction(context, action, actorID);
   return await executeApprovedPiAction(context, approved.id);
+}
+
+async function approveAlwaysMcpAction(
+  context: PiActionDecisionContext,
+  id: string,
+  actorID: string,
+  reason?: string
+): Promise<PiAction> {
+  const action = requireCurrentApprovableAction(context.database, id);
+  if (isTerminal(action) || action.status === "executing") return action;
+  if (action.action_type !== "mcp.tool.call") throw new HttpError(400, "approve_always only supports MCP tool calls");
+  assertApprovableGate(action);
+  if (action.project_id === "") throw new HttpError(409, "MCP persistent approval requires a project scope");
+  const payload = parsePayload(action.payload_json);
+  const capabilityID = cleanString(payload.capability_id);
+  if (!getPiMcpCapability(context.database, capabilityID)) {
+    throw new HttpError(409, "Persistent approval requires an installed MCP capability");
+  }
+  const capability = readMcpCapability(capabilityID, { database: context.database });
+  const server = capability ? readMcpServer(capability.server_id, { database: context.database }) : null;
+  if (!capability || !server) throw new HttpError(409, "MCP capability is no longer available");
+  const fingerprint = mcpCapabilityFingerprint(server, capability);
+  const proposedFingerprint = cleanString(payload.capability_fingerprint);
+  if (proposedFingerprint !== "" && proposedFingerprint !== fingerprint) {
+    throw new HttpError(409, "MCP capability changed after approval was requested");
+  }
+  const grant = grantPiMcpCapabilityApproval(context.database, {
+    capabilityFingerprint: fingerprint,
+    capabilityID,
+    grantedBy: actorID,
+    projectID: action.project_id,
+    reason: cleanString(reason) || "user always allowed MCP capability for project"
+  });
+  recordPiActionAuditEvent(context.database, action, "mcp_approval_grant_created", {
+    actor: actorID,
+    decision: "approve_always",
+    payload: { capability_id: capabilityID, grant_id: grant.id, project_id: action.project_id }
+  });
+  return await approveAction(context, id, actorID);
 }
 
 function rejectAction(context: PiActionDecisionContext, id: string, actorID: string, reason?: string): PiAction {
@@ -174,6 +221,48 @@ function requireAction(db: RunnerDatabase, id: string): PiAction {
   const action = getPiAction(db, id);
   if (!action) throw new HttpError(404, "资源不存在");
   return action;
+}
+
+function requireCurrentApprovableAction(db: RunnerDatabase, id: string): PiAction {
+  const action = requireAction(db, id);
+  if (action.action_type !== "mcp.tool.call" || action.lease_expires_at === "") return action;
+  const expiresAt = Date.parse(action.lease_expires_at);
+  if (!Number.isFinite(expiresAt) || expiresAt > Date.now()) return action;
+  if (action.status === "pending") {
+    const expired = updatePiAction(db, action.id, {
+      decided_by: "system:approval_ttl",
+      result_json: JSON.stringify({ action_id: action.id, reason: "approval_ttl_expired", status: "rejected" }),
+      status: "rejected"
+    });
+    recordPiActionAuditEvent(db, expired, "approval_expired", {
+      actor: "system:approval_ttl",
+      decision: "reject",
+      reason: "MCP approval window expired"
+    });
+  }
+  throw new HttpError(409, "MCP approval request expired");
+}
+
+function parsePayload(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function assertCurrentMcpCapability(db: RunnerDatabase, action: PiAction): void {
+  if (action.action_type !== "mcp.tool.call") return;
+  const payload = parsePayload(action.payload_json);
+  const proposedFingerprint = cleanString(payload.capability_fingerprint);
+  if (proposedFingerprint === "") return;
+  const capability = readMcpCapability(cleanString(payload.capability_id), { database: db });
+  const server = capability ? readMcpServer(capability.server_id, { database: db }) : null;
+  if (!capability || !server) throw new HttpError(409, "MCP capability is no longer enabled");
+  if (mcpCapabilityFingerprint(server, capability) !== proposedFingerprint) {
+    throw new HttpError(409, "MCP capability changed after approval was requested");
+  }
 }
 
 function assertApprovableGate(action: PiAction): void {

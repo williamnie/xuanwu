@@ -9,11 +9,11 @@ import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getSyncOutbox, listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
-import { createPiAction, getPiAction, listPiActionEvents } from "../db/repositories/pi.ts";
+import { createPiAction, getPiAction, listPiActionEvents, listPiNotificationIntents } from "../db/repositories/pi.ts";
 import { createDefaultRouter, createRequestHandler } from "../http/server.ts";
 import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
 import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
-import { queueFeishuPiActionPendingNotification } from "./feishuNotifications.ts";
+import { queueFeishuPiActionPendingNotification, queuePendingPiActionNotifications } from "./feishuNotifications.ts";
 
 const tempRoots: string[] = [];
 const BASE_URL = "http://127.0.0.1:3008";
@@ -51,6 +51,7 @@ describe("Feishu PI action cards", () => {
       expect(sender.calls).toEqual([]);
       expect(cardText).toContain("pi-action-card-1");
       expect(cardText).toContain("批准执行");
+      expect(cardText).not.toContain("当前项目始终允许");
       expect(cardText).toContain("拒绝");
       expect(cardText).toContain("要求修改");
       expect(cardText).toContain("暂缓 30 分钟");
@@ -58,6 +59,73 @@ describe("Feishu PI action cards", () => {
     } finally {
       db.close();
     }
+  });
+
+  test("uses the project Feishu fallback and persists an explicit failure when no target exists", async () => {
+    const db = await fixtureDatabase();
+    const sender = new FakeFeishuSender();
+    try {
+      createPiAction(db, { action_type: "mcp.tool.call", gate_decision: "ask", id: "mcp-push", project_id: "demo", status: "pending" });
+      const event = {
+        payload: JSON.stringify({ action_id: "mcp-push", action_type: "mcp.tool.call" }),
+        projectId: "demo",
+        type: "pi.action_pending"
+      };
+      const missing = queueFeishuPiActionPendingNotification(db, event);
+      expect(missing).toEqual({ queued: false, reason: "missing_feishu_target" });
+      expect(listPiNotificationIntents(db)).toEqual([
+        expect.objectContaining({ error: "missing_feishu_target", source_event_id: "mcp-push", state: "failed" })
+      ]);
+
+      const queued = queueFeishuPiActionPendingNotification(db, event, {
+        config: buildConfig({ feishuDefaultChatId: "oc_default" }).integrations.feishu
+      });
+      await flushAgentCommunicationTestMessages(db);
+      expect(queued).toMatchObject({ queued: true });
+      expect(listSyncOutbox(db, { source: "feishu" })).toEqual([
+        expect.objectContaining({ approval_action_id: "pi_action:mcp-push", target_chat_id: "oc_default" })
+      ]);
+      await dispatchFeishuOutbox({
+        config: buildConfig({ feishuDefaultChatId: "oc_default" }).integrations.feishu,
+        database: db,
+        sender
+      });
+      expect(JSON.stringify(sender.cardCalls[0]?.card)).toContain("当前项目始终允许");
+    } finally { db.close(); }
+  });
+
+  test("sweeps pending Actions created without an in-process event observer into Feishu", async () => {
+    const db = await fixtureDatabase();
+    try {
+      createPiAction(db, {
+        action_type: "assistant.tool.call",
+        gate_decision: "ask",
+        id: "skill-write-action",
+        payload_json: JSON.stringify({
+          input: { path: "notes/output.txt" },
+          permission: "write",
+          provider_id: "fixture-cli",
+          tool_name: "write-file"
+        }),
+        project_id: "demo",
+        source: "skill_runtime:fixture",
+        status: "pending"
+      });
+      const result = queuePendingPiActionNotifications(
+        db,
+        buildConfig({ feishuDefaultChatId: "oc_default" }).integrations.feishu
+      );
+      await flushAgentCommunicationTestMessages(db);
+
+      expect(result).toMatchObject({ queued: 1, scanned: 1 });
+      expect(listSyncOutbox(db, { source: "feishu" })).toEqual([
+        expect.objectContaining({
+          approval_action_id: "pi_action:skill-write-action",
+          content: expect.stringContaining("目标 fixture-cli:write-file；权限 write；输入"),
+          target_chat_id: "oc_default"
+        })
+      ]);
+    } finally { db.close(); }
   });
 
   test("resolves approve PI action callbacks through the action dispatcher", async () => {

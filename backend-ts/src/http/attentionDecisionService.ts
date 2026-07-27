@@ -96,14 +96,14 @@ export async function resolveInternalActionDecision(
   body: DecisionBody = {}
 ): Promise<unknown> {
   if (action === "execute") return await executeApprovedPiAction(context, actionID);
-  if (!["approve", "reject", "request_changes", "snooze"].includes(action)) {
+  if (!["approve", "approve_always", "reject", "request_changes", "snooze"].includes(action)) {
     throw new HttpError(400, "unsupported PI action decision");
   }
   return await resolvePiActionDecision(context, {
     actionID,
     actor: actorID(body),
     comment: cleanString(body.comment ?? body.reason ?? body.requested_changes),
-    decision: action as "approve" | "reject" | "request_changes" | "snooze",
+    decision: action as "approve" | "approve_always" | "reject" | "request_changes" | "snooze",
     reason: cleanString(body.reason),
     snoozedUntil: cleanString(body.until ?? body.snoozed_until)
   });

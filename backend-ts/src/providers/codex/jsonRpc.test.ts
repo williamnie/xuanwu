@@ -286,11 +286,16 @@ describe("Codex stdio JSON-RPC transport", () => {
     expect(fake.requests).toContainEqual({ id: 99, result: { answers: {} } });
   });
 
-  test("declines gray approval requests without publishing approval events", async () => {
+  test("routes gray current-workspace commands through pending approval events", async () => {
     let fake!: FakeCodexProcess;
     const events: ProviderEvent[] = [];
     const transport = new CodexStdioJsonRpcTransport({ ...config, timeoutMs: 50 }, {
-      onEvent: (event) => events.push(event),
+      onEvent: (event) => {
+        events.push(event);
+        if ((event.raw as { method?: string } | undefined)?.method === "approval/requested") {
+          void transport.resolveApprovalRequest("item-command", { decision: "reject", scope: "turn" });
+        }
+      },
       processFactory: () => {
         fake = new FakeCodexProcess((request, process) => {
           if (request.method === "initialize") {
@@ -318,7 +323,10 @@ describe("Codex stdio JSON-RPC transport", () => {
     await expect(transport.request("initialize", {})).resolves.toEqual({ protocolVersion: "fixture" });
 
     expect(fake.requests).toContainEqual({ id: 99, result: { decision: "decline" } });
-    expect(events).toEqual([]);
+    expect(events).toEqual([
+      expect.objectContaining({ raw: expect.objectContaining({ method: "approval/requested" }), status: "pending" }),
+      expect.objectContaining({ raw: expect.objectContaining({ method: "approval/resolved" }), status: "deny" })
+    ]);
   });
 
   test("declines deterministic high-risk approval requests without publishing approval events", async () => {

@@ -119,7 +119,7 @@ const CONFIRM_ACTIONS = new Set([
   "session.resume_followup",
   ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES.filter((action) => !SUPERVISOR_HIGH_RISK_ACTIONS.has(action))
 ]);
-const HIGH_RISK_ACTIONS = new Set(["session.steer", "mcp.tool.call", ...SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES]);
+const HIGH_RISK_ACTIONS = new Set(["session.steer", "mcp.tool.call", "assistant.tool.call", ...SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES]);
 const READ_ONLY_ACTIONS = new Set(PI_READ_ONLY_ACTION_TYPES);
 
 export function classifyPiActionRisk(actionType: string, override: Partial<PiRiskClassification> = {}): PiRiskClassification {

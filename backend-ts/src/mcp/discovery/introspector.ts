@@ -65,11 +65,14 @@ function resourceCapabilities(server: PiMcpServer, result: unknown): PiMcpCapabi
 function toolCapability(server: PiMcpServer, raw: Record<string, unknown>): PiMcpCapabilityInput | null {
   const name = clean(raw.name);
   if (!name) return null;
-  const readOnly = record(raw.annotations).readOnlyHint === true;
+  const annotations = record(raw.annotations);
+  const readOnly = annotations.readOnlyHint === true;
+  const highRisk = annotations.destructiveHint === true || annotations.openWorldHint === true;
   return { description: clean(raw.description), input_schema: schema(raw.inputSchema ?? raw.input_schema), kind: "tool",
-    metadata: { annotations: record(raw.annotations) }, name, output_schema: schema(raw.outputSchema ?? raw.output_schema),
-    permission: readOnly ? "read" : "write", read_only: readOnly, requires_confirmation: !readOnly,
-    risk_level: readOnly ? "low" : "high", server_id: server.id, source_path: server.source_path,
+    metadata: { annotations }, name, output_schema: schema(raw.outputSchema ?? raw.output_schema),
+    permission: readOnly ? "read" : "write", read_only: readOnly,
+    requires_confirmation: highRisk, risk_level: readOnly ? "low" : highRisk ? "high" : "medium",
+    server_id: server.id, source_path: server.source_path,
     timeout_ms: 10000 };
 }
 

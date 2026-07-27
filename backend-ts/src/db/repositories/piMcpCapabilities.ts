@@ -98,13 +98,13 @@ export function patchPiMcpCapability(db: RunnerDatabase, id: string, patch: PiMc
 
 function normalized(input: PiMcpCapabilityInput, existing?: PiMcpCapability): PiMcpCapabilityInput & { id: string } {
   const permission = input.permission ?? existing?.permission ?? (input.kind === "resource" ? "read" : "write");
-  const risk = input.risk_level ?? existing?.risk_level ?? (permission === "read" ? "low" : "high");
+  const risk = input.risk_level ?? existing?.risk_level ?? (permission === "read" ? "low" : permission === "admin" ? "high" : "medium");
   const readOnly = input.read_only ?? existing?.read_only ?? (permission === "read" && risk === "low");
   return { description: clean(input.description ?? existing?.description), diagnostics: input.diagnostics ?? existing?.diagnostics ?? [],
     enabled: input.enabled ?? existing?.enabled ?? false, id: input.id || capabilityID(input), input_schema: input.input_schema ?? existing?.input_schema ?? {},
     kind: input.kind, metadata: input.metadata ?? existing?.metadata ?? {}, name: normalizeName(input.name),
     output_schema: input.output_schema ?? existing?.output_schema ?? {}, permission, read_only: readOnly,
-    requires_confirmation: input.requires_confirmation ?? existing?.requires_confirmation ?? (!readOnly || risk !== "low"),
+    requires_confirmation: input.requires_confirmation ?? existing?.requires_confirmation ?? (risk === "high" || permission === "admin"),
     risk_level: risk, server_id: input.server_id, source_path: clean(input.source_path ?? existing?.source_path),
     timeout_ms: positive(input.timeout_ms ?? existing?.timeout_ms) || 10000, uri: clean(input.uri ?? existing?.uri) };
 }

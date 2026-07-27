@@ -8,7 +8,7 @@ import { callHttpTool } from "./httpToolCall.ts";
 import { callMcpTool } from "./mcpToolCall.ts";
 import { recordToolCallAuditEvent, type ToolCallAuditContext } from "./toolCallAudit.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
-import type { AssistantTool, ToolProvider, ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
+import type { AssistantTool, ToolPermission, ToolProvider, ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
 import { assessDataEgress } from "../security/promptInjectionDefense.ts";
 
 export type ReadOnlyToolInvocationInput = {
@@ -18,6 +18,7 @@ export type ReadOnlyToolInvocationInput = {
   input?: Record<string, unknown>;
   invocationID?: string;
   manifestDirs?: string[];
+  maxPermission?: ToolPermission;
   projectID?: string;
   providerID: string;
   timeoutMs?: number;
@@ -38,7 +39,10 @@ export async function invokeReadOnlyAssistantTool(input: ReadOnlyToolInvocationI
   const clock = invocationClock(input.invocationID);
   const target = findInvocationTarget(input);
   if (!target) throw new ToolInvocationNotFoundError(`tool 不存在: ${input.providerID}:${input.toolName}`);
-  if (target.tool.permission !== "read") return auditLocalResult(input, target.tool, deniedResult(clock, target.tool));
+  const maxPermission = input.maxPermission ?? "read";
+  if (permissionRank(target.tool.permission) > permissionRank(maxPermission)) {
+    return auditLocalResult(input, target.tool, deniedResult(clock, target.tool, maxPermission));
+  }
   const kind = target.provider?.kind ?? providerKindFromMetadata(target.tool);
   if (kind !== "builtin") {
     const egress = assessDataEgress(input.input ?? {});
@@ -71,7 +75,7 @@ async function callCli(input: ReadOnlyToolInvocationInput, clock: InvocationCloc
     input: input.input ?? {},
     invocationID: clock.invocationID,
     manifestDirs: input.manifestDirs ?? [],
-    maxPermission: "read",
+    maxPermission: input.maxPermission ?? "read",
     providerID: input.providerID,
     toolName: input.toolName
   });
@@ -91,7 +95,7 @@ function callMcp(input: ReadOnlyToolInvocationInput, tool: AssistantTool, clock:
     db: input.db,
     input: input.input ?? {},
     invocationID: clock.invocationID,
-    maxPermission: "read",
+    maxPermission: input.maxPermission ?? "read",
     registry: { database: input.db, registryJson: input.env?.CODEX_RUNNER_MCP_REGISTRY_JSON },
     timeoutMs: input.timeoutMs ?? tool.timeout_ms
   });
@@ -184,11 +188,15 @@ function auditLocalResult(input: ReadOnlyToolInvocationInput, tool: AssistantToo
   return result;
 }
 
-function deniedResult(clock: InvocationClock, tool: AssistantTool): ToolResult {
+function deniedResult(clock: InvocationClock, tool: AssistantTool, maxPermission: ToolPermission): ToolResult {
   return finishResult(clock, "denied", {
     code: "permission_denied",
-    message: `Read-only invocation cannot execute ${tool.permission} tool ${tool.provider_id}:${tool.name}`
+    message: `${maxPermission} invocation cannot execute ${tool.permission} tool ${tool.provider_id}:${tool.name}`
   });
+}
+
+function permissionRank(permission: ToolPermission): number {
+  return permission === "read" ? 0 : permission === "write" ? 1 : 2;
 }
 
 function sensitiveEgressDeniedResult(clock: InvocationClock, reason: string): ToolResult {

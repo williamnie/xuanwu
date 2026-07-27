@@ -12,6 +12,7 @@ import { executeSafePiAction, type PiActionContext, type PiActionRequest } from 
 import { readMcpResourceWithAdapter } from "./mcpResourceRead.ts";
 import { callMcpTool } from "./mcpToolCall.ts";
 import { mcpToolProviderID } from "./mcpToolProvider.ts";
+import { resolveMcpInvocationApproval } from "../mcp/approvalPolicy.ts";
 
 export type PiMcpActionLayer = {
   callMcpTool(input: McpToolCallInput): unknown;
@@ -46,19 +47,33 @@ function safeMcpToolCall(db: RunnerDatabase, context: McpActionContext, input: M
   const capabilityID = cleanString(input.capability_id);
   const capability = readMcpCapability(capabilityID, { database: db });
   const server = capability ? readMcpServer(capability.server_id, { database: db }) : null;
+  const approval = capability && server ? resolveMcpInvocationApproval({
+    capability,
+    db,
+    projectID: cleanString(context.projectID),
+    server
+  }) : null;
   const request: PiActionRequest = {
     actionType: "mcp.tool.call",
     payload: cleanPayload({
       capability_id: capabilityID,
       input: input.input ?? {},
       provider_id: server ? mcpToolProviderID(server.id) : "",
+      approval_mode: approval?.approvalMode ?? "dangerous_only",
+      capability_fingerprint: approval?.capabilityFingerprint ?? "",
+      approval_grant_id: approval?.grantID ?? "",
       tool_name: capability?.name ?? "",
       timeout_ms: input.timeout_ms
     }),
     projectID: cleanString(context.projectID),
-    riskOverride: capability ? {
-      requiresConfirmation: capability.requires_confirmation,
-      riskLevel: capability.risk_level
+    preconditionFailure: approval?.preconditionFailure || (
+      !capability || !server || !isMcpServerAuthorized(server)
+        ? "MCP capability is not installed and enabled"
+        : ""
+    ),
+    riskOverride: capability && approval ? {
+      requiresConfirmation: approval.requiresConfirmation,
+      riskLevel: approval.riskLevel
     } : { requiresConfirmation: true, riskLevel: "high" }
   };
   return executeSafePiAction(db, context, {

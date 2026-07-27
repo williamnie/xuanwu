@@ -20,11 +20,13 @@ export default function PiMcpManagementPanel() {
       <ManualServerForm form={state.form} saving={state.saving} setForm={state.setForm} submit={state.addManualServer} />
       <ServerGroup title="Manual MCP servers" servers={manual} state={state} showForget />
       <Capabilities capabilities={state.capabilities} onToggle={state.toggleCapability} />
+      <ApprovalGrants grants={state.approvalGrants} onRevoke={state.revokeGrant} />
     </section>
   );
 }
 
 function useMcpManagementState() {
+  const [approvalGrants, setApprovalGrants] = useState([]);
   const [capabilities, setCapabilities] = useState([]);
   const [error, setError] = useState('');
   const [form, setForm] = useState(emptyForm);
@@ -33,15 +35,17 @@ function useMcpManagementState() {
   const [scanning, setScanning] = useState(false);
   const [servers, setServers] = useState([]);
   const [sources, setSources] = useState([]);
-  const loadAll = () => loadMcpState({ setCapabilities, setError, setLoading, setServers, setSources });
+  const loadAll = () => loadMcpState({ setApprovalGrants, setCapabilities, setError, setLoading, setServers, setSources });
   const scan = () => scanMcp({ loadAll, setError, setScanning });
   const addManualServer = (event) => createManualServer(event, { form, loadAll, setError, setForm, setSaving });
   const toggleServer = (server) => patchServer(server.id, { enabled: !server.enabled }, { loadAll, setError });
+  const setApprovalMode = (server, approvalMode) => patchServer(server.id, { approval_mode: approvalMode }, { loadAll, setError });
   const introspectServer = (server) => introspectServerCapabilities(server.id, { loadAll, setError });
   const forgetServer = (server) => forgetDisabledServer(server, { loadAll, setError });
   const toggleCapability = (capability) => patchCapability(capability.id, { enabled: !capability.enabled }, { loadAll, setError });
+  const revokeGrant = (grant) => revokeApprovalGrant(grant.id, { loadAll, setError });
   useEffect(() => { loadAll(); }, []);
-  return { addManualServer, capabilities, error, form, forgetServer, introspectServer, loadAll, loading, saving, scan, scanning, servers, setForm, sources, toggleCapability, toggleServer };
+  return { addManualServer, approvalGrants, capabilities, error, form, forgetServer, introspectServer, loadAll, loading, revokeGrant, saving, scan, scanning, servers, setApprovalMode, setForm, sources, toggleCapability, toggleServer };
 }
 
 function PanelHeader({ loading, onRefresh, onScan, scanning }) {
@@ -109,9 +113,18 @@ function ServerCard({ server, showForget, state }) {
       <div style={{ minWidth: 0 }}>
         <strong>{server.name || server.id}</strong>
         <div style={mutedStyle}>{server.source} · {server.transport_type} · lifecycle {lifecycle.join(' / ')} · readiness {server.readiness || 'not_introspected'}</div>
+        <div style={mutedStyle}>{approvalModeDescription(server.approval_mode)}</div>
         <Diagnostics diagnostics={server.diagnostics} />
       </div>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <label style={{ ...mutedStyle, alignItems: 'center', display: 'flex', gap: '6px' }}>
+          写入审批
+          <select aria-label={`${server.name || server.id} 写入审批模式`} className="form-control" onChange={(event) => state.setApprovalMode(server, event.target.value)} value={server.approval_mode || 'dangerous_only'}>
+            <option value="dangerous_only">仅高危操作询问（推荐）</option>
+            <option value="every_write">每次写入都询问</option>
+            <option value="read_only">只读，禁止写入</option>
+          </select>
+        </label>
         <button className="btn btn-secondary" onClick={() => state.introspectServer(server)} type="button">Inspect server capabilities</button>
         <button className="btn btn-secondary" onClick={() => state.toggleServer(server)} type="button">{server.enabled ? 'Disable server' : 'Enable for Supervisor'}</button>
         {showForget && !server.enabled && <button className="btn btn-secondary" onClick={() => state.forgetServer(server)} type="button">Forget</button>}
@@ -156,11 +169,29 @@ function CapabilityRow({ capability, onToggle }) {
     <div style={rowCardStyle}>
       <div>
         <strong>{capability.name}</strong>
-        <div style={mutedStyle}>{capability.kind} · {capability.permission} · risk {capability.risk_level} · {capability.enabled ? 'enabled' : 'disabled'}</div>
+        <div style={mutedStyle}>{capability.kind} · {capability.permission} · risk {capability.risk_level} · {capability.requires_confirmation ? '需要即时审批' : '按已选权限自动执行'} · {capability.enabled ? 'enabled' : 'disabled'}</div>
       </div>
-      <button className="btn btn-secondary" onClick={() => onToggle(capability)} type="button">{capability.enabled ? 'Disable' : 'Enable selected read-only resources/tools'}</button>
+      <button className="btn btn-secondary" onClick={() => onToggle(capability)} type="button">{capability.enabled ? 'Disable' : 'Enable this capability'}</button>
     </div>
   );
+}
+
+function ApprovalGrants({ grants, onRevoke }) {
+  if (!grants.length) return null;
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <h3 style={sectionTitleStyle}>项目持续授权</h3>
+    <div style={mutedStyle}>仅来自人工选择“当前项目始终允许”；工具定义、权限或传输配置变化后自动失效。</div>
+    {grants.map((grant) => <div key={grant.id} style={rowCardStyle}>
+      <div><strong>{grant.capability_id}</strong><div style={mutedStyle}>项目 {grant.project_id} · {grant.granted_by}</div></div>
+      <button className="btn btn-secondary" onClick={() => onRevoke(grant)} type="button">撤销持续授权</button>
+    </div>)}
+  </div>;
+}
+
+function approvalModeDescription(mode) {
+  if (mode === 'every_write') return '读取自动；每次写入均通过飞书或页面批准。';
+  if (mode === 'read_only') return '仅允许读取，任何写入都直接拒绝。';
+  return '启用即授权普通写入；删除、公开发布、外部写入等高危操作才询问。';
 }
 
 function Diagnostics({ diagnostics = [] }) {
@@ -179,9 +210,15 @@ async function loadMcpState(setters) {
     setters.setSources(sources.sources || []);
     setters.setServers(results.servers || []);
     setters.setCapabilities(results.capabilities || []);
+    setters.setApprovalGrants(results.approval_grants || []);
     setters.setError('');
   } catch (err) { setters.setError(err.message || '加载 MCP 管理状态失败'); }
   finally { setters.setLoading(false); }
+}
+
+async function revokeApprovalGrant(id, { loadAll, setError }) {
+  try { await connectorsApi.revokePiMcpApprovalGrant(id); message.success('持续授权已撤销'); await loadAll(); }
+  catch (err) { setError(err.message || '撤销 MCP 持续授权失败'); }
 }
 
 async function scanMcp({ loadAll, setError, setScanning }) {
@@ -223,7 +260,11 @@ async function forgetDisabledServer(server, { loadAll, setError }) {
 }
 
 function groupCapabilities(items) {
-  return { 'Read-only': items.filter((item) => item.read_only), 'Write/Admin or high risk': items.filter((item) => !item.read_only) };
+  return {
+    '只读能力': items.filter((item) => item.read_only),
+    '普通写入': items.filter((item) => !item.read_only && item.risk_level !== 'high'),
+    '高危或外部写入': items.filter((item) => !item.read_only && item.risk_level === 'high'),
+  };
 }
 
 function splitWords(value) {

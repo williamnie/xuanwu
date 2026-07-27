@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { openDatabase } from "../backend-ts/src/db/database.ts";
-import { listPiActionEvents, listPiActions } from "../backend-ts/src/db/repositories/pi.ts";
+import { listPiActionEvents, listPiActions, updatePiAction } from "../backend-ts/src/db/repositories/pi.ts";
 import { createPiMcpActions } from "../backend-ts/src/pi/mcpActionTools.ts";
 import { mcpServerLifecycleStates } from "../frontend/src/utils/mcpLifecycle.js";
 
@@ -223,6 +223,21 @@ async function cleanup(input: Options): Promise<void> {
       method: "PATCH"
     });
     await api(input, `/api/pi/mcp/servers/${encodeURIComponent(SERVER_ID)}`, { method: "DELETE" });
+  }
+  const db = await openDatabase({ dbPath: input.dbPath });
+  try {
+    for (const action of listPiActions(db, { status: "pending" })) {
+      if (action.action_type !== "mcp.tool.call" || action.source !== "agentic_activation_issue_781") continue;
+      const payload = parseJson(action.payload_json);
+      if (payload.capability_id !== WRITE_CAPABILITY) continue;
+      updatePiAction(db, action.id, {
+        decided_by: "fixture:cleanup",
+        result_json: JSON.stringify({ reason: "isolated fixture cleanup", status: "rejected" }),
+        status: "rejected"
+      });
+    }
+  } finally {
+    db.close();
   }
   await rm(controlPath(input), { force: true });
   await rm(statePath(input), { force: true });

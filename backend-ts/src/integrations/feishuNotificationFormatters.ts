@@ -36,15 +36,21 @@ export function formatMemoryCandidateNotification(item: PiMemoryItem): string {
   ].join("\n");
 }
 
-export function formatPiActionPendingNotification(input: { actionID: string; actionType: string; issueID?: number }): string {
+export function formatPiActionPendingNotification(input: {
+  actionDetail?: string;
+  actionID: string;
+  actionType: string;
+  issueID?: number;
+}): string {
   const issue = input.issueID ? `issue #${input.issueID}` : "当前任务";
   const actionID = safeSummary(input.actionID, 80);
   const actionType = safeSummary(input.actionType || "Supervisor action", 80);
   return [
     `${SUPERVISOR_NOTIFICATION_PREFIX}：${issue} 需要用户确认才能继续。`,
     `待确认动作：${actionType}（${actionID}）`,
+    input.actionDetail ? `范围：${safeSummary(input.actionDetail, 360)}` : "",
     "下一步：可直接在本 Feishu 卡片批准、拒绝、要求修改或暂缓；Runner issue/后端 API 仍作为备用入口。"
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 export function formatPiNeedsUserNotification(input: {

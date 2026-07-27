@@ -359,6 +359,7 @@ function piActionAttentionDetails(
   now: Date
 ): Record<string, unknown> {
   const target = piActionTarget(db, action);
+  const notification = piActionNotificationStatus(db, action.id);
   const location = [
     action.project_id ? `项目 ${action.project_id}` : "Runner 系统",
     target.issueID > 0 ? `Issue #${target.issueID}` : "",
@@ -412,21 +413,53 @@ function piActionAttentionDetails(
   return {
     active: true,
     component: "Action Gate",
-    description: `PI 请求执行 ${action.action_type}，该动作需要你的明确决定。`,
+    description: notification.delivery === "sent"
+      ? `PI 请求执行 ${action.action_type}，审批已经推送到飞书；页面仅保留兜底入口。`
+      : notification.delivery === "failed"
+        ? `PI 请求执行 ${action.action_type}，但飞书审批通知未送达；请在页面处理或修复通知目标。`
+        : `PI 请求执行 ${action.action_type}，该动作需要你的明确决定。`,
     diagnostic: item.summary,
     first_seen_at: item.created_at,
     handling: "user_action_required",
     historical: false,
     last_seen_at: item.updated_at,
     location,
+    notification,
     pi_action: `PI 已在 Action Gate 停止执行；原因：${action.gate_reason || "等待人工决定"}。`,
     pi_can_handle: false,
     requires_user: true,
-    state_label: "当前事项 · 需要你决定",
+    state_label: notification.delivery === "sent"
+      ? "已推送飞书 · 页面兜底"
+      : notification.delivery === "failed" ? "飞书未送达 · 页面兜底" : "当前事项 · 需要你决定",
     title: `是否允许 ${action.action_type}`,
     user_action: "审阅动作范围、目标和风险，然后批准、拒绝或要求修改。",
     source: "pi_actions"
   };
+}
+
+function piActionNotificationStatus(
+  db: RunnerDatabase,
+  actionID: string
+): { delivery: "failed" | "missing" | "queued" | "sent"; error: string; state: string } {
+  const row = db.sqlite.query<{
+    error: string; outbox_error: string | null; outbox_status: string | null;
+    sent_outbox_id: number; state: string;
+  }, [string]>(`
+    select intent.state, intent.error, intent.sent_outbox_id,
+      outbox.status as outbox_status, outbox.last_error as outbox_error
+    from pi_notification_intents intent
+    left join sync_outbox outbox on outbox.id=intent.sent_outbox_id
+    where intent.kind='pi_action_pending' and intent.source_event_id=?
+    order by intent.created_at desc, intent.id desc limit 1
+  `).get(actionID);
+  if (!row) return { delivery: "missing", error: "notification_intent_missing", state: "missing" };
+  if (row.state === "sent" && row.outbox_status === "sent") {
+    return { delivery: "sent", error: "", state: row.state };
+  }
+  if (row.state === "failed" || row.outbox_status === "failed" || row.error !== "") {
+    return { delivery: "failed", error: cleanText(row.outbox_error) || row.error, state: row.state };
+  }
+  return { delivery: "queued", error: "", state: row.state };
 }
 
 function piActionTarget(
@@ -644,16 +677,22 @@ function attentionDecisionDetails(db: RunnerDatabase, attention: AttentionRecord
     }
     if (source.authority === "pi_actions") {
       const action = getPiAction(db, source.local_id);
-      if (action) details.push({
+      if (action) {
+        const payload = safeRecord(action.payload_json);
+        details.push({
         action_type: action.action_type,
+        capability_id: cleanText(payload.capability_id),
+        expires_at: action.lease_expires_at,
         gate_decision: action.gate_decision,
         gate_reason: action.gate_reason,
         kind: "pi_action",
         ref: `pi_action:${action.id}`,
         risk: action.risk_level,
+        project_id: action.project_id,
         status: action.status,
         summary: action.rationale || action.action_type
       });
+      }
     }
   }
   for (const ref of attention.related_refs.filter((value) => value.startsWith("proposal:"))) {

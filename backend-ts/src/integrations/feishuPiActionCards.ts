@@ -1,4 +1,4 @@
-export type FeishuPiActionDecision = "approve" | "reject" | "request_changes" | "snooze";
+export type FeishuPiActionDecision = "approve" | "approve_always" | "reject" | "request_changes" | "snooze";
 
 export type FeishuPiActionCardAction = {
   actionID?: string;
@@ -15,6 +15,7 @@ const PI_ACTION_CARD_ACTION = "pi_action_resolve";
 
 export function buildFeishuPiActionCard(input: {
   actionID: string;
+  actionType?: string;
   issueID?: number;
   text: string;
 }): Record<string, unknown> {
@@ -26,6 +27,9 @@ export function buildFeishuPiActionCard(input: {
         tag: "action",
         actions: [
           piActionButton(input.actionID, "approve", "批准执行", "primary"),
+          ...(input.actionType === "mcp.tool.call"
+            ? [piActionButton(input.actionID, "approve_always", "当前项目始终允许", "default")]
+            : []),
           piActionButton(input.actionID, "reject", "拒绝", "danger"),
           piActionButton(input.actionID, "request_changes", "要求修改", "default"),
           piActionButton(input.actionID, "snooze", "暂缓 30 分钟", "default", { snooze_minutes: 30 })
@@ -89,6 +93,7 @@ function piActionButton(
 
 function normalizeDecision(value: string): FeishuPiActionDecision | null {
   if (["approve", "approved", "execute"].includes(value)) return "approve";
+  if (["approve_always", "always_allow", "allow_always"].includes(value)) return "approve_always";
   if (["reject", "rejected", "deny", "denied"].includes(value)) return "reject";
   if (["request_changes", "changes_requested", "request-changes"].includes(value)) return "request_changes";
   if (["snooze", "defer", "later"].includes(value)) return "snooze";

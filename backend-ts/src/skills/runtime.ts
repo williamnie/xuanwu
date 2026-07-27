@@ -1,7 +1,12 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { getProject } from "../db/repositories/projects.ts";
 import type { AttentionInboxItemRecord } from "../db/repositories/intakeRuns.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
 import { invokeReadOnlyAssistantTool } from "../pi/readOnlyToolInvocation.ts";
+import { createPiMcpActions } from "../pi/mcpActionTools.ts";
+import { executeSafePiAction } from "../pi/actionEngine.ts";
+import { createPiProjectTools } from "../http/piProjectTools.ts";
+import type { EventBus } from "../events/bus.ts";
 import { recordToolCallAuditEvent, type ToolCallAuditContext } from "../pi/toolCallAudit.ts";
 import { loadAssistantToolRegistrySnapshot, type AssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts";
 import type { AssistantTool, ToolPermission } from "../pi/toolProviderEnvelope.ts";
@@ -32,6 +37,7 @@ export type SkillRuntimeWorkflowContext = {
 
 export type ExecuteSkillRuntimeInput = {
   auditContext?: Partial<ToolCallAuditContext>;
+  bus?: EventBus;
   cliConnectorDirs?: string[];
   db: RunnerDatabase;
   env?: Record<string, string | undefined>;
@@ -195,15 +201,7 @@ async function invokeGrantedTool(
     return denyTool(input.db, audit, invocationID, grant, params, "permission_denied", `tool ${grant} exceeds ${max} permission`);
   }
   if (tool.permission !== "read") {
-    return denyTool(
-      input.db,
-      audit,
-      invocationID,
-      grant,
-      params,
-      "approval_required",
-      `skill runtime cannot auto-execute ${tool.permission} tool ${grant}; create an approval-gated proposal instead`
-    );
+    return await invokeGovernedSkillTool(input, snapshot, audit, tool, params, invocationID);
   }
   const result = await invokeReadOnlyAssistantTool({
     auditContext: audit,
@@ -221,6 +219,67 @@ async function invokeGrantedTool(
     throw new SkillRuntimeError(result.error?.code || `tool_${result.status}`, result.error?.message || `tool ${grant} ${result.status}`);
   }
   return result.output;
+}
+
+async function invokeGovernedSkillTool(
+  input: ExecuteSkillRuntimeInput,
+  snapshot: AssistantToolRegistrySnapshot,
+  audit: ToolCallAuditContext,
+  tool: AssistantTool,
+  params: JsonObject,
+  invocationID: string
+): Promise<unknown> {
+  const provider = snapshot.providers.find((item) => item.id === tool.provider_id);
+  const context = {
+    bus: input.bus,
+    conversationID: audit.conversationID,
+    delegationID: audit.delegationID,
+    heartbeatID: audit.heartbeatID,
+    issueID: audit.issueID,
+    projectID: audit.projectID,
+    source: `skill_runtime:${input.skill.id}`
+  };
+  if (provider?.kind === "builtin") {
+    const project = audit.projectID ? getProject(input.db, audit.projectID) ?? undefined : undefined;
+    const definition = createPiProjectTools(input.db, project, context).find((item) => item.name === tool.name);
+    if (!definition) {
+      return denyTool(input.db, audit, invocationID, tool.name, params, "handler_not_allowed", `builtin tool is not governed: ${tool.name}`);
+    }
+    const result = await definition.execute(invocationID, params, undefined, undefined, {} as never);
+    return recordValue(result).details ?? result;
+  }
+  if (provider?.kind === "mcp") {
+    const capabilityID = cleanString(tool.metadata?.capability_id);
+    if (capabilityID === "") {
+      return denyTool(input.db, audit, invocationID, tool.name, params, "tool_not_granted", "MCP capability id is missing");
+    }
+    return await createPiMcpActions(input.db, context).callMcpTool({ capability_id: capabilityID, input: params });
+  }
+  return await executeSafePiAction(input.db, context, {
+    actionType: "assistant.tool.call",
+    payload: {
+      input: params,
+      manifest_dirs: input.cliConnectorDirs ?? [],
+      permission: tool.permission,
+      provider_id: tool.provider_id,
+      tool_name: tool.name
+    },
+    issueID: audit.issueID,
+    projectID: audit.projectID,
+    riskOverride: { requiresConfirmation: true, riskLevel: "high" },
+    execute: () => invokeReadOnlyAssistantTool({
+      auditContext: audit,
+      db: input.db,
+      env: input.env,
+      input: params,
+      invocationID,
+      manifestDirs: input.cliConnectorDirs,
+      maxPermission: tool.permission,
+      projectID: audit.projectID,
+      providerID: tool.provider_id,
+      toolName: tool.name
+    })
+  });
 }
 
 function denyTool(

@@ -38,6 +38,9 @@ import {
   completeIssueFromRuntimeEvidence,
   reconcileIssueCompletionFromRuntimeEvidence
 } from "../domain/evidence/completionGate.ts";
+import { callMcpTool } from "../pi/mcpToolCall.ts";
+import { invokeReadOnlyAssistantTool } from "../pi/readOnlyToolInvocation.ts";
+import type { ToolPermission } from "../pi/toolProviderEnvelope.ts";
 
 export type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -106,9 +109,59 @@ export async function dispatchPiAction(
       return await dispatchSupervisorPiAction(context, action, payload);
     case "session.steer":
       return await steerSession(context, payload);
+    case "mcp.tool.call":
+      return callMcpTool({
+        auditContext: {
+          conversationID: action.conversation_id,
+          delegationID: action.delegation_id,
+          heartbeatID: action.heartbeat_id,
+          issueID: action.issue_id || undefined,
+          projectID: action.project_id,
+          source: action.source || "pi_action_dispatch"
+        },
+        capabilityID: requiredPayloadText(payload, "capability_id"),
+        db: context.database,
+        input: objectPayload(payload.input),
+        registry: { database: context.database },
+        timeoutMs: positiveInputID(payload.timeout_ms) || undefined
+      });
+    case "assistant.tool.call":
+      return await invokeReadOnlyAssistantTool({
+        auditContext: {
+          conversationID: action.conversation_id,
+          delegationID: action.delegation_id,
+          heartbeatID: action.heartbeat_id,
+          issueID: action.issue_id || undefined,
+          projectID: action.project_id,
+          source: action.source || "pi_action_dispatch"
+        },
+        db: context.database,
+        input: objectPayload(payload.input),
+        manifestDirs: stringArray(payload.manifest_dirs),
+        maxPermission: toolPermission(payload.permission),
+        projectID: action.project_id,
+        providerID: requiredPayloadText(payload, "provider_id"),
+        toolName: requiredPayloadText(payload, "tool_name")
+      });
     default:
       throw new Error(`unsupported PI action type: ${action.action_type}`);
   }
+}
+
+function requiredPayloadText(payload: Record<string, unknown>, key: string): string {
+  const value = cleanString(payload[key]);
+  if (value === "") throw new Error(`${key} is required`);
+  return value;
+}
+
+function toolPermission(value: unknown): ToolPermission {
+  const permission = cleanString(value);
+  if (permission === "read" || permission === "write" || permission === "dangerous") return permission;
+  return "dangerous";
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
 }
 
 async function reconcileIssueCompletion(

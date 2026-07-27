@@ -14,6 +14,7 @@ export type McpCapability = {
   id: string;
   input_schema?: Record<string, unknown>;
   kind: McpCapabilityKind;
+  metadata: Record<string, unknown>;
   name: string;
   output_schema?: Record<string, unknown>;
   permission: McpPermission;
@@ -35,6 +36,7 @@ export type McpServerTransport = {
 };
 
 export type McpServerRegistry = {
+  approval_mode: "dangerous_only" | "every_write" | "read_only";
   capabilities: McpCapability[];
   description: string;
   diagnostics: McpRegistryDiagnostic[];
@@ -145,7 +147,7 @@ function managedRegistryServers(db: RunnerDatabase): RawServer[] {
   return listPiMcpServers(db).filter((server) => server.enabled).map((server) => {
     const items = byServer.get(server.id) ?? [];
     return {
-      description: server.description, id: server.id, metadata: server.metadata, name: server.name,
+      approval_mode: server.approval_mode, description: server.description, id: server.id, metadata: server.metadata, name: server.name,
       readiness: server.readiness || "unknown", risk_level: server.risk_level,
       resources: items.filter((item) => item.kind === "resource").map(managedCapability),
       status: managedServerStatus(server.status),
@@ -162,6 +164,7 @@ function managedServerStatus(status: string): string {
 function managedCapability(capability: ReturnType<typeof listPiMcpCapabilities>[number]): RawCapability {
   return {
     description: capability.description, input_schema: capability.input_schema, name: capability.name, output_schema: capability.output_schema,
+    metadata: capability.metadata,
     permission: capability.permission, read_only: capability.read_only, requires_confirmation: capability.requires_confirmation,
     risk_level: capability.risk_level, source_path: capability.source_path, timeout_ms: capability.timeout_ms, uri: capability.uri
   };
@@ -194,6 +197,7 @@ function normalizeServer(server: RawServer): McpServerRegistry | null {
   const status = cleanString(server.status) || "unknown";
   const readiness = cleanString(server.readiness) || cleanString(server.ready) || "unknown";
   return {
+    approval_mode: approvalMode(server.approval_mode),
     capabilities,
     description: cleanString(server.description ?? server.summary),
     diagnostics: serverDiagnostics(id, status, readiness),
@@ -214,8 +218,11 @@ function normalizeServer(server: RawServer): McpServerRegistry | null {
 function normalizeCapability(serverID: string, kind: McpCapabilityKind, raw: RawCapability): McpCapability | null {
   const name = normalizeName(raw.name ?? raw.id ?? raw.uri ?? raw.tool);
   if (name === "") return null;
-  const permission = permissionLevel(raw.permission ?? raw.permissions ?? (kind === "resource" ? "read" : "write"));
-  const risk_level = riskLevel(raw.risk_level ?? raw.risk ?? permission, []);
+  const metadata = objectValue(raw.metadata);
+  const annotations = objectValue(raw.annotations ?? metadata.annotations);
+  const readOnlyHint = annotations.readOnlyHint === true;
+  const permission = permissionLevel(raw.permission ?? raw.permissions ?? (kind === "resource" || readOnlyHint ? "read" : "write"));
+  const risk_level = capabilityRisk(raw.risk_level ?? raw.risk, permission, annotations);
   const readOnly = booleanValue(raw.read_only ?? raw.readOnly, permission === "read" && risk_level === "low");
   return {
     allowed_actions: allowedActions(kind, permission),
@@ -226,16 +233,33 @@ function normalizeCapability(serverID: string, kind: McpCapabilityKind, raw: Raw
       output_schema: jsonSchema(raw.output_schema ?? raw.outputSchema, { type: "object" })
     } : {}),
     kind,
+    metadata: { ...metadata, ...(Object.keys(annotations).length > 0 ? { annotations } : {}) },
     name,
     permission,
     read_only: readOnly,
-    requires_confirmation: booleanValue(raw.requires_confirmation ?? raw.requiresConfirmation, risk_level !== "low" || permission !== "read"),
+    requires_confirmation: booleanValue(
+      raw.requires_confirmation ?? raw.requiresConfirmation,
+      risk_level === "high" || permission === "admin" || (permission === "read" && risk_level === "medium")
+    ),
     risk_level,
     server_id: serverID,
     ...optionalStringField("source_path", raw.source_path ?? raw.sourcePath),
     ...optionalTimeout(raw.timeout_ms ?? raw.timeoutMs),
     ...optionalURI(raw.uri)
   };
+}
+
+function capabilityRisk(value: unknown, permission: McpPermission, annotations: Record<string, unknown>): McpRiskLevel {
+  const explicit = cleanString(value).toLowerCase();
+  if (["low", "medium", "high"].includes(explicit)) return explicit as McpRiskLevel;
+  if (permission === "admin" || annotations.destructiveHint === true || annotations.openWorldHint === true) return "high";
+  if (permission === "write") return "medium";
+  return "low";
+}
+
+function approvalMode(value: unknown): McpServerRegistry["approval_mode"] {
+  const mode = cleanString(value);
+  return mode === "every_write" || mode === "read_only" ? mode : "dangerous_only";
 }
 
 function rawCapabilities(value: unknown): RawCapability[] {

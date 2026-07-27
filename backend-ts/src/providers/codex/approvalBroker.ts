@@ -133,7 +133,7 @@ function approvalResponse(
 
 function approvalFastResolvedEvent(
   request: PendingApproval,
-  decision: ApprovalFastDecision,
+  decision: Exclude<ApprovalFastDecision, { decision: "ask-user" }>,
   latencyMs: number
 ): ProviderEvent {
   const parsed = parseCodexApprovalRequest({ method: request.method, params: request.params });
