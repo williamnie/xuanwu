@@ -1,6 +1,8 @@
 .activity-panel {
   display: grid;
   gap: 16px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .activity-head {
@@ -8,6 +10,14 @@
   display: flex;
   gap: 16px;
   justify-content: space-between;
+}
+
+.activity-head > div {
+  min-width: 0;
+}
+
+.activity-head > .btn {
+  flex: 0 0 auto;
 }
 
 .activity-eyebrow {
@@ -41,13 +51,15 @@
   font-size: 0.84rem;
   line-height: 1.55;
   margin: 4px 0 0;
+  overflow-wrap: anywhere;
 }
 
 .activity-filter {
   align-items: end;
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  min-width: 0;
 }
 
 .activity-filter label {
@@ -56,6 +68,7 @@
   font-size: 0.74rem;
   font-weight: 750;
   gap: 5px;
+  min-width: 0;
 }
 
 .activity-filter input,
@@ -65,11 +78,9 @@
   border-radius: 10px;
   color: var(--text-primary);
   height: 36px;
+  min-width: 0;
   padding: 0 10px;
-}
-
-.activity-filter select {
-  min-width: 128px;
+  width: 100%;
 }
 
 .activity-summary {

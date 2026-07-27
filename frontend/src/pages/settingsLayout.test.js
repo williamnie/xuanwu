@@ -15,6 +15,7 @@ const notificationSettingsSource = readFileSync(new URL('./NotificationSettingsP
 const settingsProductModelsSource = readFileSync(new URL('./settingsProductModels.js', import.meta.url), 'utf8');
 const skillsRuntimeSource = readFileSync(new URL('./SkillsRuntimePanel.jsx', import.meta.url), 'utf8');
 const activityTimelineSource = readFileSync(new URL('./ActivityTimelinePanel.jsx', import.meta.url), 'utf8');
+const activityTimelineStyles = readFileSync(new URL('./ActivityTimelinePanel.css', import.meta.url), 'utf8');
 const sourcePoliciesSource = readFileSync(new URL('./SourcePoliciesPanel.jsx', import.meta.url), 'utf8');
 const assistantApiSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
 const automationApiSource = readFileSync(new URL('../api/automation.js', import.meta.url), 'utf8');
@@ -244,6 +245,13 @@ test('Activity tab shows traceable redacted timeline from API', () => {
   assert.match(activityTimelineSource, /Decision/);
   assert.match(activityTimelineSource, /summaries are redacted/);
   assert.doesNotMatch(activityTimelineSource, /window\.confirm|window\.alert/);
+});
+
+test('Activity filters shrink inside their grid tracks without overlapping', () => {
+  assert.match(activityTimelineStyles, /\.activity-panel \{[\s\S]*?min-width: 0;/);
+  assert.match(activityTimelineStyles, /grid-template-columns: repeat\(auto-fit, minmax\(min\(150px, 100%\), 1fr\)\);/);
+  assert.match(activityTimelineStyles, /\.activity-filter label \{[\s\S]*?min-width: 0;/);
+  assert.match(activityTimelineStyles, /\.activity-filter input,[\s\S]*?min-width: 0;[\s\S]*?width: 100%;/);
 });
 
 test('Policies tab reads source profiles without retaining legacy Automation writers', () => {
