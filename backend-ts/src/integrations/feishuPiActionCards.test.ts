@@ -128,6 +128,40 @@ describe("Feishu PI action cards", () => {
     } finally { db.close(); }
   });
 
+  test("does not backfill historical or unrelated pending Actions after restart", async () => {
+    const db = await fixtureDatabase();
+    try {
+      createPiAction(db, {
+        action_type: "agent.workflow_request",
+        gate_decision: "ask",
+        id: "historical-workflow-action",
+        project_id: "demo",
+        status: "pending"
+      });
+      createPiAction(db, {
+        action_type: "assistant.tool.call",
+        gate_decision: "ask",
+        id: "historical-skill-action",
+        project_id: "demo",
+        status: "pending"
+      });
+      db.sqlite.run(
+        "update pi_actions set created_at='2026-07-20T00:00:00.000Z' where id=?",
+        ["historical-skill-action"]
+      );
+
+      const result = queuePendingPiActionNotifications(
+        db,
+        buildConfig({ feishuDefaultChatId: "oc_default" }).integrations.feishu,
+        { now: new Date("2026-07-27T07:00:00.000Z") }
+      );
+
+      expect(result).toEqual({ failed: 0, queued: 0, scanned: 2, skipped: 2 });
+      expect(listPiNotificationIntents(db, { kind: "pi_action_pending" })).toEqual([]);
+      expect(listSyncOutbox(db, { source: "feishu" })).toEqual([]);
+    } finally { db.close(); }
+  });
+
   test("resolves approve PI action callbacks through the action dispatcher", async () => {
     const { database, handle } = await fixtureHandler();
     try {

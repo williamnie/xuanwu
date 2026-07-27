@@ -267,15 +267,26 @@ function piActionNotificationDetail(payloadJSON: string | undefined): string {
 
 export function queuePendingPiActionNotifications(
   db: RunnerDatabase,
-  config?: FeishuConnectorConfig
+  config?: FeishuConnectorConfig,
+  options: { lookbackMs?: number; maxPerSweep?: number; now?: Date } = {}
 ): { failed: number; queued: number; scanned: number; skipped: number } {
   const intents = new Map(listPiNotificationIntents(db, { kind: "pi_action_pending" })
     .map((intent) => [intent.source_event_id, intent]));
   const summary = { failed: 0, queued: 0, scanned: 0, skipped: 0 };
+  const cutoff = (options.now ?? new Date()).getTime() - (options.lookbackMs ?? 10 * 60_000);
+  const maxPerSweep = Math.max(1, Math.min(20, Math.trunc(options.maxPerSweep ?? 5)));
   for (const action of listPiActions(db, { status: "pending" })) {
     summary.scanned += 1;
+    if (!MISSED_ACTION_NOTIFICATION_TYPES.has(action.action_type) || !isRecentAction(action.created_at, cutoff)) {
+      summary.skipped += 1;
+      continue;
+    }
     const existing = intents.get(action.id);
     if (existing && existing.state !== "failed") {
+      summary.skipped += 1;
+      continue;
+    }
+    if (summary.queued >= maxPerSweep) {
       summary.skipped += 1;
       continue;
     }
@@ -291,6 +302,13 @@ export function queuePendingPiActionNotifications(
     else summary.skipped += 1;
   }
   return summary;
+}
+
+const MISSED_ACTION_NOTIFICATION_TYPES = new Set(["assistant.tool.call", "mcp.tool.call"]);
+
+function isRecentAction(createdAt: string, cutoff: number): boolean {
+  const timestamp = Date.parse(createdAt);
+  return Number.isFinite(timestamp) && timestamp >= cutoff;
 }
 
 function recordUnroutablePiActionNotification(db: RunnerDatabase, input: {
