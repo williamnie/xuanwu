@@ -29,23 +29,23 @@ export function parsePiChatMessageContent(value = '') {
   return segments;
 }
 
-export function runnerContextModeLabel(mode) {
-  if (mode === 'read_only') return '只读上下文';
-  if (mode === 'controlled') return '受控操作';
-  return '运行上下文';
+export function runnerContextModeLabel(mode, t = null) {
+  if (mode === 'read_only') return copy(t, 'chat.context.readOnly', '只读上下文');
+  if (mode === 'controlled') return copy(t, 'chat.context.controlled', '受控操作');
+  return copy(t, 'chat.context.runtime', '运行上下文');
 }
 
-export function runnerContextReferenceLabel(reference = {}) {
+export function runnerContextReferenceLabel(reference = {}, t = null) {
   const fields = reference.fields || {};
   if (reference.type === 'page_context') {
     const page = pageLabel(fields.page_id);
     const run = compactRunLabel(fields.run_id);
     const work = compactWorkLabel(fields.work_id);
-    return [page, run || work].filter(Boolean).join(' · ') || '当前页面';
+    return [page, run || work].filter(Boolean).join(' · ') || copy(t, 'chat.context.currentPage', '当前页面');
   }
-  if (reference.type === 'project') return fields.id ? `项目 @${fields.id}` : '项目上下文';
-  if (reference.type === 'work') return compactWorkLabel(fields.id) || 'Work 上下文';
-  return reference.type ? `${reference.type} 上下文` : '关联上下文';
+  if (reference.type === 'project') return fields.id ? copy(t, 'chat.context.project', `项目 @${fields.id}`, { id: fields.id }) : copy(t, 'chat.context.projectContext', '项目上下文');
+  if (reference.type === 'work') return compactWorkLabel(fields.id) || copy(t, 'chat.context.workContext', 'Work 上下文');
+  return reference.type ? copy(t, 'chat.context.typedContext', `${reference.type} 上下文`, { type: reference.type }) : copy(t, 'chat.context.related', '关联上下文');
 }
 
 function nextCustomTag(text, offset) {
@@ -130,4 +130,8 @@ function compactIdentifier(value, prefix) {
   const text = String(value || '').trim();
   if (!text) return '';
   return `${prefix} ${text.length > 28 ? `${text.slice(0, 14)}…${text.slice(-9)}` : text}`;
+}
+
+function copy(t, key, fallback, variables) {
+  return typeof t === 'function' ? t(key, variables) : fallback;
 }

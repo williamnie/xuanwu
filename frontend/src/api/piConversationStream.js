@@ -1,6 +1,7 @@
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { authHeader } from './authToken.js';
 import { apiUrl } from './base.js';
+import { storedLanguage } from '../i18n/translations.js';
 
 const TERMINAL_EVENTS = new Set(['completed', 'error', 'failed']);
 
@@ -28,6 +29,7 @@ export async function streamPiConversationMessage(id, message, options = {}) {
       accept: 'text/event-stream',
       'Content-Type': 'application/json',
       'X-Codex-Client': 'xuanwu-web',
+      'Accept-Language': storedLanguage(),
       ...authHeader(),
       ...options.headers,
     },

@@ -25,6 +25,7 @@ import type { LlmIntakeModel } from "../pi/llmIntake.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
 import { instrumentLegacyCompatibilityResponse } from "./legacyCompatibilityApi.ts";
 import { registerRunnerSettingsRoutes } from "./runnerSettingsApi.ts";
+import { registerI18nRoutes } from "./i18nApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
 import { staticWebResponse } from "./staticWeb.ts";
@@ -112,6 +113,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       database: runtime.database,
       providers: runtime.providers
     });
+    registerI18nRoutes(router, { database: runtime.database });
     registerExternalEventRoutes(router, { database: runtime.database });
     registerWebhookEventRoutes(router, {
       database: runtime.database,

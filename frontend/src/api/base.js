@@ -1,5 +1,6 @@
 import { authHeader } from './authToken.js';
 import { ApiError } from './errors.js';
+import { storedLanguage } from '../i18n/translations.js';
 
 const API_BASE = import.meta.env?.VITE_API_BASE_URL || '';
 const inflightGetRequests = new Map();
@@ -27,6 +28,7 @@ async function executeRequest(path, options) {
     headers: {
       'Content-Type': 'application/json',
       'X-Codex-Client': 'xuanwu-web',
+      'Accept-Language': storedLanguage(),
       ...authHeader(),
       ...options.headers,
     },
@@ -49,7 +51,7 @@ export async function uploadImage(file) {
   formData.append('file', file);
   const response = await fetch(`${API_BASE}/api/uploads/images`, {
     method: 'POST',
-    headers: authHeader(),
+    headers: { ...authHeader(), 'Accept-Language': storedLanguage() },
     body: formData,
   });
   if (!response.ok) {

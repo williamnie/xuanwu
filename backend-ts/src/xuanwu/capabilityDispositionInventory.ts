@@ -484,6 +484,8 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/evidence/:id", family: "evidence-handoff" },
   { method: "GET", path: "/api/evidence/:id/artifacts/:index", family: "evidence-handoff" },
   { method: "GET", path: "/api/issues/:id/event-summaries", family: "system-observability" },
+  { method: "GET", path: "/api/i18n", family: "capability-policy" },
+  { method: "PUT", path: "/api/i18n", family: "capability-policy" },
   { method: "GET", path: "/api/pi/approval-requests/:id", family: "attention" },
   { method: "GET", path: "/api/pi/connectors/diagnostics", family: "capability-policy" },
   { method: "POST", path: "/api/pi/connectors/:id/revoke", family: "capability-policy" },

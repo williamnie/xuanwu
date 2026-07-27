@@ -1,29 +1,29 @@
 const MAX_RELATED_WORK_LINKS = 8;
 const PLACEHOLDER_TITLES = new Set(['', 'New conversation', 'Runner']);
 
-export function displayPiConversationTitle(conversation = null) {
+export function displayPiConversationTitle(conversation = null, t = null) {
   const title = cleanText(conversation?.title);
-  if (PLACEHOLDER_TITLES.has(title)) return 'New chat';
-  if (/^Feishu\s*·\s*(?:oc_|ou_|om_|chat[-_:])/i.test(title)) return 'Feishu chat';
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(title)) return 'Chat';
+  if (PLACEHOLDER_TITLES.has(title)) return copy(t, 'chat.new', 'New chat');
+  if (/^Feishu\s*·\s*(?:oc_|ou_|om_|chat[-_:])/i.test(title)) return copy(t, 'chat.feishuChat', 'Feishu chat');
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(title)) return copy(t, 'chat.chat', 'Chat');
   return title;
 }
 
-export function piChatStatusSummary({ conversation = null, error = '', loading = false, sending = false, transcript = [] } = {}) {
+export function piChatStatusSummary({ conversation = null, error = '', loading = false, sending = false, t = null, transcript = [] } = {}) {
   const messages = Array.isArray(transcript) ? transcript : [];
-  const detail = messageCountLabel(messages.length);
-  if (error) return { detail: '打开 Advanced 可查看诊断', label: '需要重试', tone: 'error' };
-  if (loading) return { detail: '正在读取对话记录', label: '载入中', tone: 'running' };
-  if (sending) return { detail: 'Xuanwu 正在更新此 Chat', label: '处理中', tone: 'running' };
-  if (!conversation) return { detail: '开始新的 Chat', label: '准备就绪', tone: 'idle' };
+  const detail = messageCountLabel(messages.length, t);
+  if (error) return { detail: copy(t, 'chat.status.openAdvanced', '打开 Advanced 可查看诊断'), label: copy(t, 'chat.status.retry', '需要重试'), tone: 'error' };
+  if (loading) return { detail: copy(t, 'chat.status.loadingDetail', '正在读取对话记录'), label: copy(t, 'chat.status.loading', '载入中'), tone: 'running' };
+  if (sending) return { detail: copy(t, 'chat.status.sendingDetail', 'Xuanwu 正在更新此 Chat'), label: copy(t, 'chat.status.sending', '处理中'), tone: 'running' };
+  if (!conversation) return { detail: copy(t, 'chat.status.startDetail', '开始新的 Chat'), label: copy(t, 'chat.status.ready', '准备就绪'), tone: 'idle' };
   if (messages.at(-1)?.role === 'error' || ['error', 'failed'].includes(cleanText(conversation.status).toLowerCase())) {
-    return { detail: '可重试或继续说明', label: '上次未完成', tone: 'error' };
+    return { detail: copy(t, 'chat.status.incompleteDetail', '可重试或继续说明'), label: copy(t, 'chat.status.incomplete', '上次未完成'), tone: 'error' };
   }
   if (['archived', 'closed'].includes(cleanText(conversation.status).toLowerCase())) {
-    return { detail, label: '已归档', tone: 'idle' };
+    return { detail, label: copy(t, 'chat.status.archived', '已归档'), tone: 'idle' };
   }
-  if (messages.length === 0) return { detail: '等待你的目标', label: '等待输入', tone: 'idle' };
-  return { detail, label: '已更新', tone: 'ready' };
+  if (messages.length === 0) return { detail: copy(t, 'chat.status.waitingDetail', '等待你的目标'), label: copy(t, 'chat.status.waiting', '等待输入'), tone: 'idle' };
+  return { detail, label: copy(t, 'chat.status.updated', '已更新'), tone: 'ready' };
 }
 
 export function piChatWorkLinks(transcript = []) {
@@ -74,8 +74,12 @@ function compactWorkLabel(id) {
   return `Work ${suffix.length > 18 ? `${suffix.slice(0, 9)}…${suffix.slice(-6)}` : suffix}`;
 }
 
-function messageCountLabel(count) {
-  return count > 0 ? `${count} 条消息` : '暂无消息';
+function messageCountLabel(count, t) {
+  return count > 0 ? copy(t, 'chat.status.messageCount', `${count} 条消息`, { count }) : copy(t, 'chat.status.noMessages', '暂无消息');
+}
+
+function copy(t, key, fallback, variables) {
+  return typeof t === 'function' ? t(key, variables) : fallback;
 }
 
 function asArray(value) {

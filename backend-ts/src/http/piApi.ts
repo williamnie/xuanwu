@@ -39,6 +39,7 @@ import { registerPiToolRegistryRoutes } from "./piToolRegistryApi.ts";
 import { piRuntimePromptSummary } from "./piRuntimePrompt.ts";
 import type { Router } from "./router.ts";
 import { bindProjectAutomaticTakeover } from "../domain/project/automaticTakeover.ts";
+import { appLanguage } from "../i18n/language.ts";
 
 type PiApiContext = {
   agenticClient?: AgenticWorkerClient;
@@ -93,7 +94,7 @@ function piSupervisorPromptResponse(context: PiApiContext): Response {
   const agent = requirePiSupervisor(context.database);
   return json({
     supervisor_name: agent.name,
-    runtime_prompt_summary: piRuntimePromptSummary(agent)
+    runtime_prompt_summary: piRuntimePromptSummary(agent, appLanguage(context.database))
   });
 }
 

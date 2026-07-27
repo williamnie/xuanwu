@@ -7,6 +7,11 @@ import RunnerSettingsPanel from './RunnerSettingsPanel';
 import SkillsRuntimePanel from './SkillsRuntimePanel';
 import SourcePoliciesPanel from './SourcePoliciesPanel';
 import { RestartAction } from './SettingsChrome';
+import { Languages } from 'lucide-react';
+import { useState } from 'react';
+import { useI18n } from '../i18n/context.js';
+import { translate } from '../i18n/translations.js';
+import { message } from '../store/toastStore.js';
 
 export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navigateTo, tier }) {
   if (tier === 'advanced') {
@@ -22,16 +27,55 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navi
 }
 
 function GeneralSettingsTab({ navigateTo }) {
+  const { t } = useI18n();
   return (
-    <section className="glass-card settings-project-entry">
-      <div>
-        <div className="settings-entry-eyebrow">Per-project settings</div>
-        <h2>项目设置</h2>
-        <p>打开 Projects 编辑现有项目；这里不复制项目表单，也不会产生双写。</p>
+    <>
+      <LanguageSettingsCard />
+      <section className="glass-card settings-project-entry">
+        <div>
+          <div className="settings-entry-eyebrow">{t('settings.perProject')}</div>
+          <h2>{t('settings.projectSettings')}</h2>
+          <p>{t('settings.projectSettingsDescription')}</p>
+        </div>
+        <button className="btn btn-secondary" onClick={() => navigateTo?.('projects')} type="button">
+          {t('settings.manageProjects')}
+        </button>
+      </section>
+    </>
+  );
+}
+
+function LanguageSettingsCard() {
+  const { changeLanguage, language, t } = useI18n();
+  const [saving, setSaving] = useState(false);
+  const selectLanguage = async (next) => {
+    if (saving || next === language) return;
+    setSaving(true);
+    try {
+      await changeLanguage(next);
+      message.success(translate(next, 'settings.languageSaved'));
+    } catch (error) {
+      message.error(error?.message || t('settings.languageSaveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <section className="glass-card settings-language-card">
+      <div className="settings-language-copy">
+        <div className="settings-entry-eyebrow"><Languages size={14} /> i18n</div>
+        <h2>{t('settings.languageTitle')}</h2>
+        <p>{t('settings.languageDescription')}</p>
+        {saving ? <span>{t('settings.languageSaving')}</span> : null}
       </div>
-      <button className="btn btn-secondary" onClick={() => navigateTo?.('projects')} type="button">
-        管理项目设置
-      </button>
+      <div className="settings-language-options" role="radiogroup" aria-label={t('settings.languageTitle')}>
+        <button aria-checked={language === 'zh-CN'} className={language === 'zh-CN' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('zh-CN')} role="radio" type="button">
+          <strong>{t('settings.chinese')}</strong><span>zh-CN</span>
+        </button>
+        <button aria-checked={language === 'en-US'} className={language === 'en-US' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('en-US')} role="radio" type="button">
+          <strong>{t('settings.english')}</strong><span>en-US</span>
+        </button>
+      </div>
     </section>
   );
 }
@@ -57,13 +101,14 @@ function AdvancedSettingsTab({ activeTab, RuntimeStatusPanel, navigateTo }) {
 }
 
 function AdvancedRuntimeSettingsTab({ RuntimeStatusPanel }) {
+  const { t } = useI18n();
   return (
     <>
       <section className="glass-card settings-advanced-danger-zone">
         <div>
-          <div className="settings-entry-eyebrow">Advanced runtime</div>
-          <h2>服务生命周期</h2>
-          <p>重启会短暂中断当前服务，仅在确认后发送现有受审计的 restart 请求。</p>
+          <div className="settings-entry-eyebrow">{t('settings.advancedRuntime')}</div>
+          <h2>{t('settings.serviceLifecycle')}</h2>
+          <p>{t('settings.restartDescription')}</p>
         </div>
         <RestartAction />
       </section>

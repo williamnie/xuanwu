@@ -6,6 +6,7 @@ import {
   piChatStatusSummary,
   piChatWorkLinks,
 } from './piChatPresentation.js';
+import { translate } from '../i18n/translations.js';
 
 test('Chat placeholder titles use the user-facing label without changing persisted conversation values', () => {
   assert.equal(displayPiConversationTitle({ title: 'New conversation' }), 'New chat');
@@ -34,6 +35,16 @@ test('Chat status summary favors user progress over runtime details', () => {
     conversation: { status: 'active' },
     transcript: [{ role: 'error' }],
   }).label, '上次未完成');
+});
+
+test('Chat presentation follows the selected language without rewriting persisted content', () => {
+  const t = (key, variables) => translate('en-US', key, variables);
+  assert.equal(displayPiConversationTitle({ title: 'New conversation' }, t), 'New chat');
+  assert.deepEqual(piChatStatusSummary({ sending: true, t }), {
+    detail: 'Xuanwu is updating this chat',
+    label: 'Working',
+    tone: 'running',
+  });
 });
 
 test('Chat builds canonical Work links from existing transcript text and metadata', () => {

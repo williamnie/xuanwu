@@ -29,6 +29,16 @@ const MODE_META = {
   },
 };
 
+const MODE_META_EN = {
+  local_changes: { label: 'Local change snapshot', summary: 'The attributable code changes for this Work are recorded. The Handoff itself did not create a commit, push, or deployment.' },
+  branch_commit: { label: 'Local branch and commit', summary: 'An auditable local branch and commit were created for this Work. This does not mean they were pushed.' },
+  push: { label: 'Pushed to remote', summary: 'The code for this Work was pushed to a remote ref.' },
+  draft_pr: { label: 'Draft PR', summary: 'A draft PR was created and still needs work or review.' },
+  ready_pr: { label: 'PR awaiting review', summary: 'The PR is ready for review or merge.' },
+  deploy: { label: 'Deployment', summary: 'The deployment delivery and environment reference are recorded.' },
+  release: { label: 'Release', summary: 'The release and version reference are recorded.' },
+};
+
 const STATUS_LABELS = {
   delivered: '已对外交付',
   delivering: '交付进行中',
@@ -36,6 +46,11 @@ const STATUS_LABELS = {
   failed: '交付失败',
   ready: '交付凭证已就绪',
   superseded: '已被新版本替代',
+};
+
+const STATUS_LABELS_EN = {
+  delivered: 'Delivered', delivering: 'Delivering', draft: 'Delivery credential incomplete',
+  failed: 'Delivery failed', ready: 'Delivery credential ready', superseded: 'Superseded',
 };
 
 const ACTION_LABELS = {
@@ -47,11 +62,17 @@ const ACTION_LABELS = {
   tracker_update: '更新外部任务',
 };
 
-export function workDeliveryView({ detail, evidence = [], work = null } = {}) {
+const ACTION_LABELS_EN = {
+  commit: 'create a commit', deploy: 'complete deployment', open_pull_request: 'create a PR',
+  push: 'push code', release: 'complete the release', tracker_update: 'update the external task',
+};
+
+export function workDeliveryView({ detail, evidence = [], language = 'zh-CN', work = null } = {}) {
   const handoff = detail?.handoff || null;
-  if (!handoff) return emptyDeliveryView(work);
+  if (!handoff) return emptyDeliveryView(work, language);
   const mode = handoff.delivery?.mode || 'unknown';
-  const meta = MODE_META[mode] || { label: mode, summary: '已记录交付凭证。' };
+  const english = language === 'en-US';
+  const meta = (english ? MODE_META_EN : MODE_META)[mode] || { label: mode, summary: english ? 'The delivery credential is recorded.' : '已记录交付凭证。' };
   const status = detail?.delivery_status?.overall || handoff.status || 'draft';
   const linkedIDs = new Set(Array.isArray(handoff.evidence_ids) ? handoff.evidence_ids : []);
   const linkedEvidence = evidence.filter(item => linkedIDs.has(item?.id));
@@ -75,15 +96,15 @@ export function workDeliveryView({ detail, evidence = [], work = null } = {}) {
     highRiskCount,
     mode,
     modeLabel: meta.label,
-    nextAction: nextDeliveryAction({ highRiskCount, pendingActions, review, status, work }),
-    reviewLabel: reviewLabel(review),
+    nextAction: nextDeliveryAction({ highRiskCount, language, pendingActions, review, status, work }),
+    reviewLabel: reviewLabel(review, language),
     riskCount: risks.length,
     status,
-    statusLabel: STATUS_LABELS[status] || status,
+    statusLabel: (english ? STATUS_LABELS_EN : STATUS_LABELS)[status] || status,
   };
 }
 
-export function deliveryEvidenceRows(detail, evidence = []) {
+export function deliveryEvidenceRows(detail, evidence = [], language = 'zh-CN') {
   const ids = Array.isArray(detail?.handoff?.evidence_ids) ? detail.handoff.evidence_ids : [];
   const byID = new Map(evidence.map(item => [item?.id, item]));
   return ids.map(id => {
@@ -93,75 +114,81 @@ export function deliveryEvidenceRows(detail, evidence = []) {
       kind: item?.kind || evidenceKindFromID(id),
       loaded: Boolean(item),
       status: item?.status || 'linked',
-      summary: item?.decisive_summary || '证据已关联；详细摘要尚未加载。',
+      summary: item?.decisive_summary || (language === 'en-US' ? 'Evidence is linked; its detailed summary has not loaded.' : '证据已关联；详细摘要尚未加载。'),
       observedAt: item?.observed_at || item?.completed_at || '',
     };
   });
 }
 
-export function deliveryRefRows(handoff) {
+export function deliveryRefRows(handoff, language = 'zh-CN') {
   const delivery = handoff?.delivery || {};
+  const english = language === 'en-US';
   return [
-    ['分支', delivery.branch_ref],
+    [english ? 'Branch' : '分支', delivery.branch_ref],
     ['Commit', delivery.commit_ref],
-    ['远端引用', delivery.remote_ref],
+    [english ? 'Remote ref' : '远端引用', delivery.remote_ref],
     ['Pull request', delivery.pull_request_ref],
-    ['部署', delivery.deployment_ref],
-    ['环境', delivery.environment],
-    ['版本', delivery.version],
-    ['发布', delivery.release_ref],
-    ['工作区快照', delivery.working_tree_ref],
+    [english ? 'Deployment' : '部署', delivery.deployment_ref],
+    [english ? 'Environment' : '环境', delivery.environment],
+    [english ? 'Version' : '版本', delivery.version],
+    [english ? 'Release' : '发布', delivery.release_ref],
+    [english ? 'Workspace snapshot' : '工作区快照', delivery.working_tree_ref],
   ].flatMap(([label, value]) => value ? [{ label, value }] : []);
 }
 
-export function deliveryHistoryLabel(item) {
+export function deliveryHistoryLabel(item, language = 'zh-CN') {
   const issue = item?.issue;
   const revision = Number(item?.revision ?? 0);
+  const english = language === 'en-US';
   return {
-    issueLabel: issue?.id ? `Issue #${issue.id}` : item?.work_id || '关联 Work',
-    revisionLabel: revision > 0 ? `版本 ${revision + 1}` : '初始版本',
-    statusLabel: STATUS_LABELS[item?.delivery_status?.overall || item?.status] || item?.status || '未知状态',
+    issueLabel: issue?.id ? `Issue #${issue.id}` : item?.work_id || (english ? 'Related Work' : '关联 Work'),
+    revisionLabel: revision > 0 ? (english ? `Revision ${revision + 1}` : `版本 ${revision + 1}`) : (english ? 'Initial revision' : '初始版本'),
+    statusLabel: (english ? STATUS_LABELS_EN : STATUS_LABELS)[item?.delivery_status?.overall || item?.status] || item?.status || (english ? 'Unknown status' : '未知状态'),
   };
 }
 
-function emptyDeliveryView(work) {
+function emptyDeliveryView(work, language) {
+  const english = language === 'en-US';
   return {
     changedFileCount: 0,
     deliverySummary: work?.status === 'done'
-      ? '该历史完成记录没有可查询的 Handoff 交付凭证。'
-      : 'Work 完成并通过验证后，会在这里生成交付凭证。',
+      ? (english ? 'This historical completion has no queryable Handoff delivery credential.' : '该历史完成记录没有可查询的 Handoff 交付凭证。')
+      : (english ? 'A delivery credential appears here after Work completes and passes verification.' : 'Work 完成并通过验证后，会在这里生成交付凭证。'),
     evidenceFailed: 0,
     evidenceLinked: 0,
     evidenceLoaded: 0,
     evidencePassed: 0,
     highRiskCount: 0,
     mode: '',
-    modeLabel: '尚无交付',
-    nextAction: work?.status === 'done' ? '历史记录待补充交付凭证' : '等待 Work 完成',
-    reviewLabel: '未请求评审',
+    modeLabel: english ? 'No delivery' : '尚无交付',
+    nextAction: work?.status === 'done' ? (english ? 'Add a delivery credential to the historical record' : '历史记录待补充交付凭证') : (english ? 'Wait for Work to complete' : '等待 Work 完成'),
+    reviewLabel: english ? 'Review not requested' : '未请求评审',
     riskCount: 0,
     status: 'missing',
-    statusLabel: '无 Handoff',
+    statusLabel: english ? 'No Handoff' : '无 Handoff',
   };
 }
 
-function nextDeliveryAction({ highRiskCount, pendingActions, review, status, work }) {
-  if (status === 'failed') return '检查交付失败原因';
-  if (review?.state === 'pending') return '等待人工评审';
-  if (review?.state === 'changes_requested') return '按评审意见修改';
-  if (highRiskCount > 0) return '检查高风险归因问题';
+function nextDeliveryAction({ highRiskCount, language, pendingActions, review, status, work }) {
+  const english = language === 'en-US';
+  if (status === 'failed') return english ? 'Inspect the delivery failure' : '检查交付失败原因';
+  if (review?.state === 'pending') return english ? 'Wait for human review' : '等待人工评审';
+  if (review?.state === 'changes_requested') return english ? 'Apply the requested changes' : '按评审意见修改';
+  if (highRiskCount > 0) return english ? 'Inspect high-risk attribution issues' : '检查高风险归因问题';
   if (pendingActions.length > 0) {
-    return `等待${ACTION_LABELS[pendingActions[0]?.action] || pendingActions[0]?.action || '交付操作'}`;
+    const action = (english ? ACTION_LABELS_EN : ACTION_LABELS)[pendingActions[0]?.action] || pendingActions[0]?.action || (english ? 'delivery action' : '交付操作');
+    return english ? `Wait to ${action}` : `等待${action}`;
   }
-  if (work?.status === 'pending_verification') return '完成 Work 验收';
-  return '无需额外操作';
+  if (work?.status === 'pending_verification') return english ? 'Complete the Work review' : '完成 Work 验收';
+  return english ? 'No further action' : '无需额外操作';
 }
 
-function reviewLabel(review) {
-  if (review?.state === 'approved') return '评审已通过';
-  if (review?.state === 'pending') return '等待人工评审';
-  if (review?.state === 'changes_requested') return '已请求修改';
-  return '未请求评审';
+function reviewLabel(review, language) {
+  const english = language === 'en-US';
+  if (review?.state === 'approved') return english ? 'Review approved' : '评审已通过';
+  if (review?.state === 'pending') return english ? 'Awaiting human review' : '等待人工评审';
+  if (review?.state === 'changes_requested') return english ? 'Changes requested' : '已请求修改';
+  return english ? 'Review not requested' : '未请求评审';
 }
 
 function evidenceKindFromID(id) {

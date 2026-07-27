@@ -7,9 +7,9 @@ const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
 const model = readFileSync(new URL('./workDetailModel.js', import.meta.url), 'utf8');
 
 test('Work Detail keeps overview, delivery and activity together and loads Activity only on demand', () => {
-  assert.match(detail, />Overview</);
-  assert.match(detail, />交付 \{overview\.handoffs\.length/);
-  assert.match(detail, />Activity</);
+  assert.match(detail, /t\('work\.overview'\)/);
+  assert.match(detail, /t\('work\.delivery'\).*overview\.handoffs\.length/);
+  assert.match(detail, /t\('work\.activity'\)/);
   assert.match(detail, /workApi\.getWork\(workId\)/);
   assert.match(detail, /workApi\.getWorkTimeline/);
   assert.match(detail, /runsApi\.getRuns/);

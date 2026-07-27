@@ -22,7 +22,7 @@
 统计：
 
 - 86 张表：keep=54、merge=22、migrate=8、delete=2（84 张 current source + 2 张 captured live-only legacy）
-- 241 条用户 API route（以 `API_ROUTE_DISPOSITIONS` 的 family 映射为准）
+- 244 条用户 API route（以 `API_ROUTE_DISPOSITIONS` 的 family 映射为准）
 - 32 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
 - 15 个后台调度/启动单元：keep=4、merge=8、migrate=3、delete=0
 - 144 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
@@ -737,4 +737,4 @@ bunx tsc --ignoreConfig --noEmit --target ES2022 --module ESNext \
   src/xuanwu/capabilityDispositionInventory.test.ts
 ```
 
-测试会验证：84 张 current source table + 2 张 captured live-only table = 86；241 条唯一用户 API route 全覆盖；32 个 JSX 页面组件与 144 个 PI 模块恰好归属一次；12 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。
+测试会验证：84 张 current source table + 2 张 captured live-only table = 86；244 条唯一用户 API route 全覆盖；32 个 JSX 页面组件与 144 个 PI 模块恰好归属一次；12 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。

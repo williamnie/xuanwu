@@ -28,6 +28,7 @@ import { handoffRouteFromHash } from './pages/handoffPageModel.js';
 import './App.css';
 import './GeekWorkbench.css';
 import './GeekWorkbenchPages.css';
+import { useI18n } from './i18n/context.js';
 
 // 页面仅在用户实际访问时下载，避免 Dashboard 首屏载入编辑器和会话历史等重型依赖。
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -74,14 +75,16 @@ function getReconcileSlices(currentPage, selectedIssueId) {
 }
 
 function PageLoadingFallback() {
+  const { t } = useI18n();
   return (
     <div className="app-loading-stage" role="status" aria-live="polite">
-      <TurtleLoader label="正在加载页面…" />
+      <TurtleLoader label={t('app.loadingPage')} />
     </div>
   );
 }
 
 export default function App() {
+  const { refreshLanguage, t } = useI18n();
   const initialHandoffRoute = handoffRouteFromHash(globalThis.location?.hash);
   const [appState, updateAppState] = useImmer(() => ({
     // 路由与过滤状态
@@ -292,6 +295,11 @@ export default function App() {
     localStorage.setItem('codex-theme', theme);
   }, [theme]);
 
+  useEffect(() => {
+    if (!authReady) return;
+    refreshLanguage().catch(() => {});
+  }, [authReady, refreshLanguage]);
+
 
 
   // 订阅 SSE 实时变更，触发数据刷新
@@ -343,7 +351,7 @@ export default function App() {
         <button
           className="sidebar-expand-btn animate-fade-in"
           onClick={toggleSidebar}
-          title="展开菜单"
+          title={t('sidebar.expand')}
         >
           <Menu size={18} />
         </button>
@@ -367,7 +375,7 @@ export default function App() {
         <GuardianAlertBanner />
         {loading ? (
           <div className="app-loading-stage">
-            <TurtleLoader label="玄武正在唤醒工作台…" />
+            <TurtleLoader label={t('app.wakingWorkbench')} />
           </div>
         ) : (
           <Suspense fallback={<PageLoadingFallback />}>

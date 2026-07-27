@@ -10,6 +10,7 @@ import {
   Settings,
   Sun,
   LayoutDashboard,
+  Languages,
 } from 'lucide-react';
 import BrandMark from './BrandMark';
 import { useDynamicFavicon } from './brandFavicon.js';
@@ -27,6 +28,9 @@ import {
   productNavPageForRoute,
 } from '../pages/assistantModules';
 import { WORK_BOARD_ENABLED } from '../pages/workBoardModel.js';
+import { useI18n } from '../i18n/context.js';
+import { translate } from '../i18n/translations.js';
+import { message } from '../store/toastStore.js';
 
 const NAV_ICONS = {
   'command-center': LayoutDashboard,
@@ -37,6 +41,17 @@ const NAV_ICONS = {
   projects: FolderGit2,
   connections: Plug,
   settings: Settings,
+};
+
+const NAV_TRANSLATION_KEYS = {
+  'command-center': 'nav.commandCenter',
+  'ask-xuanwu': 'nav.askXuanwu',
+  work: 'nav.work',
+  runs: 'nav.runs',
+  automations: 'nav.automations',
+  projects: 'nav.projects',
+  connections: 'nav.connections',
+  settings: 'nav.settings',
 };
 
 export default function AppSidebar({
@@ -51,11 +66,22 @@ export default function AppSidebar({
   toggleTheme,
   toggleSidebar,
 }) {
+  const { changeLanguage, language, t } = useI18n();
   const brandState = useRunnerBrandState();
   const activeNavPage = productNavPageForRoute(currentPage);
   const navItems = productNavigationItems({ workBoardEnabled: WORK_BOARD_ENABLED });
   const primaryNavItems = navItems.filter(item => item.placement === 'primary');
   const footerNavItems = navItems.filter(item => item.placement === 'footer');
+  const navLabel = (item) => t(NAV_TRANSLATION_KEYS[item.page] || item.label);
+  const toggleLanguage = async () => {
+    const next = language === 'zh-CN' ? 'en-US' : 'zh-CN';
+    try {
+      await changeLanguage(next);
+      message.success(translate(next, 'settings.languageSaved'));
+    } catch (error) {
+      message.error(error?.message || t('settings.languageSaveFailed'));
+    }
+  };
   useDynamicFavicon(brandState);
 
   return (
@@ -68,7 +94,7 @@ export default function AppSidebar({
         <button
           className="sidebar-collapse-btn"
           onClick={toggleSidebar}
-          title="收起菜单"
+          title={t('sidebar.collapse')}
         >
           <ChevronLeft size={16} />
         </button>
@@ -78,12 +104,12 @@ export default function AppSidebar({
       <div className="sidebar-nav-group">
         {primaryNavItems.map((item) => (
           <button
-            aria-label={item.label}
+            aria-label={navLabel(item)}
             className={`nav-item ${activeNavPage === item.page ? 'active' : ''}`}
             key={item.page}
             onClick={() => navigateTo(item.page)}
           >
-            <NavIconLabel Icon={NAV_ICONS[item.icon]} label={item.label} />
+            <NavIconLabel Icon={NAV_ICONS[item.icon]} label={navLabel(item)} />
             <ProductNavBadge active={activeNavPage === item.page} page={item.page} />
           </button>
         ))}
@@ -107,22 +133,31 @@ export default function AppSidebar({
         <div className="sidebar-footer-actions">
           {footerNavItems.map((item) => (
             <button
-              aria-label={item.label}
+              aria-label={navLabel(item)}
               className={`nav-item nav-item-secondary ${activeNavPage === item.page ? 'active' : ''}`}
               key={item.page}
               onClick={() => navigateTo(item.page)}
               type="button"
             >
-              <NavIconLabel Icon={NAV_ICONS[item.icon]} label={item.label} />
+              <NavIconLabel Icon={NAV_ICONS[item.icon]} label={navLabel(item)} />
             </button>
           ))}
           <button
-            aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+            aria-label={theme === 'dark' ? t('sidebar.lightTheme') : t('sidebar.darkTheme')}
             className="nav-item nav-item-secondary sidebar-theme-row"
             onClick={toggleTheme}
             type="button"
           >
-            <NavIconLabel Icon={theme === 'dark' ? Sun : Moon} label={theme === 'dark' ? 'Light theme' : 'Dark theme'} />
+            <NavIconLabel Icon={theme === 'dark' ? Sun : Moon} label={theme === 'dark' ? t('sidebar.lightTheme') : t('sidebar.darkTheme')} />
+          </button>
+          <button
+            aria-label={language === 'zh-CN' ? t('sidebar.switchEnglish') : t('sidebar.switchChinese')}
+            className="nav-item nav-item-secondary sidebar-language-row"
+            onClick={toggleLanguage}
+            title={language === 'zh-CN' ? t('sidebar.switchEnglish') : t('sidebar.switchChinese')}
+            type="button"
+          >
+            <NavIconLabel Icon={Languages} label={language === 'zh-CN' ? 'EN' : '中文'} />
           </button>
         </div>
         <div className="sidebar-version">{APP_VERSION}</div>

@@ -31,30 +31,13 @@ import {
   workAvailableActions,
 } from './workDetailModel.js';
 import './WorkDetail.css';
-
-const STATUS_LABELS = {
-  cancelled: 'Cancelled',
-  done: 'Done',
-  failed: 'Failed',
-  in_progress: 'In progress',
-  pending_verification: 'Verification',
-  todo: 'Todo',
-  triage: 'Triage',
-};
-
-const TIMELINE_LABELS = {
-  approval: 'Attention',
-  evidence: 'Evidence',
-  handoff: 'Handoff',
-  issue_event: 'Issue event',
-  run: 'Run',
-  work_event: 'Work audit',
-};
+import { useI18n } from '../i18n/context.js';
 
 const EMPTY_OVERVIEW = { evidence: [], handoffs: [], runs: [] };
 const DEFAULT_ACCEPTANCE_ID = 'issue-delivery';
 
 export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChanged, projects = [], selectedHandoffId = '', workId }) {
+  const { language, t } = useI18n();
   const detailRequest = useRef(0);
   const overviewRequest = useRef(0);
   const activityRequest = useRef(0);
@@ -87,11 +70,11 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       const nextDetail = await workApi.getWork(workId);
       if (version === detailRequest.current) setDetail(nextDetail);
     } catch (loadError) {
-      if (version === detailRequest.current) setError(loadError.message || '加载 Work 详情失败');
+      if (version === detailRequest.current) setError(loadError.message || t('work.loadFailed'));
     } finally {
       if (version === detailRequest.current) setLoading(false);
     }
-  }, [workId]);
+  }, [t, workId]);
 
   const loadOverview = useCallback(async () => {
     const version = ++overviewRequest.current;
@@ -123,12 +106,12 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       setActivityLoaded(true);
     } catch (loadError) {
       if (version === activityRequest.current) {
-        setOverviewErrors(current => ({ ...current, timeline: loadError.message || '加载 Activity 失败' }));
+        setOverviewErrors(current => ({ ...current, timeline: loadError.message || t('work.loadActivityFailed') }));
       }
     } finally {
       if (version === activityRequest.current) setActivityLoading(false);
     }
-  }, [workId]);
+  }, [t, workId]);
 
   useEffect(() => {
     setDetail(null);
@@ -194,7 +177,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       setTimelineCursor(response?.next_cursor || '');
       setOverviewErrors(current => ({ ...current, timeline: '' }));
     } catch (timelineError) {
-      setOverviewErrors(current => ({ ...current, timeline: timelineError.message || '加载更多 Activity 失败' }));
+      setOverviewErrors(current => ({ ...current, timeline: timelineError.message || t('work.loadMoreActivityFailed') }));
     } finally {
       setTimelineLoadingMore(false);
     }
@@ -205,12 +188,12 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     setSubmitting(true);
     try {
       await workApi.controlWork(work.id, action, buildWorkActionPayload(work, action));
-      message.success(action === 'enqueue' ? 'Work 已开始排队' : action === 'retry' ? 'Work 已重新排队' : 'Work 已取消');
+      message.success(t(action === 'enqueue' ? 'work.enqueued' : action === 'retry' ? 'work.requeued' : 'work.cancelled'));
       setPendingAction('');
       await refreshAll();
       onWorkChanged?.();
     } catch (actionError) {
-      message.error(actionError.message || 'Work 操作失败');
+      message.error(actionError.message || t('work.actionFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -222,13 +205,13 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     setSubmitting(true);
     try {
       await workApi.reviewWork(work.id, { action: reviewAction, comment });
-      message.success('Work 验收结论已审计提交');
+      message.success(t('work.reviewSubmitted'));
       setReviewAction('');
       setReviewComment('');
       await refreshAll();
       onWorkChanged?.();
     } catch (reviewError) {
-      message.error(reviewError.message || 'Work 验收失败');
+      message.error(reviewError.message || t('work.reviewFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -254,13 +237,13 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   return (
     <section className="work-detail-page animate-fade-in">
       <div className="work-detail-toolbar">
-        <button className="work-detail-back" onClick={() => navigateTo('work')} type="button"><ArrowLeft size={15} /> Work Board</button>
+        <button className="work-detail-back" onClick={() => navigateTo('work')} type="button"><ArrowLeft size={15} /> {t('work.board')}</button>
         <div className="work-detail-actions">
-          {availableActions.edit ? <button onClick={() => setEditorOpen(true)} type="button"><Pencil size={14} /> Edit</button> : null}
-          {availableActions.start ? <button className="primary" disabled={submitting} onClick={() => submitAction('enqueue')} type="button"><Play size={14} /> Start</button> : null}
-          {availableActions.retry ? <button className="primary" disabled={submitting} onClick={() => submitAction('retry')} type="button"><RotateCw size={14} /> Retry</button> : null}
-          {availableActions.cancel ? <button className="danger" disabled={submitting} onClick={() => setPendingAction('cancel')} type="button"><Square size={13} /> Cancel</button> : null}
-          <button disabled={refreshing} onClick={refreshAll} type="button"><RefreshCw className={refreshing ? 'is-spinning' : ''} size={14} /> Refresh</button>
+          {availableActions.edit ? <button onClick={() => setEditorOpen(true)} type="button"><Pencil size={14} /> {t('work.edit')}</button> : null}
+          {availableActions.start ? <button className="primary" disabled={submitting} onClick={() => submitAction('enqueue')} type="button"><Play size={14} /> {t('work.start')}</button> : null}
+          {availableActions.retry ? <button className="primary" disabled={submitting} onClick={() => submitAction('retry')} type="button"><RotateCw size={14} /> {t('work.retry')}</button> : null}
+          {availableActions.cancel ? <button className="danger" disabled={submitting} onClick={() => setPendingAction('cancel')} type="button"><Square size={13} /> {t('work.cancel')}</button> : null}
+          <button disabled={refreshing} onClick={refreshAll} type="button"><RefreshCw className={refreshing ? 'is-spinning' : ''} size={14} /> {t('work.refresh')}</button>
         </div>
       </div>
 
@@ -268,18 +251,18 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
         <div className="work-detail-hero-main">
           <div className="work-detail-eyebrow"><CircleDot size={13} /> Work</div>
           <div className="work-detail-title-row">
-            <span className="work-detail-status" data-status={work.status}>{STATUS_LABELS[work.status] || work.status}</span>
+            <span className="work-detail-status" data-status={work.status}>{t(`status.${work.status}`)}</span>
             <h1>{work.title}</h1>
           </div>
-          <div className="work-detail-meta"><span>{projectName}</span><span>Updated {formatTime(work.updated_at)}</span></div>
+          <div className="work-detail-meta"><span>{projectName}</span><span>{t('work.updated', { time: formatTime(work.updated_at, language) })}</span></div>
         </div>
         <div className="work-detail-identity"><span>WORK ID</span><code>{work.id}</code>{issueId ? <span>Issue #{issueId}</span> : null}</div>
       </header>
 
-      <nav className="work-detail-view-tabs" aria-label="Work detail views">
-        <button aria-current={activeView === 'overview' ? 'page' : undefined} onClick={() => selectView('overview')} type="button">Overview</button>
-        <button aria-current={activeView === 'delivery' ? 'page' : undefined} onClick={() => selectView('delivery')} type="button">交付 {overview.handoffs.length > 0 ? `(${overview.handoffs.length})` : ''}</button>
-        <button aria-current={activeView === 'activity' ? 'page' : undefined} onClick={() => selectView('activity')} type="button">Activity</button>
+      <nav className="work-detail-view-tabs" aria-label={t('work.detailViews')}>
+        <button aria-current={activeView === 'overview' ? 'page' : undefined} onClick={() => selectView('overview')} type="button">{t('work.overview')}</button>
+        <button aria-current={activeView === 'delivery' ? 'page' : undefined} onClick={() => selectView('delivery')} type="button">{t('work.delivery')} {overview.handoffs.length > 0 ? `(${overview.handoffs.length})` : ''}</button>
+        <button aria-current={activeView === 'activity' ? 'page' : undefined} onClick={() => selectView('activity')} type="button">{t('work.activity')}</button>
       </nav>
 
       {pendingAction ? <InlineConfirmation busy={submitting} onCancel={() => setPendingAction('')} onConfirm={() => submitAction(pendingAction)} /> : null}
@@ -287,29 +270,29 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       {activeView === 'overview' ? (
         <div className="work-overview-layout">
           <section className="work-detail-panel work-detail-goal">
-            <SectionHeading eyebrow="Task" title="Goal" />
-            <MarkdownPreview text={work.goal || 'No goal recorded.'} />
+            <SectionHeading eyebrow={t('work.task')} title={t('work.goal')} />
+            <MarkdownPreview text={work.goal || t('work.noGoal')} />
           </section>
 
           <div className="work-overview-grid">
             <section className="work-detail-panel">
-              <SectionHeading eyebrow="Current" title="Next step" />
+              <SectionHeading eyebrow={t('work.current')} title={t('work.nextStep')} />
               <WorkStateSummary status={work.status} />
               {availableActions.review ? <ReviewActions disabled={submitting} onSelect={setReviewAction} /> : null}
             </section>
 
             <section className="work-detail-panel">
-              <SectionHeading eyebrow={overviewLoading ? 'Loading' : `${overview.runs.length} runs`} title="Latest run" />
+              <SectionHeading eyebrow={overviewLoading ? t('work.loading') : t('work.runsCount', { count: overview.runs.length })} title={t('work.latestRun')} />
               <ResourceError error={overviewErrors.runs} />
-              {latestRun ? <LatestRunCard navigateTo={navigateTo} run={latestRun} /> : <EmptySection text="No Run has been materialized." />}
+              {latestRun ? <LatestRunCard navigateTo={navigateTo} run={latestRun} /> : <EmptySection text={t('work.noRun')} />}
             </section>
 
             <section className="work-detail-panel">
-              <SectionHeading eyebrow="Verification" title="Delivery" />
+              <SectionHeading eyebrow={t('work.verification')} title={t('work.delivery')} />
               <ResourceError error={overviewErrors.evidence || overviewErrors.handoffs} />
               <div className="work-delivery-facts">
-                <span><strong>{passedEvidence}</strong> passed Evidence</span>
-                <span className={failedEvidence ? 'failed' : ''}><strong>{failedEvidence}</strong> failed Evidence</span>
+                <span><strong>{passedEvidence}</strong> {t('work.passedEvidence')}</span>
+                <span className={failedEvidence ? 'failed' : ''}><strong>{failedEvidence}</strong> {t('work.failedEvidence')}</span>
               </div>
               {latestHandoff ? <LatestHandoffCard handoff={latestHandoff} onOpen={() => selectView('delivery')} /> : <EmptySection text={work.status === 'done' ? '历史完成记录没有可查询的 Handoff。' : '完成并通过验证后会生成交付凭证。'} />}
             </section>
@@ -317,7 +300,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
 
           {customAcceptance.length ? (
             <details className="work-custom-acceptance">
-              <summary>Acceptance criteria ({customAcceptance.length})</summary>
+              <summary>{t('work.acceptanceCriteria')} ({customAcceptance.length})</summary>
               <ul>{customAcceptance.map(criterion => <li key={criterion.id}>{criterion.description}</li>)}</ul>
             </details>
           ) : null}
@@ -337,23 +320,23 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
         </section>
       ) : (
         <section className="work-detail-panel work-activity-panel">
-          <SectionHeading eyebrow="Bounded history" title="Activity" />
-          <div className="work-timeline-filters" role="group" aria-label="Activity kind">
-            <button aria-pressed={!timelineKind} onClick={() => setTimelineKind('')} type="button">All</button>
-            {WORK_TIMELINE_KINDS.map(kind => <button aria-pressed={timelineKind === kind} key={kind} onClick={() => setTimelineKind(kind)} type="button">{TIMELINE_LABELS[kind] || kind}</button>)}
+          <SectionHeading eyebrow={t('work.boundedHistory')} title={t('work.activity')} />
+          <div className="work-timeline-filters" role="group" aria-label={t('work.activityKind')}>
+            <button aria-pressed={!timelineKind} onClick={() => setTimelineKind('')} type="button">{t('work.all')}</button>
+            {WORK_TIMELINE_KINDS.map(kind => <button aria-pressed={timelineKind === kind} key={kind} onClick={() => setTimelineKind(kind)} type="button">{t(`timeline.${kind}`)}</button>)}
           </div>
           <ResourceError error={overviewErrors.timeline} />
-          {activityLoading && !activityLoaded ? <div className="work-activity-loading"><LoaderCircle className="is-spinning" size={18} /> Loading Activity…</div> : null}
-          {!activityLoading && visibleTimeline.length === 0 ? <EmptySection text={timelineKind ? 'No Activity matches this filter.' : 'No Activity recorded.'} /> : null}
+          {activityLoading && !activityLoaded ? <div className="work-activity-loading"><LoaderCircle className="is-spinning" size={18} /> {t('work.loadingActivity')}</div> : null}
+          {!activityLoading && visibleTimeline.length === 0 ? <EmptySection text={timelineKind ? t('work.noMatchingActivity') : t('work.noActivity')} /> : null}
           <div className="work-timeline-list">
             {visibleTimeline.map(item => (
               <article key={item.id}>
                 <span className="work-timeline-marker" data-kind={item.kind} />
-                <div><div><strong>{item.title}</strong><em>{item.status}</em></div><p>{item.summary}</p><span>{TIMELINE_LABELS[item.kind] || item.kind} · {formatTime(item.occurred_at)}</span></div>
+                <div><div><strong>{item.title}</strong><em>{item.status}</em></div><p>{item.summary}</p><span>{t(`timeline.${item.kind}`)} · {formatTime(item.occurred_at, language)}</span></div>
               </article>
             ))}
           </div>
-          {timelineCursor ? <button className="work-timeline-more" disabled={timelineLoadingMore} onClick={loadMoreTimeline} type="button">{timelineLoadingMore ? <LoaderCircle className="is-spinning" size={14} /> : null}{timelineLoadingMore ? 'Loading…' : 'Load earlier'}</button> : null}
+          {timelineCursor ? <button className="work-timeline-more" disabled={timelineLoadingMore} onClick={loadMoreTimeline} type="button">{timelineLoadingMore ? <LoaderCircle className="is-spinning" size={14} /> : null}{timelineLoadingMore ? t('work.loadingEarlier') : t('work.loadEarlier')}</button> : null}
         </section>
       )}
 
@@ -364,43 +347,48 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
 }
 
 function LatestRunCard({ navigateTo, run }) {
-  return <article className="work-latest-run"><div><em data-status={run.status}>{run.status}</em><span>{run.provider || 'unknown'} · {formatTime(run.started_at)}</span></div><strong>{run.progress?.latest?.summary || run.terminal?.reason || 'No progress summary yet.'}</strong><button onClick={() => navigateTo('runs', null, run.id)} type="button">Open Run <ArrowUpRight size={12} /></button></article>;
+  const { language, t } = useI18n();
+  return <article className="work-latest-run"><div><em data-status={run.status}>{t(`status.${run.status}`)}</em><span>{run.provider || 'unknown'} · {formatTime(run.started_at, language)}</span></div><strong>{run.progress?.latest?.summary || run.terminal?.reason || t('work.noProgress')}</strong><button onClick={() => navigateTo('runs', null, run.id)} type="button">{t('work.openRun')} <ArrowUpRight size={12} /></button></article>;
 }
 
 function LatestHandoffCard({ handoff, onOpen }) {
+  const { t } = useI18n();
   const status = handoff.delivery_status?.overall || handoff.status;
   const mode = {
-    branch_commit: '本地 commit 已创建',
-    deploy: '部署交付',
-    draft_pr: '草稿 PR',
-    local_changes: '本地改动已记录',
-    push: '代码已推送',
-    ready_pr: 'PR 已准备好',
-    release: '发布交付',
-  }[handoff.delivery?.mode] || handoff.delivery?.mode || '交付凭证';
-  return <article className="work-latest-handoff"><div><strong>{mode}</strong><em data-status={status}>{status === 'ready' ? '凭证已就绪' : status}</em></div><p>{handoff.changed_file_count} 个文件 · {handoff.evidence_count} 项 Evidence · {handoff.risk_count} 条风险</p><button onClick={onOpen} type="button">查看 Issue 交付 <ArrowUpRight size={12} /></button></article>;
+    branch_commit: t('work.handoff.localCommit'),
+    deploy: t('work.handoff.deploy'),
+    draft_pr: t('work.handoff.draftPr'),
+    local_changes: t('work.handoff.localChanges'),
+    push: t('work.handoff.push'),
+    ready_pr: t('work.handoff.readyPr'),
+    release: t('work.handoff.release'),
+  }[handoff.delivery?.mode] || handoff.delivery?.mode || t('work.handoff.credential');
+  return <article className="work-latest-handoff"><div><strong>{mode}</strong><em data-status={status}>{status === 'ready' ? t('work.handoff.ready') : status}</em></div><p>{t('work.handoff.summary', { files: handoff.changed_file_count, evidence: handoff.evidence_count, risks: handoff.risk_count })}</p><button onClick={onOpen} type="button">{t('work.handoff.open')} <ArrowUpRight size={12} /></button></article>;
 }
 
 function WorkStateSummary({ status }) {
+  const { t } = useI18n();
   const summary = {
-    cancelled: ['Cancelled', 'No automatic action is pending.'],
-    done: ['Completed', '执行已完成；交付凭证和实际交付层级请查看“交付”。'],
-    failed: ['Execution failed', 'Inspect the latest Run, then retry or edit the task.'],
-    in_progress: ['Running', 'The runner owns the current execution.'],
-    pending_verification: ['Review required', 'Accept the delivery or request focused changes.'],
-    todo: ['Queued', 'Issue Loop will claim this Work automatically.'],
-    triage: ['Ready to start', 'Start the Work or refine its goal.'],
-  }[status] || [status, 'Inspect the latest Run for details.'];
+    cancelled: [t('work.state.cancelledTitle'), t('work.state.cancelledDetail')],
+    done: [t('work.state.doneTitle'), t('work.state.doneDetail')],
+    failed: [t('work.state.failedTitle'), t('work.state.failedDetail')],
+    in_progress: [t('work.state.runningTitle'), t('work.state.runningDetail')],
+    pending_verification: [t('work.state.reviewTitle'), t('work.state.reviewDetail')],
+    todo: [t('work.state.queuedTitle'), t('work.state.queuedDetail')],
+    triage: [t('work.state.readyTitle'), t('work.state.readyDetail')],
+  }[status] || [status, t('work.state.unknownDetail')];
   const Icon = status === 'failed' ? AlertTriangle : status === 'done' ? CheckCircle2 : CircleDot;
   return <div className="work-state-summary" data-status={status}><Icon size={18} /><div><strong>{summary[0]}</strong><span>{summary[1]}</span></div></div>;
 }
 
 function WorkDetailLoading() {
-  return <div className="work-detail-loading"><LoaderCircle className="is-spinning" size={26} /><strong>Loading Work…</strong></div>;
+  const { t } = useI18n();
+  return <div className="work-detail-loading"><LoaderCircle className="is-spinning" size={26} /><strong>{t('work.loadingDetail')}</strong></div>;
 }
 
 function WorkDetailFailure({ error, navigateTo }) {
-  return <section className="work-detail-failure" role="alert"><AlertTriangle size={22} /><div><strong>Work Detail 暂不可用</strong><span>{error || '找不到请求的 Work。'}</span></div><button onClick={() => navigateTo('work')} type="button"><ArrowLeft size={14} /> 返回 Work Board</button></section>;
+  const { t } = useI18n();
+  return <section className="work-detail-failure" role="alert"><AlertTriangle size={22} /><div><strong>{t('work.detailUnavailable')}</strong><span>{error || t('work.notFound')}</span></div><button onClick={() => navigateTo('work')} type="button"><ArrowLeft size={14} /> {t('work.backToBoard')}</button></section>;
 }
 
 function SectionHeading({ eyebrow, title }) {
@@ -416,16 +404,19 @@ function ResourceError({ error }) {
 }
 
 function ReviewActions({ disabled, onSelect }) {
-  return <div className="work-review-actions"><button disabled={disabled} onClick={() => onSelect('accept')} type="button"><CheckCircle2 size={14} /> Accept</button><button disabled={disabled} onClick={() => onSelect('request_changes')} type="button"><RefreshCw size={14} /> Changes</button><button className="danger" disabled={disabled} onClick={() => onSelect('reject')} type="button"><XCircle size={14} /> Reject</button></div>;
+  const { t } = useI18n();
+  return <div className="work-review-actions"><button disabled={disabled} onClick={() => onSelect('accept')} type="button"><CheckCircle2 size={14} /> {t('work.accept')}</button><button disabled={disabled} onClick={() => onSelect('request_changes')} type="button"><RefreshCw size={14} /> {t('work.changes')}</button><button className="danger" disabled={disabled} onClick={() => onSelect('reject')} type="button"><XCircle size={14} /> {t('work.reject')}</button></div>;
 }
 
 function InlineConfirmation({ busy, onCancel, onConfirm }) {
-  return <div className="work-inline-confirm" role="alertdialog" aria-label="确认取消 Work"><AlertTriangle size={18} /><div><strong>确认取消 Work？</strong><span>取消会通过确定性 transition gate 写回并保留审计。</span></div><button disabled={busy} onClick={onCancel} type="button">Keep Work</button><button className="danger" disabled={busy} onClick={onConfirm} type="button">{busy ? 'Submitting…' : 'Confirm cancel'}</button></div>;
+  const { t } = useI18n();
+  return <div className="work-inline-confirm" role="alertdialog" aria-label={t('work.confirmCancel')}><AlertTriangle size={18} /><div><strong>{t('work.confirmCancel')}</strong><span>{t('work.cancelAudit')}</span></div><button disabled={busy} onClick={onCancel} type="button">{t('work.keep')}</button><button className="danger" disabled={busy} onClick={onConfirm} type="button">{busy ? t('work.submitting') : t('work.confirmCancelAction')}</button></div>;
 }
 
 function ReviewDialog({ action, busy, comment, onCancel, onChange, onConfirm }) {
+  const { t } = useI18n();
   const commentRequired = action === 'reject' || action === 'request_changes';
-  return <div className="modal-overlay work-dialog-overlay"><form className="work-review-dialog" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}><span>DETERMINISTIC ACCEPTANCE GATE</span><h2>{reviewTitle(action)}</h2><p>结论写回 Issue authority，并保留验证审计。</p><label><span>Review note {commentRequired ? '(required)' : '(optional)'}</span><textarea autoFocus className="form-control" onChange={event => onChange(event.target.value)} rows={5} value={comment} /></label><div><button disabled={busy} onClick={onCancel} type="button">Cancel</button><button className={action === 'reject' ? 'danger' : 'primary'} disabled={busy || (commentRequired && !comment.trim())} type="submit">{busy ? 'Submitting…' : 'Submit review'}</button></div></form></div>;
+  return <div className="modal-overlay work-dialog-overlay"><form className="work-review-dialog" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}><span>{t('work.reviewGate')}</span><h2>{reviewTitle(action, t)}</h2><p>{t('work.reviewAudit')}</p><label><span>{t(commentRequired ? 'work.reviewNoteRequired' : 'work.reviewNoteOptional')}</span><textarea autoFocus className="form-control" onChange={event => onChange(event.target.value)} rows={5} value={comment} /></label><div><button disabled={busy} onClick={onCancel} type="button">{t('work.cancel')}</button><button className={action === 'reject' ? 'danger' : 'primary'} disabled={busy || (commentRequired && !comment.trim())} type="submit">{busy ? t('work.submitting') : t('work.submitReview')}</button></div></form></div>;
 }
 
 function fulfilledItems(result) {
@@ -438,14 +429,14 @@ function settledErrors(results, keys) {
   return Object.fromEntries(results.flatMap((result, index) => result.status === 'rejected' ? [[keys[index], result.reason?.message || `Failed to load ${keys[index]}`]] : []));
 }
 
-function reviewTitle(action) {
-  if (action === 'accept') return 'Accept Work delivery';
-  if (action === 'reject') return 'Reject Work delivery';
-  return 'Request changes';
+function reviewTitle(action, t) {
+  if (action === 'accept') return t('work.acceptDelivery');
+  if (action === 'reject') return t('work.rejectDelivery');
+  return t('work.requestChanges');
 }
 
-function formatTime(value) {
+function formatTime(value, language) {
   if (!value) return '—';
   const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date.toLocaleString() : value;
+  return Number.isFinite(date.getTime()) ? date.toLocaleString(language) : value;
 }

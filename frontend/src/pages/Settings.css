@@ -501,3 +501,34 @@
     flex: 1 0 auto;
   }
 }
+.settings-language-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.settings-language-copy { display: grid; gap: 7px; }
+.settings-language-copy h2 { margin: 0; }
+.settings-language-copy p { margin: 0; color: var(--text-muted); line-height: 1.6; max-width: 720px; }
+.settings-language-copy > span { color: var(--primary); font-size: 0.78rem; font-weight: 700; }
+.settings-language-options { display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: 8px; }
+.settings-language-options button {
+  border: 1px solid var(--border-light);
+  border-radius: 13px;
+  padding: 11px 14px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-language-options button span { color: var(--text-muted); font-size: 0.7rem; }
+.settings-language-options button.active { border-color: var(--primary); background: var(--primary-glow); }
+.settings-language-options button:disabled { cursor: wait; opacity: 0.7; }
+
+@media (max-width: 720px) {
+  .settings-language-card { grid-template-columns: 1fr; }
+}

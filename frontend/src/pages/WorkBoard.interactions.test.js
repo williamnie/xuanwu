@@ -30,7 +30,7 @@ test('Work Board opens from one grouped snapshot and loads only the scrolled lan
   assert.match(board, /page: lane\.page \+ 1/);
   assert.match(board, /onScroll=\{event => onReachEnd\(event, status\)\}/);
   assert.match(board, /laneScrollArmed/);
-  assert.match(board, /继续加载 \$\{meta\.label\}/);
+  assert.match(board, /t\('board\.loadMoreStatus', \{ status: t\(`status\.\$\{status\}`\) \}\)/);
   assert.doesNotMatch(board, /getAllWorks|getAllWorkRelations/);
 });
 
@@ -43,7 +43,7 @@ test('Work Board avoids learned intrinsic card heights that move the lane scroll
 test('Work Board keeps search in the header, exposes board only, and does not lose height to the global composer', () => {
   assert.doesNotMatch(board, /work-ledger-stats|CompatibilityNotice/);
   assert.match(board, /className="work-header-search"/);
-  assert.match(board, /aria-label="搜索 Work"/);
+  assert.match(board, /aria-label=\{t\('board\.search'\)\}/);
   assert.doesNotMatch(board, /WorkFilters|WorkList|onViewChange|work-filter-toggle/);
   assert.doesNotMatch(composerCss, /\.main-content\.has-global-ask-composer\s*\{/);
 });

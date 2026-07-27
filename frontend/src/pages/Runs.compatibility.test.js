@@ -16,7 +16,7 @@ test('Runs is the canonical page while old Sessions navigation remains a deep-li
   assert.match(appSource, /const compatSessionRoute = page === 'sessions'/);
   assert.match(appSource, /currentPage === 'runs'/);
   assert.match(modulesSource, /page: 'runs',[\s\S]*label: PRODUCT_NAV_LABELS\.runs/);
-  assert.match(sidebarSource, /aria-label=\{item\.label\}/);
+  assert.match(sidebarSource, /aria-label=\{navLabel\(item\)\}/);
   assert.doesNotMatch(sidebarSource, /aria-label="Sessions"/);
 });
 

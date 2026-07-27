@@ -3,23 +3,10 @@ import { useState } from 'react';
 import { CheckCircle2, Pencil, X } from 'lucide-react';
 import { workApi } from '../../api/work.js';
 import { message } from '../../store/toastStore.js';
-
-const TYPE_LABELS = {
-  engineering_task: 'Engineering task',
-  objective: 'Objective',
-};
-
-const STATUS_LABELS = {
-  cancelled: 'Cancelled',
-  done: 'Done',
-  failed: 'Failed',
-  in_progress: 'In progress',
-  pending_verification: 'Verification',
-  todo: 'Todo',
-  triage: 'Triage',
-};
+import { useI18n } from '../../i18n/context.js';
 
 export default function WorkEditorDialog({ mode, onClose, onSaved, projects, work }) {
+  const { t } = useI18n();
   const editing = mode === 'edit';
   const [draft, setDraft] = useState(() => editorDraft(work, projects));
   const [error, setError] = useState('');
@@ -30,7 +17,7 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
   const submit = async (event) => {
     event.preventDefault();
     if (!draft.title.trim() || !draft.goal.trim() || (!editing && !draft.project_id)) {
-      setError('请填写标题、目标和项目。');
+      setError(t('editor.required'));
       return;
     }
     setSaving(true);
@@ -52,10 +39,10 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
           title: draft.title.trim(),
           type: 'engineering_task',
         });
-      message.success(editing ? 'Work 已更新' : 'Work 已创建');
+      message.success(t(editing ? 'editor.updated' : 'editor.created'));
       onSaved(response?.work || null);
     } catch (saveError) {
-      setError(saveError.message || '保存 Work 失败');
+      setError(saveError.message || t('editor.saveFailed'));
       setSaving(false);
     }
   };
@@ -65,51 +52,51 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
       <div aria-labelledby="work-dialog-title" aria-modal="true" className="work-dialog" role="dialog">
         <header>
           <div>
-            <span>{editing ? 'ISSUE-AUTHORITATIVE EDIT' : 'AUDITED CREATE'}</span>
-            <h2 id="work-dialog-title">{editing ? '编辑 Work' : '新建 Work'}</h2>
-            <p>{editing ? '仅修改 Work 合同允许的标题与目标。' : '当前创建 Engineering task，并由 Issue 保持写入权威。'}</p>
+            <span>{t(editing ? 'editor.authoritativeEdit' : 'editor.auditedCreate')}</span>
+            <h2 id="work-dialog-title">{t(editing ? 'editor.edit' : 'editor.create')}</h2>
+            <p>{t(editing ? 'editor.editDescription' : 'editor.createDescription')}</p>
           </div>
-          <button aria-label="关闭" disabled={saving} onClick={onClose} type="button"><X size={18} /></button>
+          <button aria-label={t('editor.close')} disabled={saving} onClick={onClose} type="button"><X size={18} /></button>
         </header>
         <form onSubmit={submit}>
           {error ? <div className="work-dialog-error" role="alert">{error}</div> : null}
           {!editing ? (
             <div className="work-dialog-grid">
               <label>
-                <span>Project</span>
+                <span>{t('nav.projects')}</span>
                 <select className="form-control" onChange={event => setField('project_id', event.target.value)} required value={draft.project_id}>
-                  <option value="">Select project</option>
+                  <option value="">{t('editor.selectProject')}</option>
                   {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
                 </select>
               </label>
               <label>
-                <span>Initial status</span>
+                <span>{t('editor.initialStatus')}</span>
                 <select className="form-control" onChange={event => setField('status', event.target.value)} value={draft.status}>
-                  <option value="triage">Triage</option>
-                  <option value="todo">Todo</option>
+                  <option value="triage">{t('status.triage')}</option>
+                  <option value="todo">{t('status.todo')}</option>
                 </select>
               </label>
             </div>
           ) : (
             <div className="work-dialog-contract">
-              <span>{TYPE_LABELS[work.type] || work.type}</span>
-              <span>{STATUS_LABELS[work.status] || work.status}</span>
-              <span>Revision {work.revision}</span>
+              <span>{t(`workType.${work.type}`)}</span>
+              <span>{t(`status.${work.status}`)}</span>
+              <span>{t('editor.revision', { revision: work.revision })}</span>
             </div>
           )}
           <label>
-            <span>Title</span>
+            <span>{t('editor.title')}</span>
             <input autoFocus className="form-control" maxLength={180} onChange={event => setField('title', event.target.value)} required value={draft.title} />
           </label>
           <label>
-            <span>Goal</span>
+            <span>{t('work.goal')}</span>
             <textarea className="form-control work-goal-input" onChange={event => setField('goal', event.target.value)} required value={draft.goal} />
           </label>
           <footer>
-            <button className="work-action-secondary" disabled={saving} onClick={onClose} type="button">取消</button>
+            <button className="work-action-secondary" disabled={saving} onClick={onClose} type="button">{t('work.cancel')}</button>
             <button className="work-action-primary" disabled={saving} type="submit">
               {editing ? <Pencil size={15} /> : <CheckCircle2 size={15} />}
-              {saving ? '保存中…' : editing ? '保存修改' : '创建 Work'}
+              {saving ? t('editor.saving') : editing ? t('editor.saveChanges') : t('editor.createAction')}
             </button>
           </footer>
         </form>

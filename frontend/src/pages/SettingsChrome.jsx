@@ -3,16 +3,18 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Boxes, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { message } from '../store/toastStore';
 import { SETTINGS_ADVANCED_TABS, SETTINGS_PRIMARY_TABS } from './settingsNavigation';
+import { useI18n } from '../i18n/context.js';
 
 export function SettingsHeader({ onRouteChange, route, title = 'Settings' }) {
+  const { t } = useI18n();
   return (
     <header className="settings-header">
       <div className="settings-title-row">
         <div>
           <div className="settings-eyebrow">
-            <Boxes size={14} /> Xuanwu · Product Settings
+            <Boxes size={14} /> {t('settings.eyebrow')}
           </div>
-          <h1>{title}</h1>
+          <h1>{title === 'Settings' ? t('settings.title') : title}</h1>
         </div>
       </div>
       <SettingsNavigation onRouteChange={onRouteChange} route={route} />
@@ -21,6 +23,7 @@ export function SettingsHeader({ onRouteChange, route, title = 'Settings' }) {
 }
 
 function SettingsNavigation({ onRouteChange, route }) {
+  const { t } = useI18n();
   const advanced = route.tier === 'advanced';
   const lastPrimaryTab = useRef(advanced ? 'general' : route.tab);
 
@@ -37,7 +40,7 @@ function SettingsNavigation({ onRouteChange, route }) {
   return (
     <div className="settings-navigation-stack">
       <div className="settings-navigation-row">
-        <nav className="settings-tabs" role="tablist" aria-label="Settings sections">
+        <nav className="settings-tabs" role="tablist" aria-label={t('settings.primarySections')}>
           {SETTINGS_PRIMARY_TABS.map((tab) => (
             <TabButton
               key={tab.id}
@@ -48,18 +51,18 @@ function SettingsNavigation({ onRouteChange, route }) {
           ))}
         </nav>
         <button
-          aria-label={advanced ? '关闭 Advanced 设置' : '打开 Advanced 设置'}
+          aria-label={advanced ? t('settings.closeAdvanced') : t('settings.openAdvanced')}
           aria-pressed={advanced}
           className={`settings-advanced-gate ${advanced ? 'active' : ''}`}
           onClick={toggleAdvanced}
           type="button"
         >
-          <SlidersHorizontal size={15} /> Advanced
+          <SlidersHorizontal size={15} /> {t('settings.advanced')}
         </button>
       </div>
       {advanced && (
         <div className="settings-advanced-navigation">
-          <nav className="settings-tabs settings-advanced-tabs" role="tablist" aria-label="Advanced Settings sections">
+          <nav className="settings-tabs settings-advanced-tabs" role="tablist" aria-label={t('settings.advancedSections')}>
             {SETTINGS_ADVANCED_TABS.map((tab) => (
               <TabButton
                 key={tab.id}
@@ -76,6 +79,7 @@ function SettingsNavigation({ onRouteChange, route }) {
 }
 
 function TabButton({ active, onClick, tab }) {
+  const { t } = useI18n();
   return (
     <button
       aria-selected={active}
@@ -84,15 +88,16 @@ function TabButton({ active, onClick, tab }) {
       role="tab"
       type="button"
     >
-      {tab.label}
+      {t(`settings.${tab.id}`)}
     </button>
   );
 }
 
 export function RestartAction() {
+  const { t } = useI18n();
   const [confirming, setConfirming] = useState(false);
   const [restarting, setRestarting] = useState(false);
-  const handleRestart = async () => restartSystem(setRestarting, setConfirming);
+  const handleRestart = async () => restartSystem(setRestarting, setConfirming, t);
   return (
     <div className="settings-restart-zone">
       <button
@@ -102,7 +107,7 @@ export function RestartAction() {
         type="button"
       >
         <RefreshCw size={15} className={restarting ? 'spin-animation' : ''} />
-        {restarting ? '重启中...' : '重启服务'}
+        {restarting ? t('settings.restarting') : t('settings.restartService')}
       </button>
       {confirming && (
         <RestartConfirm restarting={restarting} onCancel={() => setConfirming(false)} onRestart={handleRestart} />
@@ -112,30 +117,31 @@ export function RestartAction() {
 }
 
 function RestartConfirm({ onCancel, onRestart, restarting }) {
+  const { t } = useI18n();
   return (
     <div className="settings-restart-confirm" role="alert">
       <div>
-        <strong><AlertTriangle size={15} /> 确认重启玄武？</strong>
-        <p>服务会短暂断开，随后由守护进程拉起。</p>
+        <strong><AlertTriangle size={15} /> {t('settings.confirmRestart')}</strong>
+        <p>{t('settings.restartImpact')}</p>
       </div>
       <div className="settings-restart-confirm-actions">
-        <button className="btn btn-secondary" disabled={restarting} onClick={onCancel} type="button">取消</button>
+        <button className="btn btn-secondary" disabled={restarting} onClick={onCancel} type="button">{t('settings.cancel')}</button>
         <button className="btn settings-danger-button" disabled={restarting} onClick={onRestart} type="button">
-          确认重启
+          {t('settings.confirmRestartAction')}
         </button>
       </div>
     </div>
   );
 }
 
-async function restartSystem(setRestarting, setConfirming) {
+async function restartSystem(setRestarting, setConfirming, t) {
   setRestarting(true);
   try {
     await systemApi.restartSystem();
     setConfirming(false);
-    message.success('重启请求已发送，服务会短暂断开。');
+    message.success(t('settings.restartSent'));
   } catch (err) {
     setRestarting(false);
-    message.error(err.message || '重启失败');
+    message.error(err.message || t('settings.restartFailed'));
   }
 }

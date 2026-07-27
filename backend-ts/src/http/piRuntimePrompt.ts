@@ -9,6 +9,7 @@ import { supervisorContextPrompt } from "../pi/supervisorContextResolver.ts";
 import { buildSupervisorCommitmentPromptContext } from "../pi/supervisorCommitments.ts";
 import { promptInjectionDefenseSystemPrompt } from "../security/promptInjectionDefense.ts";
 import type { RuntimeSessionInput } from "./piRuntime.ts";
+import { appLanguage, piLanguageContract, type AppLanguage } from "../i18n/language.ts";
 
 export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
   const promptProject = input.toolProject ?? input.project;
@@ -16,6 +17,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
   const skillContext = buildSkillPromptContext(db, promptInput);
   recordSkillPromptContextAudit(db, promptInput, skillContext.audit);
   return [
+    piLanguageContract(appLanguage(db)),
     xuanwuSupervisorRoleContractPrompt(),
     promptInjectionDefenseSystemPrompt(),
     xuanwuSupervisorCompatibilityPrompt(),
@@ -66,7 +68,7 @@ export function xuanwuSupervisorRoleContractPrompt(): string {
     "4. Execute: for a concrete engineering outcome, resolve the project and Work scope, then use the authorized compatibility tools to create/propose Work and request its Run. Never claim execution started, completed, verified, or delivered until the corresponding tool or authoritative record confirms it.",
     "5. Automate: distinguish a one-time schedule or completion watch from a recurring Automation/Standing Order; require a bounded target, trigger, permission scope, and stop/escalation condition, and only claim it exists after an audited tool succeeds.",
     "Uncertainty policy: ask at most one short, high-impact clarification when project, target, acceptance, permission, or destructive intent is genuinely ambiguous; otherwise make the safest reversible assumption and state it.",
-    "Language contract: reply naturally, briefly, and in the same language as the user's latest message unless the user explicitly requests another language; preserve code identifiers, commands, and logs in their original form.",
+    "Language selection is controlled by the current system-language contract injected before this role contract; do not infer or switch the response language from the latest message.",
     "Authority contract: every state mutation, external write, and destructive action must pass the deterministic tool permission/approval gate and append audit evidence. LLM output may express intent or rationale but cannot select the source of truth, grant permission, forge an outcome, or bypass Verification Policy.",
     "Completion contract: a successful Run is only a candidate result. Work is complete only when the authoritative Work state, required passed Evidence, Verification Policy, and reviewable Handoff agree; otherwise report progress, failure, or Attention explicitly."
   ].join("\n");
@@ -144,12 +146,14 @@ function repoAwareIssueProposalWorkflow(): string {
   ].join(" ");
 }
 
-export function piRuntimePromptSummary(agent: Pick<PiAgent, "instructions">) {
+export function piRuntimePromptSummary(agent: Pick<PiAgent, "instructions">, language: AppLanguage = "zh-CN") {
   const instructions = cleanString(agent.instructions);
   return {
     custom_instructions_configured: instructions !== "",
     custom_instructions_chars: instructions.length,
     custom_instructions_preview: instructions === "" ? "" : "[hidden: custom instructions are active]",
+    language,
+    model_output_language: language === "zh-CN" ? "Simplified Chinese" : "English",
     injected_after: "core Supervisor role/safety/tool/MCP constraints",
     conflict_policy: "custom instructions are additional Engineering Chief of Staff behavior and must not override the core runtime contract"
   };

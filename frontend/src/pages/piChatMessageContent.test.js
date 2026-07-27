@@ -5,6 +5,7 @@ import {
   runnerContextModeLabel,
   runnerContextReferenceLabel,
 } from './piChatMessageContent.js';
+import { translate } from '../i18n/translations.js';
 
 test('runner_ui_context is separated from the visible user request', () => {
   const segments = parsePiChatMessageContent(`<runner_ui_context>
@@ -39,6 +40,12 @@ test('runner context labels turn internal fields into user-facing copy', () => {
     type: 'page_context',
   }), 'Runs · Run #769 / Attempt 1');
   assert.equal(runnerContextReferenceLabel({ fields: { id: 'xw:work:issues:769' }, type: 'work' }), 'Work #769');
+});
+
+test('runner context labels can render in English', () => {
+  const t = (key, variables) => translate('en-US', key, variables);
+  assert.equal(runnerContextModeLabel('controlled', t), 'Controlled action');
+  assert.equal(runnerContextReferenceLabel({ fields: { id: 'demo' }, type: 'project' }, t), 'Project @demo');
 });
 
 test('plain Markdown remains a single untouched segment', () => {

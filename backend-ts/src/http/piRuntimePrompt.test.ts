@@ -56,7 +56,7 @@ describe("Xuanwu Supervisor runtime prompt", () => {
     for (const term of ["Work", "Run", "Workflow", "Evidence", "Handoff", "Attention", "Automation"]) {
       expect(prompt).toContain(term);
     }
-    expect(prompt).toContain("same language as the user's latest message");
+    expect(prompt).toContain("current system-language contract");
     expect(prompt).toContain("every state mutation, external write, and destructive action");
     expect(prompt).toContain("deterministic tool permission/approval gate");
     expect(prompt).toContain("cannot select the source of truth");

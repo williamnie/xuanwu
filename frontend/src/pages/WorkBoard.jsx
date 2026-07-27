@@ -27,6 +27,7 @@ import {
   workNeedsAttention,
 } from './workBoardModel.js';
 import './WorkBoard.css';
+import { useI18n } from '../i18n/context.js';
 
 const STATUS_META = {
   triage: { label: 'Triage', tone: 'amber' },
@@ -36,11 +37,6 @@ const STATUS_META = {
   failed: { label: 'Failed', tone: 'red' },
   done: { label: 'Done', tone: 'green' },
   cancelled: { label: 'Cancelled', tone: 'slate' },
-};
-
-const TYPE_LABELS = {
-  engineering_task: 'Engineering task',
-  objective: 'Objective',
 };
 
 const EMPTY_FILTERS = {
@@ -53,6 +49,7 @@ const EMPTY_FILTERS = {
 };
 
 export default function WorkBoard({ navigateTo, onPageContextChange, selectedHandoffId = '', selectedWorkId = '' }) {
+  const { t } = useI18n();
   const projects = useDataStore(selectProjects);
   const [works, setWorks] = useState([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -93,7 +90,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
         setTotalWorks(snapshot.total);
       })
       .catch((loadError) => {
-        if (active && loadError?.name !== 'AbortError') setError(loadError.message || '加载 Work Ledger 失败');
+        if (active && loadError?.name !== 'AbortError') setError(loadError.message || t('board.loadFailed'));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -102,7 +99,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
       active = false;
       controller.abort();
     };
-  }, [refreshVersion, selectedWorkId]);
+  }, [refreshVersion, selectedWorkId, t]);
 
   useEffect(() => () => loadMoreController.current?.abort(), []);
 
@@ -127,7 +124,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
       setLanePages(current => ({ ...current, [status]: nextLane }));
       setTotalWorks(current => current - lane.total + nextLane.total);
     } catch (loadError) {
-      if (loadError?.name !== 'AbortError') message.error(loadError.message || '继续加载 Work 失败');
+      if (loadError?.name !== 'AbortError') message.error(loadError.message || t('board.loadMoreFailed'));
     } finally {
       if (loadMoreController.current === controller) {
         loadMoreController.current = null;
@@ -135,7 +132,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
         setLoadingMoreStatus('');
       }
     }
-  }, [lanePages, loading, selectedWorkId]);
+  }, [lanePages, loading, selectedWorkId, t]);
 
   const handleColumnScroll = useCallback((event, status) => {
     const target = event.currentTarget;
@@ -204,7 +201,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
 
     const operation = workDropOperation(work.status, targetStatus);
     if (operation === 'blocked') {
-      message.warning('该状态由执行或验收流程推进，不能手动拖入');
+      message.warning(t('board.dropBlocked'));
       return;
     }
 
@@ -212,20 +209,20 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
     try {
       const result = await moveWorkAfterDrop(work, targetStatus);
       const actualStatus = result?.status || targetStatus;
-      const targetLabel = STATUS_META[targetStatus]?.label || targetStatus;
-      const actualLabel = STATUS_META[actualStatus]?.label || actualStatus;
+      const targetLabel = t(`status.${targetStatus}`);
+      const actualLabel = t(`status.${actualStatus}`);
       if (result.operation === 'enqueue') {
-        message.success(`Work #${issueIdFromWorkId(work.id)} 已加入执行队列`);
+        message.success(t('board.enqueued', { issue: issueIdFromWorkId(work.id) }));
       } else if (result.operation === 'retry') {
-        message.success(`Work #${issueIdFromWorkId(work.id)} 已重新加入队列`);
+        message.success(t('board.requeued', { issue: issueIdFromWorkId(work.id) }));
       } else if (actualStatus === targetStatus) {
-        message.success(`Work #${issueIdFromWorkId(work.id)} 已移至 ${targetLabel}`);
+        message.success(t('board.moved', { issue: issueIdFromWorkId(work.id), status: targetLabel }));
       } else {
-        message.success(`状态门禁已将 Work 转入 ${actualLabel}`);
+        message.success(t('board.gated', { status: actualLabel }));
       }
       refresh();
     } catch (moveError) {
-      message.error(`移动 Work 失败: ${moveError.message || '网络异常'}`);
+      message.error(t('board.moveFailed', { error: moveError.message || t('board.networkError') }));
     } finally {
       setMovingWorkId('');
     }
@@ -261,10 +258,10 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
         <div className="work-board-error" role="alert">
           <AlertTriangle size={18} />
           <div>
-            <strong>Work Ledger 暂不可用</strong>
+            <strong>{t('board.unavailable')}</strong>
             <span>{error}</span>
           </div>
-          <button type="button" onClick={refresh}>重试</button>
+          <button type="button" onClick={refresh}>{t('chat.retry')}</button>
         </div>
       ) : (
         <div className="work-board-scroll" aria-busy={loading}>
@@ -299,7 +296,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
               );
             })}
           </div>
-          {loading ? <div className="work-board-loading">正在读取统一 Work Ledger…</div> : null}
+          {loading ? <div className="work-board-loading">{t('board.loading')}</div> : null}
         </div>
       )}
 
@@ -324,31 +321,32 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
 }
 
 function WorkBoardHeader({ filteredCount, loadedCount, loading, onCreate, onQueryChange, onRefresh, query, total }) {
+  const { t } = useI18n();
   return (
     <header className="work-ledger-header">
       <div className="work-ledger-title">
-        <div className="work-ledger-kicker"><BriefcaseBusiness size={14} /> Unified work ledger</div>
+        <div className="work-ledger-kicker"><BriefcaseBusiness size={14} /> {t('board.ledger')}</div>
         <div className="work-ledger-heading-row">
-          <h1>Work Board</h1>
-          <span>{filteredCount === loadedCount ? `${loadedCount} / ${total} Works` : `${filteredCount} / ${loadedCount} loaded · ${total} total`}</span>
+          <h1>{t('work.board')}</h1>
+          <span>{filteredCount === loadedCount ? t('board.count', { loaded: loadedCount, total }) : t('board.filteredCount', { filtered: filteredCount, loaded: loadedCount, total })}</span>
         </div>
       </div>
       <div className="work-ledger-actions">
         <label className="work-header-search">
           <Search size={15} />
           <input
-            aria-label="搜索 Work"
+            aria-label={t('board.search')}
             onChange={event => onQueryChange(event.target.value)}
-            placeholder="搜索标题、目标或 Work ID"
+            placeholder={t('board.searchPlaceholder')}
             type="search"
             value={query}
           />
         </label>
         <button className="work-action-secondary" disabled={loading} onClick={onRefresh} type="button">
-          <RefreshCw className={loading ? 'is-spinning' : ''} size={15} /> 刷新
+          <RefreshCw className={loading ? 'is-spinning' : ''} size={15} /> {t('work.refresh')}
         </button>
         <button className="work-action-primary" onClick={onCreate} type="button">
-          <Plus size={16} /> 新建 Work
+          <Plus size={16} /> {t('board.newWork')}
         </button>
       </div>
     </header>
@@ -375,6 +373,7 @@ function WorkColumn({
   status,
   works,
 }) {
+  const { t } = useI18n();
   const meta = STATUS_META[status] || { label: status, tone: 'slate' };
   return (
     <section
@@ -386,7 +385,7 @@ function WorkColumn({
     >
       <header className="work-column-header">
         <span className="work-column-marker" />
-        <h2>{meta.label}</h2>
+        <h2>{t(`status.${status}`)}</h2>
         <span>{works.length}</span>
       </header>
       <div className="work-column-stack" onScroll={event => onReachEnd(event, status)}>
@@ -404,7 +403,7 @@ function WorkColumn({
             work={work}
           />
         )) : (
-          <div className="work-column-empty">No Work in this lane</div>
+          <div className="work-column-empty">{t('board.emptyLane')}</div>
         )}
         {hasMore ? (
           <button
@@ -413,7 +412,7 @@ function WorkColumn({
             onClick={() => onLoadMore(status)}
             type="button"
           >
-            {loadingMore ? '正在加载…' : `继续加载 ${meta.label}`}
+            {loadingMore ? t('board.loadingMore') : t('board.loadMoreStatus', { status: t(`status.${status}`) })}
           </button>
         ) : null}
       </div>
@@ -450,6 +449,7 @@ function normalizeLanePage(response, fallbackPageSize) {
 }
 
 function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit, onEvidence, projectName, work }) {
+  const { t } = useI18n();
   const issueId = issueIdFromWorkId(work.id);
   const needsAttention = workNeedsAttention(work);
   return (
@@ -462,19 +462,19 @@ function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit
       onDragStart={event => onDragStart(event, work)}
     >
       <div className="work-card-topline">
-        <span className="work-type-badge">{TYPE_LABELS[work.type] || work.type}</span>
-        {needsAttention ? <span className="work-attention-badge"><AlertTriangle size={12} /> Attention</span> : null}
+        <span className="work-type-badge">{t(`workType.${work.type}`)}</span>
+        {needsAttention ? <span className="work-attention-badge"><AlertTriangle size={12} /> {t('timeline.approval')}</span> : null}
       </div>
       <h3>{work.title}</h3>
       <p>{work.goal}</p>
       <div className="work-card-project">{projectName}</div>
       <div className="work-card-footer">
         <button className="work-detail-link" onClick={() => navigateTo('work', work.id)} type="button">
-          Open <ArrowUpRight size={13} />
+          {t('board.open')} <ArrowUpRight size={13} />
         </button>
-        <button onClick={() => onEdit(work)} type="button"><Pencil size={13} /> Edit</button>
+        <button onClick={() => onEdit(work)} type="button"><Pencil size={13} /> {t('work.edit')}</button>
         <button className="work-evidence-link" onClick={() => onEvidence(work)} type="button">
-          <ShieldCheck size={13} /> Evidence
+          <ShieldCheck size={13} /> {t('timeline.evidence')}
         </button>
         {issueId ? (
           <span className="work-source-label">Issue #{issueId} authority</span>
@@ -485,16 +485,17 @@ function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit
 }
 
 function WorkEvidenceDialog({ onClose, work }) {
+  const { t } = useI18n();
   return createPortal(
     <div className="modal-overlay work-evidence-overlay" onMouseDown={event => event.target === event.currentTarget && onClose()}>
       <div aria-labelledby="work-evidence-title" aria-modal="true" className="work-evidence-dialog" role="dialog">
         <header>
           <div>
-            <span>WORK DECISIVE FACTS</span>
+            <span>{t('board.decisiveFacts')}</span>
             <h2 id="work-evidence-title">{work.title}</h2>
-            <p>区分 Agent 自述、兼容投影与系统可证明的结构化 Evidence。</p>
+            <p>{t('board.evidenceDescription')}</p>
           </div>
-          <button aria-label="关闭 Evidence" onClick={onClose} type="button"><X size={18} /></button>
+          <button aria-label={t('board.closeEvidence')} onClick={onClose} type="button"><X size={18} /></button>
         </header>
         <EvidencePanel title="Work Evidence" workId={work.id} />
       </div>

@@ -117,12 +117,12 @@ test('Handoff stays available for audit while normal delivery lives inside Work 
   assert.match(app, /lazy\(\(\) => import\('\.\/pages\/Handoffs'\)\)/);
   assert.match(app, /currentPage === 'handoffs'/);
   assert.doesNotMatch(sidebar, /handoffs: PackageCheck/);
-  assert.match(sidebar, /aria-label=\{item\.label\}/);
+  assert.match(sidebar, /aria-label=\{navLabel\(item\)\}/);
   assert.match(client, /request\(`\/api\/handoffs\?/);
   assert.match(client, /request\(`\/api\/handoffs\/\$\{encodeURIComponent\(id\)\}`/);
   assert.match(client, /\/api\/handoffs\/\$\{encodeURIComponent\(id\)\}\/reviews/);
   assert.match(workDetail, /<WorkDeliveryView/);
-  assert.match(workDetail, />交付 \{overview\.handoffs\.length/);
+  assert.match(workDetail, /\{t\('work\.delivery'\)\} \{overview\.handoffs\.length/);
   assert.doesNotMatch(workDetail, /navigateTo\('handoffs'/);
   assert.match(page, /Handoff 审计/);
   assert.match(page, /打开所属 Issue 交付/);

@@ -14,7 +14,7 @@ Decision policy: choose the least-authority path that fully satisfies the reques
 4. Execute: for a concrete engineering outcome, resolve the project and Work scope, then use the authorized compatibility tools to create/propose Work and request its Run. Never claim execution started, completed, verified, or delivered until the corresponding tool or authoritative record confirms it.
 5. Automate: distinguish a one-time schedule or completion watch from a recurring Automation/Standing Order; require a bounded target, trigger, permission scope, and stop/escalation condition, and only claim it exists after an audited tool succeeds.
 Uncertainty policy: ask at most one short, high-impact clarification when project, target, acceptance, permission, or destructive intent is genuinely ambiguous; otherwise make the safest reversible assumption and state it.
-Language contract: reply naturally, briefly, and in the same language as the user's latest message unless the user explicitly requests another language; preserve code identifiers, commands, and logs in their original form.
+Language selection is controlled by the current system-language contract injected before this role contract; do not infer or switch the response language from the latest message.
 Authority contract: every state mutation, external write, and destructive action must pass the deterministic tool permission/approval gate and append audit evidence. LLM output may express intent or rationale but cannot select the source of truth, grant permission, forge an outcome, or bypass Verification Policy.
 Completion contract: a successful Run is only a candidate result. Work is complete only when the authoritative Work state, required passed Evidence, Verification Policy, and reviewable Handoff agree; otherwise report progress, failure, or Attention explicitly.
 
@@ -30,9 +30,9 @@ This prompt introduces no dual write or dual read: deterministic SQLite/API/Runn
 
 exports[`Xuanwu Supervisor runtime prompt keeps the static and assembled prompt inside the token-size baseline 1`] = `
 {
-  "assembled_chars": 16748,
-  "assembled_estimated_tokens": 4187,
-  "role_chars": 3509,
-  "role_estimated_tokens": 878,
+  "assembled_chars": 16908,
+  "assembled_estimated_tokens": 4227,
+  "role_chars": 3465,
+  "role_estimated_tokens": 867,
 }
 `;

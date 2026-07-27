@@ -52,10 +52,10 @@ test('Settings renders behavior sections and gates internal panels behind Advanc
 
 test('Settings primary IA includes project settings without duplicating its source of truth', () => {
   assert.match(chromeSource, /title = 'Settings'/);
-  assert.match(chromeSource, /Xuanwu · Product Settings/);
-  assert.match(sectionsSource, /Per-project settings/);
+  assert.match(chromeSource, /t\('settings\.eyebrow'\)/);
+  assert.match(sectionsSource, /t\('settings\.perProject'\)/);
   assert.match(sectionsSource, /navigateTo\?\.\('projects'\)/);
-  assert.match(sectionsSource, /不会产生双写/);
+  assert.match(sectionsSource, /t\('settings\.projectSettingsDescription'\)/);
   assert.match(settingsNavigationSource, /Permissions/);
   assert.match(settingsNavigationSource, /Notifications/);
   assert.doesNotMatch(settingsNavigationSource, /Models & Agents|models-agents/);

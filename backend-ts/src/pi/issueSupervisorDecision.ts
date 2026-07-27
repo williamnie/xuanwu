@@ -18,6 +18,7 @@ import {
   isAutomaticRecoveryBlockedDiagnosis,
   isTransientRecoveryDiagnosis
 } from "./recoveryDiagnosis.ts";
+import { appLanguage, type AppLanguage } from "../i18n/language.ts";
 
 export type PiSupervisorDecisionRuntimeInput = {
   agent: PiAgent;
@@ -52,6 +53,7 @@ const SUPERVISOR_PROMPT_TIMEOUT_MS = 75_000;
 export async function runPiSupervisorDecision(
   input: PiSupervisorDecisionRuntimeInput
 ): Promise<PiSupervisorDecisionRuntimeResult> {
+  const language = appLanguage(input.database);
   const { createPiRuntimeSession } = await import("../http/piRuntime.ts");
   const runtime = await createPiRuntimeSession(input.database, {
     agent: input.agent,
@@ -65,11 +67,11 @@ export async function runPiSupervisorDecision(
   });
   runtime.session.setActiveToolsByName(SUPERVISOR_TOOL_NAMES);
   try {
-    await promptSupervisorWithTimeout(runtime.session, decisionPrompt(input.context, input.now ?? new Date()));
+    await promptSupervisorWithTimeout(runtime.session, decisionPrompt(input.context, input.now ?? new Date(), language));
     const raw = runtime.session.getLastAssistantText() ?? "";
     const parsed = parseDecision(raw, input.context, input.now ?? new Date());
     if (!parsed.valid) {
-      const fallback = fallbackDecision(input.context, parsed.error);
+      const fallback = fallbackDecision(input.context, parsed.error, language);
       recordDecisionFailure(input.database, input.context, raw, parsed, fallback);
       return {
         decision: fallback,
@@ -110,10 +112,13 @@ async function promptSupervisorWithTimeout(
   }
 }
 
-function decisionPrompt(context: IssueSupervisorRecoveryContext, now: Date): string {
+function decisionPrompt(context: IssueSupervisorRecoveryContext, now: Date, language: AppLanguage): string {
   return [
     "You are the Xuanwu Supervisor. Decide how to recover, wait, escalate, or do nothing for one Runner issue.",
     "Return exactly one JSON object. No markdown, no code fences, no prose outside JSON.",
+    language === "zh-CN"
+      ? "所有自然语言文本字段（rationale、recovery_message、expected_outcome）必须使用简体中文；schema key 和枚举值保持英文。"
+      : "All natural-language text fields (rationale, recovery_message, expected_outcome) must be in English; keep schema keys and enum values in English.",
     "Schema fields: decision, confidence, rationale, recovery_message, wait_until, risk_level, evidence_refs, expected_outcome, fallback_if_no_progress.",
     "Allowed decisions: wait, resume_session, steer_running_turn, retry_issue, needs_user, blocked, noop.",
     "Allowed confidence and risk_level values: low, medium, high. Do not return numeric confidence.",
@@ -193,15 +198,16 @@ function normalizeFallback(value: string): "needs_user" | "retry_issue" | "block
   return "blocked";
 }
 
-function fallbackDecision(context: IssueSupervisorRecoveryContext, reason: string): PiSupervisorDecisionJson {
+function fallbackDecision(context: IssueSupervisorRecoveryContext, reason: string, language: AppLanguage): PiSupervisorDecisionJson {
+  const chinese = language === "zh-CN";
   return {
     confidence: "low",
     decision: "noop",
     evidence_refs: ["supervisor_decision_invalid", ...candidateEvidence(context)],
-    expected_outcome: "Supervisor retries its decision after cooldown without mutating the Issue or Run",
+    expected_outcome: chinese ? "Supervisor 在冷却后重试决策，且不修改 Issue 或 Run" : "Supervisor retries its decision after cooldown without mutating the Issue or Run",
     fallback_if_no_progress: "blocked",
     rationale: reason,
-    recovery_message: "Xuanwu Supervisor returned an invalid decision; keep current state unchanged and retry the decision after cooldown.",
+    recovery_message: chinese ? "玄武 Supervisor 返回了无效决策；保持当前状态不变，并在冷却后重试决策。" : "Xuanwu Supervisor returned an invalid decision; keep current state unchanged and retry the decision after cooldown.",
     risk_level: "medium"
   };
 }

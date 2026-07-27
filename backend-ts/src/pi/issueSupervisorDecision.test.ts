@@ -372,7 +372,7 @@ describe("PI supervisor decision runtime", () => {
       expect(result.valid).toBe(false);
       expect(result.decision).toMatchObject({
         decision: "noop",
-        recovery_message: expect.stringContaining("retry the decision after cooldown")
+        recovery_message: expect.stringContaining("冷却后重试决策")
       });
       expect(result.error).toContain("invalid supervisor decision JSON");
       const events = fixture.db.sqlite.query<{ event_type: string; payload_json: string }, []>(

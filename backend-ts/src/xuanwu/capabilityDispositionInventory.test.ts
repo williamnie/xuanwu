@@ -75,7 +75,7 @@ describe("Xuanwu capability disposition inventory", () => {
     const routes = productionHttpRoutes();
     const inventoried = API_ROUTE_DISPOSITIONS.map((route) => `${route.method} ${route.path}`).sort();
     expect(inventoried).toEqual(routes);
-    expect(inventoried).toHaveLength(242);
+    expect(inventoried).toHaveLength(244);
     expect(unique(inventoried)).toHaveLength(inventoried.length);
 
     const familyIDs = new Set(API_ROUTE_FAMILIES.map((family) => family.id));
@@ -141,7 +141,7 @@ describe("Xuanwu capability disposition inventory", () => {
       expect(adr).toContain(heading);
     }
     expect(adr).toContain("86 张表");
-    expect(adr).toContain("241 条用户 API route");
+    expect(adr).toContain("244 条用户 API route");
   });
 });
 

@@ -24,9 +24,9 @@ test('PI Assistant page does not require a project selection for global chat', (
 
 test('Ask Xuanwu page uses canonical Chat naming in visible copy', () => {
   assert.match(pageSource, /PRODUCT_TERMS\.productLatin/);
-  assert.match(pageSource, /新建 Chat/);
-  assert.match(pageSource, />Chats</);
-  assert.match(pageSource, /Ask Xuanwu…/);
+  assert.match(pageSource, /t\('chat\.new'\)/);
+  assert.match(pageSource, /t\('chat\.chats'\)/);
+  assert.match(pageSource, /t\('chat\.placeholder'\)/);
   assert.doesNotMatch(pageSource, /PI Assistant/);
   assert.doesNotMatch(pageSource, /Runner Brain/);
   assert.doesNotMatch(pageSource, /Runner Agent/);
@@ -44,8 +44,8 @@ test('PI Assistant chat renders messages as Markdown instead of raw prewrapped t
 test('runner_ui_context renders as a compact custom component instead of raw XML', () => {
   assert.match(pageSource, /parsePiChatMessageContent\(text\)/);
   assert.match(pageSource, /function RunnerUiContextCard/);
-  assert.match(pageSource, /已附带 Runner 上下文/);
-  assert.match(pageSource, /runnerContextReferenceLabel\(reference\)/);
+  assert.match(pageSource, /t\('chat\.context\.attached'\)/);
+  assert.match(pageSource, /runnerContextReferenceLabel\(reference, t\)/);
 });
 
 test('PI Assistant chat removes the oversized hero banner in favor of compact chrome', () => {
@@ -92,7 +92,7 @@ test('PI Assistant composer supports @project activation and Advanced runtime co
   assert.match(pageSource, /buildPiChatProjectSuggestions\(state\.projects\)/);
   assert.match(pageSource, /onAttachReference=\{state\.attachReference\}/);
   assert.match(pageSource, /runtimeControls=\{<PiChatComposerMeta advanced=\{advanced\} agent=\{state\.supervisor\} project=\{state\.selectedProject \|\| projectFromPrompt\(state\.prompt, state\.projects\)\} \/>\}/);
-  assert.match(pageSource, /@项目后描述目标、进展或期望交付/);
+  assert.match(pageSource, /placeholder=\{t\('chat\.placeholder'\)\}/);
   assert.match(composerMetaSource, /\{advanced && \(/);
   assert.doesNotMatch(pageSource, /state\.messageSettings/);
   assert.doesNotMatch(pageSource, /state\.updateMessageSetting/);
@@ -102,7 +102,7 @@ test('PI Assistant composer exposes an active stop control while sending', () =>
   assert.match(pageSource, /const messageRunning = Boolean\(state\.sending && state\.runningConversationId\)/);
   assert.match(pageSource, /const selectedId = state\.runningConversationId \|\| state\.selectedConversationId \|\| 'runner-draft'/);
   assert.match(pageSource, /running=\{messageRunning\}/);
-  assert.match(pageSource, /interruptState=\{messageRunning \? piChatInterruptState\(state, selectedId\) : null\}/);
+  assert.match(pageSource, /interruptState=\{messageRunning \? piChatInterruptState\(state, selectedId, t\) : null\}/);
   assert.match(pageSource, /onStop=\{state\.handleStop\}/);
   assert.match(pageSource, /function piChatInterruptState/);
   assert.match(stateSource, /function useStopPiMessage\(state, turnManager\)/);
@@ -117,14 +117,14 @@ test('PI Assistant chat lists all conversations instead of only active rows', ()
 test('Chat hides runtime internals by default and exposes diagnostics only through Advanced', () => {
   assert.match(pageSource, /const \[advanced, setAdvanced\] = useState\(false\)/);
   assert.match(pageSource, /aria-pressed=\{advanced\}/);
-  assert.match(pageSource, /\{advanced && \(\s*<button[\s\S]*复制当前 Chat 诊断信息/);
+  assert.match(pageSource, /\{advanced && \(\s*<button[\s\S]*t\('chat\.copyConversationDebug'\)/);
   assert.match(pageSource, /\{advanced && <small>\{shortId\(conversation\.pi_session_id \|\| conversation\.id\)\}<\/small>\}/);
   assert.match(pageSource, /\{advanced && \(conversationId \|\| sessionId\) && \(/);
-  assert.match(pageSource, /advanced \? advancedAgentLabel\(agent\)/);
-  assert.match(composerMetaSource, /Advanced · 当前 provider\/model/);
+  assert.match(pageSource, /advanced \? advancedAgentLabel\(agent, t\)/);
+  assert.match(composerMetaSource, /t\('chat\.context\.modelHint'\)/);
   assert.match(pageSource, /formatPiConversationDebugInfo/);
   assert.match(pageSource, /formatPiMessageDebugInfo/);
-  assert.match(pageSource, /title=\{advanced \? '右键复制消息诊断信息' : undefined\}/);
+  assert.match(pageSource, /title=\{advanced \? t\('chat\.copyMessageDebugHint'\) : undefined\}/);
   assert.match(stateSource, /created_at:\s*item\.created_at \|\| ''/);
 });
 
@@ -133,11 +133,11 @@ test('Chat renders user status, canonical Work links, and actionable empty and e
   assert.match(pageSource, /piChatWorkLinks\(transcript\)/);
   assert.match(pageSource, /navigateTo\('work', work\.id\)/);
   assert.match(pageSource, /navigateTo\('work'\)/);
-  assert.match(pageSource, /Chat 暂不可用/);
+  assert.match(pageSource, /t\('chat\.unavailable'\)/);
   assert.match(pageSource, /onClick=\{onRetry\}/);
-  assert.match(pageSource, /开始新的 Chat/);
-  assert.match(pageSource, /进展、证据与 Work 会留在这里/);
+  assert.match(pageSource, /t\('chat\.start'\)/);
+  assert.match(pageSource, /t\('chat\.startDescription'\)/);
   assert.match(pageSource, /\{advanced && <code>\{error\}<\/code>\}/);
   assert.match(pageSource, /item\.role === 'error' && !advanced/);
-  assert.match(pageSource, /此轮未完成。请重试；若问题持续，可在 Advanced 查看诊断。/);
+  assert.match(pageSource, /t\('chat\.turnIncomplete'\)/);
 });

@@ -1,13 +1,15 @@
 import { Brain, Cpu, FolderGit2 } from 'lucide-react';
+import { useI18n } from '../i18n/context.js';
 
 export default function PiChatComposerMeta({ advanced = false, agent, project }) {
+  const { t } = useI18n();
   return (
-    <div className="pi-chat-runtime-controls" aria-label="Xuanwu context">
-      <RuntimePill icon={<FolderGit2 size={13} />} label={projectLabel(project)} muted={!project} title="输入 @ 选择 Xuanwu 工作项目" />
+    <div className="pi-chat-runtime-controls" aria-label={t('chat.context.label')}>
+      <RuntimePill icon={<FolderGit2 size={13} />} label={projectLabel(project, t)} muted={!project} title={t('chat.context.selectProjectHint')} />
       {advanced && (
         <>
-          <RuntimePill icon={<Cpu size={13} />} label={agentModelLabel(agent)} muted={!agent} title="Advanced · 当前 provider/model" />
-          <RuntimePill icon={<Brain size={13} />} label={thinkingLabel(agent)} muted={!agent?.thinking_level} title="Advanced · thinking level" />
+          <RuntimePill icon={<Cpu size={13} />} label={agentModelLabel(agent, t)} muted={!agent} title={t('chat.context.modelHint')} />
+          <RuntimePill icon={<Brain size={13} />} label={thinkingLabel(agent, t)} muted={!agent?.thinking_level} title={t('chat.context.thinkingHint')} />
         </>
       )}
     </div>
@@ -23,18 +25,18 @@ function RuntimePill({ icon, label, muted, title }) {
   );
 }
 
-function projectLabel(project) {
-  if (!project) return '@ 选择项目';
+function projectLabel(project, t) {
+  if (!project) return t('chat.context.selectProject');
   return `@${project.name || project.id}`;
 }
 
-function agentModelLabel(agent) {
-  if (!agent) return 'Xuanwu 未配置';
-  const provider = agent.model_provider || 'provider 未设';
-  const model = agent.model_id || 'model 未设';
+function agentModelLabel(agent, t) {
+  if (!agent) return t('chat.context.notConfigured');
+  const provider = agent.model_provider || t('chat.context.providerUnset');
+  const model = agent.model_id || t('chat.context.modelUnset');
   return `${provider} / ${model}`;
 }
 
-function thinkingLabel(agent) {
-  return agent?.thinking_level || '默认';
+function thinkingLabel(agent, t) {
+  return agent?.thinking_level || t('chat.context.default');
 }
