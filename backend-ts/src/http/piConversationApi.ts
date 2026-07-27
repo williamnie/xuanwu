@@ -91,6 +91,7 @@ export function registerPiConversationRoutes(router: Router, context: PiConversa
 function piConversationListResponse(context: PiConversationContext, request: Request): Response {
   const params = new URL(request.url).searchParams;
   return json(listPiConversations(context.database, {
+    includeInternal: params.get("include_internal") === "1",
     projectId: cleanString(params.get("project_id")),
     status: cleanString(params.get("status"))
   }));

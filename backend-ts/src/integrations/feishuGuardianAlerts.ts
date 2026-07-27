@@ -11,7 +11,10 @@ import {
   sentGuardianAlertRetryPatch,
   shouldAttemptGuardianAlertFeishu
 } from "../pi/guardianAlertRetryPolicy.ts";
-import { guardianAlertPresentation } from "../pi/guardianAlertPresentation.ts";
+import {
+  guardianAlertPresentation,
+  type GuardianAlertPresentation
+} from "../pi/guardianAlertPresentation.ts";
 import type { FeishuConnectorConfig } from "./feishu.ts";
 import {
   createFeishuMessageClient,
@@ -38,7 +41,8 @@ export async function sendDirectFeishuGuardianAlert(
   options: PiGuardianDirectFeishuOptions
 ): Promise<void> {
   const now = options.now ?? new Date();
-  if (!guardianAlertPresentation(alert, now).requires_user) return;
+  const presentation = guardianAlertPresentation(alert, now);
+  if (!presentation.requires_user) return;
   if (!shouldAttemptGuardianAlertFeishu(alert, now)) return;
   const target = resolveTarget(db, alert, options.config);
   if (!target) return recordFailure(db, alert, "missing direct Feishu target", options.now);
@@ -57,7 +61,7 @@ export async function sendDirectFeishuGuardianAlert(
       idempotencyKey: `${alertRef}:direct-feishu`,
       occurredAt: options.now?.toISOString(),
       operation: "message.reply",
-      payload: { text: alertText(alert, options) },
+      payload: { text: alertText(alert, options, presentation) },
       receiveID: target.receiveId,
       receiveIDType: target.receiveIdType
     }));
@@ -110,16 +114,17 @@ function recordFailure(
   });
 }
 
-function directText(alert: PiGuardianAlert): string {
+function directText(alert: PiGuardianAlert, presentation: GuardianAlertPresentation): string {
   return [
-    `[${SUPERVISOR_NOTIFICATION_PREFIX} · Guardian watchdog]`,
-    `alert=${field(alert.alert_type)}`,
-    `severity=${field(alert.severity)}`,
-    `project=${field(alert.project_id)}`,
-    `issue=${alert.issue_id > 0 ? alert.issue_id : "-"}`,
-    `run_group=${field(alert.run_group_id)}`,
-    `message=${oneLine(alert.message)}`,
-    `seen_at=${field(alert.watchdog_seen_at)}`
+    `[${SUPERVISOR_NOTIFICATION_PREFIX}] ${oneLine(presentation.title)}`,
+    `发生了什么：${oneLine(presentation.description)}`,
+    `影响位置：${oneLine(presentation.location)}`,
+    `PI 处理：${oneLine(presentation.pi_action)}`,
+    `需要你处理：${oneLine(presentation.user_action)}`,
+    `当前状态：${oneLine(presentation.state_label)}`,
+    `首次发现：${beijingTime(presentation.first_seen_at)}`,
+    `最近确认：${beijingTime(presentation.last_seen_at)}`,
+    `技术信息：${field(alert.alert_type)} · ${field(alert.id)}`
   ].join("\n");
 }
 
@@ -131,8 +136,12 @@ function targetAllowed(config: FeishuConnectorConfig, target: SendTarget): boole
   return true;
 }
 
-function alertText(alert: PiGuardianAlert, options: PiGuardianDirectFeishuOptions): string {
-  return options.formatText?.(alert) ?? directText(alert);
+function alertText(
+  alert: PiGuardianAlert,
+  options: PiGuardianDirectFeishuOptions,
+  presentation: GuardianAlertPresentation
+): string {
+  return options.formatText?.(alert) ?? directText(alert, presentation);
 }
 
 function allowed(values: string[], value: string): boolean {
@@ -168,4 +177,10 @@ function field(value: string): string {
 
 function oneLine(value: string): string {
   return redactAuditText(value).replace(/\s+/g, " ").trim();
+}
+
+function beijingTime(value: string): string {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return field(value);
+  return `${new Date(timestamp + 8 * 60 * 60_000).toISOString().slice(0, 19).replace("T", " ")}（北京时间）`;
 }

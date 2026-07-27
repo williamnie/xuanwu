@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
+import { createPiConversation, PI_MANAGER_CYCLE_TITLE } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -148,6 +149,12 @@ describe("Bun PI settings API", () => {
         status: "active",
         title: "Plan"
       });
+      createPiConversation(database, {
+        id: "internal-manager-cycle",
+        pi_agent_id: "runner-default",
+        project_id: "demo",
+        title: PI_MANAGER_CYCLE_TITLE
+      });
 
       const dbPath = database.path;
       database.close();
@@ -156,6 +163,9 @@ describe("Bun PI settings API", () => {
       const restoredRouter = createDefaultRouter({ database: restored });
       const detail = await restoredRouter.handle(new Request(`${BASE_URL}/api/pi/conversations/conv-1`));
       const list = await restoredRouter.handle(new Request(`${BASE_URL}/api/pi/conversations?project_id=demo`));
+      const internalList = await restoredRouter.handle(new Request(
+        `${BASE_URL}/api/pi/conversations?project_id=demo&include_internal=1`
+      ));
 
       expect(detail.status).toBe(200);
       expect(await detail.json()).toMatchObject({
@@ -166,6 +176,8 @@ describe("Bun PI settings API", () => {
       });
       expect(list.status).toBe(200);
       expect((await list.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual(["conv-1"]);
+      expect((await internalList.json() as Array<Record<string, unknown>>).map((item) => item.id).sort())
+        .toEqual(["conv-1", "internal-manager-cycle"]);
       expect(getAgentSession(restored, "pi-sdk:conv-1")?.provider).toBe("pi-sdk");
     } finally {
       database?.close();

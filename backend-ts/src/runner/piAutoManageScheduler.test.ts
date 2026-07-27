@@ -104,7 +104,7 @@ afterEach(async () => {
 });
 
 describe("PI auto-manage scheduler", () => {
-  test("runs scheduled cycles with a fake clock", async () => {
+  test("keeps scheduled maintenance deterministic without ambient project LLM sessions", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
     const clock = new FakeClock();
@@ -123,7 +123,7 @@ describe("PI auto-manage scheduler", () => {
       expect(clock.timers.map((timer) => timer.delayMs)).toEqual([1000]);
       await clock.runNext();
 
-      expect(runner.calls).toEqual([{ projectId: "enabled" }]);
+      expect(runner.calls).toEqual([]);
       await waitUntil(() => clock.timers.length === 1);
       scheduler.stop();
       expect(clock.timers[0]?.canceled).toBe(true);
@@ -160,29 +160,12 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
-  test("rearms Guardian and project cycles after long work and a recoverable cycle error", async () => {
+  test("continues Guardian maintenance without launching project cycles while idle", async () => {
     const db = await openFixtureDatabase();
     const wrapped = new SlowSupervisorDatabase(db);
     const clock = new FakeClock();
     const errors: unknown[] = [];
-    let active = 0;
-    let calls = 0;
-    let maxActive = 0;
-    let releaseLongCycle = () => {};
-    const longCycle = new Promise<void>((resolve) => {
-      releaseLongCycle = resolve;
-    });
-    const runProjectCycle = async () => {
-      calls += 1;
-      active += 1;
-      maxActive = Math.max(maxActive, active);
-      try {
-        if (calls === 2) await longCycle;
-        if (calls === 3) throw new Error("recoverable provider cycle failure");
-      } finally {
-        active -= 1;
-      }
-    };
+    const runner = new FakePiCycleRunner();
     try {
       insertProject(db, "enabled", 1);
       insertAgent(db, "pi-default");
@@ -192,36 +175,22 @@ describe("PI auto-manage scheduler", () => {
         database: wrapped as unknown as RunnerDatabase,
         intervalMs: 5,
         onError: (error) => errors.push(error),
-        runProjectCycle,
+        runProjectCycle: runner.run.bind(runner),
         supervisorIntervalMs: 60_000
       });
 
       scheduler.start();
-      await clock.runNext();
-      await waitUntil(() => calls === 1 && clock.timers.length === 1);
+      for (let tick = 1; tick <= 4; tick += 1) {
+        await clock.runNext();
+        await waitUntil(() => wrapped.watchdogWrites === tick && clock.timers.length === 1);
+      }
 
-      await clock.runNext();
-      await waitUntil(() => calls === 2 && active === 1);
-      expect(clock.timers).toEqual([]);
-      await clock.runNext();
-      expect(calls).toBe(2);
-      expect(maxActive).toBe(1);
-
-      releaseLongCycle();
-      await waitUntil(() => active === 0 && clock.timers.length === 1);
-      await clock.runNext();
-      await waitUntil(() => errors.length === 1 && clock.timers.length === 1);
-      await clock.runNext();
-      await waitUntil(() => calls === 4 && clock.timers.length === 1);
-
-      expect(errors.map((error) => error instanceof Error ? error.message : String(error)))
-        .toEqual(["recoverable provider cycle failure"]);
+      expect(errors).toEqual([]);
       expect(wrapped.watchdogWrites).toBe(4);
-      expect(maxActive).toBe(1);
+      expect(runner.calls).toEqual([]);
       scheduler.stop();
       expect(clock.timers[0]?.canceled).toBe(true);
     } finally {
-      releaseLongCycle();
       db.close();
     }
   });
@@ -231,6 +200,8 @@ describe("PI auto-manage scheduler", () => {
     const wrapped = new SlowSupervisorDatabase(db);
     const guardianClock = new FakeClock();
     const agenticClock = new FakeClock();
+    const provider = new ResumeProvider();
+    const runner = new FakePiCycleRunner();
     let releaseAgentic = () => {};
     const blocked = new Promise<void>((resolve) => { releaseAgentic = resolve; });
     let agenticActive = false;
@@ -238,15 +209,23 @@ describe("PI auto-manage scheduler", () => {
       insertProject(db, "enabled", 1);
       insertAgent(db, "pi-default");
       insertSettings(db, "enabled", 1, 2);
+      insertIssueRunSession(db, 519, "enabled");
       const input = {
         database: wrapped as unknown as RunnerDatabase,
         intervalMs: 5,
-        runProjectCycle: async () => {
+        providers: { codex: provider },
+        runProjectCycle: runner.run.bind(runner),
+        runSupervisorDecision: async () => {
           agenticActive = true;
           await blocked;
           agenticActive = false;
+          return {
+            decision: resumeDecision(),
+            raw_text: JSON.stringify(resumeDecision()),
+            valid: true
+          };
         },
-        runSupervisor: false
+        watchdogNow: NOW
       };
       const guardian = createPiGuardianScheduler({ ...input, clock: guardianClock });
       const agentic = createPiAgenticScheduler({ ...input, clock: agenticClock });
@@ -265,6 +244,8 @@ describe("PI auto-manage scheduler", () => {
       expect(agenticActive).toBe(true);
       releaseAgentic();
       await waitUntil(() => !agenticActive && agenticClock.timers.length === 1);
+      expect(runner.calls).toEqual([]);
+      expect(provider.calls).toEqual([{ prompt: expect.stringContaining("继续"), sessionId: "thread-519" }]);
       guardian.stop();
       agentic.stop();
     } finally {
@@ -323,7 +304,7 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
-  test("ignores legacy delegation carriers while continuing native auto-manage", async () => {
+  test("ignores legacy delegation carriers without launching ambient project cycles", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
     try {
@@ -335,8 +316,8 @@ describe("PI auto-manage scheduler", () => {
       const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
 
       expect(result.delegations).toEqual({ scanned: 0, started: 0, skipped: 0 });
-      expect(result).toMatchObject({ projects: 1, started: 1, skipped: 0, supervisor: { decisions: 0, failed: 0 } });
-      expect(runner.calls).toEqual([{ projectId: "enabled" }]);
+      expect(result).toMatchObject({ projects: 0, started: 0, skipped: 0, supervisor: { decisions: 0, failed: 0 } });
+      expect(runner.calls).toEqual([]);
       expect(heartbeatRunCount(db)).toBe(0);
     } finally {
       db.close();
@@ -764,17 +745,17 @@ function expectDeferredOutageClaim(db: DB, provider: InitializeTimeoutProvider):
   expect(listIssueEvents(db, 701).map((event) => event.type)).toContain("issue.provider_deferred");
 }
 
-function insertIssueRunSession(db: DB, issueID: number): void {
+function insertIssueRunSession(db: DB, issueID: number, projectID = "demo"): void {
   db.sqlite.run(`insert into issues (id, project_id, title, status, created_at, updated_at)
-    values (?, 'demo', 'Idle issue', 'in_progress', ?, ?)`, [issueID, "2026-06-22T08:00:00Z", "2026-06-22T08:35:07Z"]);
+    values (?, ?, 'Idle issue', 'in_progress', ?, ?)`, [issueID, projectID, "2026-06-22T08:00:00Z", "2026-06-22T08:35:07Z"]);
   db.sqlite.run(`insert into issue_runs
     (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id, started_at, ended_at)
     values (?, ?, 1, 'in_progress', 'codex', ?, ?, ?, '')`,
   [`issue-${issueID}-attempt-1`, issueID, `thread-${issueID}`, `turn-${issueID}`, "2026-06-22T08:15:07Z"]);
   db.sqlite.run(`insert into agent_sessions
     (session_key, provider, provider_session_id, agent_role, project_id, issue_id, status, raw_ref, created_at, updated_at)
-    values (?, 'codex', ?, 'executor', 'demo', ?, 'idle', ?, ?, ?)`,
-  [`codex:thread-${issueID}`, `thread-${issueID}`, issueID, JSON.stringify({ provider_turn_id: `turn-${issueID}` }),
+    values (?, 'codex', ?, 'executor', ?, ?, 'idle', ?, ?, ?)`,
+  [`codex:thread-${issueID}`, `thread-${issueID}`, projectID, issueID, JSON.stringify({ provider_turn_id: `turn-${issueID}` }),
     "2026-06-22T08:15:07Z", "2026-06-22T08:35:07Z"]);
 }
 

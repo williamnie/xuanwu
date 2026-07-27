@@ -286,7 +286,10 @@ export async function runGuardianControlPlaneCycle(
 
 export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<AgenticCycleResult> {
   const cycleStartedAt = performance.now();
-  const projects = await timedSchedulePhase("projects", () => runPiAutoManageCycle(input));
+  // Project manager cycles are real LLM sessions, not a liveness heartbeat.
+  // Only explicit project control may start one. Governed Automations execute
+  // their own Work/Run path; the ambient scheduler stays deterministic.
+  const projects: PiAutoManageCycleResult = { projects: 0, skipped: 0, started: 0 };
   if (input.config) {
     await timedSchedulePhase("pending_action_notifications", () => queuePendingPiActionNotifications(
       input.database,

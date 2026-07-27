@@ -91,7 +91,7 @@ describe("Bun project PI control regressions", () => {
       ]);
 
       expect(responses.map((response) => response.status).sort()).toEqual([201, 409]);
-      expect(listPiConversations(database, { projectId: "demo" })).toHaveLength(1);
+      expect(listPiConversations(database, { includeInternal: true, projectId: "demo" })).toHaveLength(1);
     } finally {
       faux.unregister();
       database.close();

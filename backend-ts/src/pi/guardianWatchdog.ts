@@ -159,12 +159,20 @@ function coordinatorChecks(context: PiGuardianWatchdogContext): PiGuardianWatchd
 }
 function outboxChecks(context: PiGuardianWatchdogContext): PiGuardianWatchdogCheck[] {
   const rows = context.db.sqlite.query<CountRow, [string]>(`
-    select coalesce(i.project_id, '') as project_id, count(*) as count,
+    select coalesce(nullif(o.project_id, ''), i.project_id, '') as project_id, count(*) as count,
       min(o.created_at) as oldest_created_at
     from sync_outbox o left join issues i on i.id=o.issue_id
     where o.status in ('pending','queued','retry','sending','failed')
       and o.feishu_message_id='' and o.created_at<=?
-    group by coalesce(i.project_id, '')
+      and not (
+        o.status='failed' and o.attempt_count=0
+        and o.last_error='historical_pending_backfill_suppressed'
+        and exists (
+          select 1 from pi_notification_intents intent
+          where intent.sent_outbox_id=o.id and intent.state='suppressed'
+        )
+      )
+    group by coalesce(nullif(o.project_id, ''), i.project_id, '')
     order by count desc, project_id asc limit ${context.limit}
   `).all(context.cutoffText);
   return countAlerts({

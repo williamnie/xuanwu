@@ -19,7 +19,13 @@ export type PiConversation = {
 };
 
 export type PiConversationInput = PatchInput<PiConversation>;
-export type PiConversationFilter = { piAgentId?: string; projectId?: string; status?: string };
+export type PiConversationFilter = {
+  includeInternal?: boolean;
+  piAgentId?: string;
+  projectId?: string;
+  status?: string;
+};
+export const PI_MANAGER_CYCLE_TITLE = "Supervisor manager cycle";
 const TABLE = "pi_conversations";
 const COLUMNS = `id, project_id, pi_agent_id, title, status, session_file,
   pi_session_id, created_at, updated_at`;
@@ -51,7 +57,8 @@ export function listPiConversations(
   return listRows(db, TABLE, COLUMNS, mapPiConversation, buildFilter([
     ["project_id=?", filter.projectId],
     ["pi_agent_id=?", filter.piAgentId],
-    ["status=?", filter.status]
+    ["status=?", filter.status],
+    ["title<>?", filter.includeInternal ? undefined : PI_MANAGER_CYCLE_TITLE]
   ], "updated_at desc, id asc"));
 }
 

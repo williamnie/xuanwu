@@ -51,20 +51,14 @@ describe("PI Guardian watchdog detector", () => {
         status: "open",
         ui_visible: 1
       });
-      expect(sender.calls).toEqual([{
-        receiveId: "oc_guardian",
-        receiveIdType: "chat_id",
-        text: [
-          "[玄武 Supervisor · Guardian watchdog]",
-          "alert=pi_runtime_down",
-          "severity=urgent",
-          "project=demo",
-          "issue=-",
-          "run_group=-",
-          "message=[redacted sensitive line]",
-          "seen_at=2026-06-19T01:00:00Z"
-        ].join("\n")
-      }]);
+      expect(sender.calls).toHaveLength(1);
+      expect(sender.calls[0]).toMatchObject({ receiveId: "oc_guardian", receiveIdType: "chat_id" });
+      expect(sender.calls[0]?.text).toContain("[玄武 Supervisor] 项目 PI Runtime 不可用");
+      expect(sender.calls[0]?.text).toContain("发生了什么：项目的 PI Agent、会话或运行配置不可用");
+      expect(sender.calls[0]?.text).toContain("需要你处理：检查项目的 PI Agent 是否存在并启用");
+      expect(sender.calls[0]?.text).toContain("影响位置：项目 demo");
+      expect(sender.calls[0]?.text).not.toContain("alert=");
+      expect(sender.calls[0]?.text).not.toContain("severity=");
       expect(sender.calls[0]?.text).not.toContain("fixture-token");
       expect(sender.calls[0]?.text).not.toContain("/Users/demo");
       expect(sideEffectCounts(db)).toEqual({
@@ -378,6 +372,21 @@ describe("PI Guardian watchdog detector", () => {
     }
   });
 
+  test("does not report an outbox row whose notification intent was suppressed", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertSuppressedStuckOutbox(db, "2026-06-19T00:00:00Z");
+
+      const result = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
+
+      expect(result.checks.find((check) => check.component === "outbox")).toMatchObject({ ok: true });
+      expect(listPiGuardianAlerts(db, { alertType: "outbox_stalled", status: "open" })).toEqual([]);
+      expect(sideEffectCounts(db).outbox).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
   test("ignores unroutable lifecycle intents when checking coordinator stalls", async () => {
     const db = await openFixtureDatabase();
     try {
@@ -572,6 +581,24 @@ function insertStuckOutbox(db: RunnerDatabase, createdAt: string): void {
     `insert into sync_outbox (source, reply_draft_id, content, status, created_at, updated_at)
      values ('feishu', 101, 'stuck message', 'pending', ?, ?)`,
     [createdAt, createdAt]
+  );
+}
+
+function insertSuppressedStuckOutbox(db: RunnerDatabase, createdAt: string): void {
+  db.sqlite.run(
+    `insert into sync_outbox
+     (source, reply_draft_id, project_id, operation_kind, content, status, last_error, created_at, updated_at)
+     values ('feishu', 101, 'demo', 'im_reply', 'suppressed historical message', 'failed',
+       'historical_pending_backfill_suppressed', ?, ?)`,
+    [createdAt, createdAt]
+  );
+  const outboxID = Number(db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id ?? 0);
+  db.sqlite.run(
+    `insert into pi_notification_intents
+     (id, idempotency_key, project_id, target_channel, kind, state, sent_outbox_id, created_at, updated_at)
+     values ('intent-suppressed', 'intent-suppressed-key', 'demo', 'feishu', 'pi_action_pending',
+       'suppressed', ?, ?, ?)`,
+    [outboxID, createdAt, createdAt]
   );
 }
 

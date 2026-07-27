@@ -7,6 +7,7 @@ import {
   createPiConversation,
   getPiSupervisor,
   getProjectPiSettings,
+  PI_MANAGER_CYCLE_TITLE,
   updatePiConversation,
   type PiAgent,
   type PiConversation
@@ -122,7 +123,7 @@ async function createManagerCycleState(
     project_id: project.id,
     session_file: runtime.session.sessionFile ?? "",
     status: "active",
-    title: "Supervisor manager cycle"
+    title: PI_MANAGER_CYCLE_TITLE
   });
   persistPiSessionIndex(context.database, conversation, project);
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));

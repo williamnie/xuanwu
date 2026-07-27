@@ -54,7 +54,7 @@ describe("Bun project PI control API", () => {
       expect(response.status).toBe(201);
       expect(await response.json()).toMatchObject({ project_id: "demo", status: "completed", text: "remote" });
       expect(calls).toEqual([{ maxActions: 5, projectId: "demo" }]);
-      expect(listPiConversations(database, { projectId: "demo" })).toEqual([]);
+      expect(listPiConversations(database, { includeInternal: true, projectId: "demo" })).toEqual([]);
     } finally {
       database.close();
     }
@@ -84,7 +84,7 @@ describe("Bun project PI control API", () => {
         status: "completed",
         text: "cycle done"
       });
-      const conversations = listPiConversations(database, { projectId: "demo" });
+      const conversations = listPiConversations(database, { includeInternal: true, projectId: "demo" });
       expect(conversations).toHaveLength(1);
       expect(conversations[0]).toMatchObject({ status: "completed" });
       expect(getAgentSession(database, `pi-sdk:${conversations[0]?.pi_session_id}`))
@@ -118,7 +118,7 @@ describe("Bun project PI control API", () => {
 
       expect(response.status).toBe(201);
       expect(await response.json()).toMatchObject({ status: "failed" });
-      const [conversation] = listPiConversations(database, { projectId: "demo" });
+      const [conversation] = listPiConversations(database, { includeInternal: true, projectId: "demo" });
       expect(conversation).toMatchObject({ status: "failed" });
       expect(getAgentSession(database, `pi-sdk:${conversation?.pi_session_id}`))
         .toMatchObject({ status: "failed" });

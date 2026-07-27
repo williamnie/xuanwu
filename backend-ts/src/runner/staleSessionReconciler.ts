@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { recordMaintenanceAudit } from "../db/repositories/eventMaintenance.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
+import { PI_MANAGER_CYCLE_TITLE } from "../db/repositories/pi.ts";
 import type { StaleProcessReconciliation } from "../providers/codex/processLifecycle.ts";
 
 export const STALE_SESSION_RECONCILIATION_EVENT = "agent_session.stale_reconciled.v1";
@@ -115,15 +116,15 @@ function activeSessions(db: RunnerDatabase): ActiveSessionRow[] {
 }
 
 function activeManagerConversations(db: RunnerDatabase): ActiveManagerConversationSummary {
-  const count = db.sqlite.query<{ count: number }, []>(`
+  const count = db.sqlite.query<{ count: number }, [string]>(`
     select count(*) as count from pi_conversations
-    where title='Supervisor manager cycle' and status='active'
-  `).get()?.count ?? 0;
-  const ids = db.sqlite.query<{ id: string }, []>(`
+    where title=? and status='active'
+  `).get(PI_MANAGER_CYCLE_TITLE)?.count ?? 0;
+  const ids = db.sqlite.query<{ id: string }, [string]>(`
     select id from pi_conversations
-    where title='Supervisor manager cycle' and status='active'
+    where title=? and status='active'
     order by id asc limit 50
-  `).all().map((row) => row.id);
+  `).all(PI_MANAGER_CYCLE_TITLE).map((row) => row.id);
   return { count, ids };
 }
 
@@ -133,8 +134,8 @@ function closeStaleManagerConversations(
 ): void {
   db.sqlite.run(`
     update pi_conversations set status='interrupted', updated_at=?
-    where title='Supervisor manager cycle' and status='active'
-  `, [timestamp]);
+    where title=? and status='active'
+  `, [timestamp, PI_MANAGER_CYCLE_TITLE]);
 }
 
 function hasOpenRunOwner(db: RunnerDatabase, session: ActiveSessionRow): boolean {

@@ -90,7 +90,15 @@ describe("PI runtime repositories", () => {
         pi_session_id: "pi-session-1",
         status: "archived"
       })).toMatchObject({ pi_session_id: "pi-session-1", status: "archived" });
+      createPiConversation(db, {
+        id: "manager-cycle-1",
+        project_id: "demo",
+        pi_agent_id: "runner-default",
+        title: "Supervisor manager cycle"
+      });
       expect(listPiConversations(db, { projectId: "demo" }).map((item) => item.id)).toEqual(["conv-1"]);
+      expect(listPiConversations(db, { includeInternal: true, projectId: "demo" }).map((item) => item.id).sort())
+        .toEqual(["conv-1", "manager-cycle-1"]);
 
       const action = createPiAction(db, {
         id: "action-1",
