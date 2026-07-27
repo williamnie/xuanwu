@@ -225,6 +225,14 @@ test('Skills tab shows intake and domain runtime history from API', () => {
   assert.doesNotMatch(skillsRuntimeSource, /window\.confirm|window\.alert/);
 });
 
+test('Skills refresh preserves detail state and tolerates an absent detail cache', () => {
+  assert.match(skillsRuntimeSource, /state\.skillDetails\?\.\[selectedId\]/);
+  assert.match(
+    skillsRuntimeSource,
+    /\.then\(\(\[skills, intakeRuns, domainRuns, bundles, items\]\) => setState\(\(previous\) => \(\{\s*\.\.\.previous,/
+  );
+});
+
 test('Activity tab shows traceable redacted timeline from API', () => {
   assert.match(sectionsSource, /ActivityTimelinePanel/);
   assert.match(assistantApiSource, /getPiActivityTimeline/);

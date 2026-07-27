@@ -12,7 +12,7 @@ export default function SkillsRuntimePanel() {
   const [form, setForm] = useState({ bundleId: '', itemId: '' });
   const skills = useMemo(() => runtimeSkills(state.skills), [state.skills]);
   const selected = useMemo(
-    () => state.skillDetails[selectedId] || selectedSkill(skills, selectedId),
+    () => state.skillDetails?.[selectedId] || selectedSkill(skills, selectedId),
     [skills, selectedId, state.skillDetails]
   );
 
@@ -185,7 +185,8 @@ function loadAll(setState) {
     optionalRuntimeList(() => assistantApi.getPiSkillDomainRuns({ limit: 50 })),
     optionalRuntimeList(() => assistantApi.getPiAttentionContextBundles({ limit: 20 })),
     optionalRuntimeList(() => assistantApi.getPiAttentionItems({ status: '', limit: 20 })),
-  ]).then(([skills, intakeRuns, domainRuns, bundles, items]) => setState({
+  ]).then(([skills, intakeRuns, domainRuns, bundles, items]) => setState((previous) => ({
+    ...previous,
     bundles: bundles.value,
     domainRuns: domainRuns.value,
     error: '',
@@ -194,7 +195,7 @@ function loadAll(setState) {
     loading: false,
     notice: runtimeNotice([intakeRuns, domainRuns, bundles, items]),
     skills: skills.skills || []
-  })).catch((error) => setState((previous) => ({ ...previous, error: error.message || '读取 skills runtime 失败', loading: false })));
+  }))).catch((error) => setState((previous) => ({ ...previous, error: error.message || '读取 skills runtime 失败', loading: false })));
 }
 
 async function optionalRuntimeList(read) {
