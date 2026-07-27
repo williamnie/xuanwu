@@ -44,12 +44,30 @@
 
 /* Keep the title and actions visible while long project configuration forms scroll. */
 .project-config-modal {
+  --project-modal-inline-padding: 28px;
+
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, var(--text-muted) 18%);
+  border-radius: 16px;
+  box-shadow: 0 24px 72px rgba(15, 24, 21, 0.2), 0 2px 8px rgba(15, 24, 21, 0.08);
   display: flex;
   flex-direction: column;
-  max-width: 760px;
+  max-width: 720px;
   max-height: calc(100vh - 48px);
   overflow: hidden;
   padding: 0;
+  width: min(720px, calc(100vw - 48px));
+}
+
+.project-config-modal-create {
+  max-width: 640px;
+  width: min(640px, calc(100vw - 48px));
+}
+
+.settings-project-panel > .modal-overlay {
+  backdrop-filter: blur(3px);
+  background: rgba(21, 28, 25, 0.34);
+  padding: 24px;
 }
 
 .project-config-modal-header {
@@ -57,7 +75,7 @@
   display: flex;
   flex: 0 0 auto;
   justify-content: space-between;
-  padding: 32px 32px 24px;
+  padding: 24px var(--project-modal-inline-padding) 18px;
 }
 
 .project-config-modal-header h2 {
@@ -69,22 +87,35 @@
 .project-config-modal-header p {
   color: var(--text-muted);
   font-size: 0.8rem;
-  margin: 5px 0 0;
+  line-height: 1.5;
+  margin: 6px 0 0;
+  max-width: 520px;
 }
 
 .project-config-modal-close {
   align-items: center;
   background: transparent;
-  border: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
   color: var(--text-muted);
   cursor: pointer;
   display: inline-flex;
   justify-content: center;
-  padding: 8px;
+  height: 34px;
+  padding: 0;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+  width: 34px;
 }
 
 .project-config-modal-close:hover {
+  background: var(--button-secondary-bg);
+  border-color: var(--button-border);
   color: var(--text-primary);
+}
+
+.project-config-modal-close:focus-visible {
+  border-color: var(--primary);
+  outline: none;
 }
 
 .project-config-modal-form {
@@ -98,22 +129,27 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 32px;
+  padding: 4px var(--project-modal-inline-padding) 24px;
   scrollbar-gutter: stable;
 }
 
 .project-config-modal-footer {
-  background: var(--bg-card);
+  background: color-mix(in srgb, var(--bg-secondary) 48%, var(--bg-card));
   border-top: 1px solid var(--border-color);
   display: flex;
   flex: 0 0 auto;
   gap: 12px;
   justify-content: flex-end;
-  padding: 16px 32px 32px;
+  padding: 16px var(--project-modal-inline-padding) 20px;
+}
+
+.project-config-modal-footer .btn {
+  min-height: 40px;
+  padding-inline: 18px;
 }
 
 @supports (height: 100dvh) {
@@ -325,6 +361,18 @@
     grid-template-columns: 1fr;
   }
 
+  .settings-project-panel > .modal-overlay {
+    padding: 12px;
+  }
+
+  .project-config-modal,
+  .project-config-modal-create {
+    --project-modal-inline-padding: 20px;
+
+    max-height: calc(100dvh - 24px);
+    width: calc(100vw - 24px);
+  }
+
   .project-card-title h3,
   .project-card-title code {
     max-width: min(56vw, 260px);
@@ -334,5 +382,13 @@
 @media (max-width: 480px) {
   .project-card-actions {
     justify-content: flex-end;
+  }
+
+  .project-config-modal-header {
+    align-items: flex-start;
+  }
+
+  .project-config-modal-footer .btn {
+    flex: 1 1 0;
   }
 }

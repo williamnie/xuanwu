@@ -14,7 +14,7 @@ function ruleFor(selector) {
 }
 
 test('project config modal keeps its header and footer fixed while its body scrolls', () => {
-  assert.match(source, /className="glass-card modal-content project-config-modal"/);
+  assert.match(source, /className={`modal-content project-config-modal project-config-modal-\${modalMode}`}/);
   assert.match(source, /className="project-config-modal-header"/);
   assert.match(editorSource, /'project-config-modal-form'/);
   assert.match(editorSource, /'project-config-modal-body'/);
@@ -36,6 +36,15 @@ test('project config modal keeps its header and footer fixed while its body scro
   const footerRule = ruleFor('.project-config-modal-footer');
   assert.match(footerRule, /flex:\s*0 0 auto/);
   assert.match(footerRule, /justify-content:\s*flex-end/);
+});
+
+test('project modal is viewport-centered and uses a custom compact disclosure', () => {
+  assert.match(source, /className="glass-card settings-project-panel"/);
+  assert.doesNotMatch(source, /settings-project-panel animate-fade-in/);
+  assert.match(css, /\.project-config-modal-create\s*\{[\s\S]*?max-width:\s*640px/);
+  assert.match(css, /\.settings-project-panel > \.modal-overlay\s*\{[\s\S]*?padding:\s*24px/);
+  assert.match(editorSource, /<details className="project-settings-advanced">/);
+  assert.match(readFileSync(new URL('./ProjectSettingsEditor.css', import.meta.url), 'utf8'), /summary:focus-visible[\s\S]*?box-shadow:\s*inset 3px 0 0 var\(--primary\)/);
 });
 
 test('project cards keep operational information and edit locally inside Settings', () => {

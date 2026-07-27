@@ -11,34 +11,103 @@
 
 .project-settings-grid {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .project-settings-hint {
   color: var(--text-muted);
+  display: block;
   font-size: 0.75rem;
+  line-height: 1.5;
+  margin-top: 6px;
 }
 
 .project-settings-advanced,
 .project-profile-overrides {
-  background: color-mix(in srgb, var(--bg-secondary) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 38%, var(--bg-card));
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: 0 16px;
+  border-radius: 10px;
+  overflow: hidden;
+  padding: 0;
 }
 
 .project-settings-advanced > summary,
 .project-profile-overrides > summary {
+  align-items: center;
   cursor: pointer;
+  display: flex;
   font-size: 0.86rem;
   font-weight: 800;
-  padding: 14px 0;
+  gap: 10px;
+  list-style: none;
+  min-height: 48px;
+  padding: 0 16px;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.project-settings-advanced > summary::-webkit-details-marker,
+.project-profile-overrides > summary::-webkit-details-marker {
+  display: none;
+}
+
+.project-settings-advanced > summary::before,
+.project-profile-overrides > summary::before {
+  border-bottom: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  content: '';
+  flex: 0 0 auto;
+  height: 6px;
+  transform: rotate(-45deg);
+  transition: transform 140ms ease;
+  width: 6px;
+}
+
+.project-settings-advanced > summary::after,
+.project-profile-overrides > summary::after {
+  color: var(--text-muted);
+  content: '保持默认即可';
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.project-settings-advanced > summary:hover,
+.project-profile-overrides > summary:hover {
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+
+.project-settings-advanced > summary:focus,
+.project-profile-overrides > summary:focus {
+  outline: none;
+}
+
+.project-settings-advanced > summary:focus-visible,
+.project-profile-overrides > summary:focus-visible {
+  box-shadow: inset 3px 0 0 var(--primary);
+  outline: none;
 }
 
 .project-settings-advanced[open],
 .project-profile-overrides[open] {
-  padding-bottom: 16px;
+  border-color: color-mix(in srgb, var(--primary) 26%, var(--border-light));
+  padding-bottom: 0;
+}
+
+.project-settings-advanced[open] > summary,
+.project-profile-overrides[open] > summary {
+  background: color-mix(in srgb, var(--primary) 6%, var(--bg-card));
+  border-bottom: 1px solid var(--border-light);
+}
+
+.project-settings-advanced[open] > summary::before,
+.project-profile-overrides[open] > summary::before {
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.project-settings-advanced[open] > summary::after,
+.project-profile-overrides[open] > summary::after {
+  content: '已展开';
 }
 
 .project-settings-advanced > p,
@@ -46,20 +115,49 @@
   color: var(--text-muted);
   font-size: 0.76rem;
   line-height: 1.5;
-  margin: -4px 0 16px;
+  margin: 0;
+  padding: 14px 16px 0;
 }
 
 .project-runtime-fields,
 .project-profile-overrides[open] {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
+}
+
+.project-settings-advanced > .project-runtime-fields {
+  padding: 16px;
+}
+
+.project-settings-advanced > p + .project-runtime-fields {
+  padding-top: 12px;
 }
 
 .project-profile-settings[open] {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.project-profile-settings > .form-group,
+.project-profile-settings > .project-profile-manager {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+
+.project-profile-settings > .project-profile-manager {
+  margin-bottom: 16px;
+}
+
+.project-profile-overrides > .form-group,
+.project-profile-overrides > .project-settings-grid {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+
+.project-profile-overrides > .project-settings-grid:last-child {
+  margin-bottom: 16px;
 }
 
 .project-settings-error {
@@ -114,7 +212,18 @@
 .project-profile-fields .form-group,
 .project-runtime-fields .form-group,
 .project-profile-overrides .form-group {
+  margin-bottom: 0;
   min-width: 0;
+}
+
+.project-config-modal-body > .form-group {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+
+.project-config-modal-body > .project-settings-advanced,
+.project-config-modal-body > .project-settings-error {
+  flex: 0 0 auto;
 }
 
 .project-profile-grid {

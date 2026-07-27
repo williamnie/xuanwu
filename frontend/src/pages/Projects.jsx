@@ -123,7 +123,7 @@ export default function Projects() {
   };
 
   return (
-    <section className="glass-card settings-project-panel animate-fade-in">
+    <section className="glass-card settings-project-panel">
       <div className="settings-project-panel-header">
         <div>
           <div className="settings-entry-eyebrow">项目级设置</div>
@@ -304,7 +304,7 @@ export default function Projects() {
 
       {modalMode && (modalMode === 'create' || selectedProject) && (
         <div className="modal-overlay">
-          <div className="glass-card modal-content project-config-modal">
+          <div className={`modal-content project-config-modal project-config-modal-${modalMode}`}>
             <div className="project-config-modal-header">
               <div>
                 <h2>{modalMode === 'create' ? '添加项目' : `编辑 ${selectedProject.name}`}</h2>
