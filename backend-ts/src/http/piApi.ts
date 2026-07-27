@@ -5,7 +5,6 @@ import { DEFAULT_PI_AGENT_ID, ensureDefaultPiAgent } from "../db/defaultPiAgent.
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import {
-  createProjectPiSettings,
   deleteProjectPiSettings,
   getPiSupervisor,
   getProjectPiSettings,
@@ -39,6 +38,7 @@ import { registerPiSkillRoutes } from "./piSkillsApi.ts";
 import { registerPiToolRegistryRoutes } from "./piToolRegistryApi.ts";
 import { piRuntimePromptSummary } from "./piRuntimePrompt.ts";
 import type { Router } from "./router.ts";
+import { bindProjectAutomaticTakeover } from "../domain/project/automaticTakeover.ts";
 
 type PiApiContext = {
   agenticClient?: AgenticWorkerClient;
@@ -120,21 +120,8 @@ async function patchProjectPiSettingsResponse(context: PiApiContext, request: Re
   const id = projectID(request);
   assertProjectExists(context.database, id);
   assertNoRemovedProjectPiSettings(await parseObjectBody(request));
-  const current = getProjectPiSettings(context.database, id);
   assertSupervisorCanManageProjects(context.database);
-  return writeResponse(() => bindProjectToSupervisor(context.database, id, current));
-}
-
-function bindProjectToSupervisor(
-  db: RunnerDatabase,
-  projectID: string,
-  current: ReturnType<typeof getProjectPiSettings>
-) {
-  return db.transaction(() => {
-    db.sqlite.run(`update projects set auto_run=1,
-      updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now') where id=?`, [projectID]);
-    return current ?? createProjectPiSettings(db, { project_id: projectID });
-  }).immediate();
+  return writeResponse(() => bindProjectAutomaticTakeover(context.database, id));
 }
 
 function assertNoRemovedProjectPiSettings(input: Record<string, unknown>): void {
@@ -154,8 +141,16 @@ const REMOVED_PROJECT_PI_SETTINGS = [
 function deleteProjectPiSettingsResponse(context: PiApiContext, request: Request): Response {
   const id = projectID(request);
   assertProjectExists(context.database, id);
-  deleteProjectPiSettings(context.database, id);
+  unbindProjectFromSupervisor(context.database, id);
   return json({ managed: false, project_id: id });
+}
+
+function unbindProjectFromSupervisor(db: RunnerDatabase, projectID: string): void {
+  db.transaction(() => {
+    db.sqlite.run(`update projects set auto_run=0,
+      updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now') where id=?`, [projectID]);
+    deleteProjectPiSettings(db, projectID);
+  }).immediate();
 }
 
 function normalizeAgentInput(input: Record<string, unknown>): Record<string, unknown> {

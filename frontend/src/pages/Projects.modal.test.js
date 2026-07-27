@@ -37,20 +37,39 @@ test('project config modal keeps its header and footer fixed while its body scro
   assert.match(footerRule, /justify-content:\s*flex-end/);
 });
 
-test('project cards keep low-frequency metadata behind compact details', () => {
+test('project cards keep only operational information and move configuration behind settings', () => {
   assert.match(source, /className="glass-card project-card"/);
-  assert.match(source, /<details className="project-card-details">/);
-  assert.match(source, /<ProjectMetaRow label="Provider"/);
-  assert.match(source, /<ProjectMetaRow label="Capabilities"/);
-  assert.match(source, /<ProjectMetaRow label="Agent Profile"/);
-  assert.match(source, /<ProjectMetaRow label="默认速度"/);
+  assert.match(source, /className="project-status-pill"/);
+  assert.match(source, /className="project-card-stats"/);
+  assert.match(source, /aria-label={`编辑 \${proj\.name} 配置`}/);
+  assert.doesNotMatch(source, /<details className="project-card-details">/);
+  assert.doesNotMatch(source, /ProjectMetaRow/);
+  assert.doesNotMatch(source, />Capabilities</);
+  assert.doesNotMatch(source, />运行模式</);
+  assert.doesNotMatch(css, /\.project-card-details/);
+  assert.doesNotMatch(css, /\.project-card-meta/);
 
   const cardRule = ruleFor('.project-card');
   assert.match(cardRule, /gap:\s*10px/);
   assert.match(cardRule, /padding:\s*12px/);
 
   const footerRule = ruleFor('.project-card-footer');
-  assert.match(footerRule, /grid-template-columns:\s*auto minmax\(0, 1fr\)/);
+  assert.match(footerRule, /display:\s*flex/);
+  assert.match(footerRule, /justify-content:\s*flex-end/);
+});
+
+test('project card actions share one compact control height', () => {
+  const actionsRule = ruleFor('.project-card-actions');
+  assert.match(actionsRule, /--project-card-control-height:\s*32px/);
+  assert.match(actionsRule, /align-items:\s*center/);
+
+  const buttonRule = ruleFor('.project-card-actions .btn');
+  assert.match(buttonRule, /height:\s*var\(--project-card-control-height\)/);
+  assert.match(buttonRule, /min-height:\s*var\(--project-card-control-height\)/);
+
+  const iconButtonRule = ruleFor('.project-card-actions .project-card-icon-btn');
+  assert.match(iconButtonRule, /min-width:\s*var\(--project-card-control-height\)/);
+  assert.match(css, /\.project-card-delete-btn:hover:not\(:disabled\)\s*\{/);
 });
 
 test('project config modal reads Codex model options from provider API', () => {

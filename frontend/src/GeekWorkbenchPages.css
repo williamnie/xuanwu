@@ -84,8 +84,7 @@
 .project-card-icon, .project-card-icon-btn { border-radius: var(--radius-sm); }
 .project-card-stats { background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 8px 5px; }
 .project-card-stat strong { font-family: var(--font-mono); }
-.project-card-details, .project-card-footer { border-color: var(--border-light); }
-.project-card-loop-btn { border-radius: var(--radius-sm); }
+.project-card-footer { border-color: var(--border-light); }
 /* PI Assistant Chat */
 .pi-chat-page, [data-theme="dark"] .pi-chat-page { background: transparent; color: var(--text-primary); padding: 0; }
 .pi-chat-shell { gap: 12px; grid-template-columns: minmax(272px, 298px) minmax(0, 1fr); }

@@ -102,7 +102,13 @@ describe("Bun PI settings API", () => {
       const deleted = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-settings`, { method: "DELETE" }));
       expect(deleted.status).toBe(200);
       expect(await deleted.json()).toEqual({ managed: false, project_id: "demo" });
+      expect(getProject(database, "demo")?.auto_run).toBe(0);
       expect(getProject(database, "demo")?.pi_managed).toBe(0);
+
+      database.sqlite.run("update projects set auto_run=1 where id='demo'");
+      const stoppedLegacyLoop = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-settings`, { method: "DELETE" }));
+      expect(stoppedLegacyLoop.status).toBe(200);
+      expect(getProject(database, "demo")?.auto_run).toBe(0);
     } finally {
       database.close();
     }

@@ -51,8 +51,8 @@ describe("Bun frontend API compatibility", () => {
       expect(result).toMatchObject({
         source: statePath,
         summary: { discovered: 4, created: 1, existing: 1, skipped: 2 },
-        created: [{ id: expect.any(String), name: expect.any(String), cwd: second, auto_run: 0, model: "codex-default" }],
-        existing: [{ id: "project", cwd }],
+        created: [{ id: expect.any(String), name: expect.any(String), cwd: second, auto_run: 1, pi_managed: 1, model: "codex-default" }],
+        existing: [{ id: "project", cwd, auto_run: 1, pi_managed: 1 }],
         skipped: [
           { cwd: missing, reason: "path_not_found" },
           { cwd: "remote-ssh-discovered:claw:/home/xiaobei/project", reason: "remote_project" }

@@ -3,7 +3,11 @@ import { createHash } from "node:crypto";
 import { basename, join, normalize, relative, sep } from "node:path";
 import { homedir } from "node:os";
 import type { RunnerDatabase } from "../db/database.ts";
-import { createProject, listProjects, type Project } from "../db/repositories/projects.ts";
+import { listProjects, type Project } from "../db/repositories/projects.ts";
+import {
+  createAutomaticallyManagedProject,
+  ensureProjectAutomaticTakeover
+} from "../domain/project/automaticTakeover.ts";
 
 const STATE_PATH_ENV = "CODEX_RUNNER_CODEX_STATE";
 const HASH_LENGTH = 8;
@@ -63,14 +67,14 @@ function createMissingProjects(db: RunnerDatabase, discovery: ProjectDiscovery):
   const { byCwd, usedIds } = projectIndexes(listProjects(db));
   for (const candidate of discovery.projects) {
     const existing = byCwd.get(candidate.cwd);
-    if (existing) result.existing.push(existing);
+    if (existing) result.existing.push(ensureProjectAutomaticTakeover(db, existing.id));
     else result.created.push(createSyncedProject(db, candidate.cwd, byCwd, usedIds));
   }
   return result;
 }
 
 function createSyncedProject(db: RunnerDatabase, cwd: string, byCwd: Map<string, Project>, usedIds: Set<string>): Project {
-  const project = createProject(db, { id: nextProjectID(basename(cwd), cwd, usedIds), cwd });
+  const project = createAutomaticallyManagedProject(db, { id: nextProjectID(basename(cwd), cwd, usedIds), cwd });
   byCwd.set(project.cwd, project);
   usedIds.add(project.id);
   return project;

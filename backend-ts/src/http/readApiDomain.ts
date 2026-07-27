@@ -10,12 +10,10 @@ import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { auditIssueSkillIntents } from "../skills/intentAudit.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import {
-  createProject,
   getProject,
   listProjects,
   type Project,
-  ProjectNotFoundError,
-  updateProject
+  ProjectNotFoundError
 } from "../db/repositories/projects.ts";
 import { cancelIssueWithInterrupt, retryIssueWithInterrupt } from "../runner/interrupt.ts";
 import { issueMcpRequirementSummary, type McpRequirementSummary } from "../mcp/requirements.ts";
@@ -28,6 +26,10 @@ import {
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import { listIssueEventsAsync } from "../db/asyncIssueEvents.ts";
+import {
+  createAutomaticallyManagedProject,
+  updateAutomaticallyManagedProject
+} from "../domain/project/automaticTakeover.ts";
 
 export type IssueListFilter = {
   projectId: string;
@@ -69,10 +71,10 @@ export function createReadApiDomainHandlers(context: ReadApiContext) {
       verify: (id: number, body: Record<string, unknown>) => reviewIssueVerificationAndKickLoop(context, id, body)
     },
     projects: {
-      create: (body: Record<string, unknown>) => createProject(context.database, body),
+      create: (body: Record<string, unknown>) => createAutomaticallyManagedProject(context.database, body),
       list: () => listProjects(context.database),
       read: (id: string) => mustGetProject(context.database, id),
-      update: (id: string, body: Record<string, unknown>) => updateProject(context.database, id, body)
+      update: (id: string, body: Record<string, unknown>) => updateAutomaticallyManagedProject(context.database, id, body)
     }
   };
 }

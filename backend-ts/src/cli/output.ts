@@ -13,7 +13,8 @@ export function formatIssueEvents(events: IssueEventDTO[], asJSON: boolean): str
 
 export function formatProject(project: ProjectDTO, asJSON: boolean): string {
   if (asJSON) return formatJSON(project);
-  return `${project.id} [${project.loop_status ?? "stopped"}] ${project.cwd}\n`;
+  const status = project.pi_managed === 1 || project.auto_run === 1 ? "managed" : project.loop_status ?? "stopped";
+  return `${project.id} [${status}] ${project.cwd}\n`;
 }
 
 export function formatSystemStatus(status: SystemStatusDTO, asJSON: boolean): string {

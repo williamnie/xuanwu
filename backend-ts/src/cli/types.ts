@@ -24,9 +24,11 @@ export type IssueEventDTO = {
 };
 
 export type ProjectDTO = {
+  auto_run?: number;
   cwd: string;
   id: string;
   loop_status?: string;
+  pi_managed?: number;
 };
 
 export type SystemLogLineDTO = {

@@ -112,7 +112,8 @@ describe("Bun projects/issues read API", () => {
         cwd,
         provider: "codex",
         default_skill_policy: "{\"allowed\":[\"codex-issue-runner\"]}",
-        auto_run: 0,
+        auto_run: 1,
+        pi_managed: 1,
         model: "codex-default",
         approval_policy: "never",
         sandbox: "workspace-write",
@@ -132,8 +133,18 @@ describe("Bun projects/issues read API", () => {
         default_skill_policy: "{\"recommended\":[\"verification-before-completion\"]}",
         id: "demo",
         name: "Renamed",
-        provider: "codex"
+        provider: "codex",
+        auto_run: 1,
+        pi_managed: 1
       });
+
+      const cannotDisableTakeover = await router.handle(new Request(`${BASE_URL}/api/projects/demo`, {
+        method: "PATCH",
+        body: JSON.stringify({ auto_run: 0 }),
+        headers: { "content-type": "application/json" }
+      }));
+      expect(cannotDisableTakeover.status).toBe(200);
+      expect(await cannotDisableTakeover.json()).toMatchObject({ auto_run: 1, pi_managed: 1 });
 
       const duplicateCWD = await router.handle(new Request(`${BASE_URL}/api/projects`, {
         method: "POST",
@@ -146,6 +157,7 @@ describe("Bun projects/issues read API", () => {
         name: "Manual",
         cwd,
         auto_run: 1,
+        pi_managed: 1,
         model: "gpt-5.5",
         sandbox: "danger-full-access",
         sort_order: 1

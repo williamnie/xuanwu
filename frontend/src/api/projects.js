@@ -45,24 +45,7 @@ export const projectsApi = {
     method: 'DELETE',
   }),
 
-  startProjectLoop: (id) => request(`/api/projects/${id}/loop/start`, {
-    method: 'POST',
-  }),
-
-  stopProjectLoop: (id) => request(`/api/projects/${id}/loop/stop`, {
-    method: 'POST',
-  }),
-
   getProjectLoopStatus: (id) => request(`/api/projects/${id}/loop/status`),
-
-  bindProjectToPi: (id) => request(`/api/projects/${id}/pi-settings`, {
-    method: 'PATCH',
-    body: JSON.stringify({}),
-  }),
-
-  unbindProjectFromPi: (id) => request(`/api/projects/${id}/pi-settings`, {
-    method: 'DELETE',
-  }),
 
   resumeProjectHold: (id) => request(`/api/projects/${id}/hold/resume`, {
     method: 'POST',

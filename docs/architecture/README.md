@@ -1,7 +1,7 @@
 # 玄武 canonical 架构文档索引
 
 - 状态：Canonical
-- 日期：2026-07-19
+- 日期：2026-07-27
 - 路线 issue：XW P11.08 / Runner #743
 - 硬依赖：XW P00.01 / #631、XW P10.12 / #735（均为 `done`）
 
@@ -139,6 +139,7 @@
 - [ADR-XW-0082：用户可见命名迁移与内部兼容清单](xuanwu/0082-user-facing-naming-migration.md)
 - [ADR-XW-0083：legacy/compat 引用审计与通知单写路径收敛](xuanwu/0083-legacy-compat-notification-cleanup.md)
 - [ADR-XW-0084：Issue event 写预算与有界 artifact](xuanwu/0084-issue-event-write-budgets.md)
+- [ADR-XW-0086：Project 注册即自动接管](xuanwu/0086-project-enrollment-automatic-takeover.md)
 
 ## 3. 历史归档与 superseded 映射
 

@@ -59,11 +59,12 @@ codex-issue-runner system status --addr 127.0.0.1:3008 --token-file "$CODEX_RUNN
 ```bash
 codex-issue-runner project create \
   --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" \
-  --project <project-id> \
+  --id <project-id> \
   --cwd /absolute/path/to/repo \
-  --auto-run \
   --json
 ```
+
+注册 Project 即表示交给玄武接管；服务会自动绑定 Supervisor 并启用 Issue Loop，不提供 inert Project 或 `--auto-run` 选择。
 
 If project list is needed and CLI support is missing, query the API:
 

@@ -12,7 +12,7 @@
 - SQLite 持久化（默认 live state 下的 `runner.db`）
 - Projects / Issues REST API
 - 全局 SSE：`GET /api/events`
-- 项目 auto-run / loop start-stop
+- Project 注册即由 Supervisor 接管并自动运行 Issue Loop
 - issue enqueue / retry / cancel
 - Triage cron：到点批量将 Triage issue 切到 Todo 并启动运行
 - 通过 `codex app-server --listen stdio://` 执行 todo issue
@@ -220,12 +220,11 @@ release pipeline 会发布 `release.json`、`checksums.txt` 和四个平台压�
 # 后台服务
 ./dist/codex-issue-runner serve --addr 0.0.0.0:3008 --state-dir data-bun --db data-bun/runner.db
 
-# 创建项目并开启 auto-run
+# 创建项目；注册后自动由 Supervisor 接管并运行 Issue Loop
 ./dist/codex-issue-runner project create \
   --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" \
   --id movo-web \
   --cwd /Users/xiaobei/Documents/rcrai/movo-web \
-  --auto-run \
   --json
 
 # 创建 Triage/backlog issue；不加 --run 时不会自动执行

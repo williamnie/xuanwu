@@ -58,6 +58,7 @@ import { issueDependencyAndRunGitBaselineMigration } from "./057_issue_dependenc
 import { dropIssueTemplatesMigration } from "./058_drop_issue_templates.ts";
 import { piAutomaticTakeoverMigration } from "./059_pi_automatic_takeover.ts";
 import { mcpApprovalPolicyMigration } from "./060_mcp_approval_policy.ts";
+import { projectMandatoryTakeoverMigration } from "./061_project_mandatory_takeover.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -119,5 +120,6 @@ export const migrations = [
   issueDependencyAndRunGitBaselineMigration,
   dropIssueTemplatesMigration,
   piAutomaticTakeoverMigration,
-  mcpApprovalPolicyMigration
+  mcpApprovalPolicyMigration,
+  projectMandatoryTakeoverMigration
 ];

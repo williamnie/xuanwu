@@ -115,19 +115,20 @@ describe("Bun CLI dispatcher", () => {
     const fetcher = fetchStub(async (request) => {
       expect(request.method).toBe("POST");
       expect(request.url).toBe("http://127.0.0.1:3008/api/projects");
-      expect(await request.json()).toMatchObject({
+      const body = await request.json() as Record<string, unknown>;
+      expect(body).toMatchObject({
         id: "demo",
-        cwd: "/tmp/demo",
-        auto_run: 1
+        cwd: "/tmp/demo"
       });
-      return jsonResponse({ id: "demo", cwd: "/tmp/demo", loop_status: "stopped" }, 201);
+      expect(body).not.toHaveProperty("auto_run");
+      return jsonResponse({ id: "demo", cwd: "/tmp/demo", auto_run: 1, pi_managed: 1, loop_status: "stopped" }, 201);
     });
     const { code, stdout, stderr } = await run([
-      "project", "create", "--id", "demo", "--cwd", "/tmp/demo", "--auto-run"
+      "project", "create", "--id", "demo", "--cwd", "/tmp/demo"
     ], { fetcher });
 
     expect(code).toBe(0);
-    expect(stdout).toBe("demo [stopped] /tmp/demo\n");
+    expect(stdout).toBe("demo [managed] /tmp/demo\n");
     expect(stderr).toBe("");
   });
 

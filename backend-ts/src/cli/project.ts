@@ -7,7 +7,6 @@ const PROJECT_CREATE_FLAGS = [
   { name: "id", required: true },
   { name: "name" },
   { name: "cwd", required: true },
-  { boolean: true, name: "auto-run" },
   { name: "model" },
   { name: "approval-policy" },
   { name: "sandbox" }
@@ -31,7 +30,6 @@ function projectPayload(values: Record<string, string>): Record<string, unknown>
     id: values.id,
     name: values.name ?? "",
     cwd: values.cwd,
-    auto_run: values["auto-run"] === "true" ? 1 : 0,
     model: values.model ?? "",
     approval_policy: values["approval-policy"] ?? "never",
     sandbox: values.sandbox ?? "workspace-write"
