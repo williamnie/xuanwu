@@ -7,7 +7,7 @@ export function isReviewConversationIntent(value: string): boolean {
 
 export function reviewConversationAuthorization(): PiGatePolicy {
   return {
-    allowedActions: ["memory.search", "memory.write_candidate"],
+    allowedActions: ["memory.search", "memory.remember"],
     forbiddenActions: [
       "issue.create", "issue.enqueue", "issue.schedule_enqueue",
       "issue.retry", "issue.state_repair", "needs_user.escalate",

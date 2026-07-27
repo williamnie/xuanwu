@@ -293,15 +293,17 @@ describe("PI action proposals API", () => {
             }, "low", false),
             action("memory.create", {
               content: "用户偏好：提醒前先确认是否需要发群。",
-              kind: "preference",
-              scope: "inbox"
+              kind: "user_preference",
+              memory_key: "notification.confirm-group-before-send",
+              scope: "global",
+              scope_id: "runner"
             }, "low", false)
           ],
           confidence: 0.86,
           evidence_refs: [`external_event:${itemID}`],
           skill_run_id: "domain-run-non-issue",
           source_item_ids: [`attention_inbox_item:${itemID}`],
-          summary: "需要询问、监听、提醒并写入记忆候选。",
+          summary: "需要询问、监听、提醒并写入已批准的可复用记忆。",
           target_hints: [{ confidence: 0.9, id: "demo", kind: "project" }]
         }),
         method: "POST"
@@ -338,8 +340,9 @@ describe("PI action proposals API", () => {
       expect(getAutomationTrigger(db, reminderID as `automation:${string}`)).toMatchObject({ type: "manual" });
       expect(listPiMemoryItems(db).find((item) => item.id === memoryID)).toMatchObject({
         content: "用户偏好：提醒前先确认是否需要发群。",
-        disabled: 1,
-        scope: "inbox",
+        disabled: 0,
+        memory_key: "notification.confirm-group-before-send",
+        scope: "global",
         source_id: proposal.id,
         source_type: "action_proposal"
       });

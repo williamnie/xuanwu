@@ -198,9 +198,11 @@ describe("Bun project PI control API", () => {
       faux.setResponses([
         fauxAssistantMessage([
           fauxToolCall("issue_comment", { issue_id: 1, body: "delegated mutation" }, { id: "comment" }),
-          fauxToolCall("memory_write_candidate", {
-            kind: "preference",
-            content: "must not write memory"
+          fauxToolCall("memory_remember", {
+            kind: "decision",
+            content: "当前 demo 全部终态，没有未完成 Work。",
+            memory_key: "project.current-status",
+            scope: "project"
           }, { id: "memory" })
         ], { stopReason: "toolUse" }),
         fauxAssistantMessage("cycle done")
@@ -225,17 +227,10 @@ describe("Bun project PI control API", () => {
       expect(audit.map((event) => event.event_type)).toEqual(["candidate", "gate_decision"]);
       expect(audit[1]).toMatchObject({ decision: "deny" });
       expect(listEvents(database)).toEqual([]);
-      expect(listPiMemoryItems(database, { disabled: 1 })).toEqual([
-        expect.objectContaining({
-          content: "must not write memory",
-          disabled: 1,
-          kind: "preference",
-          scope: "project",
-          scope_id: "demo",
-          source_type: "pi.manager_cycle"
-        })
-      ]);
-      expect(listPiMemoryItems(database, { disabled: 0 })).toEqual([]);
+      expect(listPiActions(database, { status: "completed" })).toContainEqual(expect.objectContaining({
+        action_type: "memory.remember"
+      }));
+      expect(listPiMemoryItems(database)).toEqual([]);
     } finally {
       faux.unregister();
       database.close();

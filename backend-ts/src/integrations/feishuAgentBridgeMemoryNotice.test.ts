@@ -9,7 +9,7 @@ import { createFeishuAgentBridge } from "./feishuAgentBridge.ts";
 import { ingestFeishuMessageEvent } from "./feishuIngest.ts";
 import type { FeishuTextMessageInput } from "./feishuClient.ts";
 
-describe("Feishu agent bridge memory candidate notices", () => {
+describe("Feishu agent bridge automatic reusable memory", () => {
   test("does not append approve/reject guidance when normal chat auto-enables explicit preference", async () => {
     const fixture = await openFixture();
     try {
@@ -62,7 +62,7 @@ describe("Feishu agent bridge memory candidate notices", () => {
     }
   });
 
-  test("appends approve/reject guidance when normal chat writes a new pending candidate", async () => {
+  test("never appends legacy approve/reject guidance for a disabled row", async () => {
     const fixture = await openFixture();
     try {
       const sent: FeishuTextMessageInput[] = [];
@@ -103,9 +103,10 @@ describe("Feishu agent bridge memory candidate notices", () => {
       expect(listPiMemoryItems(fixture.db, { disabled: 1 })).toMatchObject([
         { disabled: 1, id: "22345678-2222-4222-8222-123456789abc" }
       ]);
-      expect(sent[0]?.text).toContain("我可以记住");
-      expect(sent[0]?.text).toContain("/memory approve 22345678");
-      expect(sent[0]?.text).toContain("/memory reject 22345678");
+      expect(sent[0]?.text).toBe("收到，我先作为候选记录。");
+      expect(sent[0]?.text).not.toContain("我可以记住");
+      expect(sent[0]?.text).not.toContain("/memory approve");
+      expect(sent[0]?.text).not.toContain("/memory reject");
     } finally {
       await fixture.close();
     }

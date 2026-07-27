@@ -47,17 +47,35 @@ describe("PI memory prompt context", () => {
         scope: "project",
         scopeID: "demo"
       });
+      insertMemory(db, {
+        content: "当前 Issue #785 failed，等待人工处理。",
+        id: "legacy-status-snapshot",
+        kind: "project_observation",
+        scope: "project",
+        scopeID: "demo"
+      });
+      insertMemory(db, {
+        content: "Issue #785 failed 的根因是只看 Run 结果；修复方式是以 Evidence、Handoff 和 completion gate 复验。",
+        id: "issue-785-resolution",
+        kind: "resolution",
+        scope: "project",
+        scopeID: "demo"
+      });
 
       const context = buildPiMemoryPromptContext(db, { projectID: "demo" });
 
-      expect(context).toContain("Confirmed Supervisor memory");
+      expect(context).toContain("Reusable Supervisor memory");
       expect(context).toContain("Project policy: verify before commit");
       expect(context).toContain("User prefers concise Chinese status updates");
       expect(context).not.toContain("Unconfirmed guess");
+      expect(context).not.toContain("等待人工处理");
+      expect(context).toContain("Issue #785 failed 的根因");
+      expect(context).toContain("修复方式是以 Evidence、Handoff 和 completion gate 复验");
       expect(context).toContain("pi_memory_items/project-policy");
       expect(context).toContain("source=runbook:policy-doc");
       expect(context).toContain("updated=2026-01-01T00:00:00Z");
-      expect(context).toContain("memory_write_candidate");
+      expect(context).toContain("memory_remember");
+      expect(context).toContain("always query authoritative tools for current state");
     } finally {
       db.close();
     }
@@ -84,7 +102,7 @@ describe("PI memory prompt context", () => {
       insertMemory(db, {
         content: "Issue-specific acceptance",
         id: "issue",
-        kind: "issue_memory",
+        kind: "decision",
         scope: "issue",
         scopeID: "259"
       });
@@ -100,7 +118,7 @@ describe("PI memory prompt context", () => {
     }
   });
 
-  test("retrieves source, skill, inbox and project memories with provenance", async () => {
+  test("retrieves reusable scoped memories with provenance and omits transient inbox summaries", async () => {
     const db = await openFixtureDatabase();
     try {
       insertMemory(db, {
@@ -142,13 +160,13 @@ describe("PI memory prompt context", () => {
       });
 
       expect(result.memory_items.map((item) => item.id)).toEqual([
-        "inbox-memory", "source-memory", "skill-memory", "project-memory"
+        "source-memory", "skill-memory", "project-memory"
       ]);
       expect(result.memory_items[0]).toMatchObject({
-        reference: "pi_memory_items/inbox-memory",
-        retrieval_scope: "inbox:42",
+        reference: "pi_memory_items/source-memory",
+        retrieval_scope: "source:fixture-im",
         source_id: "policy-doc",
-        source_path: "pi_memory_items/inbox-memory"
+        source_path: "pi_memory_items/source-memory"
       });
       expect(result.retrieval_scopes).toEqual([
         "inbox:42", "source:fixture-im", "skill:fixture-domain", "project:demo", "global:runner"

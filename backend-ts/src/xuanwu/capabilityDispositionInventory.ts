@@ -638,6 +638,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "PATCH", path: "/api/pi/memory/:id", family: "assistant-runtime" },
   { method: "POST", path: "/api/pi/memory/:id/approve", family: "assistant-runtime" },
   { method: "POST", path: "/api/pi/memory/:id/disable", family: "assistant-runtime" },
+  { method: "POST", path: "/api/pi/memory/:id/enable", family: "assistant-runtime" },
   { method: "POST", path: "/api/pi/memory/:id/forget", family: "assistant-runtime" },
   { method: "POST", path: "/api/pi/memory/:id/pin", family: "assistant-runtime" },
   { method: "POST", path: "/api/pi/memory/:id/promote", family: "assistant-runtime" },

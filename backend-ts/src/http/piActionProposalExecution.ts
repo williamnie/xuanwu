@@ -110,6 +110,10 @@ function executablePayload(
     return replyPayload(db, proposal, action, payload);
   }
   if (action.type === "issue.status_lookup") return withProjectHint(action, payload);
+  if (action.type === "memory.create") return withProposalTrace(proposal, action, {
+    ...payload,
+    approved_proposal_by: proposal.approved_by
+  });
   return withProposalTrace(proposal, action, payload);
 }
 

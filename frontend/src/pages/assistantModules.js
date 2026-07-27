@@ -123,7 +123,7 @@ export const PI_ASSISTANT_CONFIG_MODULES = [
     tab: 'memory',
     label: 'Memory',
     title: 'Memory',
-    description: '审阅、启用、pin 或忘记 Supervisor 可检索记忆。'
+    description: '查看、编辑、禁用或忘记 Supervisor 自动维护的可复用记忆。'
   },
   {
     page: 'pi-activity',

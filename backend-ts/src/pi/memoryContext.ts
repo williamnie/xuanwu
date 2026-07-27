@@ -1,6 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { listPiMemoryItems, type PiMemoryItem } from "../db/repositories/pi.ts";
-import { containsSensitiveMemoryContent } from "./memoryPolicy.ts";
+import { containsSensitiveMemoryContent, retrievableMemoryContent, retrievableMemoryKind } from "./memoryPolicy.ts";
 
 export type PiMemoryPromptContextInput = {
   conversationID?: string;
@@ -23,7 +23,10 @@ export type PiMemoryContextItem = {
   id: string;
   kind: string;
   layer: string;
+  last_seen_at: string;
+  memory_key: string;
   memory_type: string;
+  occurrence_count: number;
   pinned: number;
   provenance: PiMemoryProvenance;
   reference: string;
@@ -82,11 +85,11 @@ export function buildPiMemoryPromptContext(db: RunnerDatabase, input: PiMemoryPr
   const items = result.memory_items;
   const lines = items.map(formatMemoryLine);
   return [
-    "Confirmed Supervisor memory:",
+    "Reusable Supervisor memory (non-authoritative context):",
     lines.length > 0 ? lines.join("\n") : "- No confirmed memories for this scope.",
     `Memory retrieval: scopes=${result.retrieval_scopes.join(",") || "global"} item_limit=${result.limits.item_limit} token_budget=${result.limits.token_budget} token_estimate=${result.limits.token_estimate} truncated=${result.limits.truncated}.`,
     `Memory truncation: ${result.truncation_summary.summary}`,
-    "Memory rule: write new observations only via memory_write_candidate; only explicit low-risk user preferences from normal chat may auto-enable, and guesses or policy/workflow observations still require review."
+    "Memory rule: use memory_remember only for explicit preferences/decisions/workflows or evidence-backed root-cause and resolution experience. Never store or answer current Work/Run/Issue status from memory; always query authoritative tools for current state."
   ].join("\n");
 }
 
@@ -124,6 +127,8 @@ function rawMemoryContextItems(
 ): PiMemoryContextItem[] {
   const items = memoryScopeFilters(input).flatMap((filter) => listPiMemoryItems(db, filter));
   return uniqueMemoryItems(items)
+    .filter((item) => retrievableMemoryKind(item.kind))
+    .filter((item) => retrievableMemoryContent(item.kind, item.content))
     .filter((item) => !containsSensitiveMemoryContent(item.content))
     .sort(memoryOrder)
     .map(contextItem);
@@ -179,7 +184,10 @@ function contextItem(item: PiMemoryItem): PiMemoryContextItem {
     id: item.id,
     kind: item.kind,
     layer: item.layer,
+    last_seen_at: item.last_seen_at,
+    memory_key: item.memory_key,
     memory_type: item.memory_type,
+    occurrence_count: item.occurrence_count,
     pinned: item.pinned,
     provenance: memoryProvenance(item, reference),
     reference,
@@ -215,7 +223,7 @@ function selectionReason(item: PiMemoryItem): string {
 }
 
 function formatMemoryLine(item: PiMemoryContextItem): string {
-  return `- [${item.reference} | source_path=${item.source_path} | type=${item.memory_type} | layer=${item.layer} | ${item.scope}:${item.scope_id || "runner"} | ${sourceLabel(item)} | ${citationLabel(item)} | updated=${item.updated_at} | confidence=${item.confidence}${item.truncated ? " | truncated=true" : ""}] ${item.kind}: ${item.content}`;
+  return `- [${item.reference} | memory_key=${item.memory_key} | seen=${item.occurrence_count} | last_seen=${item.last_seen_at} | source_path=${item.source_path} | type=${item.memory_type} | layer=${item.layer} | ${item.scope}:${item.scope_id || "runner"} | ${sourceLabel(item)} | ${citationLabel(item)} | updated=${item.updated_at} | confidence=${item.confidence}${item.truncated ? " | truncated=true" : ""}] ${item.kind}: ${item.content}`;
 }
 
 function sourceLabel(item: PiMemoryContextItem): string {

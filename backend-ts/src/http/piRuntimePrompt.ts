@@ -25,7 +25,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
     agentInstructionsSection(input.agent),
     manualContextWorkflow(),
-    automaticMemoryCandidatePolicy(),
+    automaticReusableMemoryPolicy(),
     legacyWorkToolWorkflow(),
     "Issue state repair: issue_state_repair_proposal is only for deterministic issueStateManager/runtime mismatch repairs returned by issue_state_diagnose. Do not use it for natural-language requests to mark, move, cancel, reopen, fail, or otherwise freely change an issue status; state repair payloads must carry deterministic expected_state preconditions.",
     "Retry diagnosis: before recommending or calling Work/Run retry, call issue_execution_status for the target. If completion.state is implementation_complete_handoff_missing, call issue_completion_reconcile to derive the persisted Handoff and re-run the gate without retrying the executor. After reconciliation succeeds, re-read the affected dependency chain and continue it through governed enqueue/retry tools; retry a failed dependent only when its dependencies are ready and issue_execution_status recommends retry. If completion.retry_recommended is false for another reason, distinguish completed implementation from formal Work status and do not retry the executor. Natural-language intent is your responsibility; deterministic gates validate only the concrete tool action, target, state preconditions, risk, and authorization.",
@@ -108,15 +108,15 @@ function manualContextWorkflow(): string {
   ].join(" ");
 }
 
-function automaticMemoryCandidatePolicy(): string {
+function automaticReusableMemoryPolicy(): string {
   return [
-    "Automatic memory candidate policy for normal chat:",
-    "When the user states stable user preferences, long-term goals, durable project habits, or reusable workflow facts, call memory_write_candidate.",
+    "Automatic reusable memory policy for normal chat:",
+    "Memory is for reusable behavior and experience, not a history of current state. When the user explicitly states a stable preference, project decision, durable workflow/constraint, or explains a reusable bug root cause and treatment, call memory_remember with user_authorized=true and a stable lowercase memory_key.",
     "When the user asks to inspect or change notification behavior, interpret the request yourself and call notification_preference_read or notification_preference_update with explicit structured fields.",
-    "Explicit low-risk personal preferences such as \"call me X\" or \"your name is Y\" may auto-enable when the user directly authorizes them; tell the user they can revoke them with /memory or the settings panel.",
-    "Guesses, summaries, sensitive data, project/team policy, workflow facts, and low-confidence observations must stay disabled pending candidates and must not be used as confirmed memory until approved.",
-    "Default scope: personal preferences or long-term goals -> global; project habits or repo/team workflow -> project; temporary topic context -> conversation.",
-    "Operational Work follow-up promises, completion notices, and due dates are Supervisor commitments, not durable memory. Track them only through authoritative Work plus the existing completion-watch commitment metadata; never call memory_write_candidate for a temporary commitment.",
+    "Accepted memory becomes active automatically and repeated facts update the existing memory_key. Do not create a review candidate or ask the user to curate low-risk memory; users can inspect, disable, or forget it in Settings.",
+    "Default scope: personal preferences or long-term goals -> global; project decisions, debugging patterns, resolutions, constraints, or workflows -> project. Temporary topic context is not memory.",
+    "Never store current or historical Work/Run/Issue status, counts, queue emptiness, timestamps, manager-cycle summaries, raw logs, or unverified guesses. For every current status question, query authoritative work/run/evidence/handoff tools even when related memory exists.",
+    "Operational Work follow-up promises, completion notices, and due dates are Supervisor commitments, not durable memory. Track them only through authoritative Work plus the existing completion-watch commitment metadata; never call memory_remember for a temporary commitment.",
     "Do not store secrets, tokens, credentials, private paths, stack traces, sensitive personal data. Do not store full chat transcripts.",
     "Be selective: skip greetings, ordinary small talk, one-off instructions, guesses, and low-confidence observations."
   ].join(" ");

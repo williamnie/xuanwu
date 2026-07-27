@@ -36,16 +36,18 @@ describe("Bun project PI control regressions", () => {
     }
   });
 
-  test("manager cycle writes memory candidates only as disabled review items", async () => {
+  test("manager cycle rejects status snapshots instead of creating memory candidates", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-control-memory-api", provider: "pi-control-memory" });
     try {
       faux.setResponses([
         fauxAssistantMessage([
           fauxToolCall("memory_search", { query: "anything" }, { id: "memory-search" }),
-          fauxToolCall("memory_write_candidate", {
-            content: "must not write memory",
-            kind: "preference"
+          fauxToolCall("memory_remember", {
+            content: "当前 demo 项目全部终态，没有未完成 Work。",
+            kind: "decision",
+            memory_key: "project.current-status",
+            scope: "project"
           }, { id: "memory-write" })
         ], { stopReason: "toolUse" }),
         fauxAssistantMessage("cycle done")
@@ -63,20 +65,10 @@ describe("Bun project PI control regressions", () => {
         gate_decision: "execute"
       }));
       expect(listPiActions(database, { status: "completed" })).toContainEqual(expect.objectContaining({
-        action_type: "memory.write_candidate",
+        action_type: "memory.remember",
         gate_decision: "execute"
       }));
-      expect(listPiMemoryItems(database, { disabled: 1 })).toEqual([
-        expect.objectContaining({
-          content: "must not write memory",
-          disabled: 1,
-          kind: "preference",
-          scope: "project",
-          scope_id: "demo",
-          source_type: "pi.manager_cycle"
-        })
-      ]);
-      expect(listPiMemoryItems(database, { disabled: 0 })).toEqual([]);
+      expect(listPiMemoryItems(database)).toEqual([]);
     } finally {
       faux.unregister();
       database.close();

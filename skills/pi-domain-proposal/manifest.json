@@ -45,7 +45,7 @@
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["issue.create", "message.reply_draft", "issue.status_lookup", "ask_user", "watch_thread", "memory.create", "reminder.create", "no_action"]
+              "enum": ["issue.create", "message.reply_draft", "issue.status_lookup", "ask_user", "watch_thread", "reminder.create", "no_action"]
             },
             "payload": { "type": "object" },
             "risk": { "type": "string", "enum": ["low", "medium", "high"] },

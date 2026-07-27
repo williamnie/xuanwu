@@ -41,7 +41,6 @@ const SUPERVISOR_TOOL_NAMES = [
   "session_read_summary",
   "project_status",
   "memory_search",
-  "memory_write_candidate",
   "grep",
   "find",
   "ls"
@@ -97,7 +96,7 @@ async function promptSupervisorWithTimeout(
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      reject(new Error(`PI Supervisor prompt timed out after ${SUPERVISOR_PROMPT_TIMEOUT_MS}ms`));
+      reject(new Error(`Xuanwu Supervisor prompt timed out after ${SUPERVISOR_PROMPT_TIMEOUT_MS}ms`));
       void session.abort().catch(() => undefined);
     }, SUPERVISOR_PROMPT_TIMEOUT_MS);
   });

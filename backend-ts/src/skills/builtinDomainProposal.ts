@@ -62,7 +62,7 @@ function actionInputsForItem(item: AttentionInboxItemRecord): Omit<DomainSkillAc
   if (shouldWatch(item)) return [watchThread(item)];
   if (hasSuggestedAction(item, "no_action")) return [noAction(item)];
   if (hasSuggestedAction(item, "reminder.create")) return [reminderCreate(item)];
-  if (hasSuggestedAction(item, "memory.create")) return [memoryCreate(item)];
+  if (hasSuggestedAction(item, "memory.create")) return [retiredMemorySuggestion(item)];
   return [askUser(item)];
 }
 
@@ -108,12 +108,11 @@ function reminderCreate(item: AttentionInboxItemRecord): Omit<DomainSkillActionP
   }, "low", false, "Create a reminder proposal without executing external writes.");
 }
 
-function memoryCreate(item: AttentionInboxItemRecord): Omit<DomainSkillActionProposal, "id"> {
-  return action("memory.create", item, {
-    evidence_refs: item.evidence_refs,
-    summary: item.summary,
+function retiredMemorySuggestion(item: AttentionInboxItemRecord): Omit<DomainSkillActionProposal, "id"> {
+  return action("no_action", item, {
+    reason: "inbox_summaries_are_not_reusable_memory",
     title: item.title
-  }, "low", false, "Capture a memory proposal for later review.");
+  }, "low", false, "Ignore an inferred inbox memory suggestion; explicit chat facts use memory_remember directly.");
 }
 
 function askUser(item: AttentionInboxItemRecord): Omit<DomainSkillActionProposal, "id"> {

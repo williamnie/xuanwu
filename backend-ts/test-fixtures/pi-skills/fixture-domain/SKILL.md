@@ -13,7 +13,7 @@ It is source-neutral and proposal-only:
 - `status_question` -> `issue.status_lookup` + `message.reply_draft`
 - `reply_needed` -> `message.reply_draft`
 - `monitor_thread` / `watch_thread` suggestion -> `watch_thread`
-- `reminder.create` / `memory.create` suggestion -> matching proposal for later review
+- `reminder.create` suggestion -> matching proposal; inbox summaries are never memory candidates
 - ambiguous `other` -> `ask_user`
 - `no_action` suggestion -> `no_action`
 

@@ -14,7 +14,6 @@ import {
   handleFeishuProjectSelectionAction,
   type FeishuProjectSelectionAction
 } from "./feishuProjectSelectionBridge.ts";
-import { appendFeishuMemoryCandidateNotice, snapshotFeishuMemoryCandidates } from "./feishuMemoryCandidateNotice.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
 import { ingestPiGuardianEvent } from "../pi/guardianEventIngest.ts";
 
@@ -133,10 +132,6 @@ async function runnerReply(
     if (route.isNewCommand && route.prompt === "") {
       return { conversationId: route.conversationId, projectId: "", targetProjectId, text: NEW_CONVERSATION_ACK_TEXT };
     }
-    const memoryBefore = snapshotFeishuMemoryCandidates(options.database, {
-      conversationId: route.conversationId,
-      projectId: targetProjectId
-    });
     const prompt = route.prompt || input.event.text || "[Feishu attachment message]";
     const result = await options.runConversation({
       conversationId: route.conversationId,
@@ -146,10 +141,7 @@ async function runnerReply(
       targetProjectSource: projectContext.source,
       prompt
     });
-    const text = appendFeishuMemoryCandidateNotice(
-      options.database, { conversationId: route.conversationId, projectId: targetProjectId }, result.text, memoryBefore
-    );
-    return { ...result, projectId: "", targetProjectId, text };
+    return { ...result, projectId: "", targetProjectId, text: result.text };
   } catch (error) {
     const message = safeError(error);
     ingestPiGuardianEvent(options.database, {

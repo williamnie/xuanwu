@@ -94,8 +94,9 @@ describe("Xuanwu Supervisor runtime prompt", () => {
       expect(prompt).toContain("Manual context trigger workflow:");
       expect(prompt).toContain("manual_context_intake only fetches and persists a bounded context bundle");
       expect(prompt).toContain("You must interpret it and choose any follow-up tool");
-      expect(prompt).toContain("Automatic memory candidate policy");
-      expect(prompt).toContain("memory_write_candidate");
+      expect(prompt).toContain("Automatic reusable memory policy");
+      expect(prompt).toContain("memory_remember");
+      expect(prompt).toContain("Never store current or historical Work/Run/Issue status");
       expect(prompt).toContain("Repo-aware issue proposal workflow:");
       expect(prompt).toContain("repo_context_pack");
       expect(prompt).toContain("must not edit code");
@@ -103,7 +104,7 @@ describe("Xuanwu Supervisor runtime prompt", () => {
       expect(prompt).toContain("最多追问一个关键问题");
       expect(prompt).toContain("Supervisor commitment context (operational projection, not long-term memory)");
       expect(prompt).toContain("xw.supervisor-commitment.v1");
-      expect(prompt).toContain("never call memory_write_candidate for a temporary commitment");
+      expect(prompt).toContain("never call memory_remember for a temporary commitment");
     });
   });
 
@@ -121,7 +122,7 @@ describe("Xuanwu Supervisor runtime prompt", () => {
       createPiMemoryItem(db, {
         content: "Global Supervisor behavior",
         id: "supervisor-global-memory",
-        kind: "policy",
+        kind: "constraint",
         scope: "global"
       });
       createPiMemoryItem(db, {
@@ -138,7 +139,7 @@ describe("Xuanwu Supervisor runtime prompt", () => {
         project: projectRecord("/tmp/xuanwu-prompt-project")
       }, db);
 
-      expect(prompt).toContain("Confirmed Supervisor memory:");
+      expect(prompt).toContain("Reusable Supervisor memory (non-authoritative context):");
       expect(prompt).toContain("Project-level Supervisor preference");
       expect(prompt).toContain("Global Supervisor behavior");
       expect(prompt).not.toContain("Old chat conversation memory");

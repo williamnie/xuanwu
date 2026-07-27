@@ -1,6 +1,4 @@
 import type { Issue } from "../db/repositories/issues.ts";
-import type { PiMemoryItem } from "../db/repositories/pi.ts";
-import { containsSensitiveMemoryContent } from "../pi/memoryPolicy.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 
@@ -24,15 +22,6 @@ export function formatApprovalNotification(issue: Issue, command: string, path: 
     detail || "授权详情请到 Runner/Codex 面板查看。",
     "可选操作：批准一次 / 本 session 批准 / 拒绝 / 暂缓。",
     "风险：会影响当前 Codex session 的执行授权；页面 Supervisor 控制台仅作为备用入口。"
-  ].join("\n");
-}
-
-export function formatMemoryCandidateNotification(item: PiMemoryItem): string {
-  const id = shortID(item.id);
-  return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：memory candidate 待确认：${id}`,
-    `- [${safeSummary(item.scope, 24)} | ${safeSummary(item.kind, 40)}] ${memoryContent(item)}`,
-    `操作：发送 /memory approve ${id} 确认，或 /memory reject ${id} 删除。`
   ].join("\n");
 }
 
@@ -120,11 +109,6 @@ function failedText(issue: Issue, title: string): string {
   ].join("\n");
 }
 
-function memoryContent(item: PiMemoryItem): string {
-  if (containsSensitiveMemoryContent(item.content)) return "内容包含敏感信息（已隐藏）";
-  return safeSummary(item.content, 90);
-}
-
 function watchStatsLine(stats: Record<string, unknown>): string {
   return [
     `done：${numberField(stats.done)}`,
@@ -182,10 +166,6 @@ function numberField(value: unknown): number {
 
 function textField(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function shortID(id: string): string {
-  return id.slice(0, 8);
 }
 
 function cleanString(value: unknown): string {

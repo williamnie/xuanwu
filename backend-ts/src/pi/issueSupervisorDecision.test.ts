@@ -70,19 +70,12 @@ describe("PI supervisor decision runtime", () => {
     }
   });
 
-  test("can write disabled memory candidates when recovery reveals reusable supervisor context", async () => {
+  test("does not turn issue recovery status into durable memory", async () => {
     const fixture = await openDecisionFixture("supervisor-decision-memory-");
     const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
     try {
       insertIssueFixture(fixture.db, { issueID: 298, projectID: fixture.project.id, sessionID: "thread-298" });
       faux.setResponses([
-        fauxAssistantMessage([
-          fauxToolCall("memory_write_candidate", {
-            kind: "failure_pattern",
-            content: "Stream disconnect recovery should inspect current issue state before resuming",
-            confidence: "low"
-          }, { id: "memory-candidate" })
-        ], { stopReason: "toolUse" }),
         fauxAssistantMessage(JSON.stringify({
           confidence: "medium",
           decision: "resume_session",
@@ -104,18 +97,8 @@ describe("PI supervisor decision runtime", () => {
       });
 
       expect(result.valid).toBe(true);
-      expect(listPiActions(fixture.db, { status: "completed" }).map((action) => action.action_type))
-        .toContain("memory.write_candidate");
-      expect(listPiMemoryItems(fixture.db, { disabled: 1 })).toEqual([
-        expect.objectContaining({
-          disabled: 1,
-          kind: "failure_pattern",
-          scope: "project",
-          scope_id: "demo",
-          source_type: "pi.supervisor"
-        })
-      ]);
-      expect(listPiMemoryItems(fixture.db, { disabled: 0 })).toEqual([]);
+      expect(listPiActions(fixture.db).map((action) => action.action_type)).not.toContain("memory.remember");
+      expect(listPiMemoryItems(fixture.db)).toEqual([]);
     } finally {
       faux.unregister();
       fixture.db.close();

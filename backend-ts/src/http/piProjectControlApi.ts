@@ -201,7 +201,8 @@ function managerCyclePrompt(
     JSON.stringify(parseMcpPolicy(project.default_mcp_policy), null, 2),
     "Use role workflow tools for executor, verifier, reviewer, reporter proposals when needed; all role actions must go through action gate and audit.",
     "This project is managed by Supervisor. After reading the exact Work and confirming it is complete, authorized, dependency-ready, inside cwd/deadline policy, use work_control action=enqueue with an explicit stable intent idempotency_key. Do not create or enqueue guessed or cross-project Work.",
-    "When you find durable project/user/process observations, write disabled review candidates via memory_write_candidate; manager-cycle observations must never auto-enable memory.",
+    "Memory is reusable experience, never a status archive. Do not remember current Work/Run/Issue status, counts, queue emptiness, timestamps, manager-session counts, temporary commitments, or cycle summaries.",
+    "Only when an authoritative Handoff/Evidence/Run/Work record contains a reusable bug root cause plus its resolution or verification method, call memory_remember with kind=debugging_pattern or resolution, a stable memory_key, and that authoritative evidence_ref. Repeated observations must reuse the same memory_key.",
     `Do not exceed ${maxActions} action proposals in this cycle.`,
     "Stop after this single cycle and return a concise summary."
   ].join("\n");

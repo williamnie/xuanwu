@@ -46,7 +46,7 @@ describe("PI runtime tool registry adapter", () => {
         "read", "issue_list", "memory_search", "work_list", "run_read", "evidence_read", "handoff_read", URL_FETCH_TOOL_NAME
       ]));
       for (const name of [
-        "issue_create_proposal", "manual_context_intake", "memory_write_candidate",
+        "issue_create_proposal", "manual_context_intake", "memory_remember",
         "work_create", "work_update", "work_control", "run_control"
       ]) {
         expect(kit.readOnlyToolNames).not.toContain(name);

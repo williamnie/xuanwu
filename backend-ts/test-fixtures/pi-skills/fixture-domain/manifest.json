@@ -30,7 +30,6 @@
                 "issue.status_lookup",
                 "ask_user",
                 "watch_thread",
-                "memory.create",
                 "reminder.create",
                 "no_action"
               ]

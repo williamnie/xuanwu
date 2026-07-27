@@ -9,7 +9,6 @@ export const piMemoryApi = {
     method: 'POST',
     body: JSON.stringify(memory),
   }),
-  digest: (filter = {}) => request(`/api/pi/memory/digest${query(filter)}`),
   disable: (id) => request(`/api/pi/memory/${encodeURIComponent(id)}/disable`, {
     method: 'POST',
     body: JSON.stringify({}),
@@ -23,7 +22,7 @@ export const piMemoryApi = {
     method: 'POST',
     body: JSON.stringify({}),
   }),
-  promote: (id) => request(`/api/pi/memory/${encodeURIComponent(id)}/promote`, {
+  enable: (id) => request(`/api/pi/memory/${encodeURIComponent(id)}/enable`, {
     method: 'POST',
     body: JSON.stringify({}),
   }),

@@ -2,17 +2,12 @@ import { Type, type Static, type TSchema } from "@earendil-works/pi-ai";
 import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense.ts";
 import type { RunnerDatabase } from "../db/database.ts";
-import {
-  createPiMemoryItem,
-  listPiMemoryItems,
-  type PiMemoryItem,
-  type PiMemoryItemFilter
-} from "../db/repositories/pi.ts";
+import { listPiMemoryItems, rememberPiMemoryItem, type PiMemoryItem, type PiMemoryItemFilter } from "../db/repositories/pi.ts";
 import { executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
-import type { AppEvent, EventBus } from "../events/bus.ts";
-import { containsSensitiveMemoryContent, memoryRejectedResult } from "./memoryPolicy.ts";
+import type { EventBus } from "../events/bus.ts";
+import { containsSensitiveMemoryContent, retrievableMemoryContent, retrievableMemoryKind, reusableMemoryRejection } from "./memoryPolicy.ts";
 
-export const PI_MEMORY_TOOL_NAMES = ["memory_search", "memory_write_candidate"] as const;
+export const PI_MEMORY_TOOL_NAMES = ["memory_search", "memory_remember"] as const;
 
 type MemoryToolName = (typeof PI_MEMORY_TOOL_NAMES)[number];
 type MemoryContext = PiActionContext & { projectID?: string };
@@ -23,7 +18,6 @@ const optionalString = Type.Optional(Type.String());
 const requiredText = Type.String({ minLength: 1, pattern: "\\S" });
 
 const memorySearchParams = Type.Object({
-  include_candidates: Type.Optional(Type.Boolean()),
   kind: optionalString,
   query: optionalString,
   scope: optionalString,
@@ -31,10 +25,19 @@ const memorySearchParams = Type.Object({
 }, objectOptions);
 
 const memoryWriteCandidateParams = Type.Object({
-  activate: Type.Optional(Type.Boolean()),
   confidence: optionalString,
   content: requiredText,
-  kind: requiredText,
+  evidence_ref: optionalString,
+  kind: Type.Union([
+    Type.Literal("user_preference"),
+    Type.Literal("project_preference"),
+    Type.Literal("decision"),
+    Type.Literal("debugging_pattern"),
+    Type.Literal("resolution"),
+    Type.Literal("workflow"),
+    Type.Literal("constraint")
+  ]),
+  memory_key: Type.String({ minLength: 3, maxLength: 120, pattern: "^[a-z0-9][a-z0-9._:/-]+$" }),
   user_authorized: Type.Optional(Type.Boolean()),
   scope: optionalString,
   scope_id: optionalString
@@ -42,20 +45,20 @@ const memoryWriteCandidateParams = Type.Object({
 
 export function createPiMemoryTools(db: RunnerDatabase, context: MemoryContext = {}): ToolDefinition[] {
   return [
-    memoryTool("memory_search", "Memory Search", "Search active Supervisor memory items; candidates are opt-in.",
+    memoryTool("memory_search", "Memory Search", "Search active reusable Supervisor memory. Current Work, Run, and Issue status is never memory.",
       memorySearchParams, (params) => executeSafePiAction(db, { ...context, source: context.source || "pi_memory_tool" }, {
         actionType: "memory.search",
         payload: params,
         projectID: defaultScopeID(cleanString(params.scope) || "project", context),
         execute: () => searchMemory(db, context, params)
       })),
-    memoryTool("memory_write_candidate", "Memory Write Candidate",
-      "Write structured Supervisor memory. Entries stay disabled candidates unless PI explicitly requests activate=true with user_authorized=true for a low-risk preference in direct chat; content wording is never regex-classified.",
+    memoryTool("memory_remember", "Remember Reusable Experience",
+      "Remember an explicit user preference/decision/workflow or an evidence-backed reusable bug root-cause and resolution. Never store current status, counts, queues, temporary commitments, or manager-cycle summaries. Stable memory_key updates an existing memory instead of appending duplicates.",
       memoryWriteCandidateParams, (params) => executeSafePiAction(db, { ...context, source: context.source || "pi_memory_tool" }, {
-        actionType: "memory.write_candidate",
+        actionType: "memory.remember",
         payload: params,
         projectID: defaultScopeID(cleanString(params.scope) || "project", context),
-        execute: () => writeMemoryCandidate(db, context, params)
+        execute: () => rememberMemory(db, context, params)
       }))
   ];
 }
@@ -72,55 +75,44 @@ function searchMemory(
   return { items: filterMemoryItems(items, input).map(summaryItem) };
 }
 
-function writeMemoryCandidate(
+function rememberMemory(
   db: RunnerDatabase,
   context: MemoryContext,
   input: Static<typeof memoryWriteCandidateParams>
 ): PiMemoryItem | { reason: string; rejected: true } {
-  const rejected = memoryRejectedResult(input.content);
-  if (rejected) return rejected;
   const scope = memoryWriteScope(context, input);
-  const disabled = activateAuthorizedPreference(context, input, scope) ? 0 : 1;
-  const item = createPiMemoryItem(db, {
+  const reason = reusableMemoryRejection({
+    confidence: input.confidence,
+    content: input.content,
+    evidenceRef: input.evidence_ref,
+    kind: input.kind,
+    memoryKey: input.memory_key,
+    scope,
+    source: context.source,
+    userAuthorized: input.user_authorized
+  });
+  if (reason) return { rejected: true, reason };
+  const citation = citationFromEvidence(input.evidence_ref);
+  return rememberPiMemoryItem(db, {
+    ...citation,
     id: crypto.randomUUID(),
     scope,
     scope_id: cleanString(input.scope_id) || defaultScopeID(scope, context),
     kind: input.kind,
     content: input.content,
+    memory_key: input.memory_key,
+    layer: "long_term",
     source_type: memorySourceType(context.source),
     source_id: cleanString(context.conversationID),
     confidence: cleanString(input.confidence) || "medium",
-    disabled
+    disabled: 0
   });
-  if (item.disabled === 1) publishMemoryCandidate(context.bus, item);
-  return item;
 }
 
 function memoryWriteScope(context: MemoryContext, input: Static<typeof memoryWriteCandidateParams>): string {
   const requested = cleanString(input.scope);
   if (requested !== "") return requested;
   return "project";
-}
-
-function activateAuthorizedPreference(
-  context: MemoryContext,
-  input: Static<typeof memoryWriteCandidateParams>,
-  scope: string
-): boolean {
-  if (cleanString(context.conversationID) === "") return false;
-  if (!normalChatSource(context.source)) return false;
-  if (!["global", "conversation"].includes(scope)) return false;
-  if (!lowRiskPreferenceKind(input.kind)) return false;
-  return input.activate === true && input.user_authorized === true;
-}
-
-function normalChatSource(source: unknown): boolean {
-  const text = cleanString(source);
-  return text === "feishu_runner_chat" || text === "runner_chat";
-}
-
-function lowRiskPreferenceKind(kind: string): boolean {
-  return ["preference", "user_preference", "personal_preference"].includes(cleanString(kind).toLowerCase());
 }
 
 function memoryTool<TParams extends TSchema>(
@@ -150,7 +142,8 @@ function filterByQuery(items: PiMemoryItem[], query: unknown): PiMemoryItem[] {
 
 function filterMemoryItems(items: PiMemoryItem[], input: Static<typeof memorySearchParams>): PiMemoryItem[] {
   const kind = cleanString(input.kind);
-  const visible = items.filter((item) => !containsSensitiveMemoryContent(item.content));
+  const visible = items.filter((item) => retrievableMemoryKind(item.kind) &&
+    retrievableMemoryContent(item.kind, item.content) && !containsSensitiveMemoryContent(item.content));
   const typed = kind === "" ? visible : visible.filter((item) => item.kind === kind);
   return filterByQuery(typed, input.query);
 }
@@ -161,7 +154,7 @@ function searchableScopes(
   input: Static<typeof memorySearchParams>,
   includeGlobalFallback: boolean
 ): PiMemoryItemFilter[] {
-  const disabled = input.include_candidates ? undefined : 0;
+  const disabled = 0;
   const scopeId = cleanString(input.scope_id);
   if (scope !== "project" || scopeId !== "" || !includeGlobalFallback) {
     return [{
@@ -193,17 +186,14 @@ function memorySourceType(source: unknown): string {
   return "pi.conversation";
 }
 
-function publishMemoryCandidate(bus: EventBus | undefined, item: PiMemoryItem): void {
-  bus?.publish(memoryCandidateEvent(item));
-}
-
-function memoryCandidateEvent(item: PiMemoryItem): AppEvent {
+function citationFromEvidence(value: unknown) {
+  const reference = cleanString(value);
+  if (reference === "") return {};
+  const separator = reference.indexOf(":");
   return {
-    type: "pi.memory_candidate",
-    conversationId: item.source_id || undefined,
-    projectId: item.scope === "project" ? item.scope_id : undefined,
-    payload: JSON.stringify({ id: item.id, kind: item.kind, scope: item.scope, scope_id: item.scope_id }),
-    created_at: item.updated_at
+    citation_type: separator > 0 ? reference.slice(0, separator) : "evidence",
+    citation_id: separator > 0 ? reference.slice(separator + 1) : reference,
+    citation_label: "authoritative reusable-experience evidence"
   };
 }
 

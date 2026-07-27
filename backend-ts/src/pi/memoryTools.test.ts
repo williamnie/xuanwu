@@ -14,63 +14,67 @@ import {
 import { createPiMemoryTools, PI_MEMORY_TOOL_NAMES } from "./memoryTools.ts";
 
 describe("PI memory tools", () => {
-  test("defines search/write_candidate tools and writes candidates disabled", async () => {
+  test("remembers an explicit preference as active memory and reuses its stable key", async () => {
     const fixture = await openFixture();
     try {
       const tools = createPiMemoryTools(fixture.db, {
         conversationID: "conv-1",
-        projectID: "demo"
+        projectID: "demo",
+        source: "runner_chat"
       });
       const search = toolByName(tools, "memory_search");
-      const writeCandidate = toolByName(tools, "memory_write_candidate");
+      const remember = toolByName(tools, "memory_remember");
 
       expect(tools.map((tool) => tool.name).sort()).toEqual([...PI_MEMORY_TOOL_NAMES].sort());
       expect(validateArgs(search, { query: "minimal", scope: "project" })).toEqual({
         query: "minimal",
         scope: "project"
       });
-      expect(validateArgs(writeCandidate, { kind: "preference", content: "Prefer small patches" }))
-        .toMatchObject({ kind: "preference", content: "Prefer small patches" });
-      expect(() => validateArgs(writeCandidate, { kind: "preference", content: " " }))
+      expect(validateArgs(remember, {
+        kind: "user_preference", content: "Prefer small patches", memory_key: "user.patch-size"
+      })).toMatchObject({ kind: "user_preference", memory_key: "user.patch-size" });
+      expect(() => validateArgs(remember, { kind: "user_preference", content: " ", memory_key: "user.patch-size" }))
         .toThrow(/Validation failed/);
+      expect(() => validateArgs(search, { include_candidates: true })).toThrow(/Validation failed/);
 
-      const candidate = await writeCandidate.execute("tool-1", {
-        kind: "preference",
+      const remembered = await remember.execute("tool-1", {
+        kind: "user_preference",
         content: "Prefer small patches",
-        confidence: "high"
+        confidence: "high",
+        memory_key: "user.patch-size",
+        scope: "global",
+        user_authorized: true
       }, undefined, undefined, {} as never);
       const activeSearch = await search.execute("tool-2", {
-        query: "patches",
-        scope: "project"
+        query: "patches"
       }, undefined, undefined, {} as never);
-      const candidateSearch = await search.execute("tool-3", {
-        include_candidates: true,
-        query: "patches",
-        scope: "project"
-      }, undefined, undefined, {} as never);
+      const secondSearch = await search.execute("tool-3", { query: "patches" }, undefined, undefined, {} as never);
 
-      expect(candidate.details).toMatchObject({
-        disabled: 1,
-        kind: "preference",
-        scope: "project",
-        scope_id: "demo",
+      expect(remembered.details).toMatchObject({
+        disabled: 0,
+        kind: "user_preference",
+        memory_key: "user.patch-size",
+        occurrence_count: 1,
+        scope: "global",
+        scope_id: "runner",
         source_id: "conv-1",
         source_type: "pi.conversation"
       });
-      const candidateDetails = candidate.details as { id: string };
-      expect(getPiMemoryItem(fixture.db, String(candidateDetails.id))).toMatchObject({ disabled: 1 });
-      expect((activeSearch.details as { items: unknown[] }).items).toEqual([]);
-      expect((candidateSearch.details as { items: Array<{ id: string }> }).items.map((item) => item.id))
-        .toEqual([String(candidateDetails.id)]);
-      expect(listPiMemoryItems(fixture.db, { disabled: 0 })).toEqual([]);
+      const rememberedDetails = remembered.details as { id: string };
+      expect(getPiMemoryItem(fixture.db, String(rememberedDetails.id))).toMatchObject({ disabled: 0 });
+      expect((activeSearch.details as { items: Array<{ id: string }> }).items.map((item) => item.id))
+        .toEqual([String(rememberedDetails.id)]);
+      expect((secondSearch.details as { items: Array<{ id: string }> }).items.map((item) => item.id))
+        .toEqual([String(rememberedDetails.id)]);
+      expect(listPiMemoryItems(fixture.db, { disabled: 1 })).toEqual([]);
       const memorySearchActions = listPiActions(fixture.db).filter((item) => item.action_type === "memory.search");
       expect(memorySearchActions).toHaveLength(2);
       expect(memorySearchActions.every((item) => item.status === "completed")).toBe(true);
-      const action = listPiActions(fixture.db).find((item) => item.action_type === "memory.write_candidate");
+      const action = listPiActions(fixture.db).find((item) => item.action_type === "memory.remember");
       expect(action).toMatchObject({
         conversation_id: "conv-1",
         gate_decision: "execute",
-        project_id: "demo",
+        project_id: "runner",
         status: "completed"
       });
       expect(listPiActionEvents(fixture.db, { actionId: action?.id ?? "" }).map((event) => event.event_type)).toEqual([
@@ -89,13 +93,16 @@ describe("PI memory tools", () => {
     try {
       const writeCandidate = toolByName(createPiMemoryTools(fixture.db, {
         conversationID: "conv-secret",
-        projectID: "demo"
-      }), "memory_write_candidate");
+        projectID: "demo",
+        source: "runner_chat"
+      }), "memory_remember");
 
       const result = await writeCandidate.execute("tool-secret", {
-        kind: "provider_runtime",
+        kind: "constraint",
         content: "CODEX_RUNNER_AUTH_TOKEN=fixture-secret",
-        confidence: "high"
+        confidence: "high",
+        memory_key: "project.secret",
+        user_authorized: true
       }, undefined, undefined, {} as never);
 
       expect(result.details).toEqual({
@@ -115,12 +122,12 @@ describe("PI memory tools", () => {
         conversationID: "conv-authorized",
         projectID: "demo",
         source: "runner_chat"
-      }), "memory_write_candidate");
+      }), "memory_remember");
 
       const result = await writeCandidate.execute("tool-authorized", {
-        activate: true,
         content: "Zed",
-        kind: "preference",
+        kind: "user_preference",
+        memory_key: "user.display-name",
         scope: "global",
         user_authorized: true
       }, undefined, undefined, {} as never);
@@ -128,9 +135,57 @@ describe("PI memory tools", () => {
       expect(result.details).toMatchObject({
         content: "Zed",
         disabled: 0,
-        kind: "preference",
+        kind: "user_preference",
         scope: "global"
       });
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("rejects status snapshots and deduplicates evidence-backed manager experience", async () => {
+    const fixture = await openFixture();
+    try {
+      const remember = toolByName(createPiMemoryTools(fixture.db, {
+        conversationID: "manager-cycle-1",
+        projectID: "demo",
+        source: "pi_manager_cycle"
+      }), "memory_remember");
+
+      const rejected = await remember.execute("tool-status", {
+        confidence: "high",
+        content: "当前 Issue #785 failed，等待人工处理。",
+        evidence_ref: "run:785",
+        kind: "resolution",
+        memory_key: "bug.785.resolution",
+        scope: "project"
+      }, undefined, undefined, {} as never);
+      expect(rejected.details).toEqual({
+        rejected: true,
+        reason: "current Work/Run/Issue status snapshots are not memory"
+      });
+
+      const input = {
+        confidence: "high",
+        content: "根因是 recovery-only Work 被错误建成 success-only dependency；修复时保留失败 provenance，并验证 current-Run Evidence 与 Handoff。",
+        evidence_ref: "handoff:issue-809",
+        kind: "resolution" as const,
+        memory_key: "runner.recovery-only-dependency",
+        scope: "project"
+      };
+      const first = await remember.execute("tool-resolution-1", input, undefined, undefined, {} as never);
+      const second = await remember.execute("tool-resolution-2", {
+        ...input,
+        content: `${input.content} 复验时还要查询实时 Work 状态。`
+      }, undefined, undefined, {} as never);
+
+      expect(first.details).toMatchObject({ disabled: 0, occurrence_count: 1 });
+      expect(second.details).toMatchObject({
+        disabled: 0,
+        memory_key: "runner.recovery-only-dependency",
+        occurrence_count: 2
+      });
+      expect(listPiMemoryItems(fixture.db)).toHaveLength(1);
     } finally {
       await fixture.close();
     }
@@ -156,6 +211,10 @@ describe("PI memory tools", () => {
         query: "fixture-secret",
         scope: "project"
       }, undefined, undefined, {} as never);
+      const staleStatus = await search.execute("tool-stale-status", {
+        query: "785",
+        scope: "project"
+      }, undefined, undefined, {} as never);
 
       expect(itemIds(allRelevant.details)).toEqual(expect.arrayContaining([
         "global-user-preference",
@@ -164,6 +223,7 @@ describe("PI memory tools", () => {
       expect(itemIds(allRelevant.details)).not.toContain("other-project-memory");
       expect(itemIds(projectPolicy.details)).toEqual(["project-policy-memory"]);
       expect(itemIds(sensitive.details)).toEqual([]);
+      expect(itemIds(staleStatus.details)).toEqual([]);
       expect(JSON.stringify(sensitive.details)).not.toContain("fixture-secret");
     } finally {
       await fixture.close();
@@ -216,6 +276,13 @@ function seedProjectPolicyFixture(db: RunnerDatabase): void {
   });
   seedMemory(db, policyMemory("other-project-memory", "other", "Prefer broad refactors"));
   seedMemory(db, policyMemory("sensitive-memory", "demo", "CODEX_RUNNER_AUTH_TOKEN=fixture-secret"));
+  seedMemory(db, {
+    id: "stale-issue-status",
+    scope: "project",
+    scope_id: "demo",
+    kind: "decision",
+    content: "当前 Issue #785 failed，等待人工处理。"
+  });
 }
 
 function policyMemory(id: string, scopeID: string, content: string) {

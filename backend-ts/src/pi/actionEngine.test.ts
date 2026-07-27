@@ -171,7 +171,7 @@ describe("PI action engine risk classifier", () => {
       }, policy)).toMatchObject({ decision: "execute" });
     }
 
-    for (const actionType of ["memory.write_candidate", "skill.intent_audit"]) {
+    for (const actionType of ["memory.remember", "skill.intent_audit"]) {
       expect(gatePiActionEnvelope({
         action_type: actionType,
         payload: { query: "status" },

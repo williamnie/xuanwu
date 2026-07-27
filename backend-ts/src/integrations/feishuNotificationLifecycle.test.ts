@@ -17,8 +17,7 @@ import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { runProjectLoopOnce } from "../runner/projectLoop.ts";
 import {
   attachFeishuNotificationObservers,
-  queueFeishuIssueStatusNotification,
-  queueFeishuMemoryCandidateNotification
+  queueFeishuIssueStatusNotification
 } from "./feishuNotifications.ts";
 
 const tempRoots: string[] = [];
@@ -75,29 +74,6 @@ describe("Feishu lifecycle notifications", () => {
       expect(content).not.toContain("fixture-secret");
       expect(content).not.toContain("/Users/example");
       expect(content).not.toContain("at run");
-    } finally {
-      db.close();
-    }
-  });
-
-  test("queues one memory candidate notice with approve and reject commands", async () => {
-    const db = await fixtureDatabase();
-    try {
-      linkedFeishuIssue(db, { conversationID: "feishu-chat-oc_group-20260614" });
-      createCandidate(db, "12345678-2222-4222-8222-123456789abc", "状态汇报使用简短中文 bullet");
-
-      const event = memoryCandidateEvent("12345678-2222-4222-8222-123456789abc");
-      const first = queueFeishuMemoryCandidateNotification(db, event);
-      const second = queueFeishuMemoryCandidateNotification(db, event);
-      await flushAgentCommunicationTestMessages(db);
-      const content = listSyncOutbox(db, { source: "feishu" })[0]?.content ?? "";
-
-      expect(first).toMatchObject({ queued: true, reason: "queued" });
-      expect(second).toMatchObject({ queued: false, reason: "duplicate" });
-      expect(content).toContain("memory candidate");
-      expect(content).toContain("/memory approve 12345678");
-      expect(content).toContain("/memory reject 12345678");
-      expect(content).toContain("状态汇报使用简短中文 bullet");
     } finally {
       db.close();
     }
@@ -202,7 +178,7 @@ describe("Feishu lifecycle notifications", () => {
     }
   });
 
-  test("observer queues memory candidate notifications", async () => {
+  test("observer ignores retired memory candidate notifications", async () => {
     const db = await fixtureDatabase();
     const bus = new EventBus();
     const detach = attachFeishuNotificationObservers({ bus, database: db });
@@ -213,9 +189,7 @@ describe("Feishu lifecycle notifications", () => {
 
       await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
-      expect(outbox).toHaveLength(1);
-      expect(outbox[0]).toMatchObject({ target_chat_id: "oc_group" });
-      expect(outbox[0]?.content).toContain("/memory approve 22345678");
+      expect(outbox).toHaveLength(0);
     } finally {
       detach();
       db.close();

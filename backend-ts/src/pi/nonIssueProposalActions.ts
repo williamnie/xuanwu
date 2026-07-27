@@ -1,12 +1,12 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
-  createPiMemoryItem,
+  rememberPiMemoryItem,
   type PiAction
 } from "../db/repositories/pi.ts";
 import { createAutomation } from "../db/repositories/automations.ts";
 import { createAutomationWatch } from "../db/repositories/automationWatches.ts";
 import { createIssueCompletionWatchAction } from "./issueCompletionWatchActions.ts";
-import { assertMemoryContentSafe } from "./memoryPolicy.ts";
+import { assertMemoryContentSafe, reusableMemoryRejection } from "./memoryPolicy.ts";
 import { INVESTIGATE_WORKFLOW_REF } from "../workflows/investigate.ts";
 
 type JsonObject = Record<string, unknown>;
@@ -41,17 +41,33 @@ export function noActionResult(action: PiAction, payload: JsonObject): JsonObjec
 export function createMemoryFromAction(db: RunnerDatabase, action: PiAction, payload: JsonObject): JsonObject {
   const content = firstString(payload.content, payload.summary, payload.title);
   assertMemoryContentSafe(content);
-  const item = createPiMemoryItem(db, {
+  const kind = firstString(payload.kind, payload.memory_kind);
+  const memoryKey = cleanString(payload.memory_key);
+  const evidenceRef = firstString(payload.evidence_ref, stringList(payload.evidence_refs)[0]);
+  const rejection = reusableMemoryRejection({
+    confidence: cleanString(payload.confidence) || confidenceFromRisk(action.risk_level),
+    content,
+    evidenceRef,
+    kind,
+    memoryKey,
+    scope: cleanString(payload.scope) || "inbox",
+    source: "approved_memory_action",
+    userAuthorized: cleanString(action.approved_by) !== "" ||
+      (action.source === "action_proposal" && cleanString(payload.approved_proposal_by) !== "")
+  });
+  if (rejection) throw new Error(rejection);
+  const item = rememberPiMemoryItem(db, {
     citation_id: cleanString(payload.citation_id) || cleanString(payload.proposal_id),
     citation_label: cleanString(payload.citation_label) || "Supervisor action proposal",
     citation_type: cleanString(payload.citation_type) || "action_proposal",
     citation_url: cleanString(payload.citation_url),
     confidence: cleanString(payload.confidence) || confidenceFromRisk(action.risk_level),
     content,
-    disabled: memoryDisabled(payload),
+    disabled: 0,
     id: cleanString(payload.id) || crypto.randomUUID(),
-    kind: firstString(payload.kind, payload.memory_kind, "note"),
-    layer: cleanString(payload.layer) || "working",
+    kind,
+    layer: cleanString(payload.layer) || "long_term",
+    memory_key: memoryKey,
     memory_type: cleanString(payload.memory_type),
     pinned: flag(payload.pinned),
     scope: cleanString(payload.scope) || "inbox",
@@ -60,10 +76,10 @@ export function createMemoryFromAction(db: RunnerDatabase, action: PiAction, pay
     source_type: cleanString(payload.source_type) || "action_proposal"
   });
   return {
-    candidate: item.disabled === 1,
+    candidate: false,
     memory: memorySummary(item),
     memory_id: item.id,
-    status: item.disabled === 1 ? "candidate" : "active"
+    status: "active"
   };
 }
 
@@ -189,12 +205,6 @@ function memoryScopeID(action: PiAction, payload: JsonObject): string {
     action.conversation_id,
     "runner"
   );
-}
-
-function memoryDisabled(payload: JsonObject): number {
-  if (payload.disabled === 0 || payload.disabled === false) return 0;
-  if (payload.active === true || cleanString(payload.status) === "active") return 0;
-  return 1;
 }
 
 function memorySummary(item: { content: string; disabled: number; id: string; kind: string; scope: string; scope_id: string }) {

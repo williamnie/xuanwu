@@ -417,7 +417,7 @@ function seedMemory(db: RunnerDatabase, inboxItemID: number): void {
     createPiMemoryItem(db, {
       content: item[3],
       id: item[0],
-      kind: "fixture_memory",
+      kind: "workflow",
       scope: item[1],
       scope_id: item[2]
     });

@@ -103,10 +103,13 @@ describe("Bun PI runtime v1 smoke", () => {
             issue_id: 1,
             next_run_at: "2999-01-01T00:00:00.000Z"
           }, { id: "schedule-enqueue" }),
-          fauxToolCall("memory_write_candidate", {
-            kind: "preference",
-            content: "Prefer PI memory candidates before long-term memory"
-          }, { id: "memory-candidate" })
+          fauxToolCall("memory_remember", {
+            kind: "project_preference",
+            content: "用户明确要求：优先保存可复用经验，不保存运行状态。",
+            memory_key: "project.memory-content-policy",
+            scope: "project",
+            user_authorized: true
+          }, { id: "memory-remember" })
         ], { stopReason: "toolUse" }),
         fauxAssistantMessage("smoke done")
       ]);
@@ -120,7 +123,7 @@ describe("Bun PI runtime v1 smoke", () => {
         project_id: "demo"
       });
       const message = await post(router, "/api/pi/conversations/conv-smoke/messages", {
-        prompt: "Create one action and one memory candidate"
+        prompt: "Create one action and remember the explicit reusable preference"
       });
 
       expect(created.status).toBe(201);
@@ -142,17 +145,18 @@ describe("Bun PI runtime v1 smoke", () => {
       });
       expect(listPiActions(database, { status: "pending" })).toEqual([]);
       expect(listPiActions(database, { status: "completed" }).map((action) => action.action_type).sort())
-        .toEqual(["issue.create", "issue.schedule_enqueue", "memory.write_candidate", "project.list"].sort());
-      const candidates = listPiMemoryItems(database, { disabled: 1 });
-      expect(candidates).toHaveLength(1);
-      expect(candidates[0]).toMatchObject({
-        kind: "preference",
+        .toEqual(["issue.create", "issue.schedule_enqueue", "memory.remember", "project.list"].sort());
+      const memories = listPiMemoryItems(database, { disabled: 0 });
+      expect(memories).toHaveLength(1);
+      expect(memories[0]).toMatchObject({
+        kind: "project_preference",
+        memory_key: "project.memory-content-policy",
         source_id: "conv-smoke",
         source_type: "pi.conversation"
       });
-      expect(listPiMemoryItems(database, { disabled: 0 })).toEqual([]);
-      expect(getPiMemoryItem(database, candidates[0]?.id ?? "")?.disabled).toBe(1);
-      expect(await collectEventTypes(events, 80)).toContain("pi.memory_candidate");
+      expect(listPiMemoryItems(database, { disabled: 1 })).toEqual([]);
+      expect(getPiMemoryItem(database, memories[0]?.id ?? "")?.disabled).toBe(0);
+      expect(await collectEventTypes(events, 80)).not.toContain("pi.memory_candidate");
       expect(faux.state.callCount).toBe(2);
     } finally {
       events.close();
@@ -284,7 +288,7 @@ describe("Bun PI runtime v1 smoke", () => {
         confidence: "high",
         content: "Issue-specific PI context",
         id: "issue-memory",
-        kind: "issue_memory",
+        kind: "decision",
         scope: "issue",
         scope_id: String(issue.id),
         source_id: "turn-1",

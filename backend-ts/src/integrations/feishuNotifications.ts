@@ -3,7 +3,6 @@ import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { listAgentSessions } from "../db/repositories/agentSessions.ts";
 import {
   getPiAction,
-  getPiMemoryItem,
   getPiApprovalRequest,
   createPiNotificationIntent,
   listPiActions,
@@ -27,7 +26,6 @@ import { routeNotification } from "../notifications/unifiedNotificationPipeline.
 import { redactSensitiveText } from "../util/redact.ts";
 import {
   formatApprovalNotification,
-  formatMemoryCandidateNotification,
   formatPiActionPendingNotification,
   formatPiNeedsUserNotification
 } from "./feishuNotificationFormatters.ts";
@@ -43,7 +41,6 @@ import {
 } from "./feishuLifecycleNotifications.ts";
 
 const APPROVAL_NOTIFY_TYPE = "feishu_approval_notification";
-const MEMORY_NOTIFY_TYPE = "feishu_memory_candidate_notification";
 const PI_ACTION_NOTIFY_TYPE = "feishu_pi_action_pending_notification";
 const PI_NEEDS_USER_NOTIFY_TYPE = "feishu_pi_needs_user_notification";
 
@@ -75,10 +72,6 @@ export function attachFeishuNotificationObservers(input: {
           config: input.config,
           conversationId: event.conversationId
         });
-        dispatchIfQueued(input, result);
-      }
-      if (event.type === "pi.memory_candidate") {
-        const result = queueFeishuMemoryCandidateNotification(input.database, event);
         dispatchIfQueued(input, result);
       }
       if (event.type === "pi.action_pending") {
@@ -162,34 +155,6 @@ export function queueFeishuPiNeedsUserNotification(
     sourceEventID: notifyID,
     sourceEventType: event.type,
     summary: `issue #${issueID || "unlinked"} needs user input`
-  })[0];
-  return queueResult(result);
-}
-
-export function queueFeishuMemoryCandidateNotification(db: RunnerDatabase, event: AppEvent): QueueResult {
-  const payload = parseObject(event.payload);
-  const itemID = safeText(payload.id);
-  if (itemID === "") return { queued: false, reason: "missing_memory_id" };
-  const item = getPiMemoryItem(db, itemID);
-  if (!item || item.disabled !== 1) return { queued: false, reason: "memory_candidate_not_pending" };
-  const target = feishuTargetForConversation(db, safeText(event.conversationId) || safeText(item.source_id));
-  if (!target) return { queued: false, reason: "missing_feishu_target" };
-  const projectID = safeText(event.projectId) || itemProjectID(item);
-  const result = routeNotification(db, {
-    content: formatMemoryCandidateNotification(item),
-    conversationID: target.threadID || target.chatID,
-    idempotencyKey: `memory_candidate:${item.id}`,
-    kind: "memory_candidate",
-    notificationID: item.id,
-    notificationType: MEMORY_NOTIFY_TYPE,
-    payload: { memory_id: item.id },
-    projectID,
-    requiresUser: true,
-    routes: [feishuRoute(target)],
-    severity: "actionable",
-    sourceEventID: item.id,
-    sourceEventType: event.type,
-    summary: `memory candidate ${item.id}`
   })[0];
   return queueResult(result);
 }
@@ -533,8 +498,4 @@ function parseObject(value: unknown): Record<string, unknown> {
 
 function safeText(value: unknown): string {
   return typeof value === "string" ? redactSensitiveText(value).trim() : "";
-}
-
-function itemProjectID(item: { scope: string; scope_id: string }): string {
-  return item.scope === "project" ? safeText(item.scope_id) : "";
 }

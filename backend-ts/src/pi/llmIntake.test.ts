@@ -38,7 +38,7 @@ describe("LLM intake runs", () => {
       createPiMemoryItem(db, {
         content: "Fixture source maps login screenshots to demo project candidates.",
         id: "fixture-source-memory",
-        kind: "source_context",
+        kind: "source_project_hint",
         scope: "source",
         scope_id: "fixture-im"
       });

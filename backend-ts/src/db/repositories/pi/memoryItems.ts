@@ -20,6 +20,7 @@ export type PiMemoryItem = {
   id: string; scope: string; scope_id: string; kind: string; content: string;
   source_type: string; source_id: string; confidence: string; pinned: number;
   disabled: number; memory_type: PiMemoryType; layer: PiMemoryLayer;
+  memory_key: string; occurrence_count: number; last_seen_at: string;
   citation_type: string; citation_id: string; citation_label: string; citation_url: string;
   created_at: string; updated_at: string;
 };
@@ -41,23 +42,49 @@ export const PI_MEMORY_LAYERS = ["ephemeral", "working", "long_term"] as const;
 const TABLE = "pi_memory_items";
 const COLUMNS = `id, scope, scope_id, kind, content, source_type, source_id,
   confidence, pinned, disabled, memory_type, layer, citation_type, citation_id,
-  citation_label, citation_url, created_at, updated_at`;
+  citation_label, citation_url, memory_key, occurrence_count, last_seen_at, created_at, updated_at`;
 const UPDATE_COLUMNS = [
   "scope", "scope_id", "kind", "content", "source_type", "source_id",
   "confidence", "pinned", "disabled", "memory_type", "layer", "citation_type",
-  "citation_id", "citation_label", "citation_url"
+  "citation_id", "citation_label", "citation_url", "memory_key", "occurrence_count", "last_seen_at"
 ] as const;
 
 export function createPiMemoryItem(db: RunnerDatabase, input: PiMemoryItemInput): PiMemoryItem {
   const record = normalizeCreate(input);
   requireCreateFields(record, ["id", "scope", "kind", "content"]);
   const timestamp = now();
-  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [record.id, record.scope, record.scope_id, record.kind, record.content, record.source_type,
       record.source_id, record.confidence, record.pinned, record.disabled, record.memory_type,
       record.layer, record.citation_type, record.citation_id, record.citation_label,
-      record.citation_url, timestamp, timestamp]);
+      record.citation_url, record.memory_key, record.occurrence_count,
+      record.last_seen_at || timestamp, timestamp, timestamp]);
   return mustGetPiMemoryItem(db, record.id);
+}
+
+export function rememberPiMemoryItem(db: RunnerDatabase, input: PiMemoryItemInput): PiMemoryItem {
+  const scope = cleanString(input.scope);
+  const scopeID = cleanString(input.scope_id);
+  const memoryKey = cleanString(input.memory_key);
+  requireCreateFields({ scope, memory_key: memoryKey }, ["scope", "memory_key"]);
+  const write = db.transaction((record: PiMemoryItemInput) => {
+    const current = getPiMemoryItemByKey(db, scope, scopeID, memoryKey);
+    if (!current) return createPiMemoryItem(db, {
+      ...record,
+      disabled: 0,
+      last_seen_at: now(),
+      memory_key: memoryKey,
+      occurrence_count: 1
+    });
+    return updatePiMemoryItem(db, current.id, {
+      ...record,
+      disabled: 0,
+      last_seen_at: now(),
+      memory_key: memoryKey,
+      occurrence_count: current.occurrence_count + 1
+    });
+  });
+  return write.immediate(input);
 }
 
 export function updatePiMemoryItem(db: RunnerDatabase, id: string, input: PiMemoryItemInput): PiMemoryItem {
@@ -77,6 +104,18 @@ export function listPiMemoryItems(db: RunnerDatabase, filter: PiMemoryItemFilter
 
 export function getPiMemoryItem(db: RunnerDatabase, id: string): PiMemoryItem | null {
   return getByID(db, TABLE, COLUMNS, id, mapPiMemoryItem);
+}
+
+export function getPiMemoryItemByKey(
+  db: RunnerDatabase,
+  scope: string,
+  scopeID: string,
+  memoryKey: string
+): PiMemoryItem | null {
+  const row = db.sqlite.query<Record<string, unknown>, [string, string, string]>(
+    `select ${COLUMNS} from ${TABLE} where scope=? and scope_id=? and memory_key=? limit 1`
+  ).get(cleanString(scope), cleanString(scopeID), cleanString(memoryKey));
+  return row ? mapPiMemoryItem(row) : null;
 }
 
 export function deletePiMemoryItem(db: RunnerDatabase, id: string): boolean {
@@ -103,6 +142,9 @@ function normalizeCreate(input: PiMemoryItemInput): PiMemoryItem {
     citation_id: cleanString(input.citation_id),
     citation_label: cleanString(input.citation_label),
     citation_url: cleanString(input.citation_url),
+    memory_key: cleanString(input.memory_key) || cleanString(input.id),
+    occurrence_count: positiveInteger(input.occurrence_count, 1),
+    last_seen_at: cleanString(input.last_seen_at),
     created_at: "", updated_at: ""
   };
 }
@@ -114,12 +156,17 @@ function normalizeUpdate(input: PiMemoryItemInput): PiMemoryItemInput {
   for (const field of ["citation_type", "citation_id", "citation_label", "citation_url"] as const) {
     if (hasPatchValue(input, field)) output[field] = cleanString(input[field]);
   }
+  if (hasPatchValue(input, "memory_key")) output.memory_key = cleanString(input.memory_key);
+  if (hasPatchValue(input, "occurrence_count")) output.occurrence_count = positiveInteger(input.occurrence_count, 1);
+  if (hasPatchValue(input, "last_seen_at")) output.last_seen_at = cleanString(input.last_seen_at);
   return output;
 }
 
 function mapPiMemoryItem(row: Record<string, unknown>): PiMemoryItem {
+  const id = requiredString(row.id, "pi_memory_items.id");
+  const updatedAt = requiredString(row.updated_at, "pi_memory_items.updated_at");
   return {
-    id: requiredString(row.id, "pi_memory_items.id"),
+    id,
     scope: requiredString(row.scope, "pi_memory_items.scope"),
     scope_id: optionalString(row.scope_id), kind: requiredString(row.kind, "pi_memory_items.kind"),
     content: requiredString(row.content, "pi_memory_items.content"),
@@ -133,8 +180,11 @@ function mapPiMemoryItem(row: Record<string, unknown>): PiMemoryItem {
     citation_id: optionalString(row.citation_id),
     citation_label: optionalString(row.citation_label),
     citation_url: optionalString(row.citation_url),
+    memory_key: optionalString(row.memory_key) || id,
+    occurrence_count: integerValue(row.occurrence_count, "pi_memory_items.occurrence_count"),
+    last_seen_at: optionalString(row.last_seen_at) || updatedAt,
     created_at: requiredString(row.created_at, "pi_memory_items.created_at"),
-    updated_at: requiredString(row.updated_at, "pi_memory_items.updated_at")
+    updated_at: updatedAt
   };
 }
 
@@ -166,4 +216,8 @@ function memoryTypeForScope(scope: string): PiMemoryType {
   if (scope === "source") return "source";
   if (scope === "skill") return "skill";
   return "user";
+}
+
+function positiveInteger(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : fallback;
 }

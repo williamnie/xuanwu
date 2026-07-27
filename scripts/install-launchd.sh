@@ -29,6 +29,7 @@ CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-$(command -v codex || true)}"
 CODEX_SERVER_MODE="${CODEX_RUNNER_CODEX_SERVER_MODE:-cli}"
 CODEX_APP_CMD="${CODEX_RUNNER_CODEX_APP_CMD:-}"
 AUTOMATION_SHADOW_W1="${CODEX_RUNNER_AUTOMATION_SHADOW_W1:-0}"
+SKIP_RUNTIME_BACKUP="${CODEX_RUNNER_SKIP_RUNTIME_BACKUP:-0}"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
 LEGACY_PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 WEB_PLIST="$HOME/Library/LaunchAgents/$WEB_LABEL.plist"
@@ -205,6 +206,11 @@ if [[ "$AUTOMATION_SHADOW_W1" != "0" && "$AUTOMATION_SHADOW_W1" != "1" ]]; then
   exit 1
 fi
 
+if [[ "$SKIP_RUNTIME_BACKUP" != "0" && "$SKIP_RUNTIME_BACKUP" != "1" ]]; then
+  echo "[launchd] CODEX_RUNNER_SKIP_RUNTIME_BACKUP must be 0 or 1" >&2
+  exit 1
+fi
+
 APP_VERSION="$("$ROOT_DIR/scripts/resolve-version.sh")"
 echo "[launchd] version: $APP_VERSION"
 env VITE_APP_VERSION="$APP_VERSION" npm --prefix "$ROOT_DIR/frontend" run build
@@ -212,7 +218,11 @@ CODEX_RUNNER_CODESIGN_IDENTIFIER="${CODEX_RUNNER_CODESIGN_IDENTIFIER:-$LABEL}" \
 CODEX_RUNNER_VERSION="$APP_VERSION" \
   "$ROOT_DIR/backend-ts/scripts/build-binary.sh"
 mkdir -p "$STATE_DIR" "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")" "$LOG_DIR" "$HOME/Library/LaunchAgents"
-backup_current_runtime
+if [ "$SKIP_RUNTIME_BACKUP" = "1" ]; then
+  echo "[launchd] runtime rollback snapshot skipped by request"
+else
+  backup_current_runtime
+fi
 stage_launchd_binary
 stage_pi_package_assets
 stage_web_dir
