@@ -67,7 +67,7 @@ export async function runAgentCommunicationGatewayOnce(
   const groups = communicationGroups(pending);
   const result = emptyResult(pending.length, groups.length);
   for (const intents of groups) {
-    await processGroup(db, intents, options.decide ?? ((input) => decideWithAgent(db, input)), now, result);
+    await processGroup(db, intents, options.decide ?? ((input) => decideAgentCommunicationWithRuntime(db, input)), now, result);
   }
   return result;
 }
@@ -150,7 +150,7 @@ function notificationStillRelevant(db: RunnerDatabase, intent: PiNotificationInt
   return true;
 }
 
-async function decideWithAgent(
+export async function decideAgentCommunicationWithRuntime(
   db: RunnerDatabase,
   input: AgentCommunicationDecisionInput
 ): Promise<AgentCommunicationDecision> {

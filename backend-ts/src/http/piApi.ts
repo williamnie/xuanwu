@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import type { AgenticWorkerClient } from "../agentic/protocol.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import { DEFAULT_PI_AGENT_ID, ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
 import type { EventBus } from "../events/bus.ts";
@@ -40,6 +41,7 @@ import { piRuntimePromptSummary } from "./piRuntimePrompt.ts";
 import type { Router } from "./router.ts";
 
 type PiApiContext = {
+  agenticClient?: AgenticWorkerClient;
   bus?: EventBus;
   codexSessionsDir?: string;
   config?: RunnerConfig;

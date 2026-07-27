@@ -128,6 +128,102 @@ describe("PI project status snapshot", () => {
       db.close();
     }
   });
+
+  test("aggregates full status counts while bounding recent project rows", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo", "/tmp/demo");
+      for (let index = 1; index <= 12; index += 1) {
+        const issueID = insertIssue(db, {
+          day: index,
+          projectID: "demo",
+          status: index % 2 === 0 ? "done" : "cancelled",
+          title: `Issue ${index}`
+        });
+        insertRun(db, {
+          attempt: 1,
+          endedAt: `2026-01-${String(index).padStart(2, "0")}T00:30:00Z`,
+          issueID,
+          runID: `run-${index}`,
+          status: "done"
+        });
+        insertSession(db, {
+          issueID,
+          projectID: "demo",
+          sessionKey: `codex:thread-${String(index).padStart(2, "0")}`,
+          status: "completed"
+        });
+      }
+
+      const snapshot = createProjectStatusSnapshot(db, "demo");
+
+      expect(snapshot.total_issues).toBe(12);
+      expect(snapshot.issue_status_counts).toEqual({ cancelled: 6, done: 6 });
+      expect(snapshot.run_status_counts).toEqual({ done: 12 });
+      expect(snapshot.session_status_counts).toEqual({ completed: 12 });
+      expect(snapshot.latest_issues).toHaveLength(8);
+      expect(snapshot.recent_runs).toHaveLength(8);
+      expect(snapshot.recent_sessions).toHaveLength(8);
+      expect(snapshot.session_progress).toHaveLength(6);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("bounds finding details while retaining exact issue totals", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo", "/tmp/demo");
+      for (let index = 1; index <= 12; index += 1) {
+        insertIssue(db, {
+          day: index,
+          error: `failure ${index}`,
+          projectID: "demo",
+          status: "failed",
+          title: `Failed issue ${index}`
+        });
+      }
+
+      const snapshot = createProjectStatusSnapshot(db, "demo");
+
+      expect(snapshot.total_issues).toBe(12);
+      expect(snapshot.issue_status_counts).toEqual({ failed: 12 });
+      expect(snapshot.findings).toHaveLength(8);
+      expect(snapshot.recent_errors).toHaveLength(8);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps a project hold visible when issue findings fill the bound", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo", "/tmp/demo");
+      for (let index = 1; index <= 10; index += 1) {
+        insertIssue(db, {
+          day: index,
+          error: `failure ${index}`,
+          projectID: "demo",
+          status: "failed",
+          title: `Failed issue ${index}`
+        });
+      }
+      createProjectHoldsTable(db);
+      db.sqlite.run(
+        `insert into project_holds
+          (project_id, reason, message, hold_since, next_check_at, last_check_at, last_check_error, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ["demo", "manual_gate", "Waiting", "2026-01-11T00:00:00Z", "", "", "", "2026-01-11T00:00:00Z"]
+      );
+
+      const snapshot = createProjectStatusSnapshot(db, "demo");
+
+      expect(snapshot.findings).toHaveLength(8);
+      expect(snapshot.findings.at(-1)).toMatchObject({ issue_id: 0, reason: "project_hold:manual_gate" });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 function createProjectHoldsTable(db: RunnerDatabase): void {

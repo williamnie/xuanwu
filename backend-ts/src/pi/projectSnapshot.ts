@@ -1,7 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { listAgentSessions, type AgentSession } from "../db/repositories/agentSessions.ts";
 import { hydrateStoredIssueLogPayload } from "../db/repositories/issueEvents.ts";
-import { listIssues, type Issue } from "../db/repositories/issues.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { scanProjectFindings, type ProjectFinding } from "./projectFindings.ts";
@@ -52,35 +51,40 @@ type RunRow = {
 
 type HoldRow = Record<keyof ProjectHoldSnapshot, unknown>;
 type EventRow = { created_at: unknown; issue_id: unknown; payload: unknown; type: unknown };
+type StatusCountRow = { count: unknown; status: unknown };
+type IssueSummaryRow = { id: unknown; status: unknown; title: unknown; updated_at: unknown };
+type IssueErrorRow = IssueSummaryRow & { error: unknown };
 
 const PROJECT_STATUS_LIMIT = 8;
 const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
 
 export function createProjectStatusSnapshot(db: RunnerDatabase, projectID: string): ProjectStatusSnapshot {
   const project = requireProject(db, projectID);
-  const issues = listIssues(db, { projectId: project.id });
-  const runs = listProjectRuns(db, project.id);
-  const sessions = listAgentSessions(db, { projectId: project.id });
+  const issueStatusCounts = projectStatusCounts(db, "issues", project.id);
+  const runStatusCounts = projectRunStatusCounts(db, project.id);
+  const sessionStatusCounts = projectStatusCounts(db, "agent_sessions", project.id);
+  const runs = listProjectRuns(db, project.id, PROJECT_STATUS_LIMIT);
+  const sessions = listAgentSessions(db, { limit: PROJECT_STATUS_LIMIT, projectId: project.id });
   const sessionProgress = listProjectSessionProgress(db, project.id);
   const holds = listProjectHolds(db, project.id);
-  const findings = scanProjectFindings(db, project.id);
-  const recentErrors = recentProjectErrors(db, project.id, issues, runs);
+  const findings = scanProjectFindings(db, project.id, { limit: PROJECT_STATUS_LIMIT });
+  const recentErrors = recentProjectErrors(db, project.id);
   const snapshot = {
     active_holds: holds,
     cwd: summarizePath(project.cwd),
     findings,
     id: project.id,
-    issue_status_counts: countStatuses(issues),
-    latest_issues: latestIssues(issues),
+    issue_status_counts: issueStatusCounts,
+    latest_issues: latestIssues(db, project.id),
     name: redactSnapshotText(project.name),
     provider: project.provider,
     recent_errors: recentErrors,
-    recent_runs: recentRuns(runs),
+    recent_runs: runs.map(({ error: _error, ...run }) => run),
     recent_sessions: recentSessions(sessions),
-    run_status_counts: countStatuses(runs),
+    run_status_counts: runStatusCounts,
     session_progress: sessionProgress,
-    session_status_counts: countStatuses(sessions),
-    total_issues: issues.length
+    session_status_counts: sessionStatusCounts,
+    total_issues: Object.values(issueStatusCounts).reduce((total, count) => total + count, 0)
   };
   return {
     ...snapshot,
@@ -94,34 +98,52 @@ function requireProject(db: RunnerDatabase, id: string): Project {
   return project;
 }
 
-function countStatuses(items: Array<{ status: string }>): Record<string, number> {
-  return items.reduce<Record<string, number>>((counts, item) => {
-    const status = item.status || "unknown";
-    counts[status] = (counts[status] ?? 0) + 1;
-    return counts;
-  }, {});
+function projectStatusCounts(
+  db: RunnerDatabase,
+  table: "agent_sessions" | "issues",
+  projectID: string
+): Record<string, number> {
+  return statusCounts(db.sqlite.query<StatusCountRow, [string]>(`
+    select status, count(*) as count from ${table} where project_id=? group by status
+  `).all(projectID));
 }
 
-function latestIssues(issues: Issue[]): ProjectStatusSnapshot["latest_issues"] {
-  return [...issues]
-    .sort((left, right) => right.updated_at.localeCompare(left.updated_at) || right.id - left.id)
-    .slice(0, PROJECT_STATUS_LIMIT)
-    .map((issue) => ({
-      id: issue.id,
-      status: issue.status,
-      title: redactSnapshotText(issue.title),
-      updated_at: issue.updated_at
-    }));
+function projectRunStatusCounts(db: RunnerDatabase, projectID: string): Record<string, number> {
+  return statusCounts(db.sqlite.query<StatusCountRow, [string]>(`
+    select ir.status, count(*) as count from issue_runs ir
+    join issues i on i.id=ir.issue_id where i.project_id=? group by ir.status
+  `).all(projectID));
 }
 
-function listProjectRuns(db: RunnerDatabase, projectID: string): Array<ProjectRunSnapshot & { error: string }> {
-  return db.sqlite.query<RunRow, [string]>(`
+function statusCounts(rows: StatusCountRow[]): Record<string, number> {
+  return Object.fromEntries(rows.map((row) => [optionalString(row.status, "unknown"), integerValue(row.count)]));
+}
+
+function latestIssues(db: RunnerDatabase, projectID: string): ProjectStatusSnapshot["latest_issues"] {
+  return db.sqlite.query<IssueSummaryRow, [string, number]>(`
+    select id, status, title, updated_at from issues where project_id=?
+    order by updated_at desc, id desc limit ?
+  `).all(projectID, PROJECT_STATUS_LIMIT).map((issue) => ({
+    id: integerValue(issue.id),
+    status: optionalString(issue.status, "unknown"),
+    title: redactSnapshotText(optionalString(issue.title)),
+    updated_at: optionalString(issue.updated_at)
+  }));
+}
+
+function listProjectRuns(
+  db: RunnerDatabase,
+  projectID: string,
+  limit: number
+): Array<ProjectRunSnapshot & { error: string }> {
+  return db.sqlite.query<RunRow, [string, number]>(`
     select ir.id as run_id, ir.issue_id, ir.attempt, ir.status, ir.provider, ir.started_at,
       ir.ended_at, ir.exit_reason, ir.error
     from issue_runs ir join issues i on i.id=ir.issue_id
     where i.project_id=?
     order by coalesce(nullif(ir.ended_at, ''), ir.started_at) desc, ir.attempt desc
-  `).all(projectID).map(mapRunRow);
+    limit ?
+  `).all(projectID, limit).map(mapRunRow);
 }
 
 function mapRunRow(row: RunRow): ProjectRunSnapshot & { error: string } {
@@ -138,12 +160,8 @@ function mapRunRow(row: RunRow): ProjectRunSnapshot & { error: string } {
   };
 }
 
-function recentRuns(runs: Array<ProjectRunSnapshot & { error: string }>): ProjectRunSnapshot[] {
-  return runs.slice(0, PROJECT_STATUS_LIMIT).map(({ error: _error, ...run }) => run);
-}
-
 function recentSessions(sessions: AgentSession[]): ProjectSessionSnapshot[] {
-  return sessions.slice(0, PROJECT_STATUS_LIMIT).map((session) => ({
+  return sessions.map((session) => ({
     agent_role: session.agent_role,
     issue_id: session.issue_id,
     provider: session.provider,
@@ -177,13 +195,11 @@ function mapHoldRow(row: HoldRow): ProjectHoldSnapshot {
 
 function recentProjectErrors(
   db: RunnerDatabase,
-  projectID: string,
-  issues: Issue[],
-  runs: Array<ProjectRunSnapshot & { error: string }>
+  projectID: string
 ): ProjectErrorSnapshot[] {
   const errors = [
-    ...issueErrors(issues),
-    ...runErrors(runs),
+    ...issueErrors(db, projectID),
+    ...runErrors(db, projectID),
     ...eventErrors(db, projectID)
   ];
   return errors
@@ -191,21 +207,28 @@ function recentProjectErrors(
     .slice(0, PROJECT_STATUS_LIMIT);
 }
 
-function issueErrors(issues: Issue[]): ProjectErrorSnapshot[] {
-  return issues
-    .filter((issue) => issue.status === "failed" || issue.error !== "")
-    .sort((left, right) => right.updated_at.localeCompare(left.updated_at) || right.id - left.id)
-    .map((issue) => ({
-      issue_id: issue.id,
-      message: redactSnapshotText(issue.error || "issue failed"),
-      source: "issue" as const,
-      status: issue.status,
-      timestamp: issue.updated_at
-    }));
+function issueErrors(db: RunnerDatabase, projectID: string): ProjectErrorSnapshot[] {
+  return db.sqlite.query<IssueErrorRow, [string, number]>(`
+    select id, status, title, error, updated_at from issues
+    where project_id=? and (status='failed' or error<>'')
+    order by updated_at desc, id desc limit ?
+  `).all(projectID, PROJECT_STATUS_LIMIT).map((issue) => ({
+    issue_id: integerValue(issue.id),
+    message: redactSnapshotText(optionalString(issue.error) || "issue failed"),
+    source: "issue" as const,
+    status: optionalString(issue.status, "unknown"),
+    timestamp: optionalString(issue.updated_at)
+  }));
 }
 
-function runErrors(runs: Array<ProjectRunSnapshot & { error: string }>): ProjectErrorSnapshot[] {
-  return runs.filter((run) => run.status === "failed" || run.error !== "").map((run) => ({
+function runErrors(db: RunnerDatabase, projectID: string): ProjectErrorSnapshot[] {
+  return db.sqlite.query<RunRow, [string, number]>(`
+    select ir.id as run_id, ir.issue_id, ir.attempt, ir.status, ir.provider, ir.started_at,
+      ir.ended_at, ir.exit_reason, ir.error
+    from issue_runs ir join issues i on i.id=ir.issue_id
+    where i.project_id=? and (ir.status='failed' or ir.error<>'')
+    order by coalesce(nullif(ir.ended_at, ''), ir.started_at) desc, ir.attempt desc limit ?
+  `).all(projectID, PROJECT_STATUS_LIMIT).map(mapRunRow).map((run) => ({
     issue_id: run.issue_id,
     message: redactSnapshotText(run.error || "run failed"),
     source: "run" as const,

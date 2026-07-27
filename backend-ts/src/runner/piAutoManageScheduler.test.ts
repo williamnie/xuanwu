@@ -12,7 +12,13 @@ import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { EventBus, type AppEvent } from "../events/bus.ts";
 import type { PiSupervisorDecisionJson } from "../pi/issueSupervisorRecovery.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
-import { createPiAutoManageScheduler, runPiAutoManageCycle, runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
+import {
+  createPiAgenticScheduler,
+  createPiAutoManageScheduler,
+  createPiGuardianScheduler,
+  runPiAutoManageCycle,
+  runScheduleLayerCycle
+} from "./piAutoManageScheduler.ts";
 import { runProjectLoopOnce } from "./projectLoop.ts";
 import { isProjectLoopActive } from "./projectLoopManager.ts";
 
@@ -216,6 +222,53 @@ describe("PI auto-manage scheduler", () => {
       expect(clock.timers[0]?.canceled).toBe(true);
     } finally {
       releaseLongCycle();
+      db.close();
+    }
+  });
+
+  test("keeps Guardian ticking while an independent agentic cycle is awaiting the model", async () => {
+    const db = await openFixtureDatabase();
+    const wrapped = new SlowSupervisorDatabase(db);
+    const guardianClock = new FakeClock();
+    const agenticClock = new FakeClock();
+    let releaseAgentic = () => {};
+    const blocked = new Promise<void>((resolve) => { releaseAgentic = resolve; });
+    let agenticActive = false;
+    try {
+      insertProject(db, "enabled", 1);
+      insertAgent(db, "pi-default");
+      insertSettings(db, "enabled", 1, 2);
+      const input = {
+        database: wrapped as unknown as RunnerDatabase,
+        intervalMs: 5,
+        runProjectCycle: async () => {
+          agenticActive = true;
+          await blocked;
+          agenticActive = false;
+        },
+        runSupervisor: false
+      };
+      const guardian = createPiGuardianScheduler({ ...input, clock: guardianClock });
+      const agentic = createPiAgenticScheduler({ ...input, clock: agenticClock });
+
+      guardian.start();
+      agentic.start();
+      await agenticClock.runNext();
+      await waitUntil(() => agenticActive);
+      expect(agenticClock.timers).toEqual([]);
+
+      await guardianClock.runNext();
+      await waitUntil(() => wrapped.watchdogWrites === 1 && guardianClock.timers.length === 1);
+      await guardianClock.runNext();
+      await waitUntil(() => wrapped.watchdogWrites === 2 && guardianClock.timers.length === 1);
+
+      expect(agenticActive).toBe(true);
+      releaseAgentic();
+      await waitUntil(() => !agenticActive && agenticClock.timers.length === 1);
+      guardian.stop();
+      agentic.stop();
+    } finally {
+      releaseAgentic();
       db.close();
     }
   });

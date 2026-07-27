@@ -23,7 +23,7 @@ export type ProjectFinding = {
   updated_at: string;
 };
 
-export type ProjectFindingScanOptions = { now?: Date; staleAfterMs?: number };
+export type ProjectFindingScanOptions = { limit?: number; now?: Date; staleAfterMs?: number };
 
 type IssueFindingRow = { attempt_count: unknown; auto_retry_next_at: unknown; auto_retry_reason: unknown;
   codex_thread_id: unknown; error: unknown; id: unknown; project_id: unknown; status: unknown; title: unknown; updated_at: unknown };
@@ -46,12 +46,24 @@ export function scanProjectFindings(
 ): ProjectFinding[] {
   const id = projectID.trim();
   if (id === "") throw new Error("project id is required");
-  return [...issueFindings(db, id, options), ...staleFindings(db, id, options), ...holdFindings(db, id)];
+  const limit = findingLimit(options.limit);
+  const holds = holdFindings(db, id).slice(0, limit);
+  const detailLimit = Math.max(0, limit - holds.length);
+  const issues = issueFindings(db, id, options, detailLimit);
+  const stale = staleFindings(db, id, options, Math.max(0, detailLimit - issues.length));
+  // Preserve the established issue/stale/hold ordering while reserving room
+  // for the project-level hold, which must not disappear behind a large issue backlog.
+  return [...issues, ...stale, ...holds];
 }
 
-function issueFindings(db: RunnerDatabase, projectID: string, options: ProjectFindingScanOptions): ProjectFinding[] {
+function issueFindings(
+  db: RunnerDatabase,
+  projectID: string,
+  options: ProjectFindingScanOptions,
+  limit: number
+): ProjectFinding[] {
   const context = { now: options.now ?? new Date() };
-  return db.sqlite.query<IssueFindingRow, [string]>(`
+  return db.sqlite.query<IssueFindingRow, [string, number]>(`
     select id, project_id, title, status, error, attempt_count, codex_thread_id, auto_retry_next_at,
       auto_retry_reason, updated_at from issues
     where project_id=? and (
@@ -59,7 +71,8 @@ function issueFindings(db: RunnerDatabase, projectID: string, options: ProjectFi
       or (status='todo' and auto_retry_next_at <> '')
     )
     order by case status when 'failed' then 0 else 1 end, updated_at asc, id asc
-  `).all(projectID).map((row) => mapIssueFinding(db, projectID, row, context));
+    limit ?
+  `).all(projectID, limit).map((row) => mapIssueFinding(db, projectID, row, context));
 }
 
 function holdFindings(db: RunnerDatabase, projectID: string): ProjectFinding[] {
@@ -102,11 +115,13 @@ function mapIssueFinding(
 function staleFindings(
   db: RunnerDatabase,
   projectID: string,
-  options: ProjectFindingScanOptions
+  options: ProjectFindingScanOptions,
+  limit: number
 ): ProjectFinding[] {
   const now = options.now ?? new Date();
   const cutoff = new Date(now.getTime() - (options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS));
-  return db.sqlite.query<StaleIssueRow, [string]>(`
+  const candidateLimit = Math.min(limit * 4, 400);
+  return db.sqlite.query<StaleIssueRow, [string, number]>(`
     select i.id, i.project_id, i.title, i.status, i.error, i.codex_thread_id,
       i.auto_retry_next_at, i.auto_retry_reason, i.updated_at,
       (select max(coalesce(nullif(ended_at, ''), started_at)) from issue_runs where issue_id=i.id) as run_activity_at,
@@ -121,7 +136,15 @@ function staleFindings(
       ) order by updated_at desc limit 1) as session_status
     from issues i where i.project_id=? and i.status='in_progress'
     order by i.updated_at asc, i.id asc
-  `).all(projectID).filter((row) => isStale(row, cutoff)).map((row) => mapStaleFinding(row, now));
+    limit ?
+  `).all(projectID, candidateLimit)
+    .filter((row) => isStale(row, cutoff))
+    .slice(0, limit)
+    .map((row) => mapStaleFinding(row, now));
+}
+
+function findingLimit(value: number | undefined): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? Math.min(value, 100) : 100;
 }
 
 function mapStaleFinding(row: StaleIssueRow, now: Date): ProjectFinding {

@@ -1,10 +1,12 @@
 import { join } from "node:path";
+import { createHttpAgenticWorkerClient } from "../agentic/client.ts";
+import type { AgenticWorkerClient } from "../agentic/protocol.ts";
 import { coldStartTrace } from "../benchmarks/coldStart.ts";
 import { loadConfig } from "../config/env.ts";
 import { openDatabase } from "../db/database.ts";
 import { EventBus } from "../events/bus.ts";
 import { BackgroundProjectionWorker } from "../events/projectionWorker.ts";
-import { runProjectPiCycle } from "../http/piProjectControlApi.ts";
+import { loadAuthToken } from "../http/auth.ts";
 import { startServer } from "../http/server.ts";
 import { primeProviderStatus } from "../http/systemStatus.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
@@ -20,23 +22,30 @@ import { primeRuntimeObservability } from "../observability/runtimeObservability
 import { createClaudeExecutorProvider } from "../providers/claude/provider.ts";
 import { createCodexExecutorProvider } from "../providers/codex/provider.ts";
 import { reconcileStaleCodexProcessOwnership } from "../providers/codex/processLifecycle.ts";
-import { createPiAutoManageScheduler } from "../runner/piAutoManageScheduler.ts";
+import {
+  createPiAgenticScheduler,
+  createPiGuardianScheduler,
+  type PiAutoManageSchedulerInput
+} from "../runner/piAutoManageScheduler.ts";
 import { setProjectLoopMaxParallelProjects, startProjectLoop } from "../runner/projectLoopManager.ts";
 import { recoverInProgressIssues } from "../runner/recovery.ts";
 import { reconcileStaleAgentSessions } from "../runner/staleSessionReconciler.ts";
-import { assertInternalCoreAddress, type ServerRole } from "../serverRole.ts";
+import { assertInternalCoreAddress } from "../serverRole.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
 type FeishuReceiver = ReturnType<typeof createFeishuReceiverManager>;
 let activeFeishuReceiver: FeishuReceiver | undefined;
 
-export async function startCoreRuntime(args: string[], role: Exclude<ServerRole, "web">): Promise<void> {
+export async function startCoreRuntime(args: string[], role: "all" | "core"): Promise<void> {
   const loadedConfig = loadConfig(args);
   const config = role === "core" ? { ...loadedConfig, webDir: "" } : loadedConfig;
   if (role === "core") assertInternalCoreAddress(config.addr);
   coldStartTrace("config_loaded");
   const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
   const readDatabase = await openDatabase({ readonlyImportPath: database.path });
+  const agenticClient = role === "core"
+    ? createHttpAgenticWorkerClient({ addr: config.agenticAddr, authToken: await loadAuthToken(config) })
+    : (await import("../agentic/embeddedClient.ts")).createEmbeddedAgenticWorkerClient(database);
   coldStartTrace("database_opened");
   const bus = new EventBus();
   const projectionWorker = new BackgroundProjectionWorker(database);
@@ -58,7 +67,12 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
     providerRuntime
   });
   processGroupMemory.start();
-  const sessionReconciliation = reconcileStaleAgentSessions(database, processReconciliation);
+  const sessionReconciliation = reconcileStaleAgentSessions(
+    database,
+    processReconciliation,
+    new Date(),
+    { reconcileManagerConversations: role === "all" }
+  );
   coldStartTrace("providers_initialized");
   setProjectLoopMaxParallelProjects(config.runner.maxParallelProjects);
   const feishuBridge = createFeishuAgentBridge({
@@ -91,6 +105,7 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
   });
   primeProviderStatus(config);
   const server = await startServer(config, {
+    agenticClient,
     bus,
     database,
     readDatabase,
@@ -106,7 +121,7 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
   coldStartTrace("http_routes_registered");
   void restartFeishuReceiver(config.integrations.feishu);
   projectionWorker.start();
-  void startAutoRunLoops(database, providers, bus, config.codexSessionsDir, config, processReconciliation);
+  void startAutoRunLoops(database, providers, bus, config.codexSessionsDir, config, processReconciliation, agenticClient);
   coldStartTrace("scheduler_watchdog_initialized");
 
   console.log(JSON.stringify({
@@ -116,6 +131,7 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
     listen: `${server.hostname}:${server.port}`,
     config: {
       addr: config.addr,
+      agenticAddr: config.agenticAddr,
       stateDir: config.stateDir,
       dbPath: database.path,
       webDir: role === "all" ? config.webDir : ""
@@ -194,27 +210,32 @@ async function startAutoRunLoops(
   bus: EventBus,
   codexSessionsDir: string,
   config: ReturnType<typeof loadConfig>,
-  processReconciliation: Awaited<ReturnType<typeof reconcileStaleCodexProcessOwnership>>
+  processReconciliation: Awaited<ReturnType<typeof reconcileStaleCodexProcessOwnership>>,
+  agenticClient: AgenticWorkerClient
 ): Promise<void> {
   await recoverInProgressIssues({ database, providers }).catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
   });
-  reconcileStaleAgentSessions(database, processReconciliation);
+  reconcileStaleAgentSessions(database, processReconciliation, new Date(), { reconcileManagerConversations: false });
   const projects = database.sqlite.query<{ id: string }, []>(
     "select id from projects where auto_run=1 order by sort_order asc, created_at asc, id asc"
   ).all();
   for (const project of projects) startProjectLoop({ bus, database, providers, onError: logProjectLoopError }, project.id);
-  createPiAutoManageScheduler({
+  const schedulerInput: PiAutoManageSchedulerInput = {
     bus,
     codexSessionsDir,
     config,
     database,
+    agentCommunicationDecider: (input) => agenticClient.decideCommunication(input),
     providers,
     onError: (error) => {
       console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
     },
-    runProjectCycle: ({ maxActions, projectId }) => runProjectPiCycle({ database }, { maxActions, projectId })
-  }).start();
+    runProjectCycle: (input) => agenticClient.runProjectCycle(input),
+    runSupervisorDecision: (context) => agenticClient.decideSupervisor(context)
+  };
+  createPiGuardianScheduler(schedulerInput).start();
+  createPiAgenticScheduler(schedulerInput).start();
 }
 
 function logProjectLoopError(error: unknown, projectId: string): void {

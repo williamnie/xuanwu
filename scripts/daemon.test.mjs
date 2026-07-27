@@ -74,11 +74,13 @@ test('release and source launchd installers declare background daemon policy', a
   assert.match(release, /\.codex-issue-runner\.stage\.\$\$/);
   assert.match(packager, /cp "\$ROOT_DIR\/scripts\/daemon\.sh" "\$pkg_dir\/daemon\.sh"/);
   assert.match(release, /serve --role core --addr \$CORE_ADDR/);
+  assert.match(release, /serve --role agentic --addr \$AGENTIC_ADDR/);
   assert.match(release, /serve --role web --addr \$ADDR --core-addr \$CORE_ADDR/);
   assert.match(release, /\$SERVICE_NAME-core\.service/);
+  assert.match(release, /\$SERVICE_NAME-agentic\.service/);
   assert.match(release, /\$SERVICE_NAME-web\.service/);
   assert.doesNotMatch(release, /Requires=\$SERVICE_NAME-core\.service/);
-  assert.match(await readFile(join(root, 'scripts', 'daemon.sh'), 'utf8'), /restart "\$SERVICE_NAME-core\.service" "\$SERVICE_NAME-web\.service"/);
+  assert.match(await readFile(join(root, 'scripts', 'daemon.sh'), 'utf8'), /restart "\$SERVICE_NAME-core\.service" "\$SERVICE_NAME-agentic\.service" "\$SERVICE_NAME-web\.service"/);
   assert.match(source, /<string>--core-addr<\/string>/);
 });
 

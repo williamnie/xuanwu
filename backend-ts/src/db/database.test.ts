@@ -925,6 +925,16 @@ describe("Bun SQLite database connection", () => {
     }
   });
 
+  test("allows the isolated Agentic writer to wait longer for short Core transactions", async () => {
+    const root = await tempPath("codex-runner-bun-agentic-writer-");
+    const connection = await openDatabase({ stateDir: join(root, "state"), writerBusyTimeoutMs: 5_000 });
+    try {
+      expect(connection.sqlite.query<{ timeout: number }, []>("pragma busy_timeout").get()).toEqual({ timeout: 5_000 });
+    } finally {
+      connection.close();
+    }
+  });
+
   test("runs callbacks inside a rollback-capable transaction", async () => {
     const root = await tempPath("codex-runner-bun-tx-");
     const connection = await openDatabase({ stateDir: join(root, "state") });

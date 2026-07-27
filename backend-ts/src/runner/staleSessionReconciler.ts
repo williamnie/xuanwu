@@ -13,25 +13,37 @@ type ActiveSessionRow = {
   session_key: string;
   status: string;
 };
+type ActiveManagerConversationSummary = { count: number; ids: string[] };
 
 export type StaleSessionReconciliationResult = {
   active_owner_sessions: number;
   audit_action_id: string;
   process_reconciliation: StaleProcessReconciliation;
+  stale_manager_conversations_closed: number;
   stale_sessions_closed: number;
+};
+type StaleSessionReconciliationOptions = { reconcileManagerConversations?: boolean };
+export type StaleManagerCycleReconciliationResult = {
+  audit_action_id: string;
+  stale_manager_conversations_closed: number;
 };
 
 export function reconcileStaleAgentSessions(
   db: RunnerDatabase,
   processReconciliation: StaleProcessReconciliation,
-  now = new Date()
+  now = new Date(),
+  options: StaleSessionReconciliationOptions = {}
 ): StaleSessionReconciliationResult {
   const timestamp = now.toISOString().replace(/\.\d{3}Z$/, "Z");
   const rows = activeSessions(db);
   const stale = rows.filter((row) => !hasOpenRunOwner(db, row));
+  const staleManagerConversations = options.reconcileManagerConversations === false
+    ? { count: 0, ids: [] }
+    : activeManagerConversations(db);
   const actionID = `runner-startup-session-reconciliation:${timestamp}:${process.pid}`;
-  const apply = db.transaction((items: ActiveSessionRow[]) => {
+  const apply = db.transaction((items: ActiveSessionRow[], conversations: ActiveManagerConversationSummary) => {
     for (const row of items) closeStaleSession(db, row, timestamp);
+    if (conversations.count > 0) closeStaleManagerConversations(db, timestamp);
     for (const [issueID, sessions] of sessionsByIssue(db, items)) {
       recordIssueEvent(db, issueID, STALE_SESSION_RECONCILIATION_EVENT, {
         action_id: actionID,
@@ -44,24 +56,53 @@ export function reconcileStaleAgentSessions(
     recordMaintenanceAudit(db.sqlite, {
       actionID,
       actor: "runner-startup-reconciler",
-      decision: items.length > 0 || processReconciliation.action === "killed" ? "applied" : "noop",
+      decision: items.length > 0 || conversations.count > 0 || processReconciliation.action === "killed" ? "applied" : "noop",
       eventType: STALE_SESSION_RECONCILIATION_EVENT,
       reason: "reconcile persisted active sessions with live process ownership and open Issue Runs",
       result: {
         active_owner_sessions: rows.length - items.length,
         process_reconciliation: processReconciliation,
+        stale_manager_conversation_ids: conversations.ids,
+        stale_manager_conversation_ids_truncated: conversations.count > conversations.ids.length,
+        stale_manager_conversations_closed: conversations.count,
         stale_session_keys: items.map((row) => row.session_key),
         stale_sessions_closed: items.length
       }
     });
   });
-  apply.immediate(stale);
+  apply.immediate(stale, staleManagerConversations);
   return {
     active_owner_sessions: rows.length - stale.length,
     audit_action_id: actionID,
     process_reconciliation: processReconciliation,
+    stale_manager_conversations_closed: staleManagerConversations.count,
     stale_sessions_closed: stale.length
   };
+}
+
+export function reconcileStaleManagerCycleConversations(
+  db: RunnerDatabase,
+  now = new Date()
+): StaleManagerCycleReconciliationResult {
+  const timestamp = now.toISOString().replace(/\.\d{3}Z$/, "Z");
+  const conversations = activeManagerConversations(db);
+  const actionID = `agentic-startup-manager-cycle-reconciliation:${timestamp}:${process.pid}`;
+  db.transaction(() => {
+    if (conversations.count > 0) closeStaleManagerConversations(db, timestamp);
+    recordMaintenanceAudit(db.sqlite, {
+      actionID,
+      actor: "agentic-startup-reconciler",
+      decision: conversations.count > 0 ? "applied" : "noop",
+      eventType: STALE_SESSION_RECONCILIATION_EVENT,
+      reason: "terminalize manager cycles left active by a previous Agentic Worker process",
+      result: {
+        stale_manager_conversation_ids: conversations.ids,
+        stale_manager_conversation_ids_truncated: conversations.count > conversations.ids.length,
+        stale_manager_conversations_closed: conversations.count
+      }
+    });
+  }).immediate();
+  return { audit_action_id: actionID, stale_manager_conversations_closed: conversations.count };
 }
 
 function activeSessions(db: RunnerDatabase): ActiveSessionRow[] {
@@ -71,6 +112,29 @@ function activeSessions(db: RunnerDatabase): ActiveSessionRow[] {
     where lower(status) in ('running', 'inprogress', 'active')
     order by session_key asc
   `).all();
+}
+
+function activeManagerConversations(db: RunnerDatabase): ActiveManagerConversationSummary {
+  const count = db.sqlite.query<{ count: number }, []>(`
+    select count(*) as count from pi_conversations
+    where title='Supervisor manager cycle' and status='active'
+  `).get()?.count ?? 0;
+  const ids = db.sqlite.query<{ id: string }, []>(`
+    select id from pi_conversations
+    where title='Supervisor manager cycle' and status='active'
+    order by id asc limit 50
+  `).all().map((row) => row.id);
+  return { count, ids };
+}
+
+function closeStaleManagerConversations(
+  db: RunnerDatabase,
+  timestamp: string
+): void {
+  db.sqlite.run(`
+    update pi_conversations set status='interrupted', updated_at=?
+    where title='Supervisor manager cycle' and status='active'
+  `, [timestamp]);
 }
 
 function hasOpenRunOwner(db: RunnerDatabase, session: ActiveSessionRow): boolean {

@@ -37,15 +37,18 @@ test('launchd Core marks Runner-managed provider execution', () => {
   assert.match(source, /<key>CODEX_RUNNER_MANAGED_EXECUTION<\/key>\s*<string>1<\/string>/);
 });
 
-test('launchd deployment defaults to split Web/Core roles from one artifact', () => {
+test('launchd deployment defaults to split Web/Core/Agentic roles from one artifact', () => {
   assert.match(source, /WEB_LABEL="\$\{LABEL\}\.web"/);
   assert.match(source, /CORE_LABEL="\$\{LABEL\}\.core"/);
+  assert.match(source, /AGENTIC_LABEL="\$\{LABEL\}\.agentic"/);
   assert.match(source, /<string>web<\/string>/);
   assert.match(source, /<string>core<\/string>/);
+  assert.match(source, /<string>agentic<\/string>/);
   assert.match(source, /<string>--core-addr<\/string>/);
-  assert.equal((source.match(/<string>--db<\/string>/g) || []).length, 1);
-  assert.equal((source.match(/<key>PI_PACKAGE_DIR<\/key>/g) || []).length, 1);
+  assert.equal((source.match(/<string>--db<\/string>/g) || []).length, 2);
+  assert.equal((source.match(/<key>PI_PACKAGE_DIR<\/key>/g) || []).length, 2);
   assert.match(source, /wait_for_health "\$\(service_url "\$CORE_ADDR"\)"/);
+  assert.match(source, /wait_for_health "\$\(service_url "\$AGENTIC_ADDR"\)"/);
   assert.match(source, /wait_for_health "\$\(service_url "\$ADDR"\)"/);
 });
 
@@ -62,8 +65,10 @@ test('launchd deployment waits for old split services before bounded bootstrap r
   assert.match(source, /bootstrap_service\(\)/);
   assert.match(source, /for attempt in \{1\.\.20\}/);
   assert.match(source, /old_core_pid="\$\(launchd_service_pid "\$CORE_LABEL" \|\| true\)"/);
+  assert.match(source, /old_agentic_pid="\$\(launchd_service_pid "\$AGENTIC_LABEL" \|\| true\)"/);
   assert.match(source, /wait_for_process_exit "\$old_core_pid" "\$CORE_LABEL"/);
   assert.match(source, /bootstrap_service "\$CORE_LABEL" "\$CORE_PLIST"/);
+  assert.match(source, /bootstrap_service "\$AGENTIC_LABEL" "\$AGENTIC_PLIST"/);
   assert.ok(
     source.indexOf('wait_for_process_exit "$old_core_pid" "$CORE_LABEL"') <
       source.indexOf('bootstrap_service "$CORE_LABEL" "$CORE_PLIST"'),

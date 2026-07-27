@@ -79,6 +79,15 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   operationsDailyReports: GuardianOperationsDailyReportResult;
   watchdog: PiGuardianWatchdogSummary;
 };
+export type GuardianControlPlaneCycleResult = Pick<ScheduleLayerCycleResult,
+  "automationCore" | "automations" | "completionWatchNotifications" | "cron" |
+  "dailyDigestNotifications" | "delegations" | "digestFlush" | "digestNotifications" |
+  "guardianActionDispatch" | "guardianDecisions" | "issueWatchdog" | "missedIntentSweep" |
+  "operationsDailyReports" | "providerTerminalSignals" | "watchdog"
+>;
+export type AgenticCycleResult = PiAutoManageCycleResult & Pick<ScheduleLayerCycleResult,
+  "agentCommunications" | "supervisor"
+>;
 
 export type PiAutoManageCycleInput = {
   agentCommunicationDecider?: AgentCommunicationDecider;
@@ -123,41 +132,34 @@ export function createPiAutoManageScheduler<Timer = unknown>(
   input: PiAutoManageSchedulerInput<Timer>
 ): PiAutoManageScheduler {
   const runtimeInput = withNativeAutomationExecutor(input);
-  const clock = input.clock ?? defaultClock<Timer>();
-  const intervalMs = input.intervalMs ?? DEFAULT_INTERVAL_MS;
   const supervisorIntervalMs = input.supervisorIntervalMs ?? DEFAULT_SUPERVISOR_INTERVAL_MS;
   let lastSupervisorScanAt = 0;
-  let timer: Timer | undefined;
-  let stopped = true;
-
-  const schedule = () => {
-    timer = clock.setTimeout(tick, intervalMs);
-  };
-  const tick = async () => {
+  return createCycleScheduler(input, async () => {
     const now = Date.now();
     const runSupervisor = shouldRunSupervisor(now, lastSupervisorScanAt, supervisorIntervalMs);
     if (runSupervisor) lastSupervisorScanAt = now;
-    try {
-      await runScheduleLayerCycle({ ...runtimeInput, runSupervisor });
-    } catch (error) {
-      input.onError?.(error);
-    } finally {
-      if (!stopped) schedule();
-    }
-  };
+    await runScheduleLayerCycle({ ...runtimeInput, runSupervisor });
+  });
+}
 
-  return {
-    start() {
-      if (!stopped) return;
-      stopped = false;
-      schedule();
-    },
-    stop() {
-      stopped = true;
-      if (timer !== undefined) clock.clearTimeout(timer);
-      timer = undefined;
-    }
-  };
+export function createPiGuardianScheduler<Timer = unknown>(
+  input: PiAutoManageSchedulerInput<Timer>
+): PiAutoManageScheduler {
+  const runtimeInput = withNativeAutomationExecutor(input);
+  return createCycleScheduler(input, () => runGuardianControlPlaneCycle(runtimeInput));
+}
+
+export function createPiAgenticScheduler<Timer = unknown>(
+  input: PiAutoManageSchedulerInput<Timer>
+): PiAutoManageScheduler {
+  const supervisorIntervalMs = input.supervisorIntervalMs ?? DEFAULT_SUPERVISOR_INTERVAL_MS;
+  let lastSupervisorScanAt = 0;
+  return createCycleScheduler(input, async () => {
+    const now = Date.now();
+    const runSupervisor = shouldRunSupervisor(now, lastSupervisorScanAt, supervisorIntervalMs);
+    if (runSupervisor) lastSupervisorScanAt = now;
+    await runAgenticCycle({ ...input, runSupervisor });
+  });
 }
 
 export async function runPiAutoManageCycle(input: PiAutoManageCycleInput): Promise<PiAutoManageCycleResult> {
@@ -179,6 +181,17 @@ export async function runPiAutoManageCycle(input: PiAutoManageCycleInput): Promi
 }
 
 export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Promise<ScheduleLayerCycleResult> {
+  const cycleStartedAt = performance.now();
+  const guardian = await runGuardianControlPlaneCycle(input);
+  const agentic = await runAgenticCycle(input);
+  const cycleDurationMs = performance.now() - cycleStartedAt;
+  if (cycleDurationMs >= SLOW_SCHEDULE_PHASE_MS) logScheduleTiming("cycle", cycleDurationMs);
+  return { ...guardian, ...agentic };
+}
+
+export async function runGuardianControlPlaneCycle(
+  input: PiAutoManageCycleInput
+): Promise<GuardianControlPlaneCycleResult> {
   const cycleStartedAt = performance.now();
   // W3 target-only cutover: compatibility result fields stay stable for one
   // release, but legacy Cron/PI/delegation schedulers are no longer invoked.
@@ -249,6 +262,29 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     providers: input.providers,
     staleAfterMs: input.watchdogStaleAfterMs
   }));
+  const cycleDurationMs = performance.now() - cycleStartedAt;
+  if (cycleDurationMs >= SLOW_SCHEDULE_PHASE_MS) logScheduleTiming("guardian_cycle", cycleDurationMs);
+  return {
+    automationCore,
+    automations,
+    completionWatchNotifications,
+    cron,
+    dailyDigestNotifications,
+    delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started },
+    digestFlush,
+    digestNotifications,
+    guardianActionDispatch,
+    guardianDecisions,
+    issueWatchdog,
+    missedIntentSweep,
+    operationsDailyReports,
+    providerTerminalSignals,
+    watchdog
+  };
+}
+
+export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<AgenticCycleResult> {
+  const cycleStartedAt = performance.now();
   const projects = await timedSchedulePhase("projects", () => runPiAutoManageCycle(input));
   const agentCommunications = await timedSchedulePhase("agent_communications", () => runAgentCommunicationGatewayOnce(input.database, {
     decide: input.agentCommunicationDecider,
@@ -263,9 +299,8 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
       sender: input.guardianDirectFeishuSender ?? createFeishuMessageClient({ config: communicationFeishuConfig.integrations.feishu })
     }));
   }
-  // PI decisions can take tens of seconds. Keep the deterministic scheduler,
-  // watchdog, and project phases ahead of the LLM boundary so a slow
-  // Supervisor cannot starve due Automation runs or the control plane.
+  // PI decisions can take tens of seconds. Runtime wiring executes this whole
+  // agentic cycle independently from the Guardian/control-plane scheduler.
   const supervisor = input.runSupervisor === false
     ? { decisions: 0, failed: 0, scanned: 0, signaled: 0, skipped: 0 }
     : await timedSchedulePhase("supervisor", () => runPiIssueSupervisorSchedulerOnce({
@@ -276,26 +311,11 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
       runDecision: input.runSupervisorDecision
     }));
   const cycleDurationMs = performance.now() - cycleStartedAt;
-  if (cycleDurationMs >= SLOW_SCHEDULE_PHASE_MS) logScheduleTiming("cycle", cycleDurationMs);
+  if (cycleDurationMs >= SLOW_SCHEDULE_PHASE_MS) logScheduleTiming("agentic_cycle", cycleDurationMs);
   return {
     ...projects,
     agentCommunications,
-    automationCore,
-    automations,
-    cron,
-    delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started },
-    dailyDigestNotifications,
-    digestFlush,
-    digestNotifications,
-    completionWatchNotifications,
-    guardianActionDispatch,
-    guardianDecisions,
-    issueWatchdog,
-    missedIntentSweep,
-    operationsDailyReports,
-    providerTerminalSignals,
-    supervisor,
-    watchdog
+    supervisor
   };
 }
 
@@ -321,6 +341,38 @@ function logScheduleTiming(phase: string, durationMs: number): void {
     duration_ms: Math.round(durationMs),
     phase
   }));
+}
+
+function createCycleScheduler<Timer>(
+  input: PiAutoManageSchedulerInput<Timer>,
+  cycle: () => Promise<unknown>
+): PiAutoManageScheduler {
+  const clock = input.clock ?? defaultClock<Timer>();
+  const intervalMs = input.intervalMs ?? DEFAULT_INTERVAL_MS;
+  let timer: Timer | undefined;
+  let stopped = true;
+  const schedule = () => { timer = clock.setTimeout(tick, intervalMs); };
+  const tick = async () => {
+    try {
+      await cycle();
+    } catch (error) {
+      input.onError?.(error);
+    } finally {
+      if (!stopped) schedule();
+    }
+  };
+  return {
+    start() {
+      if (!stopped) return;
+      stopped = false;
+      schedule();
+    },
+    stop() {
+      stopped = true;
+      if (timer !== undefined) clock.clearTimeout(timer);
+      timer = undefined;
+    }
+  };
 }
 
 function withNativeAutomationExecutor<T extends PiAutoManageCycleInput>(input: T): T {

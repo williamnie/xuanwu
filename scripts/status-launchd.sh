@@ -4,8 +4,10 @@ set -euo pipefail
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
 WEB_LABEL="${LABEL}.web"
 CORE_LABEL="${LABEL}.core"
+AGENTIC_LABEL="${LABEL}.agentic"
 ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
 CORE_ADDR="${CODEX_RUNNER_CORE_ADDR:-127.0.0.1:3009}"
+AGENTIC_ADDR="${CODEX_RUNNER_AGENTIC_ADDR:-127.0.0.1:3010}"
 APP_SUPPORT_DIR="${CODEX_RUNNER_APP_SUPPORT_DIR:-$HOME/Library/Application Support/codex-issue-runner-bun-live}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$APP_SUPPORT_DIR/state}"
 DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
@@ -48,37 +50,48 @@ print_launchd_service() {
   rm -f "$output"
 }
 
-curl_core_status() {
-  local url="$1" output="$2" token config
+curl_core_api() {
+  local url="$1" path="$2" output="$3" token config
   token="$(api_token)"
   if [ -z "$token" ]; then
-    curl -fsS "$url/api/system/status?compact=1" -o "$output"
+    curl -fsS "$url$path" -o "$output"
     return
   fi
   config="$(mktemp)"
   chmod 600 "$config"
   printf 'header = "Authorization: Bearer %s"\n' "$token" > "$config"
-  curl -fsS --config "$config" "$url/api/system/status?compact=1" -o "$output"
+  curl -fsS --config "$config" "$url$path" -o "$output"
   rm -f "$config"
+}
+
+curl_core_status() {
+  curl_core_api "$1" "/api/system/status?compact=1" "$2"
 }
 
 WEB_URL="$(service_url "$ADDR")"
 CORE_URL="$(service_url "$CORE_ADDR")"
 print_launchd_service "$WEB_LABEL"
 print_launchd_service "$CORE_LABEL"
+print_launchd_service "$AGENTIC_LABEL"
 
 WEB_PID="$(service_pid "$WEB_LABEL")"
 CORE_PID="$(service_pid "$CORE_LABEL")"
-[ -n "$WEB_PID" ] && [ -n "$CORE_PID" ] || { echo "[status] split services are not both running" >&2; exit 1; }
-[ "$WEB_PID" != "$CORE_PID" ] || { echo "[status] Web and Core unexpectedly share one PID" >&2; exit 1; }
+AGENTIC_PID="$(service_pid "$AGENTIC_LABEL")"
+[ -n "$WEB_PID" ] && [ -n "$CORE_PID" ] && [ -n "$AGENTIC_PID" ] \
+  || { echo "[status] Web, Core, and Agentic services are not all running" >&2; exit 1; }
+[ "$WEB_PID" != "$CORE_PID" ] && [ "$WEB_PID" != "$AGENTIC_PID" ] && [ "$CORE_PID" != "$AGENTIC_PID" ] \
+  || { echo "[status] Web, Core, and Agentic unexpectedly share a PID" >&2; exit 1; }
 WEB_COMMAND="$(ps -p "$WEB_PID" -o command=)"
 CORE_COMMAND="$(ps -p "$CORE_PID" -o command=)"
+AGENTIC_COMMAND="$(ps -p "$AGENTIC_PID" -o command=)"
 [[ "$WEB_COMMAND" == *"$LAUNCHD_BINARY_PATH"*"--role web"* ]] \
   || { echo "[status] Web PID is not the expected artifact/role" >&2; exit 1; }
 [[ "$CORE_COMMAND" == *"$LAUNCHD_BINARY_PATH"*"--role core"* ]] \
   || { echo "[status] Core PID is not the expected artifact/role" >&2; exit 1; }
+[[ "$AGENTIC_COMMAND" == *"$LAUNCHD_BINARY_PATH"*"--role agentic"* ]] \
+  || { echo "[status] Agentic PID is not the expected artifact/role" >&2; exit 1; }
 
-for addr in "$ADDR" "$CORE_ADDR"; do
+for addr in "$ADDR" "$CORE_ADDR" "$AGENTIC_ADDR"; do
   port="${addr##*:}"
   echo "[status] listening sockets for port $port:"
   lsof -nP -iTCP:"$port" -sTCP:LISTEN || true
@@ -88,18 +101,25 @@ echo "[status] web health: $WEB_URL/health"
 curl -fsS "$WEB_URL/health" >/dev/null
 echo "[status] core health: $CORE_URL/health"
 curl -fsS "$CORE_URL/health" >/dev/null
+AGENTIC_URL="$(service_url "$AGENTIC_ADDR")"
+echo "[status] agentic health: $AGENTIC_URL/health"
+curl -fsS "$AGENTIC_URL/health" >/dev/null
 
 STATUS_FILE="$(mktemp)"
 GATEWAY_STATUS_FILE="$(mktemp)"
-trap 'rm -f "$STATUS_FILE" "$GATEWAY_STATUS_FILE"' EXIT
+AGENTIC_STATUS_FILE="$(mktemp)"
+trap 'rm -f "$STATUS_FILE" "$GATEWAY_STATUS_FILE" "$AGENTIC_STATUS_FILE"' EXIT
 curl_core_status "$CORE_URL" "$STATUS_FILE"
 curl_core_status "$WEB_URL" "$GATEWAY_STATUS_FILE"
-python3 - "$STATUS_FILE" "$GATEWAY_STATUS_FILE" "$LAUNCHD_BINARY_PATH.build.stamp" <<'PY'
+curl_core_api "$CORE_URL" "/api/system/agentic-health" "$AGENTIC_STATUS_FILE"
+python3 - "$STATUS_FILE" "$GATEWAY_STATUS_FILE" "$LAUNCHD_BINARY_PATH.build.stamp" "$AGENTIC_STATUS_FILE" <<'PY'
 import json, pathlib, sys
 with open(sys.argv[1], encoding="utf-8") as f:
     status = json.load(f)
 with open(sys.argv[2], encoding="utf-8") as f:
     gateway_status = json.load(f)
+with open(sys.argv[4], encoding="utf-8") as f:
+    agentic_status = json.load(f)
 service = status.get("service") or {}
 build = service.get("build") or {}
 gateway_service = gateway_status.get("service") or {}
@@ -113,6 +133,7 @@ print(f"[status] backend version: {service.get('version') or build.get('version'
 print(f"[status] runtime stamp: {runtime_stamp or 'missing'}")
 print(f"[status] artifact stamp: {artifact_stamp or 'missing'}")
 print(f"[status] db ok: {(status.get('db') or {}).get('ok')}")
+print(f"[status] core -> agentic RPC ok: {agentic_status.get('ok')}")
 if service.get("role") != "core":
     raise SystemExit("core status did not report role=core")
 if gateway_service.get("role") != "core" or gateway_build.get("stamp") != runtime_stamp:
@@ -121,6 +142,8 @@ if not runtime_stamp or runtime_stamp != artifact_stamp:
     raise SystemExit("runtime/artifact stamp mismatch")
 if not (status.get("db") or {}).get("ok"):
     raise SystemExit("core database check failed")
+if agentic_status.get("ok") is not True or agentic_status.get("role") != "agentic":
+    raise SystemExit("Core did not reach the matching Agentic Worker")
 PY
 
 if lsof -nP -a -p "$WEB_PID" "$DB_PATH" 2>/dev/null | grep -F "$DB_PATH" >/dev/null; then
@@ -131,5 +154,9 @@ if ! lsof -nP -a -p "$CORE_PID" "$DB_PATH" 2>/dev/null | grep -F "$DB_PATH" >/de
   echo "[status] Core process does not hold runner DB: $DB_PATH" >&2
   exit 1
 fi
-echo "[status] split authority: web_pid=$WEB_PID core_pid=$CORE_PID db_writer=core scheduler=core provider=core connector=core"
+if ! lsof -nP -a -p "$AGENTIC_PID" "$DB_PATH" 2>/dev/null | grep -F "$DB_PATH" >/dev/null; then
+  echo "[status] Agentic process does not hold runner DB: $DB_PATH" >&2
+  exit 1
+fi
+echo "[status] split authority: web_pid=$WEB_PID core_pid=$CORE_PID agentic_pid=$AGENTIC_PID guardian=core provider=core connector=core background_llm=agentic sqlite=shared-file-serialized-writes"
 echo "[status] API OK via Web Gateway"

@@ -1,4 +1,5 @@
 import { PI_MANAGER_ROLE } from "../agents/roles.ts";
+import type { AgenticWorkerClient } from "../agentic/protocol.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
@@ -6,6 +7,7 @@ import {
   createPiConversation,
   getPiSupervisor,
   getProjectPiSettings,
+  updatePiConversation,
   type PiAgent,
   type PiConversation
 } from "../db/repositories/pi.ts";
@@ -25,7 +27,7 @@ import {
 import { publishPiSessionEvent } from "./piSessionEvents.ts";
 import type { Router } from "./router.ts";
 
-type PiProjectControlContext = { bus?: EventBus; database: RunnerDatabase };
+type PiProjectControlContext = { agenticClient?: AgenticWorkerClient; bus?: EventBus; database: RunnerDatabase };
 type ProjectPiCycleInput = { maxActions?: number; projectId: string };
 
 const PI_SESSION_PROVIDER = "pi-sdk";
@@ -64,7 +66,10 @@ function targetIssueIDs(params: URLSearchParams): number[] {
 }
 
 async function runOnceResponse(context: PiProjectControlContext, request: Request): Promise<Response> {
-  return writeResponse(async () => runProjectPiCycle(context, { projectId: projectID(request) }), 201);
+  const input = { maxActions: DEFAULT_MANAGER_ACTION_LIMIT, projectId: projectID(request) };
+  return writeResponse(async () => context.agenticClient
+    ? context.agenticClient.runProjectCycle(input)
+    : runProjectPiCycle(context, input), 201);
 }
 
 export async function runProjectPiCycle(context: PiProjectControlContext, input: ProjectPiCycleInput) {
@@ -84,6 +89,9 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
   }
   try {
     return await executeManagerCycle(context, project, maxActions, state);
+  } catch (error) {
+    finalizeManagerCycle(context.database, state.conversation, project, "failed");
+    throw error;
   } finally {
     if (activeProjectPiRuns.get(project.id) === state.runtime.session) activeProjectPiRuns.delete(project.id);
     state.unsubscribe();
@@ -134,9 +142,21 @@ async function executeManagerCycle(
     source: "rpc"
   });
   await ensurePiSessionFile(state.runtime.session);
-  persistPiSessionIndex(context.database, state.conversation, project);
+  const status = state.runtime.session.state.errorMessage ? "failed" : "completed";
+  const conversation = finalizeManagerCycle(context.database, state.conversation, project, status);
   const notifications: never[] = [];
-  return managerCycleResult(state.conversation, state.runtime.session, snapshot, issueState, notifications);
+  return managerCycleResult(conversation, state.runtime.session, snapshot, issueState, notifications);
+}
+
+function finalizeManagerCycle(
+  db: RunnerDatabase,
+  conversation: PiConversation,
+  project: Project,
+  status: "completed" | "failed"
+): PiConversation {
+  const terminal = updatePiConversation(db, conversation.id, { status });
+  persistPiSessionIndex(db, terminal, project);
+  return terminal;
 }
 
 function requireRunnableSupervisor(db: RunnerDatabase, action: string): PiAgent {

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { listPiActionEvents, listPiActions, listPiConversations, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { EventBus } from "../events/bus.ts";
@@ -29,6 +30,35 @@ afterEach(async () => {
 });
 
 describe("Bun project PI control API", () => {
+  test("run-once delegates to the Agentic Worker when configured", async () => {
+    const database = await openFixtureDatabase();
+    const calls: unknown[] = [];
+    try {
+      insertProject(database, "demo");
+      const router = createDefaultRouter({
+        agenticClient: {
+          decideCommunication: async () => ({ decision: "suppress", message: "", rationale: "test" }),
+          decideSupervisor: async () => { throw new Error("not used"); },
+          health: async () => ({ ok: true, role: "agentic" }),
+          runProjectCycle: async (input) => {
+            calls.push(input);
+            return { managed: true, project_id: input.projectId, status: "completed", text: "remote" };
+          }
+        },
+        database
+      });
+
+      const response = await post(router, "/api/projects/demo/pi/run-once");
+
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({ project_id: "demo", status: "completed", text: "remote" });
+      expect(calls).toEqual([{ maxActions: 5, projectId: "demo" }]);
+      expect(listPiConversations(database, { projectId: "demo" })).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test("run-once starts one PI manager cycle for a project", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-control-faux-api", provider: "pi-control-faux" });
@@ -53,13 +83,44 @@ describe("Bun project PI control API", () => {
         status: "completed",
         text: "cycle done"
       });
-      expect(listPiConversations(database, { projectId: "demo" })).toHaveLength(1);
+      const conversations = listPiConversations(database, { projectId: "demo" });
+      expect(conversations).toHaveLength(1);
+      expect(conversations[0]).toMatchObject({ status: "completed" });
+      expect(getAgentSession(database, `pi-sdk:${conversations[0]?.pi_session_id}`))
+        .toMatchObject({ status: "completed" });
       expect(faux.state.callCount).toBe(1);
       expect(promptContext).toContain("Project status snapshot");
       expect(promptContext).toContain("Issue state diagnostics");
       expect(promptContext).toContain("Failed issue");
       const promptText = JSON.parse(promptContext).messages[0].content[0].text;
       expect(promptText).toContain('"failed": 1');
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("run-once terminalizes failed provider cycles", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-control-error-api", provider: "pi-control-error" });
+    try {
+      faux.setResponses([fauxAssistantMessage([], {
+        errorMessage: "provider failed",
+        stopReason: "error"
+      })]);
+      insertProject(database, "demo");
+      insertFauxAgent(database, "pi-control-error");
+      writeFauxModelsConfig(database, "pi-control-error");
+      const router = createDefaultRouter({ database });
+
+      const response = await post(router, "/api/projects/demo/pi/run-once");
+
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({ status: "failed" });
+      const [conversation] = listPiConversations(database, { projectId: "demo" });
+      expect(conversation).toMatchObject({ status: "failed" });
+      expect(getAgentSession(database, `pi-sdk:${conversation?.pi_session_id}`))
+        .toMatchObject({ status: "failed" });
     } finally {
       faux.unregister();
       database.close();

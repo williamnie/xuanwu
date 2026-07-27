@@ -61,8 +61,7 @@ export function listProjectSessionProgress(
   options: SessionObserverOptions = {}
 ): SessionProgressSummary[] {
   const limit = eventLimit(options);
-  return listAgentSessions(db, { projectId: projectID.trim() })
-    .slice(0, limit)
+  return listAgentSessions(db, { limit, projectId: projectID.trim() })
     .map((session) => buildSessionProgress(db, session, limit));
 }
 

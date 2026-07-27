@@ -696,6 +696,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/sessions/preferences", family: "run-session-drilldown" },
   { method: "GET", path: "/api/sync-outbox", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/sync-outbox/dispatch", family: "integration-intake-delivery" },
+  { method: "GET", path: "/api/system/agentic-health", family: "system-observability" },
   { method: "GET", path: "/api/system/doctor", family: "system-observability" },
   { method: "GET", path: "/api/system/logs", family: "system-observability" },
   { method: "POST", path: "/api/system/restart", family: "system-observability" },

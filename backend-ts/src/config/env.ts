@@ -18,6 +18,7 @@ import { createSecretService } from "../security/secrets/service.ts";
 
 export const ENV_KEYS = {
   addr: "CODEX_RUNNER_ADDR",
+  agenticAddr: "CODEX_RUNNER_AGENTIC_ADDR",
   stateDir: "CODEX_RUNNER_STATE_DIR",
   dbPath: "CODEX_RUNNER_DB",
   authToken: "CODEX_RUNNER_AUTH_TOKEN",
@@ -109,6 +110,7 @@ export type CliConnectorConfig = {
 
 export type RunnerConfig = {
   addr: string;
+  agenticAddr: string;
   stateDir: string;
   dbPath: string;
   authToken: string;
@@ -128,6 +130,7 @@ export type RunnerConfig = {
 
 const FLAG_KEYS: Record<string, ConfigKey> = {
   "--addr": "addr",
+  "--agentic-addr": "agenticAddr",
   "--state-dir": "stateDir",
   "--db": "dbPath",
   "--auth-token": "authToken",
@@ -179,6 +182,7 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
   const codexServer = buildCodexServerConfig(overrides);
   return {
     addr: cleanValue(overrides.addr) ?? DEFAULT_ADDR,
+    agenticAddr: cleanValue(overrides.agenticAddr) ?? "127.0.0.1:3010",
     authToken: cleanValue(overrides.authToken) ?? "",
     codexSessionsDir: cleanValue(overrides.codexSessionsDir) ?? defaultCodexSessionsDir(),
     webDir: cleanValue(overrides.webDir) ?? "",
@@ -256,6 +260,7 @@ function effectiveGitLabInput(overrides: ConfigOverrides): GitLabConnectorConfig
 function readEnvOverrides(env: Env): ConfigOverrides {
   return {
     addr: cleanValue(env[ENV_KEYS.addr]),
+    agenticAddr: cleanValue(env[ENV_KEYS.agenticAddr]),
     stateDir: cleanValue(env[ENV_KEYS.stateDir]),
     dbPath: cleanValue(env[ENV_KEYS.dbPath]),
     authToken: cleanValue(env[ENV_KEYS.authToken]),

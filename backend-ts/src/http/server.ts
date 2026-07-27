@@ -1,4 +1,5 @@
 import type { RunnerConfig } from "../config/env.ts";
+import type { AgenticWorkerClient } from "../agentic/protocol.ts";
 import { parseListenAddress } from "../config/listenAddress.ts";
 import { EventBus } from "../events/bus.ts";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -8,7 +9,7 @@ import { applyLocalCors, withCors } from "./cors.ts";
 import { registerEventRoutes } from "./events.ts";
 import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
 import { attachFeishuNotificationObservers } from "../integrations/feishuNotifications.ts";
-import { json } from "./errors.ts";
+import { json, jsonError } from "./errors.ts";
 import { registerExternalEventRoutes } from "./externalEventsApi.ts";
 import { registerFeishuEventRoutes } from "./feishuEventsApi.ts";
 import { registerFeishuSettingsRoutes } from "./feishuSettingsApi.ts";
@@ -36,6 +37,7 @@ import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 
 type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
 type DefaultRouterOptions = {
+  agenticClient?: AgenticWorkerClient;
   auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
   bus?: EventBus;
   codexSessionsDir?: string;
@@ -66,6 +68,15 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   const router = createRouter();
   const bus = runtime.bus ?? new EventBus();
   router.get("/health", () => json({ status: "ok" }));
+  if (runtime.agenticClient) {
+    router.get("/api/system/agentic-health", async () => {
+      try {
+        return json(await runtime.agenticClient!.health());
+      } catch {
+        return jsonError(503, "Agentic Worker unavailable");
+      }
+    });
+  }
   registerSystemRestartRoute(router, {
     audit: runtime.auditSystemRestart,
     providers: runtime.providers,
@@ -114,6 +125,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       feishuSender: runtime.feishuSender
     });
     registerReadApiRoutes(router, {
+      agenticClient: runtime.agenticClient,
       bus,
       codexSessionsDir: runtime.codexSessionsDir,
       config: runtime.config,

@@ -10,7 +10,7 @@ export type AgentSession = {
 export type AgentSessionInput = Partial<Omit<AgentSession, "created_at" | "raw_ref" | "session_key" | "updated_at">> & {
   provider: string; provider_session_id: string; raw_ref?: unknown;
 };
-export type AgentSessionFilter = { projectId?: string; provider?: string; role?: string };
+export type AgentSessionFilter = { limit?: number; projectId?: string; provider?: string; role?: string };
 
 type AgentSessionRow = Record<keyof AgentSession, unknown>;
 const SESSION_COLUMNS = `session_key, provider, provider_session_id, agent_role,
@@ -70,7 +70,11 @@ function buildSessionListQuery(filter: AgentSessionFilter): { args: string[]; sq
   addFilter(conditions, args, "project_id=?", filter.projectId);
   addFilter(conditions, args, "agent_role=?", normalizeAgentSessionRole(filter.role));
   const where = conditions.length > 0 ? ` where ${conditions.join(" and ")}` : "";
-  return { args, sql: `select ${SESSION_COLUMNS} from agent_sessions${where} order by updated_at desc, session_key asc` };
+  const limit = normalizedLimit(filter.limit);
+  return {
+    args,
+    sql: `select ${SESSION_COLUMNS} from agent_sessions${where} order by updated_at desc, session_key asc${limit > 0 ? ` limit ${limit}` : ""}`
+  };
 }
 
 function addFilter(conditions: string[], args: string[], condition: string, value: string | undefined): void {
@@ -78,6 +82,10 @@ function addFilter(conditions: string[], args: string[], condition: string, valu
   if (text === "") return;
   conditions.push(condition);
   args.push(text);
+}
+
+function normalizedLimit(value: number | undefined): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? Math.min(value, 10_000) : 0;
 }
 
 function mustGetAgentSession(db: RunnerDatabase, sessionKey: string): AgentSession {

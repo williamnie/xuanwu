@@ -6,8 +6,10 @@ source "$ROOT_DIR/scripts/assert-external-deploy-context.sh"
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
 ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
 CORE_ADDR="${CODEX_RUNNER_CORE_ADDR:-127.0.0.1:3009}"
+AGENTIC_ADDR="${CODEX_RUNNER_AGENTIC_ADDR:-127.0.0.1:3010}"
 WEB_LABEL="${LABEL}.web"
 CORE_LABEL="${LABEL}.core"
+AGENTIC_LABEL="${LABEL}.agentic"
 APP_SUPPORT_DIR="${CODEX_RUNNER_APP_SUPPORT_DIR:-$HOME/Library/Application Support/codex-issue-runner-bun-live}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$APP_SUPPORT_DIR/state}"
 DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
@@ -31,6 +33,7 @@ PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
 LEGACY_PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 WEB_PLIST="$HOME/Library/LaunchAgents/$WEB_LABEL.plist"
 CORE_PLIST="$HOME/Library/LaunchAgents/$CORE_LABEL.plist"
+AGENTIC_PLIST="$HOME/Library/LaunchAgents/$AGENTIC_LABEL.plist"
 DOMAIN="gui/$(id -u)"
 
 xml_escape() {
@@ -83,7 +86,7 @@ stage_launchd_binary() {
 
 backup_current_runtime() {
   local rollback_dir="" source
-  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST"; do
+  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST"; do
     [ -e "$source" ] || continue
     if [ -z "$rollback_dir" ]; then
       rollback_dir="$APP_SUPPORT_DIR/rollback/$(date -u '+%Y%m%dT%H%M%SZ')"
@@ -275,6 +278,8 @@ cat > "$CORE_PLIST" <<PLIST
     <string>core</string>
     <string>--addr</string>
     <string>$(xml_escape "$CORE_ADDR")</string>
+    <string>--agentic-addr</string>
+    <string>$(xml_escape "$AGENTIC_ADDR")</string>
     <string>--state-dir</string>
     <string>$(xml_escape "$STATE_DIR")</string>
     <string>--db</string>
@@ -315,32 +320,90 @@ cat > "$CORE_PLIST" <<PLIST
 </plist>
 PLIST
 
+cat > "$AGENTIC_PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$(xml_escape "$AGENTIC_LABEL")</string>
+  <key>Program</key>
+  <string>$(xml_escape "$LAUNCHD_BINARY_PATH")</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$(xml_escape "$LAUNCHD_BINARY_PATH")</string>
+    <string>serve</string>
+    <string>--role</string>
+    <string>agentic</string>
+    <string>--addr</string>
+    <string>$(xml_escape "$AGENTIC_ADDR")</string>
+    <string>--state-dir</string>
+    <string>$(xml_escape "$STATE_DIR")</string>
+    <string>--db</string>
+    <string>$(xml_escape "$DB_PATH")</string>
+    <string>--auth-token-file</string>
+    <string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>$(xml_escape "$HOME")</string>
+    <key>PATH</key>
+    <string>$(xml_escape "$PATH_VALUE")</string>
+    <key>PI_PACKAGE_DIR</key>
+    <string>$(xml_escape "$PI_PACKAGE_ASSET_DIR")</string>
+    <key>CODEX_RUNNER_MANAGED_EXECUTION</key>
+    <string>1</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>$(xml_escape "$LOG_DIR/launchd.agentic.out.log")</string>
+  <key>StandardErrorPath</key>
+  <string>$(xml_escape "$LOG_DIR/launchd.agentic.err.log")</string>
+</dict>
+</plist>
+PLIST
+
 plutil -lint "$WEB_PLIST" >/dev/null
 plutil -lint "$CORE_PLIST" >/dev/null
+plutil -lint "$AGENTIC_PLIST" >/dev/null
 old_legacy_pid="$(launchd_service_pid "$LABEL" || true)"
 old_web_pid="$(launchd_service_pid "$WEB_LABEL" || true)"
 old_core_pid="$(launchd_service_pid "$CORE_LABEL" || true)"
+old_agentic_pid="$(launchd_service_pid "$AGENTIC_LABEL" || true)"
 launchctl bootout "$DOMAIN/$LABEL" >/dev/null 2>&1 || launchctl bootout "$DOMAIN" "$LEGACY_PLIST" >/dev/null 2>&1 || true
 rm -f "$LEGACY_PLIST"
 launchctl bootout "$DOMAIN/$WEB_LABEL" >/dev/null 2>&1 || true
 launchctl bootout "$DOMAIN/$CORE_LABEL" >/dev/null 2>&1 || true
+launchctl bootout "$DOMAIN/$AGENTIC_LABEL" >/dev/null 2>&1 || true
 wait_for_service_unloaded "$LABEL"
 wait_for_service_unloaded "$WEB_LABEL"
 wait_for_service_unloaded "$CORE_LABEL"
+wait_for_service_unloaded "$AGENTIC_LABEL"
 wait_for_process_exit "$old_legacy_pid" "$LABEL"
 wait_for_process_exit "$old_web_pid" "$WEB_LABEL"
 wait_for_process_exit "$old_core_pid" "$CORE_LABEL"
+wait_for_process_exit "$old_agentic_pid" "$AGENTIC_LABEL"
 bootstrap_service "$CORE_LABEL" "$CORE_PLIST"
-bootstrap_service "$WEB_LABEL" "$WEB_PLIST"
 launchctl enable "$DOMAIN/$CORE_LABEL" >/dev/null 2>&1 || true
-launchctl enable "$DOMAIN/$WEB_LABEL" >/dev/null 2>&1 || true
 launchctl kickstart -k "$DOMAIN/$CORE_LABEL"
 wait_for_health "$(service_url "$CORE_ADDR")"
+bootstrap_service "$AGENTIC_LABEL" "$AGENTIC_PLIST"
+launchctl enable "$DOMAIN/$AGENTIC_LABEL" >/dev/null 2>&1 || true
+launchctl kickstart -k "$DOMAIN/$AGENTIC_LABEL"
+wait_for_health "$(service_url "$AGENTIC_ADDR")"
+bootstrap_service "$WEB_LABEL" "$WEB_PLIST"
+launchctl enable "$DOMAIN/$WEB_LABEL" >/dev/null 2>&1 || true
 launchctl kickstart -k "$DOMAIN/$WEB_LABEL"
 wait_for_health "$(service_url "$ADDR")"
 
 "$ROOT_DIR/scripts/status-launchd.sh"
-echo "[launchd] installed plists: $WEB_PLIST $CORE_PLIST"
+echo "[launchd] installed plists: $WEB_PLIST $CORE_PLIST $AGENTIC_PLIST"
 echo "[launchd] binary: $LAUNCHD_BINARY_PATH"
 echo "[launchd] web: $WEB_DIR"
-echo "[launchd] logs: $LOG_DIR/launchd.web.*.log $LOG_DIR/launchd.out.log $LOG_DIR/launchd.err.log"
+echo "[launchd] logs: $LOG_DIR/launchd.web.*.log $LOG_DIR/launchd.agentic.*.log $LOG_DIR/launchd.out.log $LOG_DIR/launchd.err.log"

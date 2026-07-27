@@ -17,13 +17,17 @@ const root = await mkdtemp(join(tmpdir(), "runner-web-core-smoke-"));
 const stateDir = join(root, "state");
 const dbPath = join(stateDir, "runner.db");
 const assetPath = await findHashedAsset(webDir);
-const [webPort, corePort] = await freePorts();
+const [webPort, corePort, agenticPort] = await freePorts();
 const webUrl = `http://127.0.0.1:${webPort}`;
 const coreUrl = `http://127.0.0.1:${corePort}`;
+const agenticUrl = `http://127.0.0.1:${agenticPort}`;
+let agentic: Child | undefined;
 let core: Child | undefined;
 let web: Child | undefined;
 
 try {
+  agentic = spawnRole("agentic", agenticPort);
+  await waitForHealth(agenticUrl);
   core = spawnRole("core", corePort);
   web = spawnRole("web", webPort);
   await Promise.all([waitForHealth(coreUrl), waitForHealth(webUrl)]);
@@ -46,6 +50,20 @@ try {
   const performancePass = indexStats.p95 < 100 && indexStats.p99 < 250
     && assetStats.p95 < 100 && assetStats.p99 < 250;
   const webDbFdOpen = processOpenedPath(web.pid, dbPath);
+  const coreDbFdOpen = processOpenedPath(core.pid, dbPath);
+  const agenticDbFdOpen = processOpenedPath(agentic.pid, dbPath);
+
+  agentic.kill("SIGSTOP");
+  await Bun.sleep(100);
+  const coreWhileAgenticPaused = await timedStatus(`${coreUrl}/api/projects`, { authorization: AUTHORIZATION });
+  agentic.kill("SIGCONT");
+  await stop(agentic);
+  agentic = undefined;
+  const coreWhileAgenticDown = await timedStatus(`${coreUrl}/api/projects`, { authorization: AUTHORIZATION });
+  const agenticUnavailable = await timedStatus(`${coreUrl}/api/system/agentic-health`, { authorization: AUTHORIZATION });
+  agentic = spawnRole("agentic", agenticPort);
+  await waitForHealth(agenticUrl);
+  const agenticRecovered = await timedStatus(`${coreUrl}/api/system/agentic-health`, { authorization: AUTHORIZATION });
 
   await stop(core);
   core = undefined;
@@ -58,11 +76,19 @@ try {
   const recoveredBody = await recovered.json();
 
   const result = {
-    contract: "runner-web-core-isolation-smoke.v1",
+    contract: "runner-web-core-agentic-isolation-smoke.v2",
     ok: performancePass
       && slowResponse.ok
       && slowBody.blocked_ms === slowMs
       && webDbFdOpen === false
+      && coreDbFdOpen === true
+      && agenticDbFdOpen === true
+      && coreWhileAgenticPaused.status === 200
+      && coreWhileAgenticPaused.elapsed_ms < 250
+      && coreWhileAgenticDown.status === 200
+      && agenticUnavailable.status === 503
+      && agenticUnavailable.elapsed_ms < 2_000
+      && agenticRecovered.status === 200
       && shellWhileCoreDown.status === 200
       && unavailable.status === 503
       && unavailable.elapsed_ms < 2_000
@@ -72,10 +98,21 @@ try {
     asset: assetPath,
     core_block_ms: slowBody.blocked_ms ?? 0,
     process_isolation: {
+      agentic_pid: agentic.pid,
       core_pid: core.pid,
-      distinct_pids: core.pid !== web.pid,
+      distinct_pids: core.pid !== web.pid && core.pid !== agentic.pid && web.pid !== agentic.pid,
+      agentic_db_fd_open: agenticDbFdOpen,
+      core_db_fd_open: coreDbFdOpen,
       web_db_fd_open: webDbFdOpen,
       web_pid: web.pid
+    },
+    agentic_restart: {
+      core_api_paused_elapsed_ms: coreWhileAgenticPaused.elapsed_ms,
+      core_api_paused_status: coreWhileAgenticPaused.status,
+      core_api_status: coreWhileAgenticDown.status,
+      health_recovered_status: agenticRecovered.status,
+      unavailable_elapsed_ms: agenticUnavailable.elapsed_ms,
+      unavailable_status: agenticUnavailable.status
     },
     static_latency_ms: { asset: assetStats, index: indexStats, samples },
     core_restart: {
@@ -90,7 +127,7 @@ try {
   if (!result.ok) process.exitCode = 1;
 } catch (error) {
   process.stdout.write(`${JSON.stringify({
-    contract: "runner-web-core-isolation-smoke.v1",
+    contract: "runner-web-core-agentic-isolation-smoke.v2",
     error: error instanceof Error ? error.message : String(error),
     ok: false
   })}\n`);
@@ -98,23 +135,30 @@ try {
 } finally {
   if (web) await stop(web);
   if (core) await stop(core);
+  if (agentic) await stop(agentic);
   await rm(root, { recursive: true, force: true });
 }
 
-function spawnRole(role: "core" | "web", port: number): Child {
+function spawnRole(role: "agentic" | "core" | "web", port: number): Child {
   const roleArgs = role === "core"
     ? [
         "serve", "--role", "core", "--addr", `127.0.0.1:${port}`,
-        "--state-dir", stateDir, "--db", dbPath, "--codex-cmd", Bun.which("true") ?? "/usr/bin/true"
+        "--agentic-addr", agenticUrl, "--state-dir", stateDir, "--db", dbPath,
+        "--codex-cmd", Bun.which("true") ?? "/usr/bin/true"
       ]
-    : [
+    : role === "agentic"
+      ? [
+          "serve", "--role", "agentic", "--addr", `127.0.0.1:${port}`,
+          "--state-dir", stateDir, "--db", dbPath, "--codex-cmd", Bun.which("true") ?? "/usr/bin/true"
+        ]
+      : [
         "serve", "--role", "web", "--addr", `127.0.0.1:${port}`,
         "--core-addr", coreUrl, "--web-dir", webDir, "--proxy-timeout-ms", "1000"
       ];
   const child = Bun.spawn([binary, ...roleArgs], {
     env: {
       ...Bun.env,
-      CODEX_RUNNER_AUTH_TOKEN: role === "core" ? AUTHORIZATION.slice("Bearer ".length) : "",
+      CODEX_RUNNER_AUTH_TOKEN: role === "web" ? "" : AUTHORIZATION.slice("Bearer ".length),
       CODEX_RUNNER_AUTH_TOKEN_FILE: "",
       ...(role === "core" ? { CODEX_RUNNER_TEST_BLOCK_MS: String(slowMs) } : {})
     },
@@ -196,14 +240,17 @@ async function findHashedAsset(root: string): Promise<string> {
   throw new Error(`no hashed asset found in ${assets}`);
 }
 
-async function freePorts(): Promise<[number, number]> {
+async function freePorts(): Promise<[number, number, number]> {
   const first = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("reserved") });
   const firstPort = first.port;
   const second = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("reserved") });
   const secondPort = second.port;
+  const third = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("reserved") });
+  const thirdPort = third.port;
   first.stop(true);
   second.stop(true);
-  return [firstPort, secondPort];
+  third.stop(true);
+  return [firstPort, secondPort, thirdPort];
 }
 
 function parseArgs(argv: string[]): Record<string, string> {

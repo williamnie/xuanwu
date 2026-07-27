@@ -67,6 +67,9 @@ const selected = resolveServerRole(args, Bun.env);
 if (selected.role === "web") {
   const { startWebRuntime } = await import("./runtime/web.ts");
   await startWebRuntime(selected.args);
+} else if (selected.role === "agentic") {
+  const { startAgenticRuntime } = await import("./runtime/agentic.ts");
+  await startAgenticRuntime(selected.args);
 } else {
   const { startCoreRuntime } = await import("./runtime/core.ts");
   await startCoreRuntime(selected.args, selected.role);

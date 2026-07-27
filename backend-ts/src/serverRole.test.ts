@@ -18,6 +18,11 @@ describe("server role", () => {
     expect(() => resolveServerRole(["--role"], {})).toThrow("Missing value for --role");
   });
 
+  test("accepts the isolated agentic worker role", () => {
+    expect(resolveServerRole(["--role=agentic", "--addr", "127.0.0.1:3010"], {}))
+      .toEqual({ args: ["--addr", "127.0.0.1:3010"], role: "agentic" });
+  });
+
   test("rejects a publicly bound Core authority", () => {
     expect(() => assertInternalCoreAddress("0.0.0.0:3009")).toThrow("loopback/internal");
     expect(() => assertInternalCoreAddress("[::]:3009")).toThrow("loopback/internal");

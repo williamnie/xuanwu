@@ -20,13 +20,24 @@ describe("server entrypoint wiring", () => {
     expect(source).not.toContain("event.thread_id || event.root_id || event.chat_id || event.message_id");
   });
 
-  test("loads Web and Core runtime graphs only after selecting a role", () => {
+  test("loads Web, Core, and Agentic runtime graphs only after selecting a role", () => {
     const source = readFileSync(join(import.meta.dir, "main.ts"), "utf8");
 
     expect(source).toContain('await import("./runtime/web.ts")');
     expect(source).toContain('await import("./runtime/core.ts")');
+    expect(source).toContain('await import("./runtime/agentic.ts")');
     expect(source).not.toContain('from "./db/database.ts"');
     expect(source).not.toContain('from "./providers/');
+  });
+
+  test("keeps automatic LLM boundaries behind the Agentic Worker client in split mode", () => {
+    const core = readFileSync(join(import.meta.dir, "runtime", "core.ts"), "utf8");
+
+    expect(core).toContain("createHttpAgenticWorkerClient");
+    expect(core).toContain("agenticClient.runProjectCycle");
+    expect(core).toContain("agenticClient.decideCommunication");
+    expect(core).toContain("agenticClient.decideSupervisor");
+    expect(core).not.toContain('from "../http/piProjectControlApi.ts"');
   });
 
   test("uses non-suspending physical memory and lifecycle-owned descendants off the Core HTTP loop", () => {

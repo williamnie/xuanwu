@@ -23,6 +23,7 @@ describe("Bun backend config", () => {
   test("uses Bun live defaults", () => {
     expect(buildConfig()).toEqual({
       addr: "127.0.0.1:3008",
+      agenticAddr: "127.0.0.1:3010",
       stateDir: "data-bun",
       dbPath: "data-bun/runner.db",
       authToken: "",
@@ -227,6 +228,7 @@ describe("Bun backend config", () => {
       [ENV_KEYS.authTokenFile]: "/tmp/token-bun",
       [ENV_KEYS.codexSessionsDir]: "/tmp/codex-sessions",
       [ENV_KEYS.webDir]: "/tmp/frontend-dist",
+      [ENV_KEYS.agenticAddr]: "127.0.0.1:4010",
       [ENV_KEYS.codexCommand]: "/opt/bin/codex app-server --listen stdio://",
       [ENV_KEYS.codexCwd]: "/tmp/project",
       [ENV_KEYS.codexEnv]: "CODEX_HOME=/tmp/codex, SAFE_VALUE=ok, CODEX_API_KEY=secret",
@@ -261,6 +263,7 @@ describe("Bun backend config", () => {
 
     expect(config).toEqual({
       addr: "127.0.0.1:3999",
+      agenticAddr: "127.0.0.1:4010",
       stateDir: "/tmp/state-bun",
       dbPath: "/tmp/runner-bun.db",
       authToken: "env-token",
@@ -331,6 +334,7 @@ describe("Bun backend config", () => {
     const config = loadConfig([
       "serve",
       "--addr", "127.0.0.1:4018",
+      "--agentic-addr", "127.0.0.1:4019",
       "--state-dir=/tmp/cli-state",
       "--db", "/tmp/cli.db",
       "--auth-token", "cli-token",
@@ -352,6 +356,7 @@ describe("Bun backend config", () => {
 
     expect(config).toEqual({
       addr: "127.0.0.1:4018",
+      agenticAddr: "127.0.0.1:4019",
       stateDir: "/tmp/cli-state",
       dbPath: "/tmp/cli.db",
       authToken: "cli-token",

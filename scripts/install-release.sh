@@ -12,9 +12,11 @@ VERSION="${CODEX_RUNNER_VERSION:-latest}"
 VERIFY_ATTESTATION="${CODEX_RUNNER_VERIFY_ATTESTATION:-auto}"
 ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
 CORE_ADDR="${CODEX_RUNNER_CORE_ADDR:-127.0.0.1:3009}"
+AGENTIC_ADDR="${CODEX_RUNNER_AGENTIC_ADDR:-127.0.0.1:3010}"
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
 WEB_LABEL="${LABEL}.web"
 CORE_LABEL="${LABEL}.core"
+AGENTIC_LABEL="${LABEL}.agentic"
 SERVICE_NAME="${CODEX_RUNNER_SERVICE_NAME:-codex-issue-runner}"
 INSTALL_DIR="${CODEX_RUNNER_INSTALL_DIR:-$HOME/.local/bin}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$HOME/.local/state/codex-issue-runner}"
@@ -44,6 +46,7 @@ Useful environment variables:
   CODEX_RUNNER_VERSION=v0.1.0          Install a fixed release tag instead of latest
   CODEX_RUNNER_ADDR=0.0.0.0:3008       Service listen address
   CODEX_RUNNER_CORE_ADDR=127.0.0.1:3009 Internal Core listen address
+  CODEX_RUNNER_AGENTIC_ADDR=127.0.0.1:3010 Internal Agentic Worker listen address
   CODEX_RUNNER_INSTALL_DIR=~/.local/bin Binary install directory
   CODEX_RUNNER_STATE_DIR=~/.local/state/codex-issue-runner
   CODEX_RUNNER_CODEX_CMD=/path/to/codex Codex CLI path
@@ -245,7 +248,7 @@ wait_until_ready() {
 }
 
 write_macos_plists() {
-  local web_plist="$1" core_plist="$2" codex_cmd="$3"
+  local web_plist="$1" core_plist="$2" agentic_plist="$3" codex_cmd="$4"
   cat > "$web_plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -302,6 +305,8 @@ PLIST
     <string>core</string>
     <string>--addr</string>
     <string>$(xml_escape "$CORE_ADDR")</string>
+    <string>--agentic-addr</string>
+    <string>$(xml_escape "$AGENTIC_ADDR")</string>
     <string>--state-dir</string>
     <string>$(xml_escape "$STATE_DIR")</string>
     <string>--db</string>
@@ -339,6 +344,53 @@ PLIST
 </dict>
 </plist>
 PLIST
+
+  cat > "$agentic_plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$(xml_escape "$AGENTIC_LABEL")</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$(xml_escape "$BIN_PATH")</string>
+    <string>serve</string>
+    <string>--role</string>
+    <string>agentic</string>
+    <string>--addr</string>
+    <string>$(xml_escape "$AGENTIC_ADDR")</string>
+    <string>--state-dir</string>
+    <string>$(xml_escape "$STATE_DIR")</string>
+    <string>--db</string>
+    <string>$(xml_escape "$DB_PATH")</string>
+    <string>--auth-token-file</string>
+    <string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>$(xml_escape "$HOME")</string>
+    <key>PATH</key>
+    <string>$(xml_escape "$PATH_VALUE")</string>
+    <key>PI_PACKAGE_DIR</key>
+    <string>$(xml_escape "$STATE_DIR/pi-coding-agent")</string>
+    <key>CODEX_RUNNER_MANAGED_EXECUTION</key>
+    <string>1</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>$(xml_escape "$LOG_DIR/launchd.agentic.out.log")</string>
+  <key>StandardErrorPath</key>
+  <string>$(xml_escape "$LOG_DIR/launchd.agentic.err.log")</string>
+</dict>
+</plist>
+PLIST
 }
 
 auth_token_file_systemd_args() {
@@ -356,34 +408,42 @@ write_custom_auth_token_file() {
 }
 
 install_macos_launchd() {
-  local codex_cmd web_plist core_plist legacy_plist domain web_url core_url
+  local codex_cmd web_plist core_plist agentic_plist legacy_plist domain web_url core_url agentic_url
   codex_cmd="$(resolve_codex_cmd)"
   web_plist="$HOME/Library/LaunchAgents/$WEB_LABEL.plist"
   core_plist="$HOME/Library/LaunchAgents/$CORE_LABEL.plist"
+  agentic_plist="$HOME/Library/LaunchAgents/$AGENTIC_LABEL.plist"
   legacy_plist="$HOME/Library/LaunchAgents/$LABEL.plist"
   domain="gui/$(id -u)"
   mkdir -p "$HOME/Library/LaunchAgents"
-  write_macos_plists "$web_plist" "$core_plist" "$codex_cmd"
+  write_macos_plists "$web_plist" "$core_plist" "$agentic_plist" "$codex_cmd"
   plutil -lint "$web_plist" >/dev/null
   plutil -lint "$core_plist" >/dev/null
+  plutil -lint "$agentic_plist" >/dev/null
   launchctl bootout "$domain/$LABEL" >/dev/null 2>&1 || launchctl bootout "$domain" "$legacy_plist" >/dev/null 2>&1 || true
   launchctl bootout "$domain/$WEB_LABEL" >/dev/null 2>&1 || true
   launchctl bootout "$domain/$CORE_LABEL" >/dev/null 2>&1 || true
+  launchctl bootout "$domain/$AGENTIC_LABEL" >/dev/null 2>&1 || true
   launchctl bootstrap "$domain" "$core_plist"
-  launchctl bootstrap "$domain" "$web_plist"
   launchctl enable "$domain/$CORE_LABEL" >/dev/null 2>&1 || true
-  launchctl enable "$domain/$WEB_LABEL" >/dev/null 2>&1 || true
   launchctl kickstart -k "$domain/$CORE_LABEL"
   core_url="$(service_url "$CORE_ADDR")"
   wait_until_ready "$core_url" || fail "Core did not become ready at $core_url"
+  launchctl bootstrap "$domain" "$agentic_plist"
+  launchctl enable "$domain/$AGENTIC_LABEL" >/dev/null 2>&1 || true
+  launchctl kickstart -k "$domain/$AGENTIC_LABEL"
+  agentic_url="$(service_url "$AGENTIC_ADDR")"
+  wait_until_ready "$agentic_url" || fail "Agentic Worker did not become ready at $agentic_url"
+  launchctl bootstrap "$domain" "$web_plist"
+  launchctl enable "$domain/$WEB_LABEL" >/dev/null 2>&1 || true
   launchctl kickstart -k "$domain/$WEB_LABEL"
   web_url="$(service_url "$ADDR")"
   wait_until_ready "$web_url" || fail "Web did not become ready at $web_url"
-  log "launchd services installed: $web_plist $core_plist"
+  log "launchd services installed: $web_plist $core_plist $agentic_plist"
 }
 
 install_linux_systemd() {
-  local codex_cmd unit_dir web_unit core_unit web_url core_url
+  local codex_cmd unit_dir web_unit core_unit agentic_unit web_url core_url agentic_url
   require_cmd systemctl
   require_cmd loginctl
   loginctl enable-linger "$USER" || fail "failed to enable user linger; systemd user service would stop after logout"
@@ -391,6 +451,7 @@ install_linux_systemd() {
   unit_dir="$HOME/.config/systemd/user"
   web_unit="$unit_dir/$SERVICE_NAME-web.service"
   core_unit="$unit_dir/$SERVICE_NAME-core.service"
+  agentic_unit="$unit_dir/$SERVICE_NAME-agentic.service"
   mkdir -p "$unit_dir"
   cat > "$core_unit" <<UNIT
 [Unit]
@@ -406,7 +467,28 @@ Environment=PI_PACKAGE_DIR=$STATE_DIR/pi-coding-agent
 Environment="CODEX_RUNNER_CODEX_SERVER_MODE=$CODEX_SERVER_MODE"
 Environment="CODEX_RUNNER_CODEX_APP_CMD=$CODEX_APP_CMD"
 Environment=CODEX_RUNNER_MANAGED_EXECUTION=1
-ExecStart=$BIN_PATH serve --role core --addr $CORE_ADDR --state-dir $STATE_DIR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
+ExecStart=$BIN_PATH serve --role core --addr $CORE_ADDR --agentic-addr $AGENTIC_ADDR --state-dir $STATE_DIR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
+Restart=always
+RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
+UNIT
+  cat > "$agentic_unit" <<UNIT
+[Unit]
+Description=Xuanwu Agentic Worker
+After=$SERVICE_NAME-core.service
+
+[Service]
+Type=simple
+WorkingDirectory=$STATE_DIR
+Environment=HOME=$HOME
+Environment=PATH=$PATH_VALUE
+Environment=PI_PACKAGE_DIR=$STATE_DIR/pi-coding-agent
+Environment=CODEX_RUNNER_MANAGED_EXECUTION=1
+ExecStart=$BIN_PATH serve --role agentic --addr $AGENTIC_ADDR --state-dir $STATE_DIR --db $DB_PATH$(auth_token_file_systemd_args)
 Restart=always
 RestartSec=2
 KillSignal=SIGTERM
@@ -418,7 +500,7 @@ UNIT
   cat > "$web_unit" <<UNIT
 [Unit]
 Description=Xuanwu Web Gateway
-After=$SERVICE_NAME-core.service
+After=$SERVICE_NAME-core.service $SERVICE_NAME-agentic.service
 
 [Service]
 Type=simple
@@ -436,13 +518,15 @@ WantedBy=default.target
 UNIT
   systemctl --user daemon-reload
   systemctl --user disable --now "$SERVICE_NAME.service" >/dev/null 2>&1 || true
-  systemctl --user enable --now "$SERVICE_NAME-core.service" "$SERVICE_NAME-web.service"
-  systemctl --user restart "$SERVICE_NAME-core.service" "$SERVICE_NAME-web.service"
+  systemctl --user enable --now "$SERVICE_NAME-core.service" "$SERVICE_NAME-agentic.service" "$SERVICE_NAME-web.service"
+  systemctl --user restart "$SERVICE_NAME-core.service" "$SERVICE_NAME-agentic.service" "$SERVICE_NAME-web.service"
   core_url="$(service_url "$CORE_ADDR")"
   web_url="$(service_url "$ADDR")"
+  agentic_url="$(service_url "$AGENTIC_ADDR")"
   wait_until_ready "$core_url" || fail "Core did not become ready at $core_url"
+  wait_until_ready "$agentic_url" || fail "Agentic Worker did not become ready at $agentic_url"
   wait_until_ready "$web_url" || fail "Web did not become ready at $web_url"
-  log "systemd user services installed: $web_unit $core_unit"
+  log "systemd user services installed: $web_unit $core_unit $agentic_unit"
 }
 
 main() {

@@ -9,6 +9,7 @@ type OpenDatabaseOptions = {
   dbPath?: string;
   readonlyImportPath?: string;
   stateDir?: string;
+  writerBusyTimeoutMs?: number;
 };
 
 export const WRITER_BUSY_TIMEOUT_MS = 250;
@@ -41,7 +42,8 @@ export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<R
     readwrite: !target.readonly,
     strict: true
   });
-  sqlite.run(`pragma busy_timeout = ${target.readonly ? READONLY_BUSY_TIMEOUT_MS : WRITER_BUSY_TIMEOUT_MS}`);
+  const writerBusyTimeout = boundedWriterBusyTimeout(options.writerBusyTimeoutMs);
+  sqlite.run(`pragma busy_timeout = ${target.readonly ? READONLY_BUSY_TIMEOUT_MS : writerBusyTimeout}`);
   sqlite.run("pragma foreign_keys = on");
   if (target.readonly) sqlite.run("pragma query_only = on");
   if (!target.readonly) {
@@ -58,6 +60,12 @@ export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<R
     close: () => sqlite.close(),
     transaction: (inside) => sqlite.transaction(inside)
   };
+}
+
+function boundedWriterBusyTimeout(value: number | undefined): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= WRITER_BUSY_TIMEOUT_MS
+    ? Math.min(value, 30_000)
+    : WRITER_BUSY_TIMEOUT_MS;
 }
 
 /**
