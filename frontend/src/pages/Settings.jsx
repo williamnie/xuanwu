@@ -13,7 +13,7 @@ import { SettingsHeader } from './SettingsChrome';
 import { resolveSettingsRoute } from './settingsNavigation';
 import './Settings.css';
 
-export default function Settings({ initialTab = 'general', navigateTo, pageTitle }) {
+export default function Settings({ initialProjectId = '', initialTab = 'general', navigateTo, pageTitle }) {
   const [route, setRoute] = useState(() => resolveSettingsRoute(initialTab));
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export default function Settings({ initialTab = 'general', navigateTo, pageTitle
     <div className="settings-page animate-fade-in">
       <SettingsHeader onRouteChange={setRoute} route={route} title={pageTitle} />
       <div className="settings-tab-content" role="tabpanel">
-        <SettingsTabContent activeTab={route.tab} tier={route.tier} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />
+        <SettingsTabContent activeTab={route.tab} initialProjectId={initialProjectId} tier={route.tier} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />
       </div>
     </div>
   );

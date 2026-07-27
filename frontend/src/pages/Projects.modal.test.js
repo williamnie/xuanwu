@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const source = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
+const editorSource = readFileSync(new URL('./ProjectSettingsEditor.jsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('./Projects.css', import.meta.url), 'utf8');
 
 function ruleFor(selector) {
@@ -15,9 +16,9 @@ function ruleFor(selector) {
 test('project config modal keeps its header and footer fixed while its body scrolls', () => {
   assert.match(source, /className="glass-card modal-content project-config-modal"/);
   assert.match(source, /className="project-config-modal-header"/);
-  assert.match(source, /className="project-config-modal-form"/);
-  assert.match(source, /className="project-config-modal-body"/);
-  assert.match(source, /className="project-config-modal-footer"/);
+  assert.match(editorSource, /'project-config-modal-form'/);
+  assert.match(editorSource, /'project-config-modal-body'/);
+  assert.match(editorSource, /'project-config-modal-footer'/);
 
   const modalRule = ruleFor('.project-config-modal');
   assert.match(modalRule, /max-height:\s*calc\(100vh - 48px\)/);
@@ -42,6 +43,8 @@ test('project cards keep only operational information and move configuration beh
   assert.match(source, /className="project-status-pill"/);
   assert.match(source, /className="project-card-stats"/);
   assert.match(source, /aria-label={`编辑 \${proj\.name} 配置`}/);
+  assert.match(source, /onManageProject\?\.\(proj\.id\)/);
+  assert.doesNotMatch(source, /handleOpenEditModal/);
   assert.doesNotMatch(source, /<details className="project-card-details">/);
   assert.doesNotMatch(source, /ProjectMetaRow/);
   assert.doesNotMatch(source, />Capabilities</);
@@ -73,11 +76,11 @@ test('project card actions share one compact control height', () => {
 });
 
 test('project config modal reads Codex model options from provider API', () => {
-  assert.match(source, /systemApi\.getCodexModels\(\)/);
-  assert.match(source, /buildCodexModelOptions\(codexModels, formModel, profileForm\.model\)/);
-  assert.match(source, /codexModelOptions\.map\(option =>/);
-  assert.match(source, /远端 model API 读取失败，已启用手填/);
-  assert.match(source, /模型 API 失败，请手动填写 model ID/);
-  assert.doesNotMatch(source, /FALLBACK_CODEX_MODEL_OPTIONS/);
-  assert.doesNotMatch(source, /CODEX_MODEL_OPTIONS\.some\(option => option\.value === model\)/);
+  assert.match(editorSource, /systemApi\.getCodexModels\(\)/);
+  assert.match(editorSource, /buildCodexModelOptions\(ui\.codexModels, ui\.formModel, ui\.profileForm\.model\)/);
+  assert.match(editorSource, /modelOptions\.map\(option =>/);
+  assert.match(editorSource, /远端 model API 读取失败，已启用手填/);
+  assert.match(editorSource, /模型 API 失败，请手动填写 model ID/);
+  assert.doesNotMatch(editorSource, /FALLBACK_CODEX_MODEL_OPTIONS/);
+  assert.doesNotMatch(editorSource, /CODEX_MODEL_OPTIONS\.some\(option => option\.value === model\)/);
 });

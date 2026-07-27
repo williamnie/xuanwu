@@ -13,6 +13,8 @@ const connectorDiagnosticsSource = readFileSync(new URL('./ConnectorDiagnosticsP
 const permissionsSettingsSource = readFileSync(new URL('./PermissionsSettingsPanel.jsx', import.meta.url), 'utf8');
 const notificationSettingsSource = readFileSync(new URL('./NotificationSettingsPanel.jsx', import.meta.url), 'utf8');
 const settingsProductModelsSource = readFileSync(new URL('./settingsProductModels.js', import.meta.url), 'utf8');
+const projectSettingsEditorSource = readFileSync(new URL('./ProjectSettingsEditor.jsx', import.meta.url), 'utf8');
+const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
 const skillsRuntimeSource = readFileSync(new URL('./SkillsRuntimePanel.jsx', import.meta.url), 'utf8');
 const activityTimelineSource = readFileSync(new URL('./ActivityTimelinePanel.jsx', import.meta.url), 'utf8');
 const activityTimelineStyles = readFileSync(new URL('./ActivityTimelinePanel.css', import.meta.url), 'utf8');
@@ -50,12 +52,17 @@ test('Settings renders behavior sections and gates internal panels behind Advanc
   assert.doesNotMatch(settingsNavigationSource, /id: 'model-runtime'/);
 });
 
-test('Settings primary IA includes project settings without duplicating its source of truth', () => {
+test('Settings primary IA directly edits project settings from one shared editor', () => {
   assert.match(chromeSource, /title = 'Settings'/);
   assert.match(chromeSource, /t\('settings\.eyebrow'\)/);
   assert.match(sectionsSource, /t\('settings\.perProject'\)/);
-  assert.match(sectionsSource, /navigateTo\?\.\('projects'\)/);
+  assert.match(sectionsSource, /<ProjectSettingsEditor/);
+  assert.match(sectionsSource, /selectProjects/);
+  assert.match(sectionsSource, /settings-project-select/);
   assert.match(sectionsSource, /t\('settings\.projectSettingsDescription'\)/);
+  assert.match(projectSettingsEditorSource, /projectsApi\.updateProject\(projectID, payload\)/);
+  assert.doesNotMatch(sectionsSource, /LanguageSettingsCard|settings-language-card/);
+  assert.match(sidebarSource, /className="nav-item nav-item-secondary sidebar-language-row"/);
   assert.match(settingsNavigationSource, /Permissions/);
   assert.match(settingsNavigationSource, /Notifications/);
   assert.doesNotMatch(settingsNavigationSource, /Models & Agents|models-agents/);

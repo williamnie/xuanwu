@@ -6,76 +6,74 @@ import NotificationSettingsPanel from './NotificationSettingsPanel';
 import RunnerSettingsPanel from './RunnerSettingsPanel';
 import SkillsRuntimePanel from './SkillsRuntimePanel';
 import SourcePoliciesPanel from './SourcePoliciesPanel';
+import ProjectSettingsEditor from './ProjectSettingsEditor';
 import { RestartAction } from './SettingsChrome';
-import { Languages } from 'lucide-react';
-import { useState } from 'react';
+import { FolderCog } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useI18n } from '../i18n/context.js';
-import { translate } from '../i18n/translations.js';
-import { message } from '../store/toastStore.js';
+import { selectProjects, selectRefreshData, useDataStore } from '../store/dataStore.js';
 
-export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navigateTo, tier }) {
+export default function SettingsTabContent({ activeTab, initialProjectId, RuntimeStatusPanel, navigateTo, tier }) {
   if (tier === 'advanced') {
     return <AdvancedSettingsTab activeTab={activeTab} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />;
   }
   return (
     <>
-      {activeTab === 'general' && <GeneralSettingsTab navigateTo={navigateTo} />}
+      {activeTab === 'general' && <GeneralSettingsTab initialProjectId={initialProjectId} navigateTo={navigateTo} />}
       {activeTab === 'permissions' && <PermissionsSettingsTab navigateTo={navigateTo} />}
       {activeTab === 'notifications' && <NotificationsSettingsTab />}
     </>
   );
 }
 
-function GeneralSettingsTab({ navigateTo }) {
+function GeneralSettingsTab({ initialProjectId, navigateTo }) {
   const { t } = useI18n();
+  const projects = useDataStore(selectProjects);
+  const refreshData = useDataStore(selectRefreshData);
+  const [selectedProjectID, setSelectedProjectID] = useState(initialProjectId || '');
+
+  useEffect(() => {
+    setSelectedProjectID(current => {
+      if (projects.some(project => project.id === current)) return current;
+      if (projects.some(project => project.id === initialProjectId)) return initialProjectId;
+      return projects[0]?.id || '';
+    });
+  }, [initialProjectId, projects]);
+
+  const project = projects.find(item => item.id === selectedProjectID) || null;
+
   return (
-    <>
-      <LanguageSettingsCard />
-      <section className="glass-card settings-project-entry">
-        <div>
-          <div className="settings-entry-eyebrow">{t('settings.perProject')}</div>
+    <section className="glass-card settings-project-panel">
+      <div className="settings-project-panel-header">
+        <div className="settings-project-heading">
+          <div className="settings-entry-eyebrow"><FolderCog size={14} /> {t('settings.perProject')}</div>
           <h2>{t('settings.projectSettings')}</h2>
           <p>{t('settings.projectSettingsDescription')}</p>
         </div>
-        <button className="btn btn-secondary" onClick={() => navigateTo?.('projects')} type="button">
-          {t('settings.manageProjects')}
-        </button>
-      </section>
-    </>
-  );
-}
+        {projects.length > 0 && (
+          <label className="settings-project-select">
+            <span>{t('settings.selectProject')}</span>
+            <select className="form-control" onChange={event => setSelectedProjectID(event.target.value)} value={selectedProjectID}>
+              {projects.map(item => <option key={item.id} value={item.id}>{item.name} · {item.id}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
 
-function LanguageSettingsCard() {
-  const { changeLanguage, language, t } = useI18n();
-  const [saving, setSaving] = useState(false);
-  const selectLanguage = async (next) => {
-    if (saving || next === language) return;
-    setSaving(true);
-    try {
-      await changeLanguage(next);
-      message.success(translate(next, 'settings.languageSaved'));
-    } catch (error) {
-      message.error(error?.message || t('settings.languageSaveFailed'));
-    } finally {
-      setSaving(false);
-    }
-  };
-  return (
-    <section className="glass-card settings-language-card">
-      <div className="settings-language-copy">
-        <div className="settings-entry-eyebrow"><Languages size={14} /> i18n</div>
-        <h2>{t('settings.languageTitle')}</h2>
-        <p>{t('settings.languageDescription')}</p>
-        {saving ? <span>{t('settings.languageSaving')}</span> : null}
-      </div>
-      <div className="settings-language-options" role="radiogroup" aria-label={t('settings.languageTitle')}>
-        <button aria-checked={language === 'zh-CN'} className={language === 'zh-CN' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('zh-CN')} role="radio" type="button">
-          <strong>{t('settings.chinese')}</strong><span>zh-CN</span>
-        </button>
-        <button aria-checked={language === 'en-US'} className={language === 'en-US' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('en-US')} role="radio" type="button">
-          <strong>{t('settings.english')}</strong><span>en-US</span>
-        </button>
-      </div>
+      {project ? (
+        <ProjectSettingsEditor
+          key={project.id}
+          mode="edit"
+          onSaved={() => refreshData(['projects'])}
+          project={project}
+        />
+      ) : (
+        <div className="settings-project-empty">
+          <strong>{t('settings.noProjects')}</strong>
+          <p>{t('settings.noProjectsDescription')}</p>
+          <button className="btn btn-primary" onClick={() => navigateTo?.('projects')} type="button">{t('settings.openProjects')}</button>
+        </div>
+      )}
     </section>
   );
 }

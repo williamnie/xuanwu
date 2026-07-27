@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const pageSource = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
+const editorSource = readFileSync(new URL('./ProjectSettingsEditor.jsx', import.meta.url), 'utf8');
 const apiSource = readFileSync(new URL('../api/projects.js', import.meta.url), 'utf8');
 
 test('Projects treats PI takeover as the default project contract without an opt-out', () => {
-  assert.match(pageSource, /await projectsApi\.createProject\(\{ id: generatedId, \.\.\.payload \}\)/);
-  assert.match(pageSource, /创建并接管/);
+  assert.match(editorSource, /projectsApi\.createProject\(\{ id: projectIdFromPath\(ui\.formCwd\), \.\.\.payload \}\)/);
+  assert.match(editorSource, /创建并接管/);
   assert.doesNotMatch(pageSource, /ProjectMetaRow|PI 无人值守接管/);
   assert.doesNotMatch(pageSource, /formPiManaged|handleTogglePiManaged|isTakeoverEnabled/);
   assert.doesNotMatch(pageSource, /bindProjectToPi|unbindProjectFromPi/);

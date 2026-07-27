@@ -9,7 +9,7 @@ import {
 
 test('Settings exposes behavior tabs and keeps runtime details in Advanced', () => {
   assert.deepEqual(SETTINGS_PRIMARY_TABS.map(tab => tab.label), [
-    'General',
+    'Projects',
     'Permissions',
     'Notifications',
   ]);
@@ -36,7 +36,7 @@ test('Settings migrates configuration tabs but excludes product work queues', ()
   assert.deepEqual(resolveSettingsRoute('policies'), { tier: 'advanced', tab: 'policies' });
 });
 
-test('Settings canonical routes round-trip and unknown routes fail safe to General', () => {
+test('Settings canonical routes round-trip and unknown routes fail safe to Projects', () => {
   const advanced = resolveSettingsRoute('advanced:runtime');
   assert.deepEqual(advanced, { tier: 'advanced', tab: 'runtime' });
   assert.equal(settingsRouteId(advanced), 'advanced:runtime');

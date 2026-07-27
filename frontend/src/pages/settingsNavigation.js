@@ -1,5 +1,5 @@
 export const SETTINGS_PRIMARY_TABS = Object.freeze([
-  { id: 'general', label: 'General' },
+  { id: 'general', label: 'Projects' },
   { id: 'permissions', label: 'Permissions' },
   { id: 'notifications', label: 'Notifications' },
 ]);

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const projectsSource = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
+const projectSettingsSource = readFileSync(new URL('./ProjectSettingsEditor.jsx', import.meta.url), 'utf8');
 const issuesSource = readFileSync(new URL('./Issues.jsx', import.meta.url), 'utf8');
 const issueCardSource = readFileSync(new URL('./IssueCard.jsx', import.meta.url), 'utf8');
 const issueDetailSource = readFileSync(new URL('./IssueDetail.jsx', import.meta.url), 'utf8');
@@ -12,10 +13,11 @@ const issueDetailRunsSource = readFileSync(new URL('./issue-detail/IssueDetailRu
 const stateGuardsSource = readFileSync(new URL('../utils/stateGuards.js', import.meta.url), 'utf8');
 
 test('projects and agent profiles expose service tier settings', () => {
-  assert.match(projectsSource, /formServiceTier/);
-  assert.match(projectsSource, /default_service_tier:\s*formServiceTier/);
-  assert.match(projectsSource, /onFieldChange\('service_tier'/);
-  assert.match(projectsSource, /serviceTierLabel\(proj\.default_service_tier\)/);
+  assert.match(projectsSource, /<ProjectSettingsEditor/);
+  assert.match(projectSettingsSource, /formServiceTier/);
+  assert.match(projectSettingsSource, /default_service_tier:\s*ui\.formServiceTier/);
+  assert.match(projectSettingsSource, /onFieldChange\('service_tier'/);
+  assert.match(projectSettingsSource, /serviceTierOptions\(ui\.formServiceTier\)/);
 });
 
 test('new issue creation keeps service tier at the standard default', () => {

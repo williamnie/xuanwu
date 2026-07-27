@@ -1,4 +1,3 @@
-import { systemApi } from '../api/system.js';
 import { projectsApi } from '../api/projects.js';
 import { useImmer } from 'use-immer';
 import './Projects.css';
@@ -21,29 +20,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import ProjectHoldNotice from './ProjectHoldNotice';
-import { PROVIDER_OPTIONS } from './sessions/sessionOptions';
-import {
-  agentProfilePayload,
-  emptyAgentProfileForm,
-  normalizeAgentProfileForm,
-} from '../utils/agentProfiles';
-import {
-  serviceTierOptions,
-} from '../utils/serviceTier';
-
-const DEFAULT_PROJECT_NAME = 'project';
-const DEFAULT_CODEX_MODEL = 'codex-default';
-const DEFAULT_PROVIDER = 'codex';
-
-function projectNameFromPath(cwd) {
-  const trimmed = cwd.trim().replace(/[\\/]+$/, '');
-  return trimmed.split(/[\\/]/).pop() || DEFAULT_PROJECT_NAME;
-}
-
-function projectIdFromPath(cwd) {
-  const base = projectNameFromPath(cwd).toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  return base.replace(/^-+|-+$/g, '') || DEFAULT_PROJECT_NAME;
-}
+import ProjectSettingsEditor from './ProjectSettingsEditor';
 
 function compactPath(cwd = '') {
   const text = String(cwd || '').trim().replace(/[\\/]+$/, '');
@@ -52,34 +29,7 @@ function compactPath(cwd = '') {
   return `…/${parts.slice(-2).join('/')}`;
 }
 
-function normalizeCodexModel(model) {
-  return String(model || '').trim() || DEFAULT_CODEX_MODEL;
-}
-
-function buildCodexModelOptions(models, ...selectedValues) {
-  const options = [];
-  const seen = new Set();
-  const pushOption = (value, label) => {
-    const normalizedValue = String(value || '').trim();
-    if (!normalizedValue || seen.has(normalizedValue)) return;
-    seen.add(normalizedValue);
-    options.push({ value: normalizedValue, label: String(label || normalizedValue).trim() || normalizedValue });
-  };
-
-  pushOption(DEFAULT_CODEX_MODEL, '系统默认模型');
-
-  const liveModels = Array.isArray(models) ? models.filter(model => !model?.hidden) : [];
-  liveModels.forEach(model => pushOption(model?.id || model?.model, model?.displayName || model?.name || model?.id || model?.model));
-
-  selectedValues.forEach(value => {
-    const normalizedValue = normalizeCodexModel(value);
-    if (normalizedValue !== DEFAULT_CODEX_MODEL) pushOption(normalizedValue, normalizedValue);
-  });
-
-  return options;
-}
-
-export default function Projects() {
+export default function Projects({ onManageProject }) {
   const projects = useDataStore(selectProjects);
   const issues = useDataStore(selectIssues);
   const backendOnline = useDataStore(selectBackendOnline);
@@ -87,114 +37,21 @@ export default function Projects() {
   const [ui, updateUi] = useImmer({
     syncing: false,
     syncResult: null,
-    isModalOpen: false,
-    modalMode: 'create', // 'create' | 'edit'
-    selectedProjectId: null,
-    formCwd: '',
-    formProvider: DEFAULT_PROVIDER,
-    formProviderConfig: '{}',
-    formModel: DEFAULT_CODEX_MODEL,
-    formApproval: 'never',
-    formSandbox: 'workspace-write',
-    formServiceTier: '',
-    formAgentProfileId: '',
-    formError: '',
+    isCreateModalOpen: false,
     resumingHoldProjectId: '',
-    profiles: [],
-    profilesLoading: false,
-    profileForm: emptyAgentProfileForm(),
-    profileError: '',
-    codexModels: [],
-    codexModelsLoading: false,
-    codexModelsError: '',
   });
 
   const {
     syncing,
     syncResult,
-    isModalOpen,
-    modalMode,
-    selectedProjectId,
-    formCwd,
-    formProvider,
-    formProviderConfig,
-    formModel,
-    formApproval,
-    formSandbox,
-    formServiceTier,
-    formAgentProfileId,
-    formError,
+    isCreateModalOpen,
     resumingHoldProjectId,
-    profiles,
-    profilesLoading,
-    profileForm,
-    profileError,
-    codexModels,
-    codexModelsLoading,
-    codexModelsError,
   } = ui;
-
-  const codexModelOptions = buildCodexModelOptions(codexModels, formModel, profileForm.model);
 
   const closeModal = () => {
     updateUi(draft => {
-      draft.isModalOpen = false;
+      draft.isCreateModalOpen = false;
     });
-  };
-
-  const setFormField = (field, value) => {
-    updateUi(draft => {
-      draft[field] = value;
-    });
-  };
-
-  const setProfileFormField = (field, value) => {
-    updateUi(draft => {
-      draft.profileForm[field] = value;
-    });
-  };
-
-  const loadAgentProfiles = async () => {
-    updateUi(draft => {
-      draft.profilesLoading = true;
-      draft.profileError = '';
-    });
-    try {
-      const list = await projectsApi.getAgentProfiles();
-      updateUi(draft => {
-        draft.profiles = list || [];
-      });
-    } catch (err) {
-      updateUi(draft => {
-        draft.profileError = err.message || '加载 Agent Profile 失败';
-      });
-    } finally {
-      updateUi(draft => {
-        draft.profilesLoading = false;
-      });
-    }
-  };
-
-  const loadCodexModels = async () => {
-    updateUi(draft => {
-      draft.codexModelsLoading = true;
-      draft.codexModelsError = '';
-    });
-    try {
-      const result = await systemApi.getCodexModels();
-      updateUi(draft => {
-        draft.codexModels = Array.isArray(result?.data) ? result.data : [];
-      });
-    } catch (err) {
-      updateUi(draft => {
-        draft.codexModels = [];
-        draft.codexModelsError = err.message || '读取 Codex 模型列表失败';
-      });
-    } finally {
-      updateUi(draft => {
-        draft.codexModelsLoading = false;
-      });
-    }
   };
 
   const handleSyncCodexProjects = async () => {
@@ -221,119 +78,7 @@ export default function Projects() {
 
   const handleOpenCreateModal = () => {
     updateUi(draft => {
-      draft.modalMode = 'create';
-      draft.selectedProjectId = null;
-      draft.formCwd = '';
-      draft.formProvider = DEFAULT_PROVIDER;
-      draft.formProviderConfig = '{}';
-      draft.formModel = DEFAULT_CODEX_MODEL;
-      draft.formApproval = 'never';
-      draft.formSandbox = 'workspace-write';
-      draft.formServiceTier = '';
-      draft.formAgentProfileId = '';
-      draft.formError = '';
-      draft.isModalOpen = true;
-    });
-    loadAgentProfiles();
-    loadCodexModels();
-  };
-
-  const handleOpenEditModal = (proj) => {
-    updateUi(draft => {
-      draft.modalMode = 'edit';
-      draft.selectedProjectId = proj.id;
-      draft.formCwd = proj.cwd;
-      draft.formProvider = proj.provider;
-      draft.formProviderConfig = proj.provider_config_json || '{}';
-      draft.formModel = normalizeCodexModel(proj.model);
-      draft.formApproval = proj.approval_policy || 'never';
-      draft.formSandbox = proj.sandbox || 'workspace-write';
-      draft.formServiceTier = proj.default_service_tier || '';
-      draft.formAgentProfileId = proj.default_agent_profile_id || '';
-      draft.formError = '';
-      draft.isModalOpen = true;
-    });
-    loadAgentProfiles();
-    loadCodexModels();
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!formCwd.trim()) {
-      updateUi(draft => {
-        draft.formError = '工作路径(CWD)不能为空';
-      });
-      return;
-    }
-
-    const projectName = projectNameFromPath(formCwd);
-    const payload = {
-      name: projectName,
-      cwd: formCwd,
-      provider: formProvider,
-      provider_config_json: formProviderConfig,
-      model: normalizeCodexModel(formModel),
-      approval_policy: formApproval,
-      sandbox: formSandbox,
-      default_service_tier: formServiceTier,
-      default_agent_profile_id: formAgentProfileId,
-    };
-
-    try {
-      if (modalMode === 'create') {
-        const generatedId = projectIdFromPath(formCwd);
-        await projectsApi.createProject({ id: generatedId, ...payload });
-      } else {
-        await projectsApi.updateProject(selectedProjectId, payload);
-      }
-      updateUi(draft => {
-        draft.isModalOpen = false;
-      });
-      refreshData(['projects', 'issues']);
-    } catch (err) {
-      updateUi(draft => {
-        draft.formError = err.message || '操作失败';
-      });
-    }
-  };
-
-  const handleProfileSubmit = async (e) => {
-    e?.preventDefault?.();
-    const payload = agentProfilePayload(profileForm);
-    if (!payload.name) {
-      updateUi(draft => {
-        draft.profileError = 'Profile 名称不能为空';
-      });
-      return;
-    }
-    try {
-      const exists = profiles.some(profile => profile.id === payload.id);
-      const saved = exists
-        ? await projectsApi.updateAgentProfile(payload.id, payload)
-        : await projectsApi.createAgentProfile(payload);
-      updateUi(draft => {
-        draft.profileForm = emptyAgentProfileForm();
-        draft.formAgentProfileId = saved.id;
-      });
-      await loadAgentProfiles();
-    } catch (err) {
-      updateUi(draft => {
-        draft.profileError = err.message || '保存 Agent Profile 失败';
-      });
-    }
-  };
-
-  const handleEditProfile = (profile) => {
-    updateUi(draft => {
-      draft.profileForm = normalizeAgentProfileForm(profile);
-      draft.profileError = '';
-    });
-  };
-
-  const handleResetProfileForm = () => {
-    updateUi(draft => {
-      draft.profileForm = emptyAgentProfileForm();
-      draft.profileError = '';
+      draft.isCreateModalOpen = true;
     });
   };
 
@@ -520,7 +265,7 @@ export default function Projects() {
                     <div className="project-card-actions">
                       <button
                         className="btn btn-secondary project-card-icon-btn"
-                        onClick={() => handleOpenEditModal(proj)}
+                        onClick={() => onManageProject?.(proj.id)}
                         aria-label={`编辑 ${proj.name} 配置`}
                         title="设置"
                       >
@@ -547,264 +292,31 @@ export default function Projects() {
       </div>
 
 
-      {/* 新增/编辑项目模态窗 */}
-      {isModalOpen && (
+      {/* 新增项目仍属于项目管理；现有项目配置统一在“设置 > 项目”编辑。 */}
+      {isCreateModalOpen && (
         <div className="modal-overlay">
           <div className="glass-card modal-content project-config-modal">
             <div className="project-config-modal-header">
-              <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>
-                {modalMode === 'create' ? '新增监控项目' : '编辑项目配置'}
-              </h2>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>新增监控项目</h2>
               <button
-                type="button"
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)' }}
+                aria-label="关闭新增项目"
                 onClick={closeModal}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)' }}
+                type="button"
               >
                 <X size={20} />
               </button>
             </div>
-
-            <form className="project-config-modal-form" onSubmit={handleSubmit}>
-              <div className="project-config-modal-body">
-              {formError && (
-                <div style={{ color: 'var(--error)', background: 'var(--error-bg)', border: '1px solid rgba(244,63,94,0.2)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.85rem' }}>
-                  {formError}
-                </div>
-              )}
-
-              <div className="form-group">
-                <label>项目绝对路径 (CWD) *</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  placeholder="/Users/username/projects/project-name"
-                  value={formCwd}
-                  onChange={(e) => setFormField('formCwd', e.target.value)}
-                  required 
-                />
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  展示名会自动使用路径最后一级：{formCwd.trim() ? projectNameFromPath(formCwd) : '—'}
-                </span>
-              </div>
-
-              <div className="form-group">
-                <label>Provider</label>
-                <select
-                  className="form-control"
-                  value={formProvider}
-                  onChange={(e) => setFormField('formProvider', e.target.value)}
-                >
-                  {PROVIDER_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value} disabled={!option.enabled}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  capability 摘要会随项目 API 返回；execution-only provider 不会进入 Sessions。
-                </span>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-                <div className="form-group">
-                  <label>Codex 执行模型</label>
-                  {codexModelsError ? (
-                    <input
-                      className="form-control"
-                      value={formModel}
-                      onChange={(e) => setFormField('formModel', e.target.value)}
-                      placeholder="模型 API 失败，请手动填写 model ID"
-                    />
-                  ) : (
-                    <select
-                      className="form-control"
-                      disabled={codexModelsLoading}
-                      value={formModel}
-                      onChange={(e) => setFormField('formModel', e.target.value)}
-                    >
-                      {codexModelOptions.map(option => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                  )}
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    {codexModelsLoading
-                      ? '正在读取 Codex 模型列表…'
-                      : codexModelsError
-                        ? `远端 model API 读取失败，已启用手填：${codexModelsError}`
-                        : '模型列表来自当前 Codex provider。'}
-                  </span>
-                </div>
-
-                <div className="form-group">
-                  <label>默认执行速度</label>
-                  <select
-                    className="form-control"
-                    value={formServiceTier}
-                    onChange={(e) => setFormField('formServiceTier', e.target.value)}
-                  >
-                    {serviceTierOptions(formServiceTier).map(option => (
-                      <option key={option.value || 'standard'} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-                <div className="form-group">
-                  <label>审批策略 (Approval)</label>
-                  <select 
-                    className="form-control" 
-                    value={formApproval}
-                    onChange={(e) => setFormField('formApproval', e.target.value)}
-                  >
-                    <option value="never">从不审核 (自动运行)</option>
-                    <option value="always">每次执行必审</option>
-                    <option value="danger-only">敏感操作时审核</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>沙箱策略 (Sandbox)</label>
-                  <select 
-                    className="form-control" 
-                    value={formSandbox}
-                    onChange={(e) => setFormField('formSandbox', e.target.value)}
-                  >
-                    <option value="workspace-write">仅允许修改当前项目目录 (推荐)</option>
-                    <option value="danger-full-access">全系统读写访问 (危险)</option>
-                    <option value="read-only">严格只读</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>默认 Agent Profile v0</label>
-                <select
-                  className="form-control"
-                  value={formAgentProfileId}
-                  onChange={(e) => setFormField('formAgentProfileId', e.target.value)}
-                >
-                  <option value="">不使用 Profile（沿用上方项目参数）</option>
-                  {profiles.map(profile => (
-                    <option key={profile.id} value={profile.id}>{profile.name} · {profile.id}</option>
-                  ))}
-                </select>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Profile 会在 issue prompt 中注入默认 instructions 与 skill/plugin intent；不会安装插件或放大权限。
-                </span>
-              </div>
-
-              <AgentProfileManager
-                profiles={profiles}
-                loading={profilesLoading}
-                form={profileForm}
-                error={profileError}
-                modelOptions={codexModelOptions}
-                modelsError={codexModelsError}
-                modelsLoading={codexModelsLoading}
-                onFieldChange={setProfileFormField}
-                onSubmit={handleProfileSubmit}
-                onEdit={handleEditProfile}
-                onReset={handleResetProfileForm}
-              />
-
-              </div>
-
-              <div className="project-config-modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={closeModal}>
-                  取消
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  {modalMode === 'create' ? '创建并接管' : '保存修改'}
-                </button>
-              </div>
-
-            </form>
-
+            <ProjectSettingsEditor
+              layout="modal"
+              mode="create"
+              onCancel={closeModal}
+              onSaved={async () => {
+                closeModal();
+                await refreshData(['projects', 'issues']);
+              }}
+            />
           </div>
-        </div>
-      )}
-
-    </div>
-  );
-}
-
-function AgentProfileManager({ profiles, loading, form, error, modelOptions, modelsError, modelsLoading, onFieldChange, onSubmit, onEdit, onReset }) {
-  return (
-    <div className="glass-card" style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(0,0,0,0.025)' }}>
-      <div>
-        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Agent Profile v0</div>
-        <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-          仅保存 provider/model/权限 preset、默认 instructions 与 skill/plugin intent；不安装插件、不提升权限。
-        </p>
-      </div>
-      {error && <div style={{ color: 'var(--error)', fontSize: '0.8rem' }}>{error}</div>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
-          <select className="form-control" value={form.provider} onChange={(e) => onFieldChange('provider', e.target.value)}>
-            {PROVIDER_OPTIONS.map(option => (
-              <option key={option.value} value={option.value} disabled={!option.enabled}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <input className="form-control" placeholder="Profile ID（可留空自动生成）" value={form.id} onChange={(e) => onFieldChange('id', e.target.value)} />
-          <input className="form-control" placeholder="Profile 名称" value={form.name} onChange={(e) => onFieldChange('name', e.target.value)} />
-          {modelsError ? (
-            <input className="form-control" placeholder="模型 API 失败，请手动填写 model ID" value={form.model} onChange={(e) => onFieldChange('model', e.target.value)} />
-          ) : (
-            <select className="form-control" disabled={modelsLoading} value={form.model} onChange={(e) => onFieldChange('model', e.target.value)}>
-              {modelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          )}
-          <select className="form-control" value={form.reasoning_effort} onChange={(e) => onFieldChange('reasoning_effort', e.target.value)}>
-            <option value="">默认 effort</option>
-            <option value="low">low</option>
-            <option value="medium">medium</option>
-            <option value="high">high</option>
-            <option value="xhigh">xhigh</option>
-          </select>
-          <select className="form-control" value={form.service_tier} onChange={(e) => onFieldChange('service_tier', e.target.value)}>
-            {serviceTierOptions(form.service_tier).map(option => (
-              <option key={option.value || 'standard'} value={option.value}>速度：{option.label}</option>
-            ))}
-          </select>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
-          <select className="form-control" value={form.approval_policy} onChange={(e) => onFieldChange('approval_policy', e.target.value)}>
-            <option value="">沿用项目 approval</option>
-            <option value="never">never</option>
-            <option value="always">always</option>
-            <option value="danger-only">danger-only</option>
-          </select>
-          <select className="form-control" value={form.sandbox} onChange={(e) => onFieldChange('sandbox', e.target.value)}>
-            <option value="">沿用项目 sandbox</option>
-            <option value="workspace-write">workspace-write</option>
-            <option value="read-only">read-only</option>
-            <option value="danger-full-access">danger-full-access</option>
-          </select>
-        </div>
-        <textarea className="form-control" rows={3} placeholder="默认 instructions" value={form.default_instructions} onChange={(e) => onFieldChange('default_instructions', e.target.value)} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
-          <input className="form-control" placeholder="skill intents，逗号分隔" value={form.skill_intents} onChange={(e) => onFieldChange('skill_intents', e.target.value)} />
-          <input className="form-control" placeholder="plugin intents，逗号分隔" value={form.plugin_intents} onChange={(e) => onFieldChange('plugin_intents', e.target.value)} />
-        </div>
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{loading ? '加载 profiles...' : `已有 ${profiles.length} 个 profile`}</span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button type="button" className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }} onClick={onReset}>清空</button>
-            <button type="button" className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }} onClick={onSubmit}>保存 Profile</button>
-          </div>
-        </div>
-      </div>
-      {profiles.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {profiles.map(profile => (
-            <button key={profile.id} type="button" className="kanban-card-action-btn" onClick={() => onEdit(profile)}>
-              {profile.name} · {profile.id}
-            </button>
-          ))}
         </div>
       )}
     </div>

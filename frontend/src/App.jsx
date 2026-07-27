@@ -64,6 +64,7 @@ const PAGE_DATA_SLICES = {
   'command-center': ['projects', 'issues'],
   issues: ['issues'],
   projects: ['projects', 'issues'],
+  settings: ['projects'],
   work: ['projects'],
   handoffs: ['projects'],
 };
@@ -95,6 +96,7 @@ export default function App() {
     selectedSessionId: '',
     selectedHandoffId: initialHandoffRoute?.handoffId || '',
     selectedPiConversationId: '',
+    selectedSettingsProjectId: '',
     pageContext: null,
     filterProject: '', // '' 表示 Any project
     focusFilter: 'all', // 'all' | 'triage' | 'active' | 'failed' | 'archive'
@@ -126,6 +128,7 @@ export default function App() {
     selectedSessionId,
     selectedHandoffId,
     selectedPiConversationId,
+    selectedSettingsProjectId,
     pageContext,
     filterProject,
     focusFilter,
@@ -244,6 +247,17 @@ export default function App() {
       if (JSON.stringify(draft.pageContext) !== JSON.stringify(next)) {
         draft.pageContext = next;
       }
+    });
+  }, [updateAppState]);
+
+  const openProjectSettings = useCallback((projectId) => {
+    updateAppState(draft => {
+      draft.currentPage = 'settings';
+      draft.selectedSettingsProjectId = projectId || '';
+      draft.selectedIssueId = null;
+      draft.selectedWorkId = '';
+      draft.selectedHandoffId = '';
+      draft.pageContext = null;
     });
   }, [updateAppState]);
 
@@ -415,13 +429,13 @@ export default function App() {
             ) : isAssistantModulePage(currentPage) ? (
               <Settings initialTab={assistantModule?.tab} navigateTo={navigateTo} />
             ) : currentPage === 'projects' ? (
-              <Projects />
+              <Projects onManageProject={openProjectSettings} />
             ) : currentPage === 'automations' ? (
               <Automations />
             ) : currentPage === 'connections' ? (
               <Connections />
             ) : currentPage === 'settings' ? (
-              <Settings navigateTo={navigateTo} />
+              <Settings initialProjectId={selectedSettingsProjectId} navigateTo={navigateTo} />
             ) : (
               <Dashboard navigateTo={navigateTo} />
             )}
