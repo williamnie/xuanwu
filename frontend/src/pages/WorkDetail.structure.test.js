@@ -6,14 +6,17 @@ const detail = readFileSync(new URL('./WorkDetail.jsx', import.meta.url), 'utf8'
 const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
 const model = readFileSync(new URL('./workDetailModel.js', import.meta.url), 'utf8');
 
-test('Work Detail keeps two task-oriented views and loads Activity only on demand', () => {
+test('Work Detail keeps overview, delivery and activity together and loads Activity only on demand', () => {
   assert.match(detail, />Overview</);
+  assert.match(detail, />交付 \{overview\.handoffs\.length/);
   assert.match(detail, />Activity</);
   assert.match(detail, /workApi\.getWork\(workId\)/);
   assert.match(detail, /workApi\.getWorkTimeline/);
   assert.match(detail, /runsApi\.getRuns/);
   assert.match(detail, /evidenceApi\.listEvidence/);
   assert.match(detail, /handoffsApi\.getHandoffs/);
+  assert.match(detail, /<WorkDeliveryView/);
+  assert.doesNotMatch(detail, /navigateTo\('handoffs'/);
   assert.match(detail, /activeView === 'activity' && !activityLoaded/);
   assert.doesNotMatch(detail, /getWorkRelations|readiness|relationship|guardianAlerts|compatibility/);
   assert.doesNotMatch(detail, /<EvidencePanel/);
@@ -26,6 +29,7 @@ test('Work Board stays board-only and opens canonical Work Detail', () => {
   assert.doesNotMatch(board, /navigateTo\('issues', issueId\)/);
   assert.match(board, /Issue #\{issueId\} authority/);
   assert.match(board, /<WorkDetail/);
+  assert.match(board, /selectedHandoffId=\{selectedHandoffId\}/);
   assert.doesNotMatch(board, /relations=|work-relation-row|indexRelationsByWork/);
 });
 

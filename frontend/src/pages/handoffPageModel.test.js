@@ -14,12 +14,15 @@ import {
 } from './handoffPageModel.js';
 
 const handoffId = 'xw:handoff:derived:679%40abc123';
+const workId = 'xw:work:issues:679';
 
-test('notification Handoff links round-trip to the exact page identity', () => {
-  const href = handoffHref(handoffId);
-  assert.equal(href, `#/handoffs/${encodeURIComponent(handoffId)}`);
-  assert.deepEqual(handoffRouteFromHash(href), { handoffId, page: 'handoffs' });
+test('notification Handoff links open the exact delivery inside its Work', () => {
+  const href = handoffHref(handoffId, workId);
+  assert.equal(href, `#/work/${encodeURIComponent(workId)}/delivery/${encodeURIComponent(handoffId)}`);
+  assert.deepEqual(handoffRouteFromHash(href), { handoffId, page: 'work', workId });
+  assert.deepEqual(handoffRouteFromHash(handoffHref(handoffId)), { handoffId, page: 'handoffs' });
   assert.equal(handoffRouteFromHash('#/handoffs/javascript:alert(1)'), null);
+  assert.equal(handoffRouteFromHash('#/work/javascript%3Aalert(1)/delivery/xw%3Ahandoff%3Aderived%3A679'), null);
   assert.equal(handoffRouteFromHash('#/issues/679'), null);
 });
 
@@ -105,18 +108,24 @@ test('risk presentation orders every delivery state by severity without mutating
   assert.deepEqual(risks.map(item => item.id), ['low', 'critical', 'high']);
 });
 
-test('Handoffs stays a lazy page backed by the domain API and sidebar route', () => {
+test('Handoff stays available for audit while normal delivery lives inside Work Detail', () => {
   const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebar = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
   const client = readFileSync(new URL('../api/handoffs.js', import.meta.url), 'utf8');
   const page = readFileSync(new URL('./Handoffs.jsx', import.meta.url), 'utf8');
+  const workDetail = readFileSync(new URL('./WorkDetail.jsx', import.meta.url), 'utf8');
   assert.match(app, /lazy\(\(\) => import\('\.\/pages\/Handoffs'\)\)/);
   assert.match(app, /currentPage === 'handoffs'/);
-  assert.match(sidebar, /handoffs: PackageCheck/);
+  assert.doesNotMatch(sidebar, /handoffs: PackageCheck/);
   assert.match(sidebar, /aria-label=\{item\.label\}/);
   assert.match(client, /request\(`\/api\/handoffs\?/);
   assert.match(client, /request\(`\/api\/handoffs\/\$\{encodeURIComponent\(id\)\}`/);
   assert.match(client, /\/api\/handoffs\/\$\{encodeURIComponent\(id\)\}\/reviews/);
+  assert.match(workDetail, /<WorkDeliveryView/);
+  assert.match(workDetail, />交付 \{overview\.handoffs\.length/);
+  assert.doesNotMatch(workDetail, /navigateTo\('handoffs'/);
+  assert.match(page, /Handoff 审计/);
+  assert.match(page, /打开所属 Issue 交付/);
   assert.match(page, /title="Diff summary"/);
   assert.match(page, /title="Rollback"/);
   assert.match(page, /Request changes/);

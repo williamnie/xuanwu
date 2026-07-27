@@ -246,7 +246,7 @@ describe("unified notification intent/outbox", () => {
         issueId: issue.id,
         payload: JSON.stringify({
           handoff_id: "xw:handoff:derived:fixture",
-          href: "#/handoffs/xw%3Ahandoff%3Aderived%3Afixture",
+          href: `#/work/${encodeURIComponent(`xw:work:issues:${issue.id}`)}/delivery/xw%3Ahandoff%3Aderived%3Afixture`,
           revision: 2,
           status: "ready",
           summary: "Ready · branch_commit · Next: review"

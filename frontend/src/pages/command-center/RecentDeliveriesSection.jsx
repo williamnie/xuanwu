@@ -98,7 +98,7 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
       return;
     }
     globalThis.history?.replaceState?.(null, '', item.links.view);
-    navigateTo?.(route.page, null, '', route.handoffId);
+    navigateTo?.(route.page, route.workId || item.work_id, '', route.handoffId);
   };
 
   const copyRef = async (value, label) => {
@@ -152,7 +152,7 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
           <PackageCheck size={24} />
           <strong>还没有 Handoff 交付</strong>
           <span>形成 draft、ready 或 delivered Handoff 后会显示在这里。</span>
-          <button onClick={() => navigateTo?.('handoffs')} type="button">打开 Handoffs</button>
+          <button onClick={() => navigateTo?.('work')} type="button">打开 Work Board</button>
         </div>
       ) : (
         <div className="recent-deliveries-list">
@@ -166,8 +166,10 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
                 </div>
 
                 <button className="recent-delivery-title" onClick={() => openHandoff(item)} type="button">
-                  {item.summary}
+                  {item.issue?.id ? `#${item.issue.id} ` : ''}{item.issue?.title || item.summary}
                 </button>
+
+                <p className="recent-delivery-summary">{view.modeLabel} · {view.statusLabel}</p>
 
                 <div className="recent-delivery-badges">
                   <span className={view.evidencePassed ? 'evidence passed' : 'evidence'}>

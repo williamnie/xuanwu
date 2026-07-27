@@ -367,7 +367,7 @@ export function queueFeishuHandoffNotification(db: RunnerDatabase, event: AppEve
   const revision = positiveID(payload.revision);
   const deepLink = safeText(payload.href).startsWith("#/")
     ? safeText(payload.href)
-    : `#/handoffs/${encodeURIComponent(handoffID)}`;
+    : `#/work/${encodeURIComponent(`xw:work:issues:${issueID}`)}/delivery/${encodeURIComponent(handoffID)}`;
   const notificationID = `${handoffID}:${revision}:${status}`;
   const result = routeNotification(db, {
     content: `Handoff ${status}：${safeText(payload.summary) || handoffID}`,

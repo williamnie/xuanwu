@@ -27,6 +27,7 @@
 .recent-delivery-status[data-tone='red'] { color: var(--error); }
 .recent-delivery-title { background: none; border: 0; color: var(--text-primary); cursor: pointer; font-size: 0.94rem; font-weight: 650; line-height: 1.42; overflow-wrap: anywhere; padding: 0; text-align: left; }
 .recent-delivery-title:hover { color: var(--success); }
+.recent-delivery-summary { color: var(--text-muted); font-size: .66rem; line-height: 1.4; margin: -3px 0 0; }
 
 .recent-delivery-badges { display: flex; flex-wrap: wrap; gap: 7px; }
 .recent-delivery-badges > span { align-items: center; background: var(--surface-raised); border: 1px solid var(--border-light); color: var(--text-muted); display: inline-flex; font-family: var(--font-mono); font-size: 0.62rem; gap: 5px; padding: 4px 7px; }

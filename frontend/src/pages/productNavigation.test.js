@@ -19,7 +19,6 @@ const EXPECTED_PAGES = [
   'ask-xuanwu',
   'work',
   'runs',
-  'handoffs',
   'automations',
   'projects',
   'connections',
@@ -64,6 +63,8 @@ test('legacy page ids redirect into canonical product routes without replacing h
   assert.equal(productNavPageForRoute('issues'), 'work');
   assert.equal(productNavPageForRoute('pi-inbox'), 'command-center');
   assert.equal(productNavPageForRoute('pi-memory'), 'settings');
+  assert.equal(resolveProductPage('handoffs'), 'handoffs');
+  assert.equal(PRODUCT_NAV_ITEMS.some(item => item.page === 'handoffs'), false);
 });
 
 test('App routes canonical pages to the currently verified compatibility surfaces', () => {

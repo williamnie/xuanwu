@@ -105,6 +105,7 @@
 .handoff-list-topline { align-items: center; display: flex; justify-content: space-between; }
 .handoff-list-topline time { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.56rem; }
 .handoff-list-item > strong { font-family: var(--font-display); font-size: 0.78rem; line-height: 1.35; }
+.handoff-list-summary { color: var(--text-secondary); display: -webkit-box; font-size: 0.61rem; line-height: 1.45; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .handoff-list-ref { align-items: center; color: var(--text-secondary); display: flex; font-family: var(--font-mono); font-size: 0.62rem; gap: 5px; }
 .handoff-list-counts { color: var(--text-muted); font-size: 0.6rem; }
 
@@ -118,6 +119,7 @@
 .handoff-detail-card { display: flex; flex-direction: column; gap: 14px; padding: 18px; }
 .handoff-detail-card > header { align-items: flex-start; border-bottom: 1px solid var(--border-light); display: flex; gap: 18px; justify-content: space-between; padding-bottom: 16px; }
 .handoff-detail-card h2 { font-family: var(--font-display); font-size: 1.25rem; line-height: 1.3; margin: 10px 0 7px; }
+.handoff-detail-raw-summary { color: var(--text-secondary); font-size: 0.66rem; line-height: 1.5; margin: 0 0 8px; }
 .handoff-id-copy { align-items: center; background: transparent; border: 0; color: var(--text-muted); cursor: pointer; display: flex; font-family: var(--font-mono); font-size: 0.61rem; gap: 6px; padding: 0; }
 .handoff-detail-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
 .handoff-detail-actions a { border-color: color-mix(in srgb, var(--primary) 30%, var(--border-color)); color: var(--primary); }

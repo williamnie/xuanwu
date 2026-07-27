@@ -44,6 +44,22 @@ test('draft page context is frozen across navigation until the draft is empty', 
   assert.deepEqual(syncGlobalComposerPageReference([commandCenter], '', run), [run]);
 });
 
+test('embedded delivery keeps its Handoff attached to the Work page context', () => {
+  const page = buildGlobalComposerPageReference({
+    currentPage: 'work',
+    pageContext: {
+      handoff_id: 'xw:handoff:derived:698%40abc',
+      page_id: 'work',
+      project_id: 'alpha',
+      work_id: 'xw:work:issues:698',
+    },
+    selectedHandoffId: 'xw:handoff:derived:stale',
+  }, works);
+
+  assert.match(page.id, /handoff:xw:handoff:derived:698%40abc/);
+  assert.equal(page.metadata.work_id, 'xw:work:issues:698');
+});
+
 test('project and Work mentions attach canonical ids with visible provenance details', () => {
   const suggestions = buildGlobalComposerSuggestions(projects, works);
   const project = suggestions.find(item => item.reference?.type === 'project');

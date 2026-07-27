@@ -37,7 +37,8 @@ export function buildGlobalComposerPageReference(route = {}, works = []) {
     || (pageId === 'issues' ? clean(route.filterProject) : '');
   const runId = clean(live.run_id) || (pageId === 'runs' ? clean(route.selectedRunId) : '');
   const sessionId = clean(live.session_id) || (pageId === 'runs' ? clean(route.selectedSessionId) : '');
-  const handoffId = pageId === 'handoffs' ? clean(route.selectedHandoffId) : '';
+  const handoffId = clean(live.handoff_id)
+    || (pageId === 'handoffs' || pageId === 'work' ? clean(route.selectedHandoffId) : '');
   const routeRef = routeReference({ handoffId, issueId, pageId, projectId, runId, sessionId, workId });
 
   return {

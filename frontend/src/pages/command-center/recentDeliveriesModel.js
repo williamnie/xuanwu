@@ -5,13 +5,13 @@ import {
 } from '../handoffPageModel.js';
 
 const MODE_META = {
-  local_changes: { label: 'Local changes', operation: 'Local delivery' },
-  branch_commit: { label: 'Branch commit', operation: 'Commit' },
-  push: { label: 'Remote push', operation: 'Push' },
-  draft_pr: { label: 'Draft PR', operation: 'Pull request' },
-  ready_pr: { label: 'Ready PR', operation: 'Pull request' },
-  deploy: { label: 'Deployment', operation: 'Deploy' },
-  release: { label: 'Release', operation: 'Release' },
+  local_changes: { label: '本地改动快照', operation: '本地交付' },
+  branch_commit: { label: '本地分支与 commit', operation: 'Commit' },
+  push: { label: '已推送远端', operation: 'Push' },
+  draft_pr: { label: '草稿 PR', operation: 'Pull request' },
+  ready_pr: { label: '待评审 PR', operation: 'Pull request' },
+  deploy: { label: '部署', operation: 'Deploy' },
+  release: { label: '发布', operation: 'Release' },
 };
 
 const STATUS_LABELS = {

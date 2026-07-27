@@ -104,7 +104,8 @@ describe("Command Center aggregate API", () => {
             counts: { returned: 1, skipped_invalid: 0, total: 1 },
             items: [{
               id: makeDomainID("handoff", "derived", `command-center-${issue.id}`),
-              links: { view: expect.stringContaining("#/handoffs/") },
+              issue: { id: issue.id, status: "in_progress", title: "Command Center" },
+              links: { view: expect.stringContaining("#/work/") },
               status: "draft"
             }],
             status: "ok"

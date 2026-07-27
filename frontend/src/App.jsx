@@ -85,9 +85,9 @@ export default function App() {
   const initialHandoffRoute = handoffRouteFromHash(globalThis.location?.hash);
   const [appState, updateAppState] = useImmer(() => ({
     // 路由与过滤状态
-    currentPage: initialHandoffRoute?.page || 'command-center', // 默认进入 Command Center，通知深链进入对应 Handoff
+    currentPage: initialHandoffRoute?.page || 'command-center', // 默认进入 Command Center，交付深链进入所属 Work
     selectedIssueId: null,
-    selectedWorkId: '',
+    selectedWorkId: initialHandoffRoute?.workId || '',
     selectedRunId: '',
     selectedSessionId: '',
     selectedHandoffId: initialHandoffRoute?.handoffId || '',
@@ -205,14 +205,14 @@ export default function App() {
       );
     }
     const hashRoute = handoffRouteFromHash(globalThis.location?.hash);
-    const targetHandoffId = resolvedPage === 'handoffs' ? handoffId || hashRoute?.handoffId || '' : '';
+    const targetHandoffId = resolvedPage === 'handoffs' || resolvedPage === 'work' ? handoffId || '' : '';
     const targetIssueId = resolvedPage === 'issues'
       ? page === 'work' ? issueIdFromWorkId(issueId) : issueId
       : null;
     const targetWorkId = resolvedPage === 'work'
       ? page === 'issues' ? workIdFromIssueId(issueId) : String(issueId || '')
       : '';
-    if (resolvedPage !== 'handoffs' && hashRoute && globalThis.history && globalThis.location) {
+    if (hashRoute && !targetHandoffId && globalThis.history && globalThis.location) {
       globalThis.history.replaceState(null, '', `${globalThis.location.pathname}${globalThis.location.search}`);
     }
     updateAppState(draft => {
@@ -263,7 +263,7 @@ export default function App() {
         draft.currentPage = route.page;
         draft.selectedHandoffId = route.handoffId;
         draft.selectedIssueId = null;
-        draft.selectedWorkId = '';
+        draft.selectedWorkId = route.workId || '';
       });
     };
     globalThis.addEventListener('hashchange', syncHandoffHash);
@@ -374,7 +374,12 @@ export default function App() {
             {currentPage === 'command-center' ? (
               <Dashboard navigateTo={navigateTo} />
             ) : currentPage === 'work' ? (
-              <WorkBoard navigateTo={navigateTo} onPageContextChange={setPageContext} selectedWorkId={selectedWorkId} />
+              <WorkBoard
+                navigateTo={navigateTo}
+                onPageContextChange={setPageContext}
+                selectedHandoffId={selectedHandoffId}
+                selectedWorkId={selectedWorkId}
+              />
             ) : currentPage === 'handoffs' ? (
               <Handoffs selectedHandoffId={selectedHandoffId} />
             ) : currentPage === 'issues' && selectedIssueId ? (

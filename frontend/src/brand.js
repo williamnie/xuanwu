@@ -12,7 +12,6 @@ export const PRODUCT_NAV_LABELS = Object.freeze({
   askXuanwu: 'Ask Xuanwu',
   work: 'Work',
   runs: 'Runs',
-  handoffs: 'Handoffs',
   automations: 'Automations',
   projects: 'Projects',
   connections: 'Connections',

@@ -130,7 +130,14 @@ describe("Handoff HTTP API and delivery notification", () => {
           },
           delivery_status: { overall: "ready" },
           id: local.handoff.id,
+          issue: {
+            id: issueID,
+            project_id: "fixture",
+            status: "in_progress",
+            title: "Handoff API smoke"
+          },
           next_step: "Open delivery artifact",
+          revision: 0,
           status: "ready"
         }]
       });
@@ -148,9 +155,15 @@ describe("Handoff HTTP API and delivery notification", () => {
           diff_stats: { changed_path_count: 1, insertions: 1 }
         },
         handoff: { changed_files: ["selected.txt"], id: local.handoff.id },
+        issue: {
+          id: issueID,
+          project_id: "fixture",
+          status: "in_progress",
+          title: "Handoff API smoke"
+        },
         notification_summary: {
           handoff_id: local.handoff.id,
-          href: `#/handoffs/${encodeURIComponent(local.handoff.id)}`
+          href: `#/work/${encodeURIComponent(workID)}/delivery/${encodeURIComponent(local.handoff.id)}`
         }
       });
       expect(notifications).toHaveLength(1);
@@ -166,7 +179,7 @@ describe("Handoff HTTP API and delivery notification", () => {
         commit_ref: local.commit_revision,
         evidence_count: 1,
         handoff_id: local.handoff.id,
-        href: `#/handoffs/${encodeURIComponent(local.handoff.id)}`,
+        href: `#/work/${encodeURIComponent(workID)}/delivery/${encodeURIComponent(local.handoff.id)}`,
         risk_count: 0
       });
       expect(notifications[0]!.payload).not.toContain("selected.txt");

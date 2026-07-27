@@ -114,8 +114,8 @@ export default function Handoffs({ selectedHandoffId = '' }) {
       <header className="handoff-header">
         <div>
           <span className="handoff-kicker"><PackageCheck size={14} /> Delivery protocol</span>
-          <h1>Handoffs</h1>
-          <p>把 branch、commit、PR、Evidence、review 与 tracker update 收敛成可回放的交付视图。</p>
+          <h1>Handoff 审计</h1>
+          <p>高级审计视图；日常查看请从对应 Issue / Work 的“交付”页签进入。</p>
         </div>
         <button className="handoff-refresh" disabled={loading || detailLoading} onClick={refresh} type="button">
           <RefreshCw className={loading || detailLoading ? 'is-spinning' : ''} size={15} /> 刷新交付状态
@@ -169,7 +169,8 @@ export default function Handoffs({ selectedHandoffId = '' }) {
                   <StatusBadge status={item.delivery_status?.overall || item.status} />
                   <time>{formatTime(item.updated_at)}</time>
                 </span>
-                <strong>{item.summary}</strong>
+                <strong>{item.issue?.id ? `#${item.issue.id} ` : ''}{item.issue?.title || '未关联 Issue 标题'}</strong>
+                <span className="handoff-list-summary">{item.summary}</span>
                 <span className="handoff-list-ref">
                   {item.delivery?.branch_ref ? <><GitBranch size={12} /> {displayRef(item.delivery.branch_ref, 18, 8)}</> : item.delivery?.mode}
                 </span>
@@ -245,12 +246,14 @@ function HandoffDetail({ detail, onRefresh }) {
       <header>
         <div>
           <StatusBadge status={status} />
-          <h2>{handoff.summary}</h2>
+          <h2>{detail.issue?.id ? `#${detail.issue.id} ` : ''}{detail.issue?.title || '交付审计记录'}</h2>
+          <p className="handoff-detail-raw-summary">{handoff.summary}</p>
           <button className="handoff-id-copy" onClick={() => copy(handoff.id, 'Handoff ID')} title={handoff.id} type="button">
             {displayRef(handoff.id, 28, 12)} <Copy size={12} />
           </button>
         </div>
         <div className="handoff-detail-actions">
+          <a href={handoffHref(handoff.id, handoff.work_id)}>打开所属 Issue 交付</a>
           <button onClick={() => copy(handoffCopyText(detail), '交付摘要')} type="button"><Copy size={14} /> Copy summary</button>
           {externalUrl ? <a href={externalUrl} rel="noreferrer noopener" target="_blank"><ExternalLink size={14} /> Open delivery</a> : null}
           <button onClick={onRefresh} type="button"><RefreshCw size={14} /> Refresh</button>

@@ -91,7 +91,7 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
       "backend-ts/src/http/handoffApi.test.ts"
     ],
     fixture_projects: 1,
-    frontend_route: "#/handoffs",
+    frontend_route: "#/work/:work_id/delivery/:handoff_id",
     frontend_tests: [
       "frontend/src/pages/issueVerificationGate.test.js",
       "frontend/src/pages/IssueDetail.structure.test.js",

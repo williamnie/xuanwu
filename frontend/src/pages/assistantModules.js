@@ -31,13 +31,6 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
     availability: 'compatibility',
   },
   {
-    page: 'handoffs',
-    label: PRODUCT_NAV_LABELS.handoffs,
-    icon: 'handoffs',
-    placement: 'primary',
-    availability: 'available',
-  },
-  {
     page: 'automations',
     label: PRODUCT_NAV_LABELS.automations,
     icon: 'automations',

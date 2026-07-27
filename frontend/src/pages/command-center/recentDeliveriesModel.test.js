@@ -9,16 +9,17 @@ import {
 } from './recentDeliveriesModel.js';
 
 const HANDOFF_ID = 'xw:handoff:derived:697%40abc123';
+const WORK_ID = 'xw:work:issues:697';
 
 test('Recent Deliveries presents every Handoff mode with its authoritative refs', () => {
   const modes = [
-    ['local_changes', { working_tree_ref: 'git:tree' }, 'Working tree', 'Local changes'],
-    ['branch_commit', { branch_ref: 'refs/heads/xw/697', commit_ref: 'abc123' }, 'Commit', 'Branch commit'],
-    ['push', { branch_ref: 'refs/heads/xw/697', commit_ref: 'abc123', remote_ref: 'origin/xw/697' }, 'Remote', 'Remote push'],
-    ['draft_pr', prDelivery(), 'Pull request', 'Draft PR'],
-    ['ready_pr', prDelivery(), 'Pull request', 'Ready PR'],
-    ['deploy', { deployment_ref: 'deploy:697', environment: 'staging', revision_ref: 'abc123' }, 'Deployment', 'Deployment'],
-    ['release', { release_ref: 'release:697', revision_ref: 'abc123', version: '1.2.3' }, 'Release', 'Release'],
+    ['local_changes', { working_tree_ref: 'git:tree' }, 'Working tree', '本地改动快照'],
+    ['branch_commit', { branch_ref: 'refs/heads/xw/697', commit_ref: 'abc123' }, 'Commit', '本地分支与 commit'],
+    ['push', { branch_ref: 'refs/heads/xw/697', commit_ref: 'abc123', remote_ref: 'origin/xw/697' }, 'Remote', '已推送远端'],
+    ['draft_pr', prDelivery(), 'Pull request', '草稿 PR'],
+    ['ready_pr', prDelivery(), 'Pull request', '待评审 PR'],
+    ['deploy', { deployment_ref: 'deploy:697', environment: 'staging', revision_ref: 'abc123' }, 'Deployment', '部署'],
+    ['release', { release_ref: 'release:697', revision_ref: 'abc123', version: '1.2.3' }, 'Release', '发布'],
   ];
 
   for (const [mode, delivery, primaryLabel, modeLabel] of modes) {
@@ -71,7 +72,7 @@ test('detail refresh replaces aggregate status without replacing API-owned links
 
 test('open actions accept only the returned matching Handoff link and HTTP(S) URL', () => {
   const valid = item();
-  assert.deepEqual(recentDeliveryDetailRoute(valid), { handoffId: HANDOFF_ID, page: 'handoffs' });
+  assert.deepEqual(recentDeliveryDetailRoute(valid), { handoffId: HANDOFF_ID, page: 'work', workId: WORK_ID });
   assert.equal(recentDeliveryDetailRoute(item({ links: { view: '#/handoffs/xw%3Ahandoff%3Aderived%3Aother' } })), null);
   assert.equal(recentDeliveryView(item({
     delivery: { mode: 'ready_pr', ...prDelivery(), url: 'javascript:alert(1)' },
@@ -87,7 +88,7 @@ test('Command Center trusts the aggregate Handoff status without per-card hydrat
   assert.match(page, /REFRESH_INTERVAL_MS = 30_000/);
   assert.match(page, /navigator\.clipboard\.writeText/);
   assert.match(page, /history\?\.replaceState\?\.\(null, '', item\.links\.view\)/);
-  assert.match(page, /navigateTo\?\.\(route\.page, null, '', route\.handoffId\)/);
+  assert.match(page, /navigateTo\?\.\(route\.page, route\.workId \|\| item\.work_id, '', route\.handoffId\)/);
   assert.doesNotMatch(page, /createHandoff|updateHandoff|controlWork|controlRun/);
   assert.match(dashboard, /<RecentDeliveriesSection navigateTo=\{navigateTo\} projects=\{projects\} \/>/);
 });
@@ -97,13 +98,14 @@ function item(overrides = {}) {
     delivery: { mode: 'branch_commit', branch_ref: 'refs/heads/xw/697', commit_ref: 'abc123' },
     evidence_count: 0,
     id: HANDOFF_ID,
-    links: { view: `#/handoffs/${encodeURIComponent(HANDOFF_ID)}` },
+    links: { view: `#/work/${encodeURIComponent(WORK_ID)}/delivery/${encodeURIComponent(HANDOFF_ID)}` },
     project_id: 'codex-issue-runner',
     review: { state: 'not_requested' },
     risk_count: 0,
     status: 'draft',
     summary: 'Recent delivery fixture',
     updated_at: '2026-07-17T08:00:00.000Z',
+    work_id: WORK_ID,
     ...overrides,
   };
 }

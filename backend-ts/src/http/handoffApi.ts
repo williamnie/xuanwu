@@ -127,11 +127,13 @@ function detailResponse(db: RunnerDatabase, request: Request): Record<string, un
 }
 
 function detailRecord(db: RunnerDatabase, record: StoredHandoffRecord): Record<string, unknown> {
+  const issue = getIssue(db, record.issue_id);
   return {
     compatibility: HANDOFF_HTTP_COMPATIBILITY_POLICY,
     delivery_status: deliveryStatus(db, record.handoff),
     diff_summary: diffSummary(db, record.handoff),
     handoff: record.handoff,
+    issue: issue ? issueProjection(issue) : null,
     issue_id: record.issue_id,
     notification_summary: buildHandoffNotificationSummary(record.handoff),
     project_id: record.project_id,
@@ -257,6 +259,7 @@ async function reviewResponse(db: RunnerDatabase, request: Request): Promise<Rec
 
 function handoffSummary(db: RunnerDatabase, record: StoredHandoffRecord): Record<string, unknown> {
   const notification = buildHandoffNotificationSummary(record.handoff);
+  const issue = getIssue(db, record.issue_id);
   return {
     changed_file_count: record.handoff.changed_files.length,
     delivery: {
@@ -269,15 +272,26 @@ function handoffSummary(db: RunnerDatabase, record: StoredHandoffRecord): Record
     delivery_status: deliveryStatus(db, record.handoff),
     evidence_count: record.handoff.evidence_ids.length,
     id: record.handoff.id,
+    issue: issue ? issueProjection(issue) : null,
     issue_id: record.issue_id,
     next_step: notification.next_step,
     notification_summary: notification.summary,
     project_id: record.project_id,
+    revision: record.handoff.revision,
     risk_count: record.handoff.risks.length,
     status: record.handoff.status,
     summary: boundedText(record.handoff.summary, SUMMARY_LIMIT),
     updated_at: record.handoff.updated_at,
     work_id: record.handoff.work_id
+  };
+}
+
+function issueProjection(issue: { id: number; project_id: string; status: string; title: string }): Record<string, unknown> {
+  return {
+    id: issue.id,
+    project_id: issue.project_id,
+    status: issue.status,
+    title: issue.title
   };
 }
 

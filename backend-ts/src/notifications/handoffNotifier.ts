@@ -98,7 +98,7 @@ export function buildHandoffNotificationSummary(handoff: HandoffRecord): Handoff
     changed_file_count: handoff.changed_files.length,
     evidence_count: handoff.evidence_ids.length,
     handoff_id: handoff.id,
-    href: handoffHref(handoff.id),
+    href: handoffHref(handoff.id, handoff.work_id),
     mode: handoff.delivery.mode,
     next_step: nextStep,
     revision: handoff.revision,
@@ -109,8 +109,10 @@ export function buildHandoffNotificationSummary(handoff: HandoffRecord): Handoff
   };
 }
 
-export function handoffHref(handoffID: string): string {
-  return `#/handoffs/${encodeURIComponent(handoffID)}`;
+export function handoffHref(handoffID: string, workID = ""): string {
+  return workID
+    ? `#/work/${encodeURIComponent(workID)}/delivery/${encodeURIComponent(handoffID)}`
+    : `#/handoffs/${encodeURIComponent(handoffID)}`;
 }
 
 export function handoffNextStep(handoff: HandoffRecord): string {

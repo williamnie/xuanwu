@@ -28,6 +28,7 @@ import {
   listIssueBackedWorks,
   workIDToIssueID
 } from "../domain/work/issueAdapter.ts";
+import { getIssue } from "../db/repositories/issues.ts";
 import type { WorkLedgerEntry, WorkStatus } from "../domain/work/contracts.ts";
 import { readIssueReadiness } from "../domain/readiness/contracts.ts";
 import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
@@ -36,6 +37,7 @@ import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
 import { resolveAttentionDecision } from "./attentionDecisionService.ts";
 import { guardianAlertPresentation } from "../pi/guardianAlertPresentation.ts";
+import { handoffHref } from "../notifications/handoffNotifier.ts";
 import {
   guardianOperationsSnapshot,
   latestGuardianOperationsReport
@@ -246,7 +248,7 @@ function recentDeliveriesSection(db: RunnerDatabase, input: SectionInput): Comma
       total: countStoredHandoffs(db, filter)
     },
     freshness: freshness(input.now, page.items.map((record) => record.handoff.updated_at), 5 * 60),
-    items: page.items.map(handoffSummary),
+    items: page.items.map((record) => handoffSummary(db, record)),
     links: { collection: "/api/handoffs" }
   };
 }
@@ -593,20 +595,27 @@ function runSummary(run: RunView): Record<string, unknown> {
   };
 }
 
-function handoffSummary(record: StoredHandoffRecord): Record<string, unknown> {
+function handoffSummary(db: RunnerDatabase, record: StoredHandoffRecord): Record<string, unknown> {
   const handoff = record.handoff;
+  const issue = getIssue(db, record.issue_id);
   return {
     delivery: handoff.delivery,
     evidence_count: handoff.evidence_ids.length,
     id: handoff.id,
+    issue: issue ? {
+      id: issue.id,
+      status: issue.status,
+      title: issue.title
+    } : null,
     links: {
       evidence: `/api/evidence?work_id=${encodeURIComponent(handoff.work_id)}`,
       self: `/api/handoffs/${encodeURIComponent(handoff.id)}`,
-      view: `#/handoffs/${encodeURIComponent(handoff.id)}`,
+      view: handoffHref(handoff.id, handoff.work_id),
       work: `/api/works/${encodeURIComponent(handoff.work_id)}`
     },
     project_id: record.project_id,
     review: handoff.review,
+    revision: handoff.revision,
     risk_count: handoff.risks.length,
     status: handoff.status,
     summary: boundedText(handoff.summary),

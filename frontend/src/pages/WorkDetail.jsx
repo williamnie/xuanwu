@@ -20,6 +20,8 @@ import { workApi } from '../api/work.js';
 import MarkdownPreview from '../components/editor/MarkdownPreview.jsx';
 import { message } from '../store/toastStore.js';
 import WorkEditorDialog from './work/WorkEditorDialog.jsx';
+import WorkDeliveryView from './work/WorkDeliveryView.jsx';
+import { handoffHref } from './handoffPageModel.js';
 import { issueIdFromWorkId } from './workBoardModel.js';
 import {
   WORK_TIMELINE_KINDS,
@@ -52,7 +54,7 @@ const TIMELINE_LABELS = {
 const EMPTY_OVERVIEW = { evidence: [], handoffs: [], runs: [] };
 const DEFAULT_ACCEPTANCE_ID = 'issue-delivery';
 
-export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChanged, projects = [], workId }) {
+export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChanged, projects = [], selectedHandoffId = '', workId }) {
   const detailRequest = useRef(0);
   const overviewRequest = useRef(0);
   const activityRequest = useRef(0);
@@ -62,7 +64,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   const [timeline, setTimeline] = useState([]);
   const [timelineCursor, setTimelineCursor] = useState('');
   const [timelineKind, setTimelineKind] = useState('');
-  const [activeView, setActiveView] = useState('overview');
+  const [activeView, setActiveView] = useState(selectedHandoffId ? 'delivery' : 'overview');
+  const [activeDeliveryId, setActiveDeliveryId] = useState(selectedHandoffId);
   const [loading, setLoading] = useState(true);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -135,14 +138,15 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     setTimelineCursor('');
     setTimelineKind('');
     setActivityLoaded(false);
-    setActiveView('overview');
+    setActiveView(selectedHandoffId ? 'delivery' : 'overview');
+    setActiveDeliveryId(selectedHandoffId);
     setEditorOpen(false);
     setPendingAction('');
     setReviewAction('');
     setReviewComment('');
     loadDetail();
     loadOverview();
-  }, [loadDetail, loadOverview]);
+  }, [loadDetail, loadOverview, selectedHandoffId]);
 
   useEffect(() => {
     if (activeView === 'activity' && !activityLoaded && !activityLoading) loadActivity();
@@ -159,9 +163,21 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   );
 
   useEffect(() => {
+    setActiveDeliveryId(current => selectedHandoffId
+      || (overview.handoffs.some(item => item.id === current) ? current : overview.handoffs[0]?.id || ''));
+  }, [overview.handoffs, selectedHandoffId]);
+
+  useEffect(() => {
     if (!work) return;
-    onPageContextChange?.({ page_id: 'work', project_id: work.owner?.project_id || '', work_id: work.id });
-  }, [onPageContextChange, work]);
+    onPageContextChange?.({
+      page_id: 'work',
+      project_id: work.owner?.project_id || '',
+      work_id: work.id,
+      ...(activeView === 'delivery' && activeDeliveryId
+        ? { handoff_id: activeDeliveryId }
+        : {}),
+    });
+  }, [activeDeliveryId, activeView, onPageContextChange, work]);
 
   const refreshAll = async () => {
     setRefreshing(true);
@@ -225,6 +241,15 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   const latestHandoff = overview.handoffs[0];
   const passedEvidence = overview.evidence.filter(item => item.status === 'passed').length;
   const failedEvidence = overview.evidence.filter(item => item.status === 'failed').length;
+  const selectView = (view) => {
+    setActiveView(view);
+    if (typeof window === 'undefined') return;
+    if (view === 'delivery' && latestHandoff) {
+      window.history.replaceState(null, '', handoffHref(activeDeliveryId || latestHandoff.id, work.id));
+    } else if (window.location.hash.startsWith('#/work/')) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    }
+  };
 
   return (
     <section className="work-detail-page animate-fade-in">
@@ -252,8 +277,9 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       </header>
 
       <nav className="work-detail-view-tabs" aria-label="Work detail views">
-        <button aria-current={activeView === 'overview' ? 'page' : undefined} onClick={() => setActiveView('overview')} type="button">Overview</button>
-        <button aria-current={activeView === 'activity' ? 'page' : undefined} onClick={() => setActiveView('activity')} type="button">Activity</button>
+        <button aria-current={activeView === 'overview' ? 'page' : undefined} onClick={() => selectView('overview')} type="button">Overview</button>
+        <button aria-current={activeView === 'delivery' ? 'page' : undefined} onClick={() => selectView('delivery')} type="button">交付 {overview.handoffs.length > 0 ? `(${overview.handoffs.length})` : ''}</button>
+        <button aria-current={activeView === 'activity' ? 'page' : undefined} onClick={() => selectView('activity')} type="button">Activity</button>
       </nav>
 
       {pendingAction ? <InlineConfirmation busy={submitting} onCancel={() => setPendingAction('')} onConfirm={() => submitAction(pendingAction)} /> : null}
@@ -285,7 +311,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
                 <span><strong>{passedEvidence}</strong> passed Evidence</span>
                 <span className={failedEvidence ? 'failed' : ''}><strong>{failedEvidence}</strong> failed Evidence</span>
               </div>
-              {latestHandoff ? <LatestHandoffCard handoff={latestHandoff} navigateTo={navigateTo} /> : <EmptySection text="No Handoff prepared." />}
+              {latestHandoff ? <LatestHandoffCard handoff={latestHandoff} onOpen={() => selectView('delivery')} /> : <EmptySection text={work.status === 'done' ? '历史完成记录没有可查询的 Handoff。' : '完成并通过验证后会生成交付凭证。'} />}
             </section>
           </div>
 
@@ -296,6 +322,19 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
             </details>
           ) : null}
         </div>
+      ) : activeView === 'delivery' ? (
+        <section className="work-detail-panel work-delivery-panel">
+          <WorkDeliveryView
+            evidence={overview.evidence}
+            handoffs={overview.handoffs}
+            loading={overviewLoading}
+            loadError={overviewErrors.evidence || overviewErrors.handoffs}
+            onRefresh={loadOverview}
+            onSelectionChange={setActiveDeliveryId}
+            selectedHandoffId={activeDeliveryId}
+            work={work}
+          />
+        </section>
       ) : (
         <section className="work-detail-panel work-activity-panel">
           <SectionHeading eyebrow="Bounded history" title="Activity" />
@@ -328,15 +367,24 @@ function LatestRunCard({ navigateTo, run }) {
   return <article className="work-latest-run"><div><em data-status={run.status}>{run.status}</em><span>{run.provider || 'unknown'} · {formatTime(run.started_at)}</span></div><strong>{run.progress?.latest?.summary || run.terminal?.reason || 'No progress summary yet.'}</strong><button onClick={() => navigateTo('runs', null, run.id)} type="button">Open Run <ArrowUpRight size={12} /></button></article>;
 }
 
-function LatestHandoffCard({ handoff, navigateTo }) {
+function LatestHandoffCard({ handoff, onOpen }) {
   const status = handoff.delivery_status?.overall || handoff.status;
-  return <article className="work-latest-handoff"><div><strong>{handoff.summary}</strong><em data-status={status}>{status}</em></div><p>{handoff.notification_summary || handoff.next_step}</p><button onClick={() => navigateTo('handoffs', null, '', handoff.id)} type="button">Open Handoff <ArrowUpRight size={12} /></button></article>;
+  const mode = {
+    branch_commit: '本地 commit 已创建',
+    deploy: '部署交付',
+    draft_pr: '草稿 PR',
+    local_changes: '本地改动已记录',
+    push: '代码已推送',
+    ready_pr: 'PR 已准备好',
+    release: '发布交付',
+  }[handoff.delivery?.mode] || handoff.delivery?.mode || '交付凭证';
+  return <article className="work-latest-handoff"><div><strong>{mode}</strong><em data-status={status}>{status === 'ready' ? '凭证已就绪' : status}</em></div><p>{handoff.changed_file_count} 个文件 · {handoff.evidence_count} 项 Evidence · {handoff.risk_count} 条风险</p><button onClick={onOpen} type="button">查看 Issue 交付 <ArrowUpRight size={12} /></button></article>;
 }
 
 function WorkStateSummary({ status }) {
   const summary = {
     cancelled: ['Cancelled', 'No automatic action is pending.'],
-    done: ['Delivered', 'No action is required unless the result needs another revision.'],
+    done: ['Completed', '执行已完成；交付凭证和实际交付层级请查看“交付”。'],
     failed: ['Execution failed', 'Inspect the latest Run, then retry or edit the task.'],
     in_progress: ['Running', 'The runner owns the current execution.'],
     pending_verification: ['Review required', 'Accept the delivery or request focused changes.'],

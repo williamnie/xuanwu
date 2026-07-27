@@ -52,7 +52,7 @@ const EMPTY_FILTERS = {
   type: '',
 };
 
-export default function WorkBoard({ navigateTo, onPageContextChange, selectedWorkId = '' }) {
+export default function WorkBoard({ navigateTo, onPageContextChange, selectedHandoffId = '', selectedWorkId = '' }) {
   const projects = useDataStore(selectProjects);
   const [works, setWorks] = useState([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -238,6 +238,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
         onPageContextChange={onPageContextChange}
         onWorkChanged={refresh}
         projects={projects}
+        selectedHandoffId={selectedHandoffId}
         workId={selectedWorkId}
       />
     );

@@ -1,19 +1,41 @@
 const HANDOFF_HASH_PREFIX = '#/handoffs/';
+const WORK_HASH_PREFIX = '#/work/';
+const HANDOFF_ID_PATTERN = /^xw:handoff:derived:[A-Za-z0-9._~%-]+$/;
+const WORK_ID_PATTERN = /^xw:work:issues:[A-Za-z0-9._~%-]+$/;
 
-export function handoffHref(id) {
+export function handoffHref(id, workId = '') {
   const value = String(id || '').trim();
-  return value ? `${HANDOFF_HASH_PREFIX}${encodeURIComponent(value)}` : '#/handoffs';
+  const work = String(workId || '').trim();
+  if (!value) return work && WORK_ID_PATTERN.test(work) ? `#/work/${encodeURIComponent(work)}` : '#/handoffs';
+  if (work && WORK_ID_PATTERN.test(work)) {
+    return `${WORK_HASH_PREFIX}${encodeURIComponent(work)}/delivery/${encodeURIComponent(value)}`;
+  }
+  return `${HANDOFF_HASH_PREFIX}${encodeURIComponent(value)}`;
 }
 
 export function handoffRouteFromHash(hash) {
   const value = String(hash || '');
+  if (value.startsWith(WORK_HASH_PREFIX)) return workDeliveryRoute(value);
   if (!value.startsWith(HANDOFF_HASH_PREFIX)) return null;
   const encoded = value.slice(HANDOFF_HASH_PREFIX.length);
   if (!encoded || encoded.includes('/')) return null;
   try {
     const handoffId = decodeURIComponent(encoded).trim();
-    if (!/^xw:handoff:derived:[A-Za-z0-9._~%-]+$/.test(handoffId)) return null;
+    if (!HANDOFF_ID_PATTERN.test(handoffId)) return null;
     return { handoffId, page: 'handoffs' };
+  } catch {
+    return null;
+  }
+}
+
+function workDeliveryRoute(hash) {
+  const parts = hash.slice(WORK_HASH_PREFIX.length).split('/');
+  if (parts.length !== 3 || parts[1] !== 'delivery') return null;
+  try {
+    const workId = decodeURIComponent(parts[0] || '').trim();
+    const handoffId = decodeURIComponent(parts[2] || '').trim();
+    if (!WORK_ID_PATTERN.test(workId) || !HANDOFF_ID_PATTERN.test(handoffId)) return null;
+    return { handoffId, page: 'work', workId };
   } catch {
     return null;
   }
