@@ -38,13 +38,13 @@ test('project config modal keeps its header and footer fixed while its body scro
   assert.match(footerRule, /justify-content:\s*flex-end/);
 });
 
-test('project cards keep only operational information and move configuration behind settings', () => {
+test('project cards keep operational information and edit locally inside Settings', () => {
   assert.match(source, /className="glass-card project-card"/);
   assert.match(source, /className="project-status-pill"/);
   assert.match(source, /className="project-card-stats"/);
   assert.match(source, /aria-label={`编辑 \${proj\.name} 配置`}/);
-  assert.match(source, /onManageProject\?\.\(proj\.id\)/);
-  assert.doesNotMatch(source, /handleOpenEditModal/);
+  assert.match(source, /handleOpenEditModal\(proj\)/);
+  assert.match(source, /mode=\{modalMode\}/);
   assert.doesNotMatch(source, /<details className="project-card-details">/);
   assert.doesNotMatch(source, /ProjectMetaRow/);
   assert.doesNotMatch(source, />Capabilities</);
@@ -83,4 +83,13 @@ test('project config modal reads Codex model options from provider API', () => {
   assert.match(editorSource, /模型 API 失败，请手动填写 model ID/);
   assert.doesNotMatch(editorSource, /FALLBACK_CODEX_MODEL_OPTIONS/);
   assert.doesNotMatch(editorSource, /CODEX_MODEL_OPTIONS\.some\(option => option\.value === model\)/);
+});
+
+test('new project form defaults to one required field and keeps optional controls collapsed', () => {
+  assert.match(editorSource, /<label>项目路径 \*<\/label>/);
+  assert.match(editorSource, /mode === 'create'[\s\S]*<details className="project-settings-advanced">/);
+  assert.match(editorSource, /高级运行配置（可选）/);
+  assert.match(editorSource, /mode === 'edit'[\s\S]*loadAgentProfiles\(\)/);
+  assert.match(editorSource, /Agent Profile（可选）/);
+  assert.match(editorSource, /Profile 覆盖项（高级）/);
 });

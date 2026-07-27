@@ -29,7 +29,7 @@ function compactPath(cwd = '') {
   return `…/${parts.slice(-2).join('/')}`;
 }
 
-export default function Projects({ onManageProject }) {
+export default function Projects() {
   const projects = useDataStore(selectProjects);
   const issues = useDataStore(selectIssues);
   const backendOnline = useDataStore(selectBackendOnline);
@@ -37,20 +37,24 @@ export default function Projects({ onManageProject }) {
   const [ui, updateUi] = useImmer({
     syncing: false,
     syncResult: null,
-    isCreateModalOpen: false,
+    modalMode: '',
     resumingHoldProjectId: '',
+    selectedProjectId: '',
   });
 
   const {
     syncing,
     syncResult,
-    isCreateModalOpen,
+    modalMode,
     resumingHoldProjectId,
+    selectedProjectId,
   } = ui;
+  const selectedProject = projects.find(project => project.id === selectedProjectId) || null;
 
   const closeModal = () => {
     updateUi(draft => {
-      draft.isCreateModalOpen = false;
+      draft.modalMode = '';
+      draft.selectedProjectId = '';
     });
   };
 
@@ -78,7 +82,15 @@ export default function Projects({ onManageProject }) {
 
   const handleOpenCreateModal = () => {
     updateUi(draft => {
-      draft.isCreateModalOpen = true;
+      draft.modalMode = 'create';
+      draft.selectedProjectId = '';
+    });
+  };
+
+  const handleOpenEditModal = (project) => {
+    updateUi(draft => {
+      draft.modalMode = 'edit';
+      draft.selectedProjectId = project.id;
     });
   };
 
@@ -111,27 +123,25 @@ export default function Projects({ onManageProject }) {
   };
 
   return (
-    <div className="projects-page animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', minHeight: 0, flex: 1 }}>
-      
-      {/* 头部导航/动作栏 */}
-      <div className="page-intro" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, padding: '24px 0 8px 0' }}>
+    <section className="glass-card settings-project-panel animate-fade-in">
+      <div className="settings-project-panel-header">
         <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: '6px' }}>项目管理</h1>
-          <p style={{ color: 'var(--text-muted)' }}>添加项目给 PI 后即进入 Issue Loop 无人值守接管</p>
+          <div className="settings-entry-eyebrow">项目级设置</div>
+          <h2>项目管理</h2>
+          <p>在这里添加、同步和维护项目。添加后，项目会进入 Issue Loop 无人值守接管。</p>
         </div>
-        <div className="page-intro-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing}>
+        <div className="settings-project-panel-actions">
+          <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing} type="button">
             <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
             {syncing ? '正在同步...' : '同步 Codex 项目'}
           </button>
-          <button className="btn btn-primary" onClick={handleOpenCreateModal}>
-            <FolderPlus size={18} /> 新增监控项目
+          <button className="btn btn-primary" onClick={handleOpenCreateModal} type="button">
+            <FolderPlus size={18} /> 添加项目
           </button>
         </div>
       </div>
 
-      {/* 滚动内容区 */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '24px' }}>
+      <div className="settings-project-panel-body">
         {!backendOnline && (
           <div className="glass-card" style={{ borderLeft: '4px solid var(--error)', display: 'flex', gap: '16px', alignItems: 'center', padding: '16px 24px', background: 'var(--error-bg)' }}>
             <AlertCircle color="var(--error)" size={24} style={{ flexShrink: 0 }} />
@@ -185,10 +195,10 @@ export default function Projects({ onManageProject }) {
             <Folder size={48} color="var(--text-muted)" style={{ opacity: 0.5 }} />
             <div>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '8px' }}>暂无监控项目</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', maxWidth: '400px' }}>点击右上角的「新增监控项目」按钮，将您的本地项目绝对路径配置进来以供 Codex 扫描执行。</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', maxWidth: '400px' }}>添加本地项目路径，或从已有 Codex 项目中同步。</p>
             </div>
             <button className="btn btn-primary" style={{ marginTop: '8px' }} onClick={handleOpenCreateModal}>
-              立即添加
+              添加项目
             </button>
             <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing}>
               <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
@@ -265,7 +275,7 @@ export default function Projects({ onManageProject }) {
                     <div className="project-card-actions">
                       <button
                         className="btn btn-secondary project-card-icon-btn"
-                        onClick={() => onManageProject?.(proj.id)}
+                        onClick={() => handleOpenEditModal(proj)}
                         aria-label={`编辑 ${proj.name} 配置`}
                         title="设置"
                       >
@@ -292,33 +302,37 @@ export default function Projects({ onManageProject }) {
       </div>
 
 
-      {/* 新增项目仍属于项目管理；现有项目配置统一在“设置 > 项目”编辑。 */}
-      {isCreateModalOpen && (
+      {modalMode && (modalMode === 'create' || selectedProject) && (
         <div className="modal-overlay">
           <div className="glass-card modal-content project-config-modal">
             <div className="project-config-modal-header">
-              <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>新增监控项目</h2>
+              <div>
+                <h2>{modalMode === 'create' ? '添加项目' : `编辑 ${selectedProject.name}`}</h2>
+                <p>{modalMode === 'create' ? '只需填写项目路径；不确定的选项保持默认即可。' : '修改这个项目的默认运行设置。'}</p>
+              </div>
               <button
-                aria-label="关闭新增项目"
+                aria-label={modalMode === 'create' ? '关闭添加项目' : '关闭编辑项目'}
+                className="project-config-modal-close"
                 onClick={closeModal}
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)' }}
                 type="button"
               >
                 <X size={20} />
               </button>
             </div>
             <ProjectSettingsEditor
+              key={selectedProjectId || 'create'}
               layout="modal"
-              mode="create"
+              mode={modalMode}
               onCancel={closeModal}
               onSaved={async () => {
                 closeModal();
                 await refreshData(['projects', 'issues']);
               }}
+              project={selectedProject}
             />
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

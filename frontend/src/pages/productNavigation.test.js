@@ -20,14 +20,16 @@ const EXPECTED_PAGES = [
   'work',
   'runs',
   'automations',
-  'projects',
   'connections',
   'settings',
 ];
 
 test('product navigation has one ordered Xuanwu identity and centralized labels', () => {
   assert.deepEqual(PRODUCT_NAV_ITEMS.map(item => item.page), EXPECTED_PAGES);
-  assert.deepEqual(PRODUCT_NAV_ITEMS.map(item => item.label), Object.values(PRODUCT_NAV_LABELS));
+  assert.deepEqual(
+    PRODUCT_NAV_ITEMS.map(item => item.label),
+    Object.values(PRODUCT_NAV_LABELS).filter(label => label !== PRODUCT_NAV_LABELS.projects),
+  );
   assert.equal(new Set(PRODUCT_NAV_ITEMS.map(item => item.page)).size, PRODUCT_NAV_ITEMS.length);
   assert.equal(new Set(PRODUCT_NAV_ITEMS.map(item => item.label)).size, PRODUCT_NAV_ITEMS.length);
   assert.deepEqual(new Set(PRODUCT_NAV_ITEMS.map(item => item.availability)), new Set(['available', 'compatibility']));
@@ -53,6 +55,7 @@ test('legacy page ids redirect into canonical product routes without replacing h
     'pi-connectors': 'connections',
     'attention-inbox': 'command-center',
     'pi-inbox': 'command-center',
+    projects: 'settings',
   });
   for (const [legacyPage, canonicalPage] of Object.entries(PRODUCT_COMPAT_ROUTE_REDIRECTS)) {
     assert.equal(resolveProductPage(legacyPage), canonicalPage);
@@ -60,9 +63,11 @@ test('legacy page ids redirect into canonical product routes without replacing h
   assert.equal(resolveProductPage('issues'), 'work');
   assert.equal(resolveProductPage('attention-inbox'), 'command-center');
   assert.equal(resolveProductPage('pi-inbox'), 'command-center');
+  assert.equal(resolveProductPage('projects'), 'settings');
   assert.equal(productNavPageForRoute('issues'), 'work');
   assert.equal(productNavPageForRoute('pi-inbox'), 'command-center');
   assert.equal(productNavPageForRoute('pi-memory'), 'settings');
+  assert.equal(productNavPageForRoute('projects'), 'settings');
   assert.equal(resolveProductPage('handoffs'), 'handoffs');
   assert.equal(PRODUCT_NAV_ITEMS.some(item => item.page === 'handoffs'), false);
 });
@@ -77,6 +82,7 @@ test('App routes canonical pages to the currently verified compatibility surface
   assert.match(appSource, /currentPage === 'automations'[\s\S]*<Automations \/>/);
   assert.match(appSource, /const Connections = lazy\(\(\) => import\('\.\/pages\/Connections'\)\)/);
   assert.match(appSource, /currentPage === 'connections'[\s\S]*<Connections \/>/);
+  assert.doesNotMatch(appSource, /currentPage === 'projects'|<Projects/);
   assert.doesNotMatch(appSource, /AttentionInbox|currentPage === 'attention-inbox'|currentPage === 'pi-inbox'/);
 });
 

@@ -14,6 +14,7 @@ const permissionsSettingsSource = readFileSync(new URL('./PermissionsSettingsPan
 const notificationSettingsSource = readFileSync(new URL('./NotificationSettingsPanel.jsx', import.meta.url), 'utf8');
 const settingsProductModelsSource = readFileSync(new URL('./settingsProductModels.js', import.meta.url), 'utf8');
 const projectSettingsEditorSource = readFileSync(new URL('./ProjectSettingsEditor.jsx', import.meta.url), 'utf8');
+const projectsSource = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
 const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
 const skillsRuntimeSource = readFileSync(new URL('./SkillsRuntimePanel.jsx', import.meta.url), 'utf8');
 const activityTimelineSource = readFileSync(new URL('./ActivityTimelinePanel.jsx', import.meta.url), 'utf8');
@@ -52,14 +53,17 @@ test('Settings renders behavior sections and gates internal panels behind Advanc
   assert.doesNotMatch(settingsNavigationSource, /id: 'model-runtime'/);
 });
 
-test('Settings primary IA directly edits project settings from one shared editor', () => {
+test('Settings primary IA owns the complete project list and editor flow', () => {
   assert.match(chromeSource, /title = 'Settings'/);
   assert.match(chromeSource, /t\('settings\.eyebrow'\)/);
-  assert.match(sectionsSource, /t\('settings\.perProject'\)/);
-  assert.match(sectionsSource, /<ProjectSettingsEditor/);
-  assert.match(sectionsSource, /selectProjects/);
-  assert.match(sectionsSource, /settings-project-select/);
-  assert.match(sectionsSource, /t\('settings\.projectSettingsDescription'\)/);
+  assert.match(sectionsSource, /<Projects \/>/);
+  assert.doesNotMatch(sectionsSource, /ProjectSettingsEditor|selectProjects|settings-project-select/);
+  assert.match(projectsSource, /projects\.map\(proj =>/);
+  assert.match(projectsSource, /handleOpenCreateModal/);
+  assert.match(projectsSource, /handleOpenEditModal/);
+  assert.match(projectsSource, /handleSyncCodexProjects/);
+  assert.match(projectsSource, /handleDelete/);
+  assert.match(projectsSource, /<ProjectSettingsEditor/);
   assert.match(projectSettingsEditorSource, /projectsApi\.updateProject\(projectID, payload\)/);
   assert.doesNotMatch(sectionsSource, /LanguageSettingsCard|settings-language-card/);
   assert.match(sidebarSource, /className="nav-item nav-item-secondary sidebar-language-row"/);
@@ -126,9 +130,11 @@ test('Xuanwu product sidebar removes the PI section and keeps internal config be
   }
   assert.match(modulesSource, /'pi-automations': 'automations'/);
   assert.match(modulesSource, /'pi-approvals': 'command-center'/);
-  for (const route of ['command-center', 'ask-xuanwu', 'work', 'runs', 'automations', 'projects', 'connections', 'settings']) {
+  for (const route of ['command-center', 'ask-xuanwu', 'work', 'runs', 'automations', 'connections', 'settings']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
+  assert.doesNotMatch(modulesSource, /page: 'projects'/);
+  assert.match(modulesSource, /projects: 'settings'/);
   assert.doesNotMatch(modulesSource, /page: 'handoffs'/);
   assert.match(sidebarSource, /productNavigationItems/);
   assert.match(sidebarSource, /primaryNavItems\.map/);

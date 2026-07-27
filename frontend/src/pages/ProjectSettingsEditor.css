@@ -20,6 +20,48 @@
   font-size: 0.75rem;
 }
 
+.project-settings-advanced,
+.project-profile-overrides {
+  background: color-mix(in srgb, var(--bg-secondary) 72%, transparent);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0 16px;
+}
+
+.project-settings-advanced > summary,
+.project-profile-overrides > summary {
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 800;
+  padding: 14px 0;
+}
+
+.project-settings-advanced[open],
+.project-profile-overrides[open] {
+  padding-bottom: 16px;
+}
+
+.project-settings-advanced > p,
+.project-profile-overrides > p {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+  margin: -4px 0 16px;
+}
+
+.project-runtime-fields,
+.project-profile-overrides[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.project-profile-settings[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .project-settings-error {
   background: var(--error-bg);
   border: 1px solid color-mix(in srgb, var(--error) 20%, transparent);
@@ -38,7 +80,7 @@
 }
 
 .project-profile-manager {
-  background: color-mix(in srgb, var(--bg-secondary) 72%, transparent);
+  background: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   display: flex;
@@ -67,6 +109,12 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.project-profile-fields .form-group,
+.project-runtime-fields .form-group,
+.project-profile-overrides .form-group {
+  min-width: 0;
 }
 
 .project-profile-grid {

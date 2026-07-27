@@ -2,7 +2,6 @@ import {
   CalendarClock,
   BriefcaseBusiness,
   ChevronLeft,
-  FolderGit2,
   Layers,
   MessageSquare,
   Moon,
@@ -38,7 +37,6 @@ const NAV_ICONS = {
   work: BriefcaseBusiness,
   runs: Layers,
   automations: CalendarClock,
-  projects: FolderGit2,
   connections: Plug,
   settings: Settings,
 };
@@ -49,7 +47,6 @@ const NAV_TRANSLATION_KEYS = {
   work: 'nav.work',
   runs: 'nav.runs',
   automations: 'nav.automations',
-  projects: 'nav.projects',
   connections: 'nav.connections',
   settings: 'nav.settings',
 };
@@ -188,18 +185,7 @@ function ApiStatus() {
 
 function ProductNavBadge({ active, page }) {
   if (page === 'automations') return <AutomationCountBadge active={active} />;
-  if (page === 'projects') return <ProjectCountBadge active={active} />;
   return null;
-}
-
-function ProjectCountBadge({ active }) {
-  const projects = useDataStore(selectProjects);
-
-  return (
-    <span className="nav-badge" style={{ background: active ? 'var(--primary-glow)' : undefined, color: active ? 'var(--primary)' : undefined }}>
-      {projects.length}
-    </span>
-  );
 }
 
 function AutomationCountBadge({ active }) {

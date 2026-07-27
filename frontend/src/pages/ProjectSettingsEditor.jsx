@@ -126,9 +126,9 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
   }, [updateUi]);
 
   useEffect(() => {
-    loadAgentProfiles();
     loadCodexModels();
-  }, [loadAgentProfiles, loadCodexModels]);
+    if (mode === 'edit') loadAgentProfiles();
+  }, [loadAgentProfiles, loadCodexModels, mode]);
 
   useEffect(() => {
     updateUi(draft => {
@@ -153,7 +153,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
     event.preventDefault();
     if (!ui.formCwd.trim()) {
       updateUi(draft => {
-        draft.formError = '工作路径(CWD)不能为空';
+        draft.formError = '项目路径不能为空';
       });
       return;
     }
@@ -226,8 +226,9 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
         {ui.formError && <div className="project-settings-error" role="alert">{ui.formError}</div>}
 
         <div className="form-group">
-          <label>项目绝对路径 (CWD) *</label>
+          <label>项目路径 *</label>
           <input
+            autoFocus={mode === 'create'}
             className="form-control"
             onChange={event => setFormField('formCwd', event.target.value)}
             placeholder="/Users/username/projects/project-name"
@@ -236,96 +237,118 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
             value={ui.formCwd}
           />
           <span className="project-settings-hint">
-            展示名会自动使用路径最后一级：{ui.formCwd.trim() ? projectNameFromPath(ui.formCwd) : '—'}
+            填写项目根目录的绝对路径。项目名称会自动识别为：{ui.formCwd.trim() ? projectNameFromPath(ui.formCwd) : '—'}
           </span>
         </div>
 
-        <div className="form-group">
-          <label>Provider</label>
-          <select className="form-control" onChange={event => setFormField('formProvider', event.target.value)} value={ui.formProvider}>
-            {PROVIDER_OPTIONS.map(option => (
-              <option disabled={!option.enabled} key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-          <span className="project-settings-hint">capability 摘要会随项目 API 返回；execution-only provider 不会进入 Sessions。</span>
-        </div>
-
-        <div className="project-settings-grid">
-          <div className="form-group">
-            <label>Codex 执行模型</label>
-            {ui.codexModelsError ? (
-              <input className="form-control" onChange={event => setFormField('formModel', event.target.value)} placeholder="模型 API 失败，请手动填写 model ID" value={ui.formModel} />
-            ) : (
-              <select className="form-control" disabled={ui.codexModelsLoading} onChange={event => setFormField('formModel', event.target.value)} value={ui.formModel}>
-                {modelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            )}
-            <span className="project-settings-hint">
-              {ui.codexModelsLoading
-                ? '正在读取 Codex 模型列表…'
-                : ui.codexModelsError
-                  ? `远端 model API 读取失败，已启用手填：${ui.codexModelsError}`
-                  : '模型列表来自当前 Codex provider。'}
-            </span>
-          </div>
-          <div className="form-group">
-            <label>默认执行速度</label>
-            <select className="form-control" onChange={event => setFormField('formServiceTier', event.target.value)} value={ui.formServiceTier}>
-              {serviceTierOptions(ui.formServiceTier).map(option => <option key={option.value || 'standard'} value={option.value}>{option.label}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="project-settings-grid">
-          <div className="form-group">
-            <label>审批策略 (Approval)</label>
-            <select className="form-control" onChange={event => setFormField('formApproval', event.target.value)} value={ui.formApproval}>
-              <option value="never">从不审核 (自动运行)</option>
-              <option value="always">每次执行必审</option>
-              <option value="danger-only">敏感操作时审核</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label>沙箱策略 (Sandbox)</label>
-            <select className="form-control" onChange={event => setFormField('formSandbox', event.target.value)} value={ui.formSandbox}>
-              <option value="workspace-write">仅允许修改当前项目目录 (推荐)</option>
-              <option value="danger-full-access">全系统读写访问 (危险)</option>
-              <option value="read-only">严格只读</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label>默认 Agent Profile v0</label>
-          <select className="form-control" onChange={event => setFormField('formAgentProfileId', event.target.value)} value={ui.formAgentProfileId}>
-            <option value="">不使用 Profile（沿用上方项目参数）</option>
-            {ui.profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.id}</option>)}
-          </select>
-          <span className="project-settings-hint">Profile 会在 issue prompt 中注入默认 instructions 与 skill/plugin intent；不会安装插件或放大权限。</span>
-        </div>
-
-        <AgentProfileManager
-          error={ui.profileError}
-          form={ui.profileForm}
-          loading={ui.profilesLoading}
-          modelOptions={modelOptions}
-          modelsError={ui.codexModelsError}
-          modelsLoading={ui.codexModelsLoading}
-          onEdit={profile => updateUi(draft => { draft.profileForm = normalizeAgentProfileForm(profile); draft.profileError = ''; })}
-          onFieldChange={setProfileFormField}
-          onReset={() => updateUi(draft => { draft.profileForm = emptyAgentProfileForm(); draft.profileError = ''; })}
-          onSubmit={handleProfileSubmit}
-          profiles={ui.profiles}
-        />
+        {mode === 'create' ? (
+          <details className="project-settings-advanced">
+            <summary>高级运行配置（可选）</summary>
+            <p>不确定时无需修改。默认使用 Codex、系统默认模型、标准速度，并仅允许写入当前项目目录。</p>
+            <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setFormField} ui={ui} />
+          </details>
+        ) : (
+          <>
+            <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setFormField} ui={ui} />
+            <details className="project-settings-advanced project-profile-settings">
+              <summary>Agent Profile（可选）</summary>
+              <p>只有需要复用一组模型、权限或指令预设时才配置；普通项目可以完全忽略。</p>
+              <div className="form-group">
+                <label>项目默认 Profile</label>
+                <select className="form-control" onChange={event => setFormField('formAgentProfileId', event.target.value)} value={ui.formAgentProfileId}>
+                  <option value="">不使用 Profile（沿用项目运行配置）</option>
+                  {ui.profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.id}</option>)}
+                </select>
+              </div>
+              <AgentProfileManager
+                error={ui.profileError}
+                form={ui.profileForm}
+                loading={ui.profilesLoading}
+                modelOptions={modelOptions}
+                modelsError={ui.codexModelsError}
+                modelsLoading={ui.codexModelsLoading}
+                onEdit={profile => updateUi(draft => { draft.profileForm = normalizeAgentProfileForm(profile); draft.profileError = ''; })}
+                onFieldChange={setProfileFormField}
+                onReset={() => updateUi(draft => { draft.profileForm = emptyAgentProfileForm(); draft.profileError = ''; })}
+                onSubmit={handleProfileSubmit}
+                profiles={ui.profiles}
+              />
+            </details>
+          </>
+        )}
       </div>
 
       <div className={modal ? 'project-config-modal-footer' : 'project-settings-editor-footer'}>
         {onCancel && <button className="btn btn-secondary" disabled={ui.saving} onClick={onCancel} type="button">取消</button>}
         <button className="btn btn-primary" disabled={ui.saving} type="submit">
-          {ui.saving ? '正在保存…' : mode === 'create' ? '创建并接管' : '保存项目设置'}
+          {ui.saving ? '正在保存…' : mode === 'create' ? '添加并接管' : '保存项目设置'}
         </button>
       </div>
     </form>
+  );
+}
+
+function ProjectRuntimeFields({ modelOptions, onFieldChange, ui }) {
+  return (
+    <div className="project-runtime-fields">
+      <div className="form-group">
+        <label>执行引擎</label>
+        <select className="form-control" onChange={event => onFieldChange('formProvider', event.target.value)} value={ui.formProvider}>
+          {PROVIDER_OPTIONS.map(option => (
+            <option disabled={!option.enabled} key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <span className="project-settings-hint">决定由哪个执行器处理项目；通常保持 Codex。</span>
+      </div>
+
+      <div className="project-settings-grid">
+        <div className="form-group">
+          <label>默认模型</label>
+          {ui.codexModelsError ? (
+            <input className="form-control" onChange={event => onFieldChange('formModel', event.target.value)} placeholder="模型 API 失败，请手动填写 model ID" value={ui.formModel} />
+          ) : (
+            <select className="form-control" disabled={ui.codexModelsLoading} onChange={event => onFieldChange('formModel', event.target.value)} value={ui.formModel}>
+              {modelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          )}
+          <span className="project-settings-hint">
+            {ui.codexModelsLoading
+              ? '正在读取 Codex 模型列表…'
+              : ui.codexModelsError
+                ? `远端 model API 读取失败，已启用手填：${ui.codexModelsError}`
+                : '系统默认会跟随当前 Codex 配置。'}
+          </span>
+        </div>
+        <div className="form-group">
+          <label>执行速度</label>
+          <select className="form-control" onChange={event => onFieldChange('formServiceTier', event.target.value)} value={ui.formServiceTier}>
+            {serviceTierOptions(ui.formServiceTier).map(option => <option key={option.value || 'standard'} value={option.value}>{option.label}</option>)}
+          </select>
+          <span className="project-settings-hint">标准速度适合大多数项目。</span>
+        </div>
+      </div>
+
+      <div className="project-settings-grid">
+        <div className="form-group">
+          <label>操作确认</label>
+          <select className="form-control" onChange={event => onFieldChange('formApproval', event.target.value)} value={ui.formApproval}>
+            <option value="never">自动运行，不逐次确认</option>
+            <option value="danger-only">敏感操作时确认</option>
+            <option value="always">每次执行都确认</option>
+          </select>
+          <span className="project-settings-hint">控制执行过程中何时需要人工确认。</span>
+        </div>
+        <div className="form-group">
+          <label>文件访问范围</label>
+          <select className="form-control" onChange={event => onFieldChange('formSandbox', event.target.value)} value={ui.formSandbox}>
+            <option value="workspace-write">仅当前项目可写（推荐）</option>
+            <option value="read-only">只读</option>
+            <option value="danger-full-access">允许访问整个系统</option>
+          </select>
+          <span className="project-settings-hint">决定执行器可以读取或修改哪些文件。</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -333,46 +356,73 @@ function AgentProfileManager({ profiles, loading, form, error, modelOptions, mod
   return (
     <div className="project-profile-manager">
       <div>
-        <div className="project-profile-title">Agent Profile v0</div>
-        <p className="project-profile-copy">仅保存 provider/model/权限 preset、默认 instructions 与 skill/plugin intent；不安装插件、不提升权限。</p>
+        <div className="project-profile-title">Profile 预设</div>
+        <p className="project-profile-copy">给可复用的执行偏好起个名字。Profile 不会安装插件，也不会扩大项目权限。</p>
       </div>
       {error && <div className="project-profile-error">{error}</div>}
       <div className="project-profile-fields">
-        <div className="project-settings-grid project-profile-grid">
-          <select className="form-control" value={form.provider} onChange={event => onFieldChange('provider', event.target.value)}>
-            {PROVIDER_OPTIONS.map(option => <option key={option.value} value={option.value} disabled={!option.enabled}>{option.label}</option>)}
-          </select>
-          <input className="form-control" placeholder="Profile ID（可留空自动生成）" value={form.id} onChange={event => onFieldChange('id', event.target.value)} />
-          <input className="form-control" placeholder="Profile 名称" value={form.name} onChange={event => onFieldChange('name', event.target.value)} />
-          {modelsError ? (
-            <input className="form-control" placeholder="模型 API 失败，请手动填写 model ID" value={form.model} onChange={event => onFieldChange('model', event.target.value)} />
-          ) : (
-            <select className="form-control" disabled={modelsLoading} value={form.model} onChange={event => onFieldChange('model', event.target.value)}>
-              {modelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          )}
-          <select className="form-control" value={form.reasoning_effort} onChange={event => onFieldChange('reasoning_effort', event.target.value)}>
-            <option value="">默认 effort</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="xhigh">xhigh</option>
-          </select>
-          <select className="form-control" value={form.service_tier} onChange={event => onFieldChange('service_tier', event.target.value)}>
-            {serviceTierOptions(form.service_tier).map(option => <option key={option.value || 'standard'} value={option.value}>速度：{option.label}</option>)}
-          </select>
+        <div className="form-group">
+          <label>Profile 名称</label>
+          <input className="form-control" placeholder="例如：前端日常开发" value={form.name} onChange={event => onFieldChange('name', event.target.value)} />
         </div>
-        <div className="project-settings-grid project-profile-grid">
-          <select className="form-control" value={form.approval_policy} onChange={event => onFieldChange('approval_policy', event.target.value)}>
-            <option value="">沿用项目 approval</option><option value="never">never</option><option value="always">always</option><option value="danger-only">danger-only</option>
-          </select>
-          <select className="form-control" value={form.sandbox} onChange={event => onFieldChange('sandbox', event.target.value)}>
-            <option value="">沿用项目 sandbox</option><option value="workspace-write">workspace-write</option><option value="read-only">read-only</option><option value="danger-full-access">danger-full-access</option>
-          </select>
+        <div className="form-group">
+          <label>默认指令（可选）</label>
+          <textarea className="form-control" rows={3} placeholder="例如：优先运行前端测试，保持最小改动" value={form.default_instructions} onChange={event => onFieldChange('default_instructions', event.target.value)} />
         </div>
-        <textarea className="form-control" rows={3} placeholder="默认 instructions" value={form.default_instructions} onChange={event => onFieldChange('default_instructions', event.target.value)} />
-        <div className="project-settings-grid project-profile-grid">
-          <input className="form-control" placeholder="skill intents，逗号分隔" value={form.skill_intents} onChange={event => onFieldChange('skill_intents', event.target.value)} />
-          <input className="form-control" placeholder="plugin intents，逗号分隔" value={form.plugin_intents} onChange={event => onFieldChange('plugin_intents', event.target.value)} />
-        </div>
+        <details className="project-profile-overrides">
+          <summary>Profile 覆盖项（高级）</summary>
+          <p>只有这个 Profile 需要覆盖项目默认值时才填写。</p>
+          <div className="form-group">
+            <label>Profile ID</label>
+            <input className="form-control" placeholder="留空时根据名称自动生成" value={form.id} onChange={event => onFieldChange('id', event.target.value)} />
+          </div>
+          <div className="project-settings-grid project-profile-grid">
+            <label className="form-group">执行引擎
+              <select className="form-control" value={form.provider} onChange={event => onFieldChange('provider', event.target.value)}>
+                {PROVIDER_OPTIONS.map(option => <option key={option.value} value={option.value} disabled={!option.enabled}>{option.label}</option>)}
+              </select>
+            </label>
+            <label className="form-group">默认模型
+              {modelsError ? (
+                <input className="form-control" placeholder="模型 API 失败，请手动填写 model ID" value={form.model} onChange={event => onFieldChange('model', event.target.value)} />
+              ) : (
+                <select className="form-control" disabled={modelsLoading} value={form.model} onChange={event => onFieldChange('model', event.target.value)}>
+                  {modelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              )}
+            </label>
+            <label className="form-group">推理深度
+              <select className="form-control" value={form.reasoning_effort} onChange={event => onFieldChange('reasoning_effort', event.target.value)}>
+                <option value="">沿用默认值</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">极高</option>
+              </select>
+            </label>
+            <label className="form-group">执行速度
+              <select className="form-control" value={form.service_tier} onChange={event => onFieldChange('service_tier', event.target.value)}>
+                {serviceTierOptions(form.service_tier).map(option => <option key={option.value || 'standard'} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <label className="form-group">操作确认
+              <select className="form-control" value={form.approval_policy} onChange={event => onFieldChange('approval_policy', event.target.value)}>
+                <option value="">沿用项目设置</option><option value="never">自动运行</option><option value="danger-only">敏感操作时确认</option><option value="always">每次都确认</option>
+              </select>
+            </label>
+            <label className="form-group">文件访问范围
+              <select className="form-control" value={form.sandbox} onChange={event => onFieldChange('sandbox', event.target.value)}>
+                <option value="">沿用项目设置</option><option value="workspace-write">仅当前项目可写</option><option value="read-only">只读</option><option value="danger-full-access">整个系统</option>
+              </select>
+            </label>
+          </div>
+          <div className="project-settings-grid project-profile-grid">
+            <label className="form-group">Skill 意图（可选）
+              <input className="form-control" placeholder="多个值用逗号分隔" value={form.skill_intents} onChange={event => onFieldChange('skill_intents', event.target.value)} />
+            </label>
+            <label className="form-group">Plugin 意图（可选）
+              <input className="form-control" placeholder="多个值用逗号分隔" value={form.plugin_intents} onChange={event => onFieldChange('plugin_intents', event.target.value)} />
+            </label>
+          </div>
+        </details>
         <div className="project-profile-actions">
-          <span>{loading ? '加载 profiles...' : `已有 ${profiles.length} 个 profile`}</span>
+          <span>{loading ? '正在加载 Profile…' : `已有 ${profiles.length} 个 Profile`}</span>
           <div><button type="button" className="btn btn-secondary" onClick={onReset}>清空</button><button type="button" className="btn btn-secondary" onClick={onSubmit}>保存 Profile</button></div>
         </div>
       </div>

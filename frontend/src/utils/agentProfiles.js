@@ -12,8 +12,8 @@ export function emptyAgentProfileForm() {
     sandbox: '',
     service_tier: '',
     default_instructions: '',
-    skill_intents: '[]',
-    plugin_intents: '[]',
+    skill_intents: '',
+    plugin_intents: '',
   };
 }
 

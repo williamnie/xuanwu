@@ -1,3 +1,47 @@
+.settings-project-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+.settings-project-panel-header {
+  align-items: flex-end;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  padding-bottom: 20px;
+}
+
+.settings-project-panel-header h2 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 5px 0 6px;
+}
+
+.settings-project-panel-header p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.settings-project-panel-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.settings-project-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
 /* Keep the title and actions visible while long project configuration forms scroll. */
 .project-config-modal {
   display: flex;
@@ -14,6 +58,33 @@
   flex: 0 0 auto;
   justify-content: space-between;
   padding: 32px 32px 24px;
+}
+
+.project-config-modal-header h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.project-config-modal-header p {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin: 5px 0 0;
+}
+
+.project-config-modal-close {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  padding: 8px;
+}
+
+.project-config-modal-close:hover {
+  color: var(--text-primary);
 }
 
 .project-config-modal-form {
@@ -241,6 +312,15 @@
 }
 
 @media (max-width: 760px) {
+  .settings-project-panel-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-project-panel-actions {
+    justify-content: flex-start;
+  }
+
   .projects-grid {
     grid-template-columns: 1fr;
   }

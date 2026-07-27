@@ -38,13 +38,6 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
     availability: 'compatibility',
   },
   {
-    page: 'projects',
-    label: PRODUCT_NAV_LABELS.projects,
-    icon: 'projects',
-    placement: 'primary',
-    availability: 'available',
-  },
-  {
     page: 'connections',
     label: PRODUCT_NAV_LABELS.connections,
     icon: 'connections',
@@ -71,6 +64,7 @@ export const PRODUCT_COMPAT_ROUTE_REDIRECTS = Object.freeze({
   'pi-connectors': 'connections',
   'attention-inbox': 'command-center',
   'pi-inbox': 'command-center',
+  projects: 'settings',
 });
 
 export function productNavigationItems({ workBoardEnabled = true } = {}) {

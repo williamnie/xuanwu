@@ -32,7 +32,6 @@ import { useI18n } from './i18n/context.js';
 
 // 页面仅在用户实际访问时下载，避免 Dashboard 首屏载入编辑器和会话历史等重型依赖。
 const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Projects = lazy(() => import('./pages/Projects'));
 const WorkBoard = lazy(() => import('./pages/WorkBoard'));
 const Issues = lazy(() => import('./pages/Issues'));
 const IssueDetail = lazy(() => import('./pages/IssueDetail'));
@@ -63,8 +62,7 @@ const PAGE_DATA_SLICES = {
   automations: ['projects'],
   'command-center': ['projects', 'issues'],
   issues: ['issues'],
-  projects: ['projects', 'issues'],
-  settings: ['projects'],
+  settings: ['projects', 'issues'],
   work: ['projects'],
   handoffs: ['projects'],
 };
@@ -96,7 +94,6 @@ export default function App() {
     selectedSessionId: '',
     selectedHandoffId: initialHandoffRoute?.handoffId || '',
     selectedPiConversationId: '',
-    selectedSettingsProjectId: '',
     pageContext: null,
     filterProject: '', // '' 表示 Any project
     focusFilter: 'all', // 'all' | 'triage' | 'active' | 'failed' | 'archive'
@@ -128,7 +125,6 @@ export default function App() {
     selectedSessionId,
     selectedHandoffId,
     selectedPiConversationId,
-    selectedSettingsProjectId,
     pageContext,
     filterProject,
     focusFilter,
@@ -247,17 +243,6 @@ export default function App() {
       if (JSON.stringify(draft.pageContext) !== JSON.stringify(next)) {
         draft.pageContext = next;
       }
-    });
-  }, [updateAppState]);
-
-  const openProjectSettings = useCallback((projectId) => {
-    updateAppState(draft => {
-      draft.currentPage = 'settings';
-      draft.selectedSettingsProjectId = projectId || '';
-      draft.selectedIssueId = null;
-      draft.selectedWorkId = '';
-      draft.selectedHandoffId = '';
-      draft.pageContext = null;
     });
   }, [updateAppState]);
 
@@ -428,14 +413,12 @@ export default function App() {
               <PiChat navigateTo={navigateTo} initialConversationId={selectedPiConversationId} />
             ) : isAssistantModulePage(currentPage) ? (
               <Settings initialTab={assistantModule?.tab} navigateTo={navigateTo} />
-            ) : currentPage === 'projects' ? (
-              <Projects onManageProject={openProjectSettings} />
             ) : currentPage === 'automations' ? (
               <Automations />
             ) : currentPage === 'connections' ? (
               <Connections />
             ) : currentPage === 'settings' ? (
-              <Settings initialProjectId={selectedSettingsProjectId} navigateTo={navigateTo} />
+              <Settings navigateTo={navigateTo} />
             ) : (
               <Dashboard navigateTo={navigateTo} />
             )}
