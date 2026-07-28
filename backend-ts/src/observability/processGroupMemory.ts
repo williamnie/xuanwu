@@ -136,7 +136,7 @@ export class ProcessGroupMemoryObserver {
     }
     const memory = this.memoryUsage();
     const groupRSS = rows.reduce((total, row) => total + row.rss_bytes, 0);
-    if (phase === "run") this.lastRunObservedAt = now.getTime();
+    if (activity.workloadActive) this.lastRunObservedAt = now.getTime();
     this.history.push({ phase, rss_bytes: groupRSS, sampled_at: now.toISOString() });
     if (this.history.length > 1_800) this.history.splice(0, this.history.length - 1_800);
     this.trackExited(rows, now);
@@ -250,7 +250,7 @@ export class ProcessGroupMemoryObserver {
     this.lastProcesses = current;
   }
 
-  private activity(now: Date): { active: boolean; public: Record<string, unknown> } {
+  private activity(now: Date): { active: boolean; public: Record<string, unknown>; workloadActive: boolean } {
     const issueRuns = Math.max(0, this.options.activeRuns?.() ?? 0);
     const agentic = this.options.agenticActivity?.() ?? { in_flight: 0, last_activity_at: "" };
     const inFlight = Math.max(0, Number.isFinite(agentic.in_flight) ? Math.trunc(agentic.in_flight) : 0);
@@ -267,11 +267,13 @@ export class ProcessGroupMemoryObserver {
     const maintenanceInCooldown = this.maintenanceInFlight === 0
       && maintenanceAgeMs !== null
       && maintenanceAgeMs <= maintenanceGraceMs;
+    const workloadActive = issueRuns > 0 || inFlight > 0 || agenticInCooldown;
     const directlyActive = issueRuns > 0 || inFlight > 0 || this.maintenanceInFlight > 0;
     const inCooldown = agenticInCooldown || maintenanceInCooldown;
     const active = directlyActive || inCooldown;
     return {
       active,
+      workloadActive,
       public: {
         agentic_in_flight: inFlight,
         agentic_last_activity_at: agentic.last_activity_at,

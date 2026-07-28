@@ -106,16 +106,18 @@ describe("runner process-group memory observer", () => {
 
   test("reclaims after a short Core maintenance cooldown even when no issue or Agentic RPC is active", async () => {
     let nowMs = Date.parse("2026-07-28T12:00:00.000Z");
-    let footprintMiB = 300;
+    let footprintMiB = 180;
     let reclaims = 0;
+    let rssMiB = 180;
     const observer = new ProcessGroupMemoryObserver({
       activeRuns: () => 0,
       agenticActivity: () => ({ in_flight: 0, last_activity_at: "" }),
       footprint: async () => new Map([[50, footprintMiB * MIB]]),
-      footprintIntervalMs: 0,
-      inspect: () => [fixtureRows(300, 0)[0]!],
-      memoryUsage: () => memoryUsage(300),
+      footprintIntervalMs: 60_000,
+      inspect: () => [fixtureRows(rssMiB, 0)[0]!],
+      memoryUsage: () => memoryUsage(rssMiB),
       now: () => new Date(nowMs),
+      providerRuntime: () => ({ idle_ttl_ms: 10_000, owners: [] }),
       reclaimMemory: () => {
         reclaims += 1;
         footprintMiB = 180;
@@ -123,6 +125,10 @@ describe("runner process-group memory observer", () => {
       runnerPid: 50
     });
 
+    observer.sample();
+    await Bun.sleep(0);
+    footprintMiB = 300;
+    rssMiB = 300;
     await observer.runMaintenance(async () => {
       expect(observer.sample()).toMatchObject({
         phase: "run",
@@ -154,6 +160,13 @@ describe("runner process-group memory observer", () => {
     expect(snapshot).toMatchObject({
       aggregate: { footprint_bytes: 180 * MIB },
       budget: { measured_main_bytes: 180 * MIB, status: "within_budget" },
+      phase: "idle"
+    });
+
+    nowMs += 10_001;
+    snapshot = observer.sample() as Snapshot;
+    expect(snapshot).toMatchObject({
+      budget: { post_run: { status: "not_pending" }, status: "within_budget" },
       phase: "idle"
     });
   });
