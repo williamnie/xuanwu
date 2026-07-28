@@ -1,5 +1,6 @@
 import { projectsApi } from '../api/projects.js';
 import { useImmer } from 'use-immer';
+import { createPortal } from 'react-dom';
 import './Projects.css';
 import { message } from '../store/toastStore';
 import {
@@ -335,8 +336,8 @@ export default function Projects() {
       </div>
 
 
-      {modalMode && (modalMode === 'create' || selectedProject) && (
-        <div className="modal-overlay">
+      {modalMode && (modalMode === 'create' || selectedProject) && createPortal(
+        <div className="modal-overlay project-modal-overlay">
           <div className={`modal-content project-config-modal project-config-modal-${modalMode}`}>
             <div className="project-config-modal-header">
               <div>
@@ -364,11 +365,12 @@ export default function Projects() {
               project={selectedProject}
             />
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {deleteProject && (
-        <div className="modal-overlay">
+      {deleteProject && createPortal(
+        <div className="modal-overlay project-modal-overlay">
           <div
             aria-describedby="project-delete-dialog-description"
             aria-labelledby="project-delete-dialog-title"
@@ -414,7 +416,8 @@ export default function Projects() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </section>
   );

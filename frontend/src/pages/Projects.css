@@ -64,7 +64,7 @@
   width: min(640px, calc(100vw - 48px));
 }
 
-.settings-project-panel > .modal-overlay {
+.project-modal-overlay {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background: rgba(21, 28, 25, 0.34);
@@ -465,7 +465,7 @@
     grid-template-columns: 1fr;
   }
 
-  .settings-project-panel > .modal-overlay {
+  .project-modal-overlay {
     padding: 12px;
   }
 

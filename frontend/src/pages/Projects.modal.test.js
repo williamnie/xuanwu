@@ -41,9 +41,13 @@ test('project config modal keeps its header and footer fixed while its body scro
 test('project modal is viewport-centered and uses a custom compact disclosure', () => {
   assert.match(source, /className="glass-card settings-project-panel"/);
   assert.doesNotMatch(source, /settings-project-panel animate-fade-in/);
+  assert.match(source, /import \{ createPortal \} from 'react-dom'/);
+  assert.equal(source.match(/createPortal\(/g)?.length, 2);
+  assert.equal(source.match(/document\.body/g)?.length, 2);
+  assert.match(source, /className="modal-overlay project-modal-overlay"/);
   assert.match(css, /\.project-config-modal-create\s*\{[\s\S]*?max-width:\s*640px/);
-  assert.match(css, /\.settings-project-panel > \.modal-overlay\s*\{[\s\S]*?padding:\s*24px/);
-  assert.match(ruleFor('.settings-project-panel > .modal-overlay'), /backdrop-filter:\s*none/);
+  assert.match(css, /\.project-modal-overlay\s*\{[\s\S]*?padding:\s*24px/);
+  assert.match(ruleFor('.project-modal-overlay'), /backdrop-filter:\s*none/);
   assert.match(editorSource, /<details className="project-settings-advanced">/);
   assert.match(readFileSync(new URL('./ProjectSettingsEditor.css', import.meta.url), 'utf8'), /summary:focus-visible[\s\S]*?box-shadow:\s*inset 3px 0 0 var\(--primary\)/);
 });
