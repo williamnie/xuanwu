@@ -7,6 +7,7 @@ import {
   PROCESS_GROUP_MEMORY_AGENTIC_IDLE_GRACE_MS,
   PROCESS_GROUP_MEMORY_BUDGETS,
   PROCESS_GROUP_MEMORY_CONTRACT,
+  PROCESS_GROUP_MEMORY_MAINTENANCE_IDLE_GRACE_MS,
   ProcessGroupMemoryObserver,
   resolveRecoveredProcessGroupMemoryAlerts,
   type ProcessMemoryBudgetAlert,
@@ -97,6 +98,60 @@ describe("runner process-group memory observer", () => {
     const settled = observer.sample() as Snapshot;
     expect(reclaims).toBe(1);
     expect(settled).toMatchObject({
+      aggregate: { footprint_bytes: 180 * MIB },
+      budget: { measured_main_bytes: 180 * MIB, status: "within_budget" },
+      phase: "idle"
+    });
+  });
+
+  test("reclaims after a short Core maintenance cooldown even when no issue or Agentic RPC is active", async () => {
+    let nowMs = Date.parse("2026-07-28T12:00:00.000Z");
+    let footprintMiB = 300;
+    let reclaims = 0;
+    const observer = new ProcessGroupMemoryObserver({
+      activeRuns: () => 0,
+      agenticActivity: () => ({ in_flight: 0, last_activity_at: "" }),
+      footprint: async () => new Map([[50, footprintMiB * MIB]]),
+      footprintIntervalMs: 0,
+      inspect: () => [fixtureRows(300, 0)[0]!],
+      memoryUsage: () => memoryUsage(300),
+      now: () => new Date(nowMs),
+      reclaimMemory: () => {
+        reclaims += 1;
+        footprintMiB = 180;
+      },
+      runnerPid: 50
+    });
+
+    await observer.runMaintenance(async () => {
+      expect(observer.sample()).toMatchObject({
+        phase: "run",
+        activity: { maintenance_in_flight: 1, status: "active" }
+      });
+    });
+
+    let snapshot = observer.sample() as Snapshot;
+    expect(snapshot).toMatchObject({
+      phase: "run",
+      activity: { maintenance_in_flight: 0, status: "cooldown" }
+    });
+    expect(reclaims).toBe(0);
+
+    nowMs += PROCESS_GROUP_MEMORY_MAINTENANCE_IDLE_GRACE_MS + 1;
+    snapshot = observer.sample() as Snapshot;
+    expect(reclaims).toBe(1);
+    expect(snapshot).toMatchObject({
+      phase: "idle",
+      activity: { maintenance_in_flight: 0, status: "idle" },
+      budget: { measurement_ready: false, status: "measurement_pending" }
+    });
+
+    await Bun.sleep(0);
+    observer.sample();
+    await Bun.sleep(0);
+    snapshot = observer.sample() as Snapshot;
+    expect(reclaims).toBe(1);
+    expect(snapshot).toMatchObject({
       aggregate: { footprint_bytes: 180 * MIB },
       budget: { measured_main_bytes: 180 * MIB, status: "within_budget" },
       phase: "idle"

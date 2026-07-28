@@ -116,6 +116,7 @@ export type PiAutoManageSchedulerInput<Timer = unknown> = PiAutoManageCycleInput
   intervalMs?: number;
   onError?: (error: unknown) => void;
   supervisorIntervalMs?: number;
+  runWithinActivity?: (operation: () => Promise<unknown>) => Promise<unknown>;
 };
 
 export type PiAutoManageScheduler = {
@@ -364,7 +365,7 @@ function createCycleScheduler<Timer>(
   const schedule = () => { timer = clock.setTimeout(tick, intervalMs); };
   const tick = async () => {
     try {
-      await cycle();
+      await (input.runWithinActivity ? input.runWithinActivity(cycle) : cycle());
     } catch (error) {
       input.onError?.(error);
     } finally {

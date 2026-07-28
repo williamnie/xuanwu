@@ -47,6 +47,7 @@ describe("server entrypoint wiring", () => {
     expect(core).toContain("inspect: () => runtimeMemoryRows(runtimeStartedAt, providerRuntime(), agenticClient.activity())");
     expect(core).toContain("agenticActivity: agenticClient.activity");
     expect(core).toContain("reclaimMemory: () => Bun.gc(true)");
+    expect(core).toContain("runWithinActivity: (operation) => processGroupMemory.runMaintenance(operation)");
     expect(core).toContain("ownership.processes.map");
     expect(core).toContain("codex-issue-runner-agentic");
     expect(core).not.toContain("Bun.spawnSync");

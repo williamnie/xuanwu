@@ -195,6 +195,49 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
+  test("reports both Guardian and Agentic scheduler cycles as Core maintenance activity", async () => {
+    const db = await openFixtureDatabase();
+    const guardianClock = new FakeClock();
+    const agenticClock = new FakeClock();
+    const runner = new FakePiCycleRunner();
+    let activityCalls = 0;
+    let inFlight = 0;
+    const runWithinActivity = async (operation: () => Promise<unknown>) => {
+      activityCalls += 1;
+      inFlight += 1;
+      try {
+        return await operation();
+      } finally {
+        inFlight -= 1;
+      }
+    };
+    try {
+      const input = {
+        database: db,
+        intervalMs: 5,
+        runProjectCycle: runner.run.bind(runner),
+        runSupervisor: false,
+        runWithinActivity
+      };
+      const guardian = createPiGuardianScheduler({ ...input, clock: guardianClock });
+      const agentic = createPiAgenticScheduler({ ...input, clock: agenticClock });
+
+      guardian.start();
+      agentic.start();
+      await guardianClock.runNext();
+      await waitUntil(() => guardianClock.timers.length === 1);
+      await agenticClock.runNext();
+      await waitUntil(() => agenticClock.timers.length === 1);
+
+      expect(activityCalls).toBe(2);
+      expect(inFlight).toBe(0);
+      guardian.stop();
+      agentic.stop();
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps Guardian ticking while an independent agentic cycle is awaiting the model", async () => {
     const db = await openFixtureDatabase();
     const wrapped = new SlowSupervisorDatabase(db);

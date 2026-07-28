@@ -123,7 +123,16 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   coldStartTrace("http_routes_registered");
   void restartFeishuReceiver(config.integrations.feishu);
   projectionWorker.start();
-  void startAutoRunLoops(database, providers, bus, config.codexSessionsDir, config, processReconciliation, agenticClient);
+  void startAutoRunLoops(
+    database,
+    providers,
+    bus,
+    config.codexSessionsDir,
+    config,
+    processReconciliation,
+    agenticClient,
+    processGroupMemory
+  );
   coldStartTrace("scheduler_watchdog_initialized");
 
   console.log(JSON.stringify({
@@ -224,7 +233,8 @@ async function startAutoRunLoops(
   codexSessionsDir: string,
   config: ReturnType<typeof loadConfig>,
   processReconciliation: Awaited<ReturnType<typeof reconcileStaleCodexProcessOwnership>>,
-  agenticClient: AgenticWorkerClient
+  agenticClient: AgenticWorkerClient,
+  processGroupMemory: ProcessGroupMemoryObserver
 ): Promise<void> {
   await recoverInProgressIssues({ database, providers }).catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
@@ -245,7 +255,8 @@ async function startAutoRunLoops(
       console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
     },
     runProjectCycle: (input) => agenticClient.runProjectCycle(input),
-    runSupervisorDecision: (context) => agenticClient.decideSupervisor(context)
+    runSupervisorDecision: (context) => agenticClient.decideSupervisor(context),
+    runWithinActivity: (operation) => processGroupMemory.runMaintenance(operation)
   };
   createPiGuardianScheduler(schedulerInput).start();
   createPiAgenticScheduler(schedulerInput).start();

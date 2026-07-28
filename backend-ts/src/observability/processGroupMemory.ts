@@ -14,6 +14,7 @@ export const PROCESS_GROUP_MEMORY_CONTRACT = "runner-process-group-memory.v1" as
 export const PROCESS_GROUP_MEMORY_SAMPLE_INTERVAL_MS = 1_000;
 export const PROCESS_GROUP_MEMORY_FRESHNESS_MS = 5_000;
 export const PROCESS_GROUP_MEMORY_AGENTIC_IDLE_GRACE_MS = 90_000;
+export const PROCESS_GROUP_MEMORY_MAINTENANCE_IDLE_GRACE_MS = 5_000;
 export const PROCESS_GROUP_MEMORY_METRIC_DEFINITIONS = {
   footprint_bytes: "macOS footprint (phys_footprint) from non-suspending proc_pid_rusage, summed per observed PID",
   process_rss_bytes: "process.memoryUsage().rss for the runner main process only",
@@ -52,6 +53,7 @@ type ProcessGroupMemoryOptions = {
   footprint?: false | ((pids: number[]) => Promise<Map<number, number>>);
   footprintIntervalMs?: number;
   inspect?: () => ProcessTreeEntry[];
+  maintenanceIdleGraceMs?: number;
   memoryUsage?: () => ProcessMemoryUsage;
   now?: () => Date;
   onAlert?: (alert: ProcessMemoryBudgetAlert) => void;
@@ -90,6 +92,8 @@ export class ProcessGroupMemoryObserver {
   private idleReclaimPending = false;
   private idleBaselineBytes?: number;
   private lastRunObservedAt?: number;
+  private maintenanceInFlight = 0;
+  private maintenanceLastActivityAt = "";
   private lastProcesses = new Map<string, ObservedProcess & { last_seen_at: string; peak_rss_bytes: number }>();
   private recentExited: Array<Record<string, unknown>> = [];
   private sampleValue?: Record<string, unknown>;
@@ -107,6 +111,17 @@ export class ProcessGroupMemoryObserver {
   stop(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
+  }
+
+  async runMaintenance<T>(operation: () => T | Promise<T>): Promise<T> {
+    this.maintenanceInFlight += 1;
+    this.maintenanceLastActivityAt = this.now().toISOString();
+    try {
+      return await operation();
+    } finally {
+      this.maintenanceInFlight = Math.max(0, this.maintenanceInFlight - 1);
+      this.maintenanceLastActivityAt = this.now().toISOString();
+    }
   }
 
   sample(): Record<string, unknown> {
@@ -242,8 +257,19 @@ export class ProcessGroupMemoryObserver {
     const lastActivityMs = Date.parse(agentic.last_activity_at);
     const graceMs = this.options.agenticIdleGraceMs ?? PROCESS_GROUP_MEMORY_AGENTIC_IDLE_GRACE_MS;
     const ageMs = Number.isFinite(lastActivityMs) ? Math.max(0, now.getTime() - lastActivityMs) : null;
-    const inCooldown = inFlight === 0 && ageMs !== null && ageMs <= graceMs;
-    const active = issueRuns > 0 || inFlight > 0 || inCooldown;
+    const agenticInCooldown = inFlight === 0 && ageMs !== null && ageMs <= graceMs;
+    const maintenanceLastActivityMs = Date.parse(this.maintenanceLastActivityAt);
+    const maintenanceGraceMs = this.options.maintenanceIdleGraceMs
+      ?? PROCESS_GROUP_MEMORY_MAINTENANCE_IDLE_GRACE_MS;
+    const maintenanceAgeMs = Number.isFinite(maintenanceLastActivityMs)
+      ? Math.max(0, now.getTime() - maintenanceLastActivityMs)
+      : null;
+    const maintenanceInCooldown = this.maintenanceInFlight === 0
+      && maintenanceAgeMs !== null
+      && maintenanceAgeMs <= maintenanceGraceMs;
+    const directlyActive = issueRuns > 0 || inFlight > 0 || this.maintenanceInFlight > 0;
+    const inCooldown = agenticInCooldown || maintenanceInCooldown;
+    const active = directlyActive || inCooldown;
     return {
       active,
       public: {
@@ -252,7 +278,11 @@ export class ProcessGroupMemoryObserver {
         agentic_last_activity_age_ms: ageMs,
         idle_grace_ms: graceMs,
         issue_runs: issueRuns,
-        status: issueRuns > 0 || inFlight > 0 ? "active" : inCooldown ? "cooldown" : "idle"
+        maintenance_idle_grace_ms: maintenanceGraceMs,
+        maintenance_in_flight: this.maintenanceInFlight,
+        maintenance_last_activity_at: this.maintenanceLastActivityAt,
+        maintenance_last_activity_age_ms: maintenanceAgeMs,
+        status: directlyActive ? "active" : inCooldown ? "cooldown" : "idle"
       }
     };
   }
