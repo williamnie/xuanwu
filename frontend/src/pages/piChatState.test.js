@@ -18,8 +18,13 @@ test('PI Assistant chat sends PI prompt with project context instead of session 
   assert.doesNotMatch(source, /defaultMessageSettings/);
   assert.doesNotMatch(source, /runnerMessageSettings/);
   assert.doesNotMatch(source, /approval_policy:\s*settings\.approvalPolicy/);
-  assert.match(source, /promptWithProjectContext\(text, targetProject \|\| state\.selectedProject\)/);
+  assert.match(source, /piChatMessageWithProjectContext\(text, targetProject \|\| state\.selectedProject\)/);
   assert.match(source, /project_id:\s*currentProjectId\(state, options\.project\)/);
+});
+
+test('mentioning a project reuses the selected conversation instead of replacing its session', () => {
+  assert.match(source, /const conversationId = state\.selectedConversationId\s*\|\| await createConversation\('New conversation', \{ project: targetProject \}\)/);
+  assert.doesNotMatch(source, /shouldCreateProjectConversation/);
 });
 
 
@@ -72,4 +77,9 @@ test('PI Assistant chat can infer project from natural @project mention text', a
   assert.equal(module.projectFromPrompt('@codex-issue-runner 创建 issue', projects)?.id, 'codex-issue-runner');
   assert.equal(module.projectFromPrompt('@project:movo-web 做 smoke', projects)?.id, 'movo-web');
   assert.match(module.promptWithProjectContext('创建 issue', projects[0]), /目标项目：@project:codex-issue-runner/);
+  assert.deepEqual(module.piChatMessageWithProjectContext('创建 issue', projects[0]), {
+    prompt: '目标项目：@project:codex-issue-runner codex-issue-runner\n项目路径：未记录\n\n创建 issue',
+    target_project_id: 'codex-issue-runner',
+    target_project_source: 'request_project',
+  });
 });

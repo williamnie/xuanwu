@@ -8,6 +8,16 @@ export function promptWithProjectContext(text, project) {
   ].join('\n');
 }
 
+export function piChatMessageWithProjectContext(text, project) {
+  return {
+    prompt: promptWithProjectContext(text, project),
+    ...(project?.id ? {
+      target_project_id: project.id,
+      target_project_source: 'request_project',
+    } : {}),
+  };
+}
+
 export function projectFromPrompt(text, projects = []) {
   const body = String(text || '').toLowerCase();
   const items = Array.isArray(projects) ? projects.filter((project) => project?.id) : [];

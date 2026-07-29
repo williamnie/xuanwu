@@ -3,7 +3,7 @@ import { assistantApi } from '../api/assistant.js';
 import { PiConversationStreamError } from '../api/piConversationStream.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { message } from '../store/toastStore';
-import { cleanProjectText, projectFromPrompt, promptWithProjectContext, referenceKey } from './piChatProjectContext';
+import { cleanProjectText, piChatMessageWithProjectContext, projectFromPrompt, referenceKey } from './piChatProjectContext';
 import { appendPiTurnDelta, createPiChatTurnManager, hydrateCompletedPiTurn } from './piChatTurn';
 
 const DEFAULT_TRANSCRIPT = [];
@@ -184,10 +184,8 @@ function useSendPiMessage(state, createConversation, loadPiState, turnManager) {
     const text = state.prompt.trim();
     if (!text || state.sending) return;
     const targetProject = state.selectedProject || projectFromPrompt(text, state.projects);
-    const shouldCreateProjectConversation = targetProject?.id && state.selectedConversation?.project_id !== targetProject.id;
-    const conversationId = shouldCreateProjectConversation
-      ? await createConversation('New conversation', { project: targetProject })
-      : state.selectedConversationId || await createConversation('New conversation', { project: targetProject });
+    const conversationId = state.selectedConversationId
+      || await createConversation('New conversation', { project: targetProject });
     if (!conversationId) return;
     await sendPromptToPi(state, conversationId, text, loadPiState, targetProject, turnManager);
   }, [createConversation, loadPiState, state, turnManager]);
@@ -224,7 +222,7 @@ async function sendPromptToPi(state, conversationId, text, loadPiState, targetPr
   try {
     const result = await assistantApi.sendPiConversationMessage(
       conversationId,
-      { prompt: promptWithProjectContext(text, targetProject || state.selectedProject) },
+      piChatMessageWithProjectContext(text, targetProject || state.selectedProject),
       {
         signal: turn.controller.signal,
         onEvent: (streamEvent) => applyPiTurnEvent(state, turnManager, turn, streamEvent),
