@@ -47,6 +47,15 @@ describe("PI authorization scope matcher", () => {
     })).toEqual({ matched: false, reason: "heartbeat scope hb-1 does not match action heartbeat hb-other" });
   });
 
+  test("keeps direct project and workspace actions in separate runner scopes", () => {
+    expect(matchPiAuthorizationScope({ ...BASE, action_type: "project.create" }, { runner_resource: "projects" }))
+      .toEqual({ matched: true, reason: "scope matched runner projects" });
+    expect(matchPiAuthorizationScope({ ...BASE, action_type: "workspace.write_file" }, { runner_resource: "workspace" }))
+      .toEqual({ matched: true, reason: "scope matched local workspace" });
+    expect(matchPiAuthorizationScope({ ...BASE, action_type: "issue.enqueue" }, { runner_resource: "workspace" }))
+      .toEqual({ matched: false, reason: "runner workspace scope does not match action issue.enqueue" });
+  });
+
   test("matches goal scope through its associated issue_ids", () => {
     expect(matchPiAuthorizationScope(BASE, { goal_id: "night-run", issue_ids: [7, 8], project_id: "demo" }))
       .toEqual({ matched: true, reason: "scope matched goal night-run issue 7" });

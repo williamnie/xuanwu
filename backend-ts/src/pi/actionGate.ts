@@ -112,6 +112,7 @@ const SAFE_ACTIONS = new Set(PI_SAFE_ACTION_TYPES);
 const SUPERVISOR_HIGH_RISK_ACTIONS = new Set<string>(SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES);
 const CONFIRM_ACTIONS = new Set([
   "agent.executor_assign", "agent.workflow_request", "issue.create", "issue.enqueue", "issue.schedule_enqueue",
+  "project.create", "workspace.make_directory", "workspace.write_file",
   "issue.completion_reconcile",
   "issue_completion_watch.create", "issue_completion_watch.cancel",
   "notification.preference.update",

@@ -5,6 +5,7 @@ import test from 'node:test';
 const appSource = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8');
 const foundationCss = readFileSync(new URL('./GeekWorkbench.css', import.meta.url), 'utf8');
 const pagesCss = readFileSync(new URL('./GeekWorkbenchPages.css', import.meta.url), 'utf8');
+const piChatCss = readFileSync(new URL('./pages/PiChat.css', import.meta.url), 'utf8');
 
 test('geek workbench styles load after the legacy app stylesheet', () => {
   const legacyIndex = appSource.indexOf("import './App.css';");
@@ -45,8 +46,8 @@ test('buttons use the flat E2B-inspired control language', () => {
 });
 
 test('page refinements keep chat layouts bounded on narrow screens', () => {
-  assert.match(pagesCss, /\.pi-chat-shell\s*\{[\s\S]*grid-template-columns:\s*minmax\(272px, 298px\)\s+minmax\(0, 1fr\)/);
-  assert.match(pagesCss, /@media \(max-width:\s*960px\)[\s\S]*\.pi-chat-shell\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(piChatCss, /\.pi-chat-shell\s*\{[\s\S]*grid-template-columns:\s*minmax\(272px, 298px\)\s+minmax\(0, 1fr\)/);
+  assert.match(piChatCss, /@media \(max-width:\s*960px\)[\s\S]*\.pi-chat-shell\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
 });
 
 test('low-frequency global panels use the same visual system without owning Sessions page styles', () => {
@@ -63,6 +64,6 @@ test('low-frequency global panels use the same visual system without owning Sess
   assert.match(pagesCss, /\.proposal-action-row\s*\{\s*border-radius:\s*var\(--radius-md\)/);
   assert.match(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-family:\s*var\(--font-sans\)/);
   assert.doesNotMatch(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-family:\s*var\(--font-mono\)/);
-  assert.doesNotMatch(pagesCss, /\.pi-chat-runtime-pill[^}]*border-radius:\s*999px/);
+  assert.doesNotMatch(piChatCss, /\.pi-chat-runtime-pill[^}]*border-radius:\s*999px/);
   assert.doesNotMatch(pagesCss, /\.(?:sessions-client|client-chat|new-session|session-list-filter|session-info)/);
 });

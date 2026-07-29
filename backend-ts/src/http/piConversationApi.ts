@@ -552,7 +552,7 @@ async function openConversationRuntime(
   const review = isReviewConversationIntent(intent);
   return createPiRuntimeSession(context.database, {
     agent,
-    authorization: conversationAuthorization(review, toolProject, supervisorContext, PI_RUNNER_CHAT_ACTIONS),
+    authorization: conversationAuthorization(review, toolProject, PI_RUNNER_CHAT_ACTIONS),
     bus: context.bus,
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs,
     channelContext,
@@ -575,13 +575,11 @@ async function openConversationRuntime(
 function conversationAuthorization(
   review: boolean,
   project: Project | undefined,
-  supervisorContext: SupervisorContextResolution,
   runnerChatActions: readonly string[]
 ) {
   if (review) return reviewConversationAuthorization();
   if (project) return runnerChatAuthorization(project, runnerChatActions);
-  if (supervisorContext.status === "ambiguous") return readOnlyConversationAuthorization();
-  return undefined;
+  return unboundRunnerChatAuthorization();
 }
 
 function runnerChatAuthorization(
@@ -598,11 +596,18 @@ function runnerChatAuthorization(
   };
 }
 
-function readOnlyConversationAuthorization() {
+function unboundRunnerChatAuthorization() {
+  const actions = [
+    ...PI_READ_ONLY_ACTION_TYPES,
+    "project.create",
+    "workspace.make_directory",
+    "workspace.write_file"
+  ];
   return {
-    allowedActions: [...PI_READ_ONLY_ACTION_TYPES],
-    authorizedActions: runnerChatAuthorizedActions(PI_READ_ONLY_ACTION_TYPES),
-    mode: "attended" as const
+    allowedActions: actions,
+    authorizedActions: runnerChatAuthorizedActions(actions),
+    mode: "delegated" as const,
+    scopes: [{ runner_resource: "projects" }, { runner_resource: "workspace" }]
   };
 }
 

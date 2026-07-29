@@ -77,15 +77,24 @@ test('PI Assistant chat thread uses the compact session chat surface style', () 
   const userBubbleRule = ruleFor('.pi-chat-bubble.user');
   const assistantBubbleRule = ruleFor('.pi-chat-bubble.assistant');
 
-  assert.match(threadRule, /padding:\s*26px\s+clamp\(12px,\s*3\.2vw,\s*40px\)/);
+  assert.match(threadRule, /padding:\s*26px\s+clamp\(18px,\s*5vw,\s*72px\)\s+22px/);
   assert.match(threadRule, /overscroll-behavior:\s*contain/);
   assert.match(threadRule, /scrollbar-gutter:\s*stable/);
-  assert.match(contentRule, /gap:\s*18px/);
+  assert.match(contentRule, /gap:\s*20px/);
   assert.match(contentRule, /min-height:\s*100%/);
   assert.match(bubbleRule, /overflow-wrap:\s*anywhere/);
   assert.match(bubbleRule, /max-width:\s*min\(780px,\s*88%\)/);
-  assert.match(userBubbleRule, /background:\s*#f3f3f6/);
+  assert.match(userBubbleRule, /background:\s*var\(--message-user\)/);
   assert.match(assistantBubbleRule, /background:\s*transparent/);
+});
+
+test('Chat distinguishes direct local actions from provider coding and offers practical starters', () => {
+  assert.match(pageSource, /t\('chat\.capability\.direct'\)/);
+  assert.match(pageSource, /t\('chat\.capability\.provider'\)/);
+  assert.match(pageSource, /function filterConversations/);
+  assert.match(pageSource, /t\('chat\.searchPlaceholder'\)/);
+  assert.match(pageSource, /onPromptSelect=\{state\.setPrompt\}/);
+  assert.match(pageSource, /chat\.starter\.\$\{kind\}\.prompt/);
 });
 
 test('PI Assistant composer supports @project activation and Advanced runtime context', () => {

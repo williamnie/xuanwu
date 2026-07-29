@@ -7,6 +7,7 @@ import {
   SUPERVISOR_CONTROL_READ_TOOL_NAMES,
   SUPERVISOR_CONTROL_TOOL_NAMES
 } from "./supervisorControlContracts.ts";
+import { PI_LOCAL_WORKSPACE_TOOL_NAMES } from "./localWorkspaceTools.ts";
 
 export const RUNNER_BUILTIN_PROVIDER_ID = "runner-builtin";
 const PRIMITIVE_READ_TOOL_NAMES = ["read", "grep", "find", "ls"] as const;
@@ -39,6 +40,7 @@ const READ_TOOL_NAMES = new Set<string>([
 ]);
 const DANGEROUS_TOOL_NAMES = new Set<string>(SUPERVISOR_CONTROL_DANGEROUS_TOOL_NAMES);
 const SUPERVISOR_CONTROL_TOOLS = new Set<string>(SUPERVISOR_CONTROL_TOOL_NAMES);
+const LOCAL_WORKSPACE_TOOLS = new Set<string>(PI_LOCAL_WORKSPACE_TOOL_NAMES);
 
 export function listBuiltinToolProviders(): ToolProvider[] {
   return [{
@@ -61,7 +63,7 @@ function piActionTools(): AssistantTool[] {
   return tools.map((tool) => {
     const permission = builtinToolPermission(tool.name);
     return {
-      audit: SUPERVISOR_CONTROL_TOOLS.has(tool.name)
+      audit: SUPERVISOR_CONTROL_TOOLS.has(tool.name) || LOCAL_WORKSPACE_TOOLS.has(tool.name)
         ? { category: "supervisor_domain_control", redact: [], retention: "extended", tags: [permission] }
         : { redact: [] },
       description: tool.description,
@@ -69,7 +71,9 @@ function piActionTools(): AssistantTool[] {
       metadata: {
         builtin: true,
         label: tool.label ?? tool.name,
-        ...(SUPERVISOR_CONTROL_TOOLS.has(tool.name) ? { risk_level: toolRiskLevel(permission) } : {})
+        ...(SUPERVISOR_CONTROL_TOOLS.has(tool.name) || LOCAL_WORKSPACE_TOOLS.has(tool.name)
+          ? { risk_level: toolRiskLevel(permission) }
+          : {})
       },
       name: tool.name,
       output_schema: supervisorControlOutputSchema(tool.name) ?? { type: "object" },

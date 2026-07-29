@@ -25,7 +25,7 @@
 - 244 条用户 API route（以 `API_ROUTE_DISPOSITIONS` 的 family 映射为准）
 - 32 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
 - 15 个后台调度/启动单元：keep=4、merge=8、migrate=3、delete=0
-- 144 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
+- 145 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
 
 ## 2. live reference 证据
 
@@ -446,13 +446,13 @@ GET /api/issues/:id/runs
 
 ## 8. PI 模块清单
 
-`backend-ts/src/pi` 的 144 个非 `*.test.ts` 模块全部在下面 family 中逐项列出；测试保证没有漏项或重复归属。
+`backend-ts/src/pi` 的 145 个非 `*.test.ts` 模块全部在下面 family 中逐项列出；测试保证没有漏项或重复归属。
 
 | family | 文件数 | 结论 | 目标 | source of truth |
 | --- | ---: | --- | --- | --- |
 | `action-permission-gate` | 17 | **keep** | Deterministic permission and external-effect gate | Action Proposal/Approval plus pi_action_events |
 | `automation` | 11 | **migrate** | `automation_definitions/runs/events` execution pipeline | legacy pi_automations, heartbeats, and watches until W2/G4 |
-| `capability-connectors` | 28 | **keep** | Capability and connector runtime | registered provider/tool manifests and audited calls |
+| `capability-connectors` | 29 | **keep** | Capability and connector runtime | registered provider/tool manifests and audited calls |
 | `guardian-attention` | 25 | **merge** | Attention detection, routing and delivery | Guardian authorities projected into Attention |
 | `intake-context` | 8 | **merge** | Attention intake and Evidence context | external events, context bundles and intake audit |
 | `memory` | 4 | **keep** | Supporting knowledge store | pi_memory_items |
@@ -518,6 +518,7 @@ backend-ts/src/pi/cliToolRunner.ts
 backend-ts/src/pi/cliToolRunnerSupport.ts
 backend-ts/src/pi/httpToolCall.ts
 backend-ts/src/pi/httpToolProvider.ts
+backend-ts/src/pi/localWorkspaceTools.ts
 backend-ts/src/pi/mcpActionTools.ts
 backend-ts/src/pi/mcpApprovalExpiry.ts
 backend-ts/src/pi/mcpResourceRead.ts
@@ -737,4 +738,4 @@ bunx tsc --ignoreConfig --noEmit --target ES2022 --module ESNext \
   src/xuanwu/capabilityDispositionInventory.test.ts
 ```
 
-测试会验证：84 张 current source table + 2 张 captured live-only table = 86；244 条唯一用户 API route 全覆盖；32 个 JSX 页面组件与 144 个 PI 模块恰好归属一次；12 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。
+测试会验证：84 张 current source table + 2 张 captured live-only table = 86；244 条唯一用户 API route 全覆盖；32 个 JSX 页面组件与 145 个 PI 模块恰好归属一次；12 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。

@@ -5,12 +5,16 @@ import {
   BriefcaseBusiness,
   CheckCircle2,
   ChevronDown,
+  Code2,
   Copy,
+  FolderGit2,
   Loader2,
   MessageSquarePlus,
   RefreshCw,
+  Search,
   Settings2,
   ShieldCheck,
+  Sparkles,
   SlidersHorizontal,
   UserRound,
 } from 'lucide-react';
@@ -56,6 +60,8 @@ function PiChatLayout({ advanced, navigateTo, setAdvanced, state }) {
 
 function PiChatSidebar({ advanced, navigateTo, state }) {
   const { t } = useI18n();
+  const [query, setQuery] = useState('');
+  const conversations = filterConversations(state.conversations, query, t);
   return (
     <aside className="pi-chat-sidebar glass-card">
       <PiChatSidebarHeader
@@ -67,9 +73,20 @@ function PiChatSidebar({ advanced, navigateTo, state }) {
       <button className="btn btn-primary" onClick={state.handleCreateConversation} disabled={state.sending}>
         <MessageSquarePlus size={15} /> {t('chat.new')}
       </button>
+      <label className="pi-chat-conversation-search">
+        <Search size={14} aria-hidden="true" />
+        <input
+          aria-label={t('chat.search')}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t('chat.searchPlaceholder')}
+          type="search"
+          value={query}
+        />
+      </label>
       <ConversationList
         advanced={advanced}
-        conversations={state.conversations}
+        conversations={conversations}
+        emptyLabel={query ? t('chat.noSearchResults') : t('chat.emptyList')}
         selectedId={state.selectedConversationId}
         onSelect={state.handleConversationChange}
       />
@@ -114,7 +131,7 @@ function PiChatMain({ advanced, navigateTo, setAdvanced, state }) {
       ) : state.loading ? <LoadingState /> : (
         <>
           <ChatHeader advanced={advanced} onAdvancedChange={setAdvanced} state={state} />
-          <ChatContextBar navigateTo={navigateTo} transcript={state.transcript} />
+          <ChatContextBar navigateTo={navigateTo} project={state.selectedProject} transcript={state.transcript} />
           <ChatThread advanced={advanced} navigateTo={navigateTo} state={state} />
           <ChatComposer advanced={advanced} state={state} />
         </>
@@ -184,31 +201,38 @@ function ChatStatusSummary({ summary }) {
   );
 }
 
-function ChatContextBar({ navigateTo, transcript }) {
+function ChatContextBar({ navigateTo, project, transcript }) {
   const { t } = useI18n();
   const workLinks = piChatWorkLinks(transcript);
   return (
-    <nav className="pi-chat-context-bar" aria-label={t('chat.relatedWork')}>
-      <span><BriefcaseBusiness size={13} /> Work</span>
-      {workLinks.map((work) => (
-        <button key={work.id} onClick={() => navigateTo('work', work.id)} type="button">
-          {work.label} <ArrowUpRight size={11} />
-        </button>
-      ))}
-      <button className="pi-chat-all-work-link" onClick={() => navigateTo('work')} type="button">
-        {workLinks.length > 0 ? t('chat.viewAll') : t('chat.openWork')} <ArrowUpRight size={11} />
-      </button>
+    <nav className="pi-chat-context-bar" aria-label={t('chat.capabilities')}>
+      <span className="pi-chat-capability direct"><Sparkles size={13} /> {t('chat.capability.direct')}</span>
+      <span className="pi-chat-capability provider"><Code2 size={13} /> {t('chat.capability.provider')}</span>
+      {project && <span className="pi-chat-capability project"><FolderGit2 size={13} /> @{project.name || project.id}</span>}
+      {workLinks.length > 0 && (
+        <span className="pi-chat-work-links">
+          <span><BriefcaseBusiness size={13} /> Work</span>
+          {workLinks.map((work) => (
+            <button key={work.id} onClick={() => navigateTo('work', work.id)} type="button">
+              {work.label} <ArrowUpRight size={11} />
+            </button>
+          ))}
+          <button className="pi-chat-all-work-link" onClick={() => navigateTo('work')} type="button">
+            {t('chat.viewAll')} <ArrowUpRight size={11} />
+          </button>
+        </span>
+      )}
     </nav>
   );
 }
 
-function ConversationList({ advanced, conversations, onSelect, selectedId }) {
-  const { t } = useI18n();
+function ConversationList({ advanced, conversations, emptyLabel, onSelect, selectedId }) {
+  const { language, t } = useI18n();
   return (
     <div className="pi-chat-conversation-list">
       <div className="pi-chat-sidebar-title">{t('chat.chats')}</div>
       {conversations.length === 0 ? (
-        <div className="pi-chat-empty-mini">{t('chat.emptyList')}</div>
+        <div className="pi-chat-empty-mini">{emptyLabel}</div>
       ) : (
         conversations.map((conversation) => (
           <button
@@ -218,7 +242,11 @@ function ConversationList({ advanced, conversations, onSelect, selectedId }) {
             onContextMenu={advanced ? (event) => copyConversationDebugInfo(event, conversation, t('chat.debugCopied')) : undefined}
             title={advanced ? t('chat.copyChatDebugHint') : undefined}
           >
-            <span>{displayPiConversationTitle(conversation, t)}</span>
+            <span className="pi-chat-conversation-title">{displayPiConversationTitle(conversation, t)}</span>
+            <span className="pi-chat-conversation-meta">
+              <span>{formatConversationDate(conversation.updated_at || conversation.created_at, language)}</span>
+              <span>{conversation.project_id ? `@${conversation.project_id}` : t('chat.global')}</span>
+            </span>
             {advanced && <small>{shortId(conversation.pi_session_id || conversation.id)}</small>}
           </button>
         ))
@@ -251,7 +279,11 @@ function ChatThread({ advanced, navigateTo, state }) {
       <div className="pi-chat-thread" ref={scrollRef} onScroll={handleScroll}>
         <div className="pi-chat-thread-content" ref={contentRef}>
           {state.transcript.length === 0 ? (
-            <EmptyChat navigateTo={navigateTo} hasRuntime={Boolean(state.supervisor)} />
+            <EmptyChat
+              navigateTo={navigateTo}
+              hasRuntime={Boolean(state.supervisor)}
+              onPromptSelect={state.setPrompt}
+            />
           ) : state.transcript.map((item) => (
             <ChatBubble advanced={advanced} key={item.id} conversation={state.selectedConversation} item={item} />
           ))}
@@ -374,13 +406,23 @@ function ChatErrorState({ advanced, error, navigateTo, onAdvancedChange, onRetry
   );
 }
 
-function EmptyChat({ hasRuntime, navigateTo }) {
+function EmptyChat({ hasRuntime, navigateTo, onPromptSelect }) {
   const { t } = useI18n();
   return (
     <div className="pi-chat-empty">
       <Bot size={34} />
       <strong>{hasRuntime ? t('chat.start') : t('chat.notConnected')}</strong>
       <span>{hasRuntime ? t('chat.startDescription') : t('chat.configureBeforeStart')}</span>
+      {hasRuntime && (
+        <div className="pi-chat-starters">
+          {['project', 'document', 'code'].map((kind) => (
+            <button key={kind} onClick={() => onPromptSelect(t(`chat.starter.${kind}.prompt`))} type="button">
+              <span>{t(`chat.starter.${kind}.title`)}</span>
+              <small>{t(`chat.starter.${kind}.detail`)}</small>
+            </button>
+          ))}
+        </div>
+      )}
       {!hasRuntime && <button className="btn btn-secondary" onClick={() => navigateTo('connections')}>{t('chat.openConnections')}</button>}
     </div>
   );
@@ -485,4 +527,20 @@ function copyConversationDebugInfo(event, conversation, successMessage) {
 function copyMessageDebugInfo(event, item, conversation, successMessage) {
   event?.preventDefault();
   copyPiDebugText(formatPiMessageDebugInfo(item, conversation), successMessage);
+}
+
+function filterConversations(conversations, query, t) {
+  const needle = String(query || '').trim().toLocaleLowerCase();
+  if (!needle) return conversations;
+  return conversations.filter((conversation) => [
+    displayPiConversationTitle(conversation, t),
+    conversation.project_id,
+    conversation.id,
+  ].some((value) => String(value || '').toLocaleLowerCase().includes(needle)));
+}
+
+function formatConversationDate(value, language) {
+  const date = new Date(value || '');
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat(language || 'zh-CN', { month: 'numeric', day: 'numeric' }).format(date);
 }

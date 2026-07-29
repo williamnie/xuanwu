@@ -11,6 +11,9 @@ const RUNNER_CHAT_MUTATION_ACTIONS = new Set([
   "issue_completion_watch.create",
   "issue_completion_watch.cancel",
   "notification.preference.update",
+  "project.create",
+  "workspace.make_directory",
+  "workspace.write_file",
   ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
 ]);
 

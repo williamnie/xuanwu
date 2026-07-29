@@ -63,6 +63,9 @@ export const PI_RUNNER_CHAT_ACTIONS = [
   "issue_completion_watch.create",
   "issue_completion_watch.cancel",
   "notification.preference.update",
+  "project.create",
+  "workspace.make_directory",
+  "workspace.write_file",
   ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
 ] as const;
 
@@ -76,6 +79,9 @@ export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
   "issue_completion_watch.create",
   "issue_completion_watch.cancel",
   "notification.preference.update",
+  "project.create",
+  "workspace.make_directory",
+  "workspace.write_file",
   ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
 ] as const;
 

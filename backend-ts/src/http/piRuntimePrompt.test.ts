@@ -29,7 +29,7 @@ const DECISION_FIXTURES = [
   {
     kind: "execution",
     user: "修复登录回归并开始执行",
-    expected: "4. Execute: for a concrete engineering outcome, resolve the project and Work scope"
+    expected: "4. Act or Execute: use project_create/workspace_* directly for local folders"
   },
   {
     kind: "automation",
@@ -105,6 +105,9 @@ describe("Xuanwu Supervisor runtime prompt", () => {
       expect(prompt).toContain("Supervisor commitment context (operational projection, not long-term memory)");
       expect(prompt).toContain("xw.supervisor-commitment.v1");
       expect(prompt).toContain("never call memory_remember for a temporary commitment");
+      expect(prompt).toContain("Direct local workspace workflow:");
+      expect(prompt).toContain("keeps this conversation and its full history attached");
+      expect(prompt).toContain("Use Work/Run and the selected executor provider only for application source code");
     });
   });
 

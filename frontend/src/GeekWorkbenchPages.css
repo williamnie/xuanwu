@@ -85,74 +85,7 @@
 .project-card-stats { background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 8px 5px; }
 .project-card-stat strong { font-family: var(--font-mono); }
 .project-card-footer { border-color: var(--border-light); }
-/* PI Assistant Chat */
-.pi-chat-page, [data-theme="dark"] .pi-chat-page { background: transparent; color: var(--text-primary); padding: 0; }
-.pi-chat-shell { gap: 12px; grid-template-columns: minmax(272px, 298px) minmax(0, 1fr); }
-.pi-chat-sidebar.glass-card, [data-theme="dark"] .pi-chat-sidebar.glass-card,
-.pi-chat-main.glass-card, [data-theme="dark"] .pi-chat-main.glass-card {
-  background: var(--panel-gradient);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-}
-.pi-chat-sidebar.glass-card { padding: 15px 11px; }
-.pi-chat-sidebar-header { border-bottom: 1px solid var(--border-light); margin-bottom: 2px; padding: 2px 4px 13px; }
-.pi-chat-sidebar-brand strong, [data-theme="dark"] .pi-chat-sidebar-brand strong,
-.pi-chat-main-header strong, [data-theme="dark"] .pi-chat-main-header strong { color: var(--text-primary); font-family: var(--font-display); font-weight: 600; }
-.pi-chat-sidebar-brand span, [data-theme="dark"] .pi-chat-sidebar-brand span,
-.pi-chat-sidebar-title, [data-theme="dark"] .pi-chat-sidebar-title,
-.pi-chat-main-header span, .pi-chat-main-header small,
-[data-theme="dark"] .pi-chat-main-header span, [data-theme="dark"] .pi-chat-main-header small {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  letter-spacing: 0.09em;
-}
-.pi-chat-sidebar-icon, .pi-chat-icon-button,
-[data-theme="dark"] .pi-chat-sidebar-icon, [data-theme="dark"] .pi-chat-icon-button,
-.pi-chat-agent-status, [data-theme="dark"] .pi-chat-agent-status {
-  background: var(--bg-secondary);
-  border-color: var(--border-light);
-  border-radius: var(--radius-sm);
-  box-shadow: none;
-  color: var(--text-secondary);
-}
-.pi-chat-sidebar .btn.btn-primary, [data-theme="dark"] .pi-chat-sidebar .btn.btn-primary {
-  background: var(--button-primary-bg);
-  border-color: var(--button-primary-bg);
-  border-radius: var(--button-radius);
-  color: var(--button-primary-fg);
-  font-family: var(--font-sans);
-  justify-content: center;
-}
-.pi-chat-conversation, [data-theme="dark"] .pi-chat-conversation {
-  border-color: transparent;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  padding: 10px 11px;
-}
-.pi-chat-conversation:hover, .pi-chat-conversation.active,
-[data-theme="dark"] .pi-chat-conversation:hover, [data-theme="dark"] .pi-chat-conversation.active {
-  background: var(--message-user);
-  border-color: var(--message-user-border);
-  color: var(--text-primary);
-}
-.pi-chat-main::before, [data-theme="dark"] .pi-chat-main::before { display: none; }
-.pi-chat-main-header { background: color-mix(in srgb, var(--bg-secondary) 52%, transparent); border-bottom: 1px solid var(--border-color); margin: 0; max-width: none; padding: 16px 20px; }
-.pi-chat-thread { padding: 30px clamp(22px, 5vw, 76px) 22px; }
-.pi-chat-thread-content { gap: 20px; }
-.pi-chat-bubble { border-radius: var(--radius-md); }
-.pi-chat-bubble.user, [data-theme="dark"] .pi-chat-bubble.user { background: var(--message-user); border-color: var(--message-user-border); color: var(--text-primary); }
-.pi-chat-bubble.assistant { border-left: 2px solid color-mix(in srgb, var(--primary) 68%, transparent); padding-left: 15px; }
-.pi-chat-markdown, [data-theme="dark"] .pi-chat-markdown { color: var(--text-primary); line-height: 1.68; }
-.pi-chat-composer { border-top: 1px solid var(--border-color); padding: 13px clamp(22px, 5vw, 76px) 18px; }
-.pi-chat-composer .prompt-editor-shell.composer, [data-theme="dark"] .pi-chat-composer .prompt-editor-shell.composer {
-  background: var(--control-bg);
-  border-color: var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-}
-.pi-chat-runtime-pill, [data-theme="dark"] .pi-chat-runtime-pill { background: var(--bg-secondary); border-color: var(--border-light); border-radius: var(--radius-xs); color: var(--text-secondary); }
-
+/* PI Chat owns its responsive workspace surface in pages/PiChat*.css. */
 /* Settings and Command Center Attention */
 .attention-card {
   background: var(--panel-gradient);

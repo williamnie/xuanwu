@@ -75,11 +75,12 @@ describe("PI project tools", () => {
         "mcp_requirement_recommend", "mcp_resource_list", "mcp_resource_read",
         "mcp_tool_call", "memory_remember", "memory_search", "needs_user_escalation",
         "notification_preference_read", "notification_preference_update",
-        "project_list", "project_status", "read", "repo_read_excerpt", "repo_search", "repo_tree",
+        "project_create", "project_list", "project_status", "read", "repo_read_excerpt", "repo_search", "repo_tree",
         "report_workflow_request", "review_workflow_request", "run_control", "run_list", "run_read", "session_list",
         "session_read_summary", "session_steer_proposal", "skill_intent_audit",
         "skill_list", "skill_read", "skill_recommend", URL_FETCH_TOOL_NAME, "verification_workflow_request",
-        "work_control", "work_create", "work_list", "work_read", "work_update"
+        "work_control", "work_create", "work_list", "work_read", "work_update",
+        "workspace_make_directory", "workspace_write_file"
       ]);
       expect(runtime.session.getAllTools().map((tool) => tool.name).sort()).toEqual(runtime.session.getActiveToolNames().sort());
       expect(probes.get("project_status")?.isError).toBe(false);

@@ -210,6 +210,53 @@ describe("Bun PI conversation message API", () => {
     }
   });
 
+  test("lets PI create a local project and write its PRD without starting coding Work", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-local-project-api", provider: "pi-local-project" });
+    const projectRoot = join(database.path, "..", "fashion-studio");
+    try {
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("project_create", {
+            cwd: projectRoot,
+            id: "fashion-studio",
+            name: "Fashion Studio"
+          }, { id: "create-local-project" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage([
+          fauxToolCall("workspace_write_file", {
+            content: "# Fashion Studio PRD\n\n## MVP\n服装模特图与首屏图。\n",
+            path: "PRD.md",
+            project_id: "fashion-studio"
+          }, { id: "write-local-prd" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage(`项目已创建，PRD 已写入 ${join(projectRoot, "PRD.md")}。`)
+      ]);
+      insertFauxAgent(database, "pi-local-project");
+      writeFauxModelsConfig(database, "pi-local-project");
+      const router = createDefaultRouter({ database });
+      await request(router, "/api/pi/conversations", { id: "conv-local-project" });
+
+      const message = await request(router, "/api/pi/conversations/conv-local-project/messages", {
+        prompt: `请在 ${projectRoot} 新建项目，并根据当前对话把 PRD 写入 PRD.md`
+      });
+      const result = await finalPiConversationSseData(message);
+
+      expect(message.status).toBe(201);
+      expect(result.text).toContain("PRD 已写入");
+      expect(readFileSync(join(projectRoot, "PRD.md"), "utf8")).toContain("服装模特图与首屏图");
+      expect(getPiConversation(database, "conv-local-project")).toMatchObject({ project_id: "fashion-studio" });
+      expect(listIssues(database, { projectId: "fashion-studio" })).toEqual([]);
+      expect(listPiActions(database)).toEqual(expect.arrayContaining([
+        expect.objectContaining({ action_type: "project.create", gate_decision: "execute", status: "completed" }),
+        expect.objectContaining({ action_type: "workspace.write_file", gate_decision: "execute", status: "completed" })
+      ]));
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
   test("passes uploaded attachment images to PI SDK prompt", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-image-faux-api", provider: "pi-image-faux" });

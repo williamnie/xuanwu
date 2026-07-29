@@ -72,10 +72,16 @@ function matchIssueScope(envelope: PiActionEnvelope, issueIDs: number[], project
 }
 
 function matchRunnerResourceScope(envelope: PiActionEnvelope, resource: string): PiAuthorizationScopeMatch {
-  if (resource !== "issues") return denied(`runner resource scope ${resource} is not supported`);
-  return runnerIssueAction(envelope.action_type)
+  if (resource === "issues") return runnerIssueAction(envelope.action_type)
     ? matched("scope matched runner issues")
     : denied(`runner issues scope does not match action ${envelope.action_type}`);
+  if (resource === "projects") return runnerProjectAction(envelope.action_type)
+    ? matched("scope matched runner projects")
+    : denied(`runner projects scope does not match action ${envelope.action_type}`);
+  if (resource === "workspace") return envelope.action_type.startsWith("workspace.")
+    ? matched("scope matched local workspace")
+    : denied(`runner workspace scope does not match action ${envelope.action_type}`);
+  return denied(`runner resource scope ${resource} is not supported`);
 }
 
 function matchRunnerScope(
@@ -91,6 +97,10 @@ function matchRunnerScope(
 function runnerIssueAction(actionType: string): boolean {
   return actionType.startsWith("issue.") || actionType.startsWith("issue_completion_watch.") ||
     actionType === "project.status" || actionType === "project.list";
+}
+
+function runnerProjectAction(actionType: string): boolean {
+  return actionType === "project.create" || actionType === "project.list" || actionType === "project.status";
 }
 
 function matchProject(expected: string, actual: unknown): PiAuthorizationScopeMatch {
