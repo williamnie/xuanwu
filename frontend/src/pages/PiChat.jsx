@@ -357,9 +357,9 @@ function ChatComposer({ advanced, state }) {
 }
 
 function composerProject(state) {
-  if (!state.prompt.trim()) return null;
   const hasProjectReference = state.references.some((reference) => reference.type === 'project');
   if (hasProjectReference) return state.selectedProject;
+  if (!state.prompt.trim()) return null;
   return projectFromPrompt(state.prompt, state.projects);
 }
 

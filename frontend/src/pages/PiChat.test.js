@@ -103,7 +103,7 @@ test('PI Assistant composer supports @project activation and Advanced runtime co
   assert.match(pageSource, /onAttachReference=\{state\.attachReference\}/);
   assert.match(pageSource, /showReferenceChips=\{false\}/);
   assert.match(pageSource, /runtimeControls=\{<PiChatComposerMeta advanced=\{advanced\} agent=\{state\.supervisor\} project=\{composerProject\(state\)\} \/>\}/);
-  assert.match(pageSource, /if \(!state\.prompt\.trim\(\)\) return null/);
+  assert.match(pageSource, /if \(hasProjectReference\) return state\.selectedProject;\s*if \(!state\.prompt\.trim\(\)\) return null/);
   assert.match(composerMetaSource, /\{project && <RuntimePill/);
   assert.match(composerMetaSource, /if \(!project && !advanced\) return null/);
   assert.doesNotMatch(composerMetaSource, /chat\.context\.selectProject'\)/);
