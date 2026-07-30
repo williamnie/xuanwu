@@ -162,7 +162,10 @@ function selectedProvider(
 ): ExecutorProvider {
   if (isExecutorProviderId(selection.provider)) {
     const preferred = providers[selection.provider];
-    if (preferred) return preferred;
+    if (preferred) {
+      assertProviderReady(preferred, project.id);
+      return preferred;
+    }
     throw new Error(`project ${project.id} provider "${selection.provider}" is not registered`);
   }
   return projectProvider(project, providers);
@@ -176,8 +179,19 @@ function issueProviderAvailable(
   now: Date | string | undefined
 ): boolean {
   const providerID = issueProviderID(db, project, issue);
-  return isExecutorProviderId(providerID) && providers[providerID] !== undefined &&
+  const provider = isExecutorProviderId(providerID) ? providers[providerID] : undefined;
+  return Boolean(provider) && provider!.capabilities.includes("issue_execution") && providerReady(provider!) &&
     !hasDeferredProviderRuntime(db, providerID, now ?? new Date());
+}
+
+function providerReady(provider: ExecutorProvider): boolean {
+  return provider.runtimeStatus?.().ready !== false;
+}
+
+function assertProviderReady(provider: ExecutorProvider, projectID: string): void {
+  const status = provider.runtimeStatus?.();
+  if (status?.ready !== false) return;
+  throw new Error(`project ${projectID} provider "${provider.id}" is not ready: ${status.reason || "configuration required"}`);
 }
 
 function issueProviderID(db: RunnerDatabase, project: Project, issue: Issue): string {
@@ -240,6 +254,7 @@ function projectProvider(project: Project, providers: ProjectLoopInput["provider
   if (!isExecutorProviderId(providerID)) throw new Error(`project ${project.id} provider "${providerID}" is not supported`);
   const provider = providers[providerID];
   if (!provider) throw new Error(`project ${project.id} provider "${providerID}" is not registered`);
+  assertProviderReady(provider, project.id);
   return provider;
 }
 

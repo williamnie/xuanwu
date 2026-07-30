@@ -34,6 +34,9 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
       CODEX_RUNNER_INSTALL_DIR: install,
       CODEX_RUNNER_STATE_DIR: state,
       CODEX_RUNNER_ADDR: '127.0.0.1:3999',
+      CODEX_RUNNER_CLAUDE_AUTH_MODE: 'platform-profile',
+      CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR: join(home, '.config', 'anthropic'),
+      CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE: 'runner',
       CODEX_RUNNER_VERIFY_ATTESTATION: 'require',
       FIXTURE_RELEASE_DIR: releaseV1,
     };
@@ -41,6 +44,9 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     const fresh = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], { env, encoding: 'utf8' });
     assert.equal(fresh.status, 0, `${fresh.stdout}\n${fresh.stderr}`);
     assert.match(runVersion(join(install, 'codex-issue-runner'), env), /v1\.0\.0/);
+    const corePlist = await readFile(join(home, 'Library', 'LaunchAgents', 'com.xiaobei.codex-issue-runner.core.plist'), 'utf8');
+    assert.match(corePlist, /<key>CODEX_RUNNER_CLAUDE_AUTH_MODE<\/key>\s*<string>platform-profile<\/string>/);
+    assert.match(corePlist, /<key>CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE<\/key>\s*<string>runner<\/string>/);
     await writeFile(join(state, 'runner.db'), 'authority-survives-release-changes');
 
     const updateEnv = { ...env, FIXTURE_RELEASE_DIR: releaseV2 };
@@ -116,7 +122,7 @@ test('release manifest enforces tag format, changelog, and target metadata', asy
   }
 });
 
-test('release package keeps PI Bun assets beside the executable and smokes the host binary', async () => {
+test('release package keeps Bun runtime assets beside the executable and smokes the host binary', async () => {
   const [script, workflow, runbook] = await Promise.all([
     readFile(join(root, 'scripts', 'package-release.sh'), 'utf8'),
     readFile(join(root, '.github', 'workflows', 'release.yml'), 'utf8'),
@@ -130,6 +136,8 @@ test('release package keeps PI Bun assets beside the executable and smokes the h
   assert.match(script, /"\$pkg_dir\/assets"/);
   assert.match(script, /"\$pkg_dir\/export-html"/);
   assert.match(script, /run_step "packaged host binary smoke" "\$binary" --version/);
+  assert.match(script, /stage_claude_sdk_executable "\$target" "\$pkg_dir"/);
+  assert.match(script, /"\$pkg_dir\/codex-issue-runner\.claude-agent-sdk"/);
   assert.doesNotMatch(script, /"\$pkg_dir\/pi-coding-agent\/package\.json"/);
 });
 
@@ -144,6 +152,8 @@ test('release rollback snapshots split and compatibility service registrations',
   assert.match(updater, /\$LABEL\.core\.plist/);
   assert.match(updater, /\$SERVICE_NAME-web\.service/);
   assert.match(updater, /\$SERVICE_NAME-core\.service/);
+  assert.match(updater, /snapshot\/bin\/codex-issue-runner\.claude-agent-sdk/);
+  assert.match(updater, /restore_file "\$snapshot\/bin\/codex-issue-runner\.claude-agent-sdk" "\$CLAUDE_SDK_EXECUTABLE_PATH"/);
   assert.match(updater, /restore_service_registration "\$snapshot"/);
 });
 
@@ -153,6 +163,7 @@ async function createRelease(temp, name, version) {
   await mkdir(release, { recursive: true });
   await mkdir(join(fixture, 'web'), { recursive: true });
   await writeExecutable(join(fixture, 'codex-issue-runner'), `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-issue-runner ${version} build=test bun=test"; fi\nexit 0\n`);
+  await writeExecutable(join(fixture, 'codex-issue-runner.claude-agent-sdk'), '#!/bin/sh\nexit 0\n');
   await writeFile(join(fixture, 'web', 'index.html'), version);
   for (const script of ['daemon.sh', 'install-release.sh', 'update-release.sh']) {
     await writeFile(join(fixture, script), await readFile(join(root, 'scripts', script)));

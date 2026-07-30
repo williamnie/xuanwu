@@ -66,6 +66,16 @@ export async function runIssueWithProvider(
     metadata: { cwd: input.cwd }
   });
   const activeRunID = activeRun?.id ?? openIssueRunID(input.database, input.issueId);
+  if (input.database) {
+    updateIssueRuntime(input.database, input.issueId, {
+      agent_profile_id: input.agentProfileId,
+      capability_summary: input.capabilitySummary,
+      issue_run_id: activeRunID,
+      metadata: runtimeMetadata(input, { source: "provider_start" }),
+      provider: providerID,
+      selection_reason: input.selectionReason
+    });
+  }
   const eventSink = providerEventSink(input, activeRunID, activeRun?.attempt ?? 0);
   let result: ProviderRunResult;
   try {
@@ -267,9 +277,14 @@ function resultSessionStatus(db: RunnerDatabase, provider: string, session: Sess
 
 function eventSessionStatus(event: ProviderEvent): string {
   const method = event.raw?.method ?? "";
+  const terminal = event.runEvent?.terminal === true ? event.runEvent.outcome : "";
+  if (terminal === "succeeded") return event.status || "completed";
+  if (terminal === "interrupted" || terminal === "cancelled") return "interrupted";
+  if (terminal === "failed") return event.status || "failed";
   if (event.type === "turn_started" || method === "turn/started") return event.status || "running";
   if (method === "thread/status/changed") return event.status || "";
   if (method === "turn/completed") return event.status || "completed";
+  if (event.type === "done") return event.status || "completed";
   if (event.type === "error") return event.status || "failed";
   return "";
 }

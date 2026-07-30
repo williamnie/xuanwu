@@ -21,7 +21,7 @@ import {
   removeQueuedSessionMessage,
   retryQueuedSessionMessage,
 } from './sessions/sessionMessageQueue';
-import { PROJECT_REQUIRED_MESSAGE, canCreateSession, resolveLastSessionProject } from './sessions/newSessionGuards';
+import { PROJECT_REQUIRED_MESSAGE, canCreateSession, readySessionProviders, resolveLastSessionProject } from './sessions/newSessionGuards';
 import { buildRunnerCommandRequest, clearSessionCommandState, validateSessionCommand } from './sessions/sessionCommands';
 import { defaultMessageSettings, defaultSessionSettings } from './sessions/sessionOptions';
 import { orderedProjectsAfterMove } from './sessions/projectOrder';
@@ -71,7 +71,6 @@ const SESSION_DETAIL_REFRESH_DELAY_MS = 250;
 const SESSION_DETAIL_RECONCILE_INTERVAL_MS = 30_000;
 const SESSION_LIST_RECONCILE_INTERVAL_MS = 30_000;
 const SESSION_LIST_REFRESH_DELAY_MS = 800;
-const DEFAULT_SESSION_PROVIDER = 'codex';
 
 export default function Sessions({
   autoSelectFirstSession = true,
@@ -101,6 +100,7 @@ export default function Sessions({
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState('');
+  const [providerRuntimeStatus, setProviderRuntimeStatus] = useState(null);
   const [message, setMessage] = useState('');
   const [messageReferences, setMessageReferences] = useState([]);
   const [messageCommand, setMessageCommand] = useState(null);
@@ -270,8 +270,14 @@ export default function Sessions({
     }
   }, [selectedId]);
 
-  const loadModels = useCallback(async () => {
+  const loadModels = useCallback(async (provider = 'codex') => {
     setModelsLoading(true);
+    if (provider !== 'codex') {
+      setModels([]);
+      setModelsError(`${provider === 'claude' ? 'Claude Agent SDK' : provider} 未声明 model_list capability，请按需手填模型 ID`);
+      setModelsLoading(false);
+      return;
+    }
     try {
       const result = await systemApi.getCodexModels();
       setModels(result.data || []);
@@ -326,7 +332,14 @@ export default function Sessions({
     return () => window.clearInterval(interval);
   }, [loadFirstPage]);
 
-  useEffect(() => { loadModels(); }, [loadModels]);
+  useEffect(() => { loadModels(sessionSettings.provider); }, [loadModels, sessionSettings.provider]);
+  useEffect(() => {
+    let alive = true;
+    systemApi.getSystemStatus()
+      .then((status) => { if (alive) setProviderRuntimeStatus(status); })
+      .catch(() => { if (alive) setProviderRuntimeStatus({ providers: [] }); });
+    return () => { alive = false; };
+  }, []);
   useEffect(() => {
     setMessageSettings(messageSettingsForRuntimeKey(selectedSessionRuntimeKey, selectedSessionProject));
   }, [selectedId, selectedSessionProject, selectedSessionRuntimeKey]);
@@ -340,8 +353,8 @@ export default function Sessions({
     }), SESSION_LIST_REFRESH_DELAY_MS);
   }, [loadFirstPage]);
 
-  const scheduleSelectedRefresh = useCallback((threadId) => {
-    const eventKey = providerSessionKey(DEFAULT_SESSION_PROVIDER, threadId);
+  const scheduleSelectedRefresh = useCallback((provider, threadId) => {
+    const eventKey = providerSessionKey(provider, threadId);
     if (!threadId || eventKey !== selectedId) return;
     window.clearTimeout(detailRefreshTimer.current);
     detailRefreshTimer.current = window.setTimeout(loadSelected, SESSION_DETAIL_REFRESH_DELAY_MS);
@@ -355,7 +368,7 @@ export default function Sessions({
     const eventKey = eventSessionKey(event);
     if (isSessionFileEvent(event)) {
       scheduleListRefresh();
-      scheduleSelectedRefresh(event.threadId);
+      scheduleSelectedRefresh(event.provider, event.threadId);
       return;
     }
     if (!isAgentEvent(event)) return;
@@ -364,7 +377,7 @@ export default function Sessions({
       const requestSessionKey = eventKey || eventSessionKeyFromPayload(request) || selectedIdRef.current;
       setApprovalQueue((current) => enqueueApprovalNotice(current, { request, sessionId: requestSessionKey }));
       if (requestSessionKey && requestSessionKey !== selectedIdRef.current) {
-        toast.info('Codex 正在等待审批，切回对应 session 后可处理。');
+        toast.info('Provider 正在等待审批，切回对应 session 后可处理。');
       }
     }
     if (event.method === 'approval/resolved') {
@@ -537,7 +550,8 @@ export default function Sessions({
     event.preventDefault();
     const promptText = message.trim();
     const wantsOppositeMode = Boolean(event.metaKey || event.ctrlKey);
-    const shouldGuide = sessionRunning && (wantsOppositeMode ? !followRunningTurn : followRunningTurn);
+    const canSteer = String(selectedSession?.provider || selectedId.split(':')[0] || 'codex') === 'codex';
+    const shouldGuide = canSteer && sessionRunning && (wantsOppositeMode ? !followRunningTurn : followRunningTurn);
     if (!selectedId || sending || isInterruptPendingForSession(interruptStateRef.current, selectedId)) return;
     if (!hasComposerContent(promptText, messageReferences)) return;
     if (messageReferenceValidation.hasErrors) {
@@ -684,9 +698,23 @@ export default function Sessions({
   const handleCreateNewSession = async (e) => {
     if (e) e.preventDefault();
     if (sending) return;
-    const guard = canCreateSession({ projectId, cwd, prompt, selectedProject, references: promptReferences });
+    const selectedProviderStatus = (providerRuntimeStatus?.providers || []).find(item => item.id === sessionSettings.provider) || {
+      id: sessionSettings.provider,
+      ready: false,
+      available: false,
+      readiness_reason: 'Provider readiness status is unavailable',
+    };
+    const guard = canCreateSession({
+      projectId,
+      cwd,
+      prompt,
+      selectedProject,
+      providerId: sessionSettings.provider,
+      providerStatus: selectedProviderStatus,
+      references: promptReferences,
+    });
     if (!guard.ok) {
-      if (guard.reason === 'missing_project' || guard.reason === 'unsupported_provider') {
+      if (guard.reason === 'missing_project' || guard.reason === 'unsupported_provider' || guard.reason === 'provider_not_ready') {
         toast.error(guard.message || PROJECT_REQUIRED_MESSAGE);
       }
       return;
@@ -699,6 +727,7 @@ export default function Sessions({
     try {
       const result = await runsApi.createSession(sessionPayloadWithReferences(prompt.trim(), {
         project_id: projectId,
+        provider: sessionSettings.provider,
         cwd,
         model: sessionSettings.model,
         reasoning_effort: sessionSettings.reasoningEffort,
@@ -840,6 +869,7 @@ export default function Sessions({
           projectId,
           handleProjectChange,
           sessionProjects,
+          providerOptions: readySessionProviders(providerRuntimeStatus),
         }}
       />
     </>

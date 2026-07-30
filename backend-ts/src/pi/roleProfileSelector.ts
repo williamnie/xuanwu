@@ -3,6 +3,7 @@ import { parseSkillIntentList } from "../skills/intents.ts";
 import type { AgentRole } from "./agentOrchestration.ts";
 
 export type RoleProfileSelectorInput = {
+  allowStrategy?: boolean;
   explicitProfileId?: string;
   issueProfileId?: string;
   profiles: AgentProfile[];
@@ -27,6 +28,9 @@ export function selectRoleProfile(input: RoleProfileSelectorInput): RoleProfileS
   if (issue) return issue;
   const projectDefault = selectedByID(input, "project default_agent_profile_id", input.projectDefaultProfileId, missing);
   if (projectDefault) return projectDefault;
+  if (input.allowStrategy === false) {
+    return { profile: null, selection_reason: fallbackReason(input.projectProvider, missing) };
+  }
   const best = bestProfile(input);
   if (best) return { profile: best.profile, selection_reason: matchReason(input, best, missing) };
   return { profile: null, selection_reason: fallbackReason(input.projectProvider, missing) };

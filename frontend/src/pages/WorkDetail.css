@@ -50,6 +50,10 @@
 .work-delivery-facts { display: flex; gap: 8px; margin-bottom: 13px; }
 .work-delivery-facts span { background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: 999px; color: var(--text-muted); font-size: .62rem; padding: 5px 8px; }
 .work-delivery-facts span.failed { color: var(--error); }
+.work-provider-profile-facts { display: grid; gap: 7px; margin: 0; }
+.work-provider-profile-facts div { display: grid; gap: 10px; grid-template-columns: minmax(100px, .8fr) minmax(0, 1.2fr); }
+.work-provider-profile-facts dt { color: var(--text-muted); font-size: .65rem; }
+.work-provider-profile-facts dd { color: var(--text-primary); font-size: .68rem; margin: 0; overflow-wrap: anywhere; }
 .work-custom-acceptance { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: .68rem; padding: 11px 13px; }
 .work-custom-acceptance summary { cursor: pointer; font-weight: 800; }
 .work-custom-acceptance li { margin-top: 6px; }

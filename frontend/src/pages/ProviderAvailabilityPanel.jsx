@@ -2,6 +2,7 @@ import { systemApi } from '../api/system.js';
 import { useEffect, useState } from 'react';
 import { KeyRound, RefreshCw } from 'lucide-react';
 import { PanelLoader } from '../components/TurtleLoader';
+import { providerAuthenticationText, providerRuntimeText } from './providerAvailabilityModel.js';
 
 export default function ProviderAvailabilityPanel() {
   const [status, setStatus] = useState(null);
@@ -36,7 +37,7 @@ function PanelHeader({ loading, onRefresh }) {
           <KeyRound size={18} color="var(--primary)" /> Provider Settings
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-          只显示 CLI 路径和 secret 是否已配置；不会返回 token/API key 明文。
+          显示运行模式和安全认证摘要；不会返回 token、API key 或 credential 文件内容。
         </p>
       </div>
       <button className="btn btn-secondary" onClick={onRefresh} disabled={loading}>
@@ -76,9 +77,9 @@ function ProviderCard({ provider }) {
           {providerStatusLabel(provider)}
         </span>
       </div>
-      <ProviderMeta label="CLI" value={providerCLIText(provider)} ok={provider.cli?.available} />
-      {provider.cli?.version && <ProviderMeta label="Version" value={provider.cli.version} ok={provider.cli?.available} />}
-      <ProviderMeta label="API key/token" value={secretStatusLabel(provider.secrets?.api_key)} ok={provider.secrets?.api_key?.configured} />
+      <ProviderMeta label="Runtime" value={providerRuntimeText(provider)} ok={provider.ready ?? provider.cli?.available} />
+      <ProviderMeta label="Auth" value={providerAuthenticationText(provider)} ok={provider.auth_configured ?? provider.secrets?.api_key?.configured} />
+      {provider.id !== 'claude' && <ProviderMeta label="CLI" value={providerCLIText(provider)} ok={provider.cli?.available} />}
       <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.5 }}>
         {provider.enabled ? `已启用：${providerCapabilityText(provider)}` : '仅展示配置状态，暂不启用执行'}
       </div>
@@ -88,7 +89,7 @@ function ProviderCard({ provider }) {
 
 function providerCapabilityText(provider) {
   const capabilities = provider.capabilities || [];
-  if (capabilities.includes('issue_execution')) return 'Issue execution only';
+  if (capabilities.length > 0) return capabilities.join(', ');
   return '未声明 capability';
 }
 
@@ -111,10 +112,6 @@ function providerCLIText(provider) {
 function providerStatusLabel(provider) {
   if (provider.status === 'available') return 'available';
   if (provider.status === 'missing') return 'missing';
+  if (provider.status === 'configuration_required') return 'configuration required';
   return 'unknown';
-}
-
-function secretStatusLabel(secret) {
-  if (!secret) return '未声明';
-  return secret.configured ? '已配置' : '未配置';
 }

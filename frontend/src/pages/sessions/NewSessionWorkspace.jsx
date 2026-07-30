@@ -37,6 +37,7 @@ export default function NewSessionWorkspace({
   projectId,
   handleProjectChange,
   sessionProjects,
+  providerOptions = [],
 }) {
   return (
     <div className="new-session-container animate-fade-in">
@@ -111,8 +112,11 @@ export default function NewSessionWorkspace({
           <div className="bottom-tag-select">
             <SlidersHorizontal size={13} />
             <span>Provider: {projectProviderLabel(sessionSettings.provider)}</span>
-            <select value={sessionSettings.provider} disabled>
-              <option value={sessionSettings.provider}>{projectProviderLabel(sessionSettings.provider)}</option>
+            <select value={sessionSettings.provider} onChange={(event) => handleSettingChange('provider', event.target.value)}>
+              {!providerOptions.some(option => option.id === sessionSettings.provider) ? (
+                <option value={sessionSettings.provider}>{projectProviderLabel(sessionSettings.provider)}（未就绪）</option>
+              ) : null}
+              {providerOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
             </select>
           </div>
 
@@ -177,9 +181,9 @@ function NewSessionComposerActions({ settings, models, modelsError, modelsLoadin
       ) : (
         <div className="composer-embedded-select">
           <Brain size={13} />
-          <span>{modelsLoading ? '读取模型' : settings.model ? compactModelName(settings.model) : 'Codex 默认'}</span>
+          <span>{modelsLoading ? '读取模型' : settings.model ? compactModelName(settings.model) : `${projectProviderLabel(settings.provider)} 默认`}</span>
           <select disabled={modelsLoading} value={settings.model} onChange={(event) => onModelChange(event.target.value)}>
-            <option value="">Codex 默认</option>
+            <option value="">{projectProviderLabel(settings.provider)} 默认</option>
             {models.map((model) => (
               <option key={model.id || model.model} value={model.id || model.model}>
                 {compactModelName(modelLabel(model))}

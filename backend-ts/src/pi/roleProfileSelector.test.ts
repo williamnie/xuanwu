@@ -73,6 +73,19 @@ describe("role profile selector", () => {
     expect(selected.selection_reason).toContain("default-missing");
   });
 
+  test("can enforce Work routing priority without selecting a strategy profile", () => {
+    const selected = selectRoleProfile({
+      allowStrategy: false,
+      profiles: [verifierProfile()],
+      projectProvider: "claude",
+      role: "verifier",
+      requiredSkillIntents: ["verification-before-completion"]
+    });
+
+    expect(selected.profile).toBeNull();
+    expect(selected.selection_reason).toContain("fallback to project provider claude");
+  });
+
   test("audits missing overrides when falling back to a matched profile", () => {
     const selected = selectRoleProfile({
       issueProfileId: "issue-missing",

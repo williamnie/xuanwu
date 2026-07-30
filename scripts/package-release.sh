@@ -67,6 +67,33 @@ stage_pi_package_assets() {
   copy_if_exists "$ROOT_DIR/backend-ts/node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm" "$pkg_dir/photon_rs_bg.wasm"
 }
 
+stage_claude_sdk_executable() {
+  local target="$1" pkg_dir="$2" suffix package_name version source cache archive_name
+  case "$target" in
+    bun-darwin-arm64) suffix="darwin-arm64" ;;
+    bun-darwin-x64) suffix="darwin-x64" ;;
+    bun-linux-arm64) suffix="linux-arm64" ;;
+    bun-linux-x64) suffix="linux-x64" ;;
+    *) fail "unsupported Claude SDK target: $target" ;;
+  esac
+  package_name="@anthropic-ai/claude-agent-sdk-$suffix"
+  version="$(node -p "require('$ROOT_DIR/backend-ts/node_modules/@anthropic-ai/claude-agent-sdk/package.json').version")"
+  source="$ROOT_DIR/backend-ts/node_modules/$package_name/claude"
+  if [ ! -f "$source" ]; then
+    cache="$WORK_DIR/claude-agent-sdk-$suffix"
+    rm -rf "$cache"
+    mkdir -p "$cache"
+    log "fetching $package_name@$version for $target"
+    archive_name="$(npm pack --silent --pack-destination "$cache" "$package_name@$version" | tail -n 1)"
+    [ -n "$archive_name" ] && [ -f "$cache/$archive_name" ] \
+      || fail "could not fetch $package_name@$version"
+    LC_ALL=C tar -xzf "$cache/$archive_name" -C "$cache"
+    source="$cache/package/claude"
+  fi
+  [ -f "$source" ] || fail "missing Claude Agent SDK native executable for $target"
+  install -m 0755 "$source" "$pkg_dir/codex-issue-runner.claude-agent-sdk"
+}
+
 host_bun_target() {
   case "$(uname -s)-$(uname -m)" in
     Darwin-arm64) printf 'bun-darwin-arm64' ;;
@@ -149,6 +176,7 @@ package_target() {
   cp "$ROOT_DIR/docs/backup-restore.md" "$pkg_dir/docs/backup-restore.md"
   cp "$ROOT_DIR/docs/architecture/xuanwu/0070-db-migration-rehearsal-gate.md" "$pkg_dir/docs/migration-rehearsal.md"
   stage_pi_package_assets "$pkg_dir"
+  stage_claude_sdk_executable "$target" "$pkg_dir"
   (cd "$pkg_dir" && LC_ALL=C tar -czf "$OUT_DIR/$asset.tar.gz" .)
 }
 

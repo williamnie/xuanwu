@@ -13,7 +13,7 @@ export function sessionToMarkdown(session, options = {}) {
   const lines = [
     `# ${escapeHeading(readableSessionTitle(session, options.project))}`,
     '',
-    '> Codex-only Markdown export generated from the currently loaded session detail.',
+    '> Provider-neutral Markdown export generated from the currently loaded Runner session detail.',
     '',
     ...metadataLines(session, options, resume),
     '',
@@ -36,8 +36,11 @@ export function buildSessionResumeCommand(session) {
   const threadId = providerSessionId(session);
   if (provider !== 'codex') {
     return {
+      action: 'runner',
       command: '',
-      note: `Resume command is currently Codex-only; provider ${provider || 'unknown'} is not supported.`,
+      note: provider === 'claude'
+        ? 'Continue or resume this Claude Agent SDK session in Runner; no unverified Claude CLI command is exported.'
+        : `Continue this ${provider || 'unknown'} session in Runner; no verified provider CLI resume command is available.`,
     };
   }
   if (!threadId) {
@@ -47,14 +50,16 @@ export function buildSessionResumeCommand(session) {
     };
   }
   return {
+    action: 'cli',
     command: `codex resume ${shellQuote(threadId)}`,
     note: 'Codex-only: requires a Codex CLI version that supports `codex resume <SESSION_ID>`.',
   };
 }
 
 export function markdownFilenameForSession(session) {
+  const provider = normalizeText(session?.provider || 'codex').toLowerCase() || 'provider';
   const id = providerSessionId(session) || session?.id || 'session';
-  return `codex-session-${safeFilename(id)}.md`;
+  return `${safeFilename(provider)}-session-${safeFilename(id)}.md`;
 }
 function metadataLines(session, options, resume) {
   const project = options.project || null;
@@ -71,8 +76,8 @@ function metadataLines(session, options, resume) {
     `- Updated: ${inlineValue(formatTimestamp(session?.updatedAt))}`,
     '',
     '## Resume command',
-    `- Provider limit: Codex-only. ${resume.note}`,
-    resume.command ? fencedCode('bash', resume.command) : '- Stable resume command unavailable.',
+    `- Resume path: ${resume.note}`,
+    resume.command ? fencedCode('bash', resume.command) : '- Use the Runner transcript composer to continue this session.',
   ];
 }
 function issueLines(session) {

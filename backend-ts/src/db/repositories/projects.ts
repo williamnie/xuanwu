@@ -259,6 +259,7 @@ function providerCapabilities(value: unknown): string[] {
     case "codex":
       return ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"];
     case "claude":
+      return ["issue_execution", "sessions", "resume_session", "interrupt"];
     case "fake-execution-only":
       return ["issue_execution"];
     default:

@@ -11,6 +11,8 @@ import {
 import { countIssues, getIssue, listIssues, type Issue, type IssueFilter } from "../../db/repositories/issues.ts";
 import { updateIssue } from "../../db/repositories/issueUpdate.ts";
 import { getWork } from "../../db/repositories/workLedger.ts";
+import { getProject } from "../../db/repositories/projects.ts";
+import { resolveExecutorSelection, type AgentRecommendation } from "../../pi/agentOrchestration.ts";
 import { makeDomainID, parseDomainID, type DomainActor } from "../../xuanwu/coreDomainContracts.ts";
 import {
   evaluateWorkTransition,
@@ -30,9 +32,10 @@ const SHADOW_POLICY_REF = "xuanwu-work-shadow-v1";
 export type IssueWorkShadowMode = "disabled" | "best_effort";
 export type IssueWorkAction = "cancel" | "enqueue" | "retry";
 
-export type IssueWorkPatch = Partial<Pick<WorkLedgerEntry, "goal" | "title">>;
+export type IssueWorkPatch = Partial<Pick<WorkLedgerEntry, "agent_profile_id" | "goal" | "title">>;
 
 export type IssueWorkCreateCommand = {
+  agent_profile_id?: string;
   audit: WorkTransitionAudit;
   depends_on_issue_ids?: number[];
   goal: string;
@@ -127,19 +130,21 @@ export function getIssueAsWork(db: RunnerDatabase, issueID: number): WorkLedgerE
 export function listIssueBackedWorks(db: RunnerDatabase, filter: IssueFilter = {}): WorkLedgerEntry[] {
   const issues = listIssues(db, filter);
   const createdEvents = latestIssueEventsByIssueID(db, issues.map((issue) => issue.id), "issue.created");
-  return issues.map((issue) => issueAsWork(issue, createdEvents.get(issue.id)));
+  return issues.map((issue) => projectIssueAsWork(db, issue, createdEvents.get(issue.id)));
 }
 
 export function countIssueBackedWorks(db: RunnerDatabase, filter: IssueFilter = {}): number {
   return countIssues(db, filter);
 }
 
-export function projectIssueAsWork(db: RunnerDatabase, issue: Issue): WorkLedgerEntry {
-  const createdEvent = listIssueEvents(db, issue.id, { limit: 1, types: ["issue.created"] })[0];
-  return issueAsWork(issue, createdEvent);
+export function projectIssueAsWork(db: RunnerDatabase, issue: Issue, created?: IssueEvent): WorkLedgerEntry {
+  const createdEvent = created ?? listIssueEvents(db, issue.id, { limit: 1, types: ["issue.created"] })[0];
+  const project = getProject(db, issue.project_id);
+  const selection = project ? resolveExecutorSelection(db, project, issue) : null;
+  return issueAsWork(issue, createdEvent, selection);
 }
 
-export function issueAsWork(issue: Issue, createdEvent?: IssueEvent): WorkLedgerEntry {
+export function issueAsWork(issue: Issue, createdEvent?: IssueEvent, selection?: AgentRecommendation | null): WorkLedgerEntry {
   const status = issueStatusToWorkStatus(issue.status);
   return {
     acceptance: {
@@ -154,6 +159,11 @@ export function issueAsWork(issue: Issue, createdEvent?: IssueEvent): WorkLedger
       version: 1
     },
     created_at: issue.created_at,
+    agent_profile_id: issue.agent_profile_id,
+    ...(selection ? {
+      effective_agent_profile: effectiveAgentProfile(issue, selection),
+      effective_provider: selection.provider
+    } : {}),
     goal: issue.description.trim() || issue.title,
     id: issueIDToWorkID(issue.id),
     owner: { kind: "project", project_id: issue.project_id },
@@ -191,6 +201,7 @@ export function createIssueBackedWork(
     const replay = replayIssueWorkCreate(db, command.audit.event_id, fingerprint);
     if (replay) return replay;
     const issue = createIssue(db, {
+      agent_profile_id: command.agent_profile_id,
       depends_on_issue_ids: command.depends_on_issue_ids,
       description: command.goal,
       project_id: command.project_id,
@@ -234,6 +245,10 @@ export function updateIssueBackedWork(
       ...revisionViolations(command.expected_revision, before.revision),
       ...patchViolations(command.patch)
     ];
+    if (before.status === "in_progress" && command.patch.agent_profile_id !== undefined &&
+        command.patch.agent_profile_id !== before.agent_profile_id) {
+      violations.push("running Work agent_profile_id cannot be changed");
+    }
     if (violations.length > 0) {
       return rejectAdapterWrite(db, issueID, before, command.audit, fingerprint, "update", violations, command.patch);
     }
@@ -502,8 +517,9 @@ function applyLegacyIssueAction(db: RunnerDatabase, issueID: number, action: Iss
   return cancelIssue(db, issueID, reason);
 }
 
-function issuePatch(patch: IssueWorkPatch): { description?: string; title?: string } {
+function issuePatch(patch: IssueWorkPatch): { agent_profile_id?: string; description?: string; title?: string } {
   return {
+    ...(patch.agent_profile_id !== undefined ? { agent_profile_id: patch.agent_profile_id } : {}),
     ...(patch.goal !== undefined ? { description: patch.goal } : {}),
     ...(patch.title !== undefined ? { title: patch.title } : {})
   };
@@ -512,12 +528,31 @@ function issuePatch(patch: IssueWorkPatch): { description?: string; title?: stri
 function patchViolations(patch: IssueWorkPatch): string[] {
   const keys = Object.keys(patch);
   const violations: string[] = [];
-  const unsupported = keys.filter((key) => key !== "goal" && key !== "title");
+  const unsupported = keys.filter((key) => key !== "agent_profile_id" && key !== "goal" && key !== "title");
   if (unsupported.length > 0) violations.push(`unsupported Issue-backed Work fields: ${unsupported.join(", ")}`);
   if (keys.length === 0) violations.push("Issue-backed Work patch is empty");
   if (patch.title !== undefined && patch.title.trim() === "") violations.push("Work title is required");
   if (patch.goal !== undefined && patch.goal.trim() === "") violations.push("Work goal is required");
   return violations;
+}
+
+function effectiveAgentProfile(issue: Issue, selection: AgentRecommendation): NonNullable<WorkLedgerEntry["effective_agent_profile"]> {
+  const reason = selection.selection_reason;
+  const source = issue.agent_profile_id
+    ? "work"
+    : reason.startsWith("project default_agent_profile_id")
+      ? "project_default"
+      : selection.profile_id
+        ? "strategy"
+        : "project_provider";
+  return {
+    id: selection.profile_id,
+    model: selection.model,
+    name: selection.profile_name,
+    provider: selection.provider,
+    selection_reason: reason,
+    source
+  };
 }
 
 function createViolations(command: IssueWorkCreateCommand): string[] {
@@ -728,7 +763,15 @@ function recordShadowMismatch(
 }
 
 function withoutPersistenceFields(work: WorkLedgerEntry): Omit<WorkLedgerEntry, "created_at" | "revision" | "updated_at"> {
-  const { created_at: _createdAt, revision: _revision, updated_at: _updatedAt, ...input } = work;
+  const {
+    agent_profile_id: _agentProfileID,
+    created_at: _createdAt,
+    effective_agent_profile: _effectiveAgentProfile,
+    effective_provider: _effectiveProvider,
+    revision: _revision,
+    updated_at: _updatedAt,
+    ...input
+  } = work;
   return input;
 }
 

@@ -15,11 +15,12 @@ type RuntimeSettings = {
 export async function withSessionRuntimeSettings(
   db: RunnerDatabase,
   sessionId: string,
-  detail: Record<string, unknown>
+  detail: Record<string, unknown>,
+  provider = "codex"
 ): Promise<Record<string, unknown>> {
   const settings = {
-    ...runtimeSettingsFromAgentSession(db, sessionId),
-    ...await runtimeSettingsFromRolloutPath(stringValue(detail.path)),
+    ...runtimeSettingsFromAgentSession(db, sessionId, provider),
+    ...(provider === "codex" ? await runtimeSettingsFromRolloutPath(stringValue(detail.path)) : {}),
     ...runtimeSettings(detail)
   };
   if (!hasRuntimeSettings(settings)) return detail;
@@ -34,8 +35,8 @@ export function runtimeRawRef(
   return turnId ? { ...settings, provider_turn_id: turnId } : settings;
 }
 
-export function runtimeSettingsFromAgentSession(db: RunnerDatabase, sessionId: string): RuntimeSettings {
-  const raw = jsonRecord(getAgentSession(db, `codex:${sessionId}`)?.raw_ref);
+export function runtimeSettingsFromAgentSession(db: RunnerDatabase, sessionId: string, provider = "codex"): RuntimeSettings {
+  const raw = jsonRecord(getAgentSession(db, `${provider}:${sessionId}`)?.raw_ref);
   return runtimeSettings(raw);
 }
 

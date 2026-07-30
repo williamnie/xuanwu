@@ -18,7 +18,7 @@ import { getIssue, listIssueRuns, listIssues, type Issue } from "../db/repositor
 import type { RunnerDatabase } from "../db/database.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
-import type { ExecutorProvider, ExecutorProviderId, InterruptInput, SessionRef } from "../providers/types.ts";
+import { isExecutorProviderId, type ExecutorProvider, type ExecutorProviderId, type InterruptInput, type SessionRef } from "../providers/types.ts";
 
 export type InterruptRuntime = {
   bus?: EventBus;
@@ -81,11 +81,11 @@ export async function interruptSession(
   runtime: InterruptRuntime = {}
 ): Promise<SessionInterruptResult> {
   const session = sessionRef(rawSessionID, latestTurnID(db, rawSessionID));
-  const linked = linkedRunningIssue(db, session.sessionId);
+  const linked = linkedRunningIssue(db, session);
   if (linked) {
     return { interrupted: await interruptLinkedIssue(db, linked, SESSION_INTERRUPT_REASON, runtime) };
   }
-  if (!session.turnId) return { interrupted: false };
+  if (!session.turnId && session.provider === "codex") return { interrupted: false };
   const error = await interruptProviderTurn(db, 0, session, SESSION_INTERRUPT_REASON, runtime);
   return { interrupted: !error };
 }
@@ -234,11 +234,14 @@ async function interruptWithTimeout(
   }
 }
 
-function linkedRunningIssue(db: RunnerDatabase, threadID: string): Issue | null {
-  const issue = listIssues(db, { status: "in_progress" }).find((item) => {
-    return item.codex_thread_id === threadID && item.codex_turn_id !== "";
-  }) ?? null;
-  return issue ? issueWithLatestRun(db, issue) : null;
+function linkedRunningIssue(db: RunnerDatabase, session: SessionRef): Issue | null {
+  for (const issue of listIssues(db, { status: "in_progress" })) {
+    const hydrated = issueWithLatestRun(db, issue);
+    const run = hydrated.latest_run;
+    if (run?.ended_at === "" && run.provider === session.provider && run.provider_session_id === session.sessionId) return hydrated;
+    if (session.provider === "codex" && issue.codex_thread_id === session.sessionId && issue.codex_turn_id !== "") return hydrated;
+  }
+  return null;
 }
 
 function issueWithLatestRun(db: RunnerDatabase, issue: Issue): Issue {
@@ -271,7 +274,8 @@ function normalizeSessionKey(rawSessionID: string): string {
 function sessionRef(rawSessionID: string, turnID: string): SessionRef {
   const key = normalizeSessionKey(rawSessionID);
   const separator = key.indexOf(":");
-  const provider = key.slice(0, separator) as ExecutorProviderId;
+  const provider = key.slice(0, separator);
+  if (!isExecutorProviderId(provider)) throw new Error(`provider "${provider}" interrupt unavailable`);
   return { provider, sessionId: key.slice(separator + 1), ...(turnID === "" ? {} : { turnId: turnID }) };
 }
 

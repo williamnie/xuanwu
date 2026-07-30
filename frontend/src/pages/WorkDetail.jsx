@@ -20,6 +20,7 @@ import { workApi } from '../api/work.js';
 import MarkdownPreview from '../components/editor/MarkdownPreview.jsx';
 import { message } from '../store/toastStore.js';
 import WorkEditorDialog from './work/WorkEditorDialog.jsx';
+import { workProfileSummary } from './work/workProfileRouting.js';
 import WorkDeliveryView from './work/WorkDeliveryView.jsx';
 import { handoffHref } from './handoffPageModel.js';
 import { issueIdFromWorkId } from './workBoardModel.js';
@@ -221,6 +222,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   if (error || !work) return <WorkDetailFailure error={error} navigateTo={navigateTo} />;
 
   const latestRun = overview.runs[0];
+  const profileSummary = workProfileSummary(work, latestRun);
   const latestHandoff = overview.handoffs[0];
   const passedEvidence = overview.evidence.filter(item => item.status === 'passed').length;
   const failedEvidence = overview.evidence.filter(item => item.status === 'failed').length;
@@ -285,6 +287,18 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
               <SectionHeading eyebrow={overviewLoading ? t('work.loading') : t('work.runsCount', { count: overview.runs.length })} title={t('work.latestRun')} />
               <ResourceError error={overviewErrors.runs} />
               {latestRun ? <LatestRunCard navigateTo={navigateTo} run={latestRun} /> : <EmptySection text={t('work.noRun')} />}
+            </section>
+
+            <section className="work-detail-panel work-provider-profile-panel">
+              <SectionHeading eyebrow="Execution routing" title="Agent Profile / Provider" />
+              <dl className="work-provider-profile-facts">
+                <div><dt>Work selection</dt><dd>{profileSummary.selection}</dd></div>
+                <div><dt>Effective profile</dt><dd>{profileSummary.effectiveProfile}</dd></div>
+                <div><dt>Effective provider</dt><dd>{profileSummary.effectiveProvider}</dd></div>
+                <div><dt>Effective model</dt><dd>{profileSummary.effectiveModel}</dd></div>
+                <div><dt>Selection source</dt><dd>{profileSummary.source}</dd></div>
+                <div><dt>Latest Run actual provider</dt><dd>{profileSummary.runProvider}</dd></div>
+              </dl>
             </section>
 
             <section className="work-detail-panel">

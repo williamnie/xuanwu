@@ -4,11 +4,19 @@ import { getProject, ProjectNotFoundError, type Project } from "../db/repositori
 import { lastSessionProject } from "../db/repositories/preferences.ts";
 import { interruptSession } from "../runner/interrupt.ts";
 import type { EventBus } from "../events/bus.ts";
-import type { ExecutorProvider, ExecutorProviderId, SessionCreateInput, SessionMessageInput } from "../providers/types.ts";
+import {
+  isExecutorProviderId,
+  type ExecutorCapability,
+  type ExecutorProvider,
+  type ExecutorProviderId,
+  type SessionCreateInput,
+  type SessionMessageInput
+} from "../providers/types.ts";
 import { runtimeRawRef, runtimeSettingsFromAgentSession, withSessionRuntimeSettings } from "./sessionRuntimeSettings.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { reconcileCodexSessionIndex, reconcileCodexSessionIndexes } from "./sessionIndexReconciler.ts";
+import { redactedUserVisibleText } from "../util/redact.ts";
 
 export type SessionApiContext = {
   bus?: EventBus;
@@ -16,6 +24,8 @@ export type SessionApiContext = {
   interruptTimeoutMs?: number;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
+
+type QualifiedSessionRef = { key: string; provider: string; sessionId: string };
 
 export function registerSessionRoutes(router: Router, context: SessionApiContext): void {
   router.get("/api/sessions", (request) => asyncResponse(() => listSessions(context, request)));
@@ -37,55 +47,129 @@ export function registerSessionRoutes(router: Router, context: SessionApiContext
 }
 
 async function listSessions(context: SessionApiContext, request: Request) {
-  const indexed = indexedSessionList(context, request);
-  if (indexed) return indexed;
-  const result = await codexProvider(context).listSessions?.(sessionListInput(request));
-  if (!result) throw new Error('provider "codex" 不支持 capability "sessions"');
-  reconcileCodexSessionIndexes(context.database, result.data);
-  return result;
+  const params = new URL(request.url).searchParams;
+  const filter = {
+    projectId: cleanParam(params.get("project_id") || params.get("projectId")),
+    provider: cleanParam(params.get("provider")),
+    role: cleanParam(params.get("role") || params.get("agent_role"))
+  };
+  const project = filter.projectId ? projectForSession(context, filter.projectId) : null;
+  const limit = sessionLimit(params.get("limit"));
+  const indexed = listAgentSessions(context.database, { ...filter, limit }).map(publicAgentSession);
+  if (filter.role || (filter.provider && !isExecutorProviderId(filter.provider))) {
+    return { data: indexed, nextCursor: "" };
+  }
+  const providers = providersForList(context, filter);
+  const merged = new Map(indexed.map((item) => [String(item.id), item]));
+  const providerErrors: Array<{ error: string; provider: string }> = [];
+  for (const provider of providers) {
+    try {
+      const runtimeStatus = provider.runtimeStatus?.();
+      if (runtimeStatus?.ready === false) {
+        throw new Error(`provider "${provider.id}" 尚未就绪: ${runtimeStatus.reason || "configuration required"}`);
+      }
+      const result = await provider.listSessions!({
+        ...sessionListInput(request),
+        ...(project ? { cwd: project.cwd } : {})
+      });
+      if (provider.id === "codex") reconcileCodexSessionIndexes(context.database, result.data);
+      for (const raw of result.data) {
+        const item = qualifiedProviderSession(provider.id, raw);
+        const key = String(item.id);
+        const existing = merged.get(key);
+        merged.set(key, {
+          ...(existing ?? {}),
+          ...item,
+          // agent_sessions is the provider-neutral lifecycle index. Provider
+          // discovery enriches it, but must not downgrade an indexed running
+          // session to an idle historical summary.
+          ...(provider.id !== "codex" && existing?.status ? { status: existing.status } : {})
+        });
+      }
+    } catch (error) {
+      providerErrors.push({ provider: provider.id, error: safeSessionError(error) });
+    }
+  }
+  const data = [...merged.values()]
+    .filter((item) => !filter.provider || item.provider === filter.provider)
+    .slice(0, limit);
+  return { data, nextCursor: "", ...(providerErrors.length > 0 ? { provider_errors: providerErrors } : {}) };
 }
 
 async function createSession(context: SessionApiContext, body: Record<string, unknown>) {
-  const input = sessionCreateInput(context, body);
-  const result = await codexProvider(context).createSession?.(input);
-  if (!result) throw new Error('provider "codex" 不支持 capability "sessions"');
-  persistSession(context, input, result.provider_session_id, result.provider_turn_id ?? "");
-  return result;
+  const project = projectForSession(context, stringBody(body, "project_id"));
+  const providerID = firstNonEmpty(stringBody(body, "provider"), project?.provider ?? "codex");
+  const provider = capableProvider(context, providerID, "sessions", "createSession");
+  const input = sessionCreateInput(body, project);
+  const result = await provider.createSession!(input);
+  assertProviderResult(provider.id, result.provider);
+  persistSession(context, provider.id, input, result.provider_session_id, result.provider_turn_id ?? "");
+  return { ...result, id: `${provider.id}:${result.provider_session_id}`, provider: provider.id };
 }
 
 async function readSession(context: SessionApiContext, rawSessionID: string) {
-  const indexed = indexedSessionDetail(context.database, rawSessionID);
-  if (indexed) return indexed;
-  const sessionId = parseSessionID(rawSessionID);
-  const result = await readProviderSession(context, sessionId);
-  if (!result) throw new Error('provider "codex" 不支持 capability "resume_session"');
-  reconcileCodexSessionIndex(context.database, sessionId, result);
-  return await withSessionRuntimeSettings(context.database, sessionId, result);
-}
-
-async function readProviderSession(context: SessionApiContext, sessionId: string): Promise<Record<string, unknown> | undefined> {
-  try {
-    return await codexProvider(context).readSession?.(sessionId);
-  } catch (error) {
-    const fallback = pendingCodexSessionFallback(context.database, sessionId, error);
-    if (fallback) return fallback;
-    throw error;
+  const ref = parseSessionRef(rawSessionID);
+  if (!isExecutorProviderId(ref.provider)) {
+    const indexed = publicAgentSessionOrNull(getAgentSession(context.database, ref.key));
+    if (!indexed) throw new Error(`session provider "${ref.provider}" 当前 runner 未注册`);
+    return indexed;
   }
+  const provider = capableProvider(context, ref.provider, "sessions", "readSession");
+  let result: Record<string, unknown>;
+  try {
+    result = await provider.readSession!(ref.sessionId);
+  } catch (error) {
+    const fallback = ref.provider === "codex" ? pendingCodexSessionFallback(context.database, ref.sessionId, error) : null;
+    if (!fallback) throw error;
+    result = fallback;
+  }
+  if (ref.provider === "codex") reconcileCodexSessionIndex(context.database, ref.sessionId, result);
+  return await withSessionRuntimeSettings(
+    context.database,
+    ref.sessionId,
+    qualifiedProviderSession(ref.provider, result),
+    ref.provider
+  );
 }
 
 async function sessionMessage(context: SessionApiContext, rawSessionID: string, body: Record<string, unknown>) {
-  const sessionId = parseSessionID(rawSessionID);
-  const input = sessionMessageInput(context, sessionId, body);
-  const result = await codexProvider(context).sendSessionMessage?.(input);
-  if (!result) throw new Error('provider "codex" 不支持 capability "resume_session"');
-  persistSessionTurn(context, input, result.provider_session_id, result.turn_id);
+  const ref = parseSessionRef(rawSessionID);
+  if (!isExecutorProviderId(ref.provider)) throw new Error(`provider "${ref.provider}" 不支持 capability "resume_session"`);
+  const provider = capableProvider(context, ref.provider, "resume_session", "sendSessionMessage");
+  const input = sessionMessageInput(context, ref, body);
+  const result = await provider.sendSessionMessage!(input);
+  assertProviderResult(provider.id, result.provider);
+  persistSessionTurn(context, provider.id, input, result.provider_session_id, result.turn_id);
   return { thread_id: result.provider_session_id, turn_id: result.turn_id };
 }
 
-function codexProvider(context: SessionApiContext): ExecutorProvider {
-  const provider = context.providers?.codex;
-  if (!provider) throw new Error('provider "codex" 当前 runner 未注册');
+function capableProvider(
+  context: SessionApiContext,
+  rawProviderID: string,
+  capability: ExecutorCapability,
+  method: "createSession" | "listSessions" | "readSession" | "sendSessionMessage"
+): ExecutorProvider {
+  const providerID = rawProviderID.trim();
+  if (!isExecutorProviderId(providerID)) throw new Error(`session provider "${providerID}" 当前 runner 未注册`);
+  const provider = context.providers?.[providerID];
+  if (!provider) throw new Error(`provider "${providerID}" 当前 runner 未注册`);
+  if (!provider.capabilities.includes(capability) || typeof provider[method] !== "function") {
+    throw new Error(`provider "${providerID}" 不支持 capability "${capability}"`);
+  }
+  const status = provider.runtimeStatus?.();
+  if (status?.ready === false) {
+    throw new Error(`provider "${providerID}" 尚未就绪: ${status.reason || "configuration required"}`);
+  }
   return provider;
+}
+
+function providersForList(context: SessionApiContext, filter: { projectId: string; provider: string }): ExecutorProvider[] {
+  const wanted = filter.provider || (filter.projectId ? getProject(context.database, filter.projectId)?.provider ?? "" : "");
+  return Object.values(context.providers ?? {}).filter((provider): provider is ExecutorProvider => {
+    if (!provider || (wanted && provider.id !== wanted)) return false;
+    if (!provider.capabilities.includes("sessions") || typeof provider.listSessions !== "function") return false;
+    return wanted !== "" || provider.runtimeStatus?.().ready !== false;
+  });
 }
 
 function sessionListInput(request: Request): { cursor: string; limit: number } {
@@ -93,20 +177,7 @@ function sessionListInput(request: Request): { cursor: string; limit: number } {
   return { cursor: cleanParam(params.get("cursor")), limit: sessionLimit(params.get("limit")) };
 }
 
-function indexedSessionList(context: SessionApiContext, request: Request): { data: Array<Record<string, unknown>>; nextCursor: string } | null {
-  const params = new URL(request.url).searchParams;
-  const filter = {
-    projectId: cleanParam(params.get("project_id") || params.get("projectId")),
-    provider: cleanParam(params.get("provider")),
-    role: cleanParam(params.get("role") || params.get("agent_role"))
-  };
-  if (!filter.projectId && !filter.provider && !filter.role) return null;
-  const data = listAgentSessions(context.database, filter).map(publicAgentSession);
-  return { data, nextCursor: "" };
-}
-
-function sessionCreateInput(context: SessionApiContext, body: Record<string, unknown>): SessionCreateInput {
-  const project = projectForSession(context, stringBody(body, "project_id"));
+function sessionCreateInput(body: Record<string, unknown>, project: Project | null): SessionCreateInput {
   return {
     projectId: project?.id,
     cwd: firstNonEmpty(stringBody(body, "cwd"), project?.cwd ?? ""),
@@ -119,18 +190,23 @@ function sessionCreateInput(context: SessionApiContext, body: Record<string, unk
   };
 }
 
-function sessionMessageInput(context: SessionApiContext, sessionId: string, body: Record<string, unknown>): SessionMessageInput {
+function sessionMessageInput(context: SessionApiContext, ref: QualifiedSessionRef, body: Record<string, unknown>): SessionMessageInput {
   const mode = stringBody(body, "mode");
+  const indexed = getAgentSession(context.database, ref.key);
+  const project = indexed?.project_id ? getProject(context.database, indexed.project_id) : null;
+  const stored = runtimeSettingsFromAgentSession(context.database, ref.sessionId, ref.provider);
   return {
-    sessionId,
-    turnId: mode === "steer" ? latestSessionTurnID(context.database, sessionId) : "",
+    projectId: project?.id,
+    cwd: project?.cwd ?? "",
+    sessionId: ref.sessionId,
+    turnId: mode === "steer" ? latestSessionTurnID(context.database, ref) : "",
     prompt: stringBody(body, "prompt"),
     mode,
-    model: stringBody(body, "model"),
-    reasoningEffort: stringBody(body, "reasoning_effort"),
-    serviceTier: stringBody(body, "service_tier"),
-    approvalPolicy: stringBody(body, "approval_policy"),
-    sandbox: stringBody(body, "sandbox")
+    model: firstNonEmpty(stringBody(body, "model"), stored.model ?? ""),
+    reasoningEffort: firstNonEmpty(stringBody(body, "reasoning_effort"), stored.reasoning_effort ?? ""),
+    serviceTier: firstNonEmpty(stringBody(body, "service_tier"), stored.service_tier ?? ""),
+    approvalPolicy: firstNonEmpty(stringBody(body, "approval_policy"), stored.approval_policy ?? ""),
+    sandbox: firstNonEmpty(stringBody(body, "sandbox"), stored.sandbox ?? "")
   };
 }
 
@@ -149,7 +225,7 @@ async function asyncResponse(write: () => Promise<unknown>, status = 200): Promi
     return json(await write(), { status });
   } catch (error) {
     if (error instanceof ProjectNotFoundError) throw new HttpError(404, error.message);
-    if (error instanceof Error) throw new HttpError(400, error.message);
+    if (error instanceof Error) throw new HttpError(400, safeSessionError(error));
     throw error;
   }
 }
@@ -162,19 +238,13 @@ function sessionID(request: Request): string {
   return id;
 }
 
-function parseSessionID(rawSessionID: string): string {
-  const separator = rawSessionID.indexOf(":");
-  if (separator < 0) return rawSessionID.trim();
-  const provider = rawSessionID.slice(0, separator).trim();
-  if (provider !== "codex") throw new Error("session provider 暂不支持");
-  return rawSessionID.slice(separator + 1).trim();
-}
-
-function indexedSessionDetail(db: RunnerDatabase, rawSessionID: string): Record<string, unknown> | null {
-  const separator = rawSessionID.indexOf(":");
-  if (separator < 0) return null;
-  if (rawSessionID.slice(0, separator).trim() === "codex") return null;
-  return publicAgentSessionOrNull(getAgentSession(db, rawSessionID));
+function parseSessionRef(rawSessionID: string): QualifiedSessionRef {
+  const clean = rawSessionID.trim();
+  const separator = clean.indexOf(":");
+  const provider = separator < 0 ? "codex" : clean.slice(0, separator).trim();
+  const sessionId = (separator < 0 ? clean : clean.slice(separator + 1)).trim();
+  if (provider === "" || sessionId === "") throw new Error("session ref 无效");
+  return { key: `${provider}:${sessionId}`, provider, sessionId };
 }
 
 function publicAgentSessionOrNull(session: AgentSession | null): Record<string, unknown> | null {
@@ -185,41 +255,72 @@ function publicAgentSession(session: AgentSession): Record<string, unknown> {
   return { ...session, id: session.session_key };
 }
 
+function qualifiedProviderSession(provider: string, session: Record<string, unknown>): Record<string, unknown> {
+  const providerSessionID = firstNonEmpty(
+    stringValue(session.provider_session_id),
+    stringValue(session.sessionId),
+    stringValue(session.thread_id),
+    providerIDFromKey(stringValue(session.id), provider)
+  );
+  return {
+    ...session,
+    id: providerSessionID ? `${provider}:${providerSessionID}` : stringValue(session.id),
+    provider,
+    ...(providerSessionID ? { provider_session_id: providerSessionID } : {})
+  };
+}
+
+function providerIDFromKey(value: string, provider: string): string {
+  return value.startsWith(`${provider}:`) ? value.slice(provider.length + 1).trim() : "";
+}
+
 function projectForSession(context: SessionApiContext, projectId: string): Project | null {
   if (projectId === "") return null;
   const project = getProject(context.database, projectId);
   if (!project) throw new ProjectNotFoundError();
-  if (project.provider !== "codex") throw new Error(`provider "${project.provider}" 不支持 capability "sessions"`);
   return project;
 }
 
-function persistSession(context: SessionApiContext, input: SessionCreateInput, sessionId: string, turnId: string): void {
+function persistSession(
+  context: SessionApiContext,
+  provider: ExecutorProviderId,
+  input: SessionCreateInput,
+  sessionId: string,
+  turnId: string
+): void {
   if (sessionId === "") return;
   upsertAgentSession(context.database, {
-    provider: "codex",
+    provider,
     provider_session_id: sessionId,
     project_id: input.projectId ?? "",
     preview: sessionPreview(input.prompt ?? ""),
     raw_ref: runtimeRawRef(input, turnId),
-    status: input.prompt?.trim() ? "running" : "idle"
+    status: provider === "claude" ? "idle" : input.prompt?.trim() ? "running" : "idle"
   });
 }
 
-function persistSessionTurn(context: SessionApiContext, input: SessionMessageInput, sessionId: string, turnId: string): void {
+function persistSessionTurn(
+  context: SessionApiContext,
+  provider: ExecutorProviderId,
+  input: SessionMessageInput,
+  sessionId: string,
+  turnId: string
+): void {
   if (sessionId === "" || turnId === "") return;
   upsertAgentSession(context.database, {
-    provider: "codex",
+    provider,
     provider_session_id: sessionId,
+    project_id: input.projectId ?? "",
     raw_ref: {
-      ...runtimeSettingsFromAgentSession(context.database, sessionId),
+      ...runtimeSettingsFromAgentSession(context.database, sessionId, provider),
       ...runtimeRawRef(input, turnId)
     },
-    status: "running"
+    status: provider === "claude" ? "idle" : "running"
   });
 }
 
-function latestSessionTurnID(db: RunnerDatabase, sessionId: string): string {
-  const session = getAgentSession(db, `codex:${sessionId}`);
+function latestSessionTurnID(db: RunnerDatabase, ref: QualifiedSessionRef): string {
+  const session = getAgentSession(db, ref.key);
   if (!session?.raw_ref) return "";
   try {
     const raw = JSON.parse(session.raw_ref) as Record<string, unknown>;
@@ -237,6 +338,10 @@ function sessionLimit(value: string | null): number {
 
 function stringBody(body: Record<string, unknown>, key: string): string {
   return typeof body[key] === "string" ? body[key].trim() : "";
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function firstNonEmpty(...values: string[]): string {
@@ -272,4 +377,12 @@ function isEmptyRolloutError(error: unknown): boolean {
 function sessionPreview(prompt: string): string {
   const text = prompt.trim().replace(/\s+/g, " ");
   return text.length <= 120 ? text : `${text.slice(0, 119)}…`;
+}
+
+function assertProviderResult(expected: ExecutorProviderId, actual: ExecutorProviderId): void {
+  if (actual !== expected) throw new Error(`provider result mismatch: expected ${expected}, received ${actual}`);
+}
+
+function safeSessionError(error: unknown): string {
+  return redactedUserVisibleText(error instanceof Error ? error.message : String(error)).slice(0, 500) || "provider request failed";
 }

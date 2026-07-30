@@ -77,6 +77,16 @@ export type WorkAcceptanceContract = {
 
 export type WorkLedgerEntry = Omit<CoreWork, "acceptance_criteria" | "source_ref"> & {
   acceptance: WorkAcceptanceContract;
+  agent_profile_id?: string;
+  effective_agent_profile?: {
+    id: string;
+    model: string;
+    name: string;
+    provider: string;
+    selection_reason: string;
+    source: "project_default" | "project_provider" | "strategy" | "work";
+  };
+  effective_provider?: string;
   provenance: WorkProvenance;
   revision: number;
   title: string;

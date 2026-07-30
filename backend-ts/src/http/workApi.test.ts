@@ -4,11 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import { createAgentProfile } from "../db/repositories/agentProfiles.ts";
+import { getIssue } from "../db/repositories/issues.ts";
 import { insertWorkRecord, insertWorkRelationRecord } from "../db/repositories/workLedger.ts";
 import type { DependencyRelation } from "../domain/work/contracts.ts";
 import { readIssueDependency } from "../domain/work/issueDependency.ts";
 import { getIssueAsWork, issueIDToWorkID, workIDToIssueID } from "../domain/work/issueAdapter.ts";
 import { createDefaultRouter, createRequestHandler } from "./server.ts";
+import type { ExecutorProvider, ExecutorProviderId, ProviderRunInput } from "../providers/types.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const AUTH_TOKEN = "work-api-test-token";
@@ -328,7 +331,119 @@ describe("Work HTTP API", () => {
       db.close();
     }
   });
+
+  test("creates and patches per-Work Agent Profiles with effective provider and running lock", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      createAgentProfile(db, { id: "codex-work", name: "Codex Work", provider: "codex", model: "gpt-5.6" });
+      createAgentProfile(db, { id: "claude-work", name: "Claude Work", provider: "claude", model: "claude-sonnet" });
+      db.sqlite.run("update projects set default_agent_profile_id='codex-work' where id='demo'");
+      const router = createDefaultRouter({
+        database: db,
+        providers: { codex: readyProvider("codex"), claude: readyProvider("claude") }
+      });
+
+      const inherited = await router.handle(jsonRequest("/api/works", "POST", {
+        audit: audit("work-inherited", "user"),
+        agent_profile_id: "",
+        goal: "inherit default",
+        project_id: "demo",
+        status: "triage",
+        title: "Inherited",
+        type: "engineering_task"
+      }));
+      const claudeCreated = await router.handle(jsonRequest("/api/works", "POST", {
+        audit: audit("work-claude", "user"),
+        agent_profile_id: "claude-work",
+        goal: "use Claude",
+        project_id: "demo",
+        status: "triage",
+        title: "Claude Work",
+        type: "engineering_task"
+      }));
+      const inheritedWork = (await body(inherited)).work as Record<string, any>;
+      const claudeWork = (await body(claudeCreated)).work as Record<string, any>;
+
+      expect(inheritedWork).toMatchObject({
+        agent_profile_id: "",
+        effective_provider: "codex",
+        effective_agent_profile: { id: "codex-work", provider: "codex", source: "project_default" }
+      });
+      expect(claudeWork).toMatchObject({
+        agent_profile_id: "claude-work",
+        effective_provider: "claude",
+        effective_agent_profile: { id: "claude-work", model: "claude-sonnet", source: "work" }
+      });
+
+      const patched = await router.handle(jsonRequest(
+        `/api/works/${encodeURIComponent(claudeWork.id)}`,
+        "PATCH",
+        { audit: audit("work-switch", "user"), expected_revision: claudeWork.revision, agent_profile_id: "codex-work" }
+      ));
+      expect(await body(patched)).toMatchObject({
+        work: { agent_profile_id: "codex-work", effective_provider: "codex", effective_agent_profile: { source: "work" } }
+      });
+
+      const invalid = await router.handle(jsonRequest("/api/works", "POST", {
+        audit: audit("work-invalid-profile", "user"),
+        agent_profile_id: "missing-profile",
+        goal: "must fail",
+        project_id: "demo",
+        title: "Invalid profile"
+      }));
+      expect(invalid.status).toBe(400);
+      expect(await body(invalid)).toMatchObject({ code: "invalid_agent_profile" });
+
+      const issueID = workIDToIssueID(String(claudeWork.id));
+      db.sqlite.run("update issues set status='in_progress' where id=?", [issueID]);
+      const runningWork = getIssueAsWork(db, issueID)!;
+      const sameProfile = await router.handle(jsonRequest(
+        `/api/works/${encodeURIComponent(claudeWork.id)}`,
+        "PATCH",
+        {
+          audit: audit("work-running-same-profile", "user"),
+          expected_revision: runningWork.revision,
+          agent_profile_id: "codex-work",
+          title: "Claude Work while running"
+        }
+      ));
+      expect(sameProfile.status).toBe(200);
+      expect(await body(sameProfile)).toMatchObject({
+        work: { agent_profile_id: "codex-work", status: "in_progress", title: "Claude Work while running" }
+      });
+      const revisedRunningWork = getIssueAsWork(db, issueID)!;
+      const locked = await router.handle(jsonRequest(
+        `/api/works/${encodeURIComponent(claudeWork.id)}`,
+        "PATCH",
+        { audit: audit("work-running-lock", "user"), expected_revision: revisedRunningWork.revision, agent_profile_id: "" }
+      ));
+      expect(locked.status).toBe(409);
+      expect(await body(locked)).toEqual({
+        code: "running_work_profile_locked",
+        message: "running Work agent_profile_id cannot be changed"
+      });
+      expect(getIssue(db, issueID)?.agent_profile_id).toBe("codex-work");
+    } finally {
+      db.close();
+    }
+  });
 });
+
+function readyProvider(id: "codex" | "claude"): ExecutorProvider {
+  return {
+    id: id as ExecutorProviderId,
+    capabilities: ["issue_execution"],
+    async run(_input: ProviderRunInput) { return { runId: `${id}-unused` }; },
+    runtimeStatus: () => ({
+      active_sessions: 0,
+      api_key_configured: id === "claude",
+      mode: id === "claude" ? "sdk" : "app-server",
+      ready: true,
+      version: "fixture"
+    })
+  };
+}
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-work-api-"));

@@ -14,6 +14,40 @@ import { ClaudeExecutorProvider, type ClaudeProcessFactory } from "./provider.ts
 const tempRoots: string[] = [];
 
 describe("Claude execution-only provider", () => {
+  test("keeps CLI fallback explicit and reports its real command readiness", () => {
+    const injected = new ClaudeExecutorProvider(runtimeConfig({ mode: "cli-fallback" }), {
+      processFactory: scriptedProcessFactory({}).factory
+    });
+    const missing = new ClaudeExecutorProvider(runtimeConfig({ command: "/definitely/missing/claude", mode: "cli-fallback" }));
+
+    expect(injected.capabilities).toEqual(["issue_execution", "interrupt"]);
+    expect(injected.runtimeStatus()).toMatchObject({ mode: "cli-fallback", ready: true });
+    expect(missing.runtimeStatus()).toMatchObject({ mode: "cli-fallback", ready: false });
+  });
+
+  test("reports explicit local CLI login and does not pass parent API credentials to Claude", async () => {
+    const factory = scriptedProcessFactory({ stdout: jsonl([
+      { type: "result", session_id: "local-session", uuid: "local-turn", is_error: false }
+    ]) });
+    const provider = new ClaudeExecutorProvider(runtimeConfig({
+      authMode: "local-cli",
+      env: { ANTHROPIC_API_KEY: "configured-api-key-must-not-win" },
+      mode: "cli-fallback"
+    }), {
+      authInspector: () => ({ auth_method: "claude.ai", checked: true, logged_in: true, provider: "firstParty" }),
+      processFactory: factory.factory
+    });
+    expect(provider.runtimeStatus()).toMatchObject({
+      auth_configured: true,
+      auth_mode: "local-cli",
+      auth_source: "local_cli",
+      mode: "cli-fallback",
+      ready: true
+    });
+    await provider.run(runInput());
+    expect(factory.calls[0]?.env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
   test("spawns Claude stream-json CLI and persists provider runtime/events", async () => {
     const db = await openFixtureDatabase();
     const factory = scriptedProcessFactory({

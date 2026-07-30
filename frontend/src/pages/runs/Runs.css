@@ -687,6 +687,8 @@
 
 .run-provider-drilldown > header > div { align-items: center; display: flex; font-size: 0.7rem; gap: 6px; }
 .run-provider-drilldown > header span { color: var(--text-muted); font-size: 0.62rem; }
+.run-provider-attempt-facts { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 8px 14px; border-bottom: 1px solid var(--border-subtle); color: var(--text-muted); font-size: 0.66rem; }
+.run-provider-attempt-facts strong { color: var(--text-primary); font-weight: 600; margin-left: 4px; }
 .run-provider-drilldown > .sessions-client-container { flex: 1; min-height: 0; }
 
 .run-raw-object { color: var(--text-muted); font-size: 0.65rem; margin-top: 14px; }

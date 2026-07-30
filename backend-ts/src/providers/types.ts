@@ -97,7 +97,21 @@ export type ProviderRunResult = {
   session?: SessionRef;
 };
 
-export type SessionListInput = { cursor?: string; limit?: number };
+export type ProviderRuntimeStatus = {
+  active_sessions: number;
+  api_key_configured: boolean;
+  auth_configured?: boolean;
+  auth_mode?: string;
+  auth_source?: string;
+  executable_ready?: boolean;
+  mode: string;
+  ready: boolean;
+  reason?: string;
+  platform_profile?: Record<string, boolean | string>;
+  version: string;
+};
+
+export type SessionListInput = { cursor?: string; cwd?: string; limit?: number };
 export type SessionListResult = {
   backwardsCursor?: string;
   data: Array<Record<string, unknown>>;
@@ -122,7 +136,9 @@ export type SessionCreateResult = {
   turn_id?: string;
 };
 export type SessionMessageInput = Omit<SessionCreateInput, "cwd" | "projectId"> & {
+  cwd?: string;
   mode?: string;
+  projectId?: string;
   sessionId: string;
   turnId?: string;
 };
@@ -152,6 +168,7 @@ export interface ExecutorProvider {
   sendSessionMessage?(input: SessionMessageInput): Promise<SessionMessageResult>;
   listModels?(): Promise<unknown>;
   resolveApproval?(requestId: string, decision: ApprovalDecision): Promise<void>;
+  runtimeStatus?(): ProviderRuntimeStatus;
   stop?(): Promise<void>;
 }
 

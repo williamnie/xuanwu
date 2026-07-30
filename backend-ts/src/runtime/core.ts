@@ -19,7 +19,7 @@ import {
   writeProcessGroupMemoryAlert
 } from "../observability/processGroupMemory.ts";
 import { primeRuntimeObservability } from "../observability/runtimeObservability.ts";
-import { createClaudeExecutorProvider } from "../providers/claude/provider.ts";
+import { claudeProviderAppEvent, createClaudeExecutorProvider } from "../providers/claude/provider.ts";
 import { createCodexExecutorProvider } from "../providers/codex/provider.ts";
 import { reconcileStaleCodexProcessOwnership } from "../providers/codex/processLifecycle.ts";
 import {
@@ -194,7 +194,10 @@ function executorProviders(config: ReturnType<typeof loadConfig>, bus?: EventBus
     (event) => bus?.publish(event),
     { ownershipFile: codexOwnershipFile }
   );
-  if (claudeConfig) providers.claude = createClaudeExecutorProvider(claudeConfig);
+  if (claudeConfig) providers.claude = createClaudeExecutorProvider(
+    claudeConfig,
+    (event) => bus?.publish(claudeProviderAppEvent(event))
+  );
   return providers;
 }
 

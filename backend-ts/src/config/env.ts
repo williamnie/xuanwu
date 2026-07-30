@@ -1,4 +1,5 @@
 import { delimiter } from "node:path";
+import { readFileSync } from "node:fs";
 import { DEFAULT_ADDR, buildRunnerPaths } from "./paths.ts";
 import { readLocalSettingsSync } from "./localSettings.ts";
 import {
@@ -15,6 +16,7 @@ import { buildGitLabConnectorConfig, type GitLabConnectorConfig, type GitLabConn
 import type { ExecutorProviderId } from "../providers/types.ts";
 import { resolveLocalSettingsSecretRefs } from "../security/secrets/configRefs.ts";
 import { createSecretService } from "../security/secrets/service.ts";
+import { registerSecretForRedaction } from "../security/redactionRegistry.ts";
 
 export const ENV_KEYS = {
   addr: "CODEX_RUNNER_ADDR",
@@ -36,6 +38,14 @@ export const ENV_KEYS = {
   claudeCommand: "CODEX_RUNNER_CLAUDE_CMD",
   claudeCwd: "CODEX_RUNNER_CLAUDE_CWD",
   claudeEnv: "CODEX_RUNNER_CLAUDE_ENV",
+  claudeMode: "CODEX_RUNNER_CLAUDE_MODE",
+  claudeAuthMode: "CODEX_RUNNER_CLAUDE_AUTH_MODE",
+  claudeApiBaseUrl: "CODEX_RUNNER_CLAUDE_API_BASE_URL",
+  claudeApiPath: "CODEX_RUNNER_CLAUDE_API_PATH",
+  claudeApiKey: "CODEX_RUNNER_CLAUDE_API_KEY",
+  claudeApiKeyFile: "CODEX_RUNNER_CLAUDE_API_KEY_FILE",
+  claudePlatformConfigDir: "CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR",
+  claudePlatformProfile: "CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE",
   claudeModel: "CODEX_RUNNER_CLAUDE_MODEL",
   claudeTimeoutMs: "CODEX_RUNNER_CLAUDE_TIMEOUT_MS",
   feishuAllowedChatIds: "FEISHU_ALLOWED_CHAT_IDS",
@@ -86,10 +96,16 @@ type ConfigOverrides =
 type ConfigKey = keyof typeof ENV_KEYS;
 
 export type ProviderRuntimeConfig = {
+  apiBaseUrl?: string;
+  apiPath?: string;
+  authMode?: "environment" | "local-cli" | "platform-profile";
   command: string;
   cwd: string;
   env: Record<string, string>;
+  mode?: "sdk" | "cli-fallback";
   model?: string;
+  platformConfigDir?: string;
+  platformProfile?: string;
   timeoutMs: number;
 };
 
@@ -148,6 +164,12 @@ const FLAG_KEYS: Record<string, ConfigKey> = {
   "--claude-cmd": "claudeCommand",
   "--claude-cwd": "claudeCwd",
   "--claude-env": "claudeEnv",
+  "--claude-mode": "claudeMode",
+  "--claude-auth-mode": "claudeAuthMode",
+  "--claude-api-base-url": "claudeApiBaseUrl",
+  "--claude-api-path": "claudeApiPath",
+  "--claude-platform-config-dir": "claudePlatformConfigDir",
+  "--claude-platform-profile": "claudePlatformProfile",
   "--claude-model": "claudeModel",
   "--claude-timeout-ms": "claudeTimeoutMs"
 };
@@ -278,6 +300,16 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     claudeCwd: cleanValue(env[ENV_KEYS.claudeCwd]),
     cliConnectorDirs: cleanValue(env[ENV_KEYS.cliConnectorDirs]),
     claudeEnv: cleanValue(env[ENV_KEYS.claudeEnv]),
+    claudeMode: cleanValue(env[ENV_KEYS.claudeMode]),
+    claudeAuthMode: cleanValue(env[ENV_KEYS.claudeAuthMode]),
+    claudeApiBaseUrl: cleanValue(env[ENV_KEYS.claudeApiBaseUrl]) ?? cleanValue(env.ANTHROPIC_BASE_URL),
+    claudeApiPath: cleanValue(env[ENV_KEYS.claudeApiPath]),
+    claudeApiKey: claudeApiKeyFromEnv(env),
+    claudeApiKeyFile: cleanValue(env[ENV_KEYS.claudeApiKeyFile]),
+    claudePlatformConfigDir: cleanValue(env[ENV_KEYS.claudePlatformConfigDir]) ?? cleanValue(env.ANTHROPIC_CONFIG_DIR),
+    claudePlatformProfile: cleanValue(env[ENV_KEYS.claudePlatformProfile]) ?? cleanValue(env.ANTHROPIC_PROFILE),
+    claudeAuthToken: cleanValue(env.ANTHROPIC_AUTH_TOKEN),
+    claudeOauthToken: cleanValue(env.CLAUDE_CODE_OAUTH_TOKEN),
     claudeModel: cleanValue(env[ENV_KEYS.claudeModel]),
     claudeTimeoutMs: cleanValue(env[ENV_KEYS.claudeTimeoutMs]),
     feishuAllowedChatIds: cleanValue(env[ENV_KEYS.feishuAllowedChatIds]),
@@ -332,10 +364,20 @@ function cleanValue(value: string | undefined): string | undefined {
 }
 
 type ProviderRuntimeOverrides = {
+  claudeApiBaseUrl?: string;
+  claudeApiKey?: string;
+  claudeApiKeyFile?: string;
+  claudeApiPath?: string;
+  claudeAuthMode?: string;
+  claudeAuthToken?: string;
   claudeCommand?: string;
   claudeCwd?: string;
   claudeEnv?: string;
+  claudeMode?: string;
   claudeModel?: string;
+  claudeOauthToken?: string;
+  claudePlatformConfigDir?: string;
+  claudePlatformProfile?: string;
   claudeTimeoutMs?: number | string;
   codexAppCommand?: string;
   codexCommand?: string;
@@ -384,16 +426,123 @@ export function buildCodexRuntimeConfig(
 }
 
 function buildClaudeRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
+  const legacyEnv = parseEnvOverrides(cleanValue(overrides.claudeEnv) ?? "");
+  const mode = normalizeClaudeProviderMode(overrides.claudeMode);
+  const apiPath = normalizeClaudeApiPath(overrides.claudeApiPath);
+  const configuredBase = cleanValue(overrides.claudeApiBaseUrl) ?? cleanValue(legacyEnv.ANTHROPIC_BASE_URL) ?? "";
+  const apiBaseUrl = joinClaudeApiBase(configuredBase, apiPath);
+  const apiKey = cleanValue(overrides.claudeApiKey)
+    ?? readSecretFile(overrides.claudeApiKeyFile)
+    ?? cleanValue(legacyEnv.ANTHROPIC_API_KEY)
+    ?? "";
+  const authToken = cleanValue(overrides.claudeAuthToken) ?? cleanValue(legacyEnv.ANTHROPIC_AUTH_TOKEN) ?? "";
+  const oauthToken = cleanValue(overrides.claudeOauthToken) ?? cleanValue(legacyEnv.CLAUDE_CODE_OAUTH_TOKEN) ?? "";
+  const platformConfigDir = cleanValue(overrides.claudePlatformConfigDir) ?? cleanValue(legacyEnv.ANTHROPIC_CONFIG_DIR) ?? "";
+  const platformProfile = normalizeClaudePlatformProfile(
+    cleanValue(overrides.claudePlatformProfile) ?? cleanValue(legacyEnv.ANTHROPIC_PROFILE) ?? ""
+  );
+  const environmentAuthConfigured = Boolean(apiKey || authToken || oauthToken);
+  const authMode = normalizeClaudeAuthMode(overrides.claudeAuthMode, mode, environmentAuthConfigured);
+  if (authMode !== "environment") {
+    delete legacyEnv.ANTHROPIC_API_KEY;
+    delete legacyEnv.ANTHROPIC_AUTH_TOKEN;
+    delete legacyEnv.CLAUDE_CODE_OAUTH_TOKEN;
+  }
+  const env = {
+    ...legacyEnv,
+    ...(apiBaseUrl === "" ? {} : { ANTHROPIC_BASE_URL: apiBaseUrl }),
+    ...(authMode === "environment" && apiKey ? { ANTHROPIC_API_KEY: apiKey } : {}),
+    ...(authMode === "environment" && authToken ? { ANTHROPIC_AUTH_TOKEN: authToken } : {}),
+    ...(authMode === "environment" && oauthToken ? { CLAUDE_CODE_OAUTH_TOKEN: oauthToken } : {}),
+    ...(authMode === "platform-profile" && platformConfigDir ? { ANTHROPIC_CONFIG_DIR: platformConfigDir } : {}),
+    ...(authMode === "platform-profile" && platformProfile ? { ANTHROPIC_PROFILE: platformProfile } : {})
+  };
+  for (const key of ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"] as const) {
+    if (env[key]) registerSecretForRedaction(env[key]);
+  }
   return {
     ...buildProviderRuntimeConfig({
       command: overrides.claudeCommand,
       cwd: overrides.claudeCwd,
       defaultCommand: DEFAULT_CLAUDE_COMMAND,
-      env: overrides.claudeEnv,
+      env: "",
       timeoutMs: overrides.claudeTimeoutMs
     }),
-    model: cleanValue(overrides.claudeModel) ?? ""
+    apiBaseUrl,
+    apiPath,
+    authMode,
+    env,
+    mode,
+    model: cleanValue(overrides.claudeModel) ?? "",
+    platformConfigDir,
+    platformProfile
   };
+}
+
+function claudeApiKeyFromEnv(env: Env): string | undefined {
+  return cleanValue(env[ENV_KEYS.claudeApiKey]) ?? cleanValue(env.ANTHROPIC_API_KEY);
+}
+
+function readSecretFile(pathValue: string | undefined): string | undefined {
+  const path = cleanValue(pathValue);
+  if (!path) return undefined;
+  try {
+    return cleanValue(readFileSync(path, "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeClaudeProviderMode(value: string | undefined): "sdk" | "cli-fallback" {
+  const mode = cleanValue(value)?.toLowerCase() ?? "sdk";
+  if (mode === "sdk" || mode === "cli-fallback") return mode;
+  throw new Error(`CODEX_RUNNER_CLAUDE_MODE must be sdk or cli-fallback, received ${mode}`);
+}
+
+function normalizeClaudeAuthMode(
+  value: string | undefined,
+  providerMode: "sdk" | "cli-fallback",
+  environmentAuthConfigured: boolean
+): "environment" | "local-cli" | "platform-profile" {
+  const configured = cleanValue(value)?.toLowerCase();
+  const mode = configured ?? (providerMode === "cli-fallback" && !environmentAuthConfigured ? "local-cli" : "environment");
+  if (mode !== "environment" && mode !== "local-cli" && mode !== "platform-profile") {
+    throw new Error(`CODEX_RUNNER_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile, received ${mode}`);
+  }
+  if (providerMode === "sdk" && mode === "local-cli") {
+    throw new Error("CODEX_RUNNER_CLAUDE_AUTH_MODE=local-cli requires CODEX_RUNNER_CLAUDE_MODE=cli-fallback");
+  }
+  if (providerMode === "cli-fallback" && mode === "platform-profile") {
+    throw new Error("CODEX_RUNNER_CLAUDE_AUTH_MODE=platform-profile requires CODEX_RUNNER_CLAUDE_MODE=sdk");
+  }
+  return mode;
+}
+
+function normalizeClaudePlatformProfile(value: string): string {
+  const profile = value.trim();
+  if (profile === "") return "";
+  if (profile === "." || profile === ".." || !/^[A-Za-z0-9_.-]+$/.test(profile)) {
+    throw new Error("CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE must contain only letters, digits, dot, underscore, or hyphen");
+  }
+  return profile;
+}
+
+function normalizeClaudeApiPath(value: string | undefined): string {
+  const path = cleanValue(value) ?? "";
+  if (path === "" || path === "/") return "";
+  return `/${path.replace(/^\/+|\/+$/g, "")}`;
+}
+
+function joinClaudeApiBase(baseValue: string, path: string): string {
+  const base = baseValue.trim().replace(/\/+$/, "");
+  if (base === "") return "";
+  try {
+    const parsed = new URL(base);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("unsupported protocol");
+  } catch {
+    throw new Error("CODEX_RUNNER_CLAUDE_API_BASE_URL must be an http(s) URL");
+  }
+  return `${base}${path}`;
 }
 
 export function buildRunnerConcurrencyConfig(input: { maxParallelProjects?: unknown } = {}): RunnerConcurrencyConfig {

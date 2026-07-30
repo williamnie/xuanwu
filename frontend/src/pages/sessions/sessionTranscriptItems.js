@@ -259,7 +259,10 @@ function completeLiveItem(state, event) {
   if (item && !updatesActiveTool(state.activeTool, item) && isRenderableToolItem(item)) {
     state.tools.push(item);
   }
-  if (state.activeTool) state.activeTool.status = 'completed';
+  if (state.activeTool) {
+    if (item?.text) state.activeTool.text = item.text;
+    state.activeTool.status = item?.status || 'completed';
+  }
 }
 
 function appendFallbackItem(state, event) {
@@ -269,7 +272,7 @@ function appendFallbackItem(state, event) {
 
 function agentEventType(event) {
   if (event?.type === 'pi.conversation.event') return piAgentEventType(event);
-  if (event?.agent_event_type) return event.agent_event_type;
+  if (event?.agent_event_type) return normalizedProviderAgentEventType(event.agent_event_type);
   const method = event?.method || event?.raw_method || '';
   if (method === 'item/agentMessage/delta') return 'agent.message.delta';
   if (method === 'item/commandExecution/outputDelta') return 'agent.command.output_delta';
@@ -280,6 +283,16 @@ function agentEventType(event) {
   if (method === 'turn/completed') return 'agent.turn.completed';
   if (method === 'error') return 'agent.error';
   return '';
+}
+
+function normalizedProviderAgentEventType(type) {
+  if (type === 'turn_started') return 'agent.turn.started';
+  if (type === 'text' || type === 'text_delta') return 'agent.message.delta';
+  if (type === 'tool') return 'agent.command.started';
+  if (type === 'tool_result') return 'agent.command.completed';
+  if (type === 'done') return 'agent.turn.completed';
+  if (type === 'error') return 'agent.error';
+  return type;
 }
 
 function piAgentEventType(event) {

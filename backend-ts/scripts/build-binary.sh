@@ -60,6 +60,29 @@ normalize_output_path() {
   printf '%s/%s' "$(cd "$dir" && pwd -P)" "$base"
 }
 
+stage_claude_sdk_executable() {
+  local package_suffix source target_dir staged target
+  case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64) package_suffix="darwin-arm64" ;;
+    Darwin-x86_64) package_suffix="darwin-x64" ;;
+    Linux-aarch64|Linux-arm64) package_suffix="linux-arm64" ;;
+    Linux-x86_64) package_suffix="linux-x64" ;;
+    *) echo "[bun-build] unsupported Claude SDK native target: $(uname -s)-$(uname -m)" >&2; exit 1 ;;
+  esac
+  source="$BACKEND_TS_DIR/node_modules/@anthropic-ai/claude-agent-sdk-$package_suffix/claude"
+  [ -f "$source" ] || {
+    echo "[bun-build] missing Claude Agent SDK native executable: $source" >&2
+    exit 1
+  }
+  target="$OUTFILE.claude-agent-sdk"
+  target_dir="$(dirname "$target")"
+  staged="$(mktemp "$target_dir/.claude-agent-sdk-stage.XXXXXX")"
+  cp -p "$source" "$staged"
+  chmod 0755 "$staged"
+  mv -f "$staged" "$target"
+  echo "[bun-build] claude sdk executable: $target"
+}
+
 resolve_build_stamp() {
   local revision dirty
   revision="nogit"
@@ -89,6 +112,7 @@ echo "[bun-build] outfile: $OUTFILE"
     bun build ./src/main.ts --compile '--env=CODEX_RUNNER_BUILD_*' --outfile "$OUTFILE"
 )
 
+stage_claude_sdk_executable
 sign_binary_if_possible
 printf '%s\n' "$BUILD_STAMP" > "$OUTFILE.build.stamp"
 echo "[bun-build] binary: $OUTFILE"

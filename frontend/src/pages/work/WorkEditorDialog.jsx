@@ -1,9 +1,11 @@
 import { createPortal } from 'react-dom';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Pencil, X } from 'lucide-react';
 import { workApi } from '../../api/work.js';
+import { projectsApi } from '../../api/projects.js';
 import { message } from '../../store/toastStore.js';
 import { useI18n } from '../../i18n/context.js';
+import { editorDraft, effectiveProfilePreview } from './workProfileRouting.js';
 
 export default function WorkEditorDialog({ mode, onClose, onSaved, projects, work }) {
   const { t } = useI18n();
@@ -11,6 +13,22 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
   const [draft, setDraft] = useState(() => editorDraft(work, projects));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [profiles, setProfiles] = useState([]);
+  const [profilesLoading, setProfilesLoading] = useState(true);
+  const selectedProject = useMemo(
+    () => projects.find(project => project.id === draft.project_id) || null,
+    [draft.project_id, projects],
+  );
+  const effectivePreview = effectiveProfilePreview(draft.agent_profile_id, selectedProject, profiles);
+
+  useEffect(() => {
+    let alive = true;
+    projectsApi.getAgentProfiles()
+      .then((items) => { if (alive) setProfiles(Array.isArray(items) ? items : items?.items || []); })
+      .catch((loadError) => { if (alive) setError(loadError.message || 'Agent Profiles 加载失败'); })
+      .finally(() => { if (alive) setProfilesLoading(false); });
+    return () => { alive = false; };
+  }, []);
 
   const setField = (field, value) => setDraft(current => ({ ...current, [field]: value }));
 
@@ -24,15 +42,20 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
     setError('');
     try {
       const audit = workEditorAudit(editing ? 'edit' : 'create');
+      const agentProfilePatch = !editing || draft.agent_profile_id !== (work?.agent_profile_id || '')
+        ? { agent_profile_id: draft.agent_profile_id }
+        : {};
       const response = editing
         ? await workApi.updateWork(work.id, {
           audit,
           expected_revision: work.revision,
+          ...agentProfilePatch,
           goal: draft.goal.trim(),
           title: draft.title.trim(),
         })
         : await workApi.createWork({
           audit,
+          ...agentProfilePatch,
           goal: draft.goal.trim(),
           project_id: draft.project_id,
           status: draft.status,
@@ -92,6 +115,26 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
             <span>{t('work.goal')}</span>
             <textarea className="form-control work-goal-input" onChange={event => setField('goal', event.target.value)} required value={draft.goal} />
           </label>
+          <label>
+            <span>Agent Profile</span>
+            <select
+              className="form-control"
+              disabled={profilesLoading || (editing && work.status === 'in_progress')}
+              onChange={event => setField('agent_profile_id', event.target.value)}
+              value={draft.agent_profile_id}
+            >
+              <option value="">继承项目默认</option>
+              {profiles.map(profile => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} · {profile.provider} · {profile.model || 'default'}
+                </option>
+              ))}
+            </select>
+            <small>
+              Effective: {effectivePreview.name || 'Project provider'} · {effectivePreview.provider || 'unknown'} · {effectivePreview.model || 'default'}
+              {effectivePreview.source === 'project_default' ? '（继承）' : effectivePreview.source === 'work' ? '（Work 显式）' : ''}
+            </small>
+          </label>
           <footer>
             <button className="work-action-secondary" disabled={saving} onClick={onClose} type="button">{t('work.cancel')}</button>
             <button className="work-action-primary" disabled={saving} type="submit">
@@ -104,15 +147,6 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
     </div>,
     document.body,
   );
-}
-
-function editorDraft(work, projects) {
-  return {
-    goal: work?.goal || '',
-    project_id: work?.owner?.project_id || projects[0]?.id || '',
-    status: 'triage',
-    title: work?.title || '',
-  };
 }
 
 function workEditorAudit(operation) {

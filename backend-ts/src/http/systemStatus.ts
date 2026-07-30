@@ -8,6 +8,9 @@ import { feishuConnectorStatus } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorCapability } from "../providers/types.ts";
+import { CLAUDE_AGENT_SDK_VERSION, resolveClaudeSdkExecutable } from "../providers/claude/provider.ts";
+import { claudeAuthenticationStatus } from "../providers/claude/auth.ts";
+import { inspectClaudeCliAuth } from "../providers/claude/cliProvider.ts";
 import { codexAppServerRpcTimeoutMs } from "../providers/codex/jsonRpc.ts";
 import { projectLoopMaxParallelProjects, runningProjectLoopCount } from "../runner/projectLoopManager.ts";
 import { redactSensitiveText } from "../util/redact.ts";
@@ -98,6 +101,7 @@ export function buildCompactSystemStatus(context: SystemStatusContext): Record<s
     auth: { enabled: context.authEnabled },
     config: configStatus(context),
     codex: { command, command_ok: command.trim() !== "" },
+    providers: providerStatus(context.config),
     runner: runnerStatus(context.database)
   };
 }
@@ -221,6 +225,17 @@ export function providerStatus(config: RunnerConfig): Array<{
   settings_mode: string;
   status: string;
   timeout_ms: number;
+  mode?: string;
+  ready?: boolean;
+  readiness_reason?: string;
+  sdk?: Record<string, unknown>;
+  api_base_url_summary?: string;
+  api_key_configured?: boolean;
+  auth_configured?: boolean;
+  auth_mode?: string;
+  auth_source?: string;
+  local_cli?: Record<string, unknown>;
+  platform_profile?: Record<string, unknown>;
 }> {
   const out = [];
   const codex = config.providers.codex;
@@ -232,15 +247,82 @@ export function providerStatus(config: RunnerConfig): Array<{
     settingsMode: `runner_settings:${config.codexServer.mode}`
   }));
   const claude = config.providers.claude;
-  if (claude) out.push(providerEntry({
-    capabilities: claudeCapabilities(),
-    config: claude,
-    defaultModel: claude.model ?? "",
-    id: "claude",
-    label: "Claude Code",
-    settingsMode: "env_or_provider_login"
-  }));
+  if (claude) out.push(claudeProviderEntry(claude));
   return out;
+}
+
+function claudeProviderEntry(config: ProviderRuntimeConfig) {
+  const mode = config.mode ?? "sdk";
+  const executableReady = resolveClaudeSdkExecutable() !== "";
+  if (mode === "cli-fallback") {
+    const base = providerEntry({
+        capabilities: ["issue_execution", "interrupt"],
+        config,
+        defaultModel: config.model ?? "",
+        id: "claude",
+        label: "Claude Code",
+        settingsMode: config.authMode === "local-cli" ? "local_claude_cli_login" : "runner_env_to_claude_cli"
+      });
+    const authMode = config.authMode ?? "local-cli";
+    const authentication = claudeAuthenticationStatus(config);
+    const localCli = authMode === "local-cli" ? inspectClaudeCliAuth(config) : undefined;
+    const authConfigured = localCli ? localCli.logged_in : authentication.configured;
+    const ready = base.cli.available && authConfigured;
+    return {
+      ...base,
+      status: ready ? "available" : base.cli.available ? "configuration_required" : "missing",
+      available: ready,
+      api_base_url_summary: safeApiBaseSummary(config.apiBaseUrl ?? config.env.ANTHROPIC_BASE_URL ?? ""),
+      api_key_configured: hasConfiguredApiKey(config.env, "claude"),
+      auth_configured: authConfigured,
+      auth_mode: authMode,
+      auth_source: authMode === "local-cli" ? "local_cli" : authentication.source,
+      ...(localCli ? { local_cli: localCli } : {}),
+      mode,
+      ready,
+      ...(!ready && base.cli.available ? { readiness_reason: authMode === "local-cli"
+        ? "Claude CLI local login is unavailable"
+        : authentication.reason || "Claude CLI environment authentication is unavailable" } : {}),
+      sdk: { executable_ready: executableReady, installed: true, ready: false, version: CLAUDE_AGENT_SDK_VERSION }
+    };
+  }
+  const apiKeyConfigured = hasConfiguredApiKey(config.env, "claude");
+  const authentication = claudeAuthenticationStatus(config);
+  const ready = authentication.configured && executableReady;
+  const readinessReason = !authentication.configured
+    ? authentication.reason || "Claude SDK authentication is not configured"
+    : !executableReady
+      ? "Claude SDK native executable is unavailable"
+      : "";
+  return {
+    id: "claude",
+    label: "Claude Agent SDK",
+    role: "executor",
+    status: ready ? "available" : "configuration_required",
+    available: ready,
+    enabled: true,
+    capabilities: claudeCapabilities(mode),
+    command: "bundled:@anthropic-ai/claude-agent-sdk",
+    cli: { available: false, mode: "not_used" },
+    cwd_configured: config.cwd.trim() !== "",
+    default_model: redactSensitiveText(config.model ?? ""),
+    env_keys: diagnosticEnvKeys(config.env),
+    secrets: { api_key: { configured: apiKeyConfigured } },
+    settings_mode: authentication.mode === "platform-profile"
+      ? "anthropic_platform_profile"
+      : "runner_env_to_anthropic_sdk",
+    timeout_ms: config.timeoutMs,
+    api_base_url_summary: safeApiBaseSummary(config.apiBaseUrl ?? config.env.ANTHROPIC_BASE_URL ?? ""),
+    api_key_configured: apiKeyConfigured,
+    auth_configured: authentication.configured,
+    auth_mode: authentication.mode,
+    auth_source: authentication.source,
+    ...(authentication.platform_profile ? { platform_profile: authentication.platform_profile } : {}),
+    mode,
+    ready,
+    ...(readinessReason ? { readiness_reason: readinessReason } : {}),
+    sdk: { executable_ready: executableReady, installed: true, ready, version: CLAUDE_AGENT_SDK_VERSION }
+  };
 }
 
 /** Resolve slow provider CLI versions before the HTTP listener is exposed. */
@@ -357,8 +439,10 @@ function codexCapabilities(): ExecutorCapability[] {
   return ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"];
 }
 
-function claudeCapabilities(): ExecutorCapability[] {
-  return ["issue_execution"];
+function claudeCapabilities(mode: string): ExecutorCapability[] {
+  return mode === "cli-fallback"
+    ? ["issue_execution", "interrupt"]
+    : ["issue_execution", "sessions", "resume_session", "interrupt"];
 }
 
 function diagnosticEnvKeys(env: Record<string, string>): string[] {
@@ -369,7 +453,20 @@ function hasConfiguredApiKey(env: Record<string, string>, provider: string): boo
   const keys = provider === "claude"
     ? ["ANTHROPIC_API_KEY"]
     : ["CODEX_API_KEY", "OPENAI_API_KEY"];
-  return keys.some((key) => (env[key] ?? Bun.env[key] ?? "").trim() !== "");
+  return keys.some((key) => (env[key] ?? (provider === "claude" ? "" : Bun.env[key]) ?? "").trim() !== "");
+}
+
+function safeApiBaseSummary(value: string): string {
+  const text = value.trim();
+  if (text === "") return "default_anthropic_endpoint";
+  try {
+    const url = new URL(text);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "configured_invalid";
+    const hasPrivatePath = url.pathname.replace(/\/+$/, "") !== "";
+    return `${url.protocol}//${url.host}${hasPrivatePath ? "/…" : "/"}`;
+  } catch {
+    return "configured_invalid";
+  }
 }
 
 function runnerStatus(database: RunnerDatabase): Record<string, number> {

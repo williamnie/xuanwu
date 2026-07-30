@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildConfig } from "../config/env.ts";
@@ -157,17 +157,21 @@ describe("Bun system status endpoints", () => {
       });
       expect(claude).toMatchObject({
         id: "claude",
-        label: "Claude Code",
+        label: "Claude Agent SDK",
         role: "executor",
         enabled: true,
-        capabilities: ["issue_execution"],
-        command: "claude",
-        cli: { command: "claude" },
+        capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"],
+        command: "bundled:@anthropic-ai/claude-agent-sdk",
+        cli: { available: false, mode: "not_used" },
         cwd_configured: false,
         default_model: "",
         env_keys: [],
+        mode: "sdk",
+        ready: false,
+        sdk: { executable_ready: true, installed: true, ready: false, version: "0.3.152" },
         secrets: { api_key: { configured: false } },
-        settings_mode: "env_or_provider_login",
+        settings_mode: "runner_env_to_anthropic_sdk",
+        status: "configuration_required",
         timeout_ms: 1_800_000
       });
       expect(body.providers.some((provider) => provider.id === "pi")).toBe(false);
@@ -314,13 +318,14 @@ describe("Bun system status endpoints", () => {
   });
 
 
-  test("reports configured Claude CLI metadata without leaking env secrets", async () => {
+  test("reports configured Claude SDK metadata without leaking env secrets", async () => {
     const binDir = await tempPath("codex-runner-bun-claude-bin-");
     await writeFakeExecutable(binDir, "claude", "claude 2.1.114 (Claude Code)");
     const secret = "anthropic-status-secret";
     const { config, database } = await openFixtureRuntime({
       claudeCommand: "claude",
       claudeEnv: `PATH=${binDir},ANTHROPIC_API_KEY=${secret},SAFE_CLAUDE=ok`,
+      claudeApiBaseUrl: "https://gateway.example/private/tenant",
       claudeModel: "claude-sonnet-4-5"
     });
     try {
@@ -338,17 +343,96 @@ describe("Bun system status endpoints", () => {
         id: "claude",
         status: "available",
         available: true,
-        capabilities: ["issue_execution"],
-        command: "claude",
-        cli: { command: "claude", available: true, version: "claude 2.1.114 (Claude Code)" },
+        capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"],
+        command: "bundled:@anthropic-ai/claude-agent-sdk",
+        cli: { available: false, mode: "not_used" },
         default_model: "claude-sonnet-4-5",
-        env_keys: ["PATH", "SAFE_CLAUDE"],
+        env_keys: ["ANTHROPIC_BASE_URL", "PATH", "SAFE_CLAUDE"],
+        mode: "sdk",
+        ready: true,
+        api_base_url_summary: "https://gateway.example/…",
+        sdk: { executable_ready: true, installed: true, ready: true, version: "0.3.152" },
         secrets: { api_key: { configured: true } }
       });
-      expect((claude?.cli as { path?: unknown } | undefined)?.path).toBe(`${binDir}/claude`);
       expect(codex?.capabilities).toEqual(["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"]);
       expect(text).not.toContain(secret);
       expect(text).not.toContain("ANTHROPIC_API_KEY");
+      expect(text).not.toContain("/private/tenant");
+    } finally {
+      database.close();
+    }
+  });
+
+  test("reports an Anthropic platform OAuth profile without exposing its credential contents", async () => {
+    const profileRoot = await tempPath("codex-runner-anthropic-status-");
+    await mkdir(join(profileRoot, "configs"), { recursive: true });
+    await mkdir(join(profileRoot, "credentials"), { recursive: true });
+    await writeFile(join(profileRoot, "configs", "runner.json"), JSON.stringify({
+      version: "1.0",
+      authentication: { type: "user_oauth" }
+    }));
+    const credentialPath = join(profileRoot, "credentials", "runner.json");
+    await writeFile(credentialPath, JSON.stringify({ refresh_token: "profile-refresh-secret", version: "1.0" }));
+    await chmod(credentialPath, 0o600);
+    const { config, database } = await openFixtureRuntime({
+      claudeAuthMode: "platform-profile",
+      claudePlatformConfigDir: profileRoot,
+      claudePlatformProfile: "runner"
+    });
+    try {
+      const router = createDefaultRouter();
+      registerSystemStatusRoute(router, { authToken: "", config, database });
+      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+      const text = await response.text();
+      const body = JSON.parse(text) as SystemStatusBody;
+      const claude = body.providers.find((provider) => provider.id === "claude");
+
+      expect(claude).toMatchObject({
+        auth_configured: true,
+        auth_mode: "platform-profile",
+        auth_source: "platform_profile",
+        ready: true,
+        settings_mode: "anthropic_platform_profile",
+        status: "available",
+        platform_profile: {
+          auth_type: "user_oauth",
+          credentials_file_ready: true,
+          profile: "runner"
+        }
+      });
+      expect(text).not.toContain(profileRoot);
+      expect(text).not.toContain("profile-refresh-secret");
+    } finally {
+      database.close();
+    }
+  });
+
+  test("reports local Claude CLI login as an explicit fallback auth source", async () => {
+    const binDir = await tempPath("codex-runner-local-claude-bin-");
+    await writeFakeExecutable(binDir, "claude", "claude 2.1.170", true);
+    const { config, database } = await openFixtureRuntime({
+      claudeAuthMode: "local-cli",
+      claudeCommand: join(binDir, "claude"),
+      claudeMode: "cli-fallback"
+    });
+    try {
+      const router = createDefaultRouter();
+      registerSystemStatusRoute(router, { authToken: "", config, database });
+      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+      const body = await response.json() as SystemStatusBody;
+      const claude = body.providers.find((provider) => provider.id === "claude");
+
+      expect(claude).toMatchObject({
+        auth_configured: true,
+        auth_mode: "local-cli",
+        auth_source: "local_cli",
+        available: true,
+        capabilities: ["issue_execution", "interrupt"],
+        local_cli: { checked: true, logged_in: true },
+        mode: "cli-fallback",
+        ready: true,
+        status: "available"
+      });
     } finally {
       database.close();
     }
@@ -359,7 +443,8 @@ describe("Bun system status endpoints", () => {
     const { config, database } = await openFixtureRuntime({
       secret,
       claudeCommand: "missing-claude-for-test",
-      claudeEnv: "ANTHROPIC_API_KEY=doctor-secret"
+      claudeEnv: "ANTHROPIC_API_KEY=doctor-secret",
+      claudeMode: "cli-fallback"
     });
     try {
       const router = createDefaultRouter();
@@ -387,7 +472,7 @@ describe("Bun system status endpoints", () => {
         status: "missing",
         available: false,
         enabled: true,
-        capabilities: ["issue_execution"]
+        capabilities: ["issue_execution", "interrupt"]
       });
       expect(text).not.toContain(secret);
       expect(text).not.toContain("doctor-secret");
@@ -483,9 +568,14 @@ describe("Bun system status endpoints", () => {
 });
 
 async function openFixtureRuntime(options: {
+  claudeAuthMode?: string;
+  claudeApiBaseUrl?: string;
   claudeCommand?: string;
   claudeEnv?: string;
+  claudeMode?: string;
   claudeModel?: string;
+  claudePlatformConfigDir?: string;
+  claudePlatformProfile?: string;
   codexCommand?: string;
   codexEnv?: string;
   feishuAppId?: string;
@@ -501,9 +591,14 @@ async function openFixtureRuntime(options: {
   const stateDir = join(root, "state");
   const config = buildConfig({
     authToken: options.secret,
+    claudeAuthMode: options.claudeAuthMode,
+    claudeApiBaseUrl: options.claudeApiBaseUrl,
     claudeCommand: options.claudeCommand,
     claudeEnv: options.claudeEnv,
+    claudeMode: options.claudeMode,
     claudeModel: options.claudeModel,
+    claudePlatformConfigDir: options.claudePlatformConfigDir,
+    claudePlatformProfile: options.claudePlatformProfile,
     codexCommand: options.codexCommand,
     codexEnv: options.codexEnv,
     feishuAppId: options.feishuAppId,
@@ -516,9 +611,13 @@ async function openFixtureRuntime(options: {
   return { config, database };
 }
 
-async function writeFakeExecutable(dir: string, name: string, version: string): Promise<void> {
+async function writeFakeExecutable(dir: string, name: string, version: string, loggedIn = false): Promise<void> {
   const path = join(dir, name);
-  await writeFile(path, `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "${version}"; fi\n`, { mode: 0o755 });
+  await writeFile(path, `#!/bin/sh
+if [ "$1" = "--version" ]; then echo "${version}"; exit 0; fi
+if [ "$1" = "auth" ] && [ "$2" = "status" ]; then echo '{"apiProvider":"firstParty","authMethod":"claude.ai","loggedIn":${loggedIn}}'; exit 0; fi
+exit 1
+`, { mode: 0o755 });
 }
 
 function insertRunnerStatusFixture(database: RunnerDatabase): void {

@@ -56,11 +56,13 @@ test('exports Codex session metadata, issues, usage, transcript and tool summary
   assert.doesNotMatch(markdown, /secret|Bearer abcdef|abc123/);
 });
 
-test('marks unavailable resume command for non-Codex providers', () => {
-  const resume = buildSessionResumeCommand({ provider: 'claude-code', provider_session_id: 'abc' });
+test('uses Runner resume for Claude without inventing a CLI command', () => {
+  const resume = buildSessionResumeCommand({ provider: 'claude', provider_session_id: 'abc' });
 
   assert.equal(resume.command, '');
-  assert.match(resume.note, /Codex-only/);
+  assert.equal(resume.action, 'runner');
+  assert.match(resume.note, /Claude Agent SDK session in Runner/);
+  assert.doesNotMatch(resume.note, /Codex-only|claude resume/);
 });
 
 test('keeps empty and long transcripts exportable with truncation notes', () => {
@@ -77,4 +79,5 @@ test('keeps empty and long transcripts exportable with truncation notes', () => 
 
 test('builds safe markdown filenames from provider session ids', () => {
   assert.equal(markdownFilenameForSession({ provider_session_id: 'thread/id:one' }), 'codex-session-thread-id-one.md');
+  assert.equal(markdownFilenameForSession({ provider: 'claude', provider_session_id: 'session/one' }), 'claude-session-session-one.md');
 });

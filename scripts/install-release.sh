@@ -25,6 +25,7 @@ DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
 AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
 BIN_PATH="$INSTALL_DIR/codex-issue-runner"
+CLAUDE_SDK_EXECUTABLE_PATH="$BIN_PATH.claude-agent-sdk"
 DAEMON_PATH="$INSTALL_DIR/codex-issue-runner-daemon"
 INSTALLER_PATH="$INSTALL_DIR/codex-issue-runner-install"
 UPDATER_PATH="$INSTALL_DIR/codex-issue-runner-update"
@@ -32,6 +33,21 @@ PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-}"
 CODEX_SERVER_MODE="${CODEX_RUNNER_CODEX_SERVER_MODE:-cli}"
 CODEX_APP_CMD="${CODEX_RUNNER_CODEX_APP_CMD:-}"
+CLAUDE_MODE="${CODEX_RUNNER_CLAUDE_MODE:-sdk}"
+CLAUDE_AUTH_MODE="${CODEX_RUNNER_CLAUDE_AUTH_MODE:-}"
+CLAUDE_API_BASE_URL="${CODEX_RUNNER_CLAUDE_API_BASE_URL:-${ANTHROPIC_BASE_URL:-}}"
+CLAUDE_API_PATH="${CODEX_RUNNER_CLAUDE_API_PATH:-}"
+CLAUDE_API_KEY="${CODEX_RUNNER_CLAUDE_API_KEY:-${ANTHROPIC_API_KEY:-}}"
+CLAUDE_API_KEY_FILE="${CODEX_RUNNER_CLAUDE_API_KEY_FILE:-$STATE_DIR/claude_api_key}"
+CLAUDE_PLATFORM_CONFIG_DIR="${CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR:-${ANTHROPIC_CONFIG_DIR:-}}"
+CLAUDE_PLATFORM_PROFILE="${CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE:-${ANTHROPIC_PROFILE:-}}"
+if [ -z "$CLAUDE_AUTH_MODE" ]; then
+  if [ "$CLAUDE_MODE" = "cli-fallback" ] && [ -z "$CLAUDE_API_KEY" ]; then
+    CLAUDE_AUTH_MODE="local-cli"
+  else
+    CLAUDE_AUTH_MODE="environment"
+  fi
+fi
 AUDIT_LOG="$LOG_DIR/release-upgrade.log"
 RESOLVED_VERSION=""
 
@@ -52,6 +68,13 @@ Useful environment variables:
   CODEX_RUNNER_CODEX_CMD=/path/to/codex Codex CLI path
   CODEX_RUNNER_CODEX_SERVER_MODE=cli|app Codex server backend
   CODEX_RUNNER_CODEX_APP_CMD=/path/to/app/codex Codex App bundled server command
+  CODEX_RUNNER_CLAUDE_MODE=sdk|cli-fallback Claude provider mode
+  CODEX_RUNNER_CLAUDE_AUTH_MODE=environment|local-cli|platform-profile
+  CODEX_RUNNER_CLAUDE_API_BASE_URL=https://... Claude/Anthropic API base URL
+  CODEX_RUNNER_CLAUDE_API_PATH=/... Optional path appended to the API base URL
+  CODEX_RUNNER_CLAUDE_API_KEY=...     Claude API key (persisted to a mode-0600 state file)
+  CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR=... Anthropic profile config directory
+  CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE=... Anthropic profile name
   CODEX_RUNNER_AUTH_TOKEN=...          Custom bearer token for remote access
   CODEX_RUNNER_AUTH_TOKEN_FILE=...     Generated token file path
   CODEX_RUNNER_VERIFY_ATTESTATION=auto|require|skip
@@ -64,6 +87,16 @@ HELP
 
 log() { printf '[install] %s\n' "$*"; }
 fail() { printf '[install] ERROR: %s\n' "$*" >&2; exit 1; }
+
+case "$CLAUDE_AUTH_MODE" in
+  environment) ;;
+  local-cli) [ "$CLAUDE_MODE" = "cli-fallback" ] || fail "CODEX_RUNNER_CLAUDE_AUTH_MODE=local-cli requires cli-fallback mode" ;;
+  platform-profile) [ "$CLAUDE_MODE" = "sdk" ] || fail "CODEX_RUNNER_CLAUDE_AUTH_MODE=platform-profile requires sdk mode" ;;
+  *) fail "CODEX_RUNNER_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile" ;;
+esac
+if [ -n "$CLAUDE_PLATFORM_PROFILE" ] && [[ ! "$CLAUDE_PLATFORM_PROFILE" =~ ^[A-Za-z0-9_.-]+$ || "$CLAUDE_PLATFORM_PROFILE" = "." || "$CLAUDE_PLATFORM_PROFILE" = ".." ]]; then
+  fail "CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE is invalid"
+fi
 
 audit() {
   local outcome="$1"
@@ -183,7 +216,7 @@ resolve_codex_cmd() {
 }
 
 download_binary() {
-  local os="$1" arch="$2" asset url tmp archive checksums metadata staged binary_version
+  local os="$1" arch="$2" asset url tmp archive checksums metadata staged sdk_staged binary_version
   asset="codex-issue-runner_${os}_${arch}.tar.gz"
   url="$(release_asset_url "$asset")"
   tmp="$(mktemp -d)"
@@ -204,10 +237,15 @@ download_binary() {
   verify_attestation "$archive"
   LC_ALL=C tar -xzf "$archive" -C "$tmp"
   [ -x "$tmp/codex-issue-runner" ] || fail "release asset does not contain executable binary"
+  [ -x "$tmp/codex-issue-runner.claude-agent-sdk" ] \
+    || fail "release asset does not contain Claude Agent SDK native executable"
   binary_version="$("$tmp/codex-issue-runner" --version | awk 'NR == 1 { print $2 }')"
   [ "$binary_version" = "$RESOLVED_VERSION" ] \
     || fail "binary version $binary_version does not match release metadata $RESOLVED_VERSION"
   mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$LOG_DIR" "$(dirname "$AUTH_TOKEN_FILE")"
+  sdk_staged="$INSTALL_DIR/.codex-issue-runner.claude-agent-sdk.stage.$$"
+  install -m 0755 "$tmp/codex-issue-runner.claude-agent-sdk" "$sdk_staged"
+  mv -f "$sdk_staged" "$CLAUDE_SDK_EXECUTABLE_PATH"
   staged="$INSTALL_DIR/.codex-issue-runner.stage.$$"
   install -m 0755 "$tmp/codex-issue-runner" "$staged"
   mv -f "$staged" "$BIN_PATH"
@@ -328,6 +366,20 @@ PLIST
     <string>$(xml_escape "$CODEX_SERVER_MODE")</string>
     <key>CODEX_RUNNER_CODEX_APP_CMD</key>
     <string>$(xml_escape "$CODEX_APP_CMD")</string>
+    <key>CODEX_RUNNER_CLAUDE_MODE</key>
+    <string>$(xml_escape "$CLAUDE_MODE")</string>
+    <key>CODEX_RUNNER_CLAUDE_AUTH_MODE</key>
+    <string>$(xml_escape "$CLAUDE_AUTH_MODE")</string>
+    <key>CODEX_RUNNER_CLAUDE_API_BASE_URL</key>
+    <string>$(xml_escape "$CLAUDE_API_BASE_URL")</string>
+    <key>CODEX_RUNNER_CLAUDE_API_PATH</key>
+    <string>$(xml_escape "$CLAUDE_API_PATH")</string>
+    <key>CODEX_RUNNER_CLAUDE_API_KEY_FILE</key>
+    <string>$(xml_escape "$CLAUDE_API_KEY_FILE")</string>
+    <key>CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR</key>
+    <string>$(xml_escape "$CLAUDE_PLATFORM_CONFIG_DIR")</string>
+    <key>CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE</key>
+    <string>$(xml_escape "$CLAUDE_PLATFORM_PROFILE")</string>
     <key>CODEX_RUNNER_MANAGED_EXECUTION</key>
     <string>1</string>
   </dict>
@@ -407,6 +459,15 @@ write_custom_auth_token_file() {
   fi
 }
 
+write_claude_api_key_file() {
+  if [ "$CLAUDE_AUTH_MODE" = "environment" ] && [ -n "$CLAUDE_API_KEY" ]; then
+    mkdir -p "$(dirname "$CLAUDE_API_KEY_FILE")"
+    umask 077
+    printf '%s\n' "$CLAUDE_API_KEY" > "$CLAUDE_API_KEY_FILE"
+    chmod 600 "$CLAUDE_API_KEY_FILE"
+  fi
+}
+
 install_macos_launchd() {
   local codex_cmd web_plist core_plist agentic_plist legacy_plist domain web_url core_url agentic_url
   codex_cmd="$(resolve_codex_cmd)"
@@ -466,6 +527,13 @@ Environment=PATH=$PATH_VALUE
 Environment=PI_PACKAGE_DIR=$STATE_DIR/pi-coding-agent
 Environment="CODEX_RUNNER_CODEX_SERVER_MODE=$CODEX_SERVER_MODE"
 Environment="CODEX_RUNNER_CODEX_APP_CMD=$CODEX_APP_CMD"
+Environment="CODEX_RUNNER_CLAUDE_MODE=$CLAUDE_MODE"
+Environment="CODEX_RUNNER_CLAUDE_AUTH_MODE=$CLAUDE_AUTH_MODE"
+Environment="CODEX_RUNNER_CLAUDE_API_BASE_URL=$CLAUDE_API_BASE_URL"
+Environment="CODEX_RUNNER_CLAUDE_API_PATH=$CLAUDE_API_PATH"
+Environment="CODEX_RUNNER_CLAUDE_API_KEY_FILE=$CLAUDE_API_KEY_FILE"
+Environment="CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR=$CLAUDE_PLATFORM_CONFIG_DIR"
+Environment="CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE=$CLAUDE_PLATFORM_PROFILE"
 Environment=CODEX_RUNNER_MANAGED_EXECUTION=1
 ExecStart=$BIN_PATH serve --role core --addr $CORE_ADDR --agentic-addr $AGENTIC_ADDR --state-dir $STATE_DIR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
 Restart=always
@@ -545,6 +613,7 @@ main() {
   read -r os arch < <(detect_platform)
   download_binary "$os" "$arch"
   write_custom_auth_token_file
+  write_claude_api_key_file
   case "$os" in
     darwin) install_macos_launchd ;;
     linux) install_linux_systemd ;;

@@ -22,6 +22,13 @@ test('provider session keys preserve the existing provider-prefixed identity', (
   assert.equal(sessionIDFromCreateResult({ provider: 'codex', thread_id: 'thread-3' }), 'codex:thread-3');
 });
 
+test('Claude SDK live events retain provider-qualified identity', () => {
+  const event = { type: 'claude.event', provider: 'claude', threadId: 'session-1', agent_event_type: 'turn_started' };
+  assert.equal(isAgentEvent(event), true);
+  assert.equal(eventSessionKey(event), 'claude:session-1');
+  assert.equal(isSessionStartEvent(event), true);
+});
+
 test('issue execution events create a visible running session before provider list refresh', () => {
   const event = {
     type: 'issue.log',

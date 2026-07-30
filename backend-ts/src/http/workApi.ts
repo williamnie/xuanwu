@@ -1,5 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getProject, ProjectNotFoundError } from "../db/repositories/projects.ts";
+import { getAgentProfile } from "../db/repositories/agentProfiles.ts";
+import { isExecutorProviderId } from "../providers/types.ts";
 import {
   applyIssueWorkAction,
   countIssueBackedWorks,
@@ -64,9 +66,12 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
   }));
   router.post("/api/works", async (request) => workResponse(async () => {
     const body = await objectBody(request);
-    assertKeys(body, ["audit", "depends_on_issue_ids", "goal", "project_id", "status", "title", "type"]);
+    assertKeys(body, ["agent_profile_id", "audit", "depends_on_issue_ids", "goal", "project_id", "status", "title", "type"]);
     const projectID = requiredString(body.project_id, "project_id");
-    if (!getProject(context.database, projectID)) throw workError(404, "project_not_found", "Project not found");
+    const project = getProject(context.database, projectID);
+    if (!project) throw workError(404, "project_not_found", "Project not found");
+    const agentProfileID = optionalString(body.agent_profile_id);
+    validateWorkExecutionSelection(context, project, agentProfileID);
     const type = optionalString(body.type) || "engineering_task";
     if (!WORK_TYPES.includes(type as typeof WORK_TYPES[number])) {
       throw workError(400, "invalid_request", "type is invalid");
@@ -83,6 +88,7 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
       throw workError(400, "invalid_request", "status must be triage or todo when creating Work");
     }
     const result = createIssueBackedWork(context.database, {
+      agent_profile_id: agentProfileID,
       audit: auditInput(body.audit),
       depends_on_issue_ids: positiveIssueIDArray(body.depends_on_issue_ids),
       goal: requiredString(body.goal, "goal"),
@@ -97,8 +103,18 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
   router.patch("/api/works/:id", async (request) => workResponse(async () => {
     const work = requireWork(context.database, workID(request));
     const body = await objectBody(request);
-    assertKeys(body, ["audit", "expected_revision", "goal", "title"]);
+    assertKeys(body, ["agent_profile_id", "audit", "expected_revision", "goal", "title"]);
+    const requestedAgentProfileID = Object.hasOwn(body, "agent_profile_id") ? optionalString(body.agent_profile_id) : undefined;
+    if (work.status === "in_progress" && requestedAgentProfileID !== undefined && requestedAgentProfileID !== (work.agent_profile_id ?? "")) {
+      throw workError(409, "running_work_profile_locked", "running Work agent_profile_id cannot be changed");
+    }
+    if (Object.hasOwn(body, "agent_profile_id")) {
+      const project = getProject(context.database, work.owner.project_id);
+      if (!project) throw workError(404, "project_not_found", "Project not found");
+      validateWorkExecutionSelection(context, project, requestedAgentProfileID ?? "");
+    }
     const patch = {
+      ...(requestedAgentProfileID !== undefined ? { agent_profile_id: requestedAgentProfileID } : {}),
       ...(Object.hasOwn(body, "goal") ? { goal: requiredString(body.goal, "goal") } : {}),
       ...(Object.hasOwn(body, "title") ? { title: requiredString(body.title, "title") } : {})
     };
@@ -127,6 +143,31 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
     if (result.applied) kickProject(context, result.work);
     return mutationResponse(result);
   }));
+}
+
+function validateWorkExecutionSelection(
+  context: ReadApiContext,
+  project: NonNullable<ReturnType<typeof getProject>>,
+  explicitProfileID: string
+): void {
+  const effectiveProfileID = explicitProfileID || project.default_agent_profile_id;
+  const profile = effectiveProfileID ? getAgentProfile(context.database, effectiveProfileID) : null;
+  if (effectiveProfileID && !profile) {
+    throw workError(400, "invalid_agent_profile", `Agent Profile "${effectiveProfileID}" was not found`);
+  }
+  const providerID = profile?.provider || project.provider;
+  if (!isExecutorProviderId(providerID)) {
+    throw workError(409, "provider_unavailable", `provider "${providerID}" is not registered`);
+  }
+  if (!context.providers) return;
+  const provider = context.providers[providerID];
+  if (!provider || !provider.capabilities.includes("issue_execution")) {
+    throw workError(409, "provider_unavailable", `provider "${providerID}" does not support issue_execution`);
+  }
+  const status = provider.runtimeStatus?.();
+  if (status?.ready === false) {
+    throw workError(409, "provider_not_ready", `provider "${providerID}" is not ready: ${status.reason || "configuration required"}`);
+  }
 }
 
 function boardResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {

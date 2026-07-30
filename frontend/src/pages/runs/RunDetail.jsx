@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Component, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   BadgeDollarSign,
@@ -118,22 +118,51 @@ function ProviderSessionDrillDown({ attempt, navigateTo, run, sessionRef }) {
   if (!sessionRef) {
     return <EmptyState icon={Terminal} text="This Attempt has no provider session observation reference." />;
   }
+  const cost = runCostView(attempt?.cost);
   return (
     <section className="run-provider-drilldown">
       <header>
         <div><Terminal size={15} /><strong>{attempt?.provider_ref?.provider || run.provider || 'Provider'} session</strong></div>
         <span>当前 Attempt 的实际执行记录</span>
       </header>
-      <Sessions
-        autoSelectFirstSession={false}
-        key={sessionRef}
-        navigateTo={navigateTo}
-        selectedSessionId={sessionRef}
-        showEvidence={false}
-        showSidebar={false}
-      />
+      <div className="run-provider-attempt-facts">
+        <span>Provider <strong>{attempt?.provider_ref?.provider || 'unknown'}</strong></span>
+        <span>Status <strong>{attempt?.status || 'unknown'}</strong></span>
+        <span>Tokens <strong>{cost.total}</strong></span>
+        <span>Cost <strong>{cost.money}</strong></span>
+        {attempt?.terminal?.reason ? <span>Terminal <strong>{attempt.terminal.reason}</strong></span> : null}
+      </div>
+      <ProviderTranscriptBoundary key={sessionRef} sessionRef={sessionRef}>
+        <Sessions
+          autoSelectFirstSession={false}
+          navigateTo={navigateTo}
+          selectedSessionId={sessionRef}
+          showEvidence={false}
+          showSidebar={false}
+        />
+      </ProviderTranscriptBoundary>
     </section>
   );
+}
+
+class ProviderTranscriptBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: '' };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error: error?.message || 'Provider transcript failed to render' };
+  }
+
+  componentDidUpdate(previousProps) {
+    if (previousProps.sessionRef !== this.props.sessionRef && this.state.error) this.setState({ error: '' });
+  }
+
+  render() {
+    if (this.state.error) return <ErrorState error={this.state.error} />;
+    return this.props.children;
+  }
 }
 
 function RunSummary({ attempt, run }) {

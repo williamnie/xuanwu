@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ENV_KEYS, buildConfig, loadConfig } from "./env.ts";
+import { redactSensitiveText } from "../util/redact.ts";
 
 const tempRoots: string[] = [];
 
@@ -39,7 +40,19 @@ describe("Bun backend config", () => {
       cliConnectors: { manifestDirs: [] },
       providers: {
         codex: { command: "codex app-server --listen stdio://", cwd: "", env: {}, timeoutMs: 1_800_000 },
-        claude: { command: "claude", cwd: "", env: {}, model: "", timeoutMs: 1_800_000 }
+        claude: {
+          apiBaseUrl: "",
+          apiPath: "",
+          authMode: "environment",
+          command: "claude",
+          cwd: "",
+          env: {},
+          mode: "sdk",
+          model: "",
+          platformConfigDir: "",
+          platformProfile: "",
+          timeoutMs: 1_800_000
+        }
       },
       runner: { maxParallelProjects: 1 },
       integrations: {
@@ -260,6 +273,7 @@ describe("Bun backend config", () => {
       [ENV_KEYS.gitlabToken]: "gitlab-secret-value",
       [ENV_KEYS.gitlabTokenRef]: "env://GITLAB_HANDOFF_TOKEN"
     });
+    expect(redactSensitiveText("upstream echoed anthropic-secret")).toBe("upstream echoed [redacted]");
 
     expect(config).toEqual({
       addr: "127.0.0.1:3999",
@@ -285,10 +299,16 @@ describe("Bun backend config", () => {
           timeoutMs: 1234
         },
         claude: {
+          apiBaseUrl: "",
+          apiPath: "",
+          authMode: "environment",
           command: "/opt/bin/claude",
           cwd: "/tmp/claude-project",
           env: { ANTHROPIC_API_KEY: "anthropic-secret", SAFE_CLAUDE: "ok" },
+          mode: "sdk",
           model: "claude-sonnet-4-5",
+          platformConfigDir: "",
+          platformProfile: "",
           timeoutMs: 2345
         }
       },
@@ -378,10 +398,16 @@ describe("Bun backend config", () => {
           timeoutMs: 5678
         },
         claude: {
+          apiBaseUrl: "",
+          apiPath: "",
+          authMode: "environment",
           command: "cli-claude",
           cwd: "/tmp/cli-claude-project",
           env: { ANTHROPIC_API_KEY: "cli-secret" },
+          mode: "sdk",
           model: "claude-opus",
+          platformConfigDir: "",
+          platformProfile: "",
           timeoutMs: 6789
         }
       },
@@ -420,5 +446,102 @@ describe("Bun backend config", () => {
         }
       }
     });
+  });
+
+  test("maps Runner Claude SDK base/path/key settings without exposing a key CLI flag", () => {
+    const config = loadConfig([
+      "--claude-mode", "sdk",
+      "--claude-api-base-url", "https://gateway.example/v1/",
+      "--claude-api-path", "/anthropic/",
+      "--claude-model", "claude-sonnet"
+    ], {
+      [ENV_KEYS.claudeApiKey]: "sdk-secret",
+      [ENV_KEYS.claudeEnv]: "SAFE_CLAUDE=ok"
+    });
+
+    expect(config.providers.claude).toMatchObject({
+      apiBaseUrl: "https://gateway.example/v1/anthropic",
+      apiPath: "/anthropic",
+      env: {
+        ANTHROPIC_API_KEY: "sdk-secret",
+        ANTHROPIC_BASE_URL: "https://gateway.example/v1/anthropic",
+        SAFE_CLAUDE: "ok"
+      },
+      mode: "sdk",
+      model: "claude-sonnet"
+    });
+    expect(() => loadConfig(["--claude-api-key", "must-not-appear-in-process-args"], {})).toThrow("Unknown config argument");
+  });
+
+  test("loads a persisted Claude API key file without exposing it in process arguments", async () => {
+    const stateDir = await tempStateDir();
+    const keyFile = join(stateDir, "claude_api_key");
+    await writeFile(keyFile, "sdk-file-secret\n", { mode: 0o600 });
+
+    const config = loadConfig([], {
+      [ENV_KEYS.claudeApiKeyFile]: keyFile,
+      [ENV_KEYS.claudeApiBaseUrl]: "https://gateway.example"
+    });
+
+    expect(config.providers.claude?.env).toEqual({
+      ANTHROPIC_API_KEY: "sdk-file-secret",
+      ANTHROPIC_BASE_URL: "https://gateway.example"
+    });
+    expect(config.providers.claude).not.toHaveProperty("apiKeyFile");
+  });
+
+  test("preserves the SDK standard auth token variables in the isolated Claude environment", () => {
+    const config = loadConfig([], {
+      ANTHROPIC_AUTH_TOKEN: "anthropic-auth-token",
+      CLAUDE_CODE_OAUTH_TOKEN: "claude-oauth-token"
+    });
+
+    expect(config.providers.claude?.env).toEqual({
+      ANTHROPIC_AUTH_TOKEN: "anthropic-auth-token",
+      CLAUDE_CODE_OAUTH_TOKEN: "claude-oauth-token"
+    });
+    expect(redactSensitiveText("anthropic-auth-token claude-oauth-token")).toBe("[redacted] [redacted]");
+  });
+
+  test("maps an Anthropic platform OAuth profile without allowing environment credentials to override it", () => {
+    const config = loadConfig([], {
+      [ENV_KEYS.claudeAuthMode]: "platform-profile",
+      [ENV_KEYS.claudePlatformConfigDir]: "/tmp/anthropic-profile",
+      [ENV_KEYS.claudePlatformProfile]: "runner",
+      [ENV_KEYS.claudeApiKey]: "must-not-win",
+      ANTHROPIC_AUTH_TOKEN: "must-not-win-either"
+    });
+
+    expect(config.providers.claude).toMatchObject({
+      authMode: "platform-profile",
+      env: {
+        ANTHROPIC_CONFIG_DIR: "/tmp/anthropic-profile",
+        ANTHROPIC_PROFILE: "runner"
+      },
+      mode: "sdk",
+      platformConfigDir: "/tmp/anthropic-profile",
+      platformProfile: "runner"
+    });
+    expect(config.providers.claude?.env).not.toHaveProperty("ANTHROPIC_API_KEY");
+    expect(config.providers.claude?.env).not.toHaveProperty("ANTHROPIC_AUTH_TOKEN");
+  });
+
+  test("defaults CLI fallback to local login and fails closed for incompatible auth modes", () => {
+    expect(buildConfig({ claudeMode: "cli-fallback" }).providers.claude).toMatchObject({
+      authMode: "local-cli",
+      mode: "cli-fallback"
+    });
+    expect(buildConfig({ claudeMode: "cli-fallback", claudeEnv: "ANTHROPIC_API_KEY=key" }).providers.claude).toMatchObject({
+      authMode: "environment",
+      mode: "cli-fallback"
+    });
+    expect(() => buildConfig({ claudeMode: "sdk", claudeAuthMode: "local-cli" })).toThrow("requires CODEX_RUNNER_CLAUDE_MODE=cli-fallback");
+    expect(() => buildConfig({ claudeMode: "cli-fallback", claudeAuthMode: "platform-profile" })).toThrow("requires CODEX_RUNNER_CLAUDE_MODE=sdk");
+    expect(() => buildConfig({ claudeAuthMode: "platform-profile", claudePlatformProfile: "../unsafe" })).toThrow("PLATFORM_PROFILE");
+  });
+
+  test("keeps Claude CLI as an explicit fallback and rejects unsafe API bases", () => {
+    expect(buildConfig({ claudeMode: "cli-fallback" }).providers.claude?.mode).toBe("cli-fallback");
+    expect(() => buildConfig({ claudeApiBaseUrl: "file:///tmp/proxy" })).toThrow("must be an http(s) URL");
   });
 });

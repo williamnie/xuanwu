@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 const source = readFileSync(new URL('./install-launchd.sh', import.meta.url), 'utf8');
+const releaseSource = readFileSync(new URL('./install-release.sh', import.meta.url), 'utf8');
 const redeploy = readFileSync(new URL('../redeploy.sh', import.meta.url), 'utf8');
 const installScript = new URL('./install-launchd.sh', import.meta.url);
 const installReleaseScript = new URL('./install-release.sh', import.meta.url);
@@ -35,6 +36,38 @@ test('launchd deployment persists the explicit W1 automation shadow selector', (
 
 test('launchd Core marks Runner-managed provider execution', () => {
   assert.match(source, /<key>CODEX_RUNNER_MANAGED_EXECUTION<\/key>\s*<string>1<\/string>/);
+});
+
+test('deployment persists Claude SDK auth through a mode-0600 key file instead of service arguments', () => {
+  for (const script of [source, releaseSource]) {
+    assert.match(script, /CLAUDE_API_KEY_FILE="\$\{CODEX_RUNNER_CLAUDE_API_KEY_FILE:-\$STATE_DIR\/claude_api_key\}"/);
+    assert.match(script, /printf '%s\\n' "\$CLAUDE_API_KEY" > "\$CLAUDE_API_KEY_FILE"/);
+    assert.match(script, /chmod 600 "\$CLAUDE_API_KEY_FILE"/);
+    assert.match(script, /CODEX_RUNNER_CLAUDE_API_KEY_FILE/);
+    assert.doesNotMatch(script, /CODEX_RUNNER_CLAUDE_API_KEY<\/key>/);
+    assert.doesNotMatch(script, /Environment="CODEX_RUNNER_CLAUDE_API_KEY=/);
+  }
+});
+
+test('deployment persists explicit Claude local CLI and Anthropic platform profile auth selectors without tokens', () => {
+  for (const script of [source, releaseSource]) {
+    assert.match(script, /CODEX_RUNNER_CLAUDE_AUTH_MODE/);
+    assert.match(script, /CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR/);
+    assert.match(script, /CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE/);
+    assert.match(script, /local-cli/);
+    assert.match(script, /platform-profile/);
+    assert.doesNotMatch(script, /CLAUDE_CODE_OAUTH_TOKEN<\/key>/);
+    assert.doesNotMatch(script, /Environment="CLAUDE_CODE_OAUTH_TOKEN=/);
+    assert.doesNotMatch(script, /ANTHROPIC_AUTH_TOKEN<\/key>/);
+    assert.doesNotMatch(script, /Environment="ANTHROPIC_AUTH_TOKEN=/);
+  }
+});
+
+test('deployment stages the adjacent Claude SDK native executable atomically and snapshots it', () => {
+  assert.match(source, /stage_file_atomically "\$CLAUDE_SDK_EXECUTABLE_SOURCE" "\$CLAUDE_SDK_EXECUTABLE_PATH" 0755/);
+  assert.match(source, /"\$LAUNCHD_BINARY_PATH\.claude-agent-sdk"/);
+  assert.match(releaseSource, /release asset does not contain Claude Agent SDK native executable/);
+  assert.match(releaseSource, /mv -f "\$sdk_staged" "\$CLAUDE_SDK_EXECUTABLE_PATH"/);
 });
 
 test('launchd deployment defaults to split Web/Core/Agentic roles from one artifact', () => {

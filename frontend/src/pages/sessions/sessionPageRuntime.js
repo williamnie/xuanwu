@@ -82,6 +82,7 @@ export function isSessionFileEvent(event) {
 export function isAgentEvent(event) {
   return event?.type === 'agent.event' ||
     event?.type === 'codex.event' ||
+    event?.type === 'claude.event' ||
     (event?.type === 'issue.log' && Boolean(event?.threadId && event?.agent_event_type));
 }
 

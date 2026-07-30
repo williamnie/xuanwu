@@ -377,6 +377,149 @@ describe("Bun Sessions API compatibility", () => {
       database.close();
     }
   });
+
+  test("routes provider-qualified Claude create/read/message/list/interrupt without Codex reconciliation", async () => {
+    const database = await openFixtureDatabase();
+    const codex = new SessionsProvider();
+    const claude = new ClaudeSessionsProvider();
+    try {
+      insertProject(database, { id: "claude-demo", cwd: "/tmp/claude-demo", provider: "claude" });
+      upsertAgentSession(database, {
+        provider: "claude",
+        provider_session_id: "claude-existing",
+        project_id: "claude-demo",
+        raw_ref: { provider_turn_id: "claude-turn-existing" },
+        status: "running"
+      });
+      const router = createDefaultRouter({ database, providers: { codex, claude } });
+
+      const liveInterrupt = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-live-unindexed/interrupt`, { method: "POST" }));
+      const created = await router.handle(jsonRequest("/api/sessions", {
+        project_id: "claude-demo",
+        prompt: "hello Claude"
+      }));
+      const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=claude&limit=20`));
+      const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-new`));
+      const message = await router.handle(jsonRequest("/api/sessions/claude:claude-new/messages", { prompt: "continue" }));
+      const interrupt = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-new/interrupt`, { method: "POST" }));
+
+      expect(created.status).toBe(201);
+      expect(liveInterrupt.status).toBe(200);
+      expect(await liveInterrupt.json()).toEqual({ interrupted: true });
+      expect(await created.json()).toMatchObject({
+        id: "claude:claude-new",
+        provider: "claude",
+        provider_session_id: "claude-new",
+        provider_turn_id: "claude-turn-initial"
+      });
+      expect(getAgentSession(database, "claude:claude-new")).toMatchObject({
+        project_id: "claude-demo",
+        provider: "claude"
+      });
+      expect(list.status).toBe(200);
+      const listed = await list.json() as { data: Array<Record<string, unknown>> };
+      expect(listed.data.find((item) => item.id === "claude:claude-existing")).toMatchObject({
+        id: "claude:claude-existing",
+        provider: "claude"
+      });
+      expect(getAgentSession(database, "claude:claude-existing")?.status).toBe("running");
+      expect(detail.status).toBe(200);
+      expect(await detail.json()).toMatchObject({ id: "claude:claude-new", provider: "claude" });
+      expect(message.status).toBe(201);
+      expect(await message.json()).toEqual({ thread_id: "claude-new", turn_id: "claude-turn-follow-up" });
+      expect(interrupt.status).toBe(200);
+      expect(await interrupt.json()).toEqual({ interrupted: true });
+      expect(claude.interrupts).toEqual([
+        { sessionId: "claude-live-unindexed", turnId: "" },
+        { sessionId: "claude-new", turnId: "claude-turn-follow-up" }
+      ]);
+      expect(codex.calls).toEqual([]);
+      expect(claude.calls).toEqual([
+        ["createSession", { cwd: "/tmp/claude-demo", prompt: "hello Claude" }],
+        ["listSessions", { limit: 20 }],
+        ["readSession", { sessionId: "claude-new" }],
+        ["sendSessionMessage", { cwd: "/tmp/claude-demo", sessionId: "claude-new", prompt: "continue" }]
+      ]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("keeps legacy bare session ids routed to Codex", async () => {
+    const database = await openFixtureDatabase();
+    const codex = new SessionsProvider();
+    const claude = new ClaudeSessionsProvider();
+    try {
+      const response = await createDefaultRouter({ database, providers: { codex, claude } })
+        .handle(new Request(`${BASE_URL}/api/sessions/thread-legacy`));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: "codex:thread-legacy", provider: "codex" });
+      expect(codex.calls).toEqual([["readSession", { sessionId: "thread-legacy" }]]);
+      expect(claude.calls).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("redacts provider credentials from provider-neutral session errors", async () => {
+    const database = await openFixtureDatabase();
+    const claude = new ClaudeSessionsProvider();
+    const secret = "anthropic-session-error-secret";
+    claude.listSessions = async () => {
+      throw new Error(`upstream rejected ANTHROPIC_API_KEY=${secret}`);
+    };
+    try {
+      const response = await createDefaultRouter({ database, providers: { claude } })
+        .handle(new Request(`${BASE_URL}/api/sessions?provider=claude`));
+      const text = await response.text();
+      expect(response.status).toBe(200);
+      expect(text).toContain("provider_errors");
+      expect(text).not.toContain(secret);
+      expect(text).toContain("ANTHROPIC_API_KEY=[redacted]");
+    } finally {
+      database.close();
+    }
+  });
+
+  test("fails a project-filtered session list closed when the project does not exist", async () => {
+    const database = await openFixtureDatabase();
+    const claude = new ClaudeSessionsProvider();
+    try {
+      const response = await createDefaultRouter({ database, providers: { claude } })
+        .handle(new Request(`${BASE_URL}/api/sessions?project_id=missing`));
+      expect(response.status).toBe(404);
+      expect(claude.calls).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("reports an explicitly requested unready Claude SDK without routing to Codex", async () => {
+    const database = await openFixtureDatabase();
+    const codex = new SessionsProvider();
+    const claude = new ClaudeSessionsProvider();
+    claude.ready = false;
+    try {
+      const router = createDefaultRouter({ database, providers: { codex, claude } });
+      const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=claude`));
+      const create = await router.handle(jsonRequest("/api/sessions", {
+        cwd: "/tmp",
+        prompt: "hello",
+        provider: "claude"
+      }));
+
+      expect(list.status).toBe(200);
+      expect(await list.json()).toMatchObject({
+        provider_errors: [{ provider: "claude", error: expect.stringContaining("configuration required") }]
+      });
+      expect(create.status).toBe(400);
+      expect(await create.text()).toContain("尚未就绪");
+      expect(codex.calls).toEqual([]);
+      expect(claude.calls).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
 });
 
 class SessionsProvider implements ExecutorProvider {
@@ -444,6 +587,66 @@ class SessionsProvider implements ExecutorProvider {
   }
 }
 
+class ClaudeSessionsProvider implements ExecutorProvider {
+  readonly id = "claude" as const;
+  readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt"] as const;
+  readonly calls: Array<[string, Record<string, unknown>]> = [];
+  readonly interrupts: Array<{ sessionId: string; turnId: string }> = [];
+  ready = true;
+
+  runtimeStatus() {
+    return {
+      active_sessions: 0,
+      api_key_configured: this.ready,
+      mode: "sdk",
+      ready: this.ready,
+      ...(this.ready ? {} : { reason: "configuration required" }),
+      version: "0.3.152"
+    };
+  }
+
+  async run(_input: ProviderRunInput) { throw new Error("not implemented"); }
+
+  async interrupt(input: { session: { sessionId: string; turnId?: string } }): Promise<void> {
+    this.interrupts.push({ sessionId: input.session.sessionId, turnId: input.session.turnId ?? "" });
+  }
+
+  async listSessions(input: { cursor?: string; cwd?: string; limit?: number }) {
+    this.calls.push(["listSessions", compact(input)]);
+    return {
+      data: [{ id: "claude:claude-existing", provider: "claude", provider_session_id: "claude-existing", status: "idle" }],
+      nextCursor: ""
+    };
+  }
+
+  async readSession(sessionId: string) {
+    this.calls.push(["readSession", { sessionId }]);
+    return { id: `claude:${sessionId}`, provider: "claude", provider_session_id: sessionId, turns: [] };
+  }
+
+  async createSession(input: Record<string, unknown>) {
+    this.calls.push(["createSession", compact({ cwd: input.cwd, prompt: input.prompt })]);
+    return {
+      id: "claude:claude-new",
+      provider: "claude" as const,
+      provider_session_id: "claude-new",
+      provider_turn_id: "claude-turn-initial",
+      thread_id: "claude-new",
+      turn_id: "claude-turn-initial"
+    };
+  }
+
+  async sendSessionMessage(input: Record<string, unknown>) {
+    this.calls.push(["sendSessionMessage", compact({ cwd: input.cwd, sessionId: input.sessionId, prompt: input.prompt })]);
+    return {
+      provider: "claude" as const,
+      provider_session_id: String(input.sessionId),
+      sessionId: String(input.sessionId),
+      turn_id: "claude-turn-follow-up"
+    };
+  }
+}
+
 type SessionCreateFixture = {
   id: string;
   provider: "codex";
@@ -453,11 +656,11 @@ type SessionCreateFixture = {
   turn_id?: string;
 };
 
-function insertProject(db: RunnerDatabase, project: { cwd: string; id: string }): void {
+function insertProject(db: RunnerDatabase, project: { cwd: string; id: string; provider?: string }): void {
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?)`,
-    [project.id, project.id, project.cwd, "codex", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    [project.id, project.id, project.cwd, project.provider ?? "codex", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 

@@ -2,9 +2,9 @@ export const RUN_EVENT_PAGE_SIZE = 100;
 export const RUN_EVENT_SCAN_LIMIT = 500;
 
 export function runAttemptProviderSessionRef(attempt, run = {}) {
-  const observationRef = text(attempt?.provider_ref?.observation_ref) || text(attempt?.agent_session_key);
-  if (observationRef) return observationRef;
   const provider = text(attempt?.provider_ref?.provider) || text(run?.provider);
+  const observationRef = text(attempt?.provider_ref?.observation_ref) || text(attempt?.agent_session_key);
+  if (observationRef) return observationRef.includes(':') ? observationRef : (provider ? `${provider}:${observationRef}` : '');
   const sessionRef = text(attempt?.provider_ref?.session_ref);
   return provider && sessionRef ? `${provider}:${sessionRef}` : '';
 }

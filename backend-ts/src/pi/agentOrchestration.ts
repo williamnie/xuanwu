@@ -139,7 +139,18 @@ export function resolveIssueAgentRole(issue: Pick<Issue, "workflow_snapshot_json
 }
 
 export function resolveExecutorSelection(db: RunnerDatabase, project: Project, issue: Issue): AgentRecommendation {
-  return recommendExecutorProfile(db, project, { issue_id: issue.id, role: resolveIssueAgentRole(issue) });
+  const role = resolveIssueAgentRole(issue);
+  const skills = roleSkills(role, project, issue, {});
+  const selection = selectRoleProfile({
+    allowStrategy: false,
+    issueProfileId: issue.agent_profile_id,
+    profiles: listAgentProfiles(db),
+    projectDefaultProfileId: project.default_agent_profile_id,
+    projectProvider: project.provider,
+    requiredSkillIntents: skills.required,
+    role
+  });
+  return recommendationFor(project, issue, role, skills, selection);
 }
 
 function recommendationFor(

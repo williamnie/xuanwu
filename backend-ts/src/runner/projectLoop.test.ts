@@ -8,7 +8,7 @@ import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { projectLoopDecision, runProjectLoopOnce } from "./projectLoop.ts";
 import { isProjectLoopActive, kickAutoRunProjects, setProjectLoopMaxParallelProjects, startProjectLoop } from "./projectLoopManager.ts";
-import type { ExecutorProvider, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
+import type { ExecutorProvider, ExecutorProviderId, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 
 const tempRoots: string[] = [];
 
@@ -58,6 +58,26 @@ class TransientInfraExecutionProvider implements ExecutorProvider {
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     this.inputs.push(input);
     throw new Error("codex app-server request timed out after 10000ms: initialize");
+  }
+}
+
+class NamedExecutionProvider implements ExecutorProvider {
+  readonly capabilities = ["issue_execution"] as const;
+  readonly inputs: ProviderRunInput[] = [];
+
+  constructor(readonly id: "codex" | "claude") {}
+
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
+    this.inputs.push(input);
+    const sessionId = `${this.id}-session-${input.issueId}`;
+    const turnId = `${this.id}-turn-${input.issueId}`;
+    input.onEvent?.({
+      provider: this.id,
+      session: { provider: this.id, sessionId, turnId },
+      status: "running",
+      type: "turn_started"
+    });
+    return { runId: `${this.id}-run-${input.issueId}`, session: { provider: this.id, sessionId, turnId } };
   }
 }
 
@@ -485,6 +505,7 @@ describe("Bun project loop claim execution", () => {
         error: "codex app-server request timed out after 10000ms: initialize"
       });
       expect(listIssueRuns(db, first).at(-1)).toMatchObject({
+        provider: "claude",
         status: "failed",
         ended_at: expect.stringMatching(/Z$/),
         exit_reason: "provider_deferred",
@@ -586,6 +607,58 @@ describe("Bun project loop claim execution", () => {
       expect(getAgentSession(db, `fake-execution-only:fake-session-${issueId}`)).toMatchObject({
         agent_role: "executor",
         issue_id: issueId
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("freezes different Codex and Claude Work providers into Run and Attempt history", async () => {
+    const db = await openFixtureDatabase();
+    const codex = new NamedExecutionProvider("codex");
+    const claude = new NamedExecutionProvider("claude");
+    try {
+      insertProject(db, { id: "demo", provider: "codex" });
+      insertAgentProfile(db, { id: "codex-work", model: "gpt-5.6", provider: "codex" });
+      insertAgentProfile(db, { id: "claude-work", model: "claude-sonnet", provider: "claude" });
+      const codexIssue = insertIssue(db, {
+        agentProfileId: "codex-work",
+        priority: 10,
+        projectId: "demo",
+        title: "Codex Work"
+      });
+      const claudeIssue = insertIssue(db, {
+        agentProfileId: "claude-work",
+        priority: 5,
+        projectId: "demo",
+        title: "Claude Work"
+      });
+      const providers = { codex, claude } satisfies Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers });
+      closeClaimedIssue(db, codexIssue);
+      db.sqlite.run("update projects set provider='claude', default_agent_profile_id='claude-work' where id='demo'");
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers });
+
+      expect(codex.inputs.map((input) => input.issueId)).toEqual([codexIssue]);
+      expect(claude.inputs.map((input) => input.issueId)).toEqual([claudeIssue]);
+      expect(listIssueRuns(db, codexIssue).at(-1)).toMatchObject({
+        agent_profile_id: "codex-work",
+        provider: "codex",
+        provider_session_id: `codex-session-${codexIssue}`
+      });
+      expect(listIssueRuns(db, claudeIssue).at(-1)).toMatchObject({
+        agent_profile_id: "claude-work",
+        provider: "claude",
+        provider_session_id: `claude-session-${claudeIssue}`
+      });
+      expect(latestAttempt(db, codexIssue)).toMatchObject({
+        provider: "codex",
+        provider_session_id: `codex-session-${codexIssue}`
+      });
+      expect(latestAttempt(db, claudeIssue)).toMatchObject({
+        provider: "claude",
+        provider_session_id: `claude-session-${claudeIssue}`
       });
     } finally {
       db.close();
@@ -816,6 +889,14 @@ function latestRun(db: RunnerDatabase, issueId: number): Record<string, unknown>
     `select agent_profile_id, capability_summary, selection_reason
      from issue_runs where issue_id=? order by attempt desc limit 1`
   ).get(issueId);
+}
+
+function latestAttempt(db: RunnerDatabase, issueId: number): Record<string, unknown> | null {
+  return db.sqlite.query<Record<string, unknown>, [number]>(`
+    select a.provider, a.provider_session_id, a.provider_turn_id
+    from run_attempts a join issue_runs r on r.id=a.issue_run_id
+    where r.issue_id=? order by a.sequence desc limit 1
+  `).get(issueId);
 }
 
 function insertOpenRun(db: RunnerDatabase, issueID: number): void {

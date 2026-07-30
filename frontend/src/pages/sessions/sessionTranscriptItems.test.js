@@ -134,6 +134,27 @@ test('live stream parser maps PI conversation SSE assistant updates to session-s
   assert.equal(parsed.tools.length, 0);
 });
 
+test('live stream parser maps Claude SDK deltas and tool results into the provider-neutral transcript', () => {
+  const parsed = parseLiveSessionEvents([
+    { provider: 'claude', agent_event_type: 'turn_started' },
+    { provider: 'claude', agent_event_type: 'text_delta', text: 'Hello ' },
+    { provider: 'claude', agent_event_type: 'text_delta', text: 'Claude' },
+    { provider: 'claude', agent_event_type: 'tool', command: 'Read {"file_path":"README.md"}', status: 'started' },
+    { provider: 'claude', agent_event_type: 'tool_result', text: 'README content', status: 'completed' },
+    { provider: 'claude', agent_event_type: 'done', status: 'completed' },
+  ]);
+
+  assert.equal(parsed.agentMessageText, 'Hello Claude');
+  assert.equal(parsed.tools.length, 1);
+  assert.deepEqual(parsed.tools[0], {
+    type: 'commandExecution',
+    command: 'Read {"file_path":"README.md"}',
+    text: 'README content',
+    status: 'completed',
+    cwd: '',
+  });
+});
+
 test('live stream parser exposes pending approval events', () => {
   const parsed = parseLiveSessionEvents([
     {

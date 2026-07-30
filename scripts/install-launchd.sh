@@ -19,6 +19,8 @@ SOURCE_WEB_DIR="${CODEX_RUNNER_SOURCE_WEB_DIR:-$ROOT_DIR/frontend/dist}"
 WEB_DIR="${CODEX_RUNNER_WEB_DIR:-$STATE_DIR/web}"
 BINARY_PATH="${CODEX_RUNNER_BINARY:-$ROOT_DIR/dist/codex-issue-runner}"
 LAUNCHD_BINARY_PATH="${CODEX_RUNNER_LAUNCHD_BINARY:-$APP_SUPPORT_DIR/bin/codex-issue-runner}"
+CLAUDE_SDK_EXECUTABLE_SOURCE="$BINARY_PATH.claude-agent-sdk"
+CLAUDE_SDK_EXECUTABLE_PATH="$LAUNCHD_BINARY_PATH.claude-agent-sdk"
 PI_PACKAGE_ASSET_SOURCE="${CODEX_RUNNER_PI_PACKAGE_ASSET_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@earendil-works/pi-coding-agent}"
 PI_PACKAGE_ASSET_DIR="${CODEX_RUNNER_PI_PACKAGE_ASSET_DIR:-$APP_SUPPORT_DIR/pi-coding-agent}"
 RUNNER_SKILLS_SOURCE="${CODEX_RUNNER_SKILLS_SOURCE:-$ROOT_DIR/skills}"
@@ -28,6 +30,21 @@ LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$APP_SUPPORT_DIR/logs}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-$(command -v codex || true)}"
 CODEX_SERVER_MODE="${CODEX_RUNNER_CODEX_SERVER_MODE:-cli}"
 CODEX_APP_CMD="${CODEX_RUNNER_CODEX_APP_CMD:-}"
+CLAUDE_MODE="${CODEX_RUNNER_CLAUDE_MODE:-sdk}"
+CLAUDE_AUTH_MODE="${CODEX_RUNNER_CLAUDE_AUTH_MODE:-}"
+CLAUDE_API_BASE_URL="${CODEX_RUNNER_CLAUDE_API_BASE_URL:-${ANTHROPIC_BASE_URL:-}}"
+CLAUDE_API_PATH="${CODEX_RUNNER_CLAUDE_API_PATH:-}"
+CLAUDE_API_KEY="${CODEX_RUNNER_CLAUDE_API_KEY:-${ANTHROPIC_API_KEY:-}}"
+CLAUDE_API_KEY_FILE="${CODEX_RUNNER_CLAUDE_API_KEY_FILE:-$STATE_DIR/claude_api_key}"
+CLAUDE_PLATFORM_CONFIG_DIR="${CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR:-${ANTHROPIC_CONFIG_DIR:-}}"
+CLAUDE_PLATFORM_PROFILE="${CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE:-${ANTHROPIC_PROFILE:-}}"
+if [ -z "$CLAUDE_AUTH_MODE" ]; then
+  if [ "$CLAUDE_MODE" = "cli-fallback" ] && [ -z "$CLAUDE_API_KEY" ]; then
+    CLAUDE_AUTH_MODE="local-cli"
+  else
+    CLAUDE_AUTH_MODE="environment"
+  fi
+fi
 AUTOMATION_SHADOW_W1="${CODEX_RUNNER_AUTOMATION_SHADOW_W1:-0}"
 SKIP_RUNTIME_BACKUP="${CODEX_RUNNER_SKIP_RUNTIME_BACKUP:-0}"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
@@ -64,6 +81,15 @@ write_custom_auth_token_file() {
   fi
 }
 
+write_claude_api_key_file() {
+  if [ "$CLAUDE_AUTH_MODE" = "environment" ] && [ -n "$CLAUDE_API_KEY" ]; then
+    mkdir -p "$(dirname "$CLAUDE_API_KEY_FILE")"
+    umask 077
+    printf '%s\n' "$CLAUDE_API_KEY" > "$CLAUDE_API_KEY_FILE"
+    chmod 600 "$CLAUDE_API_KEY_FILE"
+  fi
+}
+
 stage_file_atomically() {
   local source="$1" target="$2" mode="$3"
   local target_dir staged
@@ -85,9 +111,18 @@ stage_launchd_binary() {
   fi
 }
 
+stage_claude_sdk_executable() {
+  if [ ! -f "$CLAUDE_SDK_EXECUTABLE_SOURCE" ]; then
+    [ "$CLAUDE_MODE" = "cli-fallback" ] && return 0
+    echo "[launchd] missing Claude Agent SDK native executable: $CLAUDE_SDK_EXECUTABLE_SOURCE" >&2
+    exit 1
+  fi
+  stage_file_atomically "$CLAUDE_SDK_EXECUTABLE_SOURCE" "$CLAUDE_SDK_EXECUTABLE_PATH" 0755
+}
+
 backup_current_runtime() {
   local rollback_dir="" source
-  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST"; do
+  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.claude-agent-sdk" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST"; do
     [ -e "$source" ] || continue
     if [ -z "$rollback_dir" ]; then
       rollback_dir="$APP_SUPPORT_DIR/rollback/$(date -u '+%Y%m%dT%H%M%SZ')"
@@ -201,6 +236,21 @@ if [ -z "$CODEX_CMD" ]; then
   exit 1
 fi
 
+case "$CLAUDE_AUTH_MODE" in
+  environment) ;;
+  local-cli)
+    [ "$CLAUDE_MODE" = "cli-fallback" ] || { echo "[launchd] CODEX_RUNNER_CLAUDE_AUTH_MODE=local-cli requires cli-fallback mode" >&2; exit 1; }
+    ;;
+  platform-profile)
+    [ "$CLAUDE_MODE" = "sdk" ] || { echo "[launchd] CODEX_RUNNER_CLAUDE_AUTH_MODE=platform-profile requires sdk mode" >&2; exit 1; }
+    ;;
+  *) echo "[launchd] CODEX_RUNNER_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile" >&2; exit 1 ;;
+esac
+if [ -n "$CLAUDE_PLATFORM_PROFILE" ] && [[ ! "$CLAUDE_PLATFORM_PROFILE" =~ ^[A-Za-z0-9_.-]+$ || "$CLAUDE_PLATFORM_PROFILE" = "." || "$CLAUDE_PLATFORM_PROFILE" = ".." ]]; then
+  echo "[launchd] CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE is invalid" >&2
+  exit 1
+fi
+
 if [[ "$AUTOMATION_SHADOW_W1" != "0" && "$AUTOMATION_SHADOW_W1" != "1" ]]; then
   echo "[launchd] CODEX_RUNNER_AUTOMATION_SHADOW_W1 must be 0 or 1" >&2
   exit 1
@@ -224,9 +274,11 @@ else
   backup_current_runtime
 fi
 stage_launchd_binary
+stage_claude_sdk_executable
 stage_pi_package_assets
 stage_web_dir
 write_custom_auth_token_file
+write_claude_api_key_file
 
 cat > "$WEB_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -311,6 +363,20 @@ cat > "$CORE_PLIST" <<PLIST
     <string>$(xml_escape "$CODEX_SERVER_MODE")</string>
     <key>CODEX_RUNNER_CODEX_APP_CMD</key>
     <string>$(xml_escape "$CODEX_APP_CMD")</string>
+    <key>CODEX_RUNNER_CLAUDE_MODE</key>
+    <string>$(xml_escape "$CLAUDE_MODE")</string>
+    <key>CODEX_RUNNER_CLAUDE_AUTH_MODE</key>
+    <string>$(xml_escape "$CLAUDE_AUTH_MODE")</string>
+    <key>CODEX_RUNNER_CLAUDE_API_BASE_URL</key>
+    <string>$(xml_escape "$CLAUDE_API_BASE_URL")</string>
+    <key>CODEX_RUNNER_CLAUDE_API_PATH</key>
+    <string>$(xml_escape "$CLAUDE_API_PATH")</string>
+    <key>CODEX_RUNNER_CLAUDE_API_KEY_FILE</key>
+    <string>$(xml_escape "$CLAUDE_API_KEY_FILE")</string>
+    <key>CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR</key>
+    <string>$(xml_escape "$CLAUDE_PLATFORM_CONFIG_DIR")</string>
+    <key>CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE</key>
+    <string>$(xml_escape "$CLAUDE_PLATFORM_PROFILE")</string>
     <key>CODEX_RUNNER_MANAGED_EXECUTION</key>
     <string>1</string>
     <key>CODEX_RUNNER_AUTOMATION_SHADOW_W1</key>

@@ -132,8 +132,10 @@ export default function SessionTranscript({ session, project, liveEvents, optimi
   );
   const showLiveTurn = shouldRenderLiveTurn(liveEvents, running);
   const provider = providerLabel(session?.provider);
+  const providerId = String(session?.provider || 'codex').toLowerCase();
   const providerSessionId = session?.provider_session_id || session?.sessionId || session?.id || '';
   const codexAppUrl = useMemo(() => codexAppThreadUrl(session), [session]);
+  const resume = useMemo(() => buildSessionResumeCommand(session), [session]);
   const model = session?.model || '';
   const lastLiveEvent = liveEvents[liveEvents.length - 1];
   const autoScrollWatchKey = [
@@ -158,18 +160,23 @@ export default function SessionTranscript({ session, project, liveEvents, optimi
   });
 
   const copyResumeCommand = useCallback(async () => {
-    const resume = buildSessionResumeCommand(session);
     if (!resume.command) {
       toast.warning(resume.note);
       return;
     }
     try {
       await copyTextToClipboard(resume.command);
-      toast.success('已复制 Codex resume 命令');
+      toast.success(`已复制 ${provider} resume 命令`);
     } catch (err) {
       toast.error(err.message || '复制 resume 命令失败');
     }
-  }, [session]);
+  }, [provider, resume]);
+
+  const continueInRunner = useCallback(() => {
+    const composer = document.querySelector('.session-composer textarea, .session-chat-workspace textarea');
+    if (composer instanceof HTMLElement) composer.focus();
+    toast.info(resume.note);
+  }, [resume.note]);
 
   const downloadMarkdown = useCallback(() => {
     try {
@@ -205,9 +212,15 @@ export default function SessionTranscript({ session, project, liveEvents, optimi
                 在 Codex App 打开
               </button>
             ) : null}
-            <button type="button" onClick={copyResumeCommand} title="Codex 专用：复制 codex resume 命令">
-              复制 resume 命令
-            </button>
+            {resume.command ? (
+              <button type="button" onClick={copyResumeCommand} title={`复制 ${provider} resume 命令`}>
+                复制 resume 命令
+              </button>
+            ) : (
+              <button type="button" onClick={continueInRunner} title={resume.note}>
+                在 Runner 中继续/恢复
+              </button>
+            )}
             <button type="button" onClick={downloadMarkdown}>下载 Markdown</button>
           </div>
           <CreateSessionIssueButton session={session} project={project} navigateTo={navigateTo} />
@@ -237,6 +250,7 @@ export default function SessionTranscript({ session, project, liveEvents, optimi
             <LiveTurnItem
               liveEvents={liveEvents}
               persistedTurns={turns}
+              provider={providerId}
             />
           )}
         </div>
@@ -501,7 +515,7 @@ function AgentMessageBubble({ item }) {
   );
 }
 
-function LiveTurnItem({ liveEvents, persistedTurns }) {
+function LiveTurnItem({ liveEvents, persistedTurns, provider }) {
   const parsed = useMemo(() => parseLiveSessionEvents(liveEvents, persistedTurns), [liveEvents, persistedTurns]);
 
   const { tools, agentMessageText, agentMessageDeduped, reasoningText, errorText, approvalPending, activity } = parsed;
@@ -511,7 +525,7 @@ function LiveTurnItem({ liveEvents, persistedTurns }) {
   return (
     <div className="turn-container active-live">
       {showActivityBanner && (
-        <LiveActivityBanner activity={activity} approvalPending={approvalPending} errorText={errorText} />
+        <LiveActivityBanner activity={activity} approvalPending={approvalPending} errorText={errorText} provider={provider} />
       )}
       {tools.length > 0 && (
         <ToolsCollapsible
@@ -559,21 +573,22 @@ function LiveTurnItem({ liveEvents, persistedTurns }) {
   );
 }
 
-function LiveActivityBanner({ activity, approvalPending, errorText }) {
-  if (errorText) return <div className="live-activity-banner error">Codex 运行出错：{errorText}</div>;
-  if (approvalPending) return <div className="live-activity-banner approval">Codex 已暂停，正在等待网页审批。</div>;
-  const label = liveActivityLabel(activity);
+function LiveActivityBanner({ activity, approvalPending, errorText, provider }) {
+  const labelName = providerLabel(provider);
+  if (errorText) return <div className="live-activity-banner error">{labelName} 运行出错：{errorText}</div>;
+  if (approvalPending) return <div className="live-activity-banner approval">{labelName} 已暂停，正在等待网页审批。</div>;
+  const label = liveActivityLabel(activity, labelName);
   return <div className="live-activity-banner"><Loader2 size={13} className="spin-animation" /> {label}</div>;
 }
 
-function liveActivityLabel(activity) {
+function liveActivityLabel(activity, provider) {
   switch (activity) {
     case 'streaming':
-      return 'Codex is working · 正在输出回复';
+      return `${provider} is working · 正在输出回复`;
     case 'command':
-      return 'Codex is working · 正在运行命令';
+      return `${provider} is working · 正在运行命令`;
     case 'file-change':
-      return 'Codex is working · 正在整理文件改动';
+      return `${provider} is working · 正在整理文件改动`;
     default:
       return 'Agent is running';
   }
