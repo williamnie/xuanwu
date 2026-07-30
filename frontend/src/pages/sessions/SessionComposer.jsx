@@ -40,6 +40,7 @@ export default function SessionComposer({
   onRetryQueuedMessage,
   suggestions = [],
   referenceDetails = [],
+  showReferenceChips = true,
   onAttachReference = null,
   onRemoveReference = null,
   hasInvalidReferences = false,
@@ -108,6 +109,7 @@ export default function SessionComposer({
         onSubmitKey={canSubmitMessage ? submitFromEditor : null}
         suggestions={suggestions}
         referenceDetails={referenceDetails}
+        showReferenceChips={showReferenceChips}
         onAttachReference={onAttachReference}
         onRemoveReference={onRemoveReference}
         onSelectCommand={onSelectCommand}

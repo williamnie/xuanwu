@@ -256,6 +256,12 @@ export default function App() {
     });
   }, [updateAppState]);
 
+  const rememberPiConversation = useCallback((conversationId) => {
+    updateAppState(draft => {
+      draft.selectedPiConversationId = conversationId || '';
+    });
+  }, [updateAppState]);
+
   useEffect(() => {
     if (!globalThis.addEventListener) return undefined;
     const syncHandoffHash = () => {
@@ -410,7 +416,11 @@ export default function App() {
                 selectedSessionId={selectedSessionId}
               />
             ) : currentPage === 'ask-xuanwu' ? (
-              <PiChat navigateTo={navigateTo} initialConversationId={selectedPiConversationId} />
+              <PiChat
+                navigateTo={navigateTo}
+                initialConversationId={selectedPiConversationId}
+                onConversationChange={rememberPiConversation}
+              />
             ) : isAssistantModulePage(currentPage) ? (
               <Settings initialTab={assistantModule?.tab} navigateTo={navigateTo} />
             ) : currentPage === 'automations' ? (

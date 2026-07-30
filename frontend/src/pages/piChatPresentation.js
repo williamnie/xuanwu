@@ -14,7 +14,7 @@ export function piChatStatusSummary({ conversation = null, error = '', loading =
   const detail = messageCountLabel(messages.length, t);
   if (error) return { detail: copy(t, 'chat.status.openAdvanced', '打开 Advanced 可查看诊断'), label: copy(t, 'chat.status.retry', '需要重试'), tone: 'error' };
   if (loading) return { detail: copy(t, 'chat.status.loadingDetail', '正在读取对话记录'), label: copy(t, 'chat.status.loading', '载入中'), tone: 'running' };
-  if (sending) return { detail: copy(t, 'chat.status.sendingDetail', 'Xuanwu 正在更新此 Chat'), label: copy(t, 'chat.status.sending', '处理中'), tone: 'running' };
+  if (sending || conversation?.runtime_status === 'running') return { detail: copy(t, 'chat.status.sendingDetail', 'Xuanwu 正在更新此 Chat'), label: copy(t, 'chat.status.sending', '处理中'), tone: 'running' };
   if (!conversation) return { detail: copy(t, 'chat.status.startDetail', '开始新的 Chat'), label: copy(t, 'chat.status.ready', '准备就绪'), tone: 'idle' };
   if (messages.at(-1)?.role === 'error' || ['error', 'failed'].includes(cleanText(conversation.status).toLowerCase())) {
     return { detail: copy(t, 'chat.status.incompleteDetail', '可重试或继续说明'), label: copy(t, 'chat.status.incomplete', '上次未完成'), tone: 'error' };
@@ -24,6 +24,17 @@ export function piChatStatusSummary({ conversation = null, error = '', loading =
   }
   if (messages.length === 0) return { detail: copy(t, 'chat.status.waitingDetail', '等待你的目标'), label: copy(t, 'chat.status.waiting', '等待输入'), tone: 'idle' };
   return { detail, label: copy(t, 'chat.status.updated', '已更新'), tone: 'ready' };
+}
+
+export function sortPiConversationsByActivity(conversations = []) {
+  return [...(Array.isArray(conversations) ? conversations : [])].sort((left, right) => {
+    const leftRunning = left?.runtime_status === 'running';
+    const rightRunning = right?.runtime_status === 'running';
+    if (leftRunning !== rightRunning) return leftRunning ? -1 : 1;
+    const leftActivity = cleanText(left?.last_activity_at || left?.updated_at || left?.created_at);
+    const rightActivity = cleanText(right?.last_activity_at || right?.updated_at || right?.created_at);
+    return rightActivity.localeCompare(leftActivity) || cleanText(left?.id).localeCompare(cleanText(right?.id));
+  });
 }
 
 export function piChatWorkLinks(transcript = []) {

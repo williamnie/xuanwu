@@ -61,9 +61,19 @@ describe("Bun PI conversation message API", () => {
       const bus = new EventBus();
       const events = bus.subscribe();
       const router = createDefaultRouter({ bus, database });
+      let partialDetailPromise: Promise<any> | undefined;
+      const stopObserving = bus.observe((event) => {
+        if (event.type === "pi.conversation.event" && event.agent_event_type === "message_update" && event.text) {
+          partialDetailPromise ??= getJson(router, "/api/pi/conversations/conv-msg");
+        }
+      });
 
       const created = await request(router, "/api/pi/conversations", {
         id: "conv-msg",
+        project_id: "demo"
+      });
+      await request(router, "/api/pi/conversations", {
+        id: "conv-idle",
         project_id: "demo"
       });
       const message = await request(router, "/api/pi/conversations/conv-msg/messages", {
@@ -79,6 +89,18 @@ describe("Bun PI conversation message API", () => {
       expect(firstText).toContain("event: accepted");
       expect(firstText).not.toContain("event: completed");
       expect(providerCompleted).toBe(false);
+      const activeList = await getJson(router, "/api/pi/conversations");
+      expect(activeList[0]).toMatchObject({
+        id: "conv-msg",
+        runtime_status: "running"
+      });
+      expect(activeList[0]?.active_turn_id).toBeTruthy();
+      const activeDetail = await getJson(router, "/api/pi/conversations/conv-msg");
+      expect(activeDetail).toMatchObject({
+        active_text: "",
+        active_turn_id: activeList[0]?.active_turn_id,
+        runtime_status: "running"
+      });
 
       releaseProvider();
       let remainingText = "";
@@ -91,6 +113,8 @@ describe("Bun PI conversation message API", () => {
       const accepted = turnEvents.find((event) => event.event === "accepted");
       const deltas = turnEvents.filter((event) => event.event === "assistant_text_delta");
       const completed = turnEvents.find((event) => event.event === "completed");
+      const partialDetail = await partialDetailPromise as any;
+      stopObserving();
       expect(turnEvents.map((event) => event.event)).toContain("start");
       expect(deltas.length).toBeGreaterThan(1);
       expect(deltas.map((event) => event.data.delta).join("")).toBe("pi reply");
@@ -104,17 +128,22 @@ describe("Bun PI conversation message API", () => {
       });
       expect(accepted?.data.turn_id).toBe(completed?.data.turn_id);
       expect(turnEvents.every((event) => event.id === accepted?.data.turn_id)).toBe(true);
+      expect(partialDetail).toMatchObject({ runtime_status: "running" });
+      expect(partialDetail.active_text.length).toBeGreaterThan(0);
+      expect("pi reply".startsWith(partialDetail.active_text)).toBe(true);
       const firstEvent = await events.next();
       events.close();
       expect(firstEvent).toMatchObject({
         type: "pi.conversation.event",
         conversationId: "conv-msg",
         projectId: "demo",
-        provider: "pi-sdk"
+        provider: "pi-sdk",
+        turnId: accepted?.data.turn_id
       });
       expect(firstEvent?.issueId).toBeUndefined();
       expect(faux.state.callCount).toBe(1);
       const persisted = await waitForConversationTranscript(router, "conv-msg", "pi reply");
+      expect(persisted).toMatchObject({ active_text: "", active_turn_id: "", runtime_status: "idle" });
       expect(persisted.transcript).toEqual([
         expect.objectContaining({ role: "user", text: "hello" }),
         expect.objectContaining({ role: "assistant", text: "pi reply" })
@@ -798,6 +827,12 @@ function request(router: ReturnType<typeof createDefaultRouter>, path: string, b
     body: JSON.stringify(body),
     headers: { "content-type": "application/json" }
   }));
+}
+
+async function getJson(router: ReturnType<typeof createDefaultRouter>, path: string): Promise<any> {
+  const response = await router.handle(new Request(`${BASE_URL}${path}`));
+  expect(response.status).toBe(200);
+  return response.json();
 }
 
 function insertFauxAgent(db: RunnerDatabase, provider = "pi-test-faux"): void {

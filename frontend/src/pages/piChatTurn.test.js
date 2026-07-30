@@ -4,6 +4,7 @@ import {
   appendPiTurnDelta,
   createPiChatTurnManager,
   hydrateCompletedPiTurn,
+  replacePiTurnText,
 } from './piChatTurn.js';
 
 test('PiChat appends ordered deltas exactly once into the active Turn bubble', () => {
@@ -20,6 +21,28 @@ test('PiChat appends ordered deltas exactly once into the active Turn bubble', (
       turn_id: 'turn-1',
     },
   }]);
+});
+
+test('PiChat restores the latest active Turn snapshot after remounting', () => {
+  const restored = replacePiTurnText(
+    [{ id: 'user-1', role: 'user', text: 'hello' }],
+    'turn-live',
+    'partial reply',
+    'conv-1',
+  );
+  const updated = replacePiTurnText(restored, 'turn-live', 'new snapshot', 'conv-1');
+
+  assert.equal(updated.length, 2);
+  assert.deepEqual(updated[1], {
+    id: 'pi-turn-turn-live',
+    role: 'assistant',
+    text: 'new snapshot',
+    meta: {
+      conversation_id: 'conv-1',
+      live: true,
+      turn_id: 'turn-live',
+    },
+  });
 });
 
 test('switching conversations aborts and invalidates the previous stream', () => {

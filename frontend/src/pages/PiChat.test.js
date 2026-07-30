@@ -5,6 +5,7 @@ import test from 'node:test';
 const pageSource = readFileSync(new URL('./PiChat.jsx', import.meta.url), 'utf8');
 const composerMetaSource = readFileSync(new URL('./PiChatComposerMeta.jsx', import.meta.url), 'utf8');
 const stateSource = readFileSync(new URL('./piChatState.js', import.meta.url), 'utf8');
+const runtimeStateSource = readFileSync(new URL('./piChatRuntimeState.js', import.meta.url), 'utf8');
 const threadCss = readFileSync(new URL('./PiChatThread.css', import.meta.url), 'utf8');
 
 function ruleFor(selector) {
@@ -77,7 +78,7 @@ test('PI Assistant chat thread uses the compact session chat surface style', () 
   const userBubbleRule = ruleFor('.pi-chat-bubble.user');
   const assistantBubbleRule = ruleFor('.pi-chat-bubble.assistant');
 
-  assert.match(threadRule, /padding:\s*26px\s+clamp\(18px,\s*5vw,\s*72px\)\s+22px/);
+  assert.match(threadRule, /padding:\s*26px\s+clamp\(18px,\s*5vw,\s*72px\)\s+34px/);
   assert.match(threadRule, /overscroll-behavior:\s*contain/);
   assert.match(threadRule, /scrollbar-gutter:\s*stable/);
   assert.match(contentRule, /gap:\s*20px/);
@@ -100,7 +101,12 @@ test('Chat distinguishes direct local actions from provider coding and offers pr
 test('PI Assistant composer supports @project activation and Advanced runtime context', () => {
   assert.match(pageSource, /buildPiChatProjectSuggestions\(state\.projects\)/);
   assert.match(pageSource, /onAttachReference=\{state\.attachReference\}/);
-  assert.match(pageSource, /runtimeControls=\{<PiChatComposerMeta advanced=\{advanced\} agent=\{state\.supervisor\} project=\{state\.selectedProject \|\| projectFromPrompt\(state\.prompt, state\.projects\)\} \/>\}/);
+  assert.match(pageSource, /showReferenceChips=\{false\}/);
+  assert.match(pageSource, /runtimeControls=\{<PiChatComposerMeta advanced=\{advanced\} agent=\{state\.supervisor\} project=\{composerProject\(state\)\} \/>\}/);
+  assert.match(pageSource, /if \(!state\.prompt\.trim\(\)\) return null/);
+  assert.match(composerMetaSource, /\{project && <RuntimePill/);
+  assert.match(composerMetaSource, /if \(!project && !advanced\) return null/);
+  assert.doesNotMatch(composerMetaSource, /chat\.context\.selectProject'\)/);
   assert.match(pageSource, /placeholder=\{t\('chat\.placeholder'\)\}/);
   assert.match(composerMetaSource, /\{advanced && \(/);
   assert.doesNotMatch(pageSource, /state\.messageSettings/);
@@ -123,6 +129,13 @@ test('PI Assistant chat lists all conversations instead of only active rows', ()
   assert.doesNotMatch(stateSource, /getPiConversations\(\{\s*status:\s*'active'\s*\}\)/);
 });
 
+test('PI Assistant sidebar exposes runtime state and activity timestamps', () => {
+  assert.match(pageSource, /conversation\.runtime_status === 'running'/);
+  assert.match(pageSource, /className="pi-chat-conversation-runtime"/);
+  assert.match(pageSource, /conversation\.last_activity_at \|\| conversation\.updated_at/);
+  assert.match(pageSource, /t\('chat\.status\.idle'\)/);
+});
+
 test('Chat hides runtime internals by default and exposes diagnostics only through Advanced', () => {
   assert.match(pageSource, /const \[advanced, setAdvanced\] = useState\(false\)/);
   assert.match(pageSource, /aria-pressed=\{advanced\}/);
@@ -134,7 +147,7 @@ test('Chat hides runtime internals by default and exposes diagnostics only throu
   assert.match(pageSource, /formatPiConversationDebugInfo/);
   assert.match(pageSource, /formatPiMessageDebugInfo/);
   assert.match(pageSource, /title=\{advanced \? t\('chat\.copyMessageDebugHint'\) : undefined\}/);
-  assert.match(stateSource, /created_at:\s*item\.created_at \|\| ''/);
+  assert.match(runtimeStateSource, /created_at:\s*item\.created_at \|\| ''/);
 });
 
 test('Chat renders user status, canonical Work links, and actionable empty and error states', () => {

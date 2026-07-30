@@ -30,6 +30,7 @@ export default function PromptEditor({
   onSubmitKey = null,
   suggestions = [],
   referenceDetails = [],
+  showReferenceChips = true,
   onAttachReference = null,
   onRemoveReference = null,
   onSelectCommand = null,
@@ -220,10 +221,12 @@ export default function PromptEditor({
         attachments={composerImageState.attachments}
         onRemove={removeComposerImage}
       />
-      <PromptEditorReferences
-        details={referenceDetails}
-        onRemove={onRemoveReference}
-      />
+      {showReferenceChips && (
+        <PromptEditorReferences
+          details={referenceDetails}
+          onRemove={onRemoveReference}
+        />
+      )}
       {editorShell}
     </div>
   );

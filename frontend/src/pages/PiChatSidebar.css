@@ -163,6 +163,7 @@
   min-width: 0;
   padding: 9px 10px;
   text-align: left;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
 }
 
 .pi-chat-conversation:hover {
@@ -176,6 +177,20 @@
   color: var(--text-primary);
 }
 
+.pi-chat-conversation.running {
+  background: color-mix(in srgb, var(--primary-glow) 58%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.pi-chat-conversation-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+  width: 100%;
+}
+
 .pi-chat-conversation-title {
   font-size: .79rem;
   font-weight: 650;
@@ -184,6 +199,39 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 100%;
+}
+
+.pi-chat-conversation-runtime {
+  align-items: center;
+  color: var(--text-muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: .55rem;
+  font-weight: 700;
+  gap: 4px;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.pi-chat-conversation-runtime > span {
+  background: currentColor;
+  border-radius: 50%;
+  height: 5px;
+  width: 5px;
+}
+
+.pi-chat-conversation-runtime[data-tone="running"] { color: var(--primary); }
+.pi-chat-conversation-runtime[data-tone="error"] { color: var(--error); }
+.pi-chat-conversation-runtime[data-tone="archived"] { color: var(--text-muted); }
+
+.pi-chat-conversation-runtime[data-tone="running"] > span {
+  animation: pi-chat-runtime-pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+@keyframes pi-chat-runtime-pulse {
+  50% { opacity: .42; transform: scale(.72); }
 }
 
 .pi-chat-conversation-meta {

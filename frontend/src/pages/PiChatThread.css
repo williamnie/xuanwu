@@ -114,7 +114,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 26px clamp(18px, 5vw, 72px) 22px;
+  padding: 26px clamp(18px, 5vw, 72px) 34px;
   scrollbar-gutter: stable;
 }
 .pi-chat-thread-content {
@@ -242,42 +242,120 @@
 
 .pi-chat-bubble-meta { align-items: center; color: var(--text-muted); display: flex; font-family: var(--font-mono); font-size: .6rem; gap: 6px; margin-top: 8px; }
 .pi-chat-bubble-meta button { background: transparent; border: 0; color: inherit; cursor: pointer; padding: 2px; }
-.pi-chat-thinking { align-items: center; color: var(--text-muted); display: inline-flex; font-size: .75rem; gap: 7px; width: fit-content; }
+.pi-chat-thinking {
+  align-items: center;
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--bg-terminal) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, transparent);
+  color: color-mix(in srgb, var(--text-muted) 76%, white);
+  display: inline-flex;
+  font-family: var(--font-mono);
+  font-size: .66rem;
+  gap: 8px;
+  letter-spacing: .015em;
+  min-height: 30px;
+  padding: 0 10px;
+  width: fit-content;
+}
+.pi-chat-thinking-signal {
+  animation: pi-chat-running-signal 1.35s ease-in-out infinite;
+  background: var(--primary-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 11%, transparent);
+  height: 6px;
+  width: 6px;
+}
+.pi-chat-thinking-kicker {
+  color: var(--primary-strong);
+  font-size: .57rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
 .pi-chat-scroll-bottom-button { align-items: center; background: var(--surface-overlay); border: 1px solid var(--border-color); bottom: 14px; color: var(--text-secondary); cursor: pointer; display: inline-flex; font-size: .68rem; gap: 5px; padding: 7px 10px; position: absolute; right: 28px; z-index: 2; }
 
 .pi-chat-composer {
-  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
-  border-top: 1px solid var(--border-light);
-  padding: 13px clamp(18px, 5vw, 72px) 17px;
+  background: linear-gradient(180deg, transparent 0, color-mix(in srgb, var(--bg-card) 82%, transparent) 24px, var(--bg-card) 100%);
+  border-top: 0;
+  padding: 24px clamp(18px, 5vw, 72px) 20px;
 }
 .pi-chat-composer .session-composer { background: transparent; border-top: 0; margin: 0 auto; max-width: 880px; padding: 0; }
 .pi-chat-composer .prompt-editor-shell.composer,
 [data-theme="dark"] .pi-chat-composer .prompt-editor-shell.composer {
-  background: var(--control-bg);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+  border-radius: 14px;
+  box-shadow: 0 14px 40px rgba(18, 28, 25, .09), 0 1px 0 rgba(255, 255, 255, .55) inset;
+}
+.pi-chat-composer .prompt-editor-shell.composer.focused,
+[data-theme="dark"] .pi-chat-composer .prompt-editor-shell.composer.focused {
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border-color));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 8%, transparent), 0 18px 46px rgba(18, 28, 25, .12);
+}
+.pi-chat-composer .prompt-editor-content.composer {
+  font-size: .91rem;
+  min-height: 72px !important;
+  padding: 17px 20px 8px;
+}
+.pi-chat-composer .prompt-composer-footer {
+  border-top: 1px solid color-mix(in srgb, var(--border-light) 62%, transparent);
+  margin: 0 12px;
+  padding: 9px 1px 10px;
 }
 .pi-chat-runtime-controls { align-items: center; display: inline-flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .pi-chat-runtime-pill {
   align-items: center;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-light);
-  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
   display: inline-flex;
-  font-size: .67rem;
-  font-weight: 650;
+  font-family: var(--font-mono);
+  font-size: .64rem;
+  font-weight: 700;
   gap: 5px;
   line-height: 1;
   max-width: 260px;
-  min-height: 26px;
+  min-height: 28px;
   overflow: hidden;
-  padding: 0 8px;
+  padding: 0 7px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .pi-chat-runtime-pill:first-child { background: var(--primary-glow); color: var(--primary); }
 .pi-chat-runtime-pill.muted { color: var(--text-muted); }
+
+.pi-chat-composer .prompt-composer-add {
+  border: 1px solid transparent;
+  border-radius: 7px !important;
+  height: 30px;
+  width: 30px;
+}
+.pi-chat-composer .session-composer-circle,
+.pi-chat-composer .session-composer-circle.stop,
+[data-theme="dark"] .pi-chat-composer .session-composer-circle,
+[data-theme="dark"] .pi-chat-composer .session-composer-circle.stop {
+  animation: none;
+  border: 1px solid color-mix(in srgb, var(--text-primary) 14%, transparent);
+  border-radius: 9px !important;
+  box-shadow: none;
+  height: 34px;
+  width: 34px;
+}
+.pi-chat-composer .session-composer-circle.stop,
+[data-theme="dark"] .pi-chat-composer .session-composer-circle.stop {
+  background: color-mix(in srgb, var(--error) 9%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--error) 26%, var(--border-color));
+  color: var(--error);
+}
+.pi-chat-composer .session-composer-circle.stop:hover:not(:disabled),
+[data-theme="dark"] .pi-chat-composer .session-composer-circle.stop:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error) 15%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--error) 46%, var(--border-color));
+  color: var(--error);
+}
+
+@keyframes pi-chat-running-signal {
+  0%, 100% { opacity: .46; transform: scale(.82); }
+  50% { opacity: 1; transform: scale(1); }
+}
 
 .pi-chat-error { color: var(--text-muted); }
 .pi-chat-error > svg,
@@ -290,8 +368,8 @@
   .pi-chat-title-group > strong { max-width: 55vw; }
   .pi-chat-context-bar { padding-inline: 14px; }
   .pi-chat-capability.provider { display: none; }
-  .pi-chat-thread { padding: 22px 14px 18px; }
+  .pi-chat-thread { padding: 22px 14px 28px; }
   .pi-chat-bubble { max-width: 94%; }
-  .pi-chat-composer { padding: 11px 14px 14px; }
+  .pi-chat-composer { padding: 20px 14px 14px; }
   .pi-chat-starters { grid-template-columns: 1fr; }
 }

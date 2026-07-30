@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const source = readFileSync(new URL('./piChatState.js', import.meta.url), 'utf8');
 const panelSource = readFileSync(new URL('./PiChat.jsx', import.meta.url), 'utf8');
+const runtimeSource = readFileSync(new URL('./piChatRuntimeState.js', import.meta.url), 'utf8');
 
 test('PI Assistant chat loader keeps a stable callback and loads projects for @ mentions', () => {
   assert.match(source, /function usePiChatLoader\(setters\)/);
@@ -19,6 +20,7 @@ test('PI Assistant chat sends PI prompt with project context instead of session 
   assert.doesNotMatch(source, /runnerMessageSettings/);
   assert.doesNotMatch(source, /approval_policy:\s*settings\.approvalPolicy/);
   assert.match(source, /piChatMessageWithProjectContext\(text, targetProject \|\| state\.selectedProject\)/);
+  assert.match(source, /state\.setPrompt\(''\);\s*state\.setReferences\(\[\]\);/);
   assert.match(source, /project_id:\s*currentProjectId\(state, options\.project\)/);
 });
 
@@ -37,8 +39,9 @@ test('Xuanwu Chat uses a failure fallback instead of empty-text wording', () => 
 
 test('PI Assistant chat switches conversations by loading persisted transcript detail', () => {
   assert.match(source, /assistantApi\.getPiConversation\(id\)/);
-  assert.match(source, /setTranscript\(conversationTranscript\(detail\)\)/);
-  assert.match(source, /function conversationTranscript\(detail\)/);
+  assert.match(source, /applyConversationDetail\(\{/);
+  assert.match(runtimeSource, /replacePiTurnText\(transcript, detail\.active_turn_id, detail\.active_text, id\)/);
+  assert.match(runtimeSource, /function conversationTranscript\(detail\)/);
 });
 
 test('PI Assistant chat tracks selected conversation and updates title from message result', () => {
@@ -49,11 +52,15 @@ test('PI Assistant chat tracks selected conversation and updates title from mess
   assert.doesNotMatch(source, /new Date\(\)\.toLocaleString/);
 });
 
-test('PI Assistant chat owns the current POST SSE Turn instead of subscribing to global events', () => {
+test('PI Assistant chat owns the current POST SSE Turn and reconnects through global runtime events', () => {
   assert.match(source, /createPiChatTurnManager\(\)/);
   assert.match(source, /signal:\s*turn\.controller\.signal/);
   assert.match(source, /onEvent:\s*\(streamEvent\) => applyPiTurnEvent/);
   assert.match(source, /turnManager\.cancel\('conversation_switch'\)/);
+  assert.match(source, /eventsApi\.subscribeToEvents/);
+  assert.match(source, /RUNTIME_REFRESH_INTERVAL_MS/);
+  assert.match(source, /document\.addEventListener\('visibilitychange'/);
+  assert.match(source, /runtime_status === 'running'/);
   assert.doesNotMatch(source, /usePiConversationEvents|setPiLiveConversation|clearPiLiveAssistant/);
 });
 

@@ -1,21 +1,32 @@
 import { projectsApi } from '../api/projects.js';
 import { assistantApi } from '../api/assistant.js';
+import { eventsApi } from '../api/events.js';
 import { PiConversationStreamError } from '../api/piConversationStream.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { message } from '../store/toastStore';
 import { cleanProjectText, piChatMessageWithProjectContext, projectFromPrompt, referenceKey } from './piChatProjectContext';
+import { sortPiConversationsByActivity } from './piChatPresentation';
+import {
+  applyPiConversationActivityEvent,
+  conversationTranscript,
+  isPiRuntimeEvent,
+  isPiTerminalEvent,
+  isPiTextDeltaEvent,
+  piConversationDetailState,
+} from './piChatRuntimeState';
 import { appendPiTurnDelta, createPiChatTurnManager, hydrateCompletedPiTurn } from './piChatTurn';
 
 const DEFAULT_TRANSCRIPT = [];
 const STOP_RETRY_COUNT = 4;
 const STOP_RETRY_DELAY_MS = 160;
+const RUNTIME_REFRESH_INTERVAL_MS = 5_000;
 
-export function usePiChatState(initialConversationId = '') {
-  const state = usePiChatFields();
+export function usePiChatState(initialConversationId = '', onConversationChange = null) {
+  const state = usePiChatFields(onConversationChange);
   const initialSelectionRef = useRef('');
   const turnManager = useMemo(() => createPiChatTurnManager(), []);
   const {
-    conversations,
+    filteredConversations: conversations,
     loading,
   } = state;
   const loadPiState = usePiChatLoader({
@@ -25,6 +36,7 @@ export function usePiChatState(initialConversationId = '') {
     setProjects: state.setProjects,
     setSupervisor: state.setSupervisor
   });
+  const runtime = usePiChatRuntime(state, turnManager);
   const createConversation = useCreatePiConversation(state);
   const sendMessage = useSendPiMessage(state, createConversation, loadPiState, turnManager);
   const stopMessage = useStopPiMessage(state, turnManager);
@@ -37,16 +49,38 @@ export function usePiChatState(initialConversationId = '') {
     loadPiState();
   }, [loadPiState]);
 
+  useEffect(() => runtime.subscribe(), [runtime]);
+
+  useEffect(() => {
+    const interval = window.setInterval(runtime.reconcile, RUNTIME_REFRESH_INTERVAL_MS);
+    const reconcileVisible = () => {
+      if (document.visibilityState === 'visible') runtime.reconcile();
+    };
+    window.addEventListener('focus', runtime.reconcile);
+    document.addEventListener('visibilitychange', reconcileVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', runtime.reconcile);
+      document.removeEventListener('visibilitychange', reconcileVisible);
+    };
+  }, [runtime]);
+
   useEffect(() => () => {
     turnManager.cancel('unmount');
   }, [turnManager]);
 
   useEffect(() => {
-    if (!initialConversationId || initialSelectionRef.current === initialConversationId || loading) return;
-    if (!conversations.some(conversation => conversation.id === initialConversationId)) return;
-    initialSelectionRef.current = initialConversationId;
-    selectConversation(initialConversationId);
-  }, [conversations, initialConversationId, loading, selectConversation]);
+    if (loading) return;
+    const initialAvailable = conversations.some(conversation => conversation.id === initialConversationId);
+    const preferredId = initialAvailable && initialConversationId !== state.selectedConversationId
+      ? initialConversationId
+      : !state.selectedConversationId
+        ? conversations.find(conversation => conversation.runtime_status === 'running')?.id || ''
+        : '';
+    if (!preferredId || initialSelectionRef.current === preferredId) return;
+    initialSelectionRef.current = preferredId;
+    selectConversation(preferredId);
+  }, [conversations, initialConversationId, loading, selectConversation, state.selectedConversationId]);
 
   return {
     ...state,
@@ -59,7 +93,8 @@ export function usePiChatState(initialConversationId = '') {
   };
 }
 
-function usePiChatFields() {
+function usePiChatFields(onConversationChange) {
+  const selectionRequestRef = useRef(0);
   const [supervisor, setSupervisor] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [selectedConversationId, setSelectedConversationId] = useState('');
@@ -81,50 +116,149 @@ function usePiChatFields() {
     [projects, references, selectedConversation]
   );
   const selectConversation = useCallback(async (id) => {
+    const requestID = selectionRequestRef.current + 1;
+    selectionRequestRef.current = requestID;
     setSelectedConversationId(id);
+    onConversationChange?.(id);
     setTranscript([]);
     setReferences([]);
-    if (!id) return;
+    if (!id) {
+      setRunningConversationId('');
+      setSending(false);
+      setStopping(false);
+      return;
+    }
     setLoading(true);
     try {
       const detail = await assistantApi.getPiConversation(id);
-      setTranscript(conversationTranscript(detail));
+      if (selectionRequestRef.current !== requestID) return;
+      applyConversationDetail({
+        detail,
+        id,
+        setRunningConversationId,
+        setSending,
+        setStopping,
+        setTranscript,
+      });
       setError('');
     } catch (err) {
+      if (selectionRequestRef.current !== requestID) return;
       setError(err.message || '读取 Chat 详情失败');
     } finally {
-      setLoading(false);
+      if (selectionRequestRef.current === requestID) setLoading(false);
     }
-  }, []);
+  }, [onConversationChange]);
   const attachReference = useCallback((reference) => {
     setReferences((current) => addPiChatReference(current, reference));
   }, []);
   const removeReference = useCallback((key) => {
     setReferences((current) => current.filter((item) => referenceKey(item) !== key));
   }, []);
-  return { attachReference, error, filteredConversations: conversations, loading, projects, prompt, references, removeReference, runningConversationId,
+  const notifyConversationChange = useCallback((id) => onConversationChange?.(id), [onConversationChange]);
+  return { attachReference, error, filteredConversations: conversations, loading, notifyConversationChange, projects, prompt, references, removeReference, runningConversationId,
     selectConversation, selectedConversation, selectedConversationId, selectedProject, sending, stopping, supervisor,
     setConversations, setError, setLoading, setProjects, setPrompt, setReferences, setSupervisor,
     setSelectedConversationId, setRunningConversationId, setSending, setStopping, setTranscript, transcript };
 }
 
-function conversationTranscript(detail) {
-  return Array.isArray(detail?.transcript)
-    ? detail.transcript.map(normalizeTranscriptItem).filter(Boolean)
-    : [];
+function applyConversationDetail(setters) {
+  const { detail, id } = setters;
+  const restored = piConversationDetailState(detail, id);
+  setters.setTranscript(restored.transcript);
+  setters.setRunningConversationId(restored.runningConversationId);
+  setters.setSending(restored.sending);
+  setters.setStopping(false);
 }
 
-function normalizeTranscriptItem(item) {
-  const role = ['assistant', 'error', 'user'].includes(item?.role) ? item.role : '';
-  const text = String(item?.text || '').trim();
-  if (!role || !text) return null;
-  return {
-    created_at: item.created_at || '',
-    id: item.id || `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    meta: item.meta || null,
-    role,
-    text,
-  };
+function usePiChatRuntime(state, turnManager) {
+  const {
+    setConversations,
+    setRunningConversationId,
+    setSending,
+    setStopping,
+    setTranscript,
+  } = state;
+  const terminalReconcileTimerRef = useRef(0);
+  const selectedConversationIdRef = useLatestRef(state.selectedConversationId);
+  const runningConversationIdRef = useLatestRef(state.runningConversationId);
+  const reconcile = useCallback(async () => {
+    try {
+      const conversations = sortPiConversationsByActivity(await assistantApi.getPiConversations());
+      setConversations(conversations);
+      const id = selectedConversationIdRef.current;
+      if (!id) return;
+      const current = conversations.find((conversation) => conversation.id === id);
+      const ownsDirectStream = turnManager.current()?.conversationId === id;
+      if (ownsDirectStream) return;
+      if (current?.runtime_status !== 'running' && runningConversationIdRef.current !== id) return;
+      const detail = await assistantApi.getPiConversation(id);
+      if (selectedConversationIdRef.current !== id || turnManager.current()?.conversationId === id) return;
+      applyConversationDetail({
+        detail,
+        id,
+        setRunningConversationId,
+        setSending,
+        setStopping,
+        setTranscript,
+      });
+    } catch {
+      // Background reconciliation is best-effort; the explicit refresh path reports errors.
+    }
+  }, [
+    runningConversationIdRef,
+    selectedConversationIdRef,
+    setConversations,
+    setRunningConversationId,
+    setSending,
+    setStopping,
+    setTranscript,
+    turnManager,
+  ]);
+  const subscribe = useCallback(() => {
+    const unsubscribe = eventsApi.subscribeToEvents((event) => {
+      if (event?.type !== 'pi.conversation.event' || !event.conversationId) return;
+      setConversations((items) => applyPiConversationActivityEvent(items, event));
+      const id = event.conversationId;
+      if (selectedConversationIdRef.current !== id || turnManager.current()?.conversationId === id) return;
+      if (isPiRuntimeEvent(event)) {
+        setRunningConversationId(id);
+        setSending(true);
+      }
+      if (isPiTextDeltaEvent(event)) {
+        setTranscript((items) => appendPiTurnDelta(items, event.turnId, event.text, id));
+      }
+      if (isPiTerminalEvent(event)) {
+        setRunningConversationId('');
+        setSending(false);
+        setStopping(false);
+        window.clearTimeout(terminalReconcileTimerRef.current);
+        terminalReconcileTimerRef.current = window.setTimeout(reconcile, 120);
+      }
+    }, reconcile, reconcile);
+    return () => {
+      unsubscribe();
+      window.clearTimeout(terminalReconcileTimerRef.current);
+    };
+  }, [
+    reconcile,
+    selectedConversationIdRef,
+    setConversations,
+    setRunningConversationId,
+    setSending,
+    setStopping,
+    setTranscript,
+    terminalReconcileTimerRef,
+    turnManager,
+  ]);
+  return useMemo(() => ({ reconcile, subscribe }), [reconcile, subscribe]);
+}
+
+function useLatestRef(value) {
+  const ref = useRef(value);
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  return ref;
 }
 
 function usePiChatLoader(setters) {
@@ -135,17 +269,20 @@ function usePiChatLoader(setters) {
     setProjects,
     setSupervisor
   } = setters;
-  return useCallback(() => {
-    setLoading(true);
+  return useCallback((options = {}) => {
+    const background = Boolean(options.background);
+    if (!background) setLoading(true);
     return Promise.all([assistantApi.getPiSupervisor(), assistantApi.getPiConversations(), projectsApi.getProjects()])
       .then(([supervisor, conversationList, projectList]) => {
         setSupervisor(supervisor || null);
-        setConversations(conversationList || []);
+        setConversations(sortPiConversationsByActivity(conversationList));
         setProjects(projectList || []);
         setError('');
       })
       .catch((err) => setError(err.message || '读取 Chat 状态失败'))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!background) setLoading(false);
+      });
   }, [
     setConversations,
     setError,
@@ -165,6 +302,7 @@ function useCreatePiConversation(state) {
       });
       state.setConversations((items) => [conversation, ...items]);
       state.setSelectedConversationId(conversation.id);
+      state.notifyConversationChange(conversation.id);
       state.setTranscript([]);
       state.setReferences([]);
       if (options.notify) message.success('Chat 已创建');
@@ -215,8 +353,10 @@ function useStopPiMessage(state, turnManager) {
 
 async function sendPromptToPi(state, conversationId, text, loadPiState, targetProject, turnManager) {
   const turn = turnManager.begin(conversationId);
+  let backgroundRunning = false;
   state.setTranscript((items) => [...items, transcriptMessage('user', text)]);
   state.setPrompt('');
+  state.setReferences([]);
   state.setRunningConversationId(conversationId);
   state.setSending(true);
   try {
@@ -237,18 +377,24 @@ async function sendPromptToPi(state, conversationId, text, loadPiState, targetPr
       () => turnManager.isCurrent(turn),
     );
     if (!turnManager.isCurrent(turn)) return;
-    await loadPiState();
+    await loadPiState({ background: true });
   } catch (err) {
     if (!turnManager.isCurrent(turn)) return;
+    backgroundRunning = Boolean(err?.backgroundRunning);
     const detail = piTurnErrorMessage(err);
     state.setTranscript((items) => [...items, transcriptMessage('error', detail, {
       background_running: Boolean(err?.backgroundRunning),
       recoverable: true,
       turn_id: err?.turnId || '',
     })]);
+    if (backgroundRunning) {
+      state.setRunningConversationId(conversationId);
+      state.setSending(true);
+      await loadPiState({ background: true });
+    }
     message.error(detail);
   } finally {
-    if (turnManager.finish(turn)) clearPiTurnState(state);
+    if (turnManager.finish(turn) && !backgroundRunning) clearPiTurnState(state);
   }
 }
 
@@ -257,6 +403,12 @@ function applyPiTurnEvent(state, turnManager, turn, streamEvent) {
   const { data, event, turnId } = streamEvent;
   if (event === 'accepted' || event === 'start') {
     state.setSending(true);
+    state.setConversations((items) => applyPiConversationActivityEvent(items, {
+      agent_event_type: 'agent_start',
+      conversationId: turn.conversationId,
+      turnId,
+      type: 'pi.conversation.event',
+    }));
     return;
   }
   if (event === 'assistant_text_delta') {

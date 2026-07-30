@@ -8,7 +8,6 @@ import {
   Code2,
   Copy,
   FolderGit2,
-  Loader2,
   MessageSquarePlus,
   RefreshCw,
   Search,
@@ -41,8 +40,8 @@ import './PiChatSidebar.css';
 import './PiChatThread.css';
 import { useI18n } from '../i18n/context.js';
 
-export default function PiChat({ navigateTo, initialConversationId = '' }) {
-  const state = usePiChatState(initialConversationId);
+export default function PiChat({ navigateTo, initialConversationId = '', onConversationChange = null }) {
+  const state = usePiChatState(initialConversationId, onConversationChange);
   const [advanced, setAdvanced] = useState(false);
   return <PiChatLayout advanced={advanced} navigateTo={navigateTo} setAdvanced={setAdvanced} state={state} />;
 }
@@ -234,22 +233,30 @@ function ConversationList({ advanced, conversations, emptyLabel, onSelect, selec
       {conversations.length === 0 ? (
         <div className="pi-chat-empty-mini">{emptyLabel}</div>
       ) : (
-        conversations.map((conversation) => (
-          <button
-            key={conversation.id}
-            className={`pi-chat-conversation ${selectedId === conversation.id ? 'active' : ''}`}
-            onClick={() => onSelect(conversation.id)}
-            onContextMenu={advanced ? (event) => copyConversationDebugInfo(event, conversation, t('chat.debugCopied')) : undefined}
-            title={advanced ? t('chat.copyChatDebugHint') : undefined}
-          >
-            <span className="pi-chat-conversation-title">{displayPiConversationTitle(conversation, t)}</span>
-            <span className="pi-chat-conversation-meta">
-              <span>{formatConversationDate(conversation.updated_at || conversation.created_at, language)}</span>
-              <span>{conversation.project_id ? `@${conversation.project_id}` : t('chat.global')}</span>
-            </span>
-            {advanced && <small>{shortId(conversation.pi_session_id || conversation.id)}</small>}
-          </button>
-        ))
+        conversations.map((conversation) => {
+          const runtime = conversationRuntimePresentation(conversation, t);
+          return (
+            <button
+              key={conversation.id}
+              className={`pi-chat-conversation ${selectedId === conversation.id ? 'active' : ''} ${runtime.tone}`}
+              onClick={() => onSelect(conversation.id)}
+              onContextMenu={advanced ? (event) => copyConversationDebugInfo(event, conversation, t('chat.debugCopied')) : undefined}
+              title={advanced ? t('chat.copyChatDebugHint') : undefined}
+            >
+              <span className="pi-chat-conversation-heading">
+                <span className="pi-chat-conversation-title">{displayPiConversationTitle(conversation, t)}</span>
+                <span className="pi-chat-conversation-runtime" data-tone={runtime.tone}>
+                  <span aria-hidden="true" /> {runtime.label}
+                </span>
+              </span>
+              <span className="pi-chat-conversation-meta">
+                <span>{formatConversationDate(conversation.last_activity_at || conversation.updated_at || conversation.created_at, language)}</span>
+                <span>{conversation.project_id ? `@${conversation.project_id}` : t('chat.global')}</span>
+              </span>
+              {advanced && <small>{shortId(conversation.pi_session_id || conversation.id)}</small>}
+            </button>
+          );
+        })
       )}
     </div>
   );
@@ -287,7 +294,13 @@ function ChatThread({ advanced, navigateTo, state }) {
           ) : state.transcript.map((item) => (
             <ChatBubble advanced={advanced} key={item.id} conversation={state.selectedConversation} item={item} />
           ))}
-          {state.sending && <div className="pi-chat-thinking"><Loader2 className="spin-animation" size={14} /> {t('chat.processing')}</div>}
+          {state.sending && (
+            <div className="pi-chat-thinking" role="status">
+              <span className="pi-chat-thinking-signal" aria-hidden="true" />
+              <span className="pi-chat-thinking-kicker">RUNNING</span>
+              <span>{t('chat.processing')}</span>
+            </div>
+          )}
         </div>
       </div>
       {showScrollButton && (
@@ -324,13 +337,21 @@ function ChatComposer({ advanced, state }) {
         onSubmit={state.handleSend}
         suggestions={buildPiChatProjectSuggestions(state.projects)}
         referenceDetails={buildPiChatReferenceDetails(state.references, state.projects)}
+        showReferenceChips={false}
         onAttachReference={state.attachReference}
         onRemoveReference={state.removeReference}
-        runtimeControls={<PiChatComposerMeta advanced={advanced} agent={state.supervisor} project={state.selectedProject || projectFromPrompt(state.prompt, state.projects)} />}
+        runtimeControls={<PiChatComposerMeta advanced={advanced} agent={state.supervisor} project={composerProject(state)} />}
         onStop={state.handleStop}
       />
     </div>
   );
+}
+
+function composerProject(state) {
+  if (!state.prompt.trim()) return null;
+  const hasProjectReference = state.references.some((reference) => reference.type === 'project');
+  if (hasProjectReference) return state.selectedProject;
+  return projectFromPrompt(state.prompt, state.projects);
 }
 
 function piChatInterruptState(state, selectedId, t) {
@@ -542,5 +563,20 @@ function filterConversations(conversations, query, t) {
 function formatConversationDate(value, language) {
   const date = new Date(value || '');
   if (Number.isNaN(date.getTime())) return '';
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) {
+    return new Intl.DateTimeFormat(language || 'zh-CN', { hour: '2-digit', minute: '2-digit' }).format(date);
+  }
   return new Intl.DateTimeFormat(language || 'zh-CN', { month: 'numeric', day: 'numeric' }).format(date);
+}
+
+function conversationRuntimePresentation(conversation, t) {
+  if (conversation.runtime_status === 'running') return { label: t('chat.status.sending'), tone: 'running' };
+  if (['error', 'failed'].includes(String(conversation.status || '').toLowerCase())) {
+    return { label: t('chat.status.incomplete'), tone: 'error' };
+  }
+  if (['archived', 'closed'].includes(String(conversation.status || '').toLowerCase())) {
+    return { label: t('chat.status.archived'), tone: 'archived' };
+  }
+  return { label: t('chat.status.idle'), tone: 'idle' };
 }

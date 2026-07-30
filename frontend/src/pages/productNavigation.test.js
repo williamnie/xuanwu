@@ -78,7 +78,7 @@ test('App routes canonical pages to the currently verified compatibility surface
   assert.match(appSource, /recordLegacyRoute\(\{ family: page, target: resolvedPage \}\)/);
   assert.match(appSource, /workIdFromIssueId\(issueId\)/);
   assert.match(appSource, /currentPage === 'command-center'[\s\S]*<Dashboard navigateTo=\{navigateTo\} \/>/);
-  assert.match(appSource, /currentPage === 'ask-xuanwu'[\s\S]*<PiChat navigateTo=\{navigateTo\} initialConversationId=\{selectedPiConversationId\} \/>/);
+  assert.match(appSource, /currentPage === 'ask-xuanwu'[\s\S]*<PiChat[\s\S]*initialConversationId=\{selectedPiConversationId\}[\s\S]*onConversationChange=\{rememberPiConversation\}/);
   assert.match(appSource, /currentPage === 'automations'[\s\S]*<Automations \/>/);
   assert.match(appSource, /const Connections = lazy\(\(\) => import\('\.\/pages\/Connections'\)\)/);
   assert.match(appSource, /currentPage === 'connections'[\s\S]*<Connections \/>/);

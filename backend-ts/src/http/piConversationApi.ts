@@ -60,7 +60,14 @@ export type PiConversationPromptInput = {
 
 const PI_SESSION_PROVIDER = "pi-sdk";
 const PI_TURN_HEARTBEAT_MS = 15_000;
-const activePiRuns = new Map<string, PiRuntimeSession["session"]>();
+type ActivePiRun = {
+  session: PiRuntimeSession["session"];
+  startedAt: string;
+  text: string;
+  turnID: string;
+  updatedAt: string;
+};
+const activePiRuns = new Map<string, ActivePiRun>();
 
 type PiConversationTurn = {
   conversation: PiConversation;
@@ -90,11 +97,12 @@ export function registerPiConversationRoutes(router: Router, context: PiConversa
 
 function piConversationListResponse(context: PiConversationContext, request: Request): Response {
   const params = new URL(request.url).searchParams;
-  return json(listPiConversations(context.database, {
+  const conversations = listPiConversations(context.database, {
     includeInternal: params.get("include_internal") === "1",
     projectId: cleanString(params.get("project_id")),
     status: cleanString(params.get("status"))
-  }));
+  }).map(piConversationRuntimeView).sort(comparePiConversationActivity);
+  return json(conversations);
 }
 
 async function piConversationCreateResponse(context: PiConversationContext, request: Request): Promise<Response> {
@@ -105,7 +113,10 @@ async function piConversationCreateResponse(context: PiConversationContext, requ
 function piConversationResponse(context: PiConversationContext, request: Request): Response {
   const conversation = getPiConversation(context.database, pathPart(request, "conversations"));
   if (!conversation) throw new HttpError(404, "资源不存在");
-  return json(piConversationDetail(conversation));
+  return json({
+    ...piConversationDetail(conversation),
+    ...piConversationRuntimeState(conversation)
+  });
 }
 
 async function piConversationMessageResponse(context: PiConversationContext, request: Request): Promise<Response> {
@@ -226,8 +237,22 @@ async function preparePiConversationTurn(
     resolvedSource,
     cleanString(trusted.channelContext)
   );
-  activePiRuns.set(conversation.id, runtime.session);
-  return { conversation: titledConversation, prompt, runtime, turnID };
+  let activeConversation: PiConversation;
+  try {
+    activeConversation = touchPiConversation(context.database, titledConversation);
+  } catch (error) {
+    runtime.dispose();
+    throw error;
+  }
+  const startedAt = activeConversation.updated_at || new Date().toISOString();
+  activePiRuns.set(conversation.id, {
+    session: runtime.session,
+    startedAt,
+    text: "",
+    turnID,
+    updatedAt: startedAt
+  });
+  return { conversation: activeConversation, prompt, runtime, turnID };
 }
 
 async function executePiConversationTurn(
@@ -239,8 +264,9 @@ async function executePiConversationTurn(
   let unsubscribe = () => {};
   try {
     unsubscribe = runtime.session.subscribe((event) => {
-      publishPiSessionEvent(context.bus, conversation, event);
       const streamEvent = piTurnSessionEvent(event);
+      recordActivePiTurnEvent(conversation.id, streamEvent);
+      publishPiSessionEvent(context.bus, conversation, event, turn.turnID);
       if (streamEvent) onEvent?.(streamEvent);
     });
     await runtime.session.prompt(prompt, {
@@ -251,9 +277,10 @@ async function executePiConversationTurn(
     return piConversationTurnResult(turn);
   } finally {
     try {
-      persistPiSessionIndex(context.database, conversation);
+      const latestConversation = getPiConversation(context.database, conversation.id) ?? conversation;
+      persistPiSessionIndex(context.database, touchPiConversation(context.database, latestConversation));
     } finally {
-      if (activePiRuns.get(conversation.id) === runtime.session) activePiRuns.delete(conversation.id);
+      if (activePiRuns.get(conversation.id)?.session === runtime.session) activePiRuns.delete(conversation.id);
       try {
         unsubscribe();
       } finally {
@@ -480,8 +507,49 @@ function positiveInteger(value: unknown): number {
 async function interruptPiConversation(context: PiConversationContext, id: string) {
   const active = activePiRuns.get(id);
   if (!active) return { interrupted: false };
-  await active.abort();
-  return { interrupted: true, conversation_id: id, pi_session_id: active.sessionId };
+  await active.session.abort();
+  return { interrupted: true, conversation_id: id, pi_session_id: active.session.sessionId };
+}
+
+function piConversationRuntimeView(conversation: PiConversation) {
+  const active = activePiRuns.get(conversation.id);
+  return {
+    ...conversation,
+    active_turn_id: active?.turnID ?? "",
+    last_activity_at: active?.updatedAt || conversation.updated_at,
+    runtime_status: active ? "running" as const : "idle" as const,
+    turn_started_at: active?.startedAt ?? ""
+  };
+}
+
+function piConversationRuntimeState(conversation: PiConversation) {
+  const active = activePiRuns.get(conversation.id);
+  return {
+    active_text: active?.text ?? "",
+    active_turn_id: active?.turnID ?? "",
+    last_activity_at: active?.updatedAt || conversation.updated_at,
+    runtime_status: active ? "running" as const : "idle" as const,
+    turn_started_at: active?.startedAt ?? ""
+  };
+}
+
+function comparePiConversationActivity(
+  left: ReturnType<typeof piConversationRuntimeView>,
+  right: ReturnType<typeof piConversationRuntimeView>
+): number {
+  if (left.runtime_status !== right.runtime_status) return left.runtime_status === "running" ? -1 : 1;
+  return right.last_activity_at.localeCompare(left.last_activity_at) || left.id.localeCompare(right.id);
+}
+
+function recordActivePiTurnEvent(conversationID: string, event: PiTurnSessionEvent | undefined): void {
+  const active = activePiRuns.get(conversationID);
+  if (!active || !event) return;
+  if (event.type === "assistant_text_delta") active.text += event.delta;
+  active.updatedAt = new Date().toISOString();
+}
+
+function touchPiConversation(db: RunnerDatabase, conversation: PiConversation): PiConversation {
+  return updatePiConversation(db, conversation.id, { status: conversation.status });
 }
 
 function piConversationResultText(session: AgentSession): string {

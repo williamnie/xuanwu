@@ -3,9 +3,10 @@ import { useI18n } from '../i18n/context.js';
 
 export default function PiChatComposerMeta({ advanced = false, agent, project }) {
   const { t } = useI18n();
+  if (!project && !advanced) return null;
   return (
     <div className="pi-chat-runtime-controls" aria-label={t('chat.context.label')}>
-      <RuntimePill icon={<FolderGit2 size={13} />} label={projectLabel(project, t)} muted={!project} title={t('chat.context.selectProjectHint')} />
+      {project && <RuntimePill icon={<FolderGit2 size={13} />} label={projectLabel(project)} title={t('chat.context.selectProjectHint')} />}
       {advanced && (
         <>
           <RuntimePill icon={<Cpu size={13} />} label={agentModelLabel(agent, t)} muted={!agent} title={t('chat.context.modelHint')} />
@@ -25,8 +26,7 @@ function RuntimePill({ icon, label, muted, title }) {
   );
 }
 
-function projectLabel(project, t) {
-  if (!project) return t('chat.context.selectProject');
+function projectLabel(project) {
   return `@${project.name || project.id}`;
 }
 

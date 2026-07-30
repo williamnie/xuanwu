@@ -5,6 +5,7 @@ import {
   displayPiConversationTitle,
   piChatStatusSummary,
   piChatWorkLinks,
+  sortPiConversationsByActivity,
 } from './piChatPresentation.js';
 import { translate } from '../i18n/translations.js';
 
@@ -31,10 +32,20 @@ test('Chat status summary favors user progress over runtime details', () => {
     tone: 'ready',
   });
   assert.equal(piChatStatusSummary({ error: 'provider raw failure' }).label, '需要重试');
+  assert.equal(piChatStatusSummary({ conversation: { runtime_status: 'running' } }).label, '处理中');
   assert.equal(piChatStatusSummary({
     conversation: { status: 'active' },
     transcript: [{ role: 'error' }],
   }).label, '上次未完成');
+});
+
+test('Chat orders active conversations first and then by latest activity', () => {
+  const conversations = sortPiConversationsByActivity([
+    { id: 'older', last_activity_at: '2026-07-29T08:00:00Z', runtime_status: 'idle' },
+    { id: 'running', last_activity_at: '2026-07-29T07:00:00Z', runtime_status: 'running' },
+    { id: 'newer', last_activity_at: '2026-07-29T09:00:00Z', runtime_status: 'idle' },
+  ]);
+  assert.deepEqual(conversations.map((conversation) => conversation.id), ['running', 'newer', 'older']);
 });
 
 test('Chat presentation follows the selected language without rewriting persisted content', () => {

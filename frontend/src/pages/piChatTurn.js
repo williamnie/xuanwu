@@ -56,6 +56,26 @@ export function appendPiTurnDelta(items, turnId, delta, conversationId) {
   }];
 }
 
+export function replacePiTurnText(items, turnId, text, conversationId) {
+  const value = String(text || '');
+  const id = `pi-turn-${String(turnId || '').trim()}`;
+  const current = Array.isArray(items) ? items : [];
+  if (!value || id === 'pi-turn-') return current;
+  const liveItem = {
+    id,
+    role: 'assistant',
+    text: value,
+    meta: {
+      conversation_id: conversationId,
+      live: true,
+      turn_id: turnId,
+    },
+  };
+  const index = current.findIndex((item) => item.id === id);
+  if (index === -1) return [...current, liveItem];
+  return current.map((item, itemIndex) => itemIndex === index ? { ...item, ...liveItem } : item);
+}
+
 export async function hydrateCompletedPiTurn(options) {
   const detail = await options.getConversation(options.conversationId);
   if (!options.isCurrent()) return false;

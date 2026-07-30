@@ -12,9 +12,10 @@ export type PiTurnSessionEvent = {
 export function publishPiSessionEvent(
   bus: EventBus | undefined,
   conversation: PiConversation,
-  event: AgentSessionEvent
+  event: AgentSessionEvent,
+  turnID = ""
 ): void {
-  bus?.publish(piAppEvent(conversation, event));
+  bus?.publish(piAppEvent(conversation, event, turnID));
 }
 
 export function piTurnSessionEvent(event: AgentSessionEvent): PiTurnSessionEvent | undefined {
@@ -24,12 +25,13 @@ export function piTurnSessionEvent(event: AgentSessionEvent): PiTurnSessionEvent
   return { type: "assistant_text_delta", delta: event.assistantMessageEvent.delta };
 }
 
-function piAppEvent(conversation: PiConversation, event: AgentSessionEvent): AppEvent {
+function piAppEvent(conversation: PiConversation, event: AgentSessionEvent, turnID: string): AppEvent {
   return {
     type: "pi.conversation.event",
     conversationId: conversation.id,
     projectId: conversation.project_id,
     provider: "pi-sdk",
+    turnId: turnID,
     agent_event_type: event.type,
     status: piEventStatus(event),
     text: piEventText(event),
