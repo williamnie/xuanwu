@@ -52,6 +52,8 @@ describe("PI skill intent tools", () => {
       ]));
       expect(JSON.stringify(list.details)).not.toContain(root);
       expect(recommend.details.items.map((item: { id: string }) => item.id)).toContain("codex-issue-runner");
+      expect(recommend.details.items.every((item: Record<string, unknown>) => item.instructions === undefined)).toBe(true);
+      expect(JSON.stringify(recommend.details).length).toBeLessThan(8_192);
       expect(audit.details).toMatchObject({ issue_id: issueID, status: "ok" });
     } finally {
       db.close();

@@ -28,6 +28,7 @@ describe("PI runner action tools", () => {
     const repoRead = toolByName(tools, "repo_read_excerpt");
     const repoTree = toolByName(tools, "repo_tree");
     const issueCreate = toolByName(tools, "issue_create_proposal");
+    const issueBatchCreate = toolByName(tools, "issue_create_batch_proposal");
     const repair = toolByName(tools, "issue_state_repair_proposal");
     const batchTriage = toolByName(tools, "issue_enqueue_batch_triage");
     const nextTriage = toolByName(tools, "issue_enqueue_next_triage");
@@ -111,6 +112,24 @@ describe("PI runner action tools", () => {
       evidence: [{ source_kind: "message", summary: "IM request" }],
       open_questions: ["默认展开吗？"]
     });
+    expect(validateArgs(issueBatchCreate, {
+      project_id: "demo",
+      items: [
+        detailedBatchItem("foundation", "建立工程基线"),
+        { ...detailedBatchItem("ui", "实现前端流程"), depends_on_refs: ["foundation"] }
+      ]
+    })).toMatchObject({
+      items: [
+        expect.objectContaining({ ref: "foundation" }),
+        expect.objectContaining({ depends_on_refs: ["foundation"], ref: "ui" })
+      ]
+    });
+    expect(() => validateArgs(issueBatchCreate, {
+      items: [
+        { ...detailedBatchItem("foundation", "建立工程基线"), evidence: [] },
+        detailedBatchItem("ui", "实现前端流程")
+      ]
+    })).toThrow(/Validation failed/);
     expect(validateArgs(steer, { session_key: "codex:thread-1", prompt: "adjust" })).toEqual({
       session_key: "codex:thread-1",
       prompt: "adjust"
@@ -125,6 +144,9 @@ describe("PI runner action tools", () => {
     await verifier.execute("tool-verifier", { target_issue_id: 1, instructions: "verify" }, undefined, undefined, {} as never);
     await issueList.execute("tool-list", { limit: 3, status: "todo" }, undefined, undefined, {} as never);
     await issueRead.execute("tool-1", { id: 7 }, undefined, undefined, {} as never);
+    await issueBatchCreate.execute("tool-batch-create", {
+      items: [detailedBatchItem("foundation", "建立工程基线"), detailedBatchItem("ui", "实现前端流程")]
+    }, undefined, undefined, {} as never);
     await issueStatus.execute("tool-status", { status: "todo" }, undefined, undefined, {} as never);
     await issueExecution.execute("tool-execution", { id: 7 }, undefined, undefined, {} as never);
     await watchCreate.execute("tool-watch-create", {
@@ -165,6 +187,9 @@ describe("PI runner action tools", () => {
       ["createVerificationWorkflow", { target_issue_id: 1, instructions: "verify" }],
       ["listIssues", { limit: 3, status: "todo" }],
       ["readIssue", { id: 7 }],
+      ["createIssueBatchProposal", {
+        items: [detailedBatchItem("foundation", "建立工程基线"), detailedBatchItem("ui", "实现前端流程")]
+      }],
       ["issueStatusSummary", { status: "todo" }],
       ["issueExecutionStatus", { id: 7 }],
       ["createIssueCompletionWatch", { issue_ids: [7, 8], note: "提醒我", project_id: "demo", target_channel: "feishu" }],
@@ -940,6 +965,7 @@ describe("PI runner action tools", () => {
       });
 
       const result = actions.createIssueProposal({
+        acceptance_criteria: ["任务可从 pending 到 succeeded。"],
         context_pack: {
           intent: "实现折叠面板",
           project: { id: "demo" },
@@ -973,6 +999,105 @@ describe("PI runner action tools", () => {
       expect(payload.description).not.toContain("super-secret");
       expect(payload.description).not.toContain("must-not-leak");
       expect(issue?.description).toBe(payload.description);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("normalizes the Chinese context-pack keys emitted by the live PI session without losing detail", async () => {
+    const fixture = await openFixture();
+    try {
+      const actions = createPiRunnerActions(fixture.db, {
+        authorization: {
+          authorizedActions: [{ action_type: "issue.create", project_id: fixture.project.id }],
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
+        },
+        project: fixture.project
+      });
+
+      const result = actions.createIssueProposal({
+        context_pack: {
+          "需求理解": "按 PRD 建立服装图片生成 MVP。",
+          "相关证据": ["PRD 第 6 节定义上传、任务与结果流程。", "用户要求使用真实 Provider。"],
+          "建议改动": ["先固定 API 合同。", "再实现异步任务状态机。"],
+          "验收标准": ["任务可从 pending 到 succeeded。"],
+          "验证建议": ["运行真实 Provider smoke。"],
+          "未确认问题": ["供应商 endpoint 待用户配置。"]
+        },
+        description: "实现任务后端",
+        title: "实现任务后端"
+      }) as { result?: { id?: number } };
+      const issue = getIssue(fixture.db, result.result?.id ?? 0);
+
+      expect(issue?.description).toContain("Supervisor 理解：按 PRD 建立服装图片生成 MVP。");
+      expect(issue?.description).toContain("PRD 第 6 节定义上传、任务与结果流程。");
+      expect(issue?.description).toContain("1. 先固定 API 合同。");
+      expect(issue?.description).toContain("1. 任务可从 pending 到 succeeded。");
+      expect(issue?.description?.match(/任务可从 pending 到 succeeded。/g)).toHaveLength(1);
+      expect(issue?.description).toContain("1. 运行真实 Provider smoke。");
+      expect(issue?.description).not.toContain("## 相关证据\n- (none)");
+      expect(issue?.description).not.toContain("## 建议改动\n- (none)");
+      expect(() => actions.createIssueProposal({
+        context_pack: { unexpected_section: ["must not disappear"] } as never,
+        description: "invalid",
+        title: "invalid"
+      })).toThrow(/unsupported fields: unexpected_section/);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("creates a detailed triage issue batch with an audited dependency DAG and never enqueues it", async () => {
+    const fixture = await openFixture();
+    try {
+      const actions = createPiRunnerActions(fixture.db, {
+        authorization: {
+          authorizedActions: [{ action_type: "issue.create", project_id: fixture.project.id }],
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
+        },
+        conversationID: "conv-prd-batch",
+        project: fixture.project
+      });
+
+      const result = actions.createIssueBatchProposal({
+        project_id: fixture.project.id,
+        rationale: "用户要求按 PRD 创建后先 review",
+        items: [
+          detailedBatchItem("contract", "固定 API 与状态合同"),
+          { ...detailedBatchItem("provider", "接入真实图片 Provider"), depends_on_refs: ["contract"] },
+          { ...detailedBatchItem("journey", "验证端到端生成链路"), depends_on_refs: ["contract", "provider"] }
+        ]
+      }) as { result?: { count?: number; items?: Array<{ id: number; ref: string }> }; status: string };
+      const issues = listIssues(fixture.db, { projectId: fixture.project.id });
+      const action = listPiActions(fixture.db).find((item) => item.action_type === "issue.create");
+      const refs = Object.fromEntries((result.result?.items ?? []).map((item) => [item.ref, item.id]));
+
+      expect(result).toMatchObject({ status: "completed", result: { count: 3, status: "created" } });
+      expect(issues).toHaveLength(3);
+      expect(issues.map((issue) => issue.status)).toEqual(["triage", "triage", "triage"]);
+      expect(issues.every((issue) => issue.description.includes("## 相关证据") &&
+        issue.description.includes("## 建议改动") && !issue.description.includes("## 建议改动\n- (none)"))).toBe(true);
+      expect(action).toMatchObject({ conversation_id: "conv-prd-batch", status: "completed" });
+      expect(JSON.parse(action?.payload_json ?? "{}").batch_items).toHaveLength(3);
+      expect(fixture.db.sqlite.query<{ dependency_issue_ids_json: string }, [number]>(
+        "select dependency_issue_ids_json from issues where id=?"
+      ).get(refs.provider)?.dependency_issue_ids_json).toBe(JSON.stringify([refs.contract]));
+      expect(fixture.db.sqlite.query<{ dependency_issue_ids_json: string }, [number]>(
+        "select dependency_issue_ids_json from issues where id=?"
+      ).get(refs.journey)?.dependency_issue_ids_json).toBe(JSON.stringify([refs.contract, refs.provider]));
+      expect(listIssueEvents(fixture.db, refs.contract).map((event) => event.type)).toEqual(["issue.created"]);
+
+      const beforeActionCount = listPiActions(fixture.db).length;
+      expect(() => actions.createIssueBatchProposal({
+        items: [
+          { ...detailedBatchItem("a", "A"), depends_on_refs: ["b"] },
+          { ...detailedBatchItem("b", "B"), depends_on_refs: ["a"] }
+        ]
+      })).toThrow(/dependency graph contains a cycle/);
+      expect(listPiActions(fixture.db)).toHaveLength(beforeActionCount);
+      expect(listIssues(fixture.db, { projectId: fixture.project.id })).toHaveLength(3);
     } finally {
       await fixture.close();
     }
@@ -1056,6 +1181,7 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     assignExecutorProfileProposal: record("assignExecutorProfileProposal"),
     createExecutorIssueProposal: record("createExecutorIssueProposal"),
     createIssueCompletionWatch: record("createIssueCompletionWatch"),
+    createIssueBatchProposal: record("createIssueBatchProposal"),
     createIssueProposal: record("createIssueProposal"),
     reconcileIssueCompletion: record("reconcileIssueCompletion"),
     createIssueStateRepairProposal: record("createIssueStateRepairProposal"),
@@ -1093,6 +1219,18 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     issueExecutionStatus: record("issueExecutionStatus"),
     issueStatusSummary: record("issueStatusSummary"),
     runManualContextIntake: record("runManualContextIntake")
+  };
+}
+
+function detailedBatchItem(ref: string, title: string) {
+  return {
+    acceptance_criteria: [`${title} 可以独立验收。`],
+    description: `${title}，保持单一主要交付目标。`,
+    evidence: [`PRD 明确要求：${title}`],
+    proposed_changes: [`实施 ${title}。`],
+    ref,
+    title,
+    validation: [`运行 ${ref} focused test。`]
   };
 }
 

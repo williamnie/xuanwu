@@ -46,6 +46,8 @@ PI-first 不等于让 LLM 直接写数据库。下列边界保持确定性：
 
 Entity resolver 只回答“这个 ID/项目/会话绑定指向什么”，不回答“用户想做什么”。Action Gate 只验证 PI 已经提出的具体动作是否合法，不替 PI 生成动作。
 
+大型 PRD 的 Work 拆分同样遵守 PI-first：PI 先读取权威文档并完成语义分解，决定单 Issue 还是 2–40 个细粒度 Issue、MVP 主链、后续 backlog 与依赖关系；`issue_create_batch_proposal` 只校验 closed schema、本地引用唯一性、依赖存在性、无环性、授权与事务落库，不根据关键词、模块名或固定数量替 PI 规划。用户要求先 review 时，PI 只呈现计划；授权创建后 batch action 原子生成 triage Issue，且不自动 enqueue 整个 DAG。
+
 以 `issue_state_repair_proposal` 为例，PI 必须提交当前 diagnosis 对应的 exact `diagnosis_code` 和 exact `operation`；gate 不再从候选集合取第一项。以 retry 为例，PI 先调用状态工具；若 authoritative projection 为 `implementation_complete_handoff_missing` 或 `retry_recommended=false`，gate 拒绝重复执行，只允许 PI说明 Handoff/交付账本缺口。
 
 ## 4. Agent / Provider / Tool 下线语义
@@ -81,6 +83,7 @@ Git commit、clean/dirty working tree、Run 结果、Evidence 和 Handoff 是不
 - heartbeat/Guardian/project loop 不制造 action；
 - PI/model/provider/tool 不可用时显式 failure + Attention；
 - exact tool call 在 target/revision/state/authorization 不匹配时 fail closed；
+- 大型 PRD 会先读取正文，再生成含非空证据、改动、验收、验证及无环依赖的细粒度 batch；review 模式零 mutation，创建模式只落 triage、不 enqueue；
 - implementation complete 但 Handoff 缺失时不重复 retry；
 - 源码中不得重新出现被删除的 pre-LLM router/planner 标识。
 

@@ -15,6 +15,7 @@ const BASE_URL = "http://127.0.0.1:3008";
 const FAUX_PROVIDER = "pi-planner-faux";
 const FAUX_API = "pi-planner-faux-api";
 const TARGET_FILE = "src/components/AccordionPanel.tsx";
+const PRD_FILE = "PRD-demo.md";
 const tempRoots: string[] = [];
 
 type Fixture = { db: RunnerDatabase; projectCwd: string; router: ReturnType<typeof createDefaultRouter>; bus: EventBus };
@@ -65,6 +66,47 @@ describe("PI read-only planner turn smoke", () => {
       fixture.db.close();
     }
   });
+
+  test("reads the named PRD before creating a detailed non-enqueued issue DAG", async () => {
+    const fixture = await openFixture();
+    const faux = registerFauxProvider({ api: FAUX_API, provider: FAUX_PROVIDER });
+    const events = fixture.bus.subscribe();
+    try {
+      faux.setResponses(prdPlannerResponses());
+      insertProject(fixture.db, "demo", fixture.projectCwd);
+      insertFauxAgent(fixture.db);
+      writeFauxModelsConfig(fixture.db);
+
+      await post(fixture.router, "/api/pi/conversations", {
+        id: "conv-prd-planner-smoke",
+        project_id: "demo",
+        pi_agent_id: "pi-faux"
+      });
+      const message = await post(fixture.router, "/api/pi/conversations/conv-prd-planner-smoke/messages", {
+        prompt: "按照 PRD-demo.md 拆分成可执行 Issue，建立好但不要开始，我要先 review。"
+      });
+      const body = await finalPiConversationSseData(message);
+      const issues = listIssues(fixture.db, { projectId: "demo" });
+      const actions = listPiActions(fixture.db);
+
+      expect(body).toMatchObject({ status: "completed", text: "已按 PRD 创建 4 个 triage Issue 和依赖 DAG，未 enqueue。" });
+      expect(actions.filter((action) => action.action_type === "repo.read_excerpt")).toHaveLength(2);
+      expect(actions.find((action) => action.action_type === "issue.create")).toMatchObject({ status: "completed" });
+      expect(issues).toHaveLength(4);
+      expect(issues.every((issue) => issue.status === "triage")).toBe(true);
+      expect(issues.every((issue) => issue.description.includes("## 相关证据") &&
+        !issue.description.includes("## 相关证据\n- (none)") &&
+        !issue.description.includes("## 建议改动\n- (none)"))).toBe(true);
+      expect(fixture.db.sqlite.query<{ total: number }, []>(
+        "select count(*) as total from work_relations where kind='depends_on'"
+      ).get()?.total).toBe(4);
+      assertNoForbiddenPlannerToolCalls(await drainEvents(events), fixture.db);
+    } finally {
+      events.close();
+      faux.unregister();
+      fixture.db.close();
+    }
+  });
 });
 
 async function openFixture(): Promise<Fixture> {
@@ -87,6 +129,16 @@ function writeFixtureProject(projectCwd: string): void {
     ""
   ].join("\n"));
   writeFileSync(join(projectCwd, "README.md"), "# Demo\nTarget page uses AccordionPanel.\n");
+  writeFileSync(join(projectCwd, PRD_FILE), [
+    "# Demo PRD",
+    "## MVP",
+    "固定领域合同、实现任务 API、接入真实 Provider、完成端到端验收。",
+    "## 非目标",
+    "本阶段不做计费和团队系统。",
+    "## 验收",
+    "所有任务必须独立测试并保留真实 Provider smoke。",
+    ""
+  ].join("\n"));
 }
 
 function componentSource(): string {
@@ -109,6 +161,42 @@ function plannerResponses() {
     ], { stopReason: "toolUse" }),
     fauxAssistantMessage("已创建折叠面板规划 issue，等待是否现在开始。")
   ];
+}
+
+function prdPlannerResponses() {
+  return [
+    fauxAssistantMessage([
+      fauxToolCall("project_status", { project_id: "demo" }, { id: "project-map" }),
+      fauxToolCall("repo_tree", { path: ".", max_depth: 1 }, { id: "repo-tree" }),
+      fauxToolCall("repo_read_excerpt", { path: PRD_FILE, start_line: 1, max_lines: 5 }, { id: "prd-read-1" }),
+      fauxToolCall("repo_read_excerpt", { path: PRD_FILE, start_line: 6, max_lines: 20 }, { id: "prd-read-2" })
+    ], { stopReason: "toolUse" }),
+    fauxAssistantMessage([
+      fauxToolCall("issue_create_batch_proposal", {
+        project_id: "demo",
+        rationale: "按 PRD 建立可 review 的 MVP DAG，不启动执行",
+        items: [
+          prdBatchItem("contract", "固定领域与 API 合同"),
+          { ...prdBatchItem("api", "实现异步任务 API"), depends_on_refs: ["contract"] },
+          { ...prdBatchItem("provider", "接入真实图片 Provider"), depends_on_refs: ["contract"] },
+          { ...prdBatchItem("journey", "完成真实端到端验收"), depends_on_refs: ["api", "provider"] }
+        ]
+      }, { id: "prd-batch" })
+    ], { stopReason: "toolUse" }),
+    fauxAssistantMessage("已按 PRD 创建 4 个 triage Issue 和依赖 DAG，未 enqueue。")
+  ];
+}
+
+function prdBatchItem(ref: string, title: string) {
+  return {
+    acceptance_criteria: [`${title} 有独立通过标准。`],
+    description: `${title}，只覆盖一个主要工程结果。`,
+    evidence: [{ source_kind: "doc", path: PRD_FILE, summary: `PRD 要求 ${title}` }],
+    proposed_changes: [`实施 ${title}。`],
+    ref,
+    title,
+    validation: [`运行 ${ref} focused test 并保存 Evidence。`]
+  };
 }
 
 function issueProposalPayload() {

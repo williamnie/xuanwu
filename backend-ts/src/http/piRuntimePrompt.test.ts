@@ -101,6 +101,13 @@ describe("Xuanwu Supervisor runtime prompt", () => {
       expect(prompt).toContain("Never store current or historical Work/Run/Issue status");
       expect(prompt).toContain("Repo-aware issue proposal workflow:");
       expect(prompt).toContain("repo_context_pack");
+      expect(prompt).toContain("reading only the directory entry is insufficient");
+      expect(prompt).toContain("issue_create_batch_proposal");
+      expect(prompt).toContain("structured dependency DAG");
+      expect(prompt).toContain("review the plan before creation");
+      expect(prompt).toContain("create triage issues only and never enqueue them");
+      expect(prompt).toContain("Machine field names inside context_pack must use intent");
+      expect(prompt).toContain("never enqueue the whole DAG blindly");
       expect(prompt).toContain("must not edit code");
       expect(prompt).toContain("issue_state_repair_proposal is only for deterministic");
       expect(prompt).toContain("最多追问一个关键问题");

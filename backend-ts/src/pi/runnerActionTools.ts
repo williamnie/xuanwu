@@ -18,6 +18,7 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "issue_completion_reconcile",
   "issue_read",
   "issue_create_proposal",
+  "issue_create_batch_proposal",
   "issue_state_diagnose",
   "issue_state_repair_proposal",
   "issue_comment",
@@ -55,8 +56,50 @@ const positiveNumber = Type.Integer({ minimum: 1 });
 const skillIntentList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
 const mcpCapabilityList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
 const textList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
-const looseList = Type.Optional(Type.Array(Type.Any()));
 const TOOL_RESULT_MAX_CHARS = 8192;
+
+const evidenceItem = Type.Object({
+  confidence: optionalString,
+  excerpt: optionalString,
+  issue_id: Type.Optional(positiveID),
+  message_id: optionalString,
+  path: optionalString,
+  reason: optionalString,
+  session_key: optionalString,
+  source_kind: optionalString,
+  summary: optionalString
+}, objectOptions);
+const evidenceValue = Type.Union([requiredText, evidenceItem]);
+const evidenceList = Type.Optional(Type.Array(evidenceValue));
+const relevantFile = Type.Object({
+  path: requiredText,
+  reason: optionalString,
+  symbols: Type.Optional(Type.Array(requiredText))
+}, objectOptions);
+const repoContextPack = Type.Optional(Type.Object({
+  acceptance_criteria: textList,
+  confidence: optionalString,
+  evidence: evidenceList,
+  intent: optionalString,
+  open_questions: textList,
+  project: Type.Optional(Type.Object({ cwd: optionalString, id: optionalString, name: optionalString }, objectOptions)),
+  proposed_changes: textList,
+  relevant_files: Type.Optional(Type.Array(relevantFile)),
+  source: Type.Optional(Type.Object({
+    channel: optionalString,
+    kind: optionalString,
+    message_id: optionalString,
+    session_key: optionalString
+  }, objectOptions)),
+  validation: textList,
+  "需求理解": optionalString,
+  "相关证据": textList,
+  "相关文件": Type.Optional(Type.Array(relevantFile)),
+  "建议改动": textList,
+  "验收标准": textList,
+  "验证建议": textList,
+  "未确认问题": textList
+}, objectOptions));
 
 export function createPiRunnerActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
   return [
@@ -198,9 +241,9 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
         project_id: optionalString,
         rationale: optionalString,
         title: optionalString,
-        context_pack: Type.Optional(Type.Any()),
-        evidence: looseList,
-        relevant_files: looseList,
+        context_pack: repoContextPack,
+        evidence: evidenceList,
+        relevant_files: Type.Optional(Type.Array(relevantFile)),
         proposed_changes: textList,
         acceptance_criteria: textList,
         validation: textList,
@@ -210,6 +253,29 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
         required_mcp_capabilities: mcpCapabilityList,
         recommended_mcp_capabilities: mcpCapabilityList
       }, objectOptions), actions.createIssueProposal),
+    actionTool("issue_create_batch_proposal", "Issue Create Batch Proposal",
+      "Create one audited proposal containing 2-40 detailed triage issues with a validated dependency DAG. Use stable local refs in depends_on_refs; this tool never enqueues the created issues.",
+      Type.Object({
+        items: Type.Array(Type.Object({
+          acceptance_criteria: Type.Array(requiredText, { minItems: 1 }),
+          context_pack: repoContextPack,
+          depends_on_refs: Type.Optional(Type.Array(requiredText)),
+          description: requiredText,
+          evidence: Type.Array(evidenceValue, { minItems: 1 }),
+          open_questions: textList,
+          proposed_changes: Type.Array(requiredText, { minItems: 1 }),
+          recommended_mcp_capabilities: mcpCapabilityList,
+          recommended_skill_intents: skillIntentList,
+          ref: Type.String({ minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$" }),
+          relevant_files: Type.Optional(Type.Array(relevantFile)),
+          required_mcp_capabilities: mcpCapabilityList,
+          required_skill_intents: skillIntentList,
+          title: Type.String({ minLength: 1, maxLength: 50, pattern: "\\S" }),
+          validation: Type.Array(requiredText, { minItems: 1 })
+        }, objectOptions), { minItems: 2, maxItems: 40 }),
+        project_id: optionalString,
+        rationale: optionalString
+      }, objectOptions), actions.createIssueBatchProposal),
     issueStateDiagnoseTool(actions),
     issueStateRepairTool(actions),
     actionTool("issue_comment", "Issue Comment", "Add a low-risk agent comment to an issue.",

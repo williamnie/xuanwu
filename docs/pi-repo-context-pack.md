@@ -21,12 +21,17 @@
 
 所有字符串在创建 pack 时会 trim；空数组默认保留为空；疑似 secret/token 行会脱敏。
 
+工具调用中的 machine key 以英文 schema 为准：`intent`、`evidence`、`relevant_files`、`proposed_changes`、`acceptance_criteria`、`validation`、`open_questions`。为兼容既有 PI 会话，action layer 也会规范化 `需求理解`、`相关证据`、`相关文件`、`建议改动`、`验收标准`、`验证建议`、`未确认问题`；中英文字段重复的文本会稳定去重。未知字段会显式拒绝，不能再静默渲染成 `(none)`。
+
 ## 现有 Supervisor 工具边界
 
 - `read` / `grep` / `find` / `ls`：Supervisor runtime 暴露的只读 SDK 工具，可读项目文件、搜索和列目录；不提供 `write` / `edit` / `bash`。
 - `project_status`：读取 runner 项目快照，包括 issue/session/run 状态摘要、近期错误和 findings；不修改状态。
 - `session_read_summary`：读取 runner 观察到的 session 进度摘要；不 steer session。
 - `issue_create_proposal`：创建 `issue.create` proposal，默认写入 triage issue；是否真实创建受 action gate/policy 控制。context pack 应放进 `description` 或后续 refinement/comment 中。
+- `issue_create_batch_proposal`：一次提交 2–40 个详细 triage Issue。每项必须有稳定本地 `ref`、证据、建议改动、验收标准和验证建议；`depends_on_refs` 形成的 DAG 会在 action gate 后原子映射成真实 Issue 依赖。工具只创建、不 enqueue，避免把整个依赖图盲目启动。
+
+面对明确点名的 PRD/spec/design/roadmap，PI 必须先用 bounded excerpt 读取权威文档，目录列表不能代替正文。单一可独立交付目标使用 `issue_create_proposal`；跨合同、持久化、Provider、UI、可靠性或端到端旅程的大型目标，应按可独立实现、独立验收的结果拆分后使用 batch tool。若用户要求“先 review”，PI 只输出完整编号计划和依赖，不调用 mutation tool。
 
 ## Supervisor 审批边界
 

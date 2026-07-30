@@ -51,16 +51,17 @@ function createIssueProposalContextPack(
   context: IssueProposalContextProject
 ): RepoContextPack {
   const raw = objectValue(input.context_pack);
+  assertSupportedContextPackKeys(raw);
   return createRepoContextPack({
     ...raw,
-    acceptance_criteria: mergeArray(raw.acceptance_criteria, input.acceptance_criteria),
-    evidence: mergeArray(raw.evidence, input.evidence) as RepoContextPackInput["evidence"],
+    acceptance_criteria: normalizeTextList(mergeArrays(raw.acceptance_criteria, raw["验收标准"], input.acceptance_criteria)),
+    evidence: normalizeEvidence(mergeArrays(raw.evidence, raw["相关证据"], input.evidence)),
     intent: contextIntent(raw, input),
-    open_questions: mergeArray(raw.open_questions, input.open_questions),
+    open_questions: normalizeTextList(mergeArrays(raw.open_questions, raw["未确认问题"], input.open_questions)),
     project: contextProject(raw.project, context),
-    proposed_changes: mergeArray(raw.proposed_changes, input.proposed_changes),
-    relevant_files: mergeArray(raw.relevant_files, input.relevant_files) as RepoContextPackInput["relevant_files"],
-    validation: mergeArray(raw.validation, input.validation)
+    proposed_changes: normalizeTextList(mergeArrays(raw.proposed_changes, raw["建议改动"], input.proposed_changes)),
+    relevant_files: mergeArrays(raw.relevant_files, raw["相关文件"], input.relevant_files) as RepoContextPackInput["relevant_files"],
+    validation: normalizeTextList(mergeArrays(raw.validation, raw["验证建议"], input.validation))
   });
 }
 
@@ -79,7 +80,7 @@ function contextIntent(
   raw: Record<string, unknown>,
   input: { description?: unknown; title?: unknown }
 ): string {
-  return textValue(raw.intent) || textValue(input.description) || textValue(input.title) || "Issue proposal";
+  return textValue(raw.intent) || textValue(raw["需求理解"]) || textValue(input.description) || textValue(input.title) || "Issue proposal";
 }
 
 function contextProject(
@@ -142,8 +143,8 @@ function section(title: string, lines: string[]): string {
   return [`## ${title}`, ...(lines.length > 0 ? lines : ["- (none)"]), ""].join("\n");
 }
 
-function mergeArray(primary: unknown, extra: unknown): unknown[] {
-  return [...arrayValue(primary), ...arrayValue(extra)];
+function mergeArrays(...values: unknown[]): unknown[] {
+  return values.flatMap(arrayValue);
 }
 
 function arrayValue(value: unknown): unknown[] {
@@ -162,6 +163,27 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
+}
+
+const CONTEXT_PACK_KEYS = new Set([
+  "acceptance_criteria", "confidence", "evidence", "generated_at", "intent", "kind", "open_questions",
+  "project", "proposed_changes", "relevant_files", "source", "validation", "version",
+  "需求理解", "相关证据", "相关文件", "建议改动", "验收标准", "验证建议", "未确认问题"
+]);
+
+function assertSupportedContextPackKeys(raw: Record<string, unknown>): void {
+  const unsupported = Object.keys(raw).filter((key) => !CONTEXT_PACK_KEYS.has(key));
+  if (unsupported.length > 0) throw new Error(`context_pack contains unsupported fields: ${unsupported.join(", ")}`);
+}
+
+function normalizeEvidence(items: unknown[]): RepoContextPackInput["evidence"] {
+  return items.map((item) => typeof item === "string"
+    ? { source_kind: "message" as const, summary: item }
+    : objectValue(item));
+}
+
+function normalizeTextList(items: unknown[]): string[] {
+  return [...new Set(items.map(textValue).filter(Boolean))];
 }
 
 function projectLabel(project: RepoContextPack["project"]): string {

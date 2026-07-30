@@ -41,6 +41,7 @@ import {
 import { callMcpTool } from "../pi/mcpToolCall.ts";
 import { invokeReadOnlyAssistantTool } from "../pi/readOnlyToolInvocation.ts";
 import type { ToolPermission } from "../pi/toolProviderEnvelope.ts";
+import { materializeIssueBatch } from "../pi/issueBatchProposal.ts";
 
 export type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -62,7 +63,9 @@ export async function dispatchPiAction(
   const payload = parsePayload(action);
   switch (action.action_type) {
     case "issue.create":
-      return createIssue(context.database, issueCreatePayload(payload));
+      return Array.isArray(payload.batch_items)
+        ? materializeIssueBatch(context.database, payload)
+        : createIssue(context.database, issueCreatePayload(payload));
     case "issue.enqueue":
       return enqueueIssueAndStartAutoRun(context, action, positivePayloadID(payload, "issue_id"));
     case "issue.status_lookup":

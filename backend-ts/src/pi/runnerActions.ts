@@ -50,10 +50,12 @@ import {
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { reconcileIssueCompletionFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
+import { materializeIssueBatch, normalizeIssueBatchPayload } from "./issueBatchProposal.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
   createIssueProposal(input: IssueCreateProposalInput): unknown;
+  createIssueBatchProposal(input: IssueCreateBatchProposalInput): unknown;
   createIssueStateRepairProposal(input: IssueStateRepairProposalInput): unknown;
   diagnoseIssueState(input: IssueStateDiagnosisInput): unknown;
   createSessionSteerProposal(input: SessionSteerProposalInput): unknown;
@@ -112,6 +114,11 @@ type IssueCreateProposalInput = IssueProposalContextFields & {
   recommended_mcp_capabilities?: string[];
   required_mcp_capabilities?: string[];
 };
+type IssueCreateBatchProposalInput = {
+  items: Array<IssueCreateProposalInput & { ref: string; depends_on_refs?: string[] }>;
+  project_id?: string;
+  rationale?: string;
+};
 type ProjectListInput = {};
 type SkillListInput = {};
 type SkillReadInput = { id: string };
@@ -150,6 +157,11 @@ export function createPiRunnerActions(
       const proposal = issueCreateProposal(input, context);
       const actionContext = actionContextForProposal(context, proposal);
       return createPendingPiAction(db, actionContext, proposal, () => createIssue(db, proposal.payload));
+    },
+    createIssueBatchProposal: (input) => {
+      const proposal = issueCreateBatchProposal(input, context);
+      const actionContext = actionContextForProposal(context, proposal);
+      return createPendingPiAction(db, actionContext, proposal, () => materializeIssueBatch(db, proposal.payload));
     },
     createIssueStateRepairProposal: (input) => createIssueStateRepairProposal(db, context, input),
     diagnoseIssueState: (input) => safeIssueStateDiagnosis(db, context, input),
@@ -449,6 +461,28 @@ function issueCreateProposal(
   };
 }
 
+function issueCreateBatchProposal(
+  input: IssueCreateBatchProposalInput,
+  context: PiRunnerActionContext
+): ProposalInput {
+  const projectID = scopedProjectID(input.project_id, context);
+  const payload = normalizeIssueBatchPayload({
+    project_id: projectID,
+    status: "triage",
+    batch_items: input.items.map((item) => ({
+      ref: item.ref,
+      title: item.title ?? "",
+      description: renderIssueCreateProposalDescription(item, { project: context.project, projectID }),
+      depends_on_refs: item.depends_on_refs ?? [],
+      required_skill_intents: parseSkillIntentList(item.required_skill_intents),
+      recommended_skill_intents: parseSkillIntentList(item.recommended_skill_intents),
+      required_mcp_capabilities: item.required_mcp_capabilities ?? [],
+      recommended_mcp_capabilities: item.recommended_mcp_capabilities ?? []
+    }))
+  });
+  return { actionType: "issue.create", payload, projectID, rationale: input.rationale };
+}
+
 function sessionSteerProposal(db: RunnerDatabase, input: SessionSteerProposalInput): ProposalInput {
   const session = readSessionSummary(db, input.session_key);
   const progress = observeSessionProgress(db, session.session_key);
@@ -488,8 +522,22 @@ function safeRecommendSkills(db: RunnerDatabase, context: PiRunnerActionContext,
     actionType: "skill.recommend",
     payload: cleanObjectPayload({ project_id: projectID, title: input.title ?? "", description: input.description ?? "" }),
     projectID,
-    execute: () => ({ items: recommendSkillIntents(input) })
+    execute: () => ({ items: recommendSkillIntents(input).map(compactSkillRecommendation) })
   });
+}
+
+function compactSkillRecommendation(item: ReturnType<typeof recommendSkillIntents>[number]) {
+  return {
+    allowed_roles: item.allowed_roles,
+    description: item.description,
+    id: item.id,
+    name: item.name,
+    reason: item.reason,
+    risk_level: item.risk_level,
+    score: item.score,
+    summary: item.summary,
+    version: item.version
+  };
 }
 
 function skillRegistryTools(db: RunnerDatabase) {

@@ -150,11 +150,17 @@ function repoAwareIssueProposalWorkflow(): string {
     "Repo-aware issue proposal workflow:",
     "When the user asks for implementation or a fix, identify the project and use only read-only repo/context tools when useful:",
     "project_status, issue_status_summary, issue_execution_status, issue_read, session_read_summary, repo_search, repo_read_excerpt, repo_tree, memory_search.",
-    "Then call issue_create_proposal with a repo_context_pack-compatible context_pack/evidence/open_questions payload.",
+    "If the request references a PRD, specification, design, roadmap, or named local document, reading only the directory entry is insufficient: read the authoritative document in bounded excerpts until its relevant scope, goals, non-goals, acceptance criteria, and open questions are covered before proposing Work.",
+    "For one focused outcome, call issue_create_proposal. For a broad initiative spanning independent contracts, persistence, providers, UI flows, reliability, or end-to-end journeys, decompose it into independently implementable and independently verifiable triage Works and call issue_create_batch_proposal once with stable refs and a structured dependency DAG.",
+    "Do not use frontend/backend/Agent as three executable umbrella buckets when each bucket still contains multiple independently testable deliverables. An executable Work should have one primary outcome, bounded scope and non-goals, concrete acceptance criteria, a replayable validation path, and only the dependencies required for success.",
+    "Separate the shortest MVP delivery chain from post-MVP productization backlog. Do not target a magic issue count: prefer the smallest complete DAG that preserves independent implementation, verification, rollback, and ownership boundaries.",
+    "Machine field names inside context_pack must use intent, evidence, relevant_files, proposed_changes, acceptance_criteria, validation, and open_questions; section headings rendered to users remain Chinese.",
+    "If the user asks to review the plan before creation, present the complete numbered plan and dependency outline without calling a mutation tool. If the user asks to create issues but not start them, create triage issues only and never enqueue them. issue_create_batch_proposal never enqueues.",
+    "Then call issue_create_proposal or issue_create_batch_proposal with a repo_context_pack-compatible context_pack/evidence/open_questions payload.",
     "The created triage issue must include sections: 需求理解, 相关证据, 建议改动, 验收标准, 验证建议, 未确认问题.",
     "Supervisor must not edit code or run destructive commands; the pack is non-binding and executor must re-read and verify.",
     "If information is insufficient, 最多追问一个关键问题 (ask at most one key question); do not block simple requests waiting for a perfect plan.",
-    "After creating the proposal/triage issue from chat/IM, enqueue it by default unless the user asks to wait or schedule later."
+    "After creating one focused proposal/triage issue from chat/IM, enqueue it by default unless the user asks to wait or schedule later. After creating a multi-Work batch, never enqueue the whole DAG blindly; if the user explicitly asks to start now, enqueue only dependency-ready root Work and let authoritative dependency readiness govern later Work."
   ].join(" ");
 }
 

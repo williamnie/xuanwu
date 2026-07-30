@@ -265,6 +265,41 @@ describe("Bun PI actions API", () => {
     }
   });
 
+  test("approve materializes a reviewed detailed issue batch and its dependency DAG exactly once", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const project = mustGetProject(database, "demo");
+      const action = createPiRunnerActions(database, { project }).createIssueBatchProposal({
+        project_id: "demo",
+        rationale: "reviewed PRD plan",
+        items: [
+          batchItem("contract", "固定领域合同"),
+          { ...batchItem("api", "实现任务 API"), depends_on_refs: ["contract"] }
+        ]
+      }) as { action_id: string; status: string };
+      const router = createDefaultRouter({ database });
+
+      expect(action.status).toBe("pending");
+      expect(listIssues(database, { projectId: "demo" })).toHaveLength(0);
+      const first = await postAction(router, action.action_id, "approve");
+      const second = await postAction(router, action.action_id, "approve");
+      const issues = listIssues(database, { projectId: "demo" });
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(await first.json()).toMatchObject({ id: action.action_id, status: "completed" });
+      expect(await second.json()).toMatchObject({ id: action.action_id, status: "completed" });
+      expect(issues).toHaveLength(2);
+      expect(issues.map((issue) => issue.status)).toEqual(["triage", "triage"]);
+      expect(JSON.parse(database.sqlite.query<{ dependency_issue_ids_json: string }, [number]>(
+        "select dependency_issue_ids_json from issues where id=?"
+      ).get(issues[1]?.id ?? 0)?.dependency_issue_ids_json ?? "[]")).toEqual([issues[0]?.id]);
+    } finally {
+      database.close();
+    }
+  });
+
   test("execute steers approved session actions through provider once", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionSteerProvider();
@@ -347,6 +382,18 @@ describe("Bun PI actions API", () => {
   });
 
 });
+
+function batchItem(ref: string, title: string) {
+  return {
+    acceptance_criteria: [`${title} 可独立验收。`],
+    description: `${title} 的单一交付目标。`,
+    evidence: [`PRD 要求 ${title}。`],
+    proposed_changes: [`实施 ${title}。`],
+    ref,
+    title,
+    validation: [`运行 ${ref} focused test。`]
+  };
+}
 
 function postAction(
   router: Router,
