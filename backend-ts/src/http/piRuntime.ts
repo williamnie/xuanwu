@@ -312,25 +312,38 @@ function resolvePiModel(modelRegistry: PiModelRegistry, agent: PiAgent) {
   if (!model) {
     throw new Error(`PI agent ${agent.id} model is unavailable: ${agent.model_provider}/${agent.model_id}`);
   }
-  return withBuiltInModelMetadata(model, agent);
+  return piRuntimeModelMetadata(model, agent);
 }
 
-function withBuiltInModelMetadata(model: Model<any>, agent: PiAgent): Model<any> {
+export function piRuntimeModelMetadata(model: Model<any>, agent: PiAgent): Model<any> {
   const provider = knownModelProvider(agent.model_provider);
-  if (!provider) return model;
-  const builtIn = getModel(provider, agent.model_id as never);
-  if (!builtIn || !isDefaultCustomModelMetadata(model)) return model;
-  return {
-    ...model,
-    name: builtIn.name,
-    reasoning: builtIn.reasoning,
-    thinkingLevelMap: builtIn.thinkingLevelMap,
-    input: builtIn.input,
-    cost: builtIn.cost,
-    contextWindow: builtIn.contextWindow,
-    maxTokens: builtIn.maxTokens,
-    compat: model.compat ?? builtIn.compat
-  };
+  const defaultCustomMetadata = isDefaultCustomModelMetadata(model);
+  if (provider) {
+    const builtIn = getModel(provider, agent.model_id as never);
+    if (builtIn && defaultCustomMetadata) {
+      return {
+        ...model,
+        name: builtIn.name,
+        reasoning: builtIn.reasoning,
+        thinkingLevelMap: builtIn.thinkingLevelMap,
+        input: builtIn.input,
+        cost: builtIn.cost,
+        contextWindow: builtIn.contextWindow,
+        maxTokens: builtIn.maxTokens,
+        compat: model.compat ?? builtIn.compat
+      };
+    }
+  }
+  if (defaultCustomMetadata && isCustomOpenAIGptModel(model, agent)) {
+    return { ...model, input: ["text", "image"] };
+  }
+  return model;
+}
+
+function isCustomOpenAIGptModel(model: Model<any>, agent: PiAgent): boolean {
+  return ["openai", "openai-codex"].includes(agent.model_provider) &&
+    ["openai-responses", "openai-codex-responses"].includes(model.api) &&
+    /^gpt(?:[-_.]|$)/i.test(agent.model_id);
 }
 
 function knownModelProvider(provider: string): KnownProvider | undefined {

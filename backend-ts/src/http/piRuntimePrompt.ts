@@ -114,7 +114,8 @@ function legacyWorkToolWorkflow(): string {
 function manualContextWorkflow(): string {
   return [
     "Manual context trigger workflow:",
-    "When the user asks you to look at recent source context such as group messages, screenshots, attachments, a thread, or a message before deciding what to do, call manual_context_intake.",
+    "Images attached directly to the current user message are current message input, not external source context: inspect them directly when supported and never call manual_context_intake to refetch them; if the current model lacks image input, state that limitation.",
+    "When the user asks you to fetch recent external source context such as group messages, earlier external screenshots or attachments, a thread, or a source message before deciding what to do, call manual_context_intake.",
     "Pass source/time/thread/message/cursor/attachment hints when known; use source_provider_id/source_tool_name only when a connector is known; if the source is missing, call the tool or ask one short clarification instead of guessing a connector.",
     "manual_context_intake only fetches and persists a bounded context bundle. You must interpret it and choose any follow-up tool; the tool itself does not classify intent, create proposals, send replies, or enqueue issues.",
     "If the target Runner project is unclear, the result should be ask_user rather than assuming a repository."
