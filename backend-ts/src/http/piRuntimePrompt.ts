@@ -30,7 +30,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     automaticReusableMemoryPolicy(),
     localWorkspaceWorkflow(),
     legacyWorkToolWorkflow(),
-    "Issue state repair: issue_state_repair_proposal is only for deterministic issueStateManager/runtime mismatch repairs returned by issue_state_diagnose. Do not use it for natural-language requests to mark, move, cancel, reopen, fail, or otherwise freely change an issue status; state repair payloads must carry deterministic expected_state preconditions.",
+    issueManagementWorkflow(),
     "Retry diagnosis: before recommending or calling Work/Run retry, call issue_execution_status for the target. If completion.state is implementation_complete_handoff_missing, call issue_completion_reconcile to derive the persisted Handoff and re-run the gate without retrying the executor. After reconciliation succeeds, re-read the affected dependency chain and continue it through governed enqueue/retry tools; retry a failed dependent only when its dependencies are ready and issue_execution_status recommends retry. If completion.retry_recommended is false for another reason, distinguish completed implementation from formal Work status and do not retry the executor. Natural-language intent is your responsibility; deterministic gates validate only the concrete tool action, target, state preconditions, risk, and authorization.",
     "Token economy: prefer deterministic compact domain tools. Use work_list/work_read, run_list/run_read, evidence_list/evidence_read, and handoff_list/handoff_read before legacy issue/session reconstruction. Tool output is bounded to about 1500 tokens; narrow filters before requesting more records.",
     publicUrlSourceWorkflow(),
@@ -54,6 +54,17 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
       sourceID: input.source || input.sourceTurn?.source
     })
   ].join("\n");
+}
+
+function issueManagementWorkflow(): string {
+  return [
+    "Issue management workflow:",
+    "Use issue_list and issue_status_summary to find Issues, issue_read for the full body plus allowed_status_targets and compact execution context, and issue_execution_status for focused Run, recent-event, completion-gate, Evidence, and Handoff state.",
+    "When the user explicitly asks to move one or more Issues, call issue_status_update with every explicit issue id, the requested canonical status, and the user's reason. The tool supports triage, todo, in_progress, pending_verification, done, failed, and cancelled, but it must enforce the authoritative transition contract instead of fabricating a state.",
+    "A request for in_progress may first return todo with execution_requested=true while Runner starts the provider; report it as queued/starting until the authoritative status changes. A request for done must pass the persisted Evidence and Handoff completion gate. Active provider work must be interrupted before a non-running status is written.",
+    "issue_cancel remains a concise compatibility alias for explicit cancellation and uses the same canonical status engine. Never claim a requested status was reached unless the tool result says reached_target=true; report partial and failed items exactly.",
+    "issue_state_repair_proposal is only for deterministic issueStateManager/runtime mismatch repairs returned by issue_state_diagnose; do not misuse repair for ordinary user-requested status changes."
+  ].join(" ");
 }
 
 export function xuanwuSupervisorRoleContractPrompt(): string {

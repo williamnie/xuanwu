@@ -4,9 +4,11 @@ import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "./supervisorControlCon
 const RUNNER_CHAT_MUTATION_ACTIONS = new Set([
   "agent.workflow_request",
   "issue.create",
+  "issue.cancel",
   "issue.completion_reconcile",
   "issue.enqueue",
   "issue.schedule_enqueue",
+  "issue.status_update",
   "issue.state_repair",
   "issue_completion_watch.create",
   "issue_completion_watch.cancel",

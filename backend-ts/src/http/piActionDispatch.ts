@@ -42,6 +42,10 @@ import { callMcpTool } from "../pi/mcpToolCall.ts";
 import { invokeReadOnlyAssistantTool } from "../pi/readOnlyToolInvocation.ts";
 import type { ToolPermission } from "../pi/toolProviderEnvelope.ts";
 import { materializeIssueBatch } from "../pi/issueBatchProposal.ts";
+import {
+  executeIssueStatusUpdate,
+  type IssueStatusUpdateInput
+} from "../pi/runnerIssueStatusActions.ts";
 
 export type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -68,6 +72,14 @@ export async function dispatchPiAction(
         : createIssue(context.database, issueCreatePayload(payload));
     case "issue.enqueue":
       return enqueueIssueAndStartAutoRun(context, action, positivePayloadID(payload, "issue_id"));
+    case "issue.cancel":
+      return await updateIssueStatusesAndStartAutoRun(context, action, {
+        issue_ids: positiveIDList(payload.issue_ids),
+        reason: cleanString(payload.reason) || cleanString(action.rationale) || "用户明确取消 Issue",
+        status: "cancelled"
+      });
+    case "issue.status_update":
+      return await updateIssueStatusesAndStartAutoRun(context, action, issueStatusUpdateInput(payload));
     case "issue.status_lookup":
       return lookupIssueStatus(context.database, payload);
     case "message.reply_draft":
@@ -149,6 +161,37 @@ export async function dispatchPiAction(
     default:
       throw new Error(`unsupported PI action type: ${action.action_type}`);
   }
+}
+
+async function updateIssueStatusesAndStartAutoRun(
+  context: PiActionDispatchContext,
+  action: PiAction,
+  input: IssueStatusUpdateInput
+): Promise<unknown> {
+  const result = await executeIssueStatusUpdate(context.database, input, {
+    bus: context.bus,
+    onExecutionRequested: (projectID) => startEnqueuedProjectLoop(context, action, projectID),
+    providers: context.providers
+  });
+  if (input.status !== "in_progress" && input.status !== "todo") {
+    startAutoRunProjectLoop(context, result.project_id);
+  }
+  return result;
+}
+
+function issueStatusUpdateInput(payload: Record<string, unknown>): IssueStatusUpdateInput {
+  const status = cleanString(payload.status);
+  if (status !== "triage" && status !== "todo" && status !== "in_progress" &&
+    status !== "pending_verification" && status !== "done" && status !== "failed" && status !== "cancelled") {
+    throw new Error("status is invalid");
+  }
+  const reason = requiredPayloadText(payload, "reason");
+  return {
+    error: cleanString(payload.error),
+    issue_ids: positiveIDList(payload.issue_ids),
+    reason,
+    status
+  };
 }
 
 function requiredPayloadText(payload: Record<string, unknown>, key: string): string {
@@ -376,6 +419,14 @@ function positiveInputID(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return value;
   const parsed = Number.parseInt(cleanString(value), 10);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function positiveIDList(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  if (value.length > 40) throw new Error("issue_ids supports at most 40 items");
+  const ids = value.map(positiveInputID);
+  if (ids.some((id) => id === undefined)) throw new Error("issue_ids must contain positive integers");
+  return [...new Set(ids.filter((id): id is number => id !== undefined))];
 }
 
 function stringList(value: unknown): string[] {

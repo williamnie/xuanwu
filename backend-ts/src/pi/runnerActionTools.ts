@@ -19,6 +19,8 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "issue_read",
   "issue_create_proposal",
   "issue_create_batch_proposal",
+  "issue_cancel",
+  "issue_status_update",
   "issue_state_diagnose",
   "issue_state_repair_proposal",
   "issue_comment",
@@ -231,7 +233,7 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
       "Deterministically repair an implementation_complete_handoff_missing Issue without rerunning the executor. Re-read current-Run Evidence, derive and persist a Git Handoff, re-run the completion gate, and resume the project loop after Done.",
       Type.Object({ issue_id: positiveID, rationale: optionalString }, objectOptions),
       actions.reconcileIssueCompletion),
-    actionTool("issue_read", "Issue Read", "Read one runner issue through the action layer.",
+    actionTool("issue_read", "Issue Read", "Read one runner issue with full body, allowed status targets, dependency readiness, compact Run state, recent events, completion gate, Evidence, and Handoff context.",
       Type.Object({ id: positiveID }, objectOptions), actions.readIssue),
     actionTool("issue_create_proposal", "Issue Create Proposal",
       "Create a high-risk pending proposal for a new issue; does not create the issue directly.",
@@ -276,6 +278,28 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
         project_id: optionalString,
         rationale: optionalString
       }, objectOptions), actions.createIssueBatchProposal),
+    actionTool("issue_cancel", "Issue Cancel",
+      "Cancel one or more explicitly requested issues. Use this when the user says the issues will not be done or asks to move them to cancelled; active Runs are interrupted through the canonical Runner cancellation path.",
+      Type.Object({
+        issue_ids: Type.Array(positiveID, { minItems: 1, maxItems: 40 }),
+        rationale: optionalString
+      }, objectOptions), actions.cancelIssues),
+    actionTool("issue_status_update", "Issue Status Update",
+      "Move one or more explicit issues through the canonical Runner status contract. Supports every Issue status, validates the current transition, interrupts active providers when required, queues execution for in_progress, and enforces the completion Evidence/Handoff gate for done.",
+      Type.Object({
+        error: optionalString,
+        issue_ids: Type.Array(positiveID, { minItems: 1, maxItems: 40 }),
+        reason: requiredText,
+        status: Type.Union([
+          Type.Literal("triage"),
+          Type.Literal("todo"),
+          Type.Literal("in_progress"),
+          Type.Literal("pending_verification"),
+          Type.Literal("done"),
+          Type.Literal("failed"),
+          Type.Literal("cancelled")
+        ])
+      }, objectOptions), actions.updateIssueStatuses),
     issueStateDiagnoseTool(actions),
     issueStateRepairTool(actions),
     actionTool("issue_comment", "Issue Comment", "Add a low-risk agent comment to an issue.",

@@ -6,6 +6,9 @@ import {
   getScrollBottomDistance,
   isNearScrollBottom,
 } from './smartAutoScroll.js';
+import { readFileSync } from 'node:fs';
+
+const source = readFileSync(new URL('./smartAutoScroll.js', import.meta.url), 'utf8');
 
 test('treats tiny bottom offsets as near bottom', () => {
   const element = { scrollHeight: 1000, scrollTop: 399, clientHeight: 600 };
@@ -29,4 +32,9 @@ test('clamps overscroll distance to zero', () => {
 
   assert.equal(getScrollBottomDistance(element), 0);
   assert.equal(isNearScrollBottom(element), true);
+});
+
+test('force scroll key resumes following after an explicit user action', () => {
+  assert.match(source, /if \(!forceScrollKey\) return;/);
+  assert.match(source, /shouldFollowRef\.current = true;\s*scheduleScrollToBottom\('auto'\);/);
 });

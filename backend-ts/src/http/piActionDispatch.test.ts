@@ -92,6 +92,69 @@ describe("PI action dispatcher supervisor actions", () => {
     }
   });
 
+  test("issue.cancel dispatch cancels every explicit issue in one project", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo");
+      insertIssue(db, { issueID: 812, projectID: "demo", status: "triage" });
+      insertIssue(db, { issueID: 813, projectID: "demo", status: "triage" });
+      insertIssue(db, { issueID: 814, projectID: "demo", status: "triage" });
+      const action = createPiAction(db, {
+        action_type: "issue.cancel",
+        id: "cancel-explicit-batch",
+        payload_json: JSON.stringify({ issue_ids: [812, 813, 814] }),
+        project_id: "demo",
+        status: "approved"
+      });
+
+      const result = await dispatchPiAction({ database: db }, action);
+
+      expect(result).toMatchObject({
+        accepted: 3,
+        project_id: "demo",
+        requested_status: "cancelled",
+        status: "completed"
+      });
+      expect([812, 813, 814].map((id) => getIssue(db, id)?.status)).toEqual([
+        "cancelled", "cancelled", "cancelled"
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("issue.status_update dispatch applies a canonical batch transition", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo");
+      insertIssue(db, { issueID: 815, projectID: "demo", status: "triage" });
+      insertIssue(db, { issueID: 816, projectID: "demo", status: "triage" });
+      const action = createPiAction(db, {
+        action_type: "issue.status_update",
+        id: "status-update-explicit-batch",
+        payload_json: JSON.stringify({
+          issue_ids: [815, 816],
+          reason: "用户要求放入待办",
+          status: "todo"
+        }),
+        project_id: "demo",
+        status: "approved"
+      });
+
+      const result = await dispatchPiAction({ database: db }, action);
+
+      expect(result).toMatchObject({
+        accepted: 2,
+        project_id: "demo",
+        requested_status: "todo",
+        status: "completed"
+      });
+      expect([815, 816].map((id) => getIssue(db, id)?.status)).toEqual(["todo", "todo"]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("issue completion watch create/cancel dispatch persists watch rows after approval", async () => {
     const db = await fixtureDb();
     try {

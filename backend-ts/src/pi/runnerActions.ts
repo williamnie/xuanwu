@@ -51,9 +51,18 @@ import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { reconcileIssueCompletionFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
 import { materializeIssueBatch, normalizeIssueBatchPayload } from "./issueBatchProposal.ts";
+import { readIssueDependency } from "../domain/work/issueDependency.ts";
+import {
+  allowedIssueStatusTargets,
+  executeIssueStatusUpdate,
+  prepareIssueStatusUpdate,
+  type IssueStatusUpdateInput
+} from "./runnerIssueStatusActions.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
+  cancelIssues(input: IssueCancelInput): unknown;
+  updateIssueStatuses(input: IssueStatusUpdateInput): unknown;
   createIssueProposal(input: IssueCreateProposalInput): unknown;
   createIssueBatchProposal(input: IssueCreateBatchProposalInput): unknown;
   createIssueStateRepairProposal(input: IssueStateRepairProposalInput): unknown;
@@ -102,6 +111,7 @@ type IssueReadInput = { id: number };
 type IssueExecutionStatusInput = { id: number };
 type IssueCompletionReconcileInput = { issue_id: number; rationale?: string };
 type IssueCommentInput = { body: string; issue_id: number };
+type IssueCancelInput = { issue_ids: number[]; rationale?: string };
 type IssueProposalInput = { issue_id: number; rationale?: string };
 type IssueCreateProposalInput = IssueProposalContextFields & {
   description: string;
@@ -153,6 +163,8 @@ export function createPiRunnerActions(
       projectID: issueProjectID(db, input.issue_id, context),
       execute: () => createIssueComment(db, input.issue_id, { author: "agent", body: input.body })
     }),
+    cancelIssues: (input) => cancelIssues(db, context, input),
+    updateIssueStatuses: (input) => updateIssueStatuses(db, context, input),
     createIssueProposal: (input) => {
       const proposal = issueCreateProposal(input, context);
       const actionContext = actionContextForProposal(context, proposal);
@@ -201,6 +213,49 @@ export function createPiRunnerActions(
     recommendSkills: (input) => safeRecommendSkills(db, context, input),
     readIssue: (input) => safeReadIssue(db, context, input),
     readSessionSummary: (input) => safeReadSessionSummary(db, context, input)
+  };
+}
+
+function cancelIssues(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  input: IssueCancelInput
+) {
+  const reason = cleanString(input.rationale) || "用户明确取消 Issue";
+  const statusInput: IssueStatusUpdateInput = { issue_ids: input.issue_ids, reason, status: "cancelled" };
+  const prepared = prepareIssueStatusUpdate(db, statusInput);
+  const projectID = prepared.projectID;
+  const actionType = "issue.cancel";
+  const actionContext = scopedRunnerChatActionContext(context, actionType, { projectID });
+  return createPendingPiAction(db, actionContext, {
+    actionType,
+    payload: { issue_ids: prepared.issues.map((issue) => issue.id), reason, status: "cancelled" },
+    projectID,
+    rationale: input.rationale
+  }, () => executeIssueStatusUpdate(db, statusInput, issueStatusRuntime(context)));
+}
+
+function updateIssueStatuses(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  input: IssueStatusUpdateInput
+) {
+  const prepared = prepareIssueStatusUpdate(db, input);
+  const actionType = "issue.status_update";
+  const actionContext = scopedRunnerChatActionContext(context, actionType, { projectID: prepared.projectID });
+  return createPendingPiAction(db, actionContext, {
+    actionType,
+    payload: cleanObjectPayload(input),
+    projectID: prepared.projectID,
+    rationale: input.reason
+  }, () => executeIssueStatusUpdate(db, input, issueStatusRuntime(context)));
+}
+
+function issueStatusRuntime(context: PiRunnerActionContext) {
+  return {
+    bus: context.bus,
+    onExecutionRequested: context.onIssueEnqueued,
+    providers: context.providers
   };
 }
 
@@ -421,7 +476,13 @@ function safeReadIssue(db: RunnerDatabase, context: PiRunnerActionContext, input
     issueID: issue.id,
     payload: { id: issue.id },
     projectID: issue.project_id,
-    execute: () => issue
+    execute: () => ({
+      ...issue,
+      allowed_status_targets: allowedIssueStatusTargets(issue.status),
+      dependency: readIssueDependency(db, issue.id),
+      execution: createIssueExecutionStatus(db, issue.id),
+      source: "issue_read"
+    })
   });
 }
 

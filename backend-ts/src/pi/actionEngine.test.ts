@@ -22,6 +22,16 @@ describe("PI action engine risk classifier", () => {
       requiresConfirmation: true,
       riskLevel: "medium"
     });
+    expect(classifyPiActionRisk("issue.cancel")).toEqual({
+      gate: "confirm",
+      requiresConfirmation: true,
+      riskLevel: "medium"
+    });
+    expect(classifyPiActionRisk("issue.status_update")).toEqual({
+      gate: "confirm",
+      requiresConfirmation: true,
+      riskLevel: "medium"
+    });
     expect(classifyPiActionRisk("workspace.write_file")).toEqual({
       gate: "confirm",
       requiresConfirmation: true,

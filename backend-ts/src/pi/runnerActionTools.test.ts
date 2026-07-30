@@ -29,6 +29,8 @@ describe("PI runner action tools", () => {
     const repoTree = toolByName(tools, "repo_tree");
     const issueCreate = toolByName(tools, "issue_create_proposal");
     const issueBatchCreate = toolByName(tools, "issue_create_batch_proposal");
+    const issueCancel = toolByName(tools, "issue_cancel");
+    const issueStatusUpdate = toolByName(tools, "issue_status_update");
     const repair = toolByName(tools, "issue_state_repair_proposal");
     const batchTriage = toolByName(tools, "issue_enqueue_batch_triage");
     const nextTriage = toolByName(tools, "issue_enqueue_next_triage");
@@ -45,6 +47,13 @@ describe("PI runner action tools", () => {
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
     expect(validateArgs(issueStatus, { status: "todo" })).toEqual({ status: "todo" });
     expect(validateArgs(issueExecution, { id: 1 })).toEqual({ id: 1 });
+    expect(validateArgs(issueCancel, { issue_ids: [812, 813, 814], rationale: "不再做" }))
+      .toEqual({ issue_ids: [812, 813, 814], rationale: "不再做" });
+    expect(validateArgs(issueStatusUpdate, {
+      issue_ids: [812, 813, 814],
+      reason: "用户要求重新排队",
+      status: "todo"
+    })).toEqual({ issue_ids: [812, 813, 814], reason: "用户要求重新排队", status: "todo" });
     expect(validateArgs(completionReconcile, { issue_id: 1, rationale: "补齐交付记录" }))
       .toEqual({ issue_id: 1, rationale: "补齐交付记录" });
     expect(validateArgs(watchCreate, {
@@ -144,6 +153,15 @@ describe("PI runner action tools", () => {
     await verifier.execute("tool-verifier", { target_issue_id: 1, instructions: "verify" }, undefined, undefined, {} as never);
     await issueList.execute("tool-list", { limit: 3, status: "todo" }, undefined, undefined, {} as never);
     await issueRead.execute("tool-1", { id: 7 }, undefined, undefined, {} as never);
+    await issueCancel.execute("tool-cancel", {
+      issue_ids: [812, 813, 814],
+      rationale: "不再做"
+    }, undefined, undefined, {} as never);
+    await issueStatusUpdate.execute("tool-status-update", {
+      issue_ids: [812, 813, 814],
+      reason: "用户要求重新排队",
+      status: "todo"
+    }, undefined, undefined, {} as never);
     await issueBatchCreate.execute("tool-batch-create", {
       items: [detailedBatchItem("foundation", "建立工程基线"), detailedBatchItem("ui", "实现前端流程")]
     }, undefined, undefined, {} as never);
@@ -187,6 +205,8 @@ describe("PI runner action tools", () => {
       ["createVerificationWorkflow", { target_issue_id: 1, instructions: "verify" }],
       ["listIssues", { limit: 3, status: "todo" }],
       ["readIssue", { id: 7 }],
+      ["cancelIssues", { issue_ids: [812, 813, 814], rationale: "不再做" }],
+      ["updateIssueStatuses", { issue_ids: [812, 813, 814], reason: "用户要求重新排队", status: "todo" }],
       ["createIssueBatchProposal", {
         items: [detailedBatchItem("foundation", "建立工程基线"), detailedBatchItem("ui", "实现前端流程")]
       }],
@@ -1177,6 +1197,8 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     return { ok: true };
   };
   return {
+    cancelIssues: record("cancelIssues"),
+    updateIssueStatuses: record("updateIssueStatuses"),
     commentIssue: record("commentIssue"),
     assignExecutorProfileProposal: record("assignExecutorProfileProposal"),
     createExecutorIssueProposal: record("createExecutorIssueProposal"),

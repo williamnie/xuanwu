@@ -110,6 +110,8 @@ describe("Xuanwu Supervisor runtime prompt", () => {
       expect(prompt).toContain("never enqueue the whole DAG blindly");
       expect(prompt).toContain("must not edit code");
       expect(prompt).toContain("issue_state_repair_proposal is only for deterministic");
+      expect(prompt).toContain("call issue_status_update with every explicit issue id");
+      expect(prompt).toContain("triage, todo, in_progress, pending_verification, done, failed, and cancelled");
       expect(prompt).toContain("最多追问一个关键问题");
       expect(prompt).toContain("Supervisor commitment context (operational projection, not long-term memory)");
       expect(prompt).toContain("xw.supervisor-commitment.v1");

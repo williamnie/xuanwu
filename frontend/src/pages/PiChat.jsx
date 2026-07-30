@@ -287,6 +287,7 @@ function ChatThread({ advanced, navigateTo, state }) {
     handleScroll,
     scrollToLatest,
   } = useSmartAutoScroll({
+    forceScrollKey: lastMessage?.role === 'user' ? lastMessage.id : '',
     resetKey: state.selectedConversationId,
     watchKey: autoScrollWatchKey,
   });

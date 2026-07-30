@@ -21,7 +21,7 @@ import type { AppEvent, EventBus } from "../events/bus.ts";
 import { isExecutorProviderId, type ExecutorProvider, type ExecutorProviderId, type InterruptInput, type SessionRef } from "../providers/types.ts";
 
 export type InterruptRuntime = {
-  bus?: EventBus;
+  bus?: Pick<EventBus, "publish">;
   interruptTimeoutMs?: number;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
@@ -46,6 +46,19 @@ export async function cancelIssueWithInterrupt(
     await interruptLinkedIssue(db, issue, ISSUE_CANCEL_REASON, runtime);
   }
   return cancelIssue(db, issueID, ISSUE_CANCEL_REASON);
+}
+
+export async function interruptIssueForStatusTransition(
+  db: RunnerDatabase,
+  issueID: number,
+  reason: string,
+  runtime: InterruptRuntime = {}
+): Promise<Issue> {
+  const issue = issueWithLatestRun(db, mustGetIssue(db, issueID));
+  if (!shouldInterruptIssue(issue)) return issue;
+  const interrupted = await interruptLinkedIssue(db, issue, reason, runtime);
+  if (!interrupted) throw new Error("旧 Session 中断失败，Issue 状态未更新");
+  return issue;
 }
 
 export async function retryIssueWithInterrupt(
@@ -289,7 +302,7 @@ function recordInterruptEvent(
   type: string,
   session: SessionRef,
   reason: string,
-  bus?: EventBus
+  bus?: Pick<EventBus, "publish">
 ): void {
   recordEvent(db, issueID, type, {
     thread_id: session.sessionId,
@@ -304,7 +317,7 @@ function recordInterruptFailed(
   session: SessionRef,
   reason: string,
   error: string,
-  bus?: EventBus
+  bus?: Pick<EventBus, "publish">
 ): void {
   recordEvent(db, issueID, "issue.interrupt_failed", {
     thread_id: session.sessionId,
@@ -319,7 +332,7 @@ function recordEvent(
   issueID: number,
   type: string,
   payload: Record<string, string>,
-  bus: EventBus | undefined,
+  bus: Pick<EventBus, "publish"> | undefined,
   session: SessionRef,
   error = ""
 ): void {
@@ -341,7 +354,7 @@ function recordEvent(
   });
 }
 
-function publish(bus: EventBus | undefined, event: AppEvent): void {
+function publish(bus: Pick<EventBus, "publish"> | undefined, event: AppEvent): void {
   bus?.publish(event);
 }
 

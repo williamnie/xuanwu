@@ -23,7 +23,7 @@ export function scrollToBottom(element, behavior = 'auto') {
   element.scrollTop = element.scrollHeight;
 }
 
-export function useSmartAutoScroll({ resetKey, watchKey }) {
+export function useSmartAutoScroll({ forceScrollKey = '', resetKey, watchKey }) {
   const scrollRef = useRef(null);
   const contentRef = useRef(null);
   const frameRef = useRef(0);
@@ -65,6 +65,12 @@ export function useSmartAutoScroll({ resetKey, watchKey }) {
   useEffect(() => {
     if (shouldFollowRef.current) scheduleScrollToBottom('auto');
   }, [watchKey, scheduleScrollToBottom]);
+
+  useEffect(() => {
+    if (!forceScrollKey) return;
+    shouldFollowRef.current = true;
+    scheduleScrollToBottom('auto');
+  }, [forceScrollKey, scheduleScrollToBottom]);
 
   useEffect(() => {
     const content = contentRef.current;

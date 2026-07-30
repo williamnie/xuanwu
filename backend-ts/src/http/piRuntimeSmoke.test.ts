@@ -11,7 +11,11 @@ import { listIssues } from "../db/repositories/issues.ts";
 import { createPiDelegation, createPiMemoryItem, getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { EventBus } from "../events/bus.ts";
 import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";
-import { createPiRuntimeSession } from "./piRuntime.ts";
+import {
+  createPiRuntimeSession,
+  PI_RUNNER_CHAT_ACTIONS,
+  PI_RUNNER_CHAT_MUTATION_ACTIONS
+} from "./piRuntime.ts";
 import { finalPiConversationSseData } from "./piConversationSse.testSupport.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -32,6 +36,17 @@ afterEach(async () => {
 });
 
 describe("Bun PI runtime v1 smoke", () => {
+  test("Runner Chat authorization exposes canonical Issue status management", () => {
+    expect(PI_RUNNER_CHAT_ACTIONS).toEqual(expect.arrayContaining([
+      "issue.cancel",
+      "issue.status_update"
+    ]));
+    expect(PI_RUNNER_CHAT_MUTATION_ACTIONS).toEqual(expect.arrayContaining([
+      "issue.cancel",
+      "issue.status_update"
+    ]));
+  });
+
   test("fails visibly when the PI Agent has no configured model", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -160,6 +175,57 @@ describe("Bun PI runtime v1 smoke", () => {
       expect(faux.state.callCount).toBe(2);
     } finally {
       events.close();
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("runner chat reads Issue context and executes an authorized status move", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-smoke-faux-api", provider: "pi-smoke-faux" });
+    try {
+      insertProject(database, "demo");
+      const issue = createIssue(database, {
+        project_id: "demo",
+        status: "triage",
+        title: "Stop this work"
+      });
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("issue_read", { id: issue.id }, { id: "issue-read" }),
+          fauxToolCall("issue_status_update", {
+            issue_ids: [issue.id],
+            reason: "用户明确要求不再处理",
+            status: "cancelled"
+          }, { id: "issue-status-update" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage("已移到 cancelled")
+      ]);
+      insertFauxAgent(database);
+      writeFauxModelsConfig(database);
+      const router = createDefaultRouter({ database });
+
+      expect((await post(router, "/api/pi/conversations", {
+        id: "conv-status-move",
+        project_id: "demo"
+      })).status).toBe(201);
+      const message = await post(router, "/api/pi/conversations/conv-status-move/messages", {
+        prompt: `#${issue.id} 不做了，移动到 cancelled`
+      });
+
+      expect(message.status).toBe(201);
+      expect(await finalPiConversationSseData(message)).toMatchObject({
+        conversation_id: "conv-status-move",
+        status: "completed",
+        text: "已移到 cancelled"
+      });
+      expect(listIssues(database, { projectId: "demo" })).toContainEqual(expect.objectContaining({
+        id: issue.id,
+        status: "cancelled"
+      }));
+      expect(listPiActions(database, { status: "completed" }).map((action) => action.action_type))
+        .toEqual(expect.arrayContaining(["issue.read", "issue.status_update"]));
+    } finally {
       faux.unregister();
       database.close();
     }
