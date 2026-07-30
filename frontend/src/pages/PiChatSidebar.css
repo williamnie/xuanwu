@@ -177,11 +177,6 @@
   color: var(--text-primary);
 }
 
-.pi-chat-conversation.running {
-  background: color-mix(in srgb, var(--primary-glow) 58%, transparent);
-  border-color: color-mix(in srgb, var(--primary) 15%, transparent);
-}
-
 .pi-chat-conversation-heading {
   align-items: center;
   display: flex;
@@ -203,35 +198,36 @@
 
 .pi-chat-conversation-runtime {
   align-items: center;
-  color: var(--text-muted);
-  display: inline-flex;
+  color: var(--info);
+  display: inline-grid;
   flex: 0 0 auto;
-  font-family: var(--font-mono);
-  font-size: .55rem;
-  font-weight: 700;
-  gap: 4px;
-  letter-spacing: .035em;
-  text-transform: uppercase;
+  height: 14px;
+  place-items: center;
+  width: 14px;
 }
 
 .pi-chat-conversation-runtime > span {
   background: currentColor;
   border-radius: 50%;
-  height: 5px;
-  width: 5px;
+  box-shadow: 0 0 0 3px var(--info-glow);
+  height: 6px;
+  width: 6px;
 }
 
-.pi-chat-conversation-runtime[data-tone="running"] { color: var(--primary); }
-.pi-chat-conversation-runtime[data-tone="error"] { color: var(--error); }
-.pi-chat-conversation-runtime[data-tone="archived"] { color: var(--text-muted); }
+.pi-chat-conversation-runtime[data-tone="running"] { color: var(--text-muted); }
 
 .pi-chat-conversation-runtime[data-tone="running"] > span {
-  animation: pi-chat-runtime-pulse 1.5s ease-in-out infinite;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+  animation: pi-chat-runtime-spin .72s linear infinite;
+  background: transparent;
+  border: 1.5px solid color-mix(in srgb, currentColor 34%, transparent);
+  border-right-color: currentColor;
+  box-shadow: none;
+  height: 10px;
+  width: 10px;
 }
 
-@keyframes pi-chat-runtime-pulse {
-  50% { opacity: .42; transform: scale(.72); }
+@keyframes pi-chat-runtime-spin {
+  to { transform: rotate(360deg); }
 }
 
 .pi-chat-conversation-meta {

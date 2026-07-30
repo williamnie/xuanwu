@@ -129,11 +129,13 @@ test('PI Assistant chat lists all conversations instead of only active rows', ()
   assert.doesNotMatch(stateSource, /getPiConversations\(\{\s*status:\s*'active'\s*\}\)/);
 });
 
-test('PI Assistant sidebar exposes runtime state and activity timestamps', () => {
+test('PI Assistant sidebar uses Codex-style unread and running indicators', () => {
   assert.match(pageSource, /conversation\.runtime_status === 'running'/);
   assert.match(pageSource, /className="pi-chat-conversation-runtime"/);
   assert.match(pageSource, /conversation\.last_activity_at \|\| conversation\.updated_at/);
-  assert.match(pageSource, /t\('chat\.status\.idle'\)/);
+  assert.match(pageSource, /t\('chat\.status\.unread'\)/);
+  assert.match(pageSource, /visiblePiConversations\(state\.conversations\)/);
+  assert.doesNotMatch(pageSource, /t\('chat\.status\.idle'\)/);
 });
 
 test('Chat hides runtime internals by default and exposes diagnostics only through Advanced', () => {

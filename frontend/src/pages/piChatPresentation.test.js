@@ -3,9 +3,11 @@ import test from 'node:test';
 
 import {
   displayPiConversationTitle,
+  isPiConversationArchived,
   piChatStatusSummary,
   piChatWorkLinks,
   sortPiConversationsByActivity,
+  visiblePiConversations,
 } from './piChatPresentation.js';
 import { translate } from '../i18n/translations.js';
 
@@ -46,6 +48,16 @@ test('Chat orders active conversations first and then by latest activity', () =>
     { id: 'newer', last_activity_at: '2026-07-29T09:00:00Z', runtime_status: 'idle' },
   ]);
   assert.deepEqual(conversations.map((conversation) => conversation.id), ['running', 'newer', 'older']);
+});
+
+test('Chat keeps archived conversations out of the visible sidebar', () => {
+  const conversations = [
+    { id: 'active', status: 'active' },
+    { id: 'archived', status: 'archived' },
+    { id: 'closed', status: 'closed' },
+  ];
+  assert.equal(isPiConversationArchived(conversations[1]), true);
+  assert.deepEqual(visiblePiConversations(conversations).map((conversation) => conversation.id), ['active']);
 });
 
 test('Chat presentation follows the selected language without rewriting persisted content', () => {

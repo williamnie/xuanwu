@@ -37,6 +37,14 @@ export function sortPiConversationsByActivity(conversations = []) {
   });
 }
 
+export function isPiConversationArchived(conversation = null) {
+  return ['archived', 'closed'].includes(cleanText(conversation?.status).toLowerCase());
+}
+
+export function visiblePiConversations(conversations = []) {
+  return (Array.isArray(conversations) ? conversations : []).filter((conversation) => !isPiConversationArchived(conversation));
+}
+
 export function piChatWorkLinks(transcript = []) {
   const links = new Map();
   for (const item of Array.isArray(transcript) ? transcript : []) {

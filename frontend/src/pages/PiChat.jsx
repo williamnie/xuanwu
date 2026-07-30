@@ -31,7 +31,7 @@ import {
   runnerContextModeLabel,
   runnerContextReferenceLabel,
 } from './piChatMessageContent';
-import { displayPiConversationTitle, piChatStatusSummary, piChatWorkLinks } from './piChatPresentation';
+import { displayPiConversationTitle, piChatStatusSummary, piChatWorkLinks, visiblePiConversations } from './piChatPresentation';
 import { shortId, usePiChatState } from './piChatState';
 import { useSmartAutoScroll } from './sessions/smartAutoScroll';
 import './PiChat.css';
@@ -60,7 +60,7 @@ function PiChatLayout({ advanced, navigateTo, setAdvanced, state }) {
 function PiChatSidebar({ advanced, navigateTo, state }) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
-  const conversations = filterConversations(state.conversations, query, t);
+  const conversations = filterConversations(visiblePiConversations(state.conversations), query, t);
   return (
     <aside className="pi-chat-sidebar glass-card">
       <PiChatSidebarHeader
@@ -87,6 +87,7 @@ function PiChatSidebar({ advanced, navigateTo, state }) {
         conversations={conversations}
         emptyLabel={query ? t('chat.noSearchResults') : t('chat.emptyList')}
         selectedId={state.selectedConversationId}
+        unreadIds={state.unreadConversationIds}
         onSelect={state.handleConversationChange}
       />
     </aside>
@@ -225,7 +226,7 @@ function ChatContextBar({ navigateTo, project, transcript }) {
   );
 }
 
-function ConversationList({ advanced, conversations, emptyLabel, onSelect, selectedId }) {
+function ConversationList({ advanced, conversations, emptyLabel, onSelect, selectedId, unreadIds }) {
   const { language, t } = useI18n();
   return (
     <div className="pi-chat-conversation-list">
@@ -234,20 +235,28 @@ function ConversationList({ advanced, conversations, emptyLabel, onSelect, selec
         <div className="pi-chat-empty-mini">{emptyLabel}</div>
       ) : (
         conversations.map((conversation) => {
-          const runtime = conversationRuntimePresentation(conversation, t);
+          const runtime = conversationRuntimePresentation(conversation, unreadIds.has(conversation.id), t);
           return (
             <button
               key={conversation.id}
-              className={`pi-chat-conversation ${selectedId === conversation.id ? 'active' : ''} ${runtime.tone}`}
+              className={`pi-chat-conversation ${selectedId === conversation.id ? 'active' : ''} ${runtime?.tone || ''}`}
               onClick={() => onSelect(conversation.id)}
               onContextMenu={advanced ? (event) => copyConversationDebugInfo(event, conversation, t('chat.debugCopied')) : undefined}
               title={advanced ? t('chat.copyChatDebugHint') : undefined}
             >
               <span className="pi-chat-conversation-heading">
                 <span className="pi-chat-conversation-title">{displayPiConversationTitle(conversation, t)}</span>
-                <span className="pi-chat-conversation-runtime" data-tone={runtime.tone}>
-                  <span aria-hidden="true" /> {runtime.label}
-                </span>
+                {runtime && (
+                  <span
+                    aria-label={runtime.label}
+                    className="pi-chat-conversation-runtime"
+                    data-tone={runtime.tone}
+                    role="status"
+                    title={runtime.label}
+                  >
+                    <span aria-hidden="true" />
+                  </span>
+                )}
               </span>
               <span className="pi-chat-conversation-meta">
                 <span>{formatConversationDate(conversation.last_activity_at || conversation.updated_at || conversation.created_at, language)}</span>
@@ -570,13 +579,8 @@ function formatConversationDate(value, language) {
   return new Intl.DateTimeFormat(language || 'zh-CN', { month: 'numeric', day: 'numeric' }).format(date);
 }
 
-function conversationRuntimePresentation(conversation, t) {
+function conversationRuntimePresentation(conversation, unread, t) {
   if (conversation.runtime_status === 'running') return { label: t('chat.status.sending'), tone: 'running' };
-  if (['error', 'failed'].includes(String(conversation.status || '').toLowerCase())) {
-    return { label: t('chat.status.incomplete'), tone: 'error' };
-  }
-  if (['archived', 'closed'].includes(String(conversation.status || '').toLowerCase())) {
-    return { label: t('chat.status.archived'), tone: 'archived' };
-  }
-  return { label: t('chat.status.idle'), tone: 'idle' };
+  if (unread) return { label: t('chat.status.unread'), tone: 'unread' };
+  return null;
 }

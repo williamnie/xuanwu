@@ -7,6 +7,13 @@ import { message } from '../store/toastStore';
 import { cleanProjectText, piChatMessageWithProjectContext, projectFromPrompt, referenceKey } from './piChatProjectContext';
 import { sortPiConversationsByActivity } from './piChatPresentation';
 import {
+  baselinePiChatReadActivity,
+  markPiChatConversationRead,
+  parsePiChatReadActivity,
+  PI_CHAT_READ_ACTIVITY_KEY,
+  unreadPiConversationIds,
+} from './piChatUnread';
+import {
   applyPiConversationActivityEvent,
   conversationTranscript,
   isPiRuntimeEvent,
@@ -23,6 +30,7 @@ const RUNTIME_REFRESH_INTERVAL_MS = 5_000;
 
 export function usePiChatState(initialConversationId = '', onConversationChange = null) {
   const state = usePiChatFields(onConversationChange);
+  const unreadConversationIds = usePiChatUnreadState(state.filteredConversations, state.selectedConversationId);
   const initialSelectionRef = useRef('');
   const turnManager = useMemo(() => createPiChatTurnManager(), []);
   const {
@@ -85,12 +93,51 @@ export function usePiChatState(initialConversationId = '', onConversationChange 
   return {
     ...state,
     conversations: state.filteredConversations,
+    unreadConversationIds,
     handleConversationChange: selectConversation,
     handleCreateConversation: () => createConversation('New conversation', { notify: true }),
     handleSend: sendMessage,
     handleStop: stopMessage,
     loadPiState
   };
+}
+
+function usePiChatUnreadState(conversations, selectedConversationId) {
+  const [readActivity, setReadActivity] = useState(loadPiChatReadActivity);
+  const selectedConversation = conversations.find((conversation) => conversation.id === selectedConversationId) || null;
+  const selectedActivity = selectedConversation?.last_activity_at || selectedConversation?.updated_at || selectedConversation?.created_at || '';
+
+  useEffect(() => {
+    setReadActivity((current) => persistPiChatReadActivity(baselinePiChatReadActivity(current, conversations)));
+  }, [conversations]);
+
+  useEffect(() => {
+    if (!selectedConversation) return;
+    setReadActivity((current) => persistPiChatReadActivity(markPiChatConversationRead(current, selectedConversation)));
+  }, [selectedActivity, selectedConversation]);
+
+  return useMemo(
+    () => unreadPiConversationIds(conversations, selectedConversationId, readActivity),
+    [conversations, readActivity, selectedConversationId]
+  );
+}
+
+function loadPiChatReadActivity() {
+  if (typeof window === 'undefined') return {};
+  try {
+    return parsePiChatReadActivity(window.localStorage.getItem(PI_CHAT_READ_ACTIVITY_KEY));
+  } catch {
+    return {};
+  }
+}
+
+function persistPiChatReadActivity(value) {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(PI_CHAT_READ_ACTIVITY_KEY, JSON.stringify(value));
+  } catch {
+    // Reading state is a progressive enhancement; storage restrictions must not block Chat.
+  }
+  return value;
 }
 
 function usePiChatFields(onConversationChange) {
