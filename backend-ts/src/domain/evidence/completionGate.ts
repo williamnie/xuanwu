@@ -392,11 +392,12 @@ export async function completeIssueFromRuntimeEvidence(
 }
 
 /**
- * 只修复“实现与验证已完成、但缺少正式 Handoff”的终态 Issue。
+ * 修复“实现与验证已完成、但完成门禁尚未重新评估”的终态 Issue。
  *
  * 该入口不会重跑 executor，也不会把 Agent 叙述当作证明。它重新读取当前
- * canonical Run 的持久化 Evidence，从 Git authority 推导可审计 Handoff，
- * 然后通过同一 completion gate 完成 failed -> pending_verification -> done。
+ * canonical Run 的持久化 Evidence；按 Work 的 handoff_policy 尝试从 Git
+ * authority 推导可审计 Handoff，然后通过同一 completion gate 完成
+ * failed -> pending_verification -> done。summary/none 不会因无 Handoff 阻塞。
  */
 export async function reconcileIssueCompletionFromRuntimeEvidence(
   db: RunnerDatabase,
@@ -427,12 +428,13 @@ export async function reconcileIssueCompletionFromRuntimeEvidence(
   const delivery = await prepareCompletionHandoff(db, issueID, projection.run, evidence, now);
   const runID = makeDomainID("run", "issue_runs", projection.run.id);
   const workID = issueAsWork(issue).id;
+  const handoffPolicy = projectIssueAsWork(db, issue).acceptance.handoff_policy ?? "summary";
   const existingHandoff = listStoredHandoffs(db, {
     limit: 100,
     statuses: ["ready", "delivered"],
     work_id: workID
   }).items.some((item) => item.handoff.run_ids.includes(runID));
-  if (!delivery.handoff && !existingHandoff) {
+  if (handoffPolicy === "required" && !delivery.handoff && !existingHandoff) {
     const detail = delivery.errors[0]?.replace(/^Handoff gap:\s*/, "") || "no derivable delivery Handoff";
     throw new Error(`completion reconciliation could not create Handoff: ${detail}`);
   }

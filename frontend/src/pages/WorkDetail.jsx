@@ -394,7 +394,13 @@ function WorkStateSummary({ status, verification }) {
     ? [t('work.state.reviewTitle'), verification?.request?.question || t('work.state.reviewDetail')]
     : verification?.phase === 'pi_repairing'
       ? [t('work.state.piRepairingTitle'), t('work.state.piRepairingDetail')]
-      : [t('work.state.piVerifyingTitle'), t('work.state.piVerifyingDetail')];
+      : verification?.phase === 'pi_verifying'
+        ? [t('work.state.piVerifyingTitle'), t('work.state.piVerifyingDetail')]
+        : verification?.phase === 'pi_blocked'
+          ? [t('work.state.piBlockedTitle'), verification?.activity?.error || t('work.state.piBlockedDetail')]
+          : verification?.phase === 'pi_waiting'
+            ? [t('work.state.piWaitingTitle'), t('work.state.piWaitingDetail')]
+            : [t('work.state.piQueuedTitle'), t('work.state.piQueuedDetail')];
   const summary = {
     cancelled: [t('work.state.cancelledTitle'), t('work.state.cancelledDetail')],
     done: [t('work.state.doneTitle'), t('work.state.doneDetail')],

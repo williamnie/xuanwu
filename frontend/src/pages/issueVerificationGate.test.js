@@ -24,6 +24,10 @@ test('issue detail provides pending verification review actions', () => {
   assert.match(detailPage, /issue\.status === 'pending_verification'/);
   assert.match(detailPage, /setVerificationReviewAction\('accept'\)/);
   assert.match(detailVerification, /PI 正在自主验收/);
+  assert.match(detailVerification, /PI 验收已排队/);
+  assert.match(detailVerification, /PI 正在补齐验收证据/);
+  assert.match(detailVerification, /PI 验收遇到问题/);
+  assert.match(detailVerification, /verification\?\.activity\?\.error/);
   assert.match(detailVerification, /继续同一 Session/);
   assert.match(detailPage, /setVerificationReviewAction\('reject'\)/);
   assert.match(detailPage, /setVerificationReviewAction\('request_changes'\)/);

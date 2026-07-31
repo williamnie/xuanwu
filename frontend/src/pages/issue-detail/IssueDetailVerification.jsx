@@ -12,15 +12,16 @@ import { formatDateTime } from './issueDetailFormatters';
 export default function IssueDetailVerification({ evidence, verification, onAccept, onReject, onRequestChanges }) {
   const request = verification?.request;
   const humanOwned = verification?.owner === 'human' && request?.status === 'open';
+  const piState = piVerificationCopy(verification);
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderLeft: '4px solid #8b5cf6' }}>
       <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <UserCheck size={18} color="#8b5cf6" /> {humanOwned ? '需要你审批' : 'PI 正在自主验收'}
+        <UserCheck size={18} color="#8b5cf6" /> {humanOwned ? '需要你审批' : piState.title}
       </h3>
       <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
         {humanOwned
           ? 'PI 无法自主决定下面的产品、范围或风险取舍，请明确审批；技术验证仍由 PI 负责。'
-          : 'PI 会检查证据、修复可确定的问题并自主作出技术结论；当前不需要你操作。'}
+          : piState.detail}
       </p>
       {humanOwned && (
         <div className="issue-error-text" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '8px', padding: '10px', fontSize: '0.82rem', fontWeight: 700 }}>
@@ -45,6 +46,38 @@ export default function IssueDetailVerification({ evidence, verification, onAcce
       </div>}
     </section>
   );
+}
+
+function piVerificationCopy(verification) {
+  const error = verification?.activity?.error;
+  if (verification?.phase === 'pi_verifying') {
+    return {
+      detail: 'PI 验收任务正在运行，会检查证据、修复可确定的问题并自主作出技术结论。',
+      title: 'PI 正在自主验收',
+    };
+  }
+  if (verification?.phase === 'pi_repairing') {
+    return {
+      detail: 'PI 正在同一个 Session 的新 Run/Turn 中按意见调整并重新验证。',
+      title: 'PI 正在按意见调整',
+    };
+  }
+  if (verification?.phase === 'pi_blocked') {
+    return {
+      detail: error ? `PI 验收启动失败：${error}` : 'PI 验收启动失败，系统会重试；需要人类决策时会明确通知。',
+      title: 'PI 验收遇到问题',
+    };
+  }
+  if (verification?.phase === 'pi_waiting') {
+    return {
+      detail: '上一轮 PI 检查尚未完成门禁，系统会继续补齐证据或启动 Verifier；当前不需要你操作。',
+      title: 'PI 正在补齐验收证据',
+    };
+  }
+  return {
+    detail: 'PI 验收任务已进入队列；开始运行后这里会显示真实进度。',
+    title: 'PI 验收已排队',
+  };
 }
 
 export function VerificationReviewModal({ action, draft, request, submitting, onDraftChange, onCancel, onConfirm }) {

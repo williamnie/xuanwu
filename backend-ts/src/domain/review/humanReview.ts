@@ -13,6 +13,10 @@ import {
   type ExecutorProvider,
   type ExecutorProviderId
 } from "../../providers/types.ts";
+import {
+  readPiVerificationActivity,
+  type PiVerificationActivity
+} from "./piVerificationActivity.ts";
 
 export const HUMAN_REVIEW_EVENT_TYPES = {
   requested: "issue.human_review_requested.v1",
@@ -39,7 +43,15 @@ export type HumanReviewRequest = {
 
 export type IssueVerificationProjection = {
   owner: "human" | "pi";
-  phase: "human_review" | "pi_verifying" | "pi_repairing" | "complete";
+  phase:
+    | "human_review"
+    | "pi_blocked"
+    | "pi_queued"
+    | "pi_repairing"
+    | "pi_verifying"
+    | "pi_waiting"
+    | "complete";
+  activity: PiVerificationActivity | null;
   request: HumanReviewRequest | null;
 };
 
@@ -157,17 +169,41 @@ export function readIssueVerificationProjection(
     if (event.type === HUMAN_REVIEW_EVENT_TYPES.revisionResumeFailed) current.status = "open";
   }
   const request = [...requests.values()].sort((a, b) => b.revision - a.revision)[0] ?? null;
+  const storedActivity = readPiVerificationActivity(db, issueID);
+  const activity = activityAppliesToCurrentIssueState(storedActivity, issue.updated_at)
+    ? storedActivity
+    : null;
   if (issue.status === "done" || issue.status === "failed" || issue.status === "cancelled") {
-    return { owner: "pi", phase: "complete", request };
+    return { activity, owner: "pi", phase: "complete", request };
   }
-  if (request?.status === "open") return { owner: "human", phase: "human_review", request };
+  if (request?.status === "open") return { activity, owner: "human", phase: "human_review", request };
   return {
+    activity,
     owner: "pi",
     phase: issue.status === "in_progress" && request?.status === "changes_requested"
       ? "pi_repairing"
-      : "pi_verifying",
+      : piVerificationPhase(activity),
     request
   };
+}
+
+function activityAppliesToCurrentIssueState(
+  activity: PiVerificationActivity | null,
+  issueUpdatedAt: string
+): boolean {
+  if (!activity) return false;
+  const activityAt = Date.parse(activity.updated_at);
+  const issueAt = Date.parse(issueUpdatedAt);
+  return !Number.isFinite(issueAt) || !Number.isFinite(activityAt) || activityAt >= issueAt;
+}
+
+function piVerificationPhase(
+  activity: PiVerificationActivity | null
+): IssueVerificationProjection["phase"] {
+  if (!activity || activity.status === "queued") return "pi_queued";
+  if (activity.status === "running") return "pi_verifying";
+  if (activity.status === "failed") return "pi_blocked";
+  return "pi_waiting";
 }
 
 export async function reviewHumanIssue(

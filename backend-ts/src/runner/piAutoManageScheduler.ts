@@ -42,6 +42,10 @@ import {
   type PiIssueSupervisorSchedulerInput
 } from "./piIssueSupervisorScheduler.ts";
 import {
+  runPiVerificationCoordinatorOnce,
+  type PiVerificationCoordinatorResult
+} from "./piVerificationCoordinator.ts";
+import {
   runDueAutomations,
   type AutomationExecutor,
   type AutomationSchedulerResult
@@ -58,7 +62,7 @@ import {
   type IssueWatchdogSummary
 } from "./issueWatchdog.ts";
 
-export type PiAutoManageProjectCycleInput = { maxActions: number; projectId: string };
+export type PiAutoManageProjectCycleInput = { maxActions?: number; projectId: string };
 export type PiAutoManageProjectCycle = (input: PiAutoManageProjectCycleInput) => Promise<unknown>;
 export type PiAutoManageCycleResult = { projects: number; skipped: number; started: number };
 export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
@@ -88,7 +92,7 @@ export type GuardianControlPlaneCycleResult = Pick<ScheduleLayerCycleResult,
 >;
 export type AgenticCycleResult = PiAutoManageCycleResult & Pick<ScheduleLayerCycleResult,
   "agentCommunications" | "supervisor"
->;
+> & { verification: PiVerificationCoordinatorResult };
 
 export type PiAutoManageCycleInput = {
   agentCommunicationDecider?: AgentCommunicationDecider;
@@ -287,10 +291,22 @@ export async function runGuardianControlPlaneCycle(
 
 export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<AgenticCycleResult> {
   const cycleStartedAt = performance.now();
-  // Project manager cycles are real LLM sessions, not a liveness heartbeat.
-  // Only explicit project control may start one. Governed Automations execute
-  // their own Work/Run path; the ambient scheduler stays deterministic.
-  const projects: PiAutoManageCycleResult = { projects: 0, skipped: 0, started: 0 };
+  // Ordinary project manager cycles remain explicit. PI-owned verification is
+  // different: entering pending_verification is a durable request for PI work,
+  // so the coordinator starts only those bounded manager cycles and records
+  // their real queued/running/waiting/failed activity on the affected Issues.
+  const verification = await timedSchedulePhase("pi_verification", () => (
+    runPiVerificationCoordinatorOnce({
+      database: input.database,
+      runProjectCycle: input.runProjectCycle,
+      source: "agentic-scheduler"
+    })
+  ));
+  const projects: PiAutoManageCycleResult = {
+    projects: verification.projects,
+    skipped: verification.skipped,
+    started: verification.started
+  };
   if (input.config) {
     await timedSchedulePhase("pending_action_notifications", () => queuePendingPiActionNotifications(
       input.database,
@@ -326,7 +342,8 @@ export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<Ag
   return {
     ...projects,
     agentCommunications,
-    supervisor
+    supervisor,
+    verification
   };
 }
 

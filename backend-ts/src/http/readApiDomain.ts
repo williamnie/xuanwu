@@ -34,6 +34,7 @@ import {
   readIssueVerificationProjection,
   reviewHumanIssue
 } from "../domain/review/humanReview.ts";
+import { requestPiVerificationCycle } from "../runner/piVerificationCoordinator.ts";
 
 export type IssueListFilter = {
   projectId: string;
@@ -148,6 +149,18 @@ async function reviewIssueVerificationAndKickLoop(
     providers: context.providers
   });
   publishIssueStatusChange(context, issue, { status: issue.status });
+  if (
+    issue.status === "pending_verification"
+    && readIssueVerificationProjection(context.database, issue.id).owner === "pi"
+    && context.agenticClient
+  ) {
+    requestPiVerificationCycle({
+      database: context.database,
+      issueID: issue.id,
+      runProjectCycle: context.agenticClient.runProjectCycle.bind(context.agenticClient),
+      source: "human-review-resolved"
+    });
+  }
   if (shouldKickAfterWrite(issue.status)) kickAutoProject(context, issue.project_id);
   return issue;
 }

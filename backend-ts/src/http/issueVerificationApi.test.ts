@@ -7,6 +7,7 @@ import { recordEvidenceRecords } from "../db/repositories/evidence.ts";
 import { recordHandoff } from "../db/repositories/handoffs.ts";
 import type { EvidenceRecord } from "../domain/evidence/contracts.ts";
 import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
+import type { AgenticWorkerClient } from "../agentic/protocol.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -147,10 +148,59 @@ describe("Bun issue verification API", () => {
       database.close();
     }
   });
+
+  test("accepting a decision immediately dispatches a real PI verification cycle", async () => {
+    const database = await openFixtureDatabase();
+    let calls = 0;
+    try {
+      insertProject(database, "demo");
+      database.sqlite.run(
+        `insert into project_pi_settings (project_id, created_at, updated_at)
+         values ('demo', ?, ?)`,
+        ["2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+      );
+      const issueId = insertIssue(database, { error: "", status: "pending_verification" });
+      const review = createHumanReviewRequest(database, issueId, {
+        kind: "decision",
+        question: "是否接受当前技术与产品取舍？"
+      });
+      const agenticClient = fakeAgenticClient(async () => {
+        calls += 1;
+        return { status: "completed" };
+      });
+      const response = await reviewIssue(database, issueId, {
+        action: "accept",
+        review_request_id: review.id,
+        review_revision: review.revision
+      }, agenticClient);
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        id: issueId,
+        status: "pending_verification"
+      });
+      await waitUntil(() => calls === 1);
+      await waitUntil(() => listEvents(database).some((event) =>
+        event.type === "issue.pi_verification_waiting.v1"
+      ));
+      expect(listEvents(database).map((event) => event.type)).toEqual(expect.arrayContaining([
+        "issue.pi_verification_queued.v1",
+        "issue.pi_verification_started.v1",
+        "issue.pi_verification_waiting.v1"
+      ]));
+    } finally {
+      database.close();
+    }
+  });
 });
 
-function reviewIssue(db: RunnerDatabase, id: number, body: Record<string, unknown>): Promise<Response> {
-  return createDefaultRouter({ database: db }).handle(new Request(`${BASE_URL}/api/issues/${id}/verification`, {
+function reviewIssue(
+  db: RunnerDatabase,
+  id: number,
+  body: Record<string, unknown>,
+  agenticClient?: AgenticWorkerClient
+): Promise<Response> {
+  return createDefaultRouter({ agenticClient, database: db }).handle(new Request(`${BASE_URL}/api/issues/${id}/verification`, {
     method: "POST",
     body: JSON.stringify(body),
     headers: { "content-type": "application/json" }
@@ -249,4 +299,36 @@ function listEvents(db: RunnerDatabase): Array<{ payload: string; type: string }
   return db.sqlite.query<{ payload: string; type: string }, []>(
     "select type, payload from issue_events order by id asc"
   ).all();
+}
+
+function fakeAgenticClient(
+  runProjectCycle: AgenticWorkerClient["runProjectCycle"]
+): AgenticWorkerClient {
+  return {
+    activity: () => ({ in_flight: 0, last_activity_at: "" }),
+    decideCommunication: async () => ({ decision: "send", message: "test", rationale: "test" }),
+    decideSupervisor: async () => ({
+      decision: {
+        confidence: "high",
+        decision: "noop",
+        evidence_refs: ["test"],
+        expected_outcome: "test",
+        fallback_if_no_progress: "blocked",
+        rationale: "test",
+        risk_level: "low"
+      },
+      raw_text: "",
+      valid: true
+    }),
+    health: async () => ({ ok: true, role: "agentic" }),
+    runProjectCycle
+  };
+}
+
+async function waitUntil(predicate: () => boolean): Promise<void> {
+  for (let index = 0; index < 100; index += 1) {
+    if (predicate()) return;
+    await Bun.sleep(5);
+  }
+  throw new Error("timed out waiting for PI verification dispatch");
 }

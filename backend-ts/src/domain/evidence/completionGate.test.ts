@@ -253,6 +253,42 @@ describe("Evidence Policy completion gate", () => {
     }
   });
 
+  test("reconciles summary-policy Work without inventing or requiring a Handoff", async () => {
+    const db = await fixture();
+    try {
+      const issueID = insertRunningIssue(db);
+      insertCommandEvent(db, issueID, "node --test docs-contract.test.js", 0, {
+        correlation: runtimeCorrelation(issueID, 1)
+      });
+      db.sqlite.run(
+        `update issue_runs set status='pending_verification', ended_at=? where issue_id=?`,
+        [new Date().toISOString(), issueID]
+      );
+      db.sqlite.run(
+        `update issues set status='pending_verification', error='legacy Handoff gap' where id=?`,
+        [issueID]
+      );
+
+      const result = await reconcileIssueCompletionFromRuntimeEvidence(db, issueID);
+
+      expect(result).toMatchObject({
+        evaluation: { decision: "passed", satisfied: true },
+        issue: { status: "done", error: "" },
+        target_status: "done",
+        transition_path: ["pending_verification->done"]
+      });
+      expect(listStoredHandoffs(db, {
+        limit: 10,
+        work_id: `xw:work:issues:${issueID}`
+      }).items).toHaveLength(0);
+      expect(JSON.parse(gateEvents(db, issueID).at(-1)?.payload ?? "{}")).toMatchObject({
+        handoff_gap: expect.stringContaining("summary policy allows completion")
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("does not reopen a failed Issue when current-Run Evidence is not passed", async () => {
     const db = await fixture();
     try {

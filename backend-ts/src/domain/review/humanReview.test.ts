@@ -36,7 +36,7 @@ describe("human review workflow", () => {
       });
       expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({
         owner: "pi",
-        phase: "pi_verifying",
+        phase: "pi_queued",
         request: null
       });
 
@@ -80,7 +80,7 @@ describe("human review workflow", () => {
       expect(accepted.status).toBe("pending_verification");
       expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({
         owner: "pi",
-        phase: "pi_verifying",
+        phase: "pi_queued",
         request: { status: "accepted" }
       });
     } finally {
