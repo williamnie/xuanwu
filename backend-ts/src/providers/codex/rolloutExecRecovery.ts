@@ -43,18 +43,21 @@ export function parseCodexRolloutExecEvents(
     if (!entry || cleanString(entry.type) !== "response_item") continue;
     const item = objectValue(entry.payload);
     const itemType = cleanString(item.type);
-    if (itemType === "custom_tool_call") {
+    if (itemType === "custom_tool_call" || itemType === "function_call") {
       const callID = cleanString(item.call_id);
+      const supportedCall = itemType === "custom_tool_call"
+        ? cleanString(item.name) === "exec"
+        : cleanString(item.name) === "exec_command";
       if (
         callID !== ""
-        && cleanString(item.name) === "exec"
+        && supportedCall
         && matchesTurn(item, input.turnID)
       ) {
         calls.set(callID, { payload: item, timestamp: cleanString(entry.timestamp) });
       }
       continue;
     }
-    if (itemType !== "custom_tool_call_output") continue;
+    if (itemType !== "custom_tool_call_output" && itemType !== "function_call_output") continue;
     const call = calls.get(cleanString(item.call_id));
     if (!call || !matchesTurn(item, input.turnID)) continue;
     const event = recoveredExecEvent(call, {
@@ -77,6 +80,9 @@ function recoveredExecEvent(
     turnID: string;
   }
 ): ProviderEvent | undefined {
+  if (cleanString(call.payload.type) === "function_call") {
+    return recoveredDirectCommandEvent(call, input);
+  }
   const contentItems = Array.isArray(input.output.output) ? input.output.output : [];
   const exitCode = explicitNestedExitCode(contentItems);
   if (exitCode === undefined) return undefined;
@@ -100,6 +106,46 @@ function recoveredExecEvent(
     }
   });
   return event.type === "tool" ? event : undefined;
+}
+
+function recoveredDirectCommandEvent(
+  call: RolloutItem,
+  input: {
+    output: Record<string, unknown>;
+    threadID: string;
+    timestamp: string;
+    turnID: string;
+  }
+): ProviderEvent | undefined {
+  const args = parsedObject(cleanString(call.payload.arguments));
+  const command = cleanString(args?.cmd);
+  const output = cleanString(input.output.output);
+  const exitCode = directCommandExitCode(output);
+  if (command === "" || exitCode === undefined) return undefined;
+  return normalizeCodexEvent({
+    method: "item/completed",
+    params: {
+      item: {
+        aggregatedOutput: output,
+        command,
+        cwd: cleanString(args?.workdir) || ".",
+        durationMs: elapsedMilliseconds(call.timestamp, input.timestamp),
+        exitCode,
+        id: cleanString(call.payload.id) || cleanString(call.payload.call_id),
+        status: exitCode === 0 ? "completed" : "failed",
+        type: "commandExecution"
+      },
+      threadId: input.threadID,
+      turnId: input.turnID
+    }
+  });
+}
+
+function directCommandExitCode(output: string): number | undefined {
+  const match = output.match(/(?:^|\n)Process exited with code (-?\d+)(?:\n|$)/);
+  if (!match) return undefined;
+  const value = Number(match[1]);
+  return Number.isSafeInteger(value) ? value : undefined;
 }
 
 function explicitNestedExitCode(contentItems: unknown[]): number | undefined {

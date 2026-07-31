@@ -120,6 +120,53 @@ describe("Codex rollout exec recovery", () => {
       turnID: "turn-1"
     })).toEqual([]);
   });
+
+  test("recovers direct exec_command function calls with their real process exit code", () => {
+    const source = [
+      row("2026-07-31T07:26:09.470Z", {
+        type: "function_call",
+        id: "fc-test",
+        call_id: "call-direct",
+        name: "exec_command",
+        arguments: JSON.stringify({
+          cmd: "python3 -m unittest discover -s /tmp -p 'test_issue_815.py' -v",
+          workdir: "/repo"
+        })
+      }),
+      row("2026-07-31T07:26:10.037Z", {
+        type: "function_call_output",
+        call_id: "call-direct",
+        output: [
+          "Chunk ID: fixture",
+          "Wall time: 0.4 seconds",
+          "Process exited with code 0",
+          "Final output:",
+          "Ran 9 tests",
+          "OK"
+        ].join("\n")
+      })
+    ].join("\n");
+
+    const events = parseCodexRolloutExecEvents(source, {
+      threadID: "thread-direct",
+      turnID: "turn-direct"
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      command: "python3 -m unittest discover -s /tmp -p 'test_issue_815.py' -v",
+      status: "completed",
+      type: "tool"
+    });
+    expect(JSON.parse(String(events[0]!.raw!.payload))).toMatchObject({
+      item: {
+        exitCode: 0,
+        id: "fc-test",
+        status: "completed",
+        type: "commandExecution"
+      }
+    });
+  });
 });
 
 function row(timestamp: string, payload: Record<string, unknown>): string {
