@@ -111,8 +111,19 @@ async function postVerification(
   action: string,
   comment: string
 ): Promise<string> {
-  const review = { action: normalizeReviewAction(action), comment: comment.trim() };
-  const issue = await postJSON<IssueDTO>(fetcher, common, `/api/issues/${issueID(id)}/verification`, review);
+  const issueIDValue = issueID(id);
+  const current = await getJSON<IssueDTO>(fetcher, common, `/api/issues/${issueIDValue}`);
+  const request = current.verification?.request;
+  if (current.verification?.owner !== "human" || request?.status !== "open" || !request.id || !request.revision) {
+    throw new Error("当前没有等待人类处理的验收请求；PI 仍负责自主验证或修复");
+  }
+  const review = {
+    action: normalizeReviewAction(action),
+    comment: comment.trim(),
+    review_request_id: request.id,
+    review_revision: request.revision
+  };
+  const issue = await postJSON<IssueDTO>(fetcher, common, `/api/issues/${issueIDValue}/verification`, review);
   return formatIssue(issue, common.json);
 }
 

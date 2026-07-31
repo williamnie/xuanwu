@@ -39,3 +39,12 @@ test('Work Detail mutations use audited Work controls and the existing verificat
   assert.match(model, /expected_revision/);
   assert.doesNotMatch(detail, /window\.(alert|confirm)/);
 });
+
+test('Work Detail only exposes review for an explicit request and closes request-changes through the same Session', () => {
+  assert.match(model, /verification\?\.owner === 'human'/);
+  assert.match(detail, /你正在审批|work\.youAreApproving/);
+  assert.match(detail, /review_request_id/);
+  assert.match(detail, /review_revision/);
+  assert.match(detail, /submitChangesAndContinue/);
+  assert.match(detail, /reviewRevisionFlow/);
+});

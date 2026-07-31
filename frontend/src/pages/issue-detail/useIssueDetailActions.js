@@ -130,7 +130,12 @@ export default function useIssueDetailActions({
   const handleVerificationReview = async (action, comment = '') => {
     setVerificationReviewSubmitting(true);
     try {
-      await workApi.reviewIssueVerification(issueId, { action, comment: comment.trim() });
+      await workApi.reviewIssueVerification(issueId, {
+        action,
+        comment: comment.trim(),
+        review_request_id: issue?.verification?.request?.id,
+        review_revision: issue?.verification?.request?.revision,
+      });
       message.success('验证处理已提交');
       setVerificationReviewAction('');
       setVerificationReviewDraft('');

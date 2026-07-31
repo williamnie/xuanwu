@@ -9,21 +9,30 @@ import {
 import MarkdownPreview from '../../components/editor/MarkdownPreview';
 import { formatDateTime } from './issueDetailFormatters';
 
-export default function IssueDetailVerification({ evidence, onAccept, onReject, onRequestChanges }) {
+export default function IssueDetailVerification({ evidence, verification, onAccept, onReject, onRequestChanges }) {
+  const request = verification?.request;
+  const humanOwned = verification?.owner === 'human' && request?.status === 'open';
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderLeft: '4px solid #8b5cf6' }}>
       <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <UserCheck size={18} color="#8b5cf6" /> 待验证门禁
+        <UserCheck size={18} color="#8b5cf6" /> {humanOwned ? '需要你审批' : 'PI 正在自主验收'}
       </h3>
       <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
-        Agent 已提交完成证据，等待人工或 verifier 确认；接受后进入 Done，拒绝后进入 Failed，要求修改会退回 Triage。
+        {humanOwned
+          ? 'PI 无法自主决定下面的产品、范围或风险取舍，请明确审批；技术验证仍由 PI 负责。'
+          : 'PI 会检查证据、修复可确定的问题并自主作出技术结论；当前不需要你操作。'}
       </p>
+      {humanOwned && (
+        <div className="issue-error-text" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '8px', padding: '10px', fontSize: '0.82rem', fontWeight: 700 }}>
+          你正在审批：{request.question}
+        </div>
+      )}
       {evidence && (
         <div className="issue-error-text" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '8px', padding: '10px', fontSize: '0.78rem' }}>
           {evidence}
         </div>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {humanOwned && <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <button className="btn btn-secondary btn-success" onClick={onAccept}>
           <CheckCircle size={14} /> Accept → Done
         </button>
@@ -31,16 +40,17 @@ export default function IssueDetailVerification({ evidence, onAccept, onReject, 
           <XCircle size={14} /> Reject → Failed
         </button>
         <button className="btn btn-secondary" onClick={onRequestChanges}>
-          <MessageCircle size={14} /> Request changes → Triage
+          <MessageCircle size={14} /> 输入调整意见并继续同一 Session
         </button>
-      </div>
+      </div>}
     </section>
   );
 }
 
-export function VerificationReviewModal({ action, draft, submitting, onDraftChange, onCancel, onConfirm }) {
+export function VerificationReviewModal({ action, draft, request, submitting, onDraftChange, onCancel, onConfirm }) {
   const rejecting = action === 'reject';
-  const title = rejecting ? '拒绝验证' : '请求修改';
+  const title = rejecting ? '拒绝验证' : action === 'accept' ? '接受验收' : '请求修改';
+  const commentRequired = action !== 'accept';
   return (
     <div className="modal-overlay">
       <form
@@ -54,20 +64,23 @@ export function VerificationReviewModal({ action, draft, submitting, onDraftChan
           <ClipboardCheck size={18} color="var(--primary)" />
           <h3>{title}</h3>
         </div>
-        <p>这段说明会写入活动记录，并作为后续状态的人工依据。</p>
+        <p><strong>你正在审批：</strong>{request?.question}</p>
+        <p>{action === 'request_changes'
+          ? '意见会原样发回同一个 Provider Session，在新的 Run/Turn 中调整并重新验证。'
+          : '结论会写入活动记录，并作为后续状态的人工依据。'}</p>
         <textarea
           className="form-control"
           rows={5}
           value={draft}
           onChange={(event) => onDraftChange(event.target.value)}
-          placeholder={rejecting ? '说明拒绝原因…' : '说明需要修改的内容…'}
-          autoFocus
+          placeholder={rejecting ? '说明拒绝原因…' : action === 'request_changes' ? '说明需要修改的内容…' : '补充说明（可选）…'}
+          autoFocus={commentRequired}
           disabled={submitting}
         />
         <div className="issue-delete-modal-actions">
           <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={submitting}>取消</button>
-          <button type="submit" className={rejecting ? 'btn btn-danger' : 'btn btn-primary'} disabled={submitting || !draft.trim()}>
-            {submitting ? '提交中…' : `确认${title}`}
+          <button type="submit" className={rejecting ? 'btn btn-danger' : 'btn btn-primary'} disabled={submitting || (commentRequired && !draft.trim())}>
+            {submitting ? '提交中…' : action === 'request_changes' ? '提交调整意见并继续本 Session' : `确认${title}`}
           </button>
         </div>
       </form>

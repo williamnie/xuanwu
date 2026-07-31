@@ -548,6 +548,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/issues/:id/enqueue", family: "work-ledger" },
   { method: "POST", path: "/api/issues/:id/evidence/command", family: "evidence-handoff" },
   { method: "POST", path: "/api/issues/:id/evidence/readiness", family: "evidence-handoff" },
+  { method: "POST", path: "/api/issues/:id/human-review-requests", family: "evidence-handoff" },
   { method: "GET", path: "/api/issues/:id/events", family: "work-ledger" },
   { method: "POST", path: "/api/issues/:id/retry", family: "work-ledger" },
   { method: "GET", path: "/api/issues/:id/runs", family: "work-ledger" },

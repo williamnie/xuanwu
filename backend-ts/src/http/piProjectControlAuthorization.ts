@@ -16,10 +16,11 @@ export function managerCycleAuthorization(project: Project): PiGatePolicy {
   };
 }
 
-function managerAuthorizedActions(projectID: string): PiGatePolicy["authorizedActions"] {
-  const actions: PiGatePolicy["authorizedActions"] = [
+function managerAuthorizedActions(projectID: string): NonNullable<PiGatePolicy["authorizedActions"]> {
+  const actions: NonNullable<PiGatePolicy["authorizedActions"]> = [
     { action_type: "agent.profile_recommend", project_id: projectID },
     { action_type: "agent.workflow_request", project_id: projectID },
+    { action_type: "human_review.request", project_id: projectID },
     { action_type: "issue.completion_reconcile", project_id: projectID },
     { action_type: "issue.list", project_id: projectID }, { action_type: "issue.status_summary", project_id: projectID },
     { action_type: "issue.execution_status", project_id: projectID }, { action_type: "issue.read", project_id: projectID },

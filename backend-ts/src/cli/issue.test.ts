@@ -78,8 +78,22 @@ describe("Bun issue CLI", () => {
         return jsonResponse([{ id: 1, issue_id: 7, type: "issue.comment", payload: '{"body":"token=hidden"}', created_at: "2026-01-01T00:00:00Z" }]);
       }
       if (path === "/api/issues/8/verification") {
-        expect(await request.json()).toEqual({ action: "request_changes", comment: "补 smoke" });
-        return jsonResponse(issueBody({ id: 8, status: "triage", title: "待验证" }));
+        expect(await request.json()).toEqual({
+          action: "request_changes",
+          comment: "补 smoke",
+          review_request_id: "review-8",
+          review_revision: 2
+        });
+        return jsonResponse(issueBody({ id: 8, status: "in_progress", title: "待验证" }));
+      }
+      if (path === "/api/issues/8" && request.method === "GET") {
+        return jsonResponse({
+          ...issueBody({ id: 8, status: "pending_verification", title: "待验证" }),
+          verification: {
+            owner: "human",
+            request: { id: "review-8", revision: 2, status: "open" }
+          }
+        });
       }
       throw new Error(`unexpected request: ${request.method} ${path}`);
     });
@@ -94,7 +108,7 @@ describe("Bun issue CLI", () => {
     expect(logs.stdout).toContain("token=[redacted]");
     expect(logs.stdout).not.toContain("hidden");
     expect(review.code).toBe(0);
-    expect(JSON.parse(review.stdout)).toMatchObject({ id: 8, status: "triage" });
+    expect(JSON.parse(review.stdout)).toMatchObject({ id: 8, status: "in_progress" });
   });
 
   test("supports issue status retry and cancel actions", async () => {

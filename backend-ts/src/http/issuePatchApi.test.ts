@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -78,7 +79,7 @@ describe("Bun issue patch API", () => {
     }
   });
 
-  test("keeps runner completion pending when test Evidence lacks attributable delivery files", async () => {
+  test("allows summary-policy completion when test Evidence lacks attributable delivery files", async () => {
     const database = await openFixtureDatabase();
     try {
       const repository = dirtyRepository(database);
@@ -94,23 +95,24 @@ describe("Bun issue patch API", () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({
         id: issueId,
-        status: "pending_verification",
-        error: expect.stringContaining("Verification pending")
+        status: "done",
+        error: ""
       });
       expect(events.map((event) => event.type)).toEqual([
         "issue.log",
         "evidence.recorded.v1",
         "issue.verification_gate_intent.v1",
         "issue.status_changed",
+        "issue.status_changed",
         "issue.verification_gate_outcome.v1",
         "issue.verification_report"
       ]);
       expect(outcome).toMatchObject({
-        evaluation: { decision: "pending", satisfied: false },
-        handoff_gap: expect.stringContaining("attributable changed files"),
+        evaluation: { decision: "passed", satisfied: true },
+        handoff_gap: expect.stringContaining("summary policy allows completion"),
         handoff_id: null,
-        target_status: "pending_verification",
-        transition_path: ["in_progress->pending_verification"]
+        target_status: "done",
+        transition_path: ["in_progress->pending_verification", "pending_verification->done"]
       });
       expect(latestRun(database, issueId)).toMatchObject({
         status: "pending_verification",
@@ -127,8 +129,8 @@ describe("Bun issue patch API", () => {
       const eventCount = events.length;
       const replay = await patchIssue(database, issueId, { status: "done", error: "" });
       expect(replay.status).toBe(200);
-      expect(await replay.json()).toMatchObject({ status: "pending_verification" });
-      expect(listEvents(database)).toHaveLength(eventCount + 3);
+      expect(await replay.json()).toMatchObject({ status: "done" });
+      expect(listEvents(database)).toHaveLength(eventCount);
     } finally {
       database.close();
     }
@@ -175,7 +177,7 @@ describe("Bun issue patch API", () => {
     }
   });
 
-  test("keeps a verified completion pending when no real delivery artifact can be produced", async () => {
+  test("allows summary-policy completion when no delivery Handoff can be produced", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
@@ -189,14 +191,49 @@ describe("Bun issue patch API", () => {
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({
-        status: "pending_verification",
-        error: expect.stringContaining("persisted ready or delivered Handoff")
+        status: "done",
+        error: ""
       });
       expect(events.some((event) => event.type.startsWith("handoff."))).toBe(false);
       expect(outcome).toMatchObject({
-        evaluation: { decision: "pending", satisfied: false },
-        handoff_gap: expect.stringContaining("persisted ready or delivered Handoff"),
-        target_status: "pending_verification"
+        evaluation: { decision: "passed", satisfied: true },
+        handoff_gap: expect.stringContaining("summary policy allows completion"),
+        target_status: "done"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("ignores generated Handoff input entirely when Work policy is none", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const repository = cleanRepository(database);
+      insertProject(database, "demo", repository.path);
+      const issueId = insertIssue(database, "demo", "in_progress");
+      insertOpenRun(database, issueId);
+      database.sqlite.run(
+        "update issue_runs set git_base_revision=? where issue_id=?",
+        [repository.baseline, issueId]
+      );
+      writeFileSync(join(repository.path, "ignored-handoff.txt"), "completion evidence only\n");
+      insertCommandEvidenceEvent(database, issueId, "bun test src/http/issuePatchApi.test.ts", 0);
+      recordIssueEvent(database, issueId, "issue.handoff_policy_set.v1", {
+        policy: "none",
+        reason: "no downstream delivery"
+      });
+
+      const response = await patchIssue(database, issueId, { status: "done", error: "" });
+      const events = listEvents(database);
+      const outcome = JSON.parse(events.find((event) => event.type === "issue.verification_gate_outcome.v1")?.payload ?? "{}");
+
+      expect(await response.json()).toMatchObject({ status: "done", error: "" });
+      expect(events.some((event) => event.type.startsWith("handoff."))).toBe(false);
+      expect(outcome).toMatchObject({
+        evaluation: { decision: "passed", satisfied: true },
+        handoff_gap: null,
+        handoff_id: null,
+        target_status: "done"
       });
     } finally {
       database.close();

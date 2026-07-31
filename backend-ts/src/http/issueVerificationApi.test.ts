@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { recordEvidenceRecords } from "../db/repositories/evidence.ts";
 import { recordHandoff } from "../db/repositories/handoffs.ts";
 import type { EvidenceRecord } from "../domain/evidence/contracts.ts";
+import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -31,7 +32,15 @@ describe("Bun issue verification API", () => {
       insertProject(database, "demo");
       const issueId = insertIssue(database, { error: "bun test passed", status: "pending_verification" });
       seedReadyHandoff(database, issueId);
-      const response = await reviewIssue(database, issueId, { action: "accept", comment: "人工验收通过" });
+      const review = createHumanReviewRequest(database, issueId, {
+        question: "是否接受当前交付并完成 Issue？"
+      });
+      const response = await reviewIssue(database, issueId, {
+        action: "accept",
+        comment: "人工验收通过",
+        review_request_id: review.id,
+        review_revision: review.revision
+      });
       const body = await response.json() as Record<string, unknown>;
       const events = listEvents(database);
 
@@ -74,20 +83,35 @@ describe("Bun issue verification API", () => {
     }
   });
 
-  test("reject and request_changes keep comments as issue error", async () => {
+  test("reject records the decision while request_changes fails closed without a resumable Session", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
       const rejectedId = insertIssue(database, { error: "evidence", status: "pending_verification" });
       const changesId = insertIssue(database, { error: "evidence", status: "pending_verification" });
 
-      const rejected = await reviewIssue(database, rejectedId, { action: "reject", comment: "缺少测试" });
-      const changes = await reviewIssue(database, changesId, { action: "request_changes", comment: "补 smoke" });
+      const rejectedReview = createHumanReviewRequest(database, rejectedId, { question: "是否拒绝当前交付？" });
+      const changesReview = createHumanReviewRequest(database, changesId, { question: "是否接受当前实现？" });
+      const rejected = await reviewIssue(database, rejectedId, {
+        action: "reject",
+        comment: "缺少测试",
+        review_request_id: rejectedReview.id,
+        review_revision: rejectedReview.revision
+      });
+      const changes = await reviewIssue(database, changesId, {
+        action: "request_changes",
+        comment: "补 smoke",
+        review_request_id: changesReview.id,
+        review_revision: changesReview.revision
+      });
 
       expect(rejected.status).toBe(200);
       expect(await rejected.json()).toMatchObject({ id: rejectedId, status: "failed", error: "缺少测试" });
-      expect(changes.status).toBe(200);
-      expect(await changes.json()).toMatchObject({ id: changesId, status: "triage", error: "补 smoke" });
+      expect(changes.status).toBe(400);
+      expect(await changes.json()).toEqual({
+        message: "无法继续原 Session：未找到带 provider_session_id 的历史 Run"
+      });
+      expect(getIssueStatus(database, changesId)).toBe("pending_verification");
     } finally {
       database.close();
     }
@@ -111,8 +135,10 @@ describe("Bun issue verification API", () => {
 
       expect(invalidAction.status).toBe(400);
       expect(await invalidAction.json()).toEqual({ message: "verification action 必须是 accept、reject 或 request_changes" });
-      expect(wrongStatus.status).toBe(400);
-      expect(await wrongStatus.json()).toEqual({ message: "issue 当前不在 pending_verification 状态" });
+      expect(wrongStatus.status).toBe(409);
+      expect(await wrongStatus.json()).toEqual({
+        message: "当前没有等待人类处理的验收请求；PI 仍负责自主验证或修复"
+      });
       expect(missing.status).toBe(404);
       expect(await missing.json()).toEqual({ message: "资源不存在" });
       expect(invalidJson.status).toBe(400);
@@ -145,6 +171,12 @@ function insertIssue(db: RunnerDatabase, issue: IssueFixture): number {
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");
   return row.id;
+}
+
+function getIssueStatus(db: RunnerDatabase, issueID: number): string {
+  return db.sqlite.query<{ status: string }, [number]>(
+    "select status from issues where id=?"
+  ).get(issueID)?.status ?? "";
 }
 
 function insertProject(db: RunnerDatabase, id: string): void {

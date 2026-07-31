@@ -38,6 +38,13 @@
 .work-state-summary strong { font-size: .8rem; }
 .work-state-summary span { color: var(--text-secondary); font-size: .68rem; line-height: 1.5; }
 .work-review-actions { border-top: 1px solid var(--border-light); flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 12px; }
+.work-human-review-card { background: color-mix(in srgb, var(--warning) 5%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border-color)); border-radius: var(--radius-sm); margin-top: 14px; padding: 14px; }
+.work-human-review-card > span { color: var(--warning); font-family: var(--font-mono); font-size: .58rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.work-human-review-card h3 { font-size: .82rem; line-height: 1.55; margin: 7px 0 10px; }
+.work-human-review-card p, .work-human-review-card li { color: var(--text-secondary); font-size: .67rem; line-height: 1.55; }
+.work-human-review-card p { margin: 8px 0; }
+.work-human-review-card ul { margin: 5px 0 8px; padding-left: 18px; }
+.work-human-review-card div > strong { font-size: .65rem; }
 .work-latest-run, .work-latest-handoff { display: flex; flex-direction: column; gap: 10px; }
 .work-latest-run > div, .work-latest-handoff > div { align-items: flex-start; display: flex; gap: 9px; justify-content: space-between; }
 .work-latest-run em, .work-latest-handoff em { border: 1px solid currentColor; border-radius: 999px; color: var(--info); font-family: var(--font-mono); font-size: .56rem; font-style: normal; padding: 3px 6px; text-transform: uppercase; }
@@ -84,6 +91,7 @@
 .work-review-dialog > span { color: var(--primary); font-family: var(--font-mono); font-size: .58rem; font-weight: 800; letter-spacing: .11em; }
 .work-review-dialog h2, .work-review-dialog p { margin: 0; }
 .work-review-dialog p { color: var(--text-secondary); font-size: .72rem; }
+.work-review-dialog .work-review-question { background: var(--bg-secondary); border-left: 3px solid var(--primary); color: var(--text-primary); font-size: .78rem; font-weight: 750; line-height: 1.55; padding: 10px 12px; }
 .work-review-dialog label { display: flex; flex-direction: column; gap: 6px; }
 .work-review-dialog label > span { color: var(--text-muted); font-family: var(--font-mono); font-size: .6rem; }
 .work-review-dialog > div { display: flex; gap: 8px; justify-content: flex-end; }

@@ -5,7 +5,6 @@ import {
   type ListIssueEventsOptions
 } from "../db/repositories/issueEvents.ts";
 import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
-import { reviewIssueVerification } from "../db/repositories/issueVerification.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { auditIssueSkillIntents } from "../skills/intentAudit.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
@@ -30,6 +29,11 @@ import {
   createAutomaticallyManagedProject,
   updateAutomaticallyManagedProject
 } from "../domain/project/automaticTakeover.ts";
+import {
+  createHumanReviewRequest,
+  readIssueVerificationProjection,
+  reviewHumanIssue
+} from "../domain/review/humanReview.ts";
 
 export type IssueListFilter = {
   projectId: string;
@@ -49,6 +53,7 @@ type PublicIssue = Omit<Issue, "latest_run"> & {
   dependency: IssueDependencyDiagnostic;
   latest_run?: PublicIssueRunView;
   mcp_requirements: McpRequirementSummary;
+  verification: ReturnType<typeof readIssueVerificationProjection>;
 };
 
 export function createReadApiDomainHandlers(context: ReadApiContext) {
@@ -65,6 +70,9 @@ export function createReadApiDomainHandlers(context: ReadApiContext) {
       events: (id: number, options: ListIssueEventsOptions) => listIssueEventsForApi(context.database, id, options),
       list: (filter: IssueListFilter) => publicIssues(context, listIssues(context.database, filter)),
       read: (id: number) => readIssue(context, id),
+      requestHumanReview: (id: number, body: Record<string, unknown>) => (
+        createHumanReviewRequest(context.database, id, body, { bus: context.bus })
+      ),
       retry: (id: number, options: IssueActionOptions) => retryIssueAndKickLoop(context, id, options),
       runs: (id: number) => publicIssueRuns(listIssueRuns(context.database, id)),
       update: (id: number, body: Record<string, unknown>) => updateIssueAndKickLoop(context, id, body),
@@ -130,12 +138,15 @@ function startIssueFromPatch(context: ReadApiContext, id: number, body: Record<s
   return issue;
 }
 
-function reviewIssueVerificationAndKickLoop(
+async function reviewIssueVerificationAndKickLoop(
   context: ReadApiContext,
   id: number,
   body: Record<string, unknown>
-): Issue {
-  const issue = reviewIssueVerification(context.database, id, body);
+): Promise<Issue> {
+  const issue = await reviewHumanIssue(context.database, id, body, {
+    bus: context.bus,
+    providers: context.providers
+  });
   publishIssueStatusChange(context, issue, { status: issue.status });
   if (shouldKickAfterWrite(issue.status)) kickAutoProject(context, issue.project_id);
   return issue;
@@ -213,7 +224,7 @@ function readIssue(context: ReadApiContext, id: number): PublicIssue {
   if (!issue) throw new ProjectNotFoundError();
   const dependency = readProjectIssueDependencies(context.database, issue.project_id).get(issue.id);
   if (!dependency) throw new ProjectNotFoundError();
-  return publicIssue(issue, getProject(context.database, issue.project_id), dependency);
+  return publicIssue(context.database, issue, getProject(context.database, issue.project_id), dependency);
 }
 
 function publicIssues(context: ReadApiContext, issues: Issue[]): PublicIssue[] {
@@ -224,14 +235,20 @@ function publicIssues(context: ReadApiContext, issues: Issue[]): PublicIssue[] {
   return issues.map((issue) => {
     const dependency = dependencies.get(issue.project_id)?.get(issue.id);
     if (!dependency) throw new ProjectNotFoundError();
-    return publicIssue(issue, projects.get(issue.project_id) ?? null, dependency);
+    return publicIssue(context.database, issue, projects.get(issue.project_id) ?? null, dependency);
   });
 }
 
-function publicIssue(issue: Issue, project: Project | null, dependency: IssueDependencyDiagnostic): PublicIssue {
+function publicIssue(
+  db: RunnerDatabase,
+  issue: Issue,
+  project: Project | null,
+  dependency: IssueDependencyDiagnostic
+): PublicIssue {
   const mcp_requirements = issueMcpRequirementSummary(issue, project);
-  if (!issue.latest_run) return { ...issue, dependency, mcp_requirements } as PublicIssue;
-  return { ...issue, dependency, latest_run: publicIssueRun(issue.latest_run), mcp_requirements };
+  const verification = readIssueVerificationProjection(db, issue.id);
+  if (!issue.latest_run) return { ...issue, dependency, mcp_requirements, verification } as PublicIssue;
+  return { ...issue, dependency, latest_run: publicIssueRun(issue.latest_run), mcp_requirements, verification };
 }
 
 function publicIssueRuns(runs: IssueRun[]): PublicIssueRunView[] {

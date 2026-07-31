@@ -110,8 +110,9 @@ describe("Work HTTP API", () => {
         sort: { field: "updated_at", order: "desc" }
       });
       expect(detail.status).toBe(200);
-      expect(detailBody).toEqual({
-        work: expect.objectContaining({ goal: "Alpha goal", id: issueIDToWorkID(alpha.id), title: "Alpha" })
+      expect(detailBody).toMatchObject({
+        verification: { owner: "pi", request: null },
+        work: { goal: "Alpha goal", id: issueIDToWorkID(alpha.id), title: "Alpha" }
       });
       expect(removedRelations.status).toBe(404);
       expect(listBody).not.toHaveProperty("compatibility");
@@ -131,6 +132,7 @@ describe("Work HTTP API", () => {
       const createPayload = {
         audit: audit("work-create-1", "user"),
         goal: "Ship Work API",
+        handoff_policy: "required",
         project_id: "demo",
         status: "triage",
         title: "Work API",
@@ -152,6 +154,7 @@ describe("Work HTTP API", () => {
         audit: audit("work-update-1", "supervisor"),
         expected_revision: work.revision,
         goal: "Ship and verify Work API",
+        handoff_policy: "summary",
         title: "Verified Work API"
       }));
       const updatedWork = (await body(updated)).work as Record<string, unknown>;
@@ -171,6 +174,10 @@ describe("Work HTTP API", () => {
       expect(unauthorized.status).toBe(401);
       expect(await unauthorized.json()).toEqual({ message: "unauthorized" });
       expect(created.status).toBe(201);
+      expect(work.acceptance).toMatchObject({
+        handoff_policy: "required",
+        requires_handoff: true
+      });
       expect(replay.status).toBe(201);
       expect(conflictingReplay.status).toBe(409);
       expect(await body(conflictingReplay)).toEqual({
@@ -189,7 +196,11 @@ describe("Work HTTP API", () => {
       expect(createdBody.mutation).not.toHaveProperty("shadow");
       expect(rowCount(db, "issues")).toBe(1);
       expect(updated.status).toBe(200);
-      expect(updatedWork).toMatchObject({ goal: "Ship and verify Work API", title: "Verified Work API" });
+      expect(updatedWork).toMatchObject({
+        acceptance: { handoff_policy: "summary", requires_handoff: false },
+        goal: "Ship and verify Work API",
+        title: "Verified Work API"
+      });
       expect(enqueued.status).toBe(200);
       expect(enqueuedWork.status).toBe("todo");
       expect(cancelled.status).toBe(200);
@@ -326,7 +337,10 @@ describe("Work HTTP API", () => {
       });
       expect(replay.status).toBe(200);
       expect(await body(replay)).toMatchObject({ mutation: { replayed: true } });
-      expect(await body(detail)).toEqual({ work: expect.objectContaining({ id: workID }) });
+      expect(await body(detail)).toMatchObject({
+        verification: { owner: "pi" },
+        work: { id: workID }
+      });
     } finally {
       db.close();
     }

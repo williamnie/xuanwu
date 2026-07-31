@@ -17,7 +17,11 @@ test('Work actions follow the shared state transition surface', () => {
     start: true,
   });
   assert.equal(workAvailableActions('in_progress').edit, false);
-  assert.equal(workAvailableActions('pending_verification').review, true);
+  assert.equal(workAvailableActions('pending_verification').review, false);
+  assert.equal(workAvailableActions('pending_verification', {
+    owner: 'human',
+    request: { status: 'open' },
+  }).review, true);
   assert.equal(workAvailableActions('failed').retry, true);
   assert.deepEqual(workAvailableActions('done'), {
     cancel: false,

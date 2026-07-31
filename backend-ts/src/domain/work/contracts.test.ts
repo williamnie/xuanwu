@@ -99,6 +99,41 @@ describe("Work Ledger domain contract", () => {
     ]));
   });
 
+  test("allows Evidence-only completion when Handoff is summary policy", () => {
+    const work = makeWork(648, {
+      acceptance: {
+        completion_rule: "all_required",
+        criteria: [{
+          description: "tests",
+          id: "tests",
+          required: true,
+          verification_policy_ref: "verification-policy:focused-tests"
+        }],
+        handoff_policy: "summary",
+        requires_handoff: false,
+        version: 1
+      },
+      status: "pending_verification"
+    });
+    const decision = evaluateWorkTransition({ relations: [], works: [work] }, {
+      acceptance: {
+        contract_version: 1,
+        evidence: [{
+          criterion_ids: ["tests"],
+          id: makeDomainID("evidence", "issue_events", "648-summary"),
+          status: "passed",
+          work_id: work.id
+        }],
+        handoffs: []
+      },
+      audit: transition(648, "done").audit,
+      expected_revision: work.revision,
+      to: "done",
+      work_id: work.id
+    });
+    expect(decision).toEqual({ allowed: true, violations: [] });
+  });
+
   test("rejects circular dependencies and hierarchy cycles", () => {
     const works = [makeWork(647), makeWork(648), makeWork(649)];
     const relations: WorkRelation[] = [

@@ -65,7 +65,7 @@ describe("PI project tools", () => {
       expect(runtime.session.getActiveToolNames().sort()).toEqual([
         "agent_profile_recommend", "evidence_list", "evidence_read",
         "executor_issue_create_proposal", "executor_profile_assign_proposal",
-        "find", "grep", "handoff_list", "handoff_read",
+        "find", "grep", "handoff_list", "handoff_read", "human_review_request_create",
         "issue_cancel", "issue_comment", "issue_completion_reconcile", "issue_completion_watch_cancel", "issue_completion_watch_create",
         "issue_completion_watch_list", "issue_create_batch_proposal", "issue_create_proposal", "issue_enqueue_batch_triage",
         "issue_enqueue_next_triage", "issue_enqueue_proposal",

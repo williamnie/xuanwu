@@ -16,8 +16,10 @@ import { resolveExecutorSelection, type AgentRecommendation } from "../../pi/age
 import { makeDomainID, parseDomainID, type DomainActor } from "../../xuanwu/coreDomainContracts.ts";
 import {
   evaluateWorkTransition,
+  HANDOFF_POLICIES,
   WORK_STATUSES,
   type WorkLedgerEntry,
+  type HandoffPolicy,
   type WorkProvenance,
   type WorkStatus,
   type WorkTransitionAudit
@@ -28,17 +30,21 @@ const ISSUE_WORK_WRITE_EVENT = "issue.work_adapter_write";
 const ISSUE_WORK_SHADOW_MISMATCH_EVENT = "issue.work_shadow_mismatch";
 const ISSUE_WORK_POLICY_REF = "agent-execution-contract";
 const SHADOW_POLICY_REF = "xuanwu-work-shadow-v1";
+const ISSUE_HANDOFF_POLICY_EVENT = "issue.handoff_policy_set.v1";
 
 export type IssueWorkShadowMode = "disabled" | "best_effort";
 export type IssueWorkAction = "cancel" | "enqueue" | "retry";
 
-export type IssueWorkPatch = Partial<Pick<WorkLedgerEntry, "agent_profile_id" | "goal" | "title">>;
+export type IssueWorkPatch = Partial<Pick<WorkLedgerEntry, "agent_profile_id" | "goal" | "title">> & {
+  handoff_policy?: HandoffPolicy;
+};
 
 export type IssueWorkCreateCommand = {
   agent_profile_id?: string;
   audit: WorkTransitionAudit;
   depends_on_issue_ids?: number[];
   goal: string;
+  handoff_policy?: HandoffPolicy;
   project_id: string;
   source?: {
     authority: string;
@@ -130,21 +136,40 @@ export function getIssueAsWork(db: RunnerDatabase, issueID: number): WorkLedgerE
 export function listIssueBackedWorks(db: RunnerDatabase, filter: IssueFilter = {}): WorkLedgerEntry[] {
   const issues = listIssues(db, filter);
   const createdEvents = latestIssueEventsByIssueID(db, issues.map((issue) => issue.id), "issue.created");
-  return issues.map((issue) => projectIssueAsWork(db, issue, createdEvents.get(issue.id)));
+  const handoffEvents = latestIssueEventsByIssueID(db, issues.map((issue) => issue.id), ISSUE_HANDOFF_POLICY_EVENT);
+  return issues.map((issue) => projectIssueAsWork(
+    db,
+    issue,
+    createdEvents.get(issue.id),
+    handoffPolicyFromEvent(handoffEvents.get(issue.id))
+  ));
 }
 
 export function countIssueBackedWorks(db: RunnerDatabase, filter: IssueFilter = {}): number {
   return countIssues(db, filter);
 }
 
-export function projectIssueAsWork(db: RunnerDatabase, issue: Issue, created?: IssueEvent): WorkLedgerEntry {
+export function projectIssueAsWork(
+  db: RunnerDatabase,
+  issue: Issue,
+  created?: IssueEvent,
+  handoffPolicy?: HandoffPolicy
+): WorkLedgerEntry {
   const createdEvent = created ?? listIssueEvents(db, issue.id, { limit: 1, types: ["issue.created"] })[0];
+  const policy = handoffPolicy ?? handoffPolicyFromEvent(
+    listIssueEvents(db, issue.id, { limit: 1, types: [ISSUE_HANDOFF_POLICY_EVENT] })[0]
+  );
   const project = getProject(db, issue.project_id);
   const selection = project ? resolveExecutorSelection(db, project, issue) : null;
-  return issueAsWork(issue, createdEvent, selection);
+  return issueAsWork(issue, createdEvent, selection, policy);
 }
 
-export function issueAsWork(issue: Issue, createdEvent?: IssueEvent, selection?: AgentRecommendation | null): WorkLedgerEntry {
+export function issueAsWork(
+  issue: Issue,
+  createdEvent?: IssueEvent,
+  selection?: AgentRecommendation | null,
+  handoffPolicy: HandoffPolicy = "summary"
+): WorkLedgerEntry {
   const status = issueStatusToWorkStatus(issue.status);
   return {
     acceptance: {
@@ -155,7 +180,8 @@ export function issueAsWork(issue: Issue, createdEvent?: IssueEvent, selection?:
         required: true,
         verification_policy_ref: ISSUE_WORK_POLICY_REF
       }],
-      requires_handoff: true,
+      handoff_policy: handoffPolicy,
+      requires_handoff: handoffPolicy === "required",
       version: 1
     },
     created_at: issue.created_at,
@@ -220,6 +246,14 @@ export function createIssueBackedWork(
         ...(command.source ? { source: command.source } : {})
       }
     });
+    if (command.handoff_policy) {
+      recordIssueEvent(db, issue.id, ISSUE_HANDOFF_POLICY_EVENT, {
+        actor: command.audit.actor,
+        correlation_id: command.audit.correlation_id,
+        policy: command.handoff_policy,
+        reason: command.audit.reason
+      });
+    }
     return {
       applied: true,
       audit_event_id: command.audit.event_id,
@@ -228,6 +262,17 @@ export function createIssueBackedWork(
     };
   }).immediate();
   return { ...write, shadow: disabledShadow(write.work.id) };
+}
+
+function handoffPolicyFromEvent(event?: IssueEvent): HandoffPolicy {
+  if (!event) return "summary";
+  try {
+    const payload = JSON.parse(event.payload) as Record<string, unknown>;
+    const policy = typeof payload.policy === "string" ? payload.policy.trim() : "";
+    return policy === "none" || policy === "required" ? policy : "summary";
+  } catch {
+    return "summary";
+  }
 }
 
 export function updateIssueBackedWork(
@@ -254,6 +299,14 @@ export function updateIssueBackedWork(
     }
     try {
       updateIssue(db, issueID, issuePatch(command.patch));
+      if (command.patch.handoff_policy) {
+        recordIssueEvent(db, issueID, ISSUE_HANDOFF_POLICY_EVENT, {
+          actor: command.audit.actor,
+          correlation_id: command.audit.correlation_id,
+          policy: command.patch.handoff_policy,
+          reason: command.audit.reason
+        });
+      }
     } catch (error) {
       return rejectAdapterWrite(db, issueID, before, command.audit, fingerprint, "update", [errorMessage(error)], command.patch);
     }
@@ -528,11 +581,16 @@ function issuePatch(patch: IssueWorkPatch): { agent_profile_id?: string; descrip
 function patchViolations(patch: IssueWorkPatch): string[] {
   const keys = Object.keys(patch);
   const violations: string[] = [];
-  const unsupported = keys.filter((key) => key !== "agent_profile_id" && key !== "goal" && key !== "title");
+  const unsupported = keys.filter((key) => (
+    key !== "agent_profile_id" && key !== "goal" && key !== "handoff_policy" && key !== "title"
+  ));
   if (unsupported.length > 0) violations.push(`unsupported Issue-backed Work fields: ${unsupported.join(", ")}`);
   if (keys.length === 0) violations.push("Issue-backed Work patch is empty");
   if (patch.title !== undefined && patch.title.trim() === "") violations.push("Work title is required");
   if (patch.goal !== undefined && patch.goal.trim() === "") violations.push("Work goal is required");
+  if (patch.handoff_policy !== undefined && !HANDOFF_POLICIES.includes(patch.handoff_policy)) {
+    violations.push("Work handoff_policy is invalid");
+  }
   return violations;
 }
 
@@ -560,6 +618,9 @@ function createViolations(command: IssueWorkCreateCommand): string[] {
   if (!command.project_id.trim()) violations.push("project_id is required");
   if (!command.title.trim()) violations.push("Work title is required");
   if (!command.goal.trim()) violations.push("Work goal is required");
+  if (command.handoff_policy !== undefined && !HANDOFF_POLICIES.includes(command.handoff_policy)) {
+    violations.push("Work handoff_policy is invalid");
+  }
   if (command.type !== "engineering_task") {
     violations.push("Issue-backed Work type must be engineering_task");
   }

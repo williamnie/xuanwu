@@ -38,6 +38,7 @@ describe("PI runner action tools", () => {
     const issueStatus = toolByName(tools, "issue_status_summary");
     const issueExecution = toolByName(tools, "issue_execution_status");
     const completionReconcile = toolByName(tools, "issue_completion_reconcile");
+    const humanReview = toolByName(tools, "human_review_request_create");
     const watchCreate = toolByName(tools, "issue_completion_watch_create");
     const watchList = toolByName(tools, "issue_completion_watch_list");
     const watchCancel = toolByName(tools, "issue_completion_watch_cancel");
@@ -56,6 +57,23 @@ describe("PI runner action tools", () => {
     })).toEqual({ issue_ids: [812, 813, 814], reason: "用户要求重新排队", status: "todo" });
     expect(validateArgs(completionReconcile, { issue_id: 1, rationale: "补齐交付记录" }))
       .toEqual({ issue_id: 1, rationale: "补齐交付记录" });
+    expect(validateArgs(humanReview, {
+      acceptance_summary: ["Node/TypeScript/PostgreSQL", "OIDC"],
+      evidence_refs: ["docs/architecture/0001.md"],
+      excluded_scope: ["安装数据库"],
+      issue_id: 815,
+      kind: "decision",
+      question: "是否接受这些技术和产品取舍？",
+      recommendation: "接受"
+    })).toEqual({
+      acceptance_summary: ["Node/TypeScript/PostgreSQL", "OIDC"],
+      evidence_refs: ["docs/architecture/0001.md"],
+      excluded_scope: ["安装数据库"],
+      issue_id: 815,
+      kind: "decision",
+      question: "是否接受这些技术和产品取舍？",
+      recommendation: "接受"
+    });
     expect(validateArgs(watchCreate, {
       issue_ids: [7, 8],
       note: "提醒我",
@@ -185,6 +203,15 @@ describe("PI runner action tools", () => {
       issue_id: 7,
       rationale: "补齐交付记录"
     }, undefined, undefined, {} as never);
+    await humanReview.execute("tool-human-review", {
+      acceptance_summary: ["Node/TypeScript/PostgreSQL", "OIDC"],
+      evidence_refs: ["docs/architecture/0001.md"],
+      excluded_scope: ["安装数据库"],
+      issue_id: 815,
+      kind: "decision",
+      question: "是否接受这些技术和产品取舍？",
+      recommendation: "接受"
+    }, undefined, undefined, {} as never);
     await diagnose.execute("tool-diagnose", { project_id: "demo" }, undefined, undefined, {} as never);
     await repair.execute("tool-repair", {
       diagnosis_code: "done_missing_verification_evidence",
@@ -218,6 +245,15 @@ describe("PI runner action tools", () => {
       ["enqueueBatchTriageIssues", { issue_ids: [387, 388], project_id: "demo", user_phrase: "把 #387-#388 都开始做" }],
       ["enqueueNextTriageIssue", { project_id: "demo" }],
       ["reconcileIssueCompletion", { issue_id: 7, rationale: "补齐交付记录" }],
+      ["createHumanReviewRequest", {
+        acceptance_summary: ["Node/TypeScript/PostgreSQL", "OIDC"],
+        evidence_refs: ["docs/architecture/0001.md"],
+        excluded_scope: ["安装数据库"],
+        issue_id: 815,
+        kind: "decision",
+        question: "是否接受这些技术和产品取舍？",
+        recommendation: "接受"
+      }],
       ["diagnoseIssueState", { project_id: "demo" }],
       ["createIssueStateRepairProposal", { diagnosis_code: "done_missing_verification_evidence", issue_id: 1, operation: "patch_status" }],
       ["searchRepo", { query: "Accordion", max_results: 3 }],
@@ -1205,6 +1241,7 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     createIssueCompletionWatch: record("createIssueCompletionWatch"),
     createIssueBatchProposal: record("createIssueBatchProposal"),
     createIssueProposal: record("createIssueProposal"),
+    createHumanReviewRequest: record("createHumanReviewRequest"),
     reconcileIssueCompletion: record("reconcileIssueCompletion"),
     createIssueStateRepairProposal: record("createIssueStateRepairProposal"),
     createReportWorkflow: record("createReportWorkflow"),

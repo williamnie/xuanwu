@@ -130,6 +130,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
         <VerificationReviewModal
           action={actions.verificationReviewAction}
           draft={actions.verificationReviewDraft}
+          request={issue.verification?.request}
           submitting={actions.verificationReviewSubmitting}
           onDraftChange={actions.setVerificationReviewDraft}
           onCancel={() => actions.setVerificationReviewAction('')}
@@ -160,7 +161,8 @@ export default function IssueDetail({ issueId, navigateTo }) {
       {issue.status === 'pending_verification' && (
         <IssueDetailVerification
           evidence={issue.error}
-          onAccept={() => actions.handleVerificationReview('accept', '')}
+          verification={issue.verification}
+          onAccept={() => actions.setVerificationReviewAction('accept')}
           onReject={() => actions.setVerificationReviewAction('reject')}
           onRequestChanges={() => actions.setVerificationReviewAction('request_changes')}
         />

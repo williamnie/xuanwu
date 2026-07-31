@@ -28,7 +28,7 @@ import {
   type WorkLedgerEntry,
   type WorkTransitionAudit
 } from "../work/contracts.ts";
-import { issueAsWork } from "../work/issueAdapter.ts";
+import { issueAsWork, projectIssueAsWork } from "../work/issueAdapter.ts";
 import {
   COMMAND_EVIDENCE_CHANNELS,
   FileSystemCommandEvidenceArtifactStore,
@@ -216,27 +216,35 @@ export function applyIssueCompletionGate(
   const policy = input.policy ?? ISSUE_WORK_VERIFICATION_POLICY;
   const verification = createIssueVerifierReview(current, { ...input, policy });
   const verificationTarget = verifierGateStatusForPolicyDecision(verification.evaluation.decision);
-  const acceptanceHandoff = verificationTarget === "done"
+  const handoffPolicy = projectIssueAsWork(db, current).acceptance.handoff_policy ?? "summary";
+  const handoffEnabled = handoffPolicy !== "none";
+  const handoffRequired = handoffPolicy === "required";
+  const acceptanceHandoff = verificationTarget === "done" && handoffEnabled
     ? acceptanceHandoffForCompletion(db, current, input)
     : null;
   const deliveryGapDetail = input.projection_errors?.find((error) => error.startsWith("Handoff gap:"))
     ?.slice("Handoff gap:".length).trim();
-  const handoffGap = verificationTarget === "done" && !acceptanceHandoff
-    ? `Completion requires a persisted ready or delivered Handoff linked to the current Work and canonical Run${
-      deliveryGapDetail ? `: ${deliveryGapDetail}` : ""
-    }`
+  const handoffGap = verificationTarget === "done" && handoffEnabled && !acceptanceHandoff
+    ? handoffRequired
+      ? `Completion requires a persisted ready or delivered Handoff linked to the current Work and canonical Run${
+        deliveryGapDetail ? `: ${deliveryGapDetail}` : ""
+      }`
+      : `Handoff summary was not produced, but summary policy allows completion${
+        deliveryGapDetail ? `: ${deliveryGapDetail}` : ""
+      }`
     : "";
-  const evaluation = handoffGap === ""
+  const blockingHandoffGap = handoffRequired ? handoffGap : "";
+  const evaluation = blockingHandoffGap === ""
     ? verification.evaluation
     : {
       ...verification.evaluation,
       decision: "pending" as const,
-      errors: [...verification.evaluation.errors, handoffGap],
+      errors: [...verification.evaluation.errors, blockingHandoffGap],
       satisfied: false
     };
   const analysis = createIssueVerifierReview(current, { ...input, policy, projection_errors: [
     ...(input.projection_errors ?? []),
-    ...(handoffGap ? [handoffGap] : [])
+    ...(blockingHandoffGap ? [blockingHandoffGap] : [])
   ] }, evaluation);
   const targetStatus = verifierGateStatusForPolicyDecision(evaluation.decision);
   const fingerprint = completionFingerprint(current, input, policy, evaluation, acceptanceHandoff);
@@ -267,17 +275,17 @@ export function applyIssueCompletionGate(
       work_id: issueAsWork(current).id
     });
 
-    if (input.handoff) {
+    if (input.handoff && handoffEnabled) {
       recordHandoff(db, issueID, input.handoff, {
         recorded_at: canonicalNow(input.now),
         source: input.source
       });
     }
 
-    const persistedHandoff = targetStatus === "done"
+    const persistedHandoff = targetStatus === "done" && handoffEnabled
       ? persistAcceptanceHandoffEvidence(db, issueID, current, input, evaluation)
       : null;
-    if (targetStatus === "done" && !persistedHandoff) {
+    if (targetStatus === "done" && handoffRequired && !persistedHandoff) {
       throw new Error("completion gate refused done without a persisted ready or delivered Handoff");
     }
 
@@ -290,7 +298,7 @@ export function applyIssueCompletionGate(
     const patch = completionPatch(input.patch ?? {}, targetStatus, evaluation, issue.error);
     if (issue.status !== targetStatus) {
       const acceptance = targetStatus === "done"
-        ? workAcceptance(issueAsWork(issue), input.evidence, evaluation, persistedHandoff!)
+        ? workAcceptance(projectIssueAsWork(db, issue), input.evidence, evaluation, persistedHandoff)
         : undefined;
       const before = issue.status;
       issue = transitionIssue(db, issue, targetStatus, audit, acceptance, patch);
@@ -937,7 +945,7 @@ function transitionIssue(
   acceptance: WorkAcceptanceEvidence | undefined,
   patch: UpdateIssueInput
 ): Issue {
-  const work = issueAsWork(issue);
+  const work = projectIssueAsWork(db, issue);
   const decision = evaluateWorkTransition({ relations: [], works: [work] }, {
     acceptance,
     audit,
@@ -953,7 +961,7 @@ function workAcceptance(
   work: WorkLedgerEntry,
   evidence: readonly EvidenceRecord[],
   evaluation: VerificationPolicyEvaluation,
-  handoff: StoredHandoffRecord
+  handoff: StoredHandoffRecord | null
 ): WorkAcceptanceEvidence {
   const selected = selectedAcceptanceEvidenceIDs(evaluation);
   const records = evidence.filter((record) => selected.has(record.id) && record.status === "passed");
@@ -965,11 +973,11 @@ function workAcceptance(
       status: record.status,
       work_id: record.work_id
     })),
-    handoffs: [{
+    handoffs: handoff ? [{
       id: handoff.handoff.id,
       status: handoff.handoff.status === "delivered" ? "delivered" : "ready",
       work_id: handoff.handoff.work_id
-    }]
+    }] : []
   };
 }
 

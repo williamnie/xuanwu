@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { createPiAction } from "../db/repositories/pi.ts";
+import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -31,7 +32,10 @@ describe("PI verifier workflow API", () => {
       const approved = await postAction(router, "verify-candidate", "approve");
       await waitFor(() => provider.inputs.length === 1);
       const child = listIssues(database, { projectId: "demo" }).find((issue) => issue.id !== parentID);
-      const review = await postVerification(router, parentID, "accept");
+      const request = createHumanReviewRequest(database, parentID, {
+        question: "是否接受当前验证结果并将 Issue 标记为完成？"
+      });
+      const review = await postVerification(router, parentID, "accept", request.id, request.revision);
 
       expect(approved.status).toBe(200);
       expect(await approved.json()).toMatchObject({ id: "verify-candidate", status: "completed" });
@@ -49,12 +53,10 @@ describe("PI verifier workflow API", () => {
       expect(review.status).toBe(200);
       expect(await review.json()).toMatchObject({
         id: parentID,
-        status: "pending_verification",
-        error: expect.stringContaining("persisted ready or delivered Handoff")
+        status: "done"
       });
       expect(getIssue(database, parentID)).toMatchObject({
-        status: "pending_verification",
-        error: expect.stringContaining("persisted ready or delivered Handoff")
+        status: "done"
       });
     } finally {
       database.close();
@@ -107,9 +109,20 @@ function postAction(router: ReturnType<typeof createDefaultRouter>, id: string, 
   return router.handle(new Request(`${BASE_URL}/api/pi/actions/${id}/${action}`, { method: "POST" }));
 }
 
-function postVerification(router: ReturnType<typeof createDefaultRouter>, id: number, action: string): Promise<Response> {
+function postVerification(
+  router: ReturnType<typeof createDefaultRouter>,
+  id: number,
+  action: string,
+  reviewRequestID: string,
+  reviewRevision: number
+): Promise<Response> {
   return router.handle(new Request(`${BASE_URL}/api/issues/${id}/verification`, {
-    body: JSON.stringify({ action, comment: "Verifier ran bun test" }),
+    body: JSON.stringify({
+      action,
+      comment: "Verifier ran bun test",
+      review_request_id: reviewRequestID,
+      review_revision: reviewRevision
+    }),
     headers: { "content-type": "application/json" },
     method: "POST"
   }));

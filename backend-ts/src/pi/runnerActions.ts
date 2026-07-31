@@ -58,6 +58,10 @@ import {
   prepareIssueStatusUpdate,
   type IssueStatusUpdateInput
 } from "./runnerIssueStatusActions.ts";
+import {
+  createHumanReviewRequest as createHumanReviewRequestRecord,
+  type CreateHumanReviewRequestInput
+} from "../domain/review/humanReview.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
@@ -89,6 +93,7 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
   projectStatus(input: ProjectStatusInput): unknown;
   readIssue(input: IssueReadInput): unknown;
   readSessionSummary(input: SessionReadSummaryInput): unknown;
+  createHumanReviewRequest(input: CreateHumanReviewRequestInput & { issue_id: number }): unknown;
 };
 
 export type PiRunnerActionContext = PiActionContext & {
@@ -162,6 +167,13 @@ export function createPiRunnerActions(
       payload: { body: input.body, issue_id: input.issue_id },
       projectID: issueProjectID(db, input.issue_id, context),
       execute: () => createIssueComment(db, input.issue_id, { author: "agent", body: input.body })
+    }),
+    createHumanReviewRequest: (input) => executeSafePiAction(db, context, {
+      actionType: "human_review.request",
+      issueID: input.issue_id,
+      payload: cleanObjectPayload(input),
+      projectID: issueProjectID(db, input.issue_id, context),
+      execute: () => createHumanReviewRequestRecord(db, input.issue_id, input, { bus: context.bus })
     }),
     cancelIssues: (input) => cancelIssues(db, context, input),
     updateIssueStatuses: (input) => updateIssueStatuses(db, context, input),

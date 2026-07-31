@@ -151,7 +151,7 @@ function ensureIssueWorkShadow(db: RunnerDatabase, issueID: number): void {
       title,
       case when trim(description)<>'' then description else title end,
       status,
-      '{"completion_rule":"all_required","criteria":[{"description":"Satisfy the authoritative Issue description and verification requirements.","id":"issue-delivery","required":true,"verification_policy_ref":"issue-work-verification:v1"}],"requires_handoff":true,"version":1}',
+      '{"completion_rule":"all_required","criteria":[{"description":"Satisfy the authoritative Issue description and verification requirements.","id":"issue-delivery","required":true,"verification_policy_ref":"issue-work-verification:v1"}],"handoff_policy":"summary","requires_handoff":false,"version":1}',
       json_object(
         'causes', json_array(),
         'origin', json_object(

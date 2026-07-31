@@ -253,7 +253,7 @@ describe("Bun project PI control API", () => {
     }
   });
 
-  test("always authorizes only project-scoped Work enqueue for a managed project", async () => {
+  test("authorizes project-scoped Work enqueue and explicit human review requests for a managed project", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
@@ -273,6 +273,16 @@ describe("Bun project PI control API", () => {
       expect(gatePiActionEnvelope({ ...envelope, project_id: "other" }, enabled))
         .toMatchObject({ decision: "deny" });
       expect(enabled.allowedActions).toContain("work.enqueue");
+      expect(gatePiActionEnvelope({
+        action_type: "human_review.request",
+        issue_id: 7,
+        payload: { issue_id: 7, question: "是否接受当前产品范围？" },
+        project_id: "demo",
+        requires_confirmation: false,
+        risk_level: "low",
+        source: "pi_manager_cycle"
+      }, enabled)).toMatchObject({ decision: "execute" });
+      expect(enabled.allowedActions).toContain("human_review.request");
       expect(enabled.mode).toBe("delegated");
     } finally {
       database.close();

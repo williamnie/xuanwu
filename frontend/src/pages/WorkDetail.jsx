@@ -139,7 +139,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   const work = detail?.work || null;
   const issueId = issueIdFromWorkId(work?.id);
   const projectName = projects.find(project => project.id === work?.owner?.project_id)?.name || work?.owner?.project_id || 'Unscoped';
-  const availableActions = workAvailableActions(work?.status);
+  const verification = detail?.verification || null;
+  const availableActions = workAvailableActions(work?.status, verification);
   const visibleTimeline = useMemo(() => filterTimelineItems(timeline, timelineKind), [timeline, timelineKind]);
   const customAcceptance = useMemo(
     () => (work?.acceptance?.criteria || []).filter(criterion => criterion.id !== DEFAULT_ACCEPTANCE_ID),
@@ -205,7 +206,12 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     if (!work || submitting || ((reviewAction === 'reject' || reviewAction === 'request_changes') && !comment)) return;
     setSubmitting(true);
     try {
-      await workApi.reviewWork(work.id, { action: reviewAction, comment });
+      await workApi.reviewWork(work.id, {
+        action: reviewAction,
+        comment,
+        review_request_id: verification?.request?.id,
+        review_revision: verification?.request?.revision,
+      });
       message.success(t('work.reviewSubmitted'));
       setReviewAction('');
       setReviewComment('');
@@ -279,8 +285,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
           <div className="work-overview-grid">
             <section className="work-detail-panel">
               <SectionHeading eyebrow={t('work.current')} title={t('work.nextStep')} />
-              <WorkStateSummary status={work.status} />
-              {availableActions.review ? <ReviewActions disabled={submitting} onSelect={setReviewAction} /> : null}
+              <WorkStateSummary status={work.status} verification={verification} />
+              {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={setReviewAction} request={verification.request} /> : null}
             </section>
 
             <section className="work-detail-panel">
@@ -308,7 +314,9 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
                 <span><strong>{passedEvidence}</strong> {t('work.passedEvidence')}</span>
                 <span className={failedEvidence ? 'failed' : ''}><strong>{failedEvidence}</strong> {t('work.failedEvidence')}</span>
               </div>
-              {latestHandoff ? <LatestHandoffCard handoff={latestHandoff} onOpen={() => selectView('delivery')} /> : <EmptySection text={work.status === 'done' ? '历史完成记录没有可查询的 Handoff。' : '完成并通过验证后会生成交付凭证。'} />}
+              {latestHandoff
+                ? <LatestHandoffCard handoff={latestHandoff} onOpen={() => selectView('delivery')} />
+                : <EmptySection text={handoffEmptyText(work)} />}
             </section>
           </div>
 
@@ -355,7 +363,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       )}
 
       {editorOpen ? <WorkEditorDialog mode="edit" onClose={() => setEditorOpen(false)} onSaved={async () => { setEditorOpen(false); await refreshAll(); onWorkChanged?.(); }} projects={projects} work={work} /> : null}
-      {reviewAction ? <ReviewDialog action={reviewAction} busy={submitting} comment={reviewComment} onCancel={() => { setReviewAction(''); setReviewComment(''); }} onChange={setReviewComment} onConfirm={submitReview} /> : null}
+      {reviewAction ? <ReviewDialog action={reviewAction} busy={submitting} comment={reviewComment} onCancel={() => { setReviewAction(''); setReviewComment(''); }} onChange={setReviewComment} onConfirm={submitReview} request={verification?.request} /> : null}
     </section>
   );
 }
@@ -380,14 +388,19 @@ function LatestHandoffCard({ handoff, onOpen }) {
   return <article className="work-latest-handoff"><div><strong>{mode}</strong><em data-status={status}>{status === 'ready' ? t('work.handoff.ready') : status}</em></div><p>{t('work.handoff.summary', { files: handoff.changed_file_count, evidence: handoff.evidence_count, risks: handoff.risk_count })}</p><button onClick={onOpen} type="button">{t('work.handoff.open')} <ArrowUpRight size={12} /></button></article>;
 }
 
-function WorkStateSummary({ status }) {
+function WorkStateSummary({ status, verification }) {
   const { t } = useI18n();
+  const pendingSummary = verification?.owner === 'human'
+    ? [t('work.state.reviewTitle'), verification?.request?.question || t('work.state.reviewDetail')]
+    : verification?.phase === 'pi_repairing'
+      ? [t('work.state.piRepairingTitle'), t('work.state.piRepairingDetail')]
+      : [t('work.state.piVerifyingTitle'), t('work.state.piVerifyingDetail')];
   const summary = {
     cancelled: [t('work.state.cancelledTitle'), t('work.state.cancelledDetail')],
     done: [t('work.state.doneTitle'), t('work.state.doneDetail')],
     failed: [t('work.state.failedTitle'), t('work.state.failedDetail')],
     in_progress: [t('work.state.runningTitle'), t('work.state.runningDetail')],
-    pending_verification: [t('work.state.reviewTitle'), t('work.state.reviewDetail')],
+    pending_verification: pendingSummary,
     todo: [t('work.state.queuedTitle'), t('work.state.queuedDetail')],
     triage: [t('work.state.readyTitle'), t('work.state.readyDetail')],
   }[status] || [status, t('work.state.unknownDetail')];
@@ -417,9 +430,18 @@ function ResourceError({ error }) {
   return error ? <div className="work-resource-error" role="alert"><AlertTriangle size={14} /> {error}</div> : null;
 }
 
-function ReviewActions({ disabled, onSelect }) {
+function HumanReviewCard({ disabled, onSelect, request }) {
   const { t } = useI18n();
-  return <div className="work-review-actions"><button disabled={disabled} onClick={() => onSelect('accept')} type="button"><CheckCircle2 size={14} /> {t('work.accept')}</button><button disabled={disabled} onClick={() => onSelect('request_changes')} type="button"><RefreshCw size={14} /> {t('work.changes')}</button><button className="danger" disabled={disabled} onClick={() => onSelect('reject')} type="button"><XCircle size={14} /> {t('work.reject')}</button></div>;
+  return <article className="work-human-review-card">
+    <span>{t('work.youAreApproving')}</span>
+    <h3>{request.question}</h3>
+    {request.recommendation ? <p><strong>{t('work.piRecommendation')}：</strong>{request.recommendation}</p> : null}
+    {request.acceptance_summary?.length ? <div><strong>{t('work.acceptanceIncludes')}</strong><ul>{request.acceptance_summary.map(item => <li key={item}>{item}</li>)}</ul></div> : null}
+    {request.excluded_scope?.length ? <div><strong>{t('work.notIncluded')}</strong><ul>{request.excluded_scope.map(item => <li key={item}>{item}</li>)}</ul></div> : null}
+    {request.evidence_refs?.length ? <details><summary>{t('work.reviewEvidence')}</summary><ul>{request.evidence_refs.map(item => <li key={item}><code>{item}</code></li>)}</ul></details> : null}
+    {request.consequences ? <p><strong>{t('work.approvalConsequences')}：</strong>{request.consequences}</p> : null}
+    <div className="work-review-actions"><button disabled={disabled} onClick={() => onSelect('accept')} type="button"><CheckCircle2 size={14} /> {t('work.accept')}</button><button disabled={disabled} onClick={() => onSelect('request_changes')} type="button"><RefreshCw size={14} /> {t('work.changes')}</button><button className="danger" disabled={disabled} onClick={() => onSelect('reject')} type="button"><XCircle size={14} /> {t('work.reject')}</button></div>
+  </article>;
 }
 
 function InlineConfirmation({ busy, onCancel, onConfirm }) {
@@ -427,10 +449,10 @@ function InlineConfirmation({ busy, onCancel, onConfirm }) {
   return <div className="work-inline-confirm" role="alertdialog" aria-label={t('work.confirmCancel')}><AlertTriangle size={18} /><div><strong>{t('work.confirmCancel')}</strong><span>{t('work.cancelAudit')}</span></div><button disabled={busy} onClick={onCancel} type="button">{t('work.keep')}</button><button className="danger" disabled={busy} onClick={onConfirm} type="button">{busy ? t('work.submitting') : t('work.confirmCancelAction')}</button></div>;
 }
 
-function ReviewDialog({ action, busy, comment, onCancel, onChange, onConfirm }) {
+function ReviewDialog({ action, busy, comment, onCancel, onChange, onConfirm, request }) {
   const { t } = useI18n();
   const commentRequired = action === 'reject' || action === 'request_changes';
-  return <div className="modal-overlay work-dialog-overlay"><form className="work-review-dialog" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}><span>{t('work.reviewGate')}</span><h2>{reviewTitle(action, t)}</h2><p>{t('work.reviewAudit')}</p><label><span>{t(commentRequired ? 'work.reviewNoteRequired' : 'work.reviewNoteOptional')}</span><textarea autoFocus className="form-control" onChange={event => onChange(event.target.value)} rows={5} value={comment} /></label><div><button disabled={busy} onClick={onCancel} type="button">{t('work.cancel')}</button><button className={action === 'reject' ? 'danger' : 'primary'} disabled={busy || (commentRequired && !comment.trim())} type="submit">{busy ? t('work.submitting') : t('work.submitReview')}</button></div></form></div>;
+  return <div className="modal-overlay work-dialog-overlay"><form className="work-review-dialog" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}><span>{t('work.reviewGate')}</span><h2>{reviewTitle(action, t)}</h2><p className="work-review-question">{request?.question}</p><p>{action === 'request_changes' ? t('work.reviewRevisionFlow') : t('work.reviewAudit')}</p><label><span>{t(commentRequired ? 'work.reviewNoteRequired' : 'work.reviewNoteOptional')}</span><textarea autoFocus={commentRequired} className="form-control" onChange={event => onChange(event.target.value)} placeholder={action === 'request_changes' ? t('work.reviewChangesPlaceholder') : ''} rows={5} value={comment} /></label><div><button disabled={busy} onClick={onCancel} type="button">{t('work.cancel')}</button><button className={action === 'reject' ? 'danger' : 'primary'} disabled={busy || (commentRequired && !comment.trim())} type="submit">{busy ? t('work.submitting') : action === 'request_changes' ? t('work.submitChangesAndContinue') : t('work.submitReview')}</button></div></form></div>;
 }
 
 function fulfilledItems(result) {
@@ -453,4 +475,14 @@ function formatTime(value, language) {
   if (!value) return '—';
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date.toLocaleString(language) : value;
+}
+
+function handoffEmptyText(work) {
+  const policy = work?.acceptance?.handoff_policy
+    || (work?.acceptance?.requires_handoff ? 'required' : 'summary');
+  if (policy === 'none') return '此 Work 不要求 Handoff；Evidence 仍是完成门禁。';
+  if (policy === 'summary') return work?.status === 'done'
+    ? '此 Work 使用 summary 策略，未生成独立 Handoff 不阻塞完成。'
+    : 'Handoff 摘要会在有复用价值时生成，不阻塞完成。';
+  return '完成必须具备 ready 或 delivered Handoff。';
 }

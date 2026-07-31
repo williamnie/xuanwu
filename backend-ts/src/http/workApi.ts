@@ -14,12 +14,14 @@ import {
   type IssueWorkMutationResult
 } from "../domain/work/issueAdapter.ts";
 import {
+  HANDOFF_POLICIES,
   WORK_STATUSES,
   WORK_TYPES,
   type WorkLedgerEntry,
   type WorkTransitionAudit
 } from "../domain/work/contracts.ts";
 import { queryWorkTimeline } from "../domain/work/timeline.ts";
+import { readIssueVerificationProjection } from "../domain/review/humanReview.ts";
 import {
   READINESS_STAGES,
   declareIssueReadinessRequirements,
@@ -66,7 +68,7 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
   }));
   router.post("/api/works", async (request) => workResponse(async () => {
     const body = await objectBody(request);
-    assertKeys(body, ["agent_profile_id", "audit", "depends_on_issue_ids", "goal", "project_id", "status", "title", "type"]);
+    assertKeys(body, ["agent_profile_id", "audit", "depends_on_issue_ids", "goal", "handoff_policy", "project_id", "status", "title", "type"]);
     const projectID = requiredString(body.project_id, "project_id");
     const project = getProject(context.database, projectID);
     if (!project) throw workError(404, "project_not_found", "Project not found");
@@ -87,11 +89,16 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
     if (status !== "triage" && status !== "todo") {
       throw workError(400, "invalid_request", "status must be triage or todo when creating Work");
     }
+    const handoffPolicy = optionalString(body.handoff_policy) || "summary";
+    if (!HANDOFF_POLICIES.includes(handoffPolicy as typeof HANDOFF_POLICIES[number])) {
+      throw workError(400, "invalid_request", "handoff_policy must be none, summary, or required");
+    }
     const result = createIssueBackedWork(context.database, {
       agent_profile_id: agentProfileID,
       audit: auditInput(body.audit),
       depends_on_issue_ids: positiveIssueIDArray(body.depends_on_issue_ids),
       goal: requiredString(body.goal, "goal"),
+      handoff_policy: handoffPolicy as typeof HANDOFF_POLICIES[number],
       project_id: projectID,
       status,
       title: requiredString(body.title, "title"),
@@ -103,8 +110,14 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
   router.patch("/api/works/:id", async (request) => workResponse(async () => {
     const work = requireWork(context.database, workID(request));
     const body = await objectBody(request);
-    assertKeys(body, ["agent_profile_id", "audit", "expected_revision", "goal", "title"]);
+    assertKeys(body, ["agent_profile_id", "audit", "expected_revision", "goal", "handoff_policy", "title"]);
     const requestedAgentProfileID = Object.hasOwn(body, "agent_profile_id") ? optionalString(body.agent_profile_id) : undefined;
+    const requestedHandoffPolicy = Object.hasOwn(body, "handoff_policy") ? optionalString(body.handoff_policy) : undefined;
+    if (requestedHandoffPolicy !== undefined && !HANDOFF_POLICIES.includes(
+      requestedHandoffPolicy as typeof HANDOFF_POLICIES[number]
+    )) {
+      throw workError(400, "invalid_request", "handoff_policy must be none, summary, or required");
+    }
     if (work.status === "in_progress" && requestedAgentProfileID !== undefined && requestedAgentProfileID !== (work.agent_profile_id ?? "")) {
       throw workError(409, "running_work_profile_locked", "running Work agent_profile_id cannot be changed");
     }
@@ -116,6 +129,9 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
     const patch = {
       ...(requestedAgentProfileID !== undefined ? { agent_profile_id: requestedAgentProfileID } : {}),
       ...(Object.hasOwn(body, "goal") ? { goal: requiredString(body.goal, "goal") } : {}),
+      ...(requestedHandoffPolicy !== undefined
+        ? { handoff_policy: requestedHandoffPolicy as typeof HANDOFF_POLICIES[number] }
+        : {}),
       ...(Object.hasOwn(body, "title") ? { title: requiredString(body.title, "title") } : {})
     };
     if (Object.keys(patch).length === 0) throw workError(400, "invalid_request", "Work patch is empty");
@@ -237,7 +253,11 @@ function listResponse(db: RunnerDatabase, request: Request): Record<string, unkn
 }
 
 function detailResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
-  return { work: requireWork(db, workID(request)) };
+  const work = requireWork(db, workID(request));
+  return {
+    verification: readIssueVerificationProjection(db, workIDToIssueID(work.id)),
+    work
+  };
 }
 
 function readinessDeclaration(

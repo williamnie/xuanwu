@@ -121,8 +121,8 @@ describe("Evidence HTTP API", () => {
       ));
 
       expect(passed).toMatchObject({
-        status: "pending_verification",
-        error: expect.stringContaining("persisted ready or delivered Handoff")
+        status: "done",
+        error: ""
       });
       expect(failed).toMatchObject({ status: "failed", error: expect.stringContaining("Verification failed") });
       expect(passedBody.items).toEqual([
@@ -142,8 +142,8 @@ describe("Evidence HTTP API", () => {
         verifier_review_refs: [{
           finding_ids: expect.arrayContaining(["requirement:current-run-check"]),
           policy_ref: "verification-policy:agent-execution-contract@1",
-          recommended_next_action: { action: "collect_missing_evidence" },
-          verdict: "inconclusive"
+          recommended_next_action: { action: "complete_via_gate" },
+          verdict: "pass"
         }]
       });
       expect(db.sqlite.query<{ count: number }, [string]>(
@@ -246,8 +246,8 @@ describe("Evidence HTTP API", () => {
       expect(conflict.status).toBe(409);
       expect(crossRun.status).toBe(409);
       expect(completed).toMatchObject({
-        status: "pending_verification",
-        error: expect.stringContaining("persisted ready or delivered Handoff")
+        status: "done",
+        error: ""
       });
       expect(records.map((item) => item.evidence.status).sort()).toEqual(["failed", "passed"]);
 
@@ -259,9 +259,9 @@ describe("Evidence HTTP API", () => {
         commandEvidenceBody(lateRunID, "delegated_executor", "late-after-disconnect", 0, new Date(observed).toISOString())
       );
       expect(await late.json()).toMatchObject({
-        gate: { decision: "pending", issue_status: "pending_verification", target_status: "pending_verification" }
+        gate: { decision: "passed", issue_status: "done", target_status: "done" }
       });
-      expect(getIssue(db, lateIssueID)?.status).toBe("pending_verification");
+      expect(getIssue(db, lateIssueID)?.status).toBe("done");
     } finally {
       db.close();
     }

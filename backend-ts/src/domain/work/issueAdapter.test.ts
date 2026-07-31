@@ -75,7 +75,8 @@ describe("Issue-backed Work compatibility adapter", () => {
           acceptance: {
             completion_rule: "all_required",
             criteria: [{ id: "issue-delivery", required: true, verification_policy_ref: "agent-execution-contract" }],
-            requires_handoff: true,
+            handoff_policy: "summary",
+            requires_handoff: false,
             version: 1
           },
           owner: { kind: "project", project_id: PROJECT_ID },

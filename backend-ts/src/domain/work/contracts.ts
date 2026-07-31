@@ -68,10 +68,15 @@ export type WorkAcceptanceCriterion = {
   verification_policy_ref: string;
 };
 
+export const HANDOFF_POLICIES = ["none", "summary", "required"] as const;
+export type HandoffPolicy = typeof HANDOFF_POLICIES[number];
+
 export type WorkAcceptanceContract = {
   completion_rule: "all_required";
   criteria: WorkAcceptanceCriterion[];
-  requires_handoff: true;
+  handoff_policy?: HandoffPolicy;
+  /** Compatibility projection for older clients. */
+  requires_handoff: boolean;
   version: number;
 };
 
@@ -239,7 +244,11 @@ export function validateAcceptanceContract(contract: WorkAcceptanceContract): st
     errors.push("acceptance version must be positive");
   }
   if (contract.completion_rule !== "all_required") errors.push("acceptance completion_rule must be all_required");
-  if (contract.requires_handoff !== true) errors.push("acceptance must require a Handoff");
+  const handoffPolicy = contract.handoff_policy ?? (contract.requires_handoff ? "required" : "summary");
+  if (!["none", "summary", "required"].includes(handoffPolicy)) errors.push("acceptance handoff_policy is invalid");
+  if (contract.requires_handoff !== (handoffPolicy === "required")) {
+    errors.push("acceptance requires_handoff must match handoff_policy");
+  }
   if (contract.criteria.length === 0) errors.push("acceptance criteria are required");
   if (!contract.criteria.some((criterion) => criterion.required)) errors.push("acceptance requires at least one required criterion");
   const ids = new Set<string>();
@@ -301,7 +310,11 @@ export function evaluateWorkTransition(
 }
 
 function validateDoneGate(work: WorkLedgerEntry, evidence: WorkAcceptanceEvidence | undefined): string[] {
-  if (!evidence) return ["done requires acceptance Evidence and a ready Handoff"];
+  const handoffRequired = (work.acceptance.handoff_policy
+    ?? (work.acceptance.requires_handoff ? "required" : "summary")) === "required";
+  if (!evidence) return [handoffRequired
+    ? "done requires acceptance Evidence and a ready Handoff"
+    : "done requires acceptance Evidence"];
   const errors: string[] = [];
   if (evidence.contract_version !== work.acceptance.version) {
     errors.push(`acceptance contract version ${evidence.contract_version} does not match ${work.acceptance.version}`);
@@ -321,7 +334,7 @@ function validateDoneGate(work: WorkLedgerEntry, evidence: WorkAcceptanceEvidenc
   for (const item of evidence.handoffs) {
     if (item.work_id !== work.id) errors.push(`${item.id} Handoff belongs to another Work`);
   }
-  if (!evidence.handoffs.some((item) => item.status === "ready" || item.status === "delivered")) {
+  if (handoffRequired && !evidence.handoffs.some((item) => item.status === "ready" || item.status === "delivered")) {
     errors.push("done requires a ready or delivered Handoff");
   }
   return errors;

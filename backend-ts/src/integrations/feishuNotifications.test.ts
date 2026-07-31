@@ -7,10 +7,12 @@ import { buildConfig } from "../config/env.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { listPiNotificationIntents } from "../db/repositories/pi.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
+import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
 import { createDefaultRouter } from "../http/server.ts";
 import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
 import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
@@ -25,6 +27,16 @@ afterEach(async () => {
     if (root) await rm(root, { recursive: true, force: true });
   }
 });
+
+function pendingRequiredHandoffReview(db: RunnerDatabase, issueID: number) {
+  recordIssueEvent(db, issueID, "issue.handoff_policy_set.v1", {
+    policy: "required",
+    reason: "notification fixture"
+  });
+  return createHumanReviewRequest(db, issueID, {
+    question: "是否接受当前验证结果？"
+  });
+}
 
 describe("Feishu notification queue", () => {
   test("queues one approved Feishu outbox item when a linked issue is completed", async () => {
@@ -79,10 +91,16 @@ describe("Feishu notification queue", () => {
     try {
       const issueID = linkedFeishuIssue(db);
       updateIssue(db, issueID, { error: "bun test passed", status: "pending_verification" });
+      const review = pendingRequiredHandoffReview(db, issueID);
       const router = createDefaultRouter({ bus, database: db });
 
       const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueID}/verification`, {
-        body: JSON.stringify({ action: "accept", comment: "验收通过" }),
+        body: JSON.stringify({
+          action: "accept",
+          comment: "验收通过",
+          review_request_id: review.id,
+          review_revision: review.revision
+        }),
         headers: { "content-type": "application/json" },
         method: "POST"
       }));
@@ -109,10 +127,16 @@ describe("Feishu notification queue", () => {
     try {
       const issueID = linkedFeishuIssue(db);
       updateIssue(db, issueID, { error: "bun test passed", status: "pending_verification" });
+      const review = pendingRequiredHandoffReview(db, issueID);
       const router = createDefaultRouter({ bus, config, database: db, feishuSender: sender });
 
       const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueID}/verification`, {
-        body: JSON.stringify({ action: "accept", comment: "验收通过" }),
+        body: JSON.stringify({
+          action: "accept",
+          comment: "验收通过",
+          review_request_id: review.id,
+          review_revision: review.revision
+        }),
         headers: { "content-type": "application/json" },
         method: "POST"
       }));
@@ -224,6 +248,44 @@ describe("Feishu notification queue", () => {
       expect(text).not.toContain("secret");
       expect(text).not.toContain("/Users/xiaobei");
       expect(text).not.toContain("at leak");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("immediately notifies the exact human review question instead of waiting for the 24h timeout", async () => {
+    const db = await fixtureDatabase();
+    const bus = new EventBus();
+    try {
+      const issueID = linkedFeishuIssue(db);
+      updateIssue(db, issueID, { status: "pending_verification" });
+      createDefaultRouter({ bus, database: db });
+      const question = "是否接受 Node/TypeScript/PostgreSQL、OIDC、BlobStore、Provider 适配层、禁止 Mock，以及 V0.1 范围这些技术和产品取舍？";
+
+      const request = createHumanReviewRequest(db, issueID, {
+        excluded_scope: ["安装数据库", "启动完整程序"],
+        kind: "decision",
+        question,
+        recommendation: "接受"
+      }, { bus });
+      await flushAgentCommunicationTestMessages(db);
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+      const content = String(outbox[0]?.content);
+
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]).toMatchObject({
+        issue_id: issueID,
+        target_chat_id: "oc_group"
+      });
+      expect(content).toContain(`你正在审批：${question}`);
+      expect(content).toContain("不包含：安装数据库；启动完整程序");
+      expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
+        expect.objectContaining({
+          kind: "pi_needs_user",
+          source_event_id: request.id,
+          state: "sent"
+        })
+      ]);
     } finally {
       db.close();
     }

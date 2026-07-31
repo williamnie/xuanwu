@@ -5,6 +5,7 @@ import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { createReadApiDomainHandlers, type ReadApiDomainHandlers } from "./readApiDomain.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
+import { HumanReviewConflictError } from "../domain/review/humanReview.ts";
 
 export function registerCoreReadRoutes(router: Router, context: ReadApiContext): void {
   const handlers = createReadApiDomainHandlers(context);
@@ -48,7 +49,11 @@ function registerIssueItemRoutes(router: Router, handlers: ReadApiDomainHandlers
   router.post("/api/issues/:id/cancel", (request) => asyncWriteResponse(() => handlers.issues.cancel(issueID(request))));
   router.post("/api/issues/:id/verification", async (request) => {
     const body = await parseObjectBody(request);
-    return writeResponse(() => handlers.issues.verify(issueID(request), body));
+    return asyncWriteResponse(() => handlers.issues.verify(issueID(request), body));
+  });
+  router.post("/api/issues/:id/human-review-requests", async (request) => {
+    const body = await parseObjectBody(request);
+    return writeResponse(() => handlers.issues.requestHumanReview(issueID(request), body), 201);
   });
   router.get("/api/issues/:id", (request) => readResponse(() => readHandlers.issues.read(issueID(request))));
   router.patch("/api/issues/:id", async (request) => {
@@ -115,6 +120,8 @@ async function asyncWriteResponse(write: () => Promise<unknown>, status = 200): 
     return json(await write(), { status });
   } catch (error) {
     if (error instanceof ProjectNotFoundError) throw new HttpError(404, error.message);
+    if (error instanceof HumanReviewConflictError) throw new HttpError(409, error.message);
+    if (error instanceof HttpError) throw error;
     if (error instanceof Error) throw new HttpError(400, error.message);
     throw error;
   }

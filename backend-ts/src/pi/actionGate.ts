@@ -82,6 +82,7 @@ export type PiAuthorizationScope = {
 
 export const PI_SAFE_ACTION_TYPES = [
   "agent.profile_recommend",
+  "human_review.request",
   "issue.comment", "issue.execution_status", "issue.list", "issue.read", "issue.retry_after", "issue.state_diagnose",
   "issue.status_summary",
   "issue_completion_watch.list",

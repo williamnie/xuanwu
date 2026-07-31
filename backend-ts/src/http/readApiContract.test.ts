@@ -174,6 +174,7 @@ describe("read API route contracts", () => {
         "POST /api/issues/:id/cancel",
         "POST /api/issues/:id/comments",
         "POST /api/issues/:id/enqueue",
+        "POST /api/issues/:id/human-review-requests",
         "POST /api/issues/:id/retry",
         "POST /api/issues/:id/verification",
         "POST /api/projects",

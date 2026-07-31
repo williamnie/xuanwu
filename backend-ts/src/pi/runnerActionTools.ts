@@ -12,6 +12,7 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "review_workflow_request",
   "report_workflow_request",
   "needs_user_escalation",
+  "human_review_request_create",
   "issue_list",
   "issue_status_summary",
   "issue_execution_status",
@@ -187,7 +188,23 @@ function agentOrchestrationTools(actions: PiRunnerActionLayer): ToolDefinition[]
     actionTool("needs_user_escalation", "Needs User Escalation",
       "Create a pending needs_user escalation comment proposal for an issue.",
       Type.Object({ issue_id: positiveID, reason: requiredText, requested_action: optionalString }, objectOptions),
-      actions.escalateNeedsUser)
+      actions.escalateNeedsUser),
+    actionTool("human_review_request_create", "Human Review Request Create",
+      "Create an immediate, explicit human review request only when PI cannot decide a product, scope, or risk tradeoff. The question must say exactly what the human is approving.",
+      Type.Object({
+        acceptance_summary: textList,
+        consequences: optionalString,
+        evidence_refs: textList,
+        excluded_scope: textList,
+        issue_id: positiveID,
+        kind: Type.Optional(Type.Union([
+          Type.Literal("decision"),
+          Type.Literal("acceptance"),
+          Type.Literal("risk_acceptance")
+        ])),
+        question: requiredText,
+        recommendation: optionalString
+      }, objectOptions), actions.createHumanReviewRequest)
   ];
 }
 

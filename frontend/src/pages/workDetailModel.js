@@ -11,12 +11,14 @@ export const WORK_TIMELINE_KINDS = [
   'approval',
 ];
 
-export function workAvailableActions(status) {
+export function workAvailableActions(status, verification = null) {
   return {
     cancel: CANCELLABLE_STATUSES.has(status),
     edit: status !== 'in_progress',
     retry: RETRYABLE_STATUSES.has(status),
-    review: status === 'pending_verification',
+    review: status === 'pending_verification'
+      && verification?.owner === 'human'
+      && verification?.request?.status === 'open',
     start: STARTABLE_STATUSES.has(status),
   };
 }
