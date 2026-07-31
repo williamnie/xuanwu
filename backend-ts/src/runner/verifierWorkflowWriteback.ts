@@ -20,7 +20,7 @@ import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
 export type VerifierWorkflowWritebackResult = {
   evidence: number;
   parent_issue_id: number;
-  status: "completed" | "failed" | "not_verifier" | "not_ready" | "skipped";
+  status: "completed" | "discarded" | "not_verifier" | "not_ready" | "skipped";
 };
 
 /**
@@ -39,7 +39,7 @@ export async function writeBackVerifierWorkflowEvidence(
   if (!child || parentID === 0 || !authorizedVerifierCarrier(db, child, parentID)) {
     return { evidence: 0, parent_issue_id: 0, status: "not_verifier" };
   }
-  if (child.status !== "done" && child.status !== "pending_verification") {
+  if (child.status !== "done" && child.status !== "failed" && child.status !== "pending_verification") {
     return { evidence: 0, parent_issue_id: parentID, status: "not_ready" };
   }
   const parent = getIssue(db, parentID);
@@ -49,6 +49,9 @@ export async function writeBackVerifierWorkflowEvidence(
     || readIssueVerificationProjection(db, parent.id).owner !== "pi"
   ) {
     return { evidence: 0, parent_issue_id: parentID, status: "skipped" };
+  }
+  if (child.status === "failed") {
+    return discardVerifierCarrier(db, child, parentID, options.source);
   }
   const now = options.now ?? new Date();
   const childProjection = await projectIssueRuntimeEvidence(
@@ -65,14 +68,7 @@ export async function writeBackVerifierWorkflowEvidence(
   });
   if (review.evaluation.decision !== "passed") {
     if (child.status === "pending_verification") {
-      const error = "Verifier workflow completed without captured passing test/lint/build Evidence; PI will retry autonomously.";
-      updateIssue(db, child.id, { error, status: "failed" });
-      recordIssueEvent(db, child.id, "issue.verifier_contract_failed.v1", {
-        error,
-        parent_issue_id: parentID,
-        source: options.source ?? "verifier-workflow-writeback"
-      });
-      return { evidence: 0, parent_issue_id: parentID, status: "failed" };
+      return discardVerifierCarrier(db, child, parentID, options.source);
     }
     return { evidence: 0, parent_issue_id: parentID, status: "not_ready" };
   }
@@ -119,6 +115,22 @@ export async function writeBackVerifierWorkflowEvidence(
     parent_issue_id: parent.id,
     status: "completed"
   };
+}
+
+function discardVerifierCarrier(
+  db: RunnerDatabase,
+  child: Issue,
+  parentIssueID: number,
+  source = "verifier-workflow-writeback"
+): VerifierWorkflowWritebackResult {
+  const error = "Verifier workflow produced no captured passing test/lint/build Evidence; PI discarded this internal attempt and will retry autonomously.";
+  updateIssue(db, child.id, { error, status: "cancelled" });
+  recordIssueEvent(db, child.id, "issue.verifier_contract_failed.v1", {
+    error,
+    parent_issue_id: parentIssueID,
+    source
+  });
+  return { evidence: 0, parent_issue_id: parentIssueID, status: "discarded" };
 }
 
 function authorizedVerifierCarrier(db: RunnerDatabase, child: Issue, parentIssueID: number): boolean {

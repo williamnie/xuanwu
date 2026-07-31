@@ -48,7 +48,14 @@ export async function reconcileProviderOutcome(
       new Error(reported.reason || `executor reported ${reported.outcome}`),
       input.providerID
     );
-    const failed = getIssue(input.database, current.id);
+    let failed = getIssue(input.database, current.id);
+    if (failed && reported.outcome === "failed") {
+      const writeback = await writeBackVerifierWorkflowEvidence(input.database, current.id, {
+        now: input.now ?? new Date(),
+        source: "provider-runtime-host"
+      });
+      if (writeback.status === "discarded") failed = getIssue(input.database, current.id);
+    }
     if (failed && reported.outcome === "needs_user") notifyExecutorNeedsUser(input, failed, reported.reason);
     if (failed) publishIssueStatus(input, failed);
     return failed;

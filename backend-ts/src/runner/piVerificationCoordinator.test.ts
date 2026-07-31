@@ -142,7 +142,7 @@ describe("PI verification coordinator", () => {
 
       expect(result).toMatchObject({ issues: 1, projects: 1, started: 1 });
       expect(calls).toBe(1);
-      expect(getIssueStatus(db, child.id)).toBe("failed");
+      expect(getIssueStatus(db, child.id)).toBe("cancelled");
       expect(activityTypes(db, child.id)).toEqual([]);
     } finally {
       db.close();

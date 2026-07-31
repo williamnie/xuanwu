@@ -129,7 +129,7 @@ describe("verifier workflow Evidence writeback", () => {
     }
   });
 
-  test("fails a completed verifier carrier that produced no captured executable Evidence", async () => {
+  test("discards a completed verifier carrier that produced no captured executable Evidence", async () => {
     const db = await fixture();
     try {
       const parent = issueWithEndedRun(db, {
@@ -151,15 +151,42 @@ describe("verifier workflow Evidence writeback", () => {
       expect(result).toMatchObject({
         evidence: 0,
         parent_issue_id: parent.id,
-        status: "failed"
+        status: "discarded"
       });
       expect(getIssue(db, child.id)).toMatchObject({
-        error: expect.stringContaining("PI will retry autonomously"),
-        status: "failed"
+        error: expect.stringContaining("discarded this internal attempt"),
+        status: "cancelled"
       });
       expect(listIssueEvents(db, child.id, {
         types: ["issue.verifier_contract_failed.v1"]
       })).toHaveLength(1);
+      expect(getIssue(db, parent.id)?.status).toBe("pending_verification");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("discards a verifier-reported failure before Guardian can escalate the internal child", async () => {
+    const db = await fixture();
+    try {
+      const parent = issueWithEndedRun(db, {
+        status: "pending_verification",
+        title: "Parent awaiting retry"
+      });
+      const child = issueWithEndedRun(db, {
+        status: "failed",
+        title: `Verifier: #${parent.id}`,
+        workflow_snapshot_json: JSON.stringify({
+          agent_role: "verifier",
+          parent_issue_id: parent.id
+        })
+      });
+      authorizeVerifierCarrier(db, parent.id, child);
+
+      const result = await writeBackVerifierWorkflowEvidence(db, child.id);
+
+      expect(result.status).toBe("discarded");
+      expect(getIssue(db, child.id)?.status).toBe("cancelled");
       expect(getIssue(db, parent.id)?.status).toBe("pending_verification");
     } finally {
       db.close();
@@ -201,7 +228,7 @@ function authorizeVerifierCarrier(
 function issueWithEndedRun(
   db: RunnerDatabase,
   input: {
-    status: "done" | "pending_verification";
+    status: "done" | "failed" | "pending_verification";
     title: string;
     workflow_snapshot_json?: string;
   }
@@ -214,8 +241,8 @@ function issueWithEndedRun(
   });
   const run = createIssueRun(db, issue.id);
   db.sqlite.run(
-    "update issue_runs set status='done', ended_at=? where id=?",
-    ["2026-07-31T06:59:00Z", run.id]
+    "update issue_runs set status='done', started_at=?, ended_at=? where id=?",
+    ["2026-07-31T06:57:00Z", "2026-07-31T06:59:00Z", run.id]
   );
   return updateIssue(db, issue.id, { error: "", status: input.status });
 }

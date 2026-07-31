@@ -148,6 +148,25 @@ describe("Feishu notification queue", () => {
     }
   });
 
+  test("keeps failed internal verifier carriers out of human lifecycle notifications", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issueID = linkedFeishuIssue(db);
+      db.sqlite.run(
+        "update issues set status='failed', workflow_snapshot_json=? where id=?",
+        [JSON.stringify({ agent_role: "verifier", parent_issue_id: 815 }), issueID]
+      );
+
+      const result = queueFeishuIssueStatusNotification(db, issueID);
+      await flushAgentCommunicationTestMessages(db);
+
+      expect(result).toEqual({ queued: false, reason: "internal_verifier_workflow" });
+      expect(listSyncOutbox(db, { source: "feishu" })).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("router dispatches unlinked failed issue notifications to the default Feishu target", async () => {
     const db = await fixtureDatabase();
     const bus = new EventBus();
