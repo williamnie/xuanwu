@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { parseCodexRolloutExecEvents } from "./rolloutExecRecovery.ts";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  parseCodexRolloutExecEvents,
+  recoverCodexRolloutExecEvents
+} from "./rolloutExecRecovery.ts";
 
 describe("Codex rollout exec recovery", () => {
   test("recovers a completed unified exec command omitted by live notifications", () => {
@@ -166,6 +172,63 @@ describe("Codex rollout exec recovery", () => {
         type: "commandExecution"
       }
     });
+  });
+
+  test("finds a UUIDv7 thread rollout when thread/start omits path", async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), "codex-rollout-recovery-"));
+    const threadID = "019fb766-11a2-7011-9621-56c0c6195d5f";
+    const turnID = "019fb766-1d96-7341-b327-1c1b6401d79f";
+    const directory = join(codexHome, "sessions", "2026", "07", "31");
+    const source = [
+      row("2026-07-31T09:00:42.543Z", {
+        type: "function_call",
+        id: "fc-contract-test",
+        call_id: "call-contract-test",
+        name: "exec_command",
+        arguments: JSON.stringify({
+          cmd: "pnpm --filter @fuzhuang/api-contract test",
+          workdir: "/repo"
+        }),
+        internal_chat_message_metadata_passthrough: { turn_id: turnID }
+      }),
+      row("2026-07-31T09:00:49.966Z", {
+        type: "function_call_output",
+        call_id: "call-contract-test",
+        output: [
+          "Chunk ID: fixture",
+          "Wall time: 7.2 seconds",
+          "Process exited with code 0",
+          "Final output:",
+          "Tests 9 passed (9)"
+        ].join("\n"),
+        internal_chat_message_metadata_passthrough: { turn_id: turnID }
+      })
+    ].join("\n");
+
+    try {
+      await mkdir(directory, { recursive: true });
+      await writeFile(
+        join(directory, `rollout-2026-07-31T16-59-07-${threadID}.jsonl`),
+        source
+      );
+
+      const events = await recoverCodexRolloutExecEvents({
+        ephemeral: false,
+        id: `codex:${threadID}`,
+        provider: "codex",
+        provider_session_id: threadID,
+        sessionId: threadID
+      }, turnID, { codexHome });
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        command: "pnpm --filter @fuzhuang/api-contract test",
+        status: "completed",
+        type: "tool"
+      });
+    } finally {
+      await rm(codexHome, { force: true, recursive: true });
+    }
   });
 });
 
