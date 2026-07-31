@@ -8,9 +8,11 @@ import {
   createIssueSupervisorEvent,
   listIssueSupervisorEvents,
   listPiActions,
+  listPiGuardianAlerts,
   listPiGuardianEvents,
   upsertProjectPiPolicy
 } from "../db/repositories/pi.ts";
+import { listNotifications } from "../db/repositories/notifications.ts";
 import { recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { PiSupervisorDecisionRuntimeResult } from "../pi/issueSupervisorDecision.ts";
 import type { PiSupervisorDecisionJson } from "../pi/issueSupervisorRecovery.ts";
@@ -139,6 +141,62 @@ describe("PI issue supervisor scheduler", () => {
     }
   });
 
+  test("lets PI choose the current state-manager repair for a completed Session with an open Run", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-state-repair-project-"));
+      upsertProjectPiPolicy(db, {
+        allowed_supervisor_actions_json: ["issue.state_repair"],
+        project_id: "demo"
+      });
+      insertRunningIssue(db, {
+        issueID: 512,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-512",
+        turnID: "turn-512"
+      });
+      db.sqlite.run("update agent_sessions set status='completed' where session_key='codex:thread-512'");
+
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        runDecision: async (context) => {
+          expect(context.state_diagnostics).toEqual([
+            expect.objectContaining({
+              code: "in_progress_session_ended",
+              recommended_actions: [
+                expect.objectContaining({
+                  operation: "patch_status",
+                  patch: { status: "pending_verification" }
+                })
+              ]
+            })
+          ]);
+          return validDecision(stateRepairDecision());
+        },
+        staleAfterSeconds: 300
+      });
+
+      expect(result).toMatchObject({ decisions: 1, failed: 0, signaled: 1 });
+      expect(db.sqlite.query<{ status: string }, [number]>(
+        "select status from issues where id=?"
+      ).get(512)).toEqual({ status: "pending_verification" });
+      expect(db.sqlite.query<{ ended_at: string; status: string }, [number]>(
+        "select status, ended_at from issue_runs where issue_id=?"
+      ).get(512)).toMatchObject({ status: "done", ended_at: expect.any(String) });
+      expect(listPiActions(db, { issueId: 512 })).toContainEqual(expect.objectContaining({
+        action_type: "issue.state_repair",
+        gate_decision: "execute",
+        status: "completed"
+      }));
+      expect(listIssueSupervisorEvents(db, { issueId: 512 }).map((event) => event.event_type))
+        .toEqual(["signal", "decision", "action", "result"]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps issue lifecycle unchanged when PI output is invalid", async () => {
     const db = await fixtureDb();
     try {
@@ -228,6 +286,57 @@ describe("PI issue supervisor scheduler", () => {
       expect(cooling).toMatchObject({ decisions: 0, skipped: 1 });
       expect(due).toMatchObject({ decisions: 1, signaled: 1 });
       expect(calls).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("stops repeated invalid LLM decisions at a bounded limit and notifies the user", async () => {
+    const db = await fixtureDb();
+    let calls = 0;
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-invalid-budget-project-"));
+      insertRunningIssue(db, {
+        issueID: 513,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-513",
+        turnID: "turn-513"
+      });
+      db.sqlite.run("update agent_sessions set status='completed' where session_key='codex:thread-513'");
+      for (const createdAt of ["2026-06-10T07:48:00Z", "2026-06-10T07:54:00Z"]) {
+        createIssueSupervisorEvent(db, {
+          decision: "noop",
+          diagnosis_code: "session_no_recent_progress",
+          event_type: "decision_failed",
+          issue_id: 513,
+          project_id: "demo",
+          created_at: createdAt
+        });
+      }
+
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        runDecision: async () => {
+          calls += 1;
+          return validDecision(noopDecision());
+        },
+        staleAfterSeconds: 300
+      });
+      expect(result).toMatchObject({ decisions: 0, failed: 0, signaled: 1 });
+      expect(calls).toBe(0);
+      expect(db.sqlite.query<{ status: string }, [number]>(
+        "select status from issues where id=?"
+      ).get(513)).toEqual({ status: "failed" });
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toContainEqual(
+        expect.objectContaining({ alert_type: "supervisor_needs_user", issue_id: 513 })
+      );
+      expect(listNotifications(db, { projectID: "demo" })).toContainEqual(
+        expect.objectContaining({ event: "pi.needs_user", issue_id: 513 })
+      );
+      expect(listIssueSupervisorEvents(db, { issueId: 513 }).map((event) => event.event_type))
+        .toEqual(["decision_failed", "decision_failed", "budget_exhausted", "action", "result"]);
     } finally {
       db.close();
     }
@@ -381,8 +490,9 @@ describe("PI issue supervisor scheduler", () => {
     }
   });
 
-  test("retries a failed transient issue deterministically when PI runtime is unavailable", async () => {
+  test("asks PI instead of deterministically retrying a failed transient issue", async () => {
     const db = await fixtureDb();
+    let calls = 0;
     try {
       insertProject(db, "demo", await tempRoot("supervisor-deterministic-transient-retry-"));
       upsertProjectPiPolicy(db, {
@@ -406,20 +516,80 @@ describe("PI issue supervisor scheduler", () => {
 
       const result = await runPiIssueSupervisorSchedulerOnce({
         database: db,
+        runDecision: async () => {
+          calls += 1;
+          return validDecision(noopDecision());
+        },
         now: NOW,
         staleAfterSeconds: 300
       });
 
       expect(result).toMatchObject({ decisions: 1, failed: 0, signaled: 1 });
+      expect(calls).toBe(1);
       expect(db.sqlite.query<{ status: string }, [number]>(
         "select status from issues where id=?"
-      ).get(510)).toEqual({ status: "todo" });
+      ).get(510)).toEqual({ status: "failed" });
       expect(listIssueSupervisorEvents(db, { issueId: 510 }).map((event) => event.event_type))
         .toEqual(["signal", "decision", "action", "result"]);
       expect(listPiActions(db, { issueId: 510 })).toContainEqual(expect.objectContaining({
-        action_type: "issue.retry",
+        action_type: "issue.supervisor_decision",
         status: "completed"
       }));
+    } finally {
+      db.close();
+    }
+  });
+
+  test("re-enters PI after a failed recovery action instead of suppressing the issue forever", async () => {
+    const db = await fixtureDb();
+    let calls = 0;
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-failed-action-reentry-"));
+      insertRunningIssue(db, {
+        issueID: 511,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-511",
+        turnID: "turn-511"
+      });
+      db.sqlite.run("update agent_sessions set status='completed' where session_key='codex:thread-511'");
+      createIssueSupervisorEvent(db, {
+        action_id: "failed-retry-511",
+        action_type: "issue.retry",
+        decision: "retry_issue",
+        diagnosis_code: "session_no_recent_progress",
+        event_type: "action",
+        issue_id: 511,
+        project_id: "demo",
+        created_at: "2026-06-10T07:50:00Z"
+      });
+      createIssueSupervisorEvent(db, {
+        action_id: "failed-retry-511",
+        action_type: "issue.retry",
+        decision: "retry_issue",
+        diagnosis_code: "session_no_recent_progress",
+        event_type: "result",
+        issue_id: 511,
+        payload_json: { error: "thread not found", outcome: "failed" },
+        project_id: "demo",
+        created_at: "2026-06-10T07:50:01Z"
+      });
+
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        runDecision: async (context) => {
+          calls += 1;
+          expect(context.recovery_history.last_outcome).toBe("failed");
+          return validDecision(needsUserDecision("The retry failed and user configuration is required."));
+        },
+        staleAfterSeconds: 300
+      });
+
+      expect(result).toMatchObject({ decisions: 1, failed: 0, signaled: 1, skipped: 0 });
+      expect(calls).toBe(1);
+      expect(listIssueSupervisorEvents(db, { issueId: 511 }).map((event) => event.event_type))
+        .toEqual(["action", "result", "signal", "decision", "action", "result"]);
     } finally {
       db.close();
     }
@@ -589,6 +759,20 @@ function resumeDecision(): PiSupervisorDecisionJson {
     fallback_if_no_progress: "needs_user",
     rationale: "stream disconnected after stale threshold",
     recovery_message: "Inspect current state and continue safely.",
+    risk_level: "medium"
+  };
+}
+
+function stateRepairDecision(): PiSupervisorDecisionJson {
+  return {
+    confidence: "high",
+    decision: "repair_issue_state",
+    evidence_refs: ["issue", "latest_run", "session"],
+    expected_outcome: "the ended provider session is reconciled and the executor slot is released",
+    fallback_if_no_progress: "needs_user",
+    rationale: "The provider Session completed while the Issue and Run remained open.",
+    repair_diagnosis_code: "in_progress_session_ended",
+    repair_operation: "patch_status",
     risk_level: "medium"
   };
 }

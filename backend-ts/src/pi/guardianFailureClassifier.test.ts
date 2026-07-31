@@ -30,7 +30,6 @@ describe("Guardian failure classifier", () => {
       { diagnosisCode: "missing_user_input" },
       { diagnosisCode: "auth_required" },
       { diagnosisCode: "business_decision_required" },
-      { diagnosisCode: "provider_runtime_unavailable", message: "provider worker unavailable" },
       { diagnosisCode: "requires_human_decision", providerErrorCategory: "auth" },
       { diagnosisCode: "requires_human_decision", providerErrorCategory: "business_failure" }
     ]) {

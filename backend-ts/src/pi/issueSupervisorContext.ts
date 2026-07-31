@@ -25,6 +25,7 @@ import {
 import { providerDeferredCount, providerDeferredWindowStart } from "./providerOutageDiagnosis.ts";
 import { listIssueEventsAsync } from "../db/asyncIssueEvents.ts";
 import type { IssueEvent } from "../db/repositories/issueEvents.ts";
+import { diagnoseIssueState, type IssueStateDiagnostic } from "./issueStateManager.ts";
 
 export type IssueSupervisorContextOptions = {
   includeWorkspaceGit?: boolean;
@@ -43,6 +44,7 @@ export type IssueSupervisorRecoveryContext = {
   recent_events: RecentSupervisorEvent[];
   recovery_history: Record<string, unknown>;
   session: Record<string, unknown>;
+  state_diagnostics?: IssueStateDiagnostic[];
   workspace_snapshot: Record<string, unknown>;
 };
 
@@ -109,6 +111,12 @@ function buildIssueSupervisorRecoveryContextFromEvents(
     recoveryHistory(supervisorEvents, policy.supervisor_max_recoveries_per_issue, now),
     budget
   );
+  const stateDiagnostics = diagnoseIssueState(db, {
+    includeDoneIssues: true,
+    issueIDs: [issue.id],
+    now,
+    staleAfterMs: (options.staleAfterSeconds ?? DEFAULT_STALE_SECONDS) * 1_000
+  }).diagnostics;
   return {
     candidates: candidates({
       events: currentRunEvents,
@@ -135,6 +143,7 @@ function buildIssueSupervisorRecoveryContextFromEvents(
     recent_events: recentEvents,
     recovery_history: history,
     session: sessionContext({ session, latestRun, now, staleAfterSeconds: options.staleAfterSeconds ?? DEFAULT_STALE_SECONDS }),
+    state_diagnostics: stateDiagnostics,
     workspace_snapshot: workspaceSnapshot(project.cwd, recentEvents, options.includeWorkspaceGit !== false)
   };
 }

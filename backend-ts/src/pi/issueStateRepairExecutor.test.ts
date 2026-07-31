@@ -118,6 +118,66 @@ describe("Issue state repair executor", () => {
     }
   });
 
+  test("reconciles an open Run whose provider Session already completed", async () => {
+    const db = await openFixture();
+    try {
+      const issueID = insertIssue(db, "in_progress", "Terminal provider session");
+      db.sqlite.run(
+        "update issues set codex_thread_id=?, codex_turn_id=? where id=?",
+        ["thread-terminal", "turn-terminal", issueID]
+      );
+      insertOpenRun(db, issueID);
+      db.sqlite.run(
+        `update issue_runs set provider='codex', provider_session_id=?, provider_turn_id=? where issue_id=?`,
+        ["thread-terminal", "turn-terminal", issueID]
+      );
+      db.sqlite.run(
+        `insert into agent_sessions
+          (session_key, provider, provider_session_id, project_id, issue_id, status, raw_ref, created_at, updated_at)
+         values (?, 'codex', ?, 'demo', ?, 'completed', ?, ?, ?)`,
+        [
+          "codex:thread-terminal",
+          "thread-terminal",
+          issueID,
+          JSON.stringify({ provider_turn_id: "turn-terminal" }),
+          "2026-01-01T00:00:00Z",
+          "2026-01-01T00:10:00Z"
+        ]
+      );
+
+      const payload = recommendedRepairPayload(db, issueID, {
+        diagnosisCode: "in_progress_session_ended",
+        operation: "patch_status"
+      });
+      const result = applyIssueStateRepair(db, payload);
+
+      expect(result).toMatchObject({ status: "pending_verification" });
+      expect(openRunCount(db)).toBe(0);
+      expect(db.sqlite.query<Record<string, unknown>, [number]>(
+        "select status, ended_at, exit_reason from issue_runs where issue_id=?"
+      ).get(issueID)).toMatchObject({
+        status: "done",
+        ended_at: expect.any(String),
+        exit_reason: "state_repair:in_progress_session_ended"
+      });
+      expect(db.sqlite.query<Record<string, unknown>, [number]>(`
+        select attempt.status, attempt.terminal_source_ref
+        from run_attempts attempt join issue_runs run on run.id=attempt.issue_run_id
+        where run.issue_id=? order by attempt.sequence desc limit 1
+      `).get(issueID)).toMatchObject({
+        status: "succeeded",
+        terminal_source_ref: `issue_runs:issue-${issueID}-attempt-1`
+      });
+      expect(listIssueEvents(db, issueID).map((event) => event.type)).toEqual([
+        "issue.run_terminal_reconciled",
+        "issue.status_changed",
+        "issue.state_manager_repair"
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("does not let a legacy verifier report bypass the Evidence Policy done gate", async () => {
     const db = await openFixture();
     try {

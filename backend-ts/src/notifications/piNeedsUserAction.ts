@@ -3,6 +3,7 @@ import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import type { PiAction } from "../db/repositories/pi.ts";
+import { upsertPiGuardianAlert } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import type { EventBus } from "../events/bus.ts";
@@ -40,6 +41,19 @@ export function dispatchNeedsUserEscalation(
     provider,
     run: preflight.run,
     session: preflight.session
+  });
+  upsertPiGuardianAlert(context.database, {
+    alert_type: "supervisor_needs_user",
+    evidence_json: [
+      `issue:${issue.id}`,
+      cleanString(payload.decision_id) || `action:${action.id}`
+    ],
+    issue_id: issue.id,
+    message: userFacingMessage || rawMessage || diagnosis,
+    project_id: issue.project_id,
+    run_group_id: `needs-user:${issue.id}:${action.id}`,
+    severity: "high",
+    watchdog_seen_at: new Date().toISOString()
   });
   const published = publishPiNeedsUserNotification({
     actionID: action.id,

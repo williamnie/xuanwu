@@ -69,6 +69,10 @@ export async function retryIssueWithInterrupt(
 ): Promise<Issue> {
   const issue = issueWithLatestRun(db, mustGetIssue(db, issueID));
   if (!isOpenRunningIssue(issue)) return retryIssue(db, issueID, options);
+  if (linkedSessionIsTerminal(db, issue)) {
+    reconcileTerminalSessionForRetry(db, issue, runtime);
+    return forceRetryIssue(db, issueID, options);
+  }
   if (!shouldInterruptIssue(issue)) {
     if (hasDeferredStartupFailure(db, issue)) return requeueUnstartedIssueClaim(db, issueID);
     throw new Error("Issue 正在启动 provider session，请稍后再重试");
@@ -127,10 +131,10 @@ async function interruptLinkedIssue(
   recordInterruptEvent(db, issue.id, "issue.interrupt_requested", session, reason, runtime.bus);
   const error = await interruptProviderTurn(db, issue.id, session, reason, runtime);
   if (error) {
-    failRunInterrupt(db, lifecycleEventID(lifecycle, reason), error);
+    failRunInterrupt(db, lifecycle.lifecycle_event_id, error);
     return false;
   }
-  completeRunInterrupt(db, lifecycleEventID(lifecycle, reason));
+  completeRunInterrupt(db, lifecycle.lifecycle_event_id);
   recordInterruptEvent(db, issue.id, "issue.interrupted", session, reason, runtime.bus);
   return true;
 }
@@ -140,7 +144,7 @@ function prepareLinkedRunInterrupt(
   issue: Issue,
   session: SessionRef,
   reason: string
-): PreparedProviderMutation {
+): PreparedProviderMutation & { lifecycle_event_id: string } {
   const run = issue.latest_run;
   if (!run) throw new Error("Issue Run 不存在，无法中断");
   const attempt = db.sqlite.query<{
@@ -157,8 +161,9 @@ function prepareLinkedRunInterrupt(
   `).get(run.id);
   if (!attempt) throw new Error("Run Attempt 不存在，无法中断");
   const runID = `xw:run:issue_runs:${run.id}` as const;
-  const eventID = interruptLifecycleEventID(attempt.attempt_id, reason);
-  return prepareRunInterrupt(db, {
+  const runRevision = readRunRevision(db, runID);
+  const eventID = interruptLifecycleEventID(attempt.attempt_id, reason, runRevision, attempt.revision);
+  const prepared = prepareRunInterrupt(db, {
     attempt_id: attempt.attempt_id,
     audit: {
       actor: { id: "runner-interrupt", kind: "runner" },
@@ -173,7 +178,7 @@ function prepareLinkedRunInterrupt(
       reason
     },
     expected_attempt_revision: attempt.revision,
-    expected_revision: readRunRevision(db, runID),
+    expected_revision: runRevision,
     issue_run_id: run.id,
     provider_ref: {
       invocation_ref: attempt.provider_invocation_ref || run.id,
@@ -183,14 +188,16 @@ function prepareLinkedRunInterrupt(
     },
     run_id: runID
   });
+  return { ...prepared, lifecycle_event_id: eventID };
 }
 
-function lifecycleEventID(prepared: PreparedProviderMutation, reason: string): string {
-  return interruptLifecycleEventID(prepared.attempt_id, reason);
-}
-
-function interruptLifecycleEventID(attemptID: string, reason: string): string {
-  return `run-interrupt:${attemptID}:${reason}`;
+function interruptLifecycleEventID(
+  attemptID: string,
+  reason: string,
+  runRevision: number,
+  attemptRevision: number
+): string {
+  return `run-interrupt:${attemptID}:${reason}:r${runRevision}:a${attemptRevision}`;
 }
 
 function issueSessionRef(issue: Issue): SessionRef {
@@ -204,6 +211,45 @@ function issueSessionRef(issue: Issue): SessionRef {
     };
   }
   return sessionRef(issue.codex_thread_id, issue.codex_turn_id);
+}
+
+function linkedSessionIsTerminal(db: RunnerDatabase, issue: Issue): boolean {
+  const session = issueSessionRef(issue);
+  if (session.sessionId === "") return false;
+  const stored = getAgentSession(db, `${session.provider}:${session.sessionId}`);
+  return stored ? TERMINAL_SESSION_STATUSES.has(normalizeStatus(stored.status)) : false;
+}
+
+function reconcileTerminalSessionForRetry(
+  db: RunnerDatabase,
+  issue: Issue,
+  runtime: InterruptRuntime
+): void {
+  const session = issueSessionRef(issue);
+  const lifecycle = prepareLinkedRunInterrupt(db, issue, session, ISSUE_RETRY_REASON);
+  if (!lifecycle.completed) completeRunInterrupt(db, lifecycle.lifecycle_event_id);
+  recordInterruptEvent(
+    db,
+    issue.id,
+    "issue.interrupt_skipped_terminal",
+    session,
+    ISSUE_RETRY_REASON,
+    runtime.bus
+  );
+}
+
+const TERMINAL_SESSION_STATUSES = new Set([
+  "aborted",
+  "cancelled",
+  "completed",
+  "done",
+  "error",
+  "failed",
+  "stopped"
+]);
+
+function normalizeStatus(value: string): string {
+  return value.trim().toLowerCase().replace(/[_\s-]/g, "");
 }
 
 async function interruptProviderTurn(

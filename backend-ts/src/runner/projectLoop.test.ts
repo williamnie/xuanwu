@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
+import { listNotifications } from "../db/repositories/notifications.ts";
+import { listPiGuardianAlerts } from "../db/repositories/pi.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { projectLoopDecision, runProjectLoopOnce } from "./projectLoop.ts";
 import { isProjectLoopActive, kickAutoRunProjects, setProjectLoopMaxParallelProjects, startProjectLoop } from "./projectLoopManager.ts";
@@ -36,6 +38,70 @@ class FailingExecutionProvider extends FakeExecutionProvider {
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     this.inputs.push(input);
     throw new Error("provider failed CODEX_API_KEY=fixture-secret");
+  }
+}
+
+class NeedsUserExecutionProvider extends FakeExecutionProvider {
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
+    this.inputs.push(input);
+    input.onEvent?.({
+      provider: this.id,
+      type: "provider.message",
+      text: "已完成环境检查。\nRUNNER_OUTCOME: needs_user | 缺少部署凭证",
+      session: { provider: this.id, sessionId: `fake-session-${input.issueId}`, turnId: `fake-turn-${input.issueId}` }
+    });
+    return {
+      runId: `fake-run-${input.issueId}`,
+      session: { provider: this.id, sessionId: `fake-session-${input.issueId}`, turnId: `fake-turn-${input.issueId}` }
+    };
+  }
+}
+
+class CompletedExecutionProvider extends FakeExecutionProvider {
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
+    const result = await super.run(input);
+    input.onEvent?.({
+      provider: this.id,
+      raw: { method: "turn/completed" },
+      status: "completed",
+      type: "done",
+      session: result.session
+    });
+    return result;
+  }
+}
+
+class DeferredCompletionProvider extends FakeExecutionProvider {
+  private readonly completions = new Map<number, () => void>();
+
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
+    this.inputs.push(input);
+    const session = {
+      provider: this.id,
+      sessionId: `fake-session-${input.issueId}`,
+      turnId: `fake-turn-${input.issueId}`
+    };
+    input.onEvent?.({
+      provider: this.id,
+      status: "running",
+      type: "turn_started",
+      session
+    });
+    this.completions.set(input.issueId, () => input.onEvent?.({
+      provider: this.id,
+      raw: { method: "turn/completed" },
+      status: "completed",
+      type: "done",
+      session
+    }));
+    return { runId: `fake-run-${input.issueId}`, session };
+  }
+
+  complete(issueID: number): void {
+    const completion = this.completions.get(issueID);
+    if (!completion) throw new Error(`missing deferred completion for issue ${issueID}`);
+    this.completions.delete(issueID);
+    completion();
   }
 }
 
@@ -173,7 +239,7 @@ describe("Bun project loop claim execution", () => {
       expect(prompt).toContain("- Target outcome:");
       expect(prompt).toContain("- Required evidence:");
       expect(prompt).toContain("run the smallest directly relevant verification");
-      expect(prompt).toContain("explicitly write back the final status/outcome");
+      expect(prompt).toContain("report the final outcome with the Runner lifecycle marker");
       expect(prompt).toContain("- Constraints / non-goals:");
       expect(prompt).toContain("- Stop policy / escalation:");
       expect(prompt).toContain("same failure repeats");
@@ -215,7 +281,8 @@ describe("Bun project loop claim execution", () => {
       expect(prompt).not.toContain("## Goal Contract");
       expect(prompt).not.toContain("Deliver the requested end state");
       expect(prompt).toContain("## Runner lifecycle contract");
-      expect(prompt).toContain(`issue update --id`);
+      expect(prompt).toContain("RUNNER_OUTCOME: completed");
+      expect(prompt).not.toContain("issue update --id");
     } finally {
       db.close();
     }
@@ -293,6 +360,30 @@ describe("Bun project loop claim execution", () => {
       expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
       expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
       expect(listIssueRuns(db, second)).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("an asynchronous terminal event releases the slot and starts the next queued issue", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new DeferredCompletionProvider();
+    try {
+      insertProject(db, { id: "deferred-demo", provider: provider.id, autoRun: 1 });
+      const first = insertIssue(db, { projectId: "deferred-demo", title: "first" });
+      const second = insertIssue(db, { projectId: "deferred-demo", title: "second" });
+
+      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "deferred-demo");
+      await waitFor(() => provider.inputs.length === 1);
+      await waitFor(() => !isProjectLoopActive("deferred-demo"));
+
+      provider.complete(first);
+      await waitFor(() => provider.inputs.length === 2);
+      await waitFor(() => !isProjectLoopActive("deferred-demo"));
+
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([first, second]);
+      expect(getIssue(db, first)).toMatchObject({ status: "pending_verification" });
+      expect(getIssue(db, second)).toMatchObject({ status: "in_progress" });
     } finally {
       db.close();
     }
@@ -559,17 +650,48 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
-  test("keeps issue in progress after provider run completes", async () => {
+  test("reconciles a completed provider session and closes the Run", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
+    const provider = new CompletedExecutionProvider();
     try {
       insertProject(db, { id: "demo", provider: provider.id });
       const issueId = insertIssue(db, { projectId: "demo", title: "needs explicit status" });
 
       await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
 
-      expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress" });
-      expect(listIssueRuns(db, issueId)).toMatchObject([{ status: "in_progress", ended_at: "" }]);
+      expect(getIssue(db, issueId)).toMatchObject({ status: "pending_verification" });
+      expect(listIssueRuns(db, issueId)).toMatchObject([{
+        status: "done",
+        ended_at: expect.stringMatching(/Z$/)
+      }]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("turns an executor needs_user outcome into one alert and notification", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new NeedsUserExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      const issueId = insertIssue(db, { projectId: "demo", title: "needs credentials" });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      expect(getIssue(db, issueId)).toMatchObject({
+        status: "failed",
+        error: "缺少部署凭证"
+      });
+      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
+        status: "failed",
+        ended_at: expect.stringMatching(/Z$/)
+      });
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" }).filter((alert) => alert.issue_id === issueId)).toContainEqual(
+        expect.objectContaining({ alert_type: "executor_needs_user", issue_id: issueId })
+      );
+      expect(listNotifications(db, { projectID: "demo" }).filter((notification) => notification.issue_id === issueId)).toContainEqual(
+        expect.objectContaining({ event: "pi.needs_user", issue_id: issueId })
+      );
     } finally {
       db.close();
     }

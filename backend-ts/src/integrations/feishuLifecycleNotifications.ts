@@ -22,7 +22,8 @@ import { formatIssueStatusNotification } from "./feishuNotificationFormatters.ts
 import {
   feishuFallbackTargetForProject,
   feishuTargetForConversation,
-  feishuTargetForIssue
+  feishuTargetForIssue,
+  feishuTargetForProject
 } from "./feishuNotificationTargets.ts";
 
 export type QueueResult = { queued: boolean; reason: string };
@@ -124,7 +125,8 @@ function linkedLifecycleTarget(
     feishuTargetForConversation(db, conversationID ?? "") ??
     feishuTargetForConversation(db, getPiRunGroup(db, runGroupID)?.origin_conversation_id ?? "") ??
     feishuTargetForConversation(db, legacyEnqueueConversationID(db, issueID)) ??
-    latestLifecycleIntentTarget(db, issueID);
+    latestLifecycleIntentTarget(db, issueID) ??
+    feishuTargetForProject(db, getIssue(db, issueID)?.project_id ?? "");
 }
 
 function fallbackLifecycleTarget(issue: Issue, config: FeishuConnectorConfig | undefined) {

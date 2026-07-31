@@ -100,6 +100,29 @@ describe("Bun issue interrupt runtime", () => {
     }
   });
 
+  test("retry supersedes an open run without interrupting a terminal provider session", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new InterruptCaptureProvider({ reject: new Error("terminal session must not be interrupted") });
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo", "in_progress", "thread-completed", "turn-completed");
+      insertOpenRun(db, issueId);
+      insertAgentSession(db, issueId, "demo", "thread-completed", "completed");
+
+      const issue = await retryIssueWithInterrupt(db, issueId, {}, { providers: { codex: provider } });
+
+      expect(issue.status).toBe("todo");
+      expect(provider.interrupts).toEqual([]);
+      expect(latestRun(db, issueId)).toMatchObject({
+        status: "cancelled",
+        exit_reason: `superseded_by:xw:run:issue_runs:issue-${issueId}-attempt-2`
+      });
+      expect(eventWithType(db, "issue.interrupt_requested")).toBeUndefined();
+    } finally {
+      db.close();
+    }
+  });
+
   test("retry leaves the running issue intact when the old turn cannot be interrupted", async () => {
     const db = await openFixtureDatabase();
     const provider = new InterruptCaptureProvider({ reject: new Error("interrupt rejected") });
@@ -115,6 +138,30 @@ describe("Bun issue interrupt runtime", () => {
       expect(latestRun(db, issueId)).toMatchObject({ status: "in_progress", ended_at: "" });
       expect(eventWithType(db, "issue.interrupt_failed")?.payload).toContain("interrupt rejected");
       expect(eventWithType(db, "issue.interrupted")).toBeUndefined();
+    } finally {
+      db.close();
+    }
+  });
+
+  test("a failed interrupt can be retried with a new lifecycle revision", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new InterruptCaptureProvider({ reject: new Error("interrupt rejected") });
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo", "in_progress", "thread-retry-again", "turn-retry-again");
+      insertOpenRun(db, issueId);
+
+      await expect(retryIssueWithInterrupt(db, issueId, {}, { providers: { codex: provider } }))
+        .rejects.toThrow("旧 Session 中断失败");
+      await expect(retryIssueWithInterrupt(db, issueId, {}, { providers: { codex: provider } }))
+        .rejects.toThrow("旧 Session 中断失败");
+
+      expect(provider.interrupts).toHaveLength(2);
+      const lifecycleIDs = listEvents(db)
+        .filter((event) => event.type === "run.lifecycle.intent.v1")
+        .map((event) => JSON.parse(event.payload).event_id);
+      expect(lifecycleIDs).toHaveLength(2);
+      expect(new Set(lifecycleIDs).size).toBe(2);
     } finally {
       db.close();
     }
@@ -209,6 +256,29 @@ function insertOpenRun(db: RunnerDatabase, issueId: number): void {
     `insert into issue_runs (id, issue_id, attempt, status, started_at)
      values (?, ?, ?, ?, ?)`,
     [`issue-${issueId}-attempt-1`, issueId, 1, "in_progress", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function insertAgentSession(
+  db: RunnerDatabase,
+  issueID: number,
+  projectID: string,
+  sessionID: string,
+  status: string
+): void {
+  db.sqlite.run(
+    `insert into agent_sessions
+      (session_key, provider, provider_session_id, project_id, issue_id, status, raw_ref, created_at, updated_at)
+     values (?, 'codex', ?, ?, ?, ?, '{}', ?, ?)`,
+    [
+      `codex:${sessionID}`,
+      sessionID,
+      projectID,
+      issueID,
+      status,
+      "2026-01-01T00:00:00Z",
+      "2026-01-01T00:00:00Z"
+    ]
   );
 }
 

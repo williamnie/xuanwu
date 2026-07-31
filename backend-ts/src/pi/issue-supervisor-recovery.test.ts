@@ -69,6 +69,7 @@ describe("PI issue supervisor recovery contract", () => {
       "resume_session",
       "steer_running_turn",
       "retry_issue",
+      "repair_issue_state",
       "needs_user",
       "blocked",
       "noop"
@@ -87,12 +88,14 @@ describe("PI issue supervisor recovery contract", () => {
     expect(Object.keys(PI_SUPERVISOR_ACTION_PAYLOAD_SCHEMAS).sort()).toEqual([
       "issue.retry",
       "issue.retry_after",
+      "issue.state_repair",
       "issue.supervisor_decision",
       "needs_user.escalate",
       "session.resume_followup",
       "session.steer"
     ]);
     expect(PI_SUPERVISOR_DECISION_ACTION_TYPES.resume_session).toEqual(["session.resume_followup"]);
+    expect(PI_SUPERVISOR_DECISION_ACTION_TYPES.repair_issue_state).toEqual(["issue.state_repair"]);
     expect(PI_SUPERVISOR_DECISION_ACTION_TYPES.wait).toEqual(["issue.retry_after"]);
     expect(Value.Check(PI_SUPERVISOR_ACTION_PAYLOAD_SCHEMAS["session.resume_followup"], {
       decision_id: "decision-298-1",
@@ -136,7 +139,7 @@ describe("PI issue supervisor recovery contract", () => {
     const db = await openFixtureDatabase();
     try {
       expect(readProjectPiPolicy(db, "demo")).toMatchObject({
-        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"needs_user.escalate\"]",
+        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"issue.state_repair\",\"needs_user.escalate\"]",
         supervisor_cooldown_seconds: 300,
         supervisor_max_recoveries_per_issue: 2,
         supervisor_max_recoveries_per_project_per_hour: 10,
@@ -257,7 +260,7 @@ describe("PI issue supervisor recovery contract", () => {
           supervisor_rate_limit_wait_policy
         from project_pi_policies where project_id='legacy-demo'
       `).get()).toEqual({
-        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"needs_user.escalate\"]",
+        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"issue.state_repair\",\"needs_user.escalate\"]",
         supervisor_cooldown_seconds: 300,
         supervisor_max_recoveries_per_issue: 2,
         supervisor_max_recoveries_per_project_per_hour: 10,

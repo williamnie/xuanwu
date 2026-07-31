@@ -80,11 +80,33 @@ function actionPayload(input: IssueSupervisorActionInput, actionType: string): R
   if (actionType === "issue.retry_after") {
     return { ...preconditionPayload(input), reason: primaryDiagnosis(input.context), retry_after_at: waitUntil(input) };
   }
+  if (actionType === "issue.state_repair") return stateRepairPayload(input);
   if (actionType === "issue.supervisor_decision") return { ...preconditionPayload(input), decision: input.decision };
   if (actionType === "needs_user.escalate") {
     return { ...preconditionPayload(input), message: requiredRecoveryMessage(input) || input.decision.rationale };
   }
   return { ...preconditionPayload(input), reason: input.decision.rationale };
+}
+
+function stateRepairPayload(input: IssueSupervisorActionInput): Record<string, unknown> {
+  const diagnosisCode = clean(input.decision.repair_diagnosis_code);
+  const operation = clean(input.decision.repair_operation);
+  const diagnostic = (input.context.state_diagnostics ?? [])
+    .find((item) => item.code === diagnosisCode);
+  const action = diagnostic?.recommended_actions
+    .find((item) => item.operation === operation);
+  if (!diagnostic || !action) {
+    throw new Error("Supervisor state repair decision is no longer current");
+  }
+  return {
+    ...action,
+    ...preconditionPayload(input),
+    diagnosis_code: diagnostic.code,
+    evidence: diagnostic.evidence,
+    evidence_refs: action.evidence_refs,
+    operation: action.operation,
+    rationale: input.decision.rationale
+  };
 }
 
 function preconditionPayload(input: IssueSupervisorActionInput): Record<string, unknown> {
@@ -133,6 +155,7 @@ async function executeIfApproved(
     }, executing);
     const completed = updatePiAction(input.database, action.id, { result_json: JSON.stringify(result ?? null), status: "completed" });
     recordPiActionAuditEvent(input.database, completed, "execution_result", { actor: "executor", result });
+    recordLocallyCompletedResult(input, completed, result);
     return actionSummary(completed);
   } catch (error) {
     const failed = updatePiAction(input.database, action.id, { result_json: JSON.stringify({ error: safeError(error) }), status: "failed" });
@@ -142,12 +165,28 @@ async function executeIfApproved(
   }
 }
 
+function recordLocallyCompletedResult(
+  input: IssueSupervisorActionInput,
+  action: PiAction,
+  result: unknown
+): void {
+  if (action.action_type === "issue.state_repair") {
+    recordResultEvent(input, action, { outcome: "progress", result: result ?? null });
+  } else if (action.action_type === "needs_user.escalate") {
+    recordResultEvent(input, action, { outcome: "needs_user", result: result ?? null });
+  }
+}
+
 function supervisorGatePolicy(input: IssueSupervisorActionInput): PiGatePolicy {
   const configured = stringArray(input.context.policy.allowed_actions);
-  const allowed = [...new Set([...configured, "issue.supervisor_decision"])];
+  const allowed = [...new Set([
+    ...configured,
+    "issue.supervisor_decision",
+    "needs_user.escalate"
+  ])];
   const autonomous = clean(input.context.policy.mode) === "autonomous";
   const allowedActions = autonomous && configured.length === 0
-    ? ["issue.supervisor_decision"]
+    ? ["issue.supervisor_decision", "needs_user.escalate"]
     : allowed;
   return compact({
     allowed_actions: allowedActions,

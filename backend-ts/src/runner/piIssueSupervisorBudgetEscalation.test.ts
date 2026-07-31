@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 describe("PI issue supervisor budget exhausted escalation", () => {
-  test("writes reportable needs-user signal without planning recovery", async () => {
+  test("applies a bounded needs-user boundary when recovery budget is exhausted", async () => {
     const db = await fixtureDb();
     try {
       insertProject(db, "demo", await tempRoot("supervisor-budget-project-"));
@@ -38,8 +38,8 @@ describe("PI issue supervisor budget exhausted escalation", () => {
       const payload = JSON.parse(events[0]?.payload_json ?? "{}");
       const guardian = listPiGuardianEvents(db, { projectId: "demo" })[0];
 
-      expect(result).toMatchObject({ decisions: 0, failed: 0, signaled: 1, skipped: 1 });
-      expect(events).toHaveLength(1);
+      expect(result).toMatchObject({ decisions: 0, failed: 0, signaled: 1, skipped: 0 });
+      expect(events.map((event) => event.event_type)).toEqual(["budget_exhausted", "action", "result"]);
       expect(events[0]).toMatchObject({
         action_type: "needs_user.escalate",
         decision: "needs_user",
@@ -69,7 +69,9 @@ describe("PI issue supervisor budget exhausted escalation", () => {
 
       runGuardianDecisionOrchestratorOnce(db, { now: NOW });
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-10T08:00:31Z") });
-      expect(listPiActions(db, { issueId: 505 })).toEqual([]);
+      expect(listPiActions(db, { issueId: 505 })).toContainEqual(
+        expect.objectContaining({ action_type: "needs_user.escalate", status: "completed" })
+      );
       expect(listPiRecoveryAttempts(db, { issueId: 505 })).toHaveLength(2);
 
       const second = await runPiIssueSupervisorSchedulerOnce({
@@ -79,7 +81,7 @@ describe("PI issue supervisor budget exhausted escalation", () => {
       });
       expect(second).toMatchObject({ signaled: 1, skipped: 1 });
       expect(listIssueSupervisorEvents(db, { issueId: 505 }).map((event) => event.event_type))
-        .toEqual(["budget_exhausted"]);
+        .toEqual(["budget_exhausted", "action", "result"]);
     } finally {
       db.close();
     }

@@ -45,6 +45,7 @@ function executeRepair(
   if (operation === "retry") return retryIssue(db, issueID);
   const patch = objectPayload(payload.patch);
   if (operation === "move_status" || operation === "patch_status") {
+    reconcileTerminalRuntime(db, issueID, payload, patch);
     if (cleanString(patch.status) === "done") {
       const now = new Date().toISOString();
       return applyIssueCompletionGate(db, issueID, {
@@ -96,7 +97,7 @@ function assertSafeTerminalRepair(
 ): void {
   const nextStatus = cleanString(objectPayload(payload.patch).status);
   if (!["move_status", "patch_status"].includes(operation) || !terminalStatus(nextStatus)) return;
-  if (hasActiveRuntime(before)) throw new Error("issue.state_repair cannot set terminal status while runtime is active");
+  if (hasActiveRuntime(before, payload)) throw new Error("issue.state_repair cannot set terminal status while runtime is active");
   if (nextStatus === "done" && !allowsVerifiedDone(payload)) {
     throw new Error("issue.state_repair cannot mark done without deterministic verification evidence");
   }
@@ -152,9 +153,12 @@ function attemptKey(
   ].join(":");
 }
 
-function hasActiveRuntime(snapshot: IssueStateSnapshot): boolean {
-  return snapshot.run?.ended_at === "" ||
-    ["active", "running", "in_progress", "inprogress", "busy"].includes(normalize(snapshot.session?.status ?? ""));
+function hasActiveRuntime(snapshot: IssueStateSnapshot, payload: Record<string, unknown>): boolean {
+  const sessionStatus = normalize(snapshot.session?.status ?? "");
+  const terminalMismatch = cleanString(payload.diagnosis_code) === "in_progress_session_ended" &&
+    TERMINAL_SESSION_STATUSES.has(sessionStatus);
+  if (terminalMismatch) return false;
+  return snapshot.run?.ended_at === "" || ACTIVE_SESSION_STATUSES.has(sessionStatus);
 }
 
 function allowsVerifiedDone(payload: Record<string, unknown>): boolean {
@@ -164,6 +168,56 @@ function allowsVerifiedDone(payload: Record<string, unknown>): boolean {
 function terminalStatus(status: string): boolean {
   return status === "done" || status === "failed" || status === "cancelled" || status === "pending_verification";
 }
+
+function reconcileTerminalRuntime(
+  db: RunnerDatabase,
+  issueID: number,
+  payload: Record<string, unknown>,
+  patch: Record<string, unknown>
+): void {
+  if (cleanString(payload.diagnosis_code) !== "in_progress_session_ended") return;
+  const status = cleanString(patch.status);
+  if (!terminalStatus(status)) return;
+  const before = currentIssueStateSnapshot(db, issueID);
+  if (before.run?.ended_at !== "") return;
+  if (!TERMINAL_SESSION_STATUSES.has(normalize(before.session?.status ?? ""))) {
+    throw new Error("issue.state_repair terminal-session diagnosis is no longer current");
+  }
+  const timestamp = new Date().toISOString();
+  const failed = status === "failed";
+  const runStatus = failed ? "failed" : "done";
+  const reason = `state_repair:${cleanString(payload.diagnosis_code)}`;
+  db.sqlite.run(`update issue_runs set status=?, ended_at=?, exit_reason=?,
+    error=case when ?=1 then ? else '' end where id=? and ended_at=''`, [
+    runStatus,
+    timestamp,
+    reason,
+    failed ? 1 : 0,
+    cleanString(patch.error),
+    before.run?.id ?? ""
+  ]);
+  db.sqlite.run(`update run_attempts set status=?, legacy_status=?, ended_at=?,
+    terminal_reason=?, terminal_source_ref=?, revision=revision+1, updated_at=?
+    where issue_run_id=? and status not in ('succeeded','failed','interrupted','cancelled','superseded')`, [
+    failed ? "failed" : "succeeded",
+    runStatus,
+    timestamp,
+    "provider session reached a terminal state before Runner lifecycle callback",
+    `issue-state-repair:${issueID}`,
+    timestamp,
+    before.run?.id ?? ""
+  ]);
+  recordIssueEvent(db, issueID, "issue.run_terminal_reconciled", {
+    diagnosis_code: cleanString(payload.diagnosis_code),
+    issue_run_id: before.run?.id ?? "",
+    provider_session_id: before.session?.provider_session_id ?? "",
+    provider_session_status: before.session?.status ?? "",
+    run_status: runStatus
+  });
+}
+
+const ACTIVE_SESSION_STATUSES = new Set(["active", "running", "inprogress", "busy"]);
+const TERMINAL_SESSION_STATUSES = new Set(["aborted", "cancelled", "completed", "done", "error", "failed", "stopped"]);
 
 function objectPayload(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};

@@ -25,6 +25,7 @@ export type PiRecoveryBudgetDecision = {
   issue_limit: number;
   issue_window_started_at: string;
   last_action_at: string;
+  last_attempt_error?: string;
   last_action_type: string;
   last_attempt_id: string;
   last_attempt_status: string;
@@ -106,6 +107,7 @@ export function applyRecoveryBudgetToHistory(
     budget_status: budget.status,
     budget_window_started_at: budget.issue_window_started_at,
     last_action_at: budget.last_action_at,
+    last_action_error: budget.last_attempt_error,
     last_action_status: budget.last_attempt_status,
     last_action_type: budget.last_action_type,
     last_recovery_attempt_id: budget.last_attempt_id,
@@ -176,6 +178,7 @@ function baseDecision(state: {
     issue_limit: state.issueLimit,
     issue_window_started_at: state.issueSince,
     last_action_at: "",
+    last_attempt_error: "",
     last_action_type: "",
     last_attempt_id: "",
     last_attempt_status: "",
@@ -208,6 +211,7 @@ function withLastAttempt(
   return {
     ...base,
     last_action_at: attempt?.created_at ?? "",
+    last_attempt_error: attempt?.error ?? "",
     last_action_type: attempt?.action_type ?? "",
     last_attempt_id: attempt?.id ?? "",
     last_attempt_status: attempt?.status ?? ""

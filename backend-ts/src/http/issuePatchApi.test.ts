@@ -78,7 +78,7 @@ describe("Bun issue patch API", () => {
     }
   });
 
-  test("allows runner completion after a trusted current-run test result", async () => {
+  test("keeps runner completion pending when test Evidence lacks attributable delivery files", async () => {
     const database = await openFixtureDatabase();
     try {
       const repository = dirtyRepository(database);
@@ -92,24 +92,25 @@ describe("Bun issue patch API", () => {
       const outcome = JSON.parse(events.find((event) => event.type === "issue.verification_gate_outcome.v1")?.payload ?? "{}") as Record<string, unknown>;
 
       expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ id: issueId, status: "done", error: "" });
+      expect(await response.json()).toMatchObject({
+        id: issueId,
+        status: "pending_verification",
+        error: expect.stringContaining("Verification pending")
+      });
       expect(events.map((event) => event.type)).toEqual([
         "issue.log",
         "evidence.recorded.v1",
-        "evidence.recorded.v1",
         "issue.verification_gate_intent.v1",
-        "handoff.prepared.v1",
-        "issue.status_changed",
         "issue.status_changed",
         "issue.verification_gate_outcome.v1",
         "issue.verification_report"
       ]);
       expect(outcome).toMatchObject({
-        evaluation: { decision: "passed", satisfied: true },
-        handoff_gap: null,
-        handoff_id: expect.stringMatching(/^xw:handoff:derived:/),
-        target_status: "done",
-        transition_path: ["in_progress->pending_verification", "pending_verification->done"]
+        evaluation: { decision: "pending", satisfied: false },
+        handoff_gap: expect.stringContaining("attributable changed files"),
+        handoff_id: null,
+        target_status: "pending_verification",
+        transition_path: ["in_progress->pending_verification"]
       });
       expect(latestRun(database, issueId)).toMatchObject({
         status: "pending_verification",
@@ -121,25 +122,13 @@ describe("Bun issue patch API", () => {
       ));
       expect(handoffs.status).toBe(200);
       const handoffList = await handoffs.json() as { items: Array<{ id: string }> };
-      expect(handoffList.items).toHaveLength(1);
-      const detail = await createDefaultRouter({ database }).handle(new Request(
-        `${BASE_URL}/api/handoffs/${encodeURIComponent(handoffList.items[0]!.id)}`
-      ));
-      expect(detail.status).toBe(200);
-      expect(await detail.json()).toMatchObject({ handoff: {
-        evidence_ids: expect.arrayContaining([
-          expect.stringMatching(/^xw:evidence:issue_events:/),
-          expect.stringMatching(/^xw:evidence:git:/)
-        ]),
-        run_ids: [`xw:run:issue_runs:issue-${issueId}-attempt-1`],
-        status: "ready",
-        work_id: `xw:work:issues:${issueId}`
-      } });
+      expect(handoffList.items).toEqual([]);
 
       const eventCount = events.length;
       const replay = await patchIssue(database, issueId, { status: "done", error: "" });
       expect(replay.status).toBe(200);
-      expect(listEvents(database)).toHaveLength(eventCount);
+      expect(await replay.json()).toMatchObject({ status: "pending_verification" });
+      expect(listEvents(database)).toHaveLength(eventCount + 3);
     } finally {
       database.close();
     }

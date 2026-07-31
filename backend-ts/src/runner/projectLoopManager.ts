@@ -108,7 +108,13 @@ function shouldContinue(runtime: ProjectLoopRuntime, projectID: string, forceOnc
 }
 
 function loopInput(runtime: ProjectLoopRuntime, projectID: string): ProjectLoopInput {
-  return { bus: runtime.bus, database: runtime.database, projectId: projectID, providers: runtime.providers ?? {} };
+  return {
+    bus: runtime.bus,
+    database: runtime.database,
+    onProjectSlotReleased: () => kickAutoRunProjects(runtime),
+    projectId: projectID,
+    providers: runtime.providers ?? {}
+  };
 }
 
 function enqueueProject(projectID: string): void {

@@ -52,6 +52,7 @@ const DEFAULT_SUPERVISOR_ACTIONS = [
   "session.resume_followup",
   "issue.retry_after",
   "issue.retry",
+  "issue.state_repair",
   "needs_user.escalate"
 ];
 const ACTION_ID_RE = /^[a-z0-9_.:-]+$/;

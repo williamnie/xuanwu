@@ -110,17 +110,17 @@ function inProgressDiagnostics(
   now: Date
 ): IssueStateDiagnostic[] {
   const session = sessions[0];
-  if (runEnded(latestRun) || terminalSession(session)) return [inProgressEnded(issue, latestRun, session, events)];
+  if (runEnded(latestRun) || terminalSession(session)) return [inProgressEnded(issue, latestRun, session)];
   if (staleIssue(issue, latestRun, session, options, now)) return [staleInProgress(issue, latestRun, session, now)];
   return [];
 }
 
-function inProgressEnded(issue: Issue, run: IssueRun | undefined, session: AgentSession | undefined, events: IssueEvent[]): IssueStateDiagnostic {
+function inProgressEnded(issue: Issue, run: IssueRun | undefined, session: AgentSession | undefined): IssueStateDiagnostic {
   const evidence = compact([issueEvidence(issue, "issue still in_progress"), runEvidence(run), sessionEvidence(session)]);
   const failed = isFailureStatus(run?.status) || isFailureStatus(session?.status) || cleanString(run?.error) !== "";
   const patch: Record<string, string> = failed
     ? { error: run?.error || "session ended with failure", status: "failed" }
-    : { status: hasVerificationEvidence(issue, run, events) ? "done" : "pending_verification" };
+    : { status: "pending_verification" };
   return diagnostic(issue, "in_progress_session_ended", "repair", evidence, [
     action(issue, "patch_status", evidence, "Align issue status with ended runtime session.", patch, undefined, issueStateSnapshot(issue, run, session))
   ]);
@@ -267,9 +267,13 @@ function todoSuggestedOperation(db: RunnerDatabase, issue: Issue): IssueStateSug
 }
 function openRun(run: IssueRun): boolean { return run.ended_at === ""; }
 function runEnded(run: IssueRun | undefined): boolean { return Boolean(run?.ended_at); }
-function terminalSession(session: AgentSession | undefined): boolean { return ["completed", "done", "failed", "error"].includes(normalize(session?.status ?? "")); }
+function terminalSession(session: AgentSession | undefined): boolean {
+  return ["aborted", "cancelled", "completed", "done", "error", "failed", "stopped"].includes(normalize(session?.status ?? ""));
+}
 function activeSession(session: AgentSession | undefined): boolean { return ["active", "running", "inprogress", "busy"].includes(normalize(session?.status ?? "")); }
-function isFailureStatus(value: string | undefined): boolean { return ["failed", "error", "failure"].includes(normalize(value ?? "")); }
+function isFailureStatus(value: string | undefined): boolean {
+  return ["aborted", "cancelled", "error", "failed", "failure", "stopped"].includes(normalize(value ?? ""));
+}
 function parseTime(value: string): number { const time = Date.parse(value); return Number.isFinite(time) ? time : Number.POSITIVE_INFINITY; }
 function finiteTime(value: number, fallback: number): number { return Number.isFinite(value) ? value : fallback; }
 function duration(ms: number): string { const minutes = Math.max(0, Math.round(ms / 60_000)); return minutes < 120 ? `${minutes}m` : `${Math.round(minutes / 60)}h`; }

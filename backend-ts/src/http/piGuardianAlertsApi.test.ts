@@ -80,9 +80,9 @@ describe("PI guardian alerts API", () => {
         id: "alert-detail",
         presentation: {
           component: "Supervisor 调度器",
-          handling: "user_action_required",
-          requires_user: true,
-          user_action: expect.stringContaining("Core 服务")
+          handling: "pi_handling",
+          requires_user: false,
+          user_action: expect.stringContaining("当前无需操作")
         }
       });
     } finally {

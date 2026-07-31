@@ -54,6 +54,14 @@ export function listExternalLinksByIssue(db: RunnerDatabase, issueID: number): E
   ).all(issueID).map(mapExternalLink);
 }
 
+export function listExternalLinksByProject(db: RunnerDatabase, projectID: string): ExternalLinkRecord[] {
+  const id = cleanString(projectID);
+  if (id === "") return [];
+  return db.sqlite.query<Record<string, unknown>, [string]>(
+    `select ${COLUMNS} from external_links where project_id=? order by created_at desc, id desc`
+  ).all(id).map(mapExternalLink);
+}
+
 export function listExternalLinksByExternal(
   db: RunnerDatabase,
   filter: ExternalLinkExternalFilter = {}

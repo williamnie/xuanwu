@@ -8,6 +8,7 @@ export const PI_SUPERVISOR_DECISIONS = [
   "resume_session",
   "steer_running_turn",
   "retry_issue",
+  "repair_issue_state",
   "needs_user",
   "blocked",
   "noop"
@@ -49,6 +50,8 @@ export const PI_SUPERVISOR_DECISION_JSON_SCHEMA = Type.Object({
   expected_outcome: Type.String({ minLength: 1 }),
   fallback_if_no_progress: fallbackEnum,
   rationale: Type.String({ minLength: 1 }),
+  repair_diagnosis_code: optionalText,
+  repair_operation: optionalText,
   recovery_message: optionalText,
   risk_level: riskEnum,
   wait_until: optionalText
@@ -73,6 +76,16 @@ export const PI_SUPERVISOR_ACTION_PAYLOAD_SCHEMAS = {
     source_event_id: Type.Optional(positiveInteger),
     ...executionPreconditions
   }, { additionalProperties: false }),
+  "issue.state_repair": Type.Object({
+    decision_id: Type.String({ minLength: 1 }),
+    diagnosis_code: Type.String({ minLength: 1 }),
+    evidence_refs: stringArray,
+    expected_state: Type.Record(Type.String(), Type.Unknown()),
+    issue_id: positiveInteger,
+    operation: Type.String({ minLength: 1 }),
+    patch: Type.Optional(Type.Record(Type.String(), Type.String())),
+    rationale: Type.String({ minLength: 1 })
+  }, { additionalProperties: true }),
   "issue.supervisor_decision": Type.Object({
     decision: PI_SUPERVISOR_DECISION_JSON_SCHEMA,
     issue_id: positiveInteger,
@@ -112,6 +125,7 @@ export const PI_SUPERVISOR_DECISION_ACTION_TYPES: Record<PiSupervisorDecision, s
   blocked: ["needs_user.escalate"],
   needs_user: ["needs_user.escalate"],
   noop: ["issue.supervisor_decision"],
+  repair_issue_state: ["issue.state_repair"],
   resume_session: ["session.resume_followup"],
   retry_issue: ["issue.retry"],
   steer_running_turn: ["session.steer"],

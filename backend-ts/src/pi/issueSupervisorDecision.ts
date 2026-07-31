@@ -14,10 +14,6 @@ import {
   type DecisionFailure
 } from "./issueSupervisorDecisionFailure.ts";
 import type { IssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
-import {
-  isAutomaticRecoveryBlockedDiagnosis,
-  isTransientRecoveryDiagnosis
-} from "./recoveryDiagnosis.ts";
 import { appLanguage, type AppLanguage } from "../i18n/language.ts";
 
 export type PiSupervisorDecisionRuntimeInput = {
@@ -47,7 +43,6 @@ const SUPERVISOR_TOOL_NAMES = [
   "ls"
 ];
 
-const HARD_OUTAGE_DIAGNOSES = new Set(["session_recovery_exhausted", "recovery_budget_exhausted"]);
 const SUPERVISOR_PROMPT_TIMEOUT_MS = 75_000;
 
 export async function runPiSupervisorDecision(
@@ -119,8 +114,8 @@ function decisionPrompt(context: IssueSupervisorRecoveryContext, now: Date, lang
     language === "zh-CN"
       ? "所有自然语言文本字段（rationale、recovery_message、expected_outcome）必须使用简体中文；schema key 和枚举值保持英文。"
       : "All natural-language text fields (rationale, recovery_message, expected_outcome) must be in English; keep schema keys and enum values in English.",
-    "Schema fields: decision, confidence, rationale, recovery_message, wait_until, risk_level, evidence_refs, expected_outcome, fallback_if_no_progress.",
-    "Allowed decisions: wait, resume_session, steer_running_turn, retry_issue, needs_user, blocked, noop.",
+    "Schema fields: decision, confidence, rationale, recovery_message, wait_until, repair_diagnosis_code, repair_operation, risk_level, evidence_refs, expected_outcome, fallback_if_no_progress.",
+    "Allowed decisions: wait, resume_session, steer_running_turn, retry_issue, repair_issue_state, needs_user, blocked, noop.",
     "Allowed confidence and risk_level values: low, medium, high. Do not return numeric confidence.",
     "Allowed fallback_if_no_progress values: needs_user, retry_issue, blocked. Do not put explanatory prose in this field.",
     "Omit optional recovery_message or wait_until when unused; never return null.",
@@ -129,10 +124,12 @@ function decisionPrompt(context: IssueSupervisorRecoveryContext, now: Date, lang
     "- Check current issue/session/project state before recommending recovery.",
     "- Avoid duplicate operations and repeated recovery loops.",
     "- Respect provider retry-after windows; do not resume before a future wait_until.",
-    "- 401/auth/permission/quota/business failures require needs_user or blocked, not automatic resume.",
-    "- Provider timeouts, transport failures, session_no_recent_progress, and provider_runtime_unavailable are transient while recovery budget remains: respect retry-after, wait, resume a live session, or retry the issue on a fresh provider process.",
+    "- Diagnose from the supplied facts and evidence. Classification hints are observations, not mandatory action mappings.",
+    "- 401/auth/permission/quota/business failures usually require needs_user or blocked, but explain the evidence behind the decision.",
+    "- Provider timeouts, transport failures, session_no_recent_progress, and provider_runtime_unavailable may be recoverable. Choose wait, resume, retry, needs_user, blocked, or noop from the actual evidence and remaining budget.",
     "- A missing provider session cannot be resumed; choose retry_issue after any retry-after window instead.",
-    "- Only auth/permission/quota/business failures or session/recovery budget exhaustion may choose needs_user or blocked.",
+    "- Choose repair_issue_state only for a current state_diagnostics recommended action, and copy its code to repair_diagnosis_code and operation to repair_operation.",
+    "- You may choose needs_user or blocked whenever the evidence shows automatic recovery is impossible, unsafe, repeatedly failing, or requires user configuration/input.",
     "- Do not bypass executor completion contract: executor must still verify, commit if required, and update issue final status.",
     "- Generate recovery_message from this context; do not use a fixed generic 'continue' template.",
     `Current time: ${now.toISOString()}`,
@@ -180,7 +177,7 @@ function normalizeDecisionObject(input: Record<string, unknown>): Record<string,
     const confidence = normalized.confidence > 1 ? normalized.confidence / 100 : normalized.confidence;
     normalized.confidence = confidence >= 0.75 ? "high" : confidence >= 0.4 ? "medium" : "low";
   }
-  for (const key of ["recovery_message", "wait_until"] as const) {
+  for (const key of ["recovery_message", "wait_until", "repair_diagnosis_code", "repair_operation"] as const) {
     if (normalized[key] === null) delete normalized[key];
   }
   const fallback = cleanString(normalized.fallback_if_no_progress);
@@ -218,10 +215,6 @@ function semanticDecisionError(
   now: Date
 ): string {
   const decisionType = cleanString(decision.decision);
-  const blockedReason = deterministicNeedsUserReason(context);
-  if (blockedReason && !["needs_user", "blocked"].includes(decisionType)) {
-    return blockedReason;
-  }
   if (futureRetryAfter(context, now) && !["wait", "needs_user", "blocked", "noop"].includes(decisionType)) {
     return "supervisor decision ignored a future provider retry-after window";
   }
@@ -229,10 +222,8 @@ function semanticDecisionError(
     cleanString(context.session.provider_session_id) === "") {
     return "session recovery decision requires an existing provider session; retry_issue is required for a fresh provider process";
   }
-  if (isTransientRecoveryDiagnosis(primaryDiagnosis(context)) &&
-    ["needs_user", "blocked"].includes(decisionType) &&
-    !hardOutageDiagnosis(context)) {
-    return "transient provider/session diagnosis must use wait, resume_session, retry_issue, or noop while recovery budget remains";
+  if (decisionType === "repair_issue_state" && !matchingStateRepair(context, decision)) {
+    return "repair_issue_state requires a current state_diagnostics recommended action";
   }
   if (decisionType === "wait" && cleanString(decision.wait_until) === "") {
     return "wait decision requires wait_until";
@@ -242,6 +233,19 @@ function semanticDecisionError(
     return "session recovery decision requires recovery_message";
   }
   return "";
+}
+
+function matchingStateRepair(
+  context: IssueSupervisorRecoveryContext,
+  decision: PiSupervisorDecisionJson
+): boolean {
+  const diagnosisCode = cleanString(decision.repair_diagnosis_code);
+  const operation = cleanString(decision.repair_operation);
+  if (diagnosisCode === "" || operation === "") return false;
+  return (context.state_diagnostics ?? []).some((diagnostic) =>
+    diagnostic.code === diagnosisCode &&
+    diagnostic.recommended_actions.some((action) => action.operation === operation)
+  );
 }
 
 function recordDecisionSuccess(
@@ -322,29 +326,6 @@ function primaryDiagnosis(context: IssueSupervisorRecoveryContext): string {
 
 function providerCategory(context: IssueSupervisorRecoveryContext): string {
   return cleanString(context.provider_error?.category);
-}
-
-function deterministicNeedsUserReason(context: IssueSupervisorRecoveryContext): string {
-  const hardOutage = hardOutageDiagnosis(context);
-  if (hardOutage) {
-    return `supervisor decision attempted automatic recovery for provider runtime unavailable or exhausted recovery diagnosis (${hardOutage}); Supervisor must choose needs_user or blocked`;
-  }
-  if (isAutomaticRecoveryBlockedDiagnosis(primaryDiagnosis(context)) ||
-    ["auth", "permission", "quota", "business_failure"].includes(providerCategory(context))) {
-    return "supervisor decision attempted automatic recovery for a deterministic needs_context diagnosis or human-only provider failure";
-  }
-  return "";
-}
-
-function hardOutageDiagnosis(context: IssueSupervisorRecoveryContext): string {
-  return allDiagnosisCodes(context).find((code) => HARD_OUTAGE_DIAGNOSES.has(code)) ?? "";
-}
-
-function allDiagnosisCodes(context: IssueSupervisorRecoveryContext): string[] {
-  return [
-    ...context.candidates.map((candidate) => cleanString(candidate.diagnosis_code)),
-    cleanString(context.provider_error?.diagnosis_code)
-  ].filter((code) => code !== "");
 }
 
 function futureRetryAfter(context: IssueSupervisorRecoveryContext, now: Date): boolean {

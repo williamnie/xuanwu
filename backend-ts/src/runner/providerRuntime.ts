@@ -1,6 +1,7 @@
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
   hydrateStoredIssueLogPayload,
+  recordIssueEvent,
   recordIssueLogEvent,
   RUNTIME_EVIDENCE_CORRELATION_CONTRACT,
   type RuntimeEvidenceCorrelation
@@ -16,6 +17,7 @@ import type {
   ExecutorProvider,
   ExecutorProviderId,
   ProviderEvent,
+  ProviderRecoveryInput,
   ProviderRunInput,
   ProviderRunResult,
   SessionRef
@@ -27,6 +29,7 @@ import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
 import { syncProviderApprovalRequest } from "./providerApprovalRequests.ts";
 import { signalProviderTerminalEvent } from "./providerTerminalSignals.ts";
 import { createIssueLogPersistence, type IssueLogMode } from "./issueLogPersistence.ts";
+import { parseProviderOutcomeMarker, reconcileProviderOutcome } from "./providerOutcome.ts";
 
 export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   agentProfileId?: string;
@@ -35,11 +38,13 @@ export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   capabilitySummary?: string;
   database?: RunnerDatabase;
   onLog?: ProviderRunInput["onEvent"];
+  onProjectSlotReleased?: (projectID: string) => void;
   onRunComplete?: (output: ProviderRuntimeComplete) => void;
   onRunStart?: (input: ProviderRuntimeStart) => void;
   onRuntimeEvent?: ProviderRunInput["onEvent"];
   selectionReason?: string;
 };
+export type RunnerIssueRecoveryInput = RunnerIssueExecutionInput & { session: SessionRef };
 
 export type ProviderRuntimeStart = {
   issueId: number;
@@ -98,6 +103,43 @@ export async function runIssueWithProvider(
   return result;
 }
 
+export async function recoverIssueWithProvider(
+  provider: Pick<ExecutorProvider, "capabilities" | "id" | "recover">,
+  input: RunnerIssueRecoveryInput
+): Promise<ProviderRunResult> {
+  if (!provider.capabilities.includes("resume_session") || !provider.recover) {
+    throw new Error('executor provider missing capability "resume_session"');
+  }
+  const providerID = provider.id;
+  const activeRun = input.database ? ensureOpenIssueRun(input.database, input.issueId) : undefined;
+  const activeRunID = activeRun?.id ?? openIssueRunID(input.database, input.issueId);
+  if (input.database) {
+    updateIssueRuntime(input.database, input.issueId, {
+      agent_profile_id: input.agentProfileId,
+      capability_summary: input.capabilitySummary,
+      issue_run_id: activeRunID,
+      metadata: runtimeMetadata(input, { source: "provider_recovery_start" }),
+      provider: providerID,
+      provider_session_id: input.session.sessionId,
+      provider_turn_id: input.session.turnId ?? "",
+      selection_reason: input.selectionReason
+    });
+  }
+  const eventSink = providerEventSink(input, activeRunID, activeRun?.attempt ?? 0);
+  let result: ProviderRunResult;
+  try {
+    result = await provider.recover(providerRecoveryInput(input, eventSink.push));
+  } catch (error) {
+    if (!eventSink.hasFailure()) eventSink.push(providerRunErrorEvent(providerID, error));
+    throw error;
+  } finally {
+    await eventSink.flush();
+    resetDebugIssueLogMode(input, eventSink.mode, providerID);
+  }
+  persistRuntimeResult(input, providerID, result, activeRunID);
+  return result;
+}
+
 function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string, activeAttempt: number) {
   const pendingEvidence = new Set<Promise<void>>();
   const mode = issueLogMode(input);
@@ -123,10 +165,50 @@ function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string
         (!sessionObserved || eventSessionStatus(event) !== "");
       processRuntimeEvent(input, event, activeRunID, persistSession);
       if (event.session) sessionObserved = true;
+      persistRunnerOutcomeMarker(input, event, activeRunID);
       persistence.push(event);
+      if (successfulTerminalEvent(event) && input.database) {
+        const pending = reconcileProviderOutcome({
+          bus: input.bus,
+          database: input.database,
+          issueID: input.issueId,
+          issueRunID: activeRunID,
+          providerID: event.provider
+        }).then((issue) => {
+          if (issue && issue.status !== "in_progress") input.onProjectSlotReleased?.(issue.project_id);
+        }).catch((error) => {
+          input.onLog?.({
+            error: redactSensitiveText(error instanceof Error ? error.message : String(error)),
+            provider: event.provider,
+            raw: { method: "runtime/provider_outcome_reconcile_error" },
+            status: "failed",
+            type: "error"
+          });
+        });
+        pendingEvidence.add(pending);
+        void pending.finally(() => pendingEvidence.delete(pending));
+      }
       input.onRuntimeEvent?.(event);
     }
   };
+}
+
+function persistRunnerOutcomeMarker(
+  input: RunnerIssueExecutionInput,
+  event: ProviderEvent,
+  activeRunID: string
+): void {
+  if (!input.database) return;
+  const outcome = parseProviderOutcomeMarker(event.text);
+  if (!outcome) return;
+  recordIssueEvent(input.database, input.issueId, "issue.runner_outcome", {
+    issue_run_id: activeRunID,
+    outcome: outcome.outcome,
+    provider: event.provider,
+    provider_session_id: event.session?.sessionId ?? "",
+    provider_turn_id: event.session?.turnId ?? "",
+    reason: outcome.reason
+  });
 }
 
 function resetDebugIssueLogMode(
@@ -197,6 +279,13 @@ function providerInput(input: RunnerIssueExecutionInput, onEvent: ProviderRunInp
     sandbox: input.sandbox,
     onEvent
   };
+}
+
+function providerRecoveryInput(
+  input: RunnerIssueRecoveryInput,
+  onEvent: ProviderRunInput["onEvent"]
+): ProviderRecoveryInput {
+  return { ...providerInput(input, onEvent), session: input.session };
 }
 
 function persistRuntimeResult(
@@ -287,6 +376,14 @@ function eventSessionStatus(event: ProviderEvent): string {
   if (event.type === "done") return event.status || "completed";
   if (event.type === "error") return event.status || "failed";
   return "";
+}
+
+function successfulTerminalEvent(event: ProviderEvent): boolean {
+  if (event.runEvent?.terminal === true) return event.runEvent.outcome === "succeeded";
+  const method = event.raw?.method ?? "";
+  const status = (event.status ?? "").trim().toLowerCase();
+  if (method === "turn/completed") return status === "" || status === "completed" || status === "succeeded";
+  return event.type === "done" && !["failed", "error", "interrupted", "cancelled"].includes(status);
 }
 
 function publishIssueLog(

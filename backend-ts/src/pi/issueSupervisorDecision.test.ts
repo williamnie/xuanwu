@@ -237,7 +237,7 @@ describe("PI supervisor decision runtime", () => {
       expect(supervisorPrompt).toContain("executor workers");
       expect(supervisorPrompt).toContain("Codex/Claude");
       expect(supervisorPrompt).toContain("provider_runtime_unavailable");
-      expect(supervisorPrompt).toContain("transient while recovery budget remains");
+      expect(supervisorPrompt).toContain("may be recoverable");
       expect(supervisorPrompt).not.toContain("Codex is the only provider");
     } finally {
       faux.unregister();
@@ -245,7 +245,7 @@ describe("PI supervisor decision runtime", () => {
     }
   });
 
-  test("rejects automatic recovery for test/business failure decisions", async () => {
+  test("accepts the LLM recovery decision for a business failure when structural preconditions hold", async () => {
     const fixture = await openDecisionFixture("supervisor-decision-business-");
     const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
     try {
@@ -268,16 +268,15 @@ describe("PI supervisor decision runtime", () => {
         project: fixture.project
       });
 
-      expect(result.valid).toBe(false);
-      expect(result.decision.decision).toBe("noop");
-      expect(result.error).toContain("human-only provider failure");
+      expect(result.valid).toBe(true);
+      expect(result.decision.decision).toBe("resume_session");
     } finally {
       faux.unregister();
       fixture.db.close();
     }
   });
 
-  test("rejects PI downgrade of deterministic needs-context diagnosis", async () => {
+  test("does not let a hardcoded diagnosis override the LLM recovery decision", async () => {
     const fixture = await openDecisionFixture("supervisor-decision-needs-context-");
     const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
     const context: IssueSupervisorRecoveryContext = {
@@ -313,16 +312,15 @@ describe("PI supervisor decision runtime", () => {
         project: fixture.project
       });
 
-      expect(result.valid).toBe(false);
-      expect(result.decision.decision).toBe("noop");
-      expect(result.error).toContain("deterministic needs_context diagnosis");
+      expect(result.valid).toBe(true);
+      expect(result.decision.decision).toBe("resume_session");
     } finally {
       faux.unregister();
       fixture.db.close();
     }
   });
 
-  test("does not escalate a transient stale session merely because PI asks for a user", async () => {
+  test("accepts needs_user for a stale session when the LLM finds automatic recovery inappropriate", async () => {
     const fixture = await openDecisionFixture("supervisor-decision-transient-needs-user-");
     const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
     try {
@@ -346,9 +344,8 @@ describe("PI supervisor decision runtime", () => {
         project: fixture.project
       });
 
-      expect(result.valid).toBe(false);
-      expect(result.decision.decision).toBe("noop");
-      expect(result.error).toContain("transient provider/session diagnosis");
+      expect(result.valid).toBe(true);
+      expect(result.decision.decision).toBe("needs_user");
     } finally {
       faux.unregister();
       fixture.db.close();

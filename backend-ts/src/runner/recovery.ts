@@ -1,8 +1,8 @@
 import { getProject } from "../db/repositories/projects.ts";
+import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { listIssues } from "../db/repositories/issues.ts";
 import { requeueUnstartedIssueClaim } from "../db/repositories/issueActions.ts";
 import { issueTimestamp } from "../db/repositories/issueCreate.ts";
-import { updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import {
   completeRunAttemptStart,
   failRunAttemptStart,
@@ -20,7 +20,9 @@ import { redactSensitiveText } from "../util/redact.ts";
 import type { Issue } from "../db/repositories/issues.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import type { RunnerDatabase } from "../db/database.ts";
-import type { ExecutorProvider, ExecutorProviderId, ProviderRecoveryInput, ProviderRunResult, SessionRef } from "../providers/types.ts";
+import type { ExecutorProvider, ExecutorProviderId, ProviderRecoveryInput, SessionRef } from "../providers/types.ts";
+import { recoverIssueWithProvider } from "./providerRuntime.ts";
+import { reconcileProviderOutcome } from "./providerOutcome.ts";
 
 export type RecoveryInput = {
   database: RunnerDatabase;
@@ -58,6 +60,17 @@ async function recoverIssue(input: RecoveryInput, issue: Issue, now: Date): Prom
     markRecoveryFailed(input.database, issue.id, "missing provider_session_id; issue marked failed after restart");
     return "failed";
   }
+  if (linkedSessionIsTerminal(input.database, session)) {
+    await reconcileProviderOutcome({
+      database: input.database,
+      issueID: issue.id,
+      issueRunID: issue.latest_run?.id ?? "",
+      now,
+      providerID: session.provider
+    });
+    recordRecoveryEvent(input.database, issue.id, "issue.recovery_terminal_reconciled", recoveryPayload(session));
+    return "recovered";
+  }
   const provider = input.providers[session.provider];
   if (!provider?.recover) {
     markRecoveryFailed(input.database, issue.id, `provider ${session.provider} does not support recovery`);
@@ -78,13 +91,15 @@ async function recoverIssue(input: RecoveryInput, issue: Issue, now: Date): Prom
   }
   recordRecoveryEvent(input.database, issue.id, "issue.recovery_started", recoveryPayload(session));
   try {
-    const run = await provider.recover(recoveryInput(project, issue, session));
+    const run = await recoverIssueWithProvider(provider, {
+      ...recoveryInput(project, issue, session),
+      database: input.database
+    });
     completeRunAttemptStart(input.database, recoveryEventID(lifecycle), {
       invocation_ref: run.runId,
       provider_session_id: run.session?.sessionId || session.sessionId,
       provider_turn_id: run.session?.turnId || session.turnId || run.runId
     });
-    persistRecoveredRuntime(input.database, issue.id, run);
     recordRecoveryEvent(input.database, issue.id, "issue.recovery_turn_started", recoveryPayload(run.session ?? session));
     return "recovered";
   } catch (error) {
@@ -230,6 +245,11 @@ function recoverableSession(db: RunnerDatabase, issue: Issue): SessionRef | null
   return { provider, sessionId, ...(turnId === "" ? {} : { turnId }) };
 }
 
+function linkedSessionIsTerminal(db: RunnerDatabase, session: SessionRef): boolean {
+  const stored = getAgentSession(db, `${session.provider}:${session.sessionId}`);
+  return stored ? TERMINAL_SESSION_STATUSES.has(normalizeStatus(stored.status)) : false;
+}
+
 function canRequeueUnstartedClaim(db: RunnerDatabase, issue: Issue): boolean {
   const run = issue.latest_run;
   return issue.status === STATUS_IN_PROGRESS && run?.ended_at === "" &&
@@ -278,16 +298,6 @@ function requeueUnstartedClaim(db: RunnerDatabase, issue: Issue): void {
   });
 }
 
-function persistRecoveredRuntime(db: RunnerDatabase, issueID: number, result: ProviderRunResult): void {
-  if (!result.session) return;
-  updateIssueRuntime(db, issueID, {
-    provider: result.session.provider,
-    provider_session_id: result.session.sessionId,
-    provider_turn_id: result.session.turnId ?? "",
-    metadata: { run_id: result.runId, recovery: true }
-  });
-}
-
 function markRecoveryFailed(db: RunnerDatabase, issueID: number, error: unknown): void {
   failIssueExecution(db, issueID, error);
   recordRecoveryEvent(db, issueID, "issue.recovery_failed", {
@@ -321,9 +331,23 @@ function recoveryPayload(session: SessionRef): Record<string, string> {
 }
 
 function recoveryPrompt(project: Project, issue: Issue): string {
-  return `服务重启后继续处理 issue #${issue.id}。\n\n项目路径：${project.cwd}\n\n在继续前必须先检查当前工作区、issue 状态和最近日志，避免重复已完成操作。完成后仍然必须执行 codex-issue-runner issue update 回写最终状态。`;
+  return `服务重启后继续处理 issue #${issue.id}。\n\n项目路径：${project.cwd}\n\n在继续前必须先检查当前工作区、issue 状态和最近日志，避免重复已完成操作。Runner Host 负责最终状态写回；不要为了回写状态调用 localhost 或 shell CLI。最终回复必须以 RUNNER_OUTCOME: completed、RUNNER_OUTCOME: failed | <reason> 或 RUNNER_OUTCOME: needs_user | <reason> 结尾。`;
 }
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
+
+function normalizeStatus(value: string): string {
+  return value.trim().toLowerCase().replace(/[_\s-]/g, "");
+}
+
+const TERMINAL_SESSION_STATUSES = new Set([
+  "aborted",
+  "cancelled",
+  "completed",
+  "done",
+  "error",
+  "failed",
+  "stopped"
+]);

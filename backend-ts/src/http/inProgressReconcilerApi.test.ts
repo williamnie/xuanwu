@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 describe("In-progress reconciler API", () => {
-  test("issue-state endpoint suggests done for verified ended in-progress issue without mutation", async () => {
+  test("issue-state endpoint suggests pending verification without bypassing Evidence", async () => {
     const db = await openFixture();
     try {
       const issueID = insertIssue(db, "thread-success");
@@ -33,7 +33,7 @@ describe("In-progress reconciler API", () => {
       expect(body.diagnostics).toContainEqual(expect.objectContaining({
         code: "in_progress_session_ended",
         issue_id: issueID,
-        recommended_actions: [expect.objectContaining({ operation: "patch_status", patch: { status: "done" } })]
+        recommended_actions: [expect.objectContaining({ operation: "patch_status", patch: { status: "pending_verification" } })]
       }));
       expect(getIssue(db, issueID)).toMatchObject({ status: "in_progress" });
     } finally {

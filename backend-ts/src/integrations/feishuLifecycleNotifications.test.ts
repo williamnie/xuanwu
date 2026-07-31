@@ -164,6 +164,36 @@ describe("Feishu lifecycle notification intents", () => {
     }
   });
 
+  test("unlinked project issues inherit the project-level Feishu conversation target", async () => {
+    const db = await fixtureDatabase();
+    try {
+      linkFeishuProject(db, "demo", "oc_project");
+      const issue = createIssue(db, { project_id: "demo", title: "Project-routed task", status: "todo" });
+      updateIssue(db, issue.id, { error: "needs configuration", status: "failed" });
+
+      const result = queueFeishuIssueStatusNotification(db, issue.id);
+      await flushAgentCommunicationTestMessages(db);
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+
+      expect(result).toMatchObject({ queued: true, reason: "queued" });
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]).toMatchObject({
+        issue_id: issue.id,
+        target_chat_id: "oc_project"
+      });
+      expect(listPiNotificationIntents(db, { issueId: issue.id })).toEqual([
+        expect.objectContaining({
+          decision: "send_now",
+          error: "",
+          state: "sent",
+          target_chat_id: "oc_project"
+        })
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("legacy no-run-group terminal notification falls back to enqueue action conversation", async () => {
     const db = await fixtureDatabase();
     try {
@@ -303,6 +333,24 @@ function linkedFeishuIssue(db: RunnerDatabase, input: { conversationID?: string 
     source: "feishu"
   });
   return issue.id;
+}
+
+function linkFeishuProject(db: RunnerDatabase, projectID: string, chatID: string): void {
+  const event = createExternalEvent(db, {
+    content: "项目通知路由",
+    dedupe_key: `feishu:message:project_${projectID}`,
+    external_id: `om_project_${projectID}`,
+    normalized_message: { chat_id: chatID, message_id: `om_project_${projectID}` },
+    source: "feishu"
+  });
+  createExternalLink(db, {
+    conversation_id: chatID,
+    external_event_id: event.id,
+    external_type: "feishu_agent_reply",
+    project_id: projectID,
+    relationship: "agent_reply",
+    source: "feishu"
+  });
 }
 
 function legacyPiActionIssue(db: RunnerDatabase, actionID: string): number {

@@ -48,7 +48,7 @@ export const issueSupervisorRecoveryMigration: SqlMigration = {
 };
 
 const DEFAULT_SUPERVISOR_ACTIONS_JSON =
-  '["session.resume_followup","issue.retry_after","issue.retry","needs_user.escalate"]';
+  '["session.resume_followup","issue.retry_after","issue.retry","issue.state_repair","needs_user.escalate"]';
 
 function addPolicyColumn(sqlite: SQLiteDatabase, name: string, definition: string): void {
   if (tableColumns(sqlite, "project_pi_policies").has(name)) return;

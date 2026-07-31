@@ -308,6 +308,64 @@ describe("issue watchdog queue readiness", () => {
       db.close();
     }
   });
+
+  test("alerts once when a terminal provider Session leaves an in-progress Issue and open Run", async () => {
+    const db = await fixtureDatabase();
+    const provider = new FixtureProvider();
+    try {
+      insertProject(db, "demo", provider.id);
+      const issueID = insertIssue(db, "terminal mismatch", "in_progress");
+      insertOpenRun(db, issueID, provider.id, STALE);
+      db.sqlite.run(
+        "update issue_runs set provider_session_id=?, provider_turn_id=? where issue_id=?",
+        ["thread-terminal", "turn-terminal", issueID]
+      );
+      db.sqlite.run(
+        `insert into agent_sessions
+          (session_key, provider, provider_session_id, project_id, issue_id, status, raw_ref, created_at, updated_at)
+         values (?, ?, ?, 'demo', ?, 'completed', ?, ?, ?)`,
+        [
+          `${provider.id}:thread-terminal`,
+          provider.id,
+          "thread-terminal",
+          issueID,
+          JSON.stringify({ provider_turn_id: "turn-terminal" }),
+          STALE,
+          STALE
+        ]
+      );
+
+      const first = await watchdog(db, provider, NOW);
+      const duplicate = await watchdog(db, provider, new Date(NOW.getTime() + 30_000));
+
+      expect(first).toMatchObject({ attentioned: 1, candidates: 1, escalated: 1, scanned: 1 });
+      expect(duplicate).toMatchObject({ attentioned: 0, escalated: 0 });
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toContainEqual(
+        expect.objectContaining({
+          alert_type: "issue_runtime_mismatch_terminal_session_open_run",
+          issue_id: issueID
+        })
+      );
+      expect(listNotifications(db, { projectID: "demo" })).toContainEqual(
+        expect.objectContaining({ event: "pi.needs_user", issue_id: issueID })
+      );
+      expect(eventTypes(db, issueID)).toContain("issue.watchdog_runtime_mismatch");
+
+      db.sqlite.run(
+        "update issues set status='pending_verification', updated_at=? where id=?",
+        [NOW.toISOString(), issueID]
+      );
+      db.sqlite.run(
+        "update issue_runs set status='done', ended_at=? where issue_id=?",
+        [NOW.toISOString(), issueID]
+      );
+      await watchdog(db, provider, new Date(NOW.getTime() + 60_000));
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toEqual([]);
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "resolved" })).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {

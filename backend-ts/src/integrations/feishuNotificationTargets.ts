@@ -1,5 +1,8 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { listExternalLinksByIssue } from "../db/repositories/externalLinks.ts";
+import {
+  listExternalLinksByIssue,
+  listExternalLinksByProject
+} from "../db/repositories/externalLinks.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { FeishuConnectorConfig } from "./feishuTypes.ts";
 
@@ -22,6 +25,17 @@ export function feishuTargetForConversation(db: RunnerDatabase, conversationID: 
   if (link) return feishuTargetFromLink(db, link, conversation);
   const chatID = chatIDFromConversation(conversation);
   return chatID === "" ? null : { chatID, eventID: 0, messageID: "", threadID: "" };
+}
+
+export function feishuTargetForProject(db: RunnerDatabase, projectID: string): FeishuTarget | null {
+  const links = listExternalLinksByProject(db, projectID)
+    .filter((item) => item.source === FEISHU_SOURCE);
+  const link = links.find((item) => item.issue_id === 0 && item.relationship === "notification") ??
+    links.find((item) => item.issue_id === 0 && item.conversation_id !== "") ??
+    links.find((item) => item.relationship === "notification") ??
+    links.find((item) => item.conversation_id !== "");
+  if (!link) return null;
+  return feishuTargetFromLink(db, link, link.conversation_id);
 }
 
 export function feishuFallbackTargetForProject(

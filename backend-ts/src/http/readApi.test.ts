@@ -506,7 +506,9 @@ describe("Bun projects/issues read API", () => {
       expect(prompt).toContain("# 直接执行\n\n直接发给 runner");
       expect(prompt).toContain("## Goal Contract");
       expect(prompt).toContain("## Runner lifecycle contract");
-      expect(prompt).toContain(`issue update --id ${body.id} --status done --json`);
+      expect(prompt).toContain("Runner Host owns the final Issue/Run state transition");
+      expect(prompt).toContain("RUNNER_OUTCOME: completed");
+      expect(prompt).not.toContain(`issue update --id ${body.id}`);
     } finally {
       database.close();
     }

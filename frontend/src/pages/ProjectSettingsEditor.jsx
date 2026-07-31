@@ -339,13 +339,20 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, ui }) {
           <span className="project-settings-hint">控制执行过程中何时需要人工确认。</span>
         </div>
         <div className="form-group">
-          <label>文件访问范围</label>
+          <label>执行权限范围</label>
           <select className="form-control" onChange={event => onFieldChange('formSandbox', event.target.value)} value={ui.formSandbox}>
             <option value="workspace-write">仅当前项目可写（推荐）</option>
             <option value="read-only">只读</option>
             <option value="danger-full-access">允许访问整个系统</option>
           </select>
-          <span className="project-settings-hint">决定执行器可以读取或修改哪些文件。</span>
+          <span className="project-settings-hint">同时影响执行器的文件、进程和本机网络访问边界。</span>
+          {ui.formSandbox !== 'danger-full-access' && (
+            <div className="project-settings-permission-notice" role="status">
+              {ui.formSandbox === 'read-only'
+                ? '只读模式不能修改项目文件，也可能阻止需要写入缓存或构建产物的任务。'
+                : '如果任务需要访问项目目录外文件，或调用 127.0.0.1 / localhost 服务，执行器可能被沙箱拦截；请改用“允许访问整个系统”或收窄任务边界。'}
+            </div>
+          )}
         </div>
       </div>
     </div>

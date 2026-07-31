@@ -23,6 +23,17 @@
   margin-top: 6px;
 }
 
+.project-settings-permission-notice {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--warning);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
 .project-settings-advanced,
 .project-profile-overrides {
   background: color-mix(in srgb, var(--bg-secondary) 38%, var(--bg-card));

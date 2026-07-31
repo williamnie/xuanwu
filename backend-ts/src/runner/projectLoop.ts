@@ -21,11 +21,13 @@ import { mergeSkillIntents, parseSkillPolicy } from "../skills/intents.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
 import { resolveExecutorSelection, type AgentRecommendation } from "../pi/agentOrchestration.ts";
 import type { ExecutorProvider, ExecutorProviderId, ProviderRunResult } from "../providers/types.ts";
+import { reconcileProviderOutcome } from "./providerOutcome.ts";
 
 export type ProjectLoopInput = {
   bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
   now?: Date | string;
+  onProjectSlotReleased?: (projectID: string) => void;
   projectId: string;
   providers: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
@@ -100,7 +102,7 @@ async function runClaimedIssue(
   const prompt = buildIssuePrompt(project, issue);
   try {
     const serviceTier = resolveServiceTier(issue, selection, project);
-    return await runIssueWithProvider(provider, {
+    const result = await runIssueWithProvider(provider, {
       agentProfileId: selection.profile_id,
       agentRole: selection.agent_role,
       bus: input.bus,
@@ -112,6 +114,7 @@ async function runClaimedIssue(
       images: issuePromptImages(input.database, prompt),
       prompt,
       model: selection.model || project.model,
+      onProjectSlotReleased: input.onProjectSlotReleased,
       reasoningEffort: selection.reasoning_effort,
       approvalPolicy: selection.approval_policy || project.approval_policy,
       sandbox: selection.sandbox || project.sandbox,
@@ -119,6 +122,16 @@ async function runClaimedIssue(
       serviceTierSource: serviceTier.source,
       selectionReason: selection.selection_reason
     });
+    await reconcileProviderOutcome({
+      bus: input.bus,
+      database: input.database,
+      issueID: issue.id,
+      issueRunID: claimedRunID,
+      now: optionalDate(input.now),
+      providerID: provider.id,
+      providerRunID: result.runId
+    });
+    return result;
   } catch (error) {
     if (issueExecutionNoLongerCurrent(input.database, issue.id, claimedRunID)) return { runId: "interrupted" };
     if (isProviderInfraTransientFailure(error)) {
@@ -285,10 +298,10 @@ function withIssueLifecycleContract(issue: Issue, prompt: string): string {
     "",
     "## Runner lifecycle contract",
     "- Verify the directly relevant behavior before reporting completion.",
-    "- Commit the completed repository changes unless the Issue explicitly forbids committing.",
+    "- Commit completed changes only when the workspace is already a Git repository or this Issue explicitly requires repository initialization. Do not create .git solely to satisfy this contract.",
     "- Never run ./redeploy.sh, ./deploy.sh, or live service stop/restart/install commands from this Runner-managed Issue, and do not bypass this boundary with nohup, launchctl submit, or another detached helper. Treat any live-deploy request in the Issue text as an external post-completion delivery action, not an executor step or completion blocker. Use focused tests/builds; when runtime smoke is required, use ./dev.sh with isolated non-live state and ports. Live deployment must be performed externally after the Issue is committed and verified.",
-    `- On success, write back the final status with: codex-issue-runner issue update --id ${issue.id} --status done --json`,
-    `- On failure or a blocker, do not mark done; write back: codex-issue-runner issue update --id ${issue.id} --status failed --error "<reason>" --json`
+    "- Runner Host owns the final Issue/Run state transition. Do not call localhost/127.0.0.1 or a shell CLI merely to update lifecycle state.",
+    "- End the final response with exactly one machine-readable line: RUNNER_OUTCOME: completed, RUNNER_OUTCOME: failed | <reason>, or RUNNER_OUTCOME: needs_user | <reason>."
   ].join("\n").trim();
 }
 
@@ -315,7 +328,7 @@ function goalContractSections(issue: Issue): GoalContractSection[] {
     },
     {
       aliases: [/^(required evidence|evidence|verification|validation|acceptance criteria|验收标准|验证|证据|最小验证)$/i],
-      text: "- Required evidence: Before marking complete, run the smallest directly relevant verification and report commands, pass/fail result, and decisive evidence; explicitly write back the final status/outcome."
+      text: "- Required evidence: Before marking complete, run the smallest directly relevant verification and report commands, pass/fail result, and decisive evidence; report the final outcome with the Runner lifecycle marker."
     },
     {
       aliases: [/^(constraints?|non-?goals?|constraints?\s*\/\s*non-?goals?|scope|out of scope|范围|约束|非目标|全局约束)$/i],
@@ -399,4 +412,11 @@ function skillSummary(skill: ReturnType<typeof listSkillRegistry>[number]) {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function optionalDate(value: Date | string | undefined): Date | undefined {
+  if (value instanceof Date) return value;
+  if (typeof value !== "string" || value.trim() === "") return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }

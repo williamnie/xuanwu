@@ -10,6 +10,7 @@ type RecoveryGatePolicy = PiGatePolicy & {
 const BUDGETED_ACTIONS = new Set([
   "issue.retry",
   "issue.retry_after",
+  "issue.state_repair",
   "session.resume_followup",
   "session.steer"
 ]);

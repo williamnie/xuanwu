@@ -73,7 +73,7 @@ describe("Feishu notification queue", () => {
     }
   });
 
-  test("router queues Feishu completion notification when verification is accepted", async () => {
+  test("router queues Feishu pending-verification notification when Evidence is still incomplete", async () => {
     const db = await fixtureDatabase();
     const bus = new EventBus();
     try {
@@ -92,7 +92,7 @@ describe("Feishu notification queue", () => {
       expect(response.status).toBe(200);
       expect(outbox).toHaveLength(1);
       expect(outbox[0]).toMatchObject({
-        content: expect.stringContaining("issue #1 已完成"),
+        content: expect.stringContaining("issue #1 已进入待验收"),
         issue_id: issueID,
         target_chat_id: "oc_group"
       });
@@ -101,7 +101,7 @@ describe("Feishu notification queue", () => {
     }
   });
 
-  test("dispatches a router completion notification only after Agent wording", async () => {
+  test("dispatches a pending-verification notification only after Agent wording", async () => {
     const db = await fixtureDatabase();
     const bus = new EventBus();
     const sender = new FakeFeishuSender();
@@ -125,8 +125,8 @@ describe("Feishu notification queue", () => {
       expect(sender.calls).toEqual([{
         receiveId: "oc_group",
         receiveIdType: "chat_id",
-        text: "玄武 Supervisor：issue #1 已完成：Feishu task\n" +
-          "验证状态：已标记完成，未附加验证摘要。\n" +
+        text: "玄武 Supervisor：issue #1 已进入待验收：Feishu task\n" +
+          "验证状态：bun test passed\n" +
           "查看：/api/issues/1"
       }]);
       expect(outbox[0]).toMatchObject({ feishu_message_id: "om_auto_sent_1", status: "sent" });

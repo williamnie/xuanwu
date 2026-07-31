@@ -84,7 +84,8 @@ describe("Bun in-progress issue recovery", () => {
         projectId: "demo",
         session: { provider: "codex", sessionId: "thread-recover", turnId: "turn-old" }
       });
-      expect(provider.inputs[0].prompt).toContain("codex-issue-runner issue update");
+      expect(provider.inputs[0].prompt).toContain("RUNNER_OUTCOME: completed");
+      expect(provider.inputs[0].prompt).not.toContain("codex-issue-runner issue update");
       expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", error: "" });
       expect(listIssueRuns(db, issueId)).toMatchObject([{
         status: "in_progress",
@@ -98,6 +99,41 @@ describe("Bun in-progress issue recovery", () => {
         "run.lifecycle.outcome.v1",
         "issue.recovery_turn_started"
       ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("reconciles a terminal persisted Session instead of starting a redundant recovery turn", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new RecoveringCodexProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      const issueId = insertIssue(db, {
+        codexThreadId: "thread-completed",
+        codexTurnId: "turn-completed",
+        projectId: "demo",
+        status: "in_progress",
+        title: "already completed"
+      });
+      insertOpenRun(db, {
+        issueId,
+        provider: "codex",
+        providerSessionId: "thread-completed",
+        providerTurnId: "turn-completed"
+      });
+      insertAgentSession(db, issueId, "demo", "thread-completed", "completed");
+
+      const result = await recoverInProgressIssues({ database: db, providers: { codex: provider } });
+
+      expect(result).toEqual({ deferred: 0, failed: 0, recovered: 1, requeued: 0 });
+      expect(provider.inputs).toEqual([]);
+      expect(getIssue(db, issueId)).toMatchObject({ status: "pending_verification" });
+      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
+        status: "done",
+        ended_at: expect.stringMatching(/Z$/)
+      });
+      expect(listEventTypes(db)).toContain("issue.recovery_terminal_reconciled");
     } finally {
       db.close();
     }
@@ -175,6 +211,7 @@ describe("Bun in-progress issue recovery", () => {
       expect(listEventTypes(db)).toEqual([
         "run.lifecycle.intent.v1",
         "issue.recovery_started",
+        "issue.log",
         "run.lifecycle.outcome.v1",
         "issue.provider_deferred",
         "issue.recovery_deferred"
@@ -473,6 +510,29 @@ function insertOpenRun(db: RunnerDatabase, run: RunFixture): void {
       run.provider,
       run.providerSessionId ?? "",
       run.providerTurnId ?? "",
+      "2026-01-01T00:00:00Z"
+    ]
+  );
+}
+
+function insertAgentSession(
+  db: RunnerDatabase,
+  issueID: number,
+  projectID: string,
+  sessionID: string,
+  status: string
+): void {
+  db.sqlite.run(
+    `insert into agent_sessions
+      (session_key, provider, provider_session_id, project_id, issue_id, status, raw_ref, created_at, updated_at)
+     values (?, 'codex', ?, ?, ?, ?, '{}', ?, ?)`,
+    [
+      `codex:${sessionID}`,
+      sessionID,
+      projectID,
+      issueID,
+      status,
+      "2026-01-01T00:00:00Z",
       "2026-01-01T00:00:00Z"
     ]
   );

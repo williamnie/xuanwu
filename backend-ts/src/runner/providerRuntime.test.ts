@@ -219,7 +219,6 @@ describe("executor provider runtime seam", () => {
       cwd: "/tmp/project",
       prompt: "issue prompt",
       model: "codex-default",
-      serviceTier: "priority",
       approvalPolicy: "never",
       serviceTier: "priority",
       sandbox: "workspace-write",
@@ -415,7 +414,7 @@ describe("executor provider runtime seam", () => {
         terminal: false,
         unknown: { policy: "preserve" }
       });
-      expect(attempt?.status).toBe("running");
+      expect(attempt?.status).toBe("succeeded");
       expect(attempt?.revision).toBe(1);
       expect(cost).toMatchObject({
         money: { amount_micros: null, basis: "unavailable", currency: "" },
@@ -542,13 +541,14 @@ describe("executor provider runtime seam", () => {
       });
 
       const events = listIssueEvents(db, issueId);
+      const logEvents = events.filter((event) => event.type === "issue.log");
       expect(runtimeEvents).toHaveLength(514);
-      expect(events).toHaveLength(1);
-      expect(JSON.parse(events[0]?.payload ?? "{}")).toMatchObject({
+      expect(logEvents).toHaveLength(1);
+      expect(JSON.parse(logEvents[0]?.payload ?? "{}")).toMatchObject({
         raw_method: "turn/completed",
         status: "completed"
       });
-      expect(liveEvents).toHaveLength(1);
+      expect(liveEvents.filter((event) => (event as { type?: string }).type === "issue.log")).toHaveLength(1);
       const session = getAgentSession(db, "codex:thread-long");
       expect(session).toMatchObject({ status: "completed" });
       expect(JSON.parse(session?.raw_ref ?? "{}")).toMatchObject({ provider_turn_id: "turn-long" });
@@ -577,7 +577,8 @@ describe("executor provider runtime seam", () => {
       });
 
       const events = listIssueEvents(db, issueId);
-      const payloads = events.map((event) => JSON.parse(event.payload) as Record<string, unknown>);
+      const logEvents = events.filter((event) => event.type === "issue.log");
+      const payloads = logEvents.map((event) => JSON.parse(event.payload) as Record<string, unknown>);
       const replay = payloads
         .filter((payload) => payload.raw_method === "item/agentMessage/delta")
         .map((payload) => payload.text)
@@ -594,8 +595,8 @@ describe("executor provider runtime seam", () => {
       })), 0);
 
       expect(runtimeEvents).toHaveLength(514);
-      expect(events).toHaveLength(10);
-      expect(liveEvents).toHaveLength(10);
+      expect(logEvents).toHaveLength(10);
+      expect(liveEvents.filter((event) => (event as { type?: string }).type === "issue.log")).toHaveLength(10);
       expect(replay).toBe(provider.chunks.join(""));
       expect(payloads.at(-1)).toMatchObject({
         type: "done",

@@ -71,6 +71,7 @@ const DEFAULT_LIMIT = 20;
 const DEFAULT_MAX_KICK_ATTEMPTS = 3;
 const DEFAULT_STALE_AFTER_MS = 10 * 60 * 1000;
 const WATCHDOG_ALERT_PREFIX = "issue_watchdog_";
+const RUNTIME_MISMATCH_ALERT_PREFIX = "issue_runtime_mismatch_";
 
 export async function runAutoRunIssueWatchdogOnce(input: IssueWatchdogInput): Promise<IssueWatchdogSummary> {
   const now = optionalDate(input.now) ?? new Date();
@@ -84,6 +85,7 @@ export async function runAutoRunIssueWatchdogOnce(input: IssueWatchdogInput): Pr
     positiveInteger(input.limit, DEFAULT_LIMIT)
   ));
   resolveInactiveWatchdogAlerts(input.database, cutoff, now);
+  resolveInactiveRuntimeMismatchAlerts(input.database, now);
   const summary: IssueWatchdogSummary = {
     attentioned: 0,
     candidates: rows.length,
@@ -94,6 +96,7 @@ export async function runAutoRunIssueWatchdogOnce(input: IssueWatchdogInput): Pr
     skippedBusy: 0,
     waiting: 0
   };
+  handleTerminalSessionMismatches(input, summary, now, cutoff);
   if (rows.length === 0) return summary;
 
   const activeWork = countActiveExecutorWork(input.database);
@@ -140,6 +143,85 @@ export async function runAutoRunIssueWatchdogOnce(input: IssueWatchdogInput): Pr
     if (summary.kicked > 0) break;
   }
   return summary;
+}
+
+function handleTerminalSessionMismatches(
+  input: IssueWatchdogInput,
+  summary: IssueWatchdogSummary,
+  now: Date,
+  cutoff: string
+): void {
+  const rows = terminalSessionMismatchRows(
+    input.database,
+    cutoff,
+    positiveInteger(input.limit, DEFAULT_LIMIT)
+  );
+  summary.candidates += rows.length;
+  summary.scanned += rows.length;
+  for (const row of rows) {
+    const stateKey = `runtime-mismatch:${row.id}:${row.updated_at}`;
+    const alertType = `${RUNTIME_MISMATCH_ALERT_PREFIX}terminal_session_open_run`;
+    const existing = listPiGuardianAlerts(input.database, { projectId: row.project_id, status: "open" })
+      .some((alert) => alert.issue_id === row.id && alert.alert_type === alertType && alert.run_group_id === stateKey);
+    if (!existing) {
+      upsertPiGuardianAlert(input.database, {
+        alert_type: alertType,
+        evidence_json: [`issue:${row.id}`, "diagnosis:in_progress_session_ended"],
+        issue_id: row.id,
+        message: `issue #${row.id} 的 Provider Session 已结束，但 Issue/Run 仍为 in_progress。`,
+        project_id: row.project_id,
+        run_group_id: stateKey,
+        severity: "high",
+        watchdog_seen_at: now.toISOString()
+      });
+      recordWatchdogEvent(input.database, row.id, "issue.watchdog_runtime_mismatch", {
+        diagnosis: "in_progress_session_ended",
+        state_key: stateKey
+      }, now);
+      summary.attentioned += 1;
+    }
+    const notification = publishPiNeedsUserNotification({
+      actionID: stateKey,
+      bus: input.bus,
+      database: input.database,
+      diagnosis: "in_progress_session_ended",
+      issue: {
+        id: row.id,
+        project_id: row.project_id,
+        status: row.status,
+        title: row.title
+      },
+      message: "Provider Session 已结束，但 Runner 没有完成状态对账，自动队列仍被占用。",
+      nextStep: "PI 将继续尝试状态修复；若告警持续，请检查最近的 Supervisor 决策和恢复动作。",
+      now,
+      project: { id: row.project_id, name: row.project_name },
+      provider: row.provider
+    });
+    if (notification) summary.escalated += 1;
+  }
+}
+
+function terminalSessionMismatchRows(
+  db: RunnerDatabase,
+  cutoff: string,
+  limit: number
+): StaleTodoRow[] {
+  return db.sqlite.query<StaleTodoRow, [string]>(`
+    select distinct i.id, i.project_id, p.name as project_name, i.title, i.status,
+      coalesce(nullif(ir.provider, ''), p.provider) as provider,
+      i.created_at, i.updated_at
+    from issues i
+    join projects p on p.id=i.project_id and p.auto_run=1
+    join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
+    join agent_sessions session on session.issue_id=i.id
+      and session.provider=coalesce(nullif(ir.provider, ''), session.provider)
+      and session.provider_session_id=coalesce(nullif(ir.provider_session_id, ''), session.provider_session_id)
+    where i.status='in_progress'
+      and lower(replace(replace(replace(session.status, '_', ''), '-', ''), ' ', ''))
+        in ('aborted','cancelled','completed','done','error','failed','stopped')
+      and session.updated_at<=?
+    order by session.updated_at asc, i.id asc limit ${boundedLimit(limit)}
+  `).all(cutoff);
 }
 
 function handleRunnable(
@@ -351,6 +433,34 @@ function resolveInactiveWatchdogAlerts(db: RunnerDatabase, cutoff: string, now: 
   }
 }
 
+function resolveInactiveRuntimeMismatchAlerts(db: RunnerDatabase, now: Date): void {
+  for (const status of ["open", "acked"] as const) {
+    for (const alert of listPiGuardianAlerts(db, { status })) {
+      if (!alert.alert_type.startsWith(RUNTIME_MISMATCH_ALERT_PREFIX) || alert.issue_id <= 0) continue;
+      if (runtimeMismatchStillActive(db, alert.issue_id)) continue;
+      resolvePiGuardianAlert(db, alert.id, {
+        evidence_json: alert.evidence_json,
+        message: `issue #${alert.issue_id} runtime mismatch recovered`,
+        watchdog_seen_at: now.toISOString()
+      });
+    }
+  }
+}
+
+function runtimeMismatchStillActive(db: RunnerDatabase, issueID: number): boolean {
+  return db.sqlite.query<{ active: number }, [number]>(`
+    select exists(
+      select 1 from issues i
+      join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
+      join agent_sessions session on session.issue_id=i.id
+        and session.provider_session_id=coalesce(nullif(ir.provider_session_id, ''), session.provider_session_id)
+      where i.id=? and i.status='in_progress'
+        and lower(replace(replace(replace(session.status, '_', ''), '-', ''), ' ', ''))
+          in ('aborted','cancelled','completed','done','error','failed','stopped')
+    ) as active
+  `).get(issueID)?.active === 1;
+}
+
 function issueStillWatchdogCandidate(db: RunnerDatabase, issueID: number, cutoff: string): boolean {
   return (db.sqlite.query<{ active: number }, [number, string]>(`
     select exists(
@@ -483,7 +593,8 @@ function watchdogKickAttempts(db: RunnerDatabase, issueID: number, stateKey: str
 function recordWatchdogEvent(
   db: RunnerDatabase,
   issueID: number,
-  type: "issue.watchdog_kicked" | "issue.watchdog_needs_user" | "issue.watchdog_waiting",
+  type: "issue.watchdog_kicked" | "issue.watchdog_needs_user" |
+    "issue.watchdog_runtime_mismatch" | "issue.watchdog_waiting",
   payload: Record<string, unknown>,
   now: Date
 ): void {
@@ -582,6 +693,10 @@ function optionalDate(value: Date | string | undefined): Date | undefined {
 
 function positiveInteger(value: number | undefined, fallback: number): number {
   return Number.isInteger(value) && value !== undefined && value > 0 ? value : fallback;
+}
+
+function boundedLimit(value: number): number {
+  return Math.min(Math.max(Number.isFinite(value) ? Math.round(value) : DEFAULT_LIMIT, 1), DEFAULT_LIMIT);
 }
 
 function cleanString(value: unknown): string {
