@@ -152,12 +152,13 @@ async function reviewIssueVerificationAndKickLoop(
   if (
     issue.status === "pending_verification"
     && readIssueVerificationProjection(context.database, issue.id).owner === "pi"
-    && context.agenticClient
+    && context.agenticClient?.decideIssueAcceptance
   ) {
     requestPiVerificationCycle({
       database: context.database,
+      decideIssueAcceptance: context.agenticClient.decideIssueAcceptance.bind(context.agenticClient),
       issueID: issue.id,
-      runProjectCycle: context.agenticClient.runProjectCycle.bind(context.agenticClient),
+      providers: context.providers,
       source: "human-review-resolved"
     });
   }

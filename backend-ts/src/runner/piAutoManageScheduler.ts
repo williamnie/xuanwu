@@ -43,6 +43,7 @@ import {
 } from "./piIssueSupervisorScheduler.ts";
 import {
   runPiVerificationCoordinatorOnce,
+  type PiIssueAcceptanceRunner,
   type PiVerificationCoordinatorResult
 } from "./piVerificationCoordinator.ts";
 import {
@@ -100,6 +101,7 @@ export type PiAutoManageCycleInput = {
   codexSessionsDir?: string;
   config?: RunnerConfig;
   database: RunnerDatabase;
+  decideIssueAcceptance?: PiIssueAcceptanceRunner;
   guardianDirectFeishuSender?: FeishuMessageClient;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   runAutomationCore?: AutomationExecutor;
@@ -291,17 +293,20 @@ export async function runGuardianControlPlaneCycle(
 
 export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<AgenticCycleResult> {
   const cycleStartedAt = performance.now();
-  // Ordinary project manager cycles remain explicit. PI-owned verification is
-  // different: entering pending_verification is a durable request for PI work,
-  // so the coordinator starts only those bounded manager cycles and records
-  // their real queued/running/waiting/failed activity on the affected Issues.
-  const verification = await timedSchedulePhase("pi_verification", () => (
-    runPiVerificationCoordinatorOnce({
-      database: input.database,
-      runProjectCycle: input.runProjectCycle,
-      source: "agentic-scheduler"
-    })
-  ));
+  // Ordinary project manager cycles remain explicit. PI-owned acceptance is
+  // different: entering pending_verification is a durable request for one
+  // issue-scoped semantic decision over a bounded completion card.
+  const verification = input.decideIssueAcceptance
+    ? await timedSchedulePhase("pi_verification", () => (
+      runPiVerificationCoordinatorOnce({
+        bus: input.bus,
+        database: input.database,
+        decideIssueAcceptance: input.decideIssueAcceptance!,
+        providers: input.providers,
+        source: "agentic-scheduler"
+      })
+    ))
+    : { failed: 0, issues: 0, projects: 0, skipped: 0, started: 0 };
   const projects: PiAutoManageCycleResult = {
     projects: verification.projects,
     skipped: verification.skipped,

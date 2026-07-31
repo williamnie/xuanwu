@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 describe("PI pending verification timeout", () => {
-  test("uses project policy timeout and suppresses timeout after verification evidence", async () => {
+  test("uses project policy timeout without turning a legacy text report into semantic acceptance", async () => {
     const db = await openFixture();
     try {
       insertProjectPolicy(db, 60);
@@ -33,8 +33,8 @@ describe("PI pending verification timeout", () => {
       });
       expect(byIssue.has(recent)).toBe(false);
       expect(byIssue.get(verified)).toMatchObject({
-        code: "pending_verification_has_evidence",
-        recommended_actions: [expect.objectContaining({ operation: "patch_status", patch: { status: "done" } })]
+        code: "pending_verification_timeout",
+        recommended_actions: [expect.objectContaining({ operation: "comment" })]
       });
     } finally {
       db.close();

@@ -8,13 +8,17 @@ import { runProjectPiCycle } from "../http/piProjectControlApi.ts";
 import { parseListenAddress } from "../config/listenAddress.ts";
 import { decideAgentCommunicationWithRuntime } from "../notifications/agentCommunicationGateway.ts";
 import { runPiSupervisorDecision } from "../pi/issueSupervisorDecision.ts";
+import { runPiIssueAcceptance } from "../pi/issueAcceptance.ts";
+import { assertCompletionCardIntegrity } from "../domain/acceptance/completionCard.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import {
   AGENTIC_COMMUNICATION_DECISION_PATH,
   AGENTIC_HEALTH_PATH,
+  AGENTIC_ISSUE_ACCEPTANCE_PATH,
   AGENTIC_PROJECT_CYCLE_PATH,
   AGENTIC_SUPERVISOR_DECISION_PATH,
   type AgenticCommunicationDecisionRequest,
+  type AgenticIssueAcceptanceRequest,
   type AgenticProjectCycleRequest,
   type AgenticRpcResponse,
   type AgenticSupervisorDecisionRequest
@@ -69,6 +73,18 @@ export async function routeAgenticRequest(db: RunnerDatabase, request: Request):
     const now = new Date(String(input.now));
     if (intents.length === 0 || !Number.isFinite(now.getTime())) throw new HttpError(400, "invalid communication decision input");
     const result = await decideAgentCommunicationWithRuntime(db, { intents, now });
+    return rpcResponse({ ok: true, result });
+  }
+  if (path === AGENTIC_ISSUE_ACCEPTANCE_PATH) {
+    const input = await requestBody<AgenticIssueAcceptanceRequest>(request);
+    const card = input.card;
+    assertCompletionCardIntegrity(card);
+    const projectID = card.issue.project_id;
+    const agent = getPiSupervisor(db);
+    if (!agent || agent.enabled !== 1) throw new HttpError(503, "configured Supervisor is unavailable");
+    const project = getProject(db, projectID);
+    if (!project) throw new HttpError(404, `Acceptance project is unavailable: ${projectID}`);
+    const result = await runPiIssueAcceptance({ agent, card, database: db, project });
     return rpcResponse({ ok: true, result });
   }
   if (path === AGENTIC_SUPERVISOR_DECISION_PATH) {

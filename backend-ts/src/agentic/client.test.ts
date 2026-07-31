@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { CompletionCard } from "../domain/acceptance/completionCard.ts";
 import { createHttpAgenticWorkerClient } from "./client.ts";
 
 describe("Agentic Worker HTTP client", () => {
@@ -15,7 +16,7 @@ describe("Agentic Worker HTTP client", () => {
             "x-codex-runner-agentic-started-at": "2026-07-27T02:59:00.000Z"
           }
         }));
-      })) as typeof fetch;
+      })) as unknown as typeof fetch;
       const client = createHttpAgenticWorkerClient({
         addr: "127.0.0.1:3010",
         now: () => new Date(nowMs)
@@ -63,12 +64,16 @@ describe("Agentic Worker HTTP client", () => {
 
       await expect(client.health()).resolves.toEqual({ ok: true, role: "agentic" });
       await expect(client.runProjectCycle({ maxActions: 3, projectId: "demo" })).resolves.toEqual({ accepted: true });
+      const card = { issue: { id: 818, project_id: "demo" } } as CompletionCard;
+      await client.decideIssueAcceptance!(card);
       expect(calls.map((call) => call.url)).toEqual([
         "http://127.0.0.1:3010/health",
-        "http://127.0.0.1:3010/api/internal/agentic/project-cycle"
+        "http://127.0.0.1:3010/api/internal/agentic/project-cycle",
+        "http://127.0.0.1:3010/api/internal/agentic/issue-acceptance"
       ]);
       expect(calls[1]?.headers.get("authorization")).toBe("Bearer rpc-secret");
       expect(calls[1]?.body).toEqual({ maxActions: 3, projectId: "demo" });
+      expect(calls[2]?.body).toEqual({ card });
     } finally {
       globalThis.fetch = originalFetch;
     }

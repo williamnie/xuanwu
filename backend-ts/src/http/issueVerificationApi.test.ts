@@ -160,13 +160,24 @@ describe("Bun issue verification API", () => {
         ["2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
       );
       const issueId = insertIssue(database, { error: "", status: "pending_verification" });
+      seedReadyHandoff(database, issueId);
       const review = createHumanReviewRequest(database, issueId, {
         kind: "decision",
         question: "是否接受当前技术与产品取舍？"
       });
       const agenticClient = fakeAgenticClient(async () => {
         calls += 1;
-        return { status: "completed" };
+        return {
+          decision: {
+            confidence: "high",
+            decision: "needs_user",
+            evidence_refs: ["run:fixture"],
+            rationale: "还需要用户确认最终范围。",
+            unmet_requirements: []
+          },
+          raw_text: "{}",
+          valid: true
+        };
       });
       const response = await reviewIssue(database, issueId, {
         action: "accept",
@@ -181,12 +192,13 @@ describe("Bun issue verification API", () => {
       });
       await waitUntil(() => calls === 1);
       await waitUntil(() => listEvents(database).some((event) =>
-        event.type === "issue.pi_verification_waiting.v1"
+        event.type === "issue.pi_verification_completed.v1"
       ));
       expect(listEvents(database).map((event) => event.type)).toEqual(expect.arrayContaining([
-        "issue.pi_verification_queued.v1",
         "issue.pi_verification_started.v1",
-        "issue.pi_verification_waiting.v1"
+        "issue.pi_verification_completed.v1",
+        "issue.completion_card.v1",
+        "issue.pi_acceptance_decision.v1"
       ]));
     } finally {
       database.close();
@@ -302,11 +314,12 @@ function listEvents(db: RunnerDatabase): Array<{ payload: string; type: string }
 }
 
 function fakeAgenticClient(
-  runProjectCycle: AgenticWorkerClient["runProjectCycle"]
+  decideIssueAcceptance: NonNullable<AgenticWorkerClient["decideIssueAcceptance"]>
 ): AgenticWorkerClient {
   return {
     activity: () => ({ in_flight: 0, last_activity_at: "" }),
     decideCommunication: async () => ({ decision: "send", message: "test", rationale: "test" }),
+    decideIssueAcceptance,
     decideSupervisor: async () => ({
       decision: {
         confidence: "high",
@@ -321,7 +334,7 @@ function fakeAgenticClient(
       valid: true
     }),
     health: async () => ({ ok: true, role: "agentic" }),
-    runProjectCycle
+    runProjectCycle: async () => ({})
   };
 }
 

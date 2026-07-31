@@ -1,10 +1,12 @@
 import {
   AGENTIC_COMMUNICATION_DECISION_PATH,
   AGENTIC_HEALTH_PATH,
+  AGENTIC_ISSUE_ACCEPTANCE_PATH,
   AGENTIC_PROJECT_CYCLE_PATH,
   AGENTIC_SUPERVISOR_DECISION_PATH,
   type AgenticCommunicationDecisionRequest,
   type AgenticCommunicationDecisionResult,
+  type AgenticIssueAcceptanceResult,
   type AgenticProjectCycleRequest,
   type AgenticProjectCycleResult,
   type AgenticRpcResponse,
@@ -31,6 +33,9 @@ export function createHttpAgenticWorkerClient(input: {
     activity: activity.snapshot,
     decideCommunication: (body) => activity.run(() => post<AgenticCommunicationDecisionResult>(
       baseUrl, AGENTIC_COMMUNICATION_DECISION_PATH, body, input.authToken, timeoutMs, activity.observeWorker
+    )),
+    decideIssueAcceptance: (card) => activity.run(() => post<AgenticIssueAcceptanceResult>(
+      baseUrl, AGENTIC_ISSUE_ACCEPTANCE_PATH, { card }, input.authToken, timeoutMs, activity.observeWorker
     )),
     decideSupervisor: (context) => activity.run(() => post<AgenticSupervisorDecisionResult>(
       baseUrl, AGENTIC_SUPERVISOR_DECISION_PATH, { context }, input.authToken, timeoutMs, activity.observeWorker

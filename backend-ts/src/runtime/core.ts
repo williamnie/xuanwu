@@ -252,6 +252,10 @@ async function startAutoRunLoops(
     codexSessionsDir,
     config,
     database,
+    decideIssueAcceptance: (card) => {
+      if (!agenticClient.decideIssueAcceptance) throw new Error("Agentic Worker does not support issue acceptance");
+      return agenticClient.decideIssueAcceptance(card);
+    },
     agentCommunicationDecider: (input) => agenticClient.decideCommunication(input),
     providers,
     onError: (error) => {

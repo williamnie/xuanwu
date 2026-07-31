@@ -103,7 +103,7 @@ describe("Codex rollout exec recovery", () => {
     })).toEqual([]);
   });
 
-  test("fails closed when rollout output omits the nested command exit code", () => {
+  test("uses the unified-exec terminal envelope when nested JSON is not echoed", () => {
     const source = [
       row("2026-07-31T07:06:18.800Z", {
         type: "custom_tool_call",
@@ -124,7 +124,11 @@ describe("Codex rollout exec recovery", () => {
     expect(parseCodexRolloutExecEvents(source, {
       threadID: "thread-1",
       turnID: "turn-1"
-    })).toEqual([]);
+    })).toEqual([expect.objectContaining({
+      command: "bun test",
+      status: "completed",
+      type: "tool"
+    })]);
   });
 
   test("recovers direct exec_command function calls with their real process exit code", () => {
@@ -172,6 +176,61 @@ describe("Codex rollout exec recovery", () => {
         type: "commandExecution"
       }
     });
+  });
+
+  test("correlates a yielded unified exec with terminal write_stdin output", () => {
+    const source = [
+      row("2026-07-31T08:34:23.000Z", {
+        type: "custom_tool_call",
+        id: "ctc-yielded",
+        call_id: "call-exec",
+        name: "exec",
+        input: 'const r = await tools.exec_command({"cmd":"pnpm lint && pnpm test"}); text(r.output); if(r.session_id) text(`SESSION_ID=${r.session_id}`);',
+        internal_chat_message_metadata_passthrough: { turn_id: "turn-1" }
+      }),
+      row("2026-07-31T08:34:24.000Z", {
+        type: "custom_tool_call_output",
+        call_id: "call-exec",
+        output: [
+          { type: "input_text", text: "Script completed\nOutput:\n" },
+          { type: "input_text", text: "lint started\nSESSION_ID=16470" }
+        ],
+        internal_chat_message_metadata_passthrough: { turn_id: "turn-1" }
+      }),
+      row("2026-07-31T08:34:25.000Z", {
+        type: "function_call",
+        id: "fc-poll-1",
+        call_id: "call-poll-1",
+        name: "write_stdin",
+        arguments: JSON.stringify({ session_id: 16470, chars: "" }),
+        internal_chat_message_metadata_passthrough: { turn_id: "turn-1" }
+      }),
+      row("2026-07-31T08:34:26.000Z", {
+        type: "function_call_output",
+        call_id: "call-poll-1",
+        output: "Process running with session ID 16470\nOutput:\nlint passed",
+        internal_chat_message_metadata_passthrough: { turn_id: "turn-1" }
+      }),
+      row("2026-07-31T08:34:27.000Z", {
+        type: "function_call",
+        id: "fc-poll-2",
+        call_id: "call-poll-2",
+        name: "write_stdin",
+        arguments: JSON.stringify({ session_id: 16470, chars: "" }),
+        internal_chat_message_metadata_passthrough: { turn_id: "turn-1" }
+      }),
+      row("2026-07-31T08:34:28.000Z", {
+        type: "function_call_output",
+        call_id: "call-poll-2",
+        output: "Process exited with code 0\nOutput:\n9 tests passed",
+        internal_chat_message_metadata_passthrough: { turn_id: "turn-1" }
+      })
+    ].join("\n");
+
+    const events = parseCodexRolloutExecEvents(source, { threadID: "thread-1", turnID: "turn-1" });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ command: "pnpm lint && pnpm test", status: "completed" });
+    expect(String(events[0]?.raw?.payload)).toContain("9 tests passed");
   });
 
   test("finds a UUIDv7 thread rollout when thread/start omits path", async () => {

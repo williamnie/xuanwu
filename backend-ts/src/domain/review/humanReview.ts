@@ -66,7 +66,7 @@ export type CreateHumanReviewRequestInput = {
 };
 
 export type HumanReviewRuntime = {
-  bus?: EventBus;
+  bus?: Pick<EventBus, "publish">;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 

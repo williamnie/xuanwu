@@ -1,26 +1,32 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { getIssue, listIssues, type Issue } from "../db/repositories/issues.ts";
+import { getIssue, listIssueRuns, listIssues, type Issue } from "../db/repositories/issues.ts";
 import { getProjectPiSettings, isPiHeartbeatPaused } from "../db/repositories/pi.ts";
-import { readIssueVerificationProjection } from "../domain/review/humanReview.ts";
-import { resolveIssueAgentRole, resolveWorkflowParentIssueID } from "../pi/agentOrchestration.ts";
+import {
+  buildIssueCompletionCard,
+  readCurrentIssueCompletionCard,
+  recordIssueCompletionCard,
+  type CompletionCard
+} from "../domain/acceptance/completionCard.ts";
+import { createHumanReviewRequest, readIssueVerificationProjection } from "../domain/review/humanReview.ts";
 import {
   readPiVerificationActivity,
   recordPiVerificationActivity
 } from "../domain/review/piVerificationActivity.ts";
+import type { EventBus } from "../events/bus.ts";
+import type { PiAcceptanceRuntimeResult } from "../pi/issueAcceptance.ts";
+import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { redactSensitiveText } from "../util/redact.ts";
-import { writeBackVerifierWorkflowEvidence } from "./verifierWorkflowWriteback.ts";
+import { applyPiAcceptanceDecision } from "./piAcceptanceApplication.ts";
 
-export type PiVerificationCycleRunner = (input: {
-  maxActions: number;
-  projectId: string;
-}) => Promise<unknown>;
+export type PiIssueAcceptanceRunner = (card: CompletionCard) => Promise<PiAcceptanceRuntimeResult>;
 
 export type PiVerificationCoordinatorInput = {
+  bus?: Pick<EventBus, "publish">;
   cooldownMs?: number;
   database: RunnerDatabase;
-  maxActions?: number;
+  decideIssueAcceptance: PiIssueAcceptanceRunner;
   now?: Date;
-  runProjectCycle: PiVerificationCycleRunner;
+  providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   source?: string;
 };
 
@@ -32,37 +38,29 @@ export type PiVerificationCoordinatorResult = {
   started: number;
 };
 
-const activeProjects = new Set<string>();
-const DEFAULT_COOLDOWN_MS = 5 * 60_000;
-const DEFAULT_MAX_ACTIONS = 5;
+const activeIssues = new Set<number>();
+const DEFAULT_COOLDOWN_MS = 30_000;
+const MAX_DECISION_ATTEMPTS_PER_CARD = 2;
 
 export async function runPiVerificationCoordinatorOnce(
   input: PiVerificationCoordinatorInput
 ): Promise<PiVerificationCoordinatorResult> {
   const now = input.now ?? new Date();
-  await settleCompletedVerifierCarriers(input.database, now, input.source);
-  const grouped = groupByProject(dueIssues(input.database, now, input.cooldownMs ?? DEFAULT_COOLDOWN_MS));
+  const issues = dueIssues(input.database, now, input.cooldownMs ?? DEFAULT_COOLDOWN_MS);
   const result: PiVerificationCoordinatorResult = {
     failed: 0,
-    issues: [...grouped.values()].reduce((count, issues) => count + issues.length, 0),
-    projects: grouped.size,
+    issues: issues.length,
+    projects: new Set(issues.map((issue) => issue.project_id)).size,
     skipped: 0,
     started: 0
   };
-  for (const [projectID, issues] of grouped) {
-    if (activeProjects.has(projectID)) {
-      result.skipped += issues.length;
+  for (const issue of issues) {
+    if (activeIssues.has(issue.id)) {
+      result.skipped += 1;
       continue;
     }
     result.started += 1;
-    const outcome = await dispatchProjectVerificationCycle({
-      database: input.database,
-      issues,
-      maxActions: input.maxActions ?? DEFAULT_MAX_ACTIONS,
-      projectID,
-      runProjectCycle: input.runProjectCycle,
-      source: input.source ?? "pi-verification-coordinator"
-    });
+    const outcome = await dispatchIssueAcceptance(input, issue, now);
     if (!outcome.ok) result.failed += 1;
   }
   return result;
@@ -72,156 +70,126 @@ export function requestPiVerificationCycle(
   input: PiVerificationCoordinatorInput & { issueID: number }
 ): void {
   const issue = getIssue(input.database, input.issueID);
-  if (
-    !issue
-    || !getProjectPiSettings(input.database, issue.project_id)
-    || isPiHeartbeatPaused(input.database, { scopeId: issue.project_id, scopeType: "project" })
-    || !piOwnedPending(input.database, issue)
-  ) return;
-  const activity = readPiVerificationActivity(input.database, issue.id);
-  const attempt = nextAttempt(activity?.attempt);
-  if (activity?.status !== "queued" && activity?.status !== "running") {
-    recordPiVerificationActivity(input.database, issue.id, "queued", {
-      attempt,
-      project_id: issue.project_id,
-      source: input.source ?? "pi-verification-request"
-    });
-  }
-  if (activeProjects.has(issue.project_id)) return;
-  void dispatchProjectVerificationCycle({
-    database: input.database,
-    issues: [issue],
-    maxActions: input.maxActions ?? DEFAULT_MAX_ACTIONS,
-    projectID: issue.project_id,
-    runProjectCycle: input.runProjectCycle,
-    source: input.source ?? "pi-verification-request"
-  });
+  if (!issue || !piOwnedPending(input.database, issue) || activeIssues.has(issue.id)) return;
+  void dispatchIssueAcceptance(input, issue, input.now ?? new Date());
 }
 
-async function dispatchProjectVerificationCycle(input: {
-  database: RunnerDatabase;
-  issues: Issue[];
-  maxActions: number;
-  projectID: string;
-  runProjectCycle: PiVerificationCycleRunner;
-  source: string;
-}): Promise<{ error: string; ok: boolean }> {
-  if (activeProjects.has(input.projectID)) return { error: "", ok: true };
-  activeProjects.add(input.projectID);
-  const attempts = new Map<number, number>();
+async function dispatchIssueAcceptance(
+  input: PiVerificationCoordinatorInput,
+  issue: Issue,
+  now: Date
+): Promise<{ error: string; ok: boolean }> {
+  if (activeIssues.has(issue.id)) return { error: "", ok: true };
+  activeIssues.add(issue.id);
+  let card: CompletionCard | undefined;
+  const previous = readPiVerificationActivity(input.database, issue.id);
+  let attemptKey = preCardAttemptKey(input.database, issue);
+  let attempt = previous?.card_fingerprint === attemptKey ? previous.attempt + 1 : 1;
   try {
-    for (const issue of input.issues) {
-      const activity = readPiVerificationActivity(input.database, issue.id);
-      const attempt = activity?.status === "queued" ? activity.attempt : nextAttempt(activity?.attempt);
-      attempts.set(issue.id, attempt);
-      recordPiVerificationActivity(input.database, issue.id, "running", {
-        attempt,
-        project_id: issue.project_id,
-        source: input.source
-      });
+    card = readCurrentIssueCompletionCard(input.database, issue.id)
+      ?? await buildIssueCompletionCard(input.database, issue.id, { now });
+    recordIssueCompletionCard(input.database, card, input.source ?? "pi-acceptance-coordinator");
+    attemptKey = card.fingerprint;
+    attempt = previous?.card_fingerprint === card.fingerprint ? previous.attempt + 1 : 1;
+    if (attempt > MAX_DECISION_ATTEMPTS_PER_CARD) {
+      escalateDecisionFailure(input, issue, card, previous?.error || "PI acceptance did not produce an applicable decision");
+      return { error: "PI acceptance circuit breaker opened", ok: false };
     }
-    await input.runProjectCycle({
-      maxActions: input.maxActions,
-      projectId: input.projectID
+    recordPiVerificationActivity(input.database, issue.id, "running", {
+      attempt,
+      card_fingerprint: card.fingerprint,
+      project_id: issue.project_id,
+      source: input.source ?? "pi-acceptance-coordinator"
     });
-    for (const original of input.issues) {
-      const current = getIssue(input.database, original.id);
-      const attempt = attempts.get(original.id) ?? 1;
-      if (!current || terminal(current.status)) {
-        if (current) recordPiVerificationActivity(input.database, current.id, "completed", {
-          attempt,
-          project_id: current.project_id,
-          source: input.source
-        });
-        continue;
-      }
-      if (readIssueVerificationProjection(input.database, current.id).owner === "human") {
-        recordPiVerificationActivity(input.database, current.id, "completed", {
-          attempt,
-          project_id: current.project_id,
-          source: input.source
-        });
-        continue;
-      }
-      recordPiVerificationActivity(input.database, current.id, "waiting", {
-        attempt,
-        error: "PI manager cycle completed; verification is still pending and will be retried",
-        project_id: current.project_id,
-        source: input.source
-      });
-    }
-    return { error: "", ok: true };
+    const result = await input.decideIssueAcceptance(card);
+    const decision = result.valid ? result.decision : {
+      ...result.decision,
+      decision: "needs_user" as const,
+      rationale: result.error || result.decision.rationale
+    };
+    const updated = await applyPiAcceptanceDecision({
+      bus: input.bus,
+      database: input.database,
+      providers: input.providers
+    }, card, decision);
+    recordPiVerificationActivity(input.database, issue.id, "completed", {
+      attempt,
+      card_fingerprint: card.fingerprint,
+      decision: decision.decision,
+      project_id: issue.project_id,
+      source: input.source ?? "pi-acceptance-coordinator"
+    });
+    return { error: "", ok: terminalOrProgressing(updated.status) };
   } catch (error) {
     const message = safeError(error);
-    for (const issue of input.issues) {
-      recordPiVerificationActivity(input.database, issue.id, "failed", {
-        attempt: attempts.get(issue.id) ?? 1,
-        error: message,
-        project_id: issue.project_id,
-        source: input.source
-      });
+    recordPiVerificationActivity(input.database, issue.id, "failed", {
+      attempt,
+      card_fingerprint: card?.fingerprint ?? attemptKey,
+      error: message,
+      project_id: issue.project_id,
+      source: input.source ?? "pi-acceptance-coordinator"
+    });
+    if (attempt >= MAX_DECISION_ATTEMPTS_PER_CARD) {
+      escalateDecisionFailure(input, issue, card, message);
     }
     return { error: message, ok: false };
   } finally {
-    activeProjects.delete(input.projectID);
+    activeIssues.delete(issue.id);
   }
 }
 
 function dueIssues(db: RunnerDatabase, now: Date, cooldownMs: number): Issue[] {
   return listIssues(db, { status: "pending_verification" }).filter((issue) => {
-    if (!getProjectPiSettings(db, issue.project_id)) return false;
-    if (isPiHeartbeatPaused(db, { scopeId: issue.project_id, scopeType: "project" })) return false;
     if (!piOwnedPending(db, issue)) return false;
     const activity = readPiVerificationActivity(db, issue.id);
     if (!activity) return true;
-    if (activity.status === "running" || activity.status === "queued") {
+    if (activity.status === "completed") {
+      const currentCard = readCurrentIssueCompletionCard(db, issue.id);
+      return currentCard?.fingerprint !== activity.card_fingerprint;
+    }
+    if (activity.status === "queued" || activity.status === "running") {
       return ageMs(activity.updated_at, now) >= Math.max(cooldownMs, 10 * 60_000);
     }
-    if (Date.parse(issue.updated_at) > Date.parse(activity.updated_at)) return true;
     return ageMs(activity.updated_at, now) >= cooldownMs;
   });
 }
 
 function piOwnedPending(db: RunnerDatabase, issue: Issue): boolean {
   return issue.status === "pending_verification"
-    && !isVerifierCarrier(issue)
+    && Boolean(getProjectPiSettings(db, issue.project_id))
+    && !isPiHeartbeatPaused(db, { scopeId: issue.project_id, scopeType: "project" })
     && readIssueVerificationProjection(db, issue.id).owner === "pi";
 }
 
-async function settleCompletedVerifierCarriers(
-  db: RunnerDatabase,
-  now: Date,
-  source = "pi-verification-coordinator"
-): Promise<void> {
-  const carriers = listIssues(db, { status: "pending_verification" }).filter(isVerifierCarrier);
-  for (const carrier of carriers) {
-    await writeBackVerifierWorkflowEvidence(db, carrier.id, {
-      now,
-      source: `${source}:settle-verifier-carrier`
-    });
-  }
+function escalateDecisionFailure(
+  input: PiVerificationCoordinatorInput,
+  issue: Issue,
+  card: CompletionCard | undefined,
+  error: string
+): void {
+  if (readIssueVerificationProjection(input.database, issue.id).owner === "human") return;
+  const latestRun = listIssueRuns(input.database, issue.id).at(-1);
+  createHumanReviewRequest(input.database, issue.id, {
+    acceptance_summary: card
+      ? [`Run ${card.run.id}`, `${card.commands.total} command observations`]
+      : [`Issue #${issue.id}`, latestRun ? `Run ${latestRun.id}` : "No canonical Run was available"],
+    consequences: "PI issue-scoped acceptance reached its bounded retry limit; automatic retries are stopped.",
+    evidence_refs: card
+      ? [`completion-card:${card.fingerprint}`, `run:${card.run.id}`]
+      : [latestRun ? `run:${latestRun.id}` : `issue:${issue.id}`],
+    kind: "acceptance",
+    question: `PI 验收连续失败，已停止自动重试：${error}`,
+    recommendation: "请查看小结卡片，选择接受、要求调整或拒绝。"
+  }, { bus: input.bus });
 }
 
-function isVerifierCarrier(issue: Issue): boolean {
-  return resolveIssueAgentRole(issue) === "verifier" && resolveWorkflowParentIssueID(issue) > 0;
+function preCardAttemptKey(db: RunnerDatabase, issue: Issue): string {
+  const run = listIssueRuns(db, issue.id).at(-1);
+  return `precard:${issue.id}:${issue.updated_at}:${run?.id ?? "none"}:${run?.ended_at ?? ""}`;
 }
 
-function groupByProject(issues: Issue[]): Map<string, Issue[]> {
-  const grouped = new Map<string, Issue[]>();
-  for (const issue of issues) {
-    const current = grouped.get(issue.project_id) ?? [];
-    current.push(issue);
-    grouped.set(issue.project_id, current);
-  }
-  return grouped;
-}
-
-function nextAttempt(attempt: number | undefined): number {
-  return typeof attempt === "number" && attempt > 0 ? attempt + 1 : 1;
-}
-
-function terminal(status: string): boolean {
-  return status === "done" || status === "failed" || status === "cancelled";
+function terminalOrProgressing(status: string): boolean {
+  return status === "done" || status === "in_progress" || status === "pending_verification";
 }
 
 function ageMs(value: string, now: Date): number {

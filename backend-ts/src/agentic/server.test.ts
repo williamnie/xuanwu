@@ -26,6 +26,11 @@ describe("Agentic Worker narrow RPC server", () => {
       const missing = await routeAgenticRequest(db, new Request("http://127.0.0.1/api/projects"));
       expect(missing.status).toBe(404);
       expect(await missing.json()).toEqual({ error: "not found", ok: false });
+
+      await expect(routeAgenticRequest(db, new Request(
+        "http://127.0.0.1/api/internal/agentic/issue-acceptance",
+        { body: JSON.stringify({ card: { issue: { id: 818, project_id: "demo" } } }), method: "POST" }
+      ))).rejects.toThrow("completion card");
     } finally {
       db.close();
     }

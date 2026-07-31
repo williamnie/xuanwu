@@ -18,6 +18,8 @@ export type PiVerificationActivityStatus =
 
 export type PiVerificationActivity = {
   attempt: number;
+  card_fingerprint: string;
+  decision: string;
   error: string;
   event_id: number;
   project_id: string;
@@ -46,6 +48,8 @@ export function readPiVerificationActivity(
   const payload = objectPayload(event.payload);
   return {
     attempt: positiveInteger(payload.attempt),
+    card_fingerprint: cleanString(payload.card_fingerprint),
+    decision: cleanString(payload.decision),
     error: cleanString(payload.error),
     event_id: event.id,
     project_id: cleanString(payload.project_id),
@@ -61,6 +65,8 @@ export function recordPiVerificationActivity(
   status: PiVerificationActivityStatus,
   input: {
     attempt: number;
+    card_fingerprint?: string;
+    decision?: string;
     error?: string;
     project_id: string;
     source: string;
@@ -68,6 +74,8 @@ export function recordPiVerificationActivity(
 ): PiVerificationActivity {
   recordIssueEvent(db, issueID, PI_VERIFICATION_EVENT_TYPES[status], {
     attempt: input.attempt,
+    card_fingerprint: cleanString(input.card_fingerprint),
+    decision: cleanString(input.decision),
     error: cleanString(input.error),
     project_id: input.project_id,
     source: input.source,

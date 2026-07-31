@@ -53,7 +53,7 @@ describe("issue.log persistence reduction", () => {
     expect(persisted[0]).toMatchObject({ text: "final" });
   });
 
-  test("normal mode stores verification results but skips ordinary successful command output", () => {
+  test("normal mode stores every terminal command without semantic regex classification", () => {
     const persisted: ProviderEvent[] = [];
     const persistence = createIssueLogPersistence(
       (event) => persisted.push(event),
@@ -76,8 +76,11 @@ describe("issue.log persistence reduction", () => {
     persistence.push(commandCompleted("verification", "bun test src/example.test.ts"));
     persistence.flush();
 
-    expect(persisted).toHaveLength(1);
-    expect(persisted[0]).toMatchObject({ command: "bun test src/example.test.ts" });
+    expect(persisted).toHaveLength(2);
+    expect(persisted.map((event) => event.command)).toEqual([
+      "git status",
+      "bun test src/example.test.ts"
+    ]);
   });
 
   test("normal mode stores unified exec verification results", () => {

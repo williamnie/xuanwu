@@ -818,7 +818,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "verification-evidence", disposition: "keep", target: "Evidence production and verification policy", source_of_truth: "verification facts and Git/runtime inputs",
-    source_files: ["backend-ts/src/pi/meaningfulProgress.ts", "backend-ts/src/pi/projectFindings.ts", "backend-ts/src/pi/projectSnapshot.ts", "backend-ts/src/pi/repoContextPack.ts", "backend-ts/src/pi/verificationEvidence.ts", "backend-ts/src/pi/verificationPolicy.ts"]
+    source_files: ["backend-ts/src/pi/issueAcceptance.ts", "backend-ts/src/pi/meaningfulProgress.ts", "backend-ts/src/pi/projectFindings.ts", "backend-ts/src/pi/projectSnapshot.ts", "backend-ts/src/pi/repoContextPack.ts", "backend-ts/src/pi/verificationEvidence.ts", "backend-ts/src/pi/verificationPolicy.ts"]
   },
   {
     id: "work-run-orchestration", disposition: "merge", target: "Work/Run orchestration and recovery", source_of_truth: "issues and issue_runs authorities",

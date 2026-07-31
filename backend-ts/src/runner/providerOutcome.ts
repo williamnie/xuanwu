@@ -3,7 +3,6 @@ import { createIssueComment, listIssueEvents, recordIssueEvent } from "../db/rep
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { upsertPiGuardianAlert } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { reconcileIssueCompletionFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
 import type { EventBus } from "../events/bus.ts";
 import { publishPiNeedsUserNotification } from "../notifications/piNotifier.ts";
 import {
@@ -12,8 +11,11 @@ import {
   recommendedRepairPayload
 } from "../pi/issueStateManager.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
+import {
+  recordCompletionGitObservation,
+  TERMINAL_COMMAND_OBSERVATION_CONTRACT
+} from "../domain/acceptance/completionCard.ts";
 import { failIssueExecution } from "./statusGate.ts";
-import { writeBackVerifierWorkflowEvidence } from "./verifierWorkflowWriteback.ts";
 
 export type ProviderReportedOutcome = {
   outcome: "completed" | "failed" | "needs_user" | "unknown";
@@ -48,14 +50,7 @@ export async function reconcileProviderOutcome(
       new Error(reported.reason || `executor reported ${reported.outcome}`),
       input.providerID
     );
-    let failed = getIssue(input.database, current.id);
-    if (failed && reported.outcome === "failed") {
-      const writeback = await writeBackVerifierWorkflowEvidence(input.database, current.id, {
-        now: input.now ?? new Date(),
-        source: "provider-runtime-host"
-      });
-      if (writeback.status === "discarded") failed = getIssue(input.database, current.id);
-    }
+    const failed = getIssue(input.database, current.id);
     if (failed && reported.outcome === "needs_user") notifyExecutorNeedsUser(input, failed, reported.reason);
     if (failed) publishIssueStatus(input, failed);
     return failed;
@@ -76,30 +71,27 @@ export async function reconcileProviderOutcome(
     now,
     operation: repair.operation
   }));
-  try {
-    await reconcileIssueCompletionFromRuntimeEvidence(input.database, current.id, {
-      actor: { id: "provider-runtime-host", kind: "runner" },
-      correlation_id: `provider-return:${current.id}:${input.providerRunID || input.issueRunID}`,
-      now: now.toISOString(),
-      source: "provider-runtime-host"
-    });
-  } catch (error) {
-    recordIssueEvent(input.database, current.id, "issue.completion_reconcile_deferred", {
-      error: safeError(error),
-      provider_run_id: input.providerRunID ?? "",
-      reason: "provider completed but completion Evidence/Handoff is incomplete"
+  const terminalRun = getIssue(input.database, current.id)?.latest_run;
+  const project = getProject(input.database, current.project_id);
+  if (terminalRun?.id === input.issueRunID && project) {
+    recordCompletionGitObservation(input.database, {
+      issue_id: current.id,
+      observed_at: now.toISOString(),
+      repository: project.cwd,
+      run: terminalRun
     });
   }
-  const reconciled = getIssue(input.database, current.id);
-  const writeback = await writeBackVerifierWorkflowEvidence(input.database, current.id, {
-    now,
-    source: "provider-runtime-host"
+  // The Host only establishes the terminal Run/state precondition here. A
+  // bounded issue-scoped completion card is built after all terminal facts are
+  // durable, then PI performs the semantic acceptance. Do not let the legacy
+  // regex-based Evidence gate or Verifier carrier decide completion.
+  recordIssueEvent(input.database, current.id, "issue.pi_acceptance_requested.v1", {
+    command_observation_contract: TERMINAL_COMMAND_OBSERVATION_CONTRACT,
+    issue_run_id: input.issueRunID,
+    provider_run_id: input.providerRunID ?? "",
+    reason: "provider completed; issue-scoped PI acceptance required"
   });
-  if (writeback.status === "completed") {
-    const parent = getIssue(input.database, writeback.parent_issue_id);
-    if (parent) publishIssueStatus(input, parent);
-  }
-  const finalized = getIssue(input.database, current.id) ?? reconciled;
+  const finalized = getIssue(input.database, current.id);
   if (finalized) publishIssueStatus(input, finalized);
   return finalized;
 }
@@ -211,8 +203,4 @@ function normalizedOutcome(value: unknown): ProviderReportedOutcome["outcome"] {
   return outcome === "completed" || outcome === "failed" || outcome === "needs_user"
     ? outcome
     : "unknown";
-}
-
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

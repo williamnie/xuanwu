@@ -1,5 +1,4 @@
 import type { ProviderEvent } from "../providers/types.ts";
-import { classifyVerificationCommand } from "../domain/evidence/completionGate.ts";
 import { codexDynamicExecObservation } from "../providers/codex/dynamicExec.ts";
 
 export const ISSUE_LOG_CHUNK_EVENT_LIMIT = 64;
@@ -216,19 +215,10 @@ function normalCompletedItem(event: ProviderEvent): boolean {
   const itemType = stringValue(item.type);
   if (itemType === "agentMessage") return true;
   const dynamicExec = codexDynamicExecObservation(item);
-  if (itemType !== "commandExecution" && !dynamicExec) return false;
-  const command = event.command || dynamicExec?.command || commandText(item);
-  const status = stringValue(item.status).toLowerCase();
-  return status === "failed" || status === "error" || dynamicExec?.status === "failed" ||
-    classifyVerificationCommand(command) !== undefined;
-}
-
-function commandText(item: Record<string, unknown>): string {
-  const direct = stringValue(item.command);
-  if (direct !== "") return direct;
-  const actions = Array.isArray(item.commandActions) ? item.commandActions : [];
-  if (actions.length !== 1) return "";
-  return stringValue(objectValue(actions[0]).command);
+  // Every terminal command is a current-Run fact. Whether it verifies the
+  // Issue is a semantic PI decision made from the completion card; persistence
+  // must not silently discard successful commands based on shell-text regexes.
+  return itemType === "commandExecution" || Boolean(dynamicExec);
 }
 
 function writeBoundedChunk(

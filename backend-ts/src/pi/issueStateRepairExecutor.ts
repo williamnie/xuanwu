@@ -98,8 +98,8 @@ function assertSafeTerminalRepair(
   const nextStatus = cleanString(objectPayload(payload.patch).status);
   if (!["move_status", "patch_status"].includes(operation) || !terminalStatus(nextStatus)) return;
   if (hasActiveRuntime(before, payload)) throw new Error("issue.state_repair cannot set terminal status while runtime is active");
-  if (nextStatus === "done" && !allowsVerifiedDone(payload)) {
-    throw new Error("issue.state_repair cannot mark done without deterministic verification evidence");
+  if (nextStatus === "done") {
+    throw new Error("issue.state_repair cannot mark done; use the current completion-card acceptance application");
   }
 }
 
@@ -159,10 +159,6 @@ function hasActiveRuntime(snapshot: IssueStateSnapshot, payload: Record<string, 
     TERMINAL_SESSION_STATUSES.has(sessionStatus);
   if (terminalMismatch) return false;
   return snapshot.run?.ended_at === "" || ACTIVE_SESSION_STATUSES.has(sessionStatus);
-}
-
-function allowsVerifiedDone(payload: Record<string, unknown>): boolean {
-  return cleanString(payload.diagnosis_code) === "pending_verification_has_evidence";
 }
 
 function terminalStatus(status: string): boolean {
