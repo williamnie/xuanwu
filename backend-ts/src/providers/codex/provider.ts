@@ -20,6 +20,7 @@ import type {
 } from "../types.ts";
 import type { CodexInitializeResult, ThreadSummary, TurnStartResult } from "./adapter.ts";
 import { CodexStdioJsonRpcTransport, type CodexProcessLease } from "./jsonRpc.ts";
+import { recoverCodexRolloutExecEvents } from "./rolloutExecRecovery.ts";
 
 const PROVIDER_CODEX = "codex";
 const DEFAULT_DEVELOPER_INSTRUCTIONS = "Keep changes scoped to the runner issue and explicitly update the issue status when done.";
@@ -224,15 +225,47 @@ export class CodexExecutorProvider implements ExecutorProvider {
   private forwardRunEvents(input: ProviderRunInput, threadID: string, release: () => void): () => void {
     if (!this.eventSource) return () => {};
     let stop = () => {};
+    let terminalPending = false;
+    const observedItemIDs = new Set<string>();
     stop = this.eventSource.subscribe((event) => {
       if (!sameThreadEvent(event, threadID)) return;
-      input.onEvent?.(event);
+      const itemID = providerEventItemID(event);
+      if (itemID !== "") observedItemIDs.add(itemID);
       if (terminalCodexEvent(event)) {
-        release();
+        if (terminalPending) return;
+        terminalPending = true;
         stop();
+        void this.recoverTerminalExecEvents(threadID, event, observedItemIDs)
+          .then((events) => {
+            for (const recovered of events) input.onEvent?.(recovered);
+          })
+          .finally(() => {
+            input.onEvent?.(event);
+            release();
+          });
+        return;
       }
+      input.onEvent?.(event);
     });
     return stop;
+  }
+
+  private async recoverTerminalExecEvents(
+    threadID: string,
+    terminal: ProviderEvent,
+    observedItemIDs: ReadonlySet<string>
+  ): Promise<ProviderEvent[]> {
+    try {
+      const thread = await this.adapter.readThread(threadID);
+      const recovered = await recoverCodexRolloutExecEvents(thread, terminal.session?.turnId ?? "");
+      return recovered.filter((event) => {
+        const id = providerEventItemID(event);
+        return id === "" || !observedItemIDs.has(id);
+      });
+    } catch {
+      // Recovery is best-effort; the original terminal event must always win.
+      return [];
+    }
   }
 }
 
@@ -355,6 +388,21 @@ function codexUserInputs(input: { images?: ProviderRunInput["images"]; prompt?: 
 
 function sameThreadEvent(event: ProviderEvent, threadID: string): boolean {
   return event.provider === PROVIDER_CODEX && event.session?.sessionId === threadID;
+}
+
+function providerEventItemID(event: ProviderEvent): string {
+  const payload = event.raw?.payload;
+  if (typeof payload !== "string" || payload === "") return "";
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return "";
+    const item = (parsed as Record<string, unknown>).item;
+    if (!item || typeof item !== "object" || Array.isArray(item)) return "";
+    const id = (item as Record<string, unknown>).id;
+    return typeof id === "string" ? id.trim() : "";
+  } catch {
+    return "";
+  }
 }
 
 function terminalCodexEvent(event: ProviderEvent): boolean {

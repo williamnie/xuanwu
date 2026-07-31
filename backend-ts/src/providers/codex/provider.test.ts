@@ -194,6 +194,7 @@ describe("Codex executor provider", () => {
       }
     });
 
+    await Bun.sleep(1);
     expect(events).toMatchObject([
       { type: "turn_started" },
       { type: "text", text: "live output" },

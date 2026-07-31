@@ -96,6 +96,7 @@ function dynamicToolOutput(value: unknown): string {
 }
 
 function dynamicToolExitCode(item: Record<string, unknown>, output: string): number | undefined {
+  if (typeof item.exitCode === "number" && Number.isSafeInteger(item.exitCode)) return item.exitCode;
   if (/^Script completed(?:\r?\n|$)/.test(output)) return 0;
   if (/^Script (?:failed|terminated)(?:\r?\n|$)/.test(output)) return 1;
   if (item.success === false || stringValue(item.status) === "failed") return 1;
