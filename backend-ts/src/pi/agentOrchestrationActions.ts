@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
+import { listIssues, type Issue } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import { createPendingPiAction, executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
@@ -75,11 +76,28 @@ function createAgentWorkflowAction(db: RunnerDatabase, context: OrchestrationCon
     actionContext,
     { ...proposal, actionType, goalID: proposal.goalID, payload },
     () => {
+      const existing = activeRoleWorkflow(db, proposal.projectID ?? "", proposal.issueID ?? 0, input.role);
+      if (existing) return existing;
       const issue = createIssue(db, payload);
       if (issue.status === "todo") context.onIssueEnqueued?.(issue.project_id);
       return issue;
     }
   );
+}
+
+function activeRoleWorkflow(
+  db: RunnerDatabase,
+  projectID: string,
+  parentIssueID: number,
+  role: AgentWorkflowInput["role"]
+): Issue | null {
+  if (!projectID || !parentIssueID || !role) return null;
+  return listIssues(db, { projectId: projectID }).find((issue) => {
+    if (issue.status !== "triage" && issue.status !== "todo" && issue.status !== "in_progress" &&
+      issue.status !== "pending_verification") return false;
+    const snapshot = objectPayload(parseJSON(issue.workflow_snapshot_json));
+    return snapshot.agent_role === role && snapshot.parent_issue_id === parentIssueID;
+  }) ?? null;
 }
 
 function escalateNeedsUser(db: RunnerDatabase, context: OrchestrationContext, input: NeedsUserEscalationInput) {
@@ -109,6 +127,14 @@ function safeRecommendExecutorProfile(
 
 function objectPayload(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function parseJSON(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return {};
+  }
 }
 
 function cleanObjectPayload(input: Record<string, unknown>): Record<string, unknown> {

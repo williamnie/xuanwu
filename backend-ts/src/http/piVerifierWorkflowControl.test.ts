@@ -19,7 +19,7 @@ afterEach(async () => {
 });
 
 describe("PI verifier workflow control", () => {
-  test("manager cycle gates verifier and reviewer workflows by project skill policy", async () => {
+  test("manager cycle starts verifier and reviewer workflows when the project has no skill allowlist", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-control-verifier-api", provider: "pi-control-verifier" });
     try {
@@ -41,7 +41,41 @@ describe("PI verifier workflow control", () => {
       expect(response.status).toBe(201);
       expect(actions.map((item) => item.action_type)).toEqual(["agent.workflow_request", "agent.workflow_request"]);
       expect(actions.map((item) => item.issue_id)).toEqual([1, 1]);
-      expect(actions.every((item) => item.gate_decision === "deny" && item.status === "denied")).toBe(true);
+      expect(actions.every((item) => item.gate_decision === "execute" && item.status === "completed")).toBe(true);
+      expect(database.sqlite.query<{ count: number }, []>(
+        "select count(*) as count from issues where project_id='demo' and workflow_snapshot_json<>''"
+      ).get()?.count).toBe(2);
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("manager cycle still denies workflow skills outside an explicit project allowlist", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-control-verifier-api", provider: "pi-control-verifier" });
+    try {
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("verification_workflow_request", { target_issue_id: 1, instructions: "verify evidence" }, { id: "verifier" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage("cycle done")
+      ]);
+      insertProject(database, "demo", { allowed: ["codex-issue-runner"] });
+      insertFauxAgent(database);
+      writeFauxModelsConfig(database);
+      insertIssue(database, "demo");
+
+      const response = await post(createDefaultRouter({ database }), "/api/projects/demo/pi/run-once");
+      const actions = listPiActions(database);
+
+      expect(response.status).toBe(201);
+      expect(actions).toHaveLength(1);
+      expect(actions[0]).toMatchObject({
+        action_type: "agent.workflow_request",
+        gate_decision: "deny",
+        status: "denied"
+      });
     } finally {
       faux.unregister();
       database.close();
@@ -55,11 +89,25 @@ async function openFixtureDatabase(): Promise<RunnerDatabase> {
   return openDatabase({ stateDir: join(root, "state") });
 }
 
-function insertProject(db: RunnerDatabase, id: string): void {
+function insertProject(
+  db: RunnerDatabase,
+  id: string,
+  skillPolicy: Record<string, unknown> = {}
+): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, provider, sort_order, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?)`,
-    [id, id, `/tmp/${id}`, "codex", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into projects
+       (id, name, cwd, provider, default_skill_policy_json, sort_order, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      id,
+      `/tmp/${id}`,
+      "codex",
+      JSON.stringify(skillPolicy),
+      1,
+      "2026-01-01T00:00:00Z",
+      "2026-01-01T00:00:00Z"
+    ]
   );
   db.sqlite.run(
     "insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)",

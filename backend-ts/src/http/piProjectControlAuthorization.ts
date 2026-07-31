@@ -6,10 +6,11 @@ import { parseSkillPolicy } from "../skills/intents.ts";
 export function managerCycleAuthorization(project: Project): PiGatePolicy {
   const projectID = project.id;
   const authorizedActions = managerAuthorizedActions(projectID);
+  const skillPolicy = parseSkillPolicy(project.default_skill_policy);
   return {
     allowedActions: [...new Set(authorizedActions.map((action) => action.action_type ?? ""))],
     allowedMcpCapabilities: parseMcpPolicy(project.default_mcp_policy).allowed ?? [],
-    allowedSkillIntents: parseSkillPolicy(project.default_skill_policy).allowed ?? [],
+    ...(skillPolicy.allowed ? { allowedSkillIntents: skillPolicy.allowed } : {}),
     authorizedActions,
     mode: "delegated",
     scope: { project_id: projectID }

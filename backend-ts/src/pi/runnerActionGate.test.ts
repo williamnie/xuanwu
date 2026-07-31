@@ -292,10 +292,15 @@ describe("PI runner action gate", () => {
         instructions: "Verify the persisted runtime evidence.",
         target_issue_id: issueID
       }) as { action_id: string; decision: string; status: string };
+      const duplicate = actions.createVerificationWorkflow({
+        instructions: "Verify the persisted runtime evidence again.",
+        target_issue_id: issueID
+      }) as { action_id: string; decision: string; status: string };
       const child = listIssues(fixture.db, { projectId: fixture.project.id })
         .find((issue) => issue.id !== issueID);
 
       expect(result).toMatchObject({ decision: "execute", status: "completed" });
+      expect(duplicate).toMatchObject({ decision: "execute", status: "completed" });
       expect(getPiAction(fixture.db, result.action_id)).toMatchObject({
         action_type: "agent.workflow_request",
         gate_decision: "execute",
@@ -309,6 +314,8 @@ describe("PI runner action gate", () => {
       });
       expect(child?.workflow_snapshot_json).toContain("\"agent_role\":\"verifier\"");
       expect(child?.workflow_snapshot_json).toContain(`"parent_issue_id":${issueID}`);
+      expect(listIssues(fixture.db, { projectId: fixture.project.id })
+        .filter((issue) => issue.id !== issueID)).toHaveLength(1);
       expect(kicked).toEqual([fixture.project.id]);
     } finally {
       await fixture.close();

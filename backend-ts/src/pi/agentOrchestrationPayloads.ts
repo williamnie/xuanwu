@@ -97,11 +97,12 @@ function writeBackInstruction(role: AgentRole, target: Issue | null): string {
   if (!target || (role !== "verifier" && role !== "reviewer")) return "";
   if (role === "verifier") {
     return [
-      "Write-back requirement:",
-      `- For pass, request the deterministic gate with: codex-issue-runner issue update --id ${target.id} --status done --json`,
-      `- For fail or inconclusive, use: codex-issue-runner issue request-changes --id ${target.id} --comment "<structured gap>" --json`,
-      "- Never use issue accept: verifier output is advisory and cannot create human override Evidence.",
-      "- Do not close this workflow issue before the parent gate/report result is recorded."
+      "Runner Host write-back contract:",
+      "- Execute the smallest directly relevant test, lint, or build command in this verifier Run so the Runner can capture tool-produced Evidence.",
+      "- For pass, finish this verifier Issue with RUNNER_OUTCOME: completed. The Runner Host will re-bind passed executable Evidence to the parent current Run and invoke the deterministic completion gate.",
+      "- For fail or inconclusive, finish with RUNNER_OUTCOME: failed | <structured gap>. Use needs_user only for a concrete decision or external input that PI cannot supply.",
+      `- Do not call lifecycle APIs or CLI commands for parent Issue #${target.id}; verifier prose and status writes cannot bypass the parent gate.`,
+      "- Never use issue accept: verifier output cannot create human override Evidence."
     ].join("\n");
   }
   return [

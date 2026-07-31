@@ -13,6 +13,7 @@ import {
 } from "../pi/issueStateManager.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
 import { failIssueExecution } from "./statusGate.ts";
+import { writeBackVerifierWorkflowEvidence } from "./verifierWorkflowWriteback.ts";
 
 export type ProviderReportedOutcome = {
   outcome: "completed" | "failed" | "needs_user" | "unknown";
@@ -84,6 +85,14 @@ export async function reconcileProviderOutcome(
   }
   const reconciled = getIssue(input.database, current.id);
   if (reconciled) publishIssueStatus(input, reconciled);
+  const writeback = await writeBackVerifierWorkflowEvidence(input.database, current.id, {
+    now,
+    source: "provider-runtime-host"
+  });
+  if (writeback.status === "completed") {
+    const parent = getIssue(input.database, writeback.parent_issue_id);
+    if (parent) publishIssueStatus(input, parent);
+  }
   return reconciled;
 }
 
