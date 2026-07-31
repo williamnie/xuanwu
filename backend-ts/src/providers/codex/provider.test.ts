@@ -203,6 +203,7 @@ describe("Codex executor provider", () => {
     expect(source.handlers.size).toBe(0);
     expect(runtime.acquired).toEqual(["project:demo:issue:160:run"]);
     expect(runtime.released).toBe(1);
+    expect(adapter.calls.filter((call) => call.method === "thread/read")).toHaveLength(0);
   });
 
   test("reads manual Sessions API detail passively with turns included", async () => {

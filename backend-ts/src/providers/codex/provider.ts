@@ -88,7 +88,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
       });
       lease.bind(thread.provider_session_id);
       await this.nameThread(thread.provider_session_id, input.issueId);
-      stopForwarding = this.forwardRunEvents(input, thread.provider_session_id, () => lease.release());
+      stopForwarding = this.forwardRunEvents(input, thread, () => lease.release());
       const turn = await this.adapter.startTurn(thread.provider_session_id, codexUserInputs(input), {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
@@ -168,7 +168,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
       const session = await this.adapter.resumeThread(input.session.sessionId);
       const threadID = session.provider_session_id || input.session.sessionId;
       lease.bind(threadID);
-      stopForwarding = this.forwardRunEvents(input, threadID, () => lease.release());
+      stopForwarding = this.forwardRunEvents(input, session, () => lease.release());
       const turn = await this.adapter.startTurn(threadID, codexUserInputs(input), {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
@@ -222,8 +222,9 @@ export class CodexExecutorProvider implements ExecutorProvider {
     await this.adapter.setThreadName(threadID, `Issue #${issueID}`);
   }
 
-  private forwardRunEvents(input: ProviderRunInput, threadID: string, release: () => void): () => void {
+  private forwardRunEvents(input: ProviderRunInput, thread: ThreadSummary, release: () => void): () => void {
     if (!this.eventSource) return () => {};
+    const threadID = thread.provider_session_id;
     let stop = () => {};
     let terminalPending = false;
     const observedItemIDs = new Set<string>();
@@ -235,7 +236,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
         if (terminalPending) return;
         terminalPending = true;
         stop();
-        void this.recoverTerminalExecEvents(threadID, event, observedItemIDs)
+        void this.recoverTerminalExecEvents(thread, event, observedItemIDs)
           .then((events) => {
             for (const recovered of events) input.onEvent?.(recovered);
           })
@@ -251,12 +252,11 @@ export class CodexExecutorProvider implements ExecutorProvider {
   }
 
   private async recoverTerminalExecEvents(
-    threadID: string,
+    thread: ThreadSummary,
     terminal: ProviderEvent,
     observedItemIDs: ReadonlySet<string>
   ): Promise<ProviderEvent[]> {
     try {
-      const thread = await this.adapter.readThread(threadID);
       const recovered = await recoverCodexRolloutExecEvents(thread, terminal.session?.turnId ?? "");
       return recovered.filter((event) => {
         const id = providerEventItemID(event);
