@@ -40,15 +40,20 @@ import { piRuntimePromptSummary } from "./piRuntimePrompt.ts";
 import type { Router } from "./router.ts";
 import { bindProjectAutomaticTakeover } from "../domain/project/automaticTakeover.ts";
 import { appLanguage } from "../i18n/language.ts";
+import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 
 type PiApiContext = {
   agenticClient?: AgenticWorkerClient;
+  auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
   bus?: EventBus;
   codexSessionsDir?: string;
   config?: RunnerConfig;
   database: RunnerDatabase;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  restartDelayMs?: number;
+  restartProcess?: () => void;
+  supervisorManaged?: boolean;
   webhookSigningSecret?: string;
 };
 

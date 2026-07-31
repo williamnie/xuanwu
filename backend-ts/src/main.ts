@@ -50,6 +50,26 @@ if (Bun.argv[2] === "__usage-index-worker") {
   }
 }
 
+if (Bun.argv[2] === "__pi-usage-worker") {
+  const [, databasePath = "", parentPIDText = "0"] = Bun.argv.slice(2);
+  const parentPID = Number(parentPIDText);
+  const parentWatch = setInterval(() => {
+    if (!Number.isInteger(parentPID) || parentPID <= 1) return;
+    try { process.kill(parentPID, 0); } catch { process.exit(1); }
+  }, 1000);
+  try {
+    const { readPiUsageForDatabase } = await import("./usage/pi.ts");
+    const report = await readPiUsageForDatabase(databasePath);
+    clearInterval(parentWatch);
+    process.stdout.write(JSON.stringify({ ok: true, report }));
+    process.exit(0);
+  } catch (error) {
+    clearInterval(parentWatch);
+    process.stderr.write(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
 const { serve, args, version } = commandMode(Bun.argv.slice(2));
 coldStartTrace("entry_loaded");
 

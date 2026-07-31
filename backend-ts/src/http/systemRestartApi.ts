@@ -25,20 +25,26 @@ export type SystemRestartContext = {
 
 export function registerSystemRestartRoute(router: Router, context: SystemRestartContext): void {
   router.post("/api/system/restart", () => {
-    if (!canRestart(context)) {
+    const result = scheduleSystemRestart(context);
+    if (!result) {
       recordRestartAudit(context, "rejected", "service is not managed by launchd/systemd");
       return json({ ok: false, message: "当前服务不是 launchd/systemd 托管，无法从 UI 安全重启" }, { status: 501 });
     }
-    const delayMs = restartDelayMs(context.restartDelayMs);
-    recordRestartAudit(context, "accepted", `restart scheduled after ${delayMs}ms`);
-    setTimeout(() => { void stopProvidersThenRestart(context); }, delayMs);
-    return json({
-      ok: true,
-      delay_ms: delayMs,
-      message: "重启请求已接受，服务会短暂断开并由守护进程拉起",
-      restart_scheduled: true
-    }, { status: 202 });
+    return json(result, { status: 202 });
   });
+}
+
+export function scheduleSystemRestart(context: SystemRestartContext): Record<string, unknown> | null {
+  if (!canRestart(context)) return null;
+  const delayMs = restartDelayMs(context.restartDelayMs);
+  recordRestartAudit(context, "accepted", `restart scheduled after ${delayMs}ms`);
+  setTimeout(() => { void stopProvidersThenRestart(context); }, delayMs);
+  return {
+    ok: true,
+    delay_ms: delayMs,
+    message: "重启请求已接受，服务会短暂断开并由守护进程拉起",
+    restart_scheduled: true
+  };
 }
 
 function canRestart(context: SystemRestartContext): boolean {

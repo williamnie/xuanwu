@@ -30,13 +30,20 @@ type RuntimeApplyResult = {
 };
 
 export function registerRunnerSettingsRoutes(router: Router, context: RunnerSettingsContext): void {
-  router.get("/api/runner/settings", () => json(publicRunnerSettings(currentSettings(context), settingsPath(context))));
+  router.get("/api/runner/settings", () => json(readRunnerSettings(context)));
   router.put("/api/runner/settings", async (request) => {
-    return json(await saveRunnerSettings(context, await objectBody(request)));
+    return json(await updateRunnerSettings(context, await objectBody(request)));
   });
 }
 
-async function saveRunnerSettings(context: RunnerSettingsContext, body: Record<string, unknown>) {
+export function readRunnerSettings(context: RunnerSettingsContext): Record<string, unknown> {
+  return publicRunnerSettings(currentSettings(context), settingsPath(context));
+}
+
+export async function updateRunnerSettings(
+  context: RunnerSettingsContext,
+  body: Record<string, unknown>
+): Promise<Record<string, unknown>> {
   const path = settingsPath(context);
   const current = currentSettings(context);
   const next = normalizeRunnerSettings(body, current);
@@ -115,9 +122,10 @@ function applyRuntimeRunnerSettings(config: RunnerConfig | undefined, next: Runn
 
 async function restartCodexTransportIfIdle(context: RunnerSettingsContext): Promise<string> {
   if (activeExecutorCount(context) > 0) return "deferred_active_sessions";
-  const stop = context.providers?.codex?.stop;
+  const provider = context.providers?.codex;
+  const stop = provider?.stop;
   if (!stop) return "not_available";
-  await stop.call(context.providers.codex);
+  await stop.call(provider);
   return "restarted";
 }
 
@@ -136,7 +144,7 @@ function countRows(context: RunnerSettingsContext, sql: string): number {
 }
 
 function currentSettings(context: RunnerSettingsContext): RunnerSettings {
-  const codexServer = context.config?.codexServer ?? buildCodexServerConfig();
+  const codexServer = context.config?.codexServer ?? buildCodexServerConfig({});
   return {
     codexServer: { ...codexServer, appEnv: { ...codexServer.appEnv } },
     maxParallelProjects: context.config?.runner.maxParallelProjects ?? DEFAULT_MAX_PARALLEL_PROJECTS

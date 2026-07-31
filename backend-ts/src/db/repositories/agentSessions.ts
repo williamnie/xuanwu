@@ -50,6 +50,18 @@ export function getAgentSession(db: RunnerDatabase, sessionKey: string): AgentSe
   return row ? mapAgentSessionRow(row) : null;
 }
 
+export function getAgentSessionByReference(db: RunnerDatabase, reference: string): AgentSession | null {
+  const key = cleanString(reference);
+  if (key === "") return null;
+  const exact = getAgentSession(db, key);
+  if (exact) return exact;
+  const rows = db.sqlite.query<AgentSessionRow, [string]>(
+    `select ${SESSION_COLUMNS} from agent_sessions
+     where provider_session_id=? order by updated_at desc, session_key asc limit 2`
+  ).all(key);
+  return rows.length === 1 ? mapAgentSessionRow(rows[0]) : null;
+}
+
 function normalizeSessionInput(input: AgentSessionInput): AgentSession {
   const provider = cleanString(input.provider) || "codex";
   const providerSessionID = cleanString(input.provider_session_id);

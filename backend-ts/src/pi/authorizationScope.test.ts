@@ -56,6 +56,21 @@ describe("PI authorization scope matcher", () => {
       .toEqual({ matched: false, reason: "runner workspace scope does not match action issue.enqueue" });
   });
 
+  test("keeps Runner settings and service lifecycle in explicit global scopes", () => {
+    expect(matchPiAuthorizationScope(
+      { ...BASE, action_type: "runner.settings_update", project_id: "" },
+      { runner_resource: "runner_settings" }
+    )).toEqual({ matched: true, reason: "scope matched runner settings" });
+    expect(matchPiAuthorizationScope(
+      { ...BASE, action_type: "system.restart", project_id: "" },
+      { runner_resource: "service_lifecycle" }
+    )).toEqual({ matched: true, reason: "scope matched service lifecycle" });
+    expect(matchPiAuthorizationScope(
+      { ...BASE, action_type: "issue.delete" },
+      { runner_resource: "service_lifecycle" }
+    )).toEqual({ matched: false, reason: "service lifecycle scope does not match action issue.delete" });
+  });
+
   test("matches goal scope through its associated issue_ids", () => {
     expect(matchPiAuthorizationScope(BASE, { goal_id: "night-run", issue_ids: [7, 8], project_id: "demo" }))
       .toEqual({ matched: true, reason: "scope matched goal night-run issue 7" });

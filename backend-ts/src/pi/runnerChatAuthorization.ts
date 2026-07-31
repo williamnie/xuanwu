@@ -5,6 +5,7 @@ const RUNNER_CHAT_MUTATION_ACTIONS = new Set([
   "agent.workflow_request",
   "issue.create",
   "issue.cancel",
+  "issue.delete",
   "issue.completion_reconcile",
   "issue.enqueue",
   "issue.schedule_enqueue",
@@ -14,6 +15,8 @@ const RUNNER_CHAT_MUTATION_ACTIONS = new Set([
   "issue_completion_watch.cancel",
   "notification.preference.update",
   "project.create",
+  "runner.settings_update",
+  "system.restart",
   "workspace.make_directory",
   "workspace.write_file",
   ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES

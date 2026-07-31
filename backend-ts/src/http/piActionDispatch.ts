@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import type { RunnerConfig } from "../config/env.ts";
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
-import { enqueueIssue } from "../db/repositories/issueActions.ts";
+import { deleteIssues, enqueueIssue } from "../db/repositories/issueActions.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
@@ -46,6 +47,11 @@ import {
   executeIssueStatusUpdate,
   type IssueStatusUpdateInput
 } from "../pi/runnerIssueStatusActions.ts";
+import { updateRunnerSettings } from "./runnerSettingsApi.ts";
+import {
+  scheduleSystemRestart,
+  type SystemRestartAuditEvent
+} from "./systemRestartApi.ts";
 
 export type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -54,10 +60,15 @@ export type ProjectLoopStarter = (
 ) => void;
 
 export type PiActionDispatchContext = {
+  auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
   bus?: Pick<EventBus, "publish">;
+  config?: RunnerConfig;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  restartDelayMs?: number;
+  restartProcess?: () => void;
   startProjectLoop?: ProjectLoopStarter;
+  supervisorManaged?: boolean;
 };
 
 export async function dispatchPiAction(
@@ -78,10 +89,25 @@ export async function dispatchPiAction(
         reason: cleanString(payload.reason) || cleanString(action.rationale) || "用户明确取消 Issue",
         status: "cancelled"
       });
+    case "issue.delete":
+      return deleteIssues(context.database, positiveIDList(payload.issue_ids));
     case "issue.status_update":
       return await updateIssueStatusesAndStartAutoRun(context, action, issueStatusUpdateInput(payload));
     case "issue.status_lookup":
       return lookupIssueStatus(context.database, payload);
+    case "runner.settings_update":
+      return await updateRunnerSettings(context, payload);
+    case "system.restart": {
+      const result = scheduleSystemRestart({
+        audit: context.auditSystemRestart,
+        providers: context.providers,
+        restartDelayMs: context.restartDelayMs,
+        restartProcess: context.restartProcess,
+        supervisorManaged: context.supervisorManaged
+      });
+      if (!result) throw new Error("当前服务不是 launchd/systemd 托管，无法安全重启");
+      return result;
+    }
     case "message.reply_draft":
       return createImReplyDraft(context.database, replyDraftPayload(payload, action));
     case "message.reply_send":

@@ -9,6 +9,8 @@ import type { EventBus } from "../events/bus.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { ProjectLoopStarter } from "./piActionDispatch.ts";
+import type { RunnerConfig } from "../config/env.ts";
+import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 import {
   LEGACY_ATTENTION_MUTATION_HEADERS,
   resolveInternalActionDecision
@@ -16,10 +18,15 @@ import {
 import type { Router } from "./router.ts";
 
 type PiActionsContext = {
+  auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
   bus?: EventBus;
+  config?: RunnerConfig;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  restartDelayMs?: number;
+  restartProcess?: () => void;
   startProjectLoop?: ProjectLoopStarter;
+  supervisorManaged?: boolean;
 };
 
 export function registerPiActionRoutes(router: Router, context: PiActionsContext): void {

@@ -81,6 +81,12 @@ function matchRunnerResourceScope(envelope: PiActionEnvelope, resource: string):
   if (resource === "workspace") return envelope.action_type.startsWith("workspace.")
     ? matched("scope matched local workspace")
     : denied(`runner workspace scope does not match action ${envelope.action_type}`);
+  if (resource === "runner_settings") return envelope.action_type.startsWith("runner.settings")
+    ? matched("scope matched runner settings")
+    : denied(`runner settings scope does not match action ${envelope.action_type}`);
+  if (resource === "service_lifecycle") return envelope.action_type === "system.restart"
+    ? matched("scope matched service lifecycle")
+    : denied(`service lifecycle scope does not match action ${envelope.action_type}`);
   return denied(`runner resource scope ${resource} is not supported`);
 }
 

@@ -111,6 +111,49 @@ describe("PI Guardian missed intent sweep", () => {
     }
   });
 
+  test("recovers a pending digest through the latest project notification target", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      insertOutageAlert(db, "coordinator_stalled");
+      const first = runGuardianMissedIntentSweepOnce(db, {
+        now: NOW,
+        watchdog: recoveredWatchdog("coordinator")
+      });
+      expect(first.pending).toBe(1);
+
+      createPiNotificationIntent(db, {
+        conversation_id: "feishu-chat-oc_recovered",
+        id: "known-target",
+        idempotency_key: "known-target",
+        kind: "pi_action_pending",
+        project_id: "demo",
+        state: "sent",
+        target_channel: "feishu",
+        target_chat_id: "oc_recovered"
+      });
+      const second = runGuardianMissedIntentSweepOnce(db, {
+        now: "2026-06-19T00:11:00Z",
+        watchdog: recoveredWatchdog("coordinator")
+      });
+      const digest = recoveryDigests(db)[0]!;
+
+      expect(second.pending).toBe(0);
+      expect(digest).toMatchObject({
+        conversation_id: "feishu-chat-oc_recovered",
+        state: "ready",
+        target_chat_id: "oc_recovered"
+      });
+      expect(listPiGuardianAlerts(db, {
+        alertType: "missed_digest_pending",
+        projectId: "demo",
+        status: "open"
+      })).toHaveLength(0);
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps missed digest recovery inside PI instead of sending direct Feishu noise", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender([{ messageId: "om_missed_digest_1" }]);

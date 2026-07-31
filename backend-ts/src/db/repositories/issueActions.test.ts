@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../database.ts";
-import { enqueueIssue, retryIssue } from "./issueActions.ts";
+import { deleteIssues, enqueueIssue, retryIssue } from "./issueActions.ts";
 import { claimNextIssue } from "./issueQueue.ts";
 import { getIssue, listIssueRuns } from "./issues.ts";
 
@@ -55,6 +55,23 @@ describe("issue action repository", () => {
       db.close();
     }
   });
+
+  test("batch delete is atomic when any issue still has an open Run", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const deletableID = insertIssue(db, "demo", "triage");
+      const runningID = insertRunningIssue(db, "demo");
+      insertOpenRun(db, runningID);
+
+      expect(() => deleteIssues(db, [deletableID, runningID]))
+        .toThrow("运行中的 issue 不能删除，请先取消执行");
+      expect(getIssue(db, deletableID)).toMatchObject({ id: deletableID, status: "triage" });
+      expect(getIssue(db, runningID)).toMatchObject({ id: runningID, status: "in_progress" });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function expectRunningActionToBeIdempotent(
@@ -92,11 +109,32 @@ function insertProject(db: RunnerDatabase, id: string): void {
 }
 
 function insertRunningIssue(db: RunnerDatabase, projectID: string): number {
+  return insertIssue(db, projectID, "in_progress", {
+    codexThreadID: "thread-1",
+    codexTurnID: "turn-1",
+    attemptCount: 1
+  });
+}
+
+function insertIssue(
+  db: RunnerDatabase,
+  projectID: string,
+  status: string,
+  options: { attemptCount?: number; codexThreadID?: string; codexTurnID?: string } = {}
+): number {
   db.sqlite.run(
     `insert into issues
       (project_id, title, status, attempt_count, codex_thread_id, codex_turn_id, created_at, updated_at)
-     values (?, 'Running', 'in_progress', 1, 'thread-1', 'turn-1', ?, ?)`,
-    [projectID, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+     values (?, 'Issue', ?, ?, ?, ?, ?, ?)`,
+    [
+      projectID,
+      status,
+      options.attemptCount ?? 0,
+      options.codexThreadID ?? "",
+      options.codexTurnID ?? "",
+      "2026-01-01T00:00:00Z",
+      "2026-01-01T00:00:00Z"
+    ]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");

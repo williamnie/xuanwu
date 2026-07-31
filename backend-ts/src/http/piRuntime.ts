@@ -3,6 +3,7 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { getModel, getProviders, type KnownProvider, type Model } from "@earendil-works/pi-ai";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import type { RunnerConfig } from "../config/env.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
@@ -22,16 +23,19 @@ import type { SupervisorContextResolution } from "../pi/supervisorContextResolve
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "../pi/supervisorControlContracts.ts";
 import { installPiProviderSecretOverride } from "../security/secrets/piProviderRuntime.ts";
+import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 
 export type PiRuntimeResult = { piSessionId: string; sessionFile: string };
 export type PiRuntimeSession = Awaited<ReturnType<typeof createPiRuntimeSession>>;
 export type RuntimeSessionInput = {
   agent: PiAgent;
+  auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
   authorization?: PiGatePolicy;
   bus?: EventBus;
   channelContext?: string;
   cliConnectorDirs?: string[];
   conversationID: string;
+  config?: RunnerConfig;
   delegationID?: string;
   env?: Record<string, string | undefined>;
   heartbeatID?: string;
@@ -39,6 +43,8 @@ export type RuntimeSessionInput = {
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  restartDelayMs?: number;
+  restartProcess?: () => void;
   retry?: {
     baseDelayMs?: number;
     enabled?: boolean;
@@ -49,6 +55,7 @@ export type RuntimeSessionInput = {
   source?: string;
   sourceTurn?: { id?: string; source?: string; userPrompt?: string };
   supervisorContext?: SupervisorContextResolution;
+  supervisorManaged?: boolean;
   toolProject?: Project;
 };
 
@@ -57,6 +64,7 @@ export const PI_RUNNER_CHAT_ACTIONS = [
   "agent.workflow_request",
   "issue.create",
   "issue.cancel",
+  "issue.delete",
   "issue.completion_reconcile",
   "issue.enqueue",
   "issue.schedule_enqueue",
@@ -66,6 +74,8 @@ export const PI_RUNNER_CHAT_ACTIONS = [
   "issue_completion_watch.cancel",
   "notification.preference.update",
   "project.create",
+  "runner.settings_update",
+  "system.restart",
   "workspace.make_directory",
   "workspace.write_file",
   ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
@@ -75,6 +85,7 @@ export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
   "agent.workflow_request",
   "issue.create",
   "issue.cancel",
+  "issue.delete",
   "issue.completion_reconcile",
   "issue.enqueue",
   "issue.schedule_enqueue",
@@ -84,6 +95,8 @@ export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
   "issue_completion_watch.cancel",
   "notification.preference.update",
   "project.create",
+  "runner.settings_update",
+  "system.restart",
   "workspace.make_directory",
   "workspace.write_file",
   ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
@@ -140,18 +153,23 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     : sdk.pi.SessionManager.create(context.cwd, context.sessionDir, { id: input.conversationID });
   const cleanupRuntimeProvider = ensureRuntimeProvider(sdk, input.agent);
   const toolContext = {
+    auditSystemRestart: input.auditSystemRestart,
     authorization: input.authorization,
     bus: input.bus,
     cliConnectorDirs: input.cliConnectorDirs,
     conversationID: input.conversationID,
+    config: input.config,
     delegationID: input.delegationID,
     env: input.env,
     heartbeatID: input.heartbeatID,
     issueID: input.issueID,
     onIssueEnqueued: input.onIssueEnqueued,
     providers: input.providers,
+    restartDelayMs: input.restartDelayMs,
+    restartProcess: input.restartProcess,
     source: input.source,
-    sourceTurn: input.sourceTurn
+    sourceTurn: input.sourceTurn,
+    supervisorManaged: input.supervisorManaged
   };
   const toolAuditInput = {
     conversationID: input.conversationID,

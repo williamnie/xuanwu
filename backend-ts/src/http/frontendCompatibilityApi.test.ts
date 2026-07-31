@@ -276,6 +276,12 @@ describe("Bun frontend API compatibility", () => {
       expect(usage).toMatchObject({
         source: sessionsDir,
         events_scanned: 1,
+        pi_usage: {
+          completeness: "complete",
+          sessions_scanned: 0,
+          status: "available",
+          summary: { today: { total_tokens: 0 } }
+        },
         summary: { all_time: { total_tokens: 15 } },
         latest_usage: { last_token_usage: { total_tokens: 15 } }
       });

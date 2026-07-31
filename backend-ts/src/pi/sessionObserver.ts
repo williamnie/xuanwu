@@ -1,5 +1,9 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { getAgentSession, listAgentSessions, type AgentSession } from "../db/repositories/agentSessions.ts";
+import {
+  getAgentSessionByReference,
+  listAgentSessions,
+  type AgentSession
+} from "../db/repositories/agentSessions.ts";
 import { hydrateStoredIssueLogPayload } from "../db/repositories/issueEvents.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { redactSensitiveText } from "../util/redact.ts";
@@ -50,7 +54,7 @@ export function observeSessionProgress(
   sessionKey: string,
   options: SessionObserverOptions = {}
 ): SessionProgressSummary {
-  const session = getAgentSession(db, sessionKey.trim());
+  const session = getAgentSessionByReference(db, sessionKey);
   if (!session) throw new Error("session 不存在");
   return buildSessionProgress(db, session, eventLimit(options));
 }

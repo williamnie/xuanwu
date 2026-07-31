@@ -87,6 +87,7 @@ export const PI_SAFE_ACTION_TYPES = [
   "issue.status_summary",
   "issue_completion_watch.list",
   "issue.supervisor_decision", "project.list", "project.status",
+  "runner.settings_read",
   "repo.read_excerpt", "repo.search", "repo.tree",
   "session.list", "session.read_summary", "memory.search", "memory.remember",
   "notification.preference.read",
@@ -100,6 +101,7 @@ export const PI_READ_ONLY_ACTION_TYPES = [
   "issue.execution_status", "issue.list", "issue.read", "issue.state_diagnose", "issue.status_summary",
   "issue_completion_watch.list",
   "project.list", "project.status",
+  "runner.settings_read",
   "repo.read_excerpt", "repo.search", "repo.tree",
   "session.list", "session.read_summary",
   "memory.search",
@@ -122,7 +124,15 @@ const CONFIRM_ACTIONS = new Set([
   "session.resume_followup",
   ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES.filter((action) => !SUPERVISOR_HIGH_RISK_ACTIONS.has(action))
 ]);
-const HIGH_RISK_ACTIONS = new Set(["session.steer", "mcp.tool.call", "assistant.tool.call", ...SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES]);
+const HIGH_RISK_ACTIONS = new Set([
+  "assistant.tool.call",
+  "issue.delete",
+  "mcp.tool.call",
+  "runner.settings_update",
+  "session.steer",
+  "system.restart",
+  ...SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES
+]);
 const READ_ONLY_ACTIONS = new Set(PI_READ_ONLY_ACTION_TYPES);
 
 export function classifyPiActionRisk(actionType: string, override: Partial<PiRiskClassification> = {}): PiRiskClassification {

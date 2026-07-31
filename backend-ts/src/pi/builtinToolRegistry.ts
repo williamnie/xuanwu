@@ -24,6 +24,7 @@ const READ_TOOL_NAMES = new Set<string>([
   "repo_tree",
   "project_status",
   "project_list",
+  "runner_settings_read",
   "session_list",
   "session_read_summary",
   "skill_list",
@@ -38,7 +39,12 @@ const READ_TOOL_NAMES = new Set<string>([
   "notification_preference_read",
   ...SUPERVISOR_CONTROL_READ_TOOL_NAMES
 ]);
-const DANGEROUS_TOOL_NAMES = new Set<string>(SUPERVISOR_CONTROL_DANGEROUS_TOOL_NAMES);
+const DANGEROUS_TOOL_NAMES = new Set<string>([
+  "issue_delete",
+  "runner_settings_update",
+  "system_restart",
+  ...SUPERVISOR_CONTROL_DANGEROUS_TOOL_NAMES
+]);
 const SUPERVISOR_CONTROL_TOOLS = new Set<string>(SUPERVISOR_CONTROL_TOOL_NAMES);
 const LOCAL_WORKSPACE_TOOLS = new Set<string>(PI_LOCAL_WORKSPACE_TOOL_NAMES);
 

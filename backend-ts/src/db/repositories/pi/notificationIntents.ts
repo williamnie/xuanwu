@@ -40,7 +40,8 @@ const COLUMNS = `id, source_event_id, source_event_sequence_id, source_event_typ
   ack_retry_count, next_ack_retry_at, error, created_at, updated_at`;
 const UPDATE_COLUMNS = [
   "decision", "state", "summary", "payload_json", "preference_id", "flush_after_at", "ready_at",
-  "sent_outbox_id", "sent_at", "ack_status", "ack_deadline_at", "ack_retry_count", "next_ack_retry_at", "error"
+  "sent_outbox_id", "sent_at", "ack_status", "ack_deadline_at", "ack_retry_count", "next_ack_retry_at", "error",
+  "conversation_id", "target_channel", "target_chat_id", "target_thread_id", "target_message_id"
 ] as const;
 
 export function createPiNotificationIntent(
@@ -140,7 +141,12 @@ function normalizePatch(input: PiNotificationIntentInput): PiNotificationIntentI
     ...input,
     ack_retry_count: input.ack_retry_count === undefined ? undefined : integerInput(input.ack_retry_count),
     payload_json: input.payload_json === undefined ? undefined : payloadText(input.payload_json),
-    sent_outbox_id: input.sent_outbox_id === undefined ? undefined : integerInput(input.sent_outbox_id)
+    conversation_id: input.conversation_id === undefined ? undefined : cleanString(input.conversation_id),
+    sent_outbox_id: input.sent_outbox_id === undefined ? undefined : integerInput(input.sent_outbox_id),
+    target_channel: input.target_channel === undefined ? undefined : cleanString(input.target_channel),
+    target_chat_id: input.target_chat_id === undefined ? undefined : cleanString(input.target_chat_id),
+    target_message_id: input.target_message_id === undefined ? undefined : cleanString(input.target_message_id),
+    target_thread_id: input.target_thread_id === undefined ? undefined : cleanString(input.target_thread_id)
   };
 }
 

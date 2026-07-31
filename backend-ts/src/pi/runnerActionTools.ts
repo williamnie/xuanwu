@@ -21,6 +21,7 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "issue_create_proposal",
   "issue_create_batch_proposal",
   "issue_cancel",
+  "issue_delete",
   "issue_status_update",
   "issue_state_diagnose",
   "issue_state_repair_proposal",
@@ -38,6 +39,9 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "manual_context_intake",
   "project_status",
   "project_list",
+  "runner_settings_read",
+  "runner_settings_update",
+  "system_restart",
   "session_list",
   "session_read_summary",
   "session_steer_proposal",
@@ -111,6 +115,7 @@ export function createPiRunnerActionTools(actions: PiRunnerActionLayer): ToolDef
     ...repoActionTools(actions),
     ...manualContextTools(actions),
     ...projectActionTools(actions),
+    ...runnerControlTools(actions),
     ...sessionActionTools(actions),
     ...skillActionTools(actions),
     ...createPiMcpActionTools(actions)
@@ -301,6 +306,12 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
         issue_ids: Type.Array(positiveID, { minItems: 1, maxItems: 40 }),
         rationale: optionalString
       }, objectOptions), actions.cancelIssues),
+    actionTool("issue_delete", "Issue Delete",
+      "Permanently delete 1-40 explicit, non-running issues from one project. This is irreversible, requires user approval, and never deletes a project or repository files.",
+      Type.Object({
+        issue_ids: Type.Array(positiveID, { minItems: 1, maxItems: 40 }),
+        reason: requiredText
+      }, objectOptions), actions.deleteIssues),
     actionTool("issue_status_update", "Issue Status Update",
       "Move one or more explicit issues through the canonical Runner status contract. Supports every Issue status, validates the current transition, interrupts active providers when required, queues execution for in_progress, and enforces the completion Evidence/Handoff gate for done.",
       Type.Object({
@@ -356,6 +367,26 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
     actionTool("issue_completion_watch_cancel", "Issue Completion Watch Cancel",
       "Cancel one active persistent issue completion watch.",
       Type.Object({ reason: optionalString, watch_id: requiredText }, objectOptions), actions.cancelIssueCompletionWatch)
+  ];
+}
+
+function runnerControlTools(actions: PiRunnerActionLayer): ToolDefinition[] {
+  return [
+    actionTool("runner_settings_read", "Runner Settings Read",
+      "Read the bounded, non-secret Runner runtime settings exposed by the management API.",
+      Type.Object({}, objectOptions), actions.readRunnerSettings),
+    actionTool("runner_settings_update", "Runner Settings Update",
+      "Update bounded Runner settings: parallel project limit and Codex CLI/App transport commands. Requires user approval and never edits arbitrary environment variables or secrets.",
+      Type.Object({
+        codex_app_command: optionalString,
+        codex_cli_command: optionalString,
+        codex_server_mode: Type.Optional(Type.Union([Type.Literal("cli"), Type.Literal("app")])),
+        max_parallel_projects: Type.Optional(positiveNumber),
+        reason: requiredText
+      }, objectOptions), actions.updateRunnerSettings),
+    actionTool("system_restart", "System Restart",
+      "Request a supervised Runner service restart. Requires user approval, stops provider transports first, and is unavailable when launchd/systemd is not managing the service.",
+      Type.Object({ reason: requiredText }, objectOptions), actions.restartSystem)
   ];
 }
 

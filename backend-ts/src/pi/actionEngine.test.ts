@@ -42,6 +42,18 @@ describe("PI action engine risk classifier", () => {
       requiresConfirmation: true,
       riskLevel: "high"
     });
+    for (const actionType of ["issue.delete", "runner.settings_update", "system.restart"]) {
+      expect(classifyPiActionRisk(actionType)).toEqual({
+        gate: "high",
+        requiresConfirmation: true,
+        riskLevel: "high"
+      });
+    }
+    expect(classifyPiActionRisk("runner.settings_read")).toEqual({
+      gate: "safe",
+      requiresConfirmation: false,
+      riskLevel: "low"
+    });
     expect(classifyPiActionRisk("work.cancel")).toEqual({
       gate: "high",
       requiresConfirmation: true,

@@ -38,12 +38,17 @@ import {
 } from "./piConversationReview.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { Router } from "./router.ts";
+import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 
 type PiConversationContext = {
+  auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
   bus?: EventBus;
   config?: RunnerConfig;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  restartDelayMs?: number;
+  restartProcess?: () => void;
+  supervisorManaged?: boolean;
 };
 export type PiConversationPromptInput = {
   channelContext?: string;
@@ -620,11 +625,13 @@ async function openConversationRuntime(
   const review = isReviewConversationIntent(intent);
   return createPiRuntimeSession(context.database, {
     agent,
+    auditSystemRestart: context.auditSystemRestart,
     authorization: conversationAuthorization(review, toolProject, PI_RUNNER_CHAT_ACTIONS),
     bus: context.bus,
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs,
     channelContext,
     conversationID: conversation.id,
+    config: context.config,
     onIssueEnqueued: (projectID) => startProjectLoop({
       bus: context.bus,
       database: context.database,
@@ -632,11 +639,14 @@ async function openConversationRuntime(
     }, projectID, { forceOnce: true }),
     project,
     providers: context.providers,
+    restartDelayMs: context.restartDelayMs,
+    restartProcess: context.restartProcess,
     sessionFile: conversation.session_file,
     toolProject,
     source,
     sourceTurn: { id: turnID, source, userPrompt },
     supervisorContext,
+    supervisorManaged: context.supervisorManaged,
   });
 }
 
@@ -660,7 +670,12 @@ function runnerChatAuthorization(
     allowedMcpCapabilities: parseMcpPolicy(project.default_mcp_policy).allowed,
     authorizedActions: runnerChatAuthorizedActions(actions),
     mode: "delegated" as const,
-    scopes: [{ runner_resource: "issues" }, { project_id: project.id }]
+    scopes: [
+      { runner_resource: "issues" },
+      { runner_resource: "runner_settings" },
+      { runner_resource: "service_lifecycle" },
+      { project_id: project.id }
+    ]
   };
 }
 
@@ -668,6 +683,8 @@ function unboundRunnerChatAuthorization() {
   const actions = [
     ...PI_READ_ONLY_ACTION_TYPES,
     "project.create",
+    "runner.settings_update",
+    "system.restart",
     "workspace.make_directory",
     "workspace.write_file"
   ];
@@ -675,7 +692,12 @@ function unboundRunnerChatAuthorization() {
     allowedActions: actions,
     authorizedActions: runnerChatAuthorizedActions(actions),
     mode: "delegated" as const,
-    scopes: [{ runner_resource: "projects" }, { runner_resource: "workspace" }]
+    scopes: [
+      { runner_resource: "projects" },
+      { runner_resource: "runner_settings" },
+      { runner_resource: "service_lifecycle" },
+      { runner_resource: "workspace" }
+    ]
   };
 }
 

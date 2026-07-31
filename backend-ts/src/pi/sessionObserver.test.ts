@@ -39,10 +39,12 @@ describe("session progress observer", () => {
       insertIssueLog(db, error, { type: "error", error: `CODEX_API_KEY=secret failed ${longLog}` }, 6);
 
       const activeSummary = observeSessionProgress(db, "codex:thread-active");
+      const activeSummaryByProviderID = observeSessionProgress(db, "thread-active");
       const doneSummary = observeSessionProgress(db, "codex:thread-done");
       const errorSummary = observeSessionProgress(db, "codex:thread-error");
 
       expect(activeSummary).toMatchObject({ progress_state: "active", session_key: "codex:thread-active" });
+      expect(activeSummaryByProviderID).toEqual(activeSummary);
       expect(doneSummary).toMatchObject({ progress_state: "done", session_key: "codex:thread-done" });
       expect(errorSummary).toMatchObject({ progress_state: "error", session_key: "codex:thread-error" });
       expect(JSON.stringify(activeSummary)).not.toContain(longLog);

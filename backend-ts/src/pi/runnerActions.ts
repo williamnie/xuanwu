@@ -1,13 +1,14 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { enqueueIssue } from "../db/repositories/issueActions.ts";
+import type { RunnerConfig } from "../config/env.ts";
+import { deleteIssues, enqueueIssue } from "../db/repositories/issueActions.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { auditIssueSkillIntents } from "../skills/intentAudit.ts";
 import { getSkillMetadata, readSkillRegistry, recommendSkillIntents } from "../skills/registry.ts";
 import { parseSkillIntentList } from "../skills/intents.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
-import { getIssue } from "../db/repositories/issues.ts";
+import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { listProjects, ProjectNotFoundError, type Project } from "../db/repositories/projects.ts";
-import { getAgentSession, listAgentSessions } from "../db/repositories/agentSessions.ts";
+import { getAgentSessionByReference, listAgentSessions } from "../db/repositories/agentSessions.ts";
 import { createPiMcpActions, type PiMcpActionLayer } from "./mcpActionTools.ts";
 import type { EventBus } from "../events/bus.ts";
 import { createPendingPiAction, executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
@@ -62,10 +63,19 @@ import {
   createHumanReviewRequest as createHumanReviewRequestRecord,
   type CreateHumanReviewRequestInput
 } from "../domain/review/humanReview.ts";
+import {
+  readRunnerSettings,
+  updateRunnerSettings as applyRunnerSettings
+} from "../http/runnerSettingsApi.ts";
+import {
+  scheduleSystemRestart,
+  type SystemRestartAuditEvent
+} from "../http/systemRestartApi.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
   cancelIssues(input: IssueCancelInput): unknown;
+  deleteIssues(input: IssueDeleteInput): unknown;
   updateIssueStatuses(input: IssueStatusUpdateInput): unknown;
   createIssueProposal(input: IssueCreateProposalInput): unknown;
   createIssueBatchProposal(input: IssueCreateBatchProposalInput): unknown;
@@ -92,17 +102,26 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
   listSessions(input: SessionListInput): unknown;
   projectStatus(input: ProjectStatusInput): unknown;
   readIssue(input: IssueReadInput): unknown;
+  readRunnerSettings(input: object): unknown;
   readSessionSummary(input: SessionReadSummaryInput): unknown;
+  restartSystem(input: SystemRestartInput): unknown;
+  updateRunnerSettings(input: RunnerSettingsUpdateInput): unknown;
   createHumanReviewRequest(input: CreateHumanReviewRequestInput & { issue_id: number }): unknown;
 };
 
 export type PiRunnerActionContext = PiActionContext & {
+  auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
   cliConnectorDirs?: string[];
+  config?: RunnerConfig;
   env?: Record<string, string | undefined>;
+  issueID?: number;
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  restartDelayMs?: number;
+  restartProcess?: () => void;
   sourceTurn?: PiRunnerSourceTurn;
+  supervisorManaged?: boolean;
 };
 
 export type PiRunnerSourceTurn = {
@@ -117,6 +136,7 @@ type IssueExecutionStatusInput = { id: number };
 type IssueCompletionReconcileInput = { issue_id: number; rationale?: string };
 type IssueCommentInput = { body: string; issue_id: number };
 type IssueCancelInput = { issue_ids: number[]; rationale?: string };
+type IssueDeleteInput = { issue_ids: number[]; reason: string };
 type IssueProposalInput = { issue_id: number; rationale?: string };
 type IssueCreateProposalInput = IssueProposalContextFields & {
   description: string;
@@ -144,6 +164,14 @@ type ProjectStatusInput = { project_id?: string };
 type SessionListInput = { project_id?: string; provider?: string; role?: string };
 type SessionReadSummaryInput = { session_key: string };
 type SessionSteerProposalInput = { prompt: string; rationale?: string; session_key: string };
+type RunnerSettingsUpdateInput = {
+  codex_app_command?: string;
+  codex_cli_command?: string;
+  codex_server_mode?: "app" | "cli";
+  max_parallel_projects?: number;
+  reason: string;
+};
+type SystemRestartInput = { reason: string };
 
 type ProposalInput = {
   actionType: string;
@@ -176,6 +204,7 @@ export function createPiRunnerActions(
       execute: () => createHumanReviewRequestRecord(db, input.issue_id, input, { bus: context.bus })
     }),
     cancelIssues: (input) => cancelIssues(db, context, input),
+    deleteIssues: (input) => deleteIssuesProposal(db, context, input),
     updateIssueStatuses: (input) => updateIssueStatuses(db, context, input),
     createIssueProposal: (input) => {
       const proposal = issueCreateProposal(input, context);
@@ -224,7 +253,10 @@ export function createPiRunnerActions(
     readSkill: (input) => safeReadSkill(db, context, input),
     recommendSkills: (input) => safeRecommendSkills(db, context, input),
     readIssue: (input) => safeReadIssue(db, context, input),
-    readSessionSummary: (input) => safeReadSessionSummary(db, context, input)
+    readRunnerSettings: () => safeReadRunnerSettings(db, context),
+    readSessionSummary: (input) => safeReadSessionSummary(db, context, input),
+    restartSystem: (input) => restartSystemProposal(db, context, input),
+    updateRunnerSettings: (input) => runnerSettingsUpdateProposal(db, context, input)
   };
 }
 
@@ -261,6 +293,64 @@ function updateIssueStatuses(
     projectID: prepared.projectID,
     rationale: input.reason
   }, () => executeIssueStatusUpdate(db, input, issueStatusRuntime(context)));
+}
+
+function deleteIssuesProposal(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  input: IssueDeleteInput
+) {
+  const issues = explicitIssues(db, input.issue_ids);
+  const projectID = singleProjectID(issues.map((issue) => issue.project_id));
+  const actionType = "issue.delete";
+  const actionContext = scopedRunnerChatActionContext(context, actionType, {
+    issueID: issues.length === 1 ? issues[0]?.id : undefined,
+    projectID
+  });
+  return createPendingPiAction(db, actionContext, {
+    actionType,
+    issueID: issues.length === 1 ? issues[0]?.id : undefined,
+    payload: { issue_ids: issues.map((issue) => issue.id), reason: input.reason },
+    projectID,
+    rationale: input.reason
+  }, () => deleteIssues(db, issues.map((issue) => issue.id)));
+}
+
+function safeReadRunnerSettings(db: RunnerDatabase, context: PiRunnerActionContext) {
+  return executeSafePiAction(db, context, {
+    actionType: "runner.settings_read",
+    payload: {},
+    execute: () => readRunnerSettings(runnerSettingsContext(db, context))
+  });
+}
+
+function runnerSettingsUpdateProposal(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  input: RunnerSettingsUpdateInput
+) {
+  const payload = cleanObjectPayload(input);
+  return createPendingPiAction(db, context, {
+    actionType: "runner.settings_update",
+    payload,
+    rationale: input.reason
+  }, () => applyRunnerSettings(runnerSettingsContext(db, context), payload));
+}
+
+function restartSystemProposal(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  input: SystemRestartInput
+) {
+  return createPendingPiAction(db, context, {
+    actionType: "system.restart",
+    payload: { reason: input.reason },
+    rationale: input.reason
+  }, () => {
+    const result = scheduleSystemRestart(systemRestartContext(context));
+    if (!result) throw new Error("当前服务不是 launchd/systemd 托管，无法安全重启");
+    return result;
+  });
 }
 
 function issueStatusRuntime(context: PiRunnerActionContext) {
@@ -665,9 +755,40 @@ function mustGetIssue(db: RunnerDatabase, id: number) {
   return issue;
 }
 
+function explicitIssues(db: RunnerDatabase, ids: number[]): Issue[] {
+  const uniqueIDs = [...new Set(ids)];
+  if (uniqueIDs.length === 0 || uniqueIDs.length > 40) throw new Error("issue_ids must contain 1-40 items");
+  return uniqueIDs.map((id) => mustGetIssue(db, id));
+}
+
+function singleProjectID(projectIDs: string[]): string {
+  const unique = [...new Set(projectIDs.filter(Boolean))];
+  if (unique.length !== 1) throw new Error("批量 Issue 操作必须属于同一个项目");
+  return unique[0]!;
+}
+
+function runnerSettingsContext(db: RunnerDatabase, context: PiRunnerActionContext) {
+  return {
+    bus: context.bus,
+    config: context.config,
+    database: db,
+    providers: context.providers
+  };
+}
+
+function systemRestartContext(context: PiRunnerActionContext) {
+  return {
+    audit: context.auditSystemRestart,
+    providers: context.providers,
+    restartDelayMs: context.restartDelayMs,
+    restartProcess: context.restartProcess,
+    supervisorManaged: context.supervisorManaged
+  };
+}
+
 function readSessionSummary(db: RunnerDatabase, sessionKey: string) {
   const key = cleanString(sessionKey);
-  const session = getAgentSession(db, key);
+  const session = getAgentSessionByReference(db, key);
   if (!session) throw new Error("session 不存在");
   return {
     agent_role: session.agent_role,

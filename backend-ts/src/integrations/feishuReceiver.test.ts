@@ -72,6 +72,43 @@ describe("Feishu WebSocket receiver", () => {
     database.close();
   });
 
+  test("recreates the WebSocket client with bounded backoff when startup rejects", async () => {
+    const { database } = await receiverFixture();
+    let clients = 0;
+    const manager = createFeishuReceiverManager({
+      database,
+      retryBaseMs: 0,
+      wsFactory: async (input) => {
+        clients += 1;
+        const attempt = clients;
+        return {
+          close: () => undefined,
+          start: async () => {
+            if (attempt === 1) throw new Error("timeout of 15000ms exceeded");
+            input.onReady();
+          }
+        };
+      }
+    });
+    const config = buildFeishuConnectorConfig({
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+
+    await manager.restart(config);
+    await waitFor(() => manager.status().connected);
+
+    expect(clients).toBe(2);
+    expect(manager.status()).toMatchObject({
+      connected: true,
+      last_error: "",
+      reconnect_attempts: 1,
+      state: "connected"
+    });
+    manager.stop();
+    database.close();
+  });
+
   test("dispatches flattened project selection actions from the long-connection SDK", async () => {
     const { database, factory, messages } = await receiverFixture();
     const actions: unknown[] = [];
@@ -178,6 +215,14 @@ function isCardAction(event: unknown): boolean {
     ? root.header as Record<string, unknown>
     : {};
   return header.event_type === "card.action.trigger" || root.event_type === "card.action.trigger";
+}
+
+async function waitFor(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (condition()) return;
+    await Bun.sleep(5);
+  }
+  throw new Error("condition timed out");
 }
 
 function messageEvent(text: string): Record<string, unknown> {

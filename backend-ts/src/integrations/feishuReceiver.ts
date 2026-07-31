@@ -42,6 +42,7 @@ type FeishuReceiverManagerOptions = {
   bus?: EventBus;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  retryBaseMs?: number;
   wsFactory?: FeishuWsFactory;
 };
 
@@ -56,29 +57,63 @@ const DISABLED_STATUS: FeishuReceiverStatus = {
 
 export function createFeishuReceiverManager(options: FeishuReceiverManagerOptions) {
   let client: FeishuWsClient | null = null;
+  let generation = 0;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let status: FeishuReceiverStatus = { ...DISABLED_STATUS };
 
   async function restart(config: FeishuConnectorConfig): Promise<void> {
     stop();
     status = { ...DISABLED_STATUS, receive_mode: config.receiveMode };
     if (!shouldStart(config)) return;
-    const factory = options.wsFactory ?? defaultFeishuWsFactory;
     status = { ...status, state: "connecting" };
-    client = await factory({
-      config,
-      onCardAction: (event) => ingestCardAction(event, config),
-      onError: (error) => fail(error),
-      onMessage: (event) => ingest(event, config),
-      onReady: () => connect(),
-      onReconnected: () => connect(),
-      onReconnecting: () => reconnect()
-    });
-    void client.start().catch((error) => fail(error));
+    await startClient(config, generation);
   }
 
   function stop(): void {
+    generation += 1;
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = undefined;
     client?.close({ force: true });
     client = null;
+  }
+
+  async function startClient(config: FeishuConnectorConfig, expectedGeneration: number): Promise<void> {
+    const factory = options.wsFactory ?? defaultFeishuWsFactory;
+    try {
+      const next = await factory({
+        config,
+        onCardAction: (event) => ingestCardAction(event, config),
+        onError: (error) => fail(error),
+        onMessage: (event) => ingest(event, config),
+        onReady: () => connect(),
+        onReconnected: () => connect(),
+        onReconnecting: () => reconnect()
+      });
+      if (expectedGeneration !== generation) {
+        next.close({ force: true });
+        return;
+      }
+      client = next;
+      void next.start().catch((error) => scheduleReconnect(error, config, expectedGeneration));
+    } catch (error) {
+      scheduleReconnect(error, config, expectedGeneration);
+    }
+  }
+
+  function scheduleReconnect(error: unknown, config: FeishuConnectorConfig, expectedGeneration: number): void {
+    if (expectedGeneration !== generation || retryTimer) return;
+    client?.close({ force: true });
+    client = null;
+    fail(error);
+    const attempt = status.reconnect_attempts + 1;
+    status = { ...status, reconnect_attempts: attempt };
+    const delay = Math.min(Math.max(options.retryBaseMs ?? 5_000, 0) * (2 ** Math.min(attempt - 1, 4)), 60_000);
+    retryTimer = setTimeout(() => {
+      retryTimer = undefined;
+      if (expectedGeneration !== generation) return;
+      status = { ...status, state: "reconnecting" };
+      void startClient(config, expectedGeneration);
+    }, delay);
   }
 
   function currentStatus(): FeishuReceiverStatus {
@@ -136,6 +171,8 @@ export function createFeishuReceiverManager(options: FeishuReceiverManagerOption
   }
 
   function connect(): void {
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = undefined;
     status = { ...status, connected: true, last_error: "", state: "connected" };
   }
 

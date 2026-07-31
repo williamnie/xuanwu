@@ -587,6 +587,37 @@ describe("runner process-group memory observer", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test("reopens the canonical memory incident instead of creating alert history on every recovery flap", async () => {
+    const root = await mkdtemp(join(tmpdir(), "runner-memory-reopen-"));
+    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root });
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      writeProcessGroupMemoryAlert(database, {
+        budget: { status: "soft_exceeded" }, level: "soft", phase: "idle", sample: {}
+      });
+      const original = listPiGuardianAlerts(database, { alertType: "runner_process_group_memory_budget" })[0]!;
+      resolveRecoveredProcessGroupMemoryAlerts(database, {
+        budget: { status: "within_budget" }, phase: "idle", sampled_at: "2026-07-21T03:46:49Z"
+      });
+      writeProcessGroupMemoryAlert(database, {
+        budget: { status: "hard_exceeded" }, level: "hard", phase: "idle", sample: {}
+      });
+
+      const stored = listPiGuardianAlerts(database, { alertType: "runner_process_group_memory_budget" });
+      expect(stored).toHaveLength(1);
+      expect(stored[0]).toMatchObject({
+        id: original.id,
+        run_group_id: "runner-memory",
+        severity: "urgent",
+        status: "open"
+      });
+    } finally {
+      warn.mockRestore();
+      database.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 function fixtureRows(mainMiB: number, childMiB: number): ProcessTreeEntry[] {

@@ -39,10 +39,16 @@ describe("Bun PI runtime v1 smoke", () => {
   test("Runner Chat authorization exposes canonical Issue status management", () => {
     expect(PI_RUNNER_CHAT_ACTIONS).toEqual(expect.arrayContaining([
       "issue.cancel",
+      "issue.delete",
+      "runner.settings_update",
+      "system.restart",
       "issue.status_update"
     ]));
     expect(PI_RUNNER_CHAT_MUTATION_ACTIONS).toEqual(expect.arrayContaining([
       "issue.cancel",
+      "issue.delete",
+      "runner.settings_update",
+      "system.restart",
       "issue.status_update"
     ]));
   });

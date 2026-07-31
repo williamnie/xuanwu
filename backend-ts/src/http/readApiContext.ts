@@ -4,9 +4,11 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
+import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 
 export type ReadApiContext = {
   agenticClient?: AgenticWorkerClient;
+  auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
   bus?: EventBus;
   codexSessionsDir?: string;
   config?: RunnerConfig;
@@ -15,5 +17,8 @@ export type ReadApiContext = {
   interruptTimeoutMs?: number;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  restartDelayMs?: number;
+  restartProcess?: () => void;
+  supervisorManaged?: boolean;
   webhookSigningSecret?: string;
 };

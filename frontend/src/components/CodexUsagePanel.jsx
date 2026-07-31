@@ -47,8 +47,8 @@ function UsageHeader({ data, loading, onRefresh }) {
   return (
     <header className="codex-usage-header">
       <div>
-        <h3><Zap size={18} /> Codex 用量</h3>
-        <p>优先展示当前可用额度，需要时再查看历史与项目明细。</p>
+        <h3><Zap size={18} /> Codex 与 PI 用量</h3>
+        <p>管理控制台集中展示额度、PI 每日消耗和项目明细。</p>
       </div>
       <div className="codex-usage-actions">
         <span>{formatUpdatedAt(data?.generated_at)}</span>
@@ -70,7 +70,8 @@ function UsageContent({ data, loading }) {
   return (
     <div className="codex-usage-content">
       <LimitGrid limits={data.rate_limits} />
-      <TodayUsage usage={data.summary?.today} />
+      <TodayUsage piUsage={data.pi_usage} usage={data.summary?.today} />
+      <PiDailyUsage data={data.pi_usage} />
       <UsageDetails data={data} />
     </div>
   );
@@ -131,16 +132,33 @@ function LimitCard({ title, window, planType }) {
   );
 }
 
-function TodayUsage({ usage }) {
+function TodayUsage({ piUsage, usage }) {
+  const piToday = piUsage?.status === 'unavailable'
+    ? '—'
+    : formatTokens(piUsage?.summary?.today?.total_tokens || 0);
   return (
     <div className="codex-today-usage">
-      <div>
-        <span>今日用量</span>
-        <strong>{formatTokens(usage?.total_tokens || 0)}</strong>
+      <div className="codex-today-metrics">
+        <div>
+          <span>今日总用量</span>
+          <strong>{formatTokens(usage?.total_tokens || 0)}</strong>
+        </div>
+        <div>
+          <span>PI 今日消耗</span>
+          <strong>{piToday}</strong>
+        </div>
       </div>
-      <p>本地 Codex session 统计，仅用于观察工作量趋势。</p>
+      <p>总用量来自 Codex session；PI 用量单独读取 Runner 的 PI SDK 会话。</p>
     </div>
   );
+}
+
+function PiDailyUsage({ data }) {
+  if (!data) return null;
+  if (data.status === 'unavailable') {
+    return <div className="codex-usage-empty">PI 每日 Token 暂时不可用；Codex 总用量不受影响。</div>;
+  }
+  return <DailyBars periods={data.daily || []} title="PI 每日 Token（最近 7 天）" />;
 }
 
 function UsageDetails({ data }) {
@@ -155,6 +173,7 @@ function UsageDetails({ data }) {
       </summary>
       <div className="codex-usage-details-body">
         <SummaryGrid summary={data.summary} />
+        <PiUsageDetails data={data.pi_usage} />
         <CodexUsageBreakdown projects={data.project_usage || []} />
         <div className="codex-usage-detail-columns">
           <DailyBars periods={data.daily || []} />
@@ -162,6 +181,24 @@ function UsageDetails({ data }) {
         </div>
       </div>
     </details>
+  );
+}
+
+function PiUsageDetails({ data }) {
+  if (!data) return null;
+  if (data.status === 'unavailable') {
+    return <div className="codex-usage-empty">PI 用量暂时不可用；Codex 总用量不受影响。</div>;
+  }
+  return (
+    <div className="codex-usage-detail-columns">
+      <DailyBars periods={data.daily || []} title="PI 最近 7 天" />
+      <div className="codex-detail-panel">
+        <h4><Zap size={16} /> PI 消耗拆分</h4>
+        <TokenStat label="今日" usage={data.summary?.today} />
+        <TokenStat label="本周" usage={data.summary?.this_week} />
+        <TokenStat label="本月" usage={data.summary?.this_month} />
+      </div>
+    </div>
   );
 }
 
@@ -188,12 +225,12 @@ function TokenStat({ label, usage }) {
   );
 }
 
-function DailyBars({ periods }) {
+function DailyBars({ periods, title = '最近 7 天' }) {
   const latest = periods.slice(-7);
   const max = Math.max(1, ...latest.map(period => period.usage?.total_tokens || 0));
   return (
     <div className="codex-detail-panel">
-      <h4><BarChart3 size={16} /> 最近 7 天</h4>
+      <h4><BarChart3 size={16} /> {title}</h4>
       <div className="codex-daily-bars">
         {latest.map(period => <UsageBar key={period.key} period={period} max={max} />)}
       </div>

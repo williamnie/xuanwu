@@ -4,6 +4,7 @@ import {
   getPiRunGroup,
   listPiGuardianAlerts,
   listPiNotificationIntents,
+  resolvePiGuardianAlert,
   updatePiNotificationIntent,
   upsertPiGuardianAlert,
   type PiGuardianAlert,
@@ -100,7 +101,7 @@ function writeMissedDigest(context: SweepContext, input: MissedDigestInput): voi
   const existing = hasRecoveryDigest(db, digestScope, flushBucket);
   const target = digestTarget(db, input);
   try {
-    createPiNotificationIntent(db, {
+    const digest = createPiNotificationIntent(db, {
       ...target,
       flush_bucket: flushBucket,
       flush_reason: "recovery",
@@ -114,6 +115,13 @@ function writeMissedDigest(context: SweepContext, input: MissedDigestInput): voi
       summary: missedDigestSummary(window, intents, alerts),
       target_channel: DIGEST_CHANNEL
     });
+    if (!targetMissing(target) && targetMissing(digest)) {
+      updatePiNotificationIntent(db, digest.id, {
+        ...target,
+        state: "ready",
+        target_channel: DIGEST_CHANNEL
+      });
+    }
     if (!existing) result.summaries += 1;
     if (targetMissing(target)) {
       const alert = markMissedDigestPending(db, window, "missing_digest_target");
@@ -121,6 +129,7 @@ function writeMissedDigest(context: SweepContext, input: MissedDigestInput): voi
       result.pending += 1;
     } else {
       markMissedIntentsCovered(db, intents);
+      resolvePendingDigestAlerts(db, window.projectID, nowText);
     }
   } catch (error) {
     result.errors += 1;
@@ -203,7 +212,7 @@ function markMissedDigestPending(
     evidence_json: { ...missedAlertEvidence(window), reason: redactSensitiveText(reason) },
     message: `missed digest pending for project ${window.projectID || "-"}: ${reason}`,
     project_id: window.projectID,
-    run_group_id: missedDigestScope(window),
+    run_group_id: `missed-digest-pending:${window.projectID || "global"}`,
     severity: "watch",
     watchdog_seen_at: window.endAt
   });
@@ -216,12 +225,47 @@ function digestTarget(
   const intent = input.intents.find(hasTargetFields);
   const groupConversation = input.alerts.map((alert) => getPiRunGroup(db, alert.run_group_id)?.origin_conversation_id ?? "")
     .find((conversationID) => conversationID !== "") ?? "";
+  const fallback = latestDigestTarget(db, input.window.projectID);
   return {
-    conversation_id: intent?.conversation_id || groupConversation,
-    target_chat_id: intent?.target_chat_id ?? "",
-    target_message_id: intent?.target_message_id ?? "",
-    target_thread_id: intent?.target_thread_id ?? ""
+    conversation_id: intent?.conversation_id || groupConversation || fallback.conversation_id,
+    target_chat_id: intent?.target_chat_id || fallback.target_chat_id,
+    target_message_id: intent?.target_message_id || fallback.target_message_id,
+    target_thread_id: intent?.target_thread_id || fallback.target_thread_id
   };
+}
+
+function latestDigestTarget(db: RunnerDatabase, projectID: string): DigestTarget {
+  const condition = projectID === "" ? "" : "and project_id=?";
+  const args = projectID === "" ? [] : [projectID];
+  const row = db.sqlite.query<Record<string, unknown>, string[]>(`
+    select conversation_id, target_chat_id, target_message_id, target_thread_id
+    from pi_notification_intents
+    where target_channel=? ${condition}
+      and (conversation_id<>'' or target_chat_id<>'' or target_message_id<>'' or target_thread_id<>'')
+    order by updated_at desc, created_at desc, id desc limit 1
+  `).get(DIGEST_CHANNEL, ...args);
+  return {
+    conversation_id: text(row?.conversation_id),
+    target_chat_id: text(row?.target_chat_id),
+    target_message_id: text(row?.target_message_id),
+    target_thread_id: text(row?.target_thread_id)
+  };
+}
+
+function resolvePendingDigestAlerts(db: RunnerDatabase, projectID: string, nowText: string): void {
+  for (const status of ["open", "acked"]) {
+    for (const alert of listPiGuardianAlerts(db, {
+      alertType: "missed_digest_pending",
+      projectId: projectID,
+      status
+    }).filter((item) => item.project_id === projectID)) {
+      resolvePiGuardianAlert(db, alert.id, {
+        evidence_json: { event: "guardian.missed_digest_target_recovered", resolved_at: nowText },
+        message: "missed digest target recovered",
+        watchdog_seen_at: nowText
+      });
+    }
+  }
 }
 
 function hasTargetFields(intent: PiNotificationIntent): boolean {

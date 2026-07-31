@@ -20,3 +20,10 @@ test('refresh icon visibly spins while usage is loading', () => {
   assert.match(source, /<RefreshCw[^>]*className=\{loading \? 'animate-spin' : ''\}/);
   assert.match(source, /loading \? '刷新中' : '刷新'/);
 });
+
+test('dashboard separates PI daily usage from the global Codex session total', () => {
+  assert.match(source, /PI 今日消耗/);
+  assert.match(source, /PI 每日 Token（最近 7 天）/);
+  assert.match(source, /PI 最近 7 天/);
+  assert.match(source, /piUsage\?\.summary\?\.today\?\.total_tokens/);
+});

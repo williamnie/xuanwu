@@ -518,11 +518,15 @@ function upsertCanonicalProcessGroupMemoryAlert(
   alert: ProcessMemoryBudgetAlert,
   event: Record<string, unknown>
 ): void {
+  const all = listPiGuardianAlerts(database, {
+    alertType: PROCESS_GROUP_MEMORY_ALERT_TYPE
+  });
   const active = ["open", "acked"].flatMap((status) => listPiGuardianAlerts(database, {
     alertType: PROCESS_GROUP_MEMORY_ALERT_TYPE,
     status
   }));
-  const canonical = active.find((item) => item.run_group_id === PROCESS_GROUP_MEMORY_ALERT_GROUP);
+  const canonical = active.find((item) => item.run_group_id === PROCESS_GROUP_MEMORY_ALERT_GROUP)
+    ?? all.find((item) => item.run_group_id === PROCESS_GROUP_MEMORY_ALERT_GROUP);
   const peakSeverity = highestMemorySeverity([
     ...active.map((item) => item.severity),
     alert.level === "hard" ? "urgent" : "high"

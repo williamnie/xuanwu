@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { listIssues, type Issue } from "../db/repositories/issues.ts";
 import { listProjects } from "../db/repositories/projects.ts";
 import { readCodexUsage } from "../usage/codex.ts";
+import { readPiUsageInWorker } from "../usage/pi.ts";
 import type { UsageIssueRef, UsageProjectRef } from "../usage/types.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
@@ -30,7 +31,7 @@ async function usageReport(context: UsageApiContext, request: Request): Promise<
   const params = new URL(request.url).searchParams;
   const compact = params.get("compact") === "1";
   const refresh = params.get("refresh") === "1";
-  return await readCodexUsage({
+  const report = await readCodexUsage({
     backgroundRefresh: !refresh,
     indexPath: join(dirname(context.database.path), "codex-usage-index-v1.sqlite"),
     options: {
@@ -41,6 +42,23 @@ async function usageReport(context: UsageApiContext, request: Request): Promise<
     },
     root: context.codexSessionsDir ?? ""
   });
+  return {
+    ...report,
+    pi_usage: await safePiUsage(context.database.path)
+  };
+}
+
+async function safePiUsage(databasePath: string): Promise<Record<string, unknown>> {
+  try {
+    return await readPiUsageInWorker(databasePath);
+  } catch {
+    return {
+      completeness: "unavailable",
+      daily: [],
+      status: "unavailable",
+      summary: {}
+    };
+  }
 }
 
 function projectRefs(db: RunnerDatabase): UsageProjectRef[] {

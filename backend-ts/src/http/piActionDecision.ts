@@ -7,6 +7,7 @@ import {
 } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import type { RunnerConfig } from "../config/env.ts";
 import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
 import { HttpError } from "./errors.ts";
 import { dispatchPiAction, type ProjectLoopStarter } from "./piActionDispatch.ts";
@@ -14,12 +15,18 @@ import { grantPiMcpCapabilityApproval } from "../db/repositories/pi.ts";
 import { readMcpCapability, readMcpServer } from "../mcp/registry.ts";
 import { mcpCapabilityFingerprint } from "../mcp/approvalPolicy.ts";
 import { getPiMcpCapability } from "../db/repositories/piMcpCapabilities.ts";
+import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 
 export type PiActionDecisionContext = {
+  auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
   bus?: EventBus;
+  config?: RunnerConfig;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  restartDelayMs?: number;
+  restartProcess?: () => void;
   startProjectLoop?: ProjectLoopStarter;
+  supervisorManaged?: boolean;
 };
 
 export type PiActionResolveDecision = "approve" | "approve_always" | "reject" | "request_changes" | "snooze";

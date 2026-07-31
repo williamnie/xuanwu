@@ -128,6 +128,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     });
     registerReadApiRoutes(router, {
       agenticClient: runtime.agenticClient,
+      auditSystemRestart: runtime.auditSystemRestart,
       bus,
       codexSessionsDir: runtime.codexSessionsDir,
       config: runtime.config,
@@ -136,6 +137,9 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       interruptTimeoutMs: runtime.interruptTimeoutMs,
       piOpenAICodexOAuthLogin: runtime.piOpenAICodexOAuthLogin,
       providers: runtime.providers,
+      restartDelayMs: runtime.restartDelayMs,
+      restartProcess: runtime.restartProcess,
+      supervisorManaged: runtime.supervisorManaged,
       webhookSigningSecret: runtime.webhookSigningSecret
     });
   }

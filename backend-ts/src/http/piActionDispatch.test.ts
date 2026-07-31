@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { buildConfig } from "../config/env.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
@@ -11,12 +12,13 @@ import { createPiAction, getPiIssueCompletionWatch, listIssueSupervisorEvents } 
 import { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";
-import { isProjectLoopActive } from "../runner/projectLoopManager.ts";
+import { isProjectLoopActive, setProjectLoopMaxParallelProjects } from "../runner/projectLoopManager.ts";
 
 const tempRoots: string[] = [];
 const NO_AUTO_RUN_SETTLE_MS = 25;
 
 afterEach(async () => {
+  setProjectLoopMaxParallelProjects(1);
   while (tempRoots.length > 0) await rm(tempRoots.pop() ?? "", { recursive: true, force: true });
 });
 
@@ -608,6 +610,62 @@ describe("PI action dispatcher supervisor actions", () => {
       await expect(dispatchPiAction({ database: db, providers: { codex: provider } }, action))
         .resolves.toMatchObject({ skipped: true });
       expect(provider.calls).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("issue.delete permanently removes an approved non-running batch", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo");
+      insertIssue(db, { issueID: 901, projectID: "demo", status: "triage" });
+      insertIssue(db, { issueID: 902, projectID: "demo", status: "cancelled" });
+      const action = createPiAction(db, {
+        action_type: "issue.delete",
+        id: "delete-issue-batch",
+        payload_json: JSON.stringify({ issue_ids: [901, 902], reason: "用户确认删除" }),
+        project_id: "demo",
+        status: "approved"
+      });
+
+      await expect(dispatchPiAction({ database: db }, action))
+        .resolves.toEqual({ deleted_issue_ids: [901, 902] });
+      expect(getIssue(db, 901)).toBeNull();
+      expect(getIssue(db, 902)).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  test("runner settings update and supervised restart dispatch through approved PI actions", async () => {
+    const db = await fixtureDb();
+    let restarted = 0;
+    try {
+      const config = buildConfig({ dbPath: db.path, stateDir: dirname(db.path) });
+      const settingsAction = createPiAction(db, {
+        action_type: "runner.settings_update",
+        id: "runner-settings-update",
+        payload_json: JSON.stringify({ max_parallel_projects: 3, reason: "提高并发" }),
+        status: "approved"
+      });
+      const restartAction = createPiAction(db, {
+        action_type: "system.restart",
+        id: "runner-system-restart",
+        payload_json: JSON.stringify({ reason: "应用运行配置" }),
+        status: "approved"
+      });
+
+      await expect(dispatchPiAction({ config, database: db }, settingsAction))
+        .resolves.toMatchObject({ max_parallel_projects: 3 });
+      expect(config.runner.maxParallelProjects).toBe(3);
+      await expect(dispatchPiAction({
+        database: db,
+        restartDelayMs: 0,
+        restartProcess: () => { restarted += 1; },
+        supervisorManaged: true
+      }, restartAction)).resolves.toMatchObject({ restart_scheduled: true });
+      await waitUntil(() => restarted === 1);
     } finally {
       db.close();
     }

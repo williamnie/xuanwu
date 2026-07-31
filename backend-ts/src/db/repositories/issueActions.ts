@@ -87,15 +87,28 @@ function restoreInterruptedAttempt(
 }
 
 export function deleteIssue(db: RunnerDatabase, id: number): void {
-  const issue = mustGetIssue(db, id);
-  if (issue.status === "in_progress" || hasOpenIssueRun(db, issue.id)) {
-    throw new Error("运行中的 issue 不能删除，请先取消执行");
+  deleteIssues(db, [id]);
+}
+
+export function deleteIssues(db: RunnerDatabase, ids: number[]): { deleted_issue_ids: number[] } {
+  const uniqueIDs = [...new Set(ids)];
+  if (uniqueIDs.length === 0 || uniqueIDs.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+    throw new Error("issue_ids must contain positive integers");
   }
-  const result = db.transaction((issueID: number) => {
-    db.sqlite.run("delete from works where id=?", [`xw:work:issues:${issueID}`]);
-    return db.sqlite.run("delete from issues where id=?", [issueID]);
-  }).immediate(issue.id);
-  if (result.changes === 0) throw new ProjectNotFoundError();
+  return db.transaction((issueIDs: number[]) => {
+    const issues = issueIDs.map((issueID) => mustGetIssue(db, issueID));
+    for (const issue of issues) {
+      if (issue.status === "in_progress" || hasOpenIssueRun(db, issue.id)) {
+        throw new Error("运行中的 issue 不能删除，请先取消执行");
+      }
+    }
+    for (const issue of issues) {
+      db.sqlite.run("delete from works where id=?", [`xw:work:issues:${issue.id}`]);
+      const result = db.sqlite.run("delete from issues where id=?", [issue.id]);
+      if (result.changes === 0) throw new ProjectNotFoundError();
+    }
+    return { deleted_issue_ids: issues.map((issue) => issue.id) };
+  }).immediate(uniqueIDs);
 }
 
 function hasOpenIssueRun(db: RunnerDatabase, issueID: number): boolean {

@@ -189,10 +189,15 @@
   padding: 14px 2px;
 }
 
-.codex-today-usage > div {
+.codex-today-metrics,
+.codex-today-metrics > div {
   align-items: baseline;
   display: flex;
   gap: 10px;
+}
+
+.codex-today-metrics {
+  gap: 24px;
 }
 
 .codex-today-usage span {
@@ -218,6 +223,12 @@
   .codex-today-usage {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .codex-today-metrics {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
   }
 }
 

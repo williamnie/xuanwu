@@ -30,7 +30,11 @@ describe("PI runner action tools", () => {
     const issueCreate = toolByName(tools, "issue_create_proposal");
     const issueBatchCreate = toolByName(tools, "issue_create_batch_proposal");
     const issueCancel = toolByName(tools, "issue_cancel");
+    const issueDelete = toolByName(tools, "issue_delete");
     const issueStatusUpdate = toolByName(tools, "issue_status_update");
+    const runnerSettingsRead = toolByName(tools, "runner_settings_read");
+    const runnerSettingsUpdate = toolByName(tools, "runner_settings_update");
+    const systemRestart = toolByName(tools, "system_restart");
     const repair = toolByName(tools, "issue_state_repair_proposal");
     const batchTriage = toolByName(tools, "issue_enqueue_batch_triage");
     const nextTriage = toolByName(tools, "issue_enqueue_next_triage");
@@ -50,6 +54,8 @@ describe("PI runner action tools", () => {
     expect(validateArgs(issueExecution, { id: 1 })).toEqual({ id: 1 });
     expect(validateArgs(issueCancel, { issue_ids: [812, 813, 814], rationale: "不再做" }))
       .toEqual({ issue_ids: [812, 813, 814], rationale: "不再做" });
+    expect(validateArgs(issueDelete, { issue_ids: [812, 813], reason: "用户确认永久删除" }))
+      .toEqual({ issue_ids: [812, 813], reason: "用户确认永久删除" });
     expect(validateArgs(issueStatusUpdate, {
       issue_ids: [812, 813, 814],
       reason: "用户要求重新排队",
@@ -98,6 +104,13 @@ describe("PI runner action tools", () => {
     expect(validateArgs(batchTriage, { issue_ids: [387, 388], project_id: "demo", user_phrase: "把 #387-#388 都开始做" }))
       .toEqual({ issue_ids: [387, 388], project_id: "demo", user_phrase: "把 #387-#388 都开始做" });
     expect(validateArgs(nextTriage, { project_id: "demo" })).toEqual({ project_id: "demo" });
+    expect(validateArgs(runnerSettingsRead, {})).toEqual({});
+    expect(validateArgs(runnerSettingsUpdate, {
+      codex_server_mode: "app",
+      max_parallel_projects: 3,
+      reason: "修改运行配置"
+    })).toEqual({ codex_server_mode: "app", max_parallel_projects: 3, reason: "修改运行配置" });
+    expect(validateArgs(systemRestart, { reason: "应用配置" })).toEqual({ reason: "应用配置" });
     expect(validateArgs(recommendProfile, { issue_id: 1, role: "executor" })).toEqual({ issue_id: 1, role: "executor" });
     expect(validateArgs(verifier, { target_issue_id: 1, instructions: "verify" })).toEqual({
       target_issue_id: 1,
@@ -311,6 +324,37 @@ describe("PI runner action tools", () => {
       expect(JSON.parse(steerAction?.payload_json ?? "{}")).toMatchObject({
         progress_context: expect.stringContaining("state=active")
       });
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("exposes destructive issue deletion and Runner administration only as high-risk proposals", async () => {
+    const fixture = await openFixture();
+    try {
+      const issueID = insertIssue(fixture.db, {
+        projectID: fixture.project.id,
+        status: "triage",
+        title: "Delete only after approval"
+      });
+      const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
+
+      const deletion = actions.deleteIssues({ issue_ids: [issueID], reason: "用户确认永久删除" }) as {
+        action_id: string; status: string;
+      };
+      const settings = actions.updateRunnerSettings({
+        max_parallel_projects: 2,
+        reason: "用户要求修改并发"
+      }) as { action_id: string; status: string };
+      const restart = actions.restartSystem({ reason: "用户要求重启" }) as {
+        action_id: string; status: string;
+      };
+
+      expect([deletion.status, settings.status, restart.status]).toEqual(["pending", "pending", "pending"]);
+      expect(getIssue(fixture.db, issueID)).not.toBeNull();
+      expect([deletion, settings, restart].map((item) => getPiAction(fixture.db, item.action_id)?.risk_level))
+        .toEqual(["high", "high", "high"]);
+      expect(actions.readRunnerSettings({})).toMatchObject({ max_parallel_projects: 1 });
     } finally {
       await fixture.close();
     }
@@ -1234,6 +1278,7 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
   };
   return {
     cancelIssues: record("cancelIssues"),
+    deleteIssues: record("deleteIssues"),
     updateIssueStatuses: record("updateIssueStatuses"),
     commentIssue: record("commentIssue"),
     assignExecutorProfileProposal: record("assignExecutorProfileProposal"),
@@ -1263,6 +1308,7 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     projectStatus: record("projectStatus"),
     listSkills: record("listSkills"),
     readIssue: record("readIssue"),
+    readRunnerSettings: record("readRunnerSettings"),
     readMcpCapability: record("readMcpCapability"),
     readMcpResource: record("readMcpResource"),
     readRepoExcerpt: record("readRepoExcerpt"),
@@ -1277,7 +1323,9 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     auditSkillIntents: record("auditSkillIntents"),
     issueExecutionStatus: record("issueExecutionStatus"),
     issueStatusSummary: record("issueStatusSummary"),
-    runManualContextIntake: record("runManualContextIntake")
+    runManualContextIntake: record("runManualContextIntake"),
+    restartSystem: record("restartSystem"),
+    updateRunnerSettings: record("updateRunnerSettings")
   };
 }
 
