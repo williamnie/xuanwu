@@ -35,6 +35,7 @@ describe("Evidence Policy completion gate", () => {
     expect(validateWorkflowVerificationPolicy(ISSUE_WORK_VERIFICATION_POLICY)).toEqual({ errors: [], ok: true });
     expect(classifyVerificationCommand("bun test src/domain/evidence/completionGate.test.ts")).toBe("test");
     expect(classifyVerificationCommand("node --test src/api/example.test.js")).toBe("test");
+    expect(classifyVerificationCommand("python3 -m unittest discover -s /tmp -p 'test_issue_815.py'")).toBe("test");
     expect(classifyVerificationCommand("flutter analyze")).toBe("lint");
     expect(classifyVerificationCommand("cargo build --release")).toBe("build");
     expect(classifyVerificationCommand("bun test a.test.ts && git diff --check")).toBe("test");

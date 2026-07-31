@@ -5,8 +5,9 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
-import { pausePiHeartbeat } from "../db/repositories/pi.ts";
+import { createPiAction, pausePiHeartbeat } from "../db/repositories/pi.ts";
 import { readProjectIssueDependencies } from "../domain/work/issueDependency.ts";
 import { createHumanReviewRequest, readIssueVerificationProjection } from "../domain/review/humanReview.ts";
 import { runPiVerificationCoordinatorOnce } from "./piVerificationCoordinator.ts";
@@ -91,6 +92,58 @@ describe("PI verification coordinator", () => {
         owner: "human",
         phase: "human_review"
       });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("settles an incomplete verifier carrier as an internal failure without recursively verifying it", async () => {
+    const db = await fixture();
+    let calls = 0;
+    try {
+      const parent = createIssue(db, {
+        project_id: "demo",
+        status: "pending_verification",
+        title: "Parent delivery"
+      });
+      const child = createIssue(db, {
+        project_id: "demo",
+        status: "in_progress",
+        title: `Verifier: #${parent.id}`,
+        workflow_snapshot_json: JSON.stringify({
+          agent_role: "verifier",
+          parent_issue_id: parent.id
+        })
+      });
+      const run = createIssueRun(db, child.id);
+      db.sqlite.run("update issue_runs set status='done', ended_at=? where id=?", [
+        "2026-07-31T06:00:00Z",
+        run.id
+      ]);
+      updateIssue(db, child.id, { status: "pending_verification" });
+      createPiAction(db, {
+        id: `verifier-action-${child.id}`,
+        action_type: "agent.workflow_request",
+        gate_decision: "execute",
+        issue_id: parent.id,
+        payload_json: JSON.stringify({ workflow_snapshot_json: child.workflow_snapshot_json }),
+        project_id: child.project_id,
+        result_json: JSON.stringify(child),
+        status: "completed"
+      });
+
+      const result = await runPiVerificationCoordinatorOnce({
+        database: db,
+        runProjectCycle: async () => {
+          calls += 1;
+          updateIssue(db, parent.id, { status: "done" });
+        }
+      });
+
+      expect(result).toMatchObject({ issues: 1, projects: 1, started: 1 });
+      expect(calls).toBe(1);
+      expect(getIssueStatus(db, child.id)).toBe("failed");
+      expect(activityTypes(db, child.id)).toEqual([]);
     } finally {
       db.close();
     }
@@ -209,4 +262,11 @@ function activityTypes(db: RunnerDatabase, issueID: number): string[] {
       "issue.pi_verification_failed.v1"
     ]
   }).map((event) => event.type);
+}
+
+function getIssueStatus(db: RunnerDatabase, issueID: number): string {
+  const row = db.sqlite.query<{ status: string }, [number]>(
+    "select status from issues where id=?"
+  ).get(issueID);
+  return row?.status ?? "";
 }

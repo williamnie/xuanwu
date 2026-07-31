@@ -2,11 +2,13 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssues, type Issue } from "../db/repositories/issues.ts";
 import { getProjectPiSettings, isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import { readIssueVerificationProjection } from "../domain/review/humanReview.ts";
+import { resolveIssueAgentRole, resolveWorkflowParentIssueID } from "../pi/agentOrchestration.ts";
 import {
   readPiVerificationActivity,
   recordPiVerificationActivity
 } from "../domain/review/piVerificationActivity.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { writeBackVerifierWorkflowEvidence } from "./verifierWorkflowWriteback.ts";
 
 export type PiVerificationCycleRunner = (input: {
   maxActions: number;
@@ -38,6 +40,7 @@ export async function runPiVerificationCoordinatorOnce(
   input: PiVerificationCoordinatorInput
 ): Promise<PiVerificationCoordinatorResult> {
   const now = input.now ?? new Date();
+  await settleCompletedVerifierCarriers(input.database, now, input.source);
   const grouped = groupByProject(dueIssues(input.database, now, input.cooldownMs ?? DEFAULT_COOLDOWN_MS));
   const result: PiVerificationCoordinatorResult = {
     failed: 0,
@@ -181,7 +184,26 @@ function dueIssues(db: RunnerDatabase, now: Date, cooldownMs: number): Issue[] {
 
 function piOwnedPending(db: RunnerDatabase, issue: Issue): boolean {
   return issue.status === "pending_verification"
+    && !isVerifierCarrier(issue)
     && readIssueVerificationProjection(db, issue.id).owner === "pi";
+}
+
+async function settleCompletedVerifierCarriers(
+  db: RunnerDatabase,
+  now: Date,
+  source = "pi-verification-coordinator"
+): Promise<void> {
+  const carriers = listIssues(db, { status: "pending_verification" }).filter(isVerifierCarrier);
+  for (const carrier of carriers) {
+    await writeBackVerifierWorkflowEvidence(db, carrier.id, {
+      now,
+      source: `${source}:settle-verifier-carrier`
+    });
+  }
+}
+
+function isVerifierCarrier(issue: Issue): boolean {
+  return resolveIssueAgentRole(issue) === "verifier" && resolveWorkflowParentIssueID(issue) > 0;
 }
 
 function groupByProject(issues: Issue[]): Map<string, Issue[]> {

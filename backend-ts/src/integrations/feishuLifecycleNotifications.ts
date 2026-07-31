@@ -25,6 +25,7 @@ import {
   feishuTargetForIssue,
   feishuTargetForProject
 } from "./feishuNotificationTargets.ts";
+import { resolveIssueAgentRole, resolveWorkflowParentIssueID } from "../pi/agentOrchestration.ts";
 
 export type QueueResult = { queued: boolean; reason: string };
 export type DigestQueueResult = { failed: number; queued: number; scanned: number; skipped: number };
@@ -46,6 +47,12 @@ export function queueFeishuIssueStatusNotification(
 ): QueueResult {
   const issue = getIssue(db, issueID);
   if (!issue) return { queued: false, reason: "issue_not_found" };
+  if (isInternalVerifierWorkflow(issue)) {
+    return { queued: false, reason: "internal_verifier_workflow" };
+  }
+  if (issue.status === "pending_verification") {
+    return { queued: false, reason: "verification_notification_requires_explicit_human_request" };
+  }
   if (!isLifecycleStatus(issue.status)) return { queued: false, reason: "not_notifiable" };
   const runGroupID = latestRunGroupIDForIssue(db, issue.id);
   const conversationID = lifecycleConversationID(db, issue, options.conversationId, runGroupID);
@@ -76,6 +83,10 @@ export function queueFeishuIssueStatusNotification(
     return { queued: false, reason: "missing_feishu_link" };
   }
   return queueLifecycleIntent(db, issue, target, intentResult);
+}
+
+function isInternalVerifierWorkflow(issue: Issue): boolean {
+  return resolveIssueAgentRole(issue) === "verifier" && resolveWorkflowParentIssueID(issue) > 0;
 }
 
 export function queueReadyFeishuDigestNotifications(

@@ -84,7 +84,6 @@ export async function reconcileProviderOutcome(
     });
   }
   const reconciled = getIssue(input.database, current.id);
-  if (reconciled) publishIssueStatus(input, reconciled);
   const writeback = await writeBackVerifierWorkflowEvidence(input.database, current.id, {
     now,
     source: "provider-runtime-host"
@@ -93,7 +92,9 @@ export async function reconcileProviderOutcome(
     const parent = getIssue(input.database, writeback.parent_issue_id);
     if (parent) publishIssueStatus(input, parent);
   }
-  return reconciled;
+  const finalized = getIssue(input.database, current.id) ?? reconciled;
+  if (finalized) publishIssueStatus(input, finalized);
+  return finalized;
 }
 
 export function providerReportedOutcome(

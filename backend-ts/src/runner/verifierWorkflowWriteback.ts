@@ -4,6 +4,7 @@ import { recordEvidenceRecords } from "../db/repositories/evidence.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.ts";
 import { listPiActions } from "../db/repositories/pi.ts";
+import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import {
   createIssueVerifierReview,
   projectIssueRuntimeEvidence,
@@ -19,7 +20,7 @@ import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
 export type VerifierWorkflowWritebackResult = {
   evidence: number;
   parent_issue_id: number;
-  status: "completed" | "not_verifier" | "not_ready" | "skipped";
+  status: "completed" | "failed" | "not_verifier" | "not_ready" | "skipped";
 };
 
 /**
@@ -38,7 +39,7 @@ export async function writeBackVerifierWorkflowEvidence(
   if (!child || parentID === 0 || !authorizedVerifierCarrier(db, child, parentID)) {
     return { evidence: 0, parent_issue_id: 0, status: "not_verifier" };
   }
-  if (child.status !== "done") {
+  if (child.status !== "done" && child.status !== "pending_verification") {
     return { evidence: 0, parent_issue_id: parentID, status: "not_ready" };
   }
   const parent = getIssue(db, parentID);
@@ -49,11 +50,6 @@ export async function writeBackVerifierWorkflowEvidence(
   ) {
     return { evidence: 0, parent_issue_id: parentID, status: "skipped" };
   }
-  const parentRun = listIssueRuns(db, parent.id).at(-1);
-  if (!parentRun || parentRun.ended_at === "") {
-    return { evidence: 0, parent_issue_id: parentID, status: "not_ready" };
-  }
-
   const now = options.now ?? new Date();
   const childProjection = await projectIssueRuntimeEvidence(
     db,
@@ -68,6 +64,20 @@ export async function writeBackVerifierWorkflowEvidence(
     run: childProjection.run
   });
   if (review.evaluation.decision !== "passed") {
+    if (child.status === "pending_verification") {
+      const error = "Verifier workflow completed without captured passing test/lint/build Evidence; PI will retry autonomously.";
+      updateIssue(db, child.id, { error, status: "failed" });
+      recordIssueEvent(db, child.id, "issue.verifier_contract_failed.v1", {
+        error,
+        parent_issue_id: parentID,
+        source: options.source ?? "verifier-workflow-writeback"
+      });
+      return { evidence: 0, parent_issue_id: parentID, status: "failed" };
+    }
+    return { evidence: 0, parent_issue_id: parentID, status: "not_ready" };
+  }
+  const parentRun = listIssueRuns(db, parent.id).at(-1);
+  if (!parentRun || parentRun.ended_at === "") {
     return { evidence: 0, parent_issue_id: parentID, status: "not_ready" };
   }
 

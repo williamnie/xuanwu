@@ -128,6 +128,43 @@ describe("verifier workflow Evidence writeback", () => {
       db.close();
     }
   });
+
+  test("fails a completed verifier carrier that produced no captured executable Evidence", async () => {
+    const db = await fixture();
+    try {
+      const parent = issueWithEndedRun(db, {
+        status: "pending_verification",
+        title: "Parent awaiting autonomous verification"
+      });
+      const child = issueWithEndedRun(db, {
+        status: "pending_verification",
+        title: `Verifier: #${parent.id}`,
+        workflow_snapshot_json: JSON.stringify({
+          agent_role: "verifier",
+          parent_issue_id: parent.id
+        })
+      });
+      authorizeVerifierCarrier(db, parent.id, child);
+
+      const result = await writeBackVerifierWorkflowEvidence(db, child.id);
+
+      expect(result).toMatchObject({
+        evidence: 0,
+        parent_issue_id: parent.id,
+        status: "failed"
+      });
+      expect(getIssue(db, child.id)).toMatchObject({
+        error: expect.stringContaining("PI will retry autonomously"),
+        status: "failed"
+      });
+      expect(listIssueEvents(db, child.id, {
+        types: ["issue.verifier_contract_failed.v1"]
+      })).toHaveLength(1);
+      expect(getIssue(db, parent.id)?.status).toBe("pending_verification");
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function fixture(): Promise<RunnerDatabase> {

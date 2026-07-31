@@ -138,6 +138,11 @@ export function resolveIssueAgentRole(issue: Pick<Issue, "workflow_snapshot_json
   return isAgentRole(value) ? value : "executor";
 }
 
+export function resolveWorkflowParentIssueID(issue: Pick<Issue, "workflow_snapshot_json">): number {
+  const value = parseWorkflowSnapshot(issue.workflow_snapshot_json).parent_issue_id;
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
+}
+
 export function resolveExecutorSelection(db: RunnerDatabase, project: Project, issue: Issue): AgentRecommendation {
   const role = resolveIssueAgentRole(issue);
   const skills = roleSkills(role, project, issue, {});

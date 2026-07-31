@@ -900,7 +900,7 @@ export function classifyVerificationCommand(command: string): CommandEvidenceKin
 }
 
 function classifySingleVerificationCommand(value: string): CommandEvidenceKind | undefined {
-  const test = /(?:^|\s)(?:bun\s+test|node\s+--test|npm\s+(?:run\s+)?test|pnpm\s+(?:run\s+)?test|yarn\s+(?:run\s+)?test|deno\s+test|cargo\s+test|go\s+test|flutter\s+test|pytest|python\d*\s+-m\s+pytest)(?:\s|$)/i;
+  const test = /(?:^|\s)(?:bun\s+test|node\s+--test|npm\s+(?:run\s+)?test|pnpm\s+(?:run\s+)?test|yarn\s+(?:run\s+)?test|deno\s+test|cargo\s+test|go\s+test|flutter\s+test|pytest|python\d*\s+-m\s+(?:pytest|unittest))(?:\s|$)/i;
   const lint = /(?:^|\s)(?:bun\s+(?:run\s+)?lint|npm\s+(?:run\s+)?lint|pnpm\s+(?:run\s+)?lint|yarn\s+(?:run\s+)?lint|eslint|ruff\s+check|cargo\s+clippy|flutter\s+analyze|dart\s+analyze|tsc\b[^\n;&|]*--noEmit)(?:\s|$)/i;
   const build = /(?:^|\s)(?:bun\s+(?:run\s+)?build|npm\s+(?:run\s+)?build|pnpm\s+(?:run\s+)?build|yarn\s+(?:run\s+)?build|cargo\s+build|go\s+build|flutter\s+build|xcodebuild|tsc)(?:\s|$)/i;
   if (test.test(value)) return "test";
