@@ -63,6 +63,7 @@ export async function runPiIssueAcceptance(input: {
     conversationID: `pi-acceptance-${input.card.issue.id}-${input.card.fingerprint.slice(0, 12)}`,
     issueID: input.card.issue.id,
     heartbeatID: `pi-acceptance:${input.project.id}:${input.card.issue.id}:${input.card.fingerprint.slice(0, 12)}`,
+    promptProfile: "acceptance",
     project: input.project,
     retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0 } },
     source: "pi_issue_acceptance"

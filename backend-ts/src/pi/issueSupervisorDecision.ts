@@ -56,6 +56,7 @@ export async function runPiSupervisorDecision(
     conversationID: `pi-supervisor-${issueID(input.context)}-${Date.now()}`,
     issueID: issueID(input.context),
     heartbeatID: `pi-supervisor:${input.project.id}:${issueID(input.context)}`,
+    promptProfile: "recovery",
     project: input.project,
     retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0 } },
     source: "pi_supervisor_decision"

@@ -154,6 +154,7 @@ async function createConversationWithRuntime(
     agent,
     bus: context.bus,
     conversationID: id,
+    promptProfile: "chat",
     project
   });
   const conversation = createPiConversation(context.database, conversationInput({
@@ -459,7 +460,8 @@ async function resetConversationProjectRuntime(
   const runtime = await createOrRestorePiRuntime(context.database, {
     agent: requireConversationAgent(context.database, conversation),
     bus: context.bus,
-    conversationID: conversation.id
+    conversationID: conversation.id,
+    promptProfile: "chat"
   });
   const reset = updatePiConversation(context.database, conversation.id, {
     pi_session_id: runtime.piSessionId,
@@ -630,6 +632,7 @@ async function openConversationRuntime(
     bus: context.bus,
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs,
     channelContext,
+    chatToolMode: review ? "review" : "full",
     conversationID: conversation.id,
     config: context.config,
     onIssueEnqueued: (projectID) => startProjectLoop({
@@ -638,6 +641,7 @@ async function openConversationRuntime(
       providers: context.providers
     }, projectID, { forceOnce: true }),
     project,
+    promptProfile: "chat",
     providers: context.providers,
     restartDelayMs: context.restartDelayMs,
     restartProcess: context.restartProcess,

@@ -18,6 +18,24 @@ test('PI Agent Settings exposes runtime prompt summary debug without secret echo
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
 });
 
+test('PI Agent Settings exposes revisioned presentation-only Chat Persona controls', () => {
+  assert.match(panelSource, /Chat 表达风格/);
+  assert.match(panelSource, /只对 chat profile 的最终回复生效/);
+  assert.match(panelSource, /不改变权限、审批、工具调用、Issue 状态和完成判定/);
+  assert.match(panelSource, /personaPersonality/);
+  assert.match(panelSource, /personaCommunicationStyle/);
+  assert.match(panelSource, /personaVerbosity/);
+  assert.match(panelSource, /personaLanguageMode/);
+  assert.match(panelSource, /生效 profile：chat/);
+  assert.match(stateSource, /expected_revision: form\.personaRevision/);
+  assert.match(stateSource, /err\?\.status === 409/);
+  assert.match(stateSource, /保留本地草稿供你合并/);
+  assert.match(panelSource, /检测到 revision 冲突/);
+  assert.match(panelSource, /恢复本地草稿/);
+  assert.match(panelSource, /使用服务器版本/);
+  assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
+});
+
 test('PI Agent Settings exposes OpenAI Codex OAuth and user agent controls', () => {
   assert.match(panelSource, /Codex OAuth/);
   assert.match(panelSource, /复制登录地址/);

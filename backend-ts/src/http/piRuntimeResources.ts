@@ -38,6 +38,7 @@ export type ControlledPiResourceOptions = {
   onSnapshot?: (snapshot: PiRuntimeResourceSnapshot) => void;
   piPackageDir?: string;
   runtimeRoot: string;
+  resourceScope?: "core" | "full";
   systemPrompt: string;
 };
 
@@ -71,7 +72,10 @@ export async function createPiRuntimeResourceLoader(
   options: Omit<ControlledPiResourceOptions, "allowedSkillIDs" | "onSnapshot">
 ): Promise<ResourceLoader & { snapshot(): PiRuntimeResourceSnapshot }> {
   const promptProject = input.toolProject ?? input.project;
-  const skillContext = buildSkillPromptContext(db, { ...input, project: promptProject });
+  const resourceScope = input.promptProfile === "chat" || input.promptProfile === "manager_cycle" ? "full" : "core";
+  const skillContext = resourceScope === "full"
+    ? buildSkillPromptContext(db, { ...input, project: promptProject })
+    : { audit: { injected_skill_ids: [], missing_skill_intents: [] } };
   const allowedSkillIDs = unique([
     ...skillContext.audit.injected_skill_ids,
     ...skillContext.audit.missing_skill_intents
@@ -79,6 +83,7 @@ export async function createPiRuntimeResourceLoader(
   return await createControlledPiResourceLoader(sdk, {
     ...options,
     allowedSkillIDs,
+    resourceScope,
     onSnapshot: (snapshot) => recordPiRuntimeResourceSnapshot(db, input, promptProject?.id, snapshot)
   });
 }
@@ -99,9 +104,11 @@ class ControlledPiResourceLoader implements ResourceLoader {
   private generation = 0;
   private outcome: PiRuntimeResourceSnapshot["outcome"] = "loaded";
   private sources: ResourcePackage[] = [];
+  private readonly promptParts: { base: string; final: string };
 
   constructor(private readonly sdk: SmokeRuntime, private readonly options: ControlledPiResourceOptions) {
-    this.active = coreOnlyLoader(sdk, options.systemPrompt);
+    this.promptParts = splitFinalPersonaPrompt(options.systemPrompt);
+    this.active = coreOnlyLoader(sdk, this.promptParts.base);
   }
 
   getExtensions(): LoadExtensionsResult { return this.active.getExtensions(); }
@@ -112,7 +119,11 @@ class ControlledPiResourceLoader implements ResourceLoader {
   getSystemPrompt(): string | undefined { return this.active.getSystemPrompt(); }
 
   getAppendSystemPrompt(): string[] {
-    return [...this.active.getAppendSystemPrompt(), resourcePromptSummary(this.snapshot())];
+    return [
+      ...this.active.getAppendSystemPrompt(),
+      resourcePromptSummary(this.snapshot()),
+      this.promptParts.final
+    ].filter(Boolean);
   }
 
   extendResources(paths: ResourceExtensionPaths): void {
@@ -134,7 +145,7 @@ class ControlledPiResourceLoader implements ResourceLoader {
     // Drop the previous extension runtime before importing a fresh generation.
     // Keeping both runtimes live can leave the SDK module loader waiting on the
     // prior TypeScript extension instance during an in-process reload.
-    this.active = coreOnlyLoader(this.sdk, this.options.systemPrompt);
+    this.active = coreOnlyLoader(this.sdk, this.promptParts.base);
     try {
       const candidate = this.defaultLoader(discovery, policyDiagnostics);
       await candidate.reload();
@@ -144,7 +155,7 @@ class ControlledPiResourceLoader implements ResourceLoader {
       this.sources = discovery.packages;
       this.outcome = "loaded";
     } catch (error) {
-      this.active = coreOnlyLoader(this.sdk, this.options.systemPrompt);
+      this.active = coreOnlyLoader(this.sdk, this.promptParts.base);
       this.allowedRoots = discovery.allowedRoots;
       this.sources = discovery.packages;
       this.outcome = "fallback";
@@ -211,7 +222,7 @@ class ControlledPiResourceLoader implements ResourceLoader {
       noPromptTemplates: true,
       noThemes: true,
       noContextFiles: true,
-      systemPrompt: this.options.systemPrompt,
+      systemPrompt: this.promptParts.base,
       appendSystemPromptOverride: () => [],
       agentsFilesOverride: () => ({ agentsFiles: discovery.agents }),
       extensionsOverride: (base) => sanitizeExtensions(
@@ -262,6 +273,17 @@ class ControlledPiResourceLoader implements ResourceLoader {
 
 function discoverResources(options: ControlledPiResourceOptions): Discovery {
   const diagnostics: PiRuntimeResourceDiagnostic[] = [];
+  if (options.resourceScope === "core") {
+    return {
+      agents: [],
+      allowedRoots: [],
+      diagnostics,
+      extensionPaths: [],
+      packages: [],
+      promptPaths: [],
+      skillPaths: []
+    };
+  }
   const candidates: ResourcePackage[] = [
     packageCandidate("builtin", options.runtimeRoot, diagnostics),
     packageCandidate("project", join(options.cwd, PI_RESOURCE_DIR), diagnostics, options.cwd),
@@ -293,6 +315,15 @@ function discoverResources(options: ControlledPiResourceOptions): Discovery {
     promptPaths: unique(promptPaths),
     skillPaths: unique(skillPaths)
   };
+}
+
+function splitFinalPersonaPrompt(systemPrompt: string): { base: string; final: string } {
+  const header = "Chat presentation profile:";
+  const marker = `\n${header}`;
+  const index = systemPrompt.lastIndexOf(marker);
+  if (index >= 0) return { base: systemPrompt.slice(0, index), final: systemPrompt.slice(index + 1) };
+  if (systemPrompt.startsWith(header)) return { base: "", final: systemPrompt };
+  return { base: systemPrompt, final: "" };
 }
 
 function packageCandidate(

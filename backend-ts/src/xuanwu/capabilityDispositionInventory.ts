@@ -334,6 +334,11 @@ export const TABLE_DISPOSITIONS = [
     live_rows: 1, delete_preconditions: []
   },
   {
+    name: "pi_persona", disposition: "keep", target: "Supervisor Chat presentation configuration",
+    source_of_truth: "pi_persona", retention: "R4_SENSITIVE", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
     name: "pi_notification_intents", disposition: "merge", target: "Attention delivery projection",
     source_of_truth: "pi_notification_intents", retention: "R3_AUDIT", runtime_origin: "source_schema",
     live_rows: 312, delete_preconditions: []
@@ -806,7 +811,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "policy-role", disposition: "keep", target: "Deterministic policy and role selection", source_of_truth: "project policy plus static role contracts",
-    source_files: ["backend-ts/src/pi/policyTypes.ts", "backend-ts/src/pi/roleProfileSelector.ts"]
+    source_files: ["backend-ts/src/pi/personaPrompt.ts", "backend-ts/src/pi/policyTypes.ts", "backend-ts/src/pi/roleProfileSelector.ts", "backend-ts/src/pi/runtimePromptProfile.ts"]
   },
   {
     id: "reporting", disposition: "merge", target: "Evidence/Handoff reporting projections", source_of_truth: "underlying immutable facts remain authoritative",
@@ -814,7 +819,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "test-support", disposition: "keep", target: "Focused deterministic fixtures", source_of_truth: "test-only import graph",
-    source_files: ["backend-ts/src/pi/issueSupervisorDecisionTestSupport.ts", "backend-ts/src/pi/issueSupervisorRecoveryFixtures.ts"]
+    source_files: ["backend-ts/src/pi/issueSupervisorDecisionTestSupport.ts", "backend-ts/src/pi/issueSupervisorRecoveryFixtures.ts", "backend-ts/src/pi/personaABFixtures.ts"]
   },
   {
     id: "verification-evidence", disposition: "keep", target: "Evidence production and verification policy", source_of_truth: "verification facts and Git/runtime inputs",

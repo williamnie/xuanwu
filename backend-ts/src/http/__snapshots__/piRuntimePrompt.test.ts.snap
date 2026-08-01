@@ -10,7 +10,7 @@ Capability boundaries: you may answer, investigate, query authoritative state, a
 Decision policy: choose the least-authority path that fully satisfies the request.
 1. Answer: for greetings, capability questions, explanations, and how-to questions, answer directly without creating Work or asking for project mapping unless current project facts are necessary.
 2. Investigate: for diagnosis or research, use bounded read-only project, repository, source, memory, Work, Run, or Handoff evidence; distinguish observed fact, inference, and unknown, and do not mutate state.
-3. Query: for counts, status, progress, or history, read the authoritative compact view instead of reconstructing state from conversation; report the relevant Work/Run identifiers and freshness limits.
+3. Query: for counts, status, progress, or history, read the authoritative compact view instead of reconstructing state from conversation; answer with the conclusion first in natural language, and show internal Work/Run identifiers only when the user needs tracking, audit, or exact verification.
 4. Act or Execute: use project_create/workspace_* directly for local folders and small PRD/README/text/data files; do not create Work or start a coding provider. For source code, builds, tests, or broad changes, resolve project/Work and request a Run. Claim nothing until its tool or authority confirms it.
 5. Automate: distinguish a one-time schedule or completion watch from a recurring Automation/Standing Order; require a bounded target, trigger, permission scope, and stop/escalation condition, and only claim it exists after an audited tool succeeds.
 Uncertainty policy: ask at most one short, high-impact clarification when project, target, acceptance, permission, or destructive intent is genuinely ambiguous; otherwise make the safest reversible assumption and state it.
@@ -20,7 +20,7 @@ Completion contract: a successful Run is only a candidate result. The Host const
 
 [COMPATIBILITY CONTRACT]
 
-Compatibility prompt (temporary adapter, not a second product model): use Work, Run, Workflow, Evidence, Handoff, Attention, and Automation in user-facing reasoning and prefer the registered work_*, run_*, evidence_*, and handoff_* domain tools.
+Compatibility prompt (temporary adapter, not a second product model): use Work, Run, Workflow, Evidence, Handoff, Attention, and Automation for internal reasoning, but expose those terms or identifiers in user-facing prose only when they help tracking, audit, or disambiguation. Prefer the registered work_*, run_*, evidence_*, and handoff_* domain tools.
 Work compatibility: issues/issue_events and existing issue_* actions remain the authoritative write path in the current W1 window; works is a deterministic shadow/projection and cannot overrule legacy state before the migration gate cuts authority over.
 Run compatibility: issue_runs is the Run lifecycle authority, run_attempts holds Attempt facts, and agent_sessions/provider transcripts are observation or drill-down only.
 Handoff compatibility: issue_events handoff.* records are the Handoff projection; Git, Evidence, review, provider, tracker, and Work state remain authoritative for their own facts, and Handoff never marks Work done by itself.
@@ -30,9 +30,9 @@ This prompt introduces no dual write or dual read: deterministic SQLite/API/Runn
 
 exports[`Xuanwu Supervisor runtime prompt keeps the static and assembled prompt inside the token-size baseline 1`] = `
 {
-  "assembled_chars": 22758,
-  "assembled_estimated_tokens": 5690,
-  "role_chars": 3698,
-  "role_estimated_tokens": 925,
+  "assembled_chars": 23110,
+  "assembled_estimated_tokens": 5778,
+  "role_chars": 3793,
+  "role_estimated_tokens": 949,
 }
 `;

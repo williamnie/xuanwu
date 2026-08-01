@@ -144,7 +144,8 @@ describe("PI project tools", () => {
       ]);
       const runtime = await createPiRuntimeSession(db, {
         agent: agentRecord({ model_provider: "pi-global-tools" }),
-        conversationID: "conv-global-tools"
+        conversationID: "conv-global-tools",
+        promptProfile: "chat",
       });
       const probes = new Map<string, { isError: boolean; text: string }>();
       const unsubscribe = runtime.session.subscribe((event) => {
@@ -188,6 +189,7 @@ describe("PI project tools", () => {
       const runtime = await createPiRuntimeSession(db, {
         agent: agentRecord({ model_provider: "pi-tool-audit" }),
         conversationID: "conv-tool-audit",
+        promptProfile: "chat",
         project: projectRecord(projectCwd),
         source: "rpc"
       });
@@ -250,6 +252,7 @@ async function runToolProbeSession(db: RunnerDatabase, projectCwd: string) {
   const runtime = await createPiRuntimeSession(db, {
     agent: agentRecord(),
     conversationID: "conv-tools",
+    promptProfile: "chat",
     project: projectRecord(projectCwd)
   });
   const probes = new Map<string, { isError: boolean; text: string }>();

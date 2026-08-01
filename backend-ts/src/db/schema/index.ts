@@ -60,6 +60,7 @@ import { piAutomaticTakeoverMigration } from "./059_pi_automatic_takeover.ts";
 import { mcpApprovalPolicyMigration } from "./060_mcp_approval_policy.ts";
 import { projectMandatoryTakeoverMigration } from "./061_project_mandatory_takeover.ts";
 import { reusablePiMemoryMigration } from "./062_reusable_pi_memory.ts";
+import { piPersonaMigration } from "./063_pi_persona.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -123,5 +124,6 @@ export const migrations = [
   piAutomaticTakeoverMigration,
   mcpApprovalPolicyMigration,
   projectMandatoryTakeoverMigration,
-  reusablePiMemoryMigration
+  reusablePiMemoryMigration,
+  piPersonaMigration
 ];
