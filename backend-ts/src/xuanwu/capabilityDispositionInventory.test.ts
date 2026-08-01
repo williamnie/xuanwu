@@ -21,8 +21,8 @@ const ADR_PATH = "docs/architecture/xuanwu/0005-capability-disposition-inventory
 
 describe("Xuanwu capability disposition inventory", () => {
   test("covers every current source table and the two live-only legacy tables", () => {
-    expect(TABLE_DISPOSITIONS).toHaveLength(86);
-    expect(unique(TABLE_DISPOSITIONS.map((item) => item.name))).toHaveLength(86);
+    expect(TABLE_DISPOSITIONS).toHaveLength(87);
+    expect(unique(TABLE_DISPOSITIONS.map((item) => item.name))).toHaveLength(87);
     expect(Object.keys(RETENTION_LEVELS).sort()).toEqual([
       "R0_DERIVED",
       "R1_OPERATIONAL",
@@ -102,7 +102,7 @@ describe("Xuanwu capability disposition inventory", () => {
     );
     const inventoriedPi: string[] = PI_MODULE_FAMILIES.flatMap((family) => [...family.source_files]).sort();
     expect(inventoriedPi).toEqual(piFiles);
-    expect(inventoriedPi).toHaveLength(148);
+    expect(inventoriedPi).toHaveLength(151);
     expect(unique(inventoriedPi)).toHaveLength(inventoriedPi.length);
   });
 
@@ -140,7 +140,7 @@ describe("Xuanwu capability disposition inventory", () => {
     for (const heading of ["live reference", "表清单", "API 清单", "页面清单", "后台调度器", "PI 模块", "删除前置条件"]) {
       expect(adr).toContain(heading);
     }
-    expect(adr).toContain("86 张表");
+    expect(adr).toContain("87 张表");
     expect(adr).toContain("244 条用户 API route");
   });
 });

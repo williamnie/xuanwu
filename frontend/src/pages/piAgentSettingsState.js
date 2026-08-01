@@ -13,6 +13,13 @@ export const DEFAULT_PI_AGENT_FORM = {
   instructions: '你是玄武 Xuanwu Supervisor，作为 Engineering Chief of Staff 将工程目标组织为 Work，监督 Run，以 Evidence 判定完成，并产出可审查的 Handoff；所有写操作必须经过确定性权限与审计门禁。',
   modelId: 'gpt-5.4',
   modelProvider: 'openai',
+  personaCommunicationStyle: '',
+  personaDirty: false,
+  personaEnabled: false,
+  personaLanguageMode: 'system',
+  personaPersonality: '',
+  personaRevision: 0,
+  personaVerbosity: 'adaptive',
   thinkingLevel: 'medium',
   userAgent: ''
 };
@@ -30,6 +37,7 @@ export function usePiAgentSettingsState() {
   const [oauthStatus, setOauthStatus] = useState(null);
   const [promptSummary, setPromptSummary] = useState(null);
   const [promptSummaryLoading, setPromptSummaryLoading] = useState(false);
+  const [personaConflictDraft, setPersonaConflictDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const selectedProvider = useMemo(
     () => providers.find((provider) => provider.id === form.modelProvider),
@@ -52,10 +60,14 @@ export function usePiAgentSettingsState() {
   const loadOAuthStatus = () => loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
   const loadPromptSummary = () => loadPiPromptSummary(setPromptSummary, setPromptSummaryLoading);
   const updateField = (key, value) => {
-    if (key === 'instructions') setPromptSummary(null);
+    if (key === 'instructions' || key.startsWith('persona')) setPromptSummary(null);
     if (CONNECTION_FIELDS.has(key)) clearFirstDeliveryConnectionTest();
     if (key === 'modelProvider') setConnectionTest({ busy: false, providerId: '', result: null });
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+      ...(key.startsWith('persona') && key !== 'personaRevision' && key !== 'personaDirty' ? { personaDirty: true } : {})
+    }));
   };
   const selectProviderPreset = (preset) => {
     clearFirstDeliveryConnectionTest();
@@ -75,7 +87,13 @@ export function usePiAgentSettingsState() {
     void discoverPiModels(next, setModelDiscovery);
   };
   const handleConnectionSave = () => savePiConnectionSettings({ form, setForm, setProviders, setSaving });
-  const handleAgentSave = () => savePiSupervisorSettings({ form, providers, setForm, setPromptSummary, setProviders, setSaving });
+  const handleAgentSave = () => savePiSupervisorSettings({ form, providers, setForm, setPersonaConflictDraft, setPromptSummary, setProviders, setSaving });
+  const restorePersonaConflictDraft = () => {
+    if (!personaConflictDraft) return;
+    setForm((current) => ({ ...current, ...personaConflictDraft, personaDirty: true }));
+    setPersonaConflictDraft(null);
+  };
+  const dismissPersonaConflictDraft = () => setPersonaConflictDraft(null);
   const selectModelProvider = (providerId) => selectConfiguredProvider(providerId, form, providers, providerCatalog.presets, setForm, setConnectionTest, setModelDiscovery);
   const testConnection = () => testPiConnection(form, setConnectionTest, setModelDiscovery);
   const startPiCodexOAuthLogin = () => startPiOAuthLogin(setForm, setOauthBusy, setOauthStatus);
@@ -87,8 +105,8 @@ export function usePiAgentSettingsState() {
     loadSettings();
   }, []);
 
-  return { connectionTest, form, loading, modelDiscovery, modelOptions, modelSelectAvailable, oauthBusy, oauthStatus, promptSummary, promptSummaryLoading, providerCatalog, providers, saving, selectedPreset, selectedProvider,
-    copyPiCodexOAuthUrl, handleAgentSave, handleConnectionSave, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, selectModelProvider, selectProviderPreset, startPiCodexOAuthLogin, testConnection, updateField };
+  return { connectionTest, form, loading, modelDiscovery, modelOptions, modelSelectAvailable, oauthBusy, oauthStatus, personaConflictDraft, promptSummary, promptSummaryLoading, providerCatalog, providers, saving, selectedPreset, selectedProvider,
+    copyPiCodexOAuthUrl, dismissPersonaConflictDraft, handleAgentSave, handleConnectionSave, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, restorePersonaConflictDraft, selectModelProvider, selectProviderPreset, startPiCodexOAuthLogin, testConnection, updateField };
 }
 
 function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery) {
@@ -234,20 +252,37 @@ async function savePiConnectionSettings({ form, setForm, setProviders, setSaving
   }
 }
 
-async function savePiSupervisorSettings({ form, providers, setForm, setPromptSummary, setProviders, setSaving }) {
+async function savePiSupervisorSettings({ form, providers, setForm, setPersonaConflictDraft, setPromptSummary, setProviders, setSaving }) {
   if (!isValidAgentForm(form)) return;
   setSaving(true);
   try {
     await ensureSelectedProviderModel(form, providers);
     await saveSupervisor(supervisorPayload(form));
+    setPersonaConflictDraft(null);
     message.success('Supervisor 行为设置已保存');
     setPromptSummary(null);
     await refreshAfterSave(setProviders, setForm);
   } catch (err) {
+    if (err?.status === 409) {
+      setPersonaConflictDraft(personaDraft(form));
+      await refreshAfterSave(setProviders, setForm);
+      message.error('Chat Persona 已被其他修改更新；已重新加载最新 revision，并保留本地草稿供你合并');
+      return;
+    }
     message.error(err.message || '保存 Supervisor 行为设置失败');
   } finally {
     setSaving(false);
   }
+}
+
+function personaDraft(form) {
+  return {
+    personaCommunicationStyle: form.personaCommunicationStyle,
+    personaEnabled: form.personaEnabled,
+    personaLanguageMode: form.personaLanguageMode,
+    personaPersonality: form.personaPersonality,
+    personaVerbosity: form.personaVerbosity
+  };
 }
 
 async function ensureSelectedProviderModel(form, providers) {
@@ -314,7 +349,15 @@ function supervisorPayload(form) {
     model_id: form.modelId.trim(),
     thinking_level: form.thinkingLevel,
     instructions: form.instructions,
-    enabled: form.enabled
+    enabled: form.enabled,
+    ...(form.personaDirty ? { persona: {
+      expected_revision: form.personaRevision,
+      enabled: form.personaEnabled,
+      personality: form.personaPersonality,
+      communication_style: form.personaCommunicationStyle,
+      verbosity: form.personaVerbosity,
+      language_mode: form.personaLanguageMode
+    } } : {})
   };
 }
 
@@ -331,6 +374,13 @@ function formFromState(supervisor, providers) {
     instructions: normalizedInstructions(supervisor.instructions),
     modelId: supervisor.model_id || provider?.models?.[0] || DEFAULT_PI_AGENT_FORM.modelId,
     modelProvider: supervisor.model_provider || DEFAULT_PI_AGENT_FORM.modelProvider,
+    personaCommunicationStyle: supervisor.persona?.communication_style || '',
+    personaDirty: false,
+    personaEnabled: supervisor.persona?.enabled === 1,
+    personaLanguageMode: supervisor.persona?.language_mode || 'system',
+    personaPersonality: supervisor.persona?.personality || '',
+    personaRevision: Number.isInteger(supervisor.persona?.revision) ? supervisor.persona.revision : 0,
+    personaVerbosity: supervisor.persona?.verbosity || 'adaptive',
     thinkingLevel: supervisor.thinking_level || DEFAULT_PI_AGENT_FORM.thinkingLevel,
     userAgent: provider?.user_agent || ''
   };

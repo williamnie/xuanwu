@@ -62,6 +62,33 @@ describe("PI runtime tool registry adapter", () => {
 
     expect(() => createPiRuntimeToolKit(db)).toThrow();
   });
+
+  test("loads only the tool family required by each explicit runtime profile", async () => {
+    const db = await openFixture();
+    try {
+      const full = createPiRuntimeToolKit(db, undefined, {}, { promptProfile: "chat", chatToolMode: "full" });
+      const review = createPiRuntimeToolKit(db, undefined, {}, { promptProfile: "chat", chatToolMode: "review" });
+      const acceptance = createPiRuntimeToolKit(db, undefined, {}, { promptProfile: "acceptance" });
+      const recovery = createPiRuntimeToolKit(db, undefined, {}, { promptProfile: "recovery" });
+      const manager = createPiRuntimeToolKit(db, undefined, {}, { promptProfile: "manager_cycle" });
+      const notification = createPiRuntimeToolKit(db, undefined, {}, { promptProfile: "notification" });
+
+      expect(review.audit.counts.custom_tools).toBeLessThan(full.audit.counts.custom_tools);
+      expect(review.audit.tool_names).toContain("repo_read_excerpt");
+      expect(review.audit.tool_names).not.toContain("issue_delete");
+      expect(acceptance.audit.tool_names).toEqual(expect.arrayContaining(["issue_read", "repo_read_excerpt", "grep"]));
+      expect(acceptance.audit.tool_names).not.toContain("memory_remember");
+      expect(recovery.audit.tool_names).toEqual(expect.arrayContaining(["issue_state_diagnose", "memory_search"]));
+      expect(recovery.audit.tool_names).not.toContain("work_control");
+      expect(manager.audit.tool_names).toEqual(expect.arrayContaining(["work_control", "memory_remember"]));
+      expect(manager.audit.tool_names).not.toContain("workspace_write_file");
+      expect(notification.tools).toEqual([]);
+      expect(notification.customTools).toEqual([]);
+      expect(notification.readOnlyToolNames).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function openFixture(): Promise<RunnerDatabase> {

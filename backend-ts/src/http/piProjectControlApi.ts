@@ -113,6 +113,7 @@ async function createManagerCycleState(
     conversationID,
     delegationID: `pi-cycle:${project.id}`,
     heartbeatID: `pi-cycle:${project.id}:${conversationID}`,
+    promptProfile: "manager_cycle",
     project,
     source: "pi_manager_cycle"
   });

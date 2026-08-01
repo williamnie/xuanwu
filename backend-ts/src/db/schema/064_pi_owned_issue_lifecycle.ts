@@ -4,7 +4,7 @@ import { runAttemptRelationsMigration } from "./042_run_attempt_relations.ts";
 
 /** 删除 pending_verification，并把等待 PI 判断建模为 in_progress + 已结束 Run。 */
 export const piOwnedIssueLifecycleMigration: SqlMigration = {
-  id: "063_pi_owned_issue_lifecycle",
+  id: "064_pi_owned_issue_lifecycle",
   sql: "",
   apply(sqlite: SQLiteDatabase): void {
     sqlite.run("update issues set status='in_progress' where status='pending_verification'");

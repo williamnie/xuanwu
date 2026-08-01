@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { buildRunnerPaths } from "../config/paths.ts";
 import { ensureDefaultPiAgent } from "./defaultPiAgent.ts";
+import { ensureDefaultPiPersona } from "./defaultPiPersona.ts";
 import { runMigrations } from "./migrations.ts";
 
 type OpenDatabaseOptions = {
@@ -49,6 +50,7 @@ export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<R
   if (!target.readonly) {
     runMigrations(sqlite);
     ensureDefaultPiAgent({ readonly: false, sqlite });
+    ensureDefaultPiPersona({ readonly: false, sqlite });
     configureWalConnection(sqlite);
   }
 

@@ -8,7 +8,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAutomationTrigger, listAutomations } from "../db/repositories/automations.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listIssues } from "../db/repositories/issues.ts";
-import { createPiDelegation, createPiMemoryItem, getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
+import { createPiDelegation, createPiMemoryItem, getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems, updatePiPersona } from "../db/repositories/pi.ts";
 import { EventBus } from "../events/bus.ts";
 import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";
 import {
@@ -36,6 +36,57 @@ afterEach(async () => {
 });
 
 describe("Bun PI runtime v1 smoke", () => {
+  test("keeps Persona final in controlled Chat runtime and strips it plus optional resources from internal profiles", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      writeFauxModelsConfig(database);
+      updatePiPersona(database, { expected_revision: 0, enabled: 1 }, {
+        actor: "runtime-smoke", reason: "controlled canary", requestedAt: new Date().toISOString()
+      });
+      const chat = await createPiRuntimeSession(database, {
+        agent: agentRecord(),
+        channelContext: "CHANNEL_RUNTIME_SENTINEL",
+        conversationID: "controlled-chat-persona",
+        promptProfile: "chat",
+        project: projectRecord("demo")
+      });
+      const chatPrompt = chat.session.systemPrompt;
+      chat.dispose();
+      expect(chatPrompt).toContain("Controlled Supervisor resource summary:");
+      expect(chatPrompt).toContain("CHANNEL_RUNTIME_SENTINEL");
+      expect(chatPrompt.match(/Chat presentation profile:/g)).toHaveLength(1);
+      expect(chatPrompt.indexOf("Controlled Supervisor resource summary:")).toBeLessThan(
+        chatPrompt.indexOf("Chat presentation profile:")
+      );
+      const afterPersona = chatPrompt.slice(chatPrompt.indexOf("Chat presentation profile:"));
+      expect(afterPersona).toContain("Prefer natural language otherwise.");
+      expect(afterPersona).toContain("Current date:");
+      expect(afterPersona).not.toContain("Supervisor commitment context");
+      expect(afterPersona).not.toContain("Reusable Supervisor memory");
+      expect(afterPersona).not.toContain("Agent-specific Supervisor behavior");
+
+      for (const profile of ["acceptance", "recovery", "notification"] as const) {
+        const runtime = await createPiRuntimeSession(database, {
+          agent: agentRecord(),
+          conversationID: `controlled-${profile}`,
+          promptProfile: profile,
+          project: projectRecord("demo")
+        });
+        const prompt = runtime.session.systemPrompt;
+        const tools = runtime.session.getActiveToolNames();
+        runtime.dispose();
+        expect(prompt).toContain(`Runtime prompt profile: ${profile}`);
+        expect(prompt).not.toContain("Chat presentation profile:");
+        expect(prompt).not.toContain("CHANNEL_RUNTIME_SENTINEL");
+        expect(prompt).not.toContain("Relevant Skill Metadata:");
+        if (profile === "notification") expect(tools).toEqual([]);
+        else expect(tools.length).toBeGreaterThan(0);
+      }
+    } finally {
+      database.close();
+    }
+  });
+
   test("Runner Chat authorization exposes canonical Issue status management", () => {
     expect(PI_RUNNER_CHAT_ACTIONS).toEqual(expect.arrayContaining([
       "issue.cancel",
@@ -59,6 +110,7 @@ describe("Bun PI runtime v1 smoke", () => {
       await expect(createPiRuntimeSession(database, {
         agent: agentRecord({ model_id: "", model_provider: "" }),
         conversationID: "conv-model-missing",
+        promptProfile: "chat",
         project: projectRecord("demo")
       })).rejects.toThrow("has no configured model provider/model");
     } finally {
@@ -72,6 +124,7 @@ describe("Bun PI runtime v1 smoke", () => {
       await expect(createPiRuntimeSession(database, {
         agent: agentRecord({ model_id: "missing-model", model_provider: "missing-provider" }),
         conversationID: "conv-model-unavailable",
+        promptProfile: "chat",
         project: projectRecord("demo")
       })).rejects.toThrow("model is unavailable: missing-provider/missing-model");
     } finally {
@@ -245,6 +298,7 @@ describe("Bun PI runtime v1 smoke", () => {
       const runtime = await createPiRuntimeSession(database, {
         agent: agentRecord(),
         conversationID: "conv-tool-registry",
+        promptProfile: "chat",
         project: projectRecord("demo")
       });
       const activeTools = runtime.session.getActiveToolNames();
@@ -303,6 +357,7 @@ describe("Bun PI runtime v1 smoke", () => {
       const runtime = await createPiRuntimeSession(database, {
         agent: agentRecord({ model_provider: "pi-url-faux" }),
         conversationID: "conv-url-question",
+        promptProfile: "chat",
         project: projectRecord("demo"),
         source: "rpc"
       });
@@ -384,6 +439,7 @@ describe("Bun PI runtime v1 smoke", () => {
           mode: "delegated"
         },
         conversationID: "conv-skill-context",
+        promptProfile: "chat",
         delegationID: "delegation-a",
         issueID: issue.id,
         project: projectRecord("demo")
@@ -442,6 +498,7 @@ describe("Bun PI runtime v1 smoke", () => {
           instructions: "自定义 PI 行为：先用中文总结项目风险，再提出最小 action。"
         }),
         conversationID: "conv-agent-instructions",
+        promptProfile: "chat",
         project: projectRecord("demo")
       });
       const prompt = runtime.session.systemPrompt;

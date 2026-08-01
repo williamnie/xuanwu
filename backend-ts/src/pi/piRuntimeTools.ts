@@ -6,6 +6,7 @@ import { createPiProjectTools, PI_ALLOWED_TOOLS, PI_READ_ONLY_TOOLS } from "../h
 import { RUNNER_BUILTIN_PROVIDER_ID } from "./builtinToolRegistry.ts";
 import { createReadOnlyRuntimeTools } from "./readOnlyRuntimeTools.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
+import type { PiChatToolMode, PiRuntimePromptProfile } from "./runtimePromptProfile.ts";
 
 type ToolContext = NonNullable<Parameters<typeof createPiProjectTools>[2]>;
 type ToolSource = "registry";
@@ -37,14 +38,20 @@ export type PiRuntimeToolAuditInput = {
   projectID?: string;
 };
 
+export type PiRuntimeToolSelection = {
+  chatToolMode?: PiChatToolMode;
+  promptProfile: PiRuntimePromptProfile;
+};
+
 const READ_ONLY_TOOL_NAMES = new Set<string>(PI_READ_ONLY_TOOLS);
 
 export function createPiRuntimeToolKit(
   db: RunnerDatabase,
   project?: Project,
-  context: ToolContext = {}
+  context: ToolContext = {},
+  selection: PiRuntimeToolSelection = { promptProfile: "chat" }
 ): PiRuntimeToolKit {
-  return registryToolKit(db, project, context);
+  return registryToolKit(db, project, context, selection);
 }
 
 export function recordPiRuntimeToolRegistryAudit(
@@ -85,7 +92,12 @@ export function unavailablePiRuntimeToolRegistryAudit(error: unknown): PiRuntime
   };
 }
 
-function registryToolKit(db: RunnerDatabase, project: Project | undefined, context: ToolContext): PiRuntimeToolKit {
+function registryToolKit(
+  db: RunnerDatabase,
+  project: Project | undefined,
+  context: ToolContext,
+  selection: PiRuntimeToolSelection
+): PiRuntimeToolKit {
   const snapshot = loadAssistantToolRegistrySnapshot(db);
   const provider = snapshot.providers.find((item) => item.id === RUNNER_BUILTIN_PROVIDER_ID);
   if (!provider || provider.status === "disabled") throw new Error("builtin tool provider is unavailable");
@@ -106,11 +118,16 @@ function registryToolKit(db: RunnerDatabase, project: Project | undefined, conte
     ...readOnlyTools.tools.map((tool) => tool.name)
   ], customByName);
   if (executable.names.size === 0) throw new Error("builtin tool provider returned no executable tools");
-  const tools = [
+  const availableTools = [
     ...PI_ALLOWED_TOOLS.filter((name) => executable.names.has(name)),
     ...readOnlyTools.tools.map((tool) => tool.name).filter((name) => executable.names.has(name))
   ];
-  const filteredCustomTools = allCustomTools.filter((tool) => executable.names.has(tool.name));
+  const selectedNames = selectedToolNames(selection, new Set([
+    ...availableTools,
+    ...allCustomTools.map((tool) => tool.name)
+  ]));
+  const tools = availableTools.filter((name) => selectedNames.has(name));
+  const filteredCustomTools = allCustomTools.filter((tool) => executable.names.has(tool.name) && selectedNames.has(tool.name));
   return {
     audit: auditSnapshot("registry", tools, filteredCustomTools, [provider.id, ...readOnlyTools.providerIDs], executable.skipped),
     customTools: filteredCustomTools,
@@ -118,6 +135,47 @@ function registryToolKit(db: RunnerDatabase, project: Project | undefined, conte
     source: "registry",
     tools
   };
+}
+
+const ACCEPTANCE_TOOLS = new Set([
+  "issue_read", "session_read_summary", "repo_search", "repo_read_excerpt", "repo_tree",
+  "read", "grep", "find", "ls"
+]);
+const RECOVERY_TOOLS = new Set([
+  "issue_read", "issue_state_diagnose", "session_read_summary", "project_status", "memory_search",
+  "read", "grep", "find", "ls"
+]);
+const MANAGER_CYCLE_TOOLS = new Set([
+  "project_status", "issue_list", "issue_status_summary", "issue_execution_status", "issue_read",
+  "issue_comment", "issue_enqueue_next_triage", "issue_enqueue_batch_triage", "issue_state_diagnose",
+  "work_list", "work_read", "work_control", "run_list", "run_read", "evidence_list", "evidence_read",
+  "handoff_list", "handoff_read", "memory_search", "memory_remember",
+  "verification_workflow_request", "review_workflow_request", "report_workflow_request",
+  "read", "grep", "find", "ls"
+]);
+const REVIEW_CHAT_TOOLS = new Set([
+  "project_status", "project_list", "issue_list", "issue_status_summary", "issue_execution_status", "issue_read",
+  "session_list", "session_read_summary", "repo_search", "repo_read_excerpt", "repo_tree",
+  "work_list", "work_read", "run_list", "run_read", "evidence_list", "evidence_read",
+  "handoff_list", "handoff_read", "memory_search", "memory_remember", "skill_list", "skill_read",
+  "read", "grep", "find", "ls", "url_fetch"
+]);
+
+export function piRuntimeToolNamesForProfile(
+  selection: PiRuntimeToolSelection,
+  availableNames: Iterable<string>
+): string[] {
+  return [...selectedToolNames(selection, new Set(availableNames))].sort();
+}
+
+function selectedToolNames(selection: PiRuntimeToolSelection, available: Set<string>): Set<string> {
+  const allowlist = selection.promptProfile === "chat"
+    ? selection.chatToolMode === "review" ? REVIEW_CHAT_TOOLS : available
+    : selection.promptProfile === "acceptance" ? ACCEPTANCE_TOOLS
+      : selection.promptProfile === "recovery" ? RECOVERY_TOOLS
+        : selection.promptProfile === "manager_cycle" ? MANAGER_CYCLE_TOOLS
+          : new Set<string>();
+  return new Set([...available].filter((name) => allowlist.has(name)));
 }
 
 function readOnlyNames(names: string[], registry: ReturnType<typeof loadAssistantToolRegistrySnapshot>["tools"]): string[] {

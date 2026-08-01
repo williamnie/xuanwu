@@ -24,6 +24,9 @@ import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts
 import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "../pi/supervisorControlContracts.ts";
 import { installPiProviderSecretOverride } from "../security/secrets/piProviderRuntime.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
+import type { PiChatToolMode, PiRuntimePromptProfile } from "../pi/runtimePromptProfile.ts";
+
+export type { PiRuntimePromptProfile } from "../pi/runtimePromptProfile.ts";
 
 export type PiRuntimeResult = { piSessionId: string; sessionFile: string };
 export type PiRuntimeSession = Awaited<ReturnType<typeof createPiRuntimeSession>>;
@@ -33,6 +36,7 @@ export type RuntimeSessionInput = {
   authorization?: PiGatePolicy;
   bus?: EventBus;
   channelContext?: string;
+  chatToolMode?: PiChatToolMode;
   cliConnectorDirs?: string[];
   conversationID: string;
   config?: RunnerConfig;
@@ -42,6 +46,7 @@ export type RuntimeSessionInput = {
   issueID?: number;
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
+  promptProfile: PiRuntimePromptProfile;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   restartDelayMs?: number;
   restartProcess?: () => void;
@@ -180,7 +185,10 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   };
   let runtimeTools: ReturnType<typeof createPiRuntimeToolKit>;
   try {
-    runtimeTools = createPiRuntimeToolKit(db, toolProject, toolContext);
+    runtimeTools = createPiRuntimeToolKit(db, toolProject, toolContext, {
+      chatToolMode: input.chatToolMode,
+      promptProfile: input.promptProfile
+    });
     recordPiRuntimeToolRegistryAudit(db, toolAuditInput, runtimeTools.audit);
   } catch (error) {
     recordPiRuntimeToolRegistryAudit(db, toolAuditInput, unavailablePiRuntimeToolRegistryAudit(error));

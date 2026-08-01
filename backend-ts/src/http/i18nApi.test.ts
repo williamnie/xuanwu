@@ -35,7 +35,8 @@ describe("i18n API", () => {
 
       const prompt = buildPiRuntimeSystemPrompt({
         agent: agentRecord(),
-        conversationID: "i18n-prompt"
+        conversationID: "i18n-prompt",
+        promptProfile: "chat",
       }, database);
       expect(prompt).toContain("current system language is English (en-US)");
       expect(prompt).toContain("must be in English");

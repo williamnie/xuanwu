@@ -6,10 +6,13 @@ import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import {
   deleteProjectPiSettings,
+  getPiPersona,
   getPiSupervisor,
   getProjectPiSettings,
   listProjectPiSettings,
   updatePiSupervisor,
+  updatePiPersona,
+  PiPersonaRevisionConflictError,
 } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
@@ -91,7 +94,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
 
 function piSupervisorResponse(context: PiApiContext): Response {
   ensureDefaultPiAgent(context.database);
-  return json(requirePiSupervisor(context.database));
+  return json(supervisorSettings(context.database));
 }
 
 function piSupervisorPromptResponse(context: PiApiContext): Response {
@@ -99,15 +102,34 @@ function piSupervisorPromptResponse(context: PiApiContext): Response {
   const agent = requirePiSupervisor(context.database);
   return json({
     supervisor_name: agent.name,
-    runtime_prompt_summary: piRuntimePromptSummary(agent, appLanguage(context.database))
+    runtime_prompt_summary: piRuntimePromptSummary(
+      agent,
+      appLanguage(context.database),
+      getPiPersona(context.database)
+    )
   });
 }
 
 async function patchPiSupervisorResponse(context: PiApiContext, request: Request): Promise<Response> {
   ensureDefaultPiAgent(context.database);
-  const body = normalizeAgentInput(await parseObjectBody(request));
+  const raw = await parseObjectBody(request);
+  const persona = personaPatch(raw.persona);
+  const body = normalizeAgentInput(withoutPersona(raw));
   if (inputDisablesAgent(body)) assertAgentCanBeDisabled(context.database, DEFAULT_PI_AGENT_ID);
-  return writeResponse(() => updatePiSupervisor(context.database, body));
+  return writeResponse(() => context.database.transaction(() => {
+    updatePiSupervisor(context.database, body);
+    if (persona) updatePiPersona(context.database, persona, {
+      actor: request.headers.get("x-runner-actor") || "operator",
+      reason: request.headers.get("x-change-reason") || "Supervisor persona settings updated",
+      requestedAt: new Date().toISOString(),
+      source: "supervisor_settings_http"
+    });
+    return supervisorSettings(context.database);
+  }).immediate());
+}
+
+function supervisorSettings(db: RunnerDatabase) {
+  return { ...requirePiSupervisor(db), persona: getPiPersona(db) };
 }
 
 function requirePiSupervisor(db: RunnerDatabase) {
@@ -185,9 +207,21 @@ async function writeResponse(write: () => unknown | Promise<unknown>, status = 2
     return json(await write(), { status });
   } catch (error) {
     if (error instanceof HttpError) throw error;
+    if (error instanceof PiPersonaRevisionConflictError) throw new HttpError(409, error.message);
     if (error instanceof Error) throw new HttpError(400, error.message);
     throw error;
   }
+}
+
+function withoutPersona(input: Record<string, unknown>): Record<string, unknown> {
+  const { persona: _persona, ...agent } = input;
+  return agent;
+}
+
+function personaPatch(value: unknown) {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) throw new HttpError(400, "persona must be an object");
+  return value as Parameters<typeof updatePiPersona>[1];
 }
 
 async function parseObjectBody(request: Request): Promise<Record<string, unknown>> {

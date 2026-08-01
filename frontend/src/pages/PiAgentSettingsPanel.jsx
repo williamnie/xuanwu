@@ -39,10 +39,82 @@ function SupervisorBehaviorSettings({ state }) {
       <Field label="Runtime Instructions">
         <textarea className="form-control" rows={4} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
       </Field>
+      <ChatPersonaSettings state={state} />
       <PromptSummaryDebug state={state} />
       <SupervisorEnableField form={state.form} updateField={state.updateField} />
       <SaveRow mode="agent" onSave={state.handleAgentSave} saving={state.saving} />
     </>
+  );
+}
+
+function ChatPersonaSettings({ state }) {
+  const form = state.form;
+  return (
+    <details className="persona-settings-disclosure">
+      <summary>
+        <Sparkles size={17} />
+        <span>
+          <strong>Chat 表达风格</strong>
+          <small>只对 chat profile 的最终回复生效 · revision {form.personaRevision}</small>
+        </span>
+      </summary>
+      <div className="persona-settings-content">
+        <p className="persona-boundary-notice">
+          这里只控制 Chat 最终回复的表达方式，不改变权限、审批、工具调用、Issue 状态和完成判定。
+        </p>
+        {state.personaConflictDraft && <PersonaConflictNotice state={state} />}
+        <label className="persona-enable-field">
+          <input type="checkbox" checked={form.personaEnabled} onChange={(event) => state.updateField('personaEnabled', event.target.checked)} />
+          启用 Chat Persona（默认关闭）
+        </label>
+        <Field label={`性格描述 · ${form.personaPersonality.length}/1000`}>
+          <textarea className="form-control" maxLength={1000} rows={3} value={form.personaPersonality} onChange={(event) => state.updateField('personaPersonality', event.target.value)} />
+        </Field>
+        <Field label={`沟通风格 · ${form.personaCommunicationStyle.length}/2000`}>
+          <textarea className="form-control" maxLength={2000} rows={4} value={form.personaCommunicationStyle} onChange={(event) => state.updateField('personaCommunicationStyle', event.target.value)} />
+        </Field>
+        <div className="persona-select-grid">
+          <Field label="回复长度">
+            <select className="form-control" value={form.personaVerbosity} onChange={(event) => state.updateField('personaVerbosity', event.target.value)}>
+              <option value="adaptive">自适应</option>
+              <option value="concise">简短</option>
+              <option value="detailed">详细</option>
+            </select>
+          </Field>
+          <Field label="语言">
+            <select className="form-control" value={form.personaLanguageMode} onChange={(event) => state.updateField('personaLanguageMode', event.target.value)}>
+              <option value="system">跟随系统</option>
+              <option value="follow_user">跟随当前用户消息</option>
+            </select>
+          </Field>
+        </div>
+        <span className="persona-profile-badge">生效 profile：chat</span>
+      </div>
+    </details>
+  );
+}
+
+function PersonaConflictNotice({ state }) {
+  const draft = state.personaConflictDraft;
+  return (
+    <div className="persona-conflict-notice" role="status">
+      <strong>检测到 revision 冲突</strong>
+      <span>表单已显示服务器最新配置；下面保留了本地草稿，请比较后选择是否恢复并继续编辑。</span>
+      <details>
+        <summary>查看本地草稿</summary>
+        <pre>{JSON.stringify({
+          enabled: draft.personaEnabled,
+          personality: draft.personaPersonality,
+          communication_style: draft.personaCommunicationStyle,
+          verbosity: draft.personaVerbosity,
+          language_mode: draft.personaLanguageMode
+        }, null, 2)}</pre>
+      </details>
+      <div>
+        <button className="btn btn-secondary" onClick={state.restorePersonaConflictDraft} type="button">恢复本地草稿</button>
+        <button className="btn btn-secondary" onClick={state.dismissPersonaConflictDraft} type="button">使用服务器版本</button>
+      </div>
+    </div>
   );
 }
 
@@ -416,7 +488,7 @@ function PromptSummaryDebug({ state }) {
         <div>
           <strong style={{ color: 'var(--text-primary)', fontSize: '0.84rem' }}>当前生效 Prompt 摘要</strong>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.76rem', margin: '3px 0 0' }}>
-            只显示自定义 instructions 摘要与注入优先级；不回显 API key/token。
+            只显示自定义 instructions 与 Persona 安全摘要；不回显 API key/token 或 Persona 原文。
           </p>
         </div>
         <button className="btn btn-secondary" onClick={state.loadPromptSummary} disabled={state.promptSummaryLoading} type="button">
@@ -427,6 +499,9 @@ function PromptSummaryDebug({ state }) {
       {summary && (
         <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', marginTop: '8px', display: 'grid', gap: '4px' }}>
           <span>Custom instructions: {summary.custom_instructions_configured ? `${summary.custom_instructions_chars} chars` : '未配置'}</span>
+          <span>Prompt profiles：{summary.profiles?.join(' / ')}</span>
+          <span>Chat Persona：{summary.persona_enabled ? `已启用 · ${summary.persona_chars} chars · revision ${summary.persona_revision}` : `未启用 · revision ${summary.persona_revision}`}</span>
+          <span>Persona 生效范围：{summary.persona_profiles?.join(' / ') || 'chat'} · language_mode={summary.language_mode}</span>
           <span>注入位置：{summary.injected_after}</span>
           <span>优先级：{summary.conflict_policy}</span>
           {summary.custom_instructions_preview && <code style={{ color: 'var(--text-muted)', whiteSpace: 'pre-wrap' }}>{summary.custom_instructions_preview}</code>}

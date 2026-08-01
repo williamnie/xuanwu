@@ -25,3 +25,4 @@ export * from "./pi/recoveryAttempts.ts";
 export * from "./pi/issueCompletionWatches.ts";
 export * from "./pi/issueCompletionWatchAdmin.ts";
 export * from "./pi/mcpApprovalGrants.ts";
+export * from "./pi/persona.ts";

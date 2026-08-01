@@ -135,6 +135,7 @@ describe("Prompt injection defense", () => {
           created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z"
         } as never,
         conversationID: "security-fixture",
+        promptProfile: "chat",
         project: {
           id: "demo", name: "Demo", cwd: root, provider: "codex", provider_config_json: "{}", auto_run: 0,
           model: "", approval_policy: "never", sandbox: "workspace-write", default_agent_profile_id: "",

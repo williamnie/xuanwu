@@ -164,6 +164,7 @@ export async function decideAgentCommunicationWithRuntime(
     authorization: { allowedActions: [], mode: "manual" },
     conversationID: `notification-agent-${groupDigest(input.intents)}`,
     issueID: first.issue_id || undefined,
+    promptProfile: "notification",
     project,
     source: "notification_agent_decision"
   });

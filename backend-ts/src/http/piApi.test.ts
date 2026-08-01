@@ -26,6 +26,64 @@ afterEach(async () => {
 });
 
 describe("Bun PI settings API", () => {
+  test("updates Persona with Supervisor settings atomically and returns a safe prompt summary", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      const initial = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`));
+      expect(await initial.json()).toMatchObject({
+        persona: { enabled: 0, language_mode: "system", revision: 0, verbosity: "adaptive" }
+      });
+
+      const updated = await request(router, "/api/pi/supervisor", "PATCH", {
+        name: "Xuanwu Persona Canary",
+        persona: {
+          expected_revision: 0,
+          enabled: true,
+          personality: "自然可靠",
+          communication_style: "先说结论",
+          verbosity: "concise",
+          language_mode: "follow_user"
+        }
+      });
+      expect(updated.status).toBe(200);
+      expect(await updated.json()).toMatchObject({
+        name: "Xuanwu Persona Canary",
+        persona: { enabled: 1, revision: 1, verbosity: "concise", language_mode: "follow_user" }
+      });
+
+      const summary = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor/runtime-prompt`));
+      const summaryText = await summary.text();
+      expect(summaryText).not.toContain("自然可靠");
+      expect(summaryText).not.toContain("先说结论");
+      expect(JSON.parse(summaryText)).toMatchObject({
+        runtime_prompt_summary: {
+          profiles: ["chat", "acceptance", "recovery", "manager_cycle", "notification"],
+          persona_configured: true,
+          persona_enabled: true,
+          persona_revision: 1,
+          persona_chars: 8,
+          persona_profiles: ["chat"],
+          language_mode: "follow_user"
+        }
+      });
+
+      const conflict = await request(router, "/api/pi/supervisor", "PATCH", {
+        name: "must-roll-back",
+        persona: { expected_revision: 0, enabled: false }
+      });
+      expect(conflict.status).toBe(409);
+      expect(await conflict.json()).toMatchObject({ message: expect.stringContaining("persona revision conflict") });
+      const afterConflict = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`));
+      expect(await afterConflict.json()).toMatchObject({
+        name: "Xuanwu Persona Canary",
+        persona: { enabled: 1, revision: 1 }
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("exposes one Supervisor settings resource without agent CRUD", async () => {
     const database = await openFixtureDatabase();
     try {
