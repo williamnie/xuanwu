@@ -36,7 +36,6 @@ describe("PI project policy API", () => {
         supervisor_max_recoveries_per_project_per_hour: 12,
         supervisor_rate_limit_wait_policy: "default_cooldown",
         timezone: "Asia/Shanghai",
-        verification_policy: { evidence_required: true, on_timeout: "request_verifier", pending_timeout_minutes: 90 },
         working_hours: { end: "18:00", start: "09:00", weekdays: [1, 2, 3, 4, 5] }
       });
       const readBack = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-policy`));
@@ -67,7 +66,6 @@ describe("PI project policy API", () => {
       expect(JSON.parse(String(body.quiet_hours_json))).toEqual({ daily: [{ end: "08:00", start: "22:00" }] });
       expect(JSON.parse(String(body.retry_policy_json))).toEqual({ enabled: true, max_attempts: 2, backoff_minutes: [15, 60] });
       expect(JSON.parse(String(body.concurrency_policy_json))).toEqual({ max_parallel_issues: 1, max_parallel_pi_cycles: 1 });
-      expect(JSON.parse(String(body.verification_policy_json))).toEqual({ evidence_required: true, on_timeout: "request_verifier", pending_timeout_minutes: 90 });
       expect(await readBack.json()).toMatchObject(body);
     } finally {
       database.close();
@@ -135,7 +133,9 @@ describe("PI project policy API", () => {
       expect(invalidRetry.status).toBe(400);
       expect(await invalidRetry.json()).toEqual({ message: "retry_policy 必须是合法 JSON object" });
       expect(invalidVerification.status).toBe(400);
-      expect(await invalidVerification.json()).toEqual({ message: "verification_policy 必须是合法 JSON object" });
+      expect(await invalidVerification.json()).toEqual({
+        message: "verification_policy 已移除；Issue 语义状态只由 PI 的 Session 判断决定"
+      });
       expect(invalidAction.status).toBe(400);
       expect(await invalidAction.json()).toEqual({ message: "allowed_actions id 不合法: bad action" });
       expect(invalidSkill.status).toBe(400);

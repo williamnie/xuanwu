@@ -2,8 +2,6 @@ export function editorDraft(work, projects) {
   return {
     agent_profile_id: work?.agent_profile_id || '',
     goal: work?.goal || '',
-    handoff_policy: work?.acceptance?.handoff_policy
-      || (work?.acceptance?.requires_handoff ? 'required' : 'summary'),
     project_id: work?.owner?.project_id || projects[0]?.id || '',
     status: 'triage',
     title: work?.title || '',

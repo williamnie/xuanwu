@@ -11,13 +11,10 @@ const project = { id: 'demo', provider: 'codex', model: 'codex-default', default
 
 test('Work editor preserves explicit Agent Profile and resolves inherited/default routing', () => {
   const draft = editorDraft({
-    acceptance: { handoff_policy: 'required', requires_handoff: true },
     agent_profile_id: 'claude-work',
     owner: { project_id: 'demo' },
   }, [project]);
   assert.equal(draft.agent_profile_id, 'claude-work');
-  assert.equal(draft.handoff_policy, 'required');
-  assert.equal(editorDraft(null, [project]).handoff_policy, 'summary');
   assert.deepEqual(effectiveProfilePreview('', project, profiles), { ...profiles[0], source: 'project_default' });
   assert.deepEqual(effectiveProfilePreview('claude-work', project, profiles), { ...profiles[1], source: 'work' });
 });

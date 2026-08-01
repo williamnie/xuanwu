@@ -31,10 +31,10 @@ import {
 } from "../domain/project/automaticTakeover.ts";
 import {
   createHumanReviewRequest,
-  readIssueVerificationProjection,
+  readIssueDecisionProjection,
   reviewHumanIssue
 } from "../domain/review/humanReview.ts";
-import { requestPiVerificationCycle } from "../runner/piVerificationCoordinator.ts";
+import { requestPiAcceptanceCycle } from "../runner/piAcceptanceCoordinator.ts";
 
 export type IssueListFilter = {
   projectId: string;
@@ -51,10 +51,10 @@ type PublicIssueRunView = PublicIssueRun & {
   service_tier_source: string;
 };
 type PublicIssue = Omit<Issue, "latest_run"> & {
+  decision: ReturnType<typeof readIssueDecisionProjection>;
   dependency: IssueDependencyDiagnostic;
   latest_run?: PublicIssueRunView;
   mcp_requirements: McpRequirementSummary;
-  verification: ReturnType<typeof readIssueVerificationProjection>;
 };
 
 export function createReadApiDomainHandlers(context: ReadApiContext) {
@@ -63,6 +63,7 @@ export function createReadApiDomainHandlers(context: ReadApiContext) {
       listAgentProfiles: () => listAgentProfiles(context.database)
     },
     issues: {
+      answerHumanReview: (id: number, body: Record<string, unknown>) => answerHumanReviewAndKickLoop(context, id, body),
       cancel: (id: number) => cancelIssue(context, id),
       comment: (id: number, body: Record<string, unknown>) => createIssueComment(context.database, id, body),
       create: (body: Record<string, unknown>) => createIssueAndKickLoop(context, body),
@@ -76,8 +77,7 @@ export function createReadApiDomainHandlers(context: ReadApiContext) {
       ),
       retry: (id: number, options: IssueActionOptions) => retryIssueAndKickLoop(context, id, options),
       runs: (id: number) => publicIssueRuns(listIssueRuns(context.database, id)),
-      update: (id: number, body: Record<string, unknown>) => updateIssueAndKickLoop(context, id, body),
-      verify: (id: number, body: Record<string, unknown>) => reviewIssueVerificationAndKickLoop(context, id, body)
+      update: (id: number, body: Record<string, unknown>) => updateIssueAndKickLoop(context, id, body)
     },
     projects: {
       create: (body: Record<string, unknown>) => createAutomaticallyManagedProject(context.database, body),
@@ -113,10 +113,11 @@ async function updateIssueAndKickLoop(
   if (isStartIssuePatch(body)) return startIssueFromPatch(context, id, body);
   const current = getIssue(context.database, id);
   if (!current) throw new ProjectNotFoundError();
-  if (current.status === "pending_verification" && stringBody(body.status) === "failed") {
-    throw new Error("pending_verification 请使用 verification reject，避免普通失败回写覆盖验证门禁");
+  const requestedStatus = stringBody(body.status);
+  if (requestedStatus === "failed" || requestedStatus === "needs_user") {
+    throw new Error(`${requestedStatus} 只能由 PI 语义决策写入`);
   }
-  const issue = stringBody(body.status) === "done"
+  const issue = requestedStatus === "done"
     ? requestIssuePiAcceptance(context.database, id, {
       reason: "Issue PATCH requested done",
       source: "issue-patch-api"
@@ -124,12 +125,12 @@ async function updateIssueAndKickLoop(
     : updateIssue(context.database, id, body);
   publishIssueStatusChange(context, issue, body);
   if (
-    stringBody(body.status) === "done"
-    && issue.status === "pending_verification"
-    && readIssueVerificationProjection(context.database, issue.id).owner === "pi"
+    requestedStatus === "done"
+    && issue.status === "in_progress"
+    && readIssueDecisionProjection(context.database, issue.id).owner === "pi"
     && context.agenticClient?.decideIssueAcceptance
   ) {
-    requestPiVerificationCycle({
+    requestPiAcceptanceCycle({
       database: context.database,
       decideIssueAcceptance: context.agenticClient.decideIssueAcceptance.bind(context.agenticClient),
       issueID: issue.id,
@@ -152,7 +153,7 @@ function startIssueFromPatch(context: ReadApiContext, id: number, body: Record<s
   return issue;
 }
 
-async function reviewIssueVerificationAndKickLoop(
+async function answerHumanReviewAndKickLoop(
   context: ReadApiContext,
   id: number,
   body: Record<string, unknown>
@@ -163,11 +164,11 @@ async function reviewIssueVerificationAndKickLoop(
   });
   publishIssueStatusChange(context, issue, { status: issue.status });
   if (
-    issue.status === "pending_verification"
-    && readIssueVerificationProjection(context.database, issue.id).owner === "pi"
+    issue.status === "in_progress"
+    && readIssueDecisionProjection(context.database, issue.id).owner === "pi"
     && context.agenticClient?.decideIssueAcceptance
   ) {
-    requestPiVerificationCycle({
+    requestPiAcceptanceCycle({
       database: context.database,
       decideIssueAcceptance: context.agenticClient.decideIssueAcceptance.bind(context.agenticClient),
       issueID: issue.id,
@@ -273,9 +274,9 @@ function publicIssue(
   dependency: IssueDependencyDiagnostic
 ): PublicIssue {
   const mcp_requirements = issueMcpRequirementSummary(issue, project);
-  const verification = readIssueVerificationProjection(db, issue.id);
-  if (!issue.latest_run) return { ...issue, dependency, mcp_requirements, verification } as PublicIssue;
-  return { ...issue, dependency, latest_run: publicIssueRun(issue.latest_run), mcp_requirements, verification };
+  const decision = readIssueDecisionProjection(db, issue.id);
+  if (!issue.latest_run) return { ...issue, decision, dependency, mcp_requirements } as PublicIssue;
+  return { ...issue, decision, dependency, latest_run: publicIssueRun(issue.latest_run), mcp_requirements };
 }
 
 function publicIssueRuns(runs: IssueRun[]): PublicIssueRunView[] {
@@ -334,14 +335,14 @@ function stringBody(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-const LOOP_RELEASE_STATUSES = new Set(["cancelled", "done", "failed", "pending_verification", "todo"]);
+const LOOP_RELEASE_STATUSES = new Set(["cancelled", "done", "failed", "todo"]);
 
 function shouldKickAfterWrite(status: string): boolean {
   return LOOP_RELEASE_STATUSES.has(status);
 }
 
 function terminalForSkillAudit(status: string): boolean {
-  return ["cancelled", "done", "failed", "pending_verification"].includes(status);
+  return ["cancelled", "done", "failed"].includes(status);
 }
 
 function safeAuditSkillIntents(db: RunnerDatabase, issueID: number): void {

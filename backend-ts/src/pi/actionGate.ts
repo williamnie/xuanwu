@@ -118,7 +118,7 @@ const CONFIRM_ACTIONS = new Set([
   "agent.executor_assign", "agent.workflow_request", "issue.cancel", "issue.create", "issue.enqueue", "issue.schedule_enqueue",
   "issue.status_update",
   "project.create", "workspace.make_directory", "workspace.write_file",
-  "issue.completion_reconcile",
+  "issue.acceptance_request",
   "issue_completion_watch.create", "issue_completion_watch.cancel",
   "notification.preference.update",
   "issue.retry", "issue.state_repair", "needs_user.escalate",

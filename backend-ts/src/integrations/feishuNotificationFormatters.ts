@@ -10,7 +10,7 @@ export function formatIssueStatusNotification(issue: Issue): string {
   if (issue.status === "todo") return startText(issue.id, title, "已创建并准备启动 session");
   if (issue.status === "in_progress") return startText(issue.id, title, "已启动 executor session");
   if (issue.status === "done") return doneText(issue, title);
-  if (issue.status === "pending_verification") return pendingVerificationText(issue, title);
+  if (issue.status === "needs_user") return needsUserText(issue, title);
   return failedText(issue, title);
 }
 
@@ -93,10 +93,10 @@ function doneText(issue: Issue, title: string): string {
   ].join("\n");
 }
 
-function pendingVerificationText(issue: Issue, title: string): string {
+function needsUserText(issue: Issue, title: string): string {
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 已进入待验收：${title}`,
-    `验证状态：${issue.error ? safeSummary(issue.error, SUMMARY_LIMIT) : "等待用户验收。"}`
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 需要用户处理：${title}`,
+    `PI 判断：${issue.error ? safeSummary(issue.error, SUMMARY_LIMIT) : "请查看明确问题并选择后续动作。"}`
   ].join("\n");
 }
 
@@ -114,7 +114,7 @@ function watchStatsLine(stats: Record<string, unknown>): string {
     `done：${numberField(stats.done)}`,
     `failed：${numberField(stats.failed)}`,
     `cancelled：${numberField(stats.cancelled)}`,
-    `pending_verification：${numberField(stats.pending_verification)}`
+    `needs_user：${numberField(stats.needs_user)}`
   ].join(" / ");
 }
 
@@ -132,7 +132,7 @@ function watchNextStep(stats: Record<string, unknown>): string {
   if (numberField(stats.failed) + numberField(stats.cancelled) > 0) {
     return "存在 failed/cancelled，请先处理失败或取消项，再决定是否继续测试。";
   }
-  return "全部 done/pending_verification，可以开始测试。";
+  return "全部 Issue 已由 PI 判断完成，可以开始下一阶段。";
 }
 
 function safeSummary(value: unknown, maxRunes: number): string {

@@ -1,10 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { listStoredHandoffs } from "../db/repositories/handoffs.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
-import { issueAsWork } from "../domain/work/issueAdapter.ts";
 import { redactSensitiveText } from "../util/redact.ts";
-import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
 
 export const DEFAULT_ISSUE_LIST_LIMIT = 50;
 export const MAX_ISSUE_LIST_LIMIT = 50;
@@ -80,19 +77,12 @@ export function createIssueCompletionProjection(
   issue: Issue,
   latestRun: IssueRun | undefined
 ) {
-  const outcome = latestCompletionGateOutcome(db, issue.id);
-  const runID = latestRun ? makeDomainID("run", "issue_runs", latestRun.id) : "";
-  const workID = issueAsWork(issue).id;
-  const handoffPresent = runID !== "" && listStoredHandoffs(db, {
-    limit: 100,
-    statuses: ["ready", "delivered"],
-    work_id: workID
-  }).items.some((item) => item.handoff.run_ids.includes(runID));
+  const request = latestPiDecisionRequest(db, issue.id);
   const runEnded = Boolean(latestRun?.ended_at);
-  const implementationComplete = runEnded && (issue.status === "done" || issue.status === "pending_verification");
+  const implementationComplete = issue.status === "done";
   const state = issue.status === "done"
     ? "complete"
-    : issue.status === "pending_verification" && runEnded
+    : issue.status === "in_progress" && runEnded
       ? "acceptance_pending"
       : issue.status === "failed" && latestRun?.status === "failed"
         ? "execution_failed"
@@ -104,26 +94,23 @@ export function createIssueCompletionProjection(
   return {
     blocker: null,
     formal_status: issue.status,
-    handoff_present: handoffPresent,
     implementation_complete: implementationComplete,
     next_step: completionNextStep(state),
     retry_recommended: state === "execution_failed",
     state,
     truth_basis: {
-      completion_gate_event_id: outcome._event_id ?? null,
-      evidence_count: arrayValue(outcome.evidence_ids).length,
-      latest_run_id: runID || null,
+      latest_run_id: latestRun?.id ?? null,
       latest_run_status: latestRun?.status ?? null,
-      work_id: workID
+      pi_decision_request_event_id: request._event_id ?? null
     }
   };
 }
 
-function latestCompletionGateOutcome(db: RunnerDatabase, issueID: number): Record<string, unknown> {
+function latestPiDecisionRequest(db: RunnerDatabase, issueID: number): Record<string, unknown> {
   const event = listIssueEvents(db, issueID, {
     hydrateArtifacts: false,
     limit: 1,
-    types: ["issue.verification_gate_outcome.v1"]
+    types: ["issue.pi_acceptance_requested.v1"]
   })[0];
   if (!event) return {};
   const payload = jsonObject(event.payload);
@@ -201,10 +188,6 @@ function preview(value: string): string {
 
 function safeText(value: string): string {
   return redactSensitiveText(value).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
-}
-
-function arrayValue(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
 }
 
 function jsonObject(value: string): Record<string, unknown> {

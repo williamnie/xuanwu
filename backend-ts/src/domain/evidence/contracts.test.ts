@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Value } from "@sinclair/typebox/value";
-import { normalizeVerificationEvidence } from "../../pi/verificationEvidence.ts";
 import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
 import { makeRunAttemptID } from "../run/contracts.ts";
 import {
@@ -19,7 +18,6 @@ import {
   type EvidenceSourceKind,
   type EvidenceTransitionCommand
 } from "./contracts.ts";
-import { projectVerificationEvidenceV0 } from "./legacyAdapter.ts";
 
 const NOW = "2026-07-16T09:30:00.000Z";
 const LATER = "2026-07-16T09:31:00.000Z";
@@ -139,54 +137,6 @@ describe("Evidence domain contract", () => {
     const claim = record("test", "passed", "agent_statement", "agent_claim");
     expect(validateEvidence(claim).ok).toBe(true);
     expect(canSatisfyEvidenceGate(claim)).toBe(false);
-  });
-
-  test("projects VerificationEvidenceV0 without turning legacy claims into system proof", () => {
-    const legacy = normalizeVerificationEvidence({
-      version: 0,
-      kind: "shell_test",
-      status: "passed",
-      summary: "bun test passed",
-      command: "bun test src/pi/verificationEvidence.test.ts",
-      artifact_refs: ["log:verification", "log:verification"]
-    }, { now: NOW });
-    const projected = projectVerificationEvidenceV0(legacy, {
-      audit_event_ref: "issue_events:663:verification",
-      evidence_id: makeDomainID("evidence", "issue_events", "663:verification"),
-      producer: { id: "legacy-adapter", kind: "system" },
-      projected_at: LATER,
-      run_id: makeDomainID("run", "issue_runs", "663:1"),
-      source_ref: "verificationEvidenceV0:663",
-      work_id: makeDomainID("work", "issues", 663)
-    });
-
-    expect(projected).toMatchObject({
-      kind: "shell",
-      status: "passed",
-      provenance: { assertion_origin: "legacy_import", source_kind: "legacy_verification" },
-      decisive_output: { facts: { command: "bun test src/pi/verificationEvidence.test.ts", legacy_schema_version: 0 } }
-    });
-    expect(projected.artifact_refs).toEqual([{ kind: "log", ref: "log:verification" }]);
-    expect(validateEvidence(projected).ok).toBe(true);
-    expect(canSatisfyEvidenceGate(projected)).toBe(false);
-
-    const checker = projectVerificationEvidenceV0(normalizeVerificationEvidence({
-      version: 0,
-      kind: "independent_checker",
-      status: "failed",
-      summary: "checker failed",
-      checker: "codex-verifier",
-      artifact_refs: []
-    }, { now: NOW }), {
-      audit_event_ref: "issue_events:663:checker",
-      evidence_id: makeDomainID("evidence", "issue_events", "663:checker"),
-      producer: { id: "legacy-adapter", kind: "system" },
-      projected_at: LATER,
-      source_ref: "verificationEvidenceV0:663:checker",
-      work_id: makeDomainID("work", "issues", 663)
-    });
-    expect(checker.kind).toBe("legacy.independent_checker");
-    expect(validateEvidence(checker)).toMatchObject({ known_kind: false, ok: true });
   });
 
   test("documents authority, compatibility windows, rollback, and deletion gates", () => {

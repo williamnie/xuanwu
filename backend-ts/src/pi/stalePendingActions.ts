@@ -47,13 +47,13 @@ const STALE_STATUS = "rejected";
 const SUPERVISOR_SOURCES = new Set(["pi_supervisor", "pi_supervisor_decision", "needs_user.escalate"]);
 const SUPERVISOR_ACTIONS = new Set(["needs_user.escalate"]);
 const EXCLUDED_ACTIONS = new Set(["issue.enqueue"]);
-const TERMINAL_ISSUE_STATUSES = new Set(["cancelled", "done", "failed", "pending_verification"]);
+const TERMINAL_ISSUE_STATUSES = new Set(["cancelled", "done", "failed", "needs_user"]);
 const TERMINAL_RUN_STATUSES = new Set(["cancelled", "completed", "done", "failed"]);
 const EXECUTABLE_ACTIONS = new Set([
   "agent.executor_assign",
   "agent.workflow_request",
   "issue.comment",
-  "issue.completion_reconcile",
+  "issue.acceptance_request",
   "issue.create",
   "issue.retry",
   "issue.retry_after",

@@ -184,18 +184,7 @@
 .handoff-risk-list > div[data-severity='low'] em { color: var(--info); }
 .handoff-clear-risk { align-items: center; color: var(--success); display: flex; font-size: 0.68rem; gap: 7px; }
 
-.handoff-review-panel { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
-.handoff-review-panel > div:first-child { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
-.handoff-review-panel > div:first-child > span:not(.handoff-status),
-.handoff-review-panel time { color: var(--text-muted); font-size: 0.61rem; }
-.handoff-review-actions { display: flex; gap: 7px; }
-.handoff-review-actions button,
 .handoff-rollback button { align-items: center; background: var(--control-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; display: inline-flex; font-size: 0.64rem; font-weight: 800; gap: 5px; padding: 7px 9px; }
-.handoff-review-actions button.accept { border-color: color-mix(in srgb, var(--success) 35%, var(--border-color)); color: var(--success); }
-.handoff-review-history { border-top: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 6px; margin-top: 11px; padding-top: 10px; }
-.handoff-review-history > div { align-items: center; display: grid; gap: 8px; grid-template-columns: auto 1fr auto; }
-.handoff-review-history > div > span:not(.handoff-status) { color: var(--text-secondary); font-size: 0.63rem; overflow-wrap: anywhere; }
-.handoff-review-history time { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.54rem; }
 
 .handoff-rollback { align-items: flex-start; background: var(--control-bg); border: 1px solid var(--border-light); border-radius: var(--radius-sm); display: grid; gap: 9px; grid-template-columns: auto 1fr auto; padding: 10px; }
 .handoff-rollback > svg { color: var(--info); }
@@ -205,20 +194,6 @@
 .handoff-rollback[data-availability='blocked'] { border-color: color-mix(in srgb, var(--error) 30%, var(--border-color)); }
 .handoff-rollback[data-availability='blocked'] > svg { color: var(--error); }
 
-.handoff-review-overlay { z-index: 1200; }
-.handoff-review-dialog { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 13px; max-width: 520px; padding: 18px; width: min(calc(100vw - 32px), 520px); }
-.handoff-review-dialog > header { align-items: center; display: flex; justify-content: space-between; }
-.handoff-review-dialog > header > div { align-items: center; display: flex; gap: 8px; }
-.handoff-review-dialog h3 { font-family: var(--font-display); font-size: 0.95rem; margin: 0; }
-.handoff-review-dialog > header > button { background: transparent; border: 0; color: var(--text-muted); cursor: pointer; padding: 3px; }
-.handoff-review-dialog p { color: var(--text-secondary); font-size: 0.7rem; line-height: 1.5; margin: 0; }
-.handoff-review-dialog textarea { background: var(--control-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font: inherit; font-size: 0.72rem; line-height: 1.5; min-height: 110px; padding: 10px; resize: vertical; }
-.handoff-review-dialog footer { display: flex; gap: 8px; justify-content: flex-end; }
-.handoff-review-dialog footer button { background: var(--control-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; font-size: 0.68rem; font-weight: 800; min-height: 34px; padding: 7px 10px; }
-.handoff-review-dialog footer button.accept { background: var(--success); border-color: var(--success); color: white; }
-.handoff-review-dialog footer button.changes { background: var(--warning); border-color: var(--warning); color: #17110a; }
-.handoff-review-dialog button:disabled { cursor: not-allowed; opacity: 0.55; }
-.handoff-review-error { background: var(--error-bg); border-radius: var(--radius-sm); color: var(--error); font-size: 0.68rem; padding: 8px; }
 .handoff-empty { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.66rem; padding: 28px 14px; text-align: center; }
 .handoff-empty-detail { align-items: center; color: var(--text-muted); display: flex; flex-direction: column; gap: 8px; height: 100%; justify-content: center; min-height: 360px; }
 .handoff-empty-detail strong { color: var(--text-secondary); font-size: 0.82rem; }
@@ -252,7 +227,6 @@
   .handoff-notice-summary { grid-template-columns: 1fr; }
   .handoff-notice-summary > span,
   .handoff-notice-summary > strong { grid-column: 1; }
-  .handoff-review-panel { align-items: flex-start; flex-direction: column; }
   .handoff-rollback { grid-template-columns: auto 1fr; }
   .handoff-rollback button { grid-column: 2; justify-self: start; }
 }

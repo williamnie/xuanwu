@@ -87,7 +87,7 @@ const COLUMNS = `automation_id, migration_mode, legacy_watch_id, condition_json,
   subject_json, notification_target_json, dedupe_key, expires_at, status,
   outcome, matched_ref, last_external_event_id, satisfied_at, notified_at,
   error, created_at, updated_at`;
-const TERMINAL_STATUSES = new Set(["done", "failed", "cancelled", "pending_verification"]);
+const TERMINAL_STATUSES = new Set(["done", "failed", "cancelled"]);
 
 export function createAutomationWatch(
   db: RunnerDatabase,

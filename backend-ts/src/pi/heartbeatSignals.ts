@@ -139,7 +139,6 @@ function projectPiPolicy(db: RunnerDatabase, projectID: string) {
     supervisor_max_recoveries_per_project_per_hour: policy.supervisor_max_recoveries_per_project_per_hour,
     supervisor_rate_limit_wait_policy: policy.supervisor_rate_limit_wait_policy,
     timezone: policy.timezone,
-    verification_policy: safeJson(policy.verification_policy_json) as Record<string, unknown>,
     working_hours: safeJson(policy.working_hours_json) as Record<string, unknown>
   };
 }

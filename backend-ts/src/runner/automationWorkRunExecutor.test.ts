@@ -5,8 +5,6 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAutomationExecutionLink } from "../db/repositories/automationExecutionLinks.ts";
 import { createAutomation, listAutomationRuns } from "../db/repositories/automations.ts";
-import { listStoredEvidence } from "../db/repositories/evidence.ts";
-import { listStoredHandoffs } from "../db/repositories/handoffs.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { getIssueAsWork } from "../domain/work/issueAdapter.ts";
 import { runDueAutomations } from "./automationScheduler.ts";
@@ -17,8 +15,8 @@ const NOW = new Date("2026-07-18T10:00:00.000Z");
 
 afterEach(async () => { while (roots.length) await rm(roots.pop()!, { recursive: true, force: true }); });
 
-describe("P08.04 Automation Work/Run/Evidence executor", () => {
-  test("maps a successful dispatch to source-linked Work, Run, Evidence, and ready Handoff exactly once", async () => {
+describe("P08.04 Automation Work/Run executor", () => {
+  test("maps a successful dispatch to one source-linked Work and terminal Run for PI", async () => {
     const db = await fixture();
     try {
       const automation = createFixture(db, "success", "2026-07-18T09:59:30.000Z");
@@ -30,25 +28,23 @@ describe("P08.04 Automation Work/Run/Evidence executor", () => {
       const automationRun = listAutomationRuns(db, automation.id)[0]!;
       const link = getAutomationExecutionLink(db, automationRun.run_id)!;
       expect(link).toMatchObject({ automation_id: automation.id, workflow_ref: "workflow:fixture@1" });
-      expect(getIssue(db, link.issue_id)).toMatchObject({ status: "pending_verification" });
-      expect(listIssueRuns(db, link.issue_id)).toMatchObject([{ provider: "automation", status: "pending_verification" }]);
+      expect(getIssue(db, link.issue_id)).toMatchObject({ status: "in_progress" });
+      expect(listIssueRuns(db, link.issue_id)).toMatchObject([{ provider: "automation", status: "succeeded" }]);
       expect(getIssueAsWork(db, link.issue_id)?.provenance.origin).toMatchObject({
         authority: "automation_definitions", kind: "automation_trigger", external_id: `${automation.id}/${automationRun.run_id}`
       });
-      expect(listStoredEvidence(db, { issue_ids: [link.issue_id], limit: 10 }).items).toMatchObject([{ evidence: { status: "passed", run_id: link.run_id } }]);
-      expect(listStoredHandoffs(db, { work_id: link.work_id, limit: 10 }).items).toMatchObject([{ handoff: { status: "ready", run_ids: [link.run_id] } }]);
     } finally { db.close(); }
   });
 
-  test("maps an explicit skip and a retriable failure to terminal Evidence/Handoff without duplicating the Work/Run", async () => {
+  test("maps skip and failure to terminal Run facts without deciding the Issue", async () => {
     const db = await fixture();
     try {
       const skipped = createFixture(db, "skipped", "2026-07-18T09:59:30.000Z");
       const skipExecutor = createAutomationWorkRunExecutor({ dispatch: async () => ({ detail: "approval required", outcome: "skipped" }), workflow_registry: registry() });
       await runDueAutomations({ database: db, executeAutomation: skipExecutor, now: NOW });
       const skipLink = getAutomationExecutionLink(db, listAutomationRuns(db, skipped.id)[0]!.run_id)!;
-      expect(getIssue(db, skipLink.issue_id)).toMatchObject({ status: "cancelled" });
-      expect(listStoredEvidence(db, { issue_ids: [skipLink.issue_id], limit: 10 }).items[0]?.evidence.status).toBe("blocked");
+      expect(getIssue(db, skipLink.issue_id)).toMatchObject({ status: "in_progress" });
+      expect(listIssueRuns(db, skipLink.issue_id).at(-1)).toMatchObject({ status: "failed" });
 
       const failed = createFixture(db, "failed", "2026-07-18T09:59:30.000Z");
       const failExecutor = createAutomationWorkRunExecutor({ dispatch: async () => { throw new Error("workflow unavailable"); }, workflow_registry: registry() });
@@ -56,8 +52,8 @@ describe("P08.04 Automation Work/Run/Evidence executor", () => {
       const failedRun = listAutomationRuns(db, failed.id)[0]!;
       const failLink = getAutomationExecutionLink(db, failedRun.run_id)!;
       expect(failedRun.status).toBe("queued");
-      expect(listStoredEvidence(db, { issue_ids: [failLink.issue_id], limit: 10 }).items[0]?.evidence.status).toBe("failed");
-      expect(listStoredHandoffs(db, { work_id: failLink.work_id, limit: 10 }).items[0]?.handoff.status).toBe("draft");
+      expect(getIssue(db, failLink.issue_id)).toMatchObject({ status: "in_progress" });
+      expect(listIssueRuns(db, failLink.issue_id).at(-1)).toMatchObject({ status: "failed" });
     } finally { db.close(); }
   });
 });

@@ -20,7 +20,7 @@ import type { PiIssueCompletionWatchNotification } from "../db/repositories/pi/i
 import type { AutomationAudit, AutomationID } from "../domain/automation/contracts.ts";
 
 export const ISSUE_COMPLETION_TERMINAL_STATUSES = new Set([
-  "done", "failed", "cancelled", "pending_verification"
+  "done", "failed", "cancelled"
 ]);
 
 export function createIssueCompletionAutomation(

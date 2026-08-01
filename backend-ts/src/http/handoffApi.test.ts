@@ -20,7 +20,6 @@ import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const NOW = "2026-07-17T08:00:00.000Z";
-const REVIEW_NOW = "2026-07-17T08:05:00.000Z";
 const tempRoots: string[] = [];
 
 afterEach(async () => {
@@ -120,7 +119,6 @@ describe("Handoff HTTP API and delivery notification", () => {
       expect(git(repository, "rev-parse", local.branch_ref)).toBe(local.commit_revision);
       expect(list.status).toBe(200);
       expect(listBody).toMatchObject({
-        compatibility: { read_authority: "issue_events:handoff.*.v1" },
         has_more: false,
         items: [{
           delivery: {
@@ -195,64 +193,6 @@ describe("Handoff HTTP API and delivery notification", () => {
     }
   });
 
-  test("runs authenticated accept/request_changes through Reviewer Loop with audit, replay, and redaction", async () => {
-    const db = await fixture();
-    try {
-      const acceptedHandoff = await reviewableHandoff(db, "accept");
-      const router = createDefaultRouter({ database: db });
-      const acceptedPayload = reviewPayload(acceptedHandoff.handoff.revision, "accept", "Evidence verified", "accept-1");
-      const accepted = await reviewHandoff(router, acceptedHandoff.handoff.id, acceptedPayload);
-      const acceptedBody = await accepted.json() as Record<string, any>;
-      const acceptedReplay = await reviewHandoff(router, acceptedHandoff.handoff.id, acceptedPayload);
-      const acceptedReplayBody = await acceptedReplay.json() as Record<string, any>;
-
-      expect(accepted.status).toBe(200);
-      expect(acceptedBody).toMatchObject({
-        detail: {
-          handoff: { revision: 1, review: { state: "approved" } },
-          review_summary: { available_actions: [], state: "approved" }
-        },
-        mutation: { action: "accept", replayed: false, status: "accepted" }
-      });
-      expect(acceptedReplayBody.mutation).toMatchObject({ action: "accept", replayed: true });
-
-      const changedHandoff = await reviewableHandoff(db, "changes");
-      const changed = await reviewHandoff(router, changedHandoff.handoff.id, reviewPayload(
-        changedHandoff.handoff.revision,
-        "request_changes",
-        "AUTH_TOKEN=super-secret",
-        "changes-1"
-      ));
-      const changedBody = await changed.json() as Record<string, any>;
-      expect(changed.status).toBe(200);
-      expect(changedBody).toMatchObject({
-        detail: {
-          handoff: { revision: 0, review: { state: "pending" } },
-          review_summary: {
-            available_actions: [],
-            history: [{ action: "request_changes", comment: "[redacted sensitive line]" }],
-            state: "changes_requested"
-          }
-        },
-        mutation: { action: "request_changes", replayed: false, status: "changes_requested" }
-      });
-
-      const reviewEvents = db.sqlite.query<{ payload: string; type: string }, []>(`
-        select type, payload from issue_events where type like 'handoff.review.%' order by id
-      `).all();
-      expect(reviewEvents.map((event) => event.type)).toEqual(expect.arrayContaining([
-        "handoff.review.requested.v1",
-        "handoff.review.decided.v1",
-        "handoff.review.budget_exhausted.v1",
-        "handoff.review.http_completed.v1"
-      ]));
-      expect(JSON.stringify(changedBody)).not.toContain("super-secret");
-      expect(reviewEvents.map((event) => event.payload).join("\n")).not.toContain("super-secret");
-    } finally {
-      db.close();
-    }
-  });
-
   test("returns actionable invalid filters and missing detail states", async () => {
     const db = await fixture();
     try {
@@ -302,108 +242,6 @@ function insertRun(db: RunnerDatabase, issueID: number): string {
     [id, issueID, NOW, NOW]
   );
   return `xw:run:issue_runs:${id}`;
-}
-
-async function reviewableHandoff(db: RunnerDatabase, suffix: string) {
-  const repository = initRepository();
-  const issueID = insertIssue(db);
-  const workID = `xw:work:issues:${issueID}` as LocalBranchCommitHandoffRequest["work_id"];
-  const runID = insertRun(db, issueID) as LocalBranchCommitHandoffRequest["run_ids"][number];
-  const evidenceID = `xw:evidence:git:handoff-review-${issueID}` as LocalBranchCommitHandoffRequest["git_evidence"]["evidence_id"];
-  writeFileSync(join(repository, "selected.txt"), `review ${suffix}\n`);
-  const service = createLocalBranchCommitHandoffService({
-    audit_sink: {
-      record(event: LocalGitHandoffAuditEvent) {
-        recordIssueEvent(db, issueID, event.event_type, event);
-      }
-    },
-    now: () => NOW,
-    project_policy_reader: {
-      read: () => resolveLocalGitHandoffProjectPolicy({
-        allowed_actions_json: '["handoff.commit"]',
-        allowed_base_branches: ["main"],
-        branch_prefix: "xw/",
-        branch_reuse: "same_baseline",
-        commit_identity: { name: "Xuanwu Runner", email: "xuanwu@example.test" },
-        commit_subject_prefixes: ["feat(handoff):"],
-        max_commit_subject_length: 120,
-        policy_ref: "project-policy:fixture:handoff-local-git@1",
-        project_id: "fixture"
-      })
-    }
-  });
-  const local = await service.execute({
-    audit: {
-      actor: { id: `runner:issue-${issueID}`, kind: "runner" },
-      correlation_id: `issue-${issueID}-review-handoff`,
-      intent_event_id: `issue_events:${issueID}:review-handoff:intent`,
-      outcome_event_id: `issue_events:${issueID}:review-handoff:outcome`,
-      rollback_event_id: `issue_events:${issueID}:review-handoff:rollback`
-    },
-    commit_message: "feat(handoff): create review fixture",
-    git_evidence: {
-      evidence_id: evidenceID,
-      producer: { id: `runner:issue-${issueID}`, kind: "runner" },
-      run_id: runID
-    },
-    linked_evidence: [],
-    project_id: "fixture",
-    repository_path: repository,
-    repository_ref: `git-repository:handoff-review-${suffix}`,
-    run_ids: [runID],
-    runs: [{ id: runID, work_id: workID }],
-    selected_paths: ["selected.txt"],
-    work_id: workID,
-    work_title: `Handoff review ${suffix}`
-  });
-  local.handoff.review_ref = `review:${issueID}:${suffix}`;
-  local.handoff.review = {
-    required: true,
-    review_ref: local.handoff.review_ref,
-    reviewer_refs: [],
-    state: "pending"
-  };
-  recordEvidenceRecords(db, issueID, [local.git_evidence], { recorded_at: NOW, source: "handoff-review-smoke" });
-  recordHandoffDelivery({
-    database: db,
-    handoff: local.handoff,
-    issue_id: issueID,
-    recorded_at: NOW,
-    source: "handoff-review-smoke"
-  });
-  return local;
-}
-
-function reviewPayload(
-  expectedRevision: number,
-  action: "accept" | "request_changes",
-  comment: string,
-  nonce: string
-): Record<string, unknown> {
-  return {
-    action,
-    audit: {
-      actor: { id: "user:local-operator", kind: "user" },
-      correlation_id: `handoff-review-smoke:${nonce}`,
-      event_id: `handoff-review-smoke:${nonce}`,
-      occurred_at: REVIEW_NOW,
-      reason: comment || `Handoff review ${action}`
-    },
-    comment,
-    expected_revision: expectedRevision
-  };
-}
-
-function reviewHandoff(
-  router: ReturnType<typeof createDefaultRouter>,
-  handoffID: string,
-  body: Record<string, unknown>
-): Promise<Response> {
-  return router.handle(new Request(`${BASE_URL}/api/handoffs/${encodeURIComponent(handoffID)}/reviews`, {
-    body: JSON.stringify(body),
-    headers: { "content-type": "application/json" },
-    method: "POST"
-  }));
 }
 
 function initRepository(): string {

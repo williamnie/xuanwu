@@ -13,10 +13,7 @@ import {
   IssueLogTimeline,
 } from './issue-detail/IssueDetailTimeline';
 import IssueDetailComments from './issue-detail/IssueDetailComments';
-import IssueDetailVerification, {
-  VerificationReviewModal,
-  VerifierReportPanel,
-} from './issue-detail/IssueDetailVerification';
+import IssueDetailDecision, { HumanReviewResponseModal } from './issue-detail/IssueDetailDecision';
 import IssueDetailActions, {
   IssueDeleteConfirmModal,
   IssueManualControls,
@@ -24,10 +21,8 @@ import IssueDetailActions, {
 import useIssueDetailData from './issue-detail/useIssueDetailData';
 import useIssueDetailActions from './issue-detail/useIssueDetailActions';
 import {
-  canGenerateVerifierReport,
   issueExecutionSessionRef,
   issueProviderIdentity,
-  issueVerifierReports,
   providerLabel,
   supervisorHasSignal,
   supervisorNeedsAttention,
@@ -96,7 +91,6 @@ export default function IssueDetail({ issueId, navigateTo }) {
   const runtimeIdentity = issueProviderIdentity(issue, runs);
   const runtimeProvider = providerLabel(runtimeIdentity.provider);
   const executionSummary = deriveIssueExecutionSummary({ issue, events, runs });
-  const verifierReports = issueVerifierReports(events);
   const profileSummary = summarizeAgentProfile(project?.default_agent_profile);
   const mcpSummary = issueMcpRequirementSummary(issue);
   const latestRun = executionSummary.latestRun;
@@ -126,17 +120,17 @@ export default function IssueDetail({ issueId, navigateTo }) {
         />
       )}
 
-      {actions.verificationReviewAction && (
-        <VerificationReviewModal
-          action={actions.verificationReviewAction}
-          draft={actions.verificationReviewDraft}
-          request={issue.verification?.request}
-          submitting={actions.verificationReviewSubmitting}
-          onDraftChange={actions.setVerificationReviewDraft}
-          onCancel={() => actions.setVerificationReviewAction('')}
-          onConfirm={() => actions.handleVerificationReview(
-            actions.verificationReviewAction,
-            actions.verificationReviewDraft,
+      {actions.humanReviewAction && (
+        <HumanReviewResponseModal
+          action={actions.humanReviewAction}
+          draft={actions.humanReviewDraft}
+          request={issue.decision?.request}
+          submitting={actions.humanReviewSubmitting}
+          onDraftChange={actions.setHumanReviewDraft}
+          onCancel={() => actions.setHumanReviewAction('')}
+          onConfirm={() => actions.handleHumanReviewResponse(
+            actions.humanReviewAction,
+            actions.humanReviewDraft,
           )}
         />
       )}
@@ -158,13 +152,13 @@ export default function IssueDetail({ issueId, navigateTo }) {
         onShowLogs={() => setActiveTab('logs')}
       />
 
-      {issue.status === 'pending_verification' && (
-        <IssueDetailVerification
+      {issue.status === 'needs_user' && (
+        <IssueDetailDecision
           evidence={issue.error}
-          verification={issue.verification}
-          onAccept={() => actions.setVerificationReviewAction('accept')}
-          onReject={() => actions.setVerificationReviewAction('reject')}
-          onRequestChanges={() => actions.setVerificationReviewAction('request_changes')}
+          decision={issue.decision}
+          onAccept={() => actions.setHumanReviewAction('accept')}
+          onReject={() => actions.setHumanReviewAction('reject')}
+          onRequestChanges={() => actions.setHumanReviewAction('request_changes')}
         />
       )}
 
@@ -239,14 +233,6 @@ export default function IssueDetail({ issueId, navigateTo }) {
                 actionControls={(
                   <IssueManualControls issue={issue} onMarkStatus={actions.handleMarkStatus} />
                 )}
-                verificationEvidence={canGenerateVerifierReport(issue) ? (
-                  <VerifierReportPanel
-                    reports={verifierReports}
-                    generating={actions.verifierGenerating}
-                    error={actions.verifierError}
-                    onGenerate={actions.handleGenerateVerifierReport}
-                  />
-                ) : null}
               />
             </div>
           )}

@@ -234,7 +234,6 @@ function requireIssue(db: RunnerDatabase, id: number): Issue {
 }
 
 function roleRequiredSkills(role: AgentRole): string[] {
-  if (role === "verifier") return ["verification-before-completion"];
   if (role === "reviewer") return ["requesting-code-review"];
   if (role === "reporter") return ["codex-issue-runner"];
   return [];

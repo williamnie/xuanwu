@@ -1,5 +1,5 @@
 const STARTABLE_STATUSES = new Set(['triage']);
-const CANCELLABLE_STATUSES = new Set(['triage', 'todo', 'in_progress', 'pending_verification', 'failed']);
+const CANCELLABLE_STATUSES = new Set(['triage', 'todo', 'in_progress', 'needs_user', 'failed']);
 const RETRYABLE_STATUSES = new Set(['failed']);
 
 export const WORK_TIMELINE_KINDS = [
@@ -11,14 +11,14 @@ export const WORK_TIMELINE_KINDS = [
   'approval',
 ];
 
-export function workAvailableActions(status, verification = null) {
+export function workAvailableActions(status, decision = null) {
   return {
     cancel: CANCELLABLE_STATUSES.has(status),
     edit: status !== 'in_progress',
     retry: RETRYABLE_STATUSES.has(status),
-    review: status === 'pending_verification'
-      && verification?.owner === 'human'
-      && verification?.request?.status === 'open',
+    review: status === 'needs_user'
+      && decision?.owner === 'human'
+      && decision?.request?.status === 'open',
     start: STARTABLE_STATUSES.has(status),
   };
 }

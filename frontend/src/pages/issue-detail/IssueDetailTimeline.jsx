@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import {
   Activity,
   AlertTriangle,
-  ClipboardCheck,
   Clock3,
   History,
   Play,
@@ -162,10 +161,10 @@ function activityEventView(event) {
       tone: 'neutral',
     };
   }
-  if (event.type === 'issue.verification_reviewed') {
+  if (event.type === 'issue.human_review_response_applied.v1') {
     return {
-      title: `人工验证 → ${payload.action || 'reviewed'}`,
-      detail: payload.comment || `任务状态更新为 ${payload.status || 'unknown'}`,
+      title: `人工回答 → ${payload.action || 'answered'}`,
+      detail: payload.comment || 'PI 将读取这次回答并继续判断。',
       icon: <UserCheck size={14} />,
       tone: 'verification',
     };
@@ -184,14 +183,6 @@ function activityEventView(event) {
       detail: event.error || payload.error || payload.message || '未提供错误详情',
       icon: <AlertTriangle size={14} />,
       tone: 'danger',
-    };
-  }
-  if (event.type === 'issue.verification_report') {
-    return {
-      title: `Verifier report${payload.recommendation ? ` · ${payload.recommendation}` : ''}`,
-      detail: payload.summary || '已记录结构化验证报告。',
-      icon: <ClipboardCheck size={14} />,
-      tone: 'verification',
     };
   }
   if (event.type?.startsWith('issue.interrupt')) {

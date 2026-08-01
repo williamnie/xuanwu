@@ -29,7 +29,7 @@ export const WORK_STATUSES = [
   "triage",
   "todo",
   "in_progress",
-  "pending_verification",
+  "needs_user",
   "done",
   "failed",
   "cancelled"
@@ -60,10 +60,10 @@ export const STATE_TRANSITIONS = {
   work: {
     triage: ["todo", "cancelled"],
     todo: ["triage", "in_progress", "cancelled"],
-    in_progress: ["todo", "pending_verification", "failed", "cancelled"],
-    pending_verification: ["triage", "in_progress", "done", "failed", "cancelled"],
+    in_progress: ["todo", "needs_user", "done", "failed", "cancelled"],
+    needs_user: ["in_progress", "done", "failed", "cancelled"],
     done: [],
-    failed: ["triage", "todo", "pending_verification", "cancelled"],
+    failed: ["triage", "todo", "cancelled"],
     cancelled: []
   },
   run: {

@@ -15,24 +15,22 @@ describe("PI issue status actions", () => {
   test("exposes every canonical status edge and keeps terminal states closed", () => {
     expect(allowedIssueStatusTargets("triage")).toEqual(["todo", "cancelled"]);
     expect(allowedIssueStatusTargets("todo")).toEqual(["triage", "in_progress", "cancelled"]);
-    expect(allowedIssueStatusTargets("in_progress")).toEqual(["todo", "pending_verification", "failed", "cancelled"]);
-    expect(allowedIssueStatusTargets("pending_verification")).toEqual([
-      "triage", "in_progress", "done", "failed", "cancelled"
-    ]);
-    expect(allowedIssueStatusTargets("failed")).toEqual(["triage", "todo", "pending_verification", "cancelled"]);
+    expect(allowedIssueStatusTargets("in_progress")).toEqual(["todo", "needs_user", "done", "failed", "cancelled"]);
+    expect(allowedIssueStatusTargets("needs_user")).toEqual(["in_progress", "done", "failed", "cancelled"]);
+    expect(allowedIssueStatusTargets("failed")).toEqual(["triage", "todo", "cancelled"]);
     expect(allowedIssueStatusTargets("done")).toEqual([]);
     expect(allowedIssueStatusTargets("cancelled")).toEqual([]);
   });
 
-  test("moves issues through queue, verification, failure, and cancellation semantics", async () => {
+  test("moves issues through queue, PI failure, retry, and cancellation semantics", async () => {
     const fixture = await openFixture();
     const executionRequests: string[] = [];
     try {
       const queue = createIssue(fixture.db, { project_id: "demo", status: "triage", title: "Queue" });
-      const verification = createIssue(fixture.db, {
+      const decision = createIssue(fixture.db, {
         project_id: "demo",
-        status: "pending_verification",
-        title: "Verification"
+        status: "in_progress",
+        title: "PI decision"
       });
       const cancel = createIssue(fixture.db, { project_id: "demo", status: "triage", title: "Cancel" });
 
@@ -49,23 +47,20 @@ describe("PI issue status actions", () => {
       });
       expect(await executeIssueStatusUpdate(fixture.db, {
         error: "缺少测试",
-        issue_ids: [verification.id],
+        issue_ids: [decision.id],
         reason: "验收不通过",
         status: "failed"
       })).toMatchObject({ accepted: 1, items: [{ actual_status: "failed", reached_target: true }] });
       expect(await executeIssueStatusUpdate(fixture.db, {
-        issue_ids: [verification.id], reason: "重新提交验收", status: "pending_verification"
-      })).toMatchObject({ accepted: 1, items: [{ actual_status: "pending_verification", reached_target: true }] });
-      expect(await executeIssueStatusUpdate(fixture.db, {
-        issue_ids: [verification.id], reason: "需要继续修改", status: "triage"
-      })).toMatchObject({ accepted: 1, items: [{ actual_status: "triage", reached_target: true }] });
+        issue_ids: [decision.id], reason: "PI 决定重试", status: "todo"
+      })).toMatchObject({ accepted: 1, items: [{ actual_status: "todo", reached_target: true }] });
       expect(await executeIssueStatusUpdate(fixture.db, {
         issue_ids: [cancel.id], reason: "不再处理", status: "cancelled"
       })).toMatchObject({ accepted: 1, items: [{ actual_status: "cancelled", reached_target: true }] });
 
       expect(executionRequests).toEqual(["demo"]);
       expect(getIssue(fixture.db, queue.id)?.status).toBe("todo");
-      expect(getIssue(fixture.db, verification.id)?.status).toBe("triage");
+      expect(getIssue(fixture.db, decision.id)?.status).toBe("todo");
       expect(getIssue(fixture.db, cancel.id)?.status).toBe("cancelled");
     } finally {
       await fixture.close();

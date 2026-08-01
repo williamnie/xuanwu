@@ -5,12 +5,12 @@ import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../db/reposi
 import type { PiAction } from "../db/repositories/pi.ts";
 import { upsertPiGuardianAlert } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import type { EventBus } from "../events/bus.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
 import { composePiNeedsUserMessage } from "./piNeedsUserMessageComposer.ts";
 import { publishPiNeedsUserNotification } from "./piNotifier.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
+import { applyPiSemanticIssueStatus } from "../runner/piIssueLifecycle.ts";
 
 export type PiNeedsUserActionContext = {
   bus?: Pick<EventBus, "publish">;
@@ -68,7 +68,7 @@ export function dispatchNeedsUserEscalation(
     userFacingMessage
   });
   const body = published?.message ?? (userFacingMessage || needsUserCommentBody(action, issue, payload));
-  const released = releaseNeedsUserSlot(context.database, issue, payload);
+  const released = holdForUserDecision(context.database, issue, payload);
   if (hasNeedsUserComment(context.database, issueID, action.id)) {
     return { comment: null, notification: published, released, skipped_comment: "duplicate" };
   }
@@ -189,11 +189,14 @@ function needsUserCommentBody(action: PiAction, issue: Issue, payload: Record<st
   ].filter(Boolean).join("\n");
 }
 
-function releaseNeedsUserSlot(db: RunnerDatabase, issue: Issue, payload: Record<string, unknown>): Issue | null {
+function holdForUserDecision(db: RunnerDatabase, issue: Issue, payload: Record<string, unknown>): Issue | null {
   if (issue.status !== "in_progress") return null;
-  return updateIssue(db, issue.id, {
-    error: needsUserIssueError(payload),
-    status: "failed"
+  return applyPiSemanticIssueStatus(db, issue.id, {
+    card_fingerprint: cleanString(payload.decision_id) || `supervisor-needs-user:${issue.id}:${issue.updated_at}`,
+    decision: "needs_user",
+    reason: needsUserIssueError(payload),
+    run_id: cleanString(payload.expected_run_id),
+    status: "needs_user"
   });
 }
 

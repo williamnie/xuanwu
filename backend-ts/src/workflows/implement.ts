@@ -108,7 +108,7 @@ export const IMPLEMENT_WORKFLOW_MANIFEST: WorkflowManifest = {
   id: "workflow:implement",
   revision: 1,
   name: "Implement",
-  description: "Confirm the target, modify scoped files, run focused verification and regression, then create an audited local Handoff.",
+  description: "Confirm the target, modify scoped files, run focused verification and regression, then report the resulting workspace state. An optional Handoff may be produced for delivery.",
   stages: [
     {
       id: "confirm-target",
@@ -120,8 +120,6 @@ export const IMPLEMENT_WORKFLOW_MANIFEST: WorkflowManifest = {
           "runner-builtin:project_status",
           "runner-builtin:work_read",
           "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
           "runner-builtin:issue_read",
           "runner-builtin:issue_execution_status"
         ],
@@ -130,7 +128,7 @@ export const IMPLEMENT_WORKFLOW_MANIFEST: WorkflowManifest = {
       verification_policy_ref: "verification-policy:implement-target-confirmation@1",
       retry: { max_attempts: 1, backoff_seconds: [] },
       approval: { mode: "none" },
-      handoff: { mode: "local_changes", required: true, project_override_modes: ["local_changes"] }
+      handoff: { mode: "local_changes", project_override_modes: ["local_changes"] }
     },
     {
       id: "modify",
@@ -149,8 +147,6 @@ export const IMPLEMENT_WORKFLOW_MANIFEST: WorkflowManifest = {
           "runner-builtin:work_read",
           "runner-builtin:work_update",
           "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read"
         ],
         allowed_actions: ["work.update"]
       },
@@ -160,23 +156,19 @@ export const IMPLEMENT_WORKFLOW_MANIFEST: WorkflowManifest = {
         mode: "before_stage",
         policy_ref: "approval-policy:implement-target-confirmed@1"
       },
-      handoff: { mode: "local_changes", required: true, project_override_modes: ["local_changes"] }
+      handoff: { mode: "local_changes", project_override_modes: ["local_changes"] }
     },
     verificationStage("focused-verify", "Run focused verification"),
     verificationStage("regression", "Run related regression"),
     {
       id: "handoff",
-      name: "Prepare the audited Handoff",
+      name: "Report the resulting workspace state",
       agent: { role: "reporter", required_skill_ids: [] },
       permissions: {
         max_tool_permission: "write",
         allowed_tools: [
           "runner-builtin:work_read",
           "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_list",
-          "runner-builtin:handoff_read"
         ],
         allowed_actions: ["handoff.commit"]
       },
@@ -185,7 +177,6 @@ export const IMPLEMENT_WORKFLOW_MANIFEST: WorkflowManifest = {
       approval: { mode: "none" },
       handoff: {
         mode: "branch_commit",
-        required: true,
         project_override_modes: ["local_changes", "branch_commit"]
       }
     }
@@ -293,15 +284,14 @@ export const IMPLEMENT_WORKFLOW_RUN_SCHEMA = Type.Object({
     focused_evidence_ids: Type.Array(evidenceID, { minItems: 1, maxItems: 128 }),
     regression_evidence_ids: Type.Array(evidenceID, { minItems: 1, maxItems: 128 }),
     decision: Type.Literal("passed"),
-    completion_gate_audit_ref: reference
   }, { additionalProperties: false }),
   mutation_audit: Type.Array(mutationAuditSchema, { minItems: 1, maxItems: 128 }),
-  handoff: Type.Object({
+  handoff: Type.Optional(Type.Object({
     id: handoffID,
     mode: Type.Union([Type.Literal("local_changes"), Type.Literal("branch_commit")]),
     status: Type.Union([Type.Literal("ready"), Type.Literal("delivered")]),
     audit_event_refs: Type.Array(reference, { minItems: 1, maxItems: 128 })
-  }, { additionalProperties: false })
+  }, { additionalProperties: false }))
 }, { additionalProperties: false });
 
 export type ImplementStageTransition = Static<typeof IMPLEMENT_STAGE_TRANSITION_SCHEMA>;
@@ -309,7 +299,7 @@ export type ImplementWorkflowRun = Static<typeof IMPLEMENT_WORKFLOW_RUN_SCHEMA>;
 export type ImplementWorkflowValidation = { errors: string[]; ok: boolean };
 export type ImplementWorkflowValidationContext = {
   evidence: readonly EvidenceRecord[];
-  handoff: HandoffRecord;
+  handoff?: HandoffRecord;
   runs: HandoffLinkContext["runs"];
 };
 
@@ -378,10 +368,7 @@ export function evaluateImplementStageTransition(
   }
   if (transition.from === "handoff") {
     if (transition.verification_decision !== "passed") {
-      violations.push("handoff completion requires passed deterministic verification");
-    }
-    if (transition.handoff_status !== "ready" && transition.handoff_status !== "delivered") {
-      violations.push("handoff completion requires a ready or delivered Handoff");
+      violations.push("final report requires the Provider's verification commands to have passed");
     }
   }
   return { allowed: violations.length === 0, violations };
@@ -414,7 +401,7 @@ function verificationStage(id: "focused-verify" | "regression", name: string): W
   return {
     id,
     name,
-    agent: { role: "verifier", required_skill_ids: [] },
+    agent: { role: "executor", required_skill_ids: [] },
     permissions: {
       max_tool_permission: "read",
       allowed_tools: [
@@ -427,15 +414,13 @@ function verificationStage(id: "focused-verify" | "regression", name: string): W
         "runner-builtin:repo_read_excerpt",
         "runner-builtin:work_read",
         "runner-builtin:run_read",
-        "runner-builtin:evidence_list",
-        "runner-builtin:evidence_read"
       ],
       allowed_actions: []
     },
     verification_policy_ref: "verification-policy:implement-command-verification@1",
     retry: { max_attempts: 2, backoff_seconds: [5] },
     approval: { mode: "none" },
-    handoff: { mode: "local_changes", required: true, project_override_modes: ["local_changes"] }
+    handoff: { mode: "local_changes", project_override_modes: ["local_changes"] }
   };
 }
 
@@ -512,11 +497,8 @@ function validateReceiptLinks(run: ImplementWorkflowRun, errors: string[]): void
     }
   }
   const handoffAudits = stageByID.get("handoff")!.audit_event_refs;
-  if (!handoffAudits.includes(run.verification.completion_gate_audit_ref)) {
-    errors.push("completion gate audit must be linked to handoff stage");
-  }
-  for (const ref of run.handoff.audit_event_refs) {
-    if (!handoffAudits.includes(ref)) errors.push(`Handoff audit ${ref} must be linked to handoff stage`);
+  for (const ref of run.handoff?.audit_event_refs ?? []) {
+    if (!handoffAudits.includes(ref)) errors.push(`optional Handoff audit ${ref} must be linked to final report stage`);
   }
 }
 
@@ -545,12 +527,12 @@ function validateMutationAudit(run: ImplementWorkflowRun, errors: string[]): voi
     }
   }
   const commit = run.mutation_audit.find((item) => item.action === "handoff.commit");
-  if (run.handoff.mode === "branch_commit") {
+  if (run.handoff?.mode === "branch_commit") {
     if (!commit) errors.push("branch_commit mode requires an audited handoff.commit operation");
     else if (!handoffStage.audit_event_refs.includes(commit.audit_event_ref)) {
       errors.push("handoff.commit audit must be linked to handoff stage");
     }
-  } else if (commit) {
+  } else if (commit && run.handoff) {
     errors.push("local_changes mode cannot claim a handoff.commit operation");
   }
 }
@@ -584,6 +566,11 @@ function validateRuntimeLinks(
     IMPLEMENT_VERIFICATION_POLICY, "regression", errors);
 
   const handoff = context.handoff;
+  if (!run.handoff && !handoff) return;
+  if (!run.handoff || !handoff) {
+    errors.push("optional Handoff receipt and runtime artifact must either both be present or both be absent");
+    return;
+  }
   const handoffValidation = validateHandoff(handoff, {
     evidence: context.evidence.map((item) => ({ id: item.id, status: item.status, work_id: item.work_id })),
     runs: [...context.runs]

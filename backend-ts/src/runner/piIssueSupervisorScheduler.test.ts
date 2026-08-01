@@ -13,6 +13,7 @@ import {
   upsertProjectPiPolicy
 } from "../db/repositories/pi.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
+import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { PiSupervisorDecisionRuntimeResult } from "../pi/issueSupervisorDecision.ts";
 import type { PiSupervisorDecisionJson } from "../pi/issueSupervisorRecovery.ts";
@@ -167,8 +168,7 @@ describe("PI issue supervisor scheduler", () => {
               code: "in_progress_session_ended",
               recommended_actions: [
                 expect.objectContaining({
-                  operation: "patch_status",
-                  patch: { status: "pending_verification" }
+                  operation: "request_pi_decision"
                 })
               ]
             })
@@ -181,10 +181,11 @@ describe("PI issue supervisor scheduler", () => {
       expect(result).toMatchObject({ decisions: 1, failed: 0, signaled: 1 });
       expect(db.sqlite.query<{ status: string }, [number]>(
         "select status from issues where id=?"
-      ).get(512)).toEqual({ status: "pending_verification" });
+      ).get(512)).toEqual({ status: "in_progress" });
       expect(db.sqlite.query<{ ended_at: string; status: string }, [number]>(
         "select status, ended_at from issue_runs where issue_id=?"
-      ).get(512)).toMatchObject({ status: "done", ended_at: expect.any(String) });
+      ).get(512)).toMatchObject({ status: "succeeded", ended_at: expect.any(String) });
+      expect(listIssueEvents(db, 512, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
       expect(listPiActions(db, { issueId: 512 })).toContainEqual(expect.objectContaining({
         action_type: "issue.state_repair",
         gate_decision: "execute",
@@ -291,7 +292,7 @@ describe("PI issue supervisor scheduler", () => {
     }
   });
 
-  test("stops repeated invalid LLM decisions at a bounded limit and notifies the user", async () => {
+  test("never converts repeated PI runtime errors into a deterministic Issue failure", async () => {
     const db = await fixtureDb();
     let calls = 0;
     try {
@@ -324,19 +325,15 @@ describe("PI issue supervisor scheduler", () => {
         },
         staleAfterSeconds: 300
       });
-      expect(result).toMatchObject({ decisions: 0, failed: 0, signaled: 1 });
-      expect(calls).toBe(0);
+      expect(result).toMatchObject({ decisions: 1, failed: 0, signaled: 1 });
+      expect(calls).toBe(1);
       expect(db.sqlite.query<{ status: string }, [number]>(
         "select status from issues where id=?"
-      ).get(513)).toEqual({ status: "failed" });
-      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toContainEqual(
-        expect.objectContaining({ alert_type: "supervisor_needs_user", issue_id: 513 })
-      );
-      expect(listNotifications(db, { projectID: "demo" })).toContainEqual(
-        expect.objectContaining({ event: "pi.needs_user", issue_id: 513 })
-      );
+      ).get(513)).toEqual({ status: "in_progress" });
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toEqual([]);
+      expect(listNotifications(db, { projectID: "demo" })).toEqual([]);
       expect(listIssueSupervisorEvents(db, { issueId: 513 }).map((event) => event.event_type))
-        .toEqual(["decision_failed", "decision_failed", "budget_exhausted", "action", "result"]);
+        .toEqual(["decision_failed", "decision_failed", "decision_failed", "signal", "decision", "action", "result"]);
     } finally {
       db.close();
     }
@@ -444,6 +441,37 @@ describe("PI issue supervisor scheduler", () => {
           calls += 1;
           return validDecision(noopDecision());
         },
+        staleAfterSeconds: 300
+      });
+
+      expect(result).toMatchObject({ decisions: 0, signaled: 0 });
+      expect(calls).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("recent Provider events prevent a false stale disconnect even when session projection is old", async () => {
+    const db = await fixtureDb();
+    let calls = 0;
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-recent-provider-event-"));
+      insertRunningIssue(db, {
+        issueID: 520,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-520",
+        turnID: "turn-520"
+      });
+      db.sqlite.run(
+        "insert into issue_events (issue_id, type, payload, created_at) values (520, 'issue.log', ?, '2026-06-10T07:59:30Z')",
+        [JSON.stringify({ command: "bun test", status: "running", text: "tests are still producing output" })]
+      );
+
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        runDecision: async () => { calls += 1; return validDecision(noopDecision()); },
         staleAfterSeconds: 300
       });
 
@@ -772,7 +800,7 @@ function stateRepairDecision(): PiSupervisorDecisionJson {
     fallback_if_no_progress: "needs_user",
     rationale: "The provider Session completed while the Issue and Run remained open.",
     repair_diagnosis_code: "in_progress_session_ended",
-    repair_operation: "patch_status",
+    repair_operation: "request_pi_decision",
     risk_level: "medium"
   };
 }

@@ -25,8 +25,7 @@ export function missedDigestPayload(
     outage_window: { ended_at: window.endAt, started_at: window.startAt },
     run_group_id: missedDigestScope(window),
     skipped_count: 0,
-    total_count: intents.length + alerts.length,
-    verification_count: 0
+    total_count: intents.length + alerts.length
   };
 }
 

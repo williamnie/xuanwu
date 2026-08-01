@@ -22,7 +22,6 @@ export type PiAgentOrchestrationActionLayer = {
   createExecutorIssueProposal(input: AgentWorkflowInput): unknown;
   createReportWorkflow(input: AgentWorkflowInput): unknown;
   createReviewWorkflow(input: AgentWorkflowInput): unknown;
-  createVerificationWorkflow(input: AgentWorkflowInput): unknown;
   escalateNeedsUser(input: NeedsUserEscalationInput): unknown;
   recommendExecutorProfile(input: AgentRecommendationInput): unknown;
 };
@@ -41,7 +40,6 @@ export function createPiAgentOrchestrationActions(
     createExecutorIssueProposal: (input) => createAgentWorkflowAction(db, context, { ...input, role: "executor" }),
     createReportWorkflow: (input) => createAgentWorkflowAction(db, context, { ...input, role: "reporter" }),
     createReviewWorkflow: (input) => createAgentWorkflowAction(db, context, { ...input, role: "reviewer" }),
-    createVerificationWorkflow: (input) => createAgentWorkflowAction(db, context, { ...input, role: "verifier" }),
     escalateNeedsUser: (input) => escalateNeedsUser(db, context, input),
     recommendExecutorProfile: (input) => safeRecommendExecutorProfile(db, context, input)
   };
@@ -64,7 +62,7 @@ function assignExecutorProfileProposal(
 function createAgentWorkflowAction(db: RunnerDatabase, context: OrchestrationContext, input: AgentWorkflowInput) {
   const proposal = createAgentWorkflowProposal(db, context.project, input);
   const actionType = "agent.workflow_request";
-  const payload = input.role === "verifier" || input.role === "reviewer"
+  const payload = input.role === "reviewer"
     ? { ...proposal.payload, status: "todo" }
     : proposal.payload;
   const actionContext = scopedRunnerChatActionContext(context, actionType, {
@@ -94,7 +92,7 @@ function activeRoleWorkflow(
   if (!projectID || !parentIssueID || !role) return null;
   return listIssues(db, { projectId: projectID }).find((issue) => {
     if (issue.status !== "triage" && issue.status !== "todo" && issue.status !== "in_progress" &&
-      issue.status !== "pending_verification") return false;
+      issue.status !== "needs_user") return false;
     const snapshot = objectPayload(parseJSON(issue.workflow_snapshot_json));
     return snapshot.agent_role === role && snapshot.parent_issue_id === parentIssueID;
   }) ?? null;

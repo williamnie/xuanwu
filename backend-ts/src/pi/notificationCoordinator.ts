@@ -192,7 +192,7 @@ function lifecycleIntentState(decision: LifecycleIntentDecision): string {
 function lifecycleKind(status: string): string {
   if (isStartStatus(status)) return "issue_start";
   if (status === "done") return "issue_done";
-  if (status === "pending_verification") return "issue_pending_verification";
+  if (status === "needs_user") return "issue_needs_user";
   if (status === "failed") return "issue_failed";
   return `issue_${status}`;
 }

@@ -17,7 +17,7 @@ describe("PI action engine risk classifier", () => {
       requiresConfirmation: true,
       riskLevel: "medium"
     });
-    expect(classifyPiActionRisk("issue.completion_reconcile")).toEqual({
+    expect(classifyPiActionRisk("issue.acceptance_request")).toEqual({
       gate: "confirm",
       requiresConfirmation: true,
       riskLevel: "medium"
@@ -132,16 +132,16 @@ describe("PI action engine risk classifier", () => {
     })).toMatchObject({ decision: "execute" });
     const reconcileEnvelope = {
       ...confirmEnvelope,
-      action_type: "issue.completion_reconcile",
+      action_type: "issue.acceptance_request",
       payload: { issue_id: 7 }
     } as const;
     expect(gatePiActionEnvelope(reconcileEnvelope, {
-      authorizedActions: [{ action_type: "issue.completion_reconcile", issue_id: 7, project_id: "demo" }],
+      authorizedActions: [{ action_type: "issue.acceptance_request", issue_id: 7, project_id: "demo" }],
       mode: "delegated",
       scope: { project_id: "demo" }
     })).toMatchObject({ decision: "execute" });
     expect(gatePiActionEnvelope(reconcileEnvelope, {
-      authorizedActions: [{ action_type: "issue.completion_reconcile", issue_id: 8, project_id: "demo" }],
+      authorizedActions: [{ action_type: "issue.acceptance_request", issue_id: 8, project_id: "demo" }],
       mode: "delegated",
       scope: { project_id: "demo" }
     })).toMatchObject({ decision: "deny" });

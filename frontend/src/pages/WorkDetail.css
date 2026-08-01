@@ -14,7 +14,7 @@
 .work-detail-status { border: 1px solid currentColor; border-radius: 999px; color: var(--info); font-family: var(--font-mono); font-size: .63rem; font-weight: 800; padding: 4px 8px; text-transform: uppercase; }
 .work-detail-status[data-status='failed'] { color: var(--error); }
 .work-detail-status[data-status='done'] { color: var(--success); }
-.work-detail-status[data-status='triage'], .work-detail-status[data-status='pending_verification'] { color: var(--warning); }
+.work-detail-status[data-status='triage'], .work-detail-status[data-status='needs_user'] { color: var(--warning); }
 .work-detail-status[data-status='cancelled'] { color: var(--text-muted); }
 .work-detail-meta { color: var(--text-muted); display: flex; flex-wrap: wrap; font-family: var(--font-mono); font-size: .62rem; gap: 8px 16px; margin-top: 20px; }
 .work-detail-identity { align-items: flex-start; border-left: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 9px; padding-left: 22px; }
@@ -167,8 +167,6 @@
 .work-delivery-risks article strong { font-size: .68rem; line-height: 1.45; overflow-wrap: anywhere; }
 .work-delivery-risks article em { color: var(--warning); font-family: var(--font-mono); font-size: .55rem; font-style: normal; }
 .work-delivery-risks article p { color: var(--text-secondary); font-size: .62rem; line-height: 1.5; margin: 5px 0 0; }
-.work-delivery-review-actions { display: flex; gap: 7px; }
-.work-delivery-review-actions button { background: transparent; border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--primary); font-size: .65rem; font-weight: 750; padding: 7px 9px; }
 .work-delivery-technical { border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: .66rem; padding: 11px 13px; }
 .work-delivery-technical summary { cursor: pointer; font-weight: 800; }
 .work-delivery-refs { display: flex; flex-direction: column; margin-top: 10px; }
@@ -183,8 +181,6 @@
 .work-delivery-state.warning { background: color-mix(in srgb, var(--warning) 6%, transparent); border-color: color-mix(in srgb, var(--warning) 28%, var(--border-color)); }
 .work-delivery-state.error, .work-delivery-error { background: var(--error-bg); border-color: color-mix(in srgb, var(--error) 28%, var(--border-color)); color: var(--error); }
 .work-delivery-muted { color: var(--text-muted); font-size: .64rem; }
-.work-delivery-review-title { align-items: center; display: flex; justify-content: space-between; }
-.work-delivery-review-title > button { align-items: center; display: flex; padding: 4px; }
 .work-review-dialog textarea { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font: inherit; padding: 10px; resize: vertical; }
 @media (max-width: 980px) { .work-overview-grid { grid-template-columns: 1fr; } }
 @media (max-width: 980px) { .work-delivery-summary-grid, .work-delivery-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-delivery-body:has(.work-delivery-history) { grid-template-columns: 1fr; } .work-delivery-history { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-delivery-history > div { grid-column: 1 / -1; } }

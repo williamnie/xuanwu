@@ -4,14 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
+import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { pausePiHeartbeat } from "../db/repositories/pi.ts";
-import { createHumanReviewRequest, readIssueVerificationProjection } from "../domain/review/humanReview.ts";
+import { createHumanReviewRequest, readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 import type { PiAcceptanceRuntimeResult } from "../pi/issueAcceptance.ts";
 import type { ExecutorProvider, ProviderRecoveryInput, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
-import { runPiVerificationCoordinatorOnce } from "./piVerificationCoordinator.ts";
+import { runPiAcceptanceCoordinatorOnce } from "./piAcceptanceCoordinator.ts";
 
 const roots: string[] = [];
 
@@ -25,7 +26,7 @@ describe("issue-scoped PI acceptance coordinator", () => {
     try {
       const issue = completedIssue(db, "Delivery");
       const seen: Array<{ issue: number; commands: number }> = [];
-      const result = await runPiVerificationCoordinatorOnce({
+      const result = await runPiAcceptanceCoordinatorOnce({
         database: db,
         decideIssueAcceptance: async (card) => {
           seen.push({ issue: card.issue.id, commands: card.commands.total });
@@ -41,7 +42,7 @@ describe("issue-scoped PI acceptance coordinator", () => {
         "issue.completion_card.v1",
         "issue.pi_acceptance_decision.v1",
         "issue.pi_acceptance_applied.v1",
-        "evidence.recorded.v1"
+        "issue.pi_lifecycle_decision.v1"
       ]));
     } finally {
       db.close();
@@ -53,8 +54,10 @@ describe("issue-scoped PI acceptance coordinator", () => {
     let calls = 0;
     try {
       const issue = completedIssue(db, "Needs product choice");
+      updateIssue(db, issue.id, { status: "needs_user" });
       createHumanReviewRequest(db, issue.id, { question: "是否接受当前范围？" });
-      const result = await runPiVerificationCoordinatorOnce({
+      updateIssue(db, issue.id, { status: "in_progress" });
+      const result = await runPiAcceptanceCoordinatorOnce({
         database: db,
         decideIssueAcceptance: async () => { calls += 1; return acceptance("accept"); }
       });
@@ -71,7 +74,7 @@ describe("issue-scoped PI acceptance coordinator", () => {
     try {
       completedIssue(db, "Paused");
       pausePiHeartbeat(db, { reason: "maintenance", scopeId: "demo", scopeType: "project" });
-      const result = await runPiVerificationCoordinatorOnce({
+      const result = await runPiAcceptanceCoordinatorOnce({
         database: db,
         decideIssueAcceptance: async () => { calls += 1; return acceptance("accept"); }
       });
@@ -82,12 +85,12 @@ describe("issue-scoped PI acceptance coordinator", () => {
     }
   });
 
-  test("circuit-breaks PI infrastructure failures without asking the user for an approval", async () => {
+  test("keeps retrying PI infrastructure failures without changing Issue semantics", async () => {
     const db = await fixture();
     let calls = 0;
     try {
       const issue = completedIssue(db, "Broken PI RPC");
-      const run = () => runPiVerificationCoordinatorOnce({
+      const run = () => runPiAcceptanceCoordinatorOnce({
         cooldownMs: 0,
         database: db,
         decideIssueAcceptance: async () => {
@@ -98,10 +101,12 @@ describe("issue-scoped PI acceptance coordinator", () => {
       });
       expect((await run()).failed).toBe(1);
       expect((await run()).failed).toBe(1);
-      expect(calls).toBe(2);
-      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({ owner: "pi", phase: "pi_blocked" });
-      expect(eventTypes(db, issue.id)).toContain("issue.pi_acceptance_system_blocked.v1");
-      expect(eventTypes(db, issue.id).filter((type) => type === "issue.pi_verification_started.v1")).toHaveLength(2);
+      expect((await run()).failed).toBe(1);
+      expect(calls).toBe(3);
+      expect(getIssue(db, issue.id)?.status).toBe("in_progress");
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({ owner: "pi", phase: "pi_error" });
+      expect(eventTypes(db, issue.id).filter((type) => type === "issue.pi_acceptance_runtime_failed.v1")).toHaveLength(3);
+      expect(eventTypes(db, issue.id).filter((type) => type === "issue.pi_acceptance_started.v1")).toHaveLength(3);
     } finally {
       db.close();
     }
@@ -111,7 +116,7 @@ describe("issue-scoped PI acceptance coordinator", () => {
     const db = await fixture();
     try {
       const issue = completedIssue(db, "Invalid PI response");
-      const run = () => runPiVerificationCoordinatorOnce({
+      const run = () => runPiAcceptanceCoordinatorOnce({
         cooldownMs: 0,
         database: db,
         decideIssueAcceptance: async (): Promise<PiAcceptanceRuntimeResult> => ({
@@ -124,7 +129,7 @@ describe("issue-scoped PI acceptance coordinator", () => {
 
       expect((await run()).failed).toBe(1);
       expect((await run()).failed).toBe(1);
-      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({ owner: "pi", phase: "pi_blocked" });
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({ owner: "pi", phase: "pi_error" });
       expect(eventTypes(db, issue.id)).not.toContain("issue.human_review_requested.v1");
       expect(eventTypes(db, issue.id)).not.toContain("issue.pi_acceptance_decision.v1");
     } finally {
@@ -132,23 +137,24 @@ describe("issue-scoped PI acceptance coordinator", () => {
     }
   });
 
-  test("also system-blocks repeated completion-card construction failures without human approval", async () => {
+  test("does not schedule PI before a canonical Run reaches terminal state", async () => {
     const db = await fixture();
     let calls = 0;
     try {
-      const issue = createIssue(db, { project_id: "demo", status: "pending_verification", title: "Missing terminal Run" });
-      const run = () => runPiVerificationCoordinatorOnce({
+      const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Missing terminal Run" });
+      const openRun = createIssueRun(db, issue.id);
+      recordIssueEvent(db, issue.id, "issue.pi_acceptance_requested.v1", { issue_run_id: openRun.id });
+      const run = () => runPiAcceptanceCoordinatorOnce({
         cooldownMs: 0,
         database: db,
         decideIssueAcceptance: async () => { calls += 1; return acceptance("accept"); },
         now: new Date("2026-07-31T05:10:00Z")
       });
 
-      expect((await run()).failed).toBe(1);
-      expect((await run()).failed).toBe(1);
+      expect((await run()).issues).toBe(0);
+      expect((await run()).issues).toBe(0);
       expect(calls).toBe(0);
-      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({ owner: "pi", phase: "pi_blocked" });
-      expect(eventTypes(db, issue.id)).toContain("issue.pi_acceptance_system_blocked.v1");
+      expect(eventTypes(db, issue.id)).not.toContain("issue.pi_acceptance_runtime_failed.v1");
     } finally {
       db.close();
     }
@@ -168,7 +174,7 @@ describe("issue-scoped PI acceptance coordinator", () => {
         provider_turn_id: "019fbb1a-134b-7da1-ba36-9725d960c543"
       });
 
-      const result = await runPiVerificationCoordinatorOnce({
+      const result = await runPiAcceptanceCoordinatorOnce({
         database: db,
         decideIssueAcceptance: async (card) => {
           seenLatestTurn = card.session.latest_turn_id;
@@ -231,14 +237,14 @@ describe("issue-scoped PI acceptance coordinator", () => {
           : acceptance("accept");
       };
 
-      await runPiVerificationCoordinatorOnce({
+      await runPiAcceptanceCoordinatorOnce({
         cooldownMs: 0,
         database: db,
         decideIssueAcceptance: decide,
         providers: { codex: provider }
       });
-      expect(getIssue(db, issue.id)?.status).toBe("pending_verification");
-      await runPiVerificationCoordinatorOnce({
+      expect(getIssue(db, issue.id)?.status).toBe("in_progress");
+      await runPiAcceptanceCoordinatorOnce({
         cooldownMs: 0,
         database: db,
         decideIssueAcceptance: decide,
@@ -254,7 +260,42 @@ describe("issue-scoped PI acceptance coordinator", () => {
       db.close();
     }
   });
+
+  test("accepting one Issue releases the project lock and starts the next ready Issue", async () => {
+    const db = await fixture();
+    const provider = new NextIssueProvider();
+    try {
+      const first = completedIssue(db, "First delivery");
+      const second = createIssue(db, { project_id: "demo", status: "todo", title: "Second delivery" });
+
+      await runPiAcceptanceCoordinatorOnce({
+        database: db,
+        decideIssueAcceptance: async () => acceptance("accept"),
+        providers: { codex: provider }
+      });
+      await waitFor(() => provider.inputs.some((input) => input.issueId === second.id));
+
+      expect(getIssue(db, first.id)?.status).toBe("done");
+      expect(getIssue(db, second.id)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+    } finally {
+      db.close();
+    }
+  });
 });
+
+class NextIssueProvider implements ExecutorProvider {
+  readonly capabilities = ["issue_execution"] as const;
+  readonly id = "codex" as const;
+  readonly inputs: ProviderRunInput[] = [];
+
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
+    this.inputs.push(input);
+    return {
+      runId: `codex:next:${input.issueId}`,
+      session: { provider: "codex", sessionId: `next-session-${input.issueId}`, turnId: `next-turn-${input.issueId}` }
+    };
+  }
+}
 
 class CoordinatorContinuationProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution", "resume_session"] as const;
@@ -345,15 +386,25 @@ async function fixture(): Promise<RunnerDatabase> {
 }
 
 function completedIssue(db: RunnerDatabase, title: string) {
-  const issue = createIssue(db, { project_id: "demo", status: "pending_verification", title });
+  const issue = createIssue(db, { project_id: "demo", status: "in_progress", title });
   const run = createIssueRun(db, issue.id);
   db.sqlite.run(
-    "update issue_runs set status='done', ended_at=? where id=?",
+    "update issue_runs set status='succeeded', ended_at=? where id=?",
     ["2026-07-31T05:01:00Z", run.id]
   );
+  recordIssueEvent(db, issue.id, "issue.pi_acceptance_requested.v1", { issue_run_id: run.id });
   return issue;
 }
 
 function eventTypes(db: RunnerDatabase, issueID: number): string[] {
   return listIssueEvents(db, issueID).map((event) => event.type);
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await Bun.sleep(5);
+  }
+  throw new Error("condition timed out");
 }

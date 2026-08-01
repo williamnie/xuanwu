@@ -51,40 +51,6 @@ export function issueSourceSessionRef(issue) {
   return sessionId.startsWith('codex:') ? sessionId : `codex:${sessionId}`;
 }
 
-export function canGenerateVerifierReport(issue) {
-  if (issue?.status === 'pending_verification') return true;
-  return issue?.status === 'done' && String(issue?.error || '').trim() !== '';
-}
-
-export function issueVerifierReports(events = []) {
-  return events
-    .filter(event => event.type === 'issue.verification_report')
-    .map(event => ({ event, report: parseVerifierReportPayload(event.payload) }))
-    .filter(item => item.report.summary || item.report.recommendation)
-    .reverse();
-}
-
-function parseVerifierReportPayload(rawPayload) {
-  let payload = rawPayload || {};
-  if (typeof payload === 'string') {
-    try {
-      payload = JSON.parse(payload);
-    } catch {
-      payload = {};
-    }
-  }
-  return {
-    summary: payload.summary || '',
-    acceptanceChecklist: payload.acceptanceChecklist || payload.acceptance_checklist || '',
-    evidenceFound: payload.evidenceFound || payload.evidence_found || '',
-    evidenceMissing: payload.evidenceMissing || payload.evidence_missing || '',
-    risk: payload.risk || '',
-    recommendation: payload.recommendation || '',
-    threadId: payload.thread_id || payload.threadId || '',
-    turnId: payload.turn_id || payload.turnId || '',
-  };
-}
-
 export function supervisorHasSignal(supervisor) {
   const latest = supervisor?.latest || {};
   const decision = latest.pi_decision || {};
@@ -116,12 +82,14 @@ export function issuePriorityLabel(value) {
   return Number.isFinite(priority) ? `Legacy rank · ${priority}` : '未设置';
 }
 
-export function issueStatusDescription(status) {
+export function issueStatusDescription(status, latestRun = null) {
   switch (status) {
     case 'triage': return '待梳理任务说明，尚未进入 runner 队列。';
     case 'todo': return '已进入执行队列，等待 runner claim。';
-    case 'in_progress': return 'Provider 正在执行，实时交互请进入 Session。';
-    case 'pending_verification': return '执行已结束，等待人工完成验证门禁。';
+    case 'in_progress': return latestRun?.ended_at
+      ? 'Provider Turn 已结束，PI 正在读取 Session 上下文并决定后续。'
+      : 'Provider 正在执行，实时交互请进入 Session。';
+    case 'needs_user': return 'PI 已确认存在必须由用户决定的问题，项目保持锁定。';
     case 'done': return '任务已结束；请结合 Run 与结构化验证证据判断结果。';
     case 'failed': return '最近一次执行失败，可从日志或 Session 定位退出原因。';
     case 'cancelled': return '任务已取消，可在确认上下文后重新执行。';

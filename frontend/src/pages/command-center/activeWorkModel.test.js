@@ -13,13 +13,16 @@ import {
 
 const NOW = new Date('2026-07-17T08:00:00Z');
 
-test('Active Work covers queued, running, verification, and recovery phases', () => {
+test('Active Work covers queued, running, PI decision, and recovery phases', () => {
   assert.equal(activeWorkView(work({ status: 'todo' }), null, NOW).phase, 'queued');
   assert.equal(activeWorkView(work({
     latest_run: run({ phase: 'running', status: 'running' }),
     status: 'in_progress',
   }), null, NOW).phase, 'running');
-  assert.equal(activeWorkView(work({ status: 'pending_verification' }), null, NOW).phase, 'verifying');
+  assert.equal(activeWorkView(work({
+    latest_run: run({ ended_at: '2026-07-17T07:59:00Z', status: 'succeeded' }),
+    status: 'in_progress',
+  }), null, NOW).phase, 'pi_deciding');
   assert.equal(activeWorkView(work({
     latest_run: run({ phase: 'recovering', status: 'recovering' }),
     status: 'in_progress',

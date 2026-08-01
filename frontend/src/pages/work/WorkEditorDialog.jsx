@@ -51,14 +51,12 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
           expected_revision: work.revision,
           ...agentProfilePatch,
           goal: draft.goal.trim(),
-          handoff_policy: draft.handoff_policy,
           title: draft.title.trim(),
         })
         : await workApi.createWork({
           audit,
           ...agentProfilePatch,
           goal: draft.goal.trim(),
-          handoff_policy: draft.handoff_policy,
           project_id: draft.project_id,
           status: draft.status,
           title: draft.title.trim(),
@@ -136,19 +134,6 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
               Effective: {effectivePreview.name || 'Project provider'} · {effectivePreview.provider || 'unknown'} · {effectivePreview.model || 'default'}
               {effectivePreview.source === 'project_default' ? '（继承）' : effectivePreview.source === 'work' ? '（Work 显式）' : ''}
             </small>
-          </label>
-          <label>
-            <span>{t('editor.handoffPolicy')}</span>
-            <select
-              className="form-control"
-              onChange={event => setField('handoff_policy', event.target.value)}
-              value={draft.handoff_policy}
-            >
-              <option value="none">{t('editor.handoffNone')}</option>
-              <option value="summary">{t('editor.handoffSummary')}</option>
-              <option value="required">{t('editor.handoffRequired')}</option>
-            </select>
-            <small>{t(`editor.handoffHelp.${draft.handoff_policy}`)}</small>
           </label>
           <footer>
             <button className="work-action-secondary" disabled={saving} onClick={onClose} type="button">{t('work.cancel')}</button>

@@ -4,7 +4,6 @@ import { Value } from "@sinclair/typebox/value";
 export const SUPERVISOR_WORKFLOW_EVAL_SCHEMA_VERSION = "xw.supervisor-workflow-eval-suite.v1" as const;
 export const SUPERVISOR_WORKFLOW_EVAL_SCORERS = [
   "tool_selection",
-  "completion_gate",
   "report",
   "token_cost"
 ] as const;
@@ -46,9 +45,6 @@ const reportEventSchema = Type.Object({
 }, { additionalProperties: false });
 
 const inputSchema = Type.Object({
-  completion_evidence: Type.Optional(Type.Union([
-    Type.Literal("passed"), Type.Literal("failed"), Type.Literal("missing")
-  ])),
   project_id: Type.String({ minLength: 1, maxLength: 255 }),
   prompt: Type.String({ maxLength: 8192 }),
   report_events: Type.Optional(Type.Array(reportEventSchema, { maxItems: 64 })),
@@ -56,12 +52,6 @@ const inputSchema = Type.Object({
 }, { additionalProperties: false });
 
 const goldenSchema = Type.Object({
-  completion: Type.Optional(Type.Object({
-    decision: Type.Union([Type.Literal("passed"), Type.Literal("pending"), Type.Literal("failed")]),
-    target_status: Type.Union([
-      Type.Literal("done"), Type.Literal("pending_verification"), Type.Literal("failed")
-    ])
-  }, { additionalProperties: false })),
   max_estimated_cost_usd: Type.Number({ minimum: 0 }),
   max_total_tokens: Type.Integer({ minimum: 0 }),
   report: Type.Optional(Type.Record(Type.String({ minLength: 1 }), Type.Union([
@@ -143,9 +133,6 @@ function validateScorerInputs(fixture: SupervisorWorkflowEvalCase, errors: strin
   const required = new Set(fixture.required_scorers);
   if (required.has("tool_selection") && !fixture.golden.selected_tools) {
     errors.push(`${fixture.id} selected_tools golden is required`);
-  }
-  if (required.has("completion_gate") && (!fixture.golden.completion || !fixture.input.completion_evidence)) {
-    errors.push(`${fixture.id} completion input and golden are required`);
   }
   if (required.has("report") && (!fixture.golden.report || !fixture.input.report_events)) {
     errors.push(`${fixture.id} report events and golden are required`);

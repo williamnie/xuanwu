@@ -161,7 +161,7 @@ describe("Bun SQLite database connection", () => {
       expect(columnNames(connection, "project_pi_policies")).toContain("allowed_actions_json");
       expect(columnNames(connection, "project_pi_policies")).toContain("allowed_skill_intents_json");
       expect(columnNames(connection, "project_pi_policies")).toContain("allowed_mcp_capabilities_json");
-      expect(columnNames(connection, "project_pi_policies")).toContain("verification_policy_json");
+      expect(columnNames(connection, "project_pi_policies")).not.toContain("verification_policy_json");
       expect(columnNames(connection, "pi_mcp_servers")).toEqual(expect.arrayContaining(["enabled", "env_json", "redaction_json", "source_path", "transport_type"]));
       expect(columnNames(connection, "pi_mcp_capabilities")).toEqual(expect.arrayContaining(["enabled", "permission", "read_only", "requires_confirmation", "risk_level"]));
       expect(columnNames(connection, "issue_runs")).toContain("provider_session_id");
@@ -252,7 +252,8 @@ describe("Bun SQLite database connection", () => {
         { id: "059_pi_automatic_takeover" },
         { id: "060_mcp_approval_policy" },
         { id: "061_project_mandatory_takeover" },
-        { id: "062_reusable_pi_memory" }
+        { id: "062_reusable_pi_memory" },
+        { id: "063_pi_owned_issue_lifecycle" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
@@ -374,8 +375,7 @@ describe("Bun SQLite database connection", () => {
         supervisor_cooldown_seconds: "300",
         supervisor_max_recoveries_per_issue: "2",
         supervisor_max_recoveries_per_project_per_hour: "10",
-        supervisor_rate_limit_wait_policy: "'respect_retry_after'",
-        verification_policy_json: "'{\"pending_timeout_minutes\":1440,\"on_timeout\":\"escalate\",\"evidence_required\":true}'"
+        supervisor_rate_limit_wait_policy: "'respect_retry_after'"
       });
       expect(columnDefaults(connection, "pi_reports")).toMatchObject({
         issue_ids_json: "'[]'",
@@ -880,7 +880,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 61 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 62 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

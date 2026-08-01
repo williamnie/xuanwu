@@ -68,7 +68,6 @@ describe("Implement Workflow", () => {
     expect(IMPLEMENT_WORKFLOW_MANIFEST.stages.map((stage) => stage.id)).toEqual([...IMPLEMENT_STAGE_IDS]);
     expect(IMPLEMENT_WORKFLOW_MANIFEST.stages.at(-1)?.handoff).toEqual({
       mode: "branch_commit",
-      required: true,
       project_override_modes: ["local_changes", "branch_commit"]
     });
     expect(IMPLEMENT_WORKFLOW_MANIFEST.stages.find((stage) => stage.id === "modify")).toMatchObject({
@@ -175,7 +174,7 @@ describe("Implement Workflow", () => {
       verification_decision: "overridden"
     })).toMatchObject({
       allowed: false,
-      violations: expect.arrayContaining(["handoff completion requires passed deterministic verification"])
+      violations: expect.arrayContaining(["final report requires the Provider's verification commands to have passed"])
     });
   });
 

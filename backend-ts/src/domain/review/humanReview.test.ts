@@ -15,7 +15,7 @@ import type {
 import { EventBus } from "../../events/bus.ts";
 import {
   createHumanReviewRequest,
-  readIssueVerificationProjection,
+  readIssueDecisionProjection,
   reviewHumanIssue
 } from "./humanReview.ts";
 
@@ -26,15 +26,20 @@ afterEach(async () => {
 });
 
 describe("human review workflow", () => {
-  test("keeps pending verification PI-owned until an explicit natural-language request exists", async () => {
+  test("keeps needs_user PI-owned until an explicit natural-language request exists", async () => {
     const db = await fixture();
     try {
       const issue = createIssue(db, {
         project_id: "demo",
-        status: "pending_verification",
+        status: "needs_user",
         title: "Architecture decision"
       });
-      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({
+      const run = createIssueRun(db, issue.id);
+      db.sqlite.run(
+        "update issue_runs set status='succeeded', ended_at=? where id=?",
+        ["2026-07-31T00:00:00Z", run.id]
+      );
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
         owner: "pi",
         phase: "pi_queued",
         request: null
@@ -51,7 +56,7 @@ describe("human review workflow", () => {
         recommendation: "接受"
       }, { bus });
 
-      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
         owner: "human",
         phase: "human_review",
         request: {
@@ -77,8 +82,8 @@ describe("human review workflow", () => {
         review_request_id: request.id,
         review_revision: request.revision
       });
-      expect(accepted.status).toBe("pending_verification");
-      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({
+      expect(accepted.status).toBe("in_progress");
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
         owner: "pi",
         phase: "pi_queued",
         request: { status: "accepted" }
@@ -94,7 +99,7 @@ describe("human review workflow", () => {
     try {
       const issue = createIssue(db, {
         project_id: "demo",
-        status: "pending_verification",
+        status: "needs_user",
         title: "Architecture decision"
       });
       const oldRun = createIssueRun(db, issue.id);
@@ -105,7 +110,7 @@ describe("human review workflow", () => {
         provider_turn_id: "turn-original"
       });
       db.sqlite.run(
-        "update issue_runs set status='pending_verification', ended_at=? where id=?",
+        "update issue_runs set status='succeeded', ended_at=? where id=?",
         ["2026-07-31T00:00:00Z", oldRun.id]
       );
       const request = createHumanReviewRequest(db, issue.id, {
@@ -144,9 +149,9 @@ describe("human review workflow", () => {
         provider_session_id: "session-original",
         provider_turn_id: "turn-revision"
       });
-      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
         owner: "pi",
-        phase: "pi_repairing",
+        phase: "pi_continuing",
         request: { status: "changes_requested" }
       });
       expect(listIssueEvents(db, issue.id, {
@@ -162,7 +167,7 @@ describe("human review workflow", () => {
     try {
       const issue = createIssue(db, {
         project_id: "demo",
-        status: "pending_verification",
+        status: "needs_user",
         title: "Retry revision"
       });
       const oldRun = createIssueRun(db, issue.id);
@@ -173,7 +178,7 @@ describe("human review workflow", () => {
         provider_turn_id: "turn-original"
       });
       db.sqlite.run(
-        "update issue_runs set status='pending_verification', ended_at=? where id=?",
+        "update issue_runs set status='succeeded', ended_at=? where id=?",
         ["2026-07-31T00:00:00Z", oldRun.id]
       );
       const request = createHumanReviewRequest(db, issue.id, {
@@ -187,14 +192,11 @@ describe("human review workflow", () => {
         review_revision: request.revision
       }, { providers: { codex: new FailingRevisionProvider() } })).rejects.toThrow("resume unavailable");
 
-      expect(getIssue(db, issue.id)).toMatchObject({
-        error: "resume unavailable",
-        status: "pending_verification"
-      });
-      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({
-        owner: "human",
-        phase: "human_review",
-        request: { id: request.id, status: "open" }
+      expect(getIssue(db, issue.id)).toMatchObject({ status: "in_progress" });
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+        owner: "pi",
+        phase: "pi_continuing",
+        request: { id: request.id, status: "changes_requested" }
       });
       expect(listIssueRuns(db, issue.id).at(-1)).toMatchObject({
         error: "resume unavailable",

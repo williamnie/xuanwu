@@ -16,7 +16,7 @@ test('issue detail delegates its data flow and seven product sections to focused
     'IssueDetailEvidence',
     'IssueDetailTimeline',
     'IssueDetailComments',
-    'IssueDetailVerification',
+    'IssueDetailDecision',
     'IssueDetailActions',
     'useIssueDetailData',
     'useIssueDetailActions',

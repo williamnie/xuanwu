@@ -2,9 +2,9 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
-import { reviewIssueVerification } from "../db/repositories/issueVerification.ts";
 import { ProjectNotFoundError } from "../db/repositories/projects.ts";
 import { requestIssuePiAcceptance } from "../runner/piAcceptanceRequest.ts";
+import { applyPiSemanticIssueStatus } from "../runner/piIssueLifecycle.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import {
@@ -98,18 +98,7 @@ async function updateOneIssueStatus(
       reason: input.reason,
       source: "pi-issue-status-update"
     });
-    return statusResult(issue, pending, input.status, false, "", pending.status === "pending_verification");
-  }
-  if (input.status === "triage" && issue.status === "pending_verification") {
-    const updated = reviewIssueVerification(db, issue.id, { action: "request_changes", comment: input.reason });
-    return statusResult(issue, updated, input.status, false);
-  }
-  if (input.status === "failed" && issue.status === "pending_verification") {
-    const updated = reviewIssueVerification(db, issue.id, {
-      action: "reject",
-      comment: cleanString(input.error) || input.reason
-    });
-    return statusResult(issue, updated, input.status, false);
+    return statusResult(issue, pending, input.status, false, "", true);
   }
   if (input.status === "todo" && issue.status !== "triage") {
     const updated = await retryIssueWithInterrupt(db, issue.id, {}, runtime);
@@ -123,6 +112,16 @@ async function updateOneIssueStatus(
   }
   if (issue.status === "in_progress") {
     await interruptIssueForStatusTransition(db, issue.id, `issue_status_update:${input.status}`, runtime);
+  }
+  if (input.status === "needs_user" || input.status === "failed") {
+    const updated = applyPiSemanticIssueStatus(db, issue.id, {
+      card_fingerprint: `pi-status-update:${issue.id}:${issue.updated_at}:${input.status}`,
+      decision: input.status,
+      reason: cleanString(input.error) || input.reason,
+      run_id: issue.latest_run?.id ?? "",
+      status: input.status
+    });
+    return statusResult(issue, updated, input.status, false);
   }
   const patch = input.status === "failed"
     ? { error: cleanString(input.error) || input.reason, status: input.status }

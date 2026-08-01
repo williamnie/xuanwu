@@ -222,7 +222,7 @@ export const RETENTION_BLOCKER_CODES = [
   "legal_hold",
   "active_issue",
   "failed_issue",
-  "pending_verification_issue",
+  "needs_user_issue",
   "active_run",
   "failed_run",
   "non_successful_run",
@@ -263,8 +263,9 @@ export type RetentionEvaluationInput = {
 const OPERATIONAL_METHOD = /(?:delta|updated|tokenusage|moderationmetadata|startupstatus|terminalinteraction|thread\/goal\/cleared)/i;
 const DURABLE_METHOD = /^(?:item\/started|item\/completed)$/i;
 const AUDIT_METHOD = /(?:turn\/(?:started|completed)|thread\/status\/changed|error|approval)/i;
-const DELIVERY_EVENT_TYPES = new Set(["issue.verification_report", "issue.verification_reviewed"]);
+const DELIVERY_EVENT_TYPES = new Set<string>();
 const STATE_EVENT_TYPES = new Set([
+  "issue.human_review_response_applied.v1",
   "issue.created",
   "issue.status_changed",
   "issue.provider_deferred",
@@ -356,7 +357,7 @@ export function evaluateEventRetention(input: RetentionEvaluationInput): Retenti
 
   const uniqueBlockers = [...new Set(blockers)];
   const issueProtected = blockers.some((blocker) =>
-    blocker === "active_issue" || blocker === "failed_issue" || blocker === "pending_verification_issue");
+    blocker === "active_issue" || blocker === "failed_issue" || blocker === "needs_user_issue");
   const archiveDue = !issueProtected && policy.archive_after_days !== null && ageDays !== null && ageDays >= policy.archive_after_days &&
     !validArchiveReceipt(input.event, input.archive_receipt, config);
   const action = uniqueBlockers.length === 0 ? "delete_candidate" : archiveDue ? "archive" : "keep";
@@ -374,7 +375,7 @@ function addIssueBlocker(blockers: RetentionBlockerCode[], value: string | undef
   const status = value?.trim().toLowerCase() ?? "";
   if (["triage", "todo", "ready", "in_progress"].includes(status)) blockers.push("active_issue");
   else if (status === "failed") blockers.push("failed_issue");
-  else if (status === "pending_verification") blockers.push("pending_verification_issue");
+  else if (status === "needs_user") blockers.push("needs_user_issue");
 }
 
 export function retentionScopeID(event: RetainedEvent, scope: RetentionHold["scope"]): string {

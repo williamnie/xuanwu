@@ -350,7 +350,6 @@ function canonicalCommitmentCondition(value: unknown): Record<string, unknown> {
       retention: SUPERVISOR_COMMITMENT_RETENTION,
       schema_version: SUPERVISOR_COMMITMENT_SCHEMA_VERSION
     },
-    pending_verification_satisfies: false,
     terminal_statuses: ["done", "failed", "cancelled"],
     type: "all_terminal"
   };

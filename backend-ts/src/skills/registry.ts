@@ -182,7 +182,7 @@ function recommendation(skill: SkillMetadata, terms: string[]): SkillRecommendat
 function allowedRoles(description: string): string[] {
   return /design|browser|figma|credential|deploy|publish|destructive/i.test(description)
     ? ["pi", "executor", "human-approved"]
-    : ["pi", "executor", "verifier"];
+    : ["pi", "executor"];
 }
 
 function riskLevel(text: string): SkillMetadata["risk_level"] {

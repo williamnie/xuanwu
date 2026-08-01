@@ -3,13 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { listStoredEvidence } from "../db/repositories/evidence.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
+import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { buildIssueCompletionCard } from "../domain/acceptance/completionCard.ts";
-import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
+import { createHumanReviewRequest, readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 import type { PiAcceptanceDecision } from "../pi/issueAcceptance.ts";
 import { diagnoseIssueState } from "../pi/issueStateManager.ts";
 import type {
@@ -37,9 +37,6 @@ describe("PI acceptance decision application", () => {
 
       expect(first.status).toBe("done");
       expect(replay.status).toBe("done");
-      const evidence = listStoredEvidence(db, { issue_ids: [issue.id], limit: 20 }).items;
-      expect(evidence).toHaveLength(1);
-      expect(evidence[0]?.evidence).toMatchObject({ kind: "pi_acceptance", status: "passed" });
       expect(db.sqlite.query<{ count: number }, [number]>(
         "select count(*) as count from issue_events where issue_id=? and type='issue.pi_acceptance_applied.v1'"
       ).get(issue.id)?.count).toBe(1);
@@ -49,16 +46,61 @@ describe("PI acceptance decision application", () => {
     }
   });
 
-  test("does not let PI accept bypass an explicitly required Handoff", async () => {
+  test("acceptance depends on PI's Session judgment, not Handoff artifacts", async () => {
     const db = await fixture();
     try {
       const issue = completedIssue(db, "Required handoff");
-      recordIssueEvent(db, issue.id, "issue.handoff_policy_set.v1", { policy: "required" });
       const card = await buildIssueCompletionCard(db, issue.id);
 
-      await expect(applyPiAcceptanceDecision({ database: db }, card, decision("accept")))
-        .rejects.toThrow("required Handoff is missing");
-      expect(getIssue(db, issue.id)?.status).toBe("pending_verification");
+      const accepted = await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
+      expect(accepted.status).toBe("done");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("PI can hold the Issue for one explicit human decision", async () => {
+    const db = await fixture();
+    try {
+      const issue = completedIssue(db, "Need product choice");
+      const card = await buildIssueCompletionCard(db, issue.id);
+      const updated = await applyPiAcceptanceDecision(
+        { database: db },
+        card,
+        decision("needs_user", "请确认是否接受这个范围取舍。")
+      );
+
+      expect(updated.status).toBe("needs_user");
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+        owner: "human",
+        phase: "human_review",
+        request: { question: "需要在原 Session 补充明确工作。" }
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("PI retry creates a fresh Provider Session and a new canonical Run", async () => {
+    const db = await fixture();
+    const provider = new FreshSessionProvider();
+    try {
+      const issue = completedIssue(db, "Retry delivery", "session-broken", "turn-broken");
+      const card = await buildIssueCompletionCard(db, issue.id);
+      const updated = await applyPiAcceptanceDecision(
+        { database: db, providers: { codex: provider } },
+        card,
+        decision("retry", "原 Session 已损坏，读取工作区后从剩余步骤继续。")
+      );
+
+      expect(provider.inputs).toHaveLength(1);
+      expect(provider.inputs[0]?.prompt).toContain("原 Session 已损坏");
+      expect(provider.inputs[0]?.prompt).toContain("新 Session");
+      expect(updated.status).toBe("in_progress");
+      expect(listIssueRuns(db, issue.id)).toMatchObject([
+        { attempt: 1, provider_session_id: "session-broken" },
+        { attempt: 2, provider_session_id: "session-fresh", provider_turn_id: "turn-fresh", status: "succeeded" }
+      ]);
     } finally {
       db.close();
     }
@@ -82,10 +124,10 @@ describe("PI acceptance decision application", () => {
         session: { provider: "codex", sessionId: "session-original", turnId: "turn-original" }
       });
       expect(provider.inputs[0]?.prompt).toContain("补充 Node 22 下的完整回归并报告退出码");
-      expect(updated.status).toBe("pending_verification");
+      expect(updated.status).toBe("in_progress");
       expect(listIssueRuns(db, issue.id)).toMatchObject([
         { attempt: 1, provider_session_id: "session-original", provider_turn_id: "turn-original" },
-        { attempt: 2, provider_session_id: "session-original", provider_turn_id: "turn-next", status: "done" }
+        { attempt: 2, provider_session_id: "session-original", provider_turn_id: "turn-next", status: "succeeded" }
       ]);
       expect(db.sqlite.query<{ count: number }, []>("select count(*) as count from issues").get()?.count).toBe(1);
     } finally {
@@ -97,12 +139,14 @@ describe("PI acceptance decision application", () => {
     const db = await fixture();
     try {
       const issue = completedIssue(db, "Human owned");
-      const card = await buildIssueCompletionCard(db, issue.id);
+      updateIssue(db, issue.id, { status: "needs_user" });
       createHumanReviewRequest(db, issue.id, { question: "请确认产品范围。" });
+      updateIssue(db, issue.id, { status: "in_progress" });
+      const card = await buildIssueCompletionCard(db, issue.id);
 
       await expect(applyPiAcceptanceDecision({ database: db }, card, decision("accept")))
         .rejects.toThrow("cannot bypass an open human review request");
-      expect(getIssue(db, issue.id)?.status).toBe("pending_verification");
+      expect(getIssue(db, issue.id)?.status).toBe("in_progress");
     } finally {
       db.close();
     }
@@ -138,6 +182,26 @@ class ContinuingProvider implements ExecutorProvider {
   }
 }
 
+class FreshSessionProvider implements ExecutorProvider {
+  readonly capabilities = ["issue_execution", "resume_session"] as const;
+  readonly id = "codex" as const;
+  readonly inputs: ProviderRunInput[] = [];
+
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
+    this.inputs.push(input);
+    const session = { provider: this.id, sessionId: "session-fresh", turnId: "turn-fresh" };
+    input.onEvent?.({ provider: this.id, session, text: "完成剩余工作。\nRUNNER_OUTCOME: completed", type: "text" });
+    input.onEvent?.({
+      provider: this.id,
+      raw: { method: "turn/completed", payload: JSON.stringify({ turn: { id: "turn-fresh", status: "completed" } }) },
+      session,
+      status: "completed",
+      type: "done"
+    });
+    return { runId: "codex:session-fresh:turn-fresh", session };
+  }
+}
+
 async function fixture(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "pi-acceptance-application-"));
   roots.push(root);
@@ -156,7 +220,7 @@ function completedIssue(
   sessionID = "session-fixture",
   turnID = "turn-fixture"
 ) {
-  const issue = createIssue(db, { project_id: "demo", status: "pending_verification", title });
+  const issue = createIssue(db, { project_id: "demo", status: "in_progress", title });
   const run = createIssueRun(db, issue.id);
   updateIssueRuntime(db, issue.id, {
     issue_run_id: run.id,
@@ -165,9 +229,10 @@ function completedIssue(
     provider_turn_id: turnID
   });
   db.sqlite.run(
-    "update issue_runs set status='done', ended_at=? where id=?",
+    "update issue_runs set status='succeeded', ended_at=? where id=?",
     [new Date(Date.now() + 1_000).toISOString(), run.id]
   );
+  recordIssueEvent(db, issue.id, "issue.pi_acceptance_requested.v1", { issue_run_id: run.id });
   return getIssue(db, issue.id)!;
 }
 

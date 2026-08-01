@@ -28,6 +28,7 @@ export type SupervisorCandidate = {
 };
 
 type CandidateInput = {
+  activityUpdatedAt?: string;
   events: IssueEvent[];
   history: Record<string, unknown>;
   issueStatus: string;
@@ -49,6 +50,7 @@ type PolicyContextInput = {
 };
 
 type SessionContextInput = {
+  activityUpdatedAt?: string;
   latestRun: IssueRun | null;
   now: Date;
   session: AgentSession | null;
@@ -69,7 +71,7 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
   const { providerError, session, history, latestRun, now } = input;
   const runOpen = latestRun?.status === "in_progress" && latestRun.ended_at === "";
   const stopped = stoppedSession(session);
-  const stale = staleSession(session, now, input.staleAfterSeconds ?? DEFAULT_STALE_SECONDS);
+  const stale = staleSession(session, input.activityUpdatedAt, now, input.staleAfterSeconds ?? DEFAULT_STALE_SECONDS);
   const freshActiveRun = runOpen && session !== null && activeStatus(session.status) && !stopped && !stale;
   const budgetCandidate = recoveryBudgetCandidate(history);
   if (budgetCandidate && !freshActiveRun) {
@@ -217,8 +219,10 @@ export function policyContext(input: PolicyContextInput): Record<string, unknown
 
 export function sessionContext(input: SessionContextInput): Record<string, unknown> {
   const { session, latestRun, now, staleAfterSeconds } = input;
-  const staleGap = session ? ageSeconds(session.updated_at, now) : 0;
+  const freshestAt = latestTimestamp(session?.updated_at, input.activityUpdatedAt);
+  const staleGap = freshestAt ? ageSeconds(freshestAt, now) : 0;
   return {
+    activity_updated_at: input.activityUpdatedAt ?? "",
     provider: latestRun?.provider ?? session?.provider ?? "",
     provider_session_id: latestRun?.provider_session_id || session?.provider_session_id || "",
     provider_turn_id: latestRun?.provider_turn_id ?? "",
@@ -343,9 +347,23 @@ function supervisorSessionStatus(input: {
   return activeStatus(session.status) ? "active" : "unknown";
 }
 
-function staleSession(session: AgentSession | null, now: Date, staleAfterSeconds: number): boolean {
+function staleSession(
+  session: AgentSession | null,
+  activityUpdatedAt: string | undefined,
+  now: Date,
+  staleAfterSeconds: number
+): boolean {
   if (!session) return false;
-  return stoppedSession(session) || ageSeconds(session.updated_at, now) >= staleAfterSeconds;
+  return stoppedSession(session) || ageSeconds(latestTimestamp(session.updated_at, activityUpdatedAt), now) >= staleAfterSeconds;
+}
+
+function latestTimestamp(...values: Array<string | undefined>): string {
+  return values.reduce((latest, value) => {
+    const candidate = Date.parse(value ?? "");
+    return Number.isFinite(candidate) && candidate > Date.parse(latest || "1970-01-01T00:00:00Z")
+      ? value ?? latest
+      : latest;
+  }, "");
 }
 
 function activeStatus(value: string): boolean {

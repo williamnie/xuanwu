@@ -21,7 +21,6 @@ export function registerFrontendCompatRoutes(router: Router, context: FrontendCo
   registerProjectCompatRoutes(router, handlers);
   registerUtilityRoutes(router, handlers);
   registerUploadRoutes(router, handlers);
-  registerAdvisoryIssueRoutes(router, handlers);
 }
 
 function registerAgentProfileRoutes(router: Router, handlers: FrontendCompatHandlers): void {
@@ -95,12 +94,6 @@ function registerUploadRoutes(router: Router, handlers: FrontendCompatHandlers):
   router.get("/api/session-images", (request) => binaryResponse(handlers.uploads.sessionImage(
     new URL(request.url).searchParams.get("path") ?? ""
   )));
-}
-
-function registerAdvisoryIssueRoutes(router: Router, handlers: FrontendCompatHandlers): void {
-  router.post("/api/issues/:id/verifier-report", (request) => asyncResponse(() => (
-    handlers.issues.verifierReport(issueID(request))
-  ), 201));
 }
 
 async function objectBody(request: Request): Promise<Record<string, unknown>> {

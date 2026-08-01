@@ -30,35 +30,10 @@ export function hasActiveExecutorWork(db: RunnerDatabase): boolean {
 
 export function countActiveExecutorWork(db: RunnerDatabase): number {
   return countRows(db, `
-    select count(distinct i.id) as count
-    from issues i
-    left join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
-    where (i.status=? or ir.id is not null)
-      and not (
-        ir.id is not null and exists (
-          select 1 from issue_events event
-          where event.issue_id=i.id and event.type='issue.provider_deferred'
-            and event.created_at>=ir.started_at
-        )
-      )
-  `, [STATUS_IN_PROGRESS]);
-}
-
-export function hasDeferredProviderRuntime(
-  db: RunnerDatabase,
-  providerID: string,
-  at: Date | string = new Date()
-): boolean {
-  const cleanProviderID = providerID.trim();
-  if (cleanProviderID === "") return false;
-  return countRows(db, `
-    select count(distinct i.id) as count
-    from issues i
-    where i.status in ('todo', 'in_progress')
-      and i.auto_retry_reason=?
-      and i.auto_retry_next_at<>''
-      and i.auto_retry_next_at>?
-  `, [`provider_infra_transient:${cleanProviderID}`, timestamp(at)]) > 0;
+    select count(distinct ir.id) as count
+    from issue_runs ir
+    where ir.ended_at=''
+  `);
 }
 
 export function hasActiveExecutorWorkForProject(
@@ -75,24 +50,22 @@ export function countActiveExecutorWorkForProject(
   at: Date | string = new Date()
 ): number {
   const lock = parsedProjectExecutionLockKey(db, projectID);
-  const activeAt = timestamp(at);
+  void at;
   if (lock.kind === "cwd") {
     return countRows(db, `
       select count(distinct i.id) as count
       from issues i
       join projects p on p.id=i.project_id
       left join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
-      where trim(p.cwd)=? and (i.status=? or ir.id is not null)
-        and not (${expiredProviderDeferralSQL()})
-    `, [lock.value, STATUS_IN_PROGRESS, activeAt]);
+      where trim(p.cwd)=? and (i.status in (?, 'needs_user') or ir.id is not null)
+    `, [lock.value, STATUS_IN_PROGRESS]);
   }
   return countRows(db, `
     select count(distinct i.id) as count
     from issues i
     left join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
-    where i.project_id=? and (i.status=? or ir.id is not null)
-      and not (${expiredProviderDeferralSQL()})
-  `, [lock.value, STATUS_IN_PROGRESS, activeAt]);
+    where i.project_id=? and (i.status in (?, 'needs_user') or ir.id is not null)
+  `, [lock.value, STATUS_IN_PROGRESS]);
 }
 
 export function hasTodoIssue(db: RunnerDatabase, projectID: string): boolean {
@@ -191,14 +164,6 @@ function recordClaimEvent(db: RunnerDatabase, issueID: number, timestamp: string
 function countRows(db: RunnerDatabase, sql: string, params: string[] = []): number {
   return db.sqlite.query<CountRow, string[]>(sql).all(...params)
     .reduce((sum, row) => sum + row.count, 0);
-}
-
-function expiredProviderDeferralSQL(): string {
-  return `ir.id is not null and i.auto_retry_next_at<>'' and i.auto_retry_next_at<=? and exists (
-    select 1 from issue_events event
-    where event.issue_id=i.id and event.type='issue.provider_deferred'
-      and event.created_at>=ir.started_at
-  )`;
 }
 
 function timestamp(value: Date | string): string {

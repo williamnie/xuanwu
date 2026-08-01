@@ -52,13 +52,11 @@ export const INVESTIGATE_WORKFLOW_MANIFEST: WorkflowManifest = {
       "runner-builtin:project_status",
       "runner-builtin:work_read",
       "runner-builtin:run_read",
-      "runner-builtin:evidence_list",
-      "runner-builtin:evidence_read",
       "runner-builtin:issue_read",
       "runner-builtin:issue_execution_status",
       "runner-builtin:session_read_summary"
     ]),
-    stage("reproduce", "Reproduce without mutation", "verifier", [
+    stage("reproduce", "Reproduce without mutation", "executor", [
       "runner-builtin:read",
       "runner-builtin:grep",
       "runner-builtin:find",
@@ -69,7 +67,7 @@ export const INVESTIGATE_WORKFLOW_MANIFEST: WorkflowManifest = {
       "http-readonly:url_fetch",
       "browser-readonly:read_page_context"
     ]),
-    stage("root-cause", "Establish the root cause", "verifier", [
+    stage("root-cause", "Establish the root cause", "executor", [
       "runner-builtin:read",
       "runner-builtin:grep",
       "runner-builtin:find",
@@ -79,8 +77,6 @@ export const INVESTIGATE_WORKFLOW_MANIFEST: WorkflowManifest = {
       "runner-builtin:repo_read_excerpt",
       "runner-builtin:work_read",
       "runner-builtin:run_read",
-      "runner-builtin:evidence_list",
-      "runner-builtin:evidence_read",
       "runner-builtin:issue_read",
       "runner-builtin:issue_execution_status",
       "runner-builtin:session_read_summary",
@@ -90,10 +86,6 @@ export const INVESTIGATE_WORKFLOW_MANIFEST: WorkflowManifest = {
     stage("report", "Produce the handoff report", "reporter", [
       "runner-builtin:work_read",
       "runner-builtin:run_read",
-      "runner-builtin:evidence_list",
-      "runner-builtin:evidence_read",
-      "runner-builtin:handoff_list",
-      "runner-builtin:handoff_read"
     ])
   ]
 };
@@ -233,7 +225,7 @@ export function validateInvestigateHandoffReport(
 function stage(
   id: InvestigateStageID,
   name: string,
-  role: "reporter" | "verifier",
+  role: "reporter" | "executor",
   allowedTools: string[]
 ): WorkflowManifest["stages"][number] {
   return {
@@ -250,7 +242,6 @@ function stage(
     approval: { mode: "none" },
     handoff: {
       mode: "local_changes",
-      required: true,
       project_override_modes: ["local_changes"]
     }
   };

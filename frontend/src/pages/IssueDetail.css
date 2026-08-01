@@ -560,21 +560,21 @@
 .issue-manual-controls > p { color: var(--text-muted); font-size: 0.73rem; line-height: 1.5; margin: 12px 0; }
 .issue-manual-controls > div:last-child { display: flex; flex-wrap: wrap; gap: 8px; }
 
-.verification-review-modal {
+.human-review-response-modal {
   display: flex;
   flex-direction: column;
   gap: 14px;
   max-width: 520px;
 }
 
-.verification-review-modal > p {
+.human-review-response-modal > p {
   color: var(--text-secondary);
   font-size: 0.82rem;
   line-height: 1.5;
   margin: 0;
 }
 
-.verification-review-modal textarea { min-height: 120px; resize: vertical; }
+.human-review-response-modal textarea { min-height: 120px; resize: vertical; }
 
 @media (max-width: 1080px) {
   .issue-detail-overview-grid,

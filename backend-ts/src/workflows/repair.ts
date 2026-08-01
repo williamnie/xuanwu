@@ -106,9 +106,9 @@ export const REPAIR_WORKFLOW_MANIFEST: WorkflowManifest = {
         mode: "before_stage",
         policy_ref: "approval-policy:guardian-recovery-action@1"
       },
-      handoff: { mode: "local_changes", required: true, project_override_modes: ["local_changes"] }
+      handoff: { mode: "local_changes", project_override_modes: ["local_changes"] }
     },
-    readStage("verify", "Verify recovery progress with fresh Evidence", REPAIR_VERIFICATION_POLICY.id, "verifier"),
+    readStage("verify", "Verify recovery progress with fresh Evidence", REPAIR_VERIFICATION_POLICY.id, "executor"),
     {
       id: "handoff-replan",
       name: "Continue the Handoff or emit an audited replan",
@@ -118,10 +118,6 @@ export const REPAIR_WORKFLOW_MANIFEST: WorkflowManifest = {
         allowed_tools: [
           "runner-builtin:work_read",
           "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_list",
-          "runner-builtin:handoff_read"
         ],
         allowed_actions: ["needs_user.escalate"]
       },
@@ -131,7 +127,7 @@ export const REPAIR_WORKFLOW_MANIFEST: WorkflowManifest = {
         mode: "before_stage",
         policy_ref: "approval-policy:repair-handoff-replan@1"
       },
-      handoff: { mode: "local_changes", required: true, project_override_modes: ["local_changes"] }
+      handoff: { mode: "local_changes", project_override_modes: ["local_changes"] }
     }
   ]
 };
@@ -351,7 +347,7 @@ function readStage(
   id: Extract<RepairStageID, "diagnose" | "recovery-budget" | "verify">,
   name: string,
   policyID: string,
-  role: "reporter" | "verifier" = "reporter"
+  role: "reporter" | "executor" = "reporter"
 ): WorkflowManifest["stages"][number] {
   return {
     id,
@@ -362,8 +358,6 @@ function readStage(
       allowed_tools: [
         "runner-builtin:work_read",
         "runner-builtin:run_read",
-        "runner-builtin:evidence_list",
-        "runner-builtin:evidence_read",
         "runner-builtin:issue_read",
         "runner-builtin:issue_execution_status",
         "runner-builtin:session_read_summary"
@@ -373,7 +367,7 @@ function readStage(
     verification_policy_ref: `${policyID}@1`,
     retry: { max_attempts: 1, backoff_seconds: [] },
     approval: { mode: "none" },
-    handoff: { mode: "local_changes", required: true, project_override_modes: ["local_changes"] }
+    handoff: { mode: "local_changes", project_override_modes: ["local_changes"] }
   };
 }
 

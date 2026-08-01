@@ -6,22 +6,14 @@ export const SUPERVISOR_CONTROL_TOOL_NAMES = [
   "work_control",
   "run_list",
   "run_read",
-  "run_control",
-  "evidence_list",
-  "evidence_read",
-  "handoff_list",
-  "handoff_read"
+  "run_control"
 ] as const;
 
 export const SUPERVISOR_CONTROL_READ_TOOL_NAMES = [
   "work_list",
   "work_read",
   "run_list",
-  "run_read",
-  "evidence_list",
-  "evidence_read",
-  "handoff_list",
-  "handoff_read"
+  "run_read"
 ] as const;
 
 export const SUPERVISOR_CONTROL_DANGEROUS_TOOL_NAMES = ["work_control", "run_control"] as const;
@@ -30,11 +22,7 @@ export const SUPERVISOR_CONTROL_READ_ACTION_TYPES = [
   "work.list",
   "work.read",
   "run.list",
-  "run.read",
-  "evidence.list",
-  "evidence.read",
-  "handoff.list",
-  "handoff.read"
+  "run.read"
 ] as const;
 
 export const SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES = [

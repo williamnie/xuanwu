@@ -8,7 +8,6 @@ import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listPiGuardianAlerts } from "../db/repositories/pi.ts";
-import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { projectLoopDecision, runProjectLoopOnce } from "./projectLoop.ts";
 import { isProjectLoopActive, kickAutoRunProjects, setProjectLoopMaxParallelProjects, startProjectLoop } from "./projectLoopManager.ts";
 import type { ExecutorProvider, ExecutorProviderId, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
@@ -149,18 +148,18 @@ class NamedExecutionProvider implements ExecutorProvider {
 }
 
 class TerminalExecutionProvider extends FakeExecutionProvider {
-  constructor(
-    private readonly db: RunnerDatabase,
-    private readonly status: "failed" | "pending_verification"
-  ) {
+  constructor(private readonly status: "failed") {
     super();
   }
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     const result = await super.run(input);
-    updateIssue(this.db, input.issueId, {
-      error: this.status === "failed" ? "executor reported a scoped failure" : "verification evidence required",
-      status: this.status
+    input.onEvent?.({
+      error: "executor reported a scoped failure",
+      provider: this.id,
+      status: this.status,
+      type: "error",
+      session: result.session
     });
     return result;
   }
@@ -378,7 +377,7 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
-  test("an asynchronous terminal event releases the slot and starts the next queued issue", async () => {
+  test("an asynchronous terminal event keeps the project locked until PI decides", async () => {
     const db = await openFixtureDatabase();
     const provider = new DeferredCompletionProvider();
     try {
@@ -391,12 +390,13 @@ describe("Bun project loop claim execution", () => {
       await waitFor(() => !isProjectLoopActive("deferred-demo"));
 
       provider.complete(first);
-      await waitFor(() => provider.inputs.length === 2);
-      await waitFor(() => !isProjectLoopActive("deferred-demo"));
+      await waitFor(() => listIssueRuns(db, first).at(-1)?.ended_at !== "");
+      await Bun.sleep(20);
 
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([first, second]);
-      expect(getIssue(db, first)).toMatchObject({ status: "pending_verification" });
-      expect(getIssue(db, second)).toMatchObject({ status: "in_progress" });
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
+      expect(getIssue(db, first)).toMatchObject({ status: "in_progress" });
+      expect(getIssue(db, second)).toMatchObject({ status: "todo" });
+      expect(listIssueEvents(db, first, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
     } finally {
       db.close();
     }
@@ -483,67 +483,30 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
-  test("persisted provider deferral blocks the same provider but releases global capacity", async () => {
+  test("a provider terminal failure holds only its project while another project can run", async () => {
     const db = await openFixtureDatabase();
     const outage = new TransientInfraExecutionProvider();
     const healthy = new FakeExecutionProvider();
     try {
       insertProject(db, { id: "outage", provider: outage.id, autoRun: 1 });
-      insertProject(db, { id: "same-provider", provider: outage.id, autoRun: 1 });
       insertProject(db, { id: "other-provider", provider: healthy.id, autoRun: 1 });
       const deferred = insertIssue(db, { projectId: "outage", title: "deferred" });
-      const providerBlocked = insertIssue(db, { projectId: "same-provider", title: "same provider" });
       const runnable = insertIssue(db, { projectId: "other-provider", title: "other provider" });
       const runtime = { database: db, providers: { [outage.id]: outage, [healthy.id]: healthy } };
 
       startProjectLoop(runtime, "outage");
-      await waitFor(() => listEventTypes(db, deferred).includes("issue.provider_deferred"));
+      await waitFor(() => listEventTypes(db, deferred).includes("issue.pi_acceptance_requested.v1"));
+      startProjectLoop(runtime, "other-provider");
       await waitFor(() => healthy.inputs.length === 1);
 
       expect(healthy.inputs.map((input) => input.issueId)).toEqual([runnable]);
-      expect(getIssue(db, providerBlocked)).toMatchObject({ status: "todo", attempt_count: 0 });
-      expect(listIssueRuns(db, providerBlocked)).toEqual([]);
-      expect(projectLoopDecision({ ...runtime, projectId: "same-provider" }, false)).toMatchObject({
-        allowed: false,
-        authority: "issue.provider_deferred",
-        provider: "claude",
-        reason: "provider_runtime",
-        scope: "provider:claude"
-      });
+      expect(getIssue(db, deferred)).toMatchObject({ status: "in_progress" });
     } finally {
       db.close();
     }
   });
 
-  test("rekicks an already queued project after global executor capacity is released", async () => {
-    const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "busy", provider: provider.id, autoRun: 1 });
-      insertProject(db, { id: "waiting", provider: provider.id, autoRun: 1 });
-      const busy = insertIssue(db, { projectId: "busy", title: "busy", status: "in_progress" });
-      const waiting = insertIssue(db, { projectId: "waiting", title: "waiting" });
-      insertOpenRun(db, busy);
-
-      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "waiting");
-      await Bun.sleep(20);
-      expect(provider.inputs).toHaveLength(0);
-      expect(isProjectLoopActive("waiting")).toBe(true);
-      expect(getIssue(db, waiting)).toMatchObject({ status: "todo", attempt_count: 0 });
-
-      closeClaimedIssue(db, busy);
-      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "waiting");
-      await waitFor(() => provider.inputs.length === 1);
-      await waitFor(() => !isProjectLoopActive("waiting"));
-
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([waiting]);
-      expect(getIssue(db, waiting)).toMatchObject({ status: "in_progress", attempt_count: 1 });
-    } finally {
-      db.close();
-    }
-  });
-
-  test("provider startup failure does not block an independent ready sibling", async () => {
+  test("provider startup failure stays in the same Issue for PI and blocks its sibling", async () => {
     const db = await openFixtureDatabase();
     const provider = new FailingExecutionProvider();
     try {
@@ -551,45 +514,43 @@ describe("Bun project loop claim execution", () => {
       const first = insertIssue(db, { projectId: "failure-demo", title: "first" });
       const second = insertIssue(db, { projectId: "failure-demo", title: "second" });
 
-      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "failure-demo");
-      await waitFor(() => getIssue(db, first)?.status === "failed");
-      await waitFor(() => !isProjectLoopActive("failure-demo"));
+      await runProjectLoopOnce({ database: db, projectId: "failure-demo", providers: { [provider.id]: provider } });
 
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([first, second]);
-      expect(getIssue(db, first)).toMatchObject({ status: "failed", attempt_count: 1 });
-      expect(getIssue(db, second)).toMatchObject({ status: "failed", attempt_count: 1 });
-      expect(listIssueRuns(db, second)).toHaveLength(1);
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
+      expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+      expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
+      expect(listIssueRuns(db, second)).toHaveLength(0);
     } finally {
       db.close();
     }
   });
 
   for (const status of ["failed"] as const) {
-    test(`executor ${status} does not act as a project-wide fuse for ready siblings`, async () => {
+    test(`executor ${status} waits for PI before the project can run a sibling`, async () => {
       const db = await openFixtureDatabase();
-      const provider = new TerminalExecutionProvider(db, status);
+      const provider = new TerminalExecutionProvider(status);
       try {
         insertProject(db, { id: `terminal-${status}`, provider: provider.id, autoRun: 1 });
         const first = insertIssue(db, { projectId: `terminal-${status}`, title: "first" });
         const second = insertIssue(db, { projectId: `terminal-${status}`, title: "second" });
 
-        startProjectLoop({ database: db, providers: { [provider.id]: provider } }, `terminal-${status}`);
-        await waitFor(() => getIssue(db, first)?.status === status);
-        await waitFor(() => !isProjectLoopActive(`terminal-${status}`));
+        await runProjectLoopOnce({
+          database: db,
+          projectId: `terminal-${status}`,
+          providers: { [provider.id]: provider }
+        });
 
-        kickAutoRunProjects({ database: db, providers: { [provider.id]: provider } });
-        await Bun.sleep(20);
-
-        expect(provider.inputs.map((input) => input.issueId)).toEqual([first, second]);
-        expect(getIssue(db, second)).toMatchObject({ status, attempt_count: 1 });
-        expect(listIssueRuns(db, second)).toHaveLength(1);
+        expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
+        expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+        expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
+        expect(listIssueRuns(db, second)).toHaveLength(0);
       } finally {
         db.close();
       }
     });
   }
 
-  test("auto-run defers provider startup failures without leaving a phantom in-progress Run", async () => {
+  test("auto-run records provider startup failure as terminal Run facts for PI", async () => {
     const db = await openFixtureDatabase();
     const provider = new TransientInfraExecutionProvider();
     try {
@@ -597,27 +558,25 @@ describe("Bun project loop claim execution", () => {
       const first = insertIssue(db, { projectId: "infra-demo", title: "first" });
       const second = insertIssue(db, { projectId: "infra-demo", title: "second" });
 
-      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "infra-demo");
-      await waitFor(() => listEventTypes(db, first).includes("issue.provider_deferred"));
-      await waitFor(() => !isProjectLoopActive("infra-demo"));
+      await runProjectLoopOnce({ database: db, projectId: "infra-demo", providers: { [provider.id]: provider } });
 
       expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
       expect(getIssue(db, first)).toMatchObject({
-        status: "todo",
-        auto_retry_reason: `provider_infra_transient:${provider.id}`,
-        auto_retry_next_at: expect.stringMatching(/Z$/),
-        error: "codex app-server request timed out after 10000ms: initialize"
+        status: "in_progress",
+        auto_retry_reason: "",
+        auto_retry_next_at: "",
+        error: ""
       });
       expect(listIssueRuns(db, first).at(-1)).toMatchObject({
         provider: "claude",
         status: "failed",
         ended_at: expect.stringMatching(/Z$/),
-        exit_reason: "provider_deferred",
+        exit_reason: "provider_reported_failed",
         error: "codex app-server request timed out after 10000ms: initialize"
       });
       expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
       expect(listIssueRuns(db, second)).toEqual([]);
-      expect(listEventTypes(db, first)).toContain("issue.provider_deferred");
+      expect(listEventTypes(db, first)).not.toContain("issue.provider_deferred");
     } finally {
       db.close();
     }
@@ -636,8 +595,8 @@ describe("Bun project loop claim execution", () => {
 
         await runProjectLoopOnce({ database: db, projectId: `terminal-demo-${index}`, providers: { [provider.id]: provider } });
 
-        expect(getIssue(db, issueId)).toMatchObject({ status: "failed", error: message });
-        expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({ status: "failed", exit_reason: "failed" });
+        expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", error: "" });
+        expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({ status: "failed", exit_reason: "provider_reported_failed" });
         expect(listEventTypes(db, issueId)).not.toContain("issue.provider_deferred");
       } finally {
         db.close();
@@ -652,9 +611,7 @@ describe("Bun project loop claim execution", () => {
       insertProject(db, { id: "manual-demo", provider: provider.id });
       const issueId = insertIssue(db, { projectId: "manual-demo", title: "from IM" });
 
-      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "manual-demo", { forceOnce: true });
-      await waitFor(() => provider.inputs.length === 1);
-      await waitFor(() => !isProjectLoopActive("manual-demo"));
+      await runProjectLoopOnce({ database: db, projectId: "manual-demo", providers: { [provider.id]: provider } });
 
       expect(provider.inputs.map((input) => input.issueId)).toEqual([issueId]);
       expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", attempt_count: 1 });
@@ -672,11 +629,12 @@ describe("Bun project loop claim execution", () => {
 
       await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
 
-      expect(getIssue(db, issueId)).toMatchObject({ status: "pending_verification" });
+      expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress" });
       expect(listIssueRuns(db, issueId)).toMatchObject([{
-        status: "done",
+        status: "succeeded",
         ended_at: expect.stringMatching(/Z$/)
       }]);
+      expect(listIssueEvents(db, issueId, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
     } finally {
       db.close();
     }
@@ -692,7 +650,7 @@ describe("Bun project loop claim execution", () => {
       await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
 
       expect(getIssue(db, issueId)).toMatchObject({
-        status: "pending_verification",
+        status: "in_progress",
         error: ""
       });
       expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
@@ -911,7 +869,7 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
-  test("marks provider failures failed and closes the open run with redacted error", async () => {
+  test("keeps provider failures as Run facts until PI decides the Issue", async () => {
     const db = await openFixtureDatabase();
     const provider = new FailingExecutionProvider();
     try {
@@ -923,16 +881,17 @@ describe("Bun project loop claim execution", () => {
       const issue = getIssue(db, issueId);
       const run = listIssueRuns(db, issueId).at(-1);
       expect(issue).toMatchObject({
-        status: "failed",
-        error: "provider failed CODEX_API_KEY=[redacted]"
+        status: "in_progress",
+        error: ""
       });
-      expect(issue?.error).not.toContain("fixture-secret");
       expect(run).toMatchObject({
         status: "failed",
-        exit_reason: "failed",
+        exit_reason: "provider_reported_failed",
         error: "provider failed CODEX_API_KEY=[redacted]"
       });
+      expect(run?.error).not.toContain("fixture-secret");
       expect(run?.ended_at).not.toBe("");
+      expect(listIssueEvents(db, issueId, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
     } finally {
       db.close();
     }

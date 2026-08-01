@@ -12,9 +12,7 @@ import { getIssueAsWork, issueIDToWorkID } from "../domain/work/issueAdapter.ts"
 import type { DependencyRelation } from "../domain/work/contracts.ts";
 import { insertWorkRecord, insertWorkRelationRecord } from "../db/repositories/workLedger.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
-import { deferIssueToPiAfterProviderFailure, PROVIDER_BACKOFF_MAX_MS } from "./providerFailure.ts";
 import { runAutoRunIssueWatchdogOnce } from "./issueWatchdog.ts";
-import { projectLoopDecision, runProjectLoopOnce } from "./projectLoop.ts";
 import { isProjectLoopActive, setProjectLoopMaxParallelProjects } from "./projectLoopManager.ts";
 
 const NOW = new Date("2026-07-20T00:00:00.000Z");
@@ -49,7 +47,7 @@ describe("issue watchdog queue readiness", () => {
     const provider = new FixtureProvider();
     try {
       insertProject(db, "demo", provider.id);
-      const blocker = insertIssue(db, "blocker", "pending_verification");
+      const blocker = insertIssue(db, "blocker", "in_progress");
       const waiting = insertIssue(db, "waiting", "todo");
       addDependency(db, waiting, blocker);
 
@@ -117,40 +115,6 @@ describe("issue watchdog queue readiness", () => {
       const reactivated = await watchdog(db, provider, new Date(NOW.getTime() + 6 * 60_000), 60_000);
       expect(reactivated.kicked).toBe(1);
       await waitFor(() => provider.inputs.length === 4 && !isProjectLoopActive("demo"));
-    } finally {
-      db.close();
-    }
-  });
-
-  test("uses capped provider backoff and resumes queue readiness when cooldown expires", async () => {
-    const db = await fixtureDatabase();
-    const provider = new FixtureProvider();
-    try {
-      insertProject(db, "demo", provider.id);
-      const deferred = insertIssue(db, "provider outage", "in_progress");
-      insertOpenRun(db, deferred, provider.id, "2026-07-19T23:59:00.000Z");
-      const queued = insertIssue(db, "queued after outage", "todo");
-      const error = Object.assign(new Error("network error"), { retry_after: 120 });
-
-      deferIssueToPiAfterProviderFailure(db, deferred, error, provider.id, NOW);
-      expect(getIssue(db, deferred)?.auto_retry_next_at).toBe("2026-07-20T00:02:00.000Z");
-      for (let attempt = 2; attempt <= 6; attempt += 1) {
-        deferIssueToPiAfterProviderFailure(db, deferred, new Error("network error"), provider.id, NOW);
-      }
-
-      const latest = latestPayload(db, deferred, "issue.provider_deferred");
-      expect(latest).toMatchObject({ backoff_attempt: 6, backoff_ms: PROVIDER_BACKOFF_MAX_MS });
-      expect(getIssue(db, deferred)?.auto_retry_next_at).toBe("2026-07-20T00:15:00.000Z");
-      expect(projectLoopDecision(loopInput(db, provider, new Date("2026-07-20T00:14:59.999Z")), false)).toMatchObject({
-        allowed: false,
-        authority: "issue.provider_deferred",
-        reason: "provider_runtime"
-      });
-
-      const resumed = await runProjectLoopOnce(loopInput(db, provider, new Date("2026-07-20T00:15:00.000Z")));
-      expect(resumed).toMatchObject({ claimed: true, issue: { id: deferred } });
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([deferred]);
-      expect(getIssue(db, queued)).toMatchObject({ status: "todo", attempt_count: 0 });
     } finally {
       db.close();
     }

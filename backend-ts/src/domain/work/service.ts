@@ -16,7 +16,6 @@ import {
 import {
   evaluateWorkTransition,
   validateWorkLedger,
-  type WorkAcceptanceEvidence,
   type WorkLedgerEntry,
   type WorkRelation,
   type WorkTransitionAudit,
@@ -70,14 +69,9 @@ export type RemoveWorkRelationCommand = {
   work_id: WorkLedgerEntry["id"];
 };
 
-export type TransitionWorkCommand = Omit<WorkTransitionCommand, "acceptance">;
+export type TransitionWorkCommand = WorkTransitionCommand;
 
 export type ClaimWorkCommand = Omit<TransitionWorkCommand, "to">;
-
-export type WorkAcceptanceProjectionReader = (
-  db: RunnerDatabase,
-  work: WorkLedgerEntry
-) => WorkAcceptanceEvidence | undefined;
 
 export class WorkNotFoundError extends Error {
   constructor(id: string) {
@@ -327,10 +321,9 @@ export function removeWorkRelation(
 
 export function transitionWork(
   db: RunnerDatabase,
-  command: TransitionWorkCommand,
-  readAcceptance?: WorkAcceptanceProjectionReader
+  command: TransitionWorkCommand
 ): WorkMutationResult {
-  return transitionWithOperation(db, command, "transition", readAcceptance);
+  return transitionWithOperation(db, command, "transition");
 }
 
 export function claimWork(db: RunnerDatabase, command: ClaimWorkCommand): WorkMutationResult {
@@ -340,8 +333,7 @@ export function claimWork(db: RunnerDatabase, command: ClaimWorkCommand): WorkMu
 function transitionWithOperation(
   db: RunnerDatabase,
   command: TransitionWorkCommand,
-  operation: "claim" | "transition",
-  readAcceptance?: WorkAcceptanceProjectionReader
+  operation: "claim" | "transition"
 ): WorkMutationResult {
   assertWritableAudit(command.audit);
   assertExpectedRevision(command.expected_revision);
@@ -358,16 +350,7 @@ function transitionWithOperation(
     if (replay) return replay;
     const current = mustGetWork(db, command.work_id);
     const snapshot = readWorkLedgerSnapshot(db, current.owner.project_id);
-    const evaluatedCommand: WorkTransitionCommand = {
-      audit: command.audit,
-      expected_revision: command.expected_revision,
-      to: command.to,
-      work_id: command.work_id,
-      ...(command.to === "done" && readAcceptance
-        ? { acceptance: readAcceptance(db, current) }
-        : {})
-    };
-    const decision = evaluateWorkTransition(snapshot, evaluatedCommand);
+    const decision = evaluateWorkTransition(snapshot, command);
     if (!decision.allowed) {
       return rejectMutation(
         db,

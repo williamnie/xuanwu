@@ -7,14 +7,12 @@ import {
   FileDiff,
   GitBranch,
   GitCommitHorizontal,
-  MessageSquareWarning,
   PackageCheck,
   RefreshCw,
   Rocket,
   ShieldAlert,
   Tag,
   Undo2,
-  X,
 } from 'lucide-react';
 import { handoffsApi } from '../api/handoffs.js';
 import { eventsApi } from '../api/events.js';
@@ -25,8 +23,6 @@ import {
   displayRef,
   handoffCopyText,
   handoffHref,
-  handoffReviewActions,
-  handoffReviewPayload,
   handoffRiskPresentation,
   safeExternalUrl,
 } from './handoffPageModel.js';
@@ -40,7 +36,6 @@ export default function Handoffs({ selectedHandoffId = '' }) {
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState(selectedHandoffId);
   const [detail, setDetail] = useState(null);
-  const [compatibility, setCompatibility] = useState(null);
   const [filters, setFilters] = useState({ deliveryMode: '', projectId: '', status: '' });
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -64,7 +59,6 @@ export default function Handoffs({ selectedHandoffId = '' }) {
         if (!active) return;
         const nextItems = response?.items || [];
         setItems(nextItems);
-        setCompatibility(response?.compatibility || null);
         setSelectedId(current => current || nextItems[0]?.id || '');
       })
       .catch((loadError) => {
@@ -132,7 +126,7 @@ export default function Handoffs({ selectedHandoffId = '' }) {
         <span />
         <strong>Facts stay with Git, Evidence, review and delivery audit.</strong>
         <p>当前列表读取 append-only Handoff stream；刷新只重读本地 outbox/交付事实，不触发外部写。</p>
-        <code>{compatibility?.read_authority || 'issue_events:handoff.*.v1'}</code>
+        <code>issue_events:handoff.*.v1</code>
       </div>
 
       <div className="handoff-filters">
@@ -197,22 +191,10 @@ export default function Handoffs({ selectedHandoffId = '' }) {
 function HandoffDetail({ detail, onRefresh }) {
   const handoff = detail.handoff;
   const delivery = handoff.delivery || {};
-  const review = detail.review_summary || handoff.review || {};
-  const reviewActions = handoffReviewActions(detail);
   const riskPresentation = handoffRiskPresentation(handoff.risks);
   const status = detail.delivery_status?.overall || handoff.status;
   const externalUrl = safeExternalUrl(detail.notification_summary?.external_url || delivery.url);
-  const [reviewAction, setReviewAction] = useState('');
-  const [reviewComment, setReviewComment] = useState('');
-  const [reviewError, setReviewError] = useState('');
-  const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
-  useEffect(() => {
-    setReviewAction('');
-    setReviewComment('');
-    setReviewError('');
-    setReviewSubmitting(false);
-  }, [handoff.id]);
 
   const copy = async (value, label) => {
     try {
@@ -223,23 +205,7 @@ function HandoffDetail({ detail, onRefresh }) {
     }
   };
 
-  const submitReview = async () => {
-    setReviewSubmitting(true);
-    setReviewError('');
-    try {
-      await handoffsApi.reviewHandoff(handoff.id, handoffReviewPayload(detail, reviewAction, reviewComment));
-      message.success(reviewAction === 'accept' ? 'Handoff 已接受' : '修改请求已记录');
-      setReviewAction('');
-      setReviewComment('');
-      onRefresh();
-    } catch (actionError) {
-      const text = actionError.message || '提交 Handoff review 失败';
-      setReviewError(text);
-      message.error(text);
-    } finally {
-      setReviewSubmitting(false);
-    }
-  };
+
 
   return (
     <article className="handoff-detail-card">
@@ -264,7 +230,7 @@ function HandoffDetail({ detail, onRefresh }) {
         <div><CheckCircle2 size={18} /><strong>Delivery notice</strong></div>
         <p>{detail.notification_summary?.summary}</p>
         <span>Next step</span>
-        <strong>{review.next_step || detail.notification_summary?.next_step}</strong>
+        <strong>{detail.notification_summary?.next_step}</strong>
       </section>
 
       <section className="handoff-section">
@@ -315,34 +281,6 @@ function HandoffDetail({ detail, onRefresh }) {
       </div>
 
       <section className="handoff-section">
-        <SectionTitle title="Review" subtitle={review.state || 'not requested'} />
-        <div className="handoff-review-panel">
-          <div>
-            <StatusBadge status={review.state} />
-            <span>{review.reviewer_ref ? `Reviewer ${displayRef(review.reviewer_ref, 24, 8)}` : 'No reviewer decision recorded.'}</span>
-            {review.decided_at ? <time>{formatTime(review.decided_at)}</time> : null}
-          </div>
-          {reviewActions.length > 0 ? (
-            <div className="handoff-review-actions">
-              {reviewActions.includes('accept') ? <button className="accept" onClick={() => setReviewAction('accept')} type="button"><CheckCircle2 size={14} /> Accept</button> : null}
-              {reviewActions.includes('request_changes') ? <button onClick={() => setReviewAction('request_changes')} type="button"><MessageSquareWarning size={14} /> Request changes</button> : null}
-            </div>
-          ) : <span className="handoff-muted">No review action is available for this delivery revision.</span>}
-        </div>
-        {(review.history || []).length > 0 ? (
-          <div className="handoff-review-history">
-            {review.history.slice(0, 5).map(item => (
-              <div key={item.audit_event_id}>
-                <StatusBadge status={item.status} />
-                <span>{item.comment || item.action.replaceAll('_', ' ')}</span>
-                <time>{formatTime(item.occurred_at)}</time>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </section>
-
-      <section className="handoff-section">
         <SectionTitle title="Risk" subtitle={`highest ${riskPresentation.highest}`} />
         {riskPresentation.items.length > 0 ? (
           <div className="handoff-risk-list">
@@ -369,17 +307,6 @@ function HandoffDetail({ detail, onRefresh }) {
         </div>
       </section>
 
-      {reviewAction ? (
-        <ReviewDialog
-          action={reviewAction}
-          comment={reviewComment}
-          error={reviewError}
-          onCancel={() => { setReviewAction(''); setReviewComment(''); setReviewError(''); }}
-          onChange={setReviewComment}
-          onSubmit={submitReview}
-          submitting={reviewSubmitting}
-        />
-      ) : null}
     </article>
   );
 }
@@ -418,42 +345,6 @@ function DiffSummaryPanel({ summary }) {
 
 function DiffStat({ label, tone = '', value }) {
   return <div className={tone}><span>{label}</span><strong>{value ?? 0}</strong></div>;
-}
-
-function ReviewDialog({ action, comment, error, onCancel, onChange, onSubmit, submitting }) {
-  const requestingChanges = action === 'request_changes';
-  return (
-    <div className="modal-overlay handoff-review-overlay">
-      <form
-        aria-labelledby="handoff-review-dialog-title"
-        aria-modal="true"
-        className="handoff-review-dialog"
-        onSubmit={(event) => { event.preventDefault(); onSubmit(); }}
-        role="dialog"
-      >
-        <header>
-          <div><MessageSquareWarning size={17} /><h3 id="handoff-review-dialog-title">{requestingChanges ? 'Request changes' : 'Accept Handoff'}</h3></div>
-          <button aria-label="Close review dialog" disabled={submitting} onClick={onCancel} type="button"><X size={16} /></button>
-        </header>
-        <p>{requestingChanges ? '说明必须修改的内容；决定会写入 append-only review audit。' : '确认当前 Evidence、风险与交付引用可以接受。'}</p>
-        <textarea
-          autoFocus
-          disabled={submitting}
-          onChange={event => onChange(event.target.value)}
-          placeholder={requestingChanges ? '需要修改…' : '可选 review 说明…'}
-          rows={5}
-          value={comment}
-        />
-        {error ? <div className="handoff-review-error" role="alert">{error}</div> : null}
-        <footer>
-          <button disabled={submitting} onClick={onCancel} type="button">Cancel</button>
-          <button className={requestingChanges ? 'changes' : 'accept'} disabled={submitting || (requestingChanges && !comment.trim())} type="submit">
-            {submitting ? 'Submitting…' : requestingChanges ? 'Submit request' : 'Accept Handoff'}
-          </button>
-        </footer>
-      </form>
-    </div>
-  );
 }
 
 function HandoffStat({ label, tone = '', value }) {

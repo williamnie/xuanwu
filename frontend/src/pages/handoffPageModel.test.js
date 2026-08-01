@@ -6,8 +6,6 @@ import {
   deliveryTone,
   handoffCopyText,
   handoffHref,
-  handoffReviewActions,
-  handoffReviewPayload,
   handoffRouteFromHash,
   handoffRiskPresentation,
   safeExternalUrl,
@@ -56,45 +54,6 @@ test('open actions only accept HTTP(S) URLs and delivery tones remain determinis
   assert.equal(deliveryTone('pending'), 'blue');
 });
 
-test('review actions follow the current delivery/review state and build audited optimistic writes', () => {
-  const pending = {
-    handoff: {
-      id: handoffId,
-      revision: 7,
-      review: { state: 'pending' },
-      status: 'ready',
-    },
-    review_summary: { available_actions: ['accept', 'request_changes'], state: 'pending' },
-  };
-  assert.deepEqual(handoffReviewActions(pending), ['accept', 'request_changes']);
-  assert.deepEqual(handoffReviewActions({
-    ...pending,
-    review_summary: { available_actions: [], state: 'changes_requested' },
-  }), []);
-  assert.deepEqual(handoffReviewActions({
-    ...pending,
-    handoff: { ...pending.handoff, status: 'delivered' },
-  }), []);
-
-  assert.deepEqual(handoffReviewPayload(pending, 'request_changes', '  Add rollback smoke  ', {
-    actorRef: 'user:reviewer',
-    nonce: 'fixture-1',
-    occurredAt: '2026-07-17T08:30:00.000Z',
-  }), {
-    action: 'request_changes',
-    audit: {
-      actor: { id: 'user:reviewer', kind: 'user' },
-      correlation_id: `handoff-review:${handoffId}`,
-      event_id: 'handoff-review-ui:fixture-1',
-      occurred_at: '2026-07-17T08:30:00.000Z',
-      reason: 'Add rollback smoke',
-    },
-    comment: 'Add rollback smoke',
-    expected_revision: 7,
-  });
-  assert.throws(() => handoffReviewPayload(pending, 'request_changes', ''), /requires a comment/);
-});
-
 test('risk presentation orders every delivery state by severity without mutating API data', () => {
   const risks = [
     { id: 'low', severity: 'low' },
@@ -120,7 +79,6 @@ test('Handoff stays available for audit while normal delivery lives inside Work 
   assert.match(sidebar, /aria-label=\{navLabel\(item\)\}/);
   assert.match(client, /request\(`\/api\/handoffs\?/);
   assert.match(client, /request\(`\/api\/handoffs\/\$\{encodeURIComponent\(id\)\}`/);
-  assert.match(client, /\/api\/handoffs\/\$\{encodeURIComponent\(id\)\}\/reviews/);
   assert.match(workDetail, /<WorkDeliveryView/);
   assert.match(workDetail, /\{t\('work\.delivery'\)\} \{overview\.handoffs\.length/);
   assert.doesNotMatch(workDetail, /navigateTo\('handoffs'/);
@@ -128,6 +86,4 @@ test('Handoff stays available for audit while normal delivery lives inside Work 
   assert.match(page, /打开所属 Issue 交付/);
   assert.match(page, /title="Diff summary"/);
   assert.match(page, /title="Rollback"/);
-  assert.match(page, /Request changes/);
-  assert.match(page, /aria-modal="true"/);
 });

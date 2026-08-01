@@ -9,11 +9,6 @@ import { cleanString, getByID, now, requiredString } from "./common.ts";
 
 export type ProjectPiRetryPolicy = { enabled: boolean; max_attempts: number; backoff_minutes: number[] };
 export type ProjectPiConcurrencyPolicy = { max_parallel_issues: number; max_parallel_pi_cycles: number };
-export type ProjectPiVerificationPolicy = {
-  evidence_required: boolean;
-  on_timeout: "escalate" | "request_verifier";
-  pending_timeout_minutes: number;
-};
 export type ProjectPiPolicy = {
   project_id: string;
   allowed_actions_json: string;
@@ -29,7 +24,6 @@ export type ProjectPiPolicy = {
   quiet_hours_json: string;
   retry_policy_json: string;
   concurrency_policy_json: string;
-  verification_policy_json: string;
   created_at: string;
   updated_at: string;
 };
@@ -38,16 +32,14 @@ export type ProjectPiPolicyInput = Partial<Record<keyof ProjectPiPolicy, unknown
 // project_pi_settings 的记录存在即表示 PI 全自动接管；本表只承载安全与资源 policy。
 const TABLE = "project_pi_policies";
 const COLUMNS = `project_id, timezone, working_hours_json, quiet_hours_json,
-  retry_policy_json, concurrency_policy_json, verification_policy_json, allowed_actions_json,
+  retry_policy_json, concurrency_policy_json, allowed_actions_json,
   allowed_mcp_capabilities_json, allowed_skill_intents_json, allowed_supervisor_actions_json,
   supervisor_cooldown_seconds, supervisor_max_recoveries_per_issue,
   supervisor_max_recoveries_per_project_per_hour, supervisor_rate_limit_wait_policy,
   created_at, updated_at`;
 const WAIT_POLICIES = new Set<PiSupervisorRateLimitWaitPolicy>(PI_SUPERVISOR_RATE_LIMIT_WAIT_POLICIES);
-const TIMEOUT_ACTIONS = new Set(["escalate", "request_verifier"]);
 const DEFAULT_RETRY: ProjectPiRetryPolicy = { enabled: false, max_attempts: 0, backoff_minutes: [] };
 const DEFAULT_CONCURRENCY: ProjectPiConcurrencyPolicy = { max_parallel_issues: 1, max_parallel_pi_cycles: 1 };
-const DEFAULT_VERIFICATION: ProjectPiVerificationPolicy = { pending_timeout_minutes: 24 * 60, on_timeout: "escalate", evidence_required: true };
 const DEFAULT_SUPERVISOR_ACTIONS = [
   "session.resume_followup",
   "issue.retry_after",
@@ -71,11 +63,10 @@ export function upsertProjectPiPolicy(db: RunnerDatabase, input: ProjectPiPolicy
   const current = readProjectPiPolicy(db, projectID);
   const record = normalizePolicy({ ...current, ...definedValues(input), project_id: projectID });
   const timestamp = now();
-  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(project_id) do update set timezone=excluded.timezone, working_hours_json=excluded.working_hours_json,
       quiet_hours_json=excluded.quiet_hours_json, retry_policy_json=excluded.retry_policy_json,
       concurrency_policy_json=excluded.concurrency_policy_json,
-      verification_policy_json=excluded.verification_policy_json,
       allowed_actions_json=excluded.allowed_actions_json,
       allowed_mcp_capabilities_json=excluded.allowed_mcp_capabilities_json,
       allowed_skill_intents_json=excluded.allowed_skill_intents_json,
@@ -87,7 +78,7 @@ export function upsertProjectPiPolicy(db: RunnerDatabase, input: ProjectPiPolicy
       updated_at=excluded.updated_at`,
     [record.project_id, record.timezone, record.working_hours_json,
       record.quiet_hours_json, record.retry_policy_json, record.concurrency_policy_json,
-      record.verification_policy_json, record.allowed_actions_json, record.allowed_mcp_capabilities_json,
+      record.allowed_actions_json, record.allowed_mcp_capabilities_json,
       record.allowed_skill_intents_json, record.allowed_supervisor_actions_json,
       record.supervisor_cooldown_seconds, record.supervisor_max_recoveries_per_issue,
       record.supervisor_max_recoveries_per_project_per_hour, record.supervisor_rate_limit_wait_policy,
@@ -113,7 +104,6 @@ function defaultProjectPiPolicy(projectID: string): ProjectPiPolicy {
     quiet_hours_json: "{}",
     retry_policy_json: JSON.stringify(DEFAULT_RETRY),
     concurrency_policy_json: JSON.stringify(DEFAULT_CONCURRENCY),
-    verification_policy_json: JSON.stringify(DEFAULT_VERIFICATION),
     created_at: "",
     updated_at: ""
   };
@@ -135,7 +125,6 @@ function normalizePolicy(input: ProjectPiPolicyInput): ProjectPiPolicy {
     quiet_hours_json: jsonObjectText(input.quiet_hours_json, "{}"),
     retry_policy_json: JSON.stringify(retryPolicy(input.retry_policy_json)),
     concurrency_policy_json: JSON.stringify(concurrencyPolicy(input.concurrency_policy_json)),
-    verification_policy_json: JSON.stringify(verificationPolicy(input.verification_policy_json)),
     created_at: "",
     updated_at: ""
   };
@@ -157,7 +146,6 @@ function mapProjectPiPolicy(row: Record<string, unknown>): ProjectPiPolicy {
     quiet_hours_json: jsonObjectText(row.quiet_hours_json, "{}"),
     retry_policy_json: JSON.stringify(retryPolicy(row.retry_policy_json)),
     concurrency_policy_json: JSON.stringify(concurrencyPolicy(row.concurrency_policy_json)),
-    verification_policy_json: JSON.stringify(verificationPolicy(row.verification_policy_json)),
     created_at: requiredString(row.created_at, "project_pi_policies.created_at"),
     updated_at: requiredString(row.updated_at, "project_pi_policies.updated_at")
   };
@@ -177,15 +165,6 @@ function concurrencyPolicy(value: unknown): ProjectPiConcurrencyPolicy {
   return {
     max_parallel_issues: positiveInteger(input.max_parallel_issues, 1),
     max_parallel_pi_cycles: positiveInteger(input.max_parallel_pi_cycles, 1)
-  };
-}
-
-function verificationPolicy(value: unknown): ProjectPiVerificationPolicy {
-  const input = objectValue(value);
-  return {
-    pending_timeout_minutes: positiveInteger(input.pending_timeout_minutes, DEFAULT_VERIFICATION.pending_timeout_minutes),
-    on_timeout: timeoutAction(input.on_timeout),
-    evidence_required: input.evidence_required !== false
   };
 }
 
@@ -259,11 +238,6 @@ function positiveInteger(value: unknown, fallback: number): number {
 
 function positiveIntegerArray(value: unknown): number[] {
   return Array.isArray(value) ? value.filter((item) => positiveInteger(item, 0) > 0) as number[] : [];
-}
-
-function timeoutAction(value: unknown): ProjectPiVerificationPolicy["on_timeout"] {
-  const text = cleanString(value);
-  return TIMEOUT_ACTIONS.has(text) ? text as ProjectPiVerificationPolicy["on_timeout"] : DEFAULT_VERIFICATION.on_timeout;
 }
 
 function definedValues(input: ProjectPiPolicyInput): ProjectPiPolicyInput {

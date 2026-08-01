@@ -83,6 +83,7 @@ function buildIssueSupervisorRecoveryContextFromEvents(
   const latestRun = runs.at(-1) ?? null;
   const session = resolveSession(db, issue, latestRun);
   const currentRunEvents = eventsForLatestRun(events, latestRun?.started_at ?? "");
+  const activityUpdatedAt = currentRunEvents.at(-1)?.created_at;
   const recentEvents = events.slice(-recentLimit(options)).map(summarizeIssueEvent);
   const providerError = latestProviderError(currentRunEvents, now);
   const policy = readProjectPiPolicy(db, issue.project_id);
@@ -119,6 +120,7 @@ function buildIssueSupervisorRecoveryContextFromEvents(
   }).diagnostics;
   return {
     candidates: candidates({
+      activityUpdatedAt,
       events: currentRunEvents,
       history,
       legacyInvalidFallbackDiagnosis: legacyInvalidFallbackDiagnosis(issue.error),
@@ -142,7 +144,13 @@ function buildIssueSupervisorRecoveryContextFromEvents(
     provider_error: providerError,
     recent_events: recentEvents,
     recovery_history: history,
-    session: sessionContext({ session, latestRun, now, staleAfterSeconds: options.staleAfterSeconds ?? DEFAULT_STALE_SECONDS }),
+    session: sessionContext({
+      activityUpdatedAt,
+      session,
+      latestRun,
+      now,
+      staleAfterSeconds: options.staleAfterSeconds ?? DEFAULT_STALE_SECONDS
+    }),
     state_diagnostics: stateDiagnostics,
     workspace_snapshot: workspaceSnapshot(project.cwd, recentEvents, options.includeWorkspaceGit !== false)
   };

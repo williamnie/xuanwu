@@ -10,9 +10,9 @@ import type { PiGatePolicy } from "./actionGate.ts";
 export const PI_ACCEPTANCE_DECISIONS = [
   "accept",
   "continue_same_session",
-  "code_review",
-  "independent_acceptance",
-  "needs_user"
+  "retry",
+  "needs_user",
+  "failed"
 ] as const;
 
 export const PI_ACCEPTANCE_DECISION_SCHEMA = Type.Object({
@@ -106,7 +106,7 @@ function acceptancePrompt(card: CompletionCard, language: string): string {
     "Required fields: decision, confidence, rationale, evidence_refs, unmet_requirements. follow_up_prompt is optional.",
     `decision MUST be exactly one string literal from: ${PI_ACCEPTANCE_DECISIONS.join(", ")}.`,
     "confidence MUST be exactly one string literal: low, medium, or high. Never output a number, probability, percentage, or any other confidence form.",
-    "The exact JSON shape is: {\"decision\":\"accept|continue_same_session|code_review|independent_acceptance|needs_user\",\"confidence\":\"low|medium|high\",\"rationale\":\"...\",\"evidence_refs\":[\"...\"],\"unmet_requirements\":[\"...\"],\"follow_up_prompt\":\"optional...\"}.",
+    "The exact JSON shape is: {\"decision\":\"accept|continue_same_session|retry|needs_user|failed\",\"confidence\":\"low|medium|high\",\"rationale\":\"...\",\"evidence_refs\":[\"...\"],\"unmet_requirements\":[\"...\"],\"follow_up_prompt\":\"optional...\"}.",
     "Judge whether the chronological facts satisfy the authoritative Issue goal and acceptance criteria.",
     "Commands are observations, not pre-classified proof. Read their command, exit_code, order, output excerpt, changed files, commits, final message, and warnings together.",
     "The session field is a live bounded read of the Provider Session. If latest_turn_matches_run is false, treat latest_turn_items and session.current_git as later facts that supersede a stale canonical Run card when they clearly belong to this Issue.",
@@ -115,11 +115,12 @@ function acceptancePrompt(card: CompletionCard, language: string): string {
     "Do not require test/lint/build for every task. Require evidence appropriate to this Issue's actual requested outcome and risk.",
     "Choose accept when the bounded facts are sufficient. Every normal completed Work must receive this PI judgment; do not defer merely because deterministic code did not label a command.",
     "Choose continue_same_session when the same executor should fix a concrete defect or produce missing proof; include an actionable follow_up_prompt.",
-    "Choose code_review only when reading the actual diff is necessary before acceptance. You may use the bounded read-only repository tools first.",
-    "Choose independent_acceptance only when real behavior must be checked independently (for example browser, API, deployment, hardware, or external integration). Include the exact check in follow_up_prompt.",
+    "Use the available read-only repository and Session tools before deciding; code review and independent checks are PI work, not separate lifecycle states.",
+    "Choose retry only when the existing Provider Session cannot responsibly continue and a fresh Session is required; include an actionable follow_up_prompt.",
     "Choose needs_user only for a concrete product, scope, authorization, destructive-risk, visual, release, cost, or external-state decision that the system cannot responsibly make.",
+    "Choose failed only when the Issue is conclusively unrecoverable within its authorized scope. A Provider error, disconnect, missing command, or exhausted automatic-recovery counter is not by itself grounds for failed.",
     "Never create another Issue, never ask for a generic verifier, and never retry the same unchanged diagnosis.",
-    "evidence_refs must reference concrete card facts such as command:<id>, git:<revision>, handoff:<id>, run:<id>, or final_message.",
+    "evidence_refs must reference concrete card facts such as command:<id>, git:<revision>, run:<id>, session:<turn-id>, or final_message.",
     "Completion card JSON:",
     JSON.stringify(card, null, 2)
   ].join("\n");

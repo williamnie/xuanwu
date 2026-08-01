@@ -39,10 +39,9 @@ const WATCH_COLUMNS = `id, idempotency_key, project_id, origin_conversation_id,
 const ITEM_COLUMNS = `watch_id, issue_id, project_id, initial_status, last_status,
   terminal_at, created_at, updated_at`;
 export const ISSUE_COMPLETION_TERMINAL_STATUSES = new Set([
-  "done", "failed", "cancelled", "pending_verification"
+  "done", "failed", "cancelled"
 ]);
 const DEFAULT_CONDITION = JSON.stringify({
-  pending_verification_satisfies: true,
   terminal_statuses: [...ISSUE_COMPLETION_TERMINAL_STATUSES],
   type: "all_terminal"
 });
@@ -289,9 +288,7 @@ function conditionText(value: unknown): string {
 
 function terminalStatus(status: string, condition: unknown): boolean {
   const value = cleanString(status);
-  if (value === "pending_verification" && conditionObject(condition).pending_verification_satisfies === false) {
-    return false;
-  }
+  void condition;
   return ISSUE_COMPLETION_TERMINAL_STATUSES.has(value);
 }
 

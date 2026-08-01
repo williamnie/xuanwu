@@ -13,7 +13,7 @@ export type IssueDTO = {
   project_id: string;
   status: string;
   title: string;
-  verification?: {
+  decision?: {
     owner?: string;
     request?: { id?: string; revision?: number; status?: string } | null;
   };

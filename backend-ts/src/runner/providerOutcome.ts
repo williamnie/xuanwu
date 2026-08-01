@@ -2,13 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import type { EventBus } from "../events/bus.ts";
-import {
-  applyIssueStateRepair,
-  diagnoseIssueState,
-  recommendedRepairPayload
-} from "../pi/issueStateManager.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
 import {
   recordCompletionGitObservation,
@@ -28,6 +22,7 @@ export type ReconcileProviderOutcomeInput = {
   now?: Date;
   providerID: ExecutorProviderId;
   providerRunID?: string;
+  reportedOutcome?: ProviderReportedOutcome;
 };
 
 /**
@@ -40,28 +35,10 @@ export async function reconcileProviderOutcome(
 ): Promise<Issue | null> {
   const current = getIssue(input.database, input.issueID);
   if (!current || current.status !== "in_progress") return current;
-  const reported = providerReportedOutcome(input.database, current.id, input.issueRunID);
+  const reported = input.reportedOutcome ?? providerReportedOutcome(input.database, current.id, input.issueRunID);
   const now = input.now ?? new Date();
-  if (reported.outcome !== "unknown") {
-    closeReportedTerminalRun(input.database, input.issueRunID, reported, now.toISOString());
-    updateIssue(input.database, current.id, { error: "", status: "pending_verification" });
-  } else {
-    const diagnostic = diagnoseIssueState(input.database, {
-      includeDoneIssues: true,
-      issueIDs: [current.id],
-      now
-    }).diagnostics.find((item) => item.code === "in_progress_session_ended");
-    const repair = diagnostic?.recommended_actions.find((action) =>
-      action.operation === "patch_status" && action.patch?.status === "pending_verification"
-    );
-    if (!diagnostic || !repair) return current;
-    applyIssueStateRepair(input.database, recommendedRepairPayload(input.database, current.id, {
-      diagnosisCode: diagnostic.code,
-      includeDoneIssues: true,
-      now,
-      operation: repair.operation
-    }));
-  }
+  if (reported.outcome === "unknown") return current;
+  closeReportedTerminalRun(input.database, input.issueRunID, reported, now.toISOString());
   const terminalRun = getIssue(input.database, current.id)?.latest_run;
   const project = getProject(input.database, current.project_id);
   if (terminalRun?.id === input.issueRunID && project) {
@@ -76,13 +53,11 @@ export async function reconcileProviderOutcome(
   // bounded issue-scoped completion card is built after all terminal facts are
   // durable, then PI performs the semantic acceptance. Do not let the legacy
   // regex-based Evidence gate or Verifier carrier decide completion.
-  recordIssueEvent(input.database, current.id, "issue.pi_acceptance_requested.v1", {
-    command_observation_contract: TERMINAL_COMMAND_OBSERVATION_CONTRACT,
+  recordPiDecisionRequest(input.database, current.id, {
     issue_run_id: input.issueRunID,
     provider_run_id: input.providerRunID ?? "",
     provider_outcome: reported.outcome,
-    provider_reason: reported.reason,
-    reason: "provider reached terminal state; issue-scoped PI semantic acceptance required"
+    provider_reason: reported.reason
   });
   const finalized = getIssue(input.database, current.id);
   if (finalized) publishIssueStatus(input, finalized);
@@ -95,13 +70,35 @@ function closeReportedTerminalRun(
   reported: ProviderReportedOutcome,
   endedAt: string
 ): void {
-  const status = reported.outcome === "completed" ? "done" : "failed";
+  const status = reported.outcome === "completed" ? "succeeded" : "failed";
   db.sqlite.run(
     `update issue_runs set status=?, ended_at=case when ended_at='' then ? else ended_at end,
       exit_reason=case when exit_reason='' then ? else exit_reason end,
       error=case when error='' then ? else error end where id=?`,
     [status, endedAt, `provider_reported_${reported.outcome}`, reported.reason, issueRunID]
   );
+}
+
+function recordPiDecisionRequest(
+  db: RunnerDatabase,
+  issueID: number,
+  payload: {
+    issue_run_id: string;
+    provider_outcome: ProviderReportedOutcome["outcome"];
+    provider_reason: string;
+    provider_run_id: string;
+  }
+): void {
+  const exists = listIssueEvents(db, issueID, {
+    limit: 100,
+    types: ["issue.pi_acceptance_requested.v1"]
+  }).some((event) => cleanString(objectValue(parseEventPayload(event.payload)).issue_run_id) === payload.issue_run_id);
+  if (exists) return;
+  recordIssueEvent(db, issueID, "issue.pi_acceptance_requested.v1", {
+    command_observation_contract: TERMINAL_COMMAND_OBSERVATION_CONTRACT,
+    ...payload,
+    reason: "provider turn reached terminal state; PI must inspect the Session and decide the Issue"
+  });
 }
 
 export function providerReportedOutcome(

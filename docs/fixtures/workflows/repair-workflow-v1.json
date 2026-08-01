@@ -17,8 +17,6 @@
         "allowed_tools": [
           "runner-builtin:work_read",
           "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
           "runner-builtin:issue_read",
           "runner-builtin:issue_execution_status",
           "runner-builtin:session_read_summary"
@@ -35,7 +33,6 @@
       },
       "handoff": {
         "mode": "local_changes",
-        "required": true,
         "project_override_modes": [
           "local_changes"
         ]
@@ -53,8 +50,6 @@
         "allowed_tools": [
           "runner-builtin:work_read",
           "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
           "runner-builtin:issue_read",
           "runner-builtin:issue_execution_status",
           "runner-builtin:session_read_summary"
@@ -71,7 +66,6 @@
       },
       "handoff": {
         "mode": "local_changes",
-        "required": true,
         "project_override_modes": [
           "local_changes"
         ]
@@ -104,7 +98,6 @@
       },
       "handoff": {
         "mode": "local_changes",
-        "required": true,
         "project_override_modes": [
           "local_changes"
         ]
@@ -114,7 +107,7 @@
       "id": "verify",
       "name": "Verify recovery progress with fresh Evidence",
       "agent": {
-        "role": "verifier",
+        "role": "executor",
         "required_skill_ids": []
       },
       "permissions": {
@@ -122,8 +115,6 @@
         "allowed_tools": [
           "runner-builtin:work_read",
           "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
           "runner-builtin:issue_read",
           "runner-builtin:issue_execution_status",
           "runner-builtin:session_read_summary"
@@ -140,7 +131,6 @@
       },
       "handoff": {
         "mode": "local_changes",
-        "required": true,
         "project_override_modes": [
           "local_changes"
         ]
@@ -157,11 +147,7 @@
         "max_tool_permission": "write",
         "allowed_tools": [
           "runner-builtin:work_read",
-          "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_list",
-          "runner-builtin:handoff_read"
+          "runner-builtin:run_read"
         ],
         "allowed_actions": [
           "needs_user.escalate"
@@ -178,7 +164,6 @@
       },
       "handoff": {
         "mode": "local_changes",
-        "required": true,
         "project_override_modes": [
           "local_changes"
         ]

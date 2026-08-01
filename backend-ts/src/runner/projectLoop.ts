@@ -1,6 +1,5 @@
 import {
   claimNextIssue,
-  hasDeferredProviderRuntime,
   peekNextReadyIssue,
   peekNextTodoIssue
 } from "../db/repositories/issueQueue.ts";
@@ -13,8 +12,6 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { EventBus } from "../events/bus.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
-import { failIssueExecution } from "./statusGate.ts";
-import { deferIssueToPiAfterProviderFailure, isProviderInfraTransientFailure } from "./providerFailure.ts";
 import { issuePromptImages } from "./issuePromptImages.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
 import { publicMcpRegistry } from "../mcp/registry.ts";
@@ -134,17 +131,21 @@ async function runClaimedIssue(
     });
     return result;
   } catch (error) {
-    if (issueExecutionNoLongerCurrent(input.database, issue.id, claimedRunID)) return { runId: "interrupted" };
-    if (isProviderInfraTransientFailure(error)) {
-      deferIssueToPiAfterProviderFailure(input.database, issue.id, error, provider.id);
-      const deferred = getIssue(input.database, issue.id);
-      if (deferred) publishIssueStatus(input, deferred);
-      return { runId: "provider_deferred" };
+    if (!issueExecutionNoLongerCurrent(input.database, issue.id, claimedRunID)) {
+      await reconcileProviderOutcome({
+        bus: input.bus,
+        database: input.database,
+        issueID: issue.id,
+        issueRunID: claimedRunID,
+        now: optionalDate(input.now),
+        providerID: provider.id,
+        reportedOutcome: {
+          outcome: "failed",
+          reason: error instanceof Error ? error.message : String(error)
+        }
+      });
     }
-    failIssueExecution(input.database, issue.id, error, provider.id);
-    const failed = getIssue(input.database, issue.id);
-    if (failed) publishIssueStatus(input, failed);
-    return { runId: "failed" };
+    return { runId: "provider_terminal" };
   }
 }
 
@@ -194,8 +195,8 @@ function issueProviderAvailable(
 ): boolean {
   const providerID = issueProviderID(db, project, issue);
   const provider = isExecutorProviderId(providerID) ? providers[providerID] : undefined;
-  return Boolean(provider) && provider!.capabilities.includes("issue_execution") && providerReady(provider!) &&
-    !hasDeferredProviderRuntime(db, providerID, now ?? new Date());
+  void now;
+  return Boolean(provider) && provider!.capabilities.includes("issue_execution") && providerReady(provider!);
 }
 
 function providerReady(provider: ExecutorProvider): boolean {
@@ -255,7 +256,7 @@ function openIssueRunID(db: RunnerDatabase, issueID: number): string {
   return listIssueRuns(db, issueID).filter((run) => run.ended_at === "").at(-1)?.id ?? "";
 }
 
-const CLOSED_ISSUE_STATUSES = new Set(["done", "failed", "cancelled", "pending_verification"]);
+const CLOSED_ISSUE_STATUSES = new Set(["done", "failed", "cancelled", "needs_user"]);
 
 function mustGetProject(db: RunnerDatabase, projectId: string): Project {
   const project = getProject(db, projectId);

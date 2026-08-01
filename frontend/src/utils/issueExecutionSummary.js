@@ -1,19 +1,24 @@
 const TERMINAL_STATUSES = new Set(['done', 'failed', 'cancelled']);
 
-export function deriveIssueExecutionSummary({ issue = {}, events = [], runs = [] } = {}) {
+export function deriveIssueExecutionSummary({ issue = {}, runs = [] } = {}) {
   const latestRun = latestRunFromList(runs) || issue.latest_run || null;
   const issueStatus = cleanText(issue.status) || 'unknown';
   const runStatus = cleanText(latestRun?.status) || '';
-  const verification = structuredVerification(issue, events);
-  const statusConflict = terminalStatus(issueStatus) && runStatus !== '' && issueStatus !== runStatus;
+  const awaitingPi = issueStatus === 'in_progress' && Boolean(latestRun?.ended_at);
+  const piDecision = piDecisionSummary(issue, awaitingPi);
+  const statusConflict = terminalStatus(issueStatus)
+    && Boolean(latestRun)
+    && !cleanText(latestRun?.ended_at)
+    && ['created', 'running', 'recovering', 'in_progress'].includes(runStatus);
 
   return {
     issueStatus,
+    awaitingPi,
     latestRun,
     runStatus,
     statusConflict: Boolean(statusConflict),
-    verification,
-    nextAction: nextAction(issueStatus, latestRun, verification, Boolean(statusConflict)),
+    piDecision,
+    nextAction: nextAction(issueStatus, latestRun, Boolean(statusConflict), awaitingPi),
   };
 }
 
@@ -27,74 +32,40 @@ function latestRunFromList(runs) {
   }, null);
 }
 
-function structuredVerification(issue, events) {
-  const report = latestEvent(events, 'issue.verification_report');
-  if (report) {
-    const payload = parsePayload(report.payload);
-    const recommendation = cleanText(payload.recommendation);
-    return {
-      state: recommendation === 'accept' ? 'recorded' : 'attention',
-      label: recommendation ? `Verifier: ${recommendation}` : 'Verifier report 已记录',
-      detail: cleanText(payload.summary) || '已记录结构化 verifier report。',
-      source: 'verifier_report',
-    };
-  }
-
-  const snapshot = parsePayload(issue.workflow_snapshot_json);
-  const verify = Array.isArray(snapshot.steps)
-    ? snapshot.steps.find((step) => cleanText(step?.id) === 'verify')
-    : null;
-  const evidence = cleanText(verify?.evidence_summary);
-  if (verify && evidence) {
-    const status = cleanText(verify.status);
-    return {
-      state: status === 'done' ? 'recorded' : 'attention',
-      label: `Snapshot: ${status || 'recorded'}`,
-      detail: evidence,
-      source: 'workflow_snapshot',
-    };
-  }
-
-  return {
-    state: issue.status === 'done' ? 'attention' : 'missing',
-    label: '未记录结构化验证',
-    detail: issue.status === 'done'
-      ? '任务状态为 done，但没有 verifier report 或 workflow snapshot 验证证据。'
-      : '执行结束后可生成 verifier report，或由运行态写入验证快照。',
-    source: '',
+function piDecisionSummary(issue, awaitingPi) {
+  const decision = issue?.decision || {};
+  const phase = cleanText(decision.phase);
+  if (decision.owner === 'human') return {
+    state: 'attention', label: 'PI 请求人工决定', detail: decision.request?.question || '请回答 PI 提出的具体问题。',
   };
+  if (phase === 'pi_deciding') return {
+    state: 'recorded', label: 'PI 正在判断', detail: 'PI 正在读取 Provider Session、命令结果和工作区事实。',
+  };
+  if (phase === 'pi_continuing') return {
+    state: 'recorded', label: 'PI 已要求继续', detail: 'Provider 正在同一个 Session 的新 Turn 中完成剩余工作。',
+  };
+  if (phase === 'pi_error') return {
+    state: 'attention', label: 'PI 本轮执行失败', detail: decision.activity?.error || '系统会重试 PI 判断，不会把运行错误写成 Issue 结论。',
+  };
+  if (awaitingPi || phase === 'pi_waiting' || phase === 'pi_queued') return {
+    state: 'recorded', label: '等待 PI 判断', detail: 'Provider Turn 已结束；PI 将决定接受、继续、重试或请求人工处理。',
+  };
+  if (phase === 'complete') return {
+    state: 'recorded', label: `PI 已决定：${cleanText(issue.status)}`, detail: cleanText(issue.error) || 'Issue 终态由 PI 写入。',
+  };
+  return { state: 'missing', label: 'Provider 正在执行', detail: 'Provider Turn 结束后，PI 会读取真实上下文并作出结论。' };
 }
 
-function nextAction(issueStatus, latestRun, verification, statusConflict) {
-  if (statusConflict) return 'Issue 与最新 Run 的终态不一致，建议先核对 Session，再决定是否重试。';
+function nextAction(issueStatus, latestRun, statusConflict, awaitingPi) {
+  if (statusConflict) return 'Issue 已是终态，但最新 Run 仍未结束；建议先核对 Session 和运行态。';
   if (issueStatus === 'triage') return '确认描述后移动到 Todo，runner 才会开始执行。';
   if (issueStatus === 'todo' && !latestRun) return '等待 runner claim；若长期未启动，请检查项目 loop。';
   if (issueStatus === 'todo') return '当前已排队，等待下一轮 runner claim。';
-  if (issueStatus === 'in_progress') return '任务正在执行，进入 Session 查看或补充实时上下文。';
-  if (issueStatus === 'pending_verification') return '查看验证证据并完成 Accept / Reject / Request changes。';
-  if (issueStatus === 'done' && verification.state !== 'recorded') return '补充结构化验证证据，避免只凭 done 状态判断完成。';
+  if (awaitingPi) return 'Provider Turn 已结束，PI 正在读取 Session 上下文并决定接受、继续、重试或请求用户处理。';
+  if (issueStatus === 'in_progress') return 'Provider 正在执行，进入 Session 查看实时上下文。';
+  if (issueStatus === 'needs_user') return 'PI 已明确提出需要你决定的问题；处理后会回到同一个 Issue。';
   if (issueStatus === 'failed' || issueStatus === 'cancelled') return '先查看最新 Run / Session 的退出原因，修复后重新执行。';
   return '查看活动记录，确认任务状态与执行结果。';
-}
-
-function latestEvent(events, type) {
-  if (!Array.isArray(events)) return null;
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    if (events[index]?.type === type) return events[index];
-  }
-  return null;
-}
-
-function parsePayload(value) {
-  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
-  const text = cleanText(value);
-  if (!text) return {};
-  try {
-    const parsed = JSON.parse(text);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
 }
 
 function terminalStatus(value) {

@@ -23,10 +23,7 @@
           "runner-builtin:repo_search",
           "runner-builtin:repo_read_excerpt",
           "runner-builtin:work_read",
-          "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_read"
+          "runner-builtin:run_read"
         ],
         "allowed_actions": []
       },
@@ -40,7 +37,6 @@
       },
       "handoff": {
         "mode": "release",
-        "required": true,
         "project_override_modes": [
           "deploy",
           "release"
@@ -57,10 +53,15 @@
       "permissions": {
         "max_tool_permission": "dangerous",
         "allowed_tools": [
+          "runner-builtin:read",
+          "runner-builtin:grep",
+          "runner-builtin:find",
+          "runner-builtin:ls",
+          "runner-builtin:repo_tree",
+          "runner-builtin:repo_search",
+          "runner-builtin:repo_read_excerpt",
           "runner-builtin:work_read",
-          "runner-builtin:run_read",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_read"
+          "runner-builtin:run_read"
         ],
         "allowed_actions": [
           "release.execute"
@@ -77,7 +78,6 @@
       },
       "handoff": {
         "mode": "release",
-        "required": true,
         "project_override_modes": [
           "deploy",
           "release"
@@ -88,7 +88,7 @@
       "id": "verify",
       "name": "Verify the published revision",
       "agent": {
-        "role": "verifier",
+        "role": "executor",
         "required_skill_ids": []
       },
       "permissions": {
@@ -102,10 +102,7 @@
           "runner-builtin:repo_search",
           "runner-builtin:repo_read_excerpt",
           "runner-builtin:work_read",
-          "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_read"
+          "runner-builtin:run_read"
         ],
         "allowed_actions": []
       },
@@ -119,7 +116,6 @@
       },
       "handoff": {
         "mode": "release",
-        "required": true,
         "project_override_modes": [
           "deploy",
           "release"
@@ -144,10 +140,7 @@
           "runner-builtin:repo_search",
           "runner-builtin:repo_read_excerpt",
           "runner-builtin:work_read",
-          "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_read"
+          "runner-builtin:run_read"
         ],
         "allowed_actions": []
       },
@@ -161,7 +154,6 @@
       },
       "handoff": {
         "mode": "release",
-        "required": true,
         "project_override_modes": [
           "deploy",
           "release"

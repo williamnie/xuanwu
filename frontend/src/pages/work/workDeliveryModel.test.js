@@ -29,16 +29,7 @@ test('local Handoff is presented as an Issue delivery receipt rather than a comm
   assert.equal(view.statusLabel, '交付凭证已就绪');
 });
 
-test('pending review and high-risk attribution remain visible as user actions', () => {
-  const pending = fixtureDetail({
-    review_summary: { state: 'pending' },
-    handoff: {
-      ...fixtureDetail().handoff,
-      risks: [{ id: 'handoff_attribution_uncertainty', severity: 'high' }],
-    },
-  });
-  assert.equal(workDeliveryView({ detail: pending }).nextAction, '等待人工评审');
-
+test('high-risk attribution remains visible as a delivery action', () => {
   const risky = fixtureDetail({
     handoff: {
       ...fixtureDetail().handoff,
@@ -87,12 +78,10 @@ function fixtureDetail(overrides = {}) {
       delivery_actions: [],
       evidence_ids: ['xw:evidence:git:809', 'xw:evidence:test:809'],
       id: HANDOFF_ID,
-      review: { state: 'not_requested' },
       risks: [],
       status: 'ready',
       work_id: WORK_ID,
     },
-    review_summary: { state: 'not_requested' },
     ...overrides,
   };
 }

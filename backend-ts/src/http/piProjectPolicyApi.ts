@@ -38,7 +38,6 @@ async function patchPolicyResponse(context: PiProjectPolicyContext, request: Req
     supervisor_max_recoveries_per_project_per_hour: body.supervisor_max_recoveries_per_project_per_hour,
     supervisor_rate_limit_wait_policy: body.supervisor_rate_limit_wait_policy,
     timezone: body.timezone,
-    verification_policy_json: body.verification_policy,
     working_hours_json: body.working_hours
   }));
 }
@@ -60,7 +59,6 @@ function normalizePolicyBody(body: Record<string, unknown>) {
     supervisor_max_recoveries_per_project_per_hour: positiveIntegerField(body, "supervisor_max_recoveries_per_project_per_hour"),
     supervisor_rate_limit_wait_policy: supervisorWaitPolicy(body),
     timezone: stringField(body, "timezone"),
-    verification_policy: objectField(body, ["verification_policy_json", "verification_policy"], "verification_policy"),
     working_hours: objectField(body, ["working_hours_json", "working_hours"], "working_hours")
   };
 }
@@ -68,6 +66,11 @@ function normalizePolicyBody(body: Record<string, unknown>) {
 function assertNoRemovedModeFields(body: Record<string, unknown>): void {
   const field = ["default_mode", "supervisor_mode"].find((key) => Object.hasOwn(body, key));
   if (field) throw new HttpError(400, `${field} 已移除；PI 绑定项目后固定为 autonomous`);
+  const verificationField = ["verification_policy", "verification_policy_json"]
+    .find((key) => Object.hasOwn(body, key));
+  if (verificationField) {
+    throw new HttpError(400, `${verificationField} 已移除；Issue 语义状态只由 PI 的 Session 判断决定`);
+  }
 }
 
 function writePolicyResponse(write: () => unknown): Response {

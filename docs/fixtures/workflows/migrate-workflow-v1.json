@@ -9,7 +9,7 @@
       "id": "source-contract",
       "name": "Freeze the source contract",
       "agent": {
-        "role": "verifier",
+        "role": "executor",
         "required_skill_ids": []
       },
       "permissions": {
@@ -23,10 +23,7 @@
           "runner-builtin:repo_search",
           "runner-builtin:repo_read_excerpt",
           "runner-builtin:work_read",
-          "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_read"
+          "runner-builtin:run_read"
         ],
         "allowed_actions": []
       },
@@ -40,7 +37,6 @@
       },
       "handoff": {
         "mode": "branch_commit",
-        "required": true,
         "project_override_modes": [
           "local_changes",
           "branch_commit"
@@ -51,7 +47,7 @@
       "id": "target-contract",
       "name": "Freeze the target contract and mapping",
       "agent": {
-        "role": "verifier",
+        "role": "executor",
         "required_skill_ids": []
       },
       "permissions": {
@@ -65,10 +61,7 @@
           "runner-builtin:repo_search",
           "runner-builtin:repo_read_excerpt",
           "runner-builtin:work_read",
-          "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_read"
+          "runner-builtin:run_read"
         ],
         "allowed_actions": []
       },
@@ -82,7 +75,6 @@
       },
       "handoff": {
         "mode": "branch_commit",
-        "required": true,
         "project_override_modes": [
           "local_changes",
           "branch_commit"
@@ -108,9 +100,6 @@
           "runner-builtin:repo_read_excerpt",
           "runner-builtin:work_read",
           "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_read",
           "runner-builtin:work_update"
         ],
         "allowed_actions": [
@@ -129,7 +118,6 @@
       },
       "handoff": {
         "mode": "branch_commit",
-        "required": true,
         "project_override_modes": [
           "local_changes",
           "branch_commit"
@@ -140,7 +128,7 @@
       "id": "verify",
       "name": "Verify target contract parity",
       "agent": {
-        "role": "verifier",
+        "role": "executor",
         "required_skill_ids": []
       },
       "permissions": {
@@ -154,10 +142,7 @@
           "runner-builtin:repo_search",
           "runner-builtin:repo_read_excerpt",
           "runner-builtin:work_read",
-          "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_read"
+          "runner-builtin:run_read"
         ],
         "allowed_actions": []
       },
@@ -171,7 +156,6 @@
       },
       "handoff": {
         "mode": "branch_commit",
-        "required": true,
         "project_override_modes": [
           "local_changes",
           "branch_commit"
@@ -196,10 +180,7 @@
           "runner-builtin:repo_search",
           "runner-builtin:repo_read_excerpt",
           "runner-builtin:work_read",
-          "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_read"
+          "runner-builtin:run_read"
         ],
         "allowed_actions": []
       },
@@ -213,7 +194,6 @@
       },
       "handoff": {
         "mode": "branch_commit",
-        "required": true,
         "project_override_modes": [
           "local_changes",
           "branch_commit"

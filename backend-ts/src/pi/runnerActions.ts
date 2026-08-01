@@ -92,7 +92,7 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
   listIssueCompletionWatches(input: IssueCompletionWatchListInput): unknown;
   cancelIssueCompletionWatch(input: IssueCompletionWatchCancelInput): unknown;
   enqueueIssueProposal(input: IssueProposalInput): unknown;
-  reconcileIssueCompletion(input: IssueCompletionReconcileInput): unknown;
+  requestIssueAcceptanceAction(input: IssueAcceptanceRequestInput): unknown;
   issueExecutionStatus(input: IssueExecutionStatusInput): unknown;
   issueStatusSummary(input: IssueStatusSummaryInput): unknown;
   runManualContextIntake(input: ManualContextIntakeInput): unknown;
@@ -133,7 +133,7 @@ export type PiRunnerSourceTurn = {
 type IssueListInput = { limit?: number; project_id?: string; status?: string };
 type IssueReadInput = { id: number };
 type IssueExecutionStatusInput = { id: number };
-type IssueCompletionReconcileInput = { issue_id: number; rationale?: string };
+type IssueAcceptanceRequestInput = { issue_id: number; rationale?: string };
 type IssueCommentInput = { body: string; issue_id: number };
 type IssueCancelInput = { issue_ids: number[]; rationale?: string };
 type IssueDeleteInput = { issue_ids: number[]; reason: string };
@@ -231,7 +231,7 @@ export function createPiRunnerActions(
       const actionContext = actionContextForProposal(context, proposal);
       return createPendingPiAction(db, actionContext, proposal, () => enqueueIssueAndNotify(db, context, input.issue_id));
     },
-    reconcileIssueCompletion: (input) => reconcileIssueCompletion(db, context, input),
+    requestIssueAcceptanceAction: (input) => requestIssueAcceptanceAction(db, context, input),
     enqueueBatchTriageIssues: (input) => createBatchTriageEnqueueAction(db, context, input),
     enqueueNextTriageIssue: (input) => createNextTriageEnqueueAction(db, context, input),
     createIssueCompletionWatch: (input) => createCompletionWatch(db, context, input),
@@ -452,13 +452,13 @@ function enqueueIssueAndNotify(db: RunnerDatabase, context: PiRunnerActionContex
   return issue;
 }
 
-function reconcileIssueCompletion(
+function requestIssueAcceptanceAction(
   db: RunnerDatabase,
   context: PiRunnerActionContext,
-  input: IssueCompletionReconcileInput
+  input: IssueAcceptanceRequestInput
 ) {
   const issue = mustGetIssue(db, input.issue_id);
-  const actionType = "issue.completion_reconcile";
+  const actionType = "issue.acceptance_request";
   const actionContext = scopedRunnerChatActionContext(context, actionType, {
     issueID: issue.id,
     projectID: issue.project_id

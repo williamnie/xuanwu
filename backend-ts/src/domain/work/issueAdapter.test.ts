@@ -73,10 +73,7 @@ describe("Issue-backed Work compatibility adapter", () => {
       for (const work of works) {
         expect(work).toMatchObject({
           acceptance: {
-            completion_rule: "all_required",
-            criteria: [{ id: "issue-delivery", required: true, verification_policy_ref: "agent-execution-contract" }],
-            handoff_policy: "summary",
-            requires_handoff: false,
+            criteria: [{ id: "issue-delivery", required: true }],
             version: 1
           },
           owner: { kind: "project", project_id: PROJECT_ID },
@@ -255,12 +252,12 @@ describe("Issue-backed Work compatibility adapter", () => {
       const issue = createIssue(db, {
         description: "Verify first",
         project_id: PROJECT_ID,
-        status: "pending_verification",
+        status: "failed",
         title: "Shadow fixture"
       });
       const initial = mustGetIssueWork(db, issue.id);
       expect(syncIssueWorkShadow(db, issue.id, audit("shadow-seed"))).toMatchObject({ status: "created" });
-      expect(getWork(db, initial.id)?.status).toBe("pending_verification");
+      expect(getWork(db, initial.id)?.status).toBe("failed");
 
       updateIssue(db, issue.id, { status: "done" });
       const legacyDone = mustGetIssueWork(db, issue.id);
@@ -278,7 +275,7 @@ describe("Issue-backed Work compatibility adapter", () => {
         work: { status: "done", title: "Legacy still wins" }
       });
       expect(getIssue(db, issue.id)).toMatchObject({ status: "done", title: "Legacy still wins" });
-      expect(getWork(db, initial.id)).toMatchObject({ status: "pending_verification", title: "Legacy still wins" });
+      expect(getWork(db, initial.id)).toMatchObject({ status: "failed", title: "Legacy still wins" });
       expect(listWorkEvents(db, initial.id)).toContainEqual(expect.objectContaining({ outcome: "rejected" }));
       expect(shadowMismatches(db, issue.id)).toMatchObject([{ event_id: "shadow-conflict", mismatches: ["status"] }]);
     } finally {

@@ -309,7 +309,7 @@ export function issueEventRetentionMatrix(): IssueEventRetentionMatrixRow[] {
       storage_policy: "necessary snapshot; omit repeated raw envelope; 256 rows per method/item type then marker"
     },
     {
-      consumers: ["completionGate Evidence", "Issue/Run UI", "sessionObserver"],
+      consumers: ["PI Session context", "Issue/Run UI", "sessionObserver"],
       protected: true,
       selector: "item/completed command/file/agentMessage",
       storage_policy: "preserve final content; artifact when large; 1024 rows per method then fail closed"
@@ -321,7 +321,7 @@ export function issueEventRetentionMatrix(): IssueEventRetentionMatrixRow[] {
       storage_policy: "never sample/coalesce; approval overflow fails closed; terminal/error always preserved"
     },
     {
-      consumers: ["Evidence API", "Handoff", "verification gate"],
+      consumers: ["Evidence API", "optional Handoff", "PI Session context"],
       protected: true,
       selector: "issue Evidence/status/audit events",
       storage_policy: "unchanged append-only authority"

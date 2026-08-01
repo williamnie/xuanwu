@@ -42,10 +42,10 @@ import {
   type PiIssueSupervisorSchedulerInput
 } from "./piIssueSupervisorScheduler.ts";
 import {
-  runPiVerificationCoordinatorOnce,
+  runPiAcceptanceCoordinatorOnce,
   type PiIssueAcceptanceRunner,
-  type PiVerificationCoordinatorResult
-} from "./piVerificationCoordinator.ts";
+  type PiAcceptanceCoordinatorResult
+} from "./piAcceptanceCoordinator.ts";
 import {
   runDueAutomations,
   type AutomationExecutor,
@@ -93,7 +93,7 @@ export type GuardianControlPlaneCycleResult = Pick<ScheduleLayerCycleResult,
 >;
 export type AgenticCycleResult = PiAutoManageCycleResult & Pick<ScheduleLayerCycleResult,
   "agentCommunications" | "supervisor"
-> & { verification: PiVerificationCoordinatorResult };
+> & { acceptance: PiAcceptanceCoordinatorResult };
 
 export type PiAutoManageCycleInput = {
   agentCommunicationDecider?: AgentCommunicationDecider;
@@ -294,11 +294,11 @@ export async function runGuardianControlPlaneCycle(
 export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<AgenticCycleResult> {
   const cycleStartedAt = performance.now();
   // Ordinary project manager cycles remain explicit. PI-owned acceptance is
-  // different: entering pending_verification is a durable request for one
-  // issue-scoped semantic decision over a bounded completion card.
-  const verification = input.decideIssueAcceptance
-    ? await timedSchedulePhase("pi_verification", () => (
-      runPiVerificationCoordinatorOnce({
+  // different: an ended Run plus issue.pi_acceptance_requested.v1 is a durable
+  // request for one issue-scoped semantic decision over the Provider Session.
+  const acceptance = input.decideIssueAcceptance
+    ? await timedSchedulePhase("pi_acceptance", () => (
+      runPiAcceptanceCoordinatorOnce({
         bus: input.bus,
         database: input.database,
         decideIssueAcceptance: input.decideIssueAcceptance!,
@@ -308,9 +308,9 @@ export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<Ag
     ))
     : { failed: 0, issues: 0, projects: 0, skipped: 0, started: 0 };
   const projects: PiAutoManageCycleResult = {
-    projects: verification.projects,
-    skipped: verification.skipped,
-    started: verification.started
+    projects: acceptance.projects,
+    skipped: acceptance.skipped,
+    started: acceptance.started
   };
   if (input.config) {
     await timedSchedulePhase("pending_action_notifications", () => queuePendingPiActionNotifications(
@@ -348,7 +348,7 @@ export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<Ag
     ...projects,
     agentCommunications,
     supervisor,
-    verification
+    acceptance
   };
 }
 

@@ -184,7 +184,7 @@ export function authoritativeRunPhase(run: RunProjectionRow, latest: AttemptProj
     ["created", "failed", "interrupted"].includes(latest.status ?? "")
     ? "recovering"
     : run.legacy_status === "in_progress" ? "running"
-      : ["pending_verification", "done"].includes(run.legacy_status) ? "succeeded"
+      : run.legacy_status === "succeeded" ? "succeeded"
         : ["failed", "cancelled"].includes(run.legacy_status) ? run.legacy_status
           : null;
   return RUN_STATUSES.includes(status as RunStatus) ? status as RunStatus : null;

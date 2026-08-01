@@ -2,7 +2,7 @@ export const WORK_BOARD_STATUSES = [
   'triage',
   'todo',
   'in_progress',
-  'pending_verification',
+  'needs_user',
   'failed',
   'done',
   'cancelled',
@@ -18,7 +18,7 @@ export function laneScrollDecision({ armed, clientHeight, scrollHeight, scrollTo
   return { armed: false, load: true };
 }
 
-const ATTENTION_STATUSES = new Set(['triage', 'pending_verification', 'failed']);
+const ATTENTION_STATUSES = new Set(['triage', 'needs_user', 'failed']);
 
 export function workBoardEnabled(env = {}) {
   const value = String(env?.VITE_WORK_BOARD_ENABLED ?? 'true').trim().toLowerCase();
@@ -48,7 +48,7 @@ export function workNeedsAttention(work) {
 export function workDeliveryStage(work) {
   if (work?.status === 'done') return 'delivered';
   if (work?.status === 'cancelled') return 'closed';
-  if (work?.status === 'pending_verification') return 'verification';
+  if (work?.status === 'needs_user') return 'attention';
   return 'outstanding';
 }
 
@@ -77,9 +77,9 @@ export function groupWorksByStatus(works) {
 
 export function workDropOperation(currentStatus, targetStatus) {
   if (currentStatus === targetStatus) return 'none';
-  if (['done', 'failed', 'pending_verification'].includes(targetStatus)) return 'blocked';
+  if (['done', 'failed', 'needs_user'].includes(targetStatus)) return 'blocked';
   if (['done', 'cancelled'].includes(currentStatus)) return 'blocked';
-  if (currentStatus === 'pending_verification') return targetStatus === 'cancelled' ? 'cancel' : 'blocked';
+  if (currentStatus === 'needs_user') return targetStatus === 'cancelled' ? 'cancel' : 'blocked';
   if (targetStatus === 'cancelled') return 'cancel';
   if (targetStatus === 'todo') {
     if (currentStatus === 'in_progress' || currentStatus === 'failed') return 'retry';

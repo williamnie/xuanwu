@@ -21,7 +21,6 @@ import {
 import { applyIssueSupervisorDecisionActions } from "../pi/issueSupervisorActions.ts";
 import { ingestPiGuardianEvent } from "../pi/guardianEventIngest.ts";
 import { iso } from "../pi/heartbeatOrchestratorSupport.ts";
-import { recordBudgetExhaustedEscalation } from "./piIssueSupervisorBudgetEscalation.ts";
 import {
   refreshSupervisorProgressResult,
   supervisorResultOutcome
@@ -79,19 +78,7 @@ export async function runPiIssueSupervisorSchedulerOnce(
         result.skipped += 1;
         continue;
       }
-      const boundary = recordTarget(input.database, target, now);
-      if (boundary) {
-        await applyIssueSupervisorDecisionActions({
-          bus: input.bus,
-          context: target.context,
-          database: input.database,
-          decision: boundaryDecision(target, boundary),
-          now,
-          providers: input.providers,
-          recordDecision: false
-        });
-        continue;
-      }
+      recordTarget(input.database, target, now);
       const decision = await decideTarget(input, target, now);
       result.decisions += 1;
       if (!decision.valid) {
@@ -205,24 +192,17 @@ function recordTarget(
   db: RunnerDatabase,
   target: SupervisorTarget,
   now: Date
-): "invalid_decision_budget_exhausted" | "recovery_budget_exhausted" | null {
-  const exhausted = target.candidates.find((candidate) => candidate.exhausted);
-  if (exhausted) {
-    recordBudgetExhaustedEscalation(db, { ...target, candidate: exhausted }, now);
-    return "recovery_budget_exhausted";
-  }
+): void {
   if (invalidDecisionBudgetExhausted(db, target)) {
     createIssueSupervisorEvent(db, {
-      action_type: "needs_user.escalate",
-      decision: "needs_user",
       diagnosis_code: primaryDiagnosis(target.context),
-      event_type: "budget_exhausted",
+      event_type: "decision_failed",
       issue_id: target.issueID,
       payload_json: {
         count: MAX_INVALID_DECISIONS_PER_EVIDENCE,
         message: "PI Supervisor repeatedly returned invalid decisions for the same evidence.",
-        outcome: "needs_user",
-        report_status: "invalid_decision_budget_exhausted"
+        outcome: "pi_runtime_retrying",
+        report_status: "invalid_decision_retry_boundary"
       },
       project_id: target.projectID,
       provider: clean(target.context.session.provider),
@@ -230,10 +210,8 @@ function recordTarget(
       provider_turn_id: clean(target.context.session.provider_turn_id),
       run_id: clean(target.context.latest_run?.id)
     });
-    return "invalid_decision_budget_exhausted";
   }
   recordSignal(db, target, now);
-  return null;
 }
 
 function invalidDecisionBudgetExhausted(db: RunnerDatabase, target: SupervisorTarget): boolean {
@@ -247,26 +225,6 @@ function invalidDecisionBudgetExhausted(db: RunnerDatabase, target: SupervisorTa
     const createdAt = Date.parse(event.created_at);
     return Number.isFinite(createdAt) && (evidenceAt === 0 || createdAt >= evidenceAt);
   }).length >= MAX_INVALID_DECISIONS_PER_EVIDENCE;
-}
-
-function boundaryDecision(
-  target: SupervisorTarget,
-  reason: "invalid_decision_budget_exhausted" | "recovery_budget_exhausted"
-) {
-  const invalid = reason === "invalid_decision_budget_exhausted";
-  const message = invalid
-    ? "PI Supervisor 对同一批证据连续返回无效决策，已达到最大决策轮次。请检查 Supervisor 模型、Provider 或决策审计。"
-    : "PI 自动恢复预算已耗尽，Issue 仍未恢复。请查看最近恢复动作和证据后决定下一步。";
-  return {
-    confidence: "high" as const,
-    decision: "needs_user" as const,
-    evidence_refs: invalid ? ["supervisor_decision_failed"] : ["recovery_budget"],
-    expected_outcome: "释放执行槽，并把需要人工处理的原因可靠地写入告警和通知。",
-    fallback_if_no_progress: "blocked" as const,
-    rationale: message,
-    recovery_message: message,
-    risk_level: "medium" as const
-  };
 }
 
 function recordSignal(db: RunnerDatabase, target: SupervisorTarget, now: Date): void {
@@ -308,7 +266,7 @@ async function decideTarget(
 function recordFailure(db: RunnerDatabase, target: SupervisorTarget, error: unknown, now: Date): void {
   const message = `PI Supervisor unavailable for issue #${target.issueID}: ${safeError(error)}`;
   createIssueSupervisorEvent(db, {
-    decision: "needs_user",
+    decision: "pi_runtime_failed",
     diagnosis_code: primaryDiagnosis(target.context),
     event_type: "decision_failed",
     issue_id: target.issueID,
@@ -331,10 +289,10 @@ function recordFailure(db: RunnerDatabase, target: SupervisorTarget, error: unkn
     normalizedPayload: {
       diagnosis_code: "pi_supervisor_unavailable",
       message,
-      requires_user: true
+      requires_user: false
     },
     projectID: target.projectID,
-    severity: "actionable",
+    severity: "watch",
     source: "pi_supervisor",
     sourceEventID: `supervisor:${target.projectID}:${target.issueID}:${iso(now)}`,
     status: "pending"
@@ -370,12 +328,10 @@ function recentCompletedDecisionExists(db: RunnerDatabase, target: SupervisorTar
   const latestDecisionBoundary = [...matching].reverse().find((event) =>
     ["budget_exhausted", "decision", "decision_failed"].includes(event.event_type)
   );
-  // Older builds applied their needs_user fallback even after recording an
-  // invalid PI decision. Treat that action/result tail as part of the failed
-  // decision, otherwise it permanently suppresses a corrected Supervisor.
+  // A failed PI decision is a runtime fact, never an Issue outcome. Retry
+  // after cooldown; once the repeated-invalid boundary is reached, let the
+  // next scheduler pass re-enter PI immediately rather than sticking forever.
   if (latestDecisionBoundary?.event_type === "decision_failed") {
-    // Reaching the configured decision boundary must immediately hand control
-    // to needs_user instead of waiting through another cooldown window.
     if (invalidDecisionBudgetExhausted(db, target)) return false;
     return Date.parse(latestDecisionBoundary.created_at) >= failedDecisionCooldown;
   }

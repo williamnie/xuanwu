@@ -48,8 +48,8 @@ test('board drops preserve runner-aware lifecycle actions', () => {
   assert.equal(workDropOperation('in_progress', 'todo'), 'retry');
   assert.equal(workDropOperation('failed', 'todo'), 'retry');
   assert.equal(workDropOperation('in_progress', 'cancelled'), 'cancel');
-  assert.equal(workDropOperation('pending_verification', 'cancelled'), 'cancel');
-  assert.equal(workDropOperation('pending_verification', 'done'), 'blocked');
+  assert.equal(workDropOperation('needs_user', 'cancelled'), 'cancel');
+  assert.equal(workDropOperation('needs_user', 'done'), 'blocked');
   assert.equal(workDropOperation('in_progress', 'failed'), 'blocked');
   assert.equal(workDropOperation('done', 'todo'), 'blocked');
   assert.equal(workDropOperation('done', 'done'), 'none');
@@ -122,7 +122,7 @@ test('Work stays primary while Issues route redirects and compatibility APIs kee
   assert.match(client, /request\('\/api\/works'/);
   assert.match(client, /request\(`\/api\/works\/\$\{encodeURIComponent\(id\)\}`/);
   assert.match(client, /\/timeline\?\$\{workTimelineParams\(options\)\}/);
-  assert.match(client, /\/verification/);
+  assert.match(client, /\/human-review-response/);
 });
 
 function work(id, status, projectId, type) {

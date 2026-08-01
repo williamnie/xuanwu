@@ -2,12 +2,10 @@ import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, resolve, sep } from "node:path";
 import { getIssue } from "../db/repositories/issues.ts";
-import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import {
   EVIDENCE_RECORDED_EVENT_TYPE,
   getStoredEvidence,
-  issueIDForEvidenceSourceEvent,
   issueIDsForRun,
   issueIDsForSession,
   listStoredEvidence,
@@ -15,12 +13,6 @@ import {
   runIDsForSession,
   type StoredEvidenceRecord
 } from "../db/repositories/evidence.ts";
-import {
-  captureRuntimeVerification,
-  projectIssueRuntimeEvidence,
-  runtimeVerificationGap
-} from "../domain/evidence/completionGate.ts";
-import { COMMAND_EVIDENCE_CHANNELS, COMMAND_EVIDENCE_KINDS } from "../domain/evidence/commandCollector.ts";
 import {
   EVIDENCE_ARTIFACT_KINDS,
   EVIDENCE_STATUSES,
@@ -31,7 +23,6 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { json } from "./errors.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
-import { parseStructuredVerifierReviewEventPayload } from "../domain/evidence/verifierReview.ts";
 import { validateReadinessEvidence } from "../domain/readiness/contracts.ts";
 import { startProjectLoop } from "../runner/projectLoopManager.ts";
 
@@ -50,13 +41,7 @@ export const EVIDENCE_HTTP_COMPATIBILITY_POLICY = {
   rollback: "unregister-evidence-routes-and-stop-new-structured-projection-without-deleting-events-or-artifacts"
 } as const;
 
-type ApiEvidenceRecord = StoredEvidenceRecord | {
-  evidence: EvidenceRecord;
-  event_id: number;
-  issue_id: number;
-  project_id: string;
-  storage_source: "compatibility_projection";
-};
+type ApiEvidenceRecord = StoredEvidenceRecord;
 
 type ParsedFilter = {
   before_event_id?: number;
@@ -77,9 +62,6 @@ export function registerEvidenceRoutes(router: Router, context: ReadApiContext):
   router.get("/api/evidence/:id", (request) => evidenceResponse(() => detailResponse(readDatabase, request)));
   router.get("/api/evidence/:id/artifacts/:index", (request) => (
     evidenceResponse(() => artifactResponse(readDatabase, request))
-  ));
-  router.post("/api/issues/:id/evidence/command", (request) => (
-    evidenceResponse(() => captureResponse(context.database, request))
   ));
   router.post("/api/issues/:id/evidence/readiness", (request) => (
     evidenceResponse(() => readinessEvidenceResponse(context, request))
@@ -118,19 +100,14 @@ async function readinessEvidenceResponse(context: ReadApiContext, request: Reque
 async function listResponse(db: RunnerDatabase, request: Request): Promise<Record<string, unknown>> {
   const filter = parsedFilter(db, request);
   const page = listStoredEvidence(db, filter);
-  const projected = filter.cursor === "" && !filter.match_none
-    ? await compatibilityProjection(db, filter, page.items)
-    : { errors: [] as string[], items: [] as ApiEvidenceRecord[] };
-  const items: ApiEvidenceRecord[] = [...page.items, ...projected.items]
+  const items: ApiEvidenceRecord[] = [...page.items]
     .sort((left, right) => evidenceTime(right.evidence).localeCompare(evidenceTime(left.evidence)))
     .slice(0, filter.limit);
-  const fallbackSources = new Set(items.map((item) => item.storage_source).filter((source) => source !== "structured"));
-  const scopedIssueID = filter.issue_ids?.length === 1 ? filter.issue_ids[0] : undefined;
   return {
     compatibility: {
       ...EVIDENCE_HTTP_COMPATIBILITY_POLICY,
-      fallback_applied: fallbackSources.size > 0,
-      fallback_sources: [...fallbackSources]
+      fallback_applied: false,
+      fallback_sources: []
     },
     filters: {
       issue_ids: filter.issue_ids ?? [],
@@ -144,59 +121,15 @@ async function listResponse(db: RunnerDatabase, request: Request): Promise<Recor
     items: items.map(evidenceSummary),
     limit: filter.limit,
     next_cursor: page.next_before_event_id ? encodeCursor(page.next_before_event_id) : "",
-    projection_errors: projected.errors,
-    skipped_invalid: page.skipped_invalid,
-    verification_gap: scopedIssueID
-      ? await runtimeVerificationGap(db, scopedIssueID)
-      : { reason: "none", detail: "请按单个 Work、Run 或 Issue 过滤以查看验证缺口。" }
+    projection_errors: [],
+    skipped_invalid: page.skipped_invalid
   };
-}
-
-async function captureResponse(db: RunnerDatabase, request: Request): Promise<Record<string, unknown>> {
-  const issueID = issueIDFromCaptureRequest(request);
-  if (!getIssue(db, issueID)) throw evidenceError(404, "issue_not_found", "Issue not found");
-  const body = await objectBody(request);
-  assertKeys(body, ["artifact_refs", "channel", "correlation_id", "kind", "observation", "producer_id", "run_id", "source_ref"]);
-  const channel = requiredText(body.channel, "channel");
-  if (!COMMAND_EVIDENCE_CHANNELS.includes(channel as typeof COMMAND_EVIDENCE_CHANNELS[number])) {
-    throw evidenceError(400, "invalid_channel", "Evidence channel is invalid");
-  }
-  const kind = requiredText(body.kind, "kind");
-  if (!COMMAND_EVIDENCE_KINDS.includes(kind as typeof COMMAND_EVIDENCE_KINDS[number])) {
-    throw evidenceError(400, "invalid_kind", "Evidence kind is invalid");
-  }
-  const observation = commandObservation(body.observation);
-  try {
-    const result = await captureRuntimeVerification(db, issueID, {
-      artifact_refs: artifactRefs(body.artifact_refs),
-      channel: channel as typeof COMMAND_EVIDENCE_CHANNELS[number],
-      correlation_id: requiredText(body.correlation_id, "correlation_id"),
-      kind: kind as typeof COMMAND_EVIDENCE_KINDS[number],
-      observation,
-      producer_id: requiredText(body.producer_id, "producer_id"),
-      run_id: requiredText(body.run_id, "run_id"),
-      source_ref: requiredText(body.source_ref, "source_ref")
-    });
-    return {
-      evidence: result.evidence,
-      gate: result.gate ? {
-        decision: result.gate.evaluation.decision,
-        issue_status: result.gate.issue.status,
-        target_status: result.gate.target_status
-      } : null,
-      replayed: result.replayed
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const conflict = /mismatch|conflicts with its append-only replay/i.test(message);
-    throw evidenceError(conflict ? 409 : 400, conflict ? "evidence_correlation_conflict" : "invalid_evidence", message);
-  }
 }
 
 async function detailResponse(db: RunnerDatabase, request: Request): Promise<Record<string, unknown>> {
   const evidenceID = evidenceIDFromRequest(request);
   const stored = getStoredEvidence(db, evidenceID);
-  const record = stored ?? await projectedEvidence(db, evidenceID);
+  const record = stored;
   if (!record) throw evidenceError(404, "evidence_not_found", "Evidence not found");
   return evidenceDetail(db, record);
 }
@@ -204,7 +137,7 @@ async function detailResponse(db: RunnerDatabase, request: Request): Promise<Rec
 async function artifactResponse(db: RunnerDatabase, request: Request): Promise<Response> {
   const evidenceID = evidenceIDFromRequest(request);
   const stored = getStoredEvidence(db, evidenceID);
-  const record = stored ?? await projectedEvidence(db, evidenceID);
+  const record = stored;
   if (!record) throw evidenceError(404, "evidence_not_found", "Evidence not found");
   const index = artifactIndex(request);
   const artifact = record.evidence.artifact_refs[index];
@@ -293,55 +226,6 @@ function parsedFilter(db: RunnerDatabase, request: Request): ParsedFilter {
   };
 }
 
-async function compatibilityProjection(
-  db: RunnerDatabase,
-  filter: ParsedFilter,
-  stored: readonly StoredEvidenceRecord[]
-): Promise<{ errors: string[]; items: ApiEvidenceRecord[] }> {
-  const issueIDs = filter.issue_ids ?? [];
-  if (issueIDs.length === 0 || issueIDs.length > 10) return { errors: [], items: [] };
-  const seen = new Set(stored.map((item) => item.evidence.id));
-  const errors: string[] = [];
-  const items: ApiEvidenceRecord[] = [];
-  for (const issueID of issueIDs) {
-    const issue = getIssue(db, issueID);
-    if (!issue) continue;
-    if (filter.project_id && issue.project_id !== filter.project_id) continue;
-    const projection = await projectIssueRuntimeEvidence(db, issueID);
-    errors.push(...projection.errors.map((error) => `Issue ${issueID}: ${error}`));
-    for (const evidence of projection.evidence) {
-      if (seen.has(evidence.id) || !matchesFilter(evidence, filter)) continue;
-      seen.add(evidence.id);
-      items.push({
-        evidence,
-        event_id: sourceEventID(evidence.id) ?? 0,
-        issue_id: issueID,
-        project_id: issue.project_id,
-        storage_source: "compatibility_projection"
-      });
-    }
-  }
-  return { errors, items };
-}
-
-async function projectedEvidence(db: RunnerDatabase, evidenceID: string): Promise<ApiEvidenceRecord | null> {
-  const eventID = sourceEventID(evidenceID);
-  if (!eventID) return null;
-  const issueID = issueIDForEvidenceSourceEvent(db, eventID);
-  if (!issueID) return null;
-  const issue = getIssue(db, issueID);
-  if (!issue) return null;
-  const projection = await projectIssueRuntimeEvidence(db, issueID);
-  const evidence = projection.evidence.find((item) => item.id === evidenceID);
-  return evidence ? {
-    evidence,
-    event_id: eventID,
-    issue_id: issueID,
-    project_id: issue.project_id,
-    storage_source: "compatibility_projection"
-  } : null;
-}
-
 function evidenceSummary(item: ApiEvidenceRecord): Record<string, unknown> {
   const evidence = item.evidence;
   return {
@@ -390,32 +274,8 @@ function evidenceDetail(db: RunnerDatabase, item: ApiEvidenceRecord): Record<str
     evidence: item.evidence,
     issue_id: item.issue_id,
     project_id: item.project_id,
-    storage_source: item.storage_source,
-    verifier_review_refs: verifierReviewRefs(db, item.issue_id, item.evidence.id)
+    storage_source: item.storage_source
   };
-}
-
-function verifierReviewRefs(
-  db: RunnerDatabase,
-  issueID: number,
-  evidenceID: string
-): Array<Record<string, unknown>> {
-  const events = listIssueEvents(db, issueID, { limit: 50, types: ["issue.verification_report"] });
-  return events.flatMap((event) => {
-    const review = parseStructuredVerifierReviewEventPayload(event.payload);
-    if (!review) return [];
-    const findingIDs = review.findings
-      .filter((finding) => finding.evidence_ids.includes(evidenceID))
-      .map((finding) => finding.finding_id);
-    if (findingIDs.length === 0) return [];
-    return [{
-      event_id: event.id,
-      finding_ids: findingIDs,
-      policy_ref: review.input_context.policy_ref,
-      recommended_next_action: review.recommended_next_action,
-      verdict: review.verdict
-    }];
-  }).reverse();
 }
 
 function artifactAvailability(

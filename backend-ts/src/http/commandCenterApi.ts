@@ -115,7 +115,7 @@ type CommandCenterRouteOptions = {
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 25;
 const SUMMARY_TEXT_LIMIT = 320;
-const ACTIVE_WORK_STATUSES: WorkStatus[] = ["todo", "in_progress", "pending_verification"];
+const ACTIVE_WORK_STATUSES: WorkStatus[] = ["todo", "in_progress", "needs_user"];
 const RECENT_HANDOFF_STATUSES = ["draft", "ready", "delivered"];
 
 export function registerCommandCenterRoutes(

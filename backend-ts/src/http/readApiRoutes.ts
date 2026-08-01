@@ -47,9 +47,9 @@ function registerIssueItemRoutes(router: Router, handlers: ReadApiDomainHandlers
   router.post("/api/issues/:id/enqueue", (request) => actionResponse(handlers, request, "enqueue"));
   router.post("/api/issues/:id/retry", (request) => actionResponse(handlers, request, "retry"));
   router.post("/api/issues/:id/cancel", (request) => asyncWriteResponse(() => handlers.issues.cancel(issueID(request))));
-  router.post("/api/issues/:id/verification", async (request) => {
+  router.post("/api/issues/:id/human-review-response", async (request) => {
     const body = await parseObjectBody(request);
-    return asyncWriteResponse(() => handlers.issues.verify(issueID(request), body));
+    return asyncWriteResponse(() => handlers.issues.answerHumanReview(issueID(request), body));
   });
   router.post("/api/issues/:id/human-review-requests", async (request) => {
     const body = await parseObjectBody(request);

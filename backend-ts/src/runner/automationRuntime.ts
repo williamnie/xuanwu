@@ -13,7 +13,6 @@ import { implementWorkflowRegistryContributions } from "../workflows/implement.t
 import { investigateWorkflowRegistryContributions } from "../workflows/investigate.ts";
 import { repairWorkflowRegistryContributions, REPAIR_RECOVERY_ACTIONS } from "../workflows/repair.ts";
 import { longRunningWorkflowRegistryContributions } from "../workflows/releaseResearchMigrate.ts";
-import { reviewWorkflowRegistryContributions, REVIEW_WORKFLOW_ACTIONS } from "../workflows/review.ts";
 import { createWorkflowRegistry, type WorkflowRegistry } from "../workflows/registry.ts";
 import type { AutomationExecutor } from "./automationScheduler.ts";
 import {
@@ -34,8 +33,7 @@ const BUILTIN_WORKFLOW_ACTIONS = [
   "migration.apply",
   "release.execute",
   "work.update",
-  ...REPAIR_RECOVERY_ACTIONS,
-  ...REVIEW_WORKFLOW_ACTIONS
+  ...REPAIR_RECOVERY_ACTIONS
 ] as const;
 
 /** Production composition for the native Automation scheduler. */
@@ -52,7 +50,6 @@ export function createNativeWorkflowRegistry(database: RunnerDatabase): Workflow
     investigateWorkflowRegistryContributions(),
     implementWorkflowRegistryContributions(),
     repairWorkflowRegistryContributions(),
-    reviewWorkflowRegistryContributions(),
     longRunningWorkflowRegistryContributions()
   ];
   const tools = loadAssistantToolRegistrySnapshot(database).tools;

@@ -490,7 +490,6 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/pi/connectors/diagnostics", family: "capability-policy" },
   { method: "POST", path: "/api/pi/connectors/:id/revoke", family: "capability-policy" },
   { method: "POST", path: "/api/pi/connectors/:id/test-connection", family: "capability-policy" },
-  { method: "POST", path: "/api/handoffs/:id/reviews", family: "evidence-handoff" },
   { method: "POST", path: "/api/integrations/git/:provider/events", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/integrations/git/:provider/resync", family: "integration-intake-delivery" },
   { method: "PUT", path: "/api/integrations/git/mappings", family: "integration-intake-delivery" },
@@ -553,8 +552,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/issues/:id/retry", family: "work-ledger" },
   { method: "GET", path: "/api/issues/:id/runs", family: "work-ledger" },
   { method: "GET", path: "/api/issues/:id/supervisor", family: "evidence-handoff" },
-  { method: "POST", path: "/api/issues/:id/verification", family: "evidence-handoff" },
-  { method: "POST", path: "/api/issues/:id/verifier-report", family: "evidence-handoff" },
+  { method: "POST", path: "/api/issues/:id/human-review-response", family: "attention" },
   { method: "GET", path: "/api/notifications", family: "attention" },
   { method: "POST", path: "/api/notifications/:id/read", family: "attention" },
   { method: "GET", path: "/api/pi/action-proposals", family: "evidence-handoff" },
@@ -817,12 +815,12 @@ export const PI_MODULE_FAMILIES = [
     source_files: ["backend-ts/src/pi/issueSupervisorDecisionTestSupport.ts", "backend-ts/src/pi/issueSupervisorRecoveryFixtures.ts"]
   },
   {
-    id: "verification-evidence", disposition: "keep", target: "Evidence production and verification policy", source_of_truth: "verification facts and Git/runtime inputs",
-    source_files: ["backend-ts/src/pi/issueAcceptance.ts", "backend-ts/src/pi/meaningfulProgress.ts", "backend-ts/src/pi/projectFindings.ts", "backend-ts/src/pi/projectSnapshot.ts", "backend-ts/src/pi/repoContextPack.ts", "backend-ts/src/pi/verificationEvidence.ts", "backend-ts/src/pi/verificationPolicy.ts"]
+    id: "pi-acceptance", disposition: "keep", target: "PI Session-context acceptance", source_of_truth: "Provider Session, workspace, commands, Git facts, and PI decision",
+    source_files: ["backend-ts/src/pi/issueAcceptance.ts", "backend-ts/src/pi/meaningfulProgress.ts", "backend-ts/src/pi/projectFindings.ts", "backend-ts/src/pi/projectSnapshot.ts", "backend-ts/src/pi/repoContextPack.ts"]
   },
   {
     id: "work-run-orchestration", disposition: "merge", target: "Work/Run orchestration and recovery", source_of_truth: "issues and issue_runs authorities",
-    source_files: ["backend-ts/src/pi/agentOrchestration.ts", "backend-ts/src/pi/agentOrchestrationActions.ts", "backend-ts/src/pi/agentOrchestrationPayloads.ts", "backend-ts/src/pi/failedRetryPolicy.ts", "backend-ts/src/pi/issueBatchProposal.ts", "backend-ts/src/pi/issueProposalContext.ts", "backend-ts/src/pi/issueStateManager.ts", "backend-ts/src/pi/issueStateRepairExecutor.ts", "backend-ts/src/pi/issueStateSnapshot.ts", "backend-ts/src/pi/issueStateVerification.ts", "backend-ts/src/pi/issueSupervisorActions.ts", "backend-ts/src/pi/issueSupervisorContext.ts", "backend-ts/src/pi/issueSupervisorContextSupport.ts", "backend-ts/src/pi/issueSupervisorDecision.ts", "backend-ts/src/pi/issueSupervisorDecisionFailure.ts", "backend-ts/src/pi/issueSupervisorRecovery.ts", "backend-ts/src/pi/issueSupervisorRecoveryAttemptRecorder.ts", "backend-ts/src/pi/issueSupervisorSignalCollector.ts", "backend-ts/src/pi/issueToolViews.ts", "backend-ts/src/pi/providerErrorParser.ts", "backend-ts/src/pi/providerErrorParserSupport.ts", "backend-ts/src/pi/providerOutageDiagnosis.ts", "backend-ts/src/pi/recoveryBudget.ts", "backend-ts/src/pi/recoveryDiagnosis.ts", "backend-ts/src/pi/runnerActionTools.ts", "backend-ts/src/pi/runnerActions.ts", "backend-ts/src/pi/runnerBatchTriageScope.ts", "backend-ts/src/pi/runnerIssueScheduleActions.ts", "backend-ts/src/pi/runnerIssueStateActions.ts", "backend-ts/src/pi/runnerIssueStatusActions.ts", "backend-ts/src/pi/runnerNextTriageActions.ts", "backend-ts/src/pi/sessionObserver.ts", "backend-ts/src/pi/supervisorCommitments.ts", "backend-ts/src/pi/supervisorContextResolver.ts", "backend-ts/src/pi/supervisorControlContracts.ts", "backend-ts/src/pi/supervisorControlTools.ts"]
+    source_files: ["backend-ts/src/pi/agentOrchestration.ts", "backend-ts/src/pi/agentOrchestrationActions.ts", "backend-ts/src/pi/agentOrchestrationPayloads.ts", "backend-ts/src/pi/issueBatchProposal.ts", "backend-ts/src/pi/issueProposalContext.ts", "backend-ts/src/pi/issueStateManager.ts", "backend-ts/src/pi/issueStateRepairExecutor.ts", "backend-ts/src/pi/issueStateSnapshot.ts", "backend-ts/src/pi/issueSupervisorActions.ts", "backend-ts/src/pi/issueSupervisorContext.ts", "backend-ts/src/pi/issueSupervisorContextSupport.ts", "backend-ts/src/pi/issueSupervisorDecision.ts", "backend-ts/src/pi/issueSupervisorDecisionFailure.ts", "backend-ts/src/pi/issueSupervisorRecovery.ts", "backend-ts/src/pi/issueSupervisorRecoveryAttemptRecorder.ts", "backend-ts/src/pi/issueSupervisorSignalCollector.ts", "backend-ts/src/pi/issueToolViews.ts", "backend-ts/src/pi/providerErrorParser.ts", "backend-ts/src/pi/providerErrorParserSupport.ts", "backend-ts/src/pi/providerOutageDiagnosis.ts", "backend-ts/src/pi/recoveryBudget.ts", "backend-ts/src/pi/recoveryDiagnosis.ts", "backend-ts/src/pi/runnerActionTools.ts", "backend-ts/src/pi/runnerActions.ts", "backend-ts/src/pi/runnerBatchTriageScope.ts", "backend-ts/src/pi/runnerIssueScheduleActions.ts", "backend-ts/src/pi/runnerIssueStateActions.ts", "backend-ts/src/pi/runnerIssueStatusActions.ts", "backend-ts/src/pi/runnerNextTriageActions.ts", "backend-ts/src/pi/sessionObserver.ts", "backend-ts/src/pi/supervisorCommitments.ts", "backend-ts/src/pi/supervisorContextResolver.ts", "backend-ts/src/pi/supervisorControlContracts.ts", "backend-ts/src/pi/supervisorControlTools.ts"]
   },
 ] as const;
 

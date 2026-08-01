@@ -185,8 +185,7 @@ export function providerAttemptRef(input: LegacyProviderRuntimeRef): ProviderAtt
 export function mapLegacyIssueRunStatus(status: string): RunStatus {
   switch (status.trim().toLowerCase()) {
     case "in_progress": return "running";
-    case "pending_verification":
-    case "done": return "succeeded";
+    case "succeeded": return "succeeded";
     case "failed": return "failed";
     case "cancelled": return "cancelled";
     default: throw new Error(`unsupported legacy issue_run status: ${status}`);

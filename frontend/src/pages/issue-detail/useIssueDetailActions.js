@@ -18,11 +18,9 @@ export default function useIssueDetailActions({
   const [commentDraft, setCommentDraft] = useState('');
   const [commentError, setCommentError] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
-  const [verifierGenerating, setVerifierGenerating] = useState(false);
-  const [verifierError, setVerifierError] = useState('');
-  const [verificationReviewAction, setVerificationReviewAction] = useState('');
-  const [verificationReviewDraft, setVerificationReviewDraft] = useState('');
-  const [verificationReviewSubmitting, setVerificationReviewSubmitting] = useState(false);
+  const [humanReviewAction, setHumanReviewAction] = useState('');
+  const [humanReviewDraft, setHumanReviewDraft] = useState('');
+  const [humanReviewSubmitting, setHumanReviewSubmitting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingIssue, setDeletingIssue] = useState(false);
 
@@ -31,11 +29,9 @@ export default function useIssueDetailActions({
     setCommentDraft('');
     setCommentError('');
     setCommentSubmitting(false);
-    setVerifierGenerating(false);
-    setVerifierError('');
-    setVerificationReviewAction('');
-    setVerificationReviewDraft('');
-    setVerificationReviewSubmitting(false);
+    setHumanReviewAction('');
+    setHumanReviewDraft('');
+    setHumanReviewSubmitting(false);
     setDeleteConfirmOpen(false);
     setDeletingIssue(false);
   }, [issueId]);
@@ -127,24 +123,24 @@ export default function useIssueDetailActions({
     }
   };
 
-  const handleVerificationReview = async (action, comment = '') => {
-    setVerificationReviewSubmitting(true);
+  const handleHumanReviewResponse = async (action, comment = '') => {
+    setHumanReviewSubmitting(true);
     try {
-      await workApi.reviewIssueVerification(issueId, {
+      await workApi.answerIssueHumanReview(issueId, {
         action,
         comment: comment.trim(),
-        review_request_id: issue?.verification?.request?.id,
-        review_revision: issue?.verification?.request?.revision,
+        review_request_id: issue?.decision?.request?.id,
+        review_revision: issue?.decision?.request?.revision,
       });
-      message.success('验证处理已提交');
-      setVerificationReviewAction('');
-      setVerificationReviewDraft('');
+      message.success('回答已提交，PI 将继续判断');
+      setHumanReviewAction('');
+      setHumanReviewDraft('');
       loadIssueData();
       refreshData(['issues']);
     } catch (err) {
-      message.error('验证处理失败: ' + err.message);
+      message.error('提交人工回答失败: ' + err.message);
     } finally {
-      setVerificationReviewSubmitting(false);
+      setHumanReviewSubmitting(false);
     }
   };
 
@@ -169,25 +165,6 @@ export default function useIssueDetailActions({
       message.error('保存内部备注失败: ' + errorMessage);
     } finally {
       setCommentSubmitting(false);
-    }
-  };
-
-  const handleGenerateVerifierReport = async () => {
-    setVerifierGenerating(true);
-    setVerifierError('');
-    try {
-      const result = await workApi.generateIssueVerifierReport(issueId);
-      updateDetailState(draft => {
-        if (result?.event && !hasIssueEvent(draft.events, result.event)) draft.events.push(result.event);
-      });
-      message.success('Verifier report 已生成');
-      loadIssueData();
-    } catch (err) {
-      const errorMessage = err.message || '生成 verifier report 失败';
-      setVerifierError(errorMessage);
-      message.error('生成 verifier report 失败: ' + errorMessage);
-    } finally {
-      setVerifierGenerating(false);
     }
   };
 
@@ -216,13 +193,11 @@ export default function useIssueDetailActions({
     setCommentDraft,
     commentError,
     commentSubmitting,
-    verifierGenerating,
-    verifierError,
-    verificationReviewAction,
-    setVerificationReviewAction,
-    verificationReviewDraft,
-    setVerificationReviewDraft,
-    verificationReviewSubmitting,
+    humanReviewAction,
+    setHumanReviewAction,
+    humanReviewDraft,
+    setHumanReviewDraft,
+    humanReviewSubmitting,
     deleteConfirmOpen,
     setDeleteConfirmOpen,
     deletingIssue,
@@ -233,9 +208,8 @@ export default function useIssueDetailActions({
     handleCancel,
     handleDelete,
     handleMarkStatus,
-    handleVerificationReview,
+    handleHumanReviewResponse,
     handleSubmitComment,
-    handleGenerateVerifierReport,
     closeEditModal,
     handleIssueSaved,
     handleCopyText,

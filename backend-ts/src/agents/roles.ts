@@ -1,6 +1,6 @@
 export const PI_MANAGER_ROLE = "pi_manager" as const;
 
-export const EXECUTION_AGENT_ROLES = ["executor", "verifier", "reviewer", "reporter"] as const;
+export const EXECUTION_AGENT_ROLES = ["executor", "reviewer", "reporter"] as const;
 export const AGENT_SESSION_ROLES = [PI_MANAGER_ROLE, ...EXECUTION_AGENT_ROLES] as const;
 
 export type AgentSessionRole = (typeof AGENT_SESSION_ROLES)[number];

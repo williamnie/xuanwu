@@ -41,7 +41,7 @@ describe("PI runner action tools", () => {
     const issueList = toolByName(tools, "issue_list");
     const issueStatus = toolByName(tools, "issue_status_summary");
     const issueExecution = toolByName(tools, "issue_execution_status");
-    const completionReconcile = toolByName(tools, "issue_completion_reconcile");
+    const completionReconcile = toolByName(tools, "issue_acceptance_request");
     const humanReview = toolByName(tools, "human_review_request_create");
     const watchCreate = toolByName(tools, "issue_completion_watch_create");
     const watchList = toolByName(tools, "issue_completion_watch_list");
@@ -257,7 +257,7 @@ describe("PI runner action tools", () => {
       ["cancelIssueCompletionWatch", { reason: "user_cancel", watch_id: "watch-1" }],
       ["enqueueBatchTriageIssues", { issue_ids: [387, 388], project_id: "demo", user_phrase: "把 #387-#388 都开始做" }],
       ["enqueueNextTriageIssue", { project_id: "demo" }],
-      ["reconcileIssueCompletion", { issue_id: 7, rationale: "补齐交付记录" }],
+      ["requestIssueAcceptanceAction", { issue_id: 7, rationale: "补齐交付记录" }],
       ["createHumanReviewRequest", {
         acceptance_summary: ["Node/TypeScript/PostgreSQL", "OIDC"],
         evidence_refs: ["docs/architecture/0001.md"],
@@ -1287,7 +1287,7 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     createIssueBatchProposal: record("createIssueBatchProposal"),
     createIssueProposal: record("createIssueProposal"),
     createHumanReviewRequest: record("createHumanReviewRequest"),
-    reconcileIssueCompletion: record("reconcileIssueCompletion"),
+    requestIssueAcceptanceAction: record("requestIssueAcceptanceAction"),
     createIssueStateRepairProposal: record("createIssueStateRepairProposal"),
     createReportWorkflow: record("createReportWorkflow"),
     createReviewWorkflow: record("createReviewWorkflow"),

@@ -1,6 +1,5 @@
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
-  hydrateStoredIssueLogPayload,
   recordIssueEvent,
   recordIssueLogEvent,
   RUNTIME_EVIDENCE_CORRELATION_CONTRACT,
@@ -23,7 +22,6 @@ import type {
   SessionRef
 } from "../providers/types.ts";
 import { redactSensitiveText } from "../util/redact.ts";
-import { captureRuntimeEvidenceFromIssueLog } from "../domain/evidence/completionGate.ts";
 import { makeRunAttemptID } from "../domain/run/contracts.ts";
 import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
 import { syncProviderApprovalRequest } from "./providerApprovalRequests.ts";
@@ -141,20 +139,17 @@ export async function recoverIssueWithProvider(
 }
 
 function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string, activeAttempt: number) {
-  const pendingEvidence = new Set<Promise<void>>();
+  const pendingReconciliations = new Set<Promise<void>>();
   const mode = issueLogMode(input);
   const persistence = createIssueLogPersistence((event) => {
-    const pending = persistRuntimeEvent(input, event, activeRunID, activeAttempt);
-    if (!pending) return;
-    pendingEvidence.add(pending);
-    void pending.finally(() => pendingEvidence.delete(pending));
+    persistRuntimeEvent(input, event, activeRunID, activeAttempt);
   }, { mode });
   let failure = false;
   let sessionObserved = false;
   return {
     async flush() {
       persistence.flush();
-      await Promise.all([...pendingEvidence]);
+      await Promise.all([...pendingReconciliations]);
     },
     mode,
     hasFailure: () => failure,
@@ -167,16 +162,16 @@ function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string
       if (event.session) sessionObserved = true;
       persistRunnerOutcomeMarker(input, event, activeRunID);
       persistence.push(event);
-      if (successfulTerminalEvent(event) && input.database) {
+      const terminalOutcome = providerTerminalOutcome(event);
+      if (terminalOutcome && input.database) {
         const pending = reconcileProviderOutcome({
           bus: input.bus,
           database: input.database,
           issueID: input.issueId,
           issueRunID: activeRunID,
-          providerID: event.provider
-        }).then((issue) => {
-          if (issue && issue.status !== "in_progress") input.onProjectSlotReleased?.(issue.project_id);
-        }).catch((error) => {
+          providerID: event.provider,
+          reportedOutcome: parseProviderOutcomeMarker(event.text) ?? terminalOutcome
+        }).then(() => undefined).catch((error) => {
           input.onLog?.({
             error: redactSensitiveText(error instanceof Error ? error.message : String(error)),
             provider: event.provider,
@@ -185,8 +180,8 @@ function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string
             type: "error"
           });
         });
-        pendingEvidence.add(pending);
-        void pending.finally(() => pendingEvidence.delete(pending));
+        pendingReconciliations.add(pending);
+        void pending.finally(() => pendingReconciliations.delete(pending));
       }
       input.onRuntimeEvent?.(event);
     }
@@ -308,7 +303,7 @@ function persistRuntimeEvent(
   event: ProviderEvent,
   activeRunID: string,
   activeAttempt: number
-): Promise<void> | undefined {
+): void {
   if (!input.database) return;
   const persisted = recordIssueLogEvent(
     input.database,
@@ -318,25 +313,6 @@ function persistRuntimeEvent(
   );
   publishIssueLog(input, event, persisted);
   projectNormalizedRunEvent(input.database, activeRunID, event.runEvent, persisted.id);
-  if (event.raw?.method !== "item/completed") return;
-  const evidenceEvent = {
-    ...persisted,
-    payload: hydrateStoredIssueLogPayload(input.database, persisted.payload)
-  };
-  return captureRuntimeEvidenceFromIssueLog(
-    input.database,
-    input.issueId,
-    evidenceEvent,
-    activeRunID
-  ).then(() => undefined).catch((error) => {
-    input.onLog?.({
-      error: redactSensitiveText(error instanceof Error ? error.message : String(error)),
-      provider: event.provider,
-      raw: { method: "runtime/evidence_capture_error" },
-      status: "failed",
-      type: "error"
-    });
-  });
 }
 
 function runtimeEvidenceCorrelation(
@@ -378,12 +354,23 @@ function eventSessionStatus(event: ProviderEvent): string {
   return "";
 }
 
-function successfulTerminalEvent(event: ProviderEvent): boolean {
-  if (event.runEvent?.terminal === true) return event.runEvent.outcome === "succeeded";
+function providerTerminalOutcome(event: ProviderEvent): ReturnType<typeof parseProviderOutcomeMarker> {
+  if (event.runEvent?.terminal === true) {
+    if (event.runEvent.outcome === "succeeded") return { outcome: "completed", reason: "Provider Turn completed" };
+    if (event.runEvent.outcome === "failed") return { outcome: "failed", reason: event.error || event.status || "Provider Turn failed" };
+    if (event.runEvent.outcome === "cancelled" || event.runEvent.outcome === "interrupted") {
+      return { outcome: "failed", reason: event.error || event.status || `Provider Turn ${event.runEvent.outcome}` };
+    }
+  }
   const method = event.raw?.method ?? "";
   const status = (event.status ?? "").trim().toLowerCase();
-  if (method === "turn/completed") return status === "" || status === "completed" || status === "succeeded";
-  return event.type === "done" && !["failed", "error", "interrupted", "cancelled"].includes(status);
+  if (event.type === "error") return { outcome: "failed", reason: event.error || status || "Provider error" };
+  if (method === "turn/completed" || event.type === "done") {
+    return ["failed", "error", "interrupted", "cancelled"].includes(status)
+      ? { outcome: "failed", reason: event.error || status }
+      : { outcome: "completed", reason: "Provider Turn completed" };
+  }
+  return null;
 }
 
 function publishIssueLog(

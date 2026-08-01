@@ -22,7 +22,7 @@ function managerAuthorizedActions(projectID: string): NonNullable<PiGatePolicy["
     { action_type: "agent.profile_recommend", project_id: projectID },
     { action_type: "agent.workflow_request", project_id: projectID },
     { action_type: "human_review.request", project_id: projectID },
-    { action_type: "issue.completion_reconcile", project_id: projectID },
+    { action_type: "issue.acceptance_request", project_id: projectID },
     { action_type: "issue.list", project_id: projectID }, { action_type: "issue.status_summary", project_id: projectID },
     { action_type: "issue.execution_status", project_id: projectID }, { action_type: "issue.read", project_id: projectID },
     { action_type: "issue.state_diagnose", project_id: projectID }, { action_type: "project.list" },

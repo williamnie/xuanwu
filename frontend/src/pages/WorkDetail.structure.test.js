@@ -33,20 +33,20 @@ test('Work Board stays board-only and opens canonical Work Detail', () => {
   assert.doesNotMatch(board, /relations=|work-relation-row|indexRelationsByWork/);
 });
 
-test('Work Detail mutations use audited Work controls and the existing verification gate', () => {
+test('Work Detail mutations use audited Work controls and the explicit human-review response', () => {
   assert.match(detail, /workApi\.controlWork\(work\.id, action, buildWorkActionPayload\(work, action\)\)/);
-  assert.match(detail, /workApi\.reviewWork\(work\.id/);
+  assert.match(detail, /workApi\.answerWorkHumanReview\(work\.id/);
   assert.match(model, /expected_revision/);
   assert.doesNotMatch(detail, /window\.(alert|confirm)/);
 });
 
 test('Work Detail only exposes review for an explicit request and closes request-changes through the same Session', () => {
-  assert.match(model, /verification\?\.owner === 'human'/);
+  assert.match(model, /decision\?\.owner === 'human'/);
   assert.match(detail, /你正在审批|work\.youAreApproving/);
-  assert.match(detail, /verification\?\.phase === 'pi_verifying'/);
-  assert.match(detail, /verification\?\.phase === 'pi_waiting'/);
-  assert.match(detail, /verification\?\.phase === 'pi_blocked'/);
-  assert.match(detail, /verification\?\.activity\?\.error/);
+  assert.match(detail, /decision\?\.phase === 'pi_deciding'/);
+  assert.match(detail, /decision\?\.phase === 'pi_waiting'/);
+  assert.match(detail, /decision\?\.phase === 'pi_error'/);
+  assert.match(detail, /decision\?\.activity\?\.error/);
   assert.match(detail, /review_request_id/);
   assert.match(detail, /review_revision/);
   assert.match(detail, /submitChangesAndContinue/);

@@ -67,7 +67,7 @@ test('Work detail client preserves canonical detail, timeline, actions and Issue
     await workApi.updateWork(workId, { title: 'Updated' });
     await workApi.controlWork(workId, 'enqueue', actionPayload);
     await workApi.controlWork(workId, 'cancel', actionPayload);
-    await workApi.reviewWork(workId, { action: 'accept', comment: '' });
+    await workApi.answerWorkHumanReview(workId, { action: 'accept', comment: '' });
     assert.deepEqual(requests, [
       {
         body: { goal: 'Create smoke', project_id: 'demo', title: 'Created' },
@@ -79,9 +79,9 @@ test('Work detail client preserves canonical detail, timeline, actions and Issue
       { body: { title: 'Updated' }, method: 'PATCH', url: '/api/works/xw%3Awork%3Aissues%3A700' },
       { body: actionPayload, method: 'POST', url: '/api/works/xw%3Awork%3Aissues%3A700/actions/enqueue' },
       { body: actionPayload, method: 'POST', url: '/api/works/xw%3Awork%3Aissues%3A700/actions/cancel' },
-      { body: { action: 'accept', comment: '' }, method: 'POST', url: '/api/issues/700/verification' },
+      { body: { action: 'accept', comment: '' }, method: 'POST', url: '/api/issues/700/human-review-response' },
     ]);
-    assert.throws(() => workApi.reviewWork('xw:work:external:700', { action: 'accept' }), /compatible Issue/);
+    assert.throws(() => workApi.answerWorkHumanReview('xw:work:external:700', { action: 'accept' }), /compatible Issue/);
   } finally {
     globalThis.fetch = previousFetch;
   }

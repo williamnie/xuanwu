@@ -23,13 +23,12 @@ export type ManualDigestFlushInput = { now?: Date | string; runGroupID: string }
 type FlushReason = "completed" | "manual" | "partial_deadline" | "partial_interval";
 type DigestCounts = {
   active: number; completed: number; failed: number; needsUser: number;
-  skipped: number; total: number; verification: number;
+  skipped: number; total: number;
 };
 type DigestPayload = DigestCounts & {
   active_count: number; completed_count: number; failed_count: number;
   issues: Array<Record<string, number | string>>; needs_user_count: number;
   run_group_id: string; skipped_count: number; total_count: number;
-  verification_count: number;
 };
 
 const DEFAULT_LIMIT = 50;
@@ -194,9 +193,7 @@ function digestPayload(runGroupID: string, expectedCount: number, items: PiRunGr
     skipped: counts.skipped,
     skipped_count: counts.skipped,
     total: counts.total,
-    total_count: counts.total,
-    verification: counts.verification,
-    verification_count: counts.verification
+    total_count: counts.total
   };
 }
 
@@ -204,7 +201,7 @@ function digestCounts(expectedCount: number, items: PiRunGroupItem[]): DigestCou
   const counts: DigestCounts = {
     active: Math.max(expectedCount - items.length, 0),
     completed: 0, failed: 0, needsUser: 0, skipped: 0,
-    total: Math.max(expectedCount, items.length), verification: 0
+    total: Math.max(expectedCount, items.length)
   };
   for (const item of items) incrementBucket(counts, item.report_bucket);
   return counts;
@@ -212,7 +209,6 @@ function digestCounts(expectedCount: number, items: PiRunGroupItem[]): DigestCou
 
 function incrementBucket(counts: DigestCounts, bucket: string): void {
   if (bucket === "done") counts.completed += 1;
-  else if (bucket === "verification") counts.verification += 1;
   else if (bucket === "failed") counts.failed += 1;
   else if (bucket === "needs_user") counts.needsUser += 1;
   else if (bucket === "skipped") counts.skipped += 1;
@@ -232,8 +228,8 @@ function notableIssues(items: PiRunGroupItem[]): Array<Record<string, number | s
 
 function digestSummary(reason: FlushReason, payload: DigestPayload): string {
   return `run group ${payload.run_group_id} ${reason}: total ${payload.total_count}, ` +
-    `done ${payload.completed_count}, verification ${payload.verification_count}, ` +
-    `failed ${payload.failed_count}, needs_user ${payload.needs_user_count}, ` +
+    `done ${payload.completed_count}, failed ${payload.failed_count}, ` +
+    `needs_user ${payload.needs_user_count}, ` +
     `active ${payload.active_count}, skipped ${payload.skipped_count}`;
 }
 

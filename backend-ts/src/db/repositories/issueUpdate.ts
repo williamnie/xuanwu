@@ -88,8 +88,8 @@ export function updateIssue(db: RunnerDatabase, id: number, input: UpdateIssueIn
         record.auto_retry_next_at, record.auto_retry_reason, record.error, record.issue_log_mode,
         timestamp, current.id]);
     if (Object.hasOwn(patch, "status")) {
-      closeOpenIssueRun(db, record, timestamp);
       if (current.status !== record.status) {
+        if (record.status !== "in_progress") closeOpenIssueRun(db, record, timestamp);
         db.sqlite.run(
           `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
           [current.id, "issue.status_changed", JSON.stringify({ status: record.status }), timestamp]
@@ -228,11 +228,11 @@ function closeOpenIssueRun(db: RunnerDatabase, issue: NormalizedIssuePatch & { i
 }
 
 function patchStatusExitReason(status: string): string {
-  if (status === "done" || status === "pending_verification") return "explicit_status_update";
+  if (status === "done" || status === "needs_user") return "pi_semantic_decision";
   if (status === "failed" || status === "cancelled") return status;
   return "status_changed";
 }
 
 function isTerminalStatus(status: string): boolean {
-  return status === "done" || status === "failed" || status === "cancelled" || status === "pending_verification";
+  return status === "done" || status === "failed" || status === "cancelled" || status === "needs_user";
 }

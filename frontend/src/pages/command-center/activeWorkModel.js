@@ -1,6 +1,6 @@
 import { runAvailableActions } from '../runs/runPageModel.js';
 
-const ACTIVE_WORK_STATUSES = new Set(['todo', 'in_progress', 'pending_verification']);
+const ACTIVE_WORK_STATUSES = new Set(['todo', 'in_progress', 'needs_user']);
 
 const PHASE_META = {
   queued: { label: '排队中', tone: 'queued' },
@@ -8,7 +8,7 @@ const PHASE_META = {
   running: { label: '运行中', tone: 'running' },
   waiting_approval: { label: '等待审批', tone: 'waiting' },
   recovering: { label: '恢复中', tone: 'recovering' },
-  verifying: { label: '验证中', tone: 'verifying' },
+  pi_deciding: { label: 'PI 判断中', tone: 'verifying' },
   succeeded: { label: '已完成', tone: 'succeeded' },
   failed: { label: '失败', tone: 'failed' },
   cancelled: { label: '已停止', tone: 'cancelled' },
@@ -35,13 +35,14 @@ export function activeWorkView(item, runDetail, now = new Date()) {
 
 export function activeWorkPhase(item) {
   if (item?.status === 'todo') return 'queued';
-  if (item?.status === 'pending_verification') return 'verifying';
+  if (item?.status === 'needs_user') return 'waiting_approval';
+  if (item?.status === 'in_progress' && item?.latest_run?.ended_at) return 'pi_deciding';
   if (item?.latest_run?.status === 'recovering' || item?.latest_run?.phase === 'recovering') return 'recovering';
   return item?.latest_run?.phase || item?.latest_run?.status || (item?.status === 'in_progress' ? 'starting' : 'unknown');
 }
 
 export function activeWorkDuration(item, runDetail, now = new Date()) {
-  const fallbackStart = item?.status === 'todo' || item?.status === 'pending_verification' ? item?.updated_at : '';
+  const fallbackStart = item?.status === 'todo' || item?.status === 'needs_user' ? item?.updated_at : '';
   const start = runDetail?.started_at || fallbackStart;
   const end = runDetail?.ended_at || now;
   const elapsed = timestamp(end) - timestamp(start);
@@ -90,7 +91,7 @@ export function formatRelativeTime(value, now = new Date()) {
 
 function progressFallback(phase) {
   if (phase === 'queued') return '等待 Runner 领取';
-  if (phase === 'verifying') return '等待验收结论';
+  if (phase === 'pi_deciding') return 'PI 正在读取 Session 并决定后续';
   if (phase === 'recovering') return '正在恢复执行';
   if (phase === 'waiting_approval') return '等待确定性权限门禁';
   return '等待 provider 进展事件';

@@ -6,8 +6,7 @@ import { openDatabase } from "../db/database.ts";
 import { createPiMemoryItem } from "../db/repositories/pi.ts";
 import {
   buildPiRuntimeSystemPrompt,
-  xuanwuSupervisorCompatibilityPrompt,
-  xuanwuSupervisorRoleContractPrompt
+  xuanwuPiRoleContractPrompt
 } from "./piRuntimePrompt.ts";
 
 const DECISION_FIXTURES = [
@@ -38,56 +37,30 @@ const DECISION_FIXTURES = [
   }
 ] as const;
 
-describe("Xuanwu Supervisor runtime prompt", () => {
-  test("snapshots the canonical role and compatibility contracts", () => {
-    expect([
-      "[ROLE CONTRACT]",
-      xuanwuSupervisorRoleContractPrompt(),
-      "[COMPATIBILITY CONTRACT]",
-      xuanwuSupervisorCompatibilityPrompt()
-    ].join("\n\n")).toMatchSnapshot();
+describe("Xuanwu PI runtime prompt", () => {
+  test("snapshots the canonical PI role contract", () => {
+    expect(xuanwuPiRoleContractPrompt()).toMatchSnapshot();
   });
 
-  test("defines the Engineering Chief of Staff role, vocabulary, language, and deterministic gates", () => {
-    const prompt = xuanwuSupervisorRoleContractPrompt();
+  test("defines PI authority, vocabulary, language, and deterministic gates", () => {
+    const prompt = xuanwuPiRoleContractPrompt();
 
-    expect(prompt).toContain("Xuanwu Supervisor");
-    expect(prompt).toContain("Engineering Chief of Staff");
-    for (const term of ["Work", "Run", "Workflow", "Evidence", "Handoff", "Attention", "Automation"]) {
+    expect(prompt).toContain("Xuanwu PI");
+    for (const term of ["Issue", "Run", "Provider Session", "Supervisor", "Host", "Evidence", "Handoff"]) {
       expect(prompt).toContain(term);
     }
     expect(prompt).toContain("current system-language contract");
     expect(prompt).toContain("every state mutation, external write, and destructive action");
     expect(prompt).toContain("deterministic tool permission/approval gate");
     expect(prompt).toContain("cannot select the source of truth");
-    expect(prompt).toContain("a successful Run is only a candidate result");
+    expect(prompt).toContain("a terminal Run is only a signal");
   });
 
   for (const fixture of DECISION_FIXTURES) {
     test(`covers the ${fixture.kind} decision fixture: ${fixture.user}`, () => {
-      expect(xuanwuSupervisorRoleContractPrompt()).toContain(fixture.expected);
+      expect(xuanwuPiRoleContractPrompt()).toContain(fixture.expected);
     });
   }
-
-  test("keeps legacy tools as bounded compatibility adapters instead of the Supervisor identity", async () => {
-    await withRuntimePrompt("compatibility", (prompt) => {
-      expect(prompt).toContain("Compatibility prompt (temporary adapter, not a second product model)");
-      expect(prompt).toContain("issues/issue_events and existing issue_* actions remain the authoritative write path");
-      expect(prompt).toContain("issue_runs is the Run lifecycle authority");
-      expect(prompt).toContain("issue_events handoff.* records are the Handoff projection");
-      expect(prompt).toContain("This prompt introduces no dual write or dual read");
-      expect(prompt).toContain("prefer the registered work_*, run_*, evidence_*, and handoff_* domain tools");
-      expect(prompt).toContain("issue_create_proposal");
-      expect(prompt).toContain("issue_enqueue_proposal");
-      expect(prompt).toContain("issue_schedule_enqueue");
-      expect(prompt).toContain("issue_enqueue_next_triage");
-      expect(prompt).toContain("issue_enqueue_batch_triage");
-      expect(prompt).toContain("issue_completion_watch_create");
-      expect(prompt).toContain("Use depends_on_issue_ids only for success dependencies");
-      expect(prompt).toContain("rollback verification, incident review, cleanup, or a final report");
-      expect(prompt).toContain("Never combine depends_on_issue_ids with acceptance text that says the Work must proceed when that dependency fails");
-    });
-  });
 
   test("keeps investigation, repo proposal, memory, and repair boundaries", async () => {
     await withRuntimePrompt("boundaries", (prompt) => {
@@ -110,8 +83,7 @@ describe("Xuanwu Supervisor runtime prompt", () => {
       expect(prompt).toContain("never enqueue the whole DAG blindly");
       expect(prompt).toContain("must not edit code");
       expect(prompt).toContain("issue_state_repair_proposal is only for deterministic");
-      expect(prompt).toContain("call issue_status_update with every explicit issue id");
-      expect(prompt).toContain("triage, todo, in_progress, pending_verification, done, failed, and cancelled");
+      expect(prompt).toContain("triage, todo, in_progress, or cancelled");
       expect(prompt).toContain("最多追问一个关键问题");
       expect(prompt).toContain("Supervisor commitment context (operational projection, not long-term memory)");
       expect(prompt).toContain("xw.supervisor-commitment.v1");
@@ -164,7 +136,7 @@ describe("Xuanwu Supervisor runtime prompt", () => {
   });
 
   test("keeps the static and assembled prompt inside the token-size baseline", async () => {
-    const role = xuanwuSupervisorRoleContractPrompt();
+    const role = xuanwuPiRoleContractPrompt();
     await withRuntimePrompt("token-size", (prompt) => {
       const benchmark = {
         assembled_chars: prompt.length,

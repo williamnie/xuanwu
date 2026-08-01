@@ -1,7 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.ts";
-import { updateIssue } from "../db/repositories/issueUpdate.ts";
 
 export type PiAcceptanceRequestInput = {
   reason?: string;
@@ -11,7 +10,8 @@ export type PiAcceptanceRequestInput = {
 /**
  * 将完成声明交给 Issue-scoped PI 验收，而不是由 Evidence 分类器改变生命周期。
  * 运行中的 Run 只能由 Provider terminal reconciliation 结束；外部 done 声明不得
- * 提前关闭 Run。已有终态 Run 时，pending_verification 只表示“等待 PI 读卡片”。
+ * 提前关闭 Run。已有终态 Run 时，Issue 仍保持 in_progress，由终态 Run 和
+ * issue.pi_acceptance_requested.v1 表示“等待 PI 读取上下文并决定”。
  */
 export function requestIssuePiAcceptance(
   db: RunnerDatabase,
@@ -30,18 +30,13 @@ export function requestIssuePiAcceptance(
     });
     return issue;
   }
-  if (issue.status !== "pending_verification") {
-    if (issue.status !== "in_progress" && issue.status !== "failed") {
-      throw new Error(`PI acceptance cannot be requested from ${issue.status}`);
-    }
-    updateIssue(db, issueID, { error: "", status: "pending_verification" });
-  }
+  if (issue.status !== "in_progress") throw new Error(`PI acceptance cannot be requested from ${issue.status}`);
   recordOnce(db, issueID, "issue.pi_acceptance_requested.v1", run.id, {
     issue_run_id: run.id,
     reason: cleanString(input.reason) || "completion claim requires issue-scoped PI semantic acceptance",
     source: input.source
   });
-  return mustGetIssue(db, issueID);
+  return issue;
 }
 
 function recordOnce(

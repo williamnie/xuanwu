@@ -130,8 +130,8 @@ const STATUS_SNAPSHOT_PATTERNS = [
   /(?:当前|截至|本次|本轮|现在|today|currently|current status|manager cycle observation)/i,
   /(?:status_counts|unfinished_total|active pi_manager sessions)/i,
   /(?:全部终态|没有未完成|无未完成|all terminal|no unfinished|all (?:issues|works?) (?:are |were )?done)/i,
-  /(?:issue|work|run|任务)\s*#?\d+[^\n]{0,48}(?:done|failed|cancelled|triage|todo|in_progress|pending_verification|失败|已完成|已取消)/i,
-  /(?:done|failed|cancelled|triage|todo|in_progress|pending_verification)\s*[=:]\s*\d+/i
+  /(?:issue|work|run|任务)\s*#?\d+[^\n]{0,48}(?:done|failed|cancelled|triage|todo|in_progress|needs_user|失败|已完成|已取消)/i,
+  /(?:done|failed|cancelled|triage|todo|in_progress|needs_user)\s*[=:]\s*\d+/i
 ];
 
 function sensitiveLine(line: string): boolean {

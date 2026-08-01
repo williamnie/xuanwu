@@ -5,7 +5,6 @@ import { recordIssueEvent, listIssueEvents } from "../../db/repositories/issueEv
 import { createIssueRun, updateIssueRuntime } from "../../db/repositories/issueRuns.ts";
 import { getIssue, listIssueRuns, type Issue } from "../../db/repositories/issues.ts";
 import { getProject, ProjectNotFoundError } from "../../db/repositories/projects.ts";
-import { reviewIssueVerification } from "../../db/repositories/issueVerification.ts";
 import { updateIssue } from "../../db/repositories/issueUpdate.ts";
 import type { EventBus } from "../../events/bus.ts";
 import {
@@ -13,10 +12,11 @@ import {
   type ExecutorProvider,
   type ExecutorProviderId
 } from "../../providers/types.ts";
+import { requestIssuePiAcceptance } from "../../runner/piAcceptanceRequest.ts";
 import {
-  readPiVerificationActivity,
-  type PiVerificationActivity
-} from "./piVerificationActivity.ts";
+  readPiAcceptanceActivity,
+  type PiAcceptanceActivity
+} from "./piAcceptanceActivity.ts";
 
 export const HUMAN_REVIEW_EVENT_TYPES = {
   requested: "issue.human_review_requested.v1",
@@ -41,17 +41,17 @@ export type HumanReviewRequest = {
   status: "open" | "accepted" | "changes_requested" | "rejected" | "superseded";
 };
 
-export type IssueVerificationProjection = {
+export type IssueDecisionProjection = {
   owner: "human" | "pi";
   phase:
     | "human_review"
-    | "pi_blocked"
+    | "pi_error"
     | "pi_queued"
-    | "pi_repairing"
-    | "pi_verifying"
+    | "pi_continuing"
+    | "pi_deciding"
     | "pi_waiting"
     | "complete";
-  activity: PiVerificationActivity | null;
+  activity: PiAcceptanceActivity | null;
   request: HumanReviewRequest | null;
 };
 
@@ -79,11 +79,11 @@ export function createHumanReviewRequest(
   runtime: HumanReviewRuntime = {}
 ): HumanReviewRequest {
   const issue = mustGetIssue(db, issueID);
-  if (issue.status !== "pending_verification") {
-    throw new Error("只有 pending_verification Issue 才能请求人类验收");
+  if (issue.status !== "needs_user") {
+    throw new Error("只有 needs_user Issue 才能请求人类处理");
   }
   const question = requiredText(input.question, "question");
-  const current = readIssueVerificationProjection(db, issueID).request;
+  const current = readIssueDecisionProjection(db, issueID).request;
   const revision = (current?.revision ?? 0) + 1;
   if (current?.status === "open") {
     recordIssueEvent(db, issueID, HUMAN_REVIEW_EVENT_TYPES.superseded, {
@@ -134,10 +134,10 @@ export function createHumanReviewRequest(
   return request;
 }
 
-export function readIssueVerificationProjection(
+export function readIssueDecisionProjection(
   db: RunnerDatabase,
   issueID: number
-): IssueVerificationProjection {
+): IssueDecisionProjection {
   const issue = mustGetIssue(db, issueID);
   const events = listIssueEvents(db, issueID, {
     limit: 500,
@@ -166,10 +166,10 @@ export function readIssueVerificationProjection(
       event.type === HUMAN_REVIEW_EVENT_TYPES.revisionRequested
       || event.type === HUMAN_REVIEW_EVENT_TYPES.revisionResumed
     ) current.status = "changes_requested";
-    if (event.type === HUMAN_REVIEW_EVENT_TYPES.revisionResumeFailed) current.status = "open";
+    if (event.type === HUMAN_REVIEW_EVENT_TYPES.revisionResumeFailed) current.status = "changes_requested";
   }
   const request = [...requests.values()].sort((a, b) => b.revision - a.revision)[0] ?? null;
-  const storedActivity = readPiVerificationActivity(db, issueID);
+  const storedActivity = readPiAcceptanceActivity(db, issueID);
   const activity = activityAppliesToCurrentIssueState(storedActivity, issue.updated_at)
     ? storedActivity
     : null;
@@ -181,14 +181,14 @@ export function readIssueVerificationProjection(
     activity,
     owner: "pi",
     phase: issue.status === "in_progress" && request?.status === "changes_requested"
-      ? "pi_repairing"
-      : piVerificationPhase(activity),
+      ? "pi_continuing"
+      : piAcceptancePhase(activity),
     request
   };
 }
 
 function activityAppliesToCurrentIssueState(
-  activity: PiVerificationActivity | null,
+  activity: PiAcceptanceActivity | null,
   issueUpdatedAt: string
 ): boolean {
   if (!activity) return false;
@@ -197,12 +197,12 @@ function activityAppliesToCurrentIssueState(
   return !Number.isFinite(issueAt) || !Number.isFinite(activityAt) || activityAt >= issueAt;
 }
 
-function piVerificationPhase(
-  activity: PiVerificationActivity | null
-): IssueVerificationProjection["phase"] {
+function piAcceptancePhase(
+  activity: PiAcceptanceActivity | null
+): IssueDecisionProjection["phase"] {
   if (!activity || activity.status === "queued") return "pi_queued";
-  if (activity.status === "running") return "pi_verifying";
-  if (activity.status === "failed") return "pi_blocked";
+  if (activity.status === "running") return "pi_deciding";
+  if (activity.status === "failed") return "pi_error";
   return "pi_waiting";
 }
 
@@ -221,40 +221,30 @@ export async function reviewHumanIssue(
   if (action === "request_changes") {
     return resumeRevisionInSameSession(db, mustGetIssue(db, issueID), request, comment, runtime);
   }
-  if (action === "accept" && request.kind !== "acceptance") {
-    if (comment) {
-      recordIssueEvent(db, issueID, "issue.comment", {
-        author: "user",
-        body: comment,
-        source: "human_review_accept"
-      });
-    }
-    recordIssueEvent(db, issueID, "issue.verification_reviewed", {
-      action,
-      comment,
-      request_id: request.id,
-      revision: request.revision,
-      status: "pending_verification"
+  if (comment) {
+    recordIssueEvent(db, issueID, "issue.comment", {
+      author: "user",
+      body: comment,
+      source: `human_review_${action}`
     });
-    recordIssueEvent(db, issueID, HUMAN_REVIEW_EVENT_TYPES.superseded, {
-      action,
-      comment,
-      request_id: request.id,
-      revision: request.revision
-    });
-    return mustGetIssue(db, issueID);
   }
-  const issue = reviewIssueVerification(db, issueID, {
-    action,
-    comment
-  });
   recordIssueEvent(db, issueID, HUMAN_REVIEW_EVENT_TYPES.superseded, {
     action,
     comment,
     request_id: request.id,
     revision: request.revision
   });
-  return issue;
+  updateIssue(db, issueID, { error: "", status: "in_progress" });
+  recordIssueEvent(db, issueID, "issue.human_review_answered.v1", {
+    action,
+    comment,
+    request_id: request.id,
+    revision: request.revision
+  });
+  return requestIssuePiAcceptance(db, issueID, {
+    reason: `human review answered: ${action}`,
+    source: "human_review"
+  });
 }
 
 async function resumeRevisionInSameSession(
@@ -340,7 +330,7 @@ async function resumeRevisionInSameSession(
       revision: request.revision,
       resumed_from_run_id: previousRun.id
     });
-    recordIssueEvent(db, issue.id, "issue.verification_reviewed", {
+    recordIssueEvent(db, issue.id, "issue.human_review_response_applied.v1", {
       action: "request_changes",
       comment: feedback,
       request_id: request.id,
@@ -364,12 +354,15 @@ async function resumeRevisionInSameSession(
       "update issue_runs set status='failed', ended_at=?, exit_reason='human_revision_resume_failed', error=? where id=?",
       [now, safeError(error), run.id]
     );
-    updateIssue(db, issue.id, { error: safeError(error), status: "pending_verification" });
     recordIssueEvent(db, issue.id, HUMAN_REVIEW_EVENT_TYPES.revisionResumeFailed, {
       error: safeError(error),
       request_id: request.id,
       revision: request.revision,
       run_id: run.id
+    });
+    requestIssuePiAcceptance(db, issue.id, {
+      reason: `human revision resume failed: ${safeError(error)}`,
+      source: "human_review_resume"
     });
     throw error;
   }
@@ -380,7 +373,7 @@ function requireCurrentReviewRequest(
   issueID: number,
   input: Record<string, unknown>
 ): HumanReviewRequest {
-  const projection = readIssueVerificationProjection(db, issueID);
+  const projection = readIssueDecisionProjection(db, issueID);
   const request = projection.request;
   if (projection.owner !== "human" || !request || request.status !== "open") {
     throw new HumanReviewConflictError("当前没有等待人类处理的验收请求；PI 仍负责自主验证或修复");
@@ -463,7 +456,7 @@ function reviewKind(value: unknown): HumanReviewRequest["kind"] {
 function normalizeAction(value: unknown): "accept" | "reject" | "request_changes" {
   const action = cleanString(value).replaceAll("-", "_");
   if (action === "accept" || action === "reject" || action === "request_changes") return action;
-  throw new Error("verification action 必须是 accept、reject 或 request_changes");
+  throw new Error("human review action 必须是 accept、reject 或 request_changes");
 }
 
 function stringList(value: unknown): string[] {

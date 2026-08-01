@@ -10,16 +10,16 @@ export type GoldenJourneyScenario = {
 
 export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
   {
-    api_paths: ["/api/issues", "/api/evidence", "/api/handoffs"],
+    api_paths: ["/api/issues", "/api/runs", "/api/sessions"],
     backend_tests: [
       "backend-ts/src/http/piIssueProposalFlow.test.ts",
-      "backend-ts/src/http/piVerifierWorkflowApi.test.ts",
-      "backend-ts/src/http/issueVerificationApi.test.ts"
+      "backend-ts/src/runner/piAcceptanceApplication.test.ts",
+      "backend-ts/src/runner/piAcceptanceCoordinator.test.ts"
     ],
     fixture_projects: 1,
     frontend_route: "#/issues",
     frontend_tests: [
-      "frontend/src/pages/issueVerificationGate.test.js",
+      "frontend/src/utils/issueExecutionSummary.test.js",
       "frontend/src/pages/IssueDetail.structure.test.js"
     ],
     id: "GJ-01",
@@ -85,15 +85,13 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
   {
     api_paths: ["/api/evidence", "/api/handoffs", "/api/notifications"],
     backend_tests: [
-      "backend-ts/src/http/issueVerificationApi.test.ts",
-      "backend-ts/src/http/piVerifierWorkflowApi.test.ts",
       "backend-ts/src/cli/issue.test.ts",
       "backend-ts/src/http/handoffApi.test.ts"
     ],
     fixture_projects: 1,
     frontend_route: "#/work/:work_id/delivery/:handoff_id",
     frontend_tests: [
-      "frontend/src/pages/issueVerificationGate.test.js",
+      "frontend/src/utils/issueExecutionSummary.test.js",
       "frontend/src/pages/IssueDetail.structure.test.js",
       "frontend/src/pages/handoffPageModel.test.js"
     ],

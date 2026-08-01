@@ -1,10 +1,10 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { enqueueIssue, retryIssue } from "../db/repositories/issueActions.ts";
+import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { createIssueComment, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { hasActiveExecutorWork } from "../db/repositories/issueQueue.ts";
-import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { recordPiRecoveryAttempt, updatePiRecoveryAttemptStatus } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { IssueStateRepairOperation } from "./issueStateManager.ts";
+import { requestIssuePiAcceptance } from "../runner/piAcceptanceRequest.ts";
 import {
   currentIssueStateSnapshot,
   issueStateSnapshotDiff,
@@ -20,7 +20,6 @@ export function applyIssueStateRepair(db: RunnerDatabase, payload: Record<string
   const expected = normalizeIssueStateSnapshot(payload.expected_state);
   const before = currentIssueStateSnapshot(db, issueID);
   assertExpectedState(expected, before);
-  assertSafeTerminalRepair(operation, payload, before);
   const attempt = recordStateRepairAttempt(db, issueID, operation, payload, before);
   const result = executeRepair(db, issueID, operation, payload);
   const after = currentIssueStateSnapshot(db, issueID);
@@ -41,14 +40,13 @@ function executeRepair(
   payload: Record<string, unknown>
 ): unknown {
   if (operation === "enqueue") return enqueueIssue(db, issueID);
-  if (operation === "retry") return retryIssue(db, issueID);
   const patch = objectPayload(payload.patch);
-  if (operation === "move_status" || operation === "patch_status") {
-    reconcileTerminalRuntime(db, issueID, payload, patch);
-    if (cleanString(patch.status) === "done") {
-      throw new Error("issue.state_repair cannot mark done; use the current completion-card acceptance application");
-    }
-    return updateIssue(db, issueID, patch);
+  if (operation === "request_pi_decision") {
+    reconcileTerminalRuntime(db, issueID, payload);
+    return requestIssuePiAcceptance(db, issueID, {
+      reason: "state repair observed an ended Provider Turn",
+      source: "pi_state_repair"
+    });
   }
   if (operation === "comment") return createIssueComment(db, issueID, {
     author: "agent",
@@ -78,19 +76,6 @@ function repairAudit(
 function assertExpectedState(expected: IssueStateSnapshot, actual: IssueStateSnapshot): void {
   if (issueStateSnapshotsEqual(expected, actual)) return;
   throw new Error(`issue.state_repair precondition changed: ${issueStateSnapshotDiff(expected, actual)}`);
-}
-
-function assertSafeTerminalRepair(
-  operation: IssueStateRepairOperation,
-  payload: Record<string, unknown>,
-  before: IssueStateSnapshot
-): void {
-  const nextStatus = cleanString(objectPayload(payload.patch).status);
-  if (!["move_status", "patch_status"].includes(operation) || !terminalStatus(nextStatus)) return;
-  if (hasActiveRuntime(before, payload)) throw new Error("issue.state_repair cannot set terminal status while runtime is active");
-  if (nextStatus === "done") {
-    throw new Error("issue.state_repair cannot mark done; use the current completion-card acceptance application");
-  }
 }
 
 function recordStateRepairAttempt(
@@ -143,35 +128,21 @@ function attemptKey(
   ].join(":");
 }
 
-function hasActiveRuntime(snapshot: IssueStateSnapshot, payload: Record<string, unknown>): boolean {
-  const sessionStatus = normalize(snapshot.session?.status ?? "");
-  const terminalMismatch = cleanString(payload.diagnosis_code) === "in_progress_session_ended" &&
-    TERMINAL_SESSION_STATUSES.has(sessionStatus);
-  if (terminalMismatch) return false;
-  return snapshot.run?.ended_at === "" || ACTIVE_SESSION_STATUSES.has(sessionStatus);
-}
-
-function terminalStatus(status: string): boolean {
-  return status === "done" || status === "failed" || status === "cancelled" || status === "pending_verification";
-}
-
 function reconcileTerminalRuntime(
   db: RunnerDatabase,
   issueID: number,
-  payload: Record<string, unknown>,
-  patch: Record<string, unknown>
+  payload: Record<string, unknown>
 ): void {
   if (cleanString(payload.diagnosis_code) !== "in_progress_session_ended") return;
-  const status = cleanString(patch.status);
-  if (!terminalStatus(status)) return;
   const before = currentIssueStateSnapshot(db, issueID);
   if (before.run?.ended_at !== "") return;
-  if (!TERMINAL_SESSION_STATUSES.has(normalize(before.session?.status ?? ""))) {
+  const sessionStatus = normalize(before.session?.status ?? "");
+  if (!TERMINAL_SESSION_STATUSES.has(sessionStatus)) {
     throw new Error("issue.state_repair terminal-session diagnosis is no longer current");
   }
   const timestamp = new Date().toISOString();
-  const failed = status === "failed";
-  const runStatus = failed ? "failed" : "done";
+  const failed = ["aborted", "cancelled", "error", "failed", "stopped"].includes(sessionStatus);
+  const runStatus = failed ? "failed" : "succeeded";
   const reason = `state_repair:${cleanString(payload.diagnosis_code)}`;
   db.sqlite.run(`update issue_runs set status=?, ended_at=?, exit_reason=?,
     error=case when ?=1 then ? else '' end where id=? and ended_at=''`, [
@@ -179,7 +150,7 @@ function reconcileTerminalRuntime(
     timestamp,
     reason,
     failed ? 1 : 0,
-    cleanString(patch.error),
+    failed ? `Provider Session ended with status ${sessionStatus}` : "",
     before.run?.id ?? ""
   ]);
   db.sqlite.run(`update run_attempts set status=?, legacy_status=?, ended_at=?,
@@ -202,7 +173,6 @@ function reconcileTerminalRuntime(
   });
 }
 
-const ACTIVE_SESSION_STATUSES = new Set(["active", "running", "inprogress", "busy"]);
 const TERMINAL_SESSION_STATUSES = new Set(["aborted", "cancelled", "completed", "done", "error", "failed", "stopped"]);
 
 function objectPayload(value: unknown): Record<string, unknown> {

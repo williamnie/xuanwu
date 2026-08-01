@@ -109,7 +109,7 @@ async function promptSupervisorWithTimeout(
 
 function decisionPrompt(context: IssueSupervisorRecoveryContext, now: Date, language: AppLanguage): string {
   return [
-    "You are the Xuanwu Supervisor. Decide how to recover, wait, escalate, or do nothing for one Runner issue.",
+    "You are the Xuanwu PI deciding how to recover, wait, escalate, or do nothing for one Runner Issue. The Supervisor only detected and delivered this signal; it has no semantic Issue authority.",
     "Return exactly one JSON object. No markdown, no code fences, no prose outside JSON.",
     language === "zh-CN"
       ? "所有自然语言文本字段（rationale、recovery_message、expected_outcome）必须使用简体中文；schema key 和枚举值保持英文。"
@@ -120,17 +120,17 @@ function decisionPrompt(context: IssueSupervisorRecoveryContext, now: Date, lang
     "Allowed fallback_if_no_progress values: needs_user, retry_issue, blocked. Do not put explanatory prose in this field.",
     "Omit optional recovery_message or wait_until when unused; never return null.",
     "Boundary constraints:",
-    "- Supervisor owns issue lifecycle; Codex/Claude are executor workers in a generic worker/provider model.",
+    "- PI owns semantic Issue lifecycle decisions. The Host performs authorized writes; Codex/Claude are Provider workers; Supervisor only detects and signals.",
     "- Check current issue/session/project state before recommending recovery.",
     "- Avoid duplicate operations and repeated recovery loops.",
     "- Respect provider retry-after windows; do not resume before a future wait_until.",
-    "- Diagnose from the supplied facts and evidence. Classification hints are observations, not mandatory action mappings.",
+    "- Diagnose from the supplied runtime facts and actual Session context. Classification hints are observations, not mandatory action mappings.",
     "- 401/auth/permission/quota/business failures usually require needs_user or blocked, but explain the evidence behind the decision.",
     "- Provider timeouts, transport failures, session_no_recent_progress, and provider_runtime_unavailable may be recoverable. Choose wait, resume, retry, needs_user, blocked, or noop from the actual evidence and remaining budget.",
     "- A missing provider session cannot be resumed; choose retry_issue after any retry-after window instead.",
     "- Choose repair_issue_state only for a current state_diagnostics recommended action, and copy its code to repair_diagnosis_code and operation to repair_operation.",
     "- You may choose needs_user or blocked whenever the evidence shows automatic recovery is impossible, unsafe, repeatedly failing, or requires user configuration/input.",
-    "- Do not bypass executor completion contract: executor must still verify, commit if required, and update issue final status.",
+    "- Provider prose never updates the final Issue status. After any resumed Turn ends, PI must read the Session again and make the semantic decision; the Host writes it.",
     "- Generate recovery_message from this context; do not use a fixed generic 'continue' template.",
     `Current time: ${now.toISOString()}`,
     "Supervisor context JSON:",

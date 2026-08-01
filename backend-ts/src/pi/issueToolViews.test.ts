@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createIssueExecutionStatus } from "./issueToolViews.ts";
 
 const tempRoots: string[] = [];
@@ -24,44 +23,36 @@ describe("PI issue execution status completion projection", () => {
       const issue = createIssue(db, {
         description: "Implement the fix. 不要 commit、push 或 deploy。",
         project_id: "demo",
-        status: "pending_verification",
-        title: "Completed code with missing Handoff"
+        status: "in_progress",
+        title: "Provider Turn ended"
       });
       db.sqlite.run(
         `insert into issue_runs (
           id, issue_id, attempt, status, provider, started_at, ended_at, exit_reason, error
-        ) values (?, ?, ?, 'pending_verification', 'codex', ?, ?, 'explicit_status_update', ?)`,
+        ) values (?, ?, ?, 'succeeded', 'codex', ?, ?, 'provider_turn_completed', ?)`,
         [
           `issue-${issue.id}-attempt-1`,
           issue.id,
           1,
           "2026-07-23T10:00:00.000Z",
           "2026-07-23T10:10:00.000Z",
-          "Verification pending: persisted Handoff missing"
+          ""
         ]
       );
-      recordIssueEvent(db, issue.id, "issue.verification_gate_outcome.v1", {
-        evidence_ids: ["xw:evidence:issue_events:1", "xw:evidence:git:1"],
-        handoff_gap: "Completion requires a persisted ready or delivered Handoff",
-        handoff_id: null,
-        target_status: "pending_verification"
-      });
 
       expect(createIssueExecutionStatus(db, issue.id)).toMatchObject({
         completion: {
           blocker: null,
-          formal_status: "pending_verification",
-          handoff_present: false,
-          implementation_complete: true,
+          formal_status: "in_progress",
+          implementation_complete: false,
           retry_recommended: false,
           state: "acceptance_pending",
           truth_basis: {
-            evidence_count: 2,
-            latest_run_status: "pending_verification"
+            latest_run_status: "succeeded"
           }
         },
         latest_run: {
-          status: "pending_verification"
+          status: "succeeded"
         }
       });
     } finally {

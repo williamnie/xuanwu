@@ -18,7 +18,7 @@ type PiGuardianContext = { database: RunnerDatabase };
 type BucketCounts = Record<string, number>;
 type DigestCounts = {
   active: number; completed: number; failed: number; needs_user: number;
-  skipped: number; total: number; verification: number;
+  skipped: number; total: number;
 };
 
 export function registerPiGuardianRoutes(router: Router, context: PiGuardianContext): void {
@@ -193,8 +193,7 @@ function digestCounts(payload: Record<string, unknown>): DigestCounts {
     failed: numberField(payload, "failed_count", "failed"),
     needs_user: numberField(payload, "needs_user_count", "needsUser"),
     skipped: numberField(payload, "skipped_count", "skipped"),
-    total: numberField(payload, "total_count", "total"),
-    verification: numberField(payload, "verification_count", "verification")
+    total: numberField(payload, "total_count", "total")
   };
 }
 

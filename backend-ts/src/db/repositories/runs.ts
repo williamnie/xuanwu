@@ -449,7 +449,7 @@ function runStatusSql(run: string, latest: string): string {
       and ${latest}.kind='recovery'
       and ${latest}.status in ('created', 'failed', 'interrupted') then 'recovering'
     when ${run}.status='in_progress' then 'running'
-    when ${run}.status in ('pending_verification', 'done') then 'succeeded'
+    when ${run}.status='succeeded' then 'succeeded'
     when ${run}.status='failed' then 'failed'
     when ${run}.status='cancelled' then 'cancelled'
     else null end`;

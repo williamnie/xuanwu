@@ -1,9 +1,8 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { redactSensitiveText } from "../util/redact.ts";
-import { defaultFindingCategory, defaultFindingReason, evaluateProjectFailedRetryPolicy, type FailedRetryDecision } from "./failedRetryPolicy.ts";
 import { matchFailurePattern } from "./failurePatterns.ts";
 
-export type ProjectFindingCategory = "blocked" | "needs_user" | "transient" | "verification_needed";
+export type ProjectFindingCategory = "blocked" | "needs_user";
 
 export type ProjectFindingNotification = {
   message: string;
@@ -25,8 +24,8 @@ export type ProjectFinding = {
 
 export type ProjectFindingScanOptions = { limit?: number; now?: Date; staleAfterMs?: number };
 
-type IssueFindingRow = { attempt_count: unknown; auto_retry_next_at: unknown; auto_retry_reason: unknown;
-  codex_thread_id: unknown; error: unknown; id: unknown; project_id: unknown; status: unknown; title: unknown; updated_at: unknown };
+type IssueFindingRow = { codex_thread_id: unknown; error: unknown; id: unknown;
+  project_id: unknown; status: unknown; title: unknown; updated_at: unknown };
 type StaleIssueRow = IssueFindingRow & {
   run_activity_at: unknown; session_activity_at: unknown; session_key: unknown; session_status: unknown;
 };
@@ -62,17 +61,13 @@ function issueFindings(
   options: ProjectFindingScanOptions,
   limit: number
 ): ProjectFinding[] {
-  const context = { now: options.now ?? new Date() };
+  void options;
   return db.sqlite.query<IssueFindingRow, [string, number]>(`
-    select id, project_id, title, status, error, attempt_count, codex_thread_id, auto_retry_next_at,
-      auto_retry_reason, updated_at from issues
-    where project_id=? and (
-      status in ('failed', 'pending_verification')
-      or (status='todo' and auto_retry_next_at <> '')
-    )
+    select id, project_id, title, status, error, codex_thread_id, updated_at from issues
+    where project_id=? and status in ('failed', 'needs_user')
     order by case status when 'failed' then 0 else 1 end, updated_at asc, id asc
     limit ?
-  `).all(projectID, limit).map((row) => mapIssueFinding(db, projectID, row, context));
+  `).all(projectID, limit).map((row) => mapIssueFinding(db, projectID, row));
 }
 
 function holdFindings(db: RunnerDatabase, projectID: string): ProjectFinding[] {
@@ -87,17 +82,16 @@ function mapIssueFinding(
   db: RunnerDatabase,
   projectID: string,
   row: IssueFindingRow,
-  context: IssueFindingContext
 ): ProjectFinding {
   const status = optionalString(row.status, "unknown");
   const issueID = integerValue(row.id);
   const rawDetail = optionalString(row.error) || optionalString(row.title);
   const detail = redactFindingText(rawDetail);
   const pattern = matchFailurePattern(db, projectID, rawDetail);
-  const policy = retryDecision(db, projectID, row, pattern?.category ?? issueFindingCategory(row), context);
-  const category = policy?.category ?? pattern?.category ?? issueFindingCategory(row);
+  void db;
+  const category = issueFindingCategory(row);
   const message = issueMessage(status, issueID, detail, pattern?.recommendation);
-  const reason = pattern ? "failure_pattern" : policy?.reason ?? defaultFindingReason(status, category);
+  const reason = pattern ? "failure_pattern" : status === "needs_user" ? "pi_needs_user" : "pi_failed";
   return {
     category,
     issue_id: issueID,
@@ -105,7 +99,7 @@ function mapIssueFinding(
     notification: issueNotification(category, message),
     project_id: optionalString(row.project_id),
     reason,
-    severity: category === "verification_needed" || category === "transient" ? "needs_review" : "blocked",
+    severity: category === "needs_user" ? "needs_review" : "blocked",
     status,
     title: redactFindingText(optionalString(row.title)),
     updated_at: optionalString(row.updated_at)
@@ -193,8 +187,7 @@ function holdDetail(row: HoldFindingRow): string {
 
 function issueLead(status: string, issueID: number): string {
   if (status === "failed") return `Issue #${issueID} failed`;
-  if (status === "todo") return `Issue #${issueID} is waiting for transient retry`;
-  return `Issue #${issueID} is pending verification`;
+  return `Issue #${issueID} needs user input`;
 }
 
 function issueMessage(status: string, issueID: number, detail: string, recommendation: string | undefined): string {
@@ -204,41 +197,13 @@ function issueMessage(status: string, issueID: number, detail: string, recommend
 }
 
 function issueFindingCategory(row: IssueFindingRow): ProjectFindingCategory {
-  return defaultFindingCategory({
-    autoRetryNextAt: optionalString(row.auto_retry_next_at),
-    detail: optionalString(row.error) || optionalString(row.title),
-    status: optionalString(row.status)
-  });
-}
-
-function retryDecision(
-  db: RunnerDatabase,
-  projectID: string,
-  row: IssueFindingRow,
-  category: ProjectFindingCategory,
-  context: IssueFindingContext
-): FailedRetryDecision | undefined {
-  return evaluateProjectFailedRetryPolicy({
-    attemptCount: attemptCount(row),
-    autoRetryNextAt: optionalString(row.auto_retry_next_at),
-    category,
-    db,
-    now: context.now,
-    projectID,
-    status: optionalString(row.status),
-    updatedAt: optionalString(row.updated_at)
-  });
-}
-
-function attemptCount(row: IssueFindingRow): number {
-  return typeof row.attempt_count === "number" && Number.isInteger(row.attempt_count) ? row.attempt_count : 0;
+  return optionalString(row.status) === "needs_user" ? "needs_user" : "blocked";
 }
 
 function issueNotification(
   category: ProjectFindingCategory,
   message: string
 ): ProjectFindingNotification | undefined {
-  if (category === "verification_needed") return { type: "pi.issue_ready_for_acceptance", message };
   if (category === "needs_user") return { type: "pi.needs_user", message };
   if (category === "blocked") return { type: "pi.project_blocked", message };
   return undefined;

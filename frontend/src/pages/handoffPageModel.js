@@ -66,7 +66,6 @@ export function handoffCopyText(detail) {
     delivery.release_ref ? `Release: ${delivery.release_ref}` : '',
     delivery.version ? `Version: ${delivery.version}` : '',
     `Evidence: ${(handoff.evidence_ids || []).join(', ') || 'none'}`,
-    `Review: ${detail?.review_summary?.state || handoff.review?.state || 'unknown'}`,
     `Risks: ${(handoff.risks || []).length}`,
     `Rollback: ${handoff.rollback?.availability || 'unknown'}`,
     `Next: ${detail?.notification_summary?.next_step || 'Review delivery status'}`,
@@ -86,38 +85,6 @@ export function deliveryTone(status) {
   if (status === 'blocked' || status === 'delivering' || status === 'sending' || status === 'retry') return 'amber';
   if (status === 'pending' || status === 'ready') return 'blue';
   return 'slate';
-}
-
-export function handoffReviewActions(detail) {
-  const handoff = detail?.handoff;
-  const state = detail?.review_summary?.state || handoff?.review?.state;
-  if (handoff?.status !== 'ready' || state !== 'pending') return [];
-  const allowed = detail?.review_summary?.available_actions;
-  return Array.isArray(allowed)
-    ? allowed.filter(action => action === 'accept' || action === 'request_changes')
-    : ['accept', 'request_changes'];
-}
-
-export function handoffReviewPayload(detail, action, comment = '', options = {}) {
-  if (!handoffReviewActions(detail).includes(action)) throw new Error(`Review action ${action} is unavailable`);
-  const handoff = detail.handoff;
-  const body = String(comment || '').trim();
-  if (action === 'request_changes' && !body) throw new Error('Request changes requires a comment');
-  const occurredAt = options.occurredAt || new Date().toISOString();
-  const nonce = String(options.nonce || globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-  const actorRef = String(options.actorRef || 'user:local-operator');
-  return {
-    action,
-    audit: {
-      actor: { id: actorRef, kind: 'user' },
-      correlation_id: `handoff-review:${handoff.id}`,
-      event_id: `handoff-review-ui:${nonce}`,
-      occurred_at: occurredAt,
-      reason: body || `Handoff review ${action}`,
-    },
-    comment: body,
-    expected_revision: Number(handoff.revision || 0),
-  };
 }
 
 const RISK_RANK = { critical: 4, high: 3, medium: 2, low: 1 };

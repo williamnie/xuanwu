@@ -5,15 +5,13 @@ import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "
 import { getProject } from "../db/repositories/projects.ts";
 import { listAgentSessions, type AgentSession } from "../db/repositories/agentSessions.ts";
 import { redactSensitiveText } from "../util/redact.ts";
-import { defaultFindingCategory, evaluateFailedRetryPolicy, projectRetryPolicy, type FailedRetryPolicy } from "./failedRetryPolicy.ts";
-import { hasVerificationEvidence, pendingVerificationDiagnostics } from "./issueStateVerification.ts";
-import { currentIssueStateSnapshot, issueStateSnapshot, type IssueStateSnapshot } from "./issueStateSnapshot.ts";
+import { issueStateSnapshot, type IssueStateSnapshot } from "./issueStateSnapshot.ts";
 export { applyIssueStateRepair } from "./issueStateRepairExecutor.ts";
 
 export type IssueStateEvidence = {
   ref: string; source: "event" | "issue" | "policy" | "project" | "run" | "session"; summary: string; timestamp: string;
 };
-export type IssueStateRepairOperation = "comment" | "enqueue" | "move_status" | "patch_status" | "retry";
+export type IssueStateRepairOperation = "comment" | "enqueue" | "request_pi_decision";
 export type IssueStateSuggestedOperation = "enqueue" | "kick_project_loop";
 export type IssueStateAction = {
   action_type: "issue.state_repair"; evidence_refs: string[]; issue_id: number;
@@ -35,7 +33,6 @@ export type IssueStateBatchProgress = {
   deadline_at: string; done: number; label: string; off_track_issue_ids: number[]; target: number; target_status: string;
 };
 
-const DEFAULT_MAX_RETRIES = 3, DEFAULT_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
 const DEFAULT_STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
 
@@ -76,9 +73,6 @@ function diagnoseOne(db: RunnerDatabase, issue: Issue, options: IssueStateManage
   const latestRun = runs.at(-1);
   if (issue.status === "todo" && todoNeedsRuntime(runs, sessions)) return [todoWithoutSession(db, issue, latestRun, sessions[0], now)];
   if (issue.status === "in_progress") return inProgressDiagnostics(issue, latestRun, sessions, events, options, now);
-  if (issue.status === "failed") return [failedDiagnostic(db, issue, options, now)];
-  if (issue.status === "pending_verification") return pendingVerificationDiagnostics(db, issue, events, options.pendingVerificationTimeoutMs, now);
-  if (issue.status === "done" && !hasVerificationEvidence(issue, latestRun, events)) return [doneMissingEvidence(issue, latestRun, sessions[0], events)];
   return [];
 }
 
@@ -110,6 +104,7 @@ function inProgressDiagnostics(
   now: Date
 ): IssueStateDiagnostic[] {
   const session = sessions[0];
+  if (piDecisionAlreadyRequested(events, latestRun?.id ?? "")) return [];
   if (runEnded(latestRun) || terminalSession(session)) return [inProgressEnded(issue, latestRun, session)];
   if (staleIssue(issue, latestRun, session, options, now)) return [staleInProgress(issue, latestRun, session, now)];
   return [];
@@ -117,12 +112,8 @@ function inProgressDiagnostics(
 
 function inProgressEnded(issue: Issue, run: IssueRun | undefined, session: AgentSession | undefined): IssueStateDiagnostic {
   const evidence = compact([issueEvidence(issue, "issue still in_progress"), runEvidence(run), sessionEvidence(session)]);
-  const failed = isFailureStatus(run?.status) || isFailureStatus(session?.status) || cleanString(run?.error) !== "";
-  const patch: Record<string, string> = failed
-    ? { error: run?.error || "session ended with failure", status: "failed" }
-    : { status: "pending_verification" };
   return diagnostic(issue, "in_progress_session_ended", "repair", evidence, [
-    action(issue, "patch_status", evidence, "Align issue status with ended runtime session.", patch, undefined, issueStateSnapshot(issue, run, session))
+    action(issue, "request_pi_decision", evidence, "Freeze the ended Provider Turn and ask PI to decide the Issue.", undefined, undefined, issueStateSnapshot(issue, run, session))
   ]);
 }
 
@@ -131,30 +122,6 @@ function staleInProgress(issue: Issue, run: IssueRun | undefined, session: Agent
   return diagnostic(issue, "stale_in_progress", "needs_user", evidence, [action(issue, "comment", evidence, "Escalate stale in-progress issue for user decision.", {
     body: `State manager: issue #${issue.id} appears stale; please decide whether to resume, retry, or cancel.`
   }, undefined, issueStateSnapshot(issue, run, session))]);
-}
-
-function failedDiagnostic(db: RunnerDatabase, issue: Issue, options: IssueStateManagerOptions, now: Date): IssueStateDiagnostic {
-  const retry = failedRetry(db, issue, options, now);
-  const snapshot = currentIssueStateSnapshot(db, issue.id);
-  const evidence = [issueEvidence(issue, issue.error || "issue failed"), policyEvidence(issue, retry, now)];
-  if (!retry.retry_candidate) return nonRetryableFailedDiagnostic(issue, retry, evidence, snapshot);
-  return diagnostic(issue, "failed_retry_ready", "repair", evidence, [
-    action(issue, "retry", evidence, "Retry failed issue after transient failure cooldown.", undefined, undefined, snapshot)
-  ]);
-}
-
-function nonRetryableFailedDiagnostic(issue: Issue, retry: ReturnType<typeof failedRetry>, evidence: IssueStateEvidence[], snapshot: IssueStateSnapshot): IssueStateDiagnostic {
-  if (retry.reason === "failed_retry_cooling_down") return diagnostic(issue, retry.reason, "watch", evidence, []);
-  if (retry.reason === "needs_user") return diagnostic(issue, "needs_user_escalation", "needs_user", evidence, [needsUserAction(issue, evidence, snapshot)]);
-  if (retry.reason === "failed_retry_exhausted") return diagnostic(issue, retry.reason, "needs_user", evidence, [needsUserAction(issue, evidence, snapshot)]);
-  return diagnostic(issue, "blocked_escalation", "blocked", evidence, [needsUserAction(issue, evidence, snapshot)]);
-}
-
-function doneMissingEvidence(issue: Issue, run: IssueRun | undefined, session: AgentSession | undefined, events: IssueEvent[]): IssueStateDiagnostic {
-  const evidence = compact([issueEvidence(issue, "status done without verification evidence"), runEvidence(run), latestEventEvidence(events)]);
-  return diagnostic(issue, "done_missing_verification_evidence", "repair", evidence, [
-    action(issue, "patch_status", evidence, "Move weak done issue back to pending verification for evidence review.", { status: "pending_verification" }, undefined, issueStateSnapshot(issue, run, session))
-  ]);
 }
 
 function diagnostic(issue: Issue, code: string, severity: IssueStateDiagnostic["severity"], evidence: IssueStateEvidence[], actions: IssueStateAction[]): IssueStateDiagnostic {
@@ -182,10 +149,16 @@ function action(
   };
 }
 
-function needsUserAction(issue: Issue, evidence: IssueStateEvidence[], snapshot: IssueStateSnapshot): IssueStateAction {
-  return action(issue, "comment", evidence, "Escalate blocked or needs-user issue for human decision.", {
-    body: `State manager: issue #${issue.id} needs user input before retrying or closing.`
-  }, undefined, snapshot);
+function piDecisionAlreadyRequested(events: IssueEvent[], runID: string): boolean {
+  if (runID === "") return false;
+  return events.some((event) => {
+    if (event.type !== "issue.pi_acceptance_requested.v1") return false;
+    try {
+      return cleanString((JSON.parse(event.payload) as Record<string, unknown>).issue_run_id) === runID;
+    } catch {
+      return false;
+    }
+  });
 }
 
 function issueSessions(db: RunnerDatabase, issue: Issue): AgentSession[] {
@@ -207,11 +180,6 @@ function normalizedBatchTargets(options: IssueStateManagerOptions): IssueStateBa
   return [...(options.batchTargets ?? []), ...(options.batchTarget ? [options.batchTarget] : [])];
 }
 
-function policyEvidence(issue: Issue, retry: ReturnType<typeof failedRetry>, now: Date): IssueStateEvidence {
-  const max = retry.max_attempts;
-  const next = finiteTime(parseTime(retry.next_retry_at), now.getTime());
-  return { ref: `policy:retry:${issue.id}`, source: "policy", summary: `attempts=${issue.attempt_count}/${max}; next_retry_at=${iso(new Date(next))}; now=${iso(now)}`, timestamp: iso(now) };
-}
 
 function issueEvidence(issue: Issue, summary: string): IssueStateEvidence {
   return { ref: `issue:${issue.id}`, source: "issue", summary: safeText(summary), timestamp: issue.updated_at };
@@ -227,26 +195,6 @@ function runEvidence(run: IssueRun | undefined): IssueStateEvidence | undefined 
 }
 function sessionEvidence(session: AgentSession | undefined): IssueStateEvidence | undefined {
   return session ? { ref: `session:${session.session_key}`, source: "session", summary: safeText(`session ${session.status || "unknown"}`), timestamp: session.updated_at } : undefined;
-}
-function latestEventEvidence(events: IssueEvent[]): IssueStateEvidence | undefined {
-  const event = events.at(-1);
-  return event ? { ref: `event:${event.id}`, source: "event", summary: safeText(`${event.type}: ${event.payload.slice(0, 160)}`), timestamp: event.created_at } : undefined;
-}
-function failedRetry(db: RunnerDatabase, issue: Issue, options: IssueStateManagerOptions, now: Date) {
-  const detail = issue.error || issue.auto_retry_reason || issue.title;
-  return evaluateFailedRetryPolicy({
-    attemptCount: issue.attempt_count,
-    autoRetryNextAt: issue.auto_retry_next_at,
-    category: defaultFindingCategory({ autoRetryNextAt: issue.auto_retry_next_at, detail, status: issue.status }),
-    now,
-    policy: retryPolicy(db, issue.project_id, options),
-    updatedAt: issue.updated_at
-  });
-}
-function retryPolicy(db: RunnerDatabase, projectID: string, options: IssueStateManagerOptions): FailedRetryPolicy | null {
-  const persisted = projectRetryPolicy(db, projectID);
-  if (persisted) return persisted;
-  return { enabled: true, max_attempts: options.maxRetries ?? DEFAULT_MAX_RETRIES, backoff_minutes: [Math.max(0, Math.round((options.retryCooldownMs ?? DEFAULT_RETRY_COOLDOWN_MS) / 60_000))] };
 }
 function staleIssue(issue: Issue, run: IssueRun | undefined, session: AgentSession | undefined, options: IssueStateManagerOptions, now: Date): boolean {
   if (activeSession(session)) return false;
@@ -271,9 +219,6 @@ function terminalSession(session: AgentSession | undefined): boolean {
   return ["aborted", "cancelled", "completed", "done", "error", "failed", "stopped"].includes(normalize(session?.status ?? ""));
 }
 function activeSession(session: AgentSession | undefined): boolean { return ["active", "running", "inprogress", "busy"].includes(normalize(session?.status ?? "")); }
-function isFailureStatus(value: string | undefined): boolean {
-  return ["aborted", "cancelled", "error", "failed", "failure", "stopped"].includes(normalize(value ?? ""));
-}
 function parseTime(value: string): number { const time = Date.parse(value); return Number.isFinite(time) ? time : Number.POSITIVE_INFINITY; }
 function finiteTime(value: number, fallback: number): number { return Number.isFinite(value) ? value : fallback; }
 function duration(ms: number): string { const minutes = Math.max(0, Math.round(ms / 60_000)); return minutes < 120 ? `${minutes}m` : `${Math.round(minutes / 60)}h`; }

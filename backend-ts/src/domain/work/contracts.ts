@@ -4,10 +4,6 @@ import {
   canTransition,
   parseDomainID,
   type DomainActor,
-  type EvidenceID,
-  type EvidenceStatus,
-  type HandoffID,
-  type HandoffStatus,
   type Work as CoreWork,
   type WorkID,
   type WorkStatus
@@ -65,18 +61,10 @@ export type WorkAcceptanceCriterion = {
   description: string;
   id: string;
   required: boolean;
-  verification_policy_ref: string;
 };
 
-export const HANDOFF_POLICIES = ["none", "summary", "required"] as const;
-export type HandoffPolicy = typeof HANDOFF_POLICIES[number];
-
 export type WorkAcceptanceContract = {
-  completion_rule: "all_required";
   criteria: WorkAcceptanceCriterion[];
-  handoff_policy?: HandoffPolicy;
-  /** Compatibility projection for older clients. */
-  requires_handoff: boolean;
   version: number;
 };
 
@@ -142,23 +130,7 @@ export type WorkTransitionAudit = {
   reason: string;
 };
 
-export type WorkAcceptanceEvidence = {
-  contract_version: number;
-  evidence: Array<{
-    criterion_ids: string[];
-    id: EvidenceID;
-    status: EvidenceStatus;
-    work_id: WorkID;
-  }>;
-  handoffs: Array<{
-    id: HandoffID;
-    status: HandoffStatus;
-    work_id: WorkID;
-  }>;
-};
-
 export type WorkTransitionCommand = {
-  acceptance?: WorkAcceptanceEvidence;
   audit: WorkTransitionAudit;
   expected_revision: number;
   to: WorkStatus;
@@ -243,12 +215,6 @@ export function validateAcceptanceContract(contract: WorkAcceptanceContract): st
   if (!Number.isSafeInteger(contract.version) || contract.version <= 0) {
     errors.push("acceptance version must be positive");
   }
-  if (contract.completion_rule !== "all_required") errors.push("acceptance completion_rule must be all_required");
-  const handoffPolicy = contract.handoff_policy ?? (contract.requires_handoff ? "required" : "summary");
-  if (!["none", "summary", "required"].includes(handoffPolicy)) errors.push("acceptance handoff_policy is invalid");
-  if (contract.requires_handoff !== (handoffPolicy === "required")) {
-    errors.push("acceptance requires_handoff must match handoff_policy");
-  }
   if (contract.criteria.length === 0) errors.push("acceptance criteria are required");
   if (!contract.criteria.some((criterion) => criterion.required)) errors.push("acceptance requires at least one required criterion");
   const ids = new Set<string>();
@@ -257,9 +223,6 @@ export function validateAcceptanceContract(contract: WorkAcceptanceContract): st
     else if (ids.has(criterion.id)) errors.push(`duplicate acceptance criterion ${criterion.id}`);
     ids.add(criterion.id);
     if (!criterion.description.trim()) errors.push(`${criterion.id || "acceptance criterion"} description is required`);
-    if (!criterion.verification_policy_ref.trim()) {
-      errors.push(`${criterion.id || "acceptance criterion"} verification_policy_ref is required`);
-    }
   }
   return errors;
 }
@@ -289,13 +252,13 @@ export function evaluateWorkTransition(
     .filter((relation): relation is DependencyRelation => relation.kind === "depends_on" && relation.work_id === work.id)
     .map((relation) => snapshot.works.find((item) => item.id === relation.depends_on_work_id))
     .filter((item): item is WorkLedgerEntry => Boolean(item));
-  if (["in_progress", "pending_verification", "done"].includes(command.to)) {
+  if (["in_progress", "needs_user", "done"].includes(command.to)) {
     for (const dependency of dependencies) {
       if (dependency.status !== "done") violations.push(`dependency ${dependency.id} is ${dependency.status}, not done`);
     }
   }
 
-  if (["pending_verification", "done"].includes(command.to)) {
+  if (command.to === "done") {
     const children = snapshot.relations
       .filter((relation): relation is ParentChildRelation => relation.kind === "parent_child" && relation.parent_work_id === work.id)
       .map((relation) => snapshot.works.find((item) => item.id === relation.child_work_id))
@@ -305,39 +268,9 @@ export function evaluateWorkTransition(
     }
   }
 
-  if (command.to === "done") violations.push(...validateDoneGate(work, command.acceptance));
+  // PI owns the semantic completion decision. Evidence and Handoff are context,
+  // not a second deterministic completion gate.
   return decision(violations);
-}
-
-function validateDoneGate(work: WorkLedgerEntry, evidence: WorkAcceptanceEvidence | undefined): string[] {
-  const handoffRequired = (work.acceptance.handoff_policy
-    ?? (work.acceptance.requires_handoff ? "required" : "summary")) === "required";
-  if (!evidence) return [handoffRequired
-    ? "done requires acceptance Evidence and a ready Handoff"
-    : "done requires acceptance Evidence"];
-  const errors: string[] = [];
-  if (evidence.contract_version !== work.acceptance.version) {
-    errors.push(`acceptance contract version ${evidence.contract_version} does not match ${work.acceptance.version}`);
-  }
-  for (const criterion of work.acceptance.criteria.filter((item) => item.required)) {
-    const passed = evidence.evidence.some((item) =>
-      item.status === "passed" && item.criterion_ids.includes(criterion.id)
-    );
-    if (!passed) errors.push(`required acceptance criterion ${criterion.id} lacks passed Evidence`);
-  }
-  if (!evidence.evidence.some((item) => item.status === "passed")) {
-    errors.push("done requires passed Evidence");
-  }
-  for (const item of evidence.evidence) {
-    if (item.work_id !== work.id) errors.push(`${item.id} Evidence belongs to another Work`);
-  }
-  for (const item of evidence.handoffs) {
-    if (item.work_id !== work.id) errors.push(`${item.id} Handoff belongs to another Work`);
-  }
-  if (handoffRequired && !evidence.handoffs.some((item) => item.status === "ready" || item.status === "delivered")) {
-    errors.push("done requires a ready or delivered Handoff");
-  }
-  return errors;
 }
 
 function validateProvenance(provenance: WorkProvenance): string[] {

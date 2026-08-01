@@ -367,8 +367,7 @@
           "regression_evidence_ids": [
             "xw:evidence:issue_events:implement-local-regression"
           ],
-          "decision": "passed",
-          "completion_gate_audit_ref": "issue_events:688:local:completion-gate"
+          "decision": "passed"
         },
         "mutation_audit": [
           {
@@ -786,8 +785,7 @@
           "regression_evidence_ids": [
             "xw:evidence:issue_events:implement-commit-regression"
           ],
-          "decision": "passed",
-          "completion_gate_audit_ref": "issue_events:688:commit:completion-gate"
+          "decision": "passed"
         },
         "mutation_audit": [
           {

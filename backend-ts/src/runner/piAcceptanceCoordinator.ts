@@ -7,21 +7,22 @@ import {
   recordIssueCompletionCard,
   type CompletionCard
 } from "../domain/acceptance/completionCard.ts";
-import { readIssueVerificationProjection } from "../domain/review/humanReview.ts";
+import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import {
-  readPiVerificationActivity,
-  recordPiVerificationActivity
-} from "../domain/review/piVerificationActivity.ts";
+  readPiAcceptanceActivity,
+  recordPiAcceptanceActivity
+} from "../domain/review/piAcceptanceActivity.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { PiAcceptanceRuntimeResult } from "../pi/issueAcceptance.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { applyPiAcceptanceDecision } from "./piAcceptanceApplication.ts";
+import { startProjectLoop } from "./projectLoopManager.ts";
 
 export type PiIssueAcceptanceRunner = (card: CompletionCard) => Promise<PiAcceptanceRuntimeResult>;
 
-export type PiVerificationCoordinatorInput = {
+export type PiAcceptanceCoordinatorInput = {
   bus?: Pick<EventBus, "publish">;
   cooldownMs?: number;
   database: RunnerDatabase;
@@ -31,7 +32,7 @@ export type PiVerificationCoordinatorInput = {
   source?: string;
 };
 
-export type PiVerificationCoordinatorResult = {
+export type PiAcceptanceCoordinatorResult = {
   failed: number;
   issues: number;
   projects: number;
@@ -41,15 +42,14 @@ export type PiVerificationCoordinatorResult = {
 
 const activeIssues = new Set<number>();
 const DEFAULT_COOLDOWN_MS = 30_000;
-const MAX_DECISION_ATTEMPTS_PER_CARD = 2;
 const SESSION_READ_TIMEOUT_MS = 10_000;
 
-export async function runPiVerificationCoordinatorOnce(
-  input: PiVerificationCoordinatorInput
-): Promise<PiVerificationCoordinatorResult> {
+export async function runPiAcceptanceCoordinatorOnce(
+  input: PiAcceptanceCoordinatorInput
+): Promise<PiAcceptanceCoordinatorResult> {
   const now = input.now ?? new Date();
   const issues = dueIssues(input.database, now, input.cooldownMs ?? DEFAULT_COOLDOWN_MS);
-  const result: PiVerificationCoordinatorResult = {
+  const result: PiAcceptanceCoordinatorResult = {
     failed: 0,
     issues: issues.length,
     projects: new Set(issues.map((issue) => issue.project_id)).size,
@@ -68,8 +68,8 @@ export async function runPiVerificationCoordinatorOnce(
   return result;
 }
 
-export function requestPiVerificationCycle(
-  input: PiVerificationCoordinatorInput & { issueID: number }
+export function requestPiAcceptanceCycle(
+  input: PiAcceptanceCoordinatorInput & { issueID: number }
 ): void {
   const issue = getIssue(input.database, input.issueID);
   if (!issue || !piOwnedPending(input.database, issue) || activeIssues.has(issue.id)) return;
@@ -77,14 +77,14 @@ export function requestPiVerificationCycle(
 }
 
 async function dispatchIssueAcceptance(
-  input: PiVerificationCoordinatorInput,
+  input: PiAcceptanceCoordinatorInput,
   issue: Issue,
   now: Date
 ): Promise<{ error: string; ok: boolean }> {
   if (activeIssues.has(issue.id)) return { error: "", ok: true };
   activeIssues.add(issue.id);
   let card: CompletionCard | undefined;
-  const previous = readPiVerificationActivity(input.database, issue.id);
+  const previous = readPiAcceptanceActivity(input.database, issue.id);
   let attemptKey = preCardAttemptKey(input.database, issue);
   let attempt = previous?.card_fingerprint === attemptKey ? previous.attempt + 1 : 1;
   try {
@@ -97,11 +97,7 @@ async function dispatchIssueAcceptance(
     recordIssueCompletionCard(input.database, card, input.source ?? "pi-acceptance-coordinator");
     attemptKey = card.fingerprint;
     attempt = previous?.card_fingerprint === card.fingerprint ? previous.attempt + 1 : 1;
-    if (attempt > MAX_DECISION_ATTEMPTS_PER_CARD) {
-      recordDecisionSystemBlock(input, issue, card, previous?.error || "PI acceptance did not produce an applicable decision");
-      return { error: "PI acceptance circuit breaker opened", ok: false };
-    }
-    recordPiVerificationActivity(input.database, issue.id, "running", {
+    recordPiAcceptanceActivity(input.database, issue.id, "running", {
       attempt,
       card_fingerprint: card.fingerprint,
       project_id: issue.project_id,
@@ -115,7 +111,14 @@ async function dispatchIssueAcceptance(
       database: input.database,
       providers: input.providers
     }, card, decision);
-    recordPiVerificationActivity(input.database, issue.id, "completed", {
+    if (updated.status === "done" || updated.status === "failed" || updated.status === "cancelled") {
+      startProjectLoop({
+        bus: input.bus,
+        database: input.database,
+        providers: input.providers
+      }, updated.project_id);
+    }
+    recordPiAcceptanceActivity(input.database, issue.id, "completed", {
       attempt,
       card_fingerprint: card.fingerprint,
       decision: decision.decision,
@@ -125,16 +128,14 @@ async function dispatchIssueAcceptance(
     return { error: "", ok: terminalOrProgressing(updated.status) };
   } catch (error) {
     const message = safeError(error);
-    recordPiVerificationActivity(input.database, issue.id, "failed", {
+    recordPiAcceptanceActivity(input.database, issue.id, "failed", {
       attempt,
       card_fingerprint: card?.fingerprint ?? attemptKey,
       error: message,
       project_id: issue.project_id,
       source: input.source ?? "pi-acceptance-coordinator"
     });
-    if (attempt >= MAX_DECISION_ATTEMPTS_PER_CARD) {
-      recordDecisionSystemBlock(input, issue, card, message);
-    }
+    recordDecisionRuntimeFailure(input, issue, card, message, attempt);
     return { error: message, ok: false };
   } finally {
     activeIssues.delete(issue.id);
@@ -142,7 +143,7 @@ async function dispatchIssueAcceptance(
 }
 
 async function completionSessionInput(
-  input: PiVerificationCoordinatorInput,
+  input: PiAcceptanceCoordinatorInput,
   issue: Issue
 ): Promise<{ error?: string; summary?: Record<string, unknown> } | undefined> {
   const run = listIssueRuns(input.database, issue.id).at(-1);
@@ -165,9 +166,9 @@ async function completionSessionInput(
 }
 
 function dueIssues(db: RunnerDatabase, now: Date, cooldownMs: number): Issue[] {
-  return listIssues(db, { status: "pending_verification" }).filter((issue) => {
+  return listIssues(db, { status: "in_progress" }).filter((issue) => {
     if (!piOwnedPending(db, issue)) return false;
-    const activity = readPiVerificationActivity(db, issue.id);
+    const activity = readPiAcceptanceActivity(db, issue.id);
     if (!activity) return true;
     if (activity.status === "completed") {
       const currentCard = readCurrentIssueCompletionCard(db, issue.id);
@@ -176,42 +177,61 @@ function dueIssues(db: RunnerDatabase, now: Date, cooldownMs: number): Issue[] {
     if (activity.status === "queued" || activity.status === "running") {
       return ageMs(activity.updated_at, now) >= Math.max(cooldownMs, 10 * 60_000);
     }
-    if (activity.status === "failed" && activity.attempt >= MAX_DECISION_ATTEMPTS_PER_CARD) return false;
     return ageMs(activity.updated_at, now) >= cooldownMs;
   });
 }
 
 function piOwnedPending(db: RunnerDatabase, issue: Issue): boolean {
-  return issue.status === "pending_verification"
+  const latestRun = listIssueRuns(db, issue.id).at(-1);
+  return issue.status === "in_progress"
+    && latestRun?.ended_at !== ""
+    && piDecisionRequested(db, issue.id, latestRun?.id ?? "")
     && Boolean(getProjectPiSettings(db, issue.project_id))
     && !isPiHeartbeatPaused(db, { scopeId: issue.project_id, scopeType: "project" })
-    && readIssueVerificationProjection(db, issue.id).owner === "pi";
+    && readIssueDecisionProjection(db, issue.id).owner === "pi";
 }
 
-function recordDecisionSystemBlock(
-  input: PiVerificationCoordinatorInput,
+function piDecisionRequested(db: RunnerDatabase, issueID: number, runID: string): boolean {
+  if (runID === "") return false;
+  return listIssueEvents(db, issueID, {
+    limit: 100,
+    types: ["issue.pi_acceptance_requested.v1"]
+  }).some((event) => {
+    try {
+      return cleanString((JSON.parse(event.payload) as Record<string, unknown>).issue_run_id) === runID;
+    } catch {
+      return false;
+    }
+  });
+}
+
+function recordDecisionRuntimeFailure(
+  input: PiAcceptanceCoordinatorInput,
   issue: Issue,
   card: CompletionCard | undefined,
-  error: string
+  error: string,
+  attempt: number
 ): void {
   const fingerprint = card?.fingerprint ?? preCardAttemptKey(input.database, issue);
   const exists = listIssueEvents(input.database, issue.id, {
     limit: 20,
-    types: ["issue.pi_acceptance_system_blocked.v1"]
+    types: ["issue.pi_acceptance_runtime_failed.v1"]
   }).some((event) => {
     try {
-      return cleanString((JSON.parse(event.payload) as Record<string, unknown>).card_fingerprint) === fingerprint;
+      const payload = JSON.parse(event.payload) as Record<string, unknown>;
+      return cleanString(payload.card_fingerprint) === fingerprint && Number(payload.attempt) === attempt;
     } catch {
       return false;
     }
   });
   if (exists) return;
   const latestRun = listIssueRuns(input.database, issue.id).at(-1);
-  recordIssueEvent(input.database, issue.id, "issue.pi_acceptance_system_blocked.v1", {
+  recordIssueEvent(input.database, issue.id, "issue.pi_acceptance_runtime_failed.v1", {
+    attempt,
     card_fingerprint: fingerprint,
     error,
     issue_id: issue.id,
-    reason: "PI acceptance infrastructure reached its retry limit; no human approval can repair this system failure",
+    reason: "PI runtime failed; Issue remains in_progress and the coordinator will retry after cooldown",
     run_id: card?.run.id ?? latestRun?.id ?? ""
   });
 }
@@ -222,7 +242,7 @@ function preCardAttemptKey(db: RunnerDatabase, issue: Issue): string {
 }
 
 function terminalOrProgressing(status: string): boolean {
-  return status === "done" || status === "in_progress" || status === "pending_verification";
+  return status === "done" || status === "failed" || status === "needs_user" || status === "in_progress";
 }
 
 function ageMs(value: string, now: Date): number {

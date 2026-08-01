@@ -33,7 +33,7 @@ const STATUS_META = {
   triage: { label: 'Triage', tone: 'amber' },
   todo: { label: 'Todo', tone: 'slate' },
   in_progress: { label: 'In progress', tone: 'blue' },
-  pending_verification: { label: 'Verification', tone: 'violet' },
+  needs_user: { label: 'Needs user', tone: 'violet' },
   failed: { label: 'Failed', tone: 'red' },
   done: { label: 'Done', tone: 'green' },
   cancelled: { label: 'Cancelled', tone: 'slate' },

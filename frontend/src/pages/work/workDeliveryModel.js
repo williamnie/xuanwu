@@ -84,7 +84,6 @@ export function workDeliveryView({ detail, evidence = [], language = 'zh-CN', wo
     ? handoff.delivery_actions.filter(action => action?.required)
     : [];
   const pendingActions = requiredActions.filter(action => action?.outcome !== 'succeeded');
-  const review = detail?.review_summary || handoff.review || {};
 
   return {
     changedFileCount: Array.isArray(handoff.changed_files) ? handoff.changed_files.length : 0,
@@ -96,8 +95,7 @@ export function workDeliveryView({ detail, evidence = [], language = 'zh-CN', wo
     highRiskCount,
     mode,
     modeLabel: meta.label,
-    nextAction: nextDeliveryAction({ highRiskCount, language, pendingActions, review, status, work }),
-    reviewLabel: reviewLabel(review, language),
+    nextAction: nextDeliveryAction({ highRiskCount, language, pendingActions, status, work }),
     riskCount: risks.length,
     status,
     statusLabel: (english ? STATUS_LABELS_EN : STATUS_LABELS)[status] || status,
@@ -153,7 +151,7 @@ function emptyDeliveryView(work, language) {
     changedFileCount: 0,
     deliverySummary: work?.status === 'done'
       ? (english ? 'This historical completion has no queryable Handoff delivery credential.' : '该历史完成记录没有可查询的 Handoff 交付凭证。')
-      : (english ? 'A delivery credential appears here after Work completes and passes verification.' : 'Work 完成并通过验证后，会在这里生成交付凭证。'),
+      : (english ? 'A delivery credential may appear after Work completes.' : 'Work 完成后可能在这里生成交付凭证。'),
     evidenceFailed: 0,
     evidenceLinked: 0,
     evidenceLoaded: 0,
@@ -162,33 +160,22 @@ function emptyDeliveryView(work, language) {
     mode: '',
     modeLabel: english ? 'No delivery' : '尚无交付',
     nextAction: work?.status === 'done' ? (english ? 'Add a delivery credential to the historical record' : '历史记录待补充交付凭证') : (english ? 'Wait for Work to complete' : '等待 Work 完成'),
-    reviewLabel: english ? 'Review not requested' : '未请求评审',
     riskCount: 0,
     status: 'missing',
     statusLabel: english ? 'No Handoff' : '无 Handoff',
   };
 }
 
-function nextDeliveryAction({ highRiskCount, language, pendingActions, review, status, work }) {
+function nextDeliveryAction({ highRiskCount, language, pendingActions, status, work }) {
   const english = language === 'en-US';
   if (status === 'failed') return english ? 'Inspect the delivery failure' : '检查交付失败原因';
-  if (review?.state === 'pending') return english ? 'Wait for human review' : '等待人工评审';
-  if (review?.state === 'changes_requested') return english ? 'Apply the requested changes' : '按评审意见修改';
   if (highRiskCount > 0) return english ? 'Inspect high-risk attribution issues' : '检查高风险归因问题';
   if (pendingActions.length > 0) {
     const action = (english ? ACTION_LABELS_EN : ACTION_LABELS)[pendingActions[0]?.action] || pendingActions[0]?.action || (english ? 'delivery action' : '交付操作');
     return english ? `Wait to ${action}` : `等待${action}`;
   }
-  if (work?.status === 'pending_verification') return english ? 'Complete the Work review' : '完成 Work 验收';
+  if (work?.status === 'needs_user') return english ? 'Answer the PI question' : '处理 PI 提出的明确问题';
   return english ? 'No further action' : '无需额外操作';
-}
-
-function reviewLabel(review, language) {
-  const english = language === 'en-US';
-  if (review?.state === 'approved') return english ? 'Review approved' : '评审已通过';
-  if (review?.state === 'pending') return english ? 'Awaiting human review' : '等待人工评审';
-  if (review?.state === 'changes_requested') return english ? 'Changes requested' : '已请求修改';
-  return english ? 'Review not requested' : '未请求评审';
 }
 
 function evidenceKindFromID(id) {

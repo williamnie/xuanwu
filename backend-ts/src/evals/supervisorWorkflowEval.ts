@@ -1,7 +1,4 @@
 import type { IssueSupervisorEvent } from "../db/repositories/pi.ts";
-import { ISSUE_WORK_VERIFICATION_POLICY } from "../domain/evidence/completionGate.ts";
-import type { EvidenceRecord, RunID, WorkID } from "../domain/evidence/contracts.ts";
-import { evaluateWorkflowVerificationPolicy } from "../domain/evidence/policy.ts";
 import { listBrowserAssistantTools } from "../pi/browserToolProvider.ts";
 import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
 import { listHttpAssistantTools } from "../pi/httpToolProvider.ts";
@@ -204,10 +201,6 @@ function scoreFixture(
       scorer
     };
   }
-  if (scorer === "completion_gate") {
-    const actual = completionProjection(fixture, suite.evaluation_time);
-    return exactResult(scorer, fixture.golden.completion, actual, "Evidence policy completion result differs from golden output");
-  }
   if (scorer === "report") {
     const actualSummary = supervisorReportSummary((fixture.input.report_events ?? []).map(supervisorEvent));
     const actual = Object.fromEntries(Object.keys(fixture.golden.report ?? {}).map((key) => [
@@ -227,55 +220,6 @@ function scoreFixture(
     passed,
     reason: passed ? "token and cost budgets satisfied" : "token or estimated cost budget exceeded",
     scorer
-  };
-}
-
-function completionProjection(fixture: SupervisorWorkflowEvalCase, now: string) {
-  const workID = `xw:work:issues:${fixture.id}` as WorkID;
-  const runID = `xw:run:issue_runs:${fixture.id}` as RunID;
-  const evidence = fixture.input.completion_evidence === "missing"
-    ? [] : [completionEvidence(fixture.id, fixture.input.completion_evidence!, workID, runID, now)];
-  const evaluation = evaluateWorkflowVerificationPolicy({
-    context: { now, project_id: fixture.input.project_id, risk: "safe", run_id: runID, work_id: workID },
-    evidence,
-    policy: ISSUE_WORK_VERIFICATION_POLICY
-  });
-  return {
-    decision: evaluation.decision,
-    target_status: evaluation.decision === "passed" || evaluation.decision === "overridden"
-      ? "done" : evaluation.decision === "pending" ? "pending_verification" : "failed"
-  };
-}
-
-function completionEvidence(
-  id: string,
-  outcome: "passed" | "failed",
-  workID: WorkID,
-  runID: RunID,
-  now: string
-): EvidenceRecord {
-  return {
-    artifact_refs: [],
-    completed_at: now,
-    created_at: now,
-    decisive_output: { facts: { outcome }, summary: `offline fixture ${outcome}` },
-    id: `xw:evidence:issue_events:${id}` as EvidenceRecord["id"],
-    kind: "test",
-    observed_at: now,
-    provenance: {
-      assertion_origin: "tool_result",
-      audit_event_ref: `fixture:${id}:audit`,
-      producer: { id: "runner:eval", kind: "runner" },
-      source_kind: "test_runner",
-      source_ref: `fixture:${id}`
-    },
-    redaction: { policy_ref: "evidence-redaction:eval@1", redacted_paths: [], status: "not_required" },
-    revision: 0,
-    run_id: runID,
-    schema_version: 1,
-    status: outcome,
-    updated_at: now,
-    work_id: workID
   };
 }
 

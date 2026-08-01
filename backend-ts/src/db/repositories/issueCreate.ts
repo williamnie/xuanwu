@@ -39,7 +39,7 @@ export const VALID_ISSUE_STATUSES = new Set([
   "triage",
   "todo",
   "in_progress",
-  "pending_verification",
+  "needs_user",
   "done",
   "failed",
   "cancelled"
@@ -151,7 +151,7 @@ function ensureIssueWorkShadow(db: RunnerDatabase, issueID: number): void {
       title,
       case when trim(description)<>'' then description else title end,
       status,
-      '{"completion_rule":"all_required","criteria":[{"description":"Satisfy the authoritative Issue description and verification requirements.","id":"issue-delivery","required":true,"verification_policy_ref":"issue-work-verification:v1"}],"handoff_policy":"summary","requires_handoff":false,"version":1}',
+      '{"criteria":[{"description":"Satisfy the authoritative Issue goal; PI judges the actual Provider Session and workspace facts.","id":"issue-delivery","required":true}],"version":1}',
       json_object(
         'causes', json_array(),
         'origin', json_object(

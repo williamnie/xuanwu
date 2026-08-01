@@ -25,7 +25,6 @@ import {
   feishuTargetForIssue,
   feishuTargetForProject
 } from "./feishuNotificationTargets.ts";
-import { resolveIssueAgentRole, resolveWorkflowParentIssueID } from "../pi/agentOrchestration.ts";
 
 export type QueueResult = { queued: boolean; reason: string };
 export type DigestQueueResult = { failed: number; queued: number; scanned: number; skipped: number };
@@ -47,11 +46,8 @@ export function queueFeishuIssueStatusNotification(
 ): QueueResult {
   const issue = getIssue(db, issueID);
   if (!issue) return { queued: false, reason: "issue_not_found" };
-  if (isInternalVerifierWorkflow(issue)) {
-    return { queued: false, reason: "internal_verifier_workflow" };
-  }
-  if (issue.status === "pending_verification") {
-    return { queued: false, reason: "verification_notification_requires_explicit_human_request" };
+  if (issue.status === "needs_user") {
+    return { queued: false, reason: "needs_user_notification_uses_pi_channel" };
   }
   if (!isLifecycleStatus(issue.status)) return { queued: false, reason: "not_notifiable" };
   const runGroupID = latestRunGroupIDForIssue(db, issue.id);
@@ -85,10 +81,6 @@ export function queueFeishuIssueStatusNotification(
   return queueLifecycleIntent(db, issue, target, intentResult);
 }
 
-function isInternalVerifierWorkflow(issue: Issue): boolean {
-  return resolveIssueAgentRole(issue) === "verifier" && resolveWorkflowParentIssueID(issue) > 0;
-}
-
 export function queueReadyFeishuDigestNotifications(
   db: RunnerDatabase,
   options: { limit?: number } = {}
@@ -100,7 +92,7 @@ export function queueReadyFeishuDigestNotifications(
 }
 
 function isLifecycleStatus(status: string): boolean {
-  return ["todo", "in_progress", "done", "failed", "pending_verification"].includes(status);
+  return ["todo", "in_progress", "needs_user", "done", "failed"].includes(status);
 }
 
 function isStartStatus(status: string): boolean {

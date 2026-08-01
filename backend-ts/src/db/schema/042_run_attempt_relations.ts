@@ -210,8 +210,7 @@ function tableColumns(sqlite: SQLiteDatabase, table: string): Set<string> {
 function mappedAttemptStatus(status: string): string {
   return `case ${status}
     when 'in_progress' then 'running'
-    when 'pending_verification' then 'succeeded'
-    when 'done' then 'succeeded'
+    when 'succeeded' then 'succeeded'
     when 'failed' then 'failed'
     when 'cancelled' then 'cancelled'
     else null
@@ -219,7 +218,7 @@ function mappedAttemptStatus(status: string): string {
 }
 
 function mappingError(status: string): string {
-  return `case when ${status} in ('in_progress', 'pending_verification', 'done', 'failed', 'cancelled')
+  return `case when ${status} in ('in_progress', 'succeeded', 'failed', 'cancelled')
     then '' else 'unsupported legacy issue_run status: ' || ${status} end`;
 }
 

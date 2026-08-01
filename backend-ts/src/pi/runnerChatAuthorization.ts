@@ -6,7 +6,7 @@ const RUNNER_CHAT_MUTATION_ACTIONS = new Set([
   "issue.create",
   "issue.cancel",
   "issue.delete",
-  "issue.completion_reconcile",
+  "issue.acceptance_request",
   "issue.enqueue",
   "issue.schedule_enqueue",
   "issue.status_update",

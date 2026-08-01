@@ -1,7 +1,5 @@
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../../db/database.ts";
-import { listStoredEvidence } from "../../db/repositories/evidence.ts";
-import { listStoredHandoffs } from "../../db/repositories/handoffs.ts";
 import { listIssueEvents, recordIssueEvent } from "../../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns, type IssueRun } from "../../db/repositories/issues.ts";
 import { getProject } from "../../db/repositories/projects.ts";
@@ -74,7 +72,6 @@ export type CompletionCardSessionInput = {
 export type CompletionCard = {
   acceptance: {
     criteria: Array<{ description: string; id: string; required: boolean }>;
-    handoff_policy: string;
   };
   commands: {
     items: CompletionCardCommand[];
@@ -82,18 +79,10 @@ export type CompletionCard = {
     total: number;
   };
   contract: typeof COMPLETION_CARD_CONTRACT;
-  evidence: Array<{ id: string; kind: string; status: string; summary: string }>;
   final_message: string;
   fingerprint: string;
   generated_at: string;
   git: CompletionCardGit;
-  handoff: null | {
-    changed_files: string[];
-    final_revision: string;
-    id: string;
-    status: string;
-    summary: string;
-  };
   issue: {
     id: number;
     project_id: string;
@@ -138,7 +127,6 @@ export async function buildIssueCompletionCard(
   const run = listIssueRuns(db, issueID).at(-1);
   if (!run || run.ended_at === "") throw new Error("completion card requires an ended canonical Run");
   const work = projectIssueAsWork(db, issue);
-  const runID = makeDomainID("run", "issue_runs", run.id);
   const events = listIssueEvents(db, issueID, {
     limit: 500,
     types: [
@@ -155,18 +143,6 @@ export async function buildIssueCompletionCard(
   const allCommands = uniqueCommands([...logCommands, ...rolloutCommands]);
   const boundedCommands = boundedSequence(allCommands, MAX_COMMANDS);
   const git = gitRunSummary(project.cwd, run, events);
-  const handoff = listStoredHandoffs(db, { limit: 100, work_id: work.id }).items
-    .find((item) => item.handoff.run_ids.includes(runID));
-  const evidence = listStoredEvidence(db, {
-    issue_ids: [issueID],
-    limit: 200,
-    run_ids: [runID]
-  }).items.map((item) => ({
-    id: item.evidence.id,
-    kind: item.evidence.kind,
-    status: item.evidence.status,
-    summary: boundedUtf8(item.evidence.decisive_output.summary, 1_000)
-  }));
   const warnings = completionWarnings(run, allCommands, git.changed_files);
   const session = completionSession(project.cwd, run, options.session);
   if (session.inspected && session.latest_turn_id !== "" && !session.latest_turn_matches_run) {
@@ -179,8 +155,7 @@ export async function buildIssueCompletionCard(
         description: criterion.description,
         id: criterion.id,
         required: criterion.required
-      })),
-      handoff_policy: work.acceptance.handoff_policy ?? "summary"
+      }))
     },
     commands: {
       items: boundedCommands.map((item, sequence) => ({ ...item, sequence: sequence + 1 })),
@@ -188,16 +163,8 @@ export async function buildIssueCompletionCard(
       total: allCommands.length
     },
     contract: COMPLETION_CARD_CONTRACT,
-    evidence,
     final_message: latestFinalMessage(events, run),
     git,
-    handoff: handoff ? {
-      changed_files: handoff.handoff.changed_files.slice(0, MAX_CHANGED_FILES),
-      final_revision: handoff.handoff.final_revision,
-      id: handoff.handoff.id,
-      status: handoff.handoff.status,
-      summary: boundedUtf8(handoff.handoff.summary, 2_000)
-    } : null,
     issue: {
       goal: issue.description.trim() || issue.title,
       id: issue.id,

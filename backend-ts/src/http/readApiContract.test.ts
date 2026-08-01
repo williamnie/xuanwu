@@ -8,7 +8,7 @@ import {
 } from "./commandCenterApi.ts";
 import { EVIDENCE_HTTP_COMPATIBILITY_POLICY, registerEvidenceRoutes } from "./evidenceApi.ts";
 import { FRONTEND_COMPATIBILITY_POLICY, registerFrontendCompatRoutes } from "./frontendCompatApi.ts";
-import { HANDOFF_HTTP_COMPATIBILITY_POLICY, registerHandoffRoutes } from "./handoffApi.ts";
+import { registerHandoffRoutes } from "./handoffApi.ts";
 import { READ_API_ROUTE_REGISTRY } from "./readApi.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import { registerCoreReadRoutes } from "./readApiRoutes.ts";
@@ -124,7 +124,6 @@ describe("read API route contracts", () => {
       "GET /api/evidence",
       "GET /api/evidence/:id",
       "GET /api/evidence/:id/artifacts/:index",
-      "POST /api/issues/:id/evidence/command",
       "POST /api/issues/:id/evidence/readiness"
     ]);
     expect(EVIDENCE_HTTP_COMPATIBILITY_POLICY).toMatchObject({
@@ -137,14 +136,8 @@ describe("read API route contracts", () => {
   test("locks Handoff method, path, and authority contracts", () => {
     expect(captureRoutes(registerHandoffRoutes)).toEqual([
       "GET /api/handoffs",
-      "GET /api/handoffs/:id",
-      "POST /api/handoffs/:id/reviews"
+      "GET /api/handoffs/:id"
     ]);
-    expect(HANDOFF_HTTP_COMPATIBILITY_POLICY).toMatchObject({
-      dual_write: expect.stringContaining("none"),
-      fact_authority: expect.stringContaining("Git-Evidence"),
-      read_authority: "issue_events:handoff.*.v1"
-    });
   });
 
   test("locks Run method, path, and authority contracts", () => {
@@ -175,8 +168,8 @@ describe("read API route contracts", () => {
         "POST /api/issues/:id/comments",
         "POST /api/issues/:id/enqueue",
         "POST /api/issues/:id/human-review-requests",
+        "POST /api/issues/:id/human-review-response",
         "POST /api/issues/:id/retry",
-        "POST /api/issues/:id/verification",
         "POST /api/projects",
       ]
     `);
@@ -214,7 +207,6 @@ describe("read API route contracts", () => {
         "POST /api/agent-profiles",
         "POST /api/codex/approvals/:id/resolve",
         "POST /api/commands",
-        "POST /api/issues/:id/verifier-report",
         "POST /api/notifications/:id/read",
         "POST /api/projects/:id/hold/resume",
         "POST /api/projects/:id/loop/start",

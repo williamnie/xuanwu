@@ -33,7 +33,6 @@ const REVIEW_FLAGS = [
   { name: "action", required: true },
   { name: "comment" }
 ] as const;
-const REVIEW_ACTIONS = new Set(["accept", "reject", "request-changes"]);
 
 export async function runIssue(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
   const command = args[0]?.trim();
@@ -44,8 +43,7 @@ export async function runIssue(args: string[], env: EnvReader, fetcher: Fetcher)
   if (command === "delete") return await deleteIssueCommand(args.slice(1), env, fetcher);
   if (command === "logs") return await getIssueLogs(args.slice(1), env, fetcher);
   if (command === "retry" || command === "cancel" || command === "enqueue") return await issueAction(command, args.slice(1), env, fetcher);
-  if (REVIEW_ACTIONS.has(command)) return await verificationAction(command, args.slice(1), env, fetcher);
-  if (command === "verification") return await reviewIssue(args.slice(1), env, fetcher);
+  if (command === "human-review") return await answerHumanReview(args.slice(1), env, fetcher);
   throw new Error(`unknown issue command: ${command}`);
 }
 
@@ -94,17 +92,12 @@ async function issueAction(action: string, args: string[], env: EnvReader, fetch
   return formatIssue(issue, common.json);
 }
 
-async function verificationAction(action: string, args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
-  const { common, values } = parseCommandArgs(args, [{ name: "id", required: true }, { name: "comment" }], env);
-  return await postVerification(fetcher, common, values.id, action, values.comment ?? "");
-}
-
-async function reviewIssue(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
+async function answerHumanReview(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
   const { common, values } = parseCommandArgs(args, [...REVIEW_FLAGS], env);
-  return await postVerification(fetcher, common, values.id, values.action, values.comment ?? "");
+  return await postHumanReviewResponse(fetcher, common, values.id, values.action, values.comment ?? "");
 }
 
-async function postVerification(
+async function postHumanReviewResponse(
   fetcher: Fetcher,
   common: Parameters<typeof postJSON<IssueDTO>>[1],
   id: string,
@@ -113,9 +106,9 @@ async function postVerification(
 ): Promise<string> {
   const issueIDValue = issueID(id);
   const current = await getJSON<IssueDTO>(fetcher, common, `/api/issues/${issueIDValue}`);
-  const request = current.verification?.request;
-  if (current.verification?.owner !== "human" || request?.status !== "open" || !request.id || !request.revision) {
-    throw new Error("当前没有等待人类处理的验收请求；PI 仍负责自主验证或修复");
+  const request = current.decision?.request;
+  if (current.decision?.owner !== "human" || request?.status !== "open" || !request.id || !request.revision) {
+    throw new Error("当前没有等待人类回答的问题；PI 仍负责自主判断或继续处理");
   }
   const review = {
     action: normalizeReviewAction(action),
@@ -123,7 +116,7 @@ async function postVerification(
     review_request_id: request.id,
     review_revision: request.revision
   };
-  const issue = await postJSON<IssueDTO>(fetcher, common, `/api/issues/${issueIDValue}/verification`, review);
+  const issue = await postJSON<IssueDTO>(fetcher, common, `/api/issues/${issueIDValue}/human-review-response`, review);
   return formatIssue(issue, common.json);
 }
 
@@ -186,5 +179,5 @@ function normalizeReviewAction(action: string): string {
   if (normalized === "accept" || normalized === "reject" || normalized === "request-changes") {
     return normalized.replaceAll("-", "_");
   }
-  throw new Error("verification action 必须是 accept、reject 或 request_changes");
+  throw new Error("human-review action 必须是 accept、reject 或 request_changes");
 }

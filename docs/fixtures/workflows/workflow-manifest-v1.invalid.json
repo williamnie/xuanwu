@@ -27,7 +27,6 @@
       },
       "handoff": {
         "mode": "local_changes",
-        "required": true,
         "project_override_modes": [
           "local_changes"
         ]

@@ -87,7 +87,7 @@ export const workApi = {
     body: JSON.stringify(payload),
   }),
 
-  reviewWork: (id, review) => request(`/api/issues/${issueIdFromWorkId(id)}/verification`, {
+  answerWorkHumanReview: (id, review) => request(`/api/issues/${issueIdFromWorkId(id)}/human-review-response`, {
     method: 'POST',
     body: JSON.stringify(review),
   }),
@@ -130,7 +130,7 @@ export const workApi = {
     method: 'DELETE',
   }),
 
-  reviewIssueVerification: (id, review) => request(`/api/issues/${id}/verification`, {
+  answerIssueHumanReview: (id, review) => request(`/api/issues/${id}/human-review-response`, {
     method: 'POST',
     body: JSON.stringify(review),
   }),
@@ -154,8 +154,4 @@ export const workApi = {
     body: JSON.stringify(comment),
   }),
 
-  generateIssueVerifierReport: (id) => request(`/api/issues/${id}/verifier-report`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }),
 };

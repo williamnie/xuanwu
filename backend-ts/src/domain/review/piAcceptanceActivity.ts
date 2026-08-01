@@ -1,22 +1,22 @@
 import type { RunnerDatabase } from "../../db/database.ts";
 import { listIssueEvents, recordIssueEvent } from "../../db/repositories/issueEvents.ts";
 
-export const PI_VERIFICATION_EVENT_TYPES = {
-  queued: "issue.pi_verification_queued.v1",
-  running: "issue.pi_verification_started.v1",
-  waiting: "issue.pi_verification_waiting.v1",
-  completed: "issue.pi_verification_completed.v1",
-  failed: "issue.pi_verification_failed.v1"
+export const PI_ACCEPTANCE_ACTIVITY_EVENT_TYPES = {
+  queued: "issue.pi_acceptance_queued.v1",
+  running: "issue.pi_acceptance_started.v1",
+  waiting: "issue.pi_acceptance_waiting.v1",
+  completed: "issue.pi_acceptance_completed.v1",
+  failed: "issue.pi_acceptance_failed.v1"
 } as const;
 
-export type PiVerificationActivityStatus =
+export type PiAcceptanceActivityStatus =
   | "queued"
   | "running"
   | "waiting"
   | "completed"
   | "failed";
 
-export type PiVerificationActivity = {
+export type PiAcceptanceActivity = {
   attempt: number;
   card_fingerprint: string;
   decision: string;
@@ -24,24 +24,24 @@ export type PiVerificationActivity = {
   event_id: number;
   project_id: string;
   source: string;
-  status: PiVerificationActivityStatus;
+  status: PiAcceptanceActivityStatus;
   updated_at: string;
 };
 
-const EVENT_STATUS = new Map<string, PiVerificationActivityStatus>(
-  Object.entries(PI_VERIFICATION_EVENT_TYPES).map(([status, eventType]) => [
+const EVENT_STATUS = new Map<string, PiAcceptanceActivityStatus>(
+  Object.entries(PI_ACCEPTANCE_ACTIVITY_EVENT_TYPES).map(([status, eventType]) => [
     eventType,
-    status as PiVerificationActivityStatus
+    status as PiAcceptanceActivityStatus
   ])
 );
 
-export function readPiVerificationActivity(
+export function readPiAcceptanceActivity(
   db: RunnerDatabase,
   issueID: number
-): PiVerificationActivity | null {
+): PiAcceptanceActivity | null {
   const event = listIssueEvents(db, issueID, {
     limit: 1,
-    types: Object.values(PI_VERIFICATION_EVENT_TYPES)
+    types: Object.values(PI_ACCEPTANCE_ACTIVITY_EVENT_TYPES)
   })[0];
   const status = event ? EVENT_STATUS.get(event.type) : undefined;
   if (!event || !status) return null;
@@ -59,10 +59,10 @@ export function readPiVerificationActivity(
   };
 }
 
-export function recordPiVerificationActivity(
+export function recordPiAcceptanceActivity(
   db: RunnerDatabase,
   issueID: number,
-  status: PiVerificationActivityStatus,
+  status: PiAcceptanceActivityStatus,
   input: {
     attempt: number;
     card_fingerprint?: string;
@@ -71,8 +71,8 @@ export function recordPiVerificationActivity(
     project_id: string;
     source: string;
   }
-): PiVerificationActivity {
-  recordIssueEvent(db, issueID, PI_VERIFICATION_EVENT_TYPES[status], {
+): PiAcceptanceActivity {
+  recordIssueEvent(db, issueID, PI_ACCEPTANCE_ACTIVITY_EVENT_TYPES[status], {
     attempt: input.attempt,
     card_fingerprint: cleanString(input.card_fingerprint),
     decision: cleanString(input.decision),
@@ -81,8 +81,8 @@ export function recordPiVerificationActivity(
     source: input.source,
     status
   });
-  const activity = readPiVerificationActivity(db, issueID);
-  if (!activity) throw new Error("PI verification activity was not persisted");
+  const activity = readPiAcceptanceActivity(db, issueID);
+  if (!activity) throw new Error("PI acceptance activity was not persisted");
   return activity;
 }
 

@@ -15,17 +15,16 @@ export type RunGroupReportView = {
 
 const REPORTABLE_STATUSES = new Set([
   "done",
-  "pending_verification",
+  "needs_user",
   "failed",
   "blocked",
   "cancelled",
   "skipped",
-  "needs_user",
   "budget_exhausted",
   "enqueue_failed",
   "enqueue_pending_approval"
 ]);
-const REPORTABLE_BUCKETS = new Set(["done", "verification", "failed", "skipped", "needs_user"]);
+const REPORTABLE_BUCKETS = new Set(["done", "failed", "skipped", "needs_user"]);
 
 export function deriveRunGroupReportView(input: RunGroupReportInput): RunGroupReportView {
   const lifecycle = lifecycleReport(cleanString(input.final_issue_status));
@@ -44,7 +43,7 @@ export function isRunGroupItemReportable(input: RunGroupReportInput): boolean {
 
 export function lifecycleReport(status: string): RunGroupReportView | null {
   if (status === "done") return reportable("done", "done");
-  if (status === "pending_verification") return reportable("pending_verification", "verification");
+  if (status === "needs_user") return reportable("needs_user", "needs_user");
   if (status === "failed") return reportable("failed", "failed");
   if (status === "blocked") return reportable("blocked", "failed");
   if (status === "cancelled") return reportable("cancelled", "skipped");
@@ -93,7 +92,7 @@ function reportValue(value: unknown, fallback: string): string {
 
 function bucketForReportStatus(status: string): string {
   if (status === "done") return "done";
-  if (status === "pending_verification") return "verification";
+  if (status === "needs_user") return "needs_user";
   if (status === "failed" || status === "blocked") return "failed";
   if (status === "cancelled" || status === "skipped" || status === "enqueue_failed") return "skipped";
   if (status === "needs_user" || status === "budget_exhausted" || status === "enqueue_pending_approval") return "needs_user";

@@ -132,8 +132,8 @@ export async function dispatchPiAction(
       return createIssueComment(context.database, positivePayloadID(payload, "issue_id"), payload);
     case "issue.state_repair":
       return applyIssueStateRepair(context.database, actionPayload(action, payload));
-    case "issue.completion_reconcile":
-      return await reconcileIssueCompletion(context, action, payload);
+    case "issue.acceptance_request":
+      return await requestIssueAcceptanceAction(context, action, payload);
     case "agent.executor_assign":
       return await updateExecutorIssue(context.database, action, payload);
     case "agent.workflow_request":
@@ -205,7 +205,7 @@ async function updateIssueStatusesAndStartAutoRun(
 function issueStatusUpdateInput(payload: Record<string, unknown>): IssueStatusUpdateInput {
   const status = cleanString(payload.status);
   if (status !== "triage" && status !== "todo" && status !== "in_progress" &&
-    status !== "pending_verification" && status !== "done" && status !== "failed" && status !== "cancelled") {
+    status !== "needs_user" && status !== "done" && status !== "failed" && status !== "cancelled") {
     throw new Error("status is invalid");
   }
   const reason = requiredPayloadText(payload, "reason");
@@ -233,7 +233,7 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
 }
 
-async function reconcileIssueCompletion(
+async function requestIssueAcceptanceAction(
   context: PiActionDispatchContext,
   action: PiAction,
   payload: Record<string, unknown>
@@ -365,7 +365,7 @@ function workflowInput(action: PiAction, payload: Record<string, unknown>): Agen
 
 function shouldQueueWorkflow(payload: Record<string, unknown>): boolean {
   const role = workflowRole(payload);
-  return role === "verifier" || role === "reviewer";
+  return role === "reviewer";
 }
 
 function workflowRole(payload: Record<string, unknown>): string {

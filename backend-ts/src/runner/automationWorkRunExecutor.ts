@@ -4,18 +4,15 @@ import {
   getAutomationExecutionLink,
   type AutomationExecutionLink
 } from "../db/repositories/automationExecutionLinks.ts";
-import { recordEvidenceRecords } from "../db/repositories/evidence.ts";
-import { recordHandoff } from "../db/repositories/handoffs.ts";
+import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
-import { updateIssue } from "../db/repositories/issueUpdate.ts";
-import { makeDomainID, type EvidenceID, type HandoffID, type RunID } from "../xuanwu/coreDomainContracts.ts";
+import { makeDomainID, type RunID } from "../xuanwu/coreDomainContracts.ts";
 import { createIssueBackedWork, getIssueAsWork } from "../domain/work/issueAdapter.ts";
 import type { WorkLedgerEntry } from "../domain/work/contracts.ts";
-import type { EvidenceRecord } from "../domain/evidence/contracts.ts";
-import type { HandoffRecord } from "../domain/handoff/contracts.ts";
 import type { AutomationDefinition } from "../domain/automation/contracts.ts";
 import type { AutomationExecutor } from "./automationScheduler.ts";
 import type { WorkflowRegistry, WorkflowResolution } from "../workflows/registry.ts";
+import { requestIssuePiAcceptance } from "./piAcceptanceRequest.ts";
 
 export type AutomationWorkflowDispatchResult = {
   detail?: string;
@@ -50,8 +47,8 @@ export type AutomationWorkRunExecutorOptions = {
 
 /**
  * Native Automation remains the trigger/lease authority. This adapter only
- * materializes its source-linked Issue Work/Run and records its terminal
- * deterministic observation as Evidence plus a reviewable Handoff.
+ * materializes its source-linked Issue Work/Run. A terminal Automation result
+ * is only a Run fact; PI remains the sole semantic Issue decision-maker.
  */
 export function createAutomationWorkRunExecutor(options: AutomationWorkRunExecutorOptions): AutomationExecutor {
   return async (input) => {
@@ -95,9 +92,6 @@ export function createAutomationWorkRunExecutor(options: AutomationWorkRunExecut
     } catch (error) {
       const detail = safeError(error);
       persistOutcome(database, link, automation, run.run_id, run.attempt_count, now, "failed", detail, preparation.context);
-      if (run.attempt_count >= run.max_attempts) {
-        updateIssue(database, link.issue_id, { error: detail, status: "failed" });
-      }
       throw error;
     }
   };
@@ -172,95 +166,31 @@ function persistOutcome(
   context?: Record<string, unknown>
 ): void {
   const timestamp = now.toISOString();
-  const evidence = outcomeEvidence(link, automation, automationRunID, attempt, timestamp, outcome, detail, context);
-  recordEvidenceRecords(database, link.issue_id, [evidence], { recorded_at: timestamp, source: "automation-work-run-executor" });
-  const handoff = outcomeHandoff(link, automationRunID, attempt, timestamp, evidence, outcome, detail);
-  recordHandoff(database, link.issue_id, handoff, { recorded_at: timestamp, source: "automation-work-run-executor" });
-  if (outcome === "succeeded") updateIssue(database, link.issue_id, { status: "pending_verification" });
-  if (outcome === "skipped") updateIssue(database, link.issue_id, { error: detail, status: "cancelled" });
+  const runStatus = outcome === "succeeded" ? "succeeded" : "failed";
+  database.sqlite.run(
+    `update issue_runs set status=?, ended_at=case when ended_at='' then ? else ended_at end,
+      exit_reason=case when exit_reason='' then ? else exit_reason end,
+      error=case when error='' then ? else error end where id=?`,
+    [runStatus, timestamp, `automation_${outcome}`, detail, issueRunStorageID(link.run_id)]
+  );
+  recordIssueEvent(database, link.issue_id, "issue.automation_outcome.v1", {
+    attempt,
+    automation_id: automation.id,
+    automation_run_id: automationRunID,
+    context: context ?? {},
+    detail,
+    issue_run_id: issueRunStorageID(link.run_id),
+    outcome,
+    workflow_ref: link.workflow_ref
+  });
+  requestIssuePiAcceptance(database, link.issue_id, {
+    reason: `Automation Run terminal: ${outcome}: ${detail}`,
+    source: "automation-work-run-executor"
+  });
 }
 
-function outcomeEvidence(
-  link: AutomationExecutionLink,
-  automation: AutomationDefinition,
-  automationRunID: string,
-  attempt: number,
-  timestamp: string,
-  outcome: "succeeded" | "skipped" | "failed",
-  detail: string,
-  context?: Record<string, unknown>
-): EvidenceRecord {
-  const status = outcome === "succeeded" ? "passed" : outcome === "skipped" ? "blocked" : "failed";
-  return {
-    schema_version: 1,
-    id: makeDomainID("evidence", "issue_events", `automation-${automationRunID}-${attempt}`) as EvidenceID,
-    work_id: link.work_id as EvidenceRecord["work_id"],
-    run_id: link.run_id as RunID,
-    revision: 0,
-    kind: "automation_execution",
-    status,
-    created_at: timestamp,
-    observed_at: timestamp,
-    updated_at: timestamp,
-    completed_at: timestamp,
-    decisive_output: {
-      summary: detail,
-      facts: {
-        attempt,
-        automation_mode: automation.mode,
-        ...(context ? { execution_context_json: JSON.stringify(context) } : {}),
-        outcome,
-        permission_policy_ref: automation.permission_policy_ref,
-        workflow_ref: link.workflow_ref
-      }
-    },
-    artifact_refs: [{ kind: "report", label: "native Automation run", ref: `automation_runs:${automationRunID}` }],
-    provenance: {
-      assertion_origin: "system_observation",
-      source_kind: "command_execution",
-      source_ref: `automation_runs:${automationRunID}`,
-      audit_event_ref: `automation_run_events:${automationRunID}`,
-      producer: { id: "automation-runner", kind: "automation" }
-    },
-    redaction: { policy_ref: "automation-evidence-redaction:v1", redacted_paths: [], status: "not_required" }
-  };
-}
-
-function outcomeHandoff(
-  link: AutomationExecutionLink,
-  automationRunID: string,
-  attempt: number,
-  timestamp: string,
-  evidence: EvidenceRecord,
-  outcome: "succeeded" | "skipped" | "failed",
-  detail: string
-): HandoffRecord {
-  const revision = `automation-run:${automationRunID}:attempt:${attempt}`;
-  return {
-    schema_version: 1,
-    id: makeDomainID("handoff", "derived", `automation-${automationRunID}-${attempt}`) as HandoffID,
-    work_id: link.work_id as HandoffRecord["work_id"],
-    run_ids: [link.run_id as RunID],
-    evidence_ids: [evidence.id],
-    revision: 0,
-    status: outcome === "succeeded" ? "ready" : "draft",
-    summary: `Automation ${outcome}: ${detail}`,
-    created_at: timestamp,
-    updated_at: timestamp,
-    baseline_revision: revision,
-    final_revision: revision,
-    review_ref: `automation_runs:${automationRunID}`,
-    changed_files: [`automation://${automationRunID}/handoff-report`],
-    delivery: { mode: "local_changes", working_tree_ref: revision },
-    delivery_actions: [],
-    risks: outcome === "failed" ? [{
-      id: "automation-dispatch-failed", severity: "medium", summary: detail,
-      mitigation: "Inspect the linked Automation Evidence and retry policy before any manual replay.",
-      source_refs: [`automation_runs:${automationRunID}`]
-    }] : [],
-    rollback: { availability: "not_required", destructive: false, refs: [] },
-    review: { required: false, state: "not_applicable", reviewer_refs: [] }
-  };
+function issueRunStorageID(runID: string): string {
+  return runID.startsWith("xw:run:issue_runs:") ? runID.slice("xw:run:issue_runs:".length) : runID;
 }
 
 function digest(value: string): string { return createHash("sha256").update(value).digest("hex").slice(0, 24); }

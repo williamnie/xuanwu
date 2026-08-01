@@ -12,14 +12,11 @@ import {
   RefreshCw,
   ShieldAlert,
   TestTube2,
-  X,
 } from 'lucide-react';
 import { handoffsApi } from '../../api/handoffs.js';
 import { message } from '../../store/toastStore.js';
 import {
   handoffHref,
-  handoffReviewActions,
-  handoffReviewPayload,
   handoffRiskPresentation,
 } from '../handoffPageModel.js';
 import {
@@ -45,9 +42,6 @@ export default function WorkDeliveryView({
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
-  const [reviewAction, setReviewAction] = useState('');
-  const [reviewComment, setReviewComment] = useState('');
-  const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   useEffect(() => {
     const requested = selectedHandoffId || '';
@@ -76,16 +70,11 @@ export default function WorkDeliveryView({
     return () => { active = false; };
   }, [selectedId, t]);
 
-  useEffect(() => {
-    setReviewAction('');
-    setReviewComment('');
-  }, [selectedId]);
 
   const view = useMemo(() => workDeliveryView({ detail, evidence, language, work }), [detail, evidence, language, work]);
   const evidenceRows = useMemo(() => deliveryEvidenceRows(detail, evidence, language), [detail, evidence, language]);
   const refs = useMemo(() => deliveryRefRows(detail?.handoff, language), [detail, language]);
   const risks = useMemo(() => handoffRiskPresentation(detail?.handoff?.risks), [detail]);
-  const reviewActions = handoffReviewActions(detail);
 
   const selectHandoff = (id) => {
     setSelectedId(id);
@@ -107,24 +96,7 @@ export default function WorkDeliveryView({
     }
   };
 
-  const submitReview = async () => {
-    if (!reviewAction || reviewSubmitting) return;
-    setReviewSubmitting(true);
-    try {
-      await handoffsApi.reviewHandoff(
-        detail.handoff.id,
-        handoffReviewPayload(detail, reviewAction, reviewComment),
-      );
-      message.success(t(reviewAction === 'accept' ? 'delivery.reviewAccepted' : 'delivery.changesRecorded'));
-      setReviewAction('');
-      setReviewComment('');
-      await refresh();
-    } catch (error) {
-      message.error(error.message || t('delivery.reviewFailed'));
-    } finally {
-      setReviewSubmitting(false);
-    }
-  };
+
 
   if (loading && handoffs.length === 0) {
     return <DeliveryState icon={<LoaderCircle className="is-spinning" size={20} />} title={t('delivery.loading')} />;
@@ -179,7 +151,6 @@ export default function WorkDeliveryView({
           <span>{t('delivery.files', { count: view.changedFileCount })}</span>
           <span>{t('delivery.evidenceCount', { count: view.evidenceLinked })}</span>
           <span className={view.riskCount > 0 ? 'warning' : ''}>{t('delivery.risks', { count: view.riskCount })}</span>
-          <span>{view.reviewLabel}</span>
         </div>
       </section>
 
@@ -240,16 +211,6 @@ export default function WorkDeliveryView({
             </section>
           ) : null}
 
-          {reviewActions.length > 0 ? (
-            <section className="work-delivery-section work-delivery-review">
-              <SectionHeader icon={<CheckCircle2 size={16} />} title={t('delivery.review')} meta={t('delivery.humanDecision')} />
-              <div className="work-delivery-review-actions">
-                {reviewActions.includes('accept') ? <button onClick={() => setReviewAction('accept')} type="button">{t('delivery.accept')}</button> : null}
-                {reviewActions.includes('request_changes') ? <button onClick={() => setReviewAction('request_changes')} type="button">{t('work.requestChanges')}</button> : null}
-              </div>
-            </section>
-          ) : null}
-
           <details className="work-delivery-technical">
             <summary>{t('delivery.technicalDetails')}</summary>
             <div className="work-delivery-refs">
@@ -263,16 +224,6 @@ export default function WorkDeliveryView({
         </div>
       </div>
 
-      {reviewAction ? (
-        <ReviewDialog
-          action={reviewAction}
-          busy={reviewSubmitting}
-          comment={reviewComment}
-          onCancel={() => { setReviewAction(''); setReviewComment(''); }}
-          onChange={setReviewComment}
-          onSubmit={submitReview}
-        />
-      ) : null}
     </div>
   );
 }
@@ -315,21 +266,6 @@ function TechnicalRef({ label, value }) {
     }
   };
   return <div><span>{label}</span><code>{value}</code><button aria-label={t('delivery.copy', { label })} onClick={copy} type="button"><Copy size={12} /></button></div>;
-}
-
-function ReviewDialog({ action, busy, comment, onCancel, onChange, onSubmit }) {
-  const { t } = useI18n();
-  const requestingChanges = action === 'request_changes';
-  return (
-    <div className="modal-overlay work-dialog-overlay">
-      <form className="work-review-dialog" onSubmit={(event) => { event.preventDefault(); onSubmit(); }}>
-        <div className="work-delivery-review-title"><strong>{t(requestingChanges ? 'delivery.requestChangesTitle' : 'delivery.acceptTitle')}</strong><button disabled={busy} onClick={onCancel} type="button"><X size={15} /></button></div>
-        <p>{t(requestingChanges ? 'delivery.requestChangesDescription' : 'delivery.acceptDescription')}</p>
-        <textarea autoFocus disabled={busy} onChange={event => onChange(event.target.value)} placeholder={t(requestingChanges ? 'delivery.changesPlaceholder' : 'delivery.reviewPlaceholder')} rows={5} value={comment} />
-        <div><button disabled={busy} onClick={onCancel} type="button">{t('work.cancel')}</button><button className="primary" disabled={busy || (requestingChanges && !comment.trim())} type="submit">{busy ? t('work.submitting') : t(requestingChanges ? 'delivery.submitChanges' : 'delivery.accept')}</button></div>
-      </form>
-    </div>
-  );
 }
 
 function evidenceKindLabel(kind, t) {

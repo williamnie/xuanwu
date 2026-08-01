@@ -20,7 +20,6 @@ import { reportWarnings, summarizeProviderHealth } from "./reportHealth.ts";
 import { issueReportSummary } from "./reportIssueSummary.ts";
 import { listReportSupervisorEvents, supervisorReportSummary } from "./reportSupervisorSummary.ts";
 import { buildUsageCostSummary } from "./reportUsage.ts";
-import { parseStructuredVerifierReviewEventPayload } from "../domain/evidence/verifierReview.ts";
 
 export type PiReportInput = {
   bus?: Pick<EventBus, "publish">; codexSessionsDir?: string; database: RunnerDatabase;
@@ -71,7 +70,7 @@ function persistReport(db: RunnerDatabase, report: PiReport): PiReport {
   return { ...report, report_id: record.id };
 }
 
-function assembleReport(db: RunnerDatabase, input: {
+function assembleReport(_db: RunnerDatabase, input: {
   diagnostics: IssueStateDiagnostic[]; evidence: ReturnType<typeof relatedEvidence>; issues: Issue[];
   now: Date; project: Project | null; scope: ReportScope; type: string;
   usage: Record<string, unknown>; window: { since: string; until: string };
@@ -101,8 +100,6 @@ function assembleReport(db: RunnerDatabase, input: {
     heartbeatIDs,
     needsUserIssueIDs
   );
-  const verifierReviews = latestVerifierReviews(db, input.issues);
-  const verifierVerdicts = verifierReviewVerdicts(verifierReviews);
   return {
     blocked_escalations: escalations,
     completed_issues: completedSummaries,
@@ -129,9 +126,6 @@ function assembleReport(db: RunnerDatabase, input: {
       supervisor_recovery_actions: supervisor.recovery_actions,
       total: input.issues.length,
       usage_warnings: usageWarnings,
-      verifier_fail: verifierVerdicts.fail,
-      verifier_inconclusive: verifierVerdicts.inconclusive,
-      verifier_pass: verifierVerdicts.pass,
       verification_gaps: gaps.length,
       warnings: warnings.length
     },
@@ -141,42 +135,10 @@ function assembleReport(db: RunnerDatabase, input: {
     supervisor_summary: supervisor,
     type: input.type,
     usage_cost: input.usage,
-    verifier_reviews: verifierReviews,
     verification_gaps: gaps,
     warnings,
     window: input.window
   };
-}
-
-function latestVerifierReviews(db: RunnerDatabase, issues: Issue[]): Array<Record<string, unknown>> {
-  return issues.flatMap((issue) => {
-    const events = listIssueEvents(db, issue.id, { limit: 20, types: ["issue.verification_report"] });
-    for (const event of [...events].reverse()) {
-      const review = parseStructuredVerifierReviewEventPayload(event.payload);
-      if (!review) continue;
-      return [{
-        event_id: event.id,
-        evidence_ids: [...new Set(review.findings.flatMap((finding) => finding.evidence_ids))],
-        gate_consistency: review.gate_consistency,
-        issue_id: issue.id,
-        missing_evidence: review.missing_evidence,
-        policy_ref: review.input_context.policy_ref,
-        recommended_next_action: review.recommended_next_action,
-        verdict: review.verdict,
-        work_id: review.input_context.work_id
-      }];
-    }
-    return [];
-  });
-}
-
-function verifierReviewVerdicts(reviews: Array<Record<string, unknown>>): Record<"fail" | "inconclusive" | "pass", number> {
-  const counts = { fail: 0, inconclusive: 0, pass: 0 };
-  for (const review of reviews) {
-    const verdict = review.verdict;
-    if (verdict === "pass" || verdict === "fail" || verdict === "inconclusive") counts[verdict] += 1;
-  }
-  return counts;
 }
 
 function nightRunSummary(

@@ -22,7 +22,7 @@ create table if not exists works (
   check(type in ('objective', 'engineering_task')),
   check(length(trim(title)) > 0),
   check(length(trim(goal)) > 0),
-  check(status in ('triage', 'todo', 'in_progress', 'pending_verification', 'done', 'failed', 'cancelled')),
+  check(status in ('triage', 'todo', 'in_progress', 'needs_user', 'done', 'failed', 'cancelled')),
   check(json_valid(acceptance_json)),
   check(json_valid(provenance_json)),
   check(length(trim(workflow_ref)) > 0),

@@ -139,8 +139,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   const work = detail?.work || null;
   const issueId = issueIdFromWorkId(work?.id);
   const projectName = projects.find(project => project.id === work?.owner?.project_id)?.name || work?.owner?.project_id || 'Unscoped';
-  const verification = detail?.verification || null;
-  const availableActions = workAvailableActions(work?.status, verification);
+  const decision = detail?.decision || null;
+  const availableActions = workAvailableActions(work?.status, decision);
   const visibleTimeline = useMemo(() => filterTimelineItems(timeline, timelineKind), [timeline, timelineKind]);
   const customAcceptance = useMemo(
     () => (work?.acceptance?.criteria || []).filter(criterion => criterion.id !== DEFAULT_ACCEPTANCE_ID),
@@ -206,11 +206,11 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     if (!work || submitting || ((reviewAction === 'reject' || reviewAction === 'request_changes') && !comment)) return;
     setSubmitting(true);
     try {
-      await workApi.reviewWork(work.id, {
+      await workApi.answerWorkHumanReview(work.id, {
         action: reviewAction,
         comment,
-        review_request_id: verification?.request?.id,
-        review_revision: verification?.request?.revision,
+        review_request_id: decision?.request?.id,
+        review_revision: decision?.request?.revision,
       });
       message.success(t('work.reviewSubmitted'));
       setReviewAction('');
@@ -285,8 +285,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
           <div className="work-overview-grid">
             <section className="work-detail-panel">
               <SectionHeading eyebrow={t('work.current')} title={t('work.nextStep')} />
-              <WorkStateSummary status={work.status} verification={verification} />
-              {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={setReviewAction} request={verification.request} /> : null}
+              <WorkStateSummary status={work.status} decision={decision} />
+              {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={setReviewAction} request={decision.request} /> : null}
             </section>
 
             <section className="work-detail-panel">
@@ -308,7 +308,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
             </section>
 
             <section className="work-detail-panel">
-              <SectionHeading eyebrow={t('work.verification')} title={t('work.delivery')} />
+              <SectionHeading eyebrow={t('work.piDecision')} title={t('work.delivery')} />
               <ResourceError error={overviewErrors.evidence || overviewErrors.handoffs} />
               <div className="work-delivery-facts">
                 <span><strong>{passedEvidence}</strong> {t('work.passedEvidence')}</span>
@@ -363,7 +363,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       )}
 
       {editorOpen ? <WorkEditorDialog mode="edit" onClose={() => setEditorOpen(false)} onSaved={async () => { setEditorOpen(false); await refreshAll(); onWorkChanged?.(); }} projects={projects} work={work} /> : null}
-      {reviewAction ? <ReviewDialog action={reviewAction} busy={submitting} comment={reviewComment} onCancel={() => { setReviewAction(''); setReviewComment(''); }} onChange={setReviewComment} onConfirm={submitReview} request={verification?.request} /> : null}
+      {reviewAction ? <ReviewDialog action={reviewAction} busy={submitting} comment={reviewComment} onCancel={() => { setReviewAction(''); setReviewComment(''); }} onChange={setReviewComment} onConfirm={submitReview} request={decision?.request} /> : null}
     </section>
   );
 }
@@ -388,25 +388,25 @@ function LatestHandoffCard({ handoff, onOpen }) {
   return <article className="work-latest-handoff"><div><strong>{mode}</strong><em data-status={status}>{status === 'ready' ? t('work.handoff.ready') : status}</em></div><p>{t('work.handoff.summary', { files: handoff.changed_file_count, evidence: handoff.evidence_count, risks: handoff.risk_count })}</p><button onClick={onOpen} type="button">{t('work.handoff.open')} <ArrowUpRight size={12} /></button></article>;
 }
 
-function WorkStateSummary({ status, verification }) {
+function WorkStateSummary({ status, decision }) {
   const { t } = useI18n();
-  const pendingSummary = verification?.owner === 'human'
-    ? [t('work.state.reviewTitle'), verification?.request?.question || t('work.state.reviewDetail')]
-    : verification?.phase === 'pi_repairing'
+  const pendingSummary = decision?.owner === 'human'
+    ? [t('work.state.reviewTitle'), decision?.request?.question || t('work.state.reviewDetail')]
+    : decision?.phase === 'pi_continuing'
       ? [t('work.state.piRepairingTitle'), t('work.state.piRepairingDetail')]
-      : verification?.phase === 'pi_verifying'
+      : decision?.phase === 'pi_deciding'
         ? [t('work.state.piVerifyingTitle'), t('work.state.piVerifyingDetail')]
-        : verification?.phase === 'pi_blocked'
-          ? [t('work.state.piBlockedTitle'), verification?.activity?.error || t('work.state.piBlockedDetail')]
-          : verification?.phase === 'pi_waiting'
+        : decision?.phase === 'pi_error'
+          ? [t('work.state.piBlockedTitle'), decision?.activity?.error || t('work.state.piBlockedDetail')]
+          : decision?.phase === 'pi_waiting'
             ? [t('work.state.piWaitingTitle'), t('work.state.piWaitingDetail')]
             : [t('work.state.piQueuedTitle'), t('work.state.piQueuedDetail')];
   const summary = {
     cancelled: [t('work.state.cancelledTitle'), t('work.state.cancelledDetail')],
     done: [t('work.state.doneTitle'), t('work.state.doneDetail')],
     failed: [t('work.state.failedTitle'), t('work.state.failedDetail')],
-    in_progress: [t('work.state.runningTitle'), t('work.state.runningDetail')],
-    pending_verification: pendingSummary,
+    in_progress: decision?.phase?.startsWith('pi_') ? pendingSummary : [t('work.state.runningTitle'), t('work.state.runningDetail')],
+    needs_user: pendingSummary,
     todo: [t('work.state.queuedTitle'), t('work.state.queuedDetail')],
     triage: [t('work.state.readyTitle'), t('work.state.readyDetail')],
   }[status] || [status, t('work.state.unknownDetail')];
@@ -484,11 +484,6 @@ function formatTime(value, language) {
 }
 
 function handoffEmptyText(work) {
-  const policy = work?.acceptance?.handoff_policy
-    || (work?.acceptance?.requires_handoff ? 'required' : 'summary');
-  if (policy === 'none') return '此 Work 不要求 Handoff；Evidence 仍是完成门禁。';
-  if (policy === 'summary') return work?.status === 'done'
-    ? '此 Work 使用 summary 策略，未生成独立 Handoff 不阻塞完成。'
-    : 'Handoff 摘要会在有复用价值时生成，不阻塞完成。';
-  return '完成必须具备 ready 或 delivered Handoff。';
+  void work;
+  return '暂无可选交付记录；Handoff 不参与 Issue 完成判断。';
 }

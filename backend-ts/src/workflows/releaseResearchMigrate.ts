@@ -127,9 +127,6 @@ const readTools = [
   "runner-builtin:repo_read_excerpt",
   "runner-builtin:work_read",
   "runner-builtin:run_read",
-  "runner-builtin:evidence_list",
-  "runner-builtin:evidence_read",
-  "runner-builtin:handoff_read"
 ] as const;
 
 export const RELEASE_WORKFLOW_MANIFEST: WorkflowManifest = {
@@ -146,7 +143,7 @@ export const RELEASE_WORKFLOW_MANIFEST: WorkflowManifest = {
       agent: { role: "executor", required_skill_ids: [] },
       permissions: {
         max_tool_permission: "dangerous",
-        allowed_tools: ["runner-builtin:work_read", "runner-builtin:run_read", "runner-builtin:evidence_read", "runner-builtin:handoff_read"],
+        allowed_tools: [...readTools],
         allowed_actions: ["release.execute"]
       },
       verification_policy_ref: `${RELEASE_VERIFICATION_POLICY.id}@${RELEASE_VERIFICATION_POLICY.revision}`,
@@ -155,9 +152,9 @@ export const RELEASE_WORKFLOW_MANIFEST: WorkflowManifest = {
         mode: "before_external_write",
         policy_ref: "approval-policy:release-external-write@1"
       },
-      handoff: { mode: "release", required: true, project_override_modes: ["deploy", "release"] }
+      handoff: { mode: "release", project_override_modes: ["deploy", "release"] }
     },
-    readStage("verify", "Verify the published revision", "verifier", RELEASE_VERIFICATION_POLICY.id, "release"),
+    readStage("verify", "Verify the published revision", "executor", RELEASE_VERIFICATION_POLICY.id, "release"),
     readStage("handoff", "Deliver release receipt and rollback", "reporter", RELEASE_VERIFICATION_POLICY.id, "release")
   ]
 };
@@ -170,7 +167,7 @@ export const RESEARCH_WORKFLOW_MANIFEST: WorkflowManifest = {
   description: "Bound the question, collect trusted source Evidence, map every claim to its sources, and deliver a read-only research Handoff.",
   stages: [
     researchStage("scope", "Bound the research question", "reporter"),
-    researchStage("collect", "Collect source Evidence", "verifier", ["http-readonly:url_fetch", "browser-readonly:read_page_context"]),
+    researchStage("collect", "Collect source Evidence", "executor", ["http-readonly:url_fetch", "browser-readonly:read_page_context"]),
     researchStage("synthesize", "Synthesize only source-backed claims", "reviewer"),
     researchStage("handoff", "Deliver the cited research report", "reporter")
   ]
@@ -183,8 +180,8 @@ export const MIGRATE_WORKFLOW_MANIFEST: WorkflowManifest = {
   name: "Migrate",
   description: "Freeze source and target repository contracts, apply a bounded cross-repository migration only after approval, verify the target, and deliver an audited rollback-capable Handoff.",
   stages: [
-    readStage("source-contract", "Freeze the source contract", "verifier", MIGRATE_VERIFICATION_POLICY.id, "branch_commit"),
-    readStage("target-contract", "Freeze the target contract and mapping", "verifier", MIGRATE_VERIFICATION_POLICY.id, "branch_commit"),
+    readStage("source-contract", "Freeze the source contract", "executor", MIGRATE_VERIFICATION_POLICY.id, "branch_commit"),
+    readStage("target-contract", "Freeze the target contract and mapping", "executor", MIGRATE_VERIFICATION_POLICY.id, "branch_commit"),
     {
       id: "apply",
       name: "Apply the approved target migration",
@@ -200,9 +197,9 @@ export const MIGRATE_WORKFLOW_MANIFEST: WorkflowManifest = {
         mode: "before_stage",
         policy_ref: "approval-policy:migrate-target-write@1"
       },
-      handoff: { mode: "branch_commit", required: true, project_override_modes: ["local_changes", "branch_commit"] }
+      handoff: { mode: "branch_commit", project_override_modes: ["local_changes", "branch_commit"] }
     },
-    readStage("verify", "Verify target contract parity", "verifier", MIGRATE_VERIFICATION_POLICY.id, "branch_commit"),
+    readStage("verify", "Verify target contract parity", "executor", MIGRATE_VERIFICATION_POLICY.id, "branch_commit"),
     readStage("handoff", "Deliver target revision and rollback", "reporter", MIGRATE_VERIFICATION_POLICY.id, "branch_commit")
   ]
 };
@@ -585,7 +582,7 @@ export function validateMigrateWorkflowExecution(
 function readStage(
   id: string,
   name: string,
-  role: "reporter" | "verifier",
+  role: "reporter" | "executor",
   policyID: string,
   handoffMode: "release" | "branch_commit"
 ): WorkflowManifest["stages"][number] {
@@ -599,7 +596,6 @@ function readStage(
     approval: { mode: "none" },
     handoff: {
       mode: handoffMode,
-      required: true,
       project_override_modes: handoffMode === "release" ? ["deploy", "release"] : ["local_changes", "branch_commit"]
     }
   };
@@ -608,7 +604,7 @@ function readStage(
 function researchStage(
   id: string,
   name: string,
-  role: "reporter" | "reviewer" | "verifier",
+  role: "reporter" | "reviewer" | "executor",
   extraTools: readonly string[] = []
 ): WorkflowManifest["stages"][number] {
   return {
@@ -623,7 +619,7 @@ function researchStage(
     verification_policy_ref: `${RESEARCH_VERIFICATION_POLICY.id}@${RESEARCH_VERIFICATION_POLICY.revision}`,
     retry: { max_attempts: 1, backoff_seconds: [] },
     approval: { mode: "none" },
-    handoff: { mode: "local_changes", required: true, project_override_modes: ["local_changes"] }
+    handoff: { mode: "local_changes", project_override_modes: ["local_changes"] }
   };
 }
 

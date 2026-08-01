@@ -8,15 +8,16 @@
     {
       "id": "scope",
       "name": "Scope the investigation",
-      "agent": { "role": "reporter", "required_skill_ids": [] },
+      "agent": {
+        "role": "reporter",
+        "required_skill_ids": []
+      },
       "permissions": {
         "max_tool_permission": "read",
         "allowed_tools": [
           "runner-builtin:project_status",
           "runner-builtin:work_read",
           "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
           "runner-builtin:issue_read",
           "runner-builtin:issue_execution_status",
           "runner-builtin:session_read_summary"
@@ -24,14 +25,27 @@
         "allowed_actions": []
       },
       "verification_policy_ref": "verification-policy:investigate-read-only@1",
-      "retry": { "max_attempts": 1, "backoff_seconds": [] },
-      "approval": { "mode": "none" },
-      "handoff": { "mode": "local_changes", "required": true, "project_override_modes": ["local_changes"] }
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
     },
     {
       "id": "reproduce",
       "name": "Reproduce without mutation",
-      "agent": { "role": "verifier", "required_skill_ids": [] },
+      "agent": {
+        "role": "executor",
+        "required_skill_ids": []
+      },
       "permissions": {
         "max_tool_permission": "read",
         "allowed_tools": [
@@ -48,14 +62,27 @@
         "allowed_actions": []
       },
       "verification_policy_ref": "verification-policy:investigate-read-only@1",
-      "retry": { "max_attempts": 1, "backoff_seconds": [] },
-      "approval": { "mode": "none" },
-      "handoff": { "mode": "local_changes", "required": true, "project_override_modes": ["local_changes"] }
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
     },
     {
       "id": "root-cause",
       "name": "Establish the root cause",
-      "agent": { "role": "verifier", "required_skill_ids": [] },
+      "agent": {
+        "role": "executor",
+        "required_skill_ids": []
+      },
       "permissions": {
         "max_tool_permission": "read",
         "allowed_tools": [
@@ -68,8 +95,6 @@
           "runner-builtin:repo_read_excerpt",
           "runner-builtin:work_read",
           "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
           "runner-builtin:issue_read",
           "runner-builtin:issue_execution_status",
           "runner-builtin:session_read_summary",
@@ -79,30 +104,49 @@
         "allowed_actions": []
       },
       "verification_policy_ref": "verification-policy:investigate-read-only@1",
-      "retry": { "max_attempts": 1, "backoff_seconds": [] },
-      "approval": { "mode": "none" },
-      "handoff": { "mode": "local_changes", "required": true, "project_override_modes": ["local_changes"] }
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
     },
     {
       "id": "report",
       "name": "Produce the handoff report",
-      "agent": { "role": "reporter", "required_skill_ids": [] },
+      "agent": {
+        "role": "reporter",
+        "required_skill_ids": []
+      },
       "permissions": {
         "max_tool_permission": "read",
         "allowed_tools": [
           "runner-builtin:work_read",
-          "runner-builtin:run_read",
-          "runner-builtin:evidence_list",
-          "runner-builtin:evidence_read",
-          "runner-builtin:handoff_list",
-          "runner-builtin:handoff_read"
+          "runner-builtin:run_read"
         ],
         "allowed_actions": []
       },
       "verification_policy_ref": "verification-policy:investigate-read-only@1",
-      "retry": { "max_attempts": 1, "backoff_seconds": [] },
-      "approval": { "mode": "none" },
-      "handoff": { "mode": "local_changes", "required": true, "project_override_modes": ["local_changes"] }
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
     }
   ]
 }

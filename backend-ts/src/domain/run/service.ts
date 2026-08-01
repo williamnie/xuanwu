@@ -133,7 +133,7 @@ type LifecyclePayload = {
   violations?: string[];
 };
 
-const TERMINAL_RUN_STATUSES = new Set(["pending_verification", "done", "failed", "cancelled"]);
+const TERMINAL_RUN_STATUSES = new Set(["succeeded", "failed", "cancelled"]);
 const TERMINAL_ATTEMPT_STATUSES = new Set(["succeeded", "failed", "cancelled", "interrupted"]);
 
 export class RunCommandValidationError extends Error {

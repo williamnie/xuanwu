@@ -69,69 +69,11 @@ describe("Work Ledger domain contract", () => {
     expect(evaluateWorkTransition(snapshot, transition(647, "in_progress"))).toMatchObject({ allowed: true });
   });
 
-  test("requires every acceptance criterion, passed Evidence, and a ready Handoff before done", () => {
-    const work = makeWork(647, { status: "pending_verification" });
+  test("does not require Evidence or Handoff artifacts when PI decides done", () => {
+    const work = makeWork(647, { status: "in_progress" });
     const snapshot = ledger([work]);
-    const command = transition(647, "done", {
-      acceptance: {
-        contract_version: 1,
-        evidence: [{
-          criterion_ids: ["focused-tests"],
-          id: makeDomainID("evidence", "issue_events", 9001),
-          status: "passed",
-          work_id: work.id
-        }],
-        handoffs: [{
-          id: makeDomainID("handoff", "derived", "647@abc123"),
-          status: "ready",
-          work_id: work.id
-        }]
-      }
-    });
+    const command = transition(647, "done");
     expect(evaluateWorkTransition(snapshot, command)).toEqual({ allowed: true, violations: [] });
-
-    command.acceptance!.evidence[0].status = "failed";
-    const rejected = evaluateWorkTransition(snapshot, command);
-    expect(rejected.allowed).toBe(false);
-    expect(rejected.violations).toEqual(expect.arrayContaining([
-      "required acceptance criterion focused-tests lacks passed Evidence",
-      "done requires passed Evidence"
-    ]));
-  });
-
-  test("allows Evidence-only completion when Handoff is summary policy", () => {
-    const work = makeWork(648, {
-      acceptance: {
-        completion_rule: "all_required",
-        criteria: [{
-          description: "tests",
-          id: "tests",
-          required: true,
-          verification_policy_ref: "verification-policy:focused-tests"
-        }],
-        handoff_policy: "summary",
-        requires_handoff: false,
-        version: 1
-      },
-      status: "pending_verification"
-    });
-    const decision = evaluateWorkTransition({ relations: [], works: [work] }, {
-      acceptance: {
-        contract_version: 1,
-        evidence: [{
-          criterion_ids: ["tests"],
-          id: makeDomainID("evidence", "issue_events", "648-summary"),
-          status: "passed",
-          work_id: work.id
-        }],
-        handoffs: []
-      },
-      audit: transition(648, "done").audit,
-      expected_revision: work.revision,
-      to: "done",
-      work_id: work.id
-    });
-    expect(decision).toEqual({ allowed: true, violations: [] });
   });
 
   test("rejects circular dependencies and hierarchy cycles", () => {
@@ -182,14 +124,11 @@ describe("Work Ledger domain contract", () => {
 function makeWork(id: number, patch: Partial<WorkLedgerEntry> = {}): WorkLedgerEntry {
   return {
     acceptance: {
-      completion_rule: "all_required",
       criteria: [{
         description: "focused tests pass",
         id: "focused-tests",
-        required: true,
-        verification_policy_ref: "verification-policy:focused-tests"
+        required: true
       }],
-      requires_handoff: true,
       version: 1
     },
     created_at: NOW,

@@ -42,7 +42,6 @@ export type HeartbeatProjectSettingsSignal = {
     supervisor_max_recoveries_per_project_per_hour?: number;
     supervisor_rate_limit_wait_policy?: string;
     timezone: string;
-    verification_policy: Record<string, unknown>;
     working_hours: Record<string, unknown>;
   };
   pi_settings: {

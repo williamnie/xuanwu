@@ -29,11 +29,11 @@ export default function IssueDetailOverview({
         <div className="issue-detail-title-row">
           <div>
             <h1>{issue.title}</h1>
-            <p>{issueStatusDescription(issue.status)}</p>
+            <p>{issueStatusDescription(issue.status, latestRun)}</p>
           </div>
           <span className={`status-badge ${issue.status} issue-detail-status`}>
-            {issue.status === 'in_progress' && <span className="status-dot running" />}
-            {issue.status}
+            {issue.status === 'in_progress' && !latestRun?.ended_at && <span className="status-dot running" />}
+            {issue.status === 'in_progress' && latestRun?.ended_at ? 'PI 判断中' : issue.status}
           </span>
         </div>
       </header>
@@ -114,7 +114,18 @@ export function IssueStatusAlerts({ issue, executionSummary, onShowRuns, onShowL
         </div>
       )}
 
-      {issue.error && issue.status !== 'pending_verification' && (
+      {executionSummary.awaitingPi && (
+        <div className="issue-inline-alert warning" role="status">
+          <Activity size={17} />
+          <div>
+            <strong>PI 正在读取执行上下文</strong>
+            <p>Provider Turn 已结束，但 Issue 仍保持 in_progress 和项目锁；PI 决定完成、继续、重试或 needs_user 后才会进入下一项。</p>
+          </div>
+          <button type="button" onClick={onShowRuns}>查看最新 Run</button>
+        </div>
+      )}
+
+      {issue.error && (
         <div className="issue-error-card issue-inline-alert danger" role="alert">
           <AlertTriangle size={17} />
           <div>
@@ -157,10 +168,10 @@ function IssueExecutionOverview({ issue, latestRun, summary, sessionRef, navigat
             {running && <i className="status-dot running" />}
           </strong>
         </div>
-        <div className={`issue-verification-fact ${summary.verification.state}`}>
-          <span>结构化验证</span>
-          <strong>{summary.verification.label}</strong>
-          <p>{summary.verification.detail}</p>
+        <div className={`issue-verification-fact ${summary.piDecision.state}`}>
+          <span>PI 状态</span>
+          <strong>{summary.piDecision.label}</strong>
+          <p>{summary.piDecision.detail}</p>
         </div>
       </div>
 

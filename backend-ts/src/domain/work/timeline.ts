@@ -89,9 +89,7 @@ export type WorkTimelineResult = {
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 500;
 const EVIDENCE_ISSUE_EVENT_TYPES = new Set([
-  "issue.log",
-  "issue.verification_report",
-  "issue.verification_reviewed"
+  "issue.log"
 ]);
 
 type CursorPosition = { at: string; id: string; version: 1 };
@@ -196,27 +194,6 @@ function workEventNode(workID: WorkID, issueID: number, event: WorkEvent): WorkT
 function issueEventNodes(workID: WorkID, issueID: number, event: PublicEventSummary): WorkTimelineNode[] {
   const payload = jsonObject(event.payload);
   const status = text(payload.status) || event.type;
-  if (event.type === "issue.status_changed" && status === "pending_verification") {
-    return [timelineNode({
-      eventName: "handoff.prepared.v1",
-      externalID: String(event.source_event_id),
-      issueID,
-      kind: "handoff",
-      occurredAt: event.created_at,
-      payload: {
-        ...payload,
-        issue_event_type: event.type,
-        projection_completeness: "legacy_incomplete",
-        source_sha256: event.source_sha256
-      },
-      projection: "derived",
-      sourceAuthority: "issue_events",
-      status: "draft",
-      summary: event.summary || "Work is pending verification",
-      title: "Handoff prepared",
-      workID
-    })];
-  }
   const kind = issueEventKind(event.type);
   return [timelineNode({
     eventName: issueEventName(event.type),
@@ -471,7 +448,7 @@ function issueEventName(type: string): string {
 }
 
 function domainRunStatus(status: string): string {
-  if (["done", "pending_verification", "succeeded", "success"].includes(status)) return "succeeded";
+  if (["done", "succeeded", "success"].includes(status)) return "succeeded";
   if (["cancelled", "canceled", "todo", "triage"].includes(status)) return "cancelled";
   if (["failed", "error"].includes(status)) return "failed";
   return status || "succeeded";

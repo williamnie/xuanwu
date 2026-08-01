@@ -51,7 +51,6 @@ const approvalSchema = Type.Object({
 
 const handoffSchema = Type.Object({
   mode: deliveryMode,
-  required: Type.Literal(true),
   project_override_modes: Type.Array(deliveryMode, { minItems: 1, maxItems: DELIVERY_MODES.length })
 }, { additionalProperties: false });
 

@@ -8,12 +8,8 @@ import type { Project } from "../db/repositories/projects.ts";
 import { workIDToIssueID } from "../domain/work/issueAdapter.ts";
 import { WORK_STATUSES } from "../domain/work/contracts.ts";
 import { RUN_STATUSES } from "../domain/run/contracts.ts";
-import { EVIDENCE_STATUSES } from "../domain/evidence/contracts.ts";
-import { DELIVERY_MODES, HANDOFF_STATUSES } from "../domain/handoff/contracts.ts";
 import { registerWorkRoutes, WORK_WRITE_AUTHORITY } from "../http/workApi.ts";
 import { registerRunRoutes, RUN_READ_AUTHORITY, RUN_WRITE_AUTHORITY } from "../http/runApi.ts";
-import { registerEvidenceRoutes, EVIDENCE_HTTP_COMPATIBILITY_POLICY } from "../http/evidenceApi.ts";
-import { registerHandoffRoutes, HANDOFF_HTTP_COMPATIBILITY_POLICY } from "../http/handoffApi.ts";
 import { createRouter, type Router } from "../http/router.ts";
 import { executeSafePiAction } from "./actionEngine.ts";
 import { createIssueCompletionProjection } from "./issueToolViews.ts";
@@ -51,10 +47,6 @@ const nonNegativeRevision = Type.Integer({ minimum: 0 });
 const boundedLimit = Type.Optional(Type.Integer({ minimum: 1, maximum: 20 }));
 const workID = Type.String({ pattern: "^xw:work:issues:[1-9][0-9]*$" });
 const runID = Type.String({ pattern: "^xw:run:issue_runs:.+$" });
-const evidenceID = Type.String({
-  pattern: "^xw:evidence:(issue_events|pi_action_events|issue_supervisor_events|git):[A-Za-z0-9._~%-]+$"
-});
-const handoffID = Type.String({ pattern: "^xw:handoff:derived:[A-Za-z0-9._~%-]+$" });
 
 export function createPiSupervisorControlTools(
   db: RunnerDatabase,
@@ -126,34 +118,7 @@ export function createPiSupervisorControlTools(
         prompt: optionalString,
         reason: requiredText,
         run_id: runID
-      }, objectOptions), actions.runControl),
-    controlTool("evidence_list", "Evidence List",
-      "List bounded decisive Evidence summaries from the existing structured/compatibility read path.",
-      Type.Object({
-        before_event_id: Type.Optional(Type.Integer({ minimum: 1 })),
-        kinds: Type.Optional(Type.Array(requiredText)),
-        limit: boundedLimit,
-        project_id: optionalString,
-        run_ids: Type.Optional(Type.Array(runID)),
-        statuses: Type.Optional(Type.Array(Type.Union(EVIDENCE_STATUSES.map((status) => Type.Literal(status))))),
-        work_id: Type.Optional(workID)
-      }, objectOptions), actions.evidenceList),
-    controlTool("evidence_read", "Evidence Read",
-      "Read one Evidence record as a bounded decisive projection without artifact bytes or raw transcript expansion.",
-      Type.Object({ evidence_id: evidenceID }, objectOptions), actions.evidenceRead),
-    controlTool("handoff_list", "Handoff List",
-      "List compact Handoff summaries with fresh local delivery status and no external writes.",
-      Type.Object({
-        before_event_id: Type.Optional(Type.Integer({ minimum: 1 })),
-        delivery_modes: Type.Optional(Type.Array(Type.Union(DELIVERY_MODES.map((mode) => Type.Literal(mode))))),
-        limit: boundedLimit,
-        project_id: optionalString,
-        statuses: Type.Optional(Type.Array(Type.Union(HANDOFF_STATUSES.map((status) => Type.Literal(status))))),
-        work_id: Type.Optional(workID)
-      }, objectOptions), actions.handoffList),
-    controlTool("handoff_read", "Handoff Read",
-      "Read one reviewable Handoff as a bounded delivery, risk, rollback, and review projection.",
-      Type.Object({ handoff_id: handoffID }, objectOptions), actions.handoffRead)
+      }, objectOptions), actions.runControl)
   ];
 }
 
@@ -187,38 +152,7 @@ function createSupervisorControlActions(
       })))),
     runRead: (input: RunReadInput) => readAction(db, actionContext, "run.read", runProjectID(db, input.run_id, project), input,
       async () => compactRunDetail(await callDomain(router, `/api/runs/${encodeURIComponent(input.run_id)}`))),
-    runControl: (input: RunControlInput) => runControlAction(db, router, actionContext, project, input),
-    evidenceList: (input: EvidenceListInput) => readAction(
-      db, actionContext, "evidence.list", projectID(input.project_id, project), input,
-      async () => compactEvidenceList(await callDomain(router, queryPath("/api/evidence", {
-        cursor: input.before_event_id ? encodeCursor("evidence", input.before_event_id) : "",
-        kind: input.kinds,
-        limit: limit(input.limit),
-        project_id: projectID(input.project_id, project),
-        run_id: input.run_ids,
-        status: input.statuses,
-        work_id: cleanString(input.work_id)
-      })))
-    ),
-    evidenceRead: (input: EvidenceReadInput) => readAction(
-      db, actionContext, "evidence.read", evidenceProjectID(db, input.evidence_id, project), input,
-      async () => compactEvidenceDetail(await callDomain(router, `/api/evidence/${encodeURIComponent(input.evidence_id)}`))
-    ),
-    handoffList: (input: HandoffListInput) => readAction(
-      db, actionContext, "handoff.list", projectID(input.project_id, project), input,
-      async () => compactHandoffList(await callDomain(router, queryPath("/api/handoffs", {
-        cursor: input.before_event_id ? encodeCursor("handoff", input.before_event_id) : "",
-        delivery_mode: input.delivery_modes,
-        limit: limit(input.limit),
-        project_id: projectID(input.project_id, project),
-        status: input.statuses,
-        work_id: cleanString(input.work_id)
-      })))
-    ),
-    handoffRead: (input: HandoffReadInput) => readAction(
-      db, actionContext, "handoff.read", handoffProjectID(db, input.handoff_id, project), input,
-      async () => compactHandoffDetail(await callDomain(router, `/api/handoffs/${encodeURIComponent(input.handoff_id)}`))
-    )
+    runControl: (input: RunControlInput) => runControlAction(db, router, actionContext, project, input)
   };
 }
 
@@ -240,15 +174,6 @@ type RunControlInput = {
   action: "interrupt" | "resume" | "retry"; expected_attempt_revision?: number; expected_revision: number;
   idempotency_key: string; prompt?: string; reason: string; run_id: string;
 };
-type EvidenceListInput = {
-  before_event_id?: number; kinds?: string[]; limit?: number; project_id?: string; run_ids?: string[];
-  statuses?: string[]; work_id?: string;
-};
-type EvidenceReadInput = { evidence_id: string };
-type HandoffListInput = {
-  before_event_id?: number; delivery_modes?: string[]; limit?: number; project_id?: string; statuses?: string[]; work_id?: string;
-};
-type HandoffReadInput = { handoff_id: string };
 
 function workCreateAction(
   db: RunnerDatabase,
@@ -461,8 +386,6 @@ function createDomainRouter(db: RunnerDatabase, context: PiRunnerActionContext):
   };
   registerWorkRoutes(router, apiContext);
   registerRunRoutes(router, apiContext);
-  registerEvidenceRoutes(router, apiContext);
-  registerHandoffRoutes(router, apiContext);
   return router;
 }
 
@@ -523,7 +446,6 @@ function compactWork(value: unknown, includeGoal: boolean): Record<string, unkno
   return cleanObject({
     acceptance: includeGoal ? {
       criteria_count: arrayValue(acceptance.criteria).length,
-      requires_handoff: booleanValue(acceptance.requires_handoff),
       version: numberValue(acceptance.version)
     } : undefined,
     goal: includeGoal ? boundedText(work.goal, 1200) : undefined,
@@ -608,124 +530,6 @@ function compactRun(value: unknown): Record<string, unknown> {
   });
 }
 
-function compactEvidenceList(call: DomainCall): Record<string, unknown> {
-  if (!call.ok) return compactDomainError("evidence", call);
-  return withBudget(EVIDENCE_HTTP_COMPATIBILITY_POLICY.read_authority, {
-    compatibility: select(objectValue(call.body.compatibility), ["fallback_applied", "fallback_sources"]),
-    domain: "evidence",
-    has_more: booleanValue(call.body.has_more),
-    items: arrayValue(call.body.items).slice(0, 20).map((item) => select(item, [
-      "artifact_count", "attempt_id", "completed_at", "decisive_summary", "exit_code", "id", "kind",
-      "observed_at", "origin", "project_id", "run_id", "status", "storage_source", "work_id"
-    ])),
-    next_cursor: cleanString(call.body.next_cursor),
-    projection_errors: arrayValue(call.body.projection_errors).slice(0, 4),
-    skipped_invalid: numberValue(call.body.skipped_invalid)
-  });
-}
-
-function compactEvidenceDetail(call: DomainCall): Record<string, unknown> {
-  if (!call.ok) return compactDomainError("evidence", call);
-  const evidence = objectValue(call.body.evidence);
-  const decisive = objectValue(evidence.decisive_output);
-  const provenance = objectValue(evidence.provenance);
-  return withBudget(EVIDENCE_HTTP_COMPATIBILITY_POLICY.read_authority, {
-    artifacts: arrayValue(call.body.artifacts).slice(0, 12).map((item) => select(item, [
-      "download_url", "downloadable", "kind", "label", "media_type", "ref", "sha256", "unavailable_reason"
-    ])),
-    domain: "evidence",
-    evidence: cleanObject({
-      artifact_count: arrayValue(evidence.artifact_refs).length,
-      attempt_id: evidence.attempt_id,
-      completed_at: evidence.completed_at,
-      decisive_output: {
-        exit_code: decisive.exit_code ?? null,
-        fact_count: Object.keys(objectValue(decisive.facts)).length,
-        facts: boundedFacts(decisive.facts),
-        summary: boundedText(decisive.summary, 800)
-      },
-      id: evidence.id,
-      kind: evidence.kind,
-      observed_at: evidence.observed_at,
-      provenance: select(provenance, ["assertion_origin", "audit_event_ref", "source_kind", "source_ref"]),
-      revision: evidence.revision,
-      run_id: evidence.run_id,
-      status: evidence.status,
-      updated_at: evidence.updated_at,
-      work_id: evidence.work_id
-    }),
-    issue_id: call.body.issue_id,
-    project_id: call.body.project_id,
-    storage_source: call.body.storage_source,
-    verifier_review_refs: arrayValue(call.body.verifier_review_refs).slice(0, 8)
-  });
-}
-
-function compactHandoffList(call: DomainCall): Record<string, unknown> {
-  if (!call.ok) return compactDomainError("handoff", call);
-  return withBudget(HANDOFF_HTTP_COMPATIBILITY_POLICY.read_authority, {
-    domain: "handoff",
-    has_more: booleanValue(call.body.has_more),
-    items: arrayValue(call.body.items).slice(0, 20).map((item) => {
-      const handoff = objectValue(item);
-      const deliveryStatus = objectValue(handoff.delivery_status);
-      return cleanObject({
-        changed_file_count: handoff.changed_file_count,
-        delivery: handoff.delivery,
-        delivery_status: deliveryStatus.overall,
-        evidence_count: handoff.evidence_count,
-        id: handoff.id,
-        next_step: boundedText(handoff.next_step, 320),
-        project_id: handoff.project_id,
-        risk_count: handoff.risk_count,
-        status: handoff.status,
-        summary: boundedText(handoff.summary, 320),
-        updated_at: handoff.updated_at,
-        work_id: handoff.work_id
-      });
-    }),
-    next_cursor: cleanString(call.body.next_cursor),
-    skipped_invalid: numberValue(call.body.skipped_invalid)
-  });
-}
-
-function compactHandoffDetail(call: DomainCall): Record<string, unknown> {
-  if (!call.ok) return compactDomainError("handoff", call);
-  const handoff = objectValue(call.body.handoff);
-  const deliveryStatus = objectValue(call.body.delivery_status);
-  return withBudget(HANDOFF_HTTP_COMPATIBILITY_POLICY.read_authority, {
-    delivery_status: {
-      actions: arrayValue(deliveryStatus.actions).slice(0, 12),
-      overall: deliveryStatus.overall,
-      refreshed_at: deliveryStatus.refreshed_at
-    },
-    domain: "handoff",
-    handoff: cleanObject({
-      changed_file_count: arrayValue(handoff.changed_files).length,
-      changed_files: arrayValue(handoff.changed_files).slice(0, 20).map((value) => boundedText(value, 240)),
-      delivery: handoff.delivery,
-      delivery_actions: arrayValue(handoff.delivery_actions).slice(0, 12).map((item) => select(item, [
-        "action", "audit_event_ref", "classification", "gate_decision", "outcome", "required", "target"
-      ])),
-      evidence_ids: arrayValue(handoff.evidence_ids).slice(0, 20),
-      final_revision: boundedText(handoff.final_revision, 240),
-      id: handoff.id,
-      review: handoff.review,
-      revision: handoff.revision,
-      risks: arrayValue(handoff.risks).slice(0, 12).map((item) => select(item, ["id", "mitigation", "severity", "summary"])),
-      rollback: handoff.rollback,
-      run_ids: arrayValue(handoff.run_ids).slice(0, 20),
-      status: handoff.status,
-      summary: boundedText(handoff.summary, 800),
-      updated_at: handoff.updated_at,
-      work_id: handoff.work_id
-    }),
-    issue_id: call.body.issue_id,
-    project_id: call.body.project_id,
-    storage: call.body.storage
-  });
-}
-
 function compactDomainError(domain: string, call: DomainCall): Record<string, unknown> {
   return withBudget(domainAuthority(domain), {
     domain,
@@ -807,8 +611,6 @@ function truncatedProjection(authority: string, originalChars: number, preview: 
 function domainAuthority(domain: string): string {
   if (domain === "work") return WORK_WRITE_AUTHORITY;
   if (domain === "run") return RUN_WRITE_AUTHORITY;
-  if (domain === "evidence") return EVIDENCE_HTTP_COMPATIBILITY_POLICY.read_authority;
-  if (domain === "handoff") return HANDOFF_HTTP_COMPATIBILITY_POLICY.read_authority;
   return "unknown";
 }
 
@@ -893,24 +695,6 @@ function requireRunTarget(db: RunnerDatabase, runIDValue: string): Record<string
   return row;
 }
 
-function evidenceProjectID(db: RunnerDatabase, evidenceIDValue: string, fallback?: Project): string {
-  const row = db.sqlite.query<{ project_id: string }, [string]>(`
-    select issue.project_id from issue_events event join issues issue on issue.id=event.issue_id
-    where json_valid(event.payload) and json_extract(event.payload, '$.evidence.id')=?
-    order by event.id desc limit 1
-  `).get(evidenceIDValue);
-  return row?.project_id ?? fallback?.id ?? "";
-}
-
-function handoffProjectID(db: RunnerDatabase, handoffIDValue: string, fallback?: Project): string {
-  const row = db.sqlite.query<{ project_id: string }, [string]>(`
-    select issue.project_id from issue_events event join issues issue on issue.id=event.issue_id
-    where json_valid(event.payload) and json_extract(event.payload, '$.handoff.id')=?
-    order by event.id desc limit 1
-  `).get(handoffIDValue);
-  return row?.project_id ?? fallback?.id ?? "";
-}
-
 function projectID(value: unknown, fallback?: Project): string {
   return cleanString(value) || fallback?.id || "";
 }
@@ -934,20 +718,10 @@ function queryPath(path: string, input: Record<string, unknown>): string {
   return query === "" ? path : `${path}?${query}`;
 }
 
-function encodeCursor(domain: "evidence" | "handoff", eventID: number): string {
-  return Buffer.from(`${domain}:${eventID}`, "utf8").toString("base64url");
-}
-
 function limit(value: unknown): number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? Math.min(value, 20) : 10;
 }
 
-function boundedFacts(value: unknown): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(objectValue(value)).slice(0, 12).map(([key, item]) => [
-    key,
-    typeof item === "string" ? boundedText(item, 240) : item
-  ]));
-}
 
 function boundedText(value: unknown, max: number): string {
   const text = cleanString(value);
