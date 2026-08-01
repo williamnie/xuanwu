@@ -7,7 +7,8 @@ import {
   recordIssueCompletionCard,
   type CompletionCard
 } from "../domain/acceptance/completionCard.ts";
-import { createHumanReviewRequest, readIssueVerificationProjection } from "../domain/review/humanReview.ts";
+import { readIssueVerificationProjection } from "../domain/review/humanReview.ts";
+import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import {
   readPiVerificationActivity,
   recordPiVerificationActivity
@@ -41,6 +42,7 @@ export type PiVerificationCoordinatorResult = {
 const activeIssues = new Set<number>();
 const DEFAULT_COOLDOWN_MS = 30_000;
 const MAX_DECISION_ATTEMPTS_PER_CARD = 2;
+const SESSION_READ_TIMEOUT_MS = 10_000;
 
 export async function runPiVerificationCoordinatorOnce(
   input: PiVerificationCoordinatorInput
@@ -86,13 +88,17 @@ async function dispatchIssueAcceptance(
   let attemptKey = preCardAttemptKey(input.database, issue);
   let attempt = previous?.card_fingerprint === attemptKey ? previous.attempt + 1 : 1;
   try {
-    card = readCurrentIssueCompletionCard(input.database, issue.id)
-      ?? await buildIssueCompletionCard(input.database, issue.id, { now });
+    const built = await buildIssueCompletionCard(input.database, issue.id, {
+      now,
+      session: await completionSessionInput(input, issue)
+    });
+    const current = readCurrentIssueCompletionCard(input.database, issue.id);
+    card = current?.fingerprint === built.fingerprint ? current : built;
     recordIssueCompletionCard(input.database, card, input.source ?? "pi-acceptance-coordinator");
     attemptKey = card.fingerprint;
     attempt = previous?.card_fingerprint === card.fingerprint ? previous.attempt + 1 : 1;
     if (attempt > MAX_DECISION_ATTEMPTS_PER_CARD) {
-      escalateDecisionFailure(input, issue, card, previous?.error || "PI acceptance did not produce an applicable decision");
+      recordDecisionSystemBlock(input, issue, card, previous?.error || "PI acceptance did not produce an applicable decision");
       return { error: "PI acceptance circuit breaker opened", ok: false };
     }
     recordPiVerificationActivity(input.database, issue.id, "running", {
@@ -102,11 +108,8 @@ async function dispatchIssueAcceptance(
       source: input.source ?? "pi-acceptance-coordinator"
     });
     const result = await input.decideIssueAcceptance(card);
-    const decision = result.valid ? result.decision : {
-      ...result.decision,
-      decision: "needs_user" as const,
-      rationale: result.error || result.decision.rationale
-    };
+    if (!result.valid) throw new Error(result.error || "PI acceptance returned an invalid decision");
+    const decision = result.decision;
     const updated = await applyPiAcceptanceDecision({
       bus: input.bus,
       database: input.database,
@@ -130,11 +133,34 @@ async function dispatchIssueAcceptance(
       source: input.source ?? "pi-acceptance-coordinator"
     });
     if (attempt >= MAX_DECISION_ATTEMPTS_PER_CARD) {
-      escalateDecisionFailure(input, issue, card, message);
+      recordDecisionSystemBlock(input, issue, card, message);
     }
     return { error: message, ok: false };
   } finally {
     activeIssues.delete(issue.id);
+  }
+}
+
+async function completionSessionInput(
+  input: PiVerificationCoordinatorInput,
+  issue: Issue
+): Promise<{ error?: string; summary?: Record<string, unknown> } | undefined> {
+  const run = listIssueRuns(input.database, issue.id).at(-1);
+  if (!run || run.provider_session_id === "") return undefined;
+  const providerID = run.provider as ExecutorProviderId;
+  const provider = input.providers?.[providerID];
+  if (!provider?.readSession) return undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`session read timed out after ${SESSION_READ_TIMEOUT_MS}ms`)), SESSION_READ_TIMEOUT_MS);
+    });
+    const summary = await Promise.race([provider.readSession(run.provider_session_id), timeout]);
+    return { summary };
+  } catch (error) {
+    return { error: safeError(error) };
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 
@@ -150,6 +176,7 @@ function dueIssues(db: RunnerDatabase, now: Date, cooldownMs: number): Issue[] {
     if (activity.status === "queued" || activity.status === "running") {
       return ageMs(activity.updated_at, now) >= Math.max(cooldownMs, 10 * 60_000);
     }
+    if (activity.status === "failed" && activity.attempt >= MAX_DECISION_ATTEMPTS_PER_CARD) return false;
     return ageMs(activity.updated_at, now) >= cooldownMs;
   });
 }
@@ -161,26 +188,32 @@ function piOwnedPending(db: RunnerDatabase, issue: Issue): boolean {
     && readIssueVerificationProjection(db, issue.id).owner === "pi";
 }
 
-function escalateDecisionFailure(
+function recordDecisionSystemBlock(
   input: PiVerificationCoordinatorInput,
   issue: Issue,
   card: CompletionCard | undefined,
   error: string
 ): void {
-  if (readIssueVerificationProjection(input.database, issue.id).owner === "human") return;
+  const fingerprint = card?.fingerprint ?? preCardAttemptKey(input.database, issue);
+  const exists = listIssueEvents(input.database, issue.id, {
+    limit: 20,
+    types: ["issue.pi_acceptance_system_blocked.v1"]
+  }).some((event) => {
+    try {
+      return cleanString((JSON.parse(event.payload) as Record<string, unknown>).card_fingerprint) === fingerprint;
+    } catch {
+      return false;
+    }
+  });
+  if (exists) return;
   const latestRun = listIssueRuns(input.database, issue.id).at(-1);
-  createHumanReviewRequest(input.database, issue.id, {
-    acceptance_summary: card
-      ? [`Run ${card.run.id}`, `${card.commands.total} command observations`]
-      : [`Issue #${issue.id}`, latestRun ? `Run ${latestRun.id}` : "No canonical Run was available"],
-    consequences: "PI issue-scoped acceptance reached its bounded retry limit; automatic retries are stopped.",
-    evidence_refs: card
-      ? [`completion-card:${card.fingerprint}`, `run:${card.run.id}`]
-      : [latestRun ? `run:${latestRun.id}` : `issue:${issue.id}`],
-    kind: "acceptance",
-    question: `PI 验收连续失败，已停止自动重试：${error}`,
-    recommendation: "请查看小结卡片，选择接受、要求调整或拒绝。"
-  }, { bus: input.bus });
+  recordIssueEvent(input.database, issue.id, "issue.pi_acceptance_system_blocked.v1", {
+    card_fingerprint: fingerprint,
+    error,
+    issue_id: issue.id,
+    reason: "PI acceptance infrastructure reached its retry limit; no human approval can repair this system failure",
+    run_id: card?.run.id ?? latestRun?.id ?? ""
+  });
 }
 
 function preCardAttemptKey(db: RunnerDatabase, issue: Issue): string {
@@ -199,4 +232,8 @@ function ageMs(value: string, now: Date): number {
 
 function safeError(error: unknown): string {
   return redactSensitiveText(error instanceof Error ? error.message : String(error));
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }

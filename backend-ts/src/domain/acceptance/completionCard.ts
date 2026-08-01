@@ -9,6 +9,7 @@ import { codexDynamicExecObservation } from "../../providers/codex/dynamicExec.t
 import { recoverCodexRolloutExecEvents } from "../../providers/codex/rolloutExecRecovery.ts";
 import type { ProviderEvent } from "../../providers/types.ts";
 import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
+import { redactSensitiveText } from "../../util/redact.ts";
 import { makeRunAttemptID } from "../run/contracts.ts";
 import { projectIssueAsWork } from "../work/issueAdapter.ts";
 
@@ -31,6 +32,45 @@ export type CompletionCardCommand = {
   status: "completed" | "failed";
 };
 
+export type CompletionCardGit = {
+  baseline_revision: string;
+  changed_files: string[];
+  commit_count: number;
+  commits: Array<{ revision: string; subject: string; timestamp: string }>;
+  final_revision: string;
+  has_diff: boolean;
+  observed_at: string;
+  source: "legacy_reconstruction" | "session_observation" | "terminal_observation";
+  working_tree_dirty: boolean;
+};
+
+export type CompletionCardSessionItem = {
+  command: string;
+  exit_code: number | null;
+  output_excerpt: string;
+  status: string;
+  text: string;
+  type: string;
+};
+
+export type CompletionCardSession = {
+  current_git: CompletionCardGit | null;
+  error: string;
+  inspected: boolean;
+  latest_turn_id: string;
+  latest_turn_items: CompletionCardSessionItem[];
+  latest_turn_matches_run: boolean;
+  latest_turn_status: string;
+  provider_session_id: string;
+  run_turn_id: string;
+  turn_count: number;
+};
+
+export type CompletionCardSessionInput = {
+  error?: string;
+  summary?: Record<string, unknown>;
+};
+
 export type CompletionCard = {
   acceptance: {
     criteria: Array<{ description: string; id: string; required: boolean }>;
@@ -46,17 +86,7 @@ export type CompletionCard = {
   final_message: string;
   fingerprint: string;
   generated_at: string;
-  git: {
-    baseline_revision: string;
-    changed_files: string[];
-    commit_count: number;
-    commits: Array<{ revision: string; subject: string; timestamp: string }>;
-    final_revision: string;
-    has_diff: boolean;
-    observed_at: string;
-    source: "legacy_reconstruction" | "terminal_observation";
-    working_tree_dirty: boolean;
-  };
+  git: CompletionCardGit;
   handoff: null | {
     changed_files: string[];
     final_revision: string;
@@ -83,6 +113,7 @@ export type CompletionCard = {
     started_at: string;
     status: string;
   };
+  session: CompletionCardSession;
   warnings: string[];
 };
 
@@ -98,7 +129,7 @@ const MAX_COMMITS = 20;
 export async function buildIssueCompletionCard(
   db: RunnerDatabase,
   issueID: number,
-  options: { now?: Date } = {}
+  options: { now?: Date; session?: CompletionCardSessionInput } = {}
 ): Promise<CompletionCard> {
   const issue = getIssue(db, issueID);
   if (!issue) throw new Error(`Issue #${issueID} not found`);
@@ -137,6 +168,11 @@ export async function buildIssueCompletionCard(
     summary: boundedUtf8(item.evidence.decisive_output.summary, 1_000)
   }));
   const warnings = completionWarnings(run, allCommands, git.changed_files);
+  const session = completionSession(project.cwd, run, options.session);
+  if (session.inspected && session.latest_turn_id !== "" && !session.latest_turn_matches_run) {
+    warnings.push(`Provider Session has a newer Turn (${session.latest_turn_id}) than canonical Run ${run.id} (${run.provider_turn_id || "unbound"}).`);
+  }
+  if (session.error !== "") warnings.push(`Provider Session inspection failed: ${session.error}`);
   const body = {
     acceptance: {
       criteria: work.acceptance.criteria.map((criterion) => ({
@@ -181,6 +217,7 @@ export async function buildIssueCompletionCard(
       started_at: run.started_at,
       status: run.status
     },
+    session,
     warnings
   };
   const fingerprint = createHash("sha256").update(stableJson(body)).digest("hex");
@@ -222,6 +259,7 @@ export function assertCompletionCardIntegrity(value: unknown): asserts value is 
   const card = objectValue(value);
   const issue = objectValue(card.issue);
   const run = objectValue(card.run);
+  const session = objectValue(card.session);
   const commands = objectValue(card.commands);
   if (card.contract !== COMPLETION_CARD_CONTRACT) throw new Error("unsupported completion card contract");
   if (!Number.isSafeInteger(issue.id) || Number(issue.id) <= 0) throw new Error("completion card issue.id is invalid");
@@ -231,6 +269,11 @@ export function assertCompletionCardIntegrity(value: unknown): asserts value is 
   }
   if (!Array.isArray(commands.items) || !Number.isSafeInteger(commands.total) || !Number.isSafeInteger(commands.omitted)) {
     throw new Error("completion card commands summary is invalid");
+  }
+  if (Object.keys(session).length > 0) {
+    if (!Array.isArray(session.latest_turn_items) || !Number.isSafeInteger(session.turn_count)) {
+      throw new Error("completion card session summary is invalid");
+    }
   }
   const fingerprint = cleanString(card.fingerprint);
   if (!/^[a-f0-9]{64}$/.test(fingerprint)) throw new Error("completion card fingerprint is invalid");
@@ -341,6 +384,102 @@ function commandText(item: Record<string, unknown>): string {
   return actions.map((action) => cleanString(objectValue(action).command)).filter(Boolean).join(" && ");
 }
 
+function completionSession(
+  repository: string,
+  run: IssueRun,
+  input: CompletionCardSessionInput | undefined
+): CompletionCardSession {
+  const summary = input?.summary ?? {};
+  const turns = Array.isArray(summary.turns) ? summary.turns.map(objectValue) : [];
+  const latest = [...turns].reverse().find((turn) => sessionTurnID(turn) !== "") ?? {};
+  const latestTurnID = sessionTurnID(latest);
+  const matches = latestTurnID !== "" && latestTurnID === run.provider_turn_id;
+  const newer = latestTurnID !== "" && !matches;
+  return {
+    current_git: newer ? liveGitSummary(repository, run, sessionObservedAt(summary, latest, run)) : null,
+    error: boundedUtf8(redactSensitiveText(cleanString(input?.error)), 1_000),
+    inspected: input !== undefined,
+    latest_turn_id: latestTurnID,
+    latest_turn_items: sessionTurnItems(latest),
+    latest_turn_matches_run: matches,
+    latest_turn_status: sessionTurnStatus(latest),
+    provider_session_id: run.provider_session_id,
+    run_turn_id: run.provider_turn_id,
+    turn_count: turns.length
+  };
+}
+
+function sessionObservedAt(
+  summary: Record<string, unknown>,
+  latestTurn: Record<string, unknown>,
+  run: IssueRun
+): string {
+  for (const value of [
+    latestTurn.completedAt,
+    latestTurn.completed_at,
+    latestTurn.updatedAt,
+    latestTurn.updated_at,
+    summary.updatedAt,
+    summary.updated_at
+  ]) {
+    const timestamp = normalizedTimestamp(value);
+    if (timestamp !== "") return timestamp;
+  }
+  return run.ended_at;
+}
+
+function normalizedTimestamp(value: unknown): string {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const milliseconds = value >= 1_000_000_000_000 ? value : value * 1_000;
+    const timestamp = new Date(milliseconds);
+    return Number.isFinite(timestamp.getTime()) ? timestamp.toISOString() : "";
+  }
+  const text = cleanString(value);
+  if (text === "") return "";
+  const timestamp = new Date(text);
+  return Number.isFinite(timestamp.getTime()) ? timestamp.toISOString() : "";
+}
+
+function sessionTurnID(turn: Record<string, unknown>): string {
+  return cleanString(turn.id) || cleanString(turn.turn_id) || cleanString(turn.turnId);
+}
+
+function sessionTurnStatus(turn: Record<string, unknown>): string {
+  const status = turn.status;
+  if (typeof status === "string") return boundedUtf8(status.trim(), 200);
+  if (status && typeof status === "object") return boundedUtf8(stableJson(status), 200);
+  return "";
+}
+
+function sessionTurnItems(turn: Record<string, unknown>): CompletionCardSessionItem[] {
+  const items = Array.isArray(turn.items) ? turn.items.map(objectValue) : [];
+  return boundedSequence(items, 24).map((item) => {
+    const dynamic = codexDynamicExecObservation(item);
+    const exitCode = dynamic?.exitCode ?? integer(item.exitCode);
+    const output = dynamic?.aggregatedOutput || cleanString(item.aggregatedOutput)
+      || [cleanString(item.stdout), cleanString(item.stderr)].filter(Boolean).join("\n");
+    return {
+      command: boundedUtf8(redactSensitiveText(dynamic?.command || commandText(item)), MAX_COMMAND_BYTES),
+      exit_code: exitCode,
+      output_excerpt: boundedExcerpt(redactSensitiveText(output), MAX_OUTPUT_BYTES),
+      status: boundedUtf8(cleanString(item.status), 200),
+      text: boundedUtf8(redactSensitiveText(sessionItemText(item)), 2_000),
+      type: boundedUtf8(cleanString(item.type) || "unknown", 200)
+    };
+  });
+}
+
+function sessionItemText(item: Record<string, unknown>): string {
+  const direct = cleanString(item.text) || cleanString(item.message);
+  if (direct !== "") return direct;
+  if (typeof item.content === "string") return item.content.trim();
+  if (!Array.isArray(item.content)) return "";
+  return item.content.map((value) => {
+    const content = objectValue(value);
+    return cleanString(content.text) || cleanString(content.content);
+  }).filter(Boolean).join("\n");
+}
+
 function latestFinalMessage(events: ReturnType<typeof listIssueEvents>, run: IssueRun): string {
   const messages = events.flatMap((event) => {
     if (event.type !== "issue.log") return [];
@@ -388,7 +527,7 @@ function gitRunSummary(
   repository: string,
   run: IssueRun,
   events: ReturnType<typeof listIssueEvents>
-): CompletionCard["git"] {
+): CompletionCardGit {
   const observed = terminalGitObservation(events, run);
   if (observed) return observed;
   const baseline = gitObjectID(run.git_base_revision) ? run.git_base_revision.toLowerCase() : "";
@@ -423,10 +562,32 @@ function gitRunSummary(
   };
 }
 
+function liveGitSummary(repository: string, run: IssueRun, observedAt: string): CompletionCardGit {
+  const baseline = gitObjectID(run.git_base_revision) ? run.git_base_revision.toLowerCase() : "";
+  const head = gitText(repository, ["rev-parse", "--verify", "HEAD"]);
+  const diffBase = gitObjectID(baseline) ? baseline : gitObjectID(head) ? head : "";
+  const tracked = diffBase === "" ? [] : gitNullList(repository, ["diff", "--name-only", "-z", diffBase, "--"]);
+  const untracked = gitNullList(repository, ["ls-files", "--others", "--exclude-standard", "-z", "--"]);
+  const changedFiles = [...new Set([...tracked, ...untracked])].sort().slice(0, MAX_CHANGED_FILES);
+  const workingTreeDirty = gitText(repository, ["status", "--porcelain=v1", "--untracked-files=all"]) !== "";
+  const commits = gitCommitSummary(repository, baseline, head);
+  return {
+    baseline_revision: baseline,
+    changed_files: changedFiles,
+    commit_count: commits.length,
+    commits,
+    final_revision: gitObjectID(head) ? head : "",
+    has_diff: changedFiles.length > 0 || (gitObjectID(baseline) && gitObjectID(head) && baseline !== head),
+    observed_at: observedAt,
+    source: "session_observation",
+    working_tree_dirty: workingTreeDirty
+  };
+}
+
 function terminalGitObservation(
   events: ReturnType<typeof listIssueEvents>,
   run: IssueRun
-): CompletionCard["git"] | null {
+): CompletionCardGit | null {
   for (const event of [...events].reverse()) {
     if (event.type !== COMPLETION_GIT_OBSERVATION_EVENT_TYPE) continue;
     const observation = objectValue(objectValue(parseJson(event.payload)).observation);
@@ -455,12 +616,12 @@ function terminalGitObservation(
   return null;
 }
 
-function gitCommitSummary(repository: string, baseline: string, final: string): CompletionCard["git"]["commits"] {
+function gitCommitSummary(repository: string, baseline: string, final: string): CompletionCardGit["commits"] {
   if (!gitObjectID(baseline) || !gitObjectID(final)) return [];
   const fields = gitNullList(repository, [
     "log", "--format=%H%x00%cI%x00%s%x00", "-z", `${baseline}..${final}`
   ]);
-  const commits: CompletionCard["git"]["commits"] = [];
+  const commits: CompletionCardGit["commits"] = [];
   for (let index = 0; index + 2 < fields.length && commits.length < MAX_COMMITS; index += 3) {
     commits.push({ revision: fields[index]!, timestamp: fields[index + 1]!, subject: fields[index + 2]! });
   }

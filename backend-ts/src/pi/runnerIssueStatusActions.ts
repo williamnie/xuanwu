@@ -4,7 +4,7 @@ import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { reviewIssueVerification } from "../db/repositories/issueVerification.ts";
 import { ProjectNotFoundError } from "../db/repositories/projects.ts";
-import { completeIssueFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
+import { requestIssuePiAcceptance } from "../runner/piAcceptanceRequest.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import {
@@ -94,11 +94,11 @@ async function updateOneIssueStatus(
     return statusResult(issue, await cancelIssueWithInterrupt(db, issue.id, runtime), input.status, false);
   }
   if (input.status === "done") {
-    const completed = await completeIssueFromRuntimeEvidence(db, issue.id, { error: "", status: "done" }, {
-      actor: { id: "pi-issue-status-update", kind: "supervisor" },
+    const pending = requestIssuePiAcceptance(db, issue.id, {
+      reason: input.reason,
       source: "pi-issue-status-update"
     });
-    return statusResult(issue, completed.issue, input.status, false);
+    return statusResult(issue, pending, input.status, false, "", pending.status === "pending_verification");
   }
   if (input.status === "triage" && issue.status === "pending_verification") {
     const updated = reviewIssueVerification(db, issue.id, { action: "request_changes", comment: input.reason });
@@ -135,11 +135,13 @@ function statusResult(
   current: Issue,
   requestedStatus: WorkStatus,
   executionRequested: boolean,
-  error = ""
+  error = "",
+  acceptanceRequested = false
 ) {
   const reachedTarget = current.status === requestedStatus;
   return {
-    accepted: error === "" && (reachedTarget || executionRequested),
+    acceptance_requested: acceptanceRequested,
+    accepted: error === "" && (reachedTarget || executionRequested || acceptanceRequested),
     actual_status: current.status,
     changed: previous.status !== current.status,
     error,

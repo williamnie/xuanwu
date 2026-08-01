@@ -64,7 +64,7 @@ describe("Feishu notification queue", () => {
     }
   });
 
-  test("router rejects direct done patches without Evidence and does not notify", async () => {
+  test("router rejects direct done patches without a canonical Run and does not notify", async () => {
     const db = await fixtureDatabase();
     const bus = new EventBus();
     try {
@@ -85,7 +85,7 @@ describe("Feishu notification queue", () => {
     }
   });
 
-  test("does not ask the human to accept again when PI still owns incomplete verification", async () => {
+  test("human acceptance completes once and queues a completion notice, not another approval", async () => {
     const db = await fixtureDatabase();
     const bus = new EventBus();
     try {
@@ -108,13 +108,15 @@ describe("Feishu notification queue", () => {
       const outbox = listSyncOutbox(db, { source: "feishu" });
 
       expect(response.status).toBe(200);
-      expect(outbox).toEqual([]);
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]?.content).toContain("issue #1 已完成");
+      expect(outbox[0]?.content).not.toContain("需要你的确认");
     } finally {
       db.close();
     }
   });
 
-  test("does not dispatch a generic pending-verification message without an explicit human question", async () => {
+  test("dispatches only the final completion notice after an explicit human acceptance", async () => {
     const db = await fixtureDatabase();
     const bus = new EventBus();
     const sender = new FakeFeishuSender();
@@ -141,8 +143,11 @@ describe("Feishu notification queue", () => {
       const outbox = listSyncOutbox(db, { source: "feishu" });
 
       expect(response.status).toBe(200);
-      expect(sender.calls).toEqual([]);
-      expect(outbox).toEqual([]);
+      expect(sender.calls).toHaveLength(1);
+      expect(sender.calls[0]?.text).toContain("issue #1 已完成");
+      expect(sender.calls[0]?.text).not.toContain("需要你的确认");
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]?.status).toBe("sent");
     } finally {
       db.close();
     }

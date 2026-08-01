@@ -7,15 +7,14 @@ import { listPiActions } from "../db/repositories/pi.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import {
   createIssueVerifierReview,
-  projectIssueRuntimeEvidence,
-  reconcileIssueCompletionFromRuntimeEvidence
+  projectIssueRuntimeEvidence
 } from "../domain/evidence/completionGate.ts";
 import type { EvidenceRecord } from "../domain/evidence/contracts.ts";
 import { issueAsWork } from "../domain/work/issueAdapter.ts";
 import { makeRunAttemptID } from "../domain/run/contracts.ts";
 import { readIssueVerificationProjection } from "../domain/review/humanReview.ts";
-import { redactSensitiveText } from "../util/redact.ts";
 import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
+import { requestIssuePiAcceptance } from "./piAcceptanceRequest.ts";
 
 export type VerifierWorkflowWritebackResult = {
   evidence: number;
@@ -25,9 +24,9 @@ export type VerifierWorkflowWritebackResult = {
 
 /**
  * A verifier child is an isolated execution carrier, not the owner of the
- * acceptance decision. Only passed, tool-produced Evidence from its canonical
- * Run is re-bound to the parent Work/current Run. The normal deterministic
- * completion gate then remains the sole authority that can complete the parent.
+ * acceptance decision. Passed, tool-produced Evidence from its canonical Run
+ * is re-bound to the parent Work/current Run as compatibility metadata, then
+ * the parent is handed to the normal Completion Card + PI acceptance path.
  */
 export async function writeBackVerifierWorkflowEvidence(
   db: RunnerDatabase,
@@ -94,22 +93,10 @@ export async function writeBackVerifierWorkflowEvidence(
     parent_run_id: parentRun.id,
     source: options.source ?? "verifier-workflow-writeback"
   });
-  try {
-    await reconcileIssueCompletionFromRuntimeEvidence(db, parent.id, {
-      actor: { id: "pi-verifier-workflow-writeback", kind: "runner" },
-      correlation_id: `verifier-workflow:${child.id}:parent:${parent.id}`,
-      now: now.toISOString(),
-      source: options.source ?? "verifier-workflow-writeback"
-    });
-  } catch (error) {
-    recordIssueEvent(db, parent.id, "issue.verifier_writeback_deferred.v1", {
-      child_issue_id: child.id,
-      error: redactSensitiveText(error instanceof Error ? error.message : String(error)),
-      evidence_ids: promoted.map((evidence) => evidence.id),
-      source: options.source ?? "verifier-workflow-writeback"
-    });
-    return { evidence: promoted.length, parent_issue_id: parent.id, status: "not_ready" };
-  }
+  requestIssuePiAcceptance(db, parent.id, {
+    reason: `Verifier #${child.id} added facts; PI must re-evaluate the Completion Card`,
+    source: options.source ?? "verifier-workflow-writeback"
+  });
   return {
     evidence: promoted.length,
     parent_issue_id: parent.id,

@@ -432,20 +432,15 @@ describe("Supervisor Work/Run/Evidence/Handoff control tools", () => {
     }
   });
 
-  test("denies retry when implementation is complete and only persisted Handoff is missing", async () => {
+  test("denies retry while a terminal Run is waiting for PI semantic acceptance", async () => {
     const fixture = await openFixture();
     try {
       const issue = createIssue(fixture.db, {
         project_id: fixture.project.id,
-        status: "failed",
-        title: "Do not rerun completed implementation"
+        status: "pending_verification",
+        title: "Do not rerun before PI acceptance"
       });
-      const runID = insertRun(fixture.db, issue.id, "pending_verification");
-      recordIssueEvent(fixture.db, issue.id, "issue.verification_gate_outcome.v1", {
-        evidence_ids: ["xw:evidence:git:1"],
-        handoff_gap: "persisted Handoff missing",
-        target_status: "pending_verification"
-      });
+      const runID = insertRun(fixture.db, issue.id, "done");
       const tools = createPiSupervisorControlTools(fixture.db, fixture.project, {
         conversationID: "conv-handoff-gap",
         source: "runner_chat"
@@ -462,10 +457,10 @@ describe("Supervisor Work/Run/Evidence/Handoff control tools", () => {
       expect(result.details).toMatchObject({
         action_type: "run.retry",
         decision: "deny",
-        gate_reason: expect.stringContaining("only the persisted Handoff is missing"),
+        gate_reason: expect.stringContaining("PI semantic acceptance is pending"),
         status: "denied"
       });
-      expect(getIssue(fixture.db, issue.id)?.status).toBe("failed");
+      expect(getIssue(fixture.db, issue.id)?.status).toBe("pending_verification");
       expect(listPiActionEvents(fixture.db, {
         actionId: listPiActions(fixture.db)[0]!.id
       }).map((event) => event.event_type)).toEqual(["candidate", "gate_decision"]);

@@ -713,19 +713,13 @@ export async function captureRuntimeVerification(
     if (stableJson(existing) !== stableJson(evidence)) {
       throw new Error(`verification Evidence ${evidenceID} conflicts with its append-only replay`);
     }
-    const gate = issue.status === "pending_verification"
-      ? reevaluatePendingIssue(db, issueID, run, canonicalNow(now), `replayed-evidence:${input.channel}`)
-      : undefined;
-    return { evidence: existing, ...(gate ? { gate } : {}), replayed: true };
+    return { evidence: existing, replayed: true };
   }
   recordEvidenceRecords(db, issueID, [evidence], {
     recorded_at: canonicalNow(now),
     source: `runtime-evidence:${input.channel}`
   });
-  const gate = issue.status === "pending_verification"
-    ? reevaluatePendingIssue(db, issueID, run, canonicalNow(now), `late-evidence:${input.channel}`)
-    : undefined;
-  return { evidence, ...(gate ? { gate } : {}), replayed: false };
+  return { evidence, replayed: false };
 }
 
 export async function captureRuntimeEvidenceFromIssueLog(
@@ -756,11 +750,7 @@ export async function captureRuntimeEvidenceFromIssueLog(
     recorded_at: canonicalNow(now),
     source: "provider-runtime-command"
   });
-  const issue = mustGetIssue(db, issueID);
-  const gate = issue.status === "pending_verification"
-    ? reevaluatePendingIssue(db, issueID, run, canonicalNow(now), "late-provider-evidence")
-    : undefined;
-  return { evidence, ...(gate ? { gate } : {}), replayed: existing };
+  return { evidence, replayed: existing };
 }
 
 export function createManualOverrideEvidence(
@@ -1356,25 +1346,6 @@ function correlationBinding(run: IssueRun): {
 } {
   const runID = makeDomainID("run", "issue_runs", run.id);
   return { attempt_id: makeRunAttemptID(runID, run.attempt), run_id: runID };
-}
-
-function reevaluatePendingIssue(
-  db: RunnerDatabase,
-  issueID: number,
-  run: IssueRun,
-  now: string,
-  source: string
-): IssueCompletionGateResult {
-  const evidence = currentRunEvidence(db, issueID, run, []);
-  return applyIssueCompletionGate(db, issueID, {
-    actor: { id: "runtime-evidence-reevaluator", kind: "runner" },
-    correlation_id: `${source}:${issueID}:${run.id}`,
-    evidence,
-    now,
-    patch: { status: "done" },
-    run,
-    source
-  });
 }
 
 function recordCaptureRejected(

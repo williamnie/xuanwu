@@ -95,7 +95,7 @@ describe("Evidence HTTP API", () => {
     }
   });
 
-  test("persists and exposes decisive passed and failed Work completion evidence", async () => {
+  test("projects and exposes passed and failed Evidence without changing Work lifecycle", async () => {
     const db = await fixture();
     try {
       const passedIssueID = insertIssue(db, "Passing Work", "in_progress");
@@ -121,10 +121,10 @@ describe("Evidence HTTP API", () => {
       ));
 
       expect(passed).toMatchObject({
-        status: "done",
+        status: "in_progress",
         error: ""
       });
-      expect(failed).toMatchObject({ status: "failed", error: expect.stringContaining("Verification failed") });
+      expect(failed).toMatchObject({ status: "in_progress", error: "" });
       expect(passedBody.items).toEqual([
         expect.objectContaining({ kind: "test", run_id: passedRunID, status: "passed" })
       ]);
@@ -139,16 +139,12 @@ describe("Evidence HTTP API", () => {
       ]);
       expect(failedBody.verification_gap).toMatchObject({ reason: "failed" });
       expect(await passedDetail.json()).toMatchObject({
-        verifier_review_refs: [{
-          finding_ids: expect.arrayContaining(["requirement:current-run-check"]),
-          policy_ref: "verification-policy:agent-execution-contract@1",
-          recommended_next_action: { action: "complete_via_gate" },
-          verdict: "pass"
-        }]
+        evidence: { kind: "test", status: "passed" },
+        verifier_review_refs: []
       });
       expect(db.sqlite.query<{ count: number }, [string]>(
         "select count(*) as count from issue_events where type=?"
-      ).get(EVIDENCE_RECORDED_EVENT_TYPE)?.count).toBe(2);
+      ).get(EVIDENCE_RECORDED_EVENT_TYPE)?.count).toBe(0);
     } finally {
       db.close();
     }
@@ -213,7 +209,7 @@ describe("Evidence HTTP API", () => {
     }
   });
 
-  test("accepts delegated and post-deploy command results, replays idempotently, and closes late pending Evidence", async () => {
+  test("accepts delegated and post-deploy command results idempotently without Evidence-driven completion", async () => {
     const db = await fixture();
     try {
       const issueID = insertIssue(db, "Explicit verification", "in_progress");
@@ -246,7 +242,7 @@ describe("Evidence HTTP API", () => {
       expect(conflict.status).toBe(409);
       expect(crossRun.status).toBe(409);
       expect(completed).toMatchObject({
-        status: "done",
+        status: "in_progress",
         error: ""
       });
       expect(records.map((item) => item.evidence.status).sort()).toEqual(["failed", "passed"]);
@@ -258,10 +254,10 @@ describe("Evidence HTTP API", () => {
         lateIssueID,
         commandEvidenceBody(lateRunID, "delegated_executor", "late-after-disconnect", 0, new Date(observed).toISOString())
       );
-      expect(await late.json()).toMatchObject({
-        gate: { decision: "passed", issue_status: "done", target_status: "done" }
-      });
-      expect(getIssue(db, lateIssueID)?.status).toBe("done");
+      const lateBody = await late.json() as Record<string, any>;
+      expect(lateBody).toMatchObject({ evidence: { status: "passed" } });
+      expect(lateBody.gate).toBeNull();
+      expect(getIssue(db, lateIssueID)?.status).toBe("pending_verification");
     } finally {
       db.close();
     }

@@ -17,14 +17,14 @@ afterEach(async () => {
 });
 
 describe("PI issue execution status completion projection", () => {
-  test("distinguishes completed implementation with a Handoff gap from an execution failure", async () => {
+  test("reports an ended Run as PI acceptance pending without making Evidence a blocker", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db);
       const issue = createIssue(db, {
         description: "Implement the fix. 不要 commit、push 或 deploy。",
         project_id: "demo",
-        status: "failed",
+        status: "pending_verification",
         title: "Completed code with missing Handoff"
       });
       db.sqlite.run(
@@ -49,12 +49,12 @@ describe("PI issue execution status completion projection", () => {
 
       expect(createIssueExecutionStatus(db, issue.id)).toMatchObject({
         completion: {
-          blocker: { kind: "handoff_gap" },
-          formal_status: "failed",
+          blocker: null,
+          formal_status: "pending_verification",
           handoff_present: false,
           implementation_complete: true,
           retry_recommended: false,
-          state: "implementation_complete_handoff_missing",
+          state: "acceptance_pending",
           truth_basis: {
             evidence_count: 2,
             latest_run_status: "pending_verification"

@@ -26,12 +26,17 @@ export const PI_ACCEPTANCE_DECISION_SCHEMA = Type.Object({
 
 export type PiAcceptanceDecision = Static<typeof PI_ACCEPTANCE_DECISION_SCHEMA>;
 
-export type PiAcceptanceRuntimeResult = {
-  decision: PiAcceptanceDecision;
-  error?: string;
-  raw_text: string;
-  valid: boolean;
-};
+export type PiAcceptanceRuntimeResult =
+  | {
+    decision: PiAcceptanceDecision;
+    raw_text: string;
+    valid: true;
+  }
+  | {
+    error: string;
+    raw_text: string;
+    valid: false;
+  };
 
 const ACCEPTANCE_TOOL_NAMES = [
   "issue_read",
@@ -69,7 +74,6 @@ export async function runPiIssueAcceptance(input: {
     const decision = parseAcceptanceDecision(raw);
     if (decision) return { decision, raw_text: raw, valid: true };
     return {
-      decision: invalidDecisionFallback(),
       error: "PI acceptance returned invalid JSON or schema",
       raw_text: raw,
       valid: false
@@ -105,6 +109,7 @@ function acceptancePrompt(card: CompletionCard, language: string): string {
     "The exact JSON shape is: {\"decision\":\"accept|continue_same_session|code_review|independent_acceptance|needs_user\",\"confidence\":\"low|medium|high\",\"rationale\":\"...\",\"evidence_refs\":[\"...\"],\"unmet_requirements\":[\"...\"],\"follow_up_prompt\":\"optional...\"}.",
     "Judge whether the chronological facts satisfy the authoritative Issue goal and acceptance criteria.",
     "Commands are observations, not pre-classified proof. Read their command, exit_code, order, output excerpt, changed files, commits, final message, and warnings together.",
+    "The session field is a live bounded read of the Provider Session. If latest_turn_matches_run is false, treat latest_turn_items and session.current_git as later facts that supersede a stale canonical Run card when they clearly belong to this Issue.",
     "An earlier failed command may be superseded by a later successful command only when the later command actually covers the relevant scope. Explain that relationship rather than treating the latest row mechanically.",
     "The executor final message is a claim that may help correlate facts, but it is not sufficient by itself.",
     "Do not require test/lint/build for every task. Require evidence appropriate to this Issue's actual requested outcome and risk.",
@@ -142,16 +147,6 @@ async function promptWithTimeout(
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
-}
-
-function invalidDecisionFallback(): PiAcceptanceDecision {
-  return {
-    confidence: "low",
-    decision: "needs_user",
-    evidence_refs: ["pi_acceptance_invalid"],
-    rationale: "PI 验收返回无法可靠解析的决策，停止自动重试并请用户查看。",
-    unmet_requirements: ["需要一条符合 schema 的 PI 验收结论"]
-  };
 }
 
 function acceptanceAuthorization(projectID: string, issueID: number): PiGatePolicy {

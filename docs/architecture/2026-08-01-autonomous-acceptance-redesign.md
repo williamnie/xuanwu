@@ -71,6 +71,17 @@ PI 的价值不是只在确定性代码失败时兜底。如果绝大多数 Work
 
 这是 **事实层、语义层和调度层同时错位**，不是只改一个 Prompt 或把重试次数改成 3 就能解决。
 
+### 3.3 #821 暴露的 Session/Run 脱节
+
+#821 的 canonical Run 只绑定 Session `019fbb19-ff89-75c3-b4ec-b9562359cf16` 的旧 Turn
+`019fbb1a-134b-7da1-ba36-9725d960c543`；同一 Session 随后又完成了 Turn
+`019fbb3c-886f-74d0-a834-2d488e237a5d`，其中包含最终实现说明和完整验证结果。旧卡片只读
+canonical Run，因此玄武看不到后续完成事实。
+
+修复后的 coordinator 在每次 PI 判断前读取该 Session 的最新 Turn，并把旧 Run、最新 Turn 及
+此时的 Git 观察同时放入卡片。它不伪造历史 Run，也不靠命令正则推断完成；PI 负责判断后续 Turn
+是否确实属于当前 Issue、是否覆盖旧失败。
+
 ## 4. 目标架构
 
 ```mermaid
@@ -145,9 +156,28 @@ type CompletionCard = {
     has_diff: boolean;
     working_tree_dirty: boolean;
     observed_at: string;
-    source: "terminal_observation" | "legacy_reconstruction";
+    source: "terminal_observation" | "legacy_reconstruction" | "session_observation";
     changed_files: string[];
     commits: Array<{ revision: string; subject: string; timestamp: string }>;
+  };
+  session: {
+    inspected: boolean;
+    provider_session_id: string;
+    run_turn_id: string;
+    latest_turn_id: string;
+    latest_turn_matches_run: boolean;
+    latest_turn_status: string;
+    turn_count: number;
+    latest_turn_items: Array<{
+      type: string;
+      status: string;
+      command: string;
+      exit_code: number | null;
+      output_excerpt: string;
+      text: string;
+    }>;
+    current_git: CompletionCard["git"] | null;
+    error: string;
   };
   evidence: Array<{ id: string; kind: string; status: string; summary: string }>;
   handoff: object | null;
@@ -163,7 +193,8 @@ type CompletionCard = {
 - 原始 command、cwd、exit code 和关键输出必须保留；
 - 命令按时间顺序呈现，不能只保留“最后一条”或“失败的那条”；
 - 长输出取首尾摘要，命令数有硬上限，优先保留最早少量和最新多数；
-- Git 使用 Run baseline 到 Run 结束时 revision，不使用不稳定的当前工作区猜测；
+- 默认 Git 使用 Run baseline 到 Run 结束时 revision；若同一 Provider Session 已出现比 canonical Run 更新的 Turn，则额外读取一次当前 Git 观察并明确标为 `session_observation`，不伪造或改写历史 Run；
+- PI 每次判断前都对绑定的 Provider Session 做一次有超时、限条数和脱敏的最新 Turn 读取；最新 Turn 与 Run Turn 不同时，两者同时保留，交给 PI 判断后续事实是否覆盖旧 Run；
 - Host 在 terminal reconciliation 时固化 Git/working-tree observation；新 Run 直接读取该快照，旧 Run 才做 legacy reconstruction；
 - 卡片 fingerprint 不包含生成时间，相同事实产生相同 fingerprint；
 - 卡片和 PI 决策都写入 Issue event，支持审计与幂等；
@@ -278,8 +309,8 @@ type PiAcceptanceDecision = {
 ### `needs_user`
 
 - 用于产品范围、主观结果、授权、破坏性动作、发布、费用或外部状态等系统无法负责决定的事项；
-- 或 PI 调用/自动续跑达到熔断上限；
 - 创建明确的人类验收请求并主动通知，不再自动重试。
+- PI RPC、schema、Session 读取或卡片构建等系统故障不得伪装成 `needs_user`，也不得生成用户审批。
 
 ## 9. 重试与熔断
 
@@ -287,7 +318,7 @@ type PiAcceptanceDecision = {
 
 - 同一 Completion Card fingerprint 的 PI 决策最多尝试 2 次；
 - schema 无效、RPC 失败或决策无法应用都记入该 fingerprint；
-- 达到上限立即 `needs_user`，不再由 scheduler 周期性唤醒；
+- 达到上限进入 `pi_blocked` 并记录 `issue.pi_acceptance_system_blocked.v1`，不再由 scheduler 周期性唤醒；这是运维故障，不创建 Human Review；
 - 同一 Issue 的自动 continuation 最多 2 次；
 - 新 Run 产生新卡片，但不能通过创建新 Issue 重置预算；
 - human owner、heartbeat pause 或已有 open review 时不再自动验收；
@@ -364,11 +395,11 @@ owner projection 继续区分：
 
 ### P0：移除循环
 
-1. provider terminal 只落到 `pending_verification` 并请求一次验收；
+1. provider 的业务终态声明（`completed | failed | needs_user`）统一落到 `pending_verification` 并请求一次语义验收；只有 Provider/RPC/进程等基础设施异常直接走运行失败链；
 2. coordinator 不再调用 project manager；
 3. manager prompt 明确不接管 pending acceptance；
 4. fingerprint attempt 和 continuation 上限；
-5. 达到上限创建 human review 并主动通知。
+5. PI 系统错误达到上限进入 `pi_blocked`，不创建 human review；只有 PI 返回有效 `needs_user` 决策时才通知用户。
 
 ### P1：续跑与按需审查
 
@@ -401,7 +432,9 @@ owner projection 继续区分：
 - required Handoff 缺失时即使 PI accept，Host 仍拒绝应用；
 - stale card、stale Run 或 Issue revision 变化时拒绝应用；
 - continuation 使用同一 provider session、不同 Run；
-- 两次相同 fingerprint 失败后只创建一个 human review；
+- 两次相同 fingerprint 的 PI 系统失败后只记录一个 `pi_blocked` 事件，不创建 human review；
+- canonical Run 结束后同 Session 又有更新 Turn 时，卡片同时包含旧 Run 和最新 Turn，PI 可基于后续事实 accept；
+- Executor 自报 `failed` 或 `needs_user` 时仍先由 PI 判断其语义，不直接要求用户审批；
 - human-owned 或 paused Issue 不触发 PI；
 - 默认链不创建 Verifier Issue。
 

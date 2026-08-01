@@ -5,7 +5,6 @@ import { hasActiveExecutorWork } from "../db/repositories/issueQueue.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { recordPiRecoveryAttempt, updatePiRecoveryAttemptStatus } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { IssueStateRepairOperation } from "./issueStateManager.ts";
-import { applyIssueCompletionGate } from "../domain/evidence/completionGate.ts";
 import {
   currentIssueStateSnapshot,
   issueStateSnapshotDiff,
@@ -47,16 +46,7 @@ function executeRepair(
   if (operation === "move_status" || operation === "patch_status") {
     reconcileTerminalRuntime(db, issueID, payload, patch);
     if (cleanString(patch.status) === "done") {
-      const now = new Date().toISOString();
-      return applyIssueCompletionGate(db, issueID, {
-        actor: { id: "pi-state-repair", kind: "supervisor" },
-        correlation_id: cleanString(payload.action_id) || `issue-${issueID}-state-repair`,
-        evidence: [],
-        now,
-        patch,
-        projection_errors: ["legacy state-repair evidence is not trusted structured Evidence"],
-        source: "pi-state-repair"
-      }).issue;
+      throw new Error("issue.state_repair cannot mark done; use the current completion-card acceptance application");
     }
     return updateIssue(db, issueID, patch);
   }

@@ -60,9 +60,9 @@ describe("PI action engine risk classifier", () => {
       riskLevel: "high"
     });
     expect(classifyPiActionRisk("run.interrupt")).toEqual({
-      gate: "high",
-      requiresConfirmation: true,
-      riskLevel: "high"
+      gate: "safe",
+      requiresConfirmation: false,
+      riskLevel: "low"
     });
     expect(classifyPiActionRisk("mcp.resource.read")).toEqual({
       gate: "safe",
@@ -105,6 +105,31 @@ describe("PI action engine risk classifier", () => {
       decision: "execute",
       reason: expect.stringContaining("authorization envelope")
     });
+    expect(gatePiActionEnvelope({
+      ...confirmEnvelope,
+      action_type: "run.interrupt",
+      payload: { action: "interrupt", run_id: "xw:run:issue_runs:issue-7-attempt-1" },
+      requires_confirmation: false,
+      risk_level: "low"
+    }, {
+      authorizedActions: [{ action_type: "run.interrupt", issue_id: 7, project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "execute",
+      reason: expect.stringContaining("authorization envelope")
+    });
+    expect(gatePiActionEnvelope({
+      ...confirmEnvelope,
+      action_type: "run.interrupt",
+      payload: { action: "interrupt", run_id: "xw:run:issue_runs:issue-7-attempt-1" },
+      requires_confirmation: false,
+      risk_level: "low"
+    }, {
+      allowedActions: ["run.interrupt"],
+      mode: "attended",
+      scope: { issue_id: 7, project_id: "demo" }
+    })).toMatchObject({ decision: "execute" });
     const reconcileEnvelope = {
       ...confirmEnvelope,
       action_type: "issue.completion_reconcile",

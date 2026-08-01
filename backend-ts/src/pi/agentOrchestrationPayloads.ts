@@ -102,7 +102,7 @@ function writeBackInstruction(role: AgentRole, target: Issue | null): string {
       "- The decisive verification must be one separate, direct command recognized as test/lint/build (for example: bun test, npm/pnpm/yarn test, pytest, python3 -m pytest, python3 -m unittest, eslint, tsc --noEmit, or a build command). A compound shell/heredoc or prose claim is not Evidence.",
       "- When the Codex exec tool wraps tools.exec_command, return the nested terminal result as text(JSON.stringify({exit_code: r.exit_code, output: r.output})); omitting the nested exit_code makes recovered Evidence fail closed.",
       "- If a temporary test file is needed, create it first, then run it in a separate direct recognized command such as: python3 -m unittest discover -s /tmp -p 'test_issue_*.py'.",
-      "- For pass, finish this verifier Issue with RUNNER_OUTCOME: completed. The Runner Host will re-bind passed executable Evidence to the parent current Run and invoke the deterministic completion gate.",
+      "- For pass, finish this verifier Issue with RUNNER_OUTCOME: completed. The Runner Host may retain the observations as compatibility facts, but only the parent Completion Card plus issue-scoped PI semantic acceptance can complete the parent.",
       "- For fail or inconclusive, finish with RUNNER_OUTCOME: failed | <structured gap>. Use needs_user only for a concrete decision or external input that PI cannot supply.",
       `- Do not call lifecycle APIs or CLI commands for parent Issue #${target.id}; verifier prose and status writes cannot bypass the parent gate.`,
       "- Never use issue accept: verifier output cannot create human override Evidence."

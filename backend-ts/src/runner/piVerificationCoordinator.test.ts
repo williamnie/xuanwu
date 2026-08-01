@@ -82,7 +82,7 @@ describe("issue-scoped PI acceptance coordinator", () => {
     }
   });
 
-  test("opens a human review after two failures for the same card instead of retrying forever", async () => {
+  test("circuit-breaks PI infrastructure failures without asking the user for an approval", async () => {
     const db = await fixture();
     let calls = 0;
     try {
@@ -99,14 +99,40 @@ describe("issue-scoped PI acceptance coordinator", () => {
       expect((await run()).failed).toBe(1);
       expect((await run()).failed).toBe(1);
       expect(calls).toBe(2);
-      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({ owner: "human", phase: "human_review" });
+      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({ owner: "pi", phase: "pi_blocked" });
+      expect(eventTypes(db, issue.id)).toContain("issue.pi_acceptance_system_blocked.v1");
       expect(eventTypes(db, issue.id).filter((type) => type === "issue.pi_verification_started.v1")).toHaveLength(2);
     } finally {
       db.close();
     }
   });
 
-  test("also circuit-breaks repeated completion-card construction failures", async () => {
+  test("treats invalid PI schema as a system failure, never as needs_user", async () => {
+    const db = await fixture();
+    try {
+      const issue = completedIssue(db, "Invalid PI response");
+      const run = () => runPiVerificationCoordinatorOnce({
+        cooldownMs: 0,
+        database: db,
+        decideIssueAcceptance: async (): Promise<PiAcceptanceRuntimeResult> => ({
+          error: "PI acceptance returned invalid JSON or schema",
+          raw_text: "not-json",
+          valid: false
+        }),
+        now: new Date("2026-07-31T05:09:30Z")
+      });
+
+      expect((await run()).failed).toBe(1);
+      expect((await run()).failed).toBe(1);
+      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({ owner: "pi", phase: "pi_blocked" });
+      expect(eventTypes(db, issue.id)).not.toContain("issue.human_review_requested.v1");
+      expect(eventTypes(db, issue.id)).not.toContain("issue.pi_acceptance_decision.v1");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("also system-blocks repeated completion-card construction failures without human approval", async () => {
     const db = await fixture();
     let calls = 0;
     try {
@@ -121,7 +147,54 @@ describe("issue-scoped PI acceptance coordinator", () => {
       expect((await run()).failed).toBe(1);
       expect((await run()).failed).toBe(1);
       expect(calls).toBe(0);
-      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({ owner: "human", phase: "human_review" });
+      expect(readIssueVerificationProjection(db, issue.id)).toMatchObject({ owner: "pi", phase: "pi_blocked" });
+      expect(eventTypes(db, issue.id)).toContain("issue.pi_acceptance_system_blocked.v1");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("regression #821: reads the latest Provider Session Turn before judging a stale canonical Run", async () => {
+    const db = await fixture();
+    const provider = new LatestTurnProvider();
+    let seenLatestTurn = "";
+    try {
+      const issue = completedIssue(db, "Implementation continued outside the terminal Run");
+      const run = listIssueRuns(db, issue.id)[0]!;
+      updateIssueRuntime(db, issue.id, {
+        issue_run_id: run.id,
+        provider: "codex",
+        provider_session_id: "019fbb19-ff89-75c3-b4ec-b9562359cf16",
+        provider_turn_id: "019fbb1a-134b-7da1-ba36-9725d960c543"
+      });
+
+      const result = await runPiVerificationCoordinatorOnce({
+        database: db,
+        decideIssueAcceptance: async (card) => {
+          seenLatestTurn = card.session.latest_turn_id;
+          expect(card.session).toMatchObject({
+            inspected: true,
+            latest_turn_id: "019fbb3c-886f-74d0-a834-2d488e237a5d",
+            latest_turn_matches_run: false,
+            run_turn_id: "019fbb1a-134b-7da1-ba36-9725d960c543",
+            turn_count: 2
+          });
+          expect(card.session.latest_turn_items).toEqual(expect.arrayContaining([
+            expect.objectContaining({ type: "agentMessage", text: expect.stringContaining("实现和验证已经完成") }),
+            expect.objectContaining({ command: expect.stringContaining("custom-check"), exit_code: 0 })
+          ]));
+          expect(card.session.current_git).toMatchObject({
+            observed_at: "2026-07-31T05:02:00.000Z",
+            source: "session_observation"
+          });
+          return acceptance("accept");
+        },
+        providers: { codex: provider }
+      });
+
+      expect(result).toMatchObject({ failed: 0, started: 1 });
+      expect(seenLatestTurn).toBe("019fbb3c-886f-74d0-a834-2d488e237a5d");
+      expect(getIssue(db, issue.id)?.status).toBe("done");
     } finally {
       db.close();
     }
@@ -204,6 +277,39 @@ class CoordinatorContinuationProvider implements ExecutorProvider {
       type: "done"
     });
     return { runId: "codex:session-original:turn-next", session };
+  }
+}
+
+class LatestTurnProvider implements ExecutorProvider {
+  readonly capabilities = ["issue_execution", "sessions"] as const;
+  readonly id = "codex" as const;
+
+  async run(_input: ProviderRunInput): Promise<ProviderRunResult> {
+    throw new Error("run must not be called");
+  }
+
+  async readSession(sessionId: string) {
+    return {
+      id: `codex:${sessionId}`,
+      provider: "codex",
+      provider_session_id: sessionId,
+      updatedAt: 1_785_474_120,
+      turns: [
+        {
+          id: "019fbb1a-134b-7da1-ba36-9725d960c543",
+          items: [{ type: "agentMessage", text: "最初需要继续处理。" }],
+          status: "completed"
+        },
+        {
+          id: "019fbb3c-886f-74d0-a834-2d488e237a5d",
+          items: [
+            { type: "commandExecution", command: "/bin/zsh -lc 'custom-check --all; rc=$?; exit \"$rc\"'", exitCode: 0 },
+            { type: "agentMessage", text: "实现和验证已经完成，工作区干净。" }
+          ],
+          status: "completed"
+        }
+      ]
+    };
   }
 }
 

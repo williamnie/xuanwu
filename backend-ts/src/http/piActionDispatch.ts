@@ -35,10 +35,7 @@ import {
   type IssueCompletionWatchCancelInput,
   type IssueCompletionWatchCreateInput
 } from "../pi/issueCompletionWatchActions.ts";
-import {
-  completeIssueFromRuntimeEvidence,
-  reconcileIssueCompletionFromRuntimeEvidence
-} from "../domain/evidence/completionGate.ts";
+import { requestIssuePiAcceptance } from "../runner/piAcceptanceRequest.ts";
 import { callMcpTool } from "../pi/mcpToolCall.ts";
 import { invokeReadOnlyAssistantTool } from "../pi/readOnlyToolInvocation.ts";
 import type { ToolPermission } from "../pi/toolProviderEnvelope.ts";
@@ -242,21 +239,19 @@ async function reconcileIssueCompletion(
   payload: Record<string, unknown>
 ): Promise<unknown> {
   const issueID = positivePayloadID(payload, "issue_id");
-  const result = await reconcileIssueCompletionFromRuntimeEvidence(context.database, issueID, {
-    actor: { id: `pi-action:${action.id}`, kind: "supervisor" },
-    correlation_id: action.idempotency_key || action.id,
+  const issue = requestIssuePiAcceptance(context.database, issueID, {
+    reason: cleanString(payload.rationale),
     source: "pi-action-completion-reconciliation"
   });
-  if (result.issue.status === "done") startAutoRunProjectLoop(context, result.issue.project_id);
   return {
     issue: {
-      id: result.issue.id,
-      project_id: result.issue.project_id,
-      status: result.issue.status,
-      title: result.issue.title
+      id: issue.id,
+      project_id: issue.project_id,
+      status: issue.status,
+      title: issue.title
     },
-    target_status: result.target_status,
-    transition_path: result.transition_path
+    target_status: issue.status,
+    transition_path: []
   };
 }
 
@@ -268,11 +263,10 @@ async function updateExecutorIssue(
   const issueID = positivePayloadID(payload, "issue_id");
   const patch = objectPayload(payload.patch);
   if (cleanString(patch.status) !== "done") return updateIssue(db, issueID, patch);
-  return (await completeIssueFromRuntimeEvidence(db, issueID, patch, {
-    actor: { id: `pi-action:${action.id}`, kind: "supervisor" },
-    correlation_id: action.idempotency_key || action.id,
+  return requestIssuePiAcceptance(db, issueID, {
+    reason: cleanString(patch.reason) || `PI action ${action.id} requested done`,
     source: "pi-agent-executor-assign"
-  })).issue;
+  });
 }
 
 function actionPayload(action: PiAction, payload: Record<string, unknown>): Record<string, unknown> {

@@ -81,7 +81,6 @@ export function createIssueCompletionProjection(
   latestRun: IssueRun | undefined
 ) {
   const outcome = latestCompletionGateOutcome(db, issue.id);
-  const handoffGap = cleanString(outcome.handoff_gap);
   const runID = latestRun ? makeDomainID("run", "issue_runs", latestRun.id) : "";
   const workID = issueAsWork(issue).id;
   const handoffPresent = runID !== "" && listStoredHandoffs(db, {
@@ -90,16 +89,12 @@ export function createIssueCompletionProjection(
     work_id: workID
   }).items.some((item) => item.handoff.run_ids.includes(runID));
   const runEnded = Boolean(latestRun?.ended_at);
-  const implementationComplete = runEnded && (
-    issue.status === "done" ||
-    handoffPresent ||
-    (latestRun?.status === "pending_verification" && handoffGap !== "")
-  );
-  const state = issue.status === "done" && handoffPresent
+  const implementationComplete = runEnded && (issue.status === "done" || issue.status === "pending_verification");
+  const state = issue.status === "done"
     ? "complete"
-    : implementationComplete && !handoffPresent
-      ? "implementation_complete_handoff_missing"
-      : latestRun?.status === "failed"
+    : issue.status === "pending_verification" && runEnded
+      ? "acceptance_pending"
+      : issue.status === "failed" && latestRun?.status === "failed"
         ? "execution_failed"
         : runEnded
           ? "completion_unresolved"
@@ -107,10 +102,7 @@ export function createIssueCompletionProjection(
             ? "running"
             : "not_started";
   return {
-    blocker: handoffGap === "" ? null : {
-      detail: preview(handoffGap),
-      kind: "handoff_gap"
-    },
+    blocker: null,
     formal_status: issue.status,
     handoff_present: handoffPresent,
     implementation_complete: implementationComplete,
@@ -140,13 +132,11 @@ function latestCompletionGateOutcome(db: RunnerDatabase, issueID: number): Recor
 
 function completionNextStep(state: string): string {
   if (state === "complete") return "No completion action is required.";
-  if (state === "implementation_complete_handoff_missing") {
-    return "Reconcile the completed Run's Git delivery Evidence into a persisted Handoff; do not retry the executor.";
-  }
+  if (state === "acceptance_pending") return "Let the issue-scoped PI read the Completion Card and Provider Session, then make one semantic acceptance decision.";
   if (state === "execution_failed") return "Inspect the failed Run and retry only after confirming the failure is retryable.";
   if (state === "running") return "Wait for or inspect the active Run.";
   if (state === "not_started") return "Create or enqueue a Run when execution is requested.";
-  return "Inspect the completion gate outcome before choosing any mutation.";
+  return "Inspect the latest Run and request issue-scoped PI acceptance before choosing any retry.";
 }
 
 function issueSummary(issue: Issue): IssueSummary {

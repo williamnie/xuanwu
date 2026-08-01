@@ -49,8 +49,7 @@ export const SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES = [
 ] as const;
 
 export const SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES = [
-  "work.cancel",
-  "run.interrupt"
+  "work.cancel"
 ] as const;
 
 export const SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS = 6000;

@@ -764,8 +764,8 @@ function retryPreconditionFailure(
   const issue = getIssue(db, issueID);
   if (!issue) return undefined;
   const completion = createIssueCompletionProjection(db, issue, listIssueRuns(db, issue.id).at(-1));
-  return completion.state === "implementation_complete_handoff_missing"
-    ? "implementation is complete and only the persisted Handoff is missing; reconcile Handoff/Evidence instead of retrying the executor"
+  return completion.state === "acceptance_pending"
+    ? "the Run is terminal and PI semantic acceptance is pending; do not retry the executor"
     : undefined;
 }
 

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
-import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
+import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listPiGuardianAlerts } from "../db/repositories/pi.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
@@ -682,7 +682,7 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
-  test("turns an executor needs_user outcome into one alert and notification", async () => {
+  test("routes an executor needs_user claim through PI semantic acceptance instead of failing immediately", async () => {
     const db = await openFixtureDatabase();
     const provider = new NeedsUserExecutionProvider();
     try {
@@ -692,19 +692,16 @@ describe("Bun project loop claim execution", () => {
       await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
 
       expect(getIssue(db, issueId)).toMatchObject({
-        status: "failed",
-        error: "缺少部署凭证"
+        status: "pending_verification",
+        error: ""
       });
       expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
         status: "failed",
         ended_at: expect.stringMatching(/Z$/)
       });
-      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" }).filter((alert) => alert.issue_id === issueId)).toContainEqual(
-        expect.objectContaining({ alert_type: "executor_needs_user", issue_id: issueId })
-      );
-      expect(listNotifications(db, { projectID: "demo" }).filter((notification) => notification.issue_id === issueId)).toContainEqual(
-        expect.objectContaining({ event: "pi.needs_user", issue_id: issueId })
-      );
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" }).filter((alert) => alert.issue_id === issueId)).toHaveLength(0);
+      expect(listNotifications(db, { projectID: "demo" }).filter((notification) => notification.issue_id === issueId)).toHaveLength(0);
+      expect(listIssueEvents(db, issueId, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
     } finally {
       db.close();
     }

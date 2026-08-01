@@ -50,7 +50,7 @@ import {
 } from "./manualTrigger.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
-import { reconcileIssueCompletionFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
+import { requestIssuePiAcceptance } from "../runner/piAcceptanceRequest.ts";
 import { materializeIssueBatch, normalizeIssueBatchPayload } from "./issueBatchProposal.ts";
 import { readIssueDependency } from "../domain/work/issueDependency.ts";
 import {
@@ -470,28 +470,21 @@ function reconcileIssueCompletion(
     projectID: issue.project_id,
     rationale: input.rationale
   }, async () => {
-    const result = await reconcileIssueCompletionFromRuntimeEvidence(db, issue.id, {
-      actor: { id: "pi-completion-reconciliation", kind: "supervisor" },
+    const pending = requestIssuePiAcceptance(db, issue.id, {
+      reason: input.rationale,
       source: "pi-issue-completion-reconciliation"
     });
-    if (result.issue.status === "done") context.onIssueEnqueued?.(result.issue.project_id);
-    return completionReconciliationResult(result);
+    return {
+      issue: {
+        id: pending.id,
+        project_id: pending.project_id,
+        status: pending.status,
+        title: pending.title
+      },
+      target_status: pending.status,
+      transition_path: []
+    };
   });
-}
-
-function completionReconciliationResult(
-  result: Awaited<ReturnType<typeof reconcileIssueCompletionFromRuntimeEvidence>>
-) {
-  return {
-    issue: {
-      id: result.issue.id,
-      project_id: result.issue.project_id,
-      status: result.issue.status,
-      title: result.issue.title
-    },
-    target_status: result.target_status,
-    transition_path: result.transition_path
-  };
 }
 
 

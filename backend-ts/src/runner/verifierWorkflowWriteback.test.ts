@@ -19,7 +19,7 @@ afterEach(async () => {
 });
 
 describe("verifier workflow Evidence writeback", () => {
-  test("promotes passed executable Evidence to the parent Run and completes the PI-owned parent", async () => {
+  test("promotes legacy verifier facts but leaves completion to PI semantic acceptance", async () => {
     const db = await fixture();
     try {
       const parent = issueWithEndedRun(db, {
@@ -46,12 +46,13 @@ describe("verifier workflow Evidence writeback", () => {
         parent_issue_id: parent.id,
         status: "completed"
       });
-      expect(getIssue(db, parent.id)).toMatchObject({ error: "", status: "done" });
+      expect(getIssue(db, parent.id)).toMatchObject({ error: "", status: "pending_verification" });
       expect(listIssueEvents(db, parent.id, {
-        types: ["evidence.recorded.v1", "issue.verifier_evidence_promoted.v1"]
+        types: ["evidence.recorded.v1", "issue.verifier_evidence_promoted.v1", "issue.pi_acceptance_requested.v1"]
       }).map((event) => event.type)).toEqual([
         "evidence.recorded.v1",
-        "issue.verifier_evidence_promoted.v1"
+        "issue.verifier_evidence_promoted.v1",
+        "issue.pi_acceptance_requested.v1"
       ]);
       const evidenceEvent = listIssueEvents(db, parent.id, {
         limit: 1,

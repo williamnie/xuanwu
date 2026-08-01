@@ -91,6 +91,7 @@ export const PI_SAFE_ACTION_TYPES = [
   "repo.read_excerpt", "repo.search", "repo.tree",
   "session.list", "session.read_summary", "memory.search", "memory.remember",
   "notification.preference.read",
+  "run.interrupt",
   "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
   "skill.list", "skill.read", "skill.recommend", "skill.intent_audit",
   "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read",

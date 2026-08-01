@@ -17,7 +17,7 @@ import {
 import { cancelIssueWithInterrupt, retryIssueWithInterrupt } from "../runner/interrupt.ts";
 import { issueMcpRequirementSummary, type McpRequirementSummary } from "../mcp/requirements.ts";
 import { kickAutoRunProjects, startProjectLoop, type ProjectLoopStartOptions } from "../runner/projectLoopManager.ts";
-import { completeIssueFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
+import { requestIssuePiAcceptance } from "../runner/piAcceptanceRequest.ts";
 import {
   readProjectIssueDependencies,
   type IssueDependencyDiagnostic
@@ -117,13 +117,26 @@ async function updateIssueAndKickLoop(
     throw new Error("pending_verification 请使用 verification reject，避免普通失败回写覆盖验证门禁");
   }
   const issue = stringBody(body.status) === "done"
-    ? (await completeIssueFromRuntimeEvidence(context.database, id, body, {
-      actor: { id: "runner-completion-api", kind: "runner" },
-      correlation_id: `issue-${id}-completion`,
+    ? requestIssuePiAcceptance(context.database, id, {
+      reason: "Issue PATCH requested done",
       source: "issue-patch-api"
-    })).issue
+    })
     : updateIssue(context.database, id, body);
   publishIssueStatusChange(context, issue, body);
+  if (
+    stringBody(body.status) === "done"
+    && issue.status === "pending_verification"
+    && readIssueVerificationProjection(context.database, issue.id).owner === "pi"
+    && context.agenticClient?.decideIssueAcceptance
+  ) {
+    requestPiVerificationCycle({
+      database: context.database,
+      decideIssueAcceptance: context.agenticClient.decideIssueAcceptance.bind(context.agenticClient),
+      issueID: issue.id,
+      providers: context.providers,
+      source: "issue-done-claim"
+    });
+  }
   if (terminalForSkillAudit(issue.status)) safeAuditSkillIntents(context.database, issue.id);
   if (shouldKickAfterWrite(issue.status)) kickAutoProject(context, issue.project_id);
   return issue;
