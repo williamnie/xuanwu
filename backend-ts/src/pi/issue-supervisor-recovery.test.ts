@@ -141,8 +141,8 @@ describe("PI issue supervisor recovery contract", () => {
       expect(readProjectPiPolicy(db, "demo")).toMatchObject({
         allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"issue.state_repair\",\"needs_user.escalate\"]",
         supervisor_cooldown_seconds: 300,
-        supervisor_max_recoveries_per_issue: 2,
-        supervisor_max_recoveries_per_project_per_hour: 10,
+        supervisor_max_recoveries_per_issue: 6,
+        supervisor_max_recoveries_per_project_per_hour: 0,
         supervisor_rate_limit_wait_policy: "respect_retry_after"
       });
 
@@ -158,7 +158,7 @@ describe("PI issue supervisor recovery contract", () => {
       expect(policy).toMatchObject({
         supervisor_cooldown_seconds: 900,
         supervisor_max_recoveries_per_issue: 3,
-        supervisor_max_recoveries_per_project_per_hour: 12,
+        supervisor_max_recoveries_per_project_per_hour: 0,
         supervisor_rate_limit_wait_policy: "ask"
       });
       expect(JSON.parse(policy.allowed_supervisor_actions_json)).toEqual([
@@ -262,8 +262,8 @@ describe("PI issue supervisor recovery contract", () => {
       `).get()).toEqual({
         allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"issue.state_repair\",\"needs_user.escalate\"]",
         supervisor_cooldown_seconds: 300,
-        supervisor_max_recoveries_per_issue: 2,
-        supervisor_max_recoveries_per_project_per_hour: 10,
+        supervisor_max_recoveries_per_issue: 6,
+        supervisor_max_recoveries_per_project_per_hour: 0,
         supervisor_rate_limit_wait_policy: "respect_retry_after"
       });
     } finally {
@@ -380,13 +380,12 @@ async function insertLegacyPolicyRow(path: string): Promise<void> {
   try {
     db.run(`insert into project_pi_policies
       (project_id, default_mode, timezone, working_hours_json, quiet_hours_json,
-        retry_policy_json, concurrency_policy_json, verification_policy_json,
+        retry_policy_json, concurrency_policy_json,
         allowed_actions_json, allowed_mcp_capabilities_json, allowed_skill_intents_json,
         created_at, updated_at)
       values ('legacy-demo', 'manual', 'UTC', '{}', '{}',
         '{"enabled":false,"max_attempts":0,"backoff_minutes":[]}',
         '{"max_parallel_issues":1,"max_parallel_pi_cycles":1}',
-        '{"pending_timeout_minutes":1440,"on_timeout":"escalate","evidence_required":true}',
         '[]', '[]', '[]', '2026-06-10T00:00:00Z', '2026-06-10T00:00:00Z')`);
   } finally {
     db.close();

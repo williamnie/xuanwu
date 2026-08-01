@@ -73,6 +73,7 @@ export type HeartbeatSupervisorCandidateSignal = {
   issue_id: number;
   project_id: string;
   project_budget_remaining?: number;
+  project_budget_unlimited?: boolean;
   provider?: string;
   provider_error_category: string;
   provider_session_id: string;
@@ -101,6 +102,7 @@ export type HeartbeatSupervisorBudgetSignal = {
   budget_remaining: number;
   issue_id: number;
   project_budget_remaining: number;
+  project_budget_unlimited: boolean;
   project_id: string;
 };
 export type HeartbeatStaleSessionDiagnostic = {

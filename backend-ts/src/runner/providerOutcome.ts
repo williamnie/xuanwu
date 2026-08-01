@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { getProject } from "../db/repositories/projects.ts";
+import { restoreOpenHumanReviewAfterTerminalRun } from "../domain/review/humanReview.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
 import {
@@ -59,6 +60,7 @@ export async function reconcileProviderOutcome(
     provider_outcome: reported.outcome,
     provider_reason: reported.reason
   });
+  restoreOpenHumanReviewAfterTerminalRun(input.database, current.id, { bus: input.bus });
   const finalized = getIssue(input.database, current.id);
   if (finalized) publishIssueStatus(input, finalized);
   return finalized;

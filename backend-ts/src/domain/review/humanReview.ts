@@ -20,6 +20,7 @@ import {
 
 export const HUMAN_REVIEW_EVENT_TYPES = {
   requested: "issue.human_review_requested.v1",
+  restored: "issue.human_review_restored.v1",
   revisionResumeFailed: "issue.human_revision_resume_failed.v1",
   revisionResumed: "issue.human_revision_resumed.v1",
   revisionRequested: "issue.human_revision_requested.v1",
@@ -35,6 +36,8 @@ export type HumanReviewRequest = {
   id: string;
   issue_id: number;
   kind: "decision" | "acceptance" | "risk_acceptance";
+  origin_card_fingerprint: string;
+  origin_run_id: string;
   question: string;
   recommendation: string;
   revision: number;
@@ -83,6 +86,8 @@ export function createHumanReviewRequest(
     throw new Error("只有 needs_user Issue 才能请求人类处理");
   }
   const question = requiredText(input.question, "question");
+  const evidenceRefs = stringList(input.evidence_refs);
+  const origin = reviewOrigin(db, issueID, evidenceRefs);
   const current = readIssueDecisionProjection(db, issueID).request;
   const revision = (current?.revision ?? 0) + 1;
   if (current?.status === "open") {
@@ -96,11 +101,13 @@ export function createHumanReviewRequest(
     acceptance_summary: stringList(input.acceptance_summary),
     consequences: cleanString(input.consequences),
     created_at: new Date().toISOString(),
-    evidence_refs: stringList(input.evidence_refs),
+    evidence_refs: evidenceRefs,
     excluded_scope: stringList(input.excluded_scope),
     id: `human-review-${issueID}-${randomUUID()}`,
     issue_id: issueID,
     kind: reviewKind(input.kind),
+    origin_card_fingerprint: origin.cardFingerprint,
+    origin_run_id: origin.runID,
     question,
     recommendation: cleanString(input.recommendation),
     revision,
@@ -123,6 +130,8 @@ export function createHumanReviewRequest(
       message: question,
       next_step: "请打开 Work 验收，接受、要求调整或拒绝",
       recommendation: request.recommendation,
+      origin_card_fingerprint: request.origin_card_fingerprint,
+      origin_run_id: request.origin_run_id,
       reason: "human_review_required",
       requires_user: true,
       review_request_id: request.id,
@@ -187,6 +196,47 @@ export function readIssueDecisionProjection(
   };
 }
 
+export function restoreOpenHumanReviewAfterTerminalRun(
+  db: RunnerDatabase,
+  issueID: number,
+  runtime: Pick<HumanReviewRuntime, "bus"> = {}
+): Issue | null {
+  const issue = getIssue(db, issueID);
+  const run = listIssueRuns(db, issueID).at(-1);
+  if (!issue || issue.status !== "in_progress" || !run || run.ended_at === "") return issue;
+  const projection = readIssueDecisionProjection(db, issueID);
+  const request = projection.request;
+  if (projection.owner !== "human" || !request || request.status !== "open") return issue;
+  const alreadyRestored = listIssueEvents(db, issueID, {
+    limit: 50,
+    types: [HUMAN_REVIEW_EVENT_TYPES.restored]
+  }).some((event) => {
+    const payload = objectPayload(event.payload);
+    return cleanString(payload.request_id) === request.id
+      && cleanString(payload.terminal_run_id) === run.id;
+  });
+  const restored = db.transaction(() => {
+    const updated = updateIssue(db, issueID, { error: "", status: "needs_user" });
+    if (!alreadyRestored) {
+      recordIssueEvent(db, issueID, HUMAN_REVIEW_EVENT_TYPES.restored, {
+        reason: "terminal Run cannot bypass the still-open human review",
+        request_id: request.id,
+        revision: request.revision,
+        terminal_run_id: run.id,
+        terminal_run_status: run.status
+      });
+    }
+    return updated;
+  }).immediate();
+  runtime.bus?.publish({
+    issueId: restored.id,
+    projectId: restored.project_id,
+    status: "needs_user",
+    type: "issue.status_changed"
+  });
+  return restored;
+}
+
 function activityAppliesToCurrentIssueState(
   activity: PiAcceptanceActivity | null,
   issueUpdatedAt: string
@@ -215,6 +265,9 @@ export async function reviewHumanIssue(
   const action = normalizeAction(input.action);
   const comment = cleanString(input.comment);
   const request = requireCurrentReviewRequest(db, issueID, input);
+  const resolvedOrigin = reviewOrigin(db, issueID, request.evidence_refs);
+  request.origin_card_fingerprint ||= resolvedOrigin.cardFingerprint;
+  request.origin_run_id ||= resolvedOrigin.runID;
   if ((action === "request_changes" || action === "reject") && comment === "") {
     throw new Error(`${action} 必须填写具体意见`);
   }
@@ -238,6 +291,8 @@ export async function reviewHumanIssue(
   recordIssueEvent(db, issueID, "issue.human_review_answered.v1", {
     action,
     comment,
+    origin_card_fingerprint: request.origin_card_fingerprint,
+    origin_run_id: request.origin_run_id,
     request_id: request.id,
     revision: request.revision
   });
@@ -430,11 +485,44 @@ function requestFromPayload(payload: Record<string, unknown>, fallbackCreatedAt:
     id,
     issue_id: issueID,
     kind: reviewKind(payload.kind),
+    origin_card_fingerprint: cleanString(payload.origin_card_fingerprint)
+      || completionCardFingerprint(stringList(payload.evidence_refs)),
+    origin_run_id: cleanString(payload.origin_run_id),
     question,
     recommendation: cleanString(payload.recommendation),
     revision,
     status: "open"
   };
+}
+
+function reviewOrigin(
+  db: RunnerDatabase,
+  issueID: number,
+  evidenceRefs: string[]
+): { cardFingerprint: string; runID: string } {
+  const cardFingerprint = completionCardFingerprint(evidenceRefs);
+  if (cardFingerprint === "") return { cardFingerprint: "", runID: "" };
+  const event = listIssueEvents(db, issueID, {
+    limit: 100,
+    types: ["issue.completion_card.v1"]
+  }).find((candidate) => cleanString(objectPayload(candidate.payload).fingerprint) === cardFingerprint);
+  const card = objectValue(objectPayload(event?.payload ?? "").card);
+  return {
+    cardFingerprint,
+    runID: cleanString(objectValue(card.run).id)
+  };
+}
+
+function completionCardFingerprint(evidenceRefs: string[]): string {
+  return evidenceRefs
+    .map((reference) => reference.match(/^completion-card:([a-f0-9]{64})$/)?.[1] ?? "")
+    .find(Boolean) ?? "";
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
 function objectPayload(value: string): Record<string, unknown> {

@@ -50,7 +50,15 @@ export function prepareIssueStatusUpdate(
   const issues = ids.map((id) => mustGetIssue(db, id));
   const projectIDs = new Set(issues.map((issue) => issue.project_id));
   if (projectIDs.size !== 1) throw new Error("一次只能更新同一项目内的 Issue");
-  for (const issue of issues) assertStatusTransition(issue, input.status);
+  for (const issue of issues) {
+    if (issue.status === "needs_user" && input.status === "in_progress") {
+      throw new Error(
+        `Issue #${issue.id} 正在等待 human review；请使用 human_review_response 回答当前验收请求，` +
+        "不要用 issue_status_update 隐式创建新的 Run/Session"
+      );
+    }
+    assertStatusTransition(issue, input.status);
+  }
   return { issues, projectID: issues[0]!.project_id, targetStatus: input.status };
 }
 
@@ -123,9 +131,7 @@ async function updateOneIssueStatus(
     });
     return statusResult(issue, updated, input.status, false);
   }
-  const patch = input.status === "failed"
-    ? { error: cleanString(input.error) || input.reason, status: input.status }
-    : { error: "", status: input.status };
+  const patch = { error: "", status: input.status };
   return statusResult(issue, updateIssue(db, issue.id, patch), input.status, false);
 }
 

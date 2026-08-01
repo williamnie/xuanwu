@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 describe("PI recovery budget", () => {
-  test("honors the two-attempt issue recovery limit and ignores issues.attempt_count", async () => {
+  test("honors the six-attempt issue recovery limit and ignores issues.attempt_count", async () => {
     const db = await fixtureDb();
     try {
       insertProject(db, "demo");
@@ -26,11 +26,11 @@ describe("PI recovery budget", () => {
 
       expect(readPiRecoveryBudget(db, budgetInput(501, "issue.retry"))).toMatchObject({
         issue_attempts_24h: 0,
-        issue_budget_remaining: 2,
+        issue_budget_remaining: 6,
         status: "allow"
       });
 
-      for (const [index, status] of ["planned", "failed"].entries()) {
+      for (const [index, status] of ["planned", "failed", "progress", "no_progress", "executing", "failed"].entries()) {
         recordAttempt(db, {
           id: `issue-${index + 1}`,
           issueID: 501,
@@ -41,7 +41,7 @@ describe("PI recovery budget", () => {
 
       expect(readPiRecoveryBudget(db, budgetInput(501, "issue.retry"))).toMatchObject({
         diagnosis_code: "recovery_budget_exhausted",
-        issue_attempts_24h: 2,
+        issue_attempts_24h: 6,
         issue_budget_remaining: 0,
         recommended_action: "budget_exhausted",
         status: "issue_budget_exhausted"
@@ -51,31 +51,31 @@ describe("PI recovery budget", () => {
     }
   });
 
-  test("exhausts the third session resume without blocking other issue recoveries", async () => {
+  test("exhausts the seventh session resume without blocking other issue recoveries", async () => {
     const db = await fixtureDb();
     try {
       insertProject(db, "demo");
       insertIssue(db, 502, 1);
-      for (const index of [1, 2]) {
+      for (const index of [1, 2, 3, 4, 5, 6]) {
         recordAttempt(db, {
           actionType: "session.resume_followup",
           id: `resume-${index}`,
           issueID: 502,
           sessionID: "codex:thread-502",
           status: "progress",
-          at: `2026-06-18T01:0${index}:00Z`
+          at: `2026-06-18T01:${String(index).padStart(2, "0")}:00Z`
         });
       }
 
       expect(readPiRecoveryBudget(db, budgetInput(502, "session.resume_followup"))).toMatchObject({
         diagnosis_code: "session_recovery_exhausted",
         recommended_action: "budget_exhausted",
-        session_resume_attempts_24h: 2,
+        session_resume_attempts_24h: 6,
         session_resume_budget_remaining: 0,
         status: "session_resume_exhausted"
       });
       expect(readPiRecoveryBudget(db, budgetInput(502, "issue.retry"))).toMatchObject({
-        issue_attempts_24h: 2,
+        issue_attempts_24h: 6,
         issue_budget_remaining: 0,
         status: "issue_budget_exhausted"
       });
@@ -84,11 +84,11 @@ describe("PI recovery budget", () => {
     }
   });
 
-  test("returns defer-or-escalate when the project hourly budget is exhausted", async () => {
+  test("keeps project recovery unlimited while retaining hourly attempt telemetry", async () => {
     const db = await fixtureDb();
     try {
       insertProject(db, "demo");
-      for (let index = 0; index < 10; index++) {
+      for (let index = 0; index < 30; index++) {
         const issueID = 600 + index;
         insertIssue(db, issueID, 1);
         recordAttempt(db, {
@@ -103,11 +103,13 @@ describe("PI recovery budget", () => {
         ...budgetInput(601, "issue.retry"),
         projectLimit: 10
       })).toMatchObject({
-        project_attempts_1h: 10,
+        project_attempts_1h: 30,
         project_budget_remaining: 0,
-        project_defer_until: "2026-06-18T02:20:00Z",
-        recommended_action: "defer_or_escalate",
-        status: "project_budget_exhausted"
+        project_budget_unlimited: true,
+        project_defer_until: "",
+        project_limit: 0,
+        recommended_action: "allow",
+        status: "allow"
       });
     } finally {
       db.close();

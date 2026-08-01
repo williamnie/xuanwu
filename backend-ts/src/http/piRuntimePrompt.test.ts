@@ -178,6 +178,11 @@ describe("Xuanwu PI runtime prompt", () => {
       expect(prompt).toContain("must not edit code");
       expect(prompt).toContain("issue_state_repair_proposal is only for deterministic");
       expect(prompt).toContain("triage, todo, in_progress, or cancelled");
+      expect(prompt).toContain("It must never move needs_user to in_progress");
+      expect(prompt).toContain("call human_review_response with the current request id/revision");
+      expect(prompt).toContain("without a new execution Session");
+      expect(prompt).toContain("run_control interrupt stops only the current Run");
+      expect(prompt).toContain("Never leave an ended Run with an in_progress Issue");
       expect(prompt).toContain("最多追问一个关键问题");
       expect(prompt).toContain("Supervisor commitment context (operational projection, not long-term memory)");
       expect(prompt).toContain("xw.supervisor-commitment.v1");

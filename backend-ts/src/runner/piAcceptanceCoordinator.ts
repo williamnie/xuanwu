@@ -7,7 +7,10 @@ import {
   recordIssueCompletionCard,
   type CompletionCard
 } from "../domain/acceptance/completionCard.ts";
-import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
+import {
+  readIssueDecisionProjection,
+  restoreOpenHumanReviewAfterTerminalRun
+} from "../domain/review/humanReview.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import {
   readPiAcceptanceActivity,
@@ -48,6 +51,7 @@ export async function runPiAcceptanceCoordinatorOnce(
   input: PiAcceptanceCoordinatorInput
 ): Promise<PiAcceptanceCoordinatorResult> {
   const now = input.now ?? new Date();
+  restoreHumanOwnedTerminalIssues(input);
   const issues = dueIssues(input.database, now, input.cooldownMs ?? DEFAULT_COOLDOWN_MS);
   const result: PiAcceptanceCoordinatorResult = {
     failed: 0,
@@ -66,6 +70,12 @@ export async function runPiAcceptanceCoordinatorOnce(
     if (!outcome.ok) result.failed += 1;
   }
   return result;
+}
+
+function restoreHumanOwnedTerminalIssues(input: PiAcceptanceCoordinatorInput): void {
+  for (const issue of listIssues(input.database, { status: "in_progress" })) {
+    restoreOpenHumanReviewAfterTerminalRun(input.database, issue.id, { bus: input.bus });
+  }
 }
 
 export function requestPiAcceptanceCycle(

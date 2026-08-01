@@ -44,9 +44,7 @@ type CandidateInput = {
 
 type PolicyContextInput = {
   history: Record<string, unknown>;
-  now: Date;
   policy: ReturnType<typeof readProjectPiPolicy>;
-  projectEvents: IssueSupervisorEvent[];
 };
 
 type SessionContextInput = {
@@ -201,18 +199,13 @@ export function recoveryHistory(
 }
 
 export function policyContext(input: PolicyContextInput): Record<string, unknown> {
-  const { policy, history, projectEvents, now } = input;
-  const projectAttempts = projectEvents.filter((event) =>
-    isRecoveryAction(event) && Date.parse(event.created_at) >= now.getTime() - 60 * 60 * 1_000
-  ).length;
-  const projectBudgetRemaining = numberFromHistory(history.project_budget_remaining);
+  const { policy, history } = input;
   return {
     allowed_actions: jsonArray(policy.allowed_supervisor_actions_json),
     budget_remaining: history.budget_remaining,
     cooldown_seconds: policy.supervisor_cooldown_seconds,
     mode: "autonomous",
-    project_budget_remaining: projectBudgetRemaining ??
-      Math.max(0, policy.supervisor_max_recoveries_per_project_per_hour - projectAttempts),
+    project_budget_unlimited: true,
     rate_limit_wait_policy: policy.supervisor_rate_limit_wait_policy
   };
 }
@@ -358,7 +351,7 @@ function staleSession(
 }
 
 function latestTimestamp(...values: Array<string | undefined>): string {
-  return values.reduce((latest, value) => {
+  return values.reduce<string>((latest, value) => {
     const candidate = Date.parse(value ?? "");
     return Number.isFinite(candidate) && candidate > Date.parse(latest || "1970-01-01T00:00:00Z")
       ? value ?? latest
@@ -400,10 +393,6 @@ function consecutiveNoProgress(events: IssueSupervisorEvent[]): number {
 
 function outcome(event: IssueSupervisorEvent | undefined): string {
   return clean(objectValue(parsePayload(event?.payload_json ?? "{}")).outcome);
-}
-
-function numberFromHistory(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function isRecoveryAction(event: IssueSupervisorEvent): boolean {

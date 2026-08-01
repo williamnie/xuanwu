@@ -7,10 +7,12 @@ import { validateToolArguments } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listAutomations } from "../db/repositories/automations.ts";
 import type { AgentSession } from "../db/repositories/agentSessions.ts";
-import { getIssue, listIssues } from "../db/repositories/issues.ts";
+import { getIssue, listIssueRuns, listIssues } from "../db/repositories/issues.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { getPiAction, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
+import { createHumanReviewRequest, readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 import { createPiRunnerActions, type PiRunnerActionLayer } from "./runnerActions.ts";
 import { createPiRunnerActionTools, PI_RUNNER_ACTION_TOOL_NAMES } from "./runnerActionTools.ts";
 
@@ -43,6 +45,7 @@ describe("PI runner action tools", () => {
     const issueExecution = toolByName(tools, "issue_execution_status");
     const completionReconcile = toolByName(tools, "issue_acceptance_request");
     const humanReview = toolByName(tools, "human_review_request_create");
+    const humanReviewResponse = toolByName(tools, "human_review_response");
     const watchCreate = toolByName(tools, "issue_completion_watch_create");
     const watchList = toolByName(tools, "issue_completion_watch_list");
     const watchCancel = toolByName(tools, "issue_completion_watch_cancel");
@@ -79,6 +82,19 @@ describe("PI runner action tools", () => {
       kind: "decision",
       question: "是否接受这些技术和产品取舍？",
       recommendation: "接受"
+    });
+    expect(validateArgs(humanReviewResponse, {
+      action: "accept",
+      comment: "真实 smoke 后续由用户手动执行",
+      issue_id: 827,
+      review_request_id: "human-review-827",
+      review_revision: 1
+    })).toEqual({
+      action: "accept",
+      comment: "真实 smoke 后续由用户手动执行",
+      issue_id: 827,
+      review_request_id: "human-review-827",
+      review_revision: 1
     });
     expect(validateArgs(watchCreate, {
       issue_ids: [7, 8],
@@ -225,6 +241,13 @@ describe("PI runner action tools", () => {
       question: "是否接受这些技术和产品取舍？",
       recommendation: "接受"
     }, undefined, undefined, {} as never);
+    await humanReviewResponse.execute("tool-human-review-response", {
+      action: "accept",
+      comment: "真实 smoke 后续由用户手动执行",
+      issue_id: 827,
+      review_request_id: "human-review-827",
+      review_revision: 1
+    }, undefined, undefined, {} as never);
     await diagnose.execute("tool-diagnose", { project_id: "demo" }, undefined, undefined, {} as never);
     await repair.execute("tool-repair", {
       diagnosis_code: "done_missing_verification_evidence",
@@ -266,6 +289,13 @@ describe("PI runner action tools", () => {
         kind: "decision",
         question: "是否接受这些技术和产品取舍？",
         recommendation: "接受"
+      }],
+      ["respondToHumanReview", {
+        action: "accept",
+        comment: "真实 smoke 后续由用户手动执行",
+        issue_id: 827,
+        review_request_id: "human-review-827",
+        review_revision: 1
       }],
       ["diagnoseIssueState", { project_id: "demo" }],
       ["createIssueStateRepairProposal", { diagnosis_code: "done_missing_verification_evidence", issue_id: 1, operation: "patch_status" }],
@@ -440,6 +470,51 @@ describe("PI runner action tools", () => {
         "issue.comment"
       ]);
       expect(listIssues(fixture.db, { projectId: fixture.project.id })[0]?.comment_count).toBe(1);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("accepts an open human review without creating a retry Run or Provider Session", async () => {
+    const fixture = await openFixture();
+    try {
+      const issueID = insertIssue(fixture.db, {
+        projectID: fixture.project.id,
+        status: "needs_user",
+        title: "Completed implementation awaiting smoke decision"
+      });
+      const run = createIssueRun(fixture.db, issueID);
+      fixture.db.sqlite.run(
+        "update issue_runs set status='succeeded', ended_at=? where id=?",
+        ["2026-08-01T00:00:00Z", run.id]
+      );
+      const request = createHumanReviewRequest(fixture.db, issueID, {
+        question: "是否接受离线实现，并由用户后续手动执行真实 smoke？"
+      });
+      const actions = createPiRunnerActions(fixture.db, {
+        project: fixture.project,
+        source: "runner_chat"
+      });
+
+      await actions.respondToHumanReview({
+        action: "accept",
+        comment: "接受当前离线实现；真实 smoke 后续手动执行。",
+        issue_id: issueID,
+        review_request_id: request.id,
+        review_revision: request.revision
+      });
+
+      expect(getIssue(fixture.db, issueID)?.status).toBe("in_progress");
+      expect(listIssueRuns(fixture.db, issueID)).toHaveLength(1);
+      expect(readIssueDecisionProjection(fixture.db, issueID)).toMatchObject({
+        owner: "pi",
+        phase: "pi_queued",
+        request: { id: request.id, status: "accepted" }
+      });
+      expect(listPiActions(fixture.db, { status: "completed" })).toContainEqual(expect.objectContaining({
+        action_type: "human_review.respond",
+        issue_id: issueID
+      }));
     } finally {
       await fixture.close();
     }
@@ -1287,6 +1362,7 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     createIssueBatchProposal: record("createIssueBatchProposal"),
     createIssueProposal: record("createIssueProposal"),
     createHumanReviewRequest: record("createHumanReviewRequest"),
+    respondToHumanReview: record("respondToHumanReview"),
     requestIssueAcceptanceAction: record("requestIssueAcceptanceAction"),
     createIssueStateRepairProposal: record("createIssueStateRepairProposal"),
     createReportWorkflow: record("createReportWorkflow"),

@@ -67,6 +67,7 @@ export type RuntimeSessionInput = {
 export const PI_RUNNER_CHAT_ACTIONS = [
   ...PI_SAFE_ACTION_TYPES,
   "agent.workflow_request",
+  "human_review.respond",
   "issue.create",
   "issue.cancel",
   "issue.delete",
@@ -88,6 +89,7 @@ export const PI_RUNNER_CHAT_ACTIONS = [
 
 export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
   "agent.workflow_request",
+  "human_review.respond",
   "issue.create",
   "issue.cancel",
   "issue.delete",

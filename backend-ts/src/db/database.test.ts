@@ -255,7 +255,8 @@ describe("Bun SQLite database connection", () => {
         { id: "061_project_mandatory_takeover" },
         { id: "062_reusable_pi_memory" },
         { id: "063_pi_persona" },
-        { id: "064_pi_owned_issue_lifecycle" }
+        { id: "064_pi_owned_issue_lifecycle" },
+        { id: "065_unlimited_project_recovery_budget" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
@@ -375,8 +376,8 @@ describe("Bun SQLite database connection", () => {
         allowed_skill_intents_json: "'[]'",
         allowed_supervisor_actions_json: "'[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"issue.state_repair\",\"needs_user.escalate\"]'",
         supervisor_cooldown_seconds: "300",
-        supervisor_max_recoveries_per_issue: "2",
-        supervisor_max_recoveries_per_project_per_hour: "10",
+        supervisor_max_recoveries_per_issue: "6",
+        supervisor_max_recoveries_per_project_per_hour: "0",
         supervisor_rate_limit_wait_policy: "'respect_retry_after'"
       });
       expect(columnDefaults(connection, "pi_reports")).toMatchObject({
@@ -882,7 +883,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 63 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 64 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

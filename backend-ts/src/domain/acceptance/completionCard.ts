@@ -69,6 +69,45 @@ export type CompletionCardSessionInput = {
   summary?: Record<string, unknown>;
 };
 
+export type CompletionCardRun = {
+  attempt: number;
+  ended_at: string;
+  id: string;
+  provider: string;
+  provider_session_id: string;
+  provider_turn_id: string;
+  started_at: string;
+  status: string;
+};
+
+export type CompletionCardHumanReview = {
+  action: string;
+  answered_at: string;
+  comment: string;
+  intervening_runs: Array<{
+    attempt: number;
+    control_operation: string;
+    control_outcome: string;
+    ended_at: string;
+    error: string;
+    exit_reason: string;
+    id: string;
+    status: string;
+  }>;
+  origin_card_fingerprint: string;
+  origin_completion: null | {
+    commands: { items: CompletionCardCommand[]; omitted: number; total: number };
+    final_message: string;
+    git: CompletionCardGit;
+    provider_outcome: { outcome: string; reason: string };
+    run: CompletionCardRun;
+    warnings: string[];
+  };
+  origin_run_id: string;
+  request_id: string;
+  review_revision: number;
+};
+
 export type CompletionCard = {
   acceptance: {
     criteria: Array<{ description: string; id: string; required: boolean }>;
@@ -83,6 +122,7 @@ export type CompletionCard = {
   fingerprint: string;
   generated_at: string;
   git: CompletionCardGit;
+  human_review: CompletionCardHumanReview | null;
   issue: {
     id: number;
     project_id: string;
@@ -92,16 +132,7 @@ export type CompletionCard = {
     goal: string;
   };
   provider_outcome: { outcome: string; reason: string };
-  run: {
-    attempt: number;
-    ended_at: string;
-    id: string;
-    provider: string;
-    provider_session_id: string;
-    provider_turn_id: string;
-    started_at: string;
-    status: string;
-  };
+  run: CompletionCardRun;
   session: CompletionCardSession;
   warnings: string[];
 };
@@ -124,7 +155,8 @@ export async function buildIssueCompletionCard(
   if (!issue) throw new Error(`Issue #${issueID} not found`);
   const project = getProject(db, issue.project_id);
   if (!project) throw new Error(`Project ${issue.project_id} not found`);
-  const run = listIssueRuns(db, issueID).at(-1);
+  const runs = listIssueRuns(db, issueID);
+  const run = runs.at(-1);
   if (!run || run.ended_at === "") throw new Error("completion card requires an ended canonical Run");
   const work = projectIssueAsWork(db, issue);
   const events = listIssueEvents(db, issueID, {
@@ -133,6 +165,10 @@ export async function buildIssueCompletionCard(
       "issue.log",
       "issue.runner_outcome",
       "issue.pi_acceptance_requested.v1",
+      "issue.completion_card.v1",
+      "issue.human_review_answered.v1",
+      "issue.human_review_requested.v1",
+      "run.lifecycle.outcome.v1",
       COMPLETION_GIT_OBSERVATION_EVENT_TYPE
     ]
   });
@@ -165,6 +201,7 @@ export async function buildIssueCompletionCard(
     contract: COMPLETION_CARD_CONTRACT,
     final_message: latestFinalMessage(events, run),
     git,
+    human_review: humanReviewResolution(events, runs),
     issue: {
       goal: issue.description.trim() || issue.title,
       id: issue.id,
@@ -245,7 +282,10 @@ export function assertCompletionCardIntegrity(value: unknown): asserts value is 
   const fingerprint = cleanString(card.fingerprint);
   if (!/^[a-f0-9]{64}$/.test(fingerprint)) throw new Error("completion card fingerprint is invalid");
   if (!Number.isFinite(Date.parse(cleanString(card.generated_at)))) throw new Error("completion card generated_at is invalid");
-  if (completionCardFingerprint(card) !== fingerprint) throw new Error("completion card fingerprint does not match its facts");
+  const computedFingerprint = completionCardFingerprint(card);
+  if (computedFingerprint !== fingerprint) {
+    throw new Error(`completion card fingerprint does not match its facts (${fingerprint} != ${computedFingerprint})`);
+  }
 }
 
 export function completionCardFingerprint(value: Record<string, unknown> | CompletionCard): string {
@@ -466,6 +506,111 @@ function providerOutcome(events: ReturnType<typeof listIssueEvents>, run: IssueR
     return { outcome: cleanString(payload.outcome), reason: cleanString(payload.reason) };
   }
   return { outcome: "unknown", reason: "" };
+}
+
+function humanReviewResolution(
+  events: ReturnType<typeof listIssueEvents>,
+  runs: IssueRun[]
+): CompletionCardHumanReview | null {
+  const answered = [...events].reverse().find((event) => event.type === "issue.human_review_answered.v1");
+  if (!answered) return null;
+  const response = objectValue(parseJson(answered.payload));
+  const requestID = cleanString(response.request_id);
+  const requestEvent = [...events].reverse().find((event) => {
+    if (event.type !== "issue.human_review_requested.v1") return false;
+    return cleanString(objectValue(parseJson(event.payload)).id) === requestID;
+  });
+  const request = objectValue(parseJson(requestEvent?.payload));
+  const evidenceRefs = stringArray(request.evidence_refs);
+  const originFingerprint = cleanString(response.origin_card_fingerprint)
+    || cleanString(request.origin_card_fingerprint)
+    || evidenceRefs.map((reference) => reference.match(/^completion-card:([a-f0-9]{64})$/)?.[1] ?? "")
+      .find(Boolean)
+    || "";
+  const originEvent = [...events].reverse().find((event) => {
+    if (event.type !== COMPLETION_CARD_EVENT_TYPE) return false;
+    return cleanString(objectValue(parseJson(event.payload)).fingerprint) === originFingerprint;
+  });
+  const originCard = objectValue(objectValue(parseJson(originEvent?.payload)).card);
+  const originRun = objectValue(originCard.run);
+  const originRunID = cleanString(response.origin_run_id)
+    || cleanString(request.origin_run_id)
+    || cleanString(originRun.id);
+  const originAttempt = runs.find((candidate) => candidate.id === originRunID)?.attempt ?? 0;
+  const reviewRevision = integer(response.revision) ?? integer(request.revision) ?? 0;
+  return {
+    action: cleanString(response.action),
+    answered_at: answered.created_at,
+    comment: boundedUtf8(redactSensitiveText(cleanString(response.comment)), 4_000),
+    intervening_runs: runs.filter((candidate) => candidate.attempt > originAttempt).map((candidate) => {
+      const control = runControlOutcome(events, candidate);
+      return {
+        attempt: candidate.attempt,
+        control_operation: control.operation,
+        control_outcome: control.outcome,
+        ended_at: candidate.ended_at,
+        error: boundedUtf8(redactSensitiveText(candidate.error), 1_000),
+        exit_reason: candidate.exit_reason,
+        id: candidate.id,
+        status: candidate.status
+      };
+    }),
+    origin_card_fingerprint: originFingerprint,
+    origin_completion: completionCardSummary(originCard),
+    origin_run_id: originRunID,
+    request_id: requestID,
+    review_revision: reviewRevision
+  };
+}
+
+function runControlOutcome(
+  events: ReturnType<typeof listIssueEvents>,
+  run: IssueRun
+): { operation: string; outcome: string } {
+  for (const event of [...events].reverse()) {
+    if (event.type !== "run.lifecycle.outcome.v1") continue;
+    const payload = objectValue(parseJson(event.payload));
+    const issueRunID = cleanString(payload.issue_run_id);
+    const runID = cleanString(payload.run_id);
+    if (issueRunID !== run.id && runID !== run.id && !runID.endsWith(`:${run.id}`)) continue;
+    return {
+      operation: cleanString(payload.operation),
+      outcome: cleanString(payload.outcome)
+    };
+  }
+  return { operation: "", outcome: "" };
+}
+
+function completionCardSummary(card: Record<string, unknown>): CompletionCardHumanReview["origin_completion"] {
+  if (Object.keys(card).length === 0) return null;
+  const run = objectValue(card.run);
+  const commands = objectValue(card.commands);
+  const git = objectValue(card.git);
+  if (cleanString(run.id) === "" || !Array.isArray(commands.items)) return null;
+  return {
+    commands: {
+      items: commands.items as CompletionCardCommand[],
+      omitted: nonNegativeInteger(commands.omitted),
+      total: nonNegativeInteger(commands.total)
+    },
+    final_message: boundedUtf8(redactSensitiveText(cleanString(card.final_message)), MAX_FINAL_MESSAGE_BYTES),
+    git: git as CompletionCardGit,
+    provider_outcome: {
+      outcome: cleanString(objectValue(card.provider_outcome).outcome),
+      reason: boundedUtf8(redactSensitiveText(cleanString(objectValue(card.provider_outcome).reason)), 2_000)
+    },
+    run: {
+      attempt: nonNegativeInteger(run.attempt),
+      ended_at: cleanString(run.ended_at),
+      id: cleanString(run.id),
+      provider: cleanString(run.provider),
+      provider_session_id: cleanString(run.provider_session_id),
+      provider_turn_id: cleanString(run.provider_turn_id),
+      started_at: cleanString(run.started_at),
+      status: cleanString(run.status)
+    },
+    warnings: stringArray(card.warnings)
+  };
 }
 
 function hasCompleteTerminalObservationContract(

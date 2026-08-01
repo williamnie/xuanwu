@@ -3,6 +3,7 @@ import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "./supervisorControlCon
 
 const RUNNER_CHAT_MUTATION_ACTIONS = new Set([
   "agent.workflow_request",
+  "human_review.respond",
   "issue.create",
   "issue.cancel",
   "issue.delete",

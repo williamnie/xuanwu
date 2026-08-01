@@ -10,7 +10,7 @@ export function reviewConversationAuthorization(): PiGatePolicy {
     allowedActions: ["memory.search", "memory.remember"],
     forbiddenActions: [
       "issue.create", "issue.enqueue", "issue.schedule_enqueue",
-      "issue.retry", "issue.state_repair", "needs_user.escalate",
+      "human_review.respond", "issue.retry", "issue.state_repair", "needs_user.escalate",
       "session.steer", "agent.workflow_request", "agent.executor_assign"
     ],
     mode: "attended"

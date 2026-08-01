@@ -257,9 +257,7 @@ function actionSummary(action: PiAction | null): IssueSupervisorActionSummary {
 }
 
 function budgetRemaining(context: IssueSupervisorRecoveryContext): number | undefined {
-  const values = [numberValue(context.policy.budget_remaining), numberValue(context.policy.project_budget_remaining)]
-    .filter((value) => value !== undefined) as number[];
-  return values.length === 0 ? undefined : Math.min(...values);
+  return numberValue(context.policy.budget_remaining);
 }
 
 function cooldownUntil(input: IssueSupervisorActionInput): string {

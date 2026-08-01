@@ -106,6 +106,7 @@ function candidateSignals(
     issue_id: issueID(context),
     project_id: projectID(context),
     project_budget_remaining: numberValue(context.policy.project_budget_remaining),
+    project_budget_unlimited: context.policy.project_budget_unlimited === true,
     provider: clean(context.session.provider) || clean(context.provider_error?.provider),
     provider_error_category: clean(context.provider_error?.category),
     provider_session_id: clean(context.session.provider_session_id),
@@ -142,6 +143,7 @@ function recoveryBudgetSignal(context: IssueSupervisorRecoveryContext): Heartbea
     budget_remaining: numberValue(context.recovery_history.budget_remaining),
     issue_id: issue,
     project_budget_remaining: numberValue(context.policy.project_budget_remaining),
+    project_budget_unlimited: context.policy.project_budget_unlimited === true,
     project_id: projectID(context)
   };
 }

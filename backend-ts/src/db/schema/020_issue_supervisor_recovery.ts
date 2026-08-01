@@ -40,8 +40,8 @@ export const issueSupervisorRecoveryMigration: SqlMigration = {
     addPolicyColumn(sqlite, "allowed_supervisor_actions_json", `text not null default '${DEFAULT_SUPERVISOR_ACTIONS_JSON}'`);
     addPolicyColumn(sqlite, "supervisor_mode", "text not null default 'autonomous'");
     addPolicyColumn(sqlite, "supervisor_cooldown_seconds", "integer not null default 300");
-    addPolicyColumn(sqlite, "supervisor_max_recoveries_per_issue", "integer not null default 2");
-    addPolicyColumn(sqlite, "supervisor_max_recoveries_per_project_per_hour", "integer not null default 10");
+    addPolicyColumn(sqlite, "supervisor_max_recoveries_per_issue", "integer not null default 6");
+    addPolicyColumn(sqlite, "supervisor_max_recoveries_per_project_per_hour", "integer not null default 0");
     addPolicyColumn(sqlite, "supervisor_rate_limit_wait_policy", "text not null default 'respect_retry_after'");
     upgradeSupervisorDefaults(sqlite);
   }

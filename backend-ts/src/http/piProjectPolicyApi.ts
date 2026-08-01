@@ -56,7 +56,7 @@ function normalizePolicyBody(body: Record<string, unknown>) {
     retry_policy: objectField(body, ["retry_policy_json", "retry_policy"], "retry_policy"),
     supervisor_cooldown_seconds: positiveIntegerField(body, "supervisor_cooldown_seconds"),
     supervisor_max_recoveries_per_issue: positiveIntegerField(body, "supervisor_max_recoveries_per_issue"),
-    supervisor_max_recoveries_per_project_per_hour: positiveIntegerField(body, "supervisor_max_recoveries_per_project_per_hour"),
+    supervisor_max_recoveries_per_project_per_hour: unlimitedProjectRecoveryField(body),
     supervisor_rate_limit_wait_policy: supervisorWaitPolicy(body),
     timezone: stringField(body, "timezone"),
     working_hours: objectField(body, ["working_hours_json", "working_hours"], "working_hours")
@@ -195,6 +195,15 @@ function positiveIntegerField(body: Record<string, unknown>, key: string): numbe
   const number = typeof value === "number" ? value : Number(stringValue(value));
   if (Number.isInteger(number) && number > 0) return number;
   throw new HttpError(400, `${key} 必须是正整数`);
+}
+
+function unlimitedProjectRecoveryField(body: Record<string, unknown>): number | undefined {
+  const key = "supervisor_max_recoveries_per_project_per_hour";
+  if (!Object.hasOwn(body, key)) return undefined;
+  const value = body[key];
+  const number = typeof value === "number" ? value : Number(stringValue(value));
+  if (Number.isInteger(number) && number >= 0) return 0;
+  throw new HttpError(400, `${key} 必须是非负整数；0 表示项目级不限制`);
 }
 
 function stringField(body: Record<string, unknown>, key: string): string | undefined {

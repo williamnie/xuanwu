@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import { getIssue } from "../db/repositories/issues.ts";
+import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
+import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import {
   allowedIssueStatusTargets,
   executeIssueStatusUpdate,
@@ -80,6 +81,33 @@ describe("PI issue status actions", () => {
       })).toThrow(/不允许从 done 移动到 todo/);
       expect(getIssue(fixture.db, done.id)?.status).toBe("done");
       expect(getIssue(fixture.db, triage.id)?.status).toBe("triage");
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("does not turn a needs_user acceptance response into a retry Run", async () => {
+    const fixture = await openFixture();
+    try {
+      const issue = createIssue(fixture.db, {
+        project_id: "demo",
+        status: "needs_user",
+        title: "Completed implementation awaiting user acceptance"
+      });
+      const run = createIssueRun(fixture.db, issue.id);
+      fixture.db.sqlite.run(
+        "update issue_runs set status='succeeded', ended_at=? where id=?",
+        ["2026-08-01T00:00:00Z", run.id]
+      );
+
+      expect(() => prepareIssueStatusUpdate(fixture.db, {
+        issue_ids: [issue.id],
+        reason: "用户接受当前实现，真实 smoke 后续手动执行",
+        status: "in_progress"
+      })).toThrow(/human_review_response/);
+
+      expect(getIssue(fixture.db, issue.id)?.status).toBe("needs_user");
+      expect(listIssueRuns(fixture.db, issue.id)).toHaveLength(1);
     } finally {
       await fixture.close();
     }

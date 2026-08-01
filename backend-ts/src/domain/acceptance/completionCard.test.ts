@@ -38,7 +38,7 @@ describe("completion card", () => {
          values ('demo', 'Demo', ?, 'codex', 1, ?, ?)`,
         [root, "2026-07-31T05:00:00Z", "2026-07-31T05:00:00Z"]
       );
-      const issue = createIssue(db, { project_id: "demo", status: "pending_verification", title: "Node contract" });
+      const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Node contract" });
       const run = createIssueRun(db, issue.id);
       updateIssueRuntime(db, issue.id, {
         issue_run_id: run.id,

@@ -236,7 +236,7 @@ Payload：
 - `supervisor_mode`: `off | propose_only | assisted | autonomous`
 - `supervisor_cooldown_seconds`
 - `supervisor_max_recoveries_per_issue`
-- `supervisor_max_recoveries_per_project_per_hour`
+- `supervisor_max_recoveries_per_project_per_hour`（兼容字段，固定为 `0`，表示项目级不限制）
 - `supervisor_rate_limit_wait_policy`: `respect_retry_after | default_cooldown | ask`
 
 ### 6.2 默认策略
@@ -434,7 +434,7 @@ Supervisor recovery 的 live 默认值是保守防护：
 
 - `supervisor_mode='propose_only'`：只采集信号、写入 decision/proposal/audit，不自动恢复 session。
 - `allowed_supervisor_actions_json='[]'`：即使切到 `autonomous`，没有显式 allowlist 也不会执行恢复动作。
-- `supervisor_cooldown_seconds=300`，`supervisor_max_recoveries_per_issue=2`，`supervisor_max_recoveries_per_project_per_hour=10`。
+- `supervisor_cooldown_seconds=300`，`supervisor_max_recoveries_per_issue=6`，`supervisor_max_recoveries_per_project_per_hour=0`（项目级不限制）；同一 Session 24 小时最多续跑 6 次。
 - `supervisor_rate_limit_wait_policy='respect_retry_after'`：429 带 `Retry-After` / reset 时必须等窗口；429 无窗口时按 policy cooldown 生成等待候选。
 - `session.steer` 仍是 high-risk action；默认不进 supervisor allowlist。
 - 401/auth、permission、quota、业务失败、测试失败只允许 `needs_user` / `blocked`，不得自动恢复。
@@ -463,8 +463,8 @@ curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR}/api/projects/<project-id>/pi-pol
     "supervisor_mode":"autonomous",
     "allowed_supervisor_actions":["issue.retry_after","session.resume_followup"],
     "supervisor_cooldown_seconds":900,
-    "supervisor_max_recoveries_per_issue":2,
-    "supervisor_max_recoveries_per_project_per_hour":6,
+    "supervisor_max_recoveries_per_issue":6,
+    "supervisor_max_recoveries_per_project_per_hour":0,
     "supervisor_rate_limit_wait_policy":"respect_retry_after"
   }'
 ```

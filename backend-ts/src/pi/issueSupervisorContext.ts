@@ -94,11 +94,6 @@ function buildIssueSupervisorRecoveryContextFromEvents(
     eventTypes: ["action", "result"],
     issueId: issue.id
   });
-  const projectSupervisorEvents = listIssueSupervisorEvents(db, {
-    createdAfter: new Date(now.getTime() - 60 * 60 * 1_000).toISOString(),
-    eventTypes: ["action"],
-    projectId: issue.project_id
-  });
   const budget = readPiRecoveryBudget(db, {
     actionType: "session.resume_followup",
     issueID: issue.id,
@@ -139,7 +134,7 @@ function buildIssueSupervisorRecoveryContextFromEvents(
     }),
     issue: issueContext(issue),
     latest_run: latestRun ? runContext(latestRun) : null,
-    policy: policyContext({ policy, history, projectEvents: projectSupervisorEvents, now }),
+    policy: policyContext({ policy, history }),
     project: projectContext(project),
     provider_error: providerError,
     recent_events: recentEvents,

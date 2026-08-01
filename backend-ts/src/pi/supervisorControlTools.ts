@@ -109,7 +109,7 @@ export function createPiSupervisorControlTools(
       "Read one authoritative Run with compact ordered Attempt projections.",
       Type.Object({ run_id: runID }, objectOptions), actions.runRead),
     controlTool("run_control", "Run Control",
-      "Interrupt, resume, or retry one Run through the audited Run command service and provider preconditions.",
+      "Interrupt, resume, or retry one Run through the audited Run command service and provider preconditions. Interrupt is Run-only: for an Issue-linked Run, read the terminal state and resolve the Issue before ending the turn.",
       Type.Object({
         action: Type.Union([Type.Literal("interrupt"), Type.Literal("resume"), Type.Literal("retry")]),
         expected_attempt_revision: Type.Optional(nonNegativeRevision),

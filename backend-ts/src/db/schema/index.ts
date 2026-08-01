@@ -62,6 +62,7 @@ import { projectMandatoryTakeoverMigration } from "./061_project_mandatory_takeo
 import { reusablePiMemoryMigration } from "./062_reusable_pi_memory.ts";
 import { piOwnedIssueLifecycleMigration } from "./064_pi_owned_issue_lifecycle.ts";
 import { piPersonaMigration } from "./063_pi_persona.ts";
+import { unlimitedProjectRecoveryBudgetMigration } from "./065_unlimited_project_recovery_budget.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -127,5 +128,6 @@ export const migrations = [
   projectMandatoryTakeoverMigration,
   reusablePiMemoryMigration,
   piPersonaMigration,
-  piOwnedIssueLifecycleMigration
+  piOwnedIssueLifecycleMigration,
+  unlimitedProjectRecoveryBudgetMigration
 ];

@@ -12,6 +12,7 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "report_workflow_request",
   "needs_user_escalation",
   "human_review_request_create",
+  "human_review_response",
   "issue_list",
   "issue_status_summary",
   "issue_execution_status",
@@ -255,6 +256,19 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
       actions.requestIssueAcceptanceAction),
     actionTool("issue_read", "Issue Read", "Read one runner Issue with its full body, dependency readiness, compact Run state, recent events, and current PI decision state.",
       Type.Object({ id: positiveID }, objectOptions), actions.readIssue),
+    actionTool("human_review_response", "Human Review Response",
+      "Answer the current open human review. accept re-runs PI acceptance against the completed Run without creating a new execution Session; request_changes continues the same Provider Session in a new Run/Turn. Never replace this with issue_status_update.",
+      Type.Object({
+        action: Type.Union([
+          Type.Literal("accept"),
+          Type.Literal("request_changes"),
+          Type.Literal("reject")
+        ]),
+        comment: optionalString,
+        issue_id: positiveID,
+        review_request_id: requiredText,
+        review_revision: positiveID
+      }, objectOptions), actions.respondToHumanReview),
     actionTool("issue_create_proposal", "Issue Create Proposal",
       "Create a high-risk pending proposal for a new issue; does not create the issue directly.",
       Type.Object({

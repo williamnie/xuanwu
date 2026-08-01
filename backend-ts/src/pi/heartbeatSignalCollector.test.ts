@@ -37,7 +37,10 @@ describe("PI heartbeat signal collector", () => {
       expect(snapshot.issue_runs.recent[0]).toMatchObject({ issue_id: issueID, run_id: "run-a", status: "failed" });
       expect(snapshot.agent_sessions).toMatchObject({ total: 1, status_counts: { done: 1 } });
       expect(snapshot.agent_sessions.recent[0]).toMatchObject({ issue_id: issueID, session_key: "codex:thread-a" });
-      expect(snapshot.project_settings.pi_policy?.verification_policy).toMatchObject({ pending_timeout_minutes: 1440 });
+      expect(snapshot.project_settings.pi_policy).toMatchObject({
+        supervisor_max_recoveries_per_issue: 6,
+        supervisor_max_recoveries_per_project_per_hour: 0
+      });
       expect(snapshot.project_settings.pi_settings).toEqual({ managed: true });
       expect(snapshot.project_settings.project).toMatchObject({ id: "demo", provider: "codex" });
       expect(rowCount(db, "pi_actions")).toBe(0);

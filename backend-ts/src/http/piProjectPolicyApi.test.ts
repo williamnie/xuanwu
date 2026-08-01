@@ -32,8 +32,8 @@ describe("PI project policy API", () => {
         quiet_hours: { daily: [{ end: "08:00", start: "22:00" }] },
         retry_policy: { enabled: true, max_attempts: 2, backoff_minutes: [15, 60] },
         supervisor_cooldown_seconds: 900,
-        supervisor_max_recoveries_per_issue: 3,
-        supervisor_max_recoveries_per_project_per_hour: 12,
+        supervisor_max_recoveries_per_issue: 6,
+        supervisor_max_recoveries_per_project_per_hour: 0,
         supervisor_rate_limit_wait_policy: "default_cooldown",
         timezone: "Asia/Shanghai",
         working_hours: { end: "18:00", start: "09:00", weekdays: [1, 2, 3, 4, 5] }
@@ -53,8 +53,8 @@ describe("PI project policy API", () => {
       expect(body).toMatchObject({
         project_id: "demo",
         supervisor_cooldown_seconds: 900,
-        supervisor_max_recoveries_per_issue: 3,
-        supervisor_max_recoveries_per_project_per_hour: 12,
+        supervisor_max_recoveries_per_issue: 6,
+        supervisor_max_recoveries_per_project_per_hour: 0,
         supervisor_rate_limit_wait_policy: "default_cooldown",
         timezone: "Asia/Shanghai"
       });

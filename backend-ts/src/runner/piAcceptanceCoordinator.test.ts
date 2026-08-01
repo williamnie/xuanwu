@@ -4,12 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import type { CompletionCard } from "../domain/acceptance/completionCard.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { pausePiHeartbeat } from "../db/repositories/pi.ts";
-import { createHumanReviewRequest, readIssueDecisionProjection } from "../domain/review/humanReview.ts";
+import {
+  createHumanReviewRequest,
+  readIssueDecisionProjection,
+  reviewHumanIssue
+} from "../domain/review/humanReview.ts";
 import type { PiAcceptanceRuntimeResult } from "../pi/issueAcceptance.ts";
 import type { ExecutorProvider, ProviderRecoveryInput, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 import { runPiAcceptanceCoordinatorOnce } from "./piAcceptanceCoordinator.ts";
@@ -63,6 +68,83 @@ describe("issue-scoped PI acceptance coordinator", () => {
       });
       expect(result).toMatchObject({ issues: 0, projects: 0, started: 0 });
       expect(calls).toBe(0);
+      expect(getIssue(db, issue.id)?.status).toBe("needs_user");
+      expect(eventTypes(db, issue.id)).toContain("issue.human_review_restored.v1");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("regression #827: accepts the original completion after interrupting a mistaken retry without a third Run", async () => {
+    const db = await fixture();
+    try {
+      const issue = completedIssue(db, "Provider implementation");
+      const originalRun = listIssueRuns(db, issue.id)[0]!;
+      await runPiAcceptanceCoordinatorOnce({
+        database: db,
+        decideIssueAcceptance: async () => acceptance("needs_user")
+      });
+      const request = readIssueDecisionProjection(db, issue.id).request!;
+      expect(getIssue(db, issue.id)?.status).toBe("needs_user");
+      expect(request.origin_card_fingerprint).toMatch(/^[a-f0-9]{64}$/);
+      expect(request.origin_run_id).toBe(originalRun.id);
+      expect(request.status).toBe("open");
+
+      updateIssue(db, issue.id, { status: "in_progress" });
+      const mistakenRun = createIssueRun(db, issue.id);
+      db.sqlite.run(
+        "update issue_runs set status='failed', ended_at=?, exit_reason='provider_reported_failed', error='missing turn payload' where id=?",
+        ["2026-08-01T13:06:18Z", mistakenRun.id]
+      );
+      recordIssueEvent(db, issue.id, "run.lifecycle.outcome.v1", {
+        operation: "interrupt",
+        outcome: "interrupted",
+        run_id: mistakenRun.id
+      });
+      recordIssueEvent(db, issue.id, "issue.pi_acceptance_requested.v1", {
+        issue_run_id: mistakenRun.id,
+        provider_outcome: "failed",
+        provider_reason: "missing turn payload"
+      });
+
+      await runPiAcceptanceCoordinatorOnce({
+        database: db,
+        decideIssueAcceptance: async () => acceptance("accept")
+      });
+      expect(getIssue(db, issue.id)?.status).toBe("needs_user");
+
+      await reviewHumanIssue(db, issue.id, {
+        action: "accept",
+        comment: "真实 smoke 后续由用户手动执行；接受原实现。",
+        review_request_id: request.id,
+        review_revision: request.revision
+      });
+      let seenCard: CompletionCard | undefined;
+      const result = await runPiAcceptanceCoordinatorOnce({
+        database: db,
+        decideIssueAcceptance: async (card) => {
+          seenCard = structuredClone(card);
+          return acceptance("accept");
+        }
+      });
+
+      expect(result).toMatchObject({ failed: 0, started: 1 });
+      expect(seenCard?.run.id).toBe(mistakenRun.id);
+      expect(seenCard?.human_review?.action).toBe("accept");
+      expect(seenCard?.human_review?.comment).toContain("接受原实现");
+      expect(seenCard?.human_review?.origin_card_fingerprint).toBe(request.origin_card_fingerprint);
+      expect(seenCard?.human_review?.origin_run_id).toBe(originalRun.id);
+      expect(seenCard?.human_review?.origin_completion?.run.id).toBe(originalRun.id);
+      expect(seenCard?.human_review?.origin_completion?.run.status).toBe("succeeded");
+      expect(seenCard?.human_review?.intervening_runs.map((run) => [run.id, run.status])).toEqual([
+        [mistakenRun.id, "failed"]
+      ]);
+      expect(seenCard?.human_review?.intervening_runs[0]).toMatchObject({
+        control_operation: "interrupt",
+        control_outcome: "interrupted"
+      });
+      expect(getIssue(db, issue.id)?.status).toBe("done");
+      expect(listIssueRuns(db, issue.id)).toHaveLength(2);
     } finally {
       db.close();
     }

@@ -8,7 +8,9 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
+import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { createPiAction, getPiIssueCompletionWatch, listIssueSupervisorEvents } from "../db/repositories/pi.ts";
+import { createHumanReviewRequest, readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 import { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";
@@ -152,6 +154,48 @@ describe("PI action dispatcher supervisor actions", () => {
         status: "completed"
       });
       expect([815, 816].map((id) => getIssue(db, id)?.status)).toEqual(["todo", "todo"]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("human_review.respond dispatch accepts the completed Run without creating a retry Run", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo");
+      insertIssue(db, { issueID: 827, projectID: "demo", status: "needs_user" });
+      const run = createIssueRun(db, 827);
+      db.sqlite.run(
+        "update issue_runs set status='succeeded', ended_at=? where id=?",
+        ["2026-08-01T00:00:00Z", run.id]
+      );
+      const request = createHumanReviewRequest(db, 827, {
+        question: "是否接受离线实现，并由用户后续手动执行真实 smoke？"
+      });
+      const action = createPiAction(db, {
+        action_type: "human_review.respond",
+        id: "human-review-response-827",
+        issue_id: 827,
+        payload_json: JSON.stringify({
+          action: "accept",
+          comment: "接受当前实现；真实 smoke 后续手动执行。",
+          issue_id: 827,
+          review_request_id: request.id,
+          review_revision: request.revision
+        }),
+        project_id: "demo",
+        status: "approved"
+      });
+
+      await dispatchPiAction({ database: db }, action);
+
+      expect(getIssue(db, 827)?.status).toBe("in_progress");
+      expect(listIssueRuns(db, 827)).toHaveLength(1);
+      expect(readIssueDecisionProjection(db, 827)).toMatchObject({
+        owner: "pi",
+        phase: "pi_queued",
+        request: { id: request.id, status: "accepted" }
+      });
     } finally {
       db.close();
     }
@@ -409,11 +453,11 @@ describe("PI action dispatcher supervisor actions", () => {
         composer: "pi_needs_user_v1",
         user_facing_message: expect.stringContaining("当前状态：issue=in_progress")
       });
-      expect(getIssue(db, 421)).toMatchObject({ status: "failed" });
+      expect(getIssue(db, 421)).toMatchObject({ status: "needs_user" });
       expect(listIssueRuns(db, 421).at(-1)).toMatchObject({
         ended_at: expect.stringMatching(/Z$/),
-        exit_reason: "failed",
-        status: "failed"
+        exit_reason: "pi_semantic_decision",
+        status: "needs_user"
       });
       expect(events).toMatchObject([
         expect.objectContaining({ type: "pi.needs_user", issueId: 421, projectId: "demo" })

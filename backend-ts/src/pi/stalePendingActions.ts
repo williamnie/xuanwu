@@ -52,6 +52,7 @@ const TERMINAL_RUN_STATUSES = new Set(["cancelled", "completed", "done", "failed
 const EXECUTABLE_ACTIONS = new Set([
   "agent.executor_assign",
   "agent.workflow_request",
+  "human_review.respond",
   "issue.comment",
   "issue.acceptance_request",
   "issue.create",

@@ -7,11 +7,10 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import {
   listIssueSupervisorEvents,
   listPiActions,
-  listPiGuardianEvents,
+  listPiGuardianAlerts,
   upsertProjectPiPolicy
 } from "../db/repositories/pi.ts";
 import { listPiRecoveryAttempts, recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
-import { runGuardianDecisionOrchestratorOnce } from "../pi/guardianDecisionOrchestrator.ts";
 import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
 
 const NOW = new Date("2026-06-10T08:00:00Z");
@@ -31,48 +30,51 @@ describe("PI issue supervisor budget exhausted escalation", () => {
         project_id: "demo"
       });
       insertRunningIssue(db, 505, "demo", "thread-505", "turn-505");
-      for (const index of [1, 2]) recordBudgetAttempt(db, index);
+      for (const index of [1, 2, 3, 4, 5, 6]) recordBudgetAttempt(db, index);
 
-      const result = await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, staleAfterSeconds: 300 });
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        runDecision: async (context) => {
+          expect(context.recovery_history).toMatchObject({
+            attempts_24h: 6,
+            budget_remaining: 0,
+            budget_status: "issue_budget_exhausted",
+            project_budget_unlimited: true
+          });
+          return {
+            decision: {
+              confidence: "high",
+              decision: "needs_user",
+              evidence_refs: ["recovery_budget"],
+              expected_outcome: "automatic recovery stops at the Issue boundary",
+              fallback_if_no_progress: "blocked",
+              rationale: "Issue recovery budget is exhausted.",
+              recovery_message: "Review the latest recovery evidence.",
+              risk_level: "medium"
+            },
+            raw_text: "needs_user",
+            valid: true
+          };
+        },
+        staleAfterSeconds: 300
+      });
       const events = listIssueSupervisorEvents(db, { issueId: 505 });
-      const payload = JSON.parse(events[0]?.payload_json ?? "{}");
-      const guardian = listPiGuardianEvents(db, { projectId: "demo" })[0];
 
-      expect(result).toMatchObject({ decisions: 0, failed: 0, signaled: 1, skipped: 0 });
-      expect(events.map((event) => event.event_type)).toEqual(["budget_exhausted", "action", "result"]);
+      expect(result).toMatchObject({ decisions: 1, failed: 0, signaled: 1, skipped: 0 });
+      expect(events.map((event) => event.event_type)).toEqual(["signal", "decision", "action", "result"]);
       expect(events[0]).toMatchObject({
-        action_type: "needs_user.escalate",
-        decision: "needs_user",
         diagnosis_code: "recovery_budget_exhausted",
-        event_type: "budget_exhausted",
+        event_type: "signal",
         issue_id: 505
       });
-      expect(payload).toMatchObject({
-        attempts_24h: 2,
-        count: 2,
-        diagnosis_code: "recovery_budget_exhausted",
-        issue_id: 505,
-        last_action_at: "2026-06-10T07:52:00Z",
-        last_action_status: "failed",
-        last_action_type: "issue.retry",
-        last_recovery_attempt_id: "budget-505-2",
-        outcome: "needs_user",
-        report_status: "budget_exhausted",
-        window: "24h",
-        window_started_at: "2026-06-09T08:00:00Z"
-      });
-      expect(guardian).toMatchObject({
-        event_type: "guardian.supervisor.candidate",
-        issue_id: 505,
-        severity: "actionable"
-      });
-
-      runGuardianDecisionOrchestratorOnce(db, { now: NOW });
-      runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-10T08:00:31Z") });
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toContainEqual(
+        expect.objectContaining({ alert_type: "supervisor_needs_user", issue_id: 505 })
+      );
       expect(listPiActions(db, { issueId: 505 })).toContainEqual(
         expect.objectContaining({ action_type: "needs_user.escalate", status: "completed" })
       );
-      expect(listPiRecoveryAttempts(db, { issueId: 505 })).toHaveLength(2);
+      expect(listPiRecoveryAttempts(db, { issueId: 505 })).toHaveLength(6);
 
       const second = await runPiIssueSupervisorSchedulerOnce({
         database: db,
@@ -81,7 +83,7 @@ describe("PI issue supervisor budget exhausted escalation", () => {
       });
       expect(second).toMatchObject({ signaled: 1, skipped: 1 });
       expect(listIssueSupervisorEvents(db, { issueId: 505 }).map((event) => event.event_type))
-        .toEqual(["budget_exhausted", "action", "result"]);
+        .toEqual(["signal", "decision", "action", "result"]);
     } finally {
       db.close();
     }

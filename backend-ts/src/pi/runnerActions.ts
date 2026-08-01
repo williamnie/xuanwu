@@ -61,6 +61,8 @@ import {
 } from "./runnerIssueStatusActions.ts";
 import {
   createHumanReviewRequest as createHumanReviewRequestRecord,
+  readIssueDecisionProjection,
+  reviewHumanIssue,
   type CreateHumanReviewRequestInput
 } from "../domain/review/humanReview.ts";
 import {
@@ -107,6 +109,7 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
   restartSystem(input: SystemRestartInput): unknown;
   updateRunnerSettings(input: RunnerSettingsUpdateInput): unknown;
   createHumanReviewRequest(input: CreateHumanReviewRequestInput & { issue_id: number }): unknown;
+  respondToHumanReview(input: HumanReviewResponseInput): unknown;
 };
 
 export type PiRunnerActionContext = PiActionContext & {
@@ -135,6 +138,13 @@ type IssueReadInput = { id: number };
 type IssueExecutionStatusInput = { id: number };
 type IssueAcceptanceRequestInput = { issue_id: number; rationale?: string };
 type IssueCommentInput = { body: string; issue_id: number };
+type HumanReviewResponseInput = {
+  action: "accept" | "request_changes" | "reject";
+  comment?: string;
+  issue_id: number;
+  review_request_id: string;
+  review_revision: number;
+};
 type IssueCancelInput = { issue_ids: number[]; rationale?: string };
 type IssueDeleteInput = { issue_ids: number[]; reason: string };
 type IssueProposalInput = { issue_id: number; rationale?: string };
@@ -203,6 +213,7 @@ export function createPiRunnerActions(
       projectID: issueProjectID(db, input.issue_id, context),
       execute: () => createHumanReviewRequestRecord(db, input.issue_id, input, { bus: context.bus })
     }),
+    respondToHumanReview: (input) => respondToHumanReview(db, context, input),
     cancelIssues: (input) => cancelIssues(db, context, input),
     deleteIssues: (input) => deleteIssuesProposal(db, context, input),
     updateIssueStatuses: (input) => updateIssueStatuses(db, context, input),
@@ -293,6 +304,42 @@ function updateIssueStatuses(
     projectID: prepared.projectID,
     rationale: input.reason
   }, () => executeIssueStatusUpdate(db, input, issueStatusRuntime(context)));
+}
+
+function respondToHumanReview(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  input: HumanReviewResponseInput
+) {
+  const issue = mustGetIssue(db, input.issue_id);
+  const actionType = "human_review.respond";
+  const actionContext = scopedRunnerChatActionContext(context, actionType, {
+    issueID: issue.id,
+    projectID: issue.project_id
+  });
+  const payload = cleanObjectPayload(input);
+  return createPendingPiAction(db, actionContext, {
+    actionType,
+    issueID: issue.id,
+    payload,
+    projectID: issue.project_id,
+    rationale: cleanString(input.comment) || `human review ${input.action}`
+  }, async () => {
+    const updated = await reviewHumanIssue(db, issue.id, payload, {
+      bus: context.bus,
+      providers: context.providers
+    });
+    return {
+      action: input.action,
+      decision: readIssueDecisionProjection(db, issue.id),
+      issue: {
+        id: updated.id,
+        project_id: updated.project_id,
+        status: updated.status,
+        title: updated.title
+      }
+    };
+  });
 }
 
 function deleteIssuesProposal(
@@ -574,6 +621,7 @@ function safeReadIssue(db: RunnerDatabase, context: PiRunnerActionContext, input
     execute: () => ({
       ...issue,
       allowed_status_targets: allowedIssueStatusTargets(issue.status),
+      decision: readIssueDecisionProjection(db, issue.id),
       dependency: readIssueDependency(db, issue.id),
       execution: createIssueExecutionStatus(db, issue.id),
       source: "issue_read"

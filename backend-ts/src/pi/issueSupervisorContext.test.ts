@@ -99,7 +99,7 @@ describe("PI issue supervisor context builder", () => {
       expect(context.session).toMatchObject({ run_state: "open", status: "unknown" });
       expect(context.policy).toMatchObject({
         budget_remaining: 3,
-        project_budget_remaining: 5,
+        project_budget_unlimited: true,
         rate_limit_wait_policy: "respect_retry_after"
       });
       expect(context.candidates).toContainEqual(expect.objectContaining({
@@ -171,8 +171,8 @@ describe("PI issue supervisor context builder", () => {
       expect(testContext.provider_error).toMatchObject({ category: "business_failure", diagnosis_code: "requires_human_decision" });
       expect(authContext.candidates).toEqual([expect.objectContaining({ diagnosis_code: "requires_human_decision" })]);
       expect(testContext.candidates).toEqual([expect.objectContaining({ diagnosis_code: "requires_human_decision" })]);
-      expect(authContext.recovery_history).toMatchObject({ attempts_24h: 0, budget_remaining: 2 });
-      expect(testContext.recovery_history).toMatchObject({ attempts_24h: 0, budget_remaining: 2 });
+      expect(authContext.recovery_history).toMatchObject({ attempts_24h: 0, budget_remaining: 6 });
+      expect(testContext.recovery_history).toMatchObject({ attempts_24h: 0, budget_remaining: 6 });
     } finally {
       db.close();
     }
@@ -232,7 +232,7 @@ describe("PI issue supervisor context builder", () => {
 
       expect(context.recovery_history).toMatchObject({
         attempts_24h: 0,
-        budget_remaining: 2,
+        budget_remaining: 6,
         consecutive_no_progress: 2,
         last_outcome: "no_progress"
       });
@@ -252,7 +252,7 @@ describe("PI issue supervisor context builder", () => {
       insertIssue(db, { id: 307, projectID: "runner", title: "Budget issue", status: "in_progress", updatedAt: "2026-06-10T07:30:00Z" });
       db.sqlite.run("update issues set attempt_count=99 where id=307");
       insertRun(db, { issueID: 307, id: "issue-307-attempt-1", status: "in_progress", endedAt: "", sessionID: "thread-307", turnID: "turn-307" });
-      for (const index of [1, 2, 3]) {
+      for (const index of [1, 2, 3, 4, 5, 6]) {
         recordPiRecoveryAttempt(db, {
           action_type: "issue.retry",
           budget_window_started_at: "2026-06-10T00:00:00Z",
@@ -272,7 +272,7 @@ describe("PI issue supervisor context builder", () => {
 
       expect(context.issue).toMatchObject({ attempt_count: 99 });
       expect(context.recovery_history).toMatchObject({
-        attempts_24h: 3,
+        attempts_24h: 6,
         budget_remaining: 0,
         budget_status: "issue_budget_exhausted"
       });

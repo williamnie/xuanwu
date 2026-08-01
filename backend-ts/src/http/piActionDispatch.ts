@@ -49,6 +49,7 @@ import {
   scheduleSystemRestart,
   type SystemRestartAuditEvent
 } from "./systemRestartApi.ts";
+import { reviewHumanIssue } from "../domain/review/humanReview.ts";
 
 export type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -90,6 +91,13 @@ export async function dispatchPiAction(
       return deleteIssues(context.database, positiveIDList(payload.issue_ids));
     case "issue.status_update":
       return await updateIssueStatusesAndStartAutoRun(context, action, issueStatusUpdateInput(payload));
+    case "human_review.respond":
+      return await reviewHumanIssue(
+        context.database,
+        positivePayloadID(payload, "issue_id"),
+        payload,
+        { bus: context.bus, providers: context.providers }
+      );
     case "issue.status_lookup":
       return lookupIssueStatus(context.database, payload);
     case "runner.settings_update":
