@@ -221,7 +221,7 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
-  test("injects a minimal goal contract into default issue prompts", async () => {
+  test("sends the canonical issue prompt without generic runner contracts", async () => {
     const db = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
     try {
@@ -235,21 +235,7 @@ describe("Bun project loop claim execution", () => {
       await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
 
       const prompt = provider.inputs[0]?.prompt ?? "";
-      expect(prompt).toContain("Add the focused runner prompt guidance.");
-      expect(prompt).toContain("## Goal Contract");
-      expect(prompt).toContain("- Target outcome:");
-      expect(prompt).toContain("- Required evidence:");
-      expect(prompt).toContain("run the smallest directly relevant verification");
-      expect(prompt).toContain("report the final outcome with the Runner lifecycle marker");
-      expect(prompt).toContain("- Constraints / non-goals:");
-      expect(prompt).toContain("- Stop policy / escalation:");
-      expect(prompt).toContain("same failure repeats");
-      expect(prompt).toContain("schema/public-contract/shared-runtime changes");
-      expect(prompt).toContain("Never run ./redeploy.sh");
-      expect(prompt).toContain("do not bypass this boundary with nohup, launchctl submit");
-      expect(prompt).toContain("external post-completion delivery action");
-      expect(prompt).toContain("./dev.sh with isolated non-live state and ports");
-      expect(prompt).toContain("Live deployment must be performed externally");
+      expect(prompt).toBe("# prompt contract\n\nAdd the focused runner prompt guidance.");
     } finally {
       db.close();
     }
@@ -276,13 +262,13 @@ describe("Bun project loop claim execution", () => {
       expect(prompt).toContain("## Governed retry context");
       expect(prompt).toContain("Decision: decision-batch-contract");
       expect(prompt).toContain("explicitly authorized a backward-compatible public API contract extension");
-      expect(prompt.indexOf("## Governed retry context")).toBeGreaterThan(prompt.indexOf("## Goal Contract"));
+      expect(prompt.indexOf("## Governed retry context")).toBeGreaterThan(prompt.indexOf("Implement the batch upload handler"));
     } finally {
       db.close();
     }
   });
 
-  test("does not duplicate existing goal contract headings", async () => {
+  test("preserves issue-authored contract headings without adding runner contracts", async () => {
     const db = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
     try {
@@ -308,9 +294,8 @@ describe("Bun project loop claim execution", () => {
       expect(prompt).toContain("## Target outcome");
       expect(prompt).not.toContain("## Goal Contract");
       expect(prompt).not.toContain("Deliver the requested end state");
-      expect(prompt).toContain("## Runner lifecycle contract");
-      expect(prompt).toContain("RUNNER_OUTCOME: completed");
-      expect(prompt).not.toContain("issue update --id");
+      expect(prompt).not.toContain("## Runner lifecycle contract");
+      expect(prompt).toContain("## Stop policy / escalation\nReport blockers.");
     } finally {
       db.close();
     }

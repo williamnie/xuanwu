@@ -478,7 +478,7 @@ describe("Bun projects/issues read API", () => {
     }
   });
 
-  test("auto-run issue create sends the canonical title, description, and lifecycle contract", async () => {
+  test("auto-run issue create sends only the canonical title and description", async () => {
     const database = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
     try {
@@ -503,12 +503,7 @@ describe("Bun projects/issues read API", () => {
       expect(body).not.toHaveProperty("prompt_template");
       await waitForProviderStart(provider);
       const prompt = provider.inputs[0]?.prompt ?? "";
-      expect(prompt).toContain("# 直接执行\n\n直接发给 runner");
-      expect(prompt).toContain("## Goal Contract");
-      expect(prompt).toContain("## Runner lifecycle contract");
-      expect(prompt).toContain("Runner Host owns the final Issue/Run state transition");
-      expect(prompt).toContain("RUNNER_OUTCOME: completed");
-      expect(prompt).not.toContain(`issue update --id ${body.id}`);
+      expect(prompt).toBe("# 直接执行\n\n直接发给 runner");
     } finally {
       database.close();
     }

@@ -75,7 +75,7 @@ V1 override 只能收紧或在 base 明确授权的集合内选择：
 | 窗口 | 读写与 authority |
 | --- | --- |
 | Workflow Manifest V1 | Registry 与既有 `workflow_snapshot_json` / `workflow_ref` 继续按精确 revision 工作，双写 0、双读 0 |
-| Issue Prompt 模板移除 | 删除无实际多模板消费者的 UI、API、CLI、快照字段与表；不兼容历史模板数据，也不做双读或双写；Runner lifecycle contract 成为不可配置的执行约束 |
+| Issue Prompt 模板移除 | 删除无实际多模板消费者的 UI、API、CLI、快照字段与表；不兼容历史模板数据，也不做双读或双写；普通 Issue 执行仅传递原始标题和描述，不注入通用 Goal Contract 或 Runner lifecycle contract |
 
 - **回滚**：恢复上一版应用和迁移前 SQLite 备份；删除模板后的新 Issue 不再生成 `template_id` / `prompt_template`，不能把 Workflow manifest 反写成旧模板。
 - **删除边界**：`058_drop_issue_templates` 只删除 Issue Prompt 模板。`workflow_snapshot_json`、Work `workflow_ref`、Registry、Evidence 与 Handoff authority 全部保留。
