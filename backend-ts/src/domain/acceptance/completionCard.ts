@@ -104,6 +104,15 @@ export type CompletionCardHumanReview = {
     warnings: string[];
   };
   origin_run_id: string;
+  request: {
+    acceptance_summary: string[];
+    consequences: string;
+    evidence_refs: string[];
+    excluded_scope: string[];
+    kind: "acceptance" | "decision" | "risk_acceptance";
+    question: string;
+    recommendation: string;
+  };
   request_id: string;
   review_revision: number;
 };
@@ -520,7 +529,10 @@ function humanReviewResolution(
     if (event.type !== "issue.human_review_requested.v1") return false;
     return cleanString(objectValue(parseJson(event.payload)).id) === requestID;
   });
-  const request = objectValue(parseJson(requestEvent?.payload));
+  const responseRequest = objectValue(response.request_snapshot);
+  const request = Object.keys(responseRequest).length > 0
+    ? responseRequest
+    : objectValue(parseJson(requestEvent?.payload));
   const evidenceRefs = stringArray(request.evidence_refs);
   const originFingerprint = cleanString(response.origin_card_fingerprint)
     || cleanString(request.origin_card_fingerprint)
@@ -558,8 +570,27 @@ function humanReviewResolution(
     origin_card_fingerprint: originFingerprint,
     origin_completion: completionCardSummary(originCard),
     origin_run_id: originRunID,
+    request: humanReviewRequestSummary(request),
     request_id: requestID,
     review_revision: reviewRevision
+  };
+}
+
+function humanReviewRequestSummary(
+  request: Record<string, unknown>
+): CompletionCardHumanReview["request"] {
+  const kind = cleanString(request.kind);
+  return {
+    acceptance_summary: boundedSequence(stringArray(request.acceptance_summary), 24)
+      .map((value) => boundedUtf8(redactSensitiveText(value), 1_000)),
+    consequences: boundedUtf8(redactSensitiveText(cleanString(request.consequences)), 4_000),
+    evidence_refs: boundedSequence(stringArray(request.evidence_refs), 36)
+      .map((value) => boundedUtf8(redactSensitiveText(value), 1_000)),
+    excluded_scope: boundedSequence(stringArray(request.excluded_scope), 24)
+      .map((value) => boundedUtf8(redactSensitiveText(value), 1_000)),
+    kind: kind === "decision" || kind === "risk_acceptance" ? kind : "acceptance",
+    question: boundedUtf8(redactSensitiveText(cleanString(request.question)), 4_000),
+    recommendation: boundedUtf8(redactSensitiveText(cleanString(request.recommendation)), 4_000)
   };
 }
 

@@ -22,6 +22,7 @@ import { reconcileProviderOutcome } from "./providerOutcome.ts";
 
 export const PI_ACCEPTANCE_DECISION_EVENT = "issue.pi_acceptance_decision.v1";
 export const PI_ACCEPTANCE_APPLIED_EVENT = "issue.pi_acceptance_applied.v1";
+export const PI_HUMAN_ACCEPTANCE_HONORED_EVENT = "issue.pi_human_acceptance_honored.v1";
 
 export type PiAcceptanceApplicationRuntime = {
   bus?: Pick<EventBus, "publish">;
@@ -38,12 +39,42 @@ export async function applyPiAcceptanceDecision(
   const replay = getIssue(runtime.database, card.issue.id);
   if (replay?.status === "done" && applied(runtime.database, card.issue.id, card.fingerprint)) return replay;
   assertCurrentCard(runtime.database, card);
-  recordDecision(runtime.database, card, decision);
-  if (decision.decision === "accept") return acceptIssue(runtime, card, decision);
-  if (decision.decision === "needs_user") return requestUser(runtime, card, decision);
-  if (decision.decision === "failed") return failIssue(runtime, card, decision);
-  if (decision.decision === "retry") return retryInNewSession(runtime, card, decision);
-  return continueSameSession(runtime, card, decision);
+  const effectiveDecision = honorAcceptedDeliveryReview(runtime.database, card, decision);
+  recordDecision(runtime.database, card, effectiveDecision);
+  if (effectiveDecision.decision === "accept") return acceptIssue(runtime, card, effectiveDecision);
+  if (effectiveDecision.decision === "needs_user") return requestUser(runtime, card, effectiveDecision);
+  if (effectiveDecision.decision === "failed") return failIssue(runtime, card, effectiveDecision);
+  if (effectiveDecision.decision === "retry") return retryInNewSession(runtime, card, effectiveDecision);
+  return continueSameSession(runtime, card, effectiveDecision);
+}
+
+function honorAcceptedDeliveryReview(
+  db: RunnerDatabase,
+  card: CompletionCard,
+  decision: PiAcceptanceDecision
+): PiAcceptanceDecision {
+  const review = card.human_review;
+  if (decision.decision !== "needs_user"
+    || review?.action !== "accept"
+    || review.request.kind !== "acceptance"
+    || review.request.question === "") {
+    return decision;
+  }
+  recordIssueEvent(db, card.issue.id, PI_HUMAN_ACCEPTANCE_HONORED_EVENT, {
+    attempted_decision: decision,
+    card_fingerprint: card.fingerprint,
+    reason: "accepted delivery review closes its stated human-only criteria",
+    request_id: review.request_id,
+    revision: review.review_revision,
+    run_id: review.origin_run_id || card.run.id
+  });
+  return {
+    confidence: decision.confidence,
+    decision: "accept",
+    evidence_refs: [...new Set([...decision.evidence_refs, `human-review:${review.request_id}`])],
+    rationale: `用户已明确接受当前交付及该验收请求列出的取舍；不得因同一缺口重复请求确认。${decision.rationale}`,
+    unmet_requirements: []
+  };
 }
 
 function acceptIssue(

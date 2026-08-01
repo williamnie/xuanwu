@@ -8,6 +8,7 @@ import {
   type CompletionCard
 } from "../domain/acceptance/completionCard.ts";
 import {
+  repairRedundantAcceptedHumanReview,
   readIssueDecisionProjection,
   restoreOpenHumanReviewAfterTerminalRun
 } from "../domain/review/humanReview.ts";
@@ -51,6 +52,7 @@ export async function runPiAcceptanceCoordinatorOnce(
   input: PiAcceptanceCoordinatorInput
 ): Promise<PiAcceptanceCoordinatorResult> {
   const now = input.now ?? new Date();
+  repairRedundantHumanReviewLoops(input);
   restoreHumanOwnedTerminalIssues(input);
   const issues = dueIssues(input.database, now, input.cooldownMs ?? DEFAULT_COOLDOWN_MS);
   const result: PiAcceptanceCoordinatorResult = {
@@ -70,6 +72,12 @@ export async function runPiAcceptanceCoordinatorOnce(
     if (!outcome.ok) result.failed += 1;
   }
   return result;
+}
+
+function repairRedundantHumanReviewLoops(input: PiAcceptanceCoordinatorInput): void {
+  for (const issue of listIssues(input.database, { status: "needs_user" })) {
+    repairRedundantAcceptedHumanReview(input.database, issue.id, { bus: input.bus });
+  }
 }
 
 function restoreHumanOwnedTerminalIssues(input: PiAcceptanceCoordinatorInput): void {
@@ -131,7 +139,11 @@ async function dispatchIssueAcceptance(
     recordPiAcceptanceActivity(input.database, issue.id, "completed", {
       attempt,
       card_fingerprint: card.fingerprint,
-      decision: decision.decision,
+      decision: updated.status === "done"
+        ? "accept"
+        : updated.status === "failed"
+          ? "failed"
+          : decision.decision,
       project_id: issue.project_id,
       source: input.source ?? "pi-acceptance-coordinator"
     });
@@ -180,6 +192,7 @@ function dueIssues(db: RunnerDatabase, now: Date, cooldownMs: number): Issue[] {
     if (!piOwnedPending(db, issue)) return false;
     const activity = readPiAcceptanceActivity(db, issue.id);
     if (!activity) return true;
+    if (activity.status === "queued" && activity.source === "human-review-redundant-recovery") return true;
     if (activity.status === "completed") {
       const currentCard = readCurrentIssueCompletionCard(db, issue.id);
       return currentCard?.fingerprint !== activity.card_fingerprint;

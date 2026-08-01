@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import type { CompletionCard } from "../domain/acceptance/completionCard.ts";
+import {
+  buildIssueCompletionCard,
+  recordIssueCompletionCard,
+  type CompletionCard
+} from "../domain/acceptance/completionCard.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
@@ -119,12 +123,18 @@ describe("issue-scoped PI acceptance coordinator", () => {
         review_request_id: request.id,
         review_revision: request.revision
       });
+      db.sqlite.run(
+        `update issue_events
+         set payload=json_remove(payload, '$.request_snapshot')
+         where issue_id=? and type='issue.human_review_answered.v1'`,
+        [issue.id]
+      );
       let seenCard: CompletionCard | undefined;
       const result = await runPiAcceptanceCoordinatorOnce({
         database: db,
         decideIssueAcceptance: async (card) => {
           seenCard = structuredClone(card);
-          return acceptance("accept");
+          return acceptance("needs_user");
         }
       });
 
@@ -136,6 +146,11 @@ describe("issue-scoped PI acceptance coordinator", () => {
       expect(seenCard?.human_review?.origin_run_id).toBe(originalRun.id);
       expect(seenCard?.human_review?.origin_completion?.run.id).toBe(originalRun.id);
       expect(seenCard?.human_review?.origin_completion?.run.status).toBe("succeeded");
+      expect(seenCard?.human_review?.request).toMatchObject({
+        consequences: "",
+        kind: "acceptance",
+        question: "需要用户决定。"
+      });
       expect(seenCard?.human_review?.intervening_runs.map((run) => [run.id, run.status])).toEqual([
         [mistakenRun.id, "failed"]
       ]);
@@ -145,6 +160,59 @@ describe("issue-scoped PI acceptance coordinator", () => {
       });
       expect(getIssue(db, issue.id)?.status).toBe("done");
       expect(listIssueRuns(db, issue.id)).toHaveLength(2);
+      expect(eventTypes(db, issue.id)).toContain("issue.pi_human_acceptance_honored.v1");
+      expect(readIssueDecisionProjection(db, issue.id).activity?.decision).toBe("accept");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("repairs an existing repeated acceptance request and closes it in the same coordinator cycle", async () => {
+    const db = await fixture();
+    let calls = 0;
+    try {
+      const issue = completedIssue(db, "Already accepted delivery");
+      const originalCard = await buildIssueCompletionCard(db, issue.id);
+      recordIssueCompletionCard(db, originalCard, "test");
+      updateIssue(db, issue.id, { status: "needs_user" });
+      const accepted = createHumanReviewRequest(db, issue.id, {
+        consequences: "真实 smoke 未执行",
+        evidence_refs: [`completion-card:${originalCard.fingerprint}`],
+        kind: "acceptance",
+        question: "是否接受当前离线实现？"
+      });
+      await reviewHumanIssue(db, issue.id, {
+        action: "accept",
+        comment: "接受当前交付，不要求真实 smoke。",
+        review_request_id: accepted.id,
+        review_revision: accepted.revision
+      });
+      updateIssue(db, issue.id, { status: "needs_user" });
+      const repeated = createHumanReviewRequest(db, issue.id, {
+        consequences: "仍未执行真实 smoke",
+        evidence_refs: [`completion-card:${originalCard.fingerprint}`],
+        kind: "acceptance",
+        question: "是否提供配置再执行真实 smoke？"
+      });
+
+      const result = await runPiAcceptanceCoordinatorOnce({
+        database: db,
+        decideIssueAcceptance: async () => {
+          calls += 1;
+          return acceptance("needs_user");
+        }
+      });
+
+      expect(result).toMatchObject({ failed: 0, issues: 1, started: 1 });
+      expect(calls).toBe(1);
+      expect(getIssue(db, issue.id)?.status).toBe("done");
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+        owner: "pi",
+        phase: "complete",
+        request: { id: repeated.id, status: "superseded" }
+      });
+      expect(eventTypes(db, issue.id)).toContain("issue.human_review_redundant_closed.v1");
+      expect(listIssueRuns(db, issue.id)).toHaveLength(1);
     } finally {
       db.close();
     }

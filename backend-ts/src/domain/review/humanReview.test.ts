@@ -17,6 +17,7 @@ import { EventBus } from "../../events/bus.ts";
 import {
   createHumanReviewRequest,
   readIssueDecisionProjection,
+  repairRedundantAcceptedHumanReview,
   restoreOpenHumanReviewAfterTerminalRun,
   reviewHumanIssue
 } from "./humanReview.ts";
@@ -262,6 +263,65 @@ describe("human review workflow", () => {
       expect(listIssueEvents(db, issue.id, {
         types: ["issue.status_changed"]
       })).toHaveLength(statusEventsBeforeRestore + 1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("closes a redundant acceptance request on the same terminal Run after the delivery was already accepted", async () => {
+    const db = await fixture();
+    try {
+      const issue = createIssue(db, {
+        project_id: "demo",
+        status: "needs_user",
+        title: "Accepted delivery was asked again"
+      });
+      const run = createIssueRun(db, issue.id);
+      db.sqlite.run(
+        "update issue_runs set status='succeeded', ended_at=? where id=?",
+        ["2026-08-01T17:49:00Z", run.id]
+      );
+      const fingerprint = "b".repeat(64);
+      recordIssueEvent(db, issue.id, "issue.completion_card.v1", {
+        card: { run: { id: run.id } },
+        fingerprint
+      });
+      const first = createHumanReviewRequest(db, issue.id, {
+        consequences: "真实 smoke 未执行",
+        evidence_refs: [`completion-card:${fingerprint}`],
+        kind: "acceptance",
+        question: "是否接受当前离线实现？"
+      });
+      await reviewHumanIssue(db, issue.id, {
+        action: "accept",
+        comment: "接受当前交付，不要求真实 smoke。",
+        review_request_id: first.id,
+        review_revision: first.revision
+      });
+
+      updateIssue(db, issue.id, { status: "needs_user" });
+      const repeated = createHumanReviewRequest(db, issue.id, {
+        consequences: "仍未执行真实 smoke",
+        evidence_refs: [`completion-card:${fingerprint}`],
+        kind: "acceptance",
+        question: "是否提供配置再执行真实 smoke？"
+      });
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+        owner: "human",
+        request: { id: repeated.id, revision: 2, status: "open" }
+      });
+
+      expect(repairRedundantAcceptedHumanReview(db, issue.id)).toMatchObject({ status: "in_progress" });
+      expect(repairRedundantAcceptedHumanReview(db, issue.id)).toMatchObject({ status: "in_progress" });
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+        activity: { source: "human-review-redundant-recovery", status: "queued" },
+        owner: "pi",
+        request: { id: repeated.id, status: "superseded" }
+      });
+      expect(listIssueEvents(db, issue.id, {
+        types: ["issue.human_review_redundant_closed.v1"]
+      })).toHaveLength(1);
+      expect(listIssueRuns(db, issue.id)).toHaveLength(1);
     } finally {
       db.close();
     }

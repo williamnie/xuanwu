@@ -8,8 +8,12 @@ import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
-import { buildIssueCompletionCard } from "../domain/acceptance/completionCard.ts";
-import { createHumanReviewRequest, readIssueDecisionProjection } from "../domain/review/humanReview.ts";
+import { buildIssueCompletionCard, recordIssueCompletionCard } from "../domain/acceptance/completionCard.ts";
+import {
+  createHumanReviewRequest,
+  readIssueDecisionProjection,
+  reviewHumanIssue
+} from "../domain/review/humanReview.ts";
 import type { PiAcceptanceDecision } from "../pi/issueAcceptance.ts";
 import { diagnoseIssueState } from "../pi/issueStateManager.ts";
 import type {
@@ -147,6 +151,45 @@ describe("PI acceptance decision application", () => {
       await expect(applyPiAcceptanceDecision({ database: db }, card, decision("accept")))
         .rejects.toThrow("cannot bypass an open human review request");
       expect(getIssue(db, issue.id)?.status).toBe("in_progress");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("does not treat acceptance of a bounded product decision as terminal delivery acceptance", async () => {
+    const db = await fixture();
+    try {
+      const issue = completedIssue(db, "Product decision only");
+      const originCard = await buildIssueCompletionCard(db, issue.id);
+      recordIssueCompletionCard(db, originCard, "test");
+      updateIssue(db, issue.id, { status: "needs_user" });
+      const request = createHumanReviewRequest(db, issue.id, {
+        evidence_refs: [`completion-card:${originCard.fingerprint}`],
+        kind: "decision",
+        question: "是否选择方案 A？"
+      });
+      await reviewHumanIssue(db, issue.id, {
+        action: "accept",
+        comment: "选择方案 A。",
+        review_request_id: request.id,
+        review_revision: request.revision
+      });
+      const card = await buildIssueCompletionCard(db, issue.id);
+
+      const updated = await applyPiAcceptanceDecision(
+        { database: db },
+        card,
+        decision("needs_user", "还需要另一个独立产品决定。")
+      );
+
+      expect(updated.status).toBe("needs_user");
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+        owner: "human",
+        request: { kind: "acceptance", revision: 2, status: "open" }
+      });
+      expect(db.sqlite.query<{ count: number }, [number]>(
+        "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
+      ).get(issue.id)?.count).toBe(0);
     } finally {
       db.close();
     }

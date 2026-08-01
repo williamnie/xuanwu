@@ -15,11 +15,13 @@ import {
 import { requestIssuePiAcceptance } from "../../runner/piAcceptanceRequest.ts";
 import {
   readPiAcceptanceActivity,
+  recordPiAcceptanceActivity,
   type PiAcceptanceActivity
 } from "./piAcceptanceActivity.ts";
 
 export const HUMAN_REVIEW_EVENT_TYPES = {
   requested: "issue.human_review_requested.v1",
+  redundantClosed: "issue.human_review_redundant_closed.v1",
   restored: "issue.human_review_restored.v1",
   revisionResumeFailed: "issue.human_revision_resume_failed.v1",
   revisionResumed: "issue.human_revision_resumed.v1",
@@ -148,6 +150,27 @@ export function readIssueDecisionProjection(
   issueID: number
 ): IssueDecisionProjection {
   const issue = mustGetIssue(db, issueID);
+  const requests = humanReviewRequests(db, issueID);
+  const request = requests.at(-1) ?? null;
+  const storedActivity = readPiAcceptanceActivity(db, issueID);
+  const activity = activityAppliesToCurrentIssueState(storedActivity, issue.updated_at)
+    ? storedActivity
+    : null;
+  if (issue.status === "done" || issue.status === "failed" || issue.status === "cancelled") {
+    return { activity, owner: "pi", phase: "complete", request };
+  }
+  if (request?.status === "open") return { activity, owner: "human", phase: "human_review", request };
+  return {
+    activity,
+    owner: "pi",
+    phase: issue.status === "in_progress" && request?.status === "changes_requested"
+      ? "pi_continuing"
+      : piAcceptancePhase(activity),
+    request
+  };
+}
+
+function humanReviewRequests(db: RunnerDatabase, issueID: number): HumanReviewRequest[] {
   const events = listIssueEvents(db, issueID, {
     limit: 500,
     types: Object.values(HUMAN_REVIEW_EVENT_TYPES)
@@ -171,29 +194,62 @@ export function readIssueDecisionProjection(
           ? "rejected"
           : "superseded";
     }
+    if (event.type === HUMAN_REVIEW_EVENT_TYPES.redundantClosed) current.status = "superseded";
     if (
       event.type === HUMAN_REVIEW_EVENT_TYPES.revisionRequested
       || event.type === HUMAN_REVIEW_EVENT_TYPES.revisionResumed
     ) current.status = "changes_requested";
     if (event.type === HUMAN_REVIEW_EVENT_TYPES.revisionResumeFailed) current.status = "changes_requested";
   }
-  const request = [...requests.values()].sort((a, b) => b.revision - a.revision)[0] ?? null;
-  const storedActivity = readPiAcceptanceActivity(db, issueID);
-  const activity = activityAppliesToCurrentIssueState(storedActivity, issue.updated_at)
-    ? storedActivity
-    : null;
-  if (issue.status === "done" || issue.status === "failed" || issue.status === "cancelled") {
-    return { activity, owner: "pi", phase: "complete", request };
-  }
-  if (request?.status === "open") return { activity, owner: "human", phase: "human_review", request };
-  return {
-    activity,
-    owner: "pi",
-    phase: issue.status === "in_progress" && request?.status === "changes_requested"
-      ? "pi_continuing"
-      : piAcceptancePhase(activity),
-    request
-  };
+  return [...requests.values()].sort((a, b) => a.revision - b.revision);
+}
+
+export function repairRedundantAcceptedHumanReview(
+  db: RunnerDatabase,
+  issueID: number,
+  runtime: Pick<HumanReviewRuntime, "bus"> = {}
+): Issue | null {
+  const issue = getIssue(db, issueID);
+  const latestRun = listIssueRuns(db, issueID).at(-1);
+  if (!issue || issue.status !== "needs_user" || !latestRun || latestRun.ended_at === "") return issue;
+  const requests = humanReviewRequests(db, issueID);
+  const current = requests.at(-1);
+  if (!current || current.status !== "open" || current.kind !== "acceptance") return issue;
+  const accepted = [...requests].reverse().find((request) => request.revision < current.revision
+    && request.status === "accepted"
+    && request.kind === "acceptance"
+    && request.origin_run_id !== ""
+    && request.origin_run_id === current.origin_run_id
+    && request.origin_run_id === latestRun.id);
+  if (!accepted) return issue;
+  const repaired = db.transaction(() => {
+    recordIssueEvent(db, issueID, HUMAN_REVIEW_EVENT_TYPES.redundantClosed, {
+      accepted_request_id: accepted.id,
+      reason: "an accepted delivery review cannot be reopened on the same terminal Run",
+      request_id: current.id,
+      revision: current.revision,
+      run_id: latestRun.id
+    });
+    const updated = updateIssue(db, issueID, { error: "", status: "in_progress" });
+    requestIssuePiAcceptance(db, issueID, {
+      reason: `closed redundant human review revision ${current.revision} after accepted revision ${accepted.revision}`,
+      source: "human_review_redundant_recovery"
+    });
+    recordPiAcceptanceActivity(db, issueID, "queued", {
+      attempt: 1,
+      card_fingerprint: `human-review-recovery:${current.id}`,
+      project_id: issue.project_id,
+      source: "human-review-redundant-recovery"
+    });
+    return updated;
+  }).immediate();
+  runtime.bus?.publish({
+    issueId: repaired.id,
+    projectId: repaired.project_id,
+    status: "in_progress",
+    type: "issue.status_changed"
+  });
+  return repaired;
 }
 
 export function restoreOpenHumanReviewAfterTerminalRun(
@@ -293,6 +349,7 @@ export async function reviewHumanIssue(
     comment,
     origin_card_fingerprint: request.origin_card_fingerprint,
     origin_run_id: request.origin_run_id,
+    request_snapshot: humanReviewRequestSnapshot(request),
     request_id: request.id,
     revision: request.revision
   });
@@ -300,6 +357,11 @@ export async function reviewHumanIssue(
     reason: `human review answered: ${action}`,
     source: "human_review"
   });
+}
+
+function humanReviewRequestSnapshot(request: HumanReviewRequest): Omit<HumanReviewRequest, "status"> {
+  const { status: _status, ...snapshot } = request;
+  return snapshot;
 }
 
 async function resumeRevisionInSameSession(
