@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
+import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listPiGuardianAlerts } from "../db/repositories/pi.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
@@ -249,6 +250,33 @@ describe("Bun project loop claim execution", () => {
       expect(prompt).toContain("external post-completion delivery action");
       expect(prompt).toContain("./dev.sh with isolated non-live state and ports");
       expect(prompt).toContain("Live deployment must be performed externally");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("injects the latest governed Supervisor retry resolution into the new attempt prompt", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      const issueID = insertIssue(db, {
+        description: "Implement the batch upload handler without unrelated changes.",
+        projectId: "demo",
+        title: "batch upload"
+      });
+      recordIssueEvent(db, issueID, "issue.supervisor_retry", {
+        decision_id: "decision-batch-contract",
+        reason: "The user explicitly authorized a backward-compatible public API contract extension for batch upload."
+      });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      const prompt = provider.inputs[0]?.prompt ?? "";
+      expect(prompt).toContain("## Governed retry context");
+      expect(prompt).toContain("Decision: decision-batch-contract");
+      expect(prompt).toContain("explicitly authorized a backward-compatible public API contract extension");
+      expect(prompt.indexOf("## Governed retry context")).toBeGreaterThan(prompt.indexOf("## Goal Contract"));
     } finally {
       db.close();
     }

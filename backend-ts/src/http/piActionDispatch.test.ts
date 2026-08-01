@@ -286,8 +286,9 @@ describe("PI action dispatcher supervisor actions", () => {
   test("issue.retry queues a stale issue and records supervisor result", async () => {
     const db = await fixtureDb();
     const provider = new SupervisorProvider();
+    const kickedProjects: string[] = [];
     try {
-      insertProject(db, "demo");
+      insertProject(db, "demo", { autoRun: 1 });
       insertIssueRunSession(db, { issueID: 309, projectID: "demo", sessionID: "thread-309", turnID: "turn-old" });
       const action = createPiAction(db, {
         action_type: "issue.retry",
@@ -305,7 +306,11 @@ describe("PI action dispatcher supervisor actions", () => {
       });
       db.sqlite.run("update issues set updated_at=? where id=309", ["2026-06-10T07:02:00Z"]);
 
-      await dispatchPiAction({ database: db, providers: { codex: provider } }, action);
+      await dispatchPiAction({
+        database: db,
+        providers: { codex: provider },
+        startProjectLoop: (_runtime, projectID) => kickedProjects.push(projectID)
+      }, action);
 
       expect(getIssue(db, 309)).toMatchObject({ status: "todo", auto_retry_next_at: "" });
       expect(listIssueRuns(db, 309).at(-1)).toMatchObject({
@@ -317,6 +322,7 @@ describe("PI action dispatcher supervisor actions", () => {
         "issue.status_changed",
         "issue.supervisor_retry"
       ]));
+      expect(kickedProjects).toEqual(["demo"]);
       expect(listIssueSupervisorEvents(db, { issueId: 309 })).toContainEqual(expect.objectContaining({
         action_id: "retry-action",
         action_type: "issue.retry",

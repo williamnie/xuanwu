@@ -5,6 +5,7 @@ import {
   peekNextTodoIssue
 } from "../db/repositories/issueQueue.ts";
 import { issueTimestamp } from "../db/repositories/issueCreate.ts";
+import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.ts";
 import type { Project } from "../db/repositories/projects.ts";
@@ -99,7 +100,7 @@ async function runClaimedIssue(
   const claimedRunID = openIssueRunID(input.database, issue.id);
   const selection = resolveExecutorSelection(input.database, project, issue);
   const provider = selectedProvider(project, selection, input.providers);
-  const prompt = buildIssuePrompt(project, issue);
+  const prompt = buildIssuePrompt(project, issue, input.database);
   try {
     const serviceTier = resolveServiceTier(issue, selection, project);
     const result = await runIssueWithProvider(provider, {
@@ -271,25 +272,69 @@ function projectProvider(project: Project, providers: ProjectLoopInput["provider
   return provider;
 }
 
-export function buildIssuePromptForTest(project: Project, issue: Issue): string {
-  return buildIssuePrompt(project, issue);
+export function buildIssuePromptForTest(project: Project, issue: Issue, database?: RunnerDatabase): string {
+  return buildIssuePrompt(project, issue, database);
 }
 
-function buildIssuePrompt(project: Project, issue: Issue): string {
+function buildIssuePrompt(project: Project, issue: Issue, database?: RunnerDatabase): string {
   const title = issue.title.trim();
   const description = issue.description.trim();
   const base = description === "" || description === title
     ? title
     : [`# ${title}`, "", description].join("\n");
-  return withRunnerContext(project, issue, base);
+  return withRunnerContext(project, issue, base, database);
 }
 
-function withRunnerContext(project: Project, issue: Issue, prompt: string): string {
+function withRunnerContext(project: Project, issue: Issue, prompt: string, database?: RunnerDatabase): string {
   return withMcpRequirementContext(
     project,
     issue,
-    withSkillIntentContext(project, issue, withIssueLifecycleContract(issue, withGoalContract(issue, prompt)))
+    withSkillIntentContext(project, issue, withIssueLifecycleContract(
+      issue,
+      withGovernedRetryContext(database, issue, withGoalContract(issue, prompt))
+    ))
   );
+}
+
+const SUPERVISOR_RETRY_EVENT = "issue.supervisor_retry";
+const MAX_RETRY_CONTEXT_CHARS = 4_000;
+
+function withGovernedRetryContext(database: RunnerDatabase | undefined, issue: Issue, prompt: string): string {
+  const context = governedRetryContext(database, issue);
+  if (!context) return prompt.trim();
+  return [
+    prompt.trim(),
+    "",
+    "## Governed retry context",
+    "The Runner authorized this new attempt after Supervisor revalidation. The resolution below addresses the previous attempt's blocker. Apply it only within the original Issue goal and non-goals; it does not authorize unrelated expansion.",
+    context.decisionID ? `Decision: ${context.decisionID}` : "",
+    `Resolution: ${context.reason}`
+  ].filter(Boolean).join("\n").trim();
+}
+
+function governedRetryContext(
+  database: RunnerDatabase | undefined,
+  issue: Issue
+): { decisionID: string; reason: string } | null {
+  if (!database) return null;
+  const event = listIssueEvents(database, issue.id, { limit: 1, types: [SUPERVISOR_RETRY_EVENT] })[0];
+  if (!event) return null;
+  try {
+    const payload = JSON.parse(event.payload) as Record<string, unknown>;
+    const reason = boundedPromptText(payload.reason, MAX_RETRY_CONTEXT_CHARS);
+    if (reason === "") return null;
+    return {
+      decisionID: boundedPromptText(payload.decision_id, 512),
+      reason
+    };
+  } catch {
+    return null;
+  }
+}
+
+function boundedPromptText(value: unknown, limit: number): string {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, limit);
 }
 
 function withIssueLifecycleContract(issue: Issue, prompt: string): string {

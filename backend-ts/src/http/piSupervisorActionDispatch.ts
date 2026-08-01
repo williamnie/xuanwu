@@ -11,6 +11,7 @@ import {
   type PreparedProviderMutation
 } from "../domain/run/service.ts";
 import { createIssueSupervisorEvent, type PiAction } from "../db/repositories/pi.ts";
+import { getProject } from "../db/repositories/projects.ts";
 import { updatePiRecoveryAttemptStatus } from "../db/repositories/pi/recoveryAttempts.ts";
 import {
   isExecutorProviderId,
@@ -26,10 +27,24 @@ import {
 import { prepareIssueRecoveryAttempt, issueRecoverySnapshot } from "./piSupervisorIssueRecoveryAttempts.ts";
 import { assertFreshSupervisorState } from "./piSupervisorPreconditions.ts";
 import { retryIssueWithInterrupt } from "../runner/interrupt.ts";
+import {
+  startProjectLoop as defaultStartProjectLoop,
+  type ProjectLoopRuntime,
+  type ProjectLoopStartOptions
+} from "../runner/projectLoopManager.ts";
+import type { EventBus } from "../events/bus.ts";
+
+type ProjectLoopStarter = (
+  runtime: ProjectLoopRuntime,
+  projectID: string,
+  options?: ProjectLoopStartOptions
+) => void;
 
 export type SupervisorDispatchContext = {
+  bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  startProjectLoop?: ProjectLoopStarter;
 };
 
 export async function dispatchSupervisorPiAction(
@@ -204,11 +219,20 @@ async function retryIssueNow(
       reason,
       status: issue.status
     });
+    if (progress && issue.status === "todo") startRetriedProjectLoop(context, issue.project_id);
     return issue;
   } catch (error) {
     updatePiRecoveryAttemptStatus(context.database, attempt.id, { error: safeError(error), status: "failed" });
     throw error;
   }
+}
+
+function startRetriedProjectLoop(context: SupervisorDispatchContext, projectID: string): void {
+  const project = getProject(context.database, projectID);
+  const provider = project ? context.providers?.[project.provider as ExecutorProviderId] : undefined;
+  if (!project || project.auto_run !== 1 || !provider?.capabilities.includes("issue_execution")) return;
+  const starter = context.startProjectLoop ?? defaultStartProjectLoop;
+  starter({ bus: context.bus, database: context.database, providers: context.providers }, project.id);
 }
 
 function recoverySnapshotChanged(
