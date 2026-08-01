@@ -1,7 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useEditor } from '@tiptap/react';
 import { getPromptEditorExtensions } from './promptEditorCore';
 import { handlePromptEditorSubmitKey } from './promptEditorKeyHandling';
+import {
+  schedulePromptEditorCaretScroll,
+  shouldKeepPromptEditorCaretVisible,
+} from './promptEditorScroll';
+import { enqueueLocalPromptValue, reconcilePromptEditorValue } from './promptEditorValueSync';
 import {
   detectPromptSuggestionContext,
   filterPromptSuggestionItems,
@@ -12,19 +17,31 @@ import {
   samePromptSuggestionContext,
 } from './promptEditorSuggestions';
 
-export function usePromptEditor(value, onChange, placeholder, uploadFiles, submitKeyRef, suggestionState) {
+export function usePromptEditor(value, onChange, placeholder, uploadFiles, submitKeyRef, suggestionState, keepCaretVisible = false) {
+  const pendingEmittedValuesRef = useRef([]);
   const editor = useEditor({
     extensions: getPromptEditorExtensions(placeholder),
     content: '',
     immediatelyRender: false,
     editorProps: {
-      handleKeyDown: (_view, event) => handlePromptEditorKeyDown(event, submitKeyRef.current, suggestionState),
+      handleKeyDown: (view, event) => handlePromptEditorKeyDown(
+        view,
+        event,
+        submitKeyRef.current,
+        suggestionState,
+        keepCaretVisible,
+      ),
       handlePaste: (_view, event) => handleImageFiles(event.clipboardData?.files, uploadFiles),
       handleDrop: (_view, event) => handleImageFiles(event.dataTransfer?.files, uploadFiles),
       attributes: { 'aria-label': placeholder || 'Markdown editor' },
     },
     onUpdate: ({ editor: current }) => {
-      onChange(current.getMarkdown());
+      const nextValue = current.getMarkdown();
+      pendingEmittedValuesRef.current = enqueueLocalPromptValue(
+        pendingEmittedValuesRef.current,
+        nextValue,
+      );
+      onChange(nextValue);
       updatePromptSuggestionMenu(current, suggestionState);
     },
     onSelectionUpdate: ({ editor: current }) => updatePromptSuggestionMenu(current, suggestionState),
@@ -35,7 +52,9 @@ export function usePromptEditor(value, onChange, placeholder, uploadFiles, submi
     if (!editor) return;
     const current = editor.getMarkdown();
     const next = value || '';
-    if (current !== next) {
+    const reconciliation = reconcilePromptEditorValue(current, next, pendingEmittedValuesRef.current);
+    pendingEmittedValuesRef.current = reconciliation.pendingValues;
+    if (reconciliation.apply) {
       editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false });
     }
   }, [editor, value]);
@@ -72,7 +91,10 @@ export function applyPromptSuggestion(editor, context, item, { attachReference, 
   return insertPromptSuggestion(editor, context, item);
 }
 
-function handlePromptEditorKeyDown(event, onSubmitKey, suggestionState) {
+function handlePromptEditorKeyDown(view, event, onSubmitKey, suggestionState, keepCaretVisible) {
+  if (shouldKeepPromptEditorCaretVisible(event, keepCaretVisible)) {
+    schedulePromptEditorCaretScroll(view);
+  }
   const menu = suggestionState.suggestionMenuRef.current;
   const items = filterPromptSuggestionItems(suggestionState.suggestionsRef.current, menu?.context);
   if (menu && items.length > 0) {

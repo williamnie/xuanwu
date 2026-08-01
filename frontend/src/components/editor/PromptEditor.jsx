@@ -77,7 +77,7 @@ export default function PromptEditor({
     selectCommandRef,
     suggestionMenuRef,
     setSuggestionMenu,
-  });
+  }, isComposer);
 
   useLayoutEffect(() => {
     submitKeyRef.current = onSubmitKey;
