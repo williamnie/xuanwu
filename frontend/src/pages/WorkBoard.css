@@ -226,7 +226,8 @@
 .work-card.is-dragging { opacity: 0.38; }
 .work-card.is-moving { cursor: wait; opacity: 0.62; pointer-events: none; }
 
-.work-card-topline { align-items: center; display: flex; gap: 6px; justify-content: space-between; }
+.work-card-topline { align-items: center; display: flex; gap: 6px; justify-content: space-between; min-width: 0; }
+.work-card-identity { align-items: center; display: flex; gap: 7px; min-width: 0; }
 .work-type-badge,
 .work-attention-badge,
 .work-dialog-contract span {
@@ -238,16 +239,18 @@
   padding: 3px 6px;
 }
 
+.work-issue-label { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.58rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .work-attention-badge { align-items: center; border-color: color-mix(in srgb, var(--warning) 35%, var(--border-color)); color: var(--warning); display: inline-flex; gap: 4px; }
 .work-card h3 { font-family: var(--font-display); font-size: 0.94rem; line-height: 1.35; margin: 11px 0 6px; }
 .work-card > p { color: var(--text-secondary); display: -webkit-box; font-size: 0.72rem; -webkit-line-clamp: 3; -webkit-box-orient: vertical; line-height: 1.52; margin: 0; overflow: hidden; }
 .work-card-project { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.61rem; margin-top: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .work-card-footer { border-top: 1px solid var(--border-light); justify-content: space-between; margin-top: 11px; padding-top: 9px; }
-.work-card-footer button { align-items: center; background: transparent; border: 0; color: var(--text-muted); cursor: pointer; display: inline-flex; font-size: 0.65rem; font-weight: 700; gap: 4px; padding: 2px 0; }
+.work-card-footer button { align-items: center; background: transparent; border: 0; color: var(--text-muted); cursor: pointer; display: inline-flex; flex: 1 1 0; font-size: 0.65rem; font-weight: 700; gap: 4px; justify-content: center; padding: 2px 0; white-space: nowrap; }
+.work-card-footer button:first-child { justify-content: flex-start; }
+.work-card-footer button:last-child { justify-content: flex-end; }
 .work-card-footer .work-issue-link { color: var(--primary); }
 .work-card-footer .work-detail-link { color: var(--info); }
 .work-card-footer .work-evidence-link { color: var(--success); }
-.work-source-label { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.56rem; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .work-column-empty { border: 1px dashed var(--border-color); border-radius: var(--radius-sm); color: var(--text-muted); font-family: var(--font-mono); font-size: 0.66rem; padding: 24px 12px; text-align: center; }
 .work-board-loading { align-items: center; background: color-mix(in srgb, var(--bg-primary) 72%, transparent); display: flex; font-family: var(--font-mono); inset: 0; justify-content: center; position: absolute; }
 

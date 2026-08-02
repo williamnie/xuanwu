@@ -27,7 +27,9 @@ test('Work Board stays board-only and opens canonical Work Detail', () => {
   assert.match(board, /WORK_BOARD_STATUSES\.map\(status =>/);
   assert.match(board, /navigateTo\('work', work\.id\)/);
   assert.doesNotMatch(board, /navigateTo\('issues', issueId\)/);
-  assert.match(board, /Issue #\{issueId\} authority/);
+  assert.match(board, /work-card-identity/);
+  assert.match(board, /`Issue #\$\{issueId\}`/);
+  assert.doesNotMatch(board, /Issue #\$\{issueId\} authority/);
   assert.match(board, /<WorkDetail/);
   assert.match(board, /selectedHandoffId=\{selectedHandoffId\}/);
   assert.doesNotMatch(board, /relations=|work-relation-row|indexRelationsByWork/);

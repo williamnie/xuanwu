@@ -462,7 +462,10 @@ function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit
       onDragStart={event => onDragStart(event, work)}
     >
       <div className="work-card-topline">
-        <span className="work-type-badge">{t(`workType.${work.type}`)}</span>
+        <div className="work-card-identity">
+          <span className="work-type-badge">{t(`workType.${work.type}`)}</span>
+          <span className="work-issue-label">{issueId ? `Issue #${issueId}` : work.id}</span>
+        </div>
         {needsAttention ? <span className="work-attention-badge"><AlertTriangle size={12} /> {t('timeline.approval')}</span> : null}
       </div>
       <h3>{work.title}</h3>
@@ -476,9 +479,6 @@ function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit
         <button className="work-evidence-link" onClick={() => onEvidence(work)} type="button">
           <ShieldCheck size={13} /> {t('timeline.evidence')}
         </button>
-        {issueId ? (
-          <span className="work-source-label">Issue #{issueId} authority</span>
-        ) : <span className="work-source-label">{work.id}</span>}
       </div>
     </article>
   );
