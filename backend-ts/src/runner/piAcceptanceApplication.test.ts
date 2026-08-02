@@ -149,6 +149,45 @@ describe("PI acceptance decision application", () => {
     }
   });
 
+  test("accepted delivery review blocks PI continuation in the existing Provider Session", async () => {
+    const db = await fixture();
+    const provider = new ContinuingProvider();
+    try {
+      const issue = completedIssue(db, "Accepted delivery", "session-original", "turn-original");
+      const originCard = await buildIssueCompletionCard(db, issue.id);
+      recordIssueCompletionCard(db, originCard, "test");
+      updateIssue(db, issue.id, { status: "needs_user" });
+      const request = createHumanReviewRequest(db, issue.id, {
+        consequences: "真实 smoke 未执行",
+        evidence_refs: [`completion-card:${originCard.fingerprint}`],
+        kind: "acceptance",
+        question: "是否接受当前离线实现？"
+      });
+      await reviewHumanIssue(db, issue.id, {
+        action: "accept",
+        comment: "同意，我来测试。",
+        review_request_id: request.id,
+        review_revision: request.revision
+      });
+      const card = await buildIssueCompletionCard(db, issue.id);
+
+      const updated = await applyPiAcceptanceDecision(
+        { database: db, providers: { codex: provider } },
+        card,
+        decision("continue_same_session", "仍需补充正式提交和真实 Provider 验证。")
+      );
+
+      expect(updated.status).toBe("done");
+      expect(provider.inputs).toHaveLength(0);
+      expect(listIssueRuns(db, issue.id)).toHaveLength(1);
+      expect(db.sqlite.query<{ count: number }, [number]>(
+        "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
+      ).get(issue.id)?.count).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
   test("continues in the same Provider Session and creates a new canonical Run", async () => {
     const db = await fixture();
     const provider = new ContinuingProvider();

@@ -54,7 +54,11 @@ function honorAcceptedDeliveryReview(
   decision: PiAcceptanceDecision
 ): PiAcceptanceDecision {
   const review = card.human_review;
-  if (!new Set<PiAcceptanceDecision["decision"]>(["needs_user", "retry"]).has(decision.decision)
+  if (!new Set<PiAcceptanceDecision["decision"]>([
+    "continue_same_session",
+    "needs_user",
+    "retry"
+  ]).has(decision.decision)
     || review?.action !== "accept"
     || review.request.kind !== "acceptance"
     || review.request.question === "") {
@@ -65,7 +69,9 @@ function honorAcceptedDeliveryReview(
     card_fingerprint: card.fingerprint,
     reason: decision.decision === "retry"
       ? "accepted delivery review forbids a fresh execution Session for the same stated criteria"
-      : "accepted delivery review closes its stated human-only criteria",
+      : decision.decision === "continue_same_session"
+        ? "accepted delivery review forbids continuing execution for the same stated criteria"
+        : "accepted delivery review closes its stated human-only criteria",
     request_id: review.request_id,
     revision: review.review_revision,
     run_id: review.origin_run_id || card.run.id
@@ -74,7 +80,7 @@ function honorAcceptedDeliveryReview(
     confidence: decision.confidence,
     decision: "accept",
     evidence_refs: [...new Set([...decision.evidence_refs, `human-review:${review.request_id}`])],
-    rationale: `用户已明确接受当前交付及该验收请求列出的取舍；不得因同一缺口重复请求确认或启动新的执行 Session。${decision.rationale}`,
+    rationale: `用户已明确接受当前交付及该验收请求列出的取舍；不得因同一缺口重复请求确认、继续执行或启动新的执行 Session。${decision.rationale}`,
     unmet_requirements: []
   };
 }
