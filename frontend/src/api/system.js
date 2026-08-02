@@ -38,6 +38,14 @@ export const systemApi = {
     return request(`/api/usage/codex${query}`);
   },
 
+  getProviderUsage: (options = {}) => {
+    const params = new URLSearchParams();
+    if (options?.compact === true) params.set('compact', '1');
+    if (options?.refresh === true) params.set('refresh', '1');
+    const query = params.size > 0 ? `?${params}` : '';
+    return request(`/api/usage/providers${query}`);
+  },
+
   getSystemStatus: (options = {}) => getCompactSystemStatus(options),
 
   getRunnerSettings: () => request('/api/runner/settings'),

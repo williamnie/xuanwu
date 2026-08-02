@@ -269,9 +269,14 @@ describe("Bun frontend API compatibility", () => {
       `{"timestamp":"2026-05-31T08:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}}}`
     ]);
     try {
-      const router = createDefaultRouter({ database, codexSessionsDir: sessionsDir });
+      const router = createDefaultRouter({
+        database,
+        codexSessionsDir: sessionsDir,
+        providers: { codex: usageProvider("codex"), claude: usageProvider("claude") }
+      });
 
       const usage = await requestJSON(router, "/api/usage/codex?refresh=1", "GET");
+      const providerUsage = await requestJSON(router, "/api/usage/providers?compact=1&refresh=1", "GET");
 
       expect(usage).toMatchObject({
         source: sessionsDir,
@@ -284,6 +289,18 @@ describe("Bun frontend API compatibility", () => {
         },
         summary: { all_time: { total_tokens: 15 } },
         latest_usage: { last_token_usage: { total_tokens: 15 } }
+      });
+      expect(providerUsage).toMatchObject({
+        providers: [{
+          compact: true,
+          events_scanned: 1,
+          provider: { id: "codex", scope: "local_sessions" },
+          summary: { all_time: { total_tokens: 15 } }
+        }, {
+          events_scanned: 0,
+          provider: { id: "claude", scope: "runner_attempts" },
+          rate_limits: null
+        }]
       });
 
       await appendFile(usagePath,
@@ -331,6 +348,16 @@ function approvalProvider(resolutions: Array<{ decision: string; id: string; sco
     },
     async resolveApproval(id, decision) {
       resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" });
+    }
+  };
+}
+
+function usageProvider(id: "claude" | "codex"): ExecutorProvider {
+  return {
+    capabilities: ["issue_execution"],
+    id,
+    async run(_input: ProviderRunInput): Promise<never> {
+      throw new Error("not implemented");
     }
   };
 }

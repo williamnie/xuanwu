@@ -1,4 +1,4 @@
-const CODEX_USAGE_CACHE_KEY = 'codex-usage-dashboard-v1';
+const CODEX_USAGE_CACHE_KEY = 'ai-usage-dashboard-v2';
 
 export function readCodexUsageCache(storage) {
   try {
