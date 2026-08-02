@@ -40,6 +40,9 @@ test('top-level Automations page exposes editor, history, run-now, filters, real
   const page = readFileSync(new URL('./Automations.jsx', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   for (const token of ['AutomationEditor', 'History', 'runNow', 'AutomationFilters', 'subscribeToEvents', 'AutomationState']) assert.match(page, new RegExp(token));
+  assert.match(page, /createPortal\([\s\S]*document\.body/);
+  assert.match(page, /useI18n\(\)/);
+  assert.match(page, /automations\.field\.workflowHint/);
   assert.match(app, /currentPage === 'automations'[\s\S]*<Automations/);
   assert.doesNotMatch(app, /currentPage === 'automations'[\s\S]{0,80}<Cron/);
 });
