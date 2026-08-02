@@ -5,7 +5,7 @@ import type { PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import type { CompletionCard } from "../domain/acceptance/completionCard.ts";
 import { appLanguage } from "../i18n/language.ts";
-import type { PiGatePolicy } from "./actionGate.ts";
+import { piInternalReadAuthorization } from "./internalReadAuthorization.ts";
 
 export const PI_ACCEPTANCE_DECISIONS = [
   "accept",
@@ -59,7 +59,11 @@ export async function runPiIssueAcceptance(input: {
   const { createPiRuntimeSession } = await import("../http/piRuntime.ts");
   const runtime = await createPiRuntimeSession(input.database, {
     agent: input.agent,
-    authorization: acceptanceAuthorization(input.project.id, input.card.issue.id),
+    authorization: piInternalReadAuthorization({
+      issueID: input.card.issue.id,
+      projectID: input.project.id,
+      toolNames: ACCEPTANCE_TOOL_NAMES
+    }),
     conversationID: `pi-acceptance-${input.card.issue.id}-${input.card.fingerprint.slice(0, 12)}`,
     issueID: input.card.issue.id,
     heartbeatID: `pi-acceptance:${input.project.id}:${input.card.issue.id}:${input.card.fingerprint.slice(0, 12)}`,
@@ -150,26 +154,6 @@ async function promptWithTimeout(
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
-}
-
-function acceptanceAuthorization(projectID: string, issueID: number): PiGatePolicy {
-  const authorizedActions = ACCEPTANCE_TOOL_NAMES.map((name) => ({
-    action_type: name.startsWith("issue_")
-      ? name.replace("issue_", "issue.")
-      : name.startsWith("session_")
-        ? name.replace("session_", "session.")
-        : name.startsWith("repo_")
-          ? name.replace("repo_", "repo.")
-          : `sdk.${name}`,
-    issue_id: issueID,
-    project_id: projectID
-  }));
-  return {
-    allowedActions: authorizedActions.map((action) => action.action_type),
-    authorizedActions,
-    mode: "delegated",
-    scope: { issue_id: issueID, project_id: projectID }
-  };
 }
 
 function extractJson(raw: string): string {

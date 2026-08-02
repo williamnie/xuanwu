@@ -14,6 +14,9 @@ export type PiMemoryPromptContextInput = {
   tokenBudget?: number;
 };
 export type PiMemoryContextItem = {
+  authority: string;
+  authorized_at: string;
+  authorized_by: string;
   confidence: string;
   content: string;
   citation_id: string;
@@ -85,11 +88,12 @@ export function buildPiMemoryPromptContext(db: RunnerDatabase, input: PiMemoryPr
   const items = result.memory_items;
   const lines = items.map(formatMemoryLine);
   return [
-    "Reusable Supervisor memory (non-authoritative context):",
+    "Reusable Supervisor memory and durable user policy (authority labeled per item):",
     lines.length > 0 ? lines.join("\n") : "- No confirmed memories for this scope.",
     `Memory retrieval: scopes=${result.retrieval_scopes.join(",") || "global"} item_limit=${result.limits.item_limit} token_budget=${result.limits.token_budget} token_estimate=${result.limits.token_estimate} truncated=${result.limits.truncated}.`,
     `Memory truncation: ${result.truncation_summary.summary}`,
-    "Memory rule: use memory_remember only for explicit preferences/decisions/workflows or evidence-backed root-cause and resolution experience. Never store or answer current Work/Run/Issue status from memory; always query authoritative tools for current state."
+    "Memory authority rule: user_explicit items are authoritative only for the user's stated preference, workflow, constraint, or acceptance choice inside their recorded scope. evidence_backed items are reusable technical evidence. advisory items are hints only. No memory item is authoritative for current Work/Run/Issue status, safety, permissions, or facts that authoritative tools can refresh.",
+    "Memory write rule: use memory_remember only for explicit preferences/decisions/workflows or evidence-backed root-cause and resolution experience. Never store or answer current Work/Run/Issue status from memory; always query authoritative tools for current state."
   ].join("\n");
 }
 
@@ -174,7 +178,10 @@ function uniqueMemoryItems(items: PiMemoryItem[]): PiMemoryItem[] {
 
 function contextItem(item: PiMemoryItem): PiMemoryContextItem {
   const reference = memoryReference(item);
-  return {
+  const context: PiMemoryContextItem = {
+    authority: item.authority,
+    authorized_at: item.authorized_at,
+    authorized_by: item.authorized_by,
     confidence: item.confidence,
     content: item.content,
     citation_id: item.citation_id,
@@ -198,10 +205,12 @@ function contextItem(item: PiMemoryItem): PiMemoryContextItem {
     source_id: item.source_id,
     source_path: reference,
     source_type: item.source_type,
-    token_estimate: estimateTokens(formatMemoryLine({ ...item, reference, retrieval_scope: "", source_path: reference, token_estimate: 0, truncated: false })),
+    token_estimate: 0,
     truncated: false,
     updated_at: item.updated_at
   };
+  context.token_estimate = estimateTokens(formatMemoryLine(context));
+  return context;
 }
 
 function memoryProvenance(item: PiMemoryItem, reference: string): PiMemoryProvenance {
@@ -223,7 +232,7 @@ function selectionReason(item: PiMemoryItem): string {
 }
 
 function formatMemoryLine(item: PiMemoryContextItem): string {
-  return `- [${item.reference} | memory_key=${item.memory_key} | seen=${item.occurrence_count} | last_seen=${item.last_seen_at} | source_path=${item.source_path} | type=${item.memory_type} | layer=${item.layer} | ${item.scope}:${item.scope_id || "runner"} | ${sourceLabel(item)} | ${citationLabel(item)} | updated=${item.updated_at} | confidence=${item.confidence}${item.truncated ? " | truncated=true" : ""}] ${item.kind}: ${item.content}`;
+  return `- [${item.reference} | memory_key=${item.memory_key} | authority=${item.authority} | seen=${item.occurrence_count} | ${item.scope}:${item.scope_id || "runner"} | ${sourceLabel(item)} | ${citationLabel(item)} | updated=${item.updated_at} | confidence=${item.confidence}${item.truncated ? " | truncated=true" : ""}] ${item.kind}: ${item.content}`;
 }
 
 function sourceLabel(item: PiMemoryContextItem): string {
@@ -315,12 +324,12 @@ function scopeRank(item: PiMemoryItem): number {
 }
 
 function memoryLimit(value: number | undefined): number {
-  if (!Number.isInteger(value)) return DEFAULT_MEMORY_LIMIT;
+  if (typeof value !== "number" || !Number.isInteger(value)) return DEFAULT_MEMORY_LIMIT;
   return Math.max(0, Math.min(value, MAX_MEMORY_LIMIT));
 }
 
 function memoryTokenBudget(value: number | undefined): number {
-  if (!Number.isInteger(value)) return DEFAULT_TOKEN_BUDGET;
+  if (typeof value !== "number" || !Number.isInteger(value)) return DEFAULT_TOKEN_BUDGET;
   return Math.max(0, Math.min(value, MAX_TOKEN_BUDGET));
 }
 

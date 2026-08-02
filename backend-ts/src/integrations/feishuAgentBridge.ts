@@ -16,6 +16,7 @@ import {
 } from "./feishuProjectSelectionBridge.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
 import { ingestPiGuardianEvent } from "../pi/guardianEventIngest.ts";
+import { resolveFeishuActionTarget } from "./feishuActionTarget.ts";
 
 export type FeishuConversationRunner = (input: FeishuRunnerInput) => Promise<FeishuRunnerResult>;
 export type FeishuRunnerInput = {
@@ -25,6 +26,7 @@ export type FeishuRunnerInput = {
   projectId: string;
   targetProjectId?: string;
   targetProjectSource?: string;
+  targetIssueId?: number;
 };
 export type FeishuRunnerResult = {
   conversationId?: string;
@@ -133,15 +135,20 @@ async function runnerReply(
       return { conversationId: route.conversationId, projectId: "", targetProjectId, text: NEW_CONVERSATION_ACK_TEXT };
     }
     const prompt = route.prompt || input.event.text || "[Feishu attachment message]";
+    const actionTarget = resolveFeishuActionTarget(options.database, input.event);
+    const resolvedTargetProjectID = actionTarget.projectID || targetProjectId;
     const result = await options.runConversation({
       conversationId: route.conversationId,
       event: input.event,
       projectId: "",
-      targetProjectId,
-      targetProjectSource: projectContext.source,
+      targetProjectId: resolvedTargetProjectID,
+      targetProjectSource: actionTarget.source === "none"
+        ? projectContext.source
+        : `${actionTarget.source}:${actionTarget.sourceRef}`,
+      targetIssueId: actionTarget.issueID || undefined,
       prompt
     });
-    return { ...result, projectId: "", targetProjectId, text: result.text };
+    return { ...result, projectId: "", targetProjectId: resolvedTargetProjectID, text: result.text };
   } catch (error) {
     const message = safeError(error);
     ingestPiGuardianEvent(options.database, {

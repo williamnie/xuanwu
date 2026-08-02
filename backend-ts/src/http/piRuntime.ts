@@ -25,6 +25,10 @@ import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "../pi/supervisorContro
 import { installPiProviderSecretOverride } from "../security/secrets/piProviderRuntime.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 import type { PiChatToolMode, PiRuntimePromptProfile } from "../pi/runtimePromptProfile.ts";
+import {
+  buildPiRuntimeContextEnvelope,
+  recordPiRuntimeContextEnvelopeAudit
+} from "../pi/runtimeContextEnvelope.ts";
 
 export type { PiRuntimePromptProfile } from "../pi/runtimePromptProfile.ts";
 
@@ -198,12 +202,15 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     throw new Error(`PI runtime tool registry unavailable: ${runtimeError(error)}`, { cause: error });
   }
   try {
+    const systemPrompt = buildPiRuntimeSystemPrompt(input, db);
+    const runtimeContextEnvelope = buildPiRuntimeContextEnvelope(db, input);
+    recordPiRuntimeContextEnvelopeAudit(db, input, runtimeContextEnvelope, systemPrompt);
     const resourceLoader = await createPiRuntimeResourceLoader(sdk, db, input, {
       agentDir: paths.agentDir,
       cwd: context.cwd,
       piPackageDir: process.env.PI_PACKAGE_DIR,
       runtimeRoot,
-      systemPrompt: buildPiRuntimeSystemPrompt(input, db)
+      systemPrompt
     });
     const { session } = await sdk.pi.createAgentSession({
       cwd: context.cwd,

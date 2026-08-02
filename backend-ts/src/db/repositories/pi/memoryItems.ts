@@ -20,6 +20,7 @@ export type PiMemoryItem = {
   id: string; scope: string; scope_id: string; kind: string; content: string;
   source_type: string; source_id: string; confidence: string; pinned: number;
   disabled: number; memory_type: PiMemoryType; layer: PiMemoryLayer;
+  authority: PiMemoryAuthority; authorized_by: string; authorized_at: string;
   memory_key: string; occurrence_count: number; last_seen_at: string;
   citation_type: string; citation_id: string; citation_label: string; citation_url: string;
   created_at: string; updated_at: string;
@@ -35,29 +36,34 @@ export type PiMemoryItemFilter = {
 };
 export type PiMemoryType = (typeof PI_MEMORY_TYPES)[number];
 export type PiMemoryLayer = (typeof PI_MEMORY_LAYERS)[number];
+export type PiMemoryAuthority = (typeof PI_MEMORY_AUTHORITIES)[number];
 
 export const PI_MEMORY_TYPES = ["user", "project", "inbox", "source", "skill"] as const;
 export const PI_MEMORY_LAYERS = ["ephemeral", "working", "long_term"] as const;
+export const PI_MEMORY_AUTHORITIES = ["advisory", "user_explicit", "evidence_backed"] as const;
 
 const TABLE = "pi_memory_items";
 const COLUMNS = `id, scope, scope_id, kind, content, source_type, source_id,
   confidence, pinned, disabled, memory_type, layer, citation_type, citation_id,
-  citation_label, citation_url, memory_key, occurrence_count, last_seen_at, created_at, updated_at`;
+  citation_label, citation_url, authority, authorized_by, authorized_at,
+  memory_key, occurrence_count, last_seen_at, created_at, updated_at`;
 const UPDATE_COLUMNS = [
   "scope", "scope_id", "kind", "content", "source_type", "source_id",
   "confidence", "pinned", "disabled", "memory_type", "layer", "citation_type",
-  "citation_id", "citation_label", "citation_url", "memory_key", "occurrence_count", "last_seen_at"
+  "citation_id", "citation_label", "citation_url", "authority", "authorized_by", "authorized_at",
+  "memory_key", "occurrence_count", "last_seen_at"
 ] as const;
 
 export function createPiMemoryItem(db: RunnerDatabase, input: PiMemoryItemInput): PiMemoryItem {
   const record = normalizeCreate(input);
   requireCreateFields(record, ["id", "scope", "kind", "content"]);
   const timestamp = now();
-  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [record.id, record.scope, record.scope_id, record.kind, record.content, record.source_type,
       record.source_id, record.confidence, record.pinned, record.disabled, record.memory_type,
       record.layer, record.citation_type, record.citation_id, record.citation_label,
-      record.citation_url, record.memory_key, record.occurrence_count,
+      record.citation_url, record.authority, record.authorized_by, record.authorized_at,
+      record.memory_key, record.occurrence_count,
       record.last_seen_at || timestamp, timestamp, timestamp]);
   return mustGetPiMemoryItem(db, record.id);
 }
@@ -142,6 +148,9 @@ function normalizeCreate(input: PiMemoryItemInput): PiMemoryItem {
     citation_id: cleanString(input.citation_id),
     citation_label: cleanString(input.citation_label),
     citation_url: cleanString(input.citation_url),
+    authority: normalizeMemoryAuthority(input.authority),
+    authorized_by: cleanString(input.authorized_by),
+    authorized_at: cleanString(input.authorized_at),
     memory_key: cleanString(input.memory_key) || cleanString(input.id),
     occurrence_count: positiveInteger(input.occurrence_count, 1),
     last_seen_at: cleanString(input.last_seen_at),
@@ -156,6 +165,9 @@ function normalizeUpdate(input: PiMemoryItemInput): PiMemoryItemInput {
   for (const field of ["citation_type", "citation_id", "citation_label", "citation_url"] as const) {
     if (hasPatchValue(input, field)) output[field] = cleanString(input[field]);
   }
+  if (hasPatchValue(input, "authority")) output.authority = normalizeMemoryAuthority(input.authority);
+  if (hasPatchValue(input, "authorized_by")) output.authorized_by = cleanString(input.authorized_by);
+  if (hasPatchValue(input, "authorized_at")) output.authorized_at = cleanString(input.authorized_at);
   if (hasPatchValue(input, "memory_key")) output.memory_key = cleanString(input.memory_key);
   if (hasPatchValue(input, "occurrence_count")) output.occurrence_count = positiveInteger(input.occurrence_count, 1);
   if (hasPatchValue(input, "last_seen_at")) output.last_seen_at = cleanString(input.last_seen_at);
@@ -180,6 +192,9 @@ function mapPiMemoryItem(row: Record<string, unknown>): PiMemoryItem {
     citation_id: optionalString(row.citation_id),
     citation_label: optionalString(row.citation_label),
     citation_url: optionalString(row.citation_url),
+    authority: normalizeMemoryAuthority(row.authority),
+    authorized_by: optionalString(row.authorized_by),
+    authorized_at: optionalString(row.authorized_at),
     memory_key: optionalString(row.memory_key) || id,
     occurrence_count: integerValue(row.occurrence_count, "pi_memory_items.occurrence_count"),
     last_seen_at: optionalString(row.last_seen_at) || updatedAt,
@@ -200,6 +215,13 @@ function normalizeMemoryLayer(value: unknown): PiMemoryLayer {
   if (text === "") return "working";
   if (isMemoryLayer(text)) return text;
   throw new Error(`layer must be one of ${PI_MEMORY_LAYERS.join(", ")}`);
+}
+
+function normalizeMemoryAuthority(value: unknown): PiMemoryAuthority {
+  const text = cleanString(value);
+  if (text === "") return "advisory";
+  if ((PI_MEMORY_AUTHORITIES as readonly string[]).includes(text)) return text as PiMemoryAuthority;
+  throw new Error(`authority must be one of ${PI_MEMORY_AUTHORITIES.join(", ")}`);
 }
 
 function isMemoryType(value: string): value is PiMemoryType {

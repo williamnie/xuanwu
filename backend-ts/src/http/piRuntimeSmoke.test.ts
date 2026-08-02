@@ -316,7 +316,15 @@ describe("Bun PI runtime v1 smoke", () => {
       ]));
       const audit = listPiActionEvents(database, { conversationId: "conv-tool-registry" })
         .find((event) => event.event_type === "runtime_tool_registry_snapshot");
+      const contextAudit = listPiActionEvents(database, { conversationId: "conv-tool-registry" })
+        .find((event) => event.event_type === "runtime_context_projected");
       expect(audit).toBeTruthy();
+      expect(contextAudit).toBeTruthy();
+      expect(JSON.parse(contextAudit?.payload_json ?? "{}")).toMatchObject({
+        schema_version: "xw.pi-runtime-context.v1",
+        target: { project_id: "demo" },
+        system_prompt_sha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+      });
       const payload = JSON.parse(audit?.payload_json ?? "{}");
       expect(payload.source).toBe("registry");
       expect(payload.provider_ids).toEqual(expect.arrayContaining(["runner-builtin", HTTP_READONLY_PROVIDER_ID]));

@@ -80,7 +80,7 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   const feishuBridge = createFeishuAgentBridge({
     config: () => config.integrations.feishu,
     database,
-    runConversation: async ({ conversationId, event, projectId, prompt, targetProjectId, targetProjectSource }) => {
+    runConversation: async ({ conversationId, event, projectId, prompt, targetIssueId, targetProjectId, targetProjectSource }) => {
       const { runPiConversationPrompt } = await import("../http/piConversationApi.ts");
       const oneShotTargetProjectId = targetProjectId || projectId;
       const result = await runPiConversationPrompt({ bus, database, providers }, {
@@ -91,6 +91,7 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
         prompt,
         targetProjectId: oneShotTargetProjectId,
         targetProjectSource,
+        targetIssueId,
         title: `Feishu · ${event.chat_id || event.message_id}`
       });
       return { conversationId: result.conversation_id, projectId: "", targetProjectId: oneShotTargetProjectId, text: result.text };

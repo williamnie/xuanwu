@@ -3,7 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { listPiGuardianEvents } from "../db/repositories/pi.ts";
+import { createPiNotificationIntent, listPiGuardianEvents } from "../db/repositories/pi.ts";
+import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
 import { buildFeishuConnectorConfig, normalizeFeishuMessageEvent } from "./feishu.ts";
 import { createFeishuAgentBridge } from "./feishuAgentBridge.ts";
 import { ingestFeishuMessageEvent } from "./feishuIngest.ts";
@@ -80,6 +81,46 @@ describe("Feishu agent bridge PI-first boundary", () => {
       severity: "urgent",
       source: "supervisor"
     }));
+    database.close();
+  });
+
+  test("passes the correlated actionable Issue as a trusted one-shot target", async () => {
+    const database = await openFixtureDatabase();
+    database.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)
+      values ('demo', 'Demo', '/tmp/demo', ?, ?)`, ["2026-08-01T00:00:00Z", "2026-08-01T00:00:00Z"]);
+    database.sqlite.run(`insert into issues (id, project_id, title, status, created_at, updated_at)
+      values (841, 'demo', 'Issue 841', 'needs_user', ?, ?)`, ["2026-08-01T00:00:00Z", "2026-08-01T00:00:00Z"]);
+    createHumanReviewRequest(database, 841, { kind: "acceptance", question: "接受离线验收吗？" });
+    createPiNotificationIntent(database, {
+      id: "intent-841",
+      idempotency_key: "intent-841",
+      issue_id: 841,
+      kind: "pi_needs_user",
+      project_id: "demo",
+      requires_user: 1,
+      state: "sent",
+      target_channel: "feishu",
+      target_chat_id: "oc_group"
+    });
+    const calls: Array<{ targetIssueId?: number; targetProjectId?: string }> = [];
+    const config = buildFeishuConnectorConfig({
+      FEISHU_ALLOWED_CHAT_IDS: "oc_group",
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+    const bridge = createFeishuAgentBridge({
+      config: () => config,
+      database,
+      runConversation: async (input) => {
+        calls.push(input);
+        return { text: "已按 #841 处理" };
+      },
+      sender: { sendTextMessage: async () => ({ messageId: "om_reply_841" }) }
+    });
+
+    expect(await bridge.handle(normalizeEvent("接受，这种不用管", "om_accept_841", config, database)))
+      .toEqual({ reason: "agent_reply_sent", replied: true });
+    expect(calls).toEqual([expect.objectContaining({ targetIssueId: 841, targetProjectId: "demo" })]);
     database.close();
   });
 });

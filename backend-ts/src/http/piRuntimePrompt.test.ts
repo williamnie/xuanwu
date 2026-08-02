@@ -11,6 +11,7 @@ import {
   xuanwuSupervisorCompatibilityPrompt
 } from "./piRuntimePrompt.ts";
 import { PI_PERSONA_PROMPT_HEADER } from "../pi/personaPrompt.ts";
+import { PI_RUNTIME_PROMPT_PROFILES } from "../pi/runtimePromptProfile.ts";
 
 const DECISION_FIXTURES = [
   {
@@ -67,12 +68,14 @@ describe("Xuanwu PI runtime prompt", () => {
       for (const profile of ["acceptance", "recovery", "notification"] as const) {
         const prompt = buildPiRuntimeSystemPrompt({ ...common, promptProfile: profile }, db);
         expect(prompt).toContain(`Runtime prompt profile: ${profile}`);
+        expect(prompt).toContain("Shared PI runtime context envelope");
         expect(prompt).not.toContain(PI_PERSONA_PROMPT_HEADER);
         expect(prompt).not.toContain("Manual context trigger workflow:");
         expect(prompt).not.toContain("CHANNEL_SENTINEL");
       }
       const manager = buildPiRuntimeSystemPrompt({ ...common, promptProfile: "manager_cycle" }, db);
       expect(manager).toContain("Runtime prompt profile: manager_cycle");
+      expect(manager).toContain("Shared PI runtime context envelope");
       expect(manager).not.toContain(PI_PERSONA_PROMPT_HEADER);
       expect(manager).not.toContain("Automatic reusable memory policy");
     } finally {
@@ -102,6 +105,41 @@ describe("Xuanwu PI runtime prompt", () => {
       expect(prompt.match(/<persona_configuration>/g)).toHaveLength(1);
       expect(prompt.match(/<\/persona_configuration>/g)).toHaveLength(1);
       expect(prompt).toContain("For final Chat prose only");
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("projects an explicit project policy into every PI runtime profile", async () => {
+    const root = await mkdtemp(join(tmpdir(), "xw-prompt-shared-policy-"));
+    const db = await openDatabase({ stateDir: join(root, "state") });
+    try {
+      createPiMemoryItem(db, {
+        authority: "user_explicit",
+        authorized_at: "2026-08-01T18:41:00Z",
+        authorized_by: "feishu-chat-demo",
+        content: "缺少真实 Provider 配置时先完成代码和离线验证，不要阻塞实现",
+        id: "shared-user-policy",
+        kind: "project_preference",
+        memory_key: "project.external-provider-manual-later",
+        scope: "project",
+        scope_id: "demo",
+        source_id: "feishu-chat-demo",
+        source_type: "pi.conversation"
+      });
+      for (const profile of PI_RUNTIME_PROMPT_PROFILES) {
+        const prompt = buildPiRuntimeSystemPrompt({
+          agent: agentRecord(),
+          conversationID: `shared-policy-${profile}`,
+          issueID: 841,
+          promptProfile: profile,
+          project: projectRecord(root)
+        }, db);
+        expect(prompt).toContain("project.external-provider-manual-later");
+        expect(prompt).toContain("user_explicit");
+        expect(prompt).toContain("缺少真实 Provider 配置时先完成代码和离线验证，不要阻塞实现");
+      }
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });
@@ -225,7 +263,7 @@ describe("Xuanwu PI runtime prompt", () => {
         project: projectRecord("/tmp/xuanwu-prompt-project")
       }, db);
 
-      expect(prompt).toContain("Reusable Supervisor memory (non-authoritative context):");
+      expect(prompt).toContain("Shared PI runtime context envelope");
       expect(prompt).toContain("Project-level Supervisor preference");
       expect(prompt).toContain("Global Supervisor behavior");
       expect(prompt).not.toContain("Old chat conversation memory");

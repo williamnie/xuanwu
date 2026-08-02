@@ -93,6 +93,7 @@ function rememberMemory(
   });
   if (reason) return { rejected: true, reason };
   const citation = citationFromEvidence(input.evidence_ref);
+  const authority = context.source === "pi_manager_cycle" ? "evidence_backed" : "user_explicit";
   return rememberPiMemoryItem(db, {
     ...citation,
     id: crypto.randomUUID(),
@@ -105,6 +106,11 @@ function rememberMemory(
     source_type: memorySourceType(context.source),
     source_id: cleanString(context.conversationID),
     confidence: cleanString(input.confidence) || "medium",
+    authority,
+    authorized_at: new Date().toISOString(),
+    authorized_by: authority === "user_explicit"
+      ? cleanString(context.conversationID) || "explicit-user-statement"
+      : cleanString(input.evidence_ref),
     disabled: 0
   });
 }

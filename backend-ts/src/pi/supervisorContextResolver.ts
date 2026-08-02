@@ -120,7 +120,13 @@ export function resolveSupervisorContext(
       ref: `pi_conversations:${cleanString(input.conversationID) || "current"}`,
       score: 70
     });
-    addConversationHistory(db, candidates, projectMap, cleanString(input.conversationID));
+    addConversationHistory(
+      db,
+      candidates,
+      projectMap,
+      cleanString(input.conversationID),
+      source !== "feishu_runner_chat"
+    );
   }
 
   const ranked = rankCandidates(candidates);
@@ -248,13 +254,14 @@ function addConversationHistory(
   db: RunnerDatabase,
   candidates: Map<string, MutableCandidate>,
   projects: Map<string, Project>,
-  conversationID: string
+  conversationID: string,
+  inheritWork: boolean
 ): void {
   if (conversationID === "") return;
   const latest = listPiActions(db, { conversationId: conversationID })
     .slice().reverse().find((action) => projects.has(action.project_id));
   if (!latest) return;
-  const work = latest.issue_id > 0 ? getIssueAsWork(db, latest.issue_id) : null;
+  const work = inheritWork && latest.issue_id > 0 ? getIssueAsWork(db, latest.issue_id) : null;
   addProjectCandidate(candidates, projects, latest.project_id, {
     kind: "conversation_history",
     ref: `pi_actions:${latest.id}`,

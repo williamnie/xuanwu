@@ -51,6 +51,8 @@ describe("PI memory tools", () => {
       const secondSearch = await search.execute("tool-3", { query: "patches" }, undefined, undefined, {} as never);
 
       expect(remembered.details).toMatchObject({
+        authority: "user_explicit",
+        authorized_by: "conv-1",
         disabled: 0,
         kind: "user_preference",
         memory_key: "user.patch-size",
@@ -180,6 +182,7 @@ describe("PI memory tools", () => {
       }, undefined, undefined, {} as never);
 
       expect(first.details).toMatchObject({ disabled: 0, occurrence_count: 1 });
+      expect(first.details).toMatchObject({ authority: "evidence_backed", authorized_by: "handoff:issue-809" });
       expect(second.details).toMatchObject({
         disabled: 0,
         memory_key: "runner.recovery-only-dependency",

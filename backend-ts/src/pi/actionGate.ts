@@ -53,6 +53,7 @@ export type PiGatePolicy = {
   authorizedActions?: PiAuthorizedAction[];
   expiresAt?: string;
   expires_at?: string;
+  enforceAuthorizedReadScope?: boolean;
   forbiddenActions?: string[];
   forbidden_actions?: string[];
   mode?: PiActionMode;
@@ -178,6 +179,9 @@ export function decidePiAuthorization(
     return { decision: "deny", reason: "MCP capability is not covered by authorization allowlist" };
   }
   if (trustedReadOnlyAction(envelope, riskGate)) {
+    if (policy.enforceAuthorizedReadScope === true && !delegatedActionCovered(envelope, policy)) {
+      return { decision: "deny", reason: "trusted read-only action is outside the authorized action envelope" };
+    }
     return { decision: "execute", reason: withScopeReason("trusted read-only action is allowed by gate", scopeDecision.reason) };
   }
   const mode = policy.mode ?? "attended";

@@ -2,7 +2,7 @@ import { Value } from "@sinclair/typebox/value";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createIssueSupervisorEvent, type PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
-import type { PiGatePolicy } from "./actionGate.ts";
+import { piInternalReadAuthorization } from "./internalReadAuthorization.ts";
 import {
   PI_SUPERVISOR_DECISION_JSON_SCHEMA,
   type PiSupervisorDecisionJson
@@ -52,7 +52,11 @@ export async function runPiSupervisorDecision(
   const { createPiRuntimeSession } = await import("../http/piRuntime.ts");
   const runtime = await createPiRuntimeSession(input.database, {
     agent: input.agent,
-    authorization: supervisorAuthorization(input.project.id),
+    authorization: piInternalReadAuthorization({
+      issueID: issueID(input.context),
+      projectID: input.project.id,
+      toolNames: SUPERVISOR_TOOL_NAMES
+    }),
     conversationID: `pi-supervisor-${issueID(input.context)}-${Date.now()}`,
     issueID: issueID(input.context),
     heartbeatID: `pi-supervisor:${input.project.id}:${issueID(input.context)}`,
@@ -293,27 +297,6 @@ function recordDecisionFailure(
     retry_after_at: cleanString(context.provider_error?.retry_after_at),
     run_id: cleanString(context.latest_run?.id)
   });
-}
-
-function supervisorAuthorization(projectID: string): PiGatePolicy {
-  const authorizedActions = SUPERVISOR_TOOL_NAMES.map((name) => ({
-    action_type: name.startsWith("issue_")
-      ? name.replace("issue_", "issue.")
-      : name.startsWith("session_")
-        ? name.replace("session_", "session.")
-        : name.startsWith("memory_")
-          ? name.replace("memory_", "memory.")
-        : name === "project_status"
-          ? "project.status"
-          : `sdk.${name}`,
-    project_id: projectID
-  }));
-  return {
-    allowedActions: authorizedActions.map((action) => action.action_type),
-    authorizedActions,
-    mode: "delegated",
-    scope: { project_id: projectID }
-  };
 }
 
 function issueID(context: IssueSupervisorRecoveryContext): number {

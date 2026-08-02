@@ -232,9 +232,9 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
         reason: "highest deterministic context score",
         status: "resolved",
         target: {
-          issue_ids: [issue.id],
+          issue_ids: [],
           project_id: "demo",
-          work_ids: [`xw:work:issues:${issue.id}`]
+          work_ids: []
         }
       });
     } finally {

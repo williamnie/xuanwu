@@ -2,7 +2,10 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAgent, PiPersona } from "../db/repositories/pi.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
 import { publicMcpRegistry } from "../mcp/registry.ts";
-import { buildPiMemoryPromptContext } from "../pi/memoryContext.ts";
+import {
+  buildPiRuntimeContextEnvelope,
+  piRuntimeContextEnvelopePrompt
+} from "../pi/runtimeContextEnvelope.ts";
 import { buildSkillPromptContext, recordSkillPromptContextAudit } from "../skills/promptContext.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
 import { supervisorContextPrompt } from "../pi/supervisorContextResolver.ts";
@@ -11,15 +14,15 @@ import { promptInjectionDefenseSystemPrompt } from "../security/promptInjectionD
 import type { RuntimeSessionInput } from "./piRuntime.ts";
 import { appLanguage, piLanguageContract, type AppLanguage } from "../i18n/language.ts";
 import { buildPiPersonaPromptSection } from "../pi/personaPrompt.ts";
-import { PI_RUNTIME_PROMPT_PROFILES, type PiRuntimePromptProfile } from "../pi/runtimePromptProfile.ts";
+import { PI_RUNTIME_PROMPT_PROFILES } from "../pi/runtimePromptProfile.ts";
 
 export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
   switch (input.promptProfile) {
     case "chat": return buildPiChatSystemPrompt(input, db);
-    case "acceptance": return buildPiInternalSystemPrompt("acceptance", db);
-    case "recovery": return buildPiInternalSystemPrompt("recovery", db);
+    case "acceptance": return buildPiInternalSystemPrompt(input, db);
+    case "recovery": return buildPiInternalSystemPrompt(input, db);
     case "manager_cycle": return buildPiManagerCycleSystemPrompt(input, db);
-    case "notification": return buildPiInternalSystemPrompt("notification", db);
+    case "notification": return buildPiInternalSystemPrompt(input, db);
   }
 }
 
@@ -28,6 +31,7 @@ export function buildPiChatSystemPrompt(input: RuntimeSessionInput, db: RunnerDa
   const promptInput = { ...input, project: promptProject };
   const skillContext = buildSkillPromptContext(db, promptInput);
   recordSkillPromptContextAudit(db, promptInput, skillContext.audit);
+  const runtimeContext = buildPiRuntimeContextEnvelope(db, promptInput);
   return [
     piLanguageContract(appLanguage(db)),
     xuanwuPiRoleContractPrompt(),
@@ -59,24 +63,21 @@ export function buildPiChatSystemPrompt(input: RuntimeSessionInput, db: RunnerDa
       conversationID: input.conversationID,
       projectID: promptProject?.id
     }),
-    buildPiMemoryPromptContext(db, {
-      conversationID: input.conversationID,
-      issueID: input.issueID,
-      projectID: promptProject?.id,
-      sourceID: input.source || input.sourceTurn?.source
-    }),
+    piRuntimeContextEnvelopePrompt(runtimeContext),
     buildPiPersonaPromptSection(db)
   ].filter(Boolean).join("\n");
 }
 
 export function buildPiInternalSystemPrompt(
-  profile: Exclude<PiRuntimePromptProfile, "chat" | "manager_cycle">,
+  input: RuntimeSessionInput,
   db: RunnerDatabase
 ): string {
+  const runtimeContext = buildPiRuntimeContextEnvelope(db, input);
   return [
     internalLanguageContract(appLanguage(db)),
     sharedRuntimeAuthorityInvariant(),
-    `Runtime prompt profile: ${profile}. This is an internal structured-output task, not a user chat.`,
+    `Runtime prompt profile: ${input.promptProfile}. This is an internal structured-output task, not a user chat.`,
+    piRuntimeContextEnvelopePrompt(runtimeContext),
     "Follow the task-specific JSON contract in the current prompt exactly. Do not add markdown, conversational framing, Persona style, or control-plane commentary outside that contract."
   ].join("\n");
 }
@@ -86,11 +87,13 @@ export function buildPiManagerCycleSystemPrompt(input: RuntimeSessionInput, db: 
   const promptInput = { ...input, project: promptProject };
   const skillContext = buildSkillPromptContext(db, promptInput);
   recordSkillPromptContextAudit(db, promptInput, skillContext.audit);
+  const runtimeContext = buildPiRuntimeContextEnvelope(db, promptInput);
   return [
     internalLanguageContract(appLanguage(db)),
     sharedRuntimeAuthorityInvariant(),
     "Runtime prompt profile: manager_cycle. This is an internal project-control cycle, not a user chat.",
-    "Use only the bounded project facts and active tools supplied for this cycle. Do not inherit Chat Persona, channel context, commitments, reusable-memory projection, or chat-only workflows.",
+    "Use only the bounded project facts, shared durable context, and active tools supplied for this cycle. Do not inherit Chat Persona, channel message history, temporary commitments, or chat-only workflows.",
+    piRuntimeContextEnvelopePrompt(runtimeContext),
     agentInstructionsSection(input.agent),
     skillContext.promptSection,
     "Project default skill policy:",
