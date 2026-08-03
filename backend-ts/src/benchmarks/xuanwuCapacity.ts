@@ -9,6 +9,7 @@ import { listProjects } from "../db/repositories/projects.ts";
 import { listRuns } from "../db/repositories/runs.ts";
 import { runProgressProjectionStatus } from "../db/repositories/runProgress.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { sqliteObjectUsage } from "../db/sqliteObjectUsage.ts";
 import { issueIDToWorkID } from "../domain/work/issueAdapter.ts";
 import { queryWorkTimeline } from "../domain/work/timeline.ts";
 import { projectPendingEventSummaries } from "../events/eventSummaryProjector.ts";
@@ -545,14 +546,11 @@ function databaseScale(db: RunnerDatabase): Record<string, number> {
 function databaseFootprint(db: RunnerDatabase, allocatedBytes: number): CapacityReport["database"] {
   const events = count(db, "issue_events");
   const projection = count(db, "event_summary_projection");
-  const rawAndProjection = db.sqlite.query<{ bytes: number }, []>(`
-    select coalesce(sum(pgsize), 0) as bytes from dbstat
-    where name in (
-      'issue_events', 'idx_issue_events_issue_type',
-      'event_summary_projection', 'sqlite_autoindex_event_summary_projection_1',
-      'idx_event_summary_projection_issue', 'idx_event_summary_projection_project'
-    )
-  `).get()?.bytes ?? 0;
+  const rawAndProjection = sqliteObjectUsage(db.sqlite, [
+    "issue_events", "idx_issue_events_issue_type",
+    "event_summary_projection", "sqlite_autoindex_event_summary_projection_1",
+    "idx_event_summary_projection_issue", "idx_event_summary_projection_project"
+  ]).reduce((total, object) => total + object.bytes, 0);
   const lag = scalar(db, `select count(*) as value from issue_events e
     where not exists (select 1 from event_summary_projection p
       where p.source='issue_events' and p.source_event_id=e.id)`);

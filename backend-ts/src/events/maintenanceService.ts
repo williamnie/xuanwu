@@ -28,6 +28,7 @@ import {
   type IssueEventSnapshot,
   type MaintenanceEventRow
 } from "../db/repositories/eventMaintenance.ts";
+import { sqliteObjectUsage } from "../db/sqliteObjectUsage.ts";
 import {
   ARCHIVE_RECEIPT_SCHEMA_VERSION,
   DEFAULT_EVENT_RETENTION_CONFIG,
@@ -1169,9 +1170,7 @@ function requireDiskSpace(path: string, requiredBytes: number, label: string): v
 }
 
 function databaseObjectUsage(sqlite: Database): Array<{ bytes: number; name: string }> {
-  return sqlite.query<{ bytes: number; name: string }, []>(`
-    select name, sum(pgsize) as bytes from dbstat group by name order by bytes desc, name asc
-  `).all().map((row) => ({ bytes: Number(row.bytes), name: String(row.name) }));
+  return sqliteObjectUsage(sqlite);
 }
 
 function audit(

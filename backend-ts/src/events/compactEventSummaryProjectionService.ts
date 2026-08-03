@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Database as SQLiteDatabase } from "bun:sqlite";
 import type { RunnerDatabase } from "../db/database.ts";
 import { runMigrations } from "../db/migrations.ts";
+import { sqliteObjectUsage } from "../db/sqliteObjectUsage.ts";
 import { compactEventSummaryProjectionMigration } from "../db/schema/054_compact_event_summary_projection.ts";
 import { recordMaintenanceAudit } from "../db/repositories/eventMaintenance.ts";
 import { eventProjectionStatus, listEventSummaryProjection } from "../db/repositories/eventSummaryProjection.ts";
@@ -298,10 +299,7 @@ function projectionStorage(db: RunnerDatabase): { objects: Array<{ bytes: number
     "sqlite_autoindex_event_summary_projection_runs_1",
     "sqlite_autoindex_event_summary_projection_types_1"
   ];
-  const rows = db.sqlite.query<{ bytes: number; name: string }, string[]>(`
-    select name, sum(pgsize) as bytes from dbstat
-    where name in (${names.map(() => "?").join(",")}) group by name order by bytes desc
-  `).all(...names).map((row) => ({ bytes: Number(row.bytes), name: String(row.name) }));
+  const rows = sqliteObjectUsage(db.sqlite, names);
   return { objects: rows, total_bytes: rows.reduce((total, row) => total + row.bytes, 0) };
 }
 
