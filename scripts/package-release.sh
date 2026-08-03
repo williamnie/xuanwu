@@ -149,6 +149,10 @@ install_deps() {
 
 run_preflight_checks() {
   install_deps
+  if [ "${CODEX_RUNNER_ENFORCE_RELEASE:-0}" = "1" ] &&
+    [ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no)" ]; then
+    fail "release checkout has tracked changes after dependency installation"
+  fi
   run_step "backend-ts tests" bash -lc "cd '$ROOT_DIR/backend-ts' && bun test --timeout 60000"
   run_step "frontend lint" npm --prefix "$ROOT_DIR/frontend" run lint
   APP_VERSION="$(resolve_app_version)"

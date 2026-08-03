@@ -135,7 +135,12 @@ test('release package keeps Bun runtime assets beside the executable and smokes 
   ]);
   assert.match(script, /bun test --timeout 60000/);
   assert.match(workflow, /run: bun test --timeout 60000/);
+  assert.match(workflow, /run: npm --prefix frontend ci/);
+  assert.doesNotMatch(workflow, /npm --prefix frontend install/);
+  assert.match(workflow, /bun-version: '1\.3\.14'/);
+  assert.match(workflow, /bun install --cwd backend-ts --frozen-lockfile/);
   assert.match(workflow, /if: github\.event\.repository\.private == false/);
+  assert.match(script, /release checkout has tracked changes after dependency installation/);
   assert.match(runbook, /\(cd dist\/release && shasum -a 256 -c checksums\.txt\)/);
   assert.match(script, /cp "\$source\/package\.json" "\$pkg_dir\/package\.json"/);
   assert.match(script, /"\$pkg_dir\/theme"/);
