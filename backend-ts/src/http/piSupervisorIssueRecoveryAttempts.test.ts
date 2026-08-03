@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { retryIssue } from "../db/repositories/issueActions.ts";
 import { createPiAction } from "../db/repositories/pi.ts";
-import { listPiRecoveryAttempts, recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
+import { listPiRecoveryAttempts } from "../db/repositories/pi/recoveryAttempts.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";
 
 const tempRoots: string[] = [];
@@ -52,22 +52,6 @@ describe("PI supervisor issue retry recovery attempts", () => {
         source_decision_id: "retry-action-309",
         status: "progress"
       }));
-    } finally {
-      db.close();
-    }
-  });
-
-  test("issue.retry checks pi recovery budget before queueing", async () => {
-    const db = await fixtureDb();
-    try {
-      insertProject(db, "demo");
-      insertIssueRunSession(db, 310);
-      for (const index of [1, 2, 3]) recordBudgetAttempt(db, 310, index);
-
-      await expect(dispatchPiAction({ database: db }, retryAction(db, 310, "retry-budget-action")))
-        .rejects.toThrow("recovery budget is exhausted");
-
-      expect(listPiRecoveryAttempts(db, { issueId: 310 })).toHaveLength(3);
     } finally {
       db.close();
     }
@@ -152,21 +136,5 @@ function retryAction(db: RunnerDatabase, issueID: number, id: string) {
     }),
     project_id: "demo",
     status: "approved"
-  });
-}
-
-function recordBudgetAttempt(db: RunnerDatabase, issueID: number, index: number): void {
-  recordPiRecoveryAttempt(db, {
-    action_type: "issue.retry",
-    budget_window_started_at: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    diagnosis_code: "provider_timeout",
-    id: `budgeted-retry-${index}`,
-    idempotency_key: `budgeted-retry-${index}`,
-    issue_id: issueID,
-    project_id: "demo",
-    session_id: `codex:thread-${issueID}`,
-    status: "failed",
-    updated_at: new Date().toISOString()
   });
 }

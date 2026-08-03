@@ -84,8 +84,8 @@ describe("agent session repository", () => {
       });
       upsertAgentSession(db, {
         provider: "codex",
-        provider_session_id: "thread-verifier",
-        agent_role: "verifier",
+        provider_session_id: "thread-reviewer",
+        agent_role: "reviewer",
         project_id: "demo",
         issue_id: 260
       });
@@ -99,10 +99,10 @@ describe("agent session repository", () => {
       expect(listAgentSessions(db, { role: "pi_manager" }).map((session) => session.session_key)).toEqual([
         "pi-sdk:conv-1"
       ]);
-      expect(listAgentSessions(db, { projectId: "demo", role: "verifier" })).toMatchObject([{
-        agent_role: "verifier",
+      expect(listAgentSessions(db, { projectId: "demo", role: "reviewer" })).toMatchObject([{
+        agent_role: "reviewer",
         issue_id: 260,
-        session_key: "codex:thread-verifier"
+        session_key: "codex:thread-reviewer"
       }]);
       expect(() => upsertAgentSession(db, {
         provider: "codex",

@@ -49,7 +49,10 @@ describe("PI issue completion watches", () => {
         status: "active",
         target_chat_id: "oc_group"
       });
-      expect(JSON.parse(watch.condition)).toMatchObject({ pending_verification_satisfies: true });
+      expect(JSON.parse(watch.condition)).toEqual({
+        terminal_statuses: ["done", "failed", "cancelled"],
+        type: "all_terminal"
+      });
       expect(watch.items).toMatchObject([
         { initial_status: "todo", issue_id: first.id, last_status: "todo", project_id: "demo", terminal_at: "" },
         { initial_status: "in_progress", issue_id: second.id, last_status: "in_progress", project_id: "demo", terminal_at: "" }

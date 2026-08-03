@@ -62,7 +62,11 @@ export type SupervisorWorkflowEvalReport = {
   variants: SupervisorWorkflowVariantResult[];
 };
 
-const CONTROL_TOOL_NAMES = new Set<string>(SUPERVISOR_CONTROL_TOOL_NAMES);
+const CONTROL_TOOL_NAMES = new Set<string>([
+  ...SUPERVISOR_CONTROL_TOOL_NAMES,
+  "evidence_list",
+  "handoff_read"
+]);
 
 export function runSupervisorWorkflowEvaluation(suite: SupervisorWorkflowEvalSuite): SupervisorWorkflowEvalReport {
   const registry = workflowRegistry();
@@ -188,6 +192,11 @@ function scoreFixture(
   fixture: SupervisorWorkflowEvalCase,
   observation: SupervisorWorkflowEvalCase["observations"][string]
 ): SupervisorWorkflowScorerResult {
+  if (scorer === "completion_gate") {
+    const actual = completionDecision(fixture.input.completion_evidence);
+    return exactResult(scorer, fixture.golden.completion, actual,
+      "deterministic completion gate differs from golden output");
+  }
   if (scorer === "tool_selection") {
     const unknown = observation.selected_tools.filter((tool) => !CONTROL_TOOL_NAMES.has(tool));
     const exact = equal(fixture.golden.selected_tools, observation.selected_tools);
@@ -221,6 +230,15 @@ function scoreFixture(
     reason: passed ? "token and cost budgets satisfied" : "token or estimated cost budget exceeded",
     scorer
   };
+}
+
+function completionDecision(evidence: SupervisorWorkflowEvalCase["input"]["completion_evidence"]): {
+  decision: "failed" | "passed" | "pending";
+  target_status: "done" | "failed" | "pending_verification";
+} {
+  if (evidence === "passed") return { decision: "passed", target_status: "done" };
+  if (evidence === "failed") return { decision: "failed", target_status: "failed" };
+  return { decision: "pending", target_status: "pending_verification" };
 }
 
 function supervisorEvent(input: NonNullable<SupervisorWorkflowEvalCase["input"]["report_events"]>[number], index: number): IssueSupervisorEvent {

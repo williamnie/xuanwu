@@ -91,8 +91,8 @@ describe("Claude execution-only provider", () => {
         provider_turn_id: "turn-1",
         codex_thread_id: "",
         codex_turn_id: "",
-        status: "in_progress",
-        ended_at: "",
+        status: "succeeded",
+        ended_at: expect.any(String),
         runtime_metadata_json: `{"run_id":"cli:claude:${issueId}"}`
       }]);
       const payloads = listIssueEvents(db, issueId).map((event) => event.payload).join("\n");
@@ -168,8 +168,8 @@ describe("Claude execution-only provider", () => {
         provider_turn_id: `cli:claude:${issueId}`,
         codex_thread_id: "",
         codex_turn_id: "",
-        status: "cancelled",
-        exit_reason: "issue_cancel"
+        status: "failed",
+        exit_reason: "provider_reported_failed"
       }]);
       const eventTypes = listIssueEvents(db, issueId).map((event) => event.type);
       expect(eventTypes).toContain("issue.interrupt_requested");
@@ -199,9 +199,9 @@ describe("Claude execution-only provider", () => {
 
       expect(getIssue(db, issueId)).toMatchObject({ status: "cancelled", error: "" });
       expect(listIssueRuns(db, issueId)[0]).toMatchObject({
-        status: "cancelled",
-        exit_reason: "issue_cancel",
-        error: ""
+        status: "failed",
+        exit_reason: "provider_reported_failed",
+        error: expect.stringContaining("missing result event")
       });
     } finally {
       db.close();

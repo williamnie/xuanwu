@@ -336,25 +336,25 @@ describe("Bun Sessions API compatibility", () => {
       });
       upsertAgentSession(database, {
         provider: "codex",
-        provider_session_id: "thread-verifier",
-        agent_role: "verifier",
+        provider_session_id: "thread-reviewer",
+        agent_role: "reviewer",
         project_id: "demo",
         issue_id: 260,
         status: "running"
       });
 
       const router = createDefaultRouter({ database, providers: { codex: provider } });
-      const verifierList = await router.handle(new Request(`${BASE_URL}/api/sessions?role=verifier`));
+      const reviewerList = await router.handle(new Request(`${BASE_URL}/api/sessions?role=reviewer`));
       const piList = await router.handle(new Request(`${BASE_URL}/api/sessions?role=pi_manager`));
       const piDetail = await router.handle(new Request(`${BASE_URL}/api/sessions/pi-sdk:conv-1`));
 
-      expect(verifierList.status).toBe(200);
-      expect(await verifierList.json()).toMatchObject({
+      expect(reviewerList.status).toBe(200);
+      expect(await reviewerList.json()).toMatchObject({
         data: [{
-          agent_role: "verifier",
-          id: "codex:thread-verifier",
+          agent_role: "reviewer",
+          id: "codex:thread-reviewer",
           issue_id: 260,
-          provider_session_id: "thread-verifier"
+          provider_session_id: "thread-reviewer"
         }]
       });
       expect(piList.status).toBe(200);

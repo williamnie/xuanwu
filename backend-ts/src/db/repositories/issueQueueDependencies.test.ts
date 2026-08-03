@@ -134,7 +134,7 @@ describe("issue queue Work dependency readiness", () => {
     const db = await fixtureDatabase();
     try {
       insertProject(db, "demo");
-      for (const status of ["todo", "in_progress", "pending_verification", "failed", "done"] as const) {
+      for (const status of ["todo", "in_progress", "needs_user", "failed", "done"] as const) {
         const upstream = insertIssue(db, `upstream-${status}`, status);
         const downstream = insertIssue(db, `downstream-${status}`, "todo");
         addDependency(db, downstream, upstream);

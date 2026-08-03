@@ -79,7 +79,7 @@ describe("Run/Attempt relation migration", () => {
           agent_session_key: "codex:thread-one",
           attempt_id: "xw:run:issue_runs:legacy-run-1~attempt:1",
           issue_run_id: "legacy-run-1",
-          legacy_status: "done",
+          legacy_status: "succeeded",
           mapping_error: "",
           status: "succeeded"
         },
@@ -88,7 +88,7 @@ describe("Run/Attempt relation migration", () => {
           attempt_id: "xw:run:issue_runs:legacy-run-2~attempt:1",
           issue_run_id: "legacy-run-2",
           legacy_status: "auto_retry",
-          mapping_error: "unsupported legacy issue_run status: auto_retry",
+          mapping_error: "unsupported issue_run status: auto_retry",
           status: null
         },
         {
@@ -148,9 +148,9 @@ describe("Run/Attempt relation migration", () => {
         legacy_status: "done",
         provider_session_id: "thread-late",
         provider_turn_id: "turn-late",
-        status: "succeeded",
-        terminal_reason: "completed",
-        terminal_source_ref: "issue_runs:legacy-writer-run"
+        status: null,
+        terminal_reason: "",
+        terminal_source_ref: ""
       });
     } finally {
       connection.close();

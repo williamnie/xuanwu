@@ -21,11 +21,16 @@ export type ProjectLoopRuntime = {
 };
 export type ProjectLoopStartOptions = { forceOnce?: boolean };
 
-const activeLoops = new Set<string>();
-const activeLockKeys = new Set<string>();
-const forcedProjects = new Set<string>();
-const waitingProjects: string[] = [];
-let workerCount = 0;
+type ProjectLoopState = {
+  activeLockKeys: Set<string>;
+  activeLoops: Set<string>;
+  forcedProjects: Set<string>;
+  waitingProjects: string[];
+  workerCount: number;
+};
+
+const statesByDatabase = new WeakMap<RunnerDatabase, ProjectLoopState>();
+const activeLoopCounts = new Map<string, number>();
 let maxParallelProjects = 1;
 
 type RunnableProject = { id: string; lockKey: string };
@@ -37,22 +42,26 @@ export function startProjectLoop(
 ): void {
   const id = projectID.trim();
   if (id === "") return;
-  if (options.forceOnce === true) forcedProjects.add(id);
-  if (activeLoops.has(id)) {
+  const state = stateFor(runtime.database);
+  if (options.forceOnce === true) state.forcedProjects.add(id);
+  if (state.activeLoops.has(id)) {
     startQueuedWorkers(runtime);
     return;
   }
-  activeLoops.add(id);
-  enqueueProject(id);
+  state.activeLoops.add(id);
+  incrementActiveLoop(id);
+  enqueueProject(state, id);
   startQueuedWorkers(runtime);
 }
 
-export function isProjectLoopActive(projectID: string): boolean {
-  return activeLoops.has(projectID.trim());
+export function isProjectLoopActive(projectID: string, database?: RunnerDatabase): boolean {
+  const id = projectID.trim();
+  if (database) return stateFor(database).activeLoops.has(id);
+  return (activeLoopCounts.get(id) ?? 0) > 0;
 }
 
 export function runningProjectLoopCount(): number {
-  return activeLoops.size;
+  return [...activeLoopCounts.values()].reduce((count, value) => count + value, 0);
 }
 
 export function setProjectLoopMaxParallelProjects(value: number): void {
@@ -69,18 +78,20 @@ export function kickAutoRunProjects(runtime: ProjectLoopRuntime): void {
 }
 
 async function runWorker(runtime: ProjectLoopRuntime, project: RunnableProject): Promise<void> {
+  const state = stateFor(runtime.database);
   try {
     await runProject(runtime, project.id);
   } catch (error) {
     runtime.onError?.(error, project.id);
   } finally {
-    activeLockKeys.delete(project.lockKey);
-    workerCount = Math.max(0, workerCount - 1);
+    state.activeLockKeys.delete(project.lockKey);
+    state.workerCount = Math.max(0, state.workerCount - 1);
     startQueuedWorkers(runtime, project.id);
   }
 }
 
 async function runProject(runtime: ProjectLoopRuntime, projectID: string): Promise<void> {
+  const state = stateFor(runtime.database);
   let shouldRequeue = true;
   try {
     shouldRequeue = await runProjectLoop(runtime, projectID);
@@ -88,14 +99,15 @@ async function runProject(runtime: ProjectLoopRuntime, projectID: string): Promi
     shouldRequeue = false;
     runtime.onError?.(error, projectID);
   } finally {
-    forcedProjects.delete(projectID);
-    activeLoops.delete(projectID);
+    state.forcedProjects.delete(projectID);
+    deleteActiveLoop(state, projectID);
     if (shouldRequeue) requeueProjectsWithTodo(runtime);
   }
 }
 
 async function runProjectLoop(runtime: ProjectLoopRuntime, projectID: string): Promise<boolean> {
-  while (shouldContinue(runtime, projectID, forcedProjects.has(projectID))) {
+  const state = stateFor(runtime.database);
+  while (shouldContinue(runtime, projectID, state.forcedProjects.has(projectID))) {
     const result = await runProjectLoopOnce(loopInput(runtime, projectID));
     if (!result.claimed) break;
   }
@@ -117,20 +129,22 @@ function loopInput(runtime: ProjectLoopRuntime, projectID: string): ProjectLoopI
   };
 }
 
-function enqueueProject(projectID: string): void {
-  if (waitingProjects.includes(projectID)) return;
-  waitingProjects.push(projectID);
+function enqueueProject(state: ProjectLoopState, projectID: string): void {
+  if (state.waitingProjects.includes(projectID)) return;
+  state.waitingProjects.push(projectID);
 }
 
 function requeueProjectsWithTodo(runtime: ProjectLoopRuntime): void {
+  const state = stateFor(runtime.database);
   const projects = runtime.database.sqlite.query<{ id: string }, []>(
     "select id from projects where auto_run=1 order by sort_order asc, created_at asc, id asc"
   ).all();
   for (const project of projects) {
-    if (activeLoops.has(project.id) || hasActiveExecutorWorkForProject(runtime.database, project.id) ||
+    if (state.activeLoops.has(project.id) || hasActiveExecutorWorkForProject(runtime.database, project.id) ||
       !projectLoopDecision(loopInput(runtime, project.id), false).allowed) continue;
-    activeLoops.add(project.id);
-    enqueueProject(project.id);
+    state.activeLoops.add(project.id);
+    incrementActiveLoop(project.id);
+    enqueueProject(state, project.id);
   }
 }
 
@@ -143,34 +157,35 @@ function startQueuedWorkers(runtime: ProjectLoopRuntime, errorProjectID = "proje
 }
 
 function drainQueuedWorkers(runtime: ProjectLoopRuntime): void {
-  while (canStartWorker(runtime.database)) {
-    const project = nextRunnableProject(runtime);
+  const state = stateFor(runtime.database);
+  while (canStartWorker(runtime.database, state)) {
+    const project = nextRunnableProject(runtime, state);
     if (!project) return;
-    activeLockKeys.add(project.lockKey);
-    workerCount += 1;
+    state.activeLockKeys.add(project.lockKey);
+    state.workerCount += 1;
     void runWorker(runtime, project);
   }
 }
 
-function canStartWorker(db: RunnerDatabase): boolean {
-  return workerCount < maxParallelProjects && countActiveExecutorWork(db) < maxParallelProjects;
+function canStartWorker(db: RunnerDatabase, state: ProjectLoopState): boolean {
+  return state.workerCount < maxParallelProjects && countActiveExecutorWork(db) < maxParallelProjects;
 }
 
-function nextRunnableProject(runtime: ProjectLoopRuntime): RunnableProject | null {
-  const attempts = waitingProjects.length;
+function nextRunnableProject(runtime: ProjectLoopRuntime, state: ProjectLoopState): RunnableProject | null {
+  const attempts = state.waitingProjects.length;
   for (let index = 0; index < attempts; index += 1) {
-    const id = waitingProjects.shift();
+    const id = state.waitingProjects.shift();
     if (!id) continue;
     const lockKey = projectExecutionLockKey(runtime.database, id);
-    if (activeLockKeys.has(lockKey)) {
-      waitingProjects.push(id);
+    if (state.activeLockKeys.has(lockKey)) {
+      state.waitingProjects.push(id);
       continue;
     }
-    const gate = projectLoopDecision(loopInput(runtime, id), forcedProjects.has(id));
+    const gate = projectLoopDecision(loopInput(runtime, id), state.forcedProjects.has(id));
     if (hasActiveExecutorWorkForProject(runtime.database, id) || !gate.allowed) {
       if (!gate.allowed) recordProjectLoopDecision(runtime.database, gate);
-      forcedProjects.delete(id);
-      activeLoops.delete(id);
+      state.forcedProjects.delete(id);
+      deleteActiveLoop(state, id);
       continue;
     }
     return { id, lockKey };
@@ -180,4 +195,29 @@ function nextRunnableProject(runtime: ProjectLoopRuntime): RunnableProject | nul
 
 function normalizedMaxParallelProjects(value: number): number {
   return Number.isInteger(value) && value > 0 ? value : 1;
+}
+
+function stateFor(database: RunnerDatabase): ProjectLoopState {
+  const existing = statesByDatabase.get(database);
+  if (existing) return existing;
+  const state: ProjectLoopState = {
+    activeLockKeys: new Set(),
+    activeLoops: new Set(),
+    forcedProjects: new Set(),
+    waitingProjects: [],
+    workerCount: 0
+  };
+  statesByDatabase.set(database, state);
+  return state;
+}
+
+function incrementActiveLoop(projectID: string): void {
+  activeLoopCounts.set(projectID, (activeLoopCounts.get(projectID) ?? 0) + 1);
+}
+
+function deleteActiveLoop(state: ProjectLoopState, projectID: string): void {
+  if (!state.activeLoops.delete(projectID)) return;
+  const next = (activeLoopCounts.get(projectID) ?? 1) - 1;
+  if (next <= 0) activeLoopCounts.delete(projectID);
+  else activeLoopCounts.set(projectID, next);
 }

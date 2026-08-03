@@ -95,7 +95,7 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     assert.match(audit, /action=upgrade outcome=applied from=v1\.0\.0 to=v1\.1\.0/);
     assert.match(audit, /action=rollback outcome=applied from=v1\.1\.0 to=v1\.0\.0/);
     const callLog = await readFile(calls, 'utf8');
-    assert.match(callLog, /gh attestation verify .* --repo williamnie\/codex-issue-runner --signer-workflow williamnie\/codex-issue-runner\/\.github\/workflows\/release\.yml/);
+    assert.match(callLog, /gh attestation verify .* --repo williamnie\/xuanwu --signer-workflow williamnie\/xuanwu\/\.github\/workflows\/release\.yml/);
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
@@ -138,6 +138,10 @@ test('release package keeps Bun runtime assets beside the executable and smokes 
   assert.match(script, /run_step "packaged host binary smoke" "\$binary" --version/);
   assert.match(script, /stage_claude_sdk_executable "\$target" "\$pkg_dir"/);
   assert.match(script, /"\$pkg_dir\/codex-issue-runner\.claude-agent-sdk"/);
+  assert.match(script, /"\$ROOT_DIR\/README\.zh-CN\.md" "\$pkg_dir\/README\.zh-CN\.md"/);
+  assert.match(script, /"\$ROOT_DIR\/LICENSE" "\$pkg_dir\/LICENSE"/);
+  assert.match(script, /"\$ROOT_DIR\/NOTICE" "\$pkg_dir\/NOTICE"/);
+  assert.match(script, /"\$ROOT_DIR\/COMMERCIAL-LICENSE\.md" "\$pkg_dir\/COMMERCIAL-LICENSE\.md"/);
   assert.doesNotMatch(script, /"\$pkg_dir\/pi-coding-agent\/package\.json"/);
 });
 

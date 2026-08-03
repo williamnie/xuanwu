@@ -262,12 +262,12 @@ describe("Work Ledger repository service", () => {
     }
   });
 
-  test("ignores caller-supplied completion claims and only accepts a deterministic projection reader", async () => {
+  test("completes from the canonical in-progress state without caller-supplied artifact claims", async () => {
     const db = await openFixtureDatabase();
     try {
       createWork(db, {
         audit: audit("event-create-done", 0),
-        work: workInput("done", { status: "pending_verification" })
+        work: workInput("done", { status: "in_progress" })
       });
       const acceptance = acceptanceProjection(workID("done"));
       const callerClaim = {
@@ -278,20 +278,12 @@ describe("Work Ledger repository service", () => {
         work_id: workID("done")
       };
 
-      const rejected = transitionWork(db, callerClaim);
-      expect(rejected.applied).toBe(false);
-      expect(rejected.violations).toContain("done requires acceptance Evidence and a ready Handoff");
-      expect(rejected.work).toMatchObject({ revision: 0, status: "pending_verification" });
-
       const completed = transitionWork(db, {
-        audit: audit("event-done-projected", 2),
+        ...callerClaim,
+        audit: audit("event-done", 2),
         expected_revision: 0,
         to: "done",
         work_id: workID("done")
-      }, (transactionDb, work) => {
-        expect(transactionDb).toBe(db);
-        expect(work.revision).toBe(0);
-        return acceptance;
       });
       expect(completed).toMatchObject({ applied: true, work: { revision: 1, status: "done" } });
     } finally {

@@ -88,7 +88,7 @@ describe("Bun issue patch API", () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({
         id: issueId,
-        status: "pending_verification",
+        status: "in_progress",
         error: ""
       });
       expect(events.map((event) => event.type)).toContain("issue.pi_acceptance_requested.v1");
@@ -115,20 +115,20 @@ describe("Bun issue patch API", () => {
     }
   });
 
-  test("preserves pending verification against a generic failed status patch", async () => {
+  test("rejects a generic failed status patch because only PI may decide failure", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
-      const issueId = insertIssue(database, "demo", "pending_verification");
+      const issueId = insertIssue(database, "demo", "in_progress");
 
       const response = await patchIssue(database, issueId, { status: "failed", error: "agent fallback" });
 
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({
-        message: "pending_verification 请使用 verification reject，避免普通失败回写覆盖验证门禁"
+        message: "failed 只能由 PI 语义决策写入"
       });
       expect(database.sqlite.query<{ status: string }, [number]>("select status from issues where id=?").get(issueId))
-        .toEqual({ status: "pending_verification" });
+        .toEqual({ status: "in_progress" });
     } finally {
       database.close();
     }

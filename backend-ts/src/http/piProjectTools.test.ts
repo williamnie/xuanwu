@@ -7,6 +7,7 @@ import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earen
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listPiActionEvents, listPiActions, type PiActionEvent } from "../db/repositories/pi.ts";
 import { URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";
+import { PI_ALLOWED_TOOLS } from "./piProjectTools.ts";
 import { createPiRuntimeSession } from "./piRuntime.ts";
 
 const tempRoots: string[] = [];
@@ -62,27 +63,9 @@ describe("PI project tools", () => {
       ]);
       const { probes, runtime } = await runToolProbeSession(db, projectCwd);
 
-      expect(runtime.session.getActiveToolNames().sort()).toEqual([
-        "agent_profile_recommend", "evidence_list", "evidence_read",
-        "executor_issue_create_proposal", "executor_profile_assign_proposal",
-        "find", "grep", "handoff_list", "handoff_read", "human_review_request_create",
-        "issue_cancel", "issue_comment", "issue_acceptance_request", "issue_completion_watch_cancel", "issue_completion_watch_create",
-        "issue_completion_watch_list", "issue_create_batch_proposal", "issue_create_proposal", "issue_delete",
-        "issue_enqueue_batch_triage", "issue_enqueue_next_triage", "issue_enqueue_proposal",
-        "issue_execution_status", "issue_list", "issue_read", "issue_schedule_enqueue",
-        "issue_state_diagnose", "issue_state_repair_proposal", "issue_status_summary", "issue_status_update",
-        "ls", "manual_context_intake", "mcp_capability_read", "mcp_registry_list",
-        "mcp_requirement_recommend", "mcp_resource_list", "mcp_resource_read",
-        "mcp_tool_call", "memory_remember", "memory_search", "needs_user_escalation",
-        "notification_preference_read", "notification_preference_update",
-        "project_create", "project_list", "project_status", "read", "repo_read_excerpt", "repo_search", "repo_tree",
-        "report_workflow_request", "review_workflow_request", "run_control", "run_list", "run_read",
-        "runner_settings_read", "runner_settings_update", "session_list", "session_read_summary", "session_steer_proposal",
-        "skill_intent_audit", "skill_list", "skill_read", "skill_recommend", "system_restart",
-        URL_FETCH_TOOL_NAME, "verification_workflow_request",
-        "work_control", "work_create", "work_list", "work_read", "work_update",
-        "workspace_make_directory", "workspace_write_file"
-      ]);
+      expect(runtime.session.getActiveToolNames().sort()).toEqual(
+        [...new Set([...PI_ALLOWED_TOOLS, URL_FETCH_TOOL_NAME])].sort()
+      );
       expect(runtime.session.getAllTools().map((tool) => tool.name).sort()).toEqual(runtime.session.getActiveToolNames().sort());
       expect(probes.get("project_status")?.isError).toBe(false);
       expect(probes.get("project_status")?.text).toContain('"total_issues": 2');

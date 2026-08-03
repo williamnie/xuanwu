@@ -30,7 +30,7 @@ describe("Run HTTP API", () => {
       insertProject(db, "other");
       for (let index = 1; index <= 125; index += 1) {
         const issueID = insertIssue(db, "demo", `Work ${String(index).padStart(3, "0")}`, "done");
-        insertRun(db, issueID, "done", {
+        insertRun(db, issueID, "succeeded", {
           endedAt: timestamp(index + 200),
           sessionID: `session-${index}`,
           startedAt: timestamp(index),

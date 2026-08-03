@@ -108,6 +108,7 @@ function unreachableBackendFiles() {
   const pending = [
     resolve(root, 'backend-ts/src/main.ts'),
     resolve(root, 'backend-ts/src/spikes/piSmoke.ts'),
+    resolve(root, 'backend-ts/src/usage/benchmark.ts'),
     ...backendFiles.filter(isTestFile),
     ...scriptFiles,
   ];

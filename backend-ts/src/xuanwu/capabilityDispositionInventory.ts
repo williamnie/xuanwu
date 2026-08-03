@@ -550,7 +550,6 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/issues/:id/cancel", family: "work-ledger" },
   { method: "POST", path: "/api/issues/:id/comments", family: "work-ledger" },
   { method: "POST", path: "/api/issues/:id/enqueue", family: "work-ledger" },
-  { method: "POST", path: "/api/issues/:id/evidence/command", family: "evidence-handoff" },
   { method: "POST", path: "/api/issues/:id/evidence/readiness", family: "evidence-handoff" },
   { method: "POST", path: "/api/issues/:id/human-review-requests", family: "evidence-handoff" },
   { method: "GET", path: "/api/issues/:id/events", family: "work-ledger" },
@@ -717,6 +716,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/uploads/:id/content", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/uploads/images", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/usage/codex", family: "system-observability" },
+  { method: "GET", path: "/api/usage/providers", family: "system-observability" },
 ] as const;
 
 export const PAGE_SURFACES = [
@@ -801,7 +801,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "intake-context", disposition: "merge", target: "Attention intake and Evidence context", source_of_truth: "external events, context bundles and intake audit",
-    source_files: ["backend-ts/src/pi/contextBundleBuilder.ts", "backend-ts/src/pi/contextPackTrace.ts", "backend-ts/src/pi/domainSkillRun.ts", "backend-ts/src/pi/eventRouter.ts", "backend-ts/src/pi/intakeSkillInput.ts", "backend-ts/src/pi/intakeSourcePolicy.ts", "backend-ts/src/pi/llmIntake.ts", "backend-ts/src/pi/manualSourcePull.ts"]
+    source_files: ["backend-ts/src/pi/contextBundleBuilder.ts", "backend-ts/src/pi/contextPackTrace.ts", "backend-ts/src/pi/domainSkillRun.ts", "backend-ts/src/pi/eventRouter.ts", "backend-ts/src/pi/intakeSkillInput.ts", "backend-ts/src/pi/intakeSourcePolicy.ts", "backend-ts/src/pi/llmIntake.ts", "backend-ts/src/pi/manualSourcePull.ts", "backend-ts/src/pi/runtimeContextEnvelope.ts"]
   },
   {
     id: "memory", disposition: "keep", target: "Supporting knowledge store", source_of_truth: "pi_memory_items",
@@ -821,7 +821,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "pi-acceptance", disposition: "keep", target: "PI Session-context acceptance", source_of_truth: "Provider Session, workspace, commands, Git facts, and PI decision",
-    source_files: ["backend-ts/src/pi/issueAcceptance.ts", "backend-ts/src/pi/meaningfulProgress.ts", "backend-ts/src/pi/projectFindings.ts", "backend-ts/src/pi/projectSnapshot.ts", "backend-ts/src/pi/repoContextPack.ts"]
+    source_files: ["backend-ts/src/pi/internalReadAuthorization.ts", "backend-ts/src/pi/issueAcceptance.ts", "backend-ts/src/pi/meaningfulProgress.ts", "backend-ts/src/pi/projectFindings.ts", "backend-ts/src/pi/projectSnapshot.ts", "backend-ts/src/pi/repoContextPack.ts"]
   },
   {
     id: "work-run-orchestration", disposition: "merge", target: "Work/Run orchestration and recovery", source_of_truth: "issues and issue_runs authorities",

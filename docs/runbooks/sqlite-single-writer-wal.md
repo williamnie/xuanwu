@@ -45,9 +45,9 @@ codex-issue-runner maintenance db wal \
 codex-issue-runner maintenance db wal \
   --operation apply --db <copy.db> --report <apply.json> --apply \
   --confirm-backup-tested --confirm-no-active-writers \
-  --actor xiaobei --actor-kind user \
-  --audit-ref issue-773-user-request-2026-07-21 \
-  --reason '用户要求完成性能优化' --json
+  --actor <operator> --actor-kind user \
+  --audit-ref <approved-change-ref> \
+  --reason 'verified WAL transition rehearsal' --json
 
 codex-issue-runner maintenance db wal \
   --operation verify --db <copy.db> --report <verify.json> --json
@@ -63,9 +63,9 @@ Live apply 顺序不可交换：focused rehearsal/tests → fresh verified backu
 codex-issue-runner maintenance db wal \
   --operation rollback --db <runner.db> --report <rollback.json> --apply \
   --confirm-backup-tested --confirm-no-active-writers \
-  --actor xiaobei --actor-kind user \
-  --audit-ref issue-773-user-request-2026-07-21 \
-  --reason '用户要求完成性能优化' --json
+  --actor <operator> --actor-kind user \
+  --audit-ref <approved-change-ref> \
+  --reason 'approved WAL rollback' --json
 ```
 
 rollback 先 `wal_checkpoint(TRUNCATE)` 再切回 DELETE。若 integrity 或 authority row counts 异常，不继续启动 Core；恢复到 fresh state directory 中经过 restore rehearsal 的 backup bundle。

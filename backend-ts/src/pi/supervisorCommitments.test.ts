@@ -117,11 +117,10 @@ describe("Supervisor Goal, Commitment and conversation continuity", () => {
         retention: SUPERVISOR_COMMITMENT_RETENTION,
         schema_version: "xw.supervisor-commitment.v1"
       },
-      pending_verification_satisfies: false,
       terminal_statuses: ["done", "failed", "cancelled"]
     });
 
-    updateIssue(fixture.db, issue.id, { status: "pending_verification" });
+    updateIssue(fixture.db, issue.id, { status: "needs_user" });
     const pending = runWatchAutomationsOnce(fixture.db);
     expect(pending.satisfied).toBe(0);
     expect(getPiIssueCompletionWatch(fixture.db, watchID)?.status).toBe("active");

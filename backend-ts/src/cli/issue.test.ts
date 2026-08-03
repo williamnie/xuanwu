@@ -77,7 +77,7 @@ describe("Bun issue CLI", () => {
       if (path === "/api/issues/7/events") {
         return jsonResponse([{ id: 1, issue_id: 7, type: "issue.comment", payload: '{"body":"token=hidden"}', created_at: "2026-01-01T00:00:00Z" }]);
       }
-      if (path === "/api/issues/8/verification") {
+      if (path === "/api/issues/8/human-review-response") {
         expect(await request.json()).toEqual({
           action: "request_changes",
           comment: "补 smoke",
@@ -89,7 +89,7 @@ describe("Bun issue CLI", () => {
       if (path === "/api/issues/8" && request.method === "GET") {
         return jsonResponse({
           ...issueBody({ id: 8, status: "pending_verification", title: "待验证" }),
-          verification: {
+          decision: {
             owner: "human",
             request: { id: "review-8", revision: 2, status: "open" }
           }
@@ -100,7 +100,7 @@ describe("Bun issue CLI", () => {
 
     const failed = await run(["issue", "update", "--id", "7", "--status", "failed", "--error", "npm test failed"], { fetcher });
     const logs = await run(["issue", "logs", "--id", "7"], { fetcher });
-    const review = await run(["issue", "request-changes", "--id", "8", "--comment", "补 smoke", "--json"], { fetcher });
+    const review = await run(["issue", "human-review", "--id", "8", "--action", "request-changes", "--comment", "补 smoke", "--json"], { fetcher });
 
     expect(failed.code).toBe(0);
     expect(failed.stdout).toBe("#7 [failed] demo - 失败任务\n");

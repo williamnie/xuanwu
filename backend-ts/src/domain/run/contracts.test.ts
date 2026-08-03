@@ -93,8 +93,8 @@ describe("Run / Attempt lifecycle contract", () => {
       provider_turn_id: "result-without-session"
     })).toThrow("provider turn requires a session ref");
     expect(mapLegacyIssueRunStatus("in_progress")).toBe("running");
-    expect(mapLegacyIssueRunStatus("pending_verification")).toBe("succeeded");
-    expect(mapLegacyIssueRunStatus("done")).toBe("succeeded");
+    expect(() => mapLegacyIssueRunStatus("pending_verification")).toThrow("unsupported legacy issue_run status");
+    expect(() => mapLegacyIssueRunStatus("done")).toThrow("unsupported legacy issue_run status");
   });
 
   test("enforces terminal invariants and forbids transitions out of terminal states", () => {

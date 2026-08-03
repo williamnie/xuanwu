@@ -182,6 +182,7 @@ export function issueAsWork(
 }
 
 export function issueStatusToWorkStatus(status: string): WorkStatus {
+  if (status === "pending_verification") return "needs_user";
   if (!WORK_STATUSES.includes(status as WorkStatus)) throw new Error(`unsupported Issue status ${status}`);
   return status as WorkStatus;
 }

@@ -26,10 +26,10 @@ describe("PI digest flush scheduler", () => {
     const db = await openFixtureDatabase();
     try {
       insertIssue(db, 501, "Done A", "done");
-      insertIssue(db, 502, "Done B", "pending_verification");
+      insertIssue(db, 502, "Done B", "needs_user");
       createPiRunGroup(db, { id: "group-completed", project_id: "demo", expected_issue_count: 2 });
       addPiRunGroupItem(db, { run_group_id: "group-completed", issue_id: 501, position: 1, enqueue_status: "completed", final_issue_status: "done" });
-      addPiRunGroupItem(db, { run_group_id: "group-completed", issue_id: 502, position: 2, enqueue_status: "completed", final_issue_status: "pending_verification" });
+      addPiRunGroupItem(db, { run_group_id: "group-completed", issue_id: 502, position: 2, enqueue_status: "completed", final_issue_status: "needs_user" });
       createPiNotificationIntent(db, lifecycleIntent("life-501", 501, "group-completed", "issue_done", "pending"));
 
       const result = runDigestFlushSchedulerOnce(db, { now: "2026-06-18T01:00:00Z" });
@@ -47,8 +47,8 @@ describe("PI digest flush scheduler", () => {
       expect(JSON.parse(digestIntents(intents)[0]?.payload_json ?? "{}")).toMatchObject({
         active_count: 0,
         completed_count: 1,
-        total_count: 2,
-        verification_count: 1
+        needs_user_count: 1,
+        total_count: 2
       });
       expect(intents.find((intent) => intent.id === "life-501")).toMatchObject({ state: "aggregated" });
       expect(groupRow(db, "group-completed")).toMatchObject({ digest_flush_sequence: 1, status: "completed" });

@@ -27,7 +27,7 @@ afterEach(async () => {
   }
 });
 
-describe("Supervisor Work/Run/Evidence/Handoff control tools", () => {
+describe("Supervisor Work/Run control tools", () => {
   test("publishes deterministic schemas with read/write/dangerous registry metadata", async () => {
     const fixture = await openFixture();
     try {
@@ -38,10 +38,6 @@ describe("Supervisor Work/Run/Evidence/Handoff control tools", () => {
 
       expect(tools.map((tool) => tool.name)).toEqual([...SUPERVISOR_CONTROL_TOOL_NAMES]);
       expect(registry.map((tool) => [tool.name, tool.permission, tool.metadata?.risk_level])).toEqual([
-        ["evidence_list", "read", "low"],
-        ["evidence_read", "read", "low"],
-        ["handoff_list", "read", "low"],
-        ["handoff_read", "read", "low"],
         ["run_control", "dangerous", "high"],
         ["run_list", "read", "low"],
         ["run_read", "read", "low"],
@@ -113,8 +109,6 @@ describe("Supervisor Work/Run/Evidence/Handoff control tools", () => {
 
       const workList = await runTool(tools, "work_list", { limit: 20 });
       const runList = await runTool(tools, "run_list", { limit: 20 });
-      const evidenceList = await runTool(tools, "evidence_list", { limit: 20 });
-      const handoffList = await runTool(tools, "handoff_list", { limit: 20 });
 
       expect(workList.details).toMatchObject({
         authority: "issues-via-work-adapter",
@@ -130,12 +124,12 @@ describe("Supervisor Work/Run/Evidence/Handoff control tools", () => {
       expect(JSON.stringify(workList.details).length).toBeLessThanOrEqual(SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS);
       expect(visibleText(workList).length).toBeLessThanOrEqual(SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS);
       expect(Math.ceil(visibleText(workList).length / 4)).toBeLessThanOrEqual(SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_TOKENS);
-      for (const result of [runList, evidenceList, handoffList]) {
+      for (const result of [runList]) {
         expect(JSON.stringify(result.details).length).toBeLessThanOrEqual(SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS);
         expect(visibleText(result).length).toBeLessThanOrEqual(SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS);
       }
       expect(listPiActions(fixture.db, { status: "completed" }).map((action) => action.action_type).sort()).toEqual([
-        "evidence.list", "handoff.list", "run.list", "work.list"
+        "run.list", "work.list"
       ]);
       for (const action of listPiActions(fixture.db)) {
         expect(listPiActionEvents(fixture.db, { actionId: action.id }).map((event) => event.event_type)).toEqual([
@@ -437,10 +431,10 @@ describe("Supervisor Work/Run/Evidence/Handoff control tools", () => {
     try {
       const issue = createIssue(fixture.db, {
         project_id: fixture.project.id,
-        status: "pending_verification",
+        status: "in_progress",
         title: "Do not rerun before PI acceptance"
       });
-      const runID = insertRun(fixture.db, issue.id, "done");
+      const runID = insertRun(fixture.db, issue.id, "succeeded");
       const tools = createPiSupervisorControlTools(fixture.db, fixture.project, {
         conversationID: "conv-handoff-gap",
         source: "runner_chat"
@@ -460,7 +454,7 @@ describe("Supervisor Work/Run/Evidence/Handoff control tools", () => {
         gate_reason: expect.stringContaining("PI semantic acceptance is pending"),
         status: "denied"
       });
-      expect(getIssue(fixture.db, issue.id)?.status).toBe("pending_verification");
+      expect(getIssue(fixture.db, issue.id)?.status).toBe("in_progress");
       expect(listPiActionEvents(fixture.db, {
         actionId: listPiActions(fixture.db)[0]!.id
       }).map((event) => event.event_type)).toEqual(["candidate", "gate_decision"]);

@@ -5,7 +5,7 @@ import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.
 type DigestIssue = { bucket: string; issueID: number; reason: string; status: string; title: string };
 type DigestView = {
   active: number; completed: number; failed: number; needsUser: number;
-  issues: DigestIssue[]; runGroupID: string; skipped: number; total: number;
+  issues: DigestIssue[]; runGroupID: string; skipped: number; total: number; verification: number;
 };
 
 const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
@@ -20,6 +20,7 @@ export function formatRunGroupDigest(intent: PiNotificationIntent): string {
     [
       `总数：${view.total}`,
       `完成：${view.completed}`,
+      `待验证：${view.verification}`,
       `失败：${view.failed}`,
       `需要用户：${view.needsUser}`,
       `仍在跑：${view.active}`,
@@ -40,7 +41,8 @@ function digestView(intent: PiNotificationIntent): DigestView {
     needsUser: count(payload, "needs_user_count", "needsUser"),
     runGroupID: text(payload.run_group_id) || intent.run_group_id,
     skipped: count(payload, "skipped_count", "skipped"),
-    total: count(payload, "total_count", "total")
+    total: count(payload, "total_count", "total"),
+    verification: count(payload, "verification_count", "verification")
   };
 }
 

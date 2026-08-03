@@ -93,7 +93,7 @@ function PanelHeader({ loading, onRefresh }) {
 }
 
 function FirstUseLauncher({ settings }) {
-  const installCommand = 'curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/scripts/install-release.sh | bash';
+  const installCommand = 'curl -fsSL https://raw.githubusercontent.com/williamnie/xuanwu/main/scripts/install-release.sh | bash';
   const projectCommand = 'codex-issue-runner project create --id my-project --cwd /path/to/project --auto-run';
   return (
     <div style={{ border: '1px solid var(--border-light)', borderRadius: '16px', padding: '14px', background: 'var(--bg-secondary)', display: 'grid', gap: '12px' }}>

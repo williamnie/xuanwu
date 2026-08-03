@@ -139,8 +139,8 @@ Evidence 必须可由 API/DB/Git/fixture 重新读取验证。模型总结、toa
 当前可执行基线：
 
 ```bash
-bun test backend-ts/src/http/piIssueProposalFlow.test.ts backend-ts/src/http/piVerifierWorkflowApi.test.ts backend-ts/src/http/issueVerificationApi.test.ts
-node --test frontend/src/pages/issueVerificationGate.test.js frontend/src/pages/IssueDetail.structure.test.js
+bun test backend-ts/src/http/piIssueProposalFlow.test.ts backend-ts/src/http/piActionsApi.test.ts backend-ts/src/http/evidenceApi.test.ts
+node --test frontend/src/pages/IssueDetail.structure.test.js frontend/src/pages/IssueDetail.styles.test.js
 ```
 
 ## GJ-02：失败恢复
@@ -411,8 +411,8 @@ node --test frontend/src/pages/command-center/attentionModel.test.js frontend/sr
 当前可执行基线：
 
 ```bash
-bun test backend-ts/src/http/issueVerificationApi.test.ts backend-ts/src/http/piVerifierWorkflowApi.test.ts backend-ts/src/cli/issue.test.ts
-node --test frontend/src/pages/issueVerificationGate.test.js frontend/src/pages/IssueDetail.structure.test.js
+bun test backend-ts/src/http/evidenceApi.test.ts backend-ts/src/http/issuePatchApi.test.ts backend-ts/src/cli/issue.test.ts
+node --test frontend/src/pages/IssueDetail.structure.test.js frontend/src/pages/IssueDetail.terminal.test.js
 ```
 
 ## 3. 新旧模型、迁移与回滚

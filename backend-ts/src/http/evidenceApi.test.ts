@@ -95,7 +95,7 @@ describe("Evidence HTTP API", () => {
     }
   });
 
-  test("projects and exposes passed and failed Evidence without changing Work lifecycle", async () => {
+  test("does not synthesize Evidence from legacy command logs", async () => {
     const db = await fixture();
     try {
       const passedIssueID = insertIssue(db, "Passing Work", "in_progress");
@@ -116,32 +116,16 @@ describe("Evidence HTTP API", () => {
       ));
       const passedBody = await passedEvidence.json() as Record<string, any>;
       const failedBody = await failedEvidence.json() as Record<string, any>;
-      const passedDetail = await router.handle(new Request(
-        `${BASE_URL}/api/evidence/${encodeURIComponent(passedBody.items[0].id)}`
-      ));
 
       expect(passed).toMatchObject({
         status: "in_progress",
         error: ""
       });
       expect(failed).toMatchObject({ status: "in_progress", error: "" });
-      expect(passedBody.items).toEqual([
-        expect.objectContaining({ kind: "test", run_id: passedRunID, status: "passed" })
-      ]);
-      expect(passedBody.verification_gap).toMatchObject({ reason: "none" });
-      expect(failedBody.items).toEqual([
-        expect.objectContaining({
-          decisive_summary: expect.stringContaining("failed with exit 1"),
-          kind: "test",
-          run_id: failedRunID,
-          status: "failed"
-        })
-      ]);
-      expect(failedBody.verification_gap).toMatchObject({ reason: "failed" });
-      expect(await passedDetail.json()).toMatchObject({
-        evidence: { kind: "test", status: "passed" },
-        verifier_review_refs: []
-      });
+      expect(passedBody.items).toEqual([]);
+      expect(failedBody.items).toEqual([]);
+      expect(passedBody.compatibility).toMatchObject({ fallback_applied: false, fallback_sources: [] });
+      expect(failedBody.compatibility).toMatchObject({ fallback_applied: false, fallback_sources: [] });
       expect(db.sqlite.query<{ count: number }, [string]>(
         "select count(*) as count from issue_events where type=?"
       ).get(EVIDENCE_RECORDED_EVENT_TYPE)?.count).toBe(0);
@@ -165,8 +149,7 @@ describe("Evidence HTTP API", () => {
       expect(await empty.json()).toMatchObject({
         has_more: false,
         items: [],
-        projection_errors: [],
-        verification_gap: { reason: "not_executed" }
+        projection_errors: []
       });
       expect(badCursor.status).toBe(400);
       expect(await badCursor.json()).toEqual({ code: "invalid_cursor", message: "Evidence cursor is invalid" });
@@ -177,7 +160,7 @@ describe("Evidence HTTP API", () => {
     }
   });
 
-  test("keeps targeted W1 command projection as a read-only compatibility fallback", async () => {
+  test("does not apply the retired W1 command projection fallback", async () => {
     const db = await fixture();
     try {
       const issueID = insertIssue(db, "Legacy projected Evidence", "in_progress");
@@ -187,19 +170,10 @@ describe("Evidence HTTP API", () => {
 
       const response = await router.handle(new Request(`${BASE_URL}/api/evidence?issue_id=${issueID}`));
       const body = await response.json() as Record<string, any>;
-      const detail = await router.handle(new Request(
-        `${BASE_URL}/api/evidence/${encodeURIComponent(body.items[0].id)}`
-      ));
-
       expect(response.status).toBe(200);
       expect(body).toMatchObject({
-        compatibility: { fallback_applied: true, fallback_sources: ["compatibility_projection"] },
-        items: [{ status: "passed", storage_source: "compatibility_projection" }]
-      });
-      expect(detail.status).toBe(200);
-      expect(await detail.json()).toMatchObject({
-        compatibility: { fallback_applied: true },
-        storage_source: "compatibility_projection"
+        compatibility: { fallback_applied: false, fallback_sources: [] },
+        items: []
       });
       expect(db.sqlite.query<{ count: number }, [string]>(
         "select count(*) as count from issue_events where type=?"
@@ -209,7 +183,7 @@ describe("Evidence HTTP API", () => {
     }
   });
 
-  test("accepts delegated and post-deploy command results idempotently without Evidence-driven completion", async () => {
+  test("rejects writes to the retired command Evidence compatibility endpoint", async () => {
     const db = await fixture();
     try {
       const issueID = insertIssue(db, "Explicit verification", "in_progress");
@@ -229,35 +203,13 @@ describe("Evidence HTTP API", () => {
       const completed = await patchDone(router, issueID);
       const records = listStoredEvidence(db, { issue_ids: [issueID], limit: 10 }).items;
 
-      expect(failedResponse.status).toBe(200);
-      expect(await failedResponse.json()).toMatchObject({
-        evidence: { decisive_output: { facts: { correlation_channel: "delegated_executor" } }, status: "failed" },
-        replayed: false
-      });
-      expect(passedResponse.status).toBe(200);
-      expect(await passedResponse.json()).toMatchObject({
-        evidence: { decisive_output: { facts: { correlation_channel: "post_deploy_verifier" } }, status: "passed" }
-      });
-      expect(await replay.json()).toMatchObject({ replayed: true });
-      expect(conflict.status).toBe(409);
-      expect(crossRun.status).toBe(409);
+      expect([failedResponse, passedResponse, replay, conflict, crossRun].map((response) => response.status))
+        .toEqual([404, 404, 404, 404, 404]);
       expect(completed).toMatchObject({
         status: "in_progress",
         error: ""
       });
-      expect(records.map((item) => item.evidence.status).sort()).toEqual(["failed", "passed"]);
-
-      const lateIssueID = insertIssue(db, "Late verification", "pending_verification");
-      const lateRunID = insertRun(db, lateIssueID, "done", "session-late");
-      const late = await postCommandEvidence(
-        router,
-        lateIssueID,
-        commandEvidenceBody(lateRunID, "delegated_executor", "late-after-disconnect", 0, new Date(observed).toISOString())
-      );
-      const lateBody = await late.json() as Record<string, any>;
-      expect(lateBody).toMatchObject({ evidence: { status: "passed" } });
-      expect(lateBody.gate).toBeNull();
-      expect(getIssue(db, lateIssueID)?.status).toBe("pending_verification");
+      expect(records).toEqual([]);
     } finally {
       db.close();
     }
@@ -293,11 +245,15 @@ describe("Evidence HTTP API", () => {
   test("wakes an auto-run project when new readiness Evidence makes a downstream Issue eligible", async () => {
     const db = await fixture();
     const provider = new ReadinessExecutionProvider();
+    const projectID = "readiness-wake";
     try {
-      db.sqlite.run("update projects set auto_run=1 where id='demo'");
-      const sourceID = insertIssue(db, "Runtime release", "done");
-      const downstreamID = insertIssue(db, "Live-dependent cleanup", "todo");
-      addReadinessDependency(db, downstreamID, sourceID);
+      db.sqlite.run(`insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
+        values (?, ?, ?, 'codex', 1, ?, ?)`, [
+        projectID, projectID, "/tmp/readiness-wake", timestamp(0), timestamp(0)
+      ]);
+      const sourceID = insertIssue(db, "Runtime release", "done", projectID);
+      const downstreamID = insertIssue(db, "Live-dependent cleanup", "todo", projectID);
+      addReadinessDependency(db, downstreamID, sourceID, projectID);
       declareIssueReadinessRequirements(db, downstreamID, {
         audit: {
           actor: { id: "release-controller", kind: "system" },
@@ -323,10 +279,10 @@ describe("Evidence HTTP API", () => {
       await waitFor(() => provider.inputs.length === 1);
 
       expect(response.status).toBe(200);
-      expect(provider.inputs[0]).toMatchObject({ issueId: downstreamID, projectId: "demo" });
+      expect(provider.inputs[0]).toMatchObject({ issueId: downstreamID, projectId: projectID });
       expect(getIssue(db, downstreamID)).toMatchObject({ attempt_count: 1, status: "in_progress" });
     } finally {
-      await waitFor(() => !isProjectLoopActive("demo"));
+      await waitFor(() => !isProjectLoopActive(projectID));
       db.close();
     }
   });
@@ -346,10 +302,10 @@ async function fixture(): Promise<RunnerDatabase> {
   return db;
 }
 
-function insertIssue(db: RunnerDatabase, title: string, status: string): number {
+function insertIssue(db: RunnerDatabase, title: string, status: string, projectID = "demo"): number {
   db.sqlite.run(
-    "insert into issues (project_id, title, status, created_at, updated_at) values ('demo', ?, ?, ?, ?)",
-    [title, status, timestamp(0), timestamp(0)]
+    "insert into issues (project_id, title, status, created_at, updated_at) values (?, ?, ?, ?, ?)",
+    [projectID, title, status, timestamp(0), timestamp(0)]
   );
   const id = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id;
   if (!id) throw new Error("missing issue id");
@@ -545,7 +501,7 @@ class ReadinessExecutionProvider implements ExecutorProvider {
   }
 }
 
-function addReadinessDependency(db: RunnerDatabase, issueID: number, dependencyID: number): void {
+function addReadinessDependency(db: RunnerDatabase, issueID: number, dependencyID: number, projectID = "demo"): void {
   const source = getIssueAsWork(db, issueID);
   const target = getIssueAsWork(db, dependencyID);
   if (!source || !target) throw new Error("missing Work fixture");
@@ -562,7 +518,7 @@ function addReadinessDependency(db: RunnerDatabase, issueID: number, dependencyI
     relation_id: `depends-on:${issueID}:${dependencyID}`,
     work_id: source.id
   };
-  insertWorkRelationRecord(db, "demo", relation);
+  insertWorkRelationRecord(db, projectID, relation);
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {

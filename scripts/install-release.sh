@@ -7,7 +7,7 @@ if [ "${CODEX_RUNNER_MANAGED_EXECUTION:-}" = "1" ] ||
   exit 78
 fi
 
-REPO="${CODEX_RUNNER_REPO:-williamnie/codex-issue-runner}"
+REPO="${CODEX_RUNNER_REPO:-williamnie/xuanwu}"
 VERSION="${CODEX_RUNNER_VERSION:-latest}"
 VERIFY_ATTESTATION="${CODEX_RUNNER_VERIFY_ATTESTATION:-auto}"
 ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
@@ -56,7 +56,7 @@ usage() {
 Install and run Xuanwu from the codex-issue-runner compatibility release.
 
 Usage:
-  curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/scripts/install-release.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/williamnie/xuanwu/main/scripts/install-release.sh | bash
 
 Useful environment variables:
   CODEX_RUNNER_VERSION=v0.1.0          Install a fixed release tag instead of latest

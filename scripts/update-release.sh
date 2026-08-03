@@ -7,7 +7,7 @@ if [ "${CODEX_RUNNER_MANAGED_EXECUTION:-}" = "1" ] ||
   exit 78
 fi
 
-REPO="${CODEX_RUNNER_REPO:-williamnie/codex-issue-runner}"
+REPO="${CODEX_RUNNER_REPO:-williamnie/xuanwu}"
 INSTALL_DIR="${CODEX_RUNNER_INSTALL_DIR:-$HOME/.local/bin}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$HOME/.local/state/codex-issue-runner}"
 LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$STATE_DIR/logs}"

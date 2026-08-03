@@ -160,8 +160,6 @@ describe("Bun frontend API compatibility", () => {
       const commandIssue = await requestJSON(router, "/api/commands", "POST", { command: { name: "issue", args: { project_id: "demo" } }, prompt: "Command issue" });
       const commandRun = await requestJSON(router, "/api/commands", "POST", { command: { name: "run", args: { issue_id: commandIssue.issue.id, confirmed: true } } });
       const commandStatus = await requestJSON(router, "/api/commands", "POST", { command: { name: "status", args: { issue_id: commandIssue.issue.id } } });
-      await requestJSON(router, `/api/issues/${issue.id}`, "PATCH", { status: "pending_verification", error: "build passed; smoke missing" });
-      const verifier = await requestJSON(router, `/api/issues/${issue.id}/verifier-report`, "POST", {}, 201);
       const models = await requestJSON(router, "/api/codex/models", "GET");
       const usage = await requestJSON(router, "/api/usage/codex?limit=1", "GET");
       const upload = await uploadPNG(router);
@@ -171,19 +169,6 @@ describe("Bun frontend API compatibility", () => {
       expect(commandIssue).toMatchObject({ summary: expect.stringContaining("created triage issue"), issue: { title: "Command issue" } });
       expect(commandRun).toMatchObject({ summary: expect.stringContaining("enqueued issue"), issue: { status: "todo" } });
       expect(commandStatus).toMatchObject({ summary: expect.stringContaining("issue #"), issue: { id: commandIssue.issue.id } });
-      expect(verifier).toMatchObject({
-        report: {
-          recommendation: "retry",
-          structured_review: {
-            schema_id: "xw.verifier-review.v1",
-            verdict: "inconclusive",
-            missing_evidence: [expect.objectContaining({ requirement_id: "current-run-check" })],
-            recommended_next_action: { action: "collect_missing_evidence" },
-            gate_consistency: { expected_status: "pending_verification", policy_decision: "pending" }
-          }
-        },
-        event: { type: "issue.verification_report" }
-      });
       expect(models).toMatchObject({ data: expect.any(Array) });
       expect(usage).toMatchObject({ events_scanned: expect.any(Number), summary: expect.any(Object) });
       expect(upload).toMatchObject({ mime_type: "image/png", url: `/api/uploads/${upload.id}/content` });

@@ -305,8 +305,8 @@ function inWindow(value: string, window: { since: string; until: string }): bool
   return Number.isFinite(time) && time >= Date.parse(window.since) && time <= Date.parse(window.until);
 }
 
-function safeText(value: string): string {
-  return redactSensitiveText(value).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
+function safeText(value: unknown): string {
+  return redactSensitiveText(clean(value)).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
 }
 
 function clean(value: unknown): string {

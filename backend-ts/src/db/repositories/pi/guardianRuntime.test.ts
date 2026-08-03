@@ -173,7 +173,7 @@ describe("PI Guardian runtime repositories", () => {
       }
 
       updatePiRunGroupItem(db, "group-lifecycle", 201, { final_issue_status: "done" });
-      updatePiRunGroupItem(db, "group-lifecycle", 202, { final_issue_status: "pending_verification" });
+      updatePiRunGroupItem(db, "group-lifecycle", 202, { final_issue_status: "needs_user" });
       updatePiRunGroupItem(db, "group-lifecycle", 203, { final_issue_status: "failed" });
       updatePiRunGroupItem(db, "group-lifecycle", 204, { final_issue_status: "cancelled" });
       updatePiRunGroupItem(db, "group-lifecycle", 205, { enqueue_status: "pending_approval" });
@@ -184,7 +184,7 @@ describe("PI Guardian runtime repositories", () => {
 
       expect(listPiRunGroupItems(db, "group-lifecycle")).toMatchObject([
         { issue_id: 201, report_bucket: "done", report_status: "done", status: "reportable" },
-        { issue_id: 202, report_bucket: "verification", report_status: "pending_verification", status: "reportable" },
+        { issue_id: 202, report_bucket: "needs_user", report_status: "needs_user", status: "reportable" },
         { issue_id: 203, report_bucket: "failed", report_status: "failed", status: "reportable" },
         { issue_id: 204, report_bucket: "skipped", report_status: "cancelled", status: "reportable" },
         { issue_id: 205, report_bucket: "needs_user", report_status: "enqueue_pending_approval", status: "reportable" },

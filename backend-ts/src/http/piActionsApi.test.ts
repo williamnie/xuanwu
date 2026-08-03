@@ -200,21 +200,26 @@ describe("Bun PI actions API", () => {
     try {
       insertProject(database, "demo");
       const project = mustGetProject(database, "demo");
-      const issueID = insertIssue(database, project.id, { status: "done" });
+      const issueID = insertIssue(database, project.id, { status: "in_progress" });
+      database.sqlite.run(`insert into issue_runs
+        (id, issue_id, attempt, status, provider, started_at, ended_at, exit_reason)
+        values (?, ?, 1, 'done', 'codex', ?, ?, 'completed')`, [
+        `run-${issueID}`, issueID, "2026-01-01T00:00:00Z", "2026-01-01T00:01:00Z"
+      ]);
       const action = createPiRunnerActions(database, { project })
         .createIssueStateRepairProposal({
-          diagnosis_code: "done_missing_verification_evidence",
+          diagnosis_code: "in_progress_session_ended",
           issue_id: issueID,
-          operation: "patch_status"
+          operation: "request_pi_decision"
         }) as { action_id: string };
 
       const response = await postAction(createDefaultRouter({ database }), action.action_id, "approve");
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ id: action.action_id, status: "completed" });
-      expect(getIssue(database, issueID)).toMatchObject({ status: "pending_verification", error: "" });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "in_progress", error: "" });
       expect(listEvents(database).map((event) => event.type)).toEqual([
-        "issue.status_changed",
+        "issue.pi_acceptance_requested.v1",
         "issue.state_manager_repair"
       ]);
     } finally {
@@ -329,23 +334,18 @@ describe("Bun PI actions API", () => {
     }
   });
 
-  test("approve executes role workflow and needs_user escalation actions", async () => {
+  test("approve executes profile assignment and needs_user escalation actions", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
       const project = mustGetProject(database, "demo");
-      const issueID = insertIssue(database, project.id, { status: "pending_verification" });
+      const issueID = insertIssue(database, project.id, { status: "needs_user" });
       insertAgentProfile(database, "executor-codex");
       const actions = createPiRunnerActions(database, { project });
       const assign = actions.assignExecutorProfileProposal({
         agent_profile_id: "executor-codex",
         issue_id: issueID,
         rationale: "use executor profile"
-      }) as { action_id: string };
-      const verify = actions.createVerificationWorkflow({
-        target_issue_id: issueID,
-        instructions: "verify evidence",
-        verification_plan: "bun test"
       }) as { action_id: string };
       const escalation = actions.escalateNeedsUser({
         issue_id: issueID,
@@ -355,27 +355,14 @@ describe("Bun PI actions API", () => {
       const router = createDefaultRouter({ database });
 
       const assigned = await postAction(router, assign.action_id, "approve");
-      const verified = await postAction(router, verify.action_id, "approve");
       const escalated = await postAction(router, escalation.action_id, "approve");
-      const created = listIssues(database, { projectId: "demo" }).find((issue) => issue.id !== issueID);
 
       expect(assigned.status).toBe(200);
-      expect(verified.status).toBe(200);
       expect(escalated.status).toBe(200);
-      expect(await verified.json()).toMatchObject({ id: verify.action_id, status: "completed" });
       expect(await escalated.json()).toMatchObject({ id: escalation.action_id, status: "completed" });
       expect(getIssue(database, issueID)).toMatchObject({ agent_profile_id: "executor-codex" });
-      expect(created).toMatchObject({
-        agent_profile_id: "",
-        status: "todo",
-        title: expect.stringContaining(`Verifier: #${issueID}`)
-      });
-      expect(JSON.parse(created?.workflow_snapshot_json ?? "{}")).toMatchObject({
-        agent_role: "verifier",
-        parent_issue_id: issueID
-      });
-      expect(listEvents(database).map((event) => event.type)).toEqual(["issue.created", "issue.comment"]);
-      expect(listEvents(database)[1]?.payload).toContain("needs_user");
+      expect(listEvents(database).map((event) => event.type)).toEqual(["issue.comment"]);
+      expect(listEvents(database)[0]?.payload).toContain("needs_user");
     } finally {
       database.close();
     }

@@ -96,7 +96,7 @@ function doneText(issue: Issue, title: string): string {
 function needsUserText(issue: Issue, title: string): string {
   return [
     `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 需要用户处理：${title}`,
-    `PI 判断：${issue.error ? safeSummary(issue.error, SUMMARY_LIMIT) : "请查看明确问题并选择后续动作。"}`
+    `Supervisor 判断：${issue.error ? safeSummary(issue.error, SUMMARY_LIMIT) : "请查看明确问题并选择后续动作。"}`
   ].join("\n");
 }
 
@@ -132,7 +132,7 @@ function watchNextStep(stats: Record<string, unknown>): string {
   if (numberField(stats.failed) + numberField(stats.cancelled) > 0) {
     return "存在 failed/cancelled，请先处理失败或取消项，再决定是否继续测试。";
   }
-  return "全部 Issue 已由 PI 判断完成，可以开始下一阶段。";
+  return "全部 Issue 已由 Supervisor 判断完成，可以开始下一阶段。";
 }
 
 function safeSummary(value: unknown, maxRunes: number): string {

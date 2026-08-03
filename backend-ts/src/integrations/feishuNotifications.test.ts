@@ -10,6 +10,7 @@ import { createIssue } from "../db/repositories/issueCreate.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { listPiNotificationIntents } from "../db/repositories/pi.ts";
+import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
 import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
@@ -85,16 +86,20 @@ describe("Feishu notification queue", () => {
     }
   });
 
-  test("human acceptance completes once and queues a completion notice, not another approval", async () => {
+  test("human acceptance queues PI re-evaluation instead of declaring completion", async () => {
     const db = await fixtureDatabase();
     const bus = new EventBus();
     try {
       const issueID = linkedFeishuIssue(db);
-      updateIssue(db, issueID, { error: "bun test passed", status: "pending_verification" });
+      updateIssue(db, issueID, { error: "bun test passed", status: "needs_user" });
+      const run = createIssueRun(db, issueID);
+      db.sqlite.run("update issue_runs set status='succeeded', ended_at=? where id=?", [
+        "2026-08-01T00:00:00Z", run.id
+      ]);
       const review = pendingRequiredHandoffReview(db, issueID);
       const router = createDefaultRouter({ bus, database: db });
 
-      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueID}/verification`, {
+      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueID}/human-review-response`, {
         body: JSON.stringify({
           action: "accept",
           comment: "验收通过",
@@ -109,25 +114,28 @@ describe("Feishu notification queue", () => {
 
       expect(response.status).toBe(200);
       expect(outbox).toHaveLength(1);
-      expect(outbox[0]?.content).toContain("issue #1 已完成");
-      expect(outbox[0]?.content).not.toContain("需要你的确认");
+      expect(outbox[0]?.content).not.toContain("issue #1 已完成");
     } finally {
       db.close();
     }
   });
 
-  test("dispatches only the final completion notice after an explicit human acceptance", async () => {
+  test("does not dispatch a completion notice before PI re-evaluates human acceptance", async () => {
     const db = await fixtureDatabase();
     const bus = new EventBus();
     const sender = new FakeFeishuSender();
     const config = buildConfig({ feishuAppId: "cli_app_id", feishuAppSecret: "app-secret-value" });
     try {
       const issueID = linkedFeishuIssue(db);
-      updateIssue(db, issueID, { error: "bun test passed", status: "pending_verification" });
+      updateIssue(db, issueID, { error: "bun test passed", status: "needs_user" });
+      const run = createIssueRun(db, issueID);
+      db.sqlite.run("update issue_runs set status='succeeded', ended_at=? where id=?", [
+        "2026-08-01T00:00:00Z", run.id
+      ]);
       const review = pendingRequiredHandoffReview(db, issueID);
       const router = createDefaultRouter({ bus, config, database: db, feishuSender: sender });
 
-      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueID}/verification`, {
+      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueID}/human-review-response`, {
         body: JSON.stringify({
           action: "accept",
           comment: "验收通过",
@@ -144,16 +152,14 @@ describe("Feishu notification queue", () => {
 
       expect(response.status).toBe(200);
       expect(sender.calls).toHaveLength(1);
-      expect(sender.calls[0]?.text).toContain("issue #1 已完成");
-      expect(sender.calls[0]?.text).not.toContain("需要你的确认");
+      expect(sender.calls[0]?.text).not.toContain("issue #1 已完成");
       expect(outbox).toHaveLength(1);
-      expect(outbox[0]?.status).toBe("sent");
     } finally {
       db.close();
     }
   });
 
-  test("keeps failed internal verifier carriers out of human lifecycle notifications", async () => {
+  test("does not treat retired verifier metadata as a hidden notification carrier", async () => {
     const db = await fixtureDatabase();
     try {
       const issueID = linkedFeishuIssue(db);
@@ -165,8 +171,8 @@ describe("Feishu notification queue", () => {
       const result = queueFeishuIssueStatusNotification(db, issueID);
       await flushAgentCommunicationTestMessages(db);
 
-      expect(result).toEqual({ queued: false, reason: "internal_verifier_workflow" });
-      expect(listSyncOutbox(db, { source: "feishu" })).toEqual([]);
+      expect(result).toEqual({ queued: true, reason: "queued" });
+      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(1);
     } finally {
       db.close();
     }
@@ -183,19 +189,15 @@ describe("Feishu notification queue", () => {
     });
     try {
       const issue = createIssue(db, { project_id: "demo", title: "Needs human", status: "todo" });
-      const router = createDefaultRouter({ bus, config, database: db, feishuSender: sender });
-
-      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issue.id}`, {
-        body: JSON.stringify({ error: "backend contract missing", status: "failed" }),
-        headers: { "content-type": "application/json" },
-        method: "PATCH"
-      }));
+      createDefaultRouter({ bus, config, database: db, feishuSender: sender });
+      updateIssue(db, issue.id, { error: "backend contract missing", status: "failed" });
+      const queued = queueFeishuIssueStatusNotification(db, issue.id, { config: config.integrations.feishu });
       expect(sender.calls).toEqual([]);
       await flushAgentCommunicationTestMessages(db);
       await dispatchFeishuOutbox({ config: config.integrations.feishu, database: db, sender });
       const outbox = listSyncOutbox(db, { source: "feishu" });
 
-      expect(response.status).toBe(200);
+      expect(queued).toEqual({ queued: true, reason: "queued" });
       expect(sender.calls).toEqual([{
         receiveId: "oc_default",
         receiveIdType: "chat_id",
@@ -271,7 +273,7 @@ describe("Feishu notification queue", () => {
     const bus = new EventBus();
     try {
       const issueID = linkedFeishuIssue(db);
-      updateIssue(db, issueID, { status: "pending_verification" });
+      updateIssue(db, issueID, { status: "needs_user" });
       createDefaultRouter({ bus, database: db });
       const question = "是否接受 Node/TypeScript/PostgreSQL、OIDC、BlobStore、Provider 适配层、禁止 Mock，以及 V0.1 范围这些技术和产品取舍？";
 

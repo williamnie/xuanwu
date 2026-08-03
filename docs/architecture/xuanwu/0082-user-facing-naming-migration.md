@@ -24,7 +24,7 @@
 
 ## 3. Compatibility aliases 与现有配置升级
 
-- **稳定标识：** `codex-issue-runner`、`CODEX_RUNNER_*`、`runner-default`、`pi_*` 表/列/事件、`Pi*` 类型与内部文件名不变；产品 API 已收敛为 `/api/pi/supervisor`。
+- **稳定标识：** `codex-issue-runner` 二进制/CLI/skill、`CODEX_RUNNER_*`、`runner-default`、`pi_*` 表/列/事件、`Pi*` 类型与内部文件名不变；GitHub 仓库从 `v0.2.0` 起使用 `williamnie/xuanwu`；产品 API 已收敛为 `/api/pi/supervisor`。
 - **默认配置迁移：** `055_collapse_pi_agents_to_supervisor` 与启动自愈会把精确匹配的旧默认名称/instructions 改写为 canonical 值、归一项目与会话引用，并删除 `runner-default` 之外的旧 agent 配置；前端不再保留 compatibility projection。
 - **mention alias：** Feishu 输入继续接受既有 `@PI` mention，输出只显示玄武/Supervisor。该 alias 不创建新 route、agent 或状态。
 - **无双写/双读：** 没有第二份 Supervisor authority；旧多 agent 产品 API 已删除。

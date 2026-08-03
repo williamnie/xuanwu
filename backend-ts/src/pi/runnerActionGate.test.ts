@@ -274,54 +274,6 @@ describe("PI runner action gate", () => {
     }
   });
 
-  test("Runner Chat can create and start a verifier workflow without a hidden Guardian denial", async () => {
-    const fixture = await openFixture();
-    const kicked: string[] = [];
-    try {
-      const issueID = insertIssue(fixture.db, {
-        projectID: fixture.project.id,
-        status: "failed",
-        title: "Needs deterministic verification"
-      });
-      const actions = createPiRunnerActions(fixture.db, {
-        onIssueEnqueued: (projectID: string) => kicked.push(projectID),
-        source: "feishu_runner_chat"
-      });
-
-      const result = actions.createVerificationWorkflow({
-        instructions: "Verify the persisted runtime evidence.",
-        target_issue_id: issueID
-      }) as { action_id: string; decision: string; status: string };
-      const duplicate = actions.createVerificationWorkflow({
-        instructions: "Verify the persisted runtime evidence again.",
-        target_issue_id: issueID
-      }) as { action_id: string; decision: string; status: string };
-      const child = listIssues(fixture.db, { projectId: fixture.project.id })
-        .find((issue) => issue.id !== issueID);
-
-      expect(result).toMatchObject({ decision: "execute", status: "completed" });
-      expect(duplicate).toMatchObject({ decision: "execute", status: "completed" });
-      expect(getPiAction(fixture.db, result.action_id)).toMatchObject({
-        action_type: "agent.workflow_request",
-        gate_decision: "execute",
-        issue_id: issueID,
-        project_id: fixture.project.id,
-        status: "completed"
-      });
-      expect(child).toMatchObject({
-        project_id: fixture.project.id,
-        status: "todo"
-      });
-      expect(child?.workflow_snapshot_json).toContain("\"agent_role\":\"verifier\"");
-      expect(child?.workflow_snapshot_json).toContain(`"parent_issue_id":${issueID}`);
-      expect(listIssues(fixture.db, { projectId: fixture.project.id })
-        .filter((issue) => issue.id !== issueID)).toHaveLength(1);
-      expect(kicked).toEqual([fixture.project.id]);
-    } finally {
-      await fixture.close();
-    }
-  });
-
   test("completion watch create/cancel follow delegated, attended, and read-only gate semantics", async () => {
     const fixture = await openFixture();
     try {

@@ -25,8 +25,8 @@
 
    ```bash
    gh attestation verify codex-issue-runner_darwin_arm64.tar.gz \
-     --repo williamnie/codex-issue-runner \
-     --signer-workflow williamnie/codex-issue-runner/.github/workflows/release.yml
+     --repo williamnie/xuanwu \
+     --signer-workflow williamnie/xuanwu/.github/workflows/release.yml
    shasum -a 256 -c checksums.txt
    ```
 
@@ -38,7 +38,7 @@
 
 ```bash
 export CODEX_RUNNER_VERIFY_ATTESTATION=require
-curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/scripts/install-release.sh | bash
+curl -fsSL https://raw.githubusercontent.com/williamnie/xuanwu/main/scripts/install-release.sh | bash
 codex-issue-runner --version
 codex-issue-runner-daemon doctor
 ```

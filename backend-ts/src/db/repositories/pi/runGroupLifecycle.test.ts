@@ -35,13 +35,13 @@ describe("PI run group lifecycle report sync", () => {
       }));
 
       updateIssue(db, 301, { status: "done" });
-      updateIssue(db, 302, { status: "pending_verification" });
+      updateIssue(db, 302, { status: "needs_user" });
       updateIssue(db, 303, { error: "tests failed", status: "failed" });
       cancelIssue(db, 304);
 
       expect(listPiRunGroupItems(db, "group-sync")).toMatchObject([
         { issue_id: 301, report_bucket: "done", report_status: "done", status: "reportable" },
-        { issue_id: 302, report_bucket: "verification", report_status: "pending_verification", status: "reportable" },
+        { issue_id: 302, report_bucket: "needs_user", report_status: "needs_user", status: "reportable" },
         { issue_id: 303, report_bucket: "failed", report_reason: "tests failed", report_status: "failed", status: "reportable" },
         { issue_id: 304, report_bucket: "skipped", report_status: "cancelled", status: "reportable" }
       ]);

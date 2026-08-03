@@ -3,6 +3,7 @@ import { Value } from "@sinclair/typebox/value";
 
 export const SUPERVISOR_WORKFLOW_EVAL_SCHEMA_VERSION = "xw.supervisor-workflow-eval-suite.v1" as const;
 export const SUPERVISOR_WORKFLOW_EVAL_SCORERS = [
+  "completion_gate",
   "tool_selection",
   "report",
   "token_cost"
@@ -45,6 +46,9 @@ const reportEventSchema = Type.Object({
 }, { additionalProperties: false });
 
 const inputSchema = Type.Object({
+  completion_evidence: Type.Optional(Type.Union([
+    Type.Literal("passed"), Type.Literal("failed"), Type.Literal("missing")
+  ])),
   project_id: Type.String({ minLength: 1, maxLength: 255 }),
   prompt: Type.String({ maxLength: 8192 }),
   report_events: Type.Optional(Type.Array(reportEventSchema, { maxItems: 64 })),
@@ -52,6 +56,10 @@ const inputSchema = Type.Object({
 }, { additionalProperties: false });
 
 const goldenSchema = Type.Object({
+  completion: Type.Optional(Type.Object({
+    decision: Type.Union([Type.Literal("passed"), Type.Literal("failed"), Type.Literal("pending")]),
+    target_status: Type.Union([Type.Literal("done"), Type.Literal("failed"), Type.Literal("pending_verification")])
+  }, { additionalProperties: false })),
   max_estimated_cost_usd: Type.Number({ minimum: 0 }),
   max_total_tokens: Type.Integer({ minimum: 0 }),
   report: Type.Optional(Type.Record(Type.String({ minLength: 1 }), Type.Union([
@@ -131,6 +139,9 @@ function validateSuiteRelations(suite: SupervisorWorkflowEvalSuite): string[] {
 
 function validateScorerInputs(fixture: SupervisorWorkflowEvalCase, errors: string[]): void {
   const required = new Set(fixture.required_scorers);
+  if (required.has("completion_gate") && (!fixture.golden.completion || !fixture.input.completion_evidence)) {
+    errors.push(`${fixture.id} completion evidence and golden are required`);
+  }
   if (required.has("tool_selection") && !fixture.golden.selected_tools) {
     errors.push(`${fixture.id} selected_tools golden is required`);
   }

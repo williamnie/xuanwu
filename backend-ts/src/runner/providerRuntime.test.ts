@@ -346,7 +346,7 @@ describe("executor provider runtime seam", () => {
     }
   });
 
-  test("captures completed PTY verification Evidence during provider runtime", async () => {
+  test("keeps completed PTY output as an artifact without synthesizing verification Evidence", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo");
@@ -365,14 +365,9 @@ describe("executor provider runtime seam", () => {
         select payload from issue_events where issue_id=? and type='issue.log'
           and json_extract(payload, '$.raw_method')='item/completed' limit 1
       `).get(issueId);
-      expect(records).toHaveLength(1);
+      expect(records).toHaveLength(0);
       expect(JSON.parse(completed?.payload ?? "{}")).toMatchObject({
         issue_log_artifact: { schema_version: "issue-log-payload-artifact.v1" }
-      });
-      expect(records[0]?.evidence).toMatchObject({
-        decisive_output: { facts: { correlation_channel: "terminal_interaction", terminal_interaction_count: 1 } },
-        kind: "test",
-        status: "passed"
       });
     } finally {
       db.close();
@@ -506,7 +501,7 @@ describe("executor provider runtime seam", () => {
           provider_turn_id: "claude-turn",
           codex_thread_id: "",
           codex_turn_id: "",
-          exit_reason: "explicit_status_update",
+          exit_reason: "pi_semantic_decision",
           runtime_metadata_json: "{\"run_id\":\"claude-run\"}"
         }
       ]);

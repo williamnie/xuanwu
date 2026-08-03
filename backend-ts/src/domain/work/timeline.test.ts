@@ -44,16 +44,16 @@ describe("Work timeline projection", () => {
         "attention.status_changed.v1",
         "run.status_changed.v1",
         "work_ledger.work_updated.v1",
-        "handoff.prepared.v1",
-        "evidence.recorded.v1",
+        "work.status_changed.v1",
+        "issue.verification_report",
         "issue.comment",
         "attention.opened.v1",
         "run.created.v1",
         "work.created.v1"
       ]);
       expect(result.items.map((item) => item.kind)).toEqual([
-        "evidence", "approval", "run", "work_event", "handoff",
-        "evidence", "issue_event", "approval", "run", "work_event"
+        "evidence", "approval", "run", "work_event", "work_event",
+        "issue_event", "issue_event", "approval", "run", "work_event"
       ]);
       expect(result.items.every((item) => item.source_links.some((link) => link.rel === "work"))).toBe(true);
       expect(result.items.find((item) => item.source.authority === "issue_events")?.source_links)

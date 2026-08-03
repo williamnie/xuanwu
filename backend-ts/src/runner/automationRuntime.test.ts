@@ -110,7 +110,7 @@ describe("native Automation scheduler composition", () => {
       const automationRun = listAutomationRuns(db, automation.id)[0]!;
       const link = getAutomationExecutionLink(db, automationRun.run_id)!;
       expect(link).toMatchObject({ automation_id: automation.id, workflow_ref: INVESTIGATE_WORKFLOW_REF });
-      expect(getIssue(db, link.issue_id)).toMatchObject({ status: "pending_verification" });
+      expect(getIssue(db, link.issue_id)).toMatchObject({ status: "in_progress" });
       expect(getIssueAsWork(db, link.issue_id)?.provenance.origin).toMatchObject({
         authority: "automation_definitions",
         external_id: `${automation.id}/${automationRun.run_id}`,
@@ -118,31 +118,8 @@ describe("native Automation scheduler composition", () => {
         source_event_id: `automation_runs:${automationRun.run_id}`
       });
       expect(listIssueRuns(db, link.issue_id)).toHaveLength(1);
-      expect(listStoredEvidence(db, { issue_ids: [link.issue_id], limit: 10 }).items).toMatchObject([
-        { evidence: {
-          decisive_output: { facts: {
-            automation_mode: "execute_allowed",
-            permission_policy_ref: "project-policy:demo"
-          } },
-          status: "passed",
-          run_id: link.run_id
-        } }
-      ]);
-      const context = JSON.parse(String(listStoredEvidence(db, {
-        issue_ids: [link.issue_id], limit: 10
-      }).items[0]?.evidence.decisive_output.facts.execution_context_json));
-      expect(context).toMatchObject({
-        budget: { consumed: 0, limit: 5 },
-        items: [
-          { kind: "issue_signal", payload: { status: "in_progress" } },
-          { kind: "supervisor_commitment" }
-        ],
-        schema_version: "xw.standing-order-context.v1",
-        scope: { kind: "project", project_id: "demo" }
-      });
-      expect(listStoredHandoffs(db, { work_id: link.work_id, limit: 10 }).items).toMatchObject([
-        { handoff: { status: "ready", run_ids: [link.run_id], review_ref: `automation_runs:${automationRun.run_id}` } }
-      ]);
+      expect(listStoredEvidence(db, { issue_ids: [link.issue_id], limit: 10 }).items).toEqual([]);
+      expect(listStoredHandoffs(db, { work_id: link.work_id, limit: 10 }).items).toEqual([]);
     } finally {
       db.close();
     }
@@ -160,9 +137,9 @@ describe("native Automation scheduler composition", () => {
       expect(result.automationCore).toMatchObject({ executed: 0, scanned: 1, skipped: 1 });
       expect(automationRun.status).toBe("skipped");
       expect(provider.inputs).toHaveLength(0);
-      expect(getIssue(db, link.issue_id)).toMatchObject({ status: "cancelled" });
-      expect(listStoredEvidence(db, { issue_ids: [link.issue_id], limit: 10 }).items[0]?.evidence.status).toBe("blocked");
-      expect(listStoredHandoffs(db, { work_id: link.work_id, limit: 10 }).items[0]?.handoff.status).toBe("draft");
+      expect(getIssue(db, link.issue_id)).toMatchObject({ status: "in_progress" });
+      expect(listStoredEvidence(db, { issue_ids: [link.issue_id], limit: 10 }).items).toEqual([]);
+      expect(listStoredHandoffs(db, { work_id: link.work_id, limit: 10 }).items).toEqual([]);
     } finally {
       db.close();
     }
@@ -179,17 +156,15 @@ describe("native Automation scheduler composition", () => {
 
       expect(failed.automationCore).toMatchObject({ failed: 1, scanned: 1 });
       expect(queuedRun.status).toBe("queued");
-      expect(listStoredEvidence(db, { issue_ids: [link.issue_id], limit: 10 }).items.map((item) => item.evidence.status))
-        .toEqual(["failed"]);
+      expect(listStoredEvidence(db, { issue_ids: [link.issue_id], limit: 10 }).items).toEqual([]);
 
       const retried = await cycle(db, provider, new Date("2026-07-18T10:01:00.000Z"));
       expect(retried.automationCore).toMatchObject({ executed: 1, scanned: 1 });
       expect(provider.inputs).toHaveLength(2);
       expect(listAutomationRuns(db, automation.id)[0]?.status).toBe("succeeded");
-      expect(listIssueRuns(db, link.issue_id)).toHaveLength(1);
-      expect(listStoredEvidence(db, { issue_ids: [link.issue_id], limit: 10 }).items.map((item) => item.evidence.status).sort())
-        .toEqual(["failed", "passed"]);
-      expect(listStoredHandoffs(db, { work_id: link.work_id, limit: 10 }).items).toHaveLength(2);
+      expect(listIssueRuns(db, link.issue_id)).toHaveLength(2);
+      expect(listStoredEvidence(db, { issue_ids: [link.issue_id], limit: 10 }).items).toEqual([]);
+      expect(listStoredHandoffs(db, { work_id: link.work_id, limit: 10 }).items).toEqual([]);
     } finally {
       db.close();
     }
@@ -273,13 +248,13 @@ describe("native Automation scheduler composition", () => {
       const result = await cycle(db, provider, NOW);
       const runs = automations.flatMap((automation) => listAutomationRuns(db, automation.id));
 
-      expect(result.automationCore).toMatchObject({ executed: 1, scanned: 6, skipped: 5 });
-      expect(provider.inputs).toHaveLength(1);
-      expect(runs.filter((run) => run.status === "succeeded")).toHaveLength(1);
+      expect(result.automationCore).toMatchObject({ executed: 6, scanned: 6, skipped: 0 });
+      expect(provider.inputs).toHaveLength(6);
+      expect(runs.filter((run) => run.status === "succeeded")).toHaveLength(6);
 
       const next = await cycle(db, provider, new Date("2026-07-18T10:01:00.000Z"));
-      expect(next.automationCore).toMatchObject({ executed: 1, scanned: 6, skipped: 5 });
-      expect(provider.inputs).toHaveLength(2);
+      expect(next.automationCore).toMatchObject({ executed: 6, scanned: 6, skipped: 0 });
+      expect(provider.inputs).toHaveLength(12);
       expect(listAutomationRuns(db, automations[0]!.id).filter((run) => run.status === "succeeded")).toHaveLength(2);
     } finally {
       db.close();
@@ -304,12 +279,12 @@ describe("native Automation scheduler composition", () => {
       db = await openDatabase({ stateDir });
       const resumed = await cycle(db, provider, new Date("2026-07-18T10:01:00.000Z"));
 
-      expect(resumed.automationCore).toMatchObject({ executed: 0, scanned: 2, skipped: 2 });
-      expect(provider.inputs).toHaveLength(1);
-      expect(listAutomationRuns(db, automation.id).map((run) => run.status).sort()).toEqual(["skipped", "succeeded"]);
+      expect(resumed.automationCore).toMatchObject({ executed: 1, scanned: 2, skipped: 1 });
+      expect(provider.inputs).toHaveLength(2);
+      expect(listAutomationRuns(db, automation.id).map((run) => run.status).sort()).toEqual(["succeeded", "succeeded"]);
       expect(db.sqlite.query<{ count: number }, [string]>(`
         select count(*) as count from automation_execution_links where automation_id=?
-      `).get(automation.id)?.count).toBe(1);
+      `).get(automation.id)?.count).toBe(2);
     } finally {
       db.close();
     }

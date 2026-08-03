@@ -605,7 +605,7 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
-  test("alerts on a deferred provider initialize outage without a hardcoded recovery", async () => {
+  test("routes a provider initialize outage to PI acceptance without a hardcoded retry", async () => {
     const db = await openFixtureDatabase();
     const provider = new InitializeTimeoutProvider();
     const runner = new FakePiCycleRunner();
@@ -630,8 +630,8 @@ describe("PI auto-manage scheduler", () => {
 
       expect(listPiActions(db, { issueId: 701 })).toEqual([]);
       expect(getIssue(db, 701)).toMatchObject({
-        auto_retry_reason: "provider_infra_transient:claude",
-        status: "todo"
+        auto_retry_reason: "",
+        status: "in_progress"
       });
     } finally {
       db.close();
@@ -774,18 +774,19 @@ async function runOutageScheduleClosure(db: DB, runner: FakePiCycleRunner) {
 function expectDeferredOutageClaim(db: DB, provider: InitializeTimeoutProvider): void {
   expect(provider.inputs.map((input) => input.issueId)).toEqual([701]);
   expect(getIssue(db, 701)).toMatchObject({
-    auto_retry_reason: "provider_infra_transient:claude",
-    status: "todo"
+    auto_retry_reason: "",
+    status: "in_progress"
   });
   expect(listIssueRuns(db, 701).at(-1)).toMatchObject({
     ended_at: expect.not.stringMatching(/^$/),
-    exit_reason: "provider_deferred",
+    exit_reason: "provider_reported_failed",
     provider: "claude",
     status: "failed"
   });
   expect(getIssue(db, 702)).toMatchObject({ attempt_count: 0, status: "todo" });
   expect(listIssueRuns(db, 702)).toEqual([]);
-  expect(listIssueEvents(db, 701).map((event) => event.type)).toContain("issue.provider_deferred");
+  expect(listIssueEvents(db, 701).map((event) => event.type)).toContain("issue.pi_acceptance_requested.v1");
+  expect(listIssueEvents(db, 701).map((event) => event.type)).not.toContain("issue.provider_deferred");
 }
 
 function insertIssueRunSession(db: DB, issueID: number, projectID = "demo"): void {

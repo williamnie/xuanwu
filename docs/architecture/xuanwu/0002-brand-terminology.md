@@ -26,7 +26,7 @@
 
 | 兼容名称 | 当前用途 | 本期决策 |
 | --- | --- | --- |
-| `codex-issue-runner` | 仓库、发行二进制、CLI、skill、Codex `clientInfo`、安装目录和服务标识 | **保留稳定**；它是兼容产品 ID，不是 UI 品牌名 |
+| `codex-issue-runner` | 发行二进制、CLI、skill、Codex `clientInfo`、安装目录和服务标识 | **保留稳定**；它是兼容产品 ID，不是 UI 品牌名；GitHub 仓库从 `v0.2.0` 起使用 `xuanwu` |
 | `CODEX_RUNNER_*` | 环境变量和部署配置 | **保留稳定** |
 | `/api/pi/supervisor*`、`pi_*`、`pi_agents`、`pi_agent_id` | 单例 Supervisor API、数据库表/列、事件与内部模块命名 | **canonical**；不再保留 `/api/pi/agents*` collection |
 | `runner-default` | 唯一 Supervisor runtime 的稳定 agent ID | **保留稳定**；迁移将历史引用统一到该 ID |
@@ -44,6 +44,7 @@
 2. 前端代码中的固定术语投影以 `frontend/src/brand.js` 为 source of truth。
 3. 运行状态继续以现有 SQLite、Bun API 与 Runner 状态机为 source of truth；UI 名称不能改变权限、状态或完成判定。
 4. `pi_agents.name` 仍是用户可编辑的 runtime metadata，不是产品品牌字段；精确命中的历史默认值由单例 Supervisor 数据迁移规范化，其他自定义名称原样保留。
+5. GitHub 仓库的 canonical slug 是 `williamnie/xuanwu`；GitHub 对旧 slug 的重定向只用于兼容历史链接，新文档、安装器和 Release metadata 不得继续生成旧 URL。
 
 ### 3.2 新旧模型并存
 
@@ -81,7 +82,7 @@
 
 | 文件 | 本期动作 | 兼容边界 / 后续 |
 | --- | --- | --- |
-| `README.md` | 以玄武作为产品标题，链接本合同；把发行物说明为 `codex-issue-runner` 兼容名 | 安装命令、路径和 CLI 示例保持原值 |
+| `README.md`、`README.zh-CN.md` | 以玄武作为产品标题，链接本合同；把发行物说明为 `codex-issue-runner` 兼容名 | GitHub URL 使用 `xuanwu`；安装后的命令、路径和 CLI 示例保持原值 |
 | `frontend/index.html` | 浏览器标题改为玄武产品类别 | favicon 路径保持不变 |
 | `frontend/src/brand.js` | 固定产品、Supervisor、Runner 术语与 descriptor/tagline | `BRAND.name` / `BRAND.hanzi` 保持现有组件 contract |
 | `frontend/src/components/BrandMark.jsx` | 继续从 `BRAND` 渲染，不新增第二套 logo | 组件名和资源名保持不变 |

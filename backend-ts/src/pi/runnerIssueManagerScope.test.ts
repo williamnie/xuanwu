@@ -77,13 +77,18 @@ describe("PI runner issue-manager scope", () => {
     }
   });
 
-  test("can enqueue and repair issues from any issue project without switching context", async () => {
+  test("can enqueue and request a PI decision across issue projects without switching context", async () => {
     const fixture = await openFixture();
     const kicked: string[] = [];
     try {
       insertProject(fixture.db, "other", `${fixture.project.cwd}-other`, true);
       const otherIssue = insertIssue(fixture.db, { projectID: "other", status: "triage", title: "Other runnable" });
-      const weakDone = insertIssue(fixture.db, { projectID: "other", status: "done", title: "Other weak done" });
+      const ended = insertIssue(fixture.db, { projectID: "other", status: "in_progress", title: "Other ended run" });
+      fixture.db.sqlite.run(`insert into issue_runs
+        (id, issue_id, attempt, status, provider, started_at, ended_at, exit_reason)
+        values (?, ?, 1, 'done', 'codex', ?, ?, 'completed')`, [
+        `run-${ended}`, ended, "2026-06-10T06:00:00Z", "2026-06-10T06:05:00Z"
+      ]);
       const actions = createPiRunnerActions(fixture.db, {
         authorization: issueManagerAuthorization(["issue.create", "issue.enqueue", "issue.schedule_enqueue", "issue.state_repair"]),
         onIssueEnqueued: (projectID) => kicked.push(projectID),
@@ -93,16 +98,16 @@ describe("PI runner issue-manager scope", () => {
 
       const enqueue = actions.enqueueIssueProposal({ issue_id: otherIssue, rationale: "跨 issue project 入队" }) as { decision: string; status: string };
       const repair = actions.createIssueStateRepairProposal({
-        diagnosis_code: "done_missing_verification_evidence",
-        issue_id: weakDone,
-        operation: "patch_status",
-        rationale: "回到验证"
+        diagnosis_code: "in_progress_session_ended",
+        issue_id: ended,
+        operation: "request_pi_decision",
+        rationale: "请求 PI 判断已结束的 Run"
       }) as { decision: string; status: string };
 
       expect(enqueue).toMatchObject({ decision: "execute", status: "completed" });
       expect(repair).toMatchObject({ decision: "execute", status: "completed" });
       expect(getIssue(fixture.db, otherIssue)).toMatchObject({ project_id: "other", status: "todo" });
-      expect(getIssue(fixture.db, weakDone)).toMatchObject({ project_id: "other", status: "pending_verification" });
+      expect(getIssue(fixture.db, ended)).toMatchObject({ project_id: "other", status: "in_progress" });
       expect(kicked).toEqual(["other"]);
     } finally {
       await fixture.close();

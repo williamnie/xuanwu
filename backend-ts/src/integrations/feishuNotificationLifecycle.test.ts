@@ -6,6 +6,8 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { getIssue } from "../db/repositories/issues.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { createPiAction, createPiMemoryItem } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
@@ -196,7 +198,7 @@ describe("Feishu lifecycle notifications", () => {
     }
   });
 
-  test("project loop claim and failure events queue start and failed notifications", async () => {
+  test("project loop queues start and defers provider failure semantics to Supervisor", async () => {
     const db = await fixtureDatabase("fake-execution-only");
     const bus = new EventBus();
     const detach = attachFeishuNotificationObservers({ bus, database: db });
@@ -216,7 +218,9 @@ describe("Feishu lifecycle notifications", () => {
       expect(result).toMatchObject({ claimed: true });
       expect(outbox).toHaveLength(1);
       expect(outbox.map((item) => item.content).join("\n")).toContain("已启动 executor session");
-      expect(outbox.map((item) => item.content).join("\n")).toContain("执行失败/阻塞");
+      expect(outbox.map((item) => item.content).join("\n")).not.toContain("执行失败/阻塞");
+      expect(getIssue(db, 1)?.status).toBe("in_progress");
+      expect(listIssueEvents(db, 1, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
     } finally {
       detach();
       db.close();

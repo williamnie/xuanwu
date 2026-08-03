@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 describe("PI runtime tool registry adapter", () => {
-  test("assembles builtin runtime tools from registry with legacy tool names", async () => {
+  test("assembles builtin runtime tools from the current registry", async () => {
     const db = await openFixture();
     try {
       const kit = createPiRuntimeToolKit(db);
@@ -37,13 +37,12 @@ describe("PI runtime tool registry adapter", () => {
         "memory_search",
         "work_list",
         "run_control",
-        "evidence_read",
-        "handoff_read"
+        "issue_acceptance_request"
       ]));
       expect(kit.audit.custom_tool_names).toContain(URL_FETCH_TOOL_NAME);
       expect(kit.audit.provider_ids).toEqual(expect.arrayContaining(["runner-builtin", HTTP_READONLY_PROVIDER_ID]));
       expect(kit.readOnlyToolNames).toEqual(expect.arrayContaining([
-        "read", "issue_list", "memory_search", "work_list", "run_read", "evidence_read", "handoff_read", URL_FETCH_TOOL_NAME
+        "read", "issue_list", "memory_search", "work_list", "run_read", URL_FETCH_TOOL_NAME
       ]));
       for (const name of [
         "issue_create_proposal", "manual_context_intake", "memory_remember",

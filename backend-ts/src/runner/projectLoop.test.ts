@@ -425,6 +425,30 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
+  test("isolates loop queues for separate databases that reuse a project id", async () => {
+    const firstDB = await openFixtureDatabase();
+    const secondDB = await openFixtureDatabase();
+    const firstProvider = new FakeExecutionProvider();
+    const secondProvider = new FakeExecutionProvider();
+    try {
+      insertProject(firstDB, { id: "demo", provider: firstProvider.id, autoRun: 1 });
+      insertProject(secondDB, { id: "demo", provider: secondProvider.id, autoRun: 1 });
+      insertIssue(firstDB, { projectId: "demo", title: "first database" });
+      insertIssue(secondDB, { projectId: "demo", title: "second database" });
+
+      startProjectLoop({ database: firstDB, providers: { [firstProvider.id]: firstProvider } }, "demo");
+      startProjectLoop({ database: secondDB, providers: { [secondProvider.id]: secondProvider } }, "demo");
+      await waitFor(() => firstProvider.inputs.length === 1 && secondProvider.inputs.length === 1);
+      await waitFor(() => !isProjectLoopActive("demo", firstDB) && !isProjectLoopActive("demo", secondDB));
+
+      expect(firstProvider.inputs[0]).toMatchObject({ projectId: "demo", prompt: expect.stringContaining("first database") });
+      expect(secondProvider.inputs[0]).toMatchObject({ projectId: "demo", prompt: expect.stringContaining("second database") });
+    } finally {
+      firstDB.close();
+      secondDB.close();
+    }
+  });
+
   test("explicit project hold blocks auto-run and forced execution without creating a Run", async () => {
     const db = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();

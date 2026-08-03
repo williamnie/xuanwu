@@ -20,8 +20,8 @@ afterEach(async () => {
   }
 });
 
-describe("PI failed/pending/hold scanner", () => {
-  test("generates explainable findings for failed, pending verification, and project holds", async () => {
+describe("PI failed/needs-user/hold scanner", () => {
+  test("generates explainable findings for failed, needs-user, and project holds", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo");
@@ -31,11 +31,11 @@ describe("PI failed/pending/hold scanner", () => {
         status: "failed",
         title: "Failed task"
       });
-      const pending = insertIssue(db, {
+      const needsUser = insertIssue(db, {
         day: 3,
         error: "bun test passed; waiting for user acceptance",
-        status: "pending_verification",
-        title: "Pending task"
+        status: "needs_user",
+        title: "Needs user task"
       });
       insertIssue(db, { day: 4, status: "todo", title: "Healthy task" });
       createProjectHoldsTable(db);
@@ -44,8 +44,8 @@ describe("PI failed/pending/hold scanner", () => {
       const findings = scanProjectFindings(db, "demo");
 
       expect(findings.map((finding) => ({ issue_id: finding.issue_id, reason: finding.reason }))).toEqual([
-        { issue_id: failed, reason: "issue_failed" },
-        { issue_id: pending, reason: "pending_verification" },
+        { issue_id: failed, reason: "pi_failed" },
+        { issue_id: needsUser, reason: "pi_needs_user" },
         { issue_id: 0, reason: "project_hold:dirty_worktree" }
       ]);
       expect(findings[0]?.message).toContain("provider failed");
@@ -144,7 +144,7 @@ describe("PI failed/pending/hold scanner", () => {
     }
   });
 
-  test("uses structured retry state instead of wording to classify findings", async () => {
+  test("classifies canonical failed and needs-user states", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo");
@@ -173,25 +173,27 @@ describe("PI failed/pending/hold scanner", () => {
         status: "failed",
         title: "Blocked task"
       });
-      const pending = insertIssue(db, {
+      const canonicalNeedsUser = insertIssue(db, {
         day: 4,
         error: "bun test passed; waiting for user acceptance",
-        status: "pending_verification",
-        title: "Pending task"
+        status: "needs_user",
+        title: "Needs user task"
       });
 
       const findings = scanProjectFindings(db, "demo", { now: new Date("2026-01-01T01:30:00Z") });
       const categories = new Map(findings.map((finding) => [finding.issue_id, finding.category]));
 
-      expect(categories.get(transient)).toBe("transient");
+      expect(categories.has(transient)).toBe(false);
       expect(categories.get(transientFailed)).toBe("blocked");
       expect(categories.get(needsUser)).toBe("blocked");
       expect(categories.get(blocked)).toBe("blocked");
-      expect(categories.get(pending)).toBe("verification_needed");
+      expect(categories.get(canonicalNeedsUser)).toBe("needs_user");
       expect(findings.find((finding) => finding.issue_id === needsUser)?.notification).toMatchObject({
         type: "pi.project_blocked"
       });
-      expect(findings.find((finding) => finding.issue_id === needsUser)?.message).toContain("approval denied");
+      expect(findings.find((finding) => finding.issue_id === canonicalNeedsUser)?.notification).toMatchObject({
+        type: "pi.needs_user"
+      });
     } finally {
       db.close();
     }
@@ -217,9 +219,9 @@ describe("PI failed/pending/hold scanner", () => {
       const finding = findings.find((item) => item.issue_id === knownFailure);
 
       expect(finding).toMatchObject({
-        category: "needs_user",
+        category: "blocked",
         reason: "failure_pattern",
-        notification: { type: "pi.needs_user" }
+        notification: { type: "pi.project_blocked" }
       });
       expect(finding?.message).toContain("known failure pattern");
       expect(finding?.message).toContain("Escalate to user");

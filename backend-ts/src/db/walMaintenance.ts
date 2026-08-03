@@ -5,9 +5,6 @@ import { recordMaintenanceAudit } from "./repositories/eventMaintenance.ts";
 import { WAL_AUTOCHECKPOINT_PAGES } from "./database.ts";
 
 export const WAL_MAINTENANCE_SCHEMA = "xuanwu.sqlite-wal-maintenance.v1" as const;
-export const WAL_REQUIRED_ACTOR = "xiaobei";
-export const WAL_REQUIRED_AUDIT_REF = "issue-773-user-request-2026-07-21";
-export const WAL_REQUIRED_REASON = "用户要求完成性能优化";
 
 type WalOperation = "apply" | "dry-run" | "rollback" | "verify";
 
@@ -145,9 +142,6 @@ function authorize(input: WalMaintenanceInput) {
   const auditRef = required(input.auditRef, "--audit-ref");
   const reason = required(input.reason, "--reason");
   if (input.actorKind !== "user") throw new Error("WAL apply requires --actor-kind user");
-  if (actor !== WAL_REQUIRED_ACTOR) throw new Error(`WAL apply requires --actor ${WAL_REQUIRED_ACTOR}`);
-  if (auditRef !== WAL_REQUIRED_AUDIT_REF) throw new Error(`WAL apply requires --audit-ref ${WAL_REQUIRED_AUDIT_REF}`);
-  if (reason !== WAL_REQUIRED_REASON) throw new Error(`WAL apply requires --reason ${WAL_REQUIRED_REASON}`);
   return { actor, actorKind: input.actorKind, auditRef, reason };
 }
 
@@ -198,7 +192,7 @@ function sidecars(path: string): Record<string, unknown> {
 
 function rollbackContract(dbPath: string, reportPath: string): Record<string, string> {
   return {
-    command: `codex-issue-runner maintenance db wal --operation rollback --db ${shellPlaceholder(dbPath)} --report ${shellPlaceholder(reportPath)} --apply --confirm-backup-tested --confirm-no-active-writers --actor ${WAL_REQUIRED_ACTOR} --actor-kind user --audit-ref ${WAL_REQUIRED_AUDIT_REF} --reason '${WAL_REQUIRED_REASON}'`,
+    command: `codex-issue-runner maintenance db wal --operation rollback --db ${shellPlaceholder(dbPath)} --report ${shellPlaceholder(reportPath)} --apply --confirm-backup-tested --confirm-no-active-writers --actor <operator> --actor-kind user --audit-ref <approved-change-ref> --reason '<reason>'`,
     restore: "if integrity or row-count verification fails, keep Core stopped and restore the verified backup bundle into a fresh state directory"
   };
 }

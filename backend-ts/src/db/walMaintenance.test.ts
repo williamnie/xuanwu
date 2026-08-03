@@ -7,9 +7,6 @@ import { join } from "node:path";
 import { openDatabase } from "./database.ts";
 import {
   WAL_MAINTENANCE_SCHEMA,
-  WAL_REQUIRED_ACTOR,
-  WAL_REQUIRED_AUDIT_REF,
-  WAL_REQUIRED_REASON,
   runWalMaintenance
 } from "./walMaintenance.ts";
 
@@ -40,8 +37,12 @@ describe("audited SQLite WAL maintenance", () => {
     })).toThrow("--confirm-backup-tested");
     expect(() => runWalMaintenance({
       ...applyInput(fixture, "apply"),
-      actor: "another-user"
-    })).toThrow(`--actor ${WAL_REQUIRED_ACTOR}`);
+      actorKind: "system"
+    })).toThrow("--actor-kind user");
+    expect(() => runWalMaintenance({
+      ...applyInput(fixture, "apply"),
+      auditRef: ""
+    })).toThrow("--audit-ref is required");
     expect(() => runWalMaintenance({
       ...applyInput(fixture, "apply"),
       availableBytesForTest: 1
@@ -121,15 +122,15 @@ async function databaseFixture() {
 
 function applyInput(fixture: { dbPath: string; root: string }, operation: "apply" | "rollback") {
   return {
-    actor: WAL_REQUIRED_ACTOR,
+    actor: "release-operator",
     actorKind: "user" as const,
     apply: true,
-    auditRef: WAL_REQUIRED_AUDIT_REF,
+    auditRef: "change:sqlite-wal-rehearsal",
     confirmBackupTested: true,
     confirmNoActiveWriters: true,
     dbPath: fixture.dbPath,
     operation,
-    reason: WAL_REQUIRED_REASON,
+    reason: "verified WAL transition rehearsal",
     reportPath: join(fixture.root, `${operation}.json`)
   };
 }

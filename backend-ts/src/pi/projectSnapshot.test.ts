@@ -76,7 +76,7 @@ describe("PI project status snapshot", () => {
       const json = JSON.stringify(snapshot);
 
       expect(snapshot.issue_status_counts).toEqual({ failed: 1 });
-      expect(snapshot.findings[0]).toMatchObject({ issue_id: failed, reason: "issue_failed" });
+      expect(snapshot.findings[0]).toMatchObject({ issue_id: failed, reason: "pi_failed" });
       expect(snapshot.recent_errors.map((error) => error.source)).toEqual([
         "event",
         "run",

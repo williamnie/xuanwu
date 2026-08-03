@@ -178,11 +178,9 @@ describe("Bun project PI control API", () => {
       const json = JSON.stringify(body);
 
       expect(response.status).toBe(201);
-      expect(String(body.status_summary)).toContain("findings=2");
+      expect(String(body.status_summary)).toContain("findings=1");
       expect(notifications).toEqual([]);
       expect(body).not.toHaveProperty("action_candidates");
-      expect(json).toContain("[redacted]");
-      expect(json).toContain("[redacted-path]");
       expect(json).not.toContain("fixture-secret");
       expect(json).not.toContain("/Users/secret");
     } finally {

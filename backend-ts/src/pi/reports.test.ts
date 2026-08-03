@@ -54,7 +54,6 @@ describe("PI report generator", () => {
     try {
       insertProject(db, "demo");
       const included = insertIssue(db, "demo", "done", "Included", "bun test passed");
-      insertStructuredVerifierReport(db, included, "pass");
       insertIssue(db, "demo", "failed", "Outside delegation");
       createPiDelegation(db, { id: "delegation-a", project_id: "demo", title: "Night window" });
       createPiHeartbeatRun(db, {
@@ -85,15 +84,8 @@ describe("PI report generator", () => {
         project_id: "demo",
         source: "delegation",
         status: "generated",
-        summary: { completed: 1, failed: 0, total: 1, verifier_pass: 1 }
+        summary: { completed: 1, failed: 0, total: 1, verification_gaps: 0 }
       });
-      expect(report.verifier_reviews).toEqual([
-        expect.objectContaining({
-          issue_id: included,
-          verdict: "pass",
-          recommended_next_action: expect.objectContaining({ action: "complete_via_gate" })
-        })
-      ]);
     } finally {
       db.close();
     }
@@ -150,7 +142,7 @@ describe("PI report generator", () => {
       const categories = report.issue_categories as Record<string, Array<Record<string, any>>>;
       const failedNeedsUser = categories.failed.find((issue) => issue.id === needsUser);
 
-      expect(report.summary).toMatchObject({ blocked: 1, completed: 1, failed: 2, needs_user: 1, total: 3 });
+      expect(report.summary).toMatchObject({ blocked: 0, completed: 1, failed: 2, needs_user: 1, total: 3 });
       expect(report.supervisor_summary).toMatchObject({
         exhausted_recoveries: 1,
         needs_user_escalations: 1,
@@ -168,7 +160,8 @@ describe("PI report generator", () => {
         id: done
       })]);
       expect(categories.needs_user).toEqual([expect.objectContaining({ id: needsUser })]);
-      expect(categories.blocked).toEqual([expect.objectContaining({ id: blocked })]);
+      expect(categories.blocked).toEqual([]);
+      expect(categories.failed).toContainEqual(expect.objectContaining({ id: blocked }));
       expect(failedNeedsUser?.error).toContain("[redacted]");
       expect(failedNeedsUser?.error).not.toContain("secret-value");
       expect(failedNeedsUser?.error).not.toContain("/Users/xiaobei");
@@ -176,7 +169,7 @@ describe("PI report generator", () => {
       expect(String(report.summary_text_zh)).toContain("完成 1");
       expect(String(report.summary_text_zh)).toContain("失败 2");
       expect(String(report.summary_text_zh)).toContain("需用户 1");
-      expect(String(report.summary_text_zh)).toContain("阻塞 1");
+      expect(String(report.summary_text_zh)).toContain("阻塞 0");
       expect(String(report.summary_text_zh)).toContain(`/api/issues/${done}`);
       expect(String(report.summary_text_zh)).toContain(`/api/pi/audit-events?project_id=demo&issue_id=${done}`);
     } finally {

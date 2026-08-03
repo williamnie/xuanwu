@@ -21,7 +21,6 @@ describe("PI runner action tools", () => {
     const calls: Array<[string, unknown]> = [];
     const tools = createPiRunnerActionTools(fakeActions(calls));
     const recommendProfile = toolByName(tools, "agent_profile_recommend");
-    const verifier = toolByName(tools, "verification_workflow_request");
     const issueRead = toolByName(tools, "issue_read");
     const diagnose = toolByName(tools, "issue_state_diagnose");
     const schedule = toolByName(tools, "issue_schedule_enqueue");
@@ -128,10 +127,6 @@ describe("PI runner action tools", () => {
     })).toEqual({ codex_server_mode: "app", max_parallel_projects: 3, reason: "修改运行配置" });
     expect(validateArgs(systemRestart, { reason: "应用配置" })).toEqual({ reason: "应用配置" });
     expect(validateArgs(recommendProfile, { issue_id: 1, role: "executor" })).toEqual({ issue_id: 1, role: "executor" });
-    expect(validateArgs(verifier, { target_issue_id: 1, instructions: "verify" })).toEqual({
-      target_issue_id: 1,
-      instructions: "verify"
-    });
     expect(validateArgs(diagnose, { project_id: "demo" })).toEqual({ project_id: "demo" });
     expect(validateArgs(repair, { diagnosis_code: "done_missing_verification_evidence", issue_id: 1, operation: "patch_status" }))
       .toEqual({ diagnosis_code: "done_missing_verification_evidence", issue_id: 1, operation: "patch_status" });
@@ -197,7 +192,6 @@ describe("PI runner action tools", () => {
     expect(() => validateArgs(steer, { session_key: "codex:thread-1", prompt: " " })).toThrow(/Validation failed/);
 
     await recommendProfile.execute("tool-profile", { issue_id: 1, role: "executor" }, undefined, undefined, {} as never);
-    await verifier.execute("tool-verifier", { target_issue_id: 1, instructions: "verify" }, undefined, undefined, {} as never);
     await issueList.execute("tool-list", { limit: 3, status: "todo" }, undefined, undefined, {} as never);
     await issueRead.execute("tool-1", { id: 7 }, undefined, undefined, {} as never);
     await issueCancel.execute("tool-cancel", {
@@ -265,7 +259,6 @@ describe("PI runner action tools", () => {
 
     expect(calls).toEqual([
       ["recommendExecutorProfile", { issue_id: 1, role: "executor" }],
-      ["createVerificationWorkflow", { target_issue_id: 1, instructions: "verify" }],
       ["listIssues", { limit: 3, status: "todo" }],
       ["readIssue", { id: 7 }],
       ["cancelIssues", { issue_ids: [812, 813, 814], rationale: "不再做" }],
@@ -313,7 +306,7 @@ describe("PI runner action tools", () => {
       const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
       const tools = createPiRunnerActionTools(actions);
       const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "triage", title: "Queue me" });
-      insertAgentSession(fixture.db, { projectID: fixture.project.id, role: "verifier", sessionKey: "codex:thread-1" });
+      insertAgentSession(fixture.db, { projectID: fixture.project.id, role: "reviewer", sessionKey: "codex:thread-1" });
       insertAgentSession(fixture.db, { projectID: fixture.project.id, role: "reporter", sessionKey: "codex:thread-2" });
 
       const createIssue = await runTool(tools, "issue_create_proposal", {
@@ -427,13 +420,13 @@ describe("PI runner action tools", () => {
     try {
       const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
       const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "todo", title: "Read me" });
-      insertAgentSession(fixture.db, { projectID: fixture.project.id, role: "verifier", sessionKey: "codex:thread-1" });
+      insertAgentSession(fixture.db, { projectID: fixture.project.id, role: "reviewer", sessionKey: "codex:thread-1" });
       insertAgentSession(fixture.db, { projectID: fixture.project.id, role: "reporter", sessionKey: "codex:thread-2" });
 
       expect(actions.listIssues({ status: "todo" })).toMatchObject({ items: [{ id: issueID, title: "Read me" }] });
       expect(actions.readIssue({ id: issueID })).toMatchObject({ id: issueID, title: "Read me" });
       expect(projectIDs(actions.listProjects({}))).toContain(fixture.project.id);
-      expect(sessionKeys(actions.listSessions({ role: "verifier" }))).toEqual(["codex:thread-1"]);
+      expect(sessionKeys(actions.listSessions({ role: "reviewer" }))).toEqual(["codex:thread-1"]);
       expect(actions.readSessionSummary({ session_key: "codex:thread-1" })).toMatchObject({
         progress: expect.objectContaining({ progress_state: "active" })
       });
@@ -1282,21 +1275,15 @@ describe("PI runner action tools", () => {
     const fixture = await openFixture();
     try {
       insertAgentProfile(fixture.db, {
-        id: "verifier-codex",
-        name: "Verifier Codex",
-        skillIntents: "[\"verification-before-completion\"]"
+        id: "reviewer-codex",
+        name: "Reviewer Codex",
+        skillIntents: "[\"code-review\"]"
       });
       insertAgentProfile(fixture.db, { id: "reporter-codex", name: "Reporter Codex", skillIntents: "[\"codex-issue-runner\"]" });
       const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
-      const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "pending_verification", title: "Ready" });
+      const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "needs_user", title: "Ready" });
 
-      const recommendation = actions.recommendExecutorProfile({ issue_id: issueID, role: "verifier" });
-      const verifier = actions.createVerificationWorkflow({
-        target_issue_id: issueID,
-        instructions: "Check tests and evidence",
-        verification_plan: "bun test",
-        rationale: "ready for verifier"
-      }) as { action_id: string };
+      const recommendation = actions.recommendExecutorProfile({ issue_id: issueID, role: "reviewer" });
       const reporter = actions.createReportWorkflow({ report_type: "nightly", title: "Nightly report" }) as { action_id: string };
       const reviewer = actions.createReviewWorkflow({ target_issue_id: issueID, instructions: "review patch" }) as { action_id: string };
       const escalation = actions.escalateNeedsUser({
@@ -1305,22 +1292,12 @@ describe("PI runner action tools", () => {
         requested_action: "provide smoke window"
       }) as { action_id: string };
 
-      expect(recommendation).toMatchObject({ agent_role: "verifier", profile_id: "verifier-codex" });
+      expect(recommendation).toMatchObject({ agent_role: "reviewer", profile_id: "reviewer-codex" });
       expect(listPiActions(fixture.db, { status: "completed" })).toContainEqual(expect.objectContaining({
         action_type: "agent.profile_recommend",
         gate_decision: "execute",
         project_id: fixture.project.id
       }));
-      expect(getPiAction(fixture.db, verifier.action_id)).toMatchObject({
-        action_type: "agent.workflow_request",
-        issue_id: issueID,
-        status: "pending"
-      });
-      expect(JSON.parse(getPiAction(fixture.db, verifier.action_id)?.payload_json ?? "{}")).toMatchObject({
-        agent_profile_id: "verifier-codex",
-        source_excerpt: expect.stringContaining(`parent_issue_id=${issueID}`),
-        workflow_snapshot_json: expect.stringContaining("\"agent_role\":\"verifier\"")
-      });
       expect(JSON.parse(getPiAction(fixture.db, reporter.action_id)?.payload_json ?? "{}")).toMatchObject({
         title: "Nightly report",
         workflow_snapshot_json: expect.stringContaining("\"agent_role\":\"reporter\"")
@@ -1367,7 +1344,6 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     createIssueStateRepairProposal: record("createIssueStateRepairProposal"),
     createReportWorkflow: record("createReportWorkflow"),
     createReviewWorkflow: record("createReviewWorkflow"),
-    createVerificationWorkflow: record("createVerificationWorkflow"),
     diagnoseIssueState: record("diagnoseIssueState"),
     escalateNeedsUser: record("escalateNeedsUser"),
     createSessionSteerProposal: record("createSessionSteerProposal"),
