@@ -9,9 +9,14 @@ export const ISSUE_LOG_SAMPLE_ROWS_PER_METHOD = 64;
 export const ISSUE_LOG_LIFECYCLE_ROWS_PER_TYPE = 256;
 export const ISSUE_LOG_PROTECTED_ROWS_PER_METHOD = 1024;
 export const ISSUE_LOG_BUDGET_MARKER_METHOD = "runner/issueLogBudget/truncated";
+export const TOOL_OBSERVATION_SCHEMA_VERSION = "xw.tool-observation.v1" as const;
+export const RUN_COST_OBSERVATION_SCHEMA_VERSION = "xw.run-cost-observation.v1" as const;
 
 const CHUNK_IDLE_FLUSH_MS = 100;
 const SAMPLE_IDLE_FLUSH_MS = 2_000;
+const TOOL_COMMAND_BYTES = 4 * 1024;
+const TOOL_CWD_BYTES = 1_000;
+const TOOL_OUTPUT_BYTES = 1_200;
 const SAMPLE_INTERVALS = new Map<string, number>([
   ["turn/diff/updated", 16],
   ["thread/tokenUsage/updated", 20],
@@ -63,6 +68,7 @@ export function createIssueLogPersistence(
   const mode = options.mode ?? "debug";
   let chunk: PendingChunk | undefined;
   let chunkTimer: ReturnType<typeof setTimeout> | undefined;
+  let pendingNormalCost: ProviderEvent | undefined;
   let sampleTimer: ReturnType<typeof setTimeout> | undefined;
   let sequence = 0;
   const deltaBudgets = new Map<string, DeltaBudget>();
@@ -108,6 +114,11 @@ export function createIssueLogPersistence(
       sampleBudgets.set(method, budget);
     }
   };
+  const flushNormalCost = () => {
+    if (!pendingNormalCost) return;
+    write(compactRunCostEvent(pendingNormalCost));
+    pendingNormalCost = undefined;
+  };
   const flushBudgetMarkers = () => {
     for (const [method, budget] of deltaBudgets) {
       if (budget.omittedEvents <= 0) continue;
@@ -140,6 +151,10 @@ export function createIssueLogPersistence(
 
   return {
     push(sourceEvent) {
+      if (mode === "normal" && isRunCostTelemetry(sourceEvent)) {
+        pendingNormalCost = sourceEvent;
+        return;
+      }
       if (mode === "normal" && !normalModeEvent(sourceEvent)) return;
       sequence += 1;
       const sourceMethod = sourceEvent.raw?.method ?? "";
@@ -148,10 +163,11 @@ export function createIssueLogPersistence(
       const messageBudget = deltaBudgets.get("item/agentMessage/delta");
       const preserveAgentFinal = sourceMethod === "item/completed" && sourceItemType === "agentMessage" &&
         (!messageBudget || messageBudget.rows === 0 || messageBudget.omittedEvents > 0);
-      const event = compactLifecycleEvent(sourceEvent, preserveAgentFinal);
+      const event = compactLifecycleEvent(sourceEvent, preserveAgentFinal, mode);
       if (isTerminalEvent(event)) {
         flushChunk();
         flushSamples(true);
+        flushNormalCost();
         flushBudgetMarkers();
         write(event);
         return;
@@ -190,6 +206,7 @@ export function createIssueLogPersistence(
     flush() {
       flushChunk();
       flushSamples(true);
+      flushNormalCost();
       flushBudgetMarkers();
     }
   };
@@ -203,7 +220,6 @@ export function createIssueLogPersistence(
 function normalModeEvent(event: ProviderEvent): boolean {
   const method = event.raw?.method ?? "";
   if (event.type === "error" || event.type === "done") return true;
-  if (event.runEvent?.cost) return true;
   if (method === "item/completed") return normalCompletedItem(event);
   if (method === "turn/completed" || method === "error" || method === "protocol/error") return true;
   return method === "thread/status/changed" &&
@@ -367,7 +383,11 @@ function terminalCarrier(method: string): string {
   return "latest bounded sample plus terminal event";
 }
 
-function compactLifecycleEvent(event: ProviderEvent, preserveAgentFinal: boolean): ProviderEvent {
+function compactLifecycleEvent(
+  event: ProviderEvent,
+  preserveAgentFinal: boolean,
+  mode: IssueLogMode
+): ProviderEvent {
   const method = event.raw?.method ?? "";
   if (method !== "item/started" && method !== "item/completed") return event;
   const raw = rawObject(event.raw?.payload);
@@ -395,7 +415,73 @@ function compactLifecycleEvent(event: ProviderEvent, preserveAgentFinal: boolean
       ...(preserveAgentFinal ? { text: event.text || stringValue(item.text) } : { text: undefined })
     };
   }
+  if (mode === "normal" && method === "item/completed") {
+    const observation = terminalToolObservation(event, item);
+    if (observation) return observation;
+  }
   return event;
+}
+
+function terminalToolObservation(event: ProviderEvent, item: Record<string, unknown>): ProviderEvent | undefined {
+  const dynamic = codexDynamicExecObservation(item);
+  if (stringValue(item.type) !== "commandExecution" && !dynamic) return undefined;
+  const command = boundedUtf8(dynamic?.command || event.command || stringValue(item.command), TOOL_COMMAND_BYTES);
+  if (command === "") return undefined;
+  const status = dynamic?.status || event.status || stringValue(item.status) || "completed";
+  const exitCode = dynamic?.exitCode ?? terminalExitCode(item.exitCode, status);
+  const output = boundedUtf8(dynamic?.aggregatedOutput || commandOutput(item) || event.text || "", TOOL_OUTPUT_BYTES);
+  const cwd = boundedUtf8(dynamic?.cwd || stringValue(item.cwd) || ".", TOOL_CWD_BYTES);
+  const durationMs = dynamic?.durationMs ?? nonNegativeInteger(item.durationMs);
+  return {
+    ...event,
+    command,
+    payload: compactObject({
+      cwd,
+      duration_ms: durationMs,
+      exit_code: exitCode,
+      item_id: boundedUtf8(dynamic?.id || stringValue(item.id), 512),
+      item_type: "commandExecution",
+      output_excerpt: output,
+      raw_payload_omitted: true,
+      representation: "terminal_tool_observation",
+      schema_version: TOOL_OBSERVATION_SCHEMA_VERSION
+    }),
+    raw: { method: event.raw?.method },
+    status,
+    text: output
+  };
+}
+
+function compactRunCostEvent(event: ProviderEvent): ProviderEvent {
+  return {
+    ...event,
+    payload: {
+      raw_payload_omitted: true,
+      representation: "final_run_cost",
+      schema_version: RUN_COST_OBSERVATION_SCHEMA_VERSION
+    },
+    raw: { method: event.raw?.method },
+    text: undefined
+  };
+}
+
+function isRunCostTelemetry(event: ProviderEvent): boolean {
+  return event.raw?.method === "thread/tokenUsage/updated" && Boolean(event.runEvent?.cost);
+}
+
+function terminalExitCode(value: unknown, status: string): number {
+  if (typeof value === "number" && Number.isSafeInteger(value)) return value;
+  return ["completed", "done", "success", "succeeded"].includes(status.trim().toLowerCase()) ? 0 : 1;
+}
+
+function nonNegativeInteger(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+function commandOutput(item: Record<string, unknown>): string {
+  const aggregate = stringValue(item.aggregatedOutput);
+  if (aggregate !== "") return aggregate;
+  return [stringValue(item.stdout), stringValue(item.stderr)].filter(Boolean).join("\n");
 }
 
 function lifecycleItemType(event: ProviderEvent): string {

@@ -67,6 +67,13 @@ codex-issue-runner-update upgrade \
 
 ## 4. Migration notes
 
+### 2026-08-03 development redeploy：`067_compact_event_summary_created_at`
+
+- 新增 additive migration `067_compact_event_summary_created_at`：为 compact event summary 增加自身 `event_created_at` 并从 `issue_events.created_at` 回填，不删除或改写 authority 数据。
+- 本次 redeploy 只执行 schema forward 和新写入/告警逻辑；不自动切换 compact reader、不删除 legacy projection、不归档或删除 raw events，也不执行 live vacuum。
+- 最低可回滚 runtime 为当前 `v0.2.0`：在 compact v2 consumer-zero、legacy retirement 和 raw delete 尚未执行前，额外列对旧 runtime 向后兼容。未来一旦完成上述 destructive maintenance，必须使用包含 migration `067` 和独立 compact timestamp reader 的 runtime，或恢复本次部署前 backup。
+- operator action：部署前在 fresh SQLite copy 完成 migration forward/rollback rehearsal；部署脚本继续创建并 `quick_check` predeploy backup。正式三层存储迁移另开停 writer 的维护窗口。
+
 ### 从 `v0.1.0` 之后的开发版本升级
 
 - 后端启动仍通过现有 `schema_migrations` 做 forward-only migration；没有通用 down migration。

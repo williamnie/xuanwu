@@ -6,6 +6,8 @@ import {
   ISSUE_LOG_LIFECYCLE_ROWS_PER_TYPE,
   ISSUE_LOG_PROTECTED_ROWS_PER_METHOD,
   ISSUE_LOG_SAMPLE_ROWS_PER_METHOD,
+  RUN_COST_OBSERVATION_SCHEMA_VERSION,
+  TOOL_OBSERVATION_SCHEMA_VERSION,
   createIssueLogPersistence
 } from "./issueLogPersistence.ts";
 
@@ -81,6 +83,16 @@ describe("issue.log persistence reduction", () => {
       "git status",
       "bun test src/example.test.ts"
     ]);
+    expect(persisted[0]).toMatchObject({
+      payload: {
+        exit_code: 0,
+        raw_payload_omitted: true,
+        representation: "terminal_tool_observation",
+        schema_version: TOOL_OBSERVATION_SCHEMA_VERSION
+      },
+      raw: { method: "item/completed" }
+    });
+    expect(persisted[0]?.raw?.payload).toBeUndefined();
   });
 
   test("normal mode stores unified exec verification results", () => {
@@ -111,6 +123,34 @@ describe("issue.log persistence reduction", () => {
 
     expect(persisted).toHaveLength(1);
     expect(persisted[0]).toMatchObject({ command: "node --test src/example.test.js" });
+  });
+
+  test("normal mode keeps only the final cost observation", () => {
+    const persisted: ProviderEvent[] = [];
+    const persistence = createIssueLogPersistence((event) => persisted.push(event), { mode: "normal" });
+    for (let index = 1; index <= 50; index += 1) {
+      persistence.push(costEvent(index));
+    }
+    persistence.push({
+      provider: "codex",
+      type: "done",
+      session,
+      status: "completed",
+      raw: { method: "turn/completed", payload: "completed" }
+    });
+
+    expect(persisted).toHaveLength(2);
+    expect(persisted[0]).toMatchObject({
+      payload: {
+        raw_payload_omitted: true,
+        representation: "final_run_cost",
+        schema_version: RUN_COST_OBSERVATION_SCHEMA_VERSION
+      },
+      raw: { method: "thread/tokenUsage/updated" },
+      runEvent: { cost: { usage: { total_tokens: 50 } } }
+    });
+    expect(persisted[0]?.raw?.payload).toBeUndefined();
+    expect(persisted[1]).toMatchObject({ type: "done", raw: { method: "turn/completed" } });
   });
 
   test("chunks Codex deltas, samples telemetry, and keeps terminal errors", () => {
@@ -334,3 +374,34 @@ describe("issue.log persistence reduction", () => {
     expect(protectedEvents.at(-1)?.payload).toMatchObject({ category: "protected", omitted_events: 1 });
   });
 });
+
+function costEvent(totalTokens: number): ProviderEvent {
+  return {
+    provider: "codex",
+    type: "raw",
+    session,
+    raw: { method: "thread/tokenUsage/updated", payload: JSON.stringify({ total_tokens: totalTokens }) },
+    runEvent: {
+      contract: "xw.run-event.v1",
+      cost: {
+        money: { amount_micros: null, basis: "unavailable", currency: "" },
+        pricing_refs: [],
+        source_refs: [`usage:${totalTokens}`],
+        usage: {
+          cached_input_tokens: 0,
+          completeness: "complete",
+          input_tokens: totalTokens,
+          output_tokens: 0,
+          reasoning_output_tokens: 0,
+          total_tokens: totalTokens
+        }
+      },
+      kind: "progress",
+      metadata: { usage_scope: "provider_session_total" },
+      outcome: "running",
+      provider: "codex",
+      source: { method: "thread/tokenUsage/updated", ref: `usage:${totalTokens}` },
+      terminal: false
+    }
+  };
+}

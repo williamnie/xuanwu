@@ -133,3 +133,16 @@
 - 在线入口：`GET /api/system/status` → `process_group_memory`（Core 127.0.0.1:3009）。
 - 只认 `budget.measurement_source=footprint` 且 `soft_exceeded/hard_exceeded` 持续 ≥ 数十秒的情况才按真实物理预算事故处理（runbook 同口径）。
 - 告警记录：`pi_guardian_alerts` 表，`alert_type='runner_process_group_memory_budget'`；观察 open 时长与 phase 分布即可区分"常态误报"（分钟级循环、idle 占比高）与"真实故障"（长时 open、footprint 单调增长）。
+
+## 9. 后续实施（2026-08-03）
+
+本报告的只读调查完成后，按 [Provider 事件三层存储与 Runner 内存治理方案](../architecture/2026-08-03-provider-event-hot-cold-storage-and-memory-remediation.md) 实施以下调整：
+
+- idle main soft/hard 调整为 320/384 MiB；
+- idle group soft/hard 调整为 384/448 MiB；
+- active run group soft/hard 调整为 768/896 MiB；
+- post-run delta soft/hard 调整为 64/96 MiB；
+- soak drift soft/hard 调整为 96/128 MiB；
+- soft 与 hard 均需连续 180 个 1 秒采样，即持续 3 分钟才产生 Guardian 通知。
+
+原 §2、§3 和 §7 中的 3/6 秒与旧阈值保留为调查当时的历史证据，不再代表修复后的运行配置。

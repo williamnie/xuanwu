@@ -41,7 +41,7 @@ describe("runner process-group memory observer", () => {
       phase: "run",
       activity: { agentic_in_flight: 1, issue_runs: 0, status: "active" },
       budget: {
-        hard_bytes: 700 * MIB,
+        hard_bytes: 896 * MIB,
         main_hard_bytes: null,
         measured_main_bytes: 300 * MIB,
         status: "within_budget"
@@ -242,7 +242,7 @@ describe("runner process-group memory observer", () => {
 
   test("aggregates the runner tree by safe role and owner without exposing commands, tokens, or paths", async () => {
     const alerts: ProcessMemoryBudgetAlert[] = [];
-    const rows = fixtureRows(200, 130);
+    const rows = fixtureRows(200, 260);
     const observer = new ProcessGroupMemoryObserver({
       activeRuns: () => 0,
       footprint: false,
@@ -258,19 +258,26 @@ describe("runner process-group memory observer", () => {
       runnerPid: 50
     });
 
-    observer.sample();
-    observer.sample();
-    const snapshot = observer.sample() as Snapshot;
+    let snapshot = observer.sample() as Snapshot;
+    for (let sample = 1; sample < PROCESS_GROUP_MEMORY_BUDGETS.consecutive.hard; sample += 1) {
+      snapshot = observer.sample() as Snapshot;
+    }
     await Bun.sleep(0);
 
     expect(snapshot).toMatchObject({
       contract: PROCESS_GROUP_MEMORY_CONTRACT,
       phase: "idle",
-      aggregate: { process_count: 2, rss_bytes: 330 * MIB, rss_p95_bytes: 330 * MIB },
+      aggregate: { process_count: 2, rss_bytes: 460 * MIB, rss_p95_bytes: 460 * MIB },
       main: { pid: 50, role: "runner", ps_rss_bytes: 200 * MIB, process_rss_bytes: 198 * MIB },
-      budget: { auto_restart: false, hard_bytes: 320 * MIB, status: "hard_exceeded" }
+      budget: {
+        alert_after_ms: { hard: 180_000, soft: 180_000 },
+        auto_restart: false,
+        hard_bytes: 448 * MIB,
+        required_consecutive_hard: 180,
+        status: "hard_exceeded"
+      }
     });
-    expect(snapshot.roles.map((item) => item.role)).toEqual(["runner", "codex-app-server"]);
+    expect(snapshot.roles.map((item) => item.role)).toEqual(["codex-app-server", "runner"]);
     expect(alerts).toHaveLength(1);
     expect(JSON.stringify(snapshot)).not.toContain("runtime-secret");
     expect(JSON.stringify(snapshot)).not.toContain("/Users/private");
@@ -442,26 +449,29 @@ describe("runner process-group memory observer", () => {
     nowMs += 1_000;
     observer.sample();
     activeRuns = 0;
-    groupMiB = 290;
+    groupMiB = 350;
     nowMs += 16_000;
-    observer.sample();
-    observer.sample();
-    const snapshot = observer.sample() as Snapshot;
+    let snapshot = observer.sample() as Snapshot;
+    for (let sample = 1; sample < PROCESS_GROUP_MEMORY_BUDGETS.consecutive.hard; sample += 1) {
+      nowMs += 1_000;
+      snapshot = observer.sample() as Snapshot;
+    }
 
     expect(snapshot.budget).toMatchObject({
-      post_run: { baseline_rss_bytes: 250 * MIB, delta_bytes: 40 * MIB, status: "hard_exceeded", ttl_ms: 15_000 },
+      post_run: { baseline_rss_bytes: 250 * MIB, delta_bytes: 100 * MIB, status: "hard_exceeded", ttl_ms: 15_000 },
       status: "hard_exceeded"
     });
   });
 
   test("publishes explicit soft and hard thresholds instead of the former one-gigabyte ceiling", () => {
     expect(PROCESS_GROUP_MEMORY_BUDGETS).toMatchObject({
-      consecutive: { hard: 3, soft: 6 },
-      idle_main_rss_bytes: { hard: 256 * MIB, soft: 224 * MIB },
-      idle_group_rss_p95_bytes: { hard: 320 * MIB, soft: 288 * MIB },
-      active_run_group_rss_p95_bytes: { hard: 700 * MIB, soft: 640 * MIB },
-      post_run_delta_bytes: { hard: 32 * MIB },
-      soak_drift_bytes: { hard: 64 * MIB }
+      alert_after_ms: { hard: 180_000, soft: 180_000 },
+      consecutive: { hard: 180, soft: 180 },
+      idle_main_rss_bytes: { hard: 384 * MIB, soft: 320 * MIB },
+      idle_group_rss_p95_bytes: { hard: 448 * MIB, soft: 384 * MIB },
+      active_run_group_rss_p95_bytes: { hard: 896 * MIB, soft: 768 * MIB },
+      post_run_delta_bytes: { hard: 96 * MIB },
+      soak_drift_bytes: { hard: 128 * MIB }
     });
     expect(JSON.stringify(PROCESS_GROUP_MEMORY_BUDGETS)).not.toContain(String(1024 * MIB));
   });

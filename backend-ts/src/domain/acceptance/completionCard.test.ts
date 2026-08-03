@@ -57,7 +57,7 @@ describe("completion card", () => {
         run_id: domainRunID
       };
       recordIssueLogEvent(db, issue.id, commandEvent("early", "node --version; pnpm test", 1, "Node 24 engine mismatch"), correlation);
-      recordIssueLogEvent(db, issue.id, commandEvent(
+      recordIssueLogEvent(db, issue.id, normalizedCommandEvent(
         "final",
         "export PATH=/node22/bin:$PATH; pnpm --filter @demo/contract generate && pnpm lint && pnpm typecheck && pnpm test && pnpm build && git diff --check",
         0,
@@ -123,6 +123,29 @@ function commandEvent(id: string, command: string, exitCode: number, aggregatedO
         item: { aggregatedOutput, command, cwd: ".", exitCode, id, status: exitCode === 0 ? "completed" : "failed", type: "commandExecution" }
       })
     }
+  };
+}
+
+function normalizedCommandEvent(id: string, command: string, exitCode: number, output: string) {
+  return {
+    command,
+    payload: {
+      cwd: ".",
+      duration_ms: 120,
+      exit_code: exitCode,
+      item_id: id,
+      item_type: "commandExecution",
+      output_excerpt: output,
+      raw_payload_omitted: true,
+      representation: "terminal_tool_observation",
+      schema_version: "xw.tool-observation.v1"
+    },
+    provider: "codex" as const,
+    session: { provider: "codex" as const, sessionId: "thread-card", turnId: "turn-card" },
+    status: exitCode === 0 ? "completed" : "failed",
+    text: output,
+    type: "tool",
+    raw: { method: "item/completed" }
   };
 }
 

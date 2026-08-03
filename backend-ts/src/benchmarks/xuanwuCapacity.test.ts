@@ -21,15 +21,16 @@ afterEach(async () => {
 });
 
 describe("Xuanwu capacity benchmark", () => {
-  test("rejects the previous one-gigabyte memory ceiling", () => {
+  test("uses the calibrated process-group budgets and rejects the previous one-gigabyte ceiling", () => {
     expect(CAPACITY_BUDGETS.memory).toMatchObject({
       peak_rss_bytes: 512 * 1024 * 1024,
       rss_growth_bytes: 384 * 1024 * 1024,
       process_group: {
-        idle_group_rss_p95_bytes: { hard: 320 * 1024 * 1024 },
-        active_run_group_rss_p95_bytes: { hard: 700 * 1024 * 1024 },
-        post_run_delta_bytes: { hard: 32 * 1024 * 1024 },
-        soak_drift_bytes: { hard: 64 * 1024 * 1024 }
+        alert_after_ms: { hard: 180_000, soft: 180_000 },
+        idle_group_rss_p95_bytes: { hard: 448 * 1024 * 1024, soft: 384 * 1024 * 1024 },
+        active_run_group_rss_p95_bytes: { hard: 896 * 1024 * 1024, soft: 768 * 1024 * 1024 },
+        post_run_delta_bytes: { hard: 96 * 1024 * 1024, soft: 64 * 1024 * 1024 },
+        soak_drift_bytes: { hard: 128 * 1024 * 1024, soft: 96 * 1024 * 1024 }
       }
     });
     expect(JSON.stringify(CAPACITY_BUDGETS.memory)).not.toContain(String(1024 * 1024 * 1024));

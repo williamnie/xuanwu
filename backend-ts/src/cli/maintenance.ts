@@ -13,6 +13,7 @@ import {
   cutoverCompactEventSummaryProjection,
   observeCompactEventSummaryProjection,
   rebuildCompactEventSummaryProjection,
+  retireLegacyEventSummaryProjection,
   rollbackCompactEventSummaryProjection,
   verifyCompactEventSummaryProjection
 } from "../events/compactEventSummaryProjectionService.ts";
@@ -129,6 +130,21 @@ export function runMaintenance(args: string[]): string {
       "confirm-no-active-writers", "db", "json", "reason"
     ]);
     report = rollbackCompactEventSummaryProjection({
+      actor: required(flags, "actor"),
+      actorKind: actorKind(flags["actor-kind"]),
+      apply: enabled(flags, "apply"),
+      auditRef: required(flags, "audit-ref"),
+      confirmBackupTested: enabled(flags, "confirm-backup-tested"),
+      confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
+      dbPath: required(flags, "db"),
+      reason: required(flags, "reason")
+    });
+  } else if (family === "events" && command === "retire-legacy-projection") {
+    allowOnly(flags, [
+      "actor", "actor-kind", "apply", "audit-ref", "confirm-backup-tested",
+      "confirm-no-active-writers", "db", "json", "reason"
+    ]);
+    report = retireLegacyEventSummaryProjection({
       actor: required(flags, "actor"),
       actorKind: actorKind(flags["actor-kind"]),
       apply: enabled(flags, "apply"),

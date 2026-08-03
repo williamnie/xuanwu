@@ -5,6 +5,7 @@ import { getIssue, listIssueRuns, type IssueRun } from "../../db/repositories/is
 import { getProject } from "../../db/repositories/projects.ts";
 import { codexDynamicExecObservation } from "../../providers/codex/dynamicExec.ts";
 import { recoverCodexRolloutExecEvents } from "../../providers/codex/rolloutExecRecovery.ts";
+import { TOOL_OBSERVATION_SCHEMA_VERSION } from "../../runner/issueLogPersistence.ts";
 import type { ProviderEvent } from "../../providers/types.ts";
 import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
@@ -339,11 +340,29 @@ function commandsFromIssueLogs(
     if (event.type !== "issue.log") continue;
     const payload = objectValue(parseJson(event.payload));
     if (!eventBelongsToRun(payload, event.created_at, run)) continue;
-    const item = objectValue(objectValue(parseJson(payload.raw_payload)).item);
+    const item = commandItemFromIssueLog(payload);
     const observation = commandObservation(item, event.created_at, "issue_log");
     if (observation) output.push(observation);
   }
   return output;
+}
+
+function commandItemFromIssueLog(payload: Record<string, unknown>): Record<string, unknown> {
+  const stored = objectValue(payload.payload);
+  if (cleanString(stored.schema_version) === TOOL_OBSERVATION_SCHEMA_VERSION &&
+      cleanString(stored.representation) === "terminal_tool_observation") {
+    return {
+      aggregatedOutput: cleanString(stored.output_excerpt) || cleanString(payload.text),
+      command: cleanString(payload.command),
+      cwd: cleanString(stored.cwd),
+      durationMs: nonNegativeInteger(stored.duration_ms),
+      exitCode: integer(stored.exit_code),
+      id: cleanString(stored.item_id),
+      status: cleanString(payload.status),
+      type: "commandExecution"
+    };
+  }
+  return objectValue(objectValue(parseJson(payload.raw_payload)).item);
 }
 
 async function recoveredRolloutCommands(run: IssueRun): Promise<CommandObservation[]> {

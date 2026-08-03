@@ -55,6 +55,12 @@ describe("event retention policy", () => {
     expect(DEFAULT_EVENT_RETENTION_CONFIG.policies.raw_operational).toMatchObject({
       archive_after_days: 7,
       archive_minimum_days: 365,
+      minimum_retention_days: 7,
+      source_delete_after_days: 7
+    });
+    expect(DEFAULT_EVENT_RETENTION_CONFIG.policies.raw_durable).toMatchObject({
+      archive_after_days: 30,
+      archive_minimum_days: 2555,
       minimum_retention_days: 30,
       source_delete_after_days: 30
     });

@@ -1,6 +1,6 @@
 # XW P01.02：事件保留、摘要、归档与删除策略
 
-状态：accepted（2026-07-16）
+状态：accepted（2026-07-16），2026-08-03 按三层存储方案修订 raw 热保留期
 
 依赖：XW P01.01（issue 637，`done`）、XW P00.04（issue 634，`done`）
 
@@ -22,8 +22,8 @@
 | policy id | 事件等级 | 典型 carrier | 最小 source 保留 | 可开始归档 | archive 最小保留 | 默认 source 删除 |
 | --- | --- | --- | ---: | ---: | ---: | --- |
 | derived projection | R0 derived/rebuildable | legacy/compact summary projection、可重建索引 | source 覆盖且 consumer-zero 前保留 | 不单独归档；随 source archive/backup 恢复 | n/a | 仅与已获准 source event 同批清理 |
-| `raw_operational` | R1 operational raw log | delta、diff、token/status update | 30 天 | 7 天 | 365 天 | 30 天后仅成为候选 |
-| `raw_durable` | R2 durable raw log | `item/started`、`item/completed` | 180 天 | 30 天 | 2555 天 | 180 天后仅成为候选 |
+| `raw_operational` | R1 operational raw log | delta、diff、token/status update | 7 天 | 7 天 | 365 天 | 7 天后仅成为候选 |
+| `raw_durable` | R2 durable raw log | `item/started`、`item/completed` | 30 天 | 30 天 | 2555 天 | 30 天后仅成为候选 |
 | `state_event` | R3 state event | `issue.created`、`issue.status_changed`、recovery state | 365 天 | 365 天 | indefinite | 禁止 |
 | `audit_event` | R3 audit event | approval/error/interrupt、`pi_action_events`、Guardian audit | 2555 天 | 365 天 | indefinite | 禁止 |
 | `delivery_evidence` | R3 delivery evidence | verification review、`sync_outbox`、Handoff Evidence refs | 2555 天 | 90 天 | indefinite | 禁止 |
@@ -98,17 +98,17 @@ Canonical JSON/TypeScript shape：
 ```json
 {
   "schema_version": "xuanwu.event-retention-policy.v1",
-  "policy_version": "2026-07-16",
+  "policy_version": "2026-08-03",
   "execution_mode": "report_only",
   "execution_authorization": null,
   "policies": {
     "raw_operational": {
       "event_class": "raw_log",
       "tier": "R1_OPERATIONAL",
-      "minimum_retention_days": 30,
+      "minimum_retention_days": 7,
       "archive_after_days": 7,
       "archive_minimum_days": 365,
-      "source_delete_after_days": 30,
+      "source_delete_after_days": 7,
       "require_summary_watermark": true,
       "require_archive_before_delete": true
     }

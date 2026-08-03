@@ -64,14 +64,17 @@ export function listSourceIssueEvents(
 ): SourceIssueEvent[] {
   return db.sqlite.query<SourceIssueEventRow, [number, number]>(`
     select e.id, e.issue_id, i.project_id, e.type as event_type, e.payload, e.created_at,
-      coalesce(r.id, '') as run_id
+      case when legacy.source_event_id is not null then legacy.run_id else coalesce(r.id, '') end as run_id
     from issue_events e
     join issues i on i.id=e.issue_id
+    left join event_summary_projection legacy
+      on legacy.source='issue_events' and legacy.source_event_id=e.id
     left join issue_runs r on r.id=(
       select candidate.id from issue_runs candidate
-      where candidate.issue_id=e.issue_id and candidate.started_at<=e.created_at
-        and (candidate.ended_at='' or candidate.ended_at>=e.created_at)
-      order by candidate.started_at desc, candidate.attempt desc limit 1
+      where candidate.issue_id=e.issue_id
+        and julianday(candidate.started_at)<=julianday(e.created_at)
+        and (candidate.ended_at='' or julianday(candidate.ended_at)>=julianday(e.created_at))
+      order by julianday(candidate.started_at) desc, candidate.attempt desc limit 1
     )
     where e.id>? order by e.id asc limit ?
   `).all(input.afterID, input.limit).map((row) => mapSourceIssueEvent(db, row, input.hydrateIssueLogs !== false));

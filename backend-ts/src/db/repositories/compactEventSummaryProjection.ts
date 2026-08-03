@@ -83,8 +83,8 @@ export function projectPendingCompactEventSummaries(
         const result = db.sqlite.run(`
           insert into event_summary_projection_compact (
             source_event_id, issue_id, project_ref, run_ref, event_type_ref, payload_ref,
-            source_payload_bytes, source_sha256
-          ) values (?, ?, ?, ?, ?, ?, ?, ?)
+            source_payload_bytes, source_sha256, event_created_at
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
           on conflict(source_event_id) do update set
             issue_id=excluded.issue_id,
             project_ref=excluded.project_ref,
@@ -92,7 +92,8 @@ export function projectPendingCompactEventSummaries(
             event_type_ref=excluded.event_type_ref,
             payload_ref=excluded.payload_ref,
             source_payload_bytes=excluded.source_payload_bytes,
-            source_sha256=excluded.source_sha256
+            source_sha256=excluded.source_sha256,
+            event_created_at=excluded.event_created_at
           where event_summary_projection_compact.source_sha256<>excluded.source_sha256
         `, [
           projected.source_event_id,
@@ -102,7 +103,8 @@ export function projectPendingCompactEventSummaries(
           typeRef,
           payloadRef,
           projected.source_payload_bytes,
-          Buffer.from(projected.source_sha256, "hex")
+          Buffer.from(projected.source_sha256, "hex"),
+          projected.event_created_at
         ]);
         if (Number(result.changes) > 0 && projected.source_event_id > watermark.last_event_id) projectedRowCount += 1;
       }
@@ -294,13 +296,12 @@ function compactListQuery(filter: EventSummaryProjectionFilter) {
     reverseResult,
     sql: `select c.source_event_id, c.issue_id, c.payload_ref, pr.project_id, r.run_id,
       t.event_type, p.summary_payload, p.payload_codec, c.source_payload_bytes,
-      c.source_sha256, e.created_at
+      c.source_sha256, c.event_created_at as created_at
       from event_summary_projection_compact c
       join event_summary_projection_projects pr on pr.project_ref=c.project_ref
       join event_summary_projection_runs r on r.run_ref=c.run_ref
       join event_summary_projection_types t on t.event_type_ref=c.event_type_ref
       join event_summary_projection_payloads p on p.payload_ref=c.payload_ref
-      join issue_events e on e.id=c.source_event_id and e.issue_id=c.issue_id
       where ${clauses.join(" and ")}
       order by ${order}${limit === undefined ? "" : " limit ?"}`
   };

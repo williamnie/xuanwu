@@ -103,7 +103,7 @@ issue/project/run/type、summary、bounded payload、classification、source/sum
 1. `rebuild-compact-projection` 只从 `issue_events` 重建 V2，并以独立 watermark 断点续跑；
    非 resume 清空仅允许在 V1 读且无 active observation 时执行；
 2. `verify-compact-projection` 必须证明 row coverage、cursor/max ID、lag=0、逐项 parity、
-   V2 table+dictionary+index 不超过 100 MiB，以及三类关键 SQL P95 不劣于 V1 20%；
+   V2 table+dictionary+index 不超过 128 MiB，以及三类关键 SQL P95 不劣于 V1 20%；
 3. `observe-compact-projection` 在有期限窗口内保持 V1 返回、每次同时读取 V2；任何差异
    拒绝请求，不静默 fallback；
 4. `cutover-compact-projection` 在同一 transaction/revision compare 中将 read version 切到

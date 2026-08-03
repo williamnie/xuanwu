@@ -4,6 +4,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { runMigrations } from "../db/migrations.ts";
 import { sqliteObjectUsage } from "../db/sqliteObjectUsage.ts";
 import { compactEventSummaryProjectionMigration } from "../db/schema/054_compact_event_summary_projection.ts";
+import { compactEventSummaryCreatedAtMigration } from "../db/schema/067_compact_event_summary_created_at.ts";
 import { recordMaintenanceAudit } from "../db/repositories/eventMaintenance.ts";
 import { eventProjectionStatus, listEventSummaryProjection } from "../db/repositories/eventSummaryProjection.ts";
 import {
@@ -16,7 +17,7 @@ import {
   updateEventSummaryProjectionSwitch
 } from "../db/repositories/compactEventSummaryProjection.ts";
 
-const MAX_PROJECTION_BYTES = 100 * 1024 * 1024;
+const MAX_PROJECTION_BYTES = 128 * 1024 * 1024;
 const DEFAULT_OBSERVATION_SECONDS = 24 * 60 * 60;
 const DEFAULT_PERFORMANCE_SAMPLES = 20;
 
@@ -190,6 +191,74 @@ export function rollbackCompactEventSummaryProjection(
     audit(db, `compact-event-summary-rollback:${randomUUID()}`, authorization,
       "event_summary_projection.compact_rollback", "allow", { after, before, legacy });
     return { operation: "rollback_compact_event_summary_projection", dry_run: false, applied: true, blockers, before, after, legacy };
+  });
+}
+
+export function retireLegacyEventSummaryProjection(
+  input: AuthorizedDatabaseInput & {
+    apply?: boolean;
+    confirmBackupTested?: boolean;
+    confirmNoActiveWriters?: boolean;
+  }
+): Record<string, unknown> {
+  const authorization = validatedAuthorization(input);
+  return withDatabase(input.dbPath, (db) => {
+    const state = getEventSummaryProjectionSwitch(db);
+    const compact = compactProjectionStatus(db);
+    const before = {
+      legacy_rows: scalar(db, "select count(*) as value from event_summary_projection"),
+      legacy_watermark: scalar(db, `select coalesce(last_event_id, 0) as value from event_projection_watermarks
+        where projection_id='issue_events_summary_v1'`)
+    };
+    const missingCreatedAt = scalar(db, `select count(*) as value
+      from event_summary_projection_compact where event_created_at=''`);
+    const blockers = [
+      ...mutationConfirmationBlockers(input),
+      ...(state.read_version === "v2" ? [] : ["compact projection is not the active reader"]),
+      ...(state.cutover_at ? [] : ["compact projection cutover timestamp is missing"]),
+      ...(compact.lag_rows === 0 ? [] : [`compact projection lag is ${compact.lag_rows}`]),
+      ...(missingCreatedAt === 0 ? [] : [`compact projection has ${missingCreatedAt} rows without event_created_at`])
+    ];
+    if (!input.apply || blockers.length > 0) {
+      return {
+        operation: "retire_legacy_event_summary_projection",
+        applied: false,
+        dry_run: true,
+        blockers,
+        before,
+        compact,
+        switch: state
+      };
+    }
+    const actionID = `legacy-event-summary-retire:${randomUUID()}`;
+    audit(db, actionID, authorization, "event_summary_projection.legacy_retire_started", "allow", {
+      before,
+      compact,
+      switch: state
+    });
+    db.transaction(() => {
+      db.sqlite.run("delete from event_summary_projection");
+      db.sqlite.run(`update event_projection_watermarks
+        set last_event_id=0, projected_row_count=0, updated_at=?
+        where projection_id='issue_events_summary_v1'`, [new Date().toISOString()]);
+    }).immediate();
+    const after = {
+      legacy_rows: scalar(db, "select count(*) as value from event_summary_projection"),
+      legacy_watermark: scalar(db, `select coalesce(last_event_id, 0) as value from event_projection_watermarks
+        where projection_id='issue_events_summary_v1'`),
+      physical_reclaim_pending_vacuum: true
+    };
+    audit(db, actionID, authorization, "event_summary_projection.legacy_retired", "allow", { after, before });
+    return {
+      operation: "retire_legacy_event_summary_projection",
+      applied: true,
+      dry_run: false,
+      blockers,
+      before,
+      after,
+      compact,
+      switch: state
+    };
   });
 }
 
@@ -426,7 +495,7 @@ function withDatabase<T>(path: string, inside: (db: RunnerDatabase) => T): T {
   const dbPath = requiredText(path, "--db");
   const sqlite = new SQLiteDatabase(dbPath, { create: false, strict: true });
   sqlite.run("pragma foreign_keys = on");
-  runMigrations(sqlite, [compactEventSummaryProjectionMigration]);
+  runMigrations(sqlite, [compactEventSummaryProjectionMigration, compactEventSummaryCreatedAtMigration]);
   const db: RunnerDatabase = {
     close: () => sqlite.close(),
     path: dbPath,

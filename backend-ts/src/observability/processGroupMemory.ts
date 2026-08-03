@@ -22,12 +22,13 @@ export const PROCESS_GROUP_MEMORY_METRIC_DEFINITIONS = {
   probes_excluded: ["ps", "/usr/bin/footprint"]
 } as const;
 export const PROCESS_GROUP_MEMORY_BUDGETS = {
-  consecutive: { hard: 3, soft: 6 },
-  idle_main_rss_bytes: { hard: 256 * 1024 * 1024, soft: 224 * 1024 * 1024 },
-  idle_group_rss_p95_bytes: { hard: 320 * 1024 * 1024, soft: 288 * 1024 * 1024 },
-  active_run_group_rss_p95_bytes: { hard: 700 * 1024 * 1024, soft: 640 * 1024 * 1024 },
-  post_run_delta_bytes: { hard: 32 * 1024 * 1024, soft: 24 * 1024 * 1024 },
-  soak_drift_bytes: { hard: 64 * 1024 * 1024, soft: 48 * 1024 * 1024 }
+  alert_after_ms: { hard: 3 * 60_000, soft: 3 * 60_000 },
+  consecutive: { hard: 180, soft: 180 },
+  idle_main_rss_bytes: { hard: 384 * 1024 * 1024, soft: 320 * 1024 * 1024 },
+  idle_group_rss_p95_bytes: { hard: 448 * 1024 * 1024, soft: 384 * 1024 * 1024 },
+  active_run_group_rss_p95_bytes: { hard: 896 * 1024 * 1024, soft: 768 * 1024 * 1024 },
+  post_run_delta_bytes: { hard: 96 * 1024 * 1024, soft: 64 * 1024 * 1024 },
+  soak_drift_bytes: { hard: 128 * 1024 * 1024, soft: 96 * 1024 * 1024 }
 } as const;
 
 export type ProcessMemoryPhase = "idle" | "run" | "usage";
@@ -332,12 +333,17 @@ export class ProcessGroupMemoryObserver {
       || postRun.soft_exceeded);
     this.consecutiveHard = hardExceeded ? this.consecutiveHard + 1 : 0;
     this.consecutiveSoft = softExceeded ? this.consecutiveSoft + 1 : 0;
-    const alertingHard = this.consecutiveHard >= PROCESS_GROUP_MEMORY_BUDGETS.consecutive.hard;
-    const alertingSoft = this.consecutiveSoft >= PROCESS_GROUP_MEMORY_BUDGETS.consecutive.soft;
+    const requiredHardSamples = Math.ceil(PROCESS_GROUP_MEMORY_BUDGETS.alert_after_ms.hard / this.sampleIntervalMs());
+    const requiredSoftSamples = Math.ceil(PROCESS_GROUP_MEMORY_BUDGETS.alert_after_ms.soft / this.sampleIntervalMs());
+    const alertingHard = this.consecutiveHard >= requiredHardSamples;
+    const alertingSoft = this.consecutiveSoft >= requiredSoftSamples;
     return {
       auto_restart: false,
+      alert_after_ms: PROCESS_GROUP_MEMORY_BUDGETS.alert_after_ms,
       consecutive_hard: this.consecutiveHard,
       consecutive_soft: this.consecutiveSoft,
+      required_consecutive_hard: requiredHardSamples,
+      required_consecutive_soft: requiredSoftSamples,
       group_rss_p95_bytes: p95RSS,
       hard_bytes: group.hard,
       main_hard_bytes: phase === "run" ? null : main.hard,

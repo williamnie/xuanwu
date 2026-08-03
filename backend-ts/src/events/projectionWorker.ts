@@ -81,15 +81,17 @@ export class BackgroundProjectionWorker {
     this.#snapshot.running = true;
     this.#snapshot.error = "";
     try {
-      const legacy = projectPendingEventSummaries(this.#database, {
-        batchSize: BACKGROUND_PROJECTION_POLICY.batch_size,
-        maxBatches: 1
-      });
+      const state = getEventSummaryProjectionSwitch(this.#database);
+      const legacy = state.read_version === "v1"
+        ? projectPendingEventSummaries(this.#database, {
+          batchSize: BACKGROUND_PROJECTION_POLICY.batch_size,
+          maxBatches: 1
+        })
+        : { batches: 0, paused: false, projected_rows: 0 };
       let batches = legacy.batches;
       let rows = legacy.projected_rows;
       let backpressure = legacy.paused;
       if (performance.now() - started < this.#maxWallMs) {
-        const state = getEventSummaryProjectionSwitch(this.#database);
         if (state.read_version === "v2" || state.observation_started_at) {
           const compact = projectPendingCompactEventSummaries(this.#database, {
             batchSize: BACKGROUND_PROJECTION_POLICY.batch_size,

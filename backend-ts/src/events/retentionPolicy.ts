@@ -1,5 +1,5 @@
 export const EVENT_RETENTION_SCHEMA_VERSION = "xuanwu.event-retention-policy.v1" as const;
-export const EVENT_RETENTION_POLICY_VERSION = "2026-07-16" as const;
+export const EVENT_RETENTION_POLICY_VERSION = "2026-08-03" as const;
 export const SUMMARY_WATERMARK_SCHEMA_VERSION = "xuanwu.summary-watermark.v1" as const;
 export const ARCHIVE_RECEIPT_SCHEMA_VERSION = "xuanwu.event-archive-receipt.v1" as const;
 
@@ -58,20 +58,20 @@ export const DEFAULT_EVENT_RETENTION_CONFIG = {
       archive_after_days: 7,
       archive_minimum_days: 365,
       event_class: "raw_log",
-      minimum_retention_days: 30,
+      minimum_retention_days: 7,
       require_archive_before_delete: true,
       require_summary_watermark: true,
-      source_delete_after_days: 30,
+      source_delete_after_days: 7,
       tier: "R1_OPERATIONAL"
     },
     raw_durable: {
       archive_after_days: 30,
       archive_minimum_days: 2555,
       event_class: "raw_log",
-      minimum_retention_days: 180,
+      minimum_retention_days: 30,
       require_archive_before_delete: true,
       require_summary_watermark: true,
-      source_delete_after_days: 180,
+      source_delete_after_days: 30,
       tier: "R2_DURABLE"
     },
     state_event: {
