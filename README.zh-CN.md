@@ -77,8 +77,9 @@ GitHub 仓库和产品统一使用 **Xuanwu**。二进制、CLI、环境变量�
 - `curl`、`tar`，以及用户级 `launchd` 或 `systemd` 会话；
 - 已安装并登录 [Codex CLI](https://developers.openai.com/codex/cli/)。
 
-安装器会下载匹配平台、带 provenance attestations 的产物，校验 checksum，并注册 Web Gateway、Runner Core 和
-Agentic Worker 用户服务：
+安装器会下载匹配平台的产物、校验 SHA-256 checksum，并注册 Web Gateway、Runner Core 和
+Agentic Worker 用户服务。仓库公开后的 Release 还会发布 GitHub provenance attestations，
+安装器在可用时会一并验证：
 
 ```bash
 export CODEX_RUNNER_ADDR=127.0.0.1:3008

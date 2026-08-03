@@ -72,6 +72,7 @@ jobs:
         run: ./scripts/package-release.sh
 
       - name: Sign release provenance
+        if: github.event.repository.private == false
         uses: actions/attest@v4
         with:
           subject-checksums: dist/release/checksums.txt

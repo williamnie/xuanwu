@@ -22,7 +22,7 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     await mkdir(fakeBin, { recursive: true });
     await writeExecutable(join(fakeBin, 'uname'), '#!/bin/sh\ncase "$1" in -s) echo Darwin ;; -m) echo arm64 ;; *) echo Darwin ;; esac\n');
     await writeExecutable(join(fakeBin, 'curl'), '#!/bin/sh\nout=""; url=""; previous=""\nfor arg in "$@"; do if [ "$previous" = "-o" ]; then out="$arg"; fi; case "$arg" in http*) url="$arg" ;; esac; previous="$arg"; done\nif [ -n "$out" ]; then cp "$FIXTURE_RELEASE_DIR/${url##*/}" "$out"; fi\nexit 0\n');
-    await writeExecutable(join(fakeBin, 'gh'), '#!/bin/sh\necho "gh $*" >> "$CALL_LOG"\nexit 0\n');
+    await writeExecutable(join(fakeBin, 'gh'), '#!/bin/sh\necho "gh $*" >> "$CALL_LOG"\n[ "$GH_ATTESTATION_FAIL" = "1" ] && exit 1\nexit 0\n');
     await writeExecutable(join(fakeBin, 'codex'), '#!/bin/sh\nexit 0\n');
     await writeExecutable(join(fakeBin, 'plutil'), '#!/bin/sh\nexit 0\n');
     await writeExecutable(join(fakeBin, 'launchctl'), '#!/bin/sh\necho "launchctl $*" >> "$CALL_LOG"\nexit 0\n');
@@ -44,6 +44,11 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     const fresh = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], { env, encoding: 'utf8' });
     assert.equal(fresh.status, 0, `${fresh.stdout}\n${fresh.stderr}`);
     assert.match(runVersion(join(install, 'codex-issue-runner'), env), /v1\.0\.0/);
+    const unsignedAuto = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], {
+      env: { ...env, CODEX_RUNNER_VERIFY_ATTESTATION: 'auto', GH_ATTESTATION_FAIL: '1' }, encoding: 'utf8'
+    });
+    assert.equal(unsignedAuto.status, 0, `${unsignedAuto.stdout}\n${unsignedAuto.stderr}`);
+    assert.match(unsignedAuto.stdout, /SHA-256 verified but signed GitHub provenance is unavailable/);
     const corePlist = await readFile(join(home, 'Library', 'LaunchAgents', 'com.xiaobei.codex-issue-runner.core.plist'), 'utf8');
     assert.match(corePlist, /<key>CODEX_RUNNER_CLAUDE_AUTH_MODE<\/key>\s*<string>platform-profile<\/string>/);
     assert.match(corePlist, /<key>CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE<\/key>\s*<string>runner<\/string>/);
@@ -130,6 +135,7 @@ test('release package keeps Bun runtime assets beside the executable and smokes 
   ]);
   assert.match(script, /bun test --timeout 60000/);
   assert.match(workflow, /run: bun test --timeout 60000/);
+  assert.match(workflow, /if: github\.event\.repository\.private == false/);
   assert.match(runbook, /\(cd dist\/release && shasum -a 256 -c checksums\.txt\)/);
   assert.match(script, /cp "\$source\/package\.json" "\$pkg_dir\/package\.json"/);
   assert.match(script, /"\$pkg_dir\/theme"/);

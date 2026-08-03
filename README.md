@@ -84,8 +84,9 @@ existing installations and automation continue to work.
 - `curl`, `tar`, and a user-level `launchd` or `systemd` session;
 - the [Codex CLI](https://developers.openai.com/codex/cli/) installed and authenticated.
 
-The installer downloads the matching attested release artifact, verifies its checksums, and
-registers the Web Gateway, Runner Core, and Agentic Worker as user services:
+The installer downloads the matching release artifact, verifies its SHA-256 checksum, and
+registers the Web Gateway, Runner Core, and Agentic Worker as user services. Public-repository
+releases also publish GitHub provenance attestations, which the installer verifies when available:
 
 ```bash
 export CODEX_RUNNER_ADDR=127.0.0.1:3008

@@ -194,9 +194,12 @@ verify_attestation() {
     log "warning: gh not found; SHA-256 verified but signed provenance was not checked"
     return 0
   fi
-  gh attestation verify "$archive" --repo "$REPO" \
-    --signer-workflow "$REPO/.github/workflows/release.yml" >/dev/null \
-    || fail "GitHub artifact attestation verification failed"
+  if ! gh attestation verify "$archive" --repo "$REPO" \
+    --signer-workflow "$REPO/.github/workflows/release.yml" >/dev/null; then
+    [ "$VERIFY_ATTESTATION" = "require" ] && fail "GitHub artifact attestation verification failed"
+    log "warning: SHA-256 verified but signed GitHub provenance is unavailable"
+    return 0
+  fi
   log "verified signed GitHub provenance"
 }
 

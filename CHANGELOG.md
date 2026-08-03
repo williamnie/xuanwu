@@ -11,7 +11,7 @@
 - 完成玄武 AI Engineering Control Plane 的 115 项建设路线与最终迁移收口。
 - 六条 Golden Journey、容量基准、Supervisor 评测与统一可观测性。
 - SQLite 迁移门禁、加密备份/隔离恢复演练和 daemon 生命周期管理。
-- 可审计的 release update check、升级快照、release-owned file 回滚与 GitHub artifact attestations。
+- 可审计的 release update check、升级快照、release-owned file 回滚，以及仓库公开后启用的 GitHub artifact attestations。
 - Work、Run、Evidence、Handoff、Attention 与 Automation 统一产品闭环。
 - Codex 与 Claude Provider 路由、Run Detail 与真实 Attempt 归属。
 - 中英文 README、贡献指南、安全策略与双语 Release Notes。

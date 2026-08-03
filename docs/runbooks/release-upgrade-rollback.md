@@ -3,7 +3,7 @@
 ## 1. Authority 与兼容边界
 
 - 发布代码的 source of truth 是发布 tag 指向的 Git commit；GitHub Release 只是该 revision 的交付投影。
-- `release.json`、压缩包内后端 `--version`、前端 build version 和 tag 必须完全一致。`checksums.txt` 绑定所有平台压缩包与 `release.json`，GitHub Actions 再为这些 digest 生成 signed build provenance。
+- `release.json`、压缩包内后端 `--version`、前端 build version 和 tag 必须完全一致。`checksums.txt` 绑定所有平台压缩包与 `release.json`；仓库公开时，GitHub Actions 再为这些 digest 生成 signed build provenance。个人账户下的私有 GitHub 仓库不支持 artifact attestations，因此私有预发布只能依赖 checksum，不能冒充已签名产物。
 - 运行数据的唯一 source of truth 仍是 `${CODEX_RUNNER_STATE_DIR}/runner.db`。升级快照只保存 Runner-owned binary、web、Supervisor package 和运维脚本，不复制数据库、token、`.env` 或用户 artifact。
 - 当前 release 文件没有双写/双读窗口。数据库 migration 仍由既有 forward-only `schema_migrations` 执行，兼容合同是 `xuanwu.storage-compat.v1`；不能以 release snapshot 替代数据库备份。
 
@@ -20,7 +20,7 @@
    tar -xOf dist/release/codex-issue-runner_darwin_arm64.tar.gz ./codex-issue-runner.build.stamp
    ```
 
-4. 经非 LLM 发布审批后创建并 push `v*` tag。`.github/workflows/release.yml` 会重新执行测试/build、生成四平台资产、`release.json` 和 checksums，使用 GitHub OIDC/Sigstore 生成 signed provenance，最后写 GitHub Release。该外部写操作由 GitHub Actions run、tag 和 release event 审计；不要从 issue agent 自动 push tag。
+4. 经非 LLM 发布审批后创建并 push `v*` tag。`.github/workflows/release.yml` 会重新执行测试/build、生成四平台资产、`release.json` 和 checksums；公开仓库使用 GitHub OIDC/Sigstore 生成 signed provenance，私有仓库明确跳过该不可用能力，最后写 GitHub Release。该外部写操作由 GitHub Actions run、tag 和 release event 审计；不要从 issue agent 自动 push tag。
 5. 下载一个匹配平台的资产并验证：
 
    ```bash
@@ -30,11 +30,11 @@
    shasum -a 256 -c checksums.txt
    ```
 
-如果 changelog 没有精确版本 heading、版本不是 `vMAJOR.MINOR.PATCH`、测试失败或 provenance 无法生成，pipeline 必须失败，不发布部分资产。
+如果 changelog 没有精确版本 heading、版本不是 `vMAJOR.MINOR.PATCH`、测试失败，或公开仓库的 provenance 无法生成，pipeline 必须失败，不发布部分资产。
 
 ## 3. 安装与更新检查
 
-生产安装建议要求 signed provenance 验证；需要本机已有 `gh`：
+仓库公开并重新发布带 attestation 的资产后，生产安装建议要求 signed provenance 验证；需要本机已有 `gh`：
 
 ```bash
 export CODEX_RUNNER_VERIFY_ATTESTATION=require

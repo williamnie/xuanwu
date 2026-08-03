@@ -102,6 +102,7 @@ test('release installer can repeat an atomic macOS upgrade without replacing sta
     await mkdir(release, { recursive: true });
     await writeFile(join(state, 'runner.db'), 'state-survives-upgrade');
     await writeExecutable(join(fixture, 'codex-issue-runner'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-issue-runner v1.2.3 build=test bun=test"; fi\nexit 0\n');
+    await writeExecutable(join(fixture, 'codex-issue-runner.claude-agent-sdk'), '#!/bin/sh\nexit 0\n');
     await writeFile(join(fixture, 'daemon.sh'), await readFile(daemon));
     await chmod(join(fixture, 'daemon.sh'), 0o755);
     assert.equal(spawnSync('tar', ['-czf', archive, '-C', fixture, '.']).status, 0);
