@@ -81,7 +81,9 @@ describe("Work HTTP API", () => {
       const listBody = await body(list);
       const searched = await router.handle(new Request(`${BASE_URL}/api/works?project_id=demo&q=alpha`));
       const searchedBody = await body(searched);
-      const board = await router.handle(new Request(`${BASE_URL}/api/works/board?project_id=demo&page_size=1`));
+      const board = await router.handle(new Request(
+        `${BASE_URL}/api/works/board?project_id=demo&page_size=1&sort=title&order=asc`
+      ));
       const boardBody = await body(board);
       const detail = await router.handle(new Request(
         `${BASE_URL}/api/works/${encodeURIComponent(issueIDToWorkID(alpha.id))}`
@@ -107,7 +109,7 @@ describe("Work HTTP API", () => {
         },
         page_size: 1,
         project_id: "demo",
-        sort: { field: "updated_at", order: "desc" }
+        sort: { field: "title", order: "asc" }
       });
       expect(detail.status).toBe(200);
       expect(detailBody).toMatchObject({
