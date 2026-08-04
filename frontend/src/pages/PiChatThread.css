@@ -45,7 +45,6 @@
 .pi-chat-status-copy > span { color: var(--text-secondary); font-size: .68rem; font-weight: 700; }
 .pi-chat-status-copy > small { color: var(--text-muted); font-size: .6rem; }
 
-.pi-chat-advanced-toggle,
 .pi-chat-copy-button {
   align-items: center;
   background: transparent;
@@ -58,10 +57,8 @@
   min-height: 30px;
   padding: 0 8px;
 }
-.pi-chat-copy-button { justify-content: center; padding: 0; width: 30px; }
-.pi-chat-advanced-toggle:hover,
-.pi-chat-copy-button:hover,
-.pi-chat-advanced-toggle.active { background: var(--bg-card-hover); color: var(--text-primary); }
+.pi-chat-copy-button { justify-content: center; }
+.pi-chat-copy-button:hover { background: var(--bg-card-hover); color: var(--text-primary); }
 
 .pi-chat-context-bar {
   align-items: center;
@@ -233,15 +230,6 @@
 .pi-chat-context-card-title span[data-mode="read_only"] { border-color: var(--warning-glow); color: var(--warning); }
 .pi-chat-context-card-copy > p { color: var(--text-muted); font-size: .68rem; line-height: 1.5; margin: 4px 0 0; }
 .pi-chat-context-card-references { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
-.pi-chat-context-card-details { border-top: 1px solid var(--border-light); color: var(--text-muted); font-size: .64rem; margin-top: 9px; padding-top: 7px; }
-.pi-chat-context-card-details summary { cursor: pointer; width: fit-content; }
-.pi-chat-context-card-details dl { display: grid; gap: 5px; margin: 8px 0 0; }
-.pi-chat-context-card-details dl div { display: grid; gap: 5px 10px; grid-template-columns: minmax(100px, .3fr) minmax(0, 1fr); }
-.pi-chat-context-card-details :where(dt, dd) { margin: 0; overflow-wrap: anywhere; }
-.pi-chat-context-card-details dt { font-family: var(--font-mono); }
-
-.pi-chat-bubble-meta { align-items: center; color: var(--text-muted); display: flex; font-family: var(--font-mono); font-size: .6rem; gap: 6px; margin-top: 8px; }
-.pi-chat-bubble-meta button { background: transparent; border: 0; color: inherit; cursor: pointer; padding: 2px; }
 .pi-chat-thinking {
   align-items: center;
   align-self: flex-start;

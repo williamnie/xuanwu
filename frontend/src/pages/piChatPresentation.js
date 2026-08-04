@@ -12,7 +12,7 @@ export function displayPiConversationTitle(conversation = null, t = null) {
 export function piChatStatusSummary({ conversation = null, error = '', loading = false, sending = false, t = null, transcript = [] } = {}) {
   const messages = Array.isArray(transcript) ? transcript : [];
   const detail = messageCountLabel(messages.length, t);
-  if (error) return { detail: copy(t, 'chat.status.openAdvanced', '打开 Advanced 可查看诊断'), label: copy(t, 'chat.status.retry', '需要重试'), tone: 'error' };
+  if (error) return { detail: copy(t, 'chat.status.retryDetail', '可重试或复制 Debug 信息'), label: copy(t, 'chat.status.retry', '需要重试'), tone: 'error' };
   if (loading) return { detail: copy(t, 'chat.status.loadingDetail', '正在读取对话记录'), label: copy(t, 'chat.status.loading', '载入中'), tone: 'running' };
   if (sending || conversation?.runtime_status === 'running') return { detail: copy(t, 'chat.status.sendingDetail', 'Xuanwu 正在更新此 Chat'), label: copy(t, 'chat.status.sending', '处理中'), tone: 'running' };
   if (!conversation) return { detail: copy(t, 'chat.status.startDetail', '开始新的 Chat'), label: copy(t, 'chat.status.ready', '准备就绪'), tone: 'idle' };

@@ -37,7 +37,7 @@ test('Ask Xuanwu page uses canonical Chat naming in visible copy', () => {
 
 test('PI Assistant chat renders messages as Markdown instead of raw prewrapped text', () => {
   assert.match(pageSource, /import MarkdownPreview from '\.\.\/components\/editor\/MarkdownPreview'/);
-  assert.match(pageSource, /<PiChatMessageContent advanced=\{advanced\} text=\{displayText\} \/>/);
+  assert.match(pageSource, /<PiChatMessageContent text=\{displayText\} \/>/);
   assert.match(pageSource, /<MarkdownPreview key=\{`markdown-\$\{index\}`\} text=\{segment\.text\} className="pi-chat-markdown" \/>/);
   assert.doesNotMatch(pageSource, /pi-chat-bubble-text/);
 });
@@ -99,17 +99,17 @@ test('Chat distinguishes direct local actions from provider coding and offers pr
   assert.match(pageSource, /chat\.starter\.\$\{kind\}\.prompt/);
 });
 
-test('PI Assistant composer supports @project activation and Advanced runtime context', () => {
+test('PI Assistant composer supports @project activation without runtime diagnostics', () => {
   assert.match(pageSource, /buildPiChatProjectSuggestions\(state\.projects\)/);
   assert.match(pageSource, /onAttachReference=\{state\.attachReference\}/);
   assert.match(pageSource, /showReferenceChips=\{false\}/);
-  assert.match(pageSource, /runtimeControls=\{<PiChatComposerMeta advanced=\{advanced\} agent=\{state\.supervisor\} project=\{composerProject\(state\)\} \/>\}/);
+  assert.match(pageSource, /runtimeControls=\{<PiChatComposerMeta project=\{composerProject\(state\)\} \/>\}/);
   assert.match(pageSource, /if \(hasProjectReference\) return state\.selectedProject;\s*if \(!state\.prompt\.trim\(\)\) return null/);
-  assert.match(composerMetaSource, /\{project && <RuntimePill/);
-  assert.match(composerMetaSource, /if \(!project && !advanced\) return null/);
+  assert.match(composerMetaSource, /<RuntimePill icon=\{<FolderGit2/);
+  assert.match(composerMetaSource, /if \(!project\) return null/);
   assert.doesNotMatch(composerMetaSource, /chat\.context\.selectProject'\)/);
   assert.match(pageSource, /placeholder=\{t\('chat\.placeholder'\)\}/);
-  assert.match(composerMetaSource, /\{advanced && \(/);
+  assert.doesNotMatch(composerMetaSource, /agentModelLabel|thinkingLabel|advanced/);
   assert.doesNotMatch(pageSource, /state\.messageSettings/);
   assert.doesNotMatch(pageSource, /state\.updateMessageSetting/);
 });
@@ -139,17 +139,15 @@ test('PI Assistant sidebar uses Codex-style unread and running indicators', () =
   assert.doesNotMatch(pageSource, /t\('chat\.status\.idle'\)/);
 });
 
-test('Chat hides runtime internals by default and exposes diagnostics only through Advanced', () => {
-  assert.match(pageSource, /const \[advanced, setAdvanced\] = useState\(false\)/);
-  assert.match(pageSource, /aria-pressed=\{advanced\}/);
-  assert.match(pageSource, /\{advanced && \(\s*<button[\s\S]*t\('chat\.copyConversationDebug'\)/);
-  assert.match(pageSource, /\{advanced && <small>\{shortId\(conversation\.pi_session_id \|\| conversation\.id\)\}<\/small>\}/);
-  assert.match(pageSource, /\{advanced && \(conversationId \|\| sessionId\) && \(/);
-  assert.match(pageSource, /advanced \? advancedAgentLabel\(agent, t\)/);
-  assert.match(composerMetaSource, /t\('chat\.context\.modelHint'\)/);
+test('Chat removes the Advanced gate and exposes direct Debug copying', () => {
+  assert.doesNotMatch(pageSource, /setAdvanced|aria-pressed|pi-chat-advanced-toggle|settings\.advanced/);
+  assert.match(pageSource, /<Copy size=\{13\} \/> \{t\('chat\.copyConversationDebug'\)\}/);
+  assert.match(pageSource, /onContextMenu=\{\(event\) => copyConversationDebugInfo/);
+  assert.match(pageSource, /onContextMenu=\{\(event\) => copyMessageDebugInfo/);
   assert.match(pageSource, /formatPiConversationDebugInfo/);
+  assert.match(pageSource, /formatPiErrorDebugInfo/);
   assert.match(pageSource, /formatPiMessageDebugInfo/);
-  assert.match(pageSource, /title=\{advanced \? t\('chat\.copyMessageDebugHint'\) : undefined\}/);
+  assert.match(pageSource, /title=\{t\('chat\.copyMessageDebugHint'\)\}/);
   assert.match(runtimeStateSource, /created_at:\s*item\.created_at \|\| ''/);
 });
 
@@ -162,7 +160,7 @@ test('Chat renders user status, canonical Work links, and actionable empty and e
   assert.match(pageSource, /onClick=\{onRetry\}/);
   assert.match(pageSource, /t\('chat\.start'\)/);
   assert.match(pageSource, /t\('chat\.startDescription'\)/);
-  assert.match(pageSource, /\{advanced && <code>\{error\}<\/code>\}/);
-  assert.match(pageSource, /item\.role === 'error' && !advanced/);
+  assert.match(pageSource, /formatPiErrorDebugInfo\(error\)/);
+  assert.match(pageSource, /item\.role === 'error' \? t\('chat\.turnIncomplete'\)/);
   assert.match(pageSource, /t\('chat\.turnIncomplete'\)/);
 });

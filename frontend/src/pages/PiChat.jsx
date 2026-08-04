@@ -14,7 +14,6 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
-  SlidersHorizontal,
   UserRound,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -24,7 +23,12 @@ import TurtleLoader from '../components/TurtleLoader';
 import SessionComposer from './sessions/SessionComposer';
 import PiChatComposerMeta from './PiChatComposerMeta';
 import { buildPiChatProjectSuggestions, buildPiChatReferenceDetails } from './piChatComposer';
-import { copyPiDebugText, formatPiConversationDebugInfo, formatPiMessageDebugInfo } from './piChatDiagnostics';
+import {
+  copyPiDebugText,
+  formatPiConversationDebugInfo,
+  formatPiErrorDebugInfo,
+  formatPiMessageDebugInfo,
+} from './piChatDiagnostics';
 import { projectFromPrompt } from './piChatProjectContext';
 import {
   parsePiChatMessageContent,
@@ -32,7 +36,7 @@ import {
   runnerContextReferenceLabel,
 } from './piChatMessageContent';
 import { displayPiConversationTitle, piChatStatusSummary, piChatWorkLinks, visiblePiConversations } from './piChatPresentation';
-import { shortId, usePiChatState } from './piChatState';
+import { usePiChatState } from './piChatState';
 import { useSmartAutoScroll } from './sessions/smartAutoScroll';
 import './PiChat.css';
 import './PiChatDiagnostics.css';
@@ -42,22 +46,21 @@ import { useI18n } from '../i18n/context.js';
 
 export default function PiChat({ navigateTo, initialConversationId = '', onConversationChange = null }) {
   const state = usePiChatState(initialConversationId, onConversationChange);
-  const [advanced, setAdvanced] = useState(false);
-  return <PiChatLayout advanced={advanced} navigateTo={navigateTo} setAdvanced={setAdvanced} state={state} />;
+  return <PiChatLayout navigateTo={navigateTo} state={state} />;
 }
 
-function PiChatLayout({ advanced, navigateTo, setAdvanced, state }) {
+function PiChatLayout({ navigateTo, state }) {
   return (
     <div className="pi-chat-page animate-fade-in">
       <section className="pi-chat-shell">
-        <PiChatSidebar advanced={advanced} navigateTo={navigateTo} state={state} />
-        <PiChatMain advanced={advanced} navigateTo={navigateTo} setAdvanced={setAdvanced} state={state} />
+        <PiChatSidebar navigateTo={navigateTo} state={state} />
+        <PiChatMain navigateTo={navigateTo} state={state} />
       </section>
     </div>
   );
 }
 
-function PiChatSidebar({ advanced, navigateTo, state }) {
+function PiChatSidebar({ navigateTo, state }) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
   const conversations = filterConversations(visiblePiConversations(state.conversations), query, t);
@@ -68,7 +71,7 @@ function PiChatSidebar({ advanced, navigateTo, state }) {
         navigateTo={navigateTo}
         onRefresh={state.loadPiState}
       />
-      <AgentStatus advanced={advanced} agent={state.supervisor} />
+      <AgentStatus agent={state.supervisor} />
       <button className="btn btn-primary" onClick={state.handleCreateConversation} disabled={state.sending}>
         <MessageSquarePlus size={15} /> {t('chat.new')}
       </button>
@@ -83,7 +86,6 @@ function PiChatSidebar({ advanced, navigateTo, state }) {
         />
       </label>
       <ConversationList
-        advanced={advanced}
         conversations={conversations}
         emptyLabel={query ? t('chat.noSearchResults') : t('chat.emptyList')}
         selectedId={state.selectedConversationId}
@@ -117,30 +119,28 @@ function PiChatSidebarHeader({ loading, navigateTo, onRefresh }) {
   );
 }
 
-function PiChatMain({ advanced, navigateTo, setAdvanced, state }) {
+function PiChatMain({ navigateTo, state }) {
   return (
     <main className="pi-chat-main glass-card">
       {state.error ? (
         <ChatErrorState
-          advanced={advanced}
           error={state.error}
           navigateTo={navigateTo}
-          onAdvancedChange={setAdvanced}
           onRetry={state.loadPiState}
         />
       ) : state.loading ? <LoadingState /> : (
         <>
-          <ChatHeader advanced={advanced} onAdvancedChange={setAdvanced} state={state} />
+          <ChatHeader state={state} />
           <ChatContextBar navigateTo={navigateTo} project={state.selectedProject} transcript={state.transcript} />
-          <ChatThread advanced={advanced} navigateTo={navigateTo} state={state} />
-          <ChatComposer advanced={advanced} state={state} />
+          <ChatThread navigateTo={navigateTo} state={state} />
+          <ChatComposer state={state} />
         </>
       )}
     </main>
   );
 }
 
-function ChatHeader({ advanced, onAdvancedChange, state }) {
+function ChatHeader({ state }) {
   const { t } = useI18n();
   const title = displayPiConversationTitle(state.selectedConversation, t);
   const summary = piChatStatusSummary({
@@ -154,8 +154,8 @@ function ChatHeader({ advanced, onAdvancedChange, state }) {
   return (
     <header
       className="pi-chat-main-header"
-      onContextMenu={advanced ? (event) => copyConversationDebugInfo(event, state.selectedConversation, t('chat.debugCopied')) : undefined}
-      title={advanced ? t('chat.copyConversationDebugHint') : undefined}
+      onContextMenu={(event) => copyConversationDebugInfo(event, state.selectedConversation, t('chat.debugCopied'))}
+      title={t('chat.copyConversationDebugHint')}
     >
       <div className="pi-chat-title-group">
         <span>{t('chat.chat')}</span>
@@ -164,26 +164,14 @@ function ChatHeader({ advanced, onAdvancedChange, state }) {
       <div className="pi-chat-header-actions">
         <ChatStatusSummary summary={summary} />
         <button
-          aria-pressed={advanced}
-          className={`pi-chat-advanced-toggle ${advanced ? 'active' : ''}`}
-          onClick={() => onAdvancedChange(value => !value)}
-          title={t('chat.advancedHint')}
+          className="pi-chat-copy-button"
+          disabled={!state.selectedConversation}
+          onClick={() => copyConversationDebugInfo(null, state.selectedConversation, t('chat.debugCopied'))}
+          title={t('chat.copyConversationDebug')}
           type="button"
         >
-          <SlidersHorizontal size={13} /> {t('settings.advanced')}
+          <Copy size={13} /> {t('chat.copyConversationDebug')}
         </button>
-        {advanced && (
-          <button
-            aria-label={t('chat.copyConversationDebug')}
-            className="pi-chat-copy-button"
-            disabled={!state.selectedConversation}
-            onClick={() => copyConversationDebugInfo(null, state.selectedConversation, t('chat.debugCopied'))}
-            title={t('chat.copyConversationDebug')}
-            type="button"
-          >
-            <Copy size={13} />
-          </button>
-        )}
       </div>
     </header>
   );
@@ -226,7 +214,7 @@ function ChatContextBar({ navigateTo, project, transcript }) {
   );
 }
 
-function ConversationList({ advanced, conversations, emptyLabel, onSelect, selectedId, unreadIds }) {
+function ConversationList({ conversations, emptyLabel, onSelect, selectedId, unreadIds }) {
   const { language, t } = useI18n();
   return (
     <div className="pi-chat-conversation-list">
@@ -241,8 +229,8 @@ function ConversationList({ advanced, conversations, emptyLabel, onSelect, selec
               key={conversation.id}
               className={`pi-chat-conversation ${selectedId === conversation.id ? 'active' : ''} ${runtime?.tone || ''}`}
               onClick={() => onSelect(conversation.id)}
-              onContextMenu={advanced ? (event) => copyConversationDebugInfo(event, conversation, t('chat.debugCopied')) : undefined}
-              title={advanced ? t('chat.copyChatDebugHint') : undefined}
+              onContextMenu={(event) => copyConversationDebugInfo(event, conversation, t('chat.debugCopied'))}
+              title={t('chat.copyChatDebugHint')}
             >
               <span className="pi-chat-conversation-heading">
                 <span className="pi-chat-conversation-title">{displayPiConversationTitle(conversation, t)}</span>
@@ -262,7 +250,6 @@ function ConversationList({ advanced, conversations, emptyLabel, onSelect, selec
                 <span>{formatConversationDate(conversation.last_activity_at || conversation.updated_at || conversation.created_at, language)}</span>
                 <span>{conversation.project_id ? `@${conversation.project_id}` : t('chat.global')}</span>
               </span>
-              {advanced && <small>{shortId(conversation.pi_session_id || conversation.id)}</small>}
             </button>
           );
         })
@@ -271,7 +258,7 @@ function ConversationList({ advanced, conversations, emptyLabel, onSelect, selec
   );
 }
 
-function ChatThread({ advanced, navigateTo, state }) {
+function ChatThread({ navigateTo, state }) {
   const { t } = useI18n();
   const lastMessage = state.transcript[state.transcript.length - 1];
   const autoScrollWatchKey = [
@@ -302,7 +289,7 @@ function ChatThread({ advanced, navigateTo, state }) {
               onPromptSelect={state.setPrompt}
             />
           ) : state.transcript.map((item) => (
-            <ChatBubble advanced={advanced} key={item.id} conversation={state.selectedConversation} item={item} />
+            <ChatBubble key={item.id} conversation={state.selectedConversation} item={item} />
           ))}
           {state.sending && (
             <div className="pi-chat-thinking" role="status">
@@ -325,7 +312,7 @@ function ChatThread({ advanced, navigateTo, state }) {
 
 const PI_CHAT_COMPOSER_SETTINGS = { model: '', reasoningEffort: '', approvalPolicy: 'never', sandbox: 'workspace-write' };
 
-function ChatComposer({ advanced, state }) {
+function ChatComposer({ state }) {
   const { t } = useI18n();
   const messageRunning = Boolean(state.sending && state.runningConversationId);
   const selectedId = state.runningConversationId || state.selectedConversationId || 'runner-draft';
@@ -350,7 +337,7 @@ function ChatComposer({ advanced, state }) {
         showReferenceChips={false}
         onAttachReference={state.attachReference}
         onRemoveReference={state.removeReference}
-        runtimeControls={<PiChatComposerMeta advanced={advanced} agent={state.supervisor} project={composerProject(state)} />}
+        runtimeControls={<PiChatComposerMeta project={composerProject(state)} />}
         onStop={state.handleStop}
       />
     </div>
@@ -374,7 +361,7 @@ function piChatInterruptState(state, selectedId, t) {
   };
 }
 
-function AgentStatus({ advanced, agent }) {
+function AgentStatus({ agent }) {
   const { t } = useI18n();
   if (!agent) {
     return (
@@ -392,16 +379,10 @@ function AgentStatus({ advanced, agent }) {
       {agent.enabled ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
       <div>
         <strong>{agent.enabled ? t('chat.connected') : t('chat.agentUnavailable')}</strong>
-        <span>{advanced ? advancedAgentLabel(agent, t) : agent.enabled ? t('chat.ready') : t('chat.checkConnections')}</span>
+        <span>{agent.enabled ? t('chat.ready') : t('chat.checkConnections')}</span>
       </div>
     </div>
   );
-}
-
-function advancedAgentLabel(agent, t) {
-  const provider = agent.model_provider || t('chat.context.providerUnset');
-  const model = agent.model_id || t('chat.context.modelUnset');
-  return `${provider} / ${model} · ${shortId(agent.id)}`;
 }
 
 function LoadingState() {
@@ -413,23 +394,21 @@ function LoadingState() {
   );
 }
 
-function ChatErrorState({ advanced, error, navigateTo, onAdvancedChange, onRetry }) {
+function ChatErrorState({ error, navigateTo, onRetry }) {
   const { t } = useI18n();
   return (
     <div className="pi-chat-empty pi-chat-error" role="alert">
       <AlertTriangle size={34} />
       <strong>{t('chat.unavailable')}</strong>
       <span>{t('chat.unavailableDescription')}</span>
-      {advanced && <code>{error}</code>}
       <div className="pi-chat-empty-actions">
         <button className="btn btn-primary" onClick={onRetry} type="button"><RefreshCw size={14} /> {t('chat.retry')}</button>
         <button
-          aria-pressed={advanced}
           className="btn btn-secondary"
-          onClick={() => onAdvancedChange(value => !value)}
+          onClick={() => copyPiDebugText(formatPiErrorDebugInfo(error), t('chat.debugCopied'))}
           type="button"
         >
-          <SlidersHorizontal size={14} /> {t('settings.advanced')}
+          <Copy size={14} /> {t('chat.copyDebug')}
         </button>
         <button className="btn btn-secondary" onClick={() => navigateTo('connections')} type="button">{t('chat.openConnections')}</button>
       </div>
@@ -459,21 +438,16 @@ function EmptyChat({ hasRuntime, navigateTo, onPromptSelect }) {
   );
 }
 
-function ChatBubble({ advanced, conversation, item }) {
+function ChatBubble({ conversation, item }) {
   const { t } = useI18n();
-  const copyDebugInfo = () => copyMessageDebugInfo(null, item, conversation, t('chat.messageDebugCopied'));
-  const conversationId = item.meta?.conversation_id || conversation?.id || '';
-  const sessionId = item.meta?.pi_session_id || conversation?.pi_session_id || '';
-  const displayText = item.role === 'error' && !advanced
-    ? t('chat.turnIncomplete')
-    : item.text;
+  const displayText = item.role === 'error' ? t('chat.turnIncomplete') : item.text;
   const assistant = item.role === 'assistant';
   const error = item.role === 'error';
   return (
     <article
       className={`pi-chat-bubble ${item.role}`}
-      onContextMenu={advanced ? (event) => copyMessageDebugInfo(event, item, conversation, t('chat.messageDebugCopied')) : undefined}
-      title={advanced ? t('chat.copyMessageDebugHint') : undefined}
+      onContextMenu={(event) => copyMessageDebugInfo(event, item, conversation, t('chat.messageDebugCopied'))}
+      title={t('chat.copyMessageDebugHint')}
     >
       <header className="pi-chat-bubble-header">
         <span className="pi-chat-bubble-avatar" aria-hidden="true">
@@ -482,30 +456,22 @@ function ChatBubble({ advanced, conversation, item }) {
         <span className="pi-chat-bubble-role">{assistant ? PRODUCT_TERMS.productLatin : error ? t('chat.incomplete') : t('chat.you')}</span>
       </header>
       <div className="pi-chat-bubble-content">
-        <PiChatMessageContent advanced={advanced} text={displayText} />
+        <PiChatMessageContent text={displayText} />
       </div>
-      {advanced && (conversationId || sessionId) && (
-        <div className="pi-chat-bubble-meta">
-          <span>{piBubbleMetaLabel(conversationId, sessionId)}</span>
-          <button aria-label={t('chat.copyMessageDebug')} onClick={copyDebugInfo} title={t('chat.copyMessageDebug')} type="button">
-            <Copy size={11} />
-          </button>
-        </div>
-      )}
     </article>
   );
 }
 
-function PiChatMessageContent({ advanced, text }) {
+function PiChatMessageContent({ text }) {
   return parsePiChatMessageContent(text).map((segment, index) => {
     if (segment.type === 'runner_ui_context') {
-      return <RunnerUiContextCard advanced={advanced} context={segment.context} key={`context-${index}`} />;
+      return <RunnerUiContextCard context={segment.context} key={`context-${index}`} />;
     }
     return <MarkdownPreview key={`markdown-${index}`} text={segment.text} className="pi-chat-markdown" />;
   });
 }
 
-function RunnerUiContextCard({ advanced, context }) {
+function RunnerUiContextCard({ context }) {
   const { t } = useI18n();
   const mode = context.fields.permission_mode || '';
   const references = context.references || [];
@@ -523,30 +489,9 @@ function RunnerUiContextCard({ advanced, context }) {
             {references.map((reference, index) => <span key={`${reference.type}-${index}`}>{runnerContextReferenceLabel(reference, t)}</span>)}
           </div>
         )}
-        {advanced && <RunnerUiContextDetails context={context} />}
       </div>
     </section>
   );
-}
-
-function RunnerUiContextDetails({ context }) {
-  const { t } = useI18n();
-  return (
-    <details className="pi-chat-context-card-details">
-      <summary>{t('chat.context.technical')}</summary>
-      <dl>
-        {Object.entries(context.fields).map(([key, value]) => (
-          <div key={key}><dt>{key}</dt><dd>{value}</dd></div>
-        ))}
-      </dl>
-    </details>
-  );
-}
-
-function piBubbleMetaLabel(conversationId, sessionId) {
-  if (!conversationId) return `session ${shortId(sessionId)}`;
-  if (!sessionId || sessionId === conversationId) return `chat ${shortId(conversationId || sessionId)}`;
-  return `chat ${shortId(conversationId)} · session ${shortId(sessionId)}`;
 }
 
 function copyConversationDebugInfo(event, conversation, successMessage) {

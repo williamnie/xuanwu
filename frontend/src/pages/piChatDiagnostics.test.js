@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { formatPiConversationDebugInfo, formatPiMessageDebugInfo } from './piChatDiagnostics.js';
+import {
+  formatPiConversationDebugInfo,
+  formatPiErrorDebugInfo,
+  formatPiMessageDebugInfo,
+} from './piChatDiagnostics.js';
 
 test('formats PI conversation debug info with stable chat and runtime ids', () => {
   const text = formatPiConversationDebugInfo({
@@ -32,4 +36,11 @@ test('formats PI message debug info and falls back to conversation ids', () => {
   assert.match(text, /conversation_id: conv-123/);
   assert.match(text, /pi_session_id: pi-session-456/);
   assert.match(text, /conversation_title: Need a fix/);
+});
+
+test('formats PI chat errors for direct debug copying', () => {
+  const text = formatPiErrorDebugInfo('network unavailable');
+
+  assert.match(text, /type: pi_chat_error/);
+  assert.match(text, /error: network unavailable/);
 });

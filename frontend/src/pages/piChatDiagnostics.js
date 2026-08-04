@@ -40,6 +40,13 @@ export function formatPiMessageDebugInfo(item = {}, conversation = {}) {
   ]);
 }
 
+export function formatPiErrorDebugInfo(error) {
+  return debugLines([
+    ['type', 'pi_chat_error'],
+    ['error', error],
+  ]);
+}
+
 export async function copyPiDebugText(text, successText) {
   try {
     await copyTextToClipboard(text);
