@@ -489,12 +489,12 @@
    ========================================================================== */
 
 /* 当进入 sessions 页面且主侧栏折叠时，彻底让主侧栏不占用任何屏幕空间且隐藏，防止物理残留 */
-.in-sessions-page.sidebar-collapsed .sidebar {
+.in-sessions-page.runs-page.sidebar-collapsed .sidebar {
   display: none !important;
 }
 
 /* Sessions 页面下主工作区强制锁定为 100vh 高度且消除 padding */
-.in-sessions-page .main-content {
+.in-sessions-page.runs-page .main-content {
   padding: 0 !important;
   height: 100vh !important;
   max-height: 100vh !important;
@@ -502,7 +502,7 @@
 }
 
 /* 当主侧栏折叠时，强制消除左侧的 margin 和 padding */
-.in-sessions-page.sidebar-collapsed .main-content {
+.in-sessions-page.runs-page.sidebar-collapsed .main-content {
   margin-left: 0 !important;
   padding-left: 0 !important;
 }

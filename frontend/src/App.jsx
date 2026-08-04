@@ -350,7 +350,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'runs' || currentPage === 'ask-xuanwu' ? 'in-sessions-page' : ''}`}>
+    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'runs' || currentPage === 'ask-xuanwu' ? 'in-sessions-page' : ''} ${currentPage === 'runs' ? 'runs-page' : ''}`}>
       <ToastContainer />
       {sidebarCollapsed && (
         <button
