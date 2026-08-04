@@ -34,6 +34,7 @@ import { staticWebResponse } from "./staticWeb.ts";
 import { buildPiGuardianSystemStatus } from "./piGuardianStatus.ts";
 import { buildCompactSystemStatus, buildRuntimeDoctor, buildSystemStatus } from "./systemStatus.ts";
 import { registerSystemRestartRoute, type SystemRestartAuditEvent } from "./systemRestartApi.ts";
+import { registerProvidersCatalogRoute } from "./providersCatalogApi.ts";
 import { setProjectLoopMaxParallelProjects } from "../runner/projectLoopManager.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
@@ -91,6 +92,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     restartProcess: runtime.restartProcess,
     supervisorManaged: runtime.supervisorManaged
   });
+  registerProvidersCatalogRoute(router, { providersRegistry: runtime.providersRegistry });
   registerEventRoutes(router, { bus });
   registerFeishuEventRoutes(router, {
     agentBridge: runtime.feishuAgentBridge,

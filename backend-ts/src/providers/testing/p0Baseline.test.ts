@@ -116,24 +116,26 @@ describe("P0 baseline: 自动检测前后端 provider/capability drift", () => {
     expect(enabledValues).not.toContain("kimicode");
   });
 
-  test("前端 CAPABILITY_LABELS 与后端 ExecutorCapability 的漂移保持已知基线（transcript_export）", async () => {
+  test("前端 CAPABILITY_LABELS 与后端 ExecutorCapability 对齐（P6 后 transcript_export 由 nativeActions 提供）", async () => {
     const source = await readFile(frontendSessionOptionsPath, "utf8");
     const labelsBlock = source.match(/CAPABILITY_LABELS\s*=\s*{([^}]+)}/)?.[1] ?? "";
     const frontendCapabilities = [...labelsBlock.matchAll(/([a-z_]+):/g)].map((m) => m[1]).sort();
     expect(frontendCapabilities.length).toBeGreaterThan(0);
-    // 后端 ExecutorCapability 由 types.ts 定义；此处从 EXECUTOR_PROVIDER_IDS 相关的 capability 消费点断言基线
+    // P6：transcript_export 不再是通用 capability label（后端 ExecutorCapability 亦无此项）
+    expect(frontendCapabilities).not.toContain("transcript_export");
     const knownFrontendOnly = frontendCapabilities.filter((c) => !["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"].includes(c));
-    expect(knownFrontendOnly).toEqual(["transcript_export"]);
+    expect(knownFrontendOnly).toEqual([]);
   });
 
-  test("前端 issueRuns.js：opencode/kimicode 仅出现在 label switch（P6 删除基线），不得进入 SESSION_CAPABLE_PROVIDERS 可提交集合", async () => {
+  test("前端 issueRuns.js：P6 后静态 authority 删除，session 能力由 catalog capability 投影", async () => {
     const source = await readFile(frontendIssueRunsPath, "utf8");
-    expect(source).toContain("SESSION_CAPABLE_PROVIDERS");
-    // 记录基线：providerLabel switch 当前硬编码 opencode/kimicode 占位（P6 移除清单）
-    expect(source).toMatch(/case\s+'opencode'/);
-    expect(source).toMatch(/case\s+'kimicode'/);
-    // 不可提交集合只含 codex/claude（P6 后由 catalog capability 投影替代）
-    expect(source).toMatch(/SESSION_CAPABLE_PROVIDERS\s*=\s*new Set\(\['codex', 'claude'\]\)/);
+    // P6：静态 SESSION_CAPABLE_PROVIDERS authority 已删除，改为 catalog 派生（fallback 命名仅兼容）
+    expect(source).not.toMatch(/SESSION_CAPABLE_PROVIDERS\s*=\s*new Set\(\['codex', 'claude'\]\)/);
+    expect(source).toMatch(/sessionCapableFromCatalog/);
+    expect(source).toMatch(/isSessionCapableProvider/);
+    // opencode/kimicode 不再进入 label switch（roadmap 只留文档）
+    expect(source).not.toMatch(/case\s+'opencode'/);
+    expect(source).not.toMatch(/case\s+'kimicode'/);
   });
 });
 

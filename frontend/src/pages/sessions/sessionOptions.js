@@ -26,9 +26,22 @@ export const PROVIDER_OPTIONS = [
   { value: 'codex', label: 'Codex', enabled: true },
   { value: 'fake-execution-only', label: 'Fake execution-only', enabled: true },
   { value: 'claude', label: 'Claude Agent SDK', enabled: true },
-  { value: 'opencode', label: 'opencode（未启用）', enabled: false },
-  { value: 'kimicode', label: 'Kimi Code（未启用）', enabled: false },
 ];
+
+/**
+ * P6：从后端 /api/providers catalog 派生可提交 option（唯一权威）。
+ * 未注册/planned Provider（如 opencode/kimicode）不进入；not-ready 可见但 disabled。
+ */
+export function providerOptionsFromCatalog(catalog) {
+  return (Array.isArray(catalog) ? catalog : [])
+    .filter((entry) => entry && typeof entry.id === 'string')
+    .map((entry) => ({
+      value: entry.id,
+      label: entry.label || entry.id,
+      enabled: entry.submittable !== false,
+      state: entry.state,
+    }));
+}
 
 export const CAPABILITY_LABELS = {
   issue_execution: 'Issue 执行',
@@ -37,14 +50,19 @@ export const CAPABILITY_LABELS = {
   interrupt: '中断',
   approvals: '审批',
   model_list: '模型列表',
-  transcript_export: '导出记录',
+  // transcript_export 非通用 capability：由 Provider manifest nativeActions 提供（P6）
 };
 
 export function providerValue(project) {
   return project?.provider || '';
 }
 
-export function providerLabel(value) {
+/**
+ * P6：单一 label helper——catalog 优先，静态回退（旧 projection 兼容窗口）。
+ */
+export function providerLabel(value, catalog) {
+  const entry = (Array.isArray(catalog) ? catalog : []).find((item) => item?.id === value);
+  if (entry?.label) return entry.label;
   const option = PROVIDER_OPTIONS.find((item) => item.value === value);
   return option?.label || value || '未配置';
 }

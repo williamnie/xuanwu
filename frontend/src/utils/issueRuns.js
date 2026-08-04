@@ -1,20 +1,44 @@
 const DEFAULT_PROVIDER = 'codex';
-const SESSION_CAPABLE_PROVIDERS = new Set(['codex', 'claude']);
+// P6：静态 SESSION_CAPABLE_PROVIDERS 不再作为 authority——由 catalog capabilities.sessions 派生（见 sessionCapableFromCatalog）。
+const SESSION_CAPABLE_PROVIDERS_FALLBACK = new Set(['codex', 'claude']);
+
+/**
+ * P6：从 catalog 派生 session-capable Provider 集合（唯一权威，替代静态 SESSION_CAPABLE_PROVIDERS）。
+ * catalog 条目未声明 sessions capability 的 Provider（execution-only）不进入集合。
+ */
+export function sessionCapableFromCatalog(catalog) {
+  if (!Array.isArray(catalog)) return new Set();
+  return new Set(
+    catalog
+      .filter((entry) => entry?.capabilities?.sessions && entry.state === 'ready')
+      .map((entry) => entry.id)
+  );
+}
+
+export function isSessionCapableProvider(provider, catalog) {
+  const id = String(provider || DEFAULT_PROVIDER).trim().toLowerCase();
+  if (Array.isArray(catalog)) return sessionCapableFromCatalog(catalog).has(id);
+  return SESSION_CAPABLE_PROVIDERS_FALLBACK.has(id);
+}
 
 export function latestIssueRun(issue) {
   return issue?.latest_run || null;
 }
 
-export function providerLabel(provider) {
+/**
+ * P6：单一 label helper——catalog 优先，静态回退（旧 projection 兼容窗口）。
+ */
+export function providerLabel(provider, catalog) {
+  const id = String(provider || DEFAULT_PROVIDER);
+  if (Array.isArray(catalog)) {
+    const entry = catalog.find((item) => item?.id === id);
+    if (entry?.label) return entry.label;
+  }
   switch (String(provider || DEFAULT_PROVIDER).toLowerCase()) {
     case 'codex':
       return 'Codex';
     case 'claude':
       return 'Claude';
-    case 'opencode':
-      return 'opencode';
-    case 'kimicode':
-      return 'kimicode';
     default:
       return provider || 'Unknown';
   }

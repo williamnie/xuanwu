@@ -27,6 +27,23 @@ export type ProviderTransport = "rpc" | "stdio-json" | "stream-json" | "sdk" | "
 
 export type ProviderProcessObservability = "none" | "lease";
 
+/** P6：首版 setting descriptor——仅 string/enum/boolean/secret-ref（计划 §25.4 决策 6）。 */
+export type ProviderSettingDescriptor =
+  | { kind: "string"; key: string; label: string; placeholder?: string; secret?: false }
+  | { kind: "enum"; key: string; label: string; options: Array<{ value: string; label: string }> }
+  | { kind: "boolean"; key: string; label: string }
+  | { kind: "secret-ref"; key: string; label: string };
+
+export type ProviderSettingsDescriptor = { settings: readonly ProviderSettingDescriptor[] };
+
+/** P6：native action（如 Codex "Open in Codex App"）经 manifest action 提供，非通用 capability。 */
+export type ProviderNativeAction = {
+  id: string;
+  label: string;
+  kind: "open-in-app" | "link";
+  url?: string;
+};
+
 /**
  * P2：ExecutorProviderManifest（设计 §2.4 完整字段表）。
  * `id` 为 branded ProviderId，注册时由 registry 校验唯一性与格式。
@@ -38,6 +55,10 @@ export type ExecutorProviderManifest = {
   transports: readonly ProviderTransport[];
   capabilities: ProviderCapabilities;
   processObservability?: ProviderProcessObservability;
+  /** P6：Provider-specific settings descriptor（renderer 用） */
+  executionSettings?: ProviderSettingsDescriptor;
+  /** P6：session presentation（空 Session 支持 + native action） */
+  sessionPresentation?: { emptySession?: boolean; nativeActions?: readonly ProviderNativeAction[] };
 };
 
 /** P2：capability 声明 → 校验方法名 的确定性投影（conformance 用）。 */
