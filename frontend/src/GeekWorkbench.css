@@ -183,7 +183,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 [data-theme="dark"] .sidebar { box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.015); }
 .sidebar-brand-row { border-bottom: 1px solid var(--border-light); margin: 0 2px 14px; padding: 2px 2px 15px; }
 .brand-wordmark strong { font-family: var(--font-display); font-size: 1rem; font-weight: 700; letter-spacing: -0.015em; }
-.brand-wordmark span, .api-status, .sidebar-section-title, .sidebar-version {
+.brand-wordmark span, .api-status, .sidebar-section-title {
   font-family: var(--font-mono);
   letter-spacing: 0.09em;
 }
@@ -211,7 +211,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .nav-label { font-size: 0.84rem; font-weight: 600; }
 .nav-badge { background: color-mix(in srgb, var(--text-muted) 13%, transparent); border-radius: var(--radius-xs); font-family: var(--font-mono); }
 .sidebar-footer { border-top-color: var(--border-light); }
-.sidebar-footer-actions { gap: 2px; }
+.sidebar-footer-actions { gap: 4px; }
 .sidebar-footer-actions .nav-item { border-color: transparent; }
 
 .page-intro { border-bottom-color: var(--border-color); gap: 22px; min-height: 98px; padding: 26px 0 18px; }

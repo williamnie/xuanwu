@@ -9,7 +9,12 @@ import SourcePoliciesPanel from './SourcePoliciesPanel';
 import Projects from './Projects';
 import RemoteAccessTokenPanel from './RemoteAccessTokenPanel';
 import { RestartAction } from './SettingsChrome';
+import { Languages } from 'lucide-react';
+import { useState } from 'react';
 import { useI18n } from '../i18n/context.js';
+import { translate } from '../i18n/translations.js';
+import { message } from '../store/toastStore.js';
+import { APP_VERSION } from '../version.js';
 
 export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navigateTo, tier }) {
   if (tier === 'advanced') {
@@ -25,7 +30,54 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navi
 }
 
 function GeneralSettingsTab() {
-  return <Projects />;
+  return (
+    <>
+      <LanguageAndVersionCard />
+      <Projects />
+    </>
+  );
+}
+
+function LanguageAndVersionCard() {
+  const { changeLanguage, language, t } = useI18n();
+  const [saving, setSaving] = useState(false);
+  const selectLanguage = async (next) => {
+    if (saving || next === language) return;
+    setSaving(true);
+    try {
+      await changeLanguage(next);
+      message.success(translate(next, 'settings.languageSaved'));
+    } catch (error) {
+      message.error(error?.message || t('settings.languageSaveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="glass-card settings-language-card">
+      <div className="settings-language-copy">
+        <div className="settings-entry-eyebrow"><Languages size={14} /> i18n</div>
+        <h2>{t('settings.languageTitle')}</h2>
+        <p>{t('settings.languageDescription')}</p>
+        {saving ? <span>{t('settings.languageSaving')}</span> : null}
+      </div>
+      <div className="settings-language-controls">
+        <div className="settings-language-options" role="radiogroup" aria-label={t('settings.languageTitle')}>
+          <button aria-checked={language === 'zh-CN'} className={language === 'zh-CN' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('zh-CN')} role="radio" type="button">
+            <strong>{t('settings.chinese')}</strong><span>zh-CN</span>
+          </button>
+          <button aria-checked={language === 'en-US'} className={language === 'en-US' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('en-US')} role="radio" type="button">
+            <strong>{t('settings.english')}</strong><span>en-US</span>
+          </button>
+        </div>
+        <div className="settings-version-card">
+          <span>{t('settings.version')}</span>
+          <strong>{APP_VERSION}</strong>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function PermissionsSettingsTab({ navigateTo }) {

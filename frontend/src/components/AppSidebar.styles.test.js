@@ -32,14 +32,18 @@ test('sidebar API indicator only shows the connection state', () => {
   assert.doesNotMatch(source, /LOCAL API/);
 });
 
-test('sidebar footer tools use unobtrusive full-width navigation rows', () => {
+test('sidebar footer keeps settings and theme as compact horizontal icons', () => {
   const actionsRule = ruleFor('.sidebar-footer-actions');
   const actionRule = ruleFor('.sidebar-footer-actions .nav-item');
   const workbenchActionRule = ruleFor('.sidebar-footer-actions .nav-item', workbenchCss);
 
-  assert.match(actionsRule, /flex-direction:\s*column/);
-  assert.match(actionRule, /justify-content:\s*flex-start/);
-  assert.doesNotMatch(actionRule, /flex:\s*1\s+1\s+0/);
-  assert.doesNotMatch(actionRule, /padding-left|padding-right/);
+  assert.match(actionsRule, /flex-direction:\s*row/);
+  assert.match(actionRule, /flex:\s*0\s+0\s+34px/);
+  assert.match(actionRule, /justify-content:\s*center/);
+  assert.match(actionRule, /width:\s*34px/);
+  assert.doesNotMatch(source, /sidebar-language-row|sidebar-version/);
+  assert.match(source, /function FooterIcon/);
+  assert.match(css, /@media \(max-width: 768px\) \{[\s\S]*?\.sidebar \{ width: 84px;/);
+  assert.match(css, /\.sidebar-footer-actions \.nav-item \{ flex-basis: 32px;/);
   assert.match(workbenchActionRule, /border-color:\s*transparent/);
 });

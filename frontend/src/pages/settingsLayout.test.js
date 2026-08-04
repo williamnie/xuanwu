@@ -65,8 +65,10 @@ test('Settings primary IA owns the complete project list and editor flow', () =>
   assert.match(projectsSource, /handleDelete/);
   assert.match(projectsSource, /<ProjectSettingsEditor/);
   assert.match(projectSettingsEditorSource, /projectsApi\.updateProject\(projectID, payload\)/);
-  assert.doesNotMatch(sectionsSource, /LanguageSettingsCard|settings-language-card/);
-  assert.match(sidebarSource, /className="nav-item nav-item-secondary sidebar-language-row"/);
+  assert.match(sectionsSource, /LanguageAndVersionCard|settings-language-card/);
+  assert.match(sectionsSource, /settings-version-card/);
+  assert.match(sectionsSource, /APP_VERSION/);
+  assert.doesNotMatch(sidebarSource, /sidebar-language-row|APP_VERSION|sidebar-version/);
   assert.match(settingsNavigationSource, /Permissions/);
   assert.match(settingsNavigationSource, /Notifications/);
   assert.doesNotMatch(settingsNavigationSource, /Models & Agents|models-agents/);

@@ -510,21 +510,28 @@ textarea:focus-visible {
 .sidebar-footer {
   border-top: 1px solid var(--border-color);
   display: flex;
-  flex-direction: column;
-  gap: 6px;
   margin-top: auto;
-  padding-top: 16px;
+  padding-top: 10px;
 }
 
 .sidebar-footer-actions {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-direction: row;
+  gap: 4px;
 }
 
 .sidebar-footer-actions .nav-item {
-  justify-content: flex-start;
+  flex: 0 0 34px;
+  height: 34px;
+  justify-content: center;
+  min-height: 34px;
   min-width: 0;
+  padding: 0;
+  width: 34px;
+}
+
+.sidebar-footer-actions .nav-item.active::before {
+  display: none;
 }
 
 [data-theme="dark"] .nav-item.active {
@@ -605,15 +612,6 @@ textarea:focus-visible {
 [data-theme="dark"] .sidebar-theme-btn:hover {
   background: var(--bg-card);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-}
-
-.sidebar-version {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  line-height: 1.4;
-  padding: 0 8px;
-  overflow-wrap: anywhere;
 }
 
 /* Sub-items list (FOCUS & PROJECT) */
@@ -1440,14 +1438,15 @@ input:checked + .slider:before {
 .diff-line.removed { background: rgba(248, 113, 113, 0.1); color: #f87171; }
 
 @media (max-width: 768px) {
-  .sidebar { width: 60px; padding: 16px 8px; }
-  .sidebar .brand-wordmark, .sidebar .api-status, .sidebar .nav-label, .sidebar .sidebar-section-title, .sidebar .nav-badge, .sidebar .sidebar-progress, .sidebar .sub-filter-item, .sidebar .btn-new-issue-sidebar, .sidebar .sidebar-version { display: none; }
+  .sidebar { width: 84px; padding: 16px 8px; }
+  .sidebar .brand-wordmark, .sidebar .api-status, .sidebar .nav-label, .sidebar .sidebar-section-title, .sidebar .nav-badge, .sidebar .sidebar-progress, .sidebar .sub-filter-item, .sidebar .btn-new-issue-sidebar { display: none; }
   .sidebar-brand-row { justify-content: center; margin-bottom: 18px; }
   .nav-item { justify-content: center; padding: 10px 0; }
   .nav-item-main { justify-content: center; }
+  .sidebar-footer-actions .nav-item { flex-basis: 32px; height: 32px; min-height: 32px; width: 32px; }
   .brand-mark-icon { flex-basis: 36px; height: 36px; width: 36px; }
-  .main-content { margin-left: 60px; padding: 16px; }
-  :root { --sidebar-width: 60px; }
+  .main-content { margin-left: 84px; padding: 16px; }
+  :root { --sidebar-width: 84px; }
 
   .page-intro {
     align-items: flex-start !important;

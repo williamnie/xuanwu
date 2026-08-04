@@ -9,12 +9,10 @@ import {
   Settings,
   Sun,
   LayoutDashboard,
-  Languages,
 } from 'lucide-react';
 import BrandMark from './BrandMark';
 import { useDynamicFavicon } from './brandFavicon.js';
 import { useRunnerBrandState } from './useRunnerBrandState.js';
-import { APP_VERSION } from '../version';
 import {
   selectBackendOnline,
   selectAutomations,
@@ -28,8 +26,6 @@ import {
 } from '../pages/assistantModules';
 import { WORK_BOARD_ENABLED } from '../pages/workBoardModel.js';
 import { useI18n } from '../i18n/context.js';
-import { translate } from '../i18n/translations.js';
-import { message } from '../store/toastStore.js';
 
 const NAV_ICONS = {
   'command-center': LayoutDashboard,
@@ -63,22 +59,13 @@ export default function AppSidebar({
   toggleTheme,
   toggleSidebar,
 }) {
-  const { changeLanguage, language, t } = useI18n();
+  const { t } = useI18n();
   const brandState = useRunnerBrandState();
   const activeNavPage = productNavPageForRoute(currentPage);
   const navItems = productNavigationItems({ workBoardEnabled: WORK_BOARD_ENABLED });
   const primaryNavItems = navItems.filter(item => item.placement === 'primary');
   const footerNavItems = navItems.filter(item => item.placement === 'footer');
   const navLabel = (item) => t(NAV_TRANSLATION_KEYS[item.page] || item.label);
-  const toggleLanguage = async () => {
-    const next = language === 'zh-CN' ? 'en-US' : 'zh-CN';
-    try {
-      await changeLanguage(next);
-      message.success(translate(next, 'settings.languageSaved'));
-    } catch (error) {
-      message.error(error?.message || t('settings.languageSaveFailed'));
-    }
-  };
   useDynamicFavicon(brandState);
 
   return (
@@ -136,7 +123,7 @@ export default function AppSidebar({
               onClick={() => navigateTo(item.page)}
               type="button"
             >
-              <NavIconLabel Icon={NAV_ICONS[item.icon]} label={navLabel(item)} />
+              <FooterIcon Icon={NAV_ICONS[item.icon]} />
             </button>
           ))}
           <button
@@ -145,22 +132,16 @@ export default function AppSidebar({
             onClick={toggleTheme}
             type="button"
           >
-            <NavIconLabel Icon={theme === 'dark' ? Sun : Moon} label={theme === 'dark' ? t('sidebar.lightTheme') : t('sidebar.darkTheme')} />
-          </button>
-          <button
-            aria-label={language === 'zh-CN' ? t('sidebar.switchEnglish') : t('sidebar.switchChinese')}
-            className="nav-item nav-item-secondary sidebar-language-row"
-            onClick={toggleLanguage}
-            title={language === 'zh-CN' ? t('sidebar.switchEnglish') : t('sidebar.switchChinese')}
-            type="button"
-          >
-            <NavIconLabel Icon={Languages} label={language === 'zh-CN' ? 'EN' : '中文'} />
+            <FooterIcon Icon={theme === 'dark' ? Sun : Moon} />
           </button>
         </div>
-        <div className="sidebar-version">{APP_VERSION}</div>
       </div>
     </aside>
   );
+}
+
+function FooterIcon({ Icon }) {
+  return <Icon aria-hidden="true" size={17} />;
 }
 
 function NavIconLabel({ Icon, label }) {

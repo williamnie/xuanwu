@@ -158,6 +158,88 @@
   padding-bottom: 24px;
 }
 
+.settings-language-card {
+  align-items: center;
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-language-copy {
+  display: grid;
+  gap: 7px;
+}
+
+.settings-language-copy h2,
+.settings-language-copy p {
+  margin: 0;
+}
+
+.settings-language-copy p {
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-width: 720px;
+}
+
+.settings-language-copy > span {
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.settings-language-controls {
+  align-items: stretch;
+  display: flex;
+  gap: 8px;
+}
+
+.settings-language-options {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+}
+
+.settings-language-options button,
+.settings-version-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  display: grid;
+  gap: 3px;
+  padding: 11px 14px;
+  text-align: left;
+}
+
+.settings-language-options button {
+  cursor: pointer;
+}
+
+.settings-language-options button span,
+.settings-version-card span {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.settings-language-options button.active {
+  background: var(--primary-glow);
+  border-color: var(--primary);
+}
+
+.settings-language-options button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.settings-version-card {
+  min-width: 148px;
+}
+
+.settings-version-card strong {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
 .settings-advanced-danger-zone {
   align-items: center;
   display: flex;
@@ -184,6 +266,26 @@
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .settings-language-card {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-language-controls {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 560px) {
+  .settings-language-controls {
+    display: grid;
+  }
+
+  .settings-language-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 .remote-token-panel {
