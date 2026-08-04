@@ -7,6 +7,7 @@ import {
   shouldKeepPromptEditorCaretVisible,
 } from './promptEditorScroll';
 import { enqueueLocalPromptValue, reconcilePromptEditorValue } from './promptEditorValueSync';
+import { handlePromptEditorImageTransfer } from './promptEditorImageTransfer';
 import {
   detectPromptSuggestionContext,
   filterPromptSuggestionItems,
@@ -19,6 +20,10 @@ import {
 
 export function usePromptEditor(value, onChange, placeholder, uploadFiles, submitKeyRef, suggestionState, keepCaretVisible = false) {
   const pendingEmittedValuesRef = useRef([]);
+  const uploadFilesRef = useRef(uploadFiles);
+  useEffect(() => {
+    uploadFilesRef.current = uploadFiles;
+  }, [uploadFiles]);
   const editor = useEditor({
     extensions: getPromptEditorExtensions(placeholder),
     content: '',
@@ -31,8 +36,8 @@ export function usePromptEditor(value, onChange, placeholder, uploadFiles, submi
         suggestionState,
         keepCaretVisible,
       ),
-      handlePaste: (_view, event) => handleImageFiles(event.clipboardData?.files, uploadFiles),
-      handleDrop: (_view, event) => handleImageFiles(event.dataTransfer?.files, uploadFiles),
+      handlePaste: (_view, event) => handlePromptEditorImageTransfer(event.clipboardData, uploadFilesRef.current),
+      handleDrop: (_view, event) => handlePromptEditorImageTransfer(event.dataTransfer, uploadFilesRef.current),
       attributes: { 'aria-label': placeholder || 'Markdown editor' },
     },
     onUpdate: ({ editor: current }) => {
@@ -121,11 +126,4 @@ function setPromptSuggestionIndex(suggestionState, delta, count) {
     ...current,
     activeIndex: nextPromptSuggestionIndex(current.activeIndex, delta, count),
   }));
-}
-
-function handleImageFiles(files, uploadFiles) {
-  const images = Array.from(files || []).filter(file => file.type.startsWith('image/'));
-  if (!images.length) return false;
-  uploadFiles(images);
-  return true;
 }
