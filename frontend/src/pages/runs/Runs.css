@@ -12,6 +12,30 @@
   margin-bottom: 12px;
 }
 
+.runs-new-session-button,
+[data-theme="dark"] .runs-new-session-button {
+  background: var(--primary-gradient);
+  border: 1px solid color-mix(in srgb, var(--primary) 72%, var(--primary-ink));
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--primary-ink);
+  font-weight: 700;
+}
+
+.runs-new-session-button .sidebar-shortcut-item-icon,
+[data-theme="dark"] .runs-new-session-button .sidebar-shortcut-item-icon {
+  color: currentColor;
+}
+
+.runs-new-session-button:hover,
+[data-theme="dark"] .runs-new-session-button:hover {
+  background: var(--primary-gradient);
+  border-color: color-mix(in srgb, var(--primary) 58%, var(--primary-ink));
+  box-shadow: 0 9px 22px color-mix(in srgb, var(--primary) 24%, transparent);
+  color: var(--primary-ink);
+  filter: brightness(1.035);
+  transform: translateY(-1px);
+}
+
 .runs-sidebar-heading {
   align-items: center;
   display: flex;

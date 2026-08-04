@@ -35,7 +35,7 @@ export default function RunSidebar({
   return createPortal((
     <div className="sessions-app-sidebar-panel runs-app-sidebar-panel">
       <div className="sidebar-shortcut-items">
-        <button className="sidebar-shortcut-item" onClick={onNewProviderSession} type="button">
+        <button className="sidebar-shortcut-item runs-new-session-button" onClick={onNewProviderSession} type="button">
           <span className="sidebar-shortcut-item-icon"><MessageSquarePlus size={16} /></span>
           <span>新建 provider session</span>
         </button>
