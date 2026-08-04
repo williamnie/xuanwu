@@ -32,7 +32,7 @@ class BlockingStreamingProvider implements ExecutorProvider {
 }
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-realtime-events-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-realtime-events-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

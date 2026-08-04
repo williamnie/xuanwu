@@ -17,7 +17,7 @@ const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-actions-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-actions-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

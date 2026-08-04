@@ -56,7 +56,7 @@ route 只调用同一 service，不双写。迁移回滚使用 P10.02 的 fresh 
 ## Delete gate
 
 ```bash
-codex-issue-runner maintenance attention audit \
+xuanwu maintenance attention audit \
   --db /tmp/xw-p11-03/runner-copy.db \
   --report /tmp/xw-p11-03/attention-audit.json --json
 ```
@@ -77,11 +77,11 @@ bun test src/domain/attention/contracts.test.ts src/domain/attention/consolidati
   src/http/piActionProposalsApi.test.ts src/http/piActionsApi.test.ts \
   src/http/piApprovalRequestsApi.test.ts src/cli/maintenance.test.ts
 
-codex-issue-runner maintenance db migration-forward --db <copy> --backup <pre-forward> \
+xuanwu maintenance db migration-forward --db <copy> --backup <pre-forward> \
   --report <forward.json> --actor release-operator --actor-kind user --audit-ref issue:738 \
   --reason 'P11.03 copy rehearsal' --apply --confirm-backup-tested --confirm-no-active-writers --json
-codex-issue-runner maintenance attention audit --db <copy> --report <attention-audit.json> --json
-codex-issue-runner maintenance db migration-rollback --db <copy> --backup <pre-forward> \
+xuanwu maintenance attention audit --db <copy> --report <attention-audit.json> --json
+xuanwu maintenance db migration-rollback --db <copy> --backup <pre-forward> \
   --report <rollback.json> --actor release-operator --actor-kind user --audit-ref issue:738 \
   --reason 'P11.03 rollback rehearsal' --apply --confirm-backup-tested --confirm-no-active-writers --json
 ```

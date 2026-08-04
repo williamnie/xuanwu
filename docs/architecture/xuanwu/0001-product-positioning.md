@@ -121,7 +121,7 @@ flowchart LR
 - 以多 channel 覆盖面、agent 数量、模型数量、插件市场或云端协作为核心卖点。
 - 取代 Git、CI、IDE、issue tracker、Coding Agent 或 provider runtime。
 - 为每种 connector、provider 或业务来源复制一套 Issue/Work、Session/Run、Approval 或 Automation 状态机。
-- 在本 ADR 中立即重命名 CLI/API/DB 标识、迁移 schema 或删除旧能力；这些变化必须由独立迁移 issue 完成。
+- 以品牌调整为由复制 API/DB authority 或绕过独立迁移门禁。
 
 邮件、IM、浏览器、MCP、CLI 等能力只有在它们能捕获工程目标、补充工程上下文、执行受控工程动作或交付工程结果时才进入产品范围。
 
@@ -131,7 +131,7 @@ flowchart LR
 
 - **产品定位**：本 ADR。
 - **运行状态**：在对应迁移开始前，现有 SQLite 数据、Bun API 和 Runner 状态机仍是唯一运行时 source of truth。
-- **兼容名称**：`codex-issue-runner`、Issue、Session 和 `pi_*` 标识在迁移完成前保持兼容；用户可见命名统一不等于立即修改持久化标识。
+- **运行时标识**：CLI、Skill、环境变量、服务和默认数据目录使用 Xuanwu；Issue、Session 与 `pi_*` 仍是领域和持久化标识。
 
 本 ADR 不引入双写、双读或数据迁移。目标术语不能被实现方当作已经存在的新表或新 API。
 

@@ -230,7 +230,7 @@ describe("provider runtime approval request sync", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-provider-approval-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-provider-approval-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

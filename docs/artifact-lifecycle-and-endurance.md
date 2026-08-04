@@ -19,8 +19,8 @@
 Archive root 必须在 live Application Support 目录之外。Apply 先检查磁盘水位（默认保留 2 GiB；跨文件系统还要求容纳全部候选），所有 object/report/index 都先写 `.partial-*`、校验 SHA-256、原子 rename，再移除 source。超过 1 小时的孤儿 partial 会进入 report，并只在 apply 时清理。
 
 ```bash
-APP="$HOME/Library/Application Support/codex-issue-runner-bun-live"
-ARCHIVE="$HOME/Library/Application Support/codex-issue-runner-bun-archive"
+APP="$HOME/Library/Application Support/xuanwu-bun-live"
+ARCHIVE="$HOME/Library/Application Support/xuanwu-bun-archive"
 RUN="$(date -u +%Y%m%dT%H%M%SZ)"
 
 # 1. 先 report，不改 live

@@ -55,7 +55,7 @@ describe("PI source policies API", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-source-policies-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-source-policies-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

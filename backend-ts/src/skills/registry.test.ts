@@ -17,27 +17,27 @@ afterEach(async () => {
 describe("PI skill registry", () => {
   test("reads skill metadata from SKILL.md front matter", async () => {
     const root = await fixtureRoot();
-    const skillPath = await writeSkill(root, "codex-issue-runner", {
+    const skillPath = await writeSkill(root, "xuanwu", {
       description: "Use when working on runner issues, verification, and commits.",
-      name: "codex-issue-runner"
+      name: "xuanwu"
     });
 
     const registry = readSkillRegistry({ roots: [{ label: "fixture", path: join(root, "skills") }] });
     const skills = listSkillRegistry({ roots: [{ label: "fixture", path: join(root, "skills") }] });
-    const skill = getSkillMetadata("codex-issue-runner", { roots: [{ label: "fixture", path: join(root, "skills") }] });
+    const skill = getSkillMetadata("xuanwu", { roots: [{ label: "fixture", path: join(root, "skills") }] });
 
     expect(registry.diagnostics).toEqual([]);
     expect(skills).toHaveLength(1);
     expect(skill).toMatchObject({
       allowed_roles: expect.arrayContaining(["pi", "executor"]),
       description: "Use when working on runner issues, verification, and commits.",
-      id: "codex-issue-runner",
+      id: "xuanwu",
       instruction_bytes: expect.any(Number),
       instruction_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
       instructions: expect.stringContaining("# Skill body"),
-      name: "codex-issue-runner",
+      name: "xuanwu",
       risk_level: "medium",
-      source_path: "fixture:codex-issue-runner/SKILL.md",
+      source_path: "fixture:xuanwu/SKILL.md",
       trigger_rules: expect.stringContaining("runner issues")
     });
     expect(skill?.version).toMatch(/^sha256:/);
@@ -117,9 +117,9 @@ describe("PI skill registry", () => {
 
   test("recommends skill intents from issue text", async () => {
     const root = await fixtureRoot();
-    await writeSkill(root, "codex-issue-runner", {
+    await writeSkill(root, "xuanwu", {
       description: "Use when working on runner issues, PI automation, verification, and commits.",
-      name: "codex-issue-runner"
+      name: "xuanwu"
     });
     await writeSkill(root, "browser", {
       description: "Use when browser UI inspection is required.",
@@ -131,7 +131,7 @@ describe("PI skill registry", () => {
       title: "PI OpenClaw runner issue"
     }, { roots: [{ path: join(root, "skills") }] });
 
-    expect(recommendations.map((item) => item.id)).toContain("codex-issue-runner");
+    expect(recommendations.map((item) => item.id)).toContain("xuanwu");
     expect(recommendations[0]).toMatchObject({ reason: expect.stringContaining("matched") });
   });
 
@@ -166,12 +166,12 @@ describe("PI skill registry", () => {
   });
 
   test("default registry includes repo-local skills", () => {
-    const skill = getSkillMetadata("codex-issue-runner");
+    const skill = getSkillMetadata("xuanwu");
     const executable = getSkillMetadata("pi-domain-proposal");
 
     expect(skill).toMatchObject({
-      id: "codex-issue-runner",
-      source_path: "repo:skills/codex-issue-runner/SKILL.md"
+      id: "xuanwu",
+      source_path: "repo:skills/xuanwu/SKILL.md"
     });
     expect(executable).toMatchObject({
       execution: {
@@ -203,7 +203,7 @@ describe("PI skill registry", () => {
 });
 
 async function fixtureRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-skill-registry-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-skill-registry-"));
   tempRoots.push(root);
   return root;
 }

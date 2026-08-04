@@ -78,15 +78,15 @@ test('PI Assistant chat uses the default PI agent without exposing an agent sele
 test('PI Assistant chat can infer project from natural @project mention text', async () => {
   const module = await import('./piChatProjectContext.js');
   const projects = [
-    { id: 'codex-issue-runner', name: 'codex-issue-runner' },
+    { id: 'xuanwu', name: 'xuanwu' },
     { id: 'movo-web', name: 'movo-web' },
   ];
-  assert.equal(module.projectFromPrompt('@codex-issue-runner 创建 issue', projects)?.id, 'codex-issue-runner');
+  assert.equal(module.projectFromPrompt('@xuanwu 创建 issue', projects)?.id, 'xuanwu');
   assert.equal(module.projectFromPrompt('@project:movo-web 做 smoke', projects)?.id, 'movo-web');
-  assert.match(module.promptWithProjectContext('创建 issue', projects[0]), /目标项目：@project:codex-issue-runner/);
+  assert.match(module.promptWithProjectContext('创建 issue', projects[0]), /目标项目：@project:xuanwu/);
   assert.deepEqual(module.piChatMessageWithProjectContext('创建 issue', projects[0]), {
-    prompt: '目标项目：@project:codex-issue-runner codex-issue-runner\n项目路径：未记录\n\n创建 issue',
-    target_project_id: 'codex-issue-runner',
+    prompt: '目标项目：@project:xuanwu xuanwu\n项目路径：未记录\n\n创建 issue',
+    target_project_id: 'xuanwu',
     target_project_source: 'request_project',
   });
 });

@@ -94,7 +94,7 @@ async function callBrowser(db: RunnerDatabase, conversationID: string, env: Reco
 }
 
 async function openFixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-browser-tools-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-browser-tools-"));
   tempRoots.push(root);
   return await openDatabase({ stateDir: join(root, "state") });
 }

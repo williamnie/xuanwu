@@ -17,7 +17,7 @@ test.before(() => {
   };
   globalThis.localStorage = {
     getItem(key) {
-      return key === 'codex-runner-auth-token' ? 'test-token' : '';
+      return key === 'xuanwu-auth-token' ? 'test-token' : '';
     },
   };
   globalThis.window = {

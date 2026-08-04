@@ -82,7 +82,7 @@ describe("Bun system status endpoints", () => {
       expect(body.service.runtime).toBe("bun");
       expect(body.service.version).not.toBe("0.0.0-dev");
       expect(body.service.build).toMatchObject({
-        artifact: "codex-issue-runner",
+        artifact: "xuanwu",
         bun_version: Bun.version,
         stamp: expect.any(String),
         version: body.service.version
@@ -319,7 +319,7 @@ describe("Bun system status endpoints", () => {
 
 
   test("reports configured Claude SDK metadata without leaking env secrets", async () => {
-    const binDir = await tempPath("codex-runner-bun-claude-bin-");
+    const binDir = await tempPath("xuanwu-bun-claude-bin-");
     await writeFakeExecutable(binDir, "claude", "claude 2.1.114 (Claude Code)");
     const secret = "anthropic-status-secret";
     const { config, database } = await openFixtureRuntime({
@@ -364,7 +364,7 @@ describe("Bun system status endpoints", () => {
   });
 
   test("reports an Anthropic platform OAuth profile without exposing its credential contents", async () => {
-    const profileRoot = await tempPath("codex-runner-anthropic-status-");
+    const profileRoot = await tempPath("xuanwu-anthropic-status-");
     await mkdir(join(profileRoot, "configs"), { recursive: true });
     await mkdir(join(profileRoot, "credentials"), { recursive: true });
     await writeFile(join(profileRoot, "configs", "runner.json"), JSON.stringify({
@@ -408,7 +408,7 @@ describe("Bun system status endpoints", () => {
   });
 
   test("reports local Claude CLI login as an explicit fallback auth source", async () => {
-    const binDir = await tempPath("codex-runner-local-claude-bin-");
+    const binDir = await tempPath("xuanwu-local-claude-bin-");
     await writeFakeExecutable(binDir, "claude", "claude 2.1.170", true);
     const { config, database } = await openFixtureRuntime({
       claudeAuthMode: "local-cli",
@@ -587,7 +587,7 @@ async function openFixtureRuntime(options: {
   config: ReturnType<typeof buildConfig>;
   database: RunnerDatabase;
 }> {
-  const root = await tempPath("codex-runner-bun-status-");
+  const root = await tempPath("xuanwu-bun-status-");
   const stateDir = join(root, "state");
   const config = buildConfig({
     authToken: options.secret,

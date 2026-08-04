@@ -8,7 +8,7 @@ import { listProjectSessionProgress, observeSessionProgress } from "./sessionObs
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-session-observer-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-session-observer-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -29,7 +29,7 @@ export function redactRuntimeText(text) {
   return String(text || '')
     .replace(AUTH_HEADER_PATTERN, 'Authorization: [redacted]')
     .replace(BEARER_PATTERN, 'Bearer [redacted]')
-    .replace(/.*(?:auth_token|auth-token|codex_runner_auth_token).*$/gim, '[redacted sensitive log line]')
+    .replace(/.*(?:auth_token|auth-token|xuanwu_auth_token).*$/gim, '[redacted sensitive log line]')
     .replace(SECRET_ASSIGNMENT_PATTERN, '$1[redacted]')
     .replace(ABSOLUTE_PATH_PATTERN, '[redacted-path]');
 }

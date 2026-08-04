@@ -4,21 +4,21 @@ import { buildPiChatProjectSuggestions, buildPiChatReferenceDetails } from './pi
 
 test('PI chat project suggestions insert natural @project tokens and attach project reference', () => {
   const suggestions = buildPiChatProjectSuggestions([
-    { id: 'codex-issue-runner', name: 'codex-issue-runner', cwd: '/repo/runner' },
+    { id: 'xuanwu', name: 'xuanwu', cwd: '/repo/runner' },
   ]);
-  assert.equal(suggestions[0].label, '@codex-issue-runner');
-  assert.equal(suggestions[0].insertText, '@codex-issue-runner');
+  assert.equal(suggestions[0].label, '@xuanwu');
+  assert.equal(suggestions[0].insertText, '@xuanwu');
   assert.deepEqual(suggestions[0].reference, {
-    type: 'project', id: 'codex-issue-runner', label: 'codex-issue-runner', metadata: { cwd: '/repo/runner' },
+    type: 'project', id: 'xuanwu', label: 'xuanwu', metadata: { cwd: '/repo/runner' },
   });
 });
 
 test('PI chat project reference details mark selected project ready', () => {
   const details = buildPiChatReferenceDetails(
-    [{ type: 'project', id: 'codex-issue-runner', label: 'codex-issue-runner' }],
-    [{ id: 'codex-issue-runner', name: 'Runner', cwd: '/repo/runner' }],
+    [{ type: 'project', id: 'xuanwu', label: 'xuanwu' }],
+    [{ id: 'xuanwu', name: 'Runner', cwd: '/repo/runner' }],
   );
-  assert.equal(details[0].key, 'project:codex-issue-runner');
+  assert.equal(details[0].key, 'project:xuanwu');
   assert.equal(details[0].status, 'ready');
   assert.equal(details[0].message, '');
   assert.match(details[0].summary, /Runner/);

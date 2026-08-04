@@ -3,7 +3,7 @@ set -euo pipefail
 
 BACKEND_TS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT_DIR="$(cd "$BACKEND_TS_DIR/.." && pwd)"
-OUTFILE="${CODEX_RUNNER_BINARY:-$ROOT_DIR/dist/codex-issue-runner}"
+OUTFILE="${XUANWU_BINARY:-$ROOT_DIR/dist/xuanwu}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -17,7 +17,7 @@ is_darwin() {
 }
 
 resolve_codesign_identity() {
-  local configured="${CODEX_RUNNER_CODESIGN_IDENTITY:-auto}"
+  local configured="${XUANWU_CODESIGN_IDENTITY:-auto}"
   if [ "$configured" = "none" ] || [ "$configured" = "skip" ] || [ "$configured" = "0" ]; then
     return 0
   fi
@@ -36,10 +36,10 @@ sign_binary_if_possible() {
   local identity identifier
   identity="$(resolve_codesign_identity)"
   if [ -z "$identity" ]; then
-    echo "[bun-build] codesign: skipped (set CODEX_RUNNER_CODESIGN_IDENTITY to sign this binary)"
+    echo "[bun-build] codesign: skipped (set XUANWU_CODESIGN_IDENTITY to sign this binary)"
     return
   fi
-  identifier="${CODEX_RUNNER_CODESIGN_IDENTIFIER:-com.xiaobei.codex-issue-runner}"
+  identifier="${XUANWU_CODESIGN_IDENTIFIER:-com.xiaobei.xuanwu}"
   echo "[bun-build] codesign identity: $identity"
   echo "[bun-build] codesign identifier: $identifier"
   codesign --force --sign "$identity" --identifier "$identifier" --timestamp=none "$OUTFILE"
@@ -107,9 +107,9 @@ echo "[bun-build] outfile: $OUTFILE"
 
 (
   cd "$BACKEND_TS_DIR"
-  CODEX_RUNNER_BUILD_VERSION="$APP_VERSION" \
-  CODEX_RUNNER_BUILD_STAMP="$BUILD_STAMP" \
-    bun build ./src/main.ts --compile '--env=CODEX_RUNNER_BUILD_*' --outfile "$OUTFILE"
+  XUANWU_BUILD_VERSION="$APP_VERSION" \
+  XUANWU_BUILD_STAMP="$BUILD_STAMP" \
+    bun build ./src/main.ts --compile '--env=XUANWU_BUILD_*' --outfile "$OUTFILE"
 )
 
 stage_claude_sdk_executable

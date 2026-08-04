@@ -77,7 +77,7 @@ describe("Feishu IM connector contract", () => {
       FEISHU_DEFAULT_CHAT_ID: "oc_default",
       FEISHU_DEFAULT_USER_ID: "ou_default",
       FEISHU_ENCRYPT_KEY: "encrypt-secret-value",
-      FEISHU_PROJECT_MAPPINGS: "chat:oc_a=codex-runner,user:ou_1=ops-runner",
+      FEISHU_PROJECT_MAPPINGS: "chat:oc_a=xuanwu,user:ou_1=ops-runner",
       FEISHU_RECEIVE_MODE: "callback",
       FEISHU_VERIFICATION_TOKEN: "verify-secret-value"
     });
@@ -88,7 +88,7 @@ describe("Feishu IM connector contract", () => {
     expect(config.defaultChatId).toBe("oc_default");
     expect(config.defaultUserId).toBe("ou_default");
     expect(config.projectMappings).toEqual([
-      { chatId: "oc_a", projectId: "codex-runner" },
+      { chatId: "oc_a", projectId: "xuanwu" },
       { projectId: "ops-runner", userId: "ou_1" }
     ]);
     expect(config.receiveMode).toBe("callback");
@@ -116,7 +116,7 @@ describe("Feishu IM connector contract", () => {
     const config = buildFeishuConnectorConfig({
       FEISHU_APP_ID: "cli_app_id",
       FEISHU_APP_SECRET: "app-secret-value",
-      FEISHU_PROJECT_MAPPINGS: "chat:oc_group=codex-runner",
+      FEISHU_PROJECT_MAPPINGS: "chat:oc_group=xuanwu",
       FEISHU_VERIFICATION_TOKEN: "verify-secret-value"
     });
     const event = normalizeFeishuMessageEvent({

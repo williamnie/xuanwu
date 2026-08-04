@@ -123,7 +123,7 @@ async function callUrlFetch(db: RunnerDatabase, conversationID: string, input: R
 }
 
 async function openFixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-http-tools-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-http-tools-"));
   tempRoots.push(root);
   return await openDatabase({ stateDir: join(root, "state") });
 }

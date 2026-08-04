@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 
-const addr = process.env.CODEX_RUNNER_ADDR || '127.0.0.1:3008';
+const addr = process.env.XUANWU_ADDR || '127.0.0.1:3008';
 const base = addr.startsWith('http') ? addr : `http://${addr}`;
-const token = process.env.CODEX_RUNNER_AUTH_TOKEN || readToken();
-const projectId = process.env.COMPOSER_SMOKE_PROJECT_ID || 'codex-issue-runner';
+const token = process.env.XUANWU_AUTH_TOKEN || readToken();
+const projectId = process.env.COMPOSER_SMOKE_PROJECT_ID || 'xuanwu';
 
 function readToken() {
   try {

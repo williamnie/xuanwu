@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 const CONTRACT = "xw.agentic-activation.fixture.v1";
-const PROJECT_ID = "codex-issue-runner";
+const PROJECT_ID = "xuanwu";
 const SOURCE_MARKER = "agentic-activation:issue-777";
 const SCENARIOS = ["success", "retryable_failure", "needs_user"] as const;
 const DEFAULT_ARTIFACT_DIR = ".runner/artifacts/agentic-activation/issue-777";
@@ -381,7 +381,7 @@ async function collectBaseline(options: Options, client: Client): Promise<Json> 
       select
         (select count(*) from issue_supervisor_events) supervisor_events,
         (select coalesce(max(id),0) from issue_supervisor_events) supervisor_watermark,
-        (select count(*) from issue_supervisor_events where project_id='codex-issue-runner') supervisor_project_events,
+        (select count(*) from issue_supervisor_events where project_id='xuanwu') supervisor_project_events,
         (select count(*) from automation_definitions) automation_definitions,
         (select count(*) from automation_runs) automation_runs,
         (select count(*) from automation_run_events) automation_run_events,
@@ -411,9 +411,9 @@ async function collectBaseline(options: Options, client: Client): Promise<Json> 
         coalesce(nullif(p.default_mcp_policy_json,''),'{}') default_mcp_policy_json,
         case when s.project_id is null then 0 else 1 end managed
       from projects p left join project_pi_settings s on s.project_id=p.id
-      where p.id='codex-issue-runner'
+      where p.id='xuanwu'
     `).get();
-    if (!project) throw new Error("codex-issue-runner project baseline is missing");
+    if (!project) throw new Error("xuanwu project baseline is missing");
     const projection = db.query<Json, []>(`
       select count(*) count, coalesce(max(last_event_id),0) last_event_id,
         coalesce(max(updated_at),'') updated_at from event_projection_watermarks
@@ -666,7 +666,7 @@ function parseArgs(argv: string[]): Options {
   const scenario = values.scenario ?? "";
   if (scenario && !SCENARIOS.includes(scenario as Scenario)) throw new Error(`unknown scenario: ${scenario}`);
   return {
-    addr: values.addr || process.env.CODEX_RUNNER_ADDR || "127.0.0.1:3008",
+    addr: values.addr || process.env.XUANWU_ADDR || "127.0.0.1:3008",
     artifactDir,
     command,
     cycle: Number(values.cycle || "1"),
@@ -674,8 +674,8 @@ function parseArgs(argv: string[]): Options {
     manifest: resolve(values.manifest || join(artifactDir, "manifest.json")),
     scenario: scenario as Scenario | "",
     stateDir: resolve(values["state-dir"] || join(artifactDir, "fixture-state")),
-    token: process.env.CODEX_RUNNER_AUTH_TOKEN || "",
-    tokenFile: values["token-file"] || process.env.CODEX_RUNNER_AUTH_TOKEN_FILE || ""
+    token: process.env.XUANWU_AUTH_TOKEN || "",
+    tokenFile: values["token-file"] || process.env.XUANWU_AUTH_TOKEN_FILE || ""
   };
 }
 

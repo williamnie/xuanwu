@@ -192,7 +192,7 @@ function sidecars(path: string): Record<string, unknown> {
 
 function rollbackContract(dbPath: string, reportPath: string): Record<string, string> {
   return {
-    command: `codex-issue-runner maintenance db wal --operation rollback --db ${shellPlaceholder(dbPath)} --report ${shellPlaceholder(reportPath)} --apply --confirm-backup-tested --confirm-no-active-writers --actor <operator> --actor-kind user --audit-ref <approved-change-ref> --reason '<reason>'`,
+    command: `xuanwu maintenance db wal --operation rollback --db ${shellPlaceholder(dbPath)} --report ${shellPlaceholder(reportPath)} --apply --confirm-backup-tested --confirm-no-active-writers --actor <operator> --actor-kind user --audit-ref <approved-change-ref> --reason '<reason>'`,
     restore: "if integrity or row-count verification fails, keep Core stopped and restore the verified backup bundle into a fresh state directory"
   };
 }

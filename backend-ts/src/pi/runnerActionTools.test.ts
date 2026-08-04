@@ -1279,7 +1279,7 @@ describe("PI runner action tools", () => {
         name: "Reviewer Codex",
         skillIntents: "[\"code-review\"]"
       });
-      insertAgentProfile(fixture.db, { id: "reporter-codex", name: "Reporter Codex", skillIntents: "[\"codex-issue-runner\"]" });
+      insertAgentProfile(fixture.db, { id: "reporter-codex", name: "Reporter Codex", skillIntents: "[\"xuanwu\"]" });
       const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
       const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "needs_user", title: "Ready" });
 
@@ -1408,7 +1408,7 @@ function insertAgentProfile(
   );
 }
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-action-tools-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-action-tools-"));
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(
     `insert into projects (id, name, cwd, sort_order, created_at, updated_at)

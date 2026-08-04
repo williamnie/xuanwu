@@ -109,9 +109,9 @@ export function resolveSecretLocator(service: SecretService, ref: string, env: R
 }
 
 function configuredSecretBackend(): SecretBackendID {
-  const value = (Bun.env.CODEX_RUNNER_SECRET_BACKEND ?? "file").trim();
+  const value = (Bun.env.XUANWU_SECRET_BACKEND ?? "file").trim();
   if (value === "file" || value === "keychain") return value;
-  throw new SecretStoreError("secret_backend_failed", "CODEX_RUNNER_SECRET_BACKEND must be file or keychain");
+  throw new SecretStoreError("secret_backend_failed", "XUANWU_SECRET_BACKEND must be file or keychain");
 }
 
 function requiredAuditText(value: string, label: string): string {

@@ -309,7 +309,7 @@ function eventMarkers(type: string, payload: unknown, text: string): string[] {
   if (clean(record.type) === "text" && clean(record.text) !== "") markers.push("agent_message");
   if (/test|vitest|verification/i.test(text)) markers.push("verification");
   if (/\bgit\s+commit\b|\bcommitted\b/i.test(text)) markers.push("commit");
-  if (/codex-issue-runner\s+issue\s+update|issue update --id/i.test(text)) markers.push("issue_update");
+  if (/xuanwu\s+issue\s+update|issue update --id/i.test(text)) markers.push("issue_update");
   if (type === "issue.status_changed") markers.push("issue_status_update");
   return markers;
 }

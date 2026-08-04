@@ -191,7 +191,7 @@ async function receiverFixture(): Promise<{
   factory: FeishuWsFactory & { starts: number };
   messages: { emit(event: unknown): Promise<unknown> };
 }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-ws-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-ws-"));
   tempRoots.push(root);
   const database = await openDatabase({ stateDir: join(root, "state") });
   const messages = { emit: async (_event: unknown) => undefined as unknown };

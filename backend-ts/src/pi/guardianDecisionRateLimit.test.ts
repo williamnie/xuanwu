@@ -199,7 +199,7 @@ describe("PI Guardian decision orchestrator rate limit and backpressure", () => 
 
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-guardian-rate-limit-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-guardian-rate-limit-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -1,6 +1,6 @@
 # Commercial licensing
 
-`codex-issue-runner` is distributed under the [PolyForm Noncommercial License 1.0.0](LICENSE) for personal, research, educational, and other noncommercial use.
+`xuanwu` is distributed under the [PolyForm Noncommercial License 1.0.0](LICENSE) for personal, research, educational, and other noncommercial use.
 
 Commercial use is **not** granted by the public repository license. In particular, a separate commercial license is required before using, deploying, embedding, reselling, offering hosted access to, or providing paid support for this software as part of a commercial product or service.
 

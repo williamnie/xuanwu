@@ -95,7 +95,7 @@ async function main(): Promise<void> {
     allowOnly(flags, ["addr", "cycle", "duration-seconds", "interval-ms", "output", "phase"]);
     const output = resolve(required(flags, "output"));
     const captured = await captureRunnerMemory({
-      addr: optional(flags, "addr") ?? Bun.env.CODEX_RUNNER_ADDR ?? "127.0.0.1:3008",
+      addr: optional(flags, "addr") ?? Bun.env.XUANWU_ADDR ?? "127.0.0.1:3008",
       cycle: optionalInteger(flags, "cycle"),
       durationSeconds: optionalInteger(flags, "duration-seconds") ?? 0,
       intervalMs: optionalInteger(flags, "interval-ms") ?? 1_000,
@@ -131,7 +131,7 @@ async function main(): Promise<void> {
     const output = resolve(required(flags, "output"));
     const existing = await readEnduranceSamples(output);
     const sample = await captureEnduranceSample({
-      addr: optional(flags, "addr") ?? Bun.env.CODEX_RUNNER_ADDR ?? "127.0.0.1:3008",
+      addr: optional(flags, "addr") ?? Bun.env.XUANWU_ADDR ?? "127.0.0.1:3008",
       dbPath: resolve(required(flags, "db")),
       operation,
       root: resolve(required(flags, "root"))
@@ -293,7 +293,7 @@ async function readSamples(path: string): Promise<RunnerMemoryCapacitySample[]> 
 }
 
 function authHeaders(): Record<string, string> {
-  const token = Bun.env.CODEX_RUNNER_AUTH_TOKEN?.trim() ?? "";
+  const token = Bun.env.XUANWU_AUTH_TOKEN?.trim() ?? "";
   return token === "" ? {} : { authorization: `Bearer ${token}` };
 }
 

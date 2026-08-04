@@ -6,7 +6,7 @@
 > 日期：2026-07-09
 > Issue：#617
 > 范围：只读调研与建议；不改 public schema、runtime 状态机、provider adapter 或根配置。
-> 结论摘要：**OpenConnector 不等同于 codex-issue-runner 的 inbox**。OpenConnector 更像外部 SaaS 账号授权、Action catalog、MCP/HTTP/SDK/CLI 执行网关；当前/规划中的 PI Assistant inbox 是“外部事件 → 上下文包 → LLM intake → 待处理事项 → proposal/approval”的工作流入口。两者互补：OpenConnector 可以成为 PI Tool Provider / Source Pull Provider，向 `external_events` 和 action proposal 执行层提供外部系统能力。
+> 结论摘要：**OpenConnector 不等同于 xuanwu 的 inbox**。OpenConnector 更像外部 SaaS 账号授权、Action catalog、MCP/HTTP/SDK/CLI 执行网关；当前/规划中的 PI Assistant inbox 是“外部事件 → 上下文包 → LLM intake → 待处理事项 → proposal/approval”的工作流入口。两者互补：OpenConnector 可以成为 PI Tool Provider / Source Pull Provider，向 `external_events` 和 action proposal 执行层提供外部系统能力。
 
 ## 1. 调研材料
 
@@ -21,7 +21,7 @@
 - Cloudflare deployment：<https://github.com/oomol-lab/open-connector/blob/main/docs/cloudflare.md>
 - Quickstart：<https://github.com/oomol-lab/open-connector/blob/main/docs/quickstart.md>
 
-### codex-issue-runner 本仓库证据
+### xuanwu 本仓库证据
 
 - PI Runtime Roadmap：`docs/architecture/2026-07-06-pi-assistant-runtime-roadmap.md:1-50`、`:52-73`、`:243-270`、`:367-476`
 - Raw / context / intake / inbox schema：`backend-ts/src/db/schema/021_external_events.ts:21-51`、`backend-ts/src/db/schema/033_context_bundles.ts:5-24`、`backend-ts/src/db/schema/034_intake_runs.ts:5-60`
@@ -30,7 +30,7 @@
 - Feishu / IM intake：`docs/feishu-im-connector-contract.md:1-63`、`docs/feishu-im-local-smoke.md:1-81`、`backend-ts/src/http/feishuEventsApi.ts:49-121`、`backend-ts/src/integrations/feishuIngest.ts:44-70`、`:105-144`、`backend-ts/src/integrations/feishuIntakeBridge.ts:31-58`
 - API / UI / Activity：`backend-ts/src/http/piApi.ts:60-89`、`backend-ts/src/http/piAttentionInboxApi.ts:27-40`、`:86-128`、`:201-206`、`frontend/src/api/client.js:213-223`、`:280-323`、`frontend/src/pages/AttentionInbox.jsx:28-49`、`:101-168`、`frontend/src/pages/ActivityTimelinePanel.jsx:34-40`、`:74-113`
 - Tool Provider / Connector 基础：`backend-ts/src/pi/toolProviderEnvelope.ts:1-42`、`backend-ts/src/pi/cliConnectorManifest.ts:24-28`、`:77-95`、`:126-149`、`backend-ts/src/pi/cliConnectorProvider.ts:59-69`、`:182-226`、`backend-ts/src/pi/cliToolRunner.ts:62-82`、`:165-180`、`backend-ts/src/pi/mcpToolProvider.ts:27-64`、`backend-ts/src/pi/httpToolProvider.ts:3-31`、`backend-ts/src/pi/cliRawEventSync.ts:24-37`、`:45-70`
-- 已有 issue 线索：本地 issue #616 已完成，主题是“调研 codex-issue-runner 的 inbox 能力与对接可行性”；#617 是在 #616 内部 inbox 调研基础上补 OpenConnector 对比。
+- 已有 issue 线索：本地 issue #616 已完成，主题是“调研 xuanwu 的 inbox 能力与对接可行性”；#617 是在 #616 内部 inbox 调研基础上补 OpenConnector 对比。
 
 ## 2. OpenConnector 概述
 
@@ -61,7 +61,7 @@ OpenConnector 的定位是 **AI Agent connector gateway / auth gateway**：用�
    - Cloudflare Workers：Workers + D1 + R2 + Static Assets。
    - OOMOL hosted runtime：hosted auth/runtime，保留同一 provider/action contract，后续可迁回 self-host。
 
-## 3. codex-issue-runner Inbox 现状
+## 3. xuanwu Inbox 现状
 
 ### 3.1 目标架构与产品心智
 
@@ -142,7 +142,7 @@ OpenConnector 的定位是 **AI Agent connector gateway / auth gateway**：用�
 
 不差不多，但有重叠层。
 
-| 维度 | OpenConnector | codex-issue-runner Inbox | 判断 |
+| 维度 | OpenConnector | xuanwu Inbox | 判断 |
 | --- | --- | --- | --- |
 | 核心定位 | 外部账号授权 + provider/action gateway | 事件/上下文/待处理事项 intake 工作流 | 不同 |
 | 核心对象 | provider、connection、action、runtime token、run log | external_event、context_bundle、intake_run、attention_inbox_item、proposal | 不同 |

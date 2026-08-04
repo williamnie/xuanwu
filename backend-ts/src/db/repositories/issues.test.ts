@@ -8,7 +8,7 @@ import { getIssue, listIssues } from "./issues.ts";
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-issues-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-issues-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

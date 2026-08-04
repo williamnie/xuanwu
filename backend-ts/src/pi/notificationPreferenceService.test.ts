@@ -108,7 +108,7 @@ describe("PI notification preference service", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-notification-service-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-notification-service-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

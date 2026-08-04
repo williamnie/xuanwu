@@ -127,7 +127,7 @@ function digestPayload() {
 }
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-digest-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-digest-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

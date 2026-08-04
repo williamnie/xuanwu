@@ -79,7 +79,7 @@ node --test scripts/install-launchd.test.mjs
 
 cd backend-ts
 bun run build:binary
-../dist/codex-issue-runner --version
+../dist/xuanwu --version
 ```
 
 Fixtures 必须至少覆盖：空资源、正常 agents/prompts/skills/extensions、未授权 skill、坏 skill、坏 extension、PI package asset、plugin package、reload 后新增资源，以及 extension 动态越界路径被拒绝。

@@ -14,7 +14,7 @@ OpenClaw 可以作为外层多渠道 gateway；它的 plugin 调用本适配器�
 | 需要 | adapter 行为 | 唯一 source of truth |
 | --- | --- | --- |
 | Work create | `build/signOpenClawWorkCreate` 生成 P09.03 的已签名 `POST /api/integrations/webhook/events` | `issues` / `issue_events`，以及 `external_events` / `external_links` audit |
-| Work query | gateway 使用既有 `GET /api/works/:id`，或 `codex-issue-runner work status/result` | Work HTTP projection |
+| Work query | gateway 使用既有 `GET /api/works/:id`，或 `xuanwu work status/result` | Work HTTP projection |
 | approval callback | `buildOpenClawApprovalCallback` 只生成已有的 bearer-authenticated `POST /api/pi/approval-requests/:id/resolve` | `pi_approval_requests`、resolver audit、provider acknowledgement |
 | Handoff response | `GET /api/handoffs/:id` 后用 `buildOpenClawHandoffResponse` 返回原会话 | derived Handoff、Evidence、Git/delivery audit |
 

@@ -95,7 +95,7 @@ describe("signed Work webhook adapter", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-webhook-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-webhook-"));
   roots.push(root);
   return await openDatabase({ dbPath: join(root, "runner.sqlite") });
 }

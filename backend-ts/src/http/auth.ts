@@ -57,7 +57,7 @@ function requestCookieToken(request: Request): string {
   const cookie = request.headers.get("cookie") ?? "";
   for (const part of cookie.split(";")) {
     const [rawName, ...rawValue] = part.split("=");
-    if (clean(rawName) !== "codex_runner_token") continue;
+    if (clean(rawName) !== "xuanwu_token") continue;
     return decodeCookieToken(rawValue.join("="));
   }
   return "";

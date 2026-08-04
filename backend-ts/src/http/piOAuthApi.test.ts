@@ -10,7 +10,7 @@ const tempRoots: string[] = [];
 const originalCodexHome = process.env.CODEX_HOME;
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-oauth-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-oauth-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

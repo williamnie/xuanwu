@@ -9,7 +9,7 @@ import {
   ensureProjectAutomaticTakeover
 } from "../domain/project/automaticTakeover.ts";
 
-const STATE_PATH_ENV = "CODEX_RUNNER_CODEX_STATE";
+const STATE_PATH_ENV = "XUANWU_CODEX_STATE";
 const HASH_LENGTH = 8;
 
 type CodexState = {

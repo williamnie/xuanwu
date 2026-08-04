@@ -234,7 +234,7 @@ describe("issue queue Work dependency readiness", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-dependency-queue-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-dependency-queue-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -1,46 +1,46 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "${CODEX_RUNNER_MANAGED_EXECUTION:-}" = "1" ] ||
-  { [ -n "${PI_PACKAGE_DIR:-}" ] && [ -n "${CODEX_RUNNER_CODEX_SERVER_MODE:-}" ]; }; then
+if [ "${XUANWU_MANAGED_EXECUTION:-}" = "1" ] ||
+  { [ -n "${PI_PACKAGE_DIR:-}" ] && [ -n "${XUANWU_CODEX_SERVER_MODE:-}" ]; }; then
   echo "[deploy-guard] denied: live deployment cannot run from a Runner-managed provider process." >&2
   exit 78
 fi
 
-REPO="${CODEX_RUNNER_REPO:-williamnie/xuanwu}"
-VERSION="${CODEX_RUNNER_VERSION:-latest}"
-VERIFY_ATTESTATION="${CODEX_RUNNER_VERIFY_ATTESTATION:-auto}"
-ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
-CORE_ADDR="${CODEX_RUNNER_CORE_ADDR:-127.0.0.1:3009}"
-AGENTIC_ADDR="${CODEX_RUNNER_AGENTIC_ADDR:-127.0.0.1:3010}"
-LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
+REPO="${XUANWU_REPO:-williamnie/xuanwu}"
+VERSION="${XUANWU_VERSION:-latest}"
+VERIFY_ATTESTATION="${XUANWU_VERIFY_ATTESTATION:-auto}"
+ADDR="${XUANWU_ADDR:-0.0.0.0:3008}"
+CORE_ADDR="${XUANWU_CORE_ADDR:-127.0.0.1:3009}"
+AGENTIC_ADDR="${XUANWU_AGENTIC_ADDR:-127.0.0.1:3010}"
+LABEL="${XUANWU_LAUNCHD_LABEL:-com.xiaobei.xuanwu}"
 WEB_LABEL="${LABEL}.web"
 CORE_LABEL="${LABEL}.core"
 AGENTIC_LABEL="${LABEL}.agentic"
-SERVICE_NAME="${CODEX_RUNNER_SERVICE_NAME:-codex-issue-runner}"
-INSTALL_DIR="${CODEX_RUNNER_INSTALL_DIR:-$HOME/.local/bin}"
-STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$HOME/.local/state/codex-issue-runner}"
-LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$STATE_DIR/logs}"
-DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
-AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
-AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
-BIN_PATH="$INSTALL_DIR/codex-issue-runner"
+SERVICE_NAME="${XUANWU_SERVICE_NAME:-xuanwu}"
+INSTALL_DIR="${XUANWU_INSTALL_DIR:-$HOME/.local/bin}"
+STATE_DIR="${XUANWU_STATE_DIR:-$HOME/.local/state/xuanwu}"
+LOG_DIR="${XUANWU_LOG_DIR:-$STATE_DIR/logs}"
+DB_PATH="${XUANWU_DB:-${XUANWU_DEPLOY_DB:-$STATE_DIR/runner.db}}"
+AUTH_TOKEN_FILE="${XUANWU_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
+AUTH_TOKEN="${XUANWU_AUTH_TOKEN:-}"
+BIN_PATH="$INSTALL_DIR/xuanwu"
 CLAUDE_SDK_EXECUTABLE_PATH="$BIN_PATH.claude-agent-sdk"
-DAEMON_PATH="$INSTALL_DIR/codex-issue-runner-daemon"
-INSTALLER_PATH="$INSTALL_DIR/codex-issue-runner-install"
-UPDATER_PATH="$INSTALL_DIR/codex-issue-runner-update"
-PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
-CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-}"
-CODEX_SERVER_MODE="${CODEX_RUNNER_CODEX_SERVER_MODE:-cli}"
-CODEX_APP_CMD="${CODEX_RUNNER_CODEX_APP_CMD:-}"
-CLAUDE_MODE="${CODEX_RUNNER_CLAUDE_MODE:-sdk}"
-CLAUDE_AUTH_MODE="${CODEX_RUNNER_CLAUDE_AUTH_MODE:-}"
-CLAUDE_API_BASE_URL="${CODEX_RUNNER_CLAUDE_API_BASE_URL:-${ANTHROPIC_BASE_URL:-}}"
-CLAUDE_API_PATH="${CODEX_RUNNER_CLAUDE_API_PATH:-}"
-CLAUDE_API_KEY="${CODEX_RUNNER_CLAUDE_API_KEY:-${ANTHROPIC_API_KEY:-}}"
-CLAUDE_API_KEY_FILE="${CODEX_RUNNER_CLAUDE_API_KEY_FILE:-$STATE_DIR/claude_api_key}"
-CLAUDE_PLATFORM_CONFIG_DIR="${CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR:-${ANTHROPIC_CONFIG_DIR:-}}"
-CLAUDE_PLATFORM_PROFILE="${CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE:-${ANTHROPIC_PROFILE:-}}"
+DAEMON_PATH="$INSTALL_DIR/xuanwu-daemon"
+INSTALLER_PATH="$INSTALL_DIR/xuanwu-install"
+UPDATER_PATH="$INSTALL_DIR/xuanwu-update"
+PATH_VALUE="${XUANWU_PATH:-$PATH}"
+CODEX_CMD="${XUANWU_CODEX_CMD:-}"
+CODEX_SERVER_MODE="${XUANWU_CODEX_SERVER_MODE:-cli}"
+CODEX_APP_CMD="${XUANWU_CODEX_APP_CMD:-}"
+CLAUDE_MODE="${XUANWU_CLAUDE_MODE:-sdk}"
+CLAUDE_AUTH_MODE="${XUANWU_CLAUDE_AUTH_MODE:-}"
+CLAUDE_API_BASE_URL="${XUANWU_CLAUDE_API_BASE_URL:-${ANTHROPIC_BASE_URL:-}}"
+CLAUDE_API_PATH="${XUANWU_CLAUDE_API_PATH:-}"
+CLAUDE_API_KEY="${XUANWU_CLAUDE_API_KEY:-${ANTHROPIC_API_KEY:-}}"
+CLAUDE_API_KEY_FILE="${XUANWU_CLAUDE_API_KEY_FILE:-$STATE_DIR/claude_api_key}"
+CLAUDE_PLATFORM_CONFIG_DIR="${XUANWU_CLAUDE_PLATFORM_CONFIG_DIR:-${ANTHROPIC_CONFIG_DIR:-}}"
+CLAUDE_PLATFORM_PROFILE="${XUANWU_CLAUDE_PLATFORM_PROFILE:-${ANTHROPIC_PROFILE:-}}"
 if [ -z "$CLAUDE_AUTH_MODE" ]; then
   if [ "$CLAUDE_MODE" = "cli-fallback" ] && [ -z "$CLAUDE_API_KEY" ]; then
     CLAUDE_AUTH_MODE="local-cli"
@@ -53,34 +53,34 @@ RESOLVED_VERSION=""
 
 usage() {
   cat <<'HELP'
-Install and run Xuanwu from the codex-issue-runner compatibility release.
+Install and run Xuanwu.
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/williamnie/xuanwu/main/scripts/install-release.sh | bash
 
 Useful environment variables:
-  CODEX_RUNNER_VERSION=v0.1.0          Install a fixed release tag instead of latest
-  CODEX_RUNNER_ADDR=0.0.0.0:3008       Service listen address
-  CODEX_RUNNER_CORE_ADDR=127.0.0.1:3009 Internal Core listen address
-  CODEX_RUNNER_AGENTIC_ADDR=127.0.0.1:3010 Internal Agentic Worker listen address
-  CODEX_RUNNER_INSTALL_DIR=~/.local/bin Binary install directory
-  CODEX_RUNNER_STATE_DIR=~/.local/state/codex-issue-runner
-  CODEX_RUNNER_CODEX_CMD=/path/to/codex Codex CLI path
-  CODEX_RUNNER_CODEX_SERVER_MODE=cli|app Codex server backend
-  CODEX_RUNNER_CODEX_APP_CMD=/path/to/app/codex Codex App bundled server command
-  CODEX_RUNNER_CLAUDE_MODE=sdk|cli-fallback Claude provider mode
-  CODEX_RUNNER_CLAUDE_AUTH_MODE=environment|local-cli|platform-profile
-  CODEX_RUNNER_CLAUDE_API_BASE_URL=https://... Claude/Anthropic API base URL
-  CODEX_RUNNER_CLAUDE_API_PATH=/... Optional path appended to the API base URL
-  CODEX_RUNNER_CLAUDE_API_KEY=...     Claude API key (persisted to a mode-0600 state file)
-  CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR=... Anthropic profile config directory
-  CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE=... Anthropic profile name
-  CODEX_RUNNER_AUTH_TOKEN=...          Custom bearer token for remote access
-  CODEX_RUNNER_AUTH_TOKEN_FILE=...     Generated token file path
-  CODEX_RUNNER_VERIFY_ATTESTATION=auto|require|skip
+  XUANWU_VERSION=v0.1.0          Install a fixed release tag instead of latest
+  XUANWU_ADDR=0.0.0.0:3008       Service listen address
+  XUANWU_CORE_ADDR=127.0.0.1:3009 Internal Core listen address
+  XUANWU_AGENTIC_ADDR=127.0.0.1:3010 Internal Agentic Worker listen address
+  XUANWU_INSTALL_DIR=~/.local/bin Binary install directory
+  XUANWU_STATE_DIR=~/.local/state/xuanwu
+  XUANWU_CODEX_CMD=/path/to/codex Codex CLI path
+  XUANWU_CODEX_SERVER_MODE=cli|app Codex server backend
+  XUANWU_CODEX_APP_CMD=/path/to/app/codex Codex App bundled server command
+  XUANWU_CLAUDE_MODE=sdk|cli-fallback Claude provider mode
+  XUANWU_CLAUDE_AUTH_MODE=environment|local-cli|platform-profile
+  XUANWU_CLAUDE_API_BASE_URL=https://... Claude/Anthropic API base URL
+  XUANWU_CLAUDE_API_PATH=/... Optional path appended to the API base URL
+  XUANWU_CLAUDE_API_KEY=...     Claude API key (persisted to a mode-0600 state file)
+  XUANWU_CLAUDE_PLATFORM_CONFIG_DIR=... Anthropic profile config directory
+  XUANWU_CLAUDE_PLATFORM_PROFILE=... Anthropic profile name
+  XUANWU_AUTH_TOKEN=...          Custom bearer token for remote access
+  XUANWU_AUTH_TOKEN_FILE=...     Generated token file path
+  XUANWU_VERIFY_ATTESTATION=auto|require|skip
 
-After installation, use `codex-issue-runner-daemon status|doctor|restart|uninstall`
-and `codex-issue-runner-update check|upgrade|rollback`.
+After installation, use `xuanwu-daemon status|doctor|restart|uninstall`
+and `xuanwu-update check|upgrade|rollback`.
 `uninstall` keeps the state directory and database.
 HELP
 }
@@ -90,12 +90,12 @@ fail() { printf '[install] ERROR: %s\n' "$*" >&2; exit 1; }
 
 case "$CLAUDE_AUTH_MODE" in
   environment) ;;
-  local-cli) [ "$CLAUDE_MODE" = "cli-fallback" ] || fail "CODEX_RUNNER_CLAUDE_AUTH_MODE=local-cli requires cli-fallback mode" ;;
-  platform-profile) [ "$CLAUDE_MODE" = "sdk" ] || fail "CODEX_RUNNER_CLAUDE_AUTH_MODE=platform-profile requires sdk mode" ;;
-  *) fail "CODEX_RUNNER_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile" ;;
+  local-cli) [ "$CLAUDE_MODE" = "cli-fallback" ] || fail "XUANWU_CLAUDE_AUTH_MODE=local-cli requires cli-fallback mode" ;;
+  platform-profile) [ "$CLAUDE_MODE" = "sdk" ] || fail "XUANWU_CLAUDE_AUTH_MODE=platform-profile requires sdk mode" ;;
+  *) fail "XUANWU_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile" ;;
 esac
 if [ -n "$CLAUDE_PLATFORM_PROFILE" ] && [[ ! "$CLAUDE_PLATFORM_PROFILE" =~ ^[A-Za-z0-9_.-]+$ || "$CLAUDE_PLATFORM_PROFILE" = "." || "$CLAUDE_PLATFORM_PROFILE" = ".." ]]; then
-  fail "CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE is invalid"
+  fail "XUANWU_CLAUDE_PLATFORM_PROFILE is invalid"
 fi
 
 audit() {
@@ -104,8 +104,8 @@ audit() {
   chmod 700 "$LOG_DIR" 2>/dev/null || true
   printf '%s action=install outcome=%s version=%s actor=%q actor_kind=%q audit_ref=%q reason=%q\n' \
     "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$outcome" "${RESOLVED_VERSION:-$VERSION}" \
-    "${CODEX_RUNNER_AUDIT_ACTOR:-${USER:-unknown}}" "${CODEX_RUNNER_AUDIT_ACTOR_KIND:-user}" \
-    "${CODEX_RUNNER_AUDIT_REF:-shell:install-release}" "${CODEX_RUNNER_AUDIT_REASON:-manual install}" >> "$AUDIT_LOG"
+    "${XUANWU_AUDIT_ACTOR:-${USER:-unknown}}" "${XUANWU_AUDIT_ACTOR_KIND:-user}" \
+    "${XUANWU_AUDIT_REF:-shell:install-release}" "${XUANWU_AUDIT_REASON:-manual install}" >> "$AUDIT_LOG"
   chmod 600 "$AUDIT_LOG" 2>/dev/null || true
 }
 
@@ -187,7 +187,7 @@ verify_attestation() {
   case "$VERIFY_ATTESTATION" in
     skip) return 0 ;;
     auto|require) ;;
-    *) fail "CODEX_RUNNER_VERIFY_ATTESTATION must be auto, require, or skip" ;;
+    *) fail "XUANWU_VERIFY_ATTESTATION must be auto, require, or skip" ;;
   esac
   if ! command -v gh >/dev/null 2>&1; then
     [ "$VERIFY_ATTESTATION" = "require" ] && fail "gh is required for release attestation verification"
@@ -213,17 +213,17 @@ resolve_codex_cmd() {
     return
   fi
   if ! command -v codex >/dev/null 2>&1; then
-    fail "codex command not found; set CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex"
+    fail "codex command not found; set XUANWU_CODEX_CMD=/absolute/path/to/codex"
   fi
   command -v codex
 }
 
 download_binary() {
   local os="$1" arch="$2" asset url tmp archive checksums metadata staged sdk_staged binary_version
-  asset="codex-issue-runner_${os}_${arch}.tar.gz"
+  asset="xuanwu_${os}_${arch}.tar.gz"
   url="$(release_asset_url "$asset")"
   tmp="$(mktemp -d)"
-  archive="$tmp/codex-issue-runner.tar.gz"
+  archive="$tmp/xuanwu.tar.gz"
   checksums="$tmp/checksums.txt"
   metadata="$tmp/release.json"
   log "downloading $url"
@@ -239,18 +239,18 @@ download_binary() {
   fi
   verify_attestation "$archive"
   LC_ALL=C tar -xzf "$archive" -C "$tmp"
-  [ -x "$tmp/codex-issue-runner" ] || fail "release asset does not contain executable binary"
-  [ -x "$tmp/codex-issue-runner.claude-agent-sdk" ] \
+  [ -x "$tmp/xuanwu" ] || fail "release asset does not contain executable binary"
+  [ -x "$tmp/xuanwu.claude-agent-sdk" ] \
     || fail "release asset does not contain Claude Agent SDK native executable"
-  binary_version="$("$tmp/codex-issue-runner" --version | awk 'NR == 1 { print $2 }')"
+  binary_version="$("$tmp/xuanwu" --version | awk 'NR == 1 { print $2 }')"
   [ "$binary_version" = "$RESOLVED_VERSION" ] \
     || fail "binary version $binary_version does not match release metadata $RESOLVED_VERSION"
   mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$LOG_DIR" "$(dirname "$AUTH_TOKEN_FILE")"
-  sdk_staged="$INSTALL_DIR/.codex-issue-runner.claude-agent-sdk.stage.$$"
-  install -m 0755 "$tmp/codex-issue-runner.claude-agent-sdk" "$sdk_staged"
+  sdk_staged="$INSTALL_DIR/.xuanwu.claude-agent-sdk.stage.$$"
+  install -m 0755 "$tmp/xuanwu.claude-agent-sdk" "$sdk_staged"
   mv -f "$sdk_staged" "$CLAUDE_SDK_EXECUTABLE_PATH"
-  staged="$INSTALL_DIR/.codex-issue-runner.stage.$$"
-  install -m 0755 "$tmp/codex-issue-runner" "$staged"
+  staged="$INSTALL_DIR/.xuanwu.stage.$$"
+  install -m 0755 "$tmp/xuanwu" "$staged"
   mv -f "$staged" "$BIN_PATH"
   if [ -f "$tmp/daemon.sh" ]; then
     install -m 0755 "$tmp/daemon.sh" "$DAEMON_PATH"
@@ -365,25 +365,25 @@ PLIST
     <string>$(xml_escape "$PATH_VALUE")</string>
     <key>PI_PACKAGE_DIR</key>
     <string>$(xml_escape "$STATE_DIR/pi-coding-agent")</string>
-    <key>CODEX_RUNNER_CODEX_SERVER_MODE</key>
+    <key>XUANWU_CODEX_SERVER_MODE</key>
     <string>$(xml_escape "$CODEX_SERVER_MODE")</string>
-    <key>CODEX_RUNNER_CODEX_APP_CMD</key>
+    <key>XUANWU_CODEX_APP_CMD</key>
     <string>$(xml_escape "$CODEX_APP_CMD")</string>
-    <key>CODEX_RUNNER_CLAUDE_MODE</key>
+    <key>XUANWU_CLAUDE_MODE</key>
     <string>$(xml_escape "$CLAUDE_MODE")</string>
-    <key>CODEX_RUNNER_CLAUDE_AUTH_MODE</key>
+    <key>XUANWU_CLAUDE_AUTH_MODE</key>
     <string>$(xml_escape "$CLAUDE_AUTH_MODE")</string>
-    <key>CODEX_RUNNER_CLAUDE_API_BASE_URL</key>
+    <key>XUANWU_CLAUDE_API_BASE_URL</key>
     <string>$(xml_escape "$CLAUDE_API_BASE_URL")</string>
-    <key>CODEX_RUNNER_CLAUDE_API_PATH</key>
+    <key>XUANWU_CLAUDE_API_PATH</key>
     <string>$(xml_escape "$CLAUDE_API_PATH")</string>
-    <key>CODEX_RUNNER_CLAUDE_API_KEY_FILE</key>
+    <key>XUANWU_CLAUDE_API_KEY_FILE</key>
     <string>$(xml_escape "$CLAUDE_API_KEY_FILE")</string>
-    <key>CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR</key>
+    <key>XUANWU_CLAUDE_PLATFORM_CONFIG_DIR</key>
     <string>$(xml_escape "$CLAUDE_PLATFORM_CONFIG_DIR")</string>
-    <key>CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE</key>
+    <key>XUANWU_CLAUDE_PLATFORM_PROFILE</key>
     <string>$(xml_escape "$CLAUDE_PLATFORM_PROFILE")</string>
-    <key>CODEX_RUNNER_MANAGED_EXECUTION</key>
+    <key>XUANWU_MANAGED_EXECUTION</key>
     <string>1</string>
   </dict>
   <key>RunAtLoad</key>
@@ -430,7 +430,7 @@ PLIST
     <string>$(xml_escape "$PATH_VALUE")</string>
     <key>PI_PACKAGE_DIR</key>
     <string>$(xml_escape "$STATE_DIR/pi-coding-agent")</string>
-    <key>CODEX_RUNNER_MANAGED_EXECUTION</key>
+    <key>XUANWU_MANAGED_EXECUTION</key>
     <string>1</string>
   </dict>
   <key>RunAtLoad</key>
@@ -528,16 +528,16 @@ WorkingDirectory=$STATE_DIR
 Environment=HOME=$HOME
 Environment=PATH=$PATH_VALUE
 Environment=PI_PACKAGE_DIR=$STATE_DIR/pi-coding-agent
-Environment="CODEX_RUNNER_CODEX_SERVER_MODE=$CODEX_SERVER_MODE"
-Environment="CODEX_RUNNER_CODEX_APP_CMD=$CODEX_APP_CMD"
-Environment="CODEX_RUNNER_CLAUDE_MODE=$CLAUDE_MODE"
-Environment="CODEX_RUNNER_CLAUDE_AUTH_MODE=$CLAUDE_AUTH_MODE"
-Environment="CODEX_RUNNER_CLAUDE_API_BASE_URL=$CLAUDE_API_BASE_URL"
-Environment="CODEX_RUNNER_CLAUDE_API_PATH=$CLAUDE_API_PATH"
-Environment="CODEX_RUNNER_CLAUDE_API_KEY_FILE=$CLAUDE_API_KEY_FILE"
-Environment="CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR=$CLAUDE_PLATFORM_CONFIG_DIR"
-Environment="CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE=$CLAUDE_PLATFORM_PROFILE"
-Environment=CODEX_RUNNER_MANAGED_EXECUTION=1
+Environment="XUANWU_CODEX_SERVER_MODE=$CODEX_SERVER_MODE"
+Environment="XUANWU_CODEX_APP_CMD=$CODEX_APP_CMD"
+Environment="XUANWU_CLAUDE_MODE=$CLAUDE_MODE"
+Environment="XUANWU_CLAUDE_AUTH_MODE=$CLAUDE_AUTH_MODE"
+Environment="XUANWU_CLAUDE_API_BASE_URL=$CLAUDE_API_BASE_URL"
+Environment="XUANWU_CLAUDE_API_PATH=$CLAUDE_API_PATH"
+Environment="XUANWU_CLAUDE_API_KEY_FILE=$CLAUDE_API_KEY_FILE"
+Environment="XUANWU_CLAUDE_PLATFORM_CONFIG_DIR=$CLAUDE_PLATFORM_CONFIG_DIR"
+Environment="XUANWU_CLAUDE_PLATFORM_PROFILE=$CLAUDE_PLATFORM_PROFILE"
+Environment=XUANWU_MANAGED_EXECUTION=1
 ExecStart=$BIN_PATH serve --role core --addr $CORE_ADDR --agentic-addr $AGENTIC_ADDR --state-dir $STATE_DIR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
 Restart=always
 RestartSec=2
@@ -558,7 +558,7 @@ WorkingDirectory=$STATE_DIR
 Environment=HOME=$HOME
 Environment=PATH=$PATH_VALUE
 Environment=PI_PACKAGE_DIR=$STATE_DIR/pi-coding-agent
-Environment=CODEX_RUNNER_MANAGED_EXECUTION=1
+Environment=XUANWU_MANAGED_EXECUTION=1
 ExecStart=$BIN_PATH serve --role agentic --addr $AGENTIC_ADDR --state-dir $STATE_DIR --db $DB_PATH$(auth_token_file_systemd_args)
 Restart=always
 RestartSec=2

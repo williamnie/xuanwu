@@ -22,10 +22,10 @@ const FLAGS: Record<string, WebConfigKey> = {
 
 export function loadWebGatewayConfig(args: string[], env: Env = Bun.env): WebGatewayConfig {
   const values: Record<WebConfigKey, string> = {
-    addr: clean(env.CODEX_RUNNER_ADDR) || DEFAULT_ADDR,
-    coreAddr: clean(env.CODEX_RUNNER_CORE_ADDR) || DEFAULT_CORE_ADDR,
-    proxyTimeoutMs: clean(env.CODEX_RUNNER_PROXY_TIMEOUT_MS) || String(DEFAULT_PROXY_TIMEOUT_MS),
-    webDir: clean(env.CODEX_RUNNER_WEB_DIR)
+    addr: clean(env.XUANWU_ADDR) || DEFAULT_ADDR,
+    coreAddr: clean(env.XUANWU_CORE_ADDR) || DEFAULT_CORE_ADDR,
+    proxyTimeoutMs: clean(env.XUANWU_PROXY_TIMEOUT_MS) || String(DEFAULT_PROXY_TIMEOUT_MS),
+    webDir: clean(env.XUANWU_WEB_DIR)
   };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";

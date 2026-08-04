@@ -465,7 +465,7 @@ describe("Supervisor Work/Run control tools", () => {
 });
 
 async function openFixture(): Promise<{ db: RunnerDatabase; project: Project }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-supervisor-controls-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-supervisor-controls-"));
   tempRoots.push(root);
   const cwd = join(root, "repo");
   await mkdir(cwd);

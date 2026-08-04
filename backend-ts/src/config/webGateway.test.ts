@@ -18,8 +18,8 @@ describe("Web Gateway config", () => {
       "--proxy-timeout-ms", "1500",
       "--web-dir", "/tmp/web"
     ], {
-      CODEX_RUNNER_ADDR: "127.0.0.1:4008",
-      CODEX_RUNNER_CORE_ADDR: "127.0.0.1:4009"
+      XUANWU_ADDR: "127.0.0.1:4008",
+      XUANWU_CORE_ADDR: "127.0.0.1:4009"
     })).toEqual({
       addr: "0.0.0.0:3008",
       coreAddr: "http://127.0.0.1:3909",

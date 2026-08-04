@@ -101,7 +101,7 @@ describe("PI memory tools", () => {
 
       const result = await writeCandidate.execute("tool-secret", {
         kind: "constraint",
-        content: "CODEX_RUNNER_AUTH_TOKEN=fixture-secret",
+        content: "XUANWU_AUTH_TOKEN=fixture-secret",
         confidence: "high",
         memory_key: "project.secret",
         user_authorized: true
@@ -235,7 +235,7 @@ describe("PI memory tools", () => {
 });
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-memory-tools-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-memory-tools-"));
   const db = await openDatabase({ stateDir: join(root, "state") });
   return { db, close: async () => { db.close(); await rm(root, { recursive: true, force: true }); } };
 }
@@ -278,7 +278,7 @@ function seedProjectPolicyFixture(db: RunnerDatabase): void {
     content: "Prefer runner-level housekeeping"
   });
   seedMemory(db, policyMemory("other-project-memory", "other", "Prefer broad refactors"));
-  seedMemory(db, policyMemory("sensitive-memory", "demo", "CODEX_RUNNER_AUTH_TOKEN=fixture-secret"));
+  seedMemory(db, policyMemory("sensitive-memory", "demo", "XUANWU_AUTH_TOKEN=fixture-secret"));
   seedMemory(db, {
     id: "stale-issue-status",
     scope: "project",

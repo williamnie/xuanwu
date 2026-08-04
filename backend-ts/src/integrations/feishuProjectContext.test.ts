@@ -11,7 +11,7 @@ import {
 } from "./feishuProjectContext.ts";
 
 const PROJECTS = [
-  { id: "codex-issue-runner", name: "Codex Issue Runner" },
+  { id: "xuanwu", name: "Xuanwu" },
   { id: "demo", name: "Demo Project" }
 ];
 const tempRoots: string[] = [];
@@ -26,14 +26,14 @@ afterEach(async () => {
 describe("Feishu PI project context resolver", () => {
   test("resolves a project from an explicit issue reference", () => {
     const result = resolveFeishuProjectContext({
-      issues: [{ id: 386, project_id: "codex-issue-runner" }],
+      issues: [{ id: 386, project_id: "xuanwu" }],
       projects: PROJECTS,
       text: "开始 #386"
     });
 
     expect(result).toMatchObject({
       confidence: "high",
-      projectId: "codex-issue-runner",
+      projectId: "xuanwu",
       reason: "issue_ref_project",
       source: "issue_ref",
       status: "resolved"
@@ -42,13 +42,13 @@ describe("Feishu PI project context resolver", () => {
 
   test("resolves a bare issue id when Chinese wording clearly marks it as an issue reference", () => {
     const result = resolveFeishuProjectContext({
-      issues: [{ id: 762, project_id: "codex-issue-runner" }],
+      issues: [{ id: 762, project_id: "xuanwu" }],
       projects: PROJECTS,
       text: "那就是762中的修复没修复好，内存仍然超了"
     });
 
     expect(result).toMatchObject({
-      projectId: "codex-issue-runner",
+      projectId: "xuanwu",
       reason: "issue_ref_project",
       source: "issue_ref",
       status: "resolved"
@@ -60,19 +60,19 @@ describe("Feishu PI project context resolver", () => {
       mappings: [{ chatId: "oc_group", projectId: "demo" }],
       message: { chatId: "oc_group" },
       projects: PROJECTS,
-      text: "切到 codex-issue-runner"
+      text: "切到 xuanwu"
     });
 
     expect(result).toMatchObject({
       confidence: "high",
-      projectId: "codex-issue-runner",
+      projectId: "xuanwu",
       reason: "explicit_project_text",
       source: "explicit_project",
       status: "resolved"
     });
   });
 
-  test("does not resolve generic issue wording as the codex-issue-runner project", () => {
+  test("does not resolve generic issue wording as the xuanwu project", () => {
     const result = resolveFeishuProjectContext({
       projects: PROJECTS,
       text: "开始所有issue"
@@ -90,7 +90,7 @@ describe("Feishu PI project context resolver", () => {
   test("does not treat conversation active project as IM project context", () => {
     const result = resolveFeishuProjectContext({
       activeProject: {
-        active_project_id: "codex-issue-runner",
+        active_project_id: "xuanwu",
         active_project_source: "user_switch"
       },
       projects: PROJECTS,
@@ -148,7 +148,7 @@ describe("Feishu PI project context resolver", () => {
     const ambiguous = resolveFeishuProjectContext({
       mappings: [
         { chatId: "oc_group", projectId: "demo" },
-        { projectId: "codex-issue-runner", userId: "ou_user" }
+        { projectId: "xuanwu", userId: "ou_user" }
       ],
       message: { chatId: "oc_group", senderOpenId: "ou_user" },
       projects: PROJECTS,
@@ -157,7 +157,7 @@ describe("Feishu PI project context resolver", () => {
 
     expect(missing.status).toBe("missing");
     expect(ambiguous).toMatchObject({
-      candidates: ["demo", "codex-issue-runner"],
+      candidates: ["demo", "xuanwu"],
       projectId: "",
       reason: "ambiguous_source_mapping",
       source: "mapping_default",
@@ -187,9 +187,9 @@ describe("Feishu PI project context resolver", () => {
   test("loads issues, projects, active state, and fallback mapping from database inputs", async () => {
     const db = await openFixtureDatabase();
     try {
-      insertProject(db, "codex-issue-runner", "Codex Issue Runner");
+      insertProject(db, "xuanwu", "Xuanwu");
       insertProject(db, "demo", "Demo Project");
-      insertIssue(db, 386, "codex-issue-runner");
+      insertIssue(db, 386, "xuanwu");
       setFeishuConversationActiveProject(db, {
         activeConversationId: "feishu-chat-oc_group-20260613",
         activeProjectId: "demo",
@@ -203,7 +203,7 @@ describe("Feishu PI project context resolver", () => {
         scopeKey: "feishu-chat-oc_group-20260613",
         text: "开始 #386"
       })).toMatchObject({
-        projectId: "codex-issue-runner",
+        projectId: "xuanwu",
         reason: "issue_ref_project",
         source: "issue_ref",
         status: "resolved"
@@ -226,7 +226,7 @@ describe("Feishu PI project context resolver", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-project-context-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-project-context-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -166,7 +166,7 @@ async function fixtureHandler(
   provider?: ExecutorProvider,
   options: { allowedChatIds?: string; allowedUserIds?: string } = {}
 ) {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-card-callback-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-card-callback-"));
   tempRoots.push(root);
   const database = await openDatabase({ stateDir: join(root, "state") });
   const config = buildConfig({

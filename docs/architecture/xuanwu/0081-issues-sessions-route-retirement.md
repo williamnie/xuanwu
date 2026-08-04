@@ -14,7 +14,7 @@
   `write_authority=issues-via-work-adapter`、`dual_read=none`、`target_shadow=disabled`；
 - `GET /api/runs?page=1&page_size=1` 返回 200、736 个 Run，声明 `read_authority=issue_runs`、
   `attempt_authority=run_attempts-child-facts`、`session_authority=agent_sessions-observation-only`；
-- 旧 `GET /api/issues?projectId=codex-issue-runner` 和 `GET /api/sessions?limit=1` 仍分别返回 200，
+- 旧 `GET /api/issues?projectId=xuanwu` 和 `GET /api/sessions?limit=1` 仍分别返回 200，
   证明 CLI、provider drill-down 和旧 client compatibility 不能静默删除；
 - 前端已有 Work/Runs 一级导航，但 `issues` 仍能挂载旧 Issues 页面，Work 内部链接也会回到旧 Issue detail；
   `sessions` 虽已解析到 Runs，兼容视图仍缺少明确版本、截止期和可查询使用量。
@@ -32,7 +32,7 @@ Sessions 组件继续承载 Runs 内的 provider observation/独立对话。
   `compatibility.legacy_used.v1` 审计事件。写 telemetry 失败不阻断 redirect。
 - Runtime 对成功鉴权后的 `/api/issues*`、`/api/sessions*` 响应增加 `Deprecation`、`Sunset`、
   `Link`、`X-Codex-Compat-Version`、`X-Codex-Canonical-Resource` headers，body/status/error 语义不变。
-- Web 与 CLI 分别发送 `X-Codex-Client: xuanwu-web`、`codex-issue-runner-cli`。聚合使用量从
+- Web 与 CLI 分别发送 `X-Codex-Client: xuanwu-web`、`xuanwu-cli`。聚合使用量从
   `GET /api/compatibility/legacy` 查询，按 surface/family/client/method/normalized path/status 汇总；
   不创建 telemetry 表或第二 truth source。
 

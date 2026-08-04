@@ -5,7 +5,7 @@
 - 路线 issue：XW P10.06 / Runner #729
 - 硬依赖：XW P00.05 / #635（`done`）
 - canonical 实现：`backend-ts/src/security/secrets/`、`backend-ts/src/security/redactionRegistry.ts`
-- 运维入口：`codex-issue-runner secrets ...`
+- 运维入口：`xuanwu secrets ...`
 
 ## 1. Authority 与 reference
 
@@ -20,24 +20,24 @@
 
 ## 2. Backend、权限与生命周期
 
-默认 `file` backend 使用 AES-256-GCM；`<stateDir>/secrets/store.json` 只有 ciphertext/IV/tag/metadata，随机 256-bit master key 独立保存在 `<stateDir>/secrets/master.key`。目录为 `0700`，文件为 `0600`，原子 rename 更新。设置 `CODEX_RUNNER_SECRET_BACKEND=keychain` 或 CLI `--backend keychain` 时，material 进入 macOS Keychain，metadata 仍在 state dir；写入值通过 stdin 交给 `/usr/bin/security`，不出现在 argv。
+默认 `file` backend 使用 AES-256-GCM；`<stateDir>/secrets/store.json` 只有 ciphertext/IV/tag/metadata，随机 256-bit master key 独立保存在 `<stateDir>/secrets/master.key`。目录为 `0700`，文件为 `0600`，原子 rename 更新。设置 `XUANWU_SECRET_BACKEND=keychain` 或 CLI `--backend keychain` 时，material 进入 macOS Keychain，metadata 仍在 state dir；写入值通过 stdin 交给 `/usr/bin/security`，不出现在 argv。
 
 `put` 只创建不存在或已撤销的 ref；已有 active ref 必须 `rotate`。轮换原地增加 version，旧 ciphertext/keychain item 不保留；撤销删除 material、保留 revoked metadata，因此无法 readback 或回滚旧 value。所有 create/rotate/revoke 通过现有 `pi_action_events` 记录 `secret.created|rotated|revoked`，只写 ref/backend/version/status、actor 和 reason。
 
 ```bash
 # value 必须来自权限受控文件或 stdin，不放进命令行参数
-codex-issue-runner secrets put \
-  --state-dir "$CODEX_RUNNER_STATE_DIR" --db "$CODEX_RUNNER_DB" \
+xuanwu secrets put \
+  --state-dir "$XUANWU_STATE_DIR" --db "$XUANWU_DB" \
   --name integrations/github/token --value-file - \
   --actor operator --reason "initial connector setup" --json
 
-codex-issue-runner secrets rotate \
-  --state-dir "$CODEX_RUNNER_STATE_DIR" --db "$CODEX_RUNNER_DB" \
+xuanwu secrets rotate \
+  --state-dir "$XUANWU_STATE_DIR" --db "$XUANWU_DB" \
   --ref secret://integrations/github/token --value-file - \
   --actor operator --reason "scheduled rotation" --json
 
-codex-issue-runner secrets revoke \
-  --state-dir "$CODEX_RUNNER_STATE_DIR" --db "$CODEX_RUNNER_DB" \
+xuanwu secrets revoke \
+  --state-dir "$XUANWU_STATE_DIR" --db "$XUANWU_DB" \
   --ref secret://integrations/github/token \
   --actor operator --reason "connector retired" --json
 ```
@@ -55,10 +55,10 @@ codex-issue-runner secrets revoke \
 - **迁移：** 先 dry-run，再 apply。apply 将 legacy value 写入 backend、原子改写配置并删除 raw 字段；每个 secret 写入有独立审计。
 
 ```bash
-codex-issue-runner secrets migrate --state-dir "$CODEX_RUNNER_STATE_DIR" --json
-codex-issue-runner secrets migrate --state-dir "$CODEX_RUNNER_STATE_DIR" --db "$CODEX_RUNNER_DB" \
+xuanwu secrets migrate --state-dir "$XUANWU_STATE_DIR" --json
+xuanwu secrets migrate --state-dir "$XUANWU_STATE_DIR" --db "$XUANWU_DB" \
   --apply --actor operator --reason "P10.06 secret-ref migration" --json
-codex-issue-runner secrets scan --state-dir "$CODEX_RUNNER_STATE_DIR" --db "$CODEX_RUNNER_DB" --json
+xuanwu secrets scan --state-dir "$XUANWU_STATE_DIR" --db "$XUANWU_DB" --json
 ```
 
 - **回滚：** apply 前可直接回滚 scoped commit；apply 后不得把 secret 通过 CLI/API readback 再写回 raw 文件。需要回到旧 binary 时，必须先从变更前受控系统快照恢复旧配置与对应凭据，再撤销迁移后 ref；没有该快照时只允许 roll-forward。这是安全门禁，不提供隐式 material export。

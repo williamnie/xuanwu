@@ -21,12 +21,12 @@
 
 ## 2. 审计边界与只读审计命令
 
-当前样本：2026-07-16 00:02（Asia/Shanghai）对正式库执行 SQLite online backup 后得到的 `/tmp/codex-runner-issue637/runner-20260716T0002.db`。增长基线是已有备份 `runner.db.before-issue-project-move-20260713T145510Z`。工具始终用 `readonly: true` 打开输入库并设置 `pragma query_only=on`，不输出 payload、issue title 或 payload preview；重复样本只输出 SHA-256 指纹和大小。
+当前样本：2026-07-16 00:02（Asia/Shanghai）对正式库执行 SQLite online backup 后得到的 `/tmp/xuanwu-issue637/runner-20260716T0002.db`。增长基线是已有备份 `runner.db.before-issue-project-move-20260713T145510Z`。工具始终用 `readonly: true` 打开输入库并设置 `pragma query_only=on`，不输出 payload、issue title 或 payload preview；重复样本只输出 SHA-256 指纹和大小。
 
 先创建一致性备份：
 
 ```bash
-LIVE_DB="$HOME/Library/Application Support/codex-issue-runner-bun-live/state/runner.db"
+LIVE_DB="$HOME/Library/Application Support/xuanwu-bun-live/state/runner.db"
 SNAP_DB="/tmp/runner-audit-$(date +%Y%m%dT%H%M%S).db"
 LIVE_DB="$LIVE_DB" SNAP_DB="$SNAP_DB" python3 - <<'PY'
 import os, sqlite3
@@ -115,7 +115,7 @@ provider 汇总为：`codex` 424,931 行 / 827,335,487 bytes；无 provider 的 
 
 | project | 行数 | payload bytes | bytes 占比 |
 | --- | ---: | ---: | ---: |
-| `codex-issue-runner` | 370,192 | 633,128,628 | 76.08% |
+| `xuanwu` | 370,192 | 633,128,628 | 76.08% |
 | `movo-mobile` | 54,850 | 115,055,961 | 13.83% |
 | `movo-web` | 35,651 | 83,962,336 | 10.09% |
 | `xiecheng` | 462 | 52,863 | <0.01% |
@@ -126,16 +126,16 @@ provider 汇总为：`codex` 424,931 行 / 827,335,487 bytes；无 provider 的 
 
 | issue | project | 行数 | payload bytes |
 | ---: | --- | ---: | ---: |
-| 392 | `codex-issue-runner` | 2,451 | 19,168,908 |
-| 475 | `codex-issue-runner` | 3,781 | 18,088,349 |
+| 392 | `xuanwu` | 2,451 | 19,168,908 |
+| 475 | `xuanwu` | 3,781 | 18,088,349 |
 | 299 | `movo-web` | 2,062 | 16,224,727 |
-| 61 | `codex-issue-runner` | 8,169 | 12,781,609 |
-| 62 | `codex-issue-runner` | 11,304 | 10,162,052 |
-| 78 | `codex-issue-runner` | 1,348 | 9,791,685 |
-| 602 | `codex-issue-runner` | 3,666 | 8,894,573 |
-| 626 | `codex-issue-runner` | 905 | 8,525,394 |
+| 61 | `xuanwu` | 8,169 | 12,781,609 |
+| 62 | `xuanwu` | 11,304 | 10,162,052 |
+| 78 | `xuanwu` | 1,348 | 9,791,685 |
+| 602 | `xuanwu` | 3,666 | 8,894,573 |
+| 626 | `xuanwu` | 905 | 8,525,394 |
 | 511 | `movo-mobile` | 2,134 | 7,804,031 |
-| 310 | `codex-issue-runner` | 1,072 | 7,120,842 |
+| 310 | `xuanwu` | 1,072 | 7,120,842 |
 
 ## 4. 增长率
 

@@ -12,7 +12,7 @@
 - `FEISHU_ENCRYPT_KEY`（可选，启用飞书事件加密时需要）
 - `FEISHU_RECEIVE_MODE`：默认 `websocket`；只有兼容 HTTP request_url 模式时才设为 `callback`。
 - `FEISHU_ALLOWED_CHAT_IDS` / `FEISHU_ALLOWED_USER_IDS`：逗号或分号分隔 allowlist。
-- `FEISHU_PROJECT_MAPPINGS`：例如 `chat:oc_x=codex-issue-runner,user:ou_x=ops-runner`。
+- `FEISHU_PROJECT_MAPPINGS`：例如 `chat:oc_x=xuanwu,user:ou_x=ops-runner`。
 
 未配置 required secrets 时服务仍应启动，connector 状态为 `disabled`；部分配置缺失时为 `misconfigured`；完整配置后才为 `configured`。状态输出只能暴露 configured/count/missing 信息，不输出 token/secret 原文。
 

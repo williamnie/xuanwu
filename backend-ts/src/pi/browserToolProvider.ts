@@ -2,7 +2,7 @@ import type { AssistantTool, ToolJsonSchema, ToolProvider } from "./toolProvider
 
 export const BROWSER_READONLY_PROVIDER_ID = "browser-readonly";
 export const BROWSER_READ_PAGE_CONTEXT_TOOL_NAME = "read_page_context";
-export const BROWSER_SNAPSHOT_ENV = "CODEX_RUNNER_BROWSER_SNAPSHOT_JSON";
+export const BROWSER_SNAPSHOT_ENV = "XUANWU_BROWSER_SNAPSHOT_JSON";
 export const BROWSER_READ_TIMEOUT_MS = 5_000;
 
 export function listBrowserToolProviders(): ToolProvider[] {

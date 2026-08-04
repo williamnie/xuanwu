@@ -9,7 +9,7 @@ import { createDefaultRouter } from "./server.ts";
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
 const previousHome = process.env.HOME;
-const previousRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+const previousRegistry = Bun.env.XUANWU_MCP_REGISTRY_JSON;
 
 async function json(response: Response): Promise<Record<string, any>> {
   return await response.json() as Record<string, any>;
@@ -18,8 +18,8 @@ async function json(response: Response): Promise<Record<string, any>> {
 afterEach(async () => {
   if (previousHome === undefined) delete process.env.HOME;
   else process.env.HOME = previousHome;
-  if (previousRegistry === undefined) delete Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
-  else Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = previousRegistry;
+  if (previousRegistry === undefined) delete Bun.env.XUANWU_MCP_REGISTRY_JSON;
+  else Bun.env.XUANWU_MCP_REGISTRY_JSON = previousRegistry;
   while (tempRoots.length > 0) await rm(tempRoots.pop()!, { recursive: true, force: true });
 });
 
@@ -170,7 +170,7 @@ describe("PI MCP discovery API", () => {
 });
 
 async function openFixture(): Promise<{ db: RunnerDatabase; home: string; script: string; workspace: string }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-mcp-discovery-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-mcp-discovery-"));
   tempRoots.push(root);
   const home = join(root, "home");
   const workspace = join(root, "workspace");

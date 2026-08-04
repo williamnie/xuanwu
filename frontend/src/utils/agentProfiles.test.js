@@ -14,19 +14,19 @@ import {
 
 test('normalizes profile ids and intent text for API payloads', () => {
   assert.equal(profileIDFromName('Nightly Codex!'), 'nightly-codex');
-  assert.deepEqual(parseIntentText('codex-issue-runner, browser\nfigma'), [
-    'codex-issue-runner',
+  assert.deepEqual(parseIntentText('xuanwu, browser\nfigma'), [
+    'xuanwu',
     'browser',
     'figma',
   ]);
   const payload = agentProfilePayload({
     name: 'Nightly Codex',
-    skill_intents: 'codex-issue-runner, browser',
+    skill_intents: 'xuanwu, browser',
   });
   assert.equal(payload.id, 'nightly-codex');
   assert.equal(payload.provider, 'codex');
   assert.equal(payload.service_tier, '');
-  assert.equal(payload.skill_intents, '["codex-issue-runner","browser"]');
+  assert.equal(payload.skill_intents, '["xuanwu","browser"]');
 });
 
 test('summarizes configured and missing agent profiles honestly', () => {

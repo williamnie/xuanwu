@@ -83,7 +83,7 @@ async function openFixtureRuntime(): Promise<{
   config: ReturnType<typeof buildConfig>;
   database: RunnerDatabase;
 }> {
-  const root = await tempPath("codex-runner-bun-system-logs-");
+  const root = await tempPath("xuanwu-bun-system-logs-");
   const stateDir = join(root, "state");
   const config = buildConfig({ stateDir });
   const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
@@ -97,7 +97,7 @@ async function writeRuntimeLogs(stateDir: string): Promise<void> {
     "2026/05/28 01:02:03 API listening",
     "2026-05-28T01:03:04Z warn provider probe slow",
     "Authorization: Bearer secret-token",
-    "Codex Issue Runner generated auth token file: /tmp/auth_token",
+    "Xuanwu generated auth token file: /tmp/auth_token",
     "2026-05-28T01:03:05Z warn cwd=/Users/alice/private/project",
     "2026-05-28T01:04:05Z error runner failed token=super-secret SECRET_KEY=env-secret"
   ].join("\n"));

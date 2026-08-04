@@ -37,7 +37,7 @@ describe("cron task schedule writes", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-cron-writes-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-cron-writes-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -10,7 +10,7 @@
 ```mermaid
 flowchart LR
   UI["Web UI"] --> API["Bun API Server"]
-  CLI["codex-issue-runner CLI"] --> API
+  CLI["xuanwu CLI"] --> API
   API --> DB[(SQLite runner.db)]
   API --> Runner["Runner Loop"]
   Runner --> Providers["Codex / Claude Providers"]
@@ -21,7 +21,7 @@ flowchart LR
 
 - Live API：`127.0.0.1:3008`
 - 源码后端：`backend-ts/`
-- 构建产物：`dist/codex-issue-runner`
+- 构建产物：`dist/xuanwu`
 - SQLite：部署 state dir 下的 `runner.db`
 - 前端静态资源：部署 state dir 下的 `web/`
 

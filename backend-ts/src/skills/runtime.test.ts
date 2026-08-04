@@ -292,13 +292,13 @@ describe("controlled skill runtime", () => {
 });
 
 async function openFixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-skill-runtime-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-skill-runtime-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
 
 async function writeCliWriteFixture(): Promise<{ dir: string; marker: string; root: string }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-skill-write-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-skill-write-"));
   tempRoots.push(root);
   const dir = join(root, "connectors");
   const marker = join(root, "approved.txt");

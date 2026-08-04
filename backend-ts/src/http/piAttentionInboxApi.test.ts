@@ -146,7 +146,7 @@ describe("PI Attention Inbox API", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-attention-inbox-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-attention-inbox-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

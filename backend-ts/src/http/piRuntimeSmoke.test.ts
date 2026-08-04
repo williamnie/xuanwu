@@ -23,7 +23,7 @@ const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-smoke-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-runtime-smoke-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -407,17 +407,17 @@ describe("Bun PI runtime v1 smoke", () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo", JSON.stringify({
-        allowed: ["codex-issue-runner"],
-        recommended: ["codex-issue-runner", "verification-before-completion"]
+        allowed: ["xuanwu"],
+        recommended: ["xuanwu", "verification-before-completion"]
       }));
       const issue = createIssue(database, {
         project_id: "demo",
         recommended_skill_intents: ["verification-before-completion"],
-        required_skill_intents: ["codex-issue-runner"],
+        required_skill_intents: ["xuanwu"],
         title: "Skill scoped issue"
       });
       createPiDelegation(database, {
-        allowed_skill_intents_json: ["codex-issue-runner"],
+        allowed_skill_intents_json: ["xuanwu"],
         id: "delegation-a",
         project_id: "demo"
       });
@@ -445,7 +445,7 @@ describe("Bun PI runtime v1 smoke", () => {
       const runtime = await createPiRuntimeSession(database, {
         agent: agentRecord(),
         authorization: {
-          allowedSkillIntents: ["codex-issue-runner", "verification-before-completion"],
+          allowedSkillIntents: ["xuanwu", "verification-before-completion"],
           mode: "delegated"
         },
         conversationID: "conv-skill-context",
@@ -464,10 +464,10 @@ describe("Bun PI runtime v1 smoke", () => {
       expect(prompt).toContain("repo_context_pack");
       expect(prompt).toContain("issue_create_proposal");
       expect(prompt).toContain("最多追问一个关键问题");
-      expect(prompt).toContain('"id": "codex-issue-runner"');
+      expect(prompt).toContain('"id": "xuanwu"');
       expect(prompt).not.toContain('"id": "verification-before-completion"');
       expect(prompt).toContain("Controlled Supervisor resource summary:");
-      expect(prompt).toContain("<name>codex-issue-runner</name>");
+      expect(prompt).toContain("<name>xuanwu</name>");
       expect(prompt).not.toContain("<name>pi-domain-proposal</name>");
       expect(prompt).toContain("Issue-specific PI context");
       expect(prompt).toContain("pi_memory_items/issue-memory");
@@ -477,7 +477,7 @@ describe("Bun PI runtime v1 smoke", () => {
       expect(events.map((event) => event.event_type)).toContain("runtime_resource_snapshot");
       const audit = JSON.parse(events.find((event) => event.event_type === "skill_prompt_context_injected")?.payload_json ?? "{}");
       expect(audit).toMatchObject({
-        injected_skill_ids: ["codex-issue-runner"],
+        injected_skill_ids: ["xuanwu"],
         scope: { delegation_id: "delegation-a", issue_id: issue.id, project_id: "demo" },
         unauthorized_skill_intents: ["verification-before-completion"]
       });
@@ -487,7 +487,7 @@ describe("Bun PI runtime v1 smoke", () => {
       expect(resources).toMatchObject({
         counts: { skills: 1 },
         generation: 2,
-        loaded: { skills: ["codex-issue-runner"] },
+        loaded: { skills: ["xuanwu"] },
         outcome: "loaded"
       });
       expect(resourceEvents).toHaveLength(2);
@@ -595,8 +595,8 @@ function projectRecord(id: string) {
     default_service_tier: "",
     sort_order: 1, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
     default_mcp_policy: "{}", default_skill_policy: JSON.stringify({
-      allowed: ["codex-issue-runner"],
-      recommended: ["codex-issue-runner", "verification-before-completion"]
+      allowed: ["xuanwu"],
+      recommended: ["xuanwu", "verification-before-completion"]
     }),
     loop_status: "stopped", provider_capabilities: []
   };

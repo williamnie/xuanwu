@@ -14,7 +14,7 @@ const READ_CAPABILITY = `${SERVER_ID}:tool:fixture_read`;
 const WRITE_CAPABILITY = `${SERVER_ID}:tool:fixture_write`;
 const CONVERSATION_ID = "agent-05-live-issue-781";
 const ISSUE_ID = 781;
-const PROJECT_ID = "codex-issue-runner";
+const PROJECT_ID = "xuanwu";
 
 type JsonObject = Record<string, any>;
 type Assertion = { evidence: string; id: string; passed: boolean; detail?: unknown };
@@ -405,10 +405,10 @@ async function writeReplay(input: Options): Promise<void> {
     'export ISSUE781_STATE_DIR=\"$(mktemp -d /tmp/codex-issue-781-replay.XXXXXX)\"',
     `printf '%s\\n' "$ISSUE781_STATE_DIR" > ${shellQuote(resolve(input.artifactDir, "replay-state-path.txt"))}`,
     ': > \"$ISSUE781_STATE_DIR/auth_token\"',
-    `CODEX_RUNNER_STATE_DIR="$ISSUE781_STATE_DIR" \\`,
-    `CODEX_RUNNER_DB="$ISSUE781_STATE_DIR/runner.db" \\`,
-    `CODEX_RUNNER_AUTH_TOKEN_FILE="$ISSUE781_STATE_DIR/auth_token" \\`,
-    `CODEX_RUNNER_DEV_ADDR=${shellQuote(input.addr)} \\`,
+    `XUANWU_STATE_DIR="$ISSUE781_STATE_DIR" \\`,
+    `XUANWU_DB="$ISSUE781_STATE_DIR/runner.db" \\`,
+    `XUANWU_AUTH_TOKEN_FILE="$ISSUE781_STATE_DIR/auth_token" \\`,
+    `XUANWU_DEV_ADDR=${shellQuote(input.addr)} \\`,
     `FRONTEND_HOST=${shellQuote(host || "127.0.0.1")} FRONTEND_PORT=${shellQuote(frontendPort)} ./dev.sh`,
     "```",
     "",

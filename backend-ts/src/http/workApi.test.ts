@@ -456,7 +456,7 @@ function readyProvider(id: "codex" | "claude"): ExecutorProvider {
 }
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-work-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-work-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

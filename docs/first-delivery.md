@@ -9,7 +9,7 @@
 3. 先运行只读 doctor：
 
    ```bash
-   codex-issue-runner doctor
+   xuanwu doctor
    ```
 
    人类可读输出会列出确定性 `fix:` 步骤；`--json` 仍原样输出 `/api/system/doctor` 的 canonical JSON，不新建第二份诊断状态。
@@ -26,7 +26,7 @@ Command Center 顶部的 **10-MINUTE FIRST DELIVERY** 会实时检查五个门�
 
 ## 失败恢复
 
-- **API / DB 失败**：执行 `codex-issue-runner doctor` 和安装版的 `codex-issue-runner-daemon doctor`（源码部署使用 `./scripts/daemon.sh doctor`），修复后点击“重新检查”。
+- **API / DB 失败**：执行 `xuanwu doctor` 和安装版的 `xuanwu-daemon doctor`（源码部署使用 `./scripts/daemon.sh doctor`），修复后点击“重新检查”。
 - **Agent 不可用**：先安装/登录 CLI，再到 Connections → AI Providers 重新测试；不用 Advanced 的 base URL 表单做临时旁路。
 - **项目创建失败**：确认路径是已存在的目录。Projects authority 按 CWD 复用现有项目。
 - **Work 创建请求超时**：向导会禁用立即再创建。先点击“重新检查”，它会先从 Issue-backed Work authority 查找同名示例；只在确认未落库后才可重试。

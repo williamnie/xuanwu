@@ -307,7 +307,7 @@ class ControlProvider implements ExecutorProvider {
 }
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-run-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-run-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

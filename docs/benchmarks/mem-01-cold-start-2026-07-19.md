@@ -60,7 +60,7 @@ A read-only backup of the 1,078,816,768-byte live database, with `auto_run` and 
 Reproduce with:
 
 ```bash
-CODEX_RUNNER_BINARY=/absolute/path/to/codex-issue-runner \
+XUANWU_BINARY=/absolute/path/to/xuanwu \
   ./scripts/benchmark-cold-start.sh
 ```
 

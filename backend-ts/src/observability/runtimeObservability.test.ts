@@ -115,7 +115,7 @@ describe("runtime observability", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-observability-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-observability-"));
   roots.push(root);
   return await openDatabase({ dbPath: join(root, "runner.sqlite") });
 }

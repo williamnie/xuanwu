@@ -51,7 +51,7 @@ test("Guardian does not invent a recovery action from a supervisor signal", asyn
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-guardian-action-snapshot-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-guardian-action-snapshot-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

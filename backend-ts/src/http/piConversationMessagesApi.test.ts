@@ -24,7 +24,7 @@ const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-message-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-message-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -423,14 +423,14 @@ describe("Bun PI conversation message API", () => {
         ], { stopReason: "toolUse" }),
         fauxAssistantMessage("已开始 movo-mobile 的 #501。")
       ]);
-      insertProject(database, "codex-issue-runner");
+      insertProject(database, "xuanwu");
       insertProject(database, "movo-mobile");
       insertIssue(database, { id: 501, projectID: "movo-mobile", title: "Mobile issue" });
       insertFauxAgent(database, "pi-feishu-cross-issue");
       writeFauxModelsConfig(database, "pi-feishu-cross-issue");
       const router = createDefaultRouter({ database, providers: { codex: provider } });
       await request(router, "/api/pi/conversations", {
-        id: "feishu-cross-issue", project_id: "codex-issue-runner"
+        id: "feishu-cross-issue", project_id: "xuanwu"
       });
 
       const message = await request(router, "/api/pi/conversations/feishu-cross-issue/messages", {
@@ -574,7 +574,7 @@ describe("Bun PI conversation message API", () => {
         ], { stopReason: "toolUse" }),
         fauxAssistantMessage("demo 当前有 1 个 triage issue。")
       ]);
-      insertProject(database, "codex-issue-runner");
+      insertProject(database, "xuanwu");
       insertProject(database, "demo");
       insertProject(database, "other");
       insertIssue(database, { id: 700, projectID: "demo", title: "Demo issue" });
@@ -583,7 +583,7 @@ describe("Bun PI conversation message API", () => {
       writeFauxModelsConfig(database, "pi-feishu-target");
       await request(createDefaultRouter({ database }), "/api/pi/conversations", {
         id: "feishu-im-target-project",
-        project_id: "codex-issue-runner",
+        project_id: "xuanwu",
         title: "Feishu"
       });
 
@@ -606,7 +606,7 @@ describe("Bun PI conversation message API", () => {
       expect(conversation).toMatchObject({ project_id: "" });
       expect(agentSession).toMatchObject({ project_id: "" });
       expect(sessionHeader.cwd).not.toBe("/tmp/demo");
-      expect(sessionHeader.cwd).not.toBe("/tmp/codex-issue-runner");
+      expect(sessionHeader.cwd).not.toBe("/tmp/xuanwu");
       expect(action).toMatchObject({
         action_type: "issue.status_summary",
         project_id: "demo",

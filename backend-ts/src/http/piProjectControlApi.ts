@@ -189,7 +189,7 @@ function managerCyclePrompt(
   issueState: ReturnType<typeof diagnoseIssueState>
 ): string {
   return [
-    "Run exactly one Xuanwu Supervisor manager cycle for this codex-issue-runner project.",
+    "Run exactly one Xuanwu Supervisor manager cycle for this xuanwu project.",
     `Project id: ${project.id}`,
     `Project name: ${project.name}`,
     "Project status snapshot:",

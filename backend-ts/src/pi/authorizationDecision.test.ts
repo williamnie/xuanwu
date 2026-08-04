@@ -101,7 +101,7 @@ describe("PI authorization decision", () => {
 
     expect(decidePiAuthorization(action, {
       allowed_actions: ["issue.create"],
-      allowed_skill_intents: ["codex-issue-runner"],
+      allowed_skill_intents: ["xuanwu"],
       authorizedActions: [{ action_type: "issue.create", project_id: "demo" }],
       mode: "delegated",
       scope: { project_id: "demo" }

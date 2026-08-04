@@ -163,7 +163,7 @@ describe("PI event router", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-event-router-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-event-router-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

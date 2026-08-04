@@ -125,9 +125,9 @@ function agenticResponse(body: unknown, status = 200): Response {
 
 function agenticRuntimeHeaders(): Record<string, string> {
   return {
-    "x-codex-runner-agentic-pid": String(process.pid),
-    "x-codex-runner-agentic-rss-bytes": String(process.memoryUsage.rss()),
-    "x-codex-runner-agentic-started-at": AGENTIC_STARTED_AT
+    "x-xuanwu-agentic-pid": String(process.pid),
+    "x-xuanwu-agentic-rss-bytes": String(process.memoryUsage.rss()),
+    "x-xuanwu-agentic-started-at": AGENTIC_STARTED_AT
   };
 }
 

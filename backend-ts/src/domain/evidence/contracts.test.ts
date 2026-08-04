@@ -106,7 +106,7 @@ describe("Evidence domain contract", () => {
   test("redacts nested secret values, forbids sensitive fact keys, and never promotes an Agent claim", () => {
     const raw = record("shell", "passed", "command_execution", "tool_result");
     raw.decisive_output.summary = "token super-secret; command passed";
-    raw.decisive_output.facts.command = "CODEX_RUNNER_AUTH_TOKEN=secret bun test";
+    raw.decisive_output.facts.command = "XUANWU_AUTH_TOKEN=secret bun test";
     raw.artifact_refs = [{ kind: "url", ref: "https://example.test/report?access_token=secret-value" }];
     expect(validateEvidence(raw).errors).toEqual(expect.arrayContaining([
       "unredacted sensitive value at /decisive_output/summary",

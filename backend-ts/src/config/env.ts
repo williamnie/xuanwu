@@ -19,35 +19,35 @@ import { createSecretService } from "../security/secrets/service.ts";
 import { registerSecretForRedaction } from "../security/redactionRegistry.ts";
 
 export const ENV_KEYS = {
-  addr: "CODEX_RUNNER_ADDR",
-  agenticAddr: "CODEX_RUNNER_AGENTIC_ADDR",
-  stateDir: "CODEX_RUNNER_STATE_DIR",
-  dbPath: "CODEX_RUNNER_DB",
-  authToken: "CODEX_RUNNER_AUTH_TOKEN",
-  authTokenFile: "CODEX_RUNNER_AUTH_TOKEN_FILE",
-  codexSessionsDir: "CODEX_RUNNER_CODEX_SESSIONS_DIR",
-  webDir: "CODEX_RUNNER_WEB_DIR",
-  codexServerMode: "CODEX_RUNNER_CODEX_SERVER_MODE",
-  codexCommand: "CODEX_RUNNER_CODEX_CMD",
-  codexAppCommand: "CODEX_RUNNER_CODEX_APP_CMD",
-  codexCwd: "CODEX_RUNNER_CODEX_CWD",
-  codexEnv: "CODEX_RUNNER_CODEX_ENV",
-  codexTimeoutMs: "CODEX_RUNNER_CODEX_TIMEOUT_MS",
-  runnerMaxParallelProjects: "CODEX_RUNNER_MAX_PARALLEL_PROJECTS",
-  cliConnectorDirs: "CODEX_RUNNER_CLI_CONNECTOR_DIRS",
-  claudeCommand: "CODEX_RUNNER_CLAUDE_CMD",
-  claudeCwd: "CODEX_RUNNER_CLAUDE_CWD",
-  claudeEnv: "CODEX_RUNNER_CLAUDE_ENV",
-  claudeMode: "CODEX_RUNNER_CLAUDE_MODE",
-  claudeAuthMode: "CODEX_RUNNER_CLAUDE_AUTH_MODE",
-  claudeApiBaseUrl: "CODEX_RUNNER_CLAUDE_API_BASE_URL",
-  claudeApiPath: "CODEX_RUNNER_CLAUDE_API_PATH",
-  claudeApiKey: "CODEX_RUNNER_CLAUDE_API_KEY",
-  claudeApiKeyFile: "CODEX_RUNNER_CLAUDE_API_KEY_FILE",
-  claudePlatformConfigDir: "CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR",
-  claudePlatformProfile: "CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE",
-  claudeModel: "CODEX_RUNNER_CLAUDE_MODEL",
-  claudeTimeoutMs: "CODEX_RUNNER_CLAUDE_TIMEOUT_MS",
+  addr: "XUANWU_ADDR",
+  agenticAddr: "XUANWU_AGENTIC_ADDR",
+  stateDir: "XUANWU_STATE_DIR",
+  dbPath: "XUANWU_DB",
+  authToken: "XUANWU_AUTH_TOKEN",
+  authTokenFile: "XUANWU_AUTH_TOKEN_FILE",
+  codexSessionsDir: "XUANWU_CODEX_SESSIONS_DIR",
+  webDir: "XUANWU_WEB_DIR",
+  codexServerMode: "XUANWU_CODEX_SERVER_MODE",
+  codexCommand: "XUANWU_CODEX_CMD",
+  codexAppCommand: "XUANWU_CODEX_APP_CMD",
+  codexCwd: "XUANWU_CODEX_CWD",
+  codexEnv: "XUANWU_CODEX_ENV",
+  codexTimeoutMs: "XUANWU_CODEX_TIMEOUT_MS",
+  runnerMaxParallelProjects: "XUANWU_MAX_PARALLEL_PROJECTS",
+  cliConnectorDirs: "XUANWU_CLI_CONNECTOR_DIRS",
+  claudeCommand: "XUANWU_CLAUDE_CMD",
+  claudeCwd: "XUANWU_CLAUDE_CWD",
+  claudeEnv: "XUANWU_CLAUDE_ENV",
+  claudeMode: "XUANWU_CLAUDE_MODE",
+  claudeAuthMode: "XUANWU_CLAUDE_AUTH_MODE",
+  claudeApiBaseUrl: "XUANWU_CLAUDE_API_BASE_URL",
+  claudeApiPath: "XUANWU_CLAUDE_API_PATH",
+  claudeApiKey: "XUANWU_CLAUDE_API_KEY",
+  claudeApiKeyFile: "XUANWU_CLAUDE_API_KEY_FILE",
+  claudePlatformConfigDir: "XUANWU_CLAUDE_PLATFORM_CONFIG_DIR",
+  claudePlatformProfile: "XUANWU_CLAUDE_PLATFORM_PROFILE",
+  claudeModel: "XUANWU_CLAUDE_MODEL",
+  claudeTimeoutMs: "XUANWU_CLAUDE_TIMEOUT_MS",
   feishuAllowedChatIds: "FEISHU_ALLOWED_CHAT_IDS",
   feishuAllowedUserIds: "FEISHU_ALLOWED_USER_IDS",
   feishuAppId: "FEISHU_APP_ID",
@@ -496,7 +496,7 @@ function readSecretFile(pathValue: string | undefined): string | undefined {
 function normalizeClaudeProviderMode(value: string | undefined): "sdk" | "cli-fallback" {
   const mode = cleanValue(value)?.toLowerCase() ?? "sdk";
   if (mode === "sdk" || mode === "cli-fallback") return mode;
-  throw new Error(`CODEX_RUNNER_CLAUDE_MODE must be sdk or cli-fallback, received ${mode}`);
+  throw new Error(`XUANWU_CLAUDE_MODE must be sdk or cli-fallback, received ${mode}`);
 }
 
 function normalizeClaudeAuthMode(
@@ -507,13 +507,13 @@ function normalizeClaudeAuthMode(
   const configured = cleanValue(value)?.toLowerCase();
   const mode = configured ?? (providerMode === "cli-fallback" && !environmentAuthConfigured ? "local-cli" : "environment");
   if (mode !== "environment" && mode !== "local-cli" && mode !== "platform-profile") {
-    throw new Error(`CODEX_RUNNER_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile, received ${mode}`);
+    throw new Error(`XUANWU_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile, received ${mode}`);
   }
   if (providerMode === "sdk" && mode === "local-cli") {
-    throw new Error("CODEX_RUNNER_CLAUDE_AUTH_MODE=local-cli requires CODEX_RUNNER_CLAUDE_MODE=cli-fallback");
+    throw new Error("XUANWU_CLAUDE_AUTH_MODE=local-cli requires XUANWU_CLAUDE_MODE=cli-fallback");
   }
   if (providerMode === "cli-fallback" && mode === "platform-profile") {
-    throw new Error("CODEX_RUNNER_CLAUDE_AUTH_MODE=platform-profile requires CODEX_RUNNER_CLAUDE_MODE=sdk");
+    throw new Error("XUANWU_CLAUDE_AUTH_MODE=platform-profile requires XUANWU_CLAUDE_MODE=sdk");
   }
   return mode;
 }
@@ -522,7 +522,7 @@ function normalizeClaudePlatformProfile(value: string): string {
   const profile = value.trim();
   if (profile === "") return "";
   if (profile === "." || profile === ".." || !/^[A-Za-z0-9_.-]+$/.test(profile)) {
-    throw new Error("CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE must contain only letters, digits, dot, underscore, or hyphen");
+    throw new Error("XUANWU_CLAUDE_PLATFORM_PROFILE must contain only letters, digits, dot, underscore, or hyphen");
   }
   return profile;
 }
@@ -540,7 +540,7 @@ function joinClaudeApiBase(baseValue: string, path: string): string {
     const parsed = new URL(base);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("unsupported protocol");
   } catch {
-    throw new Error("CODEX_RUNNER_CLAUDE_API_BASE_URL must be an http(s) URL");
+    throw new Error("XUANWU_CLAUDE_API_BASE_URL must be an http(s) URL");
   }
   return `${base}${path}`;
 }

@@ -519,7 +519,7 @@ function acceptance(decision: "accept" | "needs_user"): PiAcceptanceRuntimeResul
 }
 
 async function fixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-acceptance-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-acceptance-"));
   roots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(

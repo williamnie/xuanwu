@@ -94,7 +94,7 @@ function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit
         <TextField label="Default Chat ID" value={form.default_chat_id} onChange={(value) => updateField('default_chat_id', value)} placeholder="oc_xxx" />
         <TextField label="Default User ID" value={form.default_user_id} onChange={(value) => updateField('default_user_id', value)} placeholder="ou_xxx" />
       </div>
-      <TextAreaField label="Project Mappings" value={form.project_mappings} onChange={(value) => updateField('project_mappings', value)} placeholder="chat:oc_xxx=codex-runner,user:ou_xxx=codex-runner" />
+      <TextAreaField label="Project Mappings" value={form.project_mappings} onChange={(value) => updateField('project_mappings', value)} placeholder="chat:oc_xxx=xuanwu,user:ou_xxx=xuanwu" />
       <Footer remote={remote} saving={saving} />
     </form>
   );

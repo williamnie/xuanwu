@@ -497,7 +497,7 @@ async function openFixture(artifactDir: string): Promise<FixtureContext> {
   const db = await openDatabase({ stateDir });
   insertProject(db, repository);
   const env = {
-    CODEX_RUNNER_MCP_REGISTRY_JSON: registryJson(controlPath, statePath)
+    XUANWU_MCP_REGISTRY_JSON: registryJson(controlPath, statePath)
   };
   const toolSnapshot = loadAssistantToolRegistrySnapshot(db, { env });
   const skill = loadFixtureSkill(skillRoot, toolSnapshot);
@@ -1339,20 +1339,20 @@ shasum -a 256 \\
 
 \`\`\`bash
 WINDOW_START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-DB_PATH="\${CODEX_RUNNER_DB_PATH:-data-bun/runner.db}"
+DB_PATH="\${XUANWU_DB_PATH:-data-bun/runner.db}"
 bun scripts/intake-observability-live.ts sample \\
   --db "$DB_PATH" \\
   --output /tmp/issue-784-24h/raw-samples.jsonl \\
   --state /tmp/issue-784-24h/sampler-state.json \\
   --window-start "$WINDOW_START" \\
-  --project-id codex-issue-runner
+  --project-id xuanwu
 
 # 每个后续采样周期执行同一命令；已有 state 时 window-start 不再改变。
 bun scripts/intake-observability-live.ts sample \\
   --db "$DB_PATH" \\
   --output /tmp/issue-784-24h/raw-samples.jsonl \\
   --state /tmp/issue-784-24h/sampler-state.json \\
-  --project-id codex-issue-runner
+  --project-id xuanwu
 
 bun scripts/intake-observability-live.ts report \\
   --input /tmp/issue-784-24h/raw-samples.jsonl \\

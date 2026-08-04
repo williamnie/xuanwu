@@ -392,7 +392,7 @@ export async function runCodexTransportInitializeSmoke(
   const transport = new CodexStdioJsonRpcTransport(config, options);
   try {
     return await transport.request("initialize", {
-      clientInfo: { name: "codex-issue-runner", version: "0.1.0" },
+      clientInfo: { name: "xuanwu", version: "0.1.0" },
       capabilities: { experimentalApi: true }
     });
   } finally {

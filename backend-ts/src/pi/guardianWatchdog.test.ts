@@ -75,7 +75,7 @@ describe("PI Guardian watchdog detector", () => {
   test("keeps UI alert open when direct Feishu falls back to retry", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianFeishuSender([
-      new FeishuClientError("socket closed CODEX_RUNNER_AUTH_TOKEN=fixture-token at /Users/demo/private.log", {
+      new FeishuClientError("socket closed XUANWU_AUTH_TOKEN=fixture-token at /Users/demo/private.log", {
         kind: "temporary",
         retryAfterSeconds: 30
       })
@@ -516,7 +516,7 @@ describe("PI Guardian watchdog detector", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-guardian-watchdog-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-guardian-watchdog-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -536,7 +536,7 @@ function failingProbe() {
       alert_type: "pi_runtime_down",
       component: "pi_runtime" as const,
       evidence: { path: "/Users/demo/private.log", token: "fixture-token" },
-      message: "PI runtime unavailable CODEX_RUNNER_AUTH_TOKEN=fixture-token at /Users/demo/private.log",
+      message: "PI runtime unavailable XUANWU_AUTH_TOKEN=fixture-token at /Users/demo/private.log",
       ok: false,
       project_id: "demo"
     })

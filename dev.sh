@@ -2,10 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_ADDR="${CODEX_RUNNER_DEV_ADDR:-127.0.0.1:3569}"
-STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$ROOT_DIR/data-bun}"
-DB_PATH="${CODEX_RUNNER_DB:-$STATE_DIR/runner.db}"
-AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
+BACKEND_ADDR="${XUANWU_DEV_ADDR:-127.0.0.1:3569}"
+STATE_DIR="${XUANWU_STATE_DIR:-$ROOT_DIR/data-bun}"
+DB_PATH="${XUANWU_DB:-$STATE_DIR/runner.db}"
+AUTH_TOKEN_FILE="${XUANWU_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 FRONTEND_HOST="${FRONTEND_HOST:-0.0.0.0}"
 FRONTEND_PORT="${FRONTEND_PORT:-3568}"
 
@@ -76,7 +76,7 @@ echo
 
 (
   cd "$ROOT_DIR/backend-ts"
-  export CODEX_RUNNER_ADDR="$BACKEND_API_ADDR"
+  export XUANWU_ADDR="$BACKEND_API_ADDR"
   bun run src/main.ts serve \
     --addr "$BACKEND_ADDR" \
     --state-dir "$STATE_DIR" \

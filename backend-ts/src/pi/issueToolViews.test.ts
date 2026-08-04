@@ -62,7 +62,7 @@ describe("PI issue execution status completion projection", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-issue-tool-views-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-issue-tool-views-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

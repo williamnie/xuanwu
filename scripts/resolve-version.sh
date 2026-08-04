@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="${CODEX_RUNNER_ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-FALLBACK_VERSION="${CODEX_RUNNER_FALLBACK_VERSION:-unknown}"
+ROOT_DIR="${XUANWU_ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+FALLBACK_VERSION="${XUANWU_FALLBACK_VERSION:-unknown}"
 
 clean() {
   local value="${1:-}"
@@ -12,7 +12,7 @@ clean() {
 }
 
 from_env() {
-  clean "${CODEX_RUNNER_VERSION:-}" && return 0
+  clean "${XUANWU_VERSION:-}" && return 0
   clean "${VITE_APP_VERSION:-}" && return 0
   if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
     clean "${GITHUB_REF_NAME:-}" && return 0

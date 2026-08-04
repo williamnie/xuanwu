@@ -95,7 +95,7 @@ function rpc(id: number, method: string): Record<string, unknown> {
 }
 
 function initializeParams(): Record<string, unknown> {
-  return { capabilities: {}, clientInfo: { name: "codex-issue-runner-pi", version: "0.0.0" }, protocolVersion: "2024-11-05" };
+  return { capabilities: {}, clientInfo: { name: "xuanwu-pi", version: "0.0.0" }, protocolVersion: "2024-11-05" };
 }
 
 function parseMessages(stdout: string): { items: JsonRpcMessage[] } | { diagnostic: { code: string; message: string } } {

@@ -35,7 +35,7 @@ function printConfigStatus(config) {
 async function postChallenge(args, config) {
   requireConfigured(config);
   const response = await postCallback(args, config, {
-    challenge: String(args.challenge || "codex-runner-feishu-smoke"),
+    challenge: String(args.challenge || "xuanwu-feishu-smoke"),
     token: config.verificationToken,
     type: "url_verification"
   });
@@ -51,7 +51,7 @@ async function postMessage(args, config) {
       message: {
         chat_id: String(args.chatId || "oc_smoke"),
         chat_type: String(args.chatType || "group"),
-        content: JSON.stringify({ text: String(args.text || "@PI codex runner Feishu smoke") }),
+        content: JSON.stringify({ text: String(args.text || "@PI xuanwu Feishu smoke") }),
         create_time: String(Date.now()),
         mentions: [{ id: "ou_bot", name: "PI", tenant_key: "tenant_smoke" }],
         message_id: messageId,
@@ -95,7 +95,7 @@ function signatureHeaders(encryptKey, rawBody) {
 function callbackUrl(args) {
   const raw = String(args.url || "").trim();
   if (raw) return raw;
-  const addr = String(args.addr || process.env.CODEX_RUNNER_ADDR || DEFAULT_ADDR);
+  const addr = String(args.addr || process.env.XUANWU_ADDR || DEFAULT_ADDR);
   const base = addr.startsWith("http") ? addr : `http://${addr}`;
   return `${base.replace(/\/+$/, "")}${PATH}`;
 }

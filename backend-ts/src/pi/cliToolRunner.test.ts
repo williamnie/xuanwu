@@ -128,7 +128,7 @@ describe("CLI tool runner", () => {
 });
 
 async function fixture(): Promise<{ cwd: string; script: string }> {
-  const cwdRaw = await mkdtemp(join(tmpdir(), "codex-runner-cli-tool-"));
+  const cwdRaw = await mkdtemp(join(tmpdir(), "xuanwu-cli-tool-"));
   const cwd = await realpath(cwdRaw);
   const script = join(cwdRaw, "fixture.mjs");
   await writeFile(script, SCRIPT);

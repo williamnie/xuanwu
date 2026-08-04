@@ -132,7 +132,7 @@ function addTextSignalReasons(value: string, reasons: Set<ProgressReason>): void
     reasons.add("verification_signal");
   }
   if (/\bgit\s+commit\b|\bcommitted\b|commit [0-9a-f]{7,40}/.test(text)) reasons.add("commit_signal");
-  if (/codex-issue-runner\s+issue\s+update|issue update --id|--status\s+(done|failed)/.test(text)) {
+  if (/xuanwu\s+issue\s+update|issue update --id|--status\s+(done|failed)/.test(text)) {
     reasons.add("issue_update_signal");
   }
 }

@@ -58,7 +58,7 @@ describe("Feishu conversation state repository", () => {
     try {
       const saved = setFeishuConversationActiveProject(db, {
         activeConversationId: "feishu-chat-oc_group-20260613",
-        activeProjectId: "codex-issue-runner",
+        activeProjectId: "xuanwu",
         scopeKey: "feishu-chat-oc_group-20260613",
         source: "user_switch"
       }, new Date("2026-06-13T03:00:00Z"));
@@ -70,7 +70,7 @@ describe("Feishu conversation state repository", () => {
 
       expect(saved).toMatchObject({
         active_conversation_id: "feishu-chat-oc_group-20260613",
-        active_project_id: "codex-issue-runner",
+        active_project_id: "xuanwu",
         active_project_source: "user_switch",
         epoch: 0,
         scope_key: "feishu-chat-oc_group-20260613",
@@ -97,7 +97,7 @@ describe("Feishu conversation state repository", () => {
     try {
       setFeishuConversationActiveProject(db, {
         activeConversationId: "feishu-chat-oc_group-20260613",
-        activeProjectId: "codex-issue-runner",
+        activeProjectId: "xuanwu",
         scopeKey: "feishu-chat-oc_group-20260613",
         source: "card_select"
       }, new Date("2026-06-13T03:00:00Z"));
@@ -109,7 +109,7 @@ describe("Feishu conversation state repository", () => {
 
       expect(bumped).toMatchObject({
         active_conversation_id: "feishu-chat-oc_group-20260613-n1",
-        active_project_id: "codex-issue-runner",
+        active_project_id: "xuanwu",
         active_project_source: "card_select",
         epoch: 1,
         scope_key: "feishu-chat-oc_group-20260613",
@@ -133,7 +133,7 @@ describe("Feishu conversation state repository", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-state-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-state-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -335,7 +335,7 @@ function classify(path: string, newestBackup: Set<string>): {
     active: false, authority: "derived", disposition: "keep", generator: "migration rehearsal", kind: "migration_manifest",
     lastVerified: true, owner: "migration-operator", restoreValue: "reproducible", retentionClass: "migration-manifest-live"
   };
-  if (path.startsWith("bin/") && !/^bin\/(?:codex-issue-runner(?:\.build\.stamp)?|photon_rs_bg\.wasm)$/.test(path)) {
+  if (path.startsWith("bin/") && !/^bin\/(?:xuanwu(?:\.build\.stamp)?|photon_rs_bg\.wasm)$/.test(path)) {
     return archive("runtime_binary", "legacy-binary-archive", "release-operator", "historic deployment");
   }
   if (path.startsWith("bin/")) return {

@@ -107,9 +107,9 @@ async function createFixture(): Promise<{ archive: string; live: string; root: s
   writeFileSync(join(live, "state", "runner.db"), "live-db");
   writeFileSync(join(live, "state", "runner.db.old.bak"), "old-state-backup");
   writeFileSync(join(live, "state", "auth_token"), "secret");
-  writeFileSync(join(live, "bin", "codex-issue-runner"), "active-binary");
-  writeFileSync(join(live, "bin", "codex-issue-runner.build.stamp"), "stamp");
-  writeFileSync(join(live, "bin", "codex-issue-runner.backup-old"), "old-binary");
+  writeFileSync(join(live, "bin", "xuanwu"), "active-binary");
+  writeFileSync(join(live, "bin", "xuanwu.build.stamp"), "stamp");
+  writeFileSync(join(live, "bin", "xuanwu.backup-old"), "old-binary");
   writeFileSync(join(live, "backups", "backup-old", "runner.db"), "old-backup");
   writeFileSync(join(live, "backups", "backup-new", "runner.db"), "new-backup");
   writeFileSync(join(live, "evidence", "issue-1", "snapshot.db"), "evidence-db");

@@ -30,7 +30,7 @@ rg -n "queueNotificationOutbox\(|routeNotification\(|queueExistingNotificationIn
 codex app-server generate-ts --out /tmp/xw-p11-06-codex-schema
 rg -n "execCommandApproval|applyPatchApproval|item/.+/requestApproval" /tmp/xw-p11-06-codex-schema/ServerRequest.ts
 
-curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+curl -fsS -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" \
   http://127.0.0.1:3008/api/compatibility/legacy
 ```
 

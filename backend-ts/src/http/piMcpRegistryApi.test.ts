@@ -6,12 +6,12 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const previousRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+const previousRegistry = Bun.env.XUANWU_MCP_REGISTRY_JSON;
 const tempRoots: string[] = [];
 
 afterEach(async () => {
-  if (previousRegistry === undefined) delete Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
-  else Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = previousRegistry;
+  if (previousRegistry === undefined) delete Bun.env.XUANWU_MCP_REGISTRY_JSON;
+  else Bun.env.XUANWU_MCP_REGISTRY_JSON = previousRegistry;
   while (tempRoots.length > 0) {
     const path = tempRoots.pop();
     if (path) await rm(path, { recursive: true, force: true });
@@ -21,7 +21,7 @@ afterEach(async () => {
 describe("PI MCP registry API", () => {
   test("lists MCP capabilities with server diagnostics and risk levels", async () => {
     const fixture = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer(), offlineServer()] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer(), offlineServer()] });
     try {
       const router = createDefaultRouter({ database: fixture.db });
       const response = await router.handle(new Request(`${BASE_URL}/api/pi/mcp/capabilities`));
@@ -54,7 +54,7 @@ describe("PI MCP registry API", () => {
 
   test("reads one MCP capability and exposes no execution route", async () => {
     const fixture = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
     try {
       const router = createDefaultRouter({ database: fixture.db });
       const detail = await router.handle(new Request(`${BASE_URL}/api/pi/mcp/capabilities/docs%3Atool%3Asearch`));
@@ -81,7 +81,7 @@ describe("PI MCP registry API", () => {
 });
 
 async function openFixture(): Promise<{ db: RunnerDatabase; root: string }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-mcp-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-mcp-api-"));
   tempRoots.push(root);
   await mkdir(join(root, "project"), { recursive: true });
   return { db: await openDatabase({ stateDir: join(root, "state") }), root };

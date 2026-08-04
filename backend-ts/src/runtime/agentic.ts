@@ -22,7 +22,7 @@ export async function startAgenticRuntime(args: string[]): Promise<void> {
     ok: true,
     reconciliation,
     role: "agentic",
-    service: "codex-issue-runner agentic worker"
+    service: "xuanwu agentic worker"
   }));
 }
 

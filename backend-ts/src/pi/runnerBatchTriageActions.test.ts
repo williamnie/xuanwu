@@ -82,7 +82,7 @@ describe("PI batch triage enqueue ranges", () => {
 });
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-batch-triage-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-batch-triage-"));
   const db = await openDatabase({ stateDir: join(root, "state") });
   insertProject(db, "demo", join(root, "project"));
   const project = getProject(db, "demo");

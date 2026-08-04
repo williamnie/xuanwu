@@ -71,7 +71,7 @@ describe("Work HTTP idempotent enqueue", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-work-api-enqueue-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-work-api-enqueue-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

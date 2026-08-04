@@ -250,7 +250,7 @@ async function fixtureHandler(projectMappings = ""): Promise<{
   handle: (request: Request) => Promise<Response>;
   root: string;
 }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-inbox-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-inbox-"));
   tempRoots.push(root);
   const database = await openDatabase({ stateDir: join(root, "state") });
   const config = buildConfig({

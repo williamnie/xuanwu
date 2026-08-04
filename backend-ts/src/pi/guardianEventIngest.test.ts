@@ -51,7 +51,7 @@ describe("PI Guardian event ingest", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-guardian-ingest-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-guardian-ingest-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

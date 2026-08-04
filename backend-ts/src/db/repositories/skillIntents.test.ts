@@ -24,23 +24,23 @@ describe("skill intent persistence", () => {
       const project = createProject(db, {
         cwd,
         default_skill_policy: {
-          allowed: ["codex-issue-runner", "verification-before-completion"],
+          allowed: ["xuanwu", "verification-before-completion"],
           recommended: ["verification-before-completion"],
-          required: ["codex-issue-runner"]
+          required: ["xuanwu"]
         },
         id: "demo"
       });
       const issue = createIssue(db, {
         project_id: project.id,
         recommended_skill_intents: "verification-before-completion",
-        required_skill_intents: ["codex-issue-runner"],
+        required_skill_intents: ["xuanwu"],
         title: "Skill issue"
       });
       const patched = updateIssue(db, issue.id, {
         recommended_skill_intents: ["browser:control-in-app-browser"]
       });
       const delegation = createPiDelegation(db, {
-        allowed_skill_intents_json: ["codex-issue-runner", "browser:control-in-app-browser"],
+        allowed_skill_intents_json: ["xuanwu", "browser:control-in-app-browser"],
         id: "delegation-a",
         project_id: project.id
       });
@@ -49,14 +49,14 @@ describe("skill intent persistence", () => {
       });
 
       expect(JSON.parse(project.default_skill_policy)).toEqual({
-        allowed: ["codex-issue-runner", "verification-before-completion"],
+        allowed: ["xuanwu", "verification-before-completion"],
         recommended: ["verification-before-completion"],
-        required: ["codex-issue-runner"]
+        required: ["xuanwu"]
       });
-      expect(JSON.parse(issue.required_skill_intents)).toEqual(["codex-issue-runner"]);
+      expect(JSON.parse(issue.required_skill_intents)).toEqual(["xuanwu"]);
       expect(JSON.parse(issue.recommended_skill_intents)).toEqual(["verification-before-completion"]);
       expect(JSON.parse(patched.recommended_skill_intents)).toEqual(["browser:control-in-app-browser"]);
-      expect(JSON.parse(delegation.allowed_skill_intents_json)).toEqual(["codex-issue-runner", "browser:control-in-app-browser"]);
+      expect(JSON.parse(delegation.allowed_skill_intents_json)).toEqual(["xuanwu", "browser:control-in-app-browser"]);
       expect(JSON.parse(patchedDelegation.allowed_skill_intents_json)).toEqual(["verification-before-completion"]);
       expect(getPiDelegation(db, "delegation-a")).toMatchObject(patchedDelegation);
     } finally {
@@ -92,7 +92,7 @@ describe("skill intent persistence", () => {
 });
 
 async function openFixture(): Promise<{ cwd: string; db: RunnerDatabase }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-skill-intents-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-skill-intents-"));
   tempRoots.push(root);
   const cwd = join(root, "project");
   await mkdir(cwd, { recursive: true });

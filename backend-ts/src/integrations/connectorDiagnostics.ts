@@ -105,7 +105,7 @@ export async function probeConnectorConnection(input: {
     return probeHttp(input.fetch ?? fetch, `${config.api_base_url}/user`, {
       accept: "application/vnd.github+json",
       authorization: `Bearer ${config.token}`,
-      "user-agent": "codex-issue-runner-connector-health/1"
+      "user-agent": "xuanwu-connector-health/1"
     }, checkedAt, now);
   }
   if (id === "gitlab-events" || id === "gitlab-issues") {
@@ -114,7 +114,7 @@ export async function probeConnectorConnection(input: {
     return probeHttp(input.fetch ?? fetch, `${config.api_base_url}/user`, {
       accept: "application/json",
       authorization: `Bearer ${config.token}`,
-      "user-agent": "codex-issue-runner-connector-health/1"
+      "user-agent": "xuanwu-connector-health/1"
     }, checkedAt, now);
   }
   if (id === "linear-issues") {

@@ -113,7 +113,7 @@ describe("PI action engine Guardian action outlet", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-action-engine-guardian-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-action-engine-guardian-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

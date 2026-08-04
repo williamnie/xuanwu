@@ -164,7 +164,7 @@ async function createFixture(
   suffix: string,
   options: { maxAttempts?: number } = {}
 ): Promise<{ actionID: string; db: RunnerDatabase; input: QueueTrackerUpdateInput }> {
-  const root = await mkdtemp(join(tmpdir(), `codex-runner-tracker-${suffix}-`));
+  const root = await mkdtemp(join(tmpdir(), `xuanwu-tracker-${suffix}-`));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run("insert into projects (id, name, cwd, created_at, updated_at) values (?, ?, ?, ?, ?)", [

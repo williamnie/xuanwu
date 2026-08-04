@@ -29,7 +29,7 @@ afterEach(async () => {
 
 describe("Bun SQLite database connection", () => {
   test("creates the state directory and default runner database", async () => {
-    const root = await tempPath("codex-runner-db-");
+    const root = await tempPath("xuanwu-db-");
     const stateDir = join(root, "state");
     const connection = await openDatabase({ stateDir });
 
@@ -49,7 +49,7 @@ describe("Bun SQLite database connection", () => {
   });
 
   test("runs the base schema migration on an empty runtime database", async () => {
-    const root = await tempPath("codex-runner-bun-schema-");
+    const root = await tempPath("xuanwu-bun-schema-");
     const connection = await openDatabase({ stateDir: join(root, "state") });
 
     try {
@@ -572,7 +572,7 @@ describe("Bun SQLite database connection", () => {
   });
 
   test("bootstraps a default PI agent for a fresh runtime database", async () => {
-    const root = await tempPath("codex-runner-bun-default-pi-agent-");
+    const root = await tempPath("xuanwu-bun-default-pi-agent-");
     const connection = await openDatabase({ stateDir: join(root, "state") });
 
     try {
@@ -592,7 +592,7 @@ describe("Bun SQLite database connection", () => {
   });
 
   test("adds runner-default when upgrading a database that only has a legacy PI agent", async () => {
-    const root = await tempPath("codex-runner-bun-legacy-pi-agent-");
+    const root = await tempPath("xuanwu-bun-legacy-pi-agent-");
     const stateDir = join(root, "state");
     const first = await openDatabase({ stateDir });
     first.sqlite.run("delete from pi_agents where id='runner-default'");
@@ -646,7 +646,7 @@ describe("Bun SQLite database connection", () => {
   });
 
   test("collapses legacy agent data when the singleton Supervisor migration is pending", async () => {
-    const root = await tempPath("codex-runner-bun-collapse-pi-agents-");
+    const root = await tempPath("xuanwu-bun-collapse-pi-agents-");
     const stateDir = join(root, "state");
     const first = await openDatabase({ stateDir });
     first.close();
@@ -694,7 +694,7 @@ describe("Bun SQLite database connection", () => {
 
 
   test("repairs schema drift when a migration row exists but tables are missing", async () => {
-    const root = await tempPath("codex-runner-bun-schema-drift-");
+    const root = await tempPath("xuanwu-bun-schema-drift-");
     const stateDir = join(root, "state");
     const first = await openDatabase({ stateDir });
     first.close();
@@ -718,7 +718,7 @@ describe("Bun SQLite database connection", () => {
   });
 
   test("removes legacy notification settings when cleanup migration is pending", async () => {
-    const root = await tempPath("codex-runner-bun-legacy-notification-settings-");
+    const root = await tempPath("xuanwu-bun-legacy-notification-settings-");
     const stateDir = join(root, "state");
     const first = await openDatabase({ stateDir });
     first.close();
@@ -745,7 +745,7 @@ describe("Bun SQLite database connection", () => {
   });
 
   test("clears stale Feishu PI conversation project bindings when cleanup migration is pending", async () => {
-    const root = await tempPath("codex-runner-bun-feishu-pi-project-cleanup-");
+    const root = await tempPath("xuanwu-bun-feishu-pi-project-cleanup-");
     const stateDir = join(root, "state");
     const first = await openDatabase({ stateDir });
     first.close();
@@ -762,7 +762,7 @@ describe("Bun SQLite database connection", () => {
       raw.run(`insert into pi_conversations
         (id, project_id, pi_agent_id, title, status, session_file, pi_session_id, created_at, updated_at)
         values (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-        "feishu-chat-oc_fixture-20260705", "codex-issue-runner", "pi-faux",
+        "feishu-chat-oc_fixture-20260705", "xuanwu", "pi-faux",
         "Feishu · oc_fixture", "active", "/tmp/feishu.jsonl", "feishu-chat-oc_fixture-20260705",
         "2026-07-05T00:00:00Z", "2026-07-05T00:00:00Z"
       ]);
@@ -777,7 +777,7 @@ describe("Bun SQLite database connection", () => {
          title, preview, status, raw_ref, created_at, updated_at)
         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         "pi-sdk:feishu-chat-oc_fixture-20260705", "pi-sdk", "feishu-chat-oc_fixture-20260705",
-        "pi_manager", "codex-issue-runner", 0, "Feishu · oc_fixture", "", "active",
+        "pi_manager", "xuanwu", 0, "Feishu · oc_fixture", "", "active",
         "{\"conversation_id\":\"feishu-chat-oc_fixture-20260705\"}",
         "2026-07-05T00:00:00Z", "2026-07-05T00:00:00Z"
       ]);
@@ -811,7 +811,7 @@ describe("Bun SQLite database connection", () => {
   });
 
   test("repairs older approval request tables after the migration row exists", async () => {
-    const root = await tempPath("codex-runner-bun-approval-drift-");
+    const root = await tempPath("xuanwu-bun-approval-drift-");
     const stateDir = join(root, "state");
     const first = await openDatabase({ stateDir });
     first.close();
@@ -881,7 +881,7 @@ describe("Bun SQLite database connection", () => {
   });
 
   test("keeps migrations idempotent across repeated runtime opens", async () => {
-    const root = await tempPath("codex-runner-bun-idempotent-");
+    const root = await tempPath("xuanwu-bun-idempotent-");
     const stateDir = join(root, "state");
     const first = await openDatabase({ stateDir });
     first.close();
@@ -897,7 +897,7 @@ describe("Bun SQLite database connection", () => {
   });
 
   test("opens explicit read-only import database without allowing writes", async () => {
-    const root = await tempPath("codex-runner-bun-import-");
+    const root = await tempPath("xuanwu-bun-import-");
     const dataDir = join(root, "data");
     const importPath = join(dataDir, "runner.db");
     await mkdir(dataDir, { recursive: true });
@@ -918,7 +918,7 @@ describe("Bun SQLite database connection", () => {
   });
 
   test("configures WAL connection settings without switching journal mode at startup", async () => {
-    const root = await tempPath("codex-runner-bun-wal-settings-");
+    const root = await tempPath("xuanwu-bun-wal-settings-");
     const stateDir = join(root, "state");
     const first = await openDatabase({ stateDir });
     expect(first.sqlite.query("pragma journal_mode").get()).toEqual({ journal_mode: "delete" });
@@ -939,7 +939,7 @@ describe("Bun SQLite database connection", () => {
   });
 
   test("allows the isolated Agentic writer to wait longer for short Core transactions", async () => {
-    const root = await tempPath("codex-runner-bun-agentic-writer-");
+    const root = await tempPath("xuanwu-bun-agentic-writer-");
     const connection = await openDatabase({ stateDir: join(root, "state"), writerBusyTimeoutMs: 5_000 });
     try {
       expect(connection.sqlite.query<{ timeout: number }, []>("pragma busy_timeout").get()).toEqual({ timeout: 5_000 });
@@ -949,7 +949,7 @@ describe("Bun SQLite database connection", () => {
   });
 
   test("runs callbacks inside a rollback-capable transaction", async () => {
-    const root = await tempPath("codex-runner-bun-tx-");
+    const root = await tempPath("xuanwu-bun-tx-");
     const connection = await openDatabase({ stateDir: join(root, "state") });
 
     try {

@@ -150,7 +150,7 @@ describe("external link repository", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-external-links-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-external-links-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

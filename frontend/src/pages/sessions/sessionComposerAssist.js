@@ -17,7 +17,7 @@ export function buildSessionComposerSuggestions({ issues = [], currentProject = 
 
 export function issueCommandPrompt(project = null) {
   const projectLine = project ? `项目：${projectLabel(project)}\n\n` : '';
-  return `${projectLine}请把下面内容整理为一个 codex-issue-runner issue：\n\n## 背景/问题\n\n## 目标\n\n## 范围\n\n## 验收\n\n## 验证方式\n`;
+  return `${projectLine}请把下面内容整理为一个 xuanwu issue：\n\n## 背景/问题\n\n## 目标\n\n## 范围\n\n## 验收\n\n## 验证方式\n`;
 }
 
 export function statusCommandPrompt(linkedIssues = []) {

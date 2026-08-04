@@ -19,7 +19,7 @@ describe("PI agent orchestration profile selection", () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, {
-        defaultSkillPolicy: { required: ["verification-before-completion"], recommended: ["codex-issue-runner"] },
+        defaultSkillPolicy: { required: ["verification-before-completion"], recommended: ["xuanwu"] },
         id: "demo",
         provider: "codex"
       });
@@ -32,7 +32,7 @@ describe("PI agent orchestration profile selection", () => {
       expect(recommendation).toMatchObject({
         profile_id: "codex-verifier",
         provider: "codex",
-        recommended_skill_intents: ["codex-issue-runner"],
+        recommended_skill_intents: ["xuanwu"],
         required_skill_intents: ["verification-before-completion"]
       });
       expect(recommendation.reason).toContain("matched role/provider/skill intent strategy");
@@ -44,7 +44,7 @@ describe("PI agent orchestration profile selection", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-agent-orchestration-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-agent-orchestration-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -11,14 +11,14 @@ import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const previousCodexHome = Bun.env.CODEX_HOME;
-const previousMcpRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+const previousMcpRegistry = Bun.env.XUANWU_MCP_REGISTRY_JSON;
 const tempRoots: string[] = [];
 
 afterEach(async () => {
   if (previousCodexHome === undefined) delete Bun.env.CODEX_HOME;
   else Bun.env.CODEX_HOME = previousCodexHome;
-  if (previousMcpRegistry === undefined) delete Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
-  else Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = previousMcpRegistry;
+  if (previousMcpRegistry === undefined) delete Bun.env.XUANWU_MCP_REGISTRY_JSON;
+  else Bun.env.XUANWU_MCP_REGISTRY_JSON = previousMcpRegistry;
   while (tempRoots.length > 0) {
     const path = tempRoots.pop();
     if (path) await rm(path, { recursive: true, force: true });
@@ -84,7 +84,7 @@ describe("PI skill metadata API", () => {
       required_tools: ["docs:tool:search"]
     }));
     Bun.env.CODEX_HOME = fixture.root;
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [mcpDocsServer()] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [mcpDocsServer()] });
     try {
       const router = createDefaultRouter({ database: fixture.db });
       const listed = await router.handle(new Request(`${BASE_URL}/api/pi/skills`));
@@ -289,7 +289,7 @@ describe("PI skill metadata API", () => {
 });
 
 async function openFixture(): Promise<{ db: RunnerDatabase; root: string }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-skills-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-skills-api-"));
   tempRoots.push(root);
   return { db: await openDatabase({ stateDir: join(root, "state") }), root };
 }

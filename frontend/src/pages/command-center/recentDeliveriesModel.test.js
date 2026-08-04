@@ -99,7 +99,7 @@ function item(overrides = {}) {
     evidence_count: 0,
     id: HANDOFF_ID,
     links: { view: `#/work/${encodeURIComponent(WORK_ID)}/delivery/${encodeURIComponent(HANDOFF_ID)}` },
-    project_id: 'codex-issue-runner',
+    project_id: 'xuanwu',
     review: { state: 'not_requested' },
     risk_count: 0,
     status: 'draft',

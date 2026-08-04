@@ -54,7 +54,7 @@ describe("CLI connector provider registry", () => {
 });
 
 async function fixtureDir(options: { invalid?: boolean; valid?: boolean }): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "codex-runner-cli-provider-"));
+  const dir = await mkdtemp(join(tmpdir(), "xuanwu-cli-provider-"));
   tempRoots.push(dir);
   if (options.valid) await writeFile(join(dir, "fixture.json"), readFileSync(FIXTURE, "utf8"));
   if (options.invalid) await writeFile(join(dir, "broken.json"), "{\"id\":\"bad provider\"}");

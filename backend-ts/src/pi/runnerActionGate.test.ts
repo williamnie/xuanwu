@@ -390,7 +390,7 @@ describe("PI runner action gate", () => {
 });
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-action-gate-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-action-gate-"));
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(
     `insert into projects (id, name, cwd, sort_order, created_at, updated_at)

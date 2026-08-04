@@ -257,7 +257,7 @@ async function fixtureHandler(options: { allowedChatIds?: string; allowedUserIds
 }
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-pi-action-card-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-pi-action-card-"));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(

@@ -15,7 +15,7 @@ const tempRoots: string[] = [];
 type Fixture = { db: RunnerDatabase; projectCwd: string };
 
 async function openFixture(): Promise<Fixture> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-tools-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-tools-"));
   const projectCwd = join(root, "project");
   mkdirSync(projectCwd, { recursive: true });
   writeFileSync(join(projectCwd, "README.md"), "# Demo\n");

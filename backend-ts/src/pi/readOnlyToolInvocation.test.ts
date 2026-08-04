@@ -81,7 +81,7 @@ describe("read-only assistant tool invocation", () => {
   test("invokes transported MCP tools and stored aliases as ToolResult", async () => {
     const db = await openFixture();
     const script = await writeMcpServer();
-    const env = { CODEX_RUNNER_MCP_REGISTRY_JSON: JSON.stringify({ servers: [docsServer(script)] }) };
+    const env = { XUANWU_MCP_REGISTRY_JSON: JSON.stringify({ servers: [docsServer(script)] }) };
     try {
       seedStoredMcpAlias(db);
       const succeeded = await invokeReadOnlyAssistantTool({
@@ -123,14 +123,14 @@ describe("read-only assistant tool invocation", () => {
 });
 
 async function openFixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-read-only-tools-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-read-only-tools-"));
   tempRoots.push(root);
   return await openDatabase({ stateDir: join(root, "state") });
 }
 
 async function openCliFixture(): Promise<{ db: RunnerDatabase; dir: string }> {
   const db = await openFixture();
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-read-only-cli-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-read-only-cli-"));
   tempRoots.push(root);
   const script = join(root, "fixture.mjs");
   await mkdir(root, { recursive: true });
@@ -174,7 +174,7 @@ function cliCommand(script: string, name: string, permission: "read" | "write"):
 }
 
 async function writeMcpServer(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-read-only-mcp-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-read-only-mcp-"));
   tempRoots.push(root);
   const script = join(root, "server.mjs");
   await writeFile(script, MCP_SERVER_SCRIPT, "utf8");

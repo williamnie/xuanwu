@@ -14,23 +14,23 @@ Claude SDK 模式声明 `issue_execution`、`sessions`、`resume_session`、`int
 常用环境变量：
 
 ```txt
-CODEX_RUNNER_CODEX_CMD
-CODEX_RUNNER_CODEX_CWD
-CODEX_RUNNER_CODEX_ENV
-CODEX_RUNNER_CODEX_TIMEOUT_MS
-CODEX_RUNNER_CLAUDE_CMD
-CODEX_RUNNER_CLAUDE_CWD
-CODEX_RUNNER_CLAUDE_ENV
-CODEX_RUNNER_CLAUDE_MODE
-CODEX_RUNNER_CLAUDE_AUTH_MODE
-CODEX_RUNNER_CLAUDE_API_BASE_URL
-CODEX_RUNNER_CLAUDE_API_PATH
-CODEX_RUNNER_CLAUDE_API_KEY
-CODEX_RUNNER_CLAUDE_API_KEY_FILE
-CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR
-CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE
-CODEX_RUNNER_CLAUDE_MODEL
-CODEX_RUNNER_CLAUDE_TIMEOUT_MS
+XUANWU_CODEX_CMD
+XUANWU_CODEX_CWD
+XUANWU_CODEX_ENV
+XUANWU_CODEX_TIMEOUT_MS
+XUANWU_CLAUDE_CMD
+XUANWU_CLAUDE_CWD
+XUANWU_CLAUDE_ENV
+XUANWU_CLAUDE_MODE
+XUANWU_CLAUDE_AUTH_MODE
+XUANWU_CLAUDE_API_BASE_URL
+XUANWU_CLAUDE_API_PATH
+XUANWU_CLAUDE_API_KEY
+XUANWU_CLAUDE_API_KEY_FILE
+XUANWU_CLAUDE_PLATFORM_CONFIG_DIR
+XUANWU_CLAUDE_PLATFORM_PROFILE
+XUANWU_CLAUDE_MODEL
+XUANWU_CLAUDE_TIMEOUT_MS
 ```
 
 ### Claude Agent SDK live 配置
@@ -39,30 +39,30 @@ Claude 认证模式：
 
 - `environment`：SDK 或 CLI 使用 API key / gateway auth token；这是 SDK 默认值。
 - `platform-profile`：SDK 使用 `ant auth login` 创建的 Anthropic Platform OAuth profile，Runner 不读取或复制 access/refresh token。
-- `local-cli`：仅可与 `CODEX_RUNNER_CLAUDE_MODE=cli-fallback` 配合，复用同一系统用户的 Claude Code CLI 登录。
+- `local-cli`：仅可与 `XUANWU_CLAUDE_MODE=cli-fallback` 配合，复用同一系统用户的 Claude Code CLI 登录。
 
 #### API key / gateway environment
 
 源码 launchd 部署可在仓库根目录执行：
 
 ```bash
-export CODEX_RUNNER_CLAUDE_MODE=sdk
-export CODEX_RUNNER_CLAUDE_API_BASE_URL='https://your-anthropic-compatible-endpoint.example'
-export CODEX_RUNNER_CLAUDE_API_PATH='/optional/path'
-export CODEX_RUNNER_CLAUDE_API_KEY='replace-at-live-smoke-time'
+export XUANWU_CLAUDE_MODE=sdk
+export XUANWU_CLAUDE_API_BASE_URL='https://your-anthropic-compatible-endpoint.example'
+export XUANWU_CLAUDE_API_PATH='/optional/path'
+export XUANWU_CLAUDE_API_KEY='replace-at-live-smoke-time'
 ./redeploy.sh
 ```
 
-- `CODEX_RUNNER_CLAUDE_API_PATH` 可留空；非空时会规范化后拼到 base URL。
-- Runner 将这三个值映射为 SDK 使用的 `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY`。直接开发也兼容标准 Anthropic 变量和已有 `CODEX_RUNNER_CLAUDE_ENV`。
-- 部署脚本不会把 key 放到命令行、plist 或 systemd unit；它将 key 写入 `${CODEX_RUNNER_STATE_DIR}/claude_api_key`（权限 `0600`），服务配置只保留 `CODEX_RUNNER_CLAUDE_API_KEY_FILE`。可用同名变量覆盖文件位置。
+- `XUANWU_CLAUDE_API_PATH` 可留空；非空时会规范化后拼到 base URL。
+- Runner 将这三个值映射为 SDK 使用的 `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY`。直接开发也兼容标准 Anthropic 变量和已有 `XUANWU_CLAUDE_ENV`。
+- 部署脚本不会把 key 放到命令行、plist 或 systemd unit；它将 key 写入 `${XUANWU_STATE_DIR}/claude_api_key`（权限 `0600`），服务配置只保留 `XUANWU_CLAUDE_API_KEY_FILE`。可用同名变量覆盖文件位置。
 - 只改凭据/endpoint 时仍需重新运行 installer/redeploy，让 Core 获得新环境并重启。源码 `./redeploy.sh` 会按现有安全流程重建并重启 Web/Core/Agentic；release 安装可用相同变量重新运行 installer。不要把真实 key 粘到 issue、日志、DB、浏览器或 status 截图中。
 
 显式回退到既有 Claude CLI：
 
 ```bash
-export CODEX_RUNNER_CLAUDE_MODE=cli-fallback
-export CODEX_RUNNER_CLAUDE_CMD=/absolute/path/to/claude
+export XUANWU_CLAUDE_MODE=cli-fallback
+export XUANWU_CLAUDE_CMD=/absolute/path/to/claude
 ./redeploy.sh
 ```
 
@@ -81,8 +81,8 @@ claude auth login
 然后显式选择 fallback：
 
 ```bash
-export CODEX_RUNNER_CLAUDE_MODE=cli-fallback
-export CODEX_RUNNER_CLAUDE_AUTH_MODE=local-cli
+export XUANWU_CLAUDE_MODE=cli-fallback
+export XUANWU_CLAUDE_AUTH_MODE=local-cli
 ./redeploy.sh
 ```
 
@@ -100,15 +100,15 @@ ant auth status --profile runner
 随后让 SDK 显式使用该 profile：
 
 ```bash
-unset CODEX_RUNNER_CLAUDE_API_KEY ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN
-export CODEX_RUNNER_CLAUDE_MODE=sdk
-export CODEX_RUNNER_CLAUDE_AUTH_MODE=platform-profile
-export CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR="$HOME/.config/anthropic"
-export CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE=runner
+unset XUANWU_CLAUDE_API_KEY ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN
+export XUANWU_CLAUDE_MODE=sdk
+export XUANWU_CLAUDE_AUTH_MODE=platform-profile
+export XUANWU_CLAUDE_PLATFORM_CONFIG_DIR="$HOME/.config/anthropic"
+export XUANWU_CLAUDE_PLATFORM_PROFILE=runner
 ./redeploy.sh
 ```
 
-`CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR` 可省略，macOS/Linux 默认使用 `$HOME/.config/anthropic`；profile 可省略，此时按 `ANTHROPIC_PROFILE`、`active_config`、`default` 的顺序解析。Runner 只读取非敏感的 `configs/<profile>.json` 并检查 `credentials/<profile>.json` 是否存在且权限私有，不读取 credential 内容。SDK 自己负责 access token 使用与刷新。显式 profile 模式会从 SDK 子进程环境移除更高优先级的 `ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN`、`CLAUDE_CODE_OAUTH_TOKEN`，防止请求被静默路由到其他 workspace。
+`XUANWU_CLAUDE_PLATFORM_CONFIG_DIR` 可省略，macOS/Linux 默认使用 `$HOME/.config/anthropic`；profile 可省略，此时按 `ANTHROPIC_PROFILE`、`active_config`、`default` 的顺序解析。Runner 只读取非敏感的 `configs/<profile>.json` 并检查 `credentials/<profile>.json` 是否存在且权限私有，不读取 credential 内容。SDK 自己负责 access token 使用与刷新。显式 profile 模式会从 SDK 子进程环境移除更高优先级的 `ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN`、`CLAUDE_CODE_OAUTH_TOKEN`，防止请求被静默路由到其他 workspace。
 
 status 应显示 `auth_mode=platform-profile`、`auth_source=platform_profile`、`auth_configured=true`，以及安全的 profile 名称、认证类型和 `credentials_file_ready`；不会返回 config 绝对路径或 token。
 
@@ -121,14 +121,14 @@ status 应显示 `auth_mode=platform-profile`、`auth_source=platform_profile`�
 
    ```bash
    ./scripts/status-launchd.sh
-   ./dist/codex-issue-runner system status \
-     --token-file "$HOME/Library/Application Support/codex-issue-runner-bun-live/state/auth_token" \
+   ./dist/xuanwu system status \
+     --token-file "$HOME/Library/Application Support/xuanwu-bun-live/state/auth_token" \
      --json | jq '.providers[] | select(.id == "claude")'
    ```
 
    预期 `mode == "sdk"`、`ready == true`、`status == "available"`、`sdk.installed == true`、`sdk.executable_ready == true`、`sdk.ready == true`、`sdk.version == "0.3.152"`、`api_key_configured == true`。`api_base_url_summary` 只显示安全 origin/路径占位，不应出现 key、query、userinfo 或私有 path。
 
-   Bun 编译产物旁会同时生成 `codex-issue-runner.claude-agent-sdk`。这是 SDK 自身要求的原生 Claude Code executable，不是 Node sidecar/daemon；build、release install 与 rollback 都会把它作为相邻运行时资产原子部署。若缺失，status 会明确返回 `sdk.executable_ready == false`，而不是假报 SDK 健康。
+   Bun 编译产物旁会同时生成 `xuanwu.claude-agent-sdk`。这是 SDK 自身要求的原生 Claude Code executable，不是 Node sidecar/daemon；build、release install 与 rollback 都会把它作为相邻运行时资产原子部署。若缺失，status 会明确返回 `sdk.executable_ready == false`，而不是假报 SDK 健康。
 3. 在项目设置的 **Agent Profile（可选）** 中准备一个 `provider=claude` 的 profile；在 Work 新建/编辑弹窗选择它并启动一个最小 Work，例如“只读取 README 第一行并回复，不修改文件”。
 4. 打开 **Run Detail → Provider**。确认引用形如 `claude:<session_id>`，能看到实时文本、工具调用/结果、usage/cost、终态；尝试 interrupt，并在同一 Runner transcript 中继续/恢复。Claude 页面不应出现 “Open in Codex App” 或 `codex resume`。
 5. 路由回归：同一项目新建两个 Work，一个显式选 Codex profile，另一个显式选 Claude profile。确认 Work Detail 的 effective provider 分别正确，并确认两个 Run 的 current Attempt 实际 provider 保持 `codex` / `claude`；随后修改项目默认 profile，历史 Attempt 不应变化。

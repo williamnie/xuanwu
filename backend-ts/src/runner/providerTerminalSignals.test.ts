@@ -105,7 +105,7 @@ describe("provider terminal PI signals", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-provider-terminal-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-provider-terminal-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

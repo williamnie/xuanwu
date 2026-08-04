@@ -236,7 +236,7 @@ describe("PI Guardian direct Feishu alert target routing", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-guardian-alerts-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-guardian-alerts-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

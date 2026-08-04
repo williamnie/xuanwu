@@ -110,7 +110,7 @@ describe("Run progress repository", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-run-progress-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-run-progress-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

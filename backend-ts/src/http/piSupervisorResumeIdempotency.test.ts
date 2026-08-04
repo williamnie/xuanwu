@@ -156,7 +156,7 @@ describe("PI supervisor resume follow-up idempotency", () => {
 });
 
 async function fixtureDb(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-resume-idempotency-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-resume-idempotency-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

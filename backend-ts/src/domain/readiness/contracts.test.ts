@@ -100,7 +100,7 @@ describe("delivery readiness Evidence projection", () => {
   });
 
   test("rebuilds after restart and rollback Evidence revokes only the matching projection", async () => {
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-readiness-restart-"));
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-readiness-restart-"));
     tempRoots.push(root);
     const stateDir = join(root, "state");
     let db = await openDatabase({ stateDir });
@@ -137,7 +137,7 @@ describe("delivery readiness Evidence projection", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-readiness-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-readiness-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

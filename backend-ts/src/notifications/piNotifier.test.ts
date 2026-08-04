@@ -11,7 +11,7 @@ import { publishNeedsUserFindingNotifications, publishPiNeedsUserNotification } 
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-notifier-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-notifier-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

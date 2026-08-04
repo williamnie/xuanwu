@@ -91,7 +91,7 @@ describe("legacy Issues/Sessions compatibility", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-legacy-compat-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-legacy-compat-"));
   roots.push(root);
   return await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root });
 }

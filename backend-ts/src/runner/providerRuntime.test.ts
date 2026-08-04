@@ -192,7 +192,7 @@ class ThrowingProvider implements ExecutorProvider {
 }
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-provider-runtime-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-provider-runtime-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -215,7 +215,7 @@ describe("executor provider runtime seam", () => {
 
     const result = await runIssueWithProvider(provider, {
       issueId: 154,
-      projectId: "codex-issue-runner",
+      projectId: "xuanwu",
       cwd: "/tmp/project",
       prompt: "issue prompt",
       model: "codex-default",
@@ -225,7 +225,7 @@ describe("executor provider runtime seam", () => {
       onLog: (event) => events.push(event)
     });
 
-    expect(provider.lastInput).toMatchObject({ issueId: 154, projectId: "codex-issue-runner", serviceTier: "priority" });
+    expect(provider.lastInput).toMatchObject({ issueId: 154, projectId: "xuanwu", serviceTier: "priority" });
     expect(result).toEqual({
       runId: "fake-run",
       session: { provider: "fake-execution-only", sessionId: "fake-session", turnId: "fake-turn" }

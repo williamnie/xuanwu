@@ -179,7 +179,7 @@ function messageFixture() {
 }
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-connector-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-connector-"));
   roots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(

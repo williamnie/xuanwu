@@ -23,7 +23,6 @@ const FORBIDDEN_UI_TERMS = [
   'PI Memory',
   'PI OAuth',
   'Agent Guardian',
-  'Codex Issue Runner',
   'Local issue loop guardian',
 ];
 
@@ -34,7 +33,7 @@ test('canonical product, Supervisor, and Runner terms stay fixed', () => {
     supervisor: 'Xuanwu Supervisor',
     supervisorShort: 'Supervisor',
     runner: 'Runner',
-    compatibilityId: 'codex-issue-runner',
+    runtimeId: 'xuanwu',
   });
   assert.equal(BRAND.name, PRODUCT_TERMS.productLatin);
   assert.equal(BRAND.hanzi, PRODUCT_TERMS.product);
@@ -70,8 +69,8 @@ test('CLI, singleton Supervisor API, and DB identifiers stay canonical', () => {
   assert.match(source('backend-ts/src/db/schema/003_pi_runtime.ts'), /create table if not exists pi_agents/);
   assert.match(source('backend-ts/src/db/schema/003_pi_runtime.ts'), /pi_agent_id text not null/);
   assert.match(source('backend-ts/src/http/piApi.ts'), /router\.get\("\/api\/pi\/supervisor"/);
-  assert.match(source('backend-ts/src/providers/codex/adapter.ts'), /name: "codex-issue-runner"/);
-  assert.match(source('backend-ts/scripts/build-binary.sh'), /dist\/codex-issue-runner/);
+  assert.match(source('backend-ts/src/providers/codex/adapter.ts'), /name: "xuanwu"/);
+  assert.match(source('backend-ts/scripts/build-binary.sh'), /dist\/xuanwu/);
 });
 
 function collectUiFiles(root) {

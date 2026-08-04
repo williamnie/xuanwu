@@ -37,7 +37,7 @@ describe("Run list repository", () => {
     expect(sql).not.toMatch(/select count\(\*\) from run_attempts child/);
     expect(sql).not.toMatch(/latest\.sequence=\(select max/);
 
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-runs-plan-"));
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-runs-plan-"));
     tempRoots.push(root);
     const fixture = await openDatabase({ stateDir: join(root, "state") });
     try {

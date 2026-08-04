@@ -12,7 +12,7 @@ import {
 } from "./piAutomationShadow.ts";
 import type { AutomationAudit } from "../../domain/automation/contracts.ts";
 
-export const PI_AUTOMATION_SHADOW_ENV = "CODEX_RUNNER_AUTOMATION_SHADOW_W1";
+export const PI_AUTOMATION_SHADOW_ENV = "XUANWU_AUTOMATION_SHADOW_W1";
 export const PI_AUTOMATION_SHADOW_AUDIT_SCHEMA = "xuanwu.automation-shadow-audit.v1";
 
 export type PiAutomationLegacyCommand =

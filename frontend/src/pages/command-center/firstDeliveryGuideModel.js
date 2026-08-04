@@ -51,7 +51,7 @@ export function firstDeliveryState({ connectionTest = null, doctor, evidence = [
 
 export function firstDeliveryRecovery(state, doctor) {
   if (!state.steps[0].complete) {
-    return '运行环境未就绪。先执行 `codex-issue-runner doctor` 和 `./scripts/daemon.sh doctor`；修复 API/DB 后回到 Command Center 点击“重新检查”。';
+    return '运行环境未就绪。先执行 `xuanwu doctor` 和 `./scripts/daemon.sh doctor`；修复 API/DB 后回到 Command Center 点击“重新检查”。';
   }
   if (!state.steps[1].complete) {
     const available = state.availableProviders.length > 0;

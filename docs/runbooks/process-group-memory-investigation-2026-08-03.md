@@ -41,7 +41,7 @@
 
 ## 3. 实测数据（2026-08-03 07:52 ~ 07:56，本机 live 实例）
 
-运行实例：`codex-issue-runner-bun-live`（launchd 三进程拆分：core 18835 / agentic 19130 / web 19194，8-2 15:50 部署）。
+运行实例：`xuanwu-bun-live`（launchd 三进程拆分：core 18835 / agentic 19130 / web 19194，8-2 15:50 部署）。
 
 ### 3.1 完全空闲时的权威测量（`GET /api/system/status` → `process_group_memory`）
 
@@ -113,7 +113,7 @@
 
 ## 6. 附加发现（非根因，但影响排查判断）
 
-1. **监控面板中 Agentic Worker RSS 为陈旧值**：`roles` 显示 worker rss_bytes=129 MiB（8-2 启动峰值），而 ps 与 agentic health 实测仅 18 MiB。原因：worker RSS 只在 **POST RPC 响应头**（`x-codex-runner-agentic-rss-bytes`）刷新，GET/health 不刷新，且 8-2 启动后无 RPC。该陈旧值让 `aggregate.rss_bytes`（231 MiB）比真实（114 MiB）虚高约 117 MiB，会误导 System Status 页面阅读；**预算判定不受影响**（预算用 footprint 实时测量）。
+1. **监控面板中 Agentic Worker RSS 为陈旧值**：`roles` 显示 worker rss_bytes=129 MiB（8-2 启动峰值），而 ps 与 agentic health 实测仅 18 MiB。原因：worker RSS 只在 **POST RPC 响应头**（`x-xuanwu-agentic-rss-bytes`）刷新，GET/health 不刷新，且 8-2 启动后无 RPC。该陈旧值让 `aggregate.rss_bytes`（231 MiB）比真实（114 MiB）虚高约 117 MiB，会误导 System Status 页面阅读；**预算判定不受影响**（预算用 footprint 实时测量）。
 2. 07-20 首次告警持续约 22 小时（1337 分钟），与后续分钟级循环明显不同，可能是当时单进程模式（未拆分 agentic worker）或一次真实驻留问题；之后 8-2 部署（三进程拆分）后告警仍在，但形态为分钟级循环。
 3. `codex-usage-index-v1.sqlite`（308 MiB）当前无进程打开；usage-index worker 空闲时已退出，不占监控聚合。
 4. 本机另有大量 ChatGPT/Codex 应用进程（如 Codex Renderer 607 MiB）占用整机内存，但不属于 Runner 进程树、不计入监控聚合。

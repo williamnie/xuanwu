@@ -29,7 +29,7 @@ function demoSession(overrides = {}) {
         items: [
           { type: 'userMessage', content: [{ type: 'input_text', text: '请导出 Markdown transcript' }] },
           { type: 'function_call', name: 'exec_command', arguments: '{"cmd":"echo hi"}' },
-          { type: 'function_call_output', output: 'CODEX_RUNNER_AUTH_TOKEN=secret\nAuthorization: Bearer abcdef\n"private_key":"abc123"' },
+          { type: 'function_call_output', output: 'XUANWU_AUTH_TOKEN=secret\nAuthorization: Bearer abcdef\n"private_key":"abc123"' },
           { type: 'agentMessage', text: '已完成。' },
         ],
       },
@@ -50,7 +50,7 @@ test('exports Codex session metadata, issues, usage, transcript and tool summary
   assert.match(markdown, /#### User\n请导出 Markdown transcript/);
   assert.match(markdown, /#### Tool: 调用工具：exec_command/);
   assert.match(markdown, /#### Tool: 工具输出/);
-  assert.match(markdown, /CODEX_RUNNER_AUTH_TOKEN=\[REDACTED\]/);
+  assert.match(markdown, /XUANWU_AUTH_TOKEN=\[REDACTED\]/);
   assert.match(markdown, /Authorization: Bearer \[REDACTED\]/);
   assert.match(markdown, /"private_key":"\[REDACTED\]"/);
   assert.doesNotMatch(markdown, /secret|Bearer abcdef|abc123/);

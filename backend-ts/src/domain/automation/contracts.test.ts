@@ -48,7 +48,7 @@ function definition(): AutomationDefinition {
   return {
     active_trigger_version: 1, created_at: NOW, id: "automation:weekday-triage", idempotency_namespace: "automation:weekday-triage",
     mode: "propose", name: "Weekday triage", next_run_at: "2026-07-17T01:00:00.000Z",
-    owner: { kind: "project", project_id: "codex-issue-runner" }, permission_policy_ref: "project-policy:codex-issue-runner",
+    owner: { kind: "project", project_id: "xuanwu" }, permission_policy_ref: "project-policy:xuanwu",
     revision: 0, status: "draft", updated_at: NOW, workflow_ref: "workflow:investigate@1"
   };
 }

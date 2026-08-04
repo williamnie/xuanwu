@@ -5,7 +5,7 @@
 
 > 状态：产品与工程路线规划。
 > 日期：2026-07-06。
-> 范围：`codex-issue-runner` 内的 PI 从“项目 issue 总控 agent”升级为“个人助理 runtime”。
+> 范围：`xuanwu` 内的 PI 从“项目 issue 总控 agent”升级为“个人助理 runtime”。
 > 约束：保留单个 PI Assistant，不恢复多 PI agent 产品心智；CLI、MCP、HTTP、browser、builtin 都作为 Tool Provider 接入。
 
 ## 1. 目标

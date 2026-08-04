@@ -125,7 +125,7 @@ function issueManagerAuthorization(actions: string[]) {
 }
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-issue-manager-scope-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-issue-manager-scope-"));
   const db = await openDatabase({ stateDir: join(root, "state") });
   insertProject(db, "demo", join(root, "project"));
   const project = getProject(db, "demo");

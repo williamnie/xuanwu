@@ -138,7 +138,7 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
 
   console.log(JSON.stringify({
     ok: true,
-    service: "codex-issue-runner backend-ts",
+    service: "xuanwu backend-ts",
     role,
     listen: `${server.hostname}:${server.port}`,
     config: {
@@ -158,7 +158,7 @@ function runtimeMemoryRows(
   agentic: ReturnType<AgenticWorkerClient["activity"]>
 ) {
   const root = {
-    command: `${runtimeStartedAt}\tcodex-issue-runner-core`,
+    command: `${runtimeStartedAt}\txuanwu-core`,
     pgid: process.pid,
     pid: process.pid,
     ppid: process.ppid,
@@ -167,7 +167,7 @@ function runtimeMemoryRows(
   const rows = [root];
   if (Number.isSafeInteger(agentic.worker_pid) && agentic.worker_pid! > 0 && agentic.worker_pid !== process.pid) {
     rows.push({
-      command: `${agentic.worker_started_at || "unknown"}\tcodex-issue-runner-agentic`,
+      command: `${agentic.worker_started_at || "unknown"}\txuanwu-agentic`,
       pgid: agentic.worker_pid!,
       pid: agentic.worker_pid!,
       ppid: process.pid,
@@ -241,7 +241,7 @@ async function startAutoRunLoops(
   processGroupMemory: ProcessGroupMemoryObserver
 ): Promise<void> {
   await recoverInProgressIssues({ database, providers }).catch((error) => {
-    console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
+    console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", error: safeError(error) }));
   });
   reconcileStaleAgentSessions(database, processReconciliation, new Date(), { reconcileManagerConversations: false });
   const projects = database.sqlite.query<{ id: string }, []>(
@@ -260,7 +260,7 @@ async function startAutoRunLoops(
     agentCommunicationDecider: (input) => agenticClient.decideCommunication(input),
     providers,
     onError: (error) => {
-      console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
+      console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", error: safeError(error) }));
     },
     runProjectCycle: (input) => agenticClient.runProjectCycle(input),
     runSupervisorDecision: (context) => agenticClient.decideSupervisor(context),
@@ -271,12 +271,12 @@ async function startAutoRunLoops(
 }
 
 function logProjectLoopError(error: unknown, projectId: string): void {
-  console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", projectId, error: safeError(error) }));
+  console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", projectId, error: safeError(error) }));
 }
 
 async function restartFeishuReceiver(feishuConfig: FeishuConnectorConfig): Promise<void> {
   await activeFeishuReceiver?.restart(feishuConfig).catch((error) => {
-    console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", connector: "feishu", error: safeError(error) }));
+    console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", connector: "feishu", error: safeError(error) }));
   });
 }
 

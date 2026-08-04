@@ -213,7 +213,7 @@ describe("external event repository", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-external-events-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-external-events-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

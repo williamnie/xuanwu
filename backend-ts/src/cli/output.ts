@@ -55,7 +55,7 @@ function doctorFixes(
   providers: NonNullable<SystemDoctorDTO["providers"]>
 ): string[] {
   const fixes: string[] = [];
-  if (!doctor.service?.alive) fixes.push("restart the Runner daemon, then rerun `codex-issue-runner doctor`");
+  if (!doctor.service?.alive) fixes.push("restart the Runner daemon, then rerun `xuanwu doctor`");
   if (!doctor.db?.ok) fixes.push("run `./scripts/daemon.sh doctor`; restore the authoritative DB from a verified backup if its check fails");
   if (providers.length === 0 || providers.every(provider => !provider.available)) {
     fixes.push("install and sign in to an executor CLI (for Codex, verify `codex --version`), then rerun this command");
@@ -70,10 +70,10 @@ function doctorFixes(
   }
   const warnings = doctor.security?.warnings || [];
   if (warnings.some(warning => warning.code === "bind_all_interfaces")) {
-    fixes.push("bind CODEX_RUNNER_ADDR to 127.0.0.1 unless remote access is explicitly required");
+    fixes.push("bind XUANWU_ADDR to 127.0.0.1 unless remote access is explicitly required");
   }
   if (warnings.some(warning => warning.code === "auth_disabled")) {
-    fixes.push("configure CODEX_RUNNER_AUTH_TOKEN before allowing non-loopback access");
+    fixes.push("configure XUANWU_AUTH_TOKEN before allowing non-loopback access");
   }
   for (const reason of doctor.health?.reasons || []) {
     const message = String(reason.message || "").trim();

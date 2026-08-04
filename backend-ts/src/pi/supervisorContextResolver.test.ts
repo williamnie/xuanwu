@@ -276,7 +276,7 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-supervisor-context-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-supervisor-context-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

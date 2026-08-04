@@ -397,7 +397,7 @@ function sdkInput(
     cwd: input.cwd,
     env: managedExecutionEnvironment({
       ...claudeProcessEnvironment(config),
-      CLAUDE_AGENT_SDK_CLIENT_APP: "codex-issue-runner/claude-provider"
+      CLAUDE_AGENT_SDK_CLIENT_APP: "xuanwu/claude-provider"
     }),
     includePartialMessages: true,
     maxTurns: DEFAULT_MAX_TURNS,
@@ -413,7 +413,7 @@ function sdkInput(
 }
 
 export function resolveClaudeSdkExecutable(): string {
-  const configured = clean(Bun.env.CODEX_RUNNER_CLAUDE_SDK_EXECUTABLE);
+  const configured = clean(Bun.env.XUANWU_CLAUDE_SDK_EXECUTABLE);
   if (configured) return isRegularFile(configured) ? configured : "";
   const suffix = process.platform === "win32" ? ".exe" : "";
   const adjacent = `${process.execPath}.claude-agent-sdk${suffix}`;

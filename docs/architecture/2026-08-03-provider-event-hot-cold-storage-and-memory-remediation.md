@@ -2,7 +2,7 @@
 
 > 日期：2026-08-03
 >
-> 范围：`codex-issue-runner` 的 Provider 事件持久化、历史事件归档、事件摘要投影、SQLite 容量和进程组内存告警。
+> 范围：`xuanwu` 的 Provider 事件持久化、历史事件归档、事件摘要投影、SQLite 容量和进程组内存告警。
 > 关联排查：[Runner 内存告警高频触发排查报告](../runbooks/process-group-memory-investigation-2026-08-03.md)
 
 ## 1. 背景与结论

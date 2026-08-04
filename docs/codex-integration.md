@@ -1,13 +1,13 @@
 # Codex 后端 Server 对接说明
 
-本文说明玄武的 Bun/TypeScript 后端如何通过 `codex-issue-runner` 兼容运行时对接 Codex 后端 server（`codex app-server`），以及 issue 自动执行、Sessions 页面、审批和事件流在两边之间如何流转。
+本文说明玄武的 Bun/TypeScript 后端如何通过 `xuanwu` 兼容运行时对接 Codex 后端 server（`codex app-server`），以及 issue 自动执行、Sessions 页面、审批和事件流在两边之间如何流转。
 
 ## 术语边界
 
 - **Issue Runner Bun 后端**：本仓库的 HTTP API、SQLite、runner loop 和 SSE 服务，入口在 `backend-ts/src/main.ts`。
 - **Codex 后端 server**：由 Bun 后端拉起的子进程，默认命令是 `codex app-server --listen stdio://`。
 - **Codex provider adapter**：`backend-ts/src/providers/codex`，负责把内部 provider 调用转换为 Codex app-server 的 JSON-RPC 请求，并把 Codex notification 规范化为内部事件。
-- **CLI 客户端模式**：同一个 `codex-issue-runner` Bun 二进制在非 `serve` 子命令下会作为短命令 CLI，调用 Issue Runner HTTP API 创建、查询、更新 issue。
+- **CLI 客户端模式**：同一个 `xuanwu` Bun 二进制在非 `serve` 子命令下会作为短命令 CLI，调用 Issue Runner HTTP API 创建、查询、更新 issue。
 
 ## 启动与配置
 
@@ -16,20 +16,20 @@ Bun 后端启动时会创建 provider adapter，但不会立刻拉起 Codex app-
 默认配置来自 `backend-ts/src/config/env.ts`：
 
 ```txt
-CODEX_RUNNER_ADDR             默认 127.0.0.1:3008（源码 launchd 使用 0.0.0.0:3008）
-CODEX_RUNNER_ROLE             默认 all；正式部署分别使用 web / core
-CODEX_RUNNER_CORE_ADDR        Web 代理的 Core 地址，正式部署默认 127.0.0.1:3009
-CODEX_RUNNER_STATE_DIR        默认 data-bun
-CODEX_RUNNER_DB               默认 <state-dir>/runner.db
-CODEX_RUNNER_AUTH_TOKEN_FILE  默认 <state-dir>/auth_token
-CODEX_RUNNER_CODEX_CMD        默认 codex app-server --listen stdio://
-CODEX_RUNNER_WEB_DIR          默认空；源码/Release 部署会传入已构建 web 目录
+XUANWU_ADDR             默认 127.0.0.1:3008（源码 launchd 使用 0.0.0.0:3008）
+XUANWU_ROLE             默认 all；正式部署分别使用 web / core
+XUANWU_CORE_ADDR        Web 代理的 Core 地址，正式部署默认 127.0.0.1:3009
+XUANWU_STATE_DIR        默认 data-bun
+XUANWU_DB               默认 <state-dir>/runner.db
+XUANWU_AUTH_TOKEN_FILE  默认 <state-dir>/auth_token
+XUANWU_CODEX_CMD        默认 codex app-server --listen stdio://
+XUANWU_WEB_DIR          默认空；源码/Release 部署会传入已构建 web 目录
 ```
 
 等价启动示例：
 
 ```bash
-./dist/codex-issue-runner serve \
+./dist/xuanwu serve \
   --addr 0.0.0.0:3008 \
   --state-dir data-bun \
   --db data-bun/runner.db \
@@ -73,7 +73,7 @@ CODEX_RUNNER_WEB_DIR          默认空；源码/Release 部署会传入已构�
 
 ```mermaid
 sequenceDiagram
-  participant CLI as codex-issue-runner CLI / Web
+  participant CLI as xuanwu CLI / Web
   participant API as Bun HTTP API
   participant DB as SQLite
   participant Runner as Runner Loop
@@ -120,21 +120,21 @@ Sessions 页面直接消费 provider session/thread 能力。Codex provider 支�
 
 ## Agent/provider 通过 CLI 或 API 反向更新 Runner
 
-agent/provider 在执行 issue 时不直接访问 SQLite，而是通过短命令 CLI 调 Runner API。CLI 默认读取 `CODEX_RUNNER_ADDR`，未设置时连接 `127.0.0.1:3008`。
+agent/provider 在执行 issue 时不直接访问 SQLite，而是通过短命令 CLI 调 Runner API。CLI 默认读取 `XUANWU_ADDR`，未设置时连接 `127.0.0.1:3008`。
 
 示例（只传 token file 路径，不输出实际 token）：
 
 ```bash
-./dist/codex-issue-runner issue status --addr 127.0.0.1:3008 --id <issue-id> --token-file <state-dir>/auth_token --json
-./dist/codex-issue-runner issue update --addr 127.0.0.1:3008 --id <issue-id> --status done --token-file <state-dir>/auth_token --json
-./dist/codex-issue-runner system status --addr 127.0.0.1:3008 --token-file <state-dir>/auth_token --json
+./dist/xuanwu issue status --addr 127.0.0.1:3008 --id <issue-id> --token-file <state-dir>/auth_token --json
+./dist/xuanwu issue update --addr 127.0.0.1:3008 --id <issue-id> --status done --token-file <state-dir>/auth_token --json
+./dist/xuanwu system status --addr 127.0.0.1:3008 --token-file <state-dir>/auth_token --json
 ```
 
 如果 CLI 不可用，provider 必须使用 API 等价更新：
 
 ```bash
-curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/issues/<issue-id>" \
-  -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+curl -fsS -X PATCH "http://${XUANWU_ADDR:-127.0.0.1:3008}/api/issues/<issue-id>" \
+  -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{"status":"done"}'
 ```
@@ -142,15 +142,15 @@ curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/issues/<issu
 确认 project id 时，当前 CLI 没有 `project list`，直接查 API：
 
 ```bash
-curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
-  "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/projects"
+curl -fsS -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" \
+  "http://${XUANWU_ADDR:-127.0.0.1:3008}/api/projects"
 ```
 
 Runtime 状态：
 
 ```bash
 curl -fsS http://127.0.0.1:3008/health
-./dist/codex-issue-runner system status --addr 127.0.0.1:3008 --token-file <state-dir>/auth_token --json
+./dist/xuanwu system status --addr 127.0.0.1:3008 --token-file <state-dir>/auth_token --json
 ```
 
 `/api/system/status` 只返回只读健康摘要：API/DB、脱敏后的配置、provider command 是否存在、runner loop/hold/in_progress 计数；不会返回 token 值，也不会为 status 主动拉起新的 Codex 深度探针。
@@ -160,5 +160,5 @@ curl -fsS http://127.0.0.1:3008/health
 - `/health` 免鉴权，供 launchd / systemd / 反代健康检查使用。
 - `/api/*`（包括 `/api/system/status`、`/api/system/doctor`、SSE `/api/events`）属于敏感 API；启用 token 时必须携带 `Authorization: Bearer ...` 或 UI cookie。
 - 默认浏览器 Origin 策略只允许本机 origin（`localhost` / `127.0.0.1` / `::1`）。
-- 远程访问必须启用 token。推荐保留默认生成的 state dir `auth_token`（权限 `0600`），或用 `CODEX_RUNNER_AUTH_TOKEN_FILE` 指向权限受限文件；不要提交 token 文件。
+- 远程访问必须启用 token。推荐保留默认生成的 state dir `auth_token`（权限 `0600`），或用 `XUANWU_AUTH_TOKEN_FILE` 指向权限受限文件；不要提交 token 文件。
 - 对公网暴露时优先绑定 `127.0.0.1` 并通过 SSH tunnel、Caddy 或 nginx 反代终止 HTTPS。

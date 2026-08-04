@@ -11,11 +11,11 @@ import { createPiRunnerActions } from "./runnerActions.ts";
 import { createPiRunnerActionTools } from "./runnerActionTools.ts";
 
 const tempRoots: string[] = [];
-const previousRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+const previousRegistry = Bun.env.XUANWU_MCP_REGISTRY_JSON;
 
 afterEach(async () => {
-  if (previousRegistry === undefined) delete Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
-  else Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = previousRegistry;
+  if (previousRegistry === undefined) delete Bun.env.XUANWU_MCP_REGISTRY_JSON;
+  else Bun.env.XUANWU_MCP_REGISTRY_JSON = previousRegistry;
   while (tempRoots.length > 0) {
     const path = tempRoots.pop();
     if (path) await rm(path, { recursive: true, force: true });
@@ -25,7 +25,7 @@ afterEach(async () => {
 describe("PI MCP registry and envelope tools", () => {
   test("exposes MCP registry and recommendation tools to PI", async () => {
     const { db, project } = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
     try {
       const tools = createPiRunnerActionTools(createPiRunnerActions(db, { project }));
 
@@ -58,7 +58,7 @@ describe("PI MCP registry and envelope tools", () => {
 
   test("fails closed when configured MCP tools have no executable transport", async () => {
     const { db, project } = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
     try {
       const tools = createPiRunnerActionTools(createPiRunnerActions(db, {
         authorization: {
@@ -112,7 +112,7 @@ describe("PI MCP registry and envelope tools", () => {
 
   test("fails closed when configured MCP resources have no executable transport", async () => {
     const { db, project } = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
     try {
       const actions = createPiRunnerActions(db, {
         authorization: {
@@ -141,7 +141,7 @@ describe("PI MCP registry and envelope tools", () => {
   test("calls real stdio MCP tools and resources through gate and audit", async () => {
     const { db, project, root } = await openFixture();
     const serverScript = await writeRealMcpServer(root);
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({
       servers: [realMcpServer(serverScript)]
     });
     try {
@@ -186,7 +186,7 @@ describe("PI MCP registry and envelope tools", () => {
   test("normalizes real MCP transport errors, timeouts, and schema mismatches", async () => {
     const { db, project, root } = await openFixture();
     const serverScript = await writeRealMcpServer(root);
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({
       servers: [
         realMcpServer(serverScript, { id: "tool-error", mode: "tool-error" }),
         realMcpServer(serverScript, { id: "tool-slow", mode: "slow", toolTimeoutMs: 5 }),
@@ -257,7 +257,7 @@ describe("PI MCP registry and envelope tools", () => {
   test("executes read-only MCP resources only when delegated allowlist covers them", async () => {
     const { db, project, root } = await openFixture();
     const serverScript = await writeRealMcpServer(root);
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [realMcpServer(serverScript)] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [realMcpServer(serverScript)] });
     try {
       const actions = createPiRunnerActions(db, {
         authorization: {
@@ -289,7 +289,7 @@ describe("PI MCP registry and envelope tools", () => {
 
   test("stores recommended MCP requirements on issue proposals", async () => {
     const { db, project } = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
     try {
       const actions = createPiRunnerActions(db, {
         authorization: {
@@ -322,7 +322,7 @@ describe("PI MCP registry and envelope tools", () => {
 
   test("denies high-risk or offline MCP resources and records audit", async () => {
     const { db, project } = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer(), offlineServer()] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer(), offlineServer()] });
     try {
       const actions = createPiRunnerActions(db, { project });
 
@@ -350,7 +350,7 @@ describe("PI MCP registry and envelope tools", () => {
 
   test("routes non-low MCP resources through gate as confirmation instead of silent deny", async () => {
     const { db, project } = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
     try {
       const actions = createPiRunnerActions(db, { project });
       const result = actions.readMcpResource({ capability_id: "docs:resource:internal" }) as {
@@ -381,7 +381,7 @@ describe("PI MCP registry and envelope tools", () => {
   test("executes delegated read-permission MCP resources when allowlist covers them", async () => {
     const { db, project, root } = await openFixture();
     const serverScript = await writeRealMcpServer(root);
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [realMcpServer(serverScript)] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [realMcpServer(serverScript)] });
     try {
       const actions = createPiRunnerActions(db, {
         authorization: {
@@ -420,7 +420,7 @@ describe("PI MCP registry and envelope tools", () => {
 });
 
 async function openFixture(): Promise<{ db: RunnerDatabase; project: Project; root: string }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-mcp-tools-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-mcp-tools-"));
   tempRoots.push(root);
   const cwd = join(root, "project");
   await mkdir(cwd, { recursive: true });

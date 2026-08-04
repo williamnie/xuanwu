@@ -85,7 +85,7 @@ function config(overrides: Partial<ProviderRuntimeConfig> = {}): ProviderRuntime
 }
 
 async function profileFixture(profile: string, credentialMode: number | undefined): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-anthropic-profile-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-anthropic-profile-"));
   roots.push(root);
   await mkdir(join(root, "configs"), { recursive: true });
   await mkdir(join(root, "credentials"), { recursive: true });

@@ -66,7 +66,7 @@ describe("PI report repository", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-report-repo-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-report-repo-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

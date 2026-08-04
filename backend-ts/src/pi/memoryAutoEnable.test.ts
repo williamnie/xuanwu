@@ -118,7 +118,7 @@ describe("PI automatic reusable memory policy", () => {
 });
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-memory-auto-enable-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-memory-auto-enable-"));
   const db = await openDatabase({ stateDir: join(root, "state") });
   return { db, close: async () => { db.close(); await rm(root, { recursive: true, force: true }); } };
 }

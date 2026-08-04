@@ -14,7 +14,7 @@ import {
 } from "../backend-ts/src/skills/runtime.ts";
 
 const ISSUE_ID = 782;
-const PROJECT_ID = "codex-issue-runner";
+const PROJECT_ID = "xuanwu";
 const LOCAL_SKILL_ID = "agent-06-local-summary";
 const TOOL_SKILL_ID = "agent-06-mcp-read";
 const DISCOVERY_SERVER_NAME = "agent-05-fixture";
@@ -581,10 +581,10 @@ async function writeReplay(input: Options): Promise<void> {
     "",
     "```bash",
     'CODEX_HOME="$ISSUE782_STATE_DIR/codex-home" \\',
-    'CODEX_RUNNER_STATE_DIR="$ISSUE782_STATE_DIR" \\',
-    'CODEX_RUNNER_DB="$ISSUE782_STATE_DIR/runner.db" \\',
-    'CODEX_RUNNER_AUTH_TOKEN_FILE="$ISSUE782_STATE_DIR/auth_token" \\',
-    `CODEX_RUNNER_DEV_ADDR=${shellQuote(input.addr)} \\`,
+    'XUANWU_STATE_DIR="$ISSUE782_STATE_DIR" \\',
+    'XUANWU_DB="$ISSUE782_STATE_DIR/runner.db" \\',
+    'XUANWU_AUTH_TOKEN_FILE="$ISSUE782_STATE_DIR/auth_token" \\',
+    `XUANWU_DEV_ADDR=${shellQuote(input.addr)} \\`,
     `FRONTEND_HOST=${shellQuote(host || "127.0.0.1")} FRONTEND_PORT=${shellQuote(frontendPort)} ./dev.sh`,
     "```",
     "",

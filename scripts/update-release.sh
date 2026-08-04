@@ -1,35 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "${CODEX_RUNNER_MANAGED_EXECUTION:-}" = "1" ] ||
-  { [ -n "${PI_PACKAGE_DIR:-}" ] && [ -n "${CODEX_RUNNER_CODEX_SERVER_MODE:-}" ]; }; then
+if [ "${XUANWU_MANAGED_EXECUTION:-}" = "1" ] ||
+  { [ -n "${PI_PACKAGE_DIR:-}" ] && [ -n "${XUANWU_CODEX_SERVER_MODE:-}" ]; }; then
   echo "[deploy-guard] denied: live deployment cannot run from a Runner-managed provider process." >&2
   exit 78
 fi
 
-REPO="${CODEX_RUNNER_REPO:-williamnie/xuanwu}"
-INSTALL_DIR="${CODEX_RUNNER_INSTALL_DIR:-$HOME/.local/bin}"
-STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$HOME/.local/state/codex-issue-runner}"
-LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$STATE_DIR/logs}"
-ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
-LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
-SERVICE_NAME="${CODEX_RUNNER_SERVICE_NAME:-codex-issue-runner}"
-BIN_PATH="${CODEX_RUNNER_BINARY:-$INSTALL_DIR/codex-issue-runner}"
+REPO="${XUANWU_REPO:-williamnie/xuanwu}"
+INSTALL_DIR="${XUANWU_INSTALL_DIR:-$HOME/.local/bin}"
+STATE_DIR="${XUANWU_STATE_DIR:-$HOME/.local/state/xuanwu}"
+LOG_DIR="${XUANWU_LOG_DIR:-$STATE_DIR/logs}"
+ADDR="${XUANWU_ADDR:-0.0.0.0:3008}"
+LABEL="${XUANWU_LAUNCHD_LABEL:-com.xiaobei.xuanwu}"
+SERVICE_NAME="${XUANWU_SERVICE_NAME:-xuanwu}"
+BIN_PATH="${XUANWU_BINARY:-$INSTALL_DIR/xuanwu}"
 CLAUDE_SDK_EXECUTABLE_PATH="$BIN_PATH.claude-agent-sdk"
-DAEMON_PATH="$INSTALL_DIR/codex-issue-runner-daemon"
-INSTALLER_PATH="${CODEX_RUNNER_INSTALLER:-$INSTALL_DIR/codex-issue-runner-install}"
-UPDATER_PATH="$INSTALL_DIR/codex-issue-runner-update"
+DAEMON_PATH="$INSTALL_DIR/xuanwu-daemon"
+INSTALLER_PATH="${XUANWU_INSTALLER:-$INSTALL_DIR/xuanwu-install}"
+UPDATER_PATH="$INSTALL_DIR/xuanwu-update"
 RELEASES_DIR="$STATE_DIR/releases"
 AUDIT_LOG="$LOG_DIR/release-upgrade.log"
-RELEASE_RETENTION="${CODEX_RUNNER_RELEASE_RETENTION:-3}"
+RELEASE_RETENTION="${XUANWU_RELEASE_RETENTION:-3}"
 
 usage() {
   cat <<'HELP'
 Usage:
-  codex-issue-runner-update check [--json]
-  codex-issue-runner-update upgrade --apply --actor <id> --actor-kind user|system \
+  xuanwu-update check [--json]
+  xuanwu-update upgrade --apply --actor <id> --actor-kind user|system \
     --audit-ref <ref> --reason <text> --backup-ref <ref> --confirm-backup-tested
-  codex-issue-runner-update rollback --snapshot <path|latest> --apply --actor <id> \
+  xuanwu-update rollback --snapshot <path|latest> --apply --actor <id> \
     --actor-kind user|system --audit-ref <ref> --reason <text> --backup-ref <ref> \
     --confirm-data-compatible
 
@@ -126,7 +126,7 @@ require_mutation_gate() {
   [ -n "$AUDIT_REF" ] || fail "mutation requires --audit-ref"
   [ -n "$REASON" ] || fail "mutation requires --reason"
   [ -n "$BACKUP_REF" ] || fail "mutation requires --backup-ref"
-  case "$RELEASE_RETENTION" in ''|0|*[!0-9]*) fail "CODEX_RUNNER_RELEASE_RETENTION must be a positive integer" ;; esac
+  case "$RELEASE_RETENTION" in ''|0|*[!0-9]*) fail "XUANWU_RELEASE_RETENTION must be a positive integer" ;; esac
 }
 
 copy_file_if_present() {
@@ -146,11 +146,11 @@ snapshot_release() {
   stamp="$(date -u '+%Y%m%dT%H%M%SZ')-$$"
   snapshot="$RELEASES_DIR/${version//\//_}-$stamp"
   mkdir -p "$snapshot/bin" "$snapshot/state" "$snapshot/service"
-  copy_file_if_present "$BIN_PATH" "$snapshot/bin/codex-issue-runner"
-  copy_file_if_present "$CLAUDE_SDK_EXECUTABLE_PATH" "$snapshot/bin/codex-issue-runner.claude-agent-sdk"
-  copy_file_if_present "$DAEMON_PATH" "$snapshot/bin/codex-issue-runner-daemon"
-  copy_file_if_present "$INSTALLER_PATH" "$snapshot/bin/codex-issue-runner-install"
-  copy_file_if_present "$UPDATER_PATH" "$snapshot/bin/codex-issue-runner-update"
+  copy_file_if_present "$BIN_PATH" "$snapshot/bin/xuanwu"
+  copy_file_if_present "$CLAUDE_SDK_EXECUTABLE_PATH" "$snapshot/bin/xuanwu.claude-agent-sdk"
+  copy_file_if_present "$DAEMON_PATH" "$snapshot/bin/xuanwu-daemon"
+  copy_file_if_present "$INSTALLER_PATH" "$snapshot/bin/xuanwu-install"
+  copy_file_if_present "$UPDATER_PATH" "$snapshot/bin/xuanwu-update"
   copy_file_if_present "$INSTALL_DIR/photon_rs_bg.wasm" "$snapshot/bin/photon_rs_bg.wasm"
   copy_dir_if_present "$STATE_DIR/web" "$snapshot/state/web"
   copy_dir_if_present "$STATE_DIR/pi-coding-agent" "$snapshot/state/pi-coding-agent"
@@ -186,14 +186,14 @@ restore_dir() {
 restore_snapshot() {
   local snapshot="$1"
   [ -d "$snapshot" ] || fail "rollback snapshot not found: $snapshot"
-  [ -x "$snapshot/bin/codex-issue-runner" ] || fail "snapshot has no runner binary: $snapshot"
+  [ -x "$snapshot/bin/xuanwu" ] || fail "snapshot has no runner binary: $snapshot"
   "$DAEMON_PATH" stop >/dev/null 2>&1 || true
   mkdir -p "$INSTALL_DIR" "$STATE_DIR"
-  restore_file "$snapshot/bin/codex-issue-runner" "$BIN_PATH"
-  restore_file "$snapshot/bin/codex-issue-runner.claude-agent-sdk" "$CLAUDE_SDK_EXECUTABLE_PATH"
-  restore_file "$snapshot/bin/codex-issue-runner-daemon" "$DAEMON_PATH"
-  restore_file "$snapshot/bin/codex-issue-runner-install" "$INSTALLER_PATH"
-  restore_file "$snapshot/bin/codex-issue-runner-update" "$UPDATER_PATH"
+  restore_file "$snapshot/bin/xuanwu" "$BIN_PATH"
+  restore_file "$snapshot/bin/xuanwu.claude-agent-sdk" "$CLAUDE_SDK_EXECUTABLE_PATH"
+  restore_file "$snapshot/bin/xuanwu-daemon" "$DAEMON_PATH"
+  restore_file "$snapshot/bin/xuanwu-install" "$INSTALLER_PATH"
+  restore_file "$snapshot/bin/xuanwu-update" "$UPDATER_PATH"
   restore_file "$snapshot/bin/photon_rs_bg.wasm" "$INSTALL_DIR/photon_rs_bg.wasm" 0644
   restore_dir "$snapshot/state/web" "$STATE_DIR/web"
   restore_dir "$snapshot/state/pi-coding-agent" "$STATE_DIR/pi-coding-agent"
@@ -262,9 +262,9 @@ upgrade_release() {
     audit upgrade failed "$from" "$to" "snapshot-failed"
     fail "could not create release snapshot"
   fi
-  if CODEX_RUNNER_VERSION="$to" \
-    CODEX_RUNNER_AUDIT_ACTOR="$ACTOR" CODEX_RUNNER_AUDIT_ACTOR_KIND="$ACTOR_KIND" \
-    CODEX_RUNNER_AUDIT_REF="$AUDIT_REF" CODEX_RUNNER_AUDIT_REASON="$REASON" \
+  if XUANWU_VERSION="$to" \
+    XUANWU_AUDIT_ACTOR="$ACTOR" XUANWU_AUDIT_ACTOR_KIND="$ACTOR_KIND" \
+    XUANWU_AUDIT_REF="$AUDIT_REF" XUANWU_AUDIT_REASON="$REASON" \
     "$INSTALLER_PATH"; then
     audit upgrade applied "$from" "$to" "$snapshot"
     prune_snapshots

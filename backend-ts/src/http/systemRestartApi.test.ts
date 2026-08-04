@@ -13,7 +13,7 @@ const CALLBACK_WAIT_INTERVAL_MS = 5;
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-system-restart-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-system-restart-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

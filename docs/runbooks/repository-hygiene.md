@@ -43,9 +43,9 @@ node scripts/repository-hygiene-audit.mjs --json
 
 ## Live reference 与迁移证据
 
-清理前对 launchd `com.xiaobei.codex-issue-runner` 做了只读检查：
+清理前对 launchd `com.xiaobei.xuanwu` 做了只读检查：
 
-- active binary 与 checkout `dist/codex-issue-runner` SHA-256 相同：`42d73b63c53dbc7956c93d71237f208b0a5d64a6ed55c3de87f17b50cd60cbee`；
+- active binary 与 checkout `dist/xuanwu` SHA-256 相同：`42d73b63c53dbc7956c93d71237f208b0a5d64a6ed55c3de87f17b50cd60cbee`；
 - active web root 与 `frontend/dist` 逐文件一致；served assets 不包含本次删除的 component/export symbol；
 - `/health`、`/api/command-center/summary`、`/api/automations`、`/api/compatibility/legacy` 均返回 `200`；
 - legacy `/api/pi/attention-inbox/items` 仍返回 `200 []`，因此只删除已无 consumer 的旧页面，不删除该 API、repository 或审计数据。
@@ -75,7 +75,7 @@ find frontend/src -name '*.test.js' -print0 | xargs -0 node --test
 cd backend-ts && bun test --timeout 60000
 cd ../frontend && npm run build
 cd ../backend-ts && ./scripts/build-binary.sh
-cd .. && ./dist/codex-issue-runner --version
+cd .. && ./dist/xuanwu --version
 git diff --check
 ```
 

@@ -62,7 +62,7 @@ describe("Todo without session detector", () => {
 });
 
 async function openFixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-todo-detector-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-todo-detector-"));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(

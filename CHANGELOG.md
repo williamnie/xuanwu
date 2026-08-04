@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Changed / 变更
+
+- **Breaking:** Release 资产、二进制与 CLI 统一为 `xuanwu`，配套命令统一为
+  `xuanwu-daemon`、`xuanwu-install` 与 `xuanwu-update`。
+- 环境变量统一使用 `XUANWU_*`，Skill ID、服务标识和默认状态目录同步统一为 Xuanwu。
+- 不提供旧命令、旧环境变量或旧服务名的兼容别名；升级前应先备份 `runner.db`。
+
 ## [0.2.0] - 2026-08-03
 
 ### Added / 新增
@@ -18,8 +25,7 @@
 
 ### Changed / 变更
 
-- 产品与 GitHub 仓库统一使用玄武 / Xuanwu 品牌；`codex-issue-runner` 保留为二进制、CLI、
-  环境变量、数据目录和兼容 API 名称。
+- 产品与 GitHub 仓库统一使用玄武 / Xuanwu 品牌。
 - 生产后端统一为 Bun/TypeScript，持久化 authority 仍为 `runner.db`。
 - Issues/Sessions 用户入口迁移到 Work/Runs；旧 API 进入可观测的 compat v1 deprecation 窗口，保留到 `v0.3.x`。
 - Release 安装使用隔离的 Web Gateway、Runner Core 与 Agentic Worker 用户服务。

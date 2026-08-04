@@ -85,7 +85,7 @@ describe("PI supervisor issue retry recovery attempts", () => {
 });
 
 async function fixtureDb(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-issue-recovery-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-issue-recovery-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

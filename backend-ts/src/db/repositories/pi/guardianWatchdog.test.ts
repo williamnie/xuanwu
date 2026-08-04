@@ -34,7 +34,7 @@ describe("PI guardian watchdog repositories", () => {
           path: "/Users/example/project/.env"
         },
         id: "alert-1",
-        message: "Outbox stalled with CODEX_RUNNER_AUTH_TOKEN=fixture-token at /Users/example/project/.env",
+        message: "Outbox stalled with XUANWU_AUTH_TOKEN=fixture-token at /Users/example/project/.env",
         project_id: "demo",
         watchdog_seen_at: "2026-06-19T00:00:00Z"
       });
@@ -131,7 +131,7 @@ describe("PI guardian watchdog repositories", () => {
     try {
       const first = upsertPiGuardianWatchdogStatus(db, {
         checked_components_json: [{ component: "outbox", lag_path: "/Users/example/outbox.log" }],
-        last_error: "CODEX_RUNNER_AUTH_TOKEN=fixture-token at /Users/example/outbox.log",
+        last_error: "XUANWU_AUTH_TOKEN=fixture-token at /Users/example/outbox.log",
         last_seen_at: "2026-06-19T00:00:00Z"
       });
       const second = upsertPiGuardianWatchdogStatus(db, {
@@ -161,7 +161,7 @@ describe("PI guardian watchdog repositories", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-watchdog-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-watchdog-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

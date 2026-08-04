@@ -18,7 +18,7 @@ afterEach(async () => {
 
 describe("PI delegation migration", () => {
   test("adds delegation envelope columns when migrating an existing runtime database", async () => {
-    const root = await tempPath("codex-runner-bun-delegation-migrate-");
+    const root = await tempPath("xuanwu-bun-delegation-migrate-");
     const stateDir = join(root, "state");
     await createLegacyDelegationDatabase(join(stateDir, "runner.db"));
 

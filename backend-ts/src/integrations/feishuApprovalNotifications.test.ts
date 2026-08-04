@@ -254,7 +254,7 @@ describe("Feishu approval notification queue", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-approval-notify-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-approval-notify-"));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(`insert into projects (id, name, cwd, provider, provider_config_json, sort_order, created_at, updated_at)

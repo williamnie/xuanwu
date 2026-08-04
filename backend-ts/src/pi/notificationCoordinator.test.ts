@@ -185,7 +185,7 @@ describe("PI notification coordinator preference boundaries", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-notification-coordinator-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-notification-coordinator-"));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(

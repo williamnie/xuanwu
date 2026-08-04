@@ -9,9 +9,9 @@
 
 - Live API：`127.0.0.1:3008`
 - 后端源码：`backend-ts/`
-- 单文件二进制：`dist/codex-issue-runner`
-- macOS launchd label：`com.xiaobei.codex-issue-runner`
-- 默认 state dir：`~/Library/Application Support/codex-issue-runner-bun-live/state`
+- 单文件二进制：`dist/xuanwu`
+- macOS launchd label：`com.xiaobei.xuanwu`
+- 默认 state dir：`~/Library/Application Support/xuanwu-bun-live/state`
 - 默认 DB：`<state-dir>/runner.db`
 - 默认 token file：`<state-dir>/auth_token`
 
@@ -36,7 +36,7 @@ backend-ts/scripts/build-binary.sh
 cd backend-ts && bun test
 npm --prefix frontend run build
 curl -fsS http://127.0.0.1:3008/health
-./dist/codex-issue-runner system status --addr 127.0.0.1:3008 --token-file <state-dir>/auth_token --json
+./dist/xuanwu system status --addr 127.0.0.1:3008 --token-file <state-dir>/auth_token --json
 ```
 
 ## 已删除的旧实现

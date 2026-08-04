@@ -50,7 +50,7 @@ describe("Bun CLI dispatcher", () => {
       return jsonResponse(systemStatusBody());
     });
     const { code, stdout } = await run(["system", "status", "--json"], {
-      env: envMap({ CODEX_RUNNER_AUTH_TOKEN: "env-token" }),
+      env: envMap({ XUANWU_AUTH_TOKEN: "env-token" }),
       fetcher
     });
 
@@ -83,7 +83,7 @@ describe("Bun CLI dispatcher", () => {
       return jsonResponse(systemStatusBody());
     });
     const { code } = await run(["doctor"], {
-      env: envMap({ CODEX_RUNNER_AUTH_TOKEN_FILE: file }),
+      env: envMap({ XUANWU_AUTH_TOKEN_FILE: file }),
       fetcher
     });
 
@@ -230,7 +230,7 @@ function envMap(values: Record<string, string>): (key: string) => string | undef
 }
 
 async function tempTokenFile(token: string): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-cli-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-cli-"));
   tempRoots.push(root);
   const path = join(root, "auth_token");
   await writeFile(path, `${token}\n`, { mode: 0o600 });

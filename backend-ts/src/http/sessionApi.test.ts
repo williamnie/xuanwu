@@ -16,7 +16,7 @@ const EMPTY_ROLLOUT_ERROR = [
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-session-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-session-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -112,7 +112,7 @@ describe("Bun Sessions API compatibility", () => {
   test("read session detail exposes runtime settings from rollout turn context", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionsProvider();
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-session-runtime-"));
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-session-runtime-"));
     tempRoots.push(root);
     const rolloutPath = join(root, "rollout.jsonl");
     await writeFile(rolloutPath, [

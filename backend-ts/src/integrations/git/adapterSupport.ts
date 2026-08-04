@@ -117,7 +117,7 @@ export function createRemoteGitHttpClient(options: RemoteGitHttpClientOptions): 
           headers: {
             accept: "application/json",
             "content-type": "application/json; charset=utf-8",
-            "user-agent": "codex-issue-runner-handoff/1",
+            "user-agent": "xuanwu-handoff/1",
             ...options.auth_header(options.config.token)
           },
           method: input.method ?? "GET"

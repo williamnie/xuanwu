@@ -286,8 +286,8 @@ describe("runner process-group memory observer", () => {
 
   test("includes the split Agentic Worker in the authoritative physical process group", async () => {
     const rows = [
-      row(50, 1, 200, "Mon Jul 20 00:00:00 2026\tcodex-issue-runner-core"),
-      row(60, 50, 170, "Mon Jul 20 00:01:00 2026\tcodex-issue-runner-agentic")
+      row(50, 1, 200, "Mon Jul 20 00:00:00 2026\txuanwu-core"),
+      row(60, 50, 170, "Mon Jul 20 00:01:00 2026\txuanwu-agentic")
     ];
     const observer = new ProcessGroupMemoryObserver({
       agenticActivity: () => ({ in_flight: 1, last_activity_at: "2026-07-27T03:00:00.000Z" }),

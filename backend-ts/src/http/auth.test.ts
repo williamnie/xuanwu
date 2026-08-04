@@ -15,7 +15,7 @@ async function readBody(response: Response): Promise<string> {
 }
 
 async function tempTokenFile(token: string): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "codex-runner-bun-auth-"));
+  const dir = await mkdtemp(join(tmpdir(), "xuanwu-bun-auth-"));
   const path = join(dir, "auth_token");
   await writeFile(path, `${token}\n`, { mode: 0o600 });
   return path;
@@ -102,7 +102,7 @@ describe("Bun HTTP bearer auth", () => {
     const handle = createRequestHandler(protectedRouter(), secret);
 
     const response = await handle(new Request(`${BASE_URL}/api/protected`, {
-      headers: { cookie: `codex_runner_token=${encodeURIComponent(secret)}` }
+      headers: { cookie: `xuanwu_token=${encodeURIComponent(secret)}` }
     }));
 
     expect(response.status).toBe(200);
@@ -141,7 +141,7 @@ describe("Bun HTTP bearer auth", () => {
   });
 
   test("sanitizes token file read errors", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "codex-runner-bun-auth-"));
+    const dir = await mkdtemp(join(tmpdir(), "xuanwu-bun-auth-"));
     const path = join(dir, "auth_token");
     await mkdir(path);
 
@@ -160,7 +160,7 @@ describe("Bun HTTP bearer auth", () => {
     const secret = "fixture-redaction-secret";
     const raw = [
       `Authorization: Bearer ${secret}`,
-      `CODEX_RUNNER_AUTH_TOKEN=${secret}`,
+      `XUANWU_AUTH_TOKEN=${secret}`,
       "generated file: /tmp/data-bun/auth_token"
     ].join("\n");
 

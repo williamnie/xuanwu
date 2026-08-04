@@ -94,7 +94,7 @@ describe("PI Activity timeline API", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-activity-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-activity-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

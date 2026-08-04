@@ -100,7 +100,7 @@ describe("Bun project PI control regressions", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-project-control-regression-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-project-control-regression-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

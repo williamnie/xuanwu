@@ -8,7 +8,7 @@ import { getAgentSession, listAgentSessions, upsertAgentSession } from "./agentS
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-agent-sessions-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-agent-sessions-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

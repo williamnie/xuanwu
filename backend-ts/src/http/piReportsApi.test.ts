@@ -18,7 +18,7 @@ afterEach(async () => {
 
 describe("PI reports API", () => {
   test("generates a manual report with evidence links, escalation, verification gap, and usage", async () => {
-    const root = await tempDir("codex-runner-pi-reports-api-");
+    const root = await tempDir("xuanwu-pi-reports-api-");
     const database = await openDatabase({ stateDir: join(root, "state") });
     const sessionsDir = join(root, "sessions");
     try {
@@ -145,9 +145,9 @@ describe("PI reports API", () => {
   });
 
   test("warns when the selected provider is unavailable without leaking provider env", async () => {
-    const root = await tempDir("codex-runner-pi-reports-health-");
+    const root = await tempDir("xuanwu-pi-reports-health-");
     const database = await openDatabase({ stateDir: join(root, "state") });
-    const sessionsDir = await tempDir("codex-runner-pi-reports-empty-usage-");
+    const sessionsDir = await tempDir("xuanwu-pi-reports-empty-usage-");
     try {
       insertProject(database, "demo");
       const config = buildConfig({

@@ -723,7 +723,7 @@ describe("PI action dispatcher supervisor actions", () => {
 });
 
 async function fixtureDb(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-dispatch-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-dispatch-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

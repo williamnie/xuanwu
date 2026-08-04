@@ -5,7 +5,7 @@
 
 > 状态：完整技术设计，非实现记录。
 > 日期：2026-06-17。
-> 范围：`codex-issue-runner` 中 PI 对 issue/session/notification/approval/recovery/watchdog 的托管能力。
+> 范围：`xuanwu` 中 PI 对 issue/session/notification/approval/recovery/watchdog 的托管能力。
 > 目标：用户可以说“把剩下的 issue 都做完，我睡觉了”，系统不刷屏、不中断低风险执行、能自动恢复瞬态失败，并只在危险、预算耗尽、PI 不可用或确实需要业务判断时升级用户。
 
 ---

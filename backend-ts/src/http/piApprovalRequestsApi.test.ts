@@ -147,7 +147,7 @@ describe("PI approval requests API", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-approval-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-approval-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

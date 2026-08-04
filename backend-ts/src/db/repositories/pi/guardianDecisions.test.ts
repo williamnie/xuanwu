@@ -158,7 +158,7 @@ describe("PI Guardian decisions", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-guardian-decisions-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-guardian-decisions-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

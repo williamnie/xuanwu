@@ -195,7 +195,7 @@ function projectHint() {
   return { confidence: 0.95, id: PROJECT_ID, kind: "project", reason: "fixture CLI project hint" };
 }
 async function openFixture(): Promise<{ cliDir: string; db: RunnerDatabase; root: string }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-fixture-cli-e2e-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-fixture-cli-e2e-"));
   tempRoots.push(root);
   const cliDir = join(root, "connectors");
   await writeFixtureCli(cliDir);

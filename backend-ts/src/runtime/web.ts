@@ -9,7 +9,7 @@ export async function startWebRuntime(args: string[]): Promise<void> {
   const build = bunBuildInfo();
   console.log(JSON.stringify({
     ok: true,
-    service: "codex-issue-runner gateway",
+    service: "xuanwu gateway",
     role: "web",
     listen: `${server.hostname}:${server.port}`,
     core: config.coreAddr,

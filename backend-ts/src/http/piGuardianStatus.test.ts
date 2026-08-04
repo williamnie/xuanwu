@@ -92,7 +92,7 @@ async function openFixtureRuntime(): Promise<{
   config: ReturnType<typeof buildConfig>;
   database: RunnerDatabase;
 }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-guardian-status-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-guardian-status-"));
   tempRoots.push(root);
   const stateDir = join(root, "state");
   const config = buildConfig({ stateDir });

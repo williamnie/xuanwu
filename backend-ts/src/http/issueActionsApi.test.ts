@@ -21,7 +21,7 @@ class RetryExecutionProvider implements ExecutorProvider {
 }
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-issue-actions-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-issue-actions-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

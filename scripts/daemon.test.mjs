@@ -10,7 +10,7 @@ const root = new URL('..', import.meta.url).pathname;
 const daemon = join(root, 'scripts', 'daemon.sh');
 
 test('macOS daemon lifecycle is repeatable and uninstall preserves state', async () => {
-  const temp = await mkdtemp(join(tmpdir(), 'codex-runner-daemon-'));
+  const temp = await mkdtemp(join(tmpdir(), 'xuanwu-daemon-'));
   try {
     const home = join(temp, 'home');
     const fakeBin = join(temp, 'bin');
@@ -26,16 +26,16 @@ test('macOS daemon lifecycle is repeatable and uninstall preserves state', async
     await writeExecutable(join(fakeBin, 'uname'), '#!/bin/sh\necho Darwin\n');
     await writeExecutable(join(fakeBin, 'launchctl'), '#!/bin/sh\necho "launchctl $*" >> "$CALL_LOG"\nexit 0\n');
     await writeExecutable(join(fakeBin, 'curl'), '#!/bin/sh\nexit 0\n');
-    await writeExecutable(join(install, 'codex-issue-runner'), '#!/bin/sh\necho "runner $*" >> "$CALL_LOG"\necho "{\\"ok\\":true}"\n');
+    await writeExecutable(join(install, 'xuanwu'), '#!/bin/sh\necho "runner $*" >> "$CALL_LOG"\necho "{\\"ok\\":true}"\n');
     const env = {
       ...process.env,
       HOME: home,
       PATH: `${fakeBin}:${process.env.PATH}`,
       CALL_LOG: log,
-      CODEX_RUNNER_LAUNCHD_LABEL: 'test.runner',
-      CODEX_RUNNER_INSTALL_DIR: install,
-      CODEX_RUNNER_STATE_DIR: state,
-      CODEX_RUNNER_ADDR: '127.0.0.1:3999'
+      XUANWU_LAUNCHD_LABEL: 'test.runner',
+      XUANWU_INSTALL_DIR: install,
+      XUANWU_STATE_DIR: state,
+      XUANWU_ADDR: '127.0.0.1:3999'
     };
 
     for (const action of ['start', 'start', 'doctor', 'uninstall']) {
@@ -71,7 +71,7 @@ test('release and source launchd installers declare background daemon policy', a
   assert.match(release, /loginctl enable-linger "\$USER"/);
   assert.match(release, /<key>ProcessType<\/key>\s*\n  <string>Background<\/string>/);
   assert.match(source, /<key>ProcessType<\/key>\s*\n  <string>Background<\/string>/);
-  assert.match(release, /\.codex-issue-runner\.stage\.\$\$/);
+  assert.match(release, /\.xuanwu\.stage\.\$\$/);
   assert.match(packager, /cp "\$ROOT_DIR\/scripts\/daemon\.sh" "\$pkg_dir\/daemon\.sh"/);
   assert.match(release, /serve --role core --addr \$CORE_ADDR/);
   assert.match(release, /serve --role agentic --addr \$AGENTIC_ADDR/);
@@ -85,7 +85,7 @@ test('release and source launchd installers declare background daemon policy', a
 });
 
 test('release installer can repeat an atomic macOS upgrade without replacing state', async () => {
-  const temp = await mkdtemp(join(tmpdir(), 'codex-runner-release-'));
+  const temp = await mkdtemp(join(tmpdir(), 'xuanwu-release-'));
   try {
     const home = join(temp, 'home');
     const fakeBin = join(temp, 'bin');
@@ -93,7 +93,7 @@ test('release installer can repeat an atomic macOS upgrade without replacing sta
     const install = join(temp, 'install');
     const fixture = join(temp, 'fixture');
     const release = join(temp, 'release');
-    const archive = join(release, 'codex-issue-runner_darwin_arm64.tar.gz');
+    const archive = join(release, 'xuanwu_darwin_arm64.tar.gz');
     const calls = join(temp, 'calls.log');
     await mkdir(join(home, 'Library', 'LaunchAgents'), { recursive: true });
     await mkdir(fakeBin, { recursive: true });
@@ -101,15 +101,15 @@ test('release installer can repeat an atomic macOS upgrade without replacing sta
     await mkdir(fixture, { recursive: true });
     await mkdir(release, { recursive: true });
     await writeFile(join(state, 'runner.db'), 'state-survives-upgrade');
-    await writeExecutable(join(fixture, 'codex-issue-runner'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-issue-runner v1.2.3 build=test bun=test"; fi\nexit 0\n');
-    await writeExecutable(join(fixture, 'codex-issue-runner.claude-agent-sdk'), '#!/bin/sh\nexit 0\n');
+    await writeExecutable(join(fixture, 'xuanwu'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "xuanwu v1.2.3 build=test bun=test"; fi\nexit 0\n');
+    await writeExecutable(join(fixture, 'xuanwu.claude-agent-sdk'), '#!/bin/sh\nexit 0\n');
     await writeFile(join(fixture, 'daemon.sh'), await readFile(daemon));
     await chmod(join(fixture, 'daemon.sh'), 0o755);
     assert.equal(spawnSync('tar', ['-czf', archive, '-C', fixture, '.']).status, 0);
     const metadata = join(release, 'release.json');
     await writeFile(metadata, '{\n  "version": "v1.2.3"\n}\n');
     await writeFile(join(release, 'checksums.txt'), [
-      `${await sha256(archive)}  codex-issue-runner_darwin_arm64.tar.gz`,
+      `${await sha256(archive)}  xuanwu_darwin_arm64.tar.gz`,
       `${await sha256(metadata)}  release.json`,
       ''
     ].join('\n'));
@@ -124,19 +124,19 @@ test('release installer can repeat an atomic macOS upgrade without replacing sta
       PATH: `${fakeBin}:${process.env.PATH}`,
       CALL_LOG: calls,
       FIXTURE_RELEASE_DIR: release,
-      CODEX_RUNNER_INSTALL_DIR: install,
-      CODEX_RUNNER_STATE_DIR: state,
-      CODEX_RUNNER_ADDR: '127.0.0.1:3999',
-      CODEX_RUNNER_VERSION: 'v1.2.3',
-      CODEX_RUNNER_VERIFY_ATTESTATION: 'skip'
+      XUANWU_INSTALL_DIR: install,
+      XUANWU_STATE_DIR: state,
+      XUANWU_ADDR: '127.0.0.1:3999',
+      XUANWU_VERSION: 'v1.2.3',
+      XUANWU_VERIFY_ATTESTATION: 'skip'
     };
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const result = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], { env, encoding: 'utf8' });
       assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     }
     assert.equal(await readFile(join(state, 'runner.db'), 'utf8'), 'state-survives-upgrade');
-    assert.match(await readFile(calls, 'utf8'), /launchctl kickstart -k gui\/\d+\/com\.xiaobei\.codex-issue-runner/);
-    assert.equal(await readFile(join(install, 'codex-issue-runner-daemon'), 'utf8'), await readFile(join(fixture, 'daemon.sh'), 'utf8'));
+    assert.match(await readFile(calls, 'utf8'), /launchctl kickstart -k gui\/\d+\/com\.xiaobei\.xuanwu/);
+    assert.equal(await readFile(join(install, 'xuanwu-daemon'), 'utf8'), await readFile(join(fixture, 'daemon.sh'), 'utf8'));
   } finally {
     await rm(temp, { recursive: true, force: true });
   }

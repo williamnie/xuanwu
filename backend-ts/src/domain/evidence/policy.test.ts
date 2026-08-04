@@ -514,7 +514,7 @@ function context(overrides: Partial<{
 }> = {}) {
   return {
     work_id: WORK_ID,
-    project_id: "codex-issue-runner",
+    project_id: "xuanwu",
     risk: "safe" as const,
     now: NOW,
     run_id: RUN_ID,
@@ -529,7 +529,7 @@ function projectOverride(
 ): ProjectVerificationOverride {
   return {
     schema_version: VERIFICATION_PROJECT_OVERRIDE_SCHEMA_VERSION,
-    project_id: "codex-issue-runner",
+    project_id: "xuanwu",
     policy_id: base.id,
     base_policy_revision: base.revision,
     additional_required_groups: [],

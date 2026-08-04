@@ -209,7 +209,7 @@ async function fixtureDb(): Promise<RunnerDatabase> {
 }
 
 async function fixtureDbWithRoot(): Promise<{ db: RunnerDatabase; root: string }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-supervisor-actions-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-supervisor-actions-"));
   tempRoots.push(root);
   return { db: await openDatabase({ stateDir: join(root, "state") }), root };
 }

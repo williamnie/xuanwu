@@ -139,7 +139,7 @@ function serviceStatus(startedAt: Date, role: "all" | "core" = "all"): Record<st
   const memory = process.memoryUsage();
   return {
     alive: true,
-    name: "codex-issue-runner backend-ts",
+    name: "xuanwu backend-ts",
     runtime: "bun",
     role,
     bun_version: build.bun_version,

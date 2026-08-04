@@ -25,7 +25,7 @@ afterEach(async () => {
 describe("PI skill intent tools", () => {
   test("lists, reads, recommends, and audits skill intents through PI tools", async () => {
     const { db, project, root } = await openFixture();
-    await writeSkill(root, "codex-issue-runner", "Use when working on runner PI issues and verification.");
+    await writeSkill(root, "xuanwu", "Use when working on runner PI issues and verification.");
     await writeSkill(root, "local-fixture", "Use when local fixture skill metadata should be visible.");
     await writeBadSkill(root, "broken");
     Bun.env.CODEX_HOME = root;
@@ -36,8 +36,8 @@ describe("PI skill intent tools", () => {
       expect(toolNames(tools)).toEqual(expect.arrayContaining([
         "skill_list", "skill_read", "skill_recommend", "skill_intent_audit"
       ]));
-      expect(validateToolArguments(toolByName(tools, "skill_read") as never, { name: "skill_read", arguments: { id: "codex-issue-runner" } } as never))
-        .toEqual({ id: "codex-issue-runner" });
+      expect(validateToolArguments(toolByName(tools, "skill_read") as never, { name: "skill_read", arguments: { id: "xuanwu" } } as never))
+        .toEqual({ id: "xuanwu" });
       const recommend = await runTool(tools, "skill_recommend", {
         description: "Runner PI issue needs verification",
         project_id: project.id,
@@ -51,7 +51,7 @@ describe("PI skill intent tools", () => {
         expect.objectContaining({ code: "missing_front_matter", source_path: "codex-home:broken/SKILL.md" })
       ]));
       expect(JSON.stringify(list.details)).not.toContain(root);
-      expect(recommend.details.items.map((item: { id: string }) => item.id)).toContain("codex-issue-runner");
+      expect(recommend.details.items.map((item: { id: string }) => item.id)).toContain("xuanwu");
       expect(recommend.details.items.every((item: Record<string, unknown>) => item.instructions === undefined)).toBe(true);
       expect(JSON.stringify(recommend.details).length).toBeLessThan(8_192);
       expect(audit.details).toMatchObject({ issue_id: issueID, status: "ok" });
@@ -65,7 +65,7 @@ describe("PI skill intent tools", () => {
     try {
       const actions = createPiRunnerActions(db, {
         authorization: {
-          allowedSkillIntents: ["codex-issue-runner"],
+          allowedSkillIntents: ["xuanwu"],
           authorizedActions: [{ action_type: "issue.create", project_id: project.id }],
           mode: "delegated",
           scope: { project_id: project.id }
@@ -80,14 +80,14 @@ describe("PI skill intent tools", () => {
       }) as { decision: string; status: string };
       const allowed = actions.createIssueProposal({
         description: "Needs runner skill",
-        required_skill_intents: ["codex-issue-runner"],
+        required_skill_intents: ["xuanwu"],
         title: "Allowed skill"
       }) as { decision: string; status: string };
 
       expect(denied).toMatchObject({ decision: "deny", status: "denied" });
       expect(allowed).toMatchObject({ decision: "execute", status: "completed" });
       expect(listIssues(db, { projectId: project.id }).map((issue) => issue.title)).toEqual(["Allowed skill"]);
-      expect(JSON.parse(getIssue(db, 1)?.required_skill_intents ?? "[]")).toEqual(["codex-issue-runner"]);
+      expect(JSON.parse(getIssue(db, 1)?.required_skill_intents ?? "[]")).toEqual(["xuanwu"]);
       expect(listPiActions(db).map((action) => action.status).sort()).toEqual(["completed", "denied"]);
     } finally {
       db.close();
@@ -96,7 +96,7 @@ describe("PI skill intent tools", () => {
 });
 
 async function openFixture(): Promise<{ db: RunnerDatabase; project: Project; root: string }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-skill-tools-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-skill-tools-"));
   tempRoots.push(root);
   const cwd = join(root, "project");
   await mkdir(cwd, { recursive: true });

@@ -62,10 +62,10 @@ function required(value, label) {
 
 function assetName(target) {
   const mapping = {
-    'bun-darwin-arm64': 'codex-issue-runner_darwin_arm64.tar.gz',
-    'bun-darwin-x64': 'codex-issue-runner_darwin_amd64.tar.gz',
-    'bun-linux-arm64': 'codex-issue-runner_linux_arm64.tar.gz',
-    'bun-linux-x64': 'codex-issue-runner_linux_amd64.tar.gz',
+    'bun-darwin-arm64': 'xuanwu_darwin_arm64.tar.gz',
+    'bun-darwin-x64': 'xuanwu_darwin_amd64.tar.gz',
+    'bun-linux-arm64': 'xuanwu_linux_arm64.tar.gz',
+    'bun-linux-x64': 'xuanwu_linux_amd64.tar.gz',
   };
   if (!mapping[target]) throw new Error(`unsupported target: ${target}`);
   return mapping[target];

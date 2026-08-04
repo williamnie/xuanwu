@@ -19,15 +19,15 @@
 umask 077
 printf '%s' 'use-a-secret-manager-value' > /secure/xuanwu-backup.passphrase
 
-./dist/codex-issue-runner backup export \
-  --state-dir "$CODEX_RUNNER_STATE_DIR" \
-  --db "$CODEX_RUNNER_DB" \
+./dist/xuanwu backup export \
+  --state-dir "$XUANWU_STATE_DIR" \
+  --db "$XUANWU_DB" \
   --output /secure/backups/xuanwu-backup-$(date -u +%Y%m%dT%H%M%SZ).encrypted \
   --encrypt --passphrase-file /secure/xuanwu-backup.passphrase --retain 7 \
   --actor backup-operator --actor-kind system --audit-ref change:backup-20260718 \
   --reason 'scheduled encrypted backup' --json
 
-./dist/codex-issue-runner backup verify \
+./dist/xuanwu backup verify \
   --input /secure/backups/xuanwu-backup-20260718T000000Z.encrypted \
   --passphrase-file /secure/xuanwu-backup.passphrase --json
 ```
@@ -42,7 +42,7 @@ printf '%s' 'use-a-secret-manager-value' > /secure/xuanwu-backup.passphrase
 RESTORE_ROOT="$(mktemp -d /tmp/xuanwu-restore.XXXXXX)"
 rm -rf "$RESTORE_ROOT" # import 要求 target 不存在或为空
 
-./dist/codex-issue-runner backup import \
+./dist/xuanwu backup import \
   --input /secure/backups/xuanwu-backup-20260718T000000Z.encrypted \
   --passphrase-file /secure/xuanwu-backup.passphrase \
   --target-state-dir "$RESTORE_ROOT" --apply \

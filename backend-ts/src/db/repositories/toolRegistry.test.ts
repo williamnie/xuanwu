@@ -61,7 +61,7 @@ describe("assistant tool registry repository", () => {
 });
 
 async function openFixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-tool-registry-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-tool-registry-"));
   tempRoots.push(root);
   return await openDatabase({ stateDir: join(root, "state") });
 }

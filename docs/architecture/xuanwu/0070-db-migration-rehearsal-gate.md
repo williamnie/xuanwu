@@ -16,14 +16,14 @@ P10.02 为现有 SQLite migration runner 增加**副本演练门禁**，不改�
 只对正式库的**隔离副本**执行；不要把 `--db` 指向运行中的服务数据库。先用部署环境的系统 doctor 确认服务/数据库可读，再建立副本：
 
 ```bash
-codex-issue-runner doctor --json
+xuanwu doctor --json
 sqlite3 "$LIVE_DB" ".backup '/tmp/xw-p10-02/runner-copy.db'"
 
-codex-issue-runner maintenance db migration-preflight \
+xuanwu maintenance db migration-preflight \
   --db /tmp/xw-p10-02/runner-copy.db \
   --report /tmp/xw-p10-02/preflight.json --json
 
-codex-issue-runner maintenance db migration-forward \
+xuanwu maintenance db migration-forward \
   --db /tmp/xw-p10-02/runner-copy.db \
   --backup /tmp/xw-p10-02/pre-forward.db \
   --report /tmp/xw-p10-02/forward.json \
@@ -41,7 +41,7 @@ codex-issue-runner maintenance db migration-forward \
 对同一副本回滚仅恢复这次 forward 前的 fresh backup：
 
 ```bash
-codex-issue-runner maintenance db migration-rollback \
+xuanwu maintenance db migration-rollback \
   --db /tmp/xw-p10-02/runner-copy.db \
   --backup /tmp/xw-p10-02/pre-forward.db \
   --report /tmp/xw-p10-02/rollback.json \

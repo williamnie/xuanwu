@@ -99,7 +99,7 @@ describe("Codex stdio JSON-RPC transport", () => {
     const result = await runCodexTransportInitializeSmoke(config, { processFactory: factory });
 
     expect(spawnedCommand).toEqual(["codex", "app-server", "--listen", "stdio://"]);
-    expect(spawnedEnvironment.CODEX_RUNNER_MANAGED_EXECUTION).toBe("1");
+    expect(spawnedEnvironment.XUANWU_MANAGED_EXECUTION).toBe("1");
     expect(result).toEqual({ protocolVersion: "fixture" });
   });
 

@@ -232,7 +232,7 @@ describe("Xuanwu PI runtime prompt", () => {
   });
 
   test("keeps confirmed project/global memory scoped away from an old conversation", async () => {
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-supervisor-memory-"));
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-supervisor-memory-"));
     const db = await openDatabase({ stateDir: join(root, "state") });
     try {
       createPiMemoryItem(db, {
@@ -291,7 +291,7 @@ describe("Xuanwu PI runtime prompt", () => {
 });
 
 async function withRuntimePrompt(name: string, assertion: (prompt: string) => void): Promise<void> {
-  const root = await mkdtemp(join(tmpdir(), `codex-runner-bun-supervisor-${name}-`));
+  const root = await mkdtemp(join(tmpdir(), `xuanwu-bun-supervisor-${name}-`));
   const db = await openDatabase({ stateDir: join(root, "state") });
   try {
     assertion(buildPiRuntimeSystemPrompt({

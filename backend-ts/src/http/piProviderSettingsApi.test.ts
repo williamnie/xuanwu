@@ -12,7 +12,7 @@ const tempRoots: string[] = [];
 const testServers: Array<ReturnType<typeof Bun.serve>> = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-provider-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-provider-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -225,18 +225,18 @@ describe("Bun PI provider settings API", () => {
       const saved = await request(router, "/api/pi/provider-settings/openai", {
         api: "openai-responses",
         models: "gpt-5.4",
-        user_agent: "CodexIssueRunner/1.0 PI"
+        user_agent: "Xuanwu/1.0 PI"
       });
 
       expect(saved.status).toBe(200);
       expect(await saved.json()).toMatchObject({
         id: "openai",
-        user_agent: "CodexIssueRunner/1.0 PI"
+        user_agent: "Xuanwu/1.0 PI"
       });
       const raw = JSON.parse(await readFile(modelsPath(database), "utf8"));
       expect(raw.providers.openai.headers).toEqual({
         "X-Trace": "keep",
-        "User-Agent": "CodexIssueRunner/1.0 PI"
+        "User-Agent": "Xuanwu/1.0 PI"
       });
     } finally {
       database.close();

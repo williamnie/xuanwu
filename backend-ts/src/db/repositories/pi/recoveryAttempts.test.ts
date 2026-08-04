@@ -171,7 +171,7 @@ describe("PI recovery attempts", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-recovery-attempts-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-recovery-attempts-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

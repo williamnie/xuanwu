@@ -122,7 +122,7 @@ function groupRow(db: RunnerDatabase, id: string) {
 }
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-digest-flush-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-digest-flush-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

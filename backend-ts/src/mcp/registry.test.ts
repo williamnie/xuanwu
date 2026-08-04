@@ -7,16 +7,16 @@ import {
   recommendMcpRequirements
 } from "./registry.ts";
 
-const previousRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+const previousRegistry = Bun.env.XUANWU_MCP_REGISTRY_JSON;
 
 afterEach(() => {
-  if (previousRegistry === undefined) delete Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
-  else Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = previousRegistry;
+  if (previousRegistry === undefined) delete Bun.env.XUANWU_MCP_REGISTRY_JSON;
+  else Bun.env.XUANWU_MCP_REGISTRY_JSON = previousRegistry;
 });
 
 describe("PI MCP capability registry", () => {
   test("normalizes configured MCP servers into discoverable capabilities", () => {
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
 
     const registry = listMcpRegistry();
     const capabilityIDs = registry.flatMap((server) => server.capabilities.map((capability) => capability.id));
@@ -49,7 +49,7 @@ describe("PI MCP capability registry", () => {
   });
 
   test("recommends MCP requirements from issue text", () => {
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
 
     const recommended = recommendMcpRequirements({
       description: "Find the deployment runbook before changing production docs.",
@@ -60,7 +60,7 @@ describe("PI MCP capability registry", () => {
     expect(recommended[0]).toMatchObject({ reason: expect.stringContaining("runbook") });
   });
   test("reports unavailable server readiness diagnostics", () => {
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [{
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [{
       id: "offline-docs",
       status: "unavailable",
       readiness: "auth_missing",
@@ -82,7 +82,7 @@ describe("PI MCP capability registry", () => {
   });
 
   test("lists only authorized read-only resources", () => {
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer(), {
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer(), {
       id: "offline-docs",
       status: "unavailable",
       readiness: "auth_missing",

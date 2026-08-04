@@ -277,7 +277,7 @@ function createPreference(
 }
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-notification-resolver-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-notification-resolver-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

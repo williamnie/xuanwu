@@ -77,7 +77,7 @@ describe("Feishu bounded conversation projection", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-context-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-context-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

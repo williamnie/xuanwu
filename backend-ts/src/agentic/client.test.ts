@@ -11,9 +11,9 @@ describe("Agentic Worker HTTP client", () => {
       globalThis.fetch = (() => new Promise<Response>((resolve) => {
         release = () => resolve(Response.json({ ok: true, result: { accepted: true } }, {
           headers: {
-            "x-codex-runner-agentic-pid": "3010",
-            "x-codex-runner-agentic-rss-bytes": "188743680",
-            "x-codex-runner-agentic-started-at": "2026-07-27T02:59:00.000Z"
+            "x-xuanwu-agentic-pid": "3010",
+            "x-xuanwu-agentic-rss-bytes": "188743680",
+            "x-xuanwu-agentic-started-at": "2026-07-27T02:59:00.000Z"
           }
         }));
       })) as unknown as typeof fetch;

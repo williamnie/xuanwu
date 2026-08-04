@@ -25,7 +25,7 @@ import { normalizedRunEvent } from "../src/providers/runEvents.ts";
 import type { ExecutorProvider, ProviderRunInput, ProviderRunResult, SessionRef } from "../src/providers/types.ts";
 
 const CONTRACT = "xw.agentic-activation.supervisor-auto-management.v1";
-const PROJECT_ID = "codex-issue-runner";
+const PROJECT_ID = "xuanwu";
 const UNAUTHORIZED_PROJECT_ID = "agent-03-unauthorized";
 const PI_PROVIDER = "pi-agent-03-faux";
 const PI_API = "pi-agent-03-faux-api";

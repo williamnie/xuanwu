@@ -131,7 +131,7 @@ function runSecurity(args: string[], input = ""): ReturnType<KeychainCommandRunn
 }
 
 function serviceName(): string {
-  return "com.codex-issue-runner.xuanwu";
+  return "com.xuanwu.xuanwu";
 }
 
 function missing(error: unknown): boolean {

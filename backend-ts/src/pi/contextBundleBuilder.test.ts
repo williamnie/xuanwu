@@ -125,7 +125,7 @@ describe("context bundle builder", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-context-bundles-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-context-bundles-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -26,7 +26,7 @@ describe("PI project policy API", () => {
       const patched = await request(router, "/api/projects/demo/pi-policy", "PATCH", {
         allowed_actions: ["issue.enqueue", "issue.state_repair"],
         allowed_mcp_capabilities: ["docs:resource:runbook", "docs:tool:search"],
-        allowed_skill_intents: ["codex-issue-runner", "verification-before-completion"],
+        allowed_skill_intents: ["xuanwu", "verification-before-completion"],
         allowed_supervisor_actions: ["session.resume_followup", "issue.retry_after"],
         concurrency_policy: { max_parallel_issues: 1, max_parallel_pi_cycles: 1 },
         quiet_hours: { daily: [{ end: "08:00", start: "22:00" }] },
@@ -60,7 +60,7 @@ describe("PI project policy API", () => {
       });
       expect(JSON.parse(String(body.allowed_actions_json))).toEqual(["issue.enqueue", "issue.state_repair"]);
       expect(JSON.parse(String(body.allowed_mcp_capabilities_json))).toEqual(["docs:resource:runbook", "docs:tool:search"]);
-      expect(JSON.parse(String(body.allowed_skill_intents_json))).toEqual(["codex-issue-runner", "verification-before-completion"]);
+      expect(JSON.parse(String(body.allowed_skill_intents_json))).toEqual(["xuanwu", "verification-before-completion"]);
       expect(JSON.parse(String(body.allowed_supervisor_actions_json))).toEqual(["session.resume_followup", "issue.retry_after"]);
       expect(JSON.parse(String(body.working_hours_json))).toEqual({ end: "18:00", start: "09:00", weekdays: [1, 2, 3, 4, 5] });
       expect(JSON.parse(String(body.quiet_hours_json))).toEqual({ daily: [{ end: "08:00", start: "22:00" }] });
@@ -155,7 +155,7 @@ describe("PI project policy API", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-policy-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-policy-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -13,7 +13,7 @@ import {
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-policy-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-policy-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -86,13 +86,13 @@ describe("project PI policy repository", () => {
         concurrency_policy_json: concurrencyPolicy,
         allowed_actions_json: ["issue.enqueue", "issue.state_repair"],
         allowed_mcp_capabilities_json: ["docs:resource:runbook"],
-        allowed_skill_intents_json: ["codex-issue-runner"]
+        allowed_skill_intents_json: ["xuanwu"]
       });
 
       expect(policy).toMatchObject({ project_id: "demo", timezone: "Asia/Shanghai" });
       expect(JSON.parse(policy.allowed_actions_json)).toEqual(["issue.enqueue", "issue.state_repair"]);
       expect(JSON.parse(policy.allowed_mcp_capabilities_json)).toEqual(["docs:resource:runbook"]);
-      expect(JSON.parse(policy.allowed_skill_intents_json)).toEqual(["codex-issue-runner"]);
+      expect(JSON.parse(policy.allowed_skill_intents_json)).toEqual(["xuanwu"]);
       expect(JSON.parse(policy.working_hours_json)).toEqual(workingHours);
       expect(JSON.parse(policy.quiet_hours_json)).toEqual(quietHours);
       expect(JSON.parse(policy.retry_policy_json)).toEqual(retryPolicy);

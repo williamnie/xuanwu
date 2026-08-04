@@ -25,8 +25,8 @@ export type ParsedCommandArgs = {
 };
 
 const DEFAULT_ADDR = "127.0.0.1:3008";
-const TOKEN_ENV = "CODEX_RUNNER_AUTH_TOKEN";
-const TOKEN_FILE_ENV = "CODEX_RUNNER_AUTH_TOKEN_FILE";
+const TOKEN_ENV = "XUANWU_AUTH_TOKEN";
+const TOKEN_FILE_ENV = "XUANWU_AUTH_TOKEN_FILE";
 
 export function parseCommandArgs(args: string[], specs: FlagSpec[], env: EnvReader): ParsedCommandArgs {
   const parsed = parseCommonArgs(args, env);
@@ -35,7 +35,7 @@ export function parseCommandArgs(args: string[], specs: FlagSpec[], env: EnvRead
 
 export function parseCommonArgs(args: string[], env: EnvReader): ParsedCommonArgs {
   const rest: string[] = [];
-  let addr = env("CODEX_RUNNER_ADDR")?.trim() || DEFAULT_ADDR;
+  let addr = env("XUANWU_ADDR")?.trim() || DEFAULT_ADDR;
   let json = false;
   let token = envToken(env);
 

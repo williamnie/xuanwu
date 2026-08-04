@@ -28,7 +28,7 @@ function resolveAppVersion(mode) {
   const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env }
   return firstValue(
     env.VITE_APP_VERSION,
-    env.CODEX_RUNNER_VERSION,
+    env.XUANWU_VERSION,
     tagRefVersion(env),
     gitDescribeVersion(),
     FALLBACK_APP_VERSION
@@ -61,7 +61,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     define: {
-      __CODEX_RUNNER_APP_VERSION__: JSON.stringify(appVersion),
+      __XUANWU_APP_VERSION__: JSON.stringify(appVersion),
     },
     plugins: [react()],
     server: {

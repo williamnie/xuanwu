@@ -99,7 +99,7 @@ describe("Feishu agent bridge /new command", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-agent-new-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-agent-new-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

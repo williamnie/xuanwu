@@ -83,9 +83,9 @@ function observeWorkerResponse(
   observe: (input: { pid: number; rss_bytes: number; started_at: string }) => void
 ): void {
   observe({
-    pid: Number(response.headers.get("x-codex-runner-agentic-pid") ?? "0"),
-    rss_bytes: Number(response.headers.get("x-codex-runner-agentic-rss-bytes") ?? "0"),
-    started_at: response.headers.get("x-codex-runner-agentic-started-at") ?? ""
+    pid: Number(response.headers.get("x-xuanwu-agentic-pid") ?? "0"),
+    rss_bytes: Number(response.headers.get("x-xuanwu-agentic-rss-bytes") ?? "0"),
+    started_at: response.headers.get("x-xuanwu-agentic-started-at") ?? ""
   });
 }
 

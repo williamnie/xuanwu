@@ -139,7 +139,7 @@ async function fixtureHandler(projectMappings = "", feishuSender?: FeishuMessage
   handle: (request: Request) => Promise<Response>;
   root: string;
 }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-im-outbox-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-im-outbox-"));
   tempRoots.push(root);
   const database = await openDatabase({ stateDir: join(root, "state") });
   const config = buildConfig({

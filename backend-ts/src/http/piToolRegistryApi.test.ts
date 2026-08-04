@@ -8,12 +8,12 @@ import { listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const previousMcpRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+const previousMcpRegistry = Bun.env.XUANWU_MCP_REGISTRY_JSON;
 const tempRoots: string[] = [];
 
 afterEach(async () => {
-  if (previousMcpRegistry === undefined) delete Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
-  else Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = previousMcpRegistry;
+  if (previousMcpRegistry === undefined) delete Bun.env.XUANWU_MCP_REGISTRY_JSON;
+  else Bun.env.XUANWU_MCP_REGISTRY_JSON = previousMcpRegistry;
   while (tempRoots.length > 0) {
     const path = tempRoots.pop();
     if (path) await rm(path, { recursive: true, force: true });
@@ -114,7 +114,7 @@ describe("PI tool registry read API", () => {
 
   test("loads MCP server tools into the unified registry without blocking on failed servers", async () => {
     const db = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsMcpServer(), failedMcpServer()] });
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsMcpServer(), failedMcpServer()] });
     try {
       const router = createDefaultRouter({ database: db });
       const providers = await router.handle(new Request(`${BASE_URL}/api/pi/tool-providers`));
@@ -233,7 +233,7 @@ describe("PI tool registry read API", () => {
       const text = JSON.stringify(await response.json());
       expect(text).toContain("[redacted]");
       expect(text).not.toContain("super-secret");
-      expect(text).not.toContain("CODEX_RUNNER_AUTH_TOKEN=abc");
+      expect(text).not.toContain("XUANWU_AUTH_TOKEN=abc");
     } finally {
       db.close();
     }
@@ -241,13 +241,13 @@ describe("PI tool registry read API", () => {
 });
 
 async function openFixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-tool-registry-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-tool-registry-api-"));
   tempRoots.push(root);
   return await openDatabase({ stateDir: join(root, "state") });
 }
 
 async function cliConnectorFixtureDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "codex-runner-cli-api-"));
+  const dir = await mkdtemp(join(tmpdir(), "xuanwu-cli-api-"));
   tempRoots.push(dir);
   const script = join(dir, "fixture.mjs");
   await writeFile(script, CLI_SCRIPT, "utf8");
@@ -307,7 +307,7 @@ function seedSecretFixture(db: RunnerDatabase): void {
       "Secret fixture provider.",
       "enabled",
       JSON.stringify({ redact: ["headers.authorization"] }),
-      JSON.stringify({ env: "CODEX_RUNNER_AUTH_TOKEN=abc", token: "super-secret" }),
+      JSON.stringify({ env: "XUANWU_AUTH_TOKEN=abc", token: "super-secret" }),
       now,
       now
     ]

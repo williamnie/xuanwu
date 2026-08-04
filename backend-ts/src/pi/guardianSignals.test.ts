@@ -87,7 +87,7 @@ describe("Guardian signals", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-guardian-signals-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-guardian-signals-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

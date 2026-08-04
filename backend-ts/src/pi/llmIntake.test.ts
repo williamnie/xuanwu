@@ -286,7 +286,7 @@ function ignoredModel(request: LlmIntakeRequest) {
 }
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-llm-intake-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-llm-intake-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

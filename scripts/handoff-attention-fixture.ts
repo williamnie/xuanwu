@@ -630,7 +630,7 @@ function writeReplay(path: string): void {
 前置条件：仅需本仓库的 Bun 依赖与 Git。fixture 使用临时仓库和临时 SQLite，不读取或清理共享工作树，不修改 live DB。
 
 \`\`\`bash
-cd /Users/xiaobei/Documents/xiaobei/codex-issue-runner
+cd /absolute/path/to/xuanwu
 
 # 六类端到端 fixture，并生成机器制品
 bun scripts/handoff-attention-fixture.ts exercise \\

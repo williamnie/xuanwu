@@ -72,7 +72,7 @@ describe("AGENT-02 live Standing Order assertions", () => {
     expect(source).toContain('Bun.spawn(["./dev.sh"]');
     expect(source).toContain('runtime_scope: "isolated ./dev.sh; launchd untouched"');
     expect(source).not.toContain('"launchctl"');
-    expect(source).not.toContain("com.xiaobei.codex-issue-runner.core");
+    expect(source).not.toContain("com.xiaobei.xuanwu.core");
   });
 });
 

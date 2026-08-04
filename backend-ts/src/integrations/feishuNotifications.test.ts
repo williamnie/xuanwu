@@ -354,7 +354,7 @@ describe("Feishu notification queue", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-notify-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-notify-"));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(

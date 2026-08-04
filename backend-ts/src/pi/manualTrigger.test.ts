@@ -135,7 +135,7 @@ describe("manual context intake trigger", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-manual-trigger-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-manual-trigger-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -144,7 +144,7 @@ async function writeSourceConnector(
   id: string,
   options: { requiredEnv?: string } = {}
 ): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-manual-source-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-manual-source-"));
   tempRoots.push(root);
   const script = join(root, `${id}.mjs`);
   await mkdir(root, { recursive: true });

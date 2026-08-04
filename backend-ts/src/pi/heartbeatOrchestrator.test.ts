@@ -229,7 +229,7 @@ describe("PI heartbeat orchestrator", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-heartbeat-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-heartbeat-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -25,7 +25,7 @@ export function loadAssistantToolRegistrySnapshot(
   options: AssistantToolRegistrySnapshotOptions = {}
 ): AssistantToolRegistrySnapshot {
   const cli = loadCliConnectorRegistry({ env: options.env, manifestDirs: options.cliConnectorDirs ?? [] });
-  const mcp = loadMcpToolProviderRegistry({ database: db, registryJson: options.env?.CODEX_RUNNER_MCP_REGISTRY_JSON });
+  const mcp = loadMcpToolProviderRegistry({ database: db, registryJson: options.env?.XUANWU_MCP_REGISTRY_JSON });
   return {
     providers: mergeProviders([
       ...listBuiltinToolProviders(), ...listBrowserToolProviders(), ...listHttpToolProviders(), ...listStoredToolProviders(db), ...cli.providers, ...mcp.providers

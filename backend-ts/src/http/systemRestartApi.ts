@@ -89,7 +89,7 @@ async function stopProvider(provider: ExecutorProvider | undefined): Promise<voi
   } catch (error) {
     console.error(JSON.stringify({
       ok: false,
-      service: "codex-issue-runner backend-ts",
+      service: "xuanwu backend-ts",
       error: error instanceof Error ? error.message : String(error)
     }));
   }

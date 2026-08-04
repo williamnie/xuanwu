@@ -3,41 +3,41 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/scripts/assert-external-deploy-context.sh"
-LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
-ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
-CORE_ADDR="${CODEX_RUNNER_CORE_ADDR:-127.0.0.1:3009}"
-AGENTIC_ADDR="${CODEX_RUNNER_AGENTIC_ADDR:-127.0.0.1:3010}"
+LABEL="${XUANWU_LAUNCHD_LABEL:-com.xiaobei.xuanwu}"
+ADDR="${XUANWU_ADDR:-0.0.0.0:3008}"
+CORE_ADDR="${XUANWU_CORE_ADDR:-127.0.0.1:3009}"
+AGENTIC_ADDR="${XUANWU_AGENTIC_ADDR:-127.0.0.1:3010}"
 WEB_LABEL="${LABEL}.web"
 CORE_LABEL="${LABEL}.core"
 AGENTIC_LABEL="${LABEL}.agentic"
-APP_SUPPORT_DIR="${CODEX_RUNNER_APP_SUPPORT_DIR:-$HOME/Library/Application Support/codex-issue-runner-bun-live}"
-STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$APP_SUPPORT_DIR/state}"
-DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
-AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
-AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
-SOURCE_WEB_DIR="${CODEX_RUNNER_SOURCE_WEB_DIR:-$ROOT_DIR/frontend/dist}"
-WEB_DIR="${CODEX_RUNNER_WEB_DIR:-$STATE_DIR/web}"
-BINARY_PATH="${CODEX_RUNNER_BINARY:-$ROOT_DIR/dist/codex-issue-runner}"
-LAUNCHD_BINARY_PATH="${CODEX_RUNNER_LAUNCHD_BINARY:-$APP_SUPPORT_DIR/bin/codex-issue-runner}"
+APP_SUPPORT_DIR="${XUANWU_APP_SUPPORT_DIR:-$HOME/Library/Application Support/xuanwu-bun-live}"
+STATE_DIR="${XUANWU_STATE_DIR:-$APP_SUPPORT_DIR/state}"
+DB_PATH="${XUANWU_DB:-${XUANWU_DEPLOY_DB:-$STATE_DIR/runner.db}}"
+AUTH_TOKEN_FILE="${XUANWU_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
+AUTH_TOKEN="${XUANWU_AUTH_TOKEN:-}"
+SOURCE_WEB_DIR="${XUANWU_SOURCE_WEB_DIR:-$ROOT_DIR/frontend/dist}"
+WEB_DIR="${XUANWU_WEB_DIR:-$STATE_DIR/web}"
+BINARY_PATH="${XUANWU_BINARY:-$ROOT_DIR/dist/xuanwu}"
+LAUNCHD_BINARY_PATH="${XUANWU_LAUNCHD_BINARY:-$APP_SUPPORT_DIR/bin/xuanwu}"
 CLAUDE_SDK_EXECUTABLE_SOURCE="$BINARY_PATH.claude-agent-sdk"
 CLAUDE_SDK_EXECUTABLE_PATH="$LAUNCHD_BINARY_PATH.claude-agent-sdk"
-PI_PACKAGE_ASSET_SOURCE="${CODEX_RUNNER_PI_PACKAGE_ASSET_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@earendil-works/pi-coding-agent}"
-PI_PACKAGE_ASSET_DIR="${CODEX_RUNNER_PI_PACKAGE_ASSET_DIR:-$APP_SUPPORT_DIR/pi-coding-agent}"
-RUNNER_SKILLS_SOURCE="${CODEX_RUNNER_SKILLS_SOURCE:-$ROOT_DIR/skills}"
-RUNNER_PLUGINS_SOURCE="${CODEX_RUNNER_PLUGINS_SOURCE:-$ROOT_DIR/plugins}"
-PHOTON_WASM_SOURCE="${CODEX_RUNNER_PHOTON_WASM_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm}"
-LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$APP_SUPPORT_DIR/logs}"
-CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-$(command -v codex || true)}"
-CODEX_SERVER_MODE="${CODEX_RUNNER_CODEX_SERVER_MODE:-cli}"
-CODEX_APP_CMD="${CODEX_RUNNER_CODEX_APP_CMD:-}"
-CLAUDE_MODE="${CODEX_RUNNER_CLAUDE_MODE:-sdk}"
-CLAUDE_AUTH_MODE="${CODEX_RUNNER_CLAUDE_AUTH_MODE:-}"
-CLAUDE_API_BASE_URL="${CODEX_RUNNER_CLAUDE_API_BASE_URL:-${ANTHROPIC_BASE_URL:-}}"
-CLAUDE_API_PATH="${CODEX_RUNNER_CLAUDE_API_PATH:-}"
-CLAUDE_API_KEY="${CODEX_RUNNER_CLAUDE_API_KEY:-${ANTHROPIC_API_KEY:-}}"
-CLAUDE_API_KEY_FILE="${CODEX_RUNNER_CLAUDE_API_KEY_FILE:-$STATE_DIR/claude_api_key}"
-CLAUDE_PLATFORM_CONFIG_DIR="${CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR:-${ANTHROPIC_CONFIG_DIR:-}}"
-CLAUDE_PLATFORM_PROFILE="${CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE:-${ANTHROPIC_PROFILE:-}}"
+PI_PACKAGE_ASSET_SOURCE="${XUANWU_PI_PACKAGE_ASSET_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@earendil-works/pi-coding-agent}"
+PI_PACKAGE_ASSET_DIR="${XUANWU_PI_PACKAGE_ASSET_DIR:-$APP_SUPPORT_DIR/pi-coding-agent}"
+RUNNER_SKILLS_SOURCE="${XUANWU_SKILLS_SOURCE:-$ROOT_DIR/skills}"
+RUNNER_PLUGINS_SOURCE="${XUANWU_PLUGINS_SOURCE:-$ROOT_DIR/plugins}"
+PHOTON_WASM_SOURCE="${XUANWU_PHOTON_WASM_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm}"
+LOG_DIR="${XUANWU_LOG_DIR:-$APP_SUPPORT_DIR/logs}"
+CODEX_CMD="${XUANWU_CODEX_CMD:-$(command -v codex || true)}"
+CODEX_SERVER_MODE="${XUANWU_CODEX_SERVER_MODE:-cli}"
+CODEX_APP_CMD="${XUANWU_CODEX_APP_CMD:-}"
+CLAUDE_MODE="${XUANWU_CLAUDE_MODE:-sdk}"
+CLAUDE_AUTH_MODE="${XUANWU_CLAUDE_AUTH_MODE:-}"
+CLAUDE_API_BASE_URL="${XUANWU_CLAUDE_API_BASE_URL:-${ANTHROPIC_BASE_URL:-}}"
+CLAUDE_API_PATH="${XUANWU_CLAUDE_API_PATH:-}"
+CLAUDE_API_KEY="${XUANWU_CLAUDE_API_KEY:-${ANTHROPIC_API_KEY:-}}"
+CLAUDE_API_KEY_FILE="${XUANWU_CLAUDE_API_KEY_FILE:-$STATE_DIR/claude_api_key}"
+CLAUDE_PLATFORM_CONFIG_DIR="${XUANWU_CLAUDE_PLATFORM_CONFIG_DIR:-${ANTHROPIC_CONFIG_DIR:-}}"
+CLAUDE_PLATFORM_PROFILE="${XUANWU_CLAUDE_PLATFORM_PROFILE:-${ANTHROPIC_PROFILE:-}}"
 if [ -z "$CLAUDE_AUTH_MODE" ]; then
   if [ "$CLAUDE_MODE" = "cli-fallback" ] && [ -z "$CLAUDE_API_KEY" ]; then
     CLAUDE_AUTH_MODE="local-cli"
@@ -45,9 +45,9 @@ if [ -z "$CLAUDE_AUTH_MODE" ]; then
     CLAUDE_AUTH_MODE="environment"
   fi
 fi
-AUTOMATION_SHADOW_W1="${CODEX_RUNNER_AUTOMATION_SHADOW_W1:-0}"
-SKIP_RUNTIME_BACKUP="${CODEX_RUNNER_SKIP_RUNTIME_BACKUP:-0}"
-PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
+AUTOMATION_SHADOW_W1="${XUANWU_AUTOMATION_SHADOW_W1:-0}"
+SKIP_RUNTIME_BACKUP="${XUANWU_SKIP_RUNTIME_BACKUP:-0}"
+PATH_VALUE="${XUANWU_PATH:-$PATH}"
 LEGACY_PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 WEB_PLIST="$HOME/Library/LaunchAgents/$WEB_LABEL.plist"
 CORE_PLIST="$HOME/Library/LaunchAgents/$CORE_LABEL.plist"
@@ -95,7 +95,7 @@ stage_file_atomically() {
   local target_dir staged
   target_dir="$(dirname "$target")"
   mkdir -p "$target_dir"
-  staged="$(mktemp "$target_dir/.codex-runner-stage.XXXXXX")"
+  staged="$(mktemp "$target_dir/.xuanwu-stage.XXXXXX")"
   if ! { cp "$source" "$staged" && chmod "$mode" "$staged" && mv -f "$staged" "$target"; }; then
     rm -f "$staged"
     return 1
@@ -172,7 +172,7 @@ stage_pi_package_assets() {
 wait_for_health() {
   local url="$1"
   for _ in {1..120}; do
-    curl -fsS "$url/health" >/dev/null 2>&1 && return 0
+    curl --connect-timeout 1 --max-time 2 -fsS "$url/health" >/dev/null 2>&1 && return 0
     sleep 0.5
   done
   return 1
@@ -232,40 +232,40 @@ bootstrap_service() {
 }
 
 if [ -z "$CODEX_CMD" ]; then
-  echo "[launchd] codex command not found; set CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex" >&2
+  echo "[launchd] codex command not found; set XUANWU_CODEX_CMD=/absolute/path/to/codex" >&2
   exit 1
 fi
 
 case "$CLAUDE_AUTH_MODE" in
   environment) ;;
   local-cli)
-    [ "$CLAUDE_MODE" = "cli-fallback" ] || { echo "[launchd] CODEX_RUNNER_CLAUDE_AUTH_MODE=local-cli requires cli-fallback mode" >&2; exit 1; }
+    [ "$CLAUDE_MODE" = "cli-fallback" ] || { echo "[launchd] XUANWU_CLAUDE_AUTH_MODE=local-cli requires cli-fallback mode" >&2; exit 1; }
     ;;
   platform-profile)
-    [ "$CLAUDE_MODE" = "sdk" ] || { echo "[launchd] CODEX_RUNNER_CLAUDE_AUTH_MODE=platform-profile requires sdk mode" >&2; exit 1; }
+    [ "$CLAUDE_MODE" = "sdk" ] || { echo "[launchd] XUANWU_CLAUDE_AUTH_MODE=platform-profile requires sdk mode" >&2; exit 1; }
     ;;
-  *) echo "[launchd] CODEX_RUNNER_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile" >&2; exit 1 ;;
+  *) echo "[launchd] XUANWU_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile" >&2; exit 1 ;;
 esac
 if [ -n "$CLAUDE_PLATFORM_PROFILE" ] && [[ ! "$CLAUDE_PLATFORM_PROFILE" =~ ^[A-Za-z0-9_.-]+$ || "$CLAUDE_PLATFORM_PROFILE" = "." || "$CLAUDE_PLATFORM_PROFILE" = ".." ]]; then
-  echo "[launchd] CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE is invalid" >&2
+  echo "[launchd] XUANWU_CLAUDE_PLATFORM_PROFILE is invalid" >&2
   exit 1
 fi
 
 if [[ "$AUTOMATION_SHADOW_W1" != "0" && "$AUTOMATION_SHADOW_W1" != "1" ]]; then
-  echo "[launchd] CODEX_RUNNER_AUTOMATION_SHADOW_W1 must be 0 or 1" >&2
+  echo "[launchd] XUANWU_AUTOMATION_SHADOW_W1 must be 0 or 1" >&2
   exit 1
 fi
 
 if [[ "$SKIP_RUNTIME_BACKUP" != "0" && "$SKIP_RUNTIME_BACKUP" != "1" ]]; then
-  echo "[launchd] CODEX_RUNNER_SKIP_RUNTIME_BACKUP must be 0 or 1" >&2
+  echo "[launchd] XUANWU_SKIP_RUNTIME_BACKUP must be 0 or 1" >&2
   exit 1
 fi
 
 APP_VERSION="$("$ROOT_DIR/scripts/resolve-version.sh")"
 echo "[launchd] version: $APP_VERSION"
 env VITE_APP_VERSION="$APP_VERSION" npm --prefix "$ROOT_DIR/frontend" run build
-CODEX_RUNNER_CODESIGN_IDENTIFIER="${CODEX_RUNNER_CODESIGN_IDENTIFIER:-$LABEL}" \
-CODEX_RUNNER_VERSION="$APP_VERSION" \
+XUANWU_CODESIGN_IDENTIFIER="${XUANWU_CODESIGN_IDENTIFIER:-$LABEL}" \
+XUANWU_VERSION="$APP_VERSION" \
   "$ROOT_DIR/backend-ts/scripts/build-binary.sh"
 mkdir -p "$STATE_DIR" "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")" "$LOG_DIR" "$HOME/Library/LaunchAgents"
 if [ "$SKIP_RUNTIME_BACKUP" = "1" ]; then
@@ -359,27 +359,27 @@ cat > "$CORE_PLIST" <<PLIST
     <string>$(xml_escape "$PATH_VALUE")</string>
     <key>PI_PACKAGE_DIR</key>
     <string>$(xml_escape "$PI_PACKAGE_ASSET_DIR")</string>
-    <key>CODEX_RUNNER_CODEX_SERVER_MODE</key>
+    <key>XUANWU_CODEX_SERVER_MODE</key>
     <string>$(xml_escape "$CODEX_SERVER_MODE")</string>
-    <key>CODEX_RUNNER_CODEX_APP_CMD</key>
+    <key>XUANWU_CODEX_APP_CMD</key>
     <string>$(xml_escape "$CODEX_APP_CMD")</string>
-    <key>CODEX_RUNNER_CLAUDE_MODE</key>
+    <key>XUANWU_CLAUDE_MODE</key>
     <string>$(xml_escape "$CLAUDE_MODE")</string>
-    <key>CODEX_RUNNER_CLAUDE_AUTH_MODE</key>
+    <key>XUANWU_CLAUDE_AUTH_MODE</key>
     <string>$(xml_escape "$CLAUDE_AUTH_MODE")</string>
-    <key>CODEX_RUNNER_CLAUDE_API_BASE_URL</key>
+    <key>XUANWU_CLAUDE_API_BASE_URL</key>
     <string>$(xml_escape "$CLAUDE_API_BASE_URL")</string>
-    <key>CODEX_RUNNER_CLAUDE_API_PATH</key>
+    <key>XUANWU_CLAUDE_API_PATH</key>
     <string>$(xml_escape "$CLAUDE_API_PATH")</string>
-    <key>CODEX_RUNNER_CLAUDE_API_KEY_FILE</key>
+    <key>XUANWU_CLAUDE_API_KEY_FILE</key>
     <string>$(xml_escape "$CLAUDE_API_KEY_FILE")</string>
-    <key>CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR</key>
+    <key>XUANWU_CLAUDE_PLATFORM_CONFIG_DIR</key>
     <string>$(xml_escape "$CLAUDE_PLATFORM_CONFIG_DIR")</string>
-    <key>CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE</key>
+    <key>XUANWU_CLAUDE_PLATFORM_PROFILE</key>
     <string>$(xml_escape "$CLAUDE_PLATFORM_PROFILE")</string>
-    <key>CODEX_RUNNER_MANAGED_EXECUTION</key>
+    <key>XUANWU_MANAGED_EXECUTION</key>
     <string>1</string>
-    <key>CODEX_RUNNER_AUTOMATION_SHADOW_W1</key>
+    <key>XUANWU_AUTOMATION_SHADOW_W1</key>
     <string>$(xml_escape "$AUTOMATION_SHADOW_W1")</string>
   </dict>
   <key>RunAtLoad</key>
@@ -428,7 +428,7 @@ cat > "$AGENTIC_PLIST" <<PLIST
     <string>$(xml_escape "$PATH_VALUE")</string>
     <key>PI_PACKAGE_DIR</key>
     <string>$(xml_escape "$PI_PACKAGE_ASSET_DIR")</string>
-    <key>CODEX_RUNNER_MANAGED_EXECUTION</key>
+    <key>XUANWU_MANAGED_EXECUTION</key>
     <string>1</string>
   </dict>
   <key>RunAtLoad</key>

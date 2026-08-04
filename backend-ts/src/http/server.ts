@@ -154,7 +154,7 @@ export async function startServer(
   const address = parseListenAddress(config.addr);
   const authToken = await loadAuthToken(config);
   const activeRouter = router ?? createDefaultRouter({ ...runtime, codexSessionsDir: config.codexSessionsDir, config });
-  registerControlledBlockRoute(activeRouter, runtime.testBlockMs ?? Number(Bun.env.CODEX_RUNNER_TEST_BLOCK_MS ?? "0"));
+  registerControlledBlockRoute(activeRouter, runtime.testBlockMs ?? Number(Bun.env.XUANWU_TEST_BLOCK_MS ?? "0"));
   registerSystemStatusRoute(activeRouter, { authToken, config, ...runtime });
   registerSystemLogsRoute(activeRouter, { config });
   return Bun.serve({

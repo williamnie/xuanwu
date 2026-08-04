@@ -1,4 +1,4 @@
-/* global __CODEX_RUNNER_APP_VERSION__ */
+/* global __XUANWU_APP_VERSION__ */
 
 export const FALLBACK_APP_VERSION = 'unknown';
 const BAD_STAMP_STATUSES = new Set(['runtime_stamp_missing', 'dist_stamp_missing', 'dist_stamp_error', 'mismatch']);
@@ -39,8 +39,8 @@ function versionWarnings(frontendVersion, backendVersion, stampStatus) {
   return warnings;
 }
 
-const INJECTED_APP_VERSION = typeof __CODEX_RUNNER_APP_VERSION__ === 'string'
-  ? __CODEX_RUNNER_APP_VERSION__
+const INJECTED_APP_VERSION = typeof __XUANWU_APP_VERSION__ === 'string'
+  ? __XUANWU_APP_VERSION__
   : '';
 
 export const APP_VERSION = resolveAppVersion(import.meta.env?.VITE_APP_VERSION, INJECTED_APP_VERSION);

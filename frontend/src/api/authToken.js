@@ -1,5 +1,5 @@
-const TOKEN_KEY = 'codex-runner-auth-token';
-const COOKIE_NAME = 'codex_runner_token';
+const TOKEN_KEY = 'xuanwu-auth-token';
+const COOKIE_NAME = 'xuanwu_token';
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 
 export function getAuthToken() {

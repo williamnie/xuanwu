@@ -212,7 +212,7 @@ export const defaultFeishuWsFactory: FeishuWsFactory = async (input) => {
     onReady: input.onReady,
     onReconnected: input.onReconnected,
     onReconnecting: input.onReconnecting,
-    source: "codex-issue-runner"
+    source: "xuanwu"
   });
   return {
     close: (params) => wsClient.close(params),

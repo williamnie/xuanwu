@@ -10,7 +10,7 @@ const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<{ cwd: string; database: RunnerDatabase }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-frontend-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-frontend-api-"));
   const cwd = join(root, "project");
   tempRoots.push(root);
   await writeFile(join(cwd, "src.txt"), "reference text", { flag: "wx" }).catch(async (error) => {
@@ -31,7 +31,7 @@ afterEach(async () => {
 describe("Bun frontend API compatibility", () => {
   test("syncs missing local Codex workspace roots", async () => {
     const { cwd, database } = await openFixtureDatabase();
-    const second = await tempDir("codex-runner-bun-sync-second-");
+    const second = await tempDir("xuanwu-bun-sync-second-");
     const missing = join(second, "missing");
     const statePath = join(second, "codex-state.json");
     await writeFile(statePath, JSON.stringify({
@@ -39,9 +39,9 @@ describe("Bun frontend API compatibility", () => {
       "active-workspace-roots": [second],
       "remote-projects": [{ hostId: "remote-ssh-discovered:claw", remotePath: "/home/xiaobei/project" }]
     }));
-    const previousStatePath = Bun.env.CODEX_RUNNER_CODEX_STATE;
+    const previousStatePath = Bun.env.XUANWU_CODEX_STATE;
     try {
-      Bun.env.CODEX_RUNNER_CODEX_STATE = statePath;
+      Bun.env.XUANWU_CODEX_STATE = statePath;
       const router = createDefaultRouter({ database });
       await requestJSON(router, "/api/projects", "POST", { id: "project", cwd }, 201);
 
@@ -60,15 +60,15 @@ describe("Bun frontend API compatibility", () => {
       });
       expect(again.summary).toMatchObject({ discovered: 4, created: 0, existing: 2, skipped: 2 });
     } finally {
-      if (previousStatePath === undefined) delete Bun.env.CODEX_RUNNER_CODEX_STATE;
-      else Bun.env.CODEX_RUNNER_CODEX_STATE = previousStatePath;
+      if (previousStatePath === undefined) delete Bun.env.XUANWU_CODEX_STATE;
+      else Bun.env.XUANWU_CODEX_STATE = previousStatePath;
       database.close();
     }
   });
 
   test("skips Codex workspace roots from TCC sensitive folders", async () => {
     const { database } = await openFixtureDatabase();
-    const root = await tempDir("codex-runner-bun-sync-sensitive-");
+    const root = await tempDir("xuanwu-bun-sync-sensitive-");
     const documents = join(root, "Documents", "safe-project");
     const downloads = join(root, "Downloads", "download-project");
     const music = join(root, "Music", "audio-project");
@@ -81,9 +81,9 @@ describe("Bun frontend API compatibility", () => {
     await writeFile(statePath, JSON.stringify({
       "electron-saved-workspace-roots": [documents, downloads, music, icloud]
     }));
-    const previousStatePath = Bun.env.CODEX_RUNNER_CODEX_STATE;
+    const previousStatePath = Bun.env.XUANWU_CODEX_STATE;
     try {
-      Bun.env.CODEX_RUNNER_CODEX_STATE = statePath;
+      Bun.env.XUANWU_CODEX_STATE = statePath;
       const router = createDefaultRouter({ database });
 
       const result = await requestJSON(router, "/api/projects/sync/codex", "POST", {});
@@ -98,8 +98,8 @@ describe("Bun frontend API compatibility", () => {
         ]
       });
     } finally {
-      if (previousStatePath === undefined) delete Bun.env.CODEX_RUNNER_CODEX_STATE;
-      else Bun.env.CODEX_RUNNER_CODEX_STATE = previousStatePath;
+      if (previousStatePath === undefined) delete Bun.env.XUANWU_CODEX_STATE;
+      else Bun.env.XUANWU_CODEX_STATE = previousStatePath;
       database.close();
     }
   });
@@ -139,10 +139,10 @@ describe("Bun frontend API compatibility", () => {
       expect(cronRedirect.headers.get("location")).toBe("/api/automations");
       expect(Array.isArray(capabilities.skills)).toBe(true);
       expect(Array.isArray(capabilities.plugins)).toBe(true);
-      const runnerSkill = (capabilities.skills as Array<Record<string, unknown>>).find((item) => item.id === "codex-issue-runner");
+      const runnerSkill = (capabilities.skills as Array<Record<string, unknown>>).find((item) => item.id === "xuanwu");
       expect(runnerSkill).toMatchObject({
-        id: "codex-issue-runner",
-        source_path: "repo:skills/codex-issue-runner/SKILL.md"
+        id: "xuanwu",
+        source_path: "repo:skills/xuanwu/SKILL.md"
       });
       expect(JSON.stringify(capabilities)).not.toContain(cwd);
     } finally {
@@ -152,7 +152,7 @@ describe("Bun frontend API compatibility", () => {
 
   test("covers command, model, usage, upload and advisory issue endpoints", async () => {
     const { cwd, database } = await openFixtureDatabase();
-    const sessionsDir = await tempDir("codex-runner-bun-empty-sessions-");
+    const sessionsDir = await tempDir("xuanwu-bun-empty-sessions-");
     try {
       const router = createDefaultRouter({ database, codexSessionsDir: sessionsDir });
       await requestJSON(router, "/api/projects", "POST", { id: "demo", cwd }, 201);
@@ -182,7 +182,7 @@ describe("Bun frontend API compatibility", () => {
 
   test("serves Codex clipboard session images through a restricted proxy", async () => {
     const { cwd, database } = await openFixtureDatabase();
-    const tempRoot = await tempDir("codex-runner-bun-session-image-");
+    const tempRoot = await tempDir("xuanwu-bun-session-image-");
     const imagePath = join(tempRoot, "codex-clipboard-test.png");
     await writeFile(imagePath, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=", "base64"));
     try {
@@ -249,7 +249,7 @@ describe("Bun frontend API compatibility", () => {
 
   test("reads Codex usage from configured sessions dir", async () => {
     const { database } = await openFixtureDatabase();
-    const sessionsDir = await tempDir("codex-runner-bun-sessions-");
+    const sessionsDir = await tempDir("xuanwu-bun-sessions-");
     const usagePath = await writeUsageJSONL(sessionsDir, "2026/05/31/session.jsonl", [
       `{"timestamp":"2026-05-31T08:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}}}`
     ]);

@@ -268,7 +268,7 @@ describe("PI Guardian decision orchestrator merge window", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-guardian-decision-merge-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-guardian-decision-merge-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

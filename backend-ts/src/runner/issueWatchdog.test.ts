@@ -333,7 +333,7 @@ describe("issue watchdog queue readiness", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-issue-watchdog-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-issue-watchdog-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

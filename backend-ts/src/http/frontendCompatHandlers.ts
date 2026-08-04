@@ -114,7 +114,7 @@ function projectLoopStatus(db: RunnerDatabase, projectID: string): string {
 function logProjectLoopError(error: unknown, projectID: string): void {
   console.error(JSON.stringify({
     ok: false,
-    service: "codex-issue-runner backend-ts",
+    service: "xuanwu backend-ts",
     projectId: projectID,
     error: error instanceof Error ? error.message : String(error)
   }));

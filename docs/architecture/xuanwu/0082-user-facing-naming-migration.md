@@ -1,13 +1,13 @@
-# ADR-XW-0082：用户可见命名迁移与内部兼容清单
+# ADR-XW-0082：Xuanwu 命名与运行时标识收口
 
 - 状态：Accepted
 - 日期：2026-07-19
 - 依赖：[ADR-XW-0002](0002-brand-terminology.md)、[Supervisor 角色与 Prompt 合同](0044-supervisor-role-prompt-contract.md)、[导航兼容合同](0050-product-navigation-compatibility.md)
-- canonical 范围：玄武用户界面、外部通知、运行时 Prompt、当前操作文档与兼容别名
+- canonical 范围：玄武用户界面、外部通知、运行时 Prompt、CLI、部署标识与当前操作文档
 
 ## 1. 结论
 
-用户可见产品名统一为 **玄武 / Xuanwu**，监督人格与交互运行时统一为 **Xuanwu Supervisor / Supervisor**，执行子系统与故障监督能力分别称为 **Runner** 与 **Guardian**。内部 `pi_*`、`Pi*`、`runner-default`、`codex-issue-runner` 以及 `/api/pi/*` 不因本次迁移改名或复制。
+产品名统一为 **玄武 / Xuanwu**，监督人格与交互运行时统一为 **Xuanwu Supervisor / Supervisor**，执行子系统与故障监督能力分别称为 **Runner** 与 **Guardian**。二进制、CLI、Skill、环境变量、服务标识和默认数据目录统一使用 Xuanwu；`pi_*`、`Pi*`、`runner-default` 与 `/api/pi/*` 仍保持领域和持久化合同。
 
 运行状态的唯一 source of truth 仍是现有 SQLite、API、Issue/Session/Work/Run/Evidence authority。本次只改变显示字符串和 Prompt 描述，不增加 schema、状态机、路由、双写或双读。
 
@@ -22,9 +22,9 @@
 | 当前文档 | 玄武作为产品，Supervisor 作为监督运行时 | `README.md`、`frontend/README.md`、当前 runbook、connector/smoke/context-pack 文档 | 命令、环境变量、路径、API/DB 名按代码原值书写 |
 | 历史设计记录 | 保留原始术语作为 provenance | `docs/architecture/2026-*`、旧 review/roadmap | 由 [canonical 架构文档索引](../README.md) 归档；不得把历史快照当作当前产品文案 |
 
-## 3. Compatibility aliases 与现有配置升级
+## 3. 运行时标识与配置升级
 
-- **稳定标识：** `codex-issue-runner` 二进制/CLI/skill、`CODEX_RUNNER_*`、`runner-default`、`pi_*` 表/列/事件、`Pi*` 类型与内部文件名不变；GitHub 仓库从 `v0.2.0` 起使用 `williamnie/xuanwu`；产品 API 已收敛为 `/api/pi/supervisor`。
+- **统一标识：** `xuanwu` 二进制/CLI/Skill、`XUANWU_*`、`com.xiaobei.xuanwu` 与 Xuanwu 默认状态目录是唯一受支持入口；不提供旧命令或配置别名。
 - **默认配置迁移：** `055_collapse_pi_agents_to_supervisor` 与启动自愈会把精确匹配的旧默认名称/instructions 改写为 canonical 值、归一项目与会话引用，并删除 `runner-default` 之外的旧 agent 配置；前端不再保留 compatibility projection。
 - **mention alias：** Feishu 输入继续接受既有 `@PI` mention，输出只显示玄武/Supervisor。该 alias 不创建新 route、agent 或状态。
 - **无双写/双读：** 没有第二份 Supervisor authority；旧多 agent 产品 API 已删除。
@@ -44,5 +44,5 @@
 
 1. UI、通知和 Prompt 源码中没有未登记的旧用户可见身份；
 2. 默认配置的历史值只在精确 projection 中出现，自定义值不被改写；
-3. `codex-issue-runner`、`runner-default`、`/api/pi/*`、`pi_agents` 和 `pi_agent_id` 保持原值；
+3. `xuanwu`、`runner-default`、`/api/pi/*`、`pi_agents` 和 `pi_agent_id` 保持原值；
 4. 通知 formatter、Guardian fallback、manager/recovery/intake Prompt 与 frontend build 通过定向测试。

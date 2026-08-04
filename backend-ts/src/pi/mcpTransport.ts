@@ -80,7 +80,7 @@ function rpcRequest(id: number, method: string, params: Record<string, unknown>)
 function initializeParams(): Record<string, unknown> {
   return {
     capabilities: {},
-    clientInfo: { name: "codex-issue-runner", version: "0.0.0" },
+    clientInfo: { name: "xuanwu", version: "0.0.0" },
     protocolVersion: "2024-11-05"
   };
 }

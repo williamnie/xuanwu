@@ -129,7 +129,7 @@ describe("OpenClaw Gateway optional adapter", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-openclaw-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-openclaw-"));
   roots.push(root);
   return await openDatabase({ dbPath: join(root, "runner.sqlite") });
 }

@@ -115,7 +115,7 @@ describe("PI issue status actions", () => {
 });
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-issue-status-actions-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-issue-status-actions-"));
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(
     `insert into projects (id, name, cwd, sort_order, created_at, updated_at)

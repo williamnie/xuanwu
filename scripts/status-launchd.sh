@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
+LABEL="${XUANWU_LAUNCHD_LABEL:-com.xiaobei.xuanwu}"
 WEB_LABEL="${LABEL}.web"
 CORE_LABEL="${LABEL}.core"
 AGENTIC_LABEL="${LABEL}.agentic"
-ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
-CORE_ADDR="${CODEX_RUNNER_CORE_ADDR:-127.0.0.1:3009}"
-AGENTIC_ADDR="${CODEX_RUNNER_AGENTIC_ADDR:-127.0.0.1:3010}"
-APP_SUPPORT_DIR="${CODEX_RUNNER_APP_SUPPORT_DIR:-$HOME/Library/Application Support/codex-issue-runner-bun-live}"
-STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$APP_SUPPORT_DIR/state}"
-DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
-AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
-LAUNCHD_BINARY_PATH="${CODEX_RUNNER_LAUNCHD_BINARY:-$APP_SUPPORT_DIR/bin/codex-issue-runner}"
+ADDR="${XUANWU_ADDR:-0.0.0.0:3008}"
+CORE_ADDR="${XUANWU_CORE_ADDR:-127.0.0.1:3009}"
+AGENTIC_ADDR="${XUANWU_AGENTIC_ADDR:-127.0.0.1:3010}"
+APP_SUPPORT_DIR="${XUANWU_APP_SUPPORT_DIR:-$HOME/Library/Application Support/xuanwu-bun-live}"
+STATE_DIR="${XUANWU_STATE_DIR:-$APP_SUPPORT_DIR/state}"
+DB_PATH="${XUANWU_DB:-${XUANWU_DEPLOY_DB:-$STATE_DIR/runner.db}}"
+AUTH_TOKEN_FILE="${XUANWU_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
+LAUNCHD_BINARY_PATH="${XUANWU_LAUNCHD_BINARY:-$APP_SUPPORT_DIR/bin/xuanwu}"
 DOMAIN="gui/$(id -u)"
 
 service_url() {
@@ -27,8 +27,8 @@ service_url() {
 }
 
 api_token() {
-  if [ -n "${CODEX_RUNNER_AUTH_TOKEN:-}" ]; then
-    printf '%s' "$CODEX_RUNNER_AUTH_TOKEN"
+  if [ -n "${XUANWU_AUTH_TOKEN:-}" ]; then
+    printf '%s' "$XUANWU_AUTH_TOKEN"
   elif [ -f "$AUTH_TOKEN_FILE" ]; then
     tr -d '\n' < "$AUTH_TOKEN_FILE"
   fi

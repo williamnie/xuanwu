@@ -63,7 +63,7 @@ describe("PI auto-manage missed digest handling", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-missed-digest-fallback-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-missed-digest-fallback-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -4,7 +4,7 @@ export const PRODUCT_TERMS = Object.freeze({
   supervisor: 'Xuanwu Supervisor',
   supervisorShort: 'Supervisor',
   runner: 'Runner',
-  compatibilityId: 'codex-issue-runner',
+  runtimeId: 'xuanwu',
 });
 
 export const PRODUCT_NAV_LABELS = Object.freeze({

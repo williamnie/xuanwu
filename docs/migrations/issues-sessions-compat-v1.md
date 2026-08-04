@@ -36,11 +36,11 @@ status code、required fields、JSON body 与错误语义在 compat v1 内保持
 新自动化优先使用：
 
 ```bash
-codex-issue-runner work create \
+xuanwu work create \
   --project demo --title 'Example' --goal 'Deliver example' \
   --occurred-at '2026-07-18T00:00:00Z' --idempotency-key example-1 --json
-codex-issue-runner work status --id 'xw:work:issues:740' --json
-codex-issue-runner work timeline --id 'xw:work:issues:740' --json
+xuanwu work status --id 'xw:work:issues:740' --json
+xuanwu work timeline --id 'xw:work:issues:740' --json
 ```
 
 `issue create/status/update/retry/cancel/logs/verification` 在 compat v1 内继续工作。现阶段 Work CLI 尚未覆盖的
@@ -49,10 +49,10 @@ final-status、retry、cancel 等调用不要自行拼接新状态机；继续�
 ## 验证与观察
 
 ```bash
-curl -fsS -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
-  "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/compatibility/legacy"
+curl -fsS -H "Authorization: Bearer $XUANWU_AUTH_TOKEN" \
+  "http://${XUANWU_ADDR:-127.0.0.1:3008}/api/compatibility/legacy"
 ```
 
-按 `usage[].client` 区分 `xuanwu-web`、`codex-issue-runner-cli` 与未知 HTTP client。移除观察只统计 external/CLI
+按 `usage[].client` 区分 `xuanwu-web`、`xuanwu-cli` 与未知 HTTP client。移除观察只统计 external/CLI
 consumer；Web 对底层 authority 的受控 adapter 调用必须与旧 page-id redirect 分开审计。没有一个完整正式 release
 的零消费者 Evidence 时，不得删除 compatibility route 或返回 404。

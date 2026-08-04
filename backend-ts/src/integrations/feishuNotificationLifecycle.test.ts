@@ -268,7 +268,7 @@ describe("Feishu lifecycle notifications", () => {
 });
 
 async function fixtureDatabase(provider = "codex"): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-lifecycle-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-lifecycle-"));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(

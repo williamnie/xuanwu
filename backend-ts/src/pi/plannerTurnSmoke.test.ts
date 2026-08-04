@@ -110,7 +110,7 @@ describe("PI read-only planner turn smoke", () => {
 });
 
 async function openFixture(): Promise<Fixture> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-planner-smoke-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-planner-smoke-"));
   tempRoots.push(root);
   const projectCwd = join(root, "project");
   writeFixtureProject(projectCwd);

@@ -24,7 +24,7 @@ describe("Work CLI", () => {
       const fetcher = (async (input: Parameters<Fetcher>[0], init?: Parameters<Fetcher>[1]) => {
         return await handle(new Request(input instanceof Request ? input.url : String(input), init));
       }) as unknown as Fetcher;
-      const env = (key: string) => key === "CODEX_RUNNER_AUTH_TOKEN" ? TOKEN : undefined;
+      const env = (key: string) => key === "XUANWU_AUTH_TOKEN" ? TOKEN : undefined;
 
       const created = await invoke([
         "work", "create", "--project", "demo", "--title", "CLI Work", "--goal", "Create through the CLI",
@@ -57,7 +57,7 @@ describe("Work CLI", () => {
       "work", "create", "--project", "demo", "--title", "x", "--goal", "x", "--occurred-at", "2026-07-18T00:00:00.000Z"
     ], () => undefined, fetch);
     const authFailure = await invoke(["work", "status", "--id", "xw:work:issues:1"], (key) => (
-      key === "CODEX_RUNNER_AUTH_TOKEN" ? TOKEN : undefined
+      key === "XUANWU_AUTH_TOKEN" ? TOKEN : undefined
     ), (async () => new Response(JSON.stringify({ message: `Bearer ${TOKEN}` }), { status: 401 })) as unknown as Fetcher);
 
     expect(missingKey).toMatchObject({ code: 1, stdout: "" });
@@ -68,7 +68,7 @@ describe("Work CLI", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-cli-work-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-cli-work-"));
   roots.push(root);
   return await openDatabase({ dbPath: join(root, "runner.sqlite") });
 }

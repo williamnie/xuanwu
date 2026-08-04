@@ -54,12 +54,12 @@ describe("Claude execution-only provider", () => {
       stdout: jsonl([
         { type: "system", subtype: "init", session_id: "sess-1" },
         { type: "assistant", message: { content: [{ type: "text", text: "hello from claude" }] } },
-        { type: "assistant", message: { content: [{ type: "tool_use", name: "Bash", input: { command: "codex-issue-runner issue update --id 183 --status done --json" } }] } },
+        { type: "assistant", message: { content: [{ type: "tool_use", name: "Bash", input: { command: "xuanwu issue update --id 183 --status done --json" } }] } },
         { type: "result", session_id: "sess-1", uuid: "turn-1", is_error: false, terminal_reason: "end_turn" }
       ])
     });
     try {
-      const cwd = await mkdtemp(join(tmpdir(), "codex-runner-bun-claude-cwd-"));
+      const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-cwd-"));
       tempRoots.push(cwd);
       insertProject(db, "demo", cwd);
       const issueId = insertIssue(db, "demo");
@@ -77,7 +77,7 @@ describe("Claude execution-only provider", () => {
 
       expect(factory.calls).toHaveLength(1);
       expect(factory.calls[0].cwd).toBe(cwd);
-      expect(factory.calls[0].env.CODEX_RUNNER_MANAGED_EXECUTION).toBe("1");
+      expect(factory.calls[0].env.XUANWU_MANAGED_EXECUTION).toBe("1");
       expect(factory.calls[0].command).toEqual([
         "claude", "-p", "--verbose", "--bare", "--output-format", "stream-json",
         "--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,LS,Edit,MultiEdit,Write,Bash",
@@ -97,7 +97,7 @@ describe("Claude execution-only provider", () => {
       }]);
       const payloads = listIssueEvents(db, issueId).map((event) => event.payload).join("\n");
       expect(payloads).toContain("hello from claude");
-      expect(payloads).toContain("codex-issue-runner issue update");
+      expect(payloads).toContain("xuanwu issue update");
       expect(payloads).toContain("end_turn");
     } finally {
       db.close();
@@ -123,7 +123,7 @@ describe("Claude execution-only provider", () => {
 
     await provider.run({ ...runInput(), sandbox: "read-only" });
 
-    expect(factory.calls[0].command).toContain("Read,Grep,Glob,LS,Bash(codex-issue-runner issue update:*),Bash(curl:*)");
+    expect(factory.calls[0].command).toContain("Read,Grep,Glob,LS,Bash(xuanwu issue update:*),Bash(curl:*)");
   });
 
   test("times out and kills the Claude child process", async () => {
@@ -140,7 +140,7 @@ describe("Claude execution-only provider", () => {
     const factory = hangingProcessFactory();
     const provider = new ClaudeExecutorProvider(runtimeConfig({ timeoutMs: 30_000 }), { processFactory: factory.factory });
     try {
-      const cwd = await mkdtemp(join(tmpdir(), "codex-runner-bun-claude-cancel-cwd-"));
+      const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-cancel-cwd-"));
       tempRoots.push(cwd);
       insertProject(db, "demo", cwd);
       const issueId = insertIssue(db, "demo");
@@ -184,7 +184,7 @@ describe("Claude execution-only provider", () => {
     const factory = hangingProcessFactory();
     const provider = new ClaudeExecutorProvider(runtimeConfig({ timeoutMs: 30_000 }), { processFactory: factory.factory });
     try {
-      const cwd = await mkdtemp(join(tmpdir(), "codex-runner-bun-claude-next-cwd-"));
+      const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-next-cwd-"));
       tempRoots.push(cwd);
       insertProject(db, "demo", cwd);
       const issueId = insertIssue(db, "demo", "todo");
@@ -299,7 +299,7 @@ function jsonl(records: unknown[]): string {
 }
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-claude-provider-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-provider-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

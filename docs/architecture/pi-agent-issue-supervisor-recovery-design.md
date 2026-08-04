@@ -5,7 +5,7 @@
 
 > 状态：完整功能设计与 backlog 拆分，不是实现记录。  
 > 日期：2026-06-10  
-> 范围：`codex-issue-runner` 的 PI Agent 对执行中 issue/session 进行巡查、判断、恢复、等待或升级。  
+> 范围：`xuanwu` 的 PI Agent 对执行中 issue/session 进行巡查、判断、恢复、等待或升级。
 > 背景样例：issue #298 在 Codex stream `Reconnecting... 1/5` 后停滞，直到人工进入 session 发消息才继续。
 
 ## 1. 目标
@@ -444,10 +444,10 @@ Supervisor recovery 的 live 默认值是保守防护：
 先读当前策略：
 
 ```bash
-export CODEX_RUNNER_ADDR="${CODEX_RUNNER_ADDR:-127.0.0.1:3008}"
-export CODEX_RUNNER_AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-$(cat data/auth_token)}"
-curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
-  "http://${CODEX_RUNNER_ADDR}/api/projects/<project-id>/pi-policy"
+export XUANWU_ADDR="${XUANWU_ADDR:-127.0.0.1:3008}"
+export XUANWU_AUTH_TOKEN="${XUANWU_AUTH_TOKEN:-$(cat data/auth_token)}"
+curl -fsS -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" \
+  "http://${XUANWU_ADDR}/api/projects/<project-id>/pi-policy"
 ```
 
 建议分两步上线：
@@ -456,8 +456,8 @@ curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
 2. 只对可恢复动作开启 autonomous，例如：
 
 ```bash
-curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR}/api/projects/<project-id>/pi-policy" \
-  -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+curl -fsS -X PATCH "http://${XUANWU_ADDR}/api/projects/<project-id>/pi-policy" \
+  -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{
     "supervisor_mode":"autonomous",
@@ -474,8 +474,8 @@ curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR}/api/projects/<project-id>/pi-pol
 最小回滚是把 supervisor 切回只提案，并清空可执行 allowlist：
 
 ```bash
-curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR}/api/projects/<project-id>/pi-policy" \
-  -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+curl -fsS -X PATCH "http://${XUANWU_ADDR}/api/projects/<project-id>/pi-policy" \
+  -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{"supervisor_mode":"propose_only","allowed_supervisor_actions":[]}'
 ```
@@ -509,7 +509,7 @@ bun test ./src/pi/providerErrorParser.test.ts \
 ./scripts/status-launchd.sh
 ./redeploy.sh
 curl -fsS http://127.0.0.1:3008/health
-curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" http://127.0.0.1:3008/api/system/status
-curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" http://127.0.0.1:3008/api/projects
-curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" http://127.0.0.1:3008/api/pi/heartbeat-timeline
+curl -fsS -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" http://127.0.0.1:3008/api/system/status
+curl -fsS -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" http://127.0.0.1:3008/api/projects
+curl -fsS -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" http://127.0.0.1:3008/api/pi/heartbeat-timeline
 ```

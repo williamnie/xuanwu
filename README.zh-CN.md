@@ -33,7 +33,7 @@ flowchart LR
   S --> W["Work"]
   W --> R["Run / Attempt"]
   R --> E["实际事实与 Evidence"]
-  E --> V{"PI 语义验收"]
+  E --> V{"PI 语义验收"}
   V -->|接受| D["Work done"]
   V -->|形成可审查交付| H["Handoff"]
   V -->|阻塞或不明确| A["Attention"]
@@ -66,8 +66,33 @@ Evidence 与 Handoff 继续作为可审计交付记录，但不会被伪造成�
 玄武仍在快速演进。`v0.2.x` 面向在自有可信机器上运行的个人开发者和小型团队；它不是经过
 加固的多租户隔离边界，Web UI 不应直接暴露到公网。
 
-GitHub 仓库和产品统一使用 **Xuanwu**。二进制、CLI、环境变量、数据目录和兼容 API 暂时继续
-使用 `codex-issue-runner` / `CODEX_RUNNER_*`，以保证已有安装和自动化不被一次改名打断。
+GitHub 仓库、Release 资产、二进制、CLI、Skill、环境变量、服务标识和默认数据目录统一使用
+**Xuanwu**：命令为 `xuanwu`，环境变量前缀为 `XUANWU_*`。
+
+## 让你的 Agent 安装玄武（推荐）
+
+玄武自带 Issue 管理 Skill。安装后，Codex 或 Claude Code 可以替你注册项目、创建与启动 Issue、
+查看执行状态，以及处理重试和取消；真正执行 Issue 的 Coding Agent 由玄武统一调度。
+
+把下面这段话直接发送给你的 Codex 或 Claude Code：
+
+```text
+请帮我安装 Xuanwu：https://github.com/williamnie/xuanwu
+
+请先阅读仓库 README 和安装脚本，再安装适合当前系统的最新 Release；然后识别你当前是
+Codex 还是 Claude Code，把仓库中的 xuanwu Skill 安装到对应的个人 Skills 目录。
+安装后运行 xuanwu-daemon doctor，确认玄武服务健康，并告诉我 Skill 的安装路径。不要打印或复制
+auth token，也不要修改与本次安装无关的配置。
+```
+
+如果已经克隆仓库，也可以手动安装 Skill：
+
+```bash
+./scripts/install-agent-skill.sh codex   # 安装到 Codex
+./scripts/install-agent-skill.sh claude  # 安装到 Claude Code
+```
+
+安装后可以直接告诉 Agent：`请用 Xuanwu 为当前仓库创建一个 triage Issue：修复登录页错误提示。`
 
 ## 安装 Release
 
@@ -82,23 +107,23 @@ Agentic Worker 用户服务。仓库公开后的 Release 还会发布 GitHub pro
 安装器在可用时会一并验证：
 
 ```bash
-export CODEX_RUNNER_ADDR=127.0.0.1:3008
+export XUANWU_ADDR=127.0.0.1:3008
 curl -fsSL https://raw.githubusercontent.com/williamnie/xuanwu/main/scripts/install-release.sh | bash
 ```
 
 然后打开 <http://127.0.0.1:3008/>，按产品内“首次交付”向导完成配置。
 
 ```bash
-codex-issue-runner-daemon status
-codex-issue-runner-daemon doctor
+xuanwu-daemon status
+xuanwu-daemon doctor
 ```
 
-安装路径继续使用兼容名：
+默认安装路径：
 
 ```text
-二进制  ~/.local/bin/codex-issue-runner
-状态    ~/.local/state/codex-issue-runner
-数据库  ~/.local/state/codex-issue-runner/runner.db
+二进制  ~/.local/bin/xuanwu
+状态    ~/.local/state/xuanwu
+数据库  ~/.local/state/xuanwu/runner.db
 ```
 
 如需修改监听地址、状态目录、Codex 可执行文件或 Claude Provider，请查看
@@ -147,18 +172,6 @@ bun scripts/run-golden-journeys.ts
 
 Fixture 通过不代表真实 Provider 账号、外部 Connector、浏览器会话或生产部署健康；需要凭据
 和外部环境的 live acceptance 必须单独执行并保留证据。
-
-## 文档入口
-
-- [10 分钟首次交付](docs/first-delivery.md)
-- [Canonical 架构与领域合同](docs/architecture/README.md)
-- [Provider 能力矩阵](docs/agent-provider-matrix.md)
-- [Codex 接入说明](docs/codex-integration.md)
-- [发布、升级与回滚](docs/runbooks/release-upgrade-rollback.md)
-- [备份与恢复](docs/backup-restore.md)
-- [安全策略](SECURITY.md)
-- [贡献指南](CONTRIBUTING.md)
-- [更新日志](CHANGELOG.md)
 
 ## 安全
 

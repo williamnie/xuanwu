@@ -8,7 +8,7 @@ import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-project-snapshot-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-project-snapshot-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -24,7 +24,7 @@ describe("PI project status snapshot", () => {
   test("summarizes issues, runs, and sessions for normal project state", async () => {
     const db = await openFixtureDatabase();
     try {
-      insertProject(db, "demo", "/Users/secret/work/codex-issue-runner");
+      insertProject(db, "demo", "/Users/secret/work/xuanwu");
       const todo = insertIssue(db, { day: 1, projectID: "demo", status: "todo", title: "Todo issue" });
       const done = insertIssue(db, { day: 2, projectID: "demo", status: "done", title: "Done issue" });
       insertRun(db, { attempt: 1, issueID: todo, runID: "run-todo", status: "in_progress" });
@@ -50,7 +50,7 @@ describe("PI project status snapshot", () => {
   test("redacts failed issue and run errors in recent error summary", async () => {
     const db = await openFixtureDatabase();
     try {
-      insertProject(db, "demo", "/Users/secret/work/codex-issue-runner");
+      insertProject(db, "demo", "/Users/secret/work/xuanwu");
       const failed = insertIssue(db, {
         day: 3,
         error: "provider failed CODEX_API_KEY=fixture-secret at /Users/secret/.codex/key.txt",
@@ -96,7 +96,7 @@ describe("PI project status snapshot", () => {
   test("includes active project holds without leaking path secrets", async () => {
     const db = await openFixtureDatabase();
     try {
-      insertProject(db, "demo", "/Users/secret/work/codex-issue-runner");
+      insertProject(db, "demo", "/Users/secret/work/xuanwu");
       createProjectHoldsTable(db);
       db.sqlite.run(
         `insert into project_holds
@@ -105,7 +105,7 @@ describe("PI project status snapshot", () => {
         [
           "demo",
           "dirty_worktree",
-          "dirty worktree at /Users/secret/work/codex-issue-runner",
+          "dirty worktree at /Users/secret/work/xuanwu",
           "2026-01-04T00:00:00Z",
           "",
           "2026-01-04T00:05:00Z",

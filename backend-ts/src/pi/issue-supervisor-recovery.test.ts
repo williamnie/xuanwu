@@ -178,7 +178,7 @@ describe("PI issue supervisor recovery contract", () => {
         event_type: "signal",
         issue_id: 298,
         payload_json: { summary: "Reconnecting... 1/5" },
-        project_id: "codex-issue-runner",
+        project_id: "xuanwu",
         provider: "codex",
         provider_session_id: "thread-298",
         run_id: "issue-298-attempt-1"
@@ -190,7 +190,7 @@ describe("PI issue supervisor recovery contract", () => {
         event_type: "decision",
         issue_id: 298,
         payload_json: { recovery_message: "continue after inspecting current state" },
-        project_id: "codex-issue-runner"
+        project_id: "xuanwu"
       });
       createIssueSupervisorEvent(db, {
         action_id: "pi-action-298-resume",
@@ -199,7 +199,7 @@ describe("PI issue supervisor recovery contract", () => {
         event_type: "action",
         issue_id: 298,
         payload_json: { prompt: "continue after inspecting current state" },
-        project_id: "codex-issue-runner"
+        project_id: "xuanwu"
       });
       createIssueSupervisorEvent(db, {
         action_id: "pi-action-298-resume",
@@ -207,7 +207,7 @@ describe("PI issue supervisor recovery contract", () => {
         event_type: "result",
         issue_id: 298,
         payload_json: { outcome: "progress" },
-        project_id: "codex-issue-runner"
+        project_id: "xuanwu"
       });
 
       const events = listIssueSupervisorEvents(db, { issueId: 298 });
@@ -227,7 +227,7 @@ describe("PI issue supervisor recovery contract", () => {
   });
 
   test("migrates legacy databases with supervisor event table and policy columns", async () => {
-    const root = await tempPath("codex-runner-supervisor-migrate-");
+    const root = await tempPath("xuanwu-supervisor-migrate-");
     const stateDir = join(root, "state");
     await createLegacyDatabase(join(stateDir, "runner.db"));
     await insertLegacyPolicyRow(join(stateDir, "runner.db"));
@@ -355,7 +355,7 @@ describe("PI issue supervisor recovery contract", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await tempPath("codex-runner-supervisor-");
+  const root = await tempPath("xuanwu-supervisor-");
   return openDatabase({ stateDir: join(root, "state") });
 }
 

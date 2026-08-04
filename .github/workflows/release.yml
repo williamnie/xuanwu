@@ -66,8 +66,8 @@ jobs:
 
       - name: Package release assets
         env:
-          CODEX_RUNNER_VERSION: ${{ steps.vars.outputs.tag }}
-          CODEX_RUNNER_ENFORCE_RELEASE: '1'
+          XUANWU_VERSION: ${{ steps.vars.outputs.tag }}
+          XUANWU_ENFORCE_RELEASE: '1'
         run: ./scripts/package-release.sh
 
       - name: Sign release provenance

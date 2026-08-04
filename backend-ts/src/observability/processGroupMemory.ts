@@ -640,7 +640,7 @@ function descendantTree(rows: ProcessTreeEntry[], rootPID: number): ProcessTreeE
 
 function processRole(command: string, providerOwned: boolean): string {
   const value = rawCommand(command).toLowerCase();
-  if (value.includes("codex-issue-runner-agentic")) return "agentic-worker";
+  if (value.includes("xuanwu-agentic")) return "agentic-worker";
   if (value.includes("__usage-index-worker")) return "usage-index";
   if (value.includes("app-server")) return "codex-app-server";
   if (value.includes("code-mode-host")) return "tool-host";
@@ -650,7 +650,7 @@ function processRole(command: string, providerOwned: boolean): string {
 
 function genericOwner(command: string): string {
   const value = rawCommand(command);
-  if (value.includes("codex-issue-runner-agentic")) return "runner:agentic";
+  if (value.includes("xuanwu-agentic")) return "runner:agentic";
   return value.includes("__usage-index-worker") ? "runner:usage-index" : "runner:child";
 }
 

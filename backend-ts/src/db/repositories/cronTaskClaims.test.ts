@@ -62,7 +62,7 @@ async function openFixtureDatabase(): Promise<RunnerDatabase> {
 }
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-cron-claims-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-cron-claims-"));
   tempRoots.push(root);
   return root;
 }

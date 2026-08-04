@@ -55,7 +55,7 @@ describe("PI run group lifecycle report sync", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-run-group-lifecycle-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-run-group-lifecycle-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

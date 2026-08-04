@@ -156,7 +156,7 @@ describe("Feishu approval request resolver", () => {
 type Resolution = { decision: string; id: string; scope: string };
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-approval-resolve-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-approval-resolve-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

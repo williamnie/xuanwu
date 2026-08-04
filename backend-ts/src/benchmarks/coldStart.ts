@@ -27,7 +27,7 @@ export function summarizeColdStartSamples(samples: ColdStartSample[]) {
 }
 
 export function coldStartTrace(phase: string): void {
-  if (process.env.CODEX_RUNNER_COLD_START_TRACE !== "1") return;
+  if (process.env.XUANWU_COLD_START_TRACE !== "1") return;
   const memory = process.memoryUsage();
   process.stderr.write(`${JSON.stringify({
     cold_start_phase: phase,

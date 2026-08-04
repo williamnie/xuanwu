@@ -138,7 +138,7 @@ describe("controlled PI runtime resources", () => {
 });
 
 async function fixtureRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-resources-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-resources-"));
   tempRoots.push(root);
   return root;
 }

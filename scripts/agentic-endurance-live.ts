@@ -31,7 +31,7 @@ const DEFAULT_ADDR = "127.0.0.1:3008";
 const DEFAULT_CORE_ADDR = "127.0.0.1:3009";
 const DEFAULT_APP_SUPPORT = join(
   process.env.HOME ?? "",
-  "Library/Application Support/codex-issue-runner-bun-live"
+  "Library/Application Support/xuanwu-bun-live"
 );
 
 type Json = Record<string, any>;
@@ -308,14 +308,14 @@ async function runController(options: Options): Promise<void> {
 
 async function stopController(options: Options, reason: string): Promise<Json> {
   const before = controllerStatus(options);
-  const label = `gui/${process.getuid()}/com.xiaobei.codex-issue-runner.issue-785-endurance`;
+  const label = `gui/${process.getuid()}/com.xiaobei.xuanwu.issue-785-endurance`;
   const stopped = await runCommand(["/bin/launchctl", "bootout", label], process.cwd(), 30_000);
   if (before.running && stopped.exit_code !== 0) {
     throw new Error(`failed to stop endurance controller: ${stopped.stderr || stopped.stdout}`);
   }
   const installedPlist = join(
     process.env.HOME ?? "",
-    "Library/LaunchAgents/com.xiaobei.codex-issue-runner.issue-785-endurance.plist"
+    "Library/LaunchAgents/com.xiaobei.xuanwu.issue-785-endurance.plist"
   );
   rmSync(installedPlist, { force: true });
   const cleanupErrors: string[] = [];
@@ -438,7 +438,7 @@ async function restartCoreAndVerifyMcp(options: Options): Promise<void> {
   const started = Date.now();
   const restart = await runCommand([
     "/bin/launchctl", "kickstart", "-k",
-    `gui/${process.getuid()}/com.xiaobei.codex-issue-runner.core`
+    `gui/${process.getuid()}/com.xiaobei.xuanwu.core`
   ], process.cwd(), 30_000);
   if (restart.exit_code !== 0) throw new Error(`Core restart failed: ${restart.stderr}`);
   const deadline = Date.now() + 180_000;
@@ -750,9 +750,9 @@ async function persistFinalEvidenceAndStatus(options: Options, report: Json): Pr
     method: "POST"
   }, [200]);
   writeStableJson(artifact(options, "persisted-evidence.json"), evidence.body);
-  const cli = existsSync(resolve("dist/codex-issue-runner"))
-    ? resolve("dist/codex-issue-runner")
-    : "codex-issue-runner";
+  const cli = existsSync(resolve("dist/xuanwu"))
+    ? resolve("dist/xuanwu")
+    : "xuanwu";
   if (report.result !== "passed") {
     const current = await api(options, `/api/issues/${ISSUE_ID}`, {}, [200]);
     if (current.body?.status === "pending_verification") {
@@ -949,7 +949,7 @@ function writeReplay(options: Options): void {
 
 \`\`\`bash
 ./scripts/status-launchd.sh
-./dist/codex-issue-runner issue status --id 784 --token-file "${options.tokenFile}" --json
+./dist/xuanwu issue status --id 784 --token-file "${options.tokenFile}" --json
 \`\`\`
 
 仅当 #784 为 \`done\` 且 Web/Core/DB 健康时继续。运行过程创建
@@ -960,7 +960,7 @@ function writeReplay(options: Options): void {
 
 \`\`\`bash
 ART='${options.artifactDir}'
-LABEL='com.xiaobei.codex-issue-runner.issue-785-endurance'
+LABEL='com.xiaobei.xuanwu.issue-785-endurance'
 DOMAIN="gui/$(id -u)"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 BUN_BIN="$(command -v bun)"
@@ -1040,8 +1040,8 @@ shasum -a 256 \\
   '${options.artifactDir}/analysis-rebuilt.json'
 jq '{result,started_at,ended_at,failure_reasons,assertions}' \\
   '${options.artifactDir}/report.json'
-launchctl bootout "gui/$(id -u)/com.xiaobei.codex-issue-runner.issue-785-endurance"
-python3 - "$HOME/Library/LaunchAgents/com.xiaobei.codex-issue-runner.issue-785-endurance.plist" <<'PY'
+launchctl bootout "gui/$(id -u)/com.xiaobei.xuanwu.issue-785-endurance"
+python3 - "$HOME/Library/LaunchAgents/com.xiaobei.xuanwu.issue-785-endurance.plist" <<'PY'
 from pathlib import Path
 import sys
 Path(sys.argv[1]).unlink(missing_ok=True)
@@ -1049,7 +1049,7 @@ PY
 \`\`\`
 
 最终控制器会先 POST 当前 Run 的 persisted command Evidence，再根据报告结果显式运行：
-\`codex-issue-runner issue update --id 785 --status done|failed --json\`。
+\`xuanwu issue update --id 785 --status done|failed --json\`。
 `;
   writeFileSync(artifact(options, "replay.md"), content);
 }
@@ -1125,7 +1125,7 @@ function scalar(db: Database, sql: string, ...params: any[]): number {
 async function servicePID(role: "web" | "core"): Promise<number> {
   const result = await runCommand([
     "/bin/launchctl", "print",
-    `gui/${process.getuid()}/com.xiaobei.codex-issue-runner.${role}`
+    `gui/${process.getuid()}/com.xiaobei.xuanwu.${role}`
   ], process.cwd(), 10_000);
   const match = result.stdout.match(/^\s*pid = (\d+)$/m);
   return match ? Number(match[1]) : 0;

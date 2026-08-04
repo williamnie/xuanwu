@@ -41,7 +41,7 @@ import { listProjects } from "./projects.ts";
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-repo-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-repo-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -258,7 +258,7 @@ describe("PI runtime repositories", () => {
         authorization_json: JSON.stringify({
           allowed_actions: ["issue.enqueue"],
           allowed_mcp_capabilities: ["docs:resource:runbook"],
-          allowed_skill_intents: ["codex-issue-runner"],
+          allowed_skill_intents: ["xuanwu"],
           audit_source: "user",
           expires_at: "2026-06-04T08:00:00Z",
           forbidden_actions: ["session.steer"],
@@ -274,7 +274,7 @@ describe("PI runtime repositories", () => {
       expect(delegation).toMatchObject({
         allowed_actions_json: "[\"issue.enqueue\"]",
         allowed_mcp_capabilities_json: "[\"docs:resource:runbook\"]",
-        allowed_skill_intents_json: "[\"codex-issue-runner\"]",
+        allowed_skill_intents_json: "[\"xuanwu\"]",
         audit_source: "user",
         expires_at: "2026-06-04T08:00:00Z",
         forbidden_actions_json: "[\"session.steer\"]",

@@ -8,7 +8,7 @@ import { runDelegationHeartbeatsOnce, runPiHeartbeatOnce } from "./heartbeatOrch
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-heartbeat-memory-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-heartbeat-memory-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

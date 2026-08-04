@@ -14,8 +14,8 @@ export async function runSecrets(args: string[], env: EnvReader): Promise<string
   if (!command) throw new Error("usage: secrets <put|rotate|revoke|status|scan|migrate> [flags]");
   const flags = parseFlags(args.slice(1));
   const backend = secretBackend(flags.backend);
-  const dbPath = flags.db?.trim() || env("CODEX_RUNNER_DB")?.trim() || "";
-  const stateDir = flags["state-dir"]?.trim() || env("CODEX_RUNNER_STATE_DIR")?.trim() || (dbPath ? dirname(dbPath) : "");
+  const dbPath = flags.db?.trim() || env("XUANWU_DB")?.trim() || "";
+  const stateDir = flags["state-dir"]?.trim() || env("XUANWU_STATE_DIR")?.trim() || (dbPath ? dirname(dbPath) : "");
   if (!stateDir) throw new Error("--state-dir is required");
 
   if (command === "status") {

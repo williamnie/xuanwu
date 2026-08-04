@@ -1,6 +1,6 @@
 # 飞书 IM connector 本地接入与 smoke
 
-本文用于把真实飞书应用事件接到本地 `codex-issue-runner`，并验证这条链路：
+本文用于把真实飞书应用事件接到本地 `xuanwu`，并验证这条链路：
 
 `Feishu long connection → message event → external_events inbox → Supervisor attention decision → OK reaction → Runner/Supervisor conversation → Feishu reply`
 
@@ -40,14 +40,14 @@ export FEISHU_ALLOWED_CHAT_IDS="oc_xxx,oc_yyy"
 export FEISHU_ALLOWED_USER_IDS="ou_xxx"
 
 # 建议至少配置 chat/user 到 runner project 的映射：
-export FEISHU_PROJECT_MAPPINGS="chat:oc_xxx=codex-issue-runner,user:ou_xxx=codex-issue-runner"
+export FEISHU_PROJECT_MAPPINGS="chat:oc_xxx=xuanwu,user:ou_xxx=xuanwu"
 ```
 
 启动或重启 runner 后检查摘要：
 
 ```bash
-codex-issue-runner system status --json | jq '.connectors[] | select(.id=="feishu")'
-codex-issue-runner system status
+xuanwu system status --json | jq '.connectors[] | select(.id=="feishu")'
+xuanwu system status
 ```
 
 状态语义：
@@ -92,15 +92,15 @@ scripts/completion-watch-smoke.mjs
 
 ```bash
 # list active/recent watches
-curl -fsS -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
+curl -fsS -H "Authorization: Bearer $XUANWU_AUTH_TOKEN" \
   "http://127.0.0.1:3008/api/pi/issue-completion-watches?status=active"
 
 # read watch detail, watched items and notification/outbox status
-curl -fsS -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
+curl -fsS -H "Authorization: Bearer $XUANWU_AUTH_TOKEN" \
   "http://127.0.0.1:3008/api/pi/issue-completion-watches/<watch-id>"
 
 # cancel active watch
-curl -fsS -X POST -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
+curl -fsS -X POST -H "Authorization: Bearer $XUANWU_AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"reason":"manual cancellation"}' \
   "http://127.0.0.1:3008/api/pi/issue-completion-watches/<watch-id>/cancel"
@@ -150,21 +150,21 @@ scripts/feishu-smoke.mjs --mode challenge --url https://<public-host>/api/integr
 issue 关联写回仍走 draft/outbox 安全边界。查看草稿：
 
 ```bash
-curl -fsS -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
+curl -fsS -H "Authorization: Bearer $XUANWU_AUTH_TOKEN" \
   "http://127.0.0.1:3008/api/im-reply-drafts?source=feishu"
 ```
 
 批准草稿后进入待发送 outbox：
 
 ```bash
-curl -fsS -X POST -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
+curl -fsS -X POST -H "Authorization: Bearer $XUANWU_AUTH_TOKEN" \
   "http://127.0.0.1:3008/api/im-reply-drafts/<draft-id>/approve"
 ```
 
 真正发送需要再显式 dispatch：
 
 ```bash
-curl -fsS -X POST -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
+curl -fsS -X POST -H "Authorization: Bearer $XUANWU_AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"limit":5}' \
   "http://127.0.0.1:3008/api/sync-outbox/dispatch"

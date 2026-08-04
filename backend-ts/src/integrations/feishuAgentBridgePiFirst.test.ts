@@ -40,7 +40,7 @@ describe("Feishu agent bridge PI-first boundary", () => {
       "/review 最近的对话",
       "/memory approve abc1",
       "/notify {\"mode\":\"quiet\"}",
-      "/p codex-issue-runner",
+      "/p xuanwu",
       "等 #774 做完通知我"
     ];
 
@@ -126,7 +126,7 @@ describe("Feishu agent bridge PI-first boundary", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-pi-first-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-pi-first-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

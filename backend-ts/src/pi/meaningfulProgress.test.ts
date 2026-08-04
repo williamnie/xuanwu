@@ -20,7 +20,7 @@ describe("meaningful progress detector", () => {
         { type: "issue.log", payload: { type: "agent_message", text: "Implemented the focused fix." } },
         { type: "issue.log", payload: { command: "bun test backend-ts/src/pi/x.test.ts", status: "completed" } },
         { type: "issue.log", payload: { text: "git commit -m \"fix(pi): 修复恢复检测\"" } },
-        { type: "issue.log", payload: { text: "codex-issue-runner issue update --id 303 --status done --json" } }
+        { type: "issue.log", payload: { text: "xuanwu issue update --id 303 --status done --json" } }
       ]
     });
 

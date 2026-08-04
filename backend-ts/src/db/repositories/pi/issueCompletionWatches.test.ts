@@ -161,7 +161,7 @@ describe("PI issue completion watches", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-issue-watch-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-issue-watch-"));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(

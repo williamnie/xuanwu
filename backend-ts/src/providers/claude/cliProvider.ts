@@ -184,7 +184,7 @@ function claudeCommand(config: ProviderRuntimeConfig, input: ProviderRunInput): 
 
 function claudeAllowedTools(sandbox?: string): string {
   return clean(sandbox).toLowerCase() === "read-only"
-    ? "Read,Grep,Glob,LS,Bash(codex-issue-runner issue update:*),Bash(curl:*)"
+    ? "Read,Grep,Glob,LS,Bash(xuanwu issue update:*),Bash(curl:*)"
     : "Read,Grep,Glob,LS,Edit,MultiEdit,Write,Bash";
 }
 
@@ -285,7 +285,7 @@ function commandError(stderr: string, exitCode: number, secrets: string[]): stri
 function secretValues(env: Record<string, string>): string[] {
   const values = new Set<string>();
   for (const key of [
-    "CODEX_RUNNER_AUTH_TOKEN",
+    "XUANWU_AUTH_TOKEN",
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_AUTH_TOKEN",
     "CLAUDE_CODE_OAUTH_TOKEN",

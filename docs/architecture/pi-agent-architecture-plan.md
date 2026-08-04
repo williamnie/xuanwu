@@ -6,11 +6,11 @@
 > 状态：架构/产品计划文档，不是实现记录。  
 > 目标读者：后续实现 agent、人工 reviewer、产品决策者。  
 > 当前日期：2026-05-28。  
-> 范围：`codex-issue-runner` 内建设独立 PI Agent 层；底层 Codex 只作为 code agent/provider 之一。
+> 范围：`xuanwu` 内建设独立 PI Agent 层；底层 Codex 只作为 code agent/provider 之一。
 
 ## 1. 目标愿景
 
-PI Agent 是 `codex-issue-runner` 的项目主控 agent，而不是 Codex 的 subagent。用户主要和 PI 对话，由 PI 负责把需求转成 issue 面板、管理项目进度、追踪执行状态、在需要人工决策时通知用户，最终由用户验收。
+PI Agent 是 `xuanwu` 的项目主控 agent，而不是 Codex 的 subagent。用户主要和 PI 对话，由 PI 负责把需求转成 issue 面板、管理项目进度、追踪执行状态、在需要人工决策时通知用户，最终由用户验收。
 
 目标形态：
 
@@ -335,7 +335,7 @@ project 不应只有一个 provider。建议拆成：
 
 ```json
 {
-  "project_id": "codex-issue-runner",
+  "project_id": "xuanwu",
   "pi_agent_id": "pi-default",
   "default_executor_profile_id": "codex-dev",
   "default_verifier_profile_id": "codex-verifier"
@@ -666,7 +666,7 @@ Codex 可以通过 runner skills/API 创建 issue：
 
 ```text
 Codex session
-  → codex-issue-runner issue create --status triage
+  → xuanwu issue create --status triage
   → issue 进入 runner
   → PI 接管 issue
 ```

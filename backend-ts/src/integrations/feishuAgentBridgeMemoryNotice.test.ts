@@ -159,7 +159,7 @@ describe("Feishu agent bridge automatic reusable memory", () => {
 });
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-memory-notice-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-memory-notice-"));
   const db = await openDatabase({ stateDir: join(root, "state") });
   return { db, close: async () => { db.close(); await rm(root, { recursive: true, force: true }); } };
 }

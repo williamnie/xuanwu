@@ -14,7 +14,7 @@ const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-read-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-read-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -95,14 +95,14 @@ describe("Bun projects/issues read API", () => {
 
   test("creates and updates projects with backend-compatible responses", async () => {
     const database = await openFixtureDatabase();
-    const cwd = await mkdtemp(join(tmpdir(), "codex-runner-bun-project-cwd-"));
+    const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-project-cwd-"));
     tempRoots.push(cwd);
     try {
       const router = createDefaultRouter({ database });
 
       const created = await router.handle(new Request(`${BASE_URL}/api/projects`, {
         method: "POST",
-        body: JSON.stringify({ id: "demo", cwd, default_skill_policy: { allowed: ["codex-issue-runner"] } }),
+        body: JSON.stringify({ id: "demo", cwd, default_skill_policy: { allowed: ["xuanwu"] } }),
         headers: { "content-type": "application/json" }
       }));
       expect(created.status).toBe(201);
@@ -111,7 +111,7 @@ describe("Bun projects/issues read API", () => {
         name: basename(cwd),
         cwd,
         provider: "codex",
-        default_skill_policy: "{\"allowed\":[\"codex-issue-runner\"]}",
+        default_skill_policy: "{\"allowed\":[\"xuanwu\"]}",
         auto_run: 1,
         pi_managed: 1,
         model: "codex-default",
@@ -172,7 +172,7 @@ describe("Bun projects/issues read API", () => {
 
   test("matches legacy API failure paths for project writes", async () => {
     const database = await openFixtureDatabase();
-    const cwd = await mkdtemp(join(tmpdir(), "codex-runner-bun-project-cwd-"));
+    const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-project-cwd-"));
     tempRoots.push(cwd);
     try {
       const router = createDefaultRouter({ database });
@@ -185,7 +185,7 @@ describe("Bun projects/issues read API", () => {
       await router.handle(new Request(`${BASE_URL}/api/projects`, {
         method: "POST", body: JSON.stringify({ id: "demo", cwd })
       }));
-      const duplicateCWD = await mkdtemp(join(tmpdir(), "codex-runner-bun-project-cwd-"));
+      const duplicateCWD = await mkdtemp(join(tmpdir(), "xuanwu-bun-project-cwd-"));
       tempRoots.push(duplicateCWD);
       const duplicateID = await router.handle(new Request(`${BASE_URL}/api/projects`, {
         method: "POST", body: JSON.stringify({ id: "demo", cwd: duplicateCWD })
@@ -351,7 +351,7 @@ describe("Bun projects/issues read API", () => {
           description: "Issue body",
           required_mcp_capabilities: ["docs:resource:runbook"],
           recommended_mcp_capabilities: ["docs:tool:search"],
-          required_skill_intents: ["codex-issue-runner"],
+          required_skill_intents: ["xuanwu"],
           recommended_skill_intents: ["verification-before-completion"],
           priority: 4,
           agent_profile_id: "Codex Pro!",
@@ -382,7 +382,7 @@ describe("Bun projects/issues read API", () => {
         source_excerpt: "讨论摘录",
         required_mcp_capabilities: "[\"docs:resource:runbook\"]",
         recommended_mcp_capabilities: "[\"docs:tool:search\"]",
-        required_skill_intents: "[\"codex-issue-runner\"]",
+        required_skill_intents: "[\"xuanwu\"]",
         recommended_skill_intents: "[\"verification-before-completion\"]",
         workflow_snapshot_json: '{"steps":[]}'
       });
@@ -395,9 +395,9 @@ describe("Bun projects/issues read API", () => {
   });
 
   test("reads issue MCP requirements with unregistered capability diagnostics", async () => {
-    const previousRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+    const previousRegistry = Bun.env.XUANWU_MCP_REGISTRY_JSON;
     const database = await openFixtureDatabase();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [{
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [{
       id: "docs",
       readiness: "ready",
       resources: [{ description: "Deployment runbook", name: "runbook" }],
@@ -442,8 +442,8 @@ describe("Bun projects/issues read API", () => {
         }
       });
     } finally {
-      if (previousRegistry === undefined) delete Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
-      else Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = previousRegistry;
+      if (previousRegistry === undefined) delete Bun.env.XUANWU_MCP_REGISTRY_JSON;
+      else Bun.env.XUANWU_MCP_REGISTRY_JSON = previousRegistry;
       database.close();
     }
   });

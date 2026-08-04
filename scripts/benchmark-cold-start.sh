@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BINARY="${CODEX_RUNNER_BINARY:-$ROOT_DIR/dist/codex-issue-runner}"
+BINARY="${XUANWU_BINARY:-$ROOT_DIR/dist/xuanwu}"
 DURATION_SECONDS=2100
 WARMUP_SECONDS=300
 INTERVAL_SECONDS=5
@@ -19,7 +19,7 @@ Usage: scripts/benchmark-cold-start.sh [options]
   --interval SECONDS  sample interval (default: 5)
   --port PORT         isolated listen port (default: 39101)
   --web-dir PATH      frontend/static directory (default: frontend/dist)
-  --output-dir PATH   artifact directory (default: /tmp/codex-runner-cold-start-<timestamp>)
+  --output-dir PATH   artifact directory (default: /tmp/xuanwu-cold-start-<timestamp>)
 EOF
 }
 
@@ -44,7 +44,7 @@ done
 (( DURATION_SECONDS > WARMUP_SECONDS )) || { echo "duration must be greater than warmup" >&2; exit 2; }
 
 STAMP="$(date -u '+%Y%m%dT%H%M%SZ')"
-OUTPUT_DIR="${OUTPUT_DIR:-/tmp/codex-runner-cold-start-$STAMP}"
+OUTPUT_DIR="${OUTPUT_DIR:-/tmp/xuanwu-cold-start-$STAMP}"
 STATE_DIR="$OUTPUT_DIR/state"
 URL="http://127.0.0.1:$PORT"
 mkdir -p "$OUTPUT_DIR" "$STATE_DIR" "$STATE_DIR/sessions"
@@ -78,7 +78,7 @@ git -C "$ROOT_DIR" status --porcelain --untracked-files=normal > "$OUTPUT_DIR/gi
   printf 'web_dir=%s\n' "$WEB_DIR"
 } > "$OUTPUT_DIR/metadata.txt"
 
-CODEX_RUNNER_COLD_START_TRACE=1 "$BINARY" serve \
+XUANWU_COLD_START_TRACE=1 "$BINARY" serve \
   --addr "127.0.0.1:$PORT" \
   --state-dir "$STATE_DIR" \
   --db "$STATE_DIR/runner.db" \

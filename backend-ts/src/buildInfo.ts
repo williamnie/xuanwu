@@ -2,7 +2,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_VERSION = "unknown";
-const ARTIFACT_NAME = "codex-issue-runner";
+const ARTIFACT_NAME = "xuanwu";
 
 export type BunBuildInfo = {
   artifact: string;
@@ -15,13 +15,13 @@ export function bunBuildInfo(): BunBuildInfo {
   return {
     artifact: ARTIFACT_NAME,
     bun_version: Bun.version,
-    stamp: clean(process.env.CODEX_RUNNER_BUILD_STAMP) ?? "",
+    stamp: clean(process.env.XUANWU_BUILD_STAMP) ?? "",
     version: resolveBuildVersion()
   };
 }
 
 export function resolveBuildVersion(): string {
-  return clean(process.env.CODEX_RUNNER_BUILD_VERSION) ?? gitDescribeVersion() ?? DEFAULT_VERSION;
+  return clean(process.env.XUANWU_BUILD_VERSION) ?? gitDescribeVersion() ?? DEFAULT_VERSION;
 }
 
 export function formatBunVersion(): string {

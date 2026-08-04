@@ -43,7 +43,7 @@ describe("PI heartbeat decision boundary", () => {
       insertDelegation(db, "delegation-a", "project-a", {
         allowed_actions: ["issue.enqueue"],
         allowed_mcp_capabilities: ["docs:resource:runbook"],
-        allowed_skill_intents: ["codex-issue-runner"],
+        allowed_skill_intents: ["xuanwu"],
         authorizedActions: [{ action_type: "issue.enqueue", issue_id: issueID, project_id: "project-a" }],
         mode: "delegated",
         scope: { project_id: "project-a" }
@@ -56,7 +56,7 @@ describe("PI heartbeat decision boundary", () => {
       expect(run).toMatchObject({ actions_proposed: 0, status: "completed" });
       expect(run?.policy.authorization_summary).toMatchObject({
         allowed_mcp_capabilities: ["docs:resource:runbook"],
-        allowed_skill_intents: ["codex-issue-runner"]
+        allowed_skill_intents: ["xuanwu"]
       });
       expect(rowCount(db, "pi_actions")).toBe(0);
       const audit = listPiHeartbeatEvents(db, { heartbeatId: run?.heartbeat_id }).find((event) => event.event_type === "audit");
@@ -95,7 +95,7 @@ describe("PI heartbeat decision boundary", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-heartbeat-action-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-heartbeat-action-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -3,17 +3,17 @@ set -euo pipefail
 
 # Lifecycle boundary for a release installation. It intentionally owns only the
 # service registration: SQLite state, tokens, and user data are never removed.
-SERVICE_NAME="${CODEX_RUNNER_SERVICE_NAME:-codex-issue-runner}"
-LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
+SERVICE_NAME="${XUANWU_SERVICE_NAME:-xuanwu}"
+LABEL="${XUANWU_LAUNCHD_LABEL:-com.xiaobei.xuanwu}"
 WEB_LABEL="${LABEL}.web"
 CORE_LABEL="${LABEL}.core"
 AGENTIC_LABEL="${LABEL}.agentic"
-ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
-INSTALL_DIR="${CODEX_RUNNER_INSTALL_DIR:-$HOME/.local/bin}"
-STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$HOME/.local/state/codex-issue-runner}"
-AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
-BIN_PATH="${CODEX_RUNNER_BINARY:-$INSTALL_DIR/codex-issue-runner}"
-LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$STATE_DIR/logs}"
+ADDR="${XUANWU_ADDR:-0.0.0.0:3008}"
+INSTALL_DIR="${XUANWU_INSTALL_DIR:-$HOME/.local/bin}"
+STATE_DIR="${XUANWU_STATE_DIR:-$HOME/.local/state/xuanwu}"
+AUTH_TOKEN_FILE="${XUANWU_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
+BIN_PATH="${XUANWU_BINARY:-$INSTALL_DIR/xuanwu}"
+LOG_DIR="${XUANWU_LOG_DIR:-$STATE_DIR/logs}"
 DOMAIN="gui/$(id -u)"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 WEB_PLIST="$HOME/Library/LaunchAgents/$WEB_LABEL.plist"
@@ -27,7 +27,7 @@ AUDIT_LOG="$LOG_DIR/daemon-lifecycle.log"
 
 usage() {
   cat <<'HELP'
-Usage: codex-issue-runner-daemon <start|stop|restart|status|doctor|uninstall>
+Usage: xuanwu-daemon <start|stop|restart|status|doctor|uninstall>
 
 This command manages the launchd/user-systemd registration created by
 install-release.sh. `uninstall` removes only the service registration; state,
@@ -146,8 +146,8 @@ uninstall_service() {
 
 run_mutation() {
   local action="$1" operation="$2"
-  if [ "${CODEX_RUNNER_MANAGED_EXECUTION:-}" = "1" ] ||
-    { [ -n "${PI_PACKAGE_DIR:-}" ] && [ -n "${CODEX_RUNNER_CODEX_SERVER_MODE:-}" ]; }; then
+  if [ "${XUANWU_MANAGED_EXECUTION:-}" = "1" ] ||
+    { [ -n "${PI_PACKAGE_DIR:-}" ] && [ -n "${XUANWU_CODEX_SERVER_MODE:-}" ]; }; then
     echo "[deploy-guard] denied: live service mutation cannot run from a Runner-managed provider process." >&2
     return 78
   fi

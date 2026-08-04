@@ -282,7 +282,7 @@ function eventOf(eventType: string, rawMethod = ""): RetainedEvent {
     event_type: eventType,
     id: 100,
     issue_id: 638,
-    project_id: "codex-issue-runner",
+    project_id: "xuanwu",
     raw_method: rawMethod,
     run_id: "run-1",
     source: "issue_events"

@@ -23,15 +23,15 @@ describe("skill intent audit", () => {
     try {
       const project = createProject(db, {
         cwd,
-        default_skill_policy: { allowed: ["codex-issue-runner"] },
+        default_skill_policy: { allowed: ["xuanwu"] },
         id: "demo"
       });
       const issue = createIssue(db, {
         project_id: project.id,
-        required_skill_intents: ["codex-issue-runner", "verification-before-completion"],
+        required_skill_intents: ["xuanwu", "verification-before-completion"],
         title: "Audit issue"
       });
-      recordIssueEvent(db, issue.id, "issue.log", { text: "Using codex-issue-runner skill to inspect runner state." });
+      recordIssueEvent(db, issue.id, "issue.log", { text: "Using xuanwu skill to inspect runner state." });
 
       const audit = auditIssueSkillIntents(db, issue.id, { issueRunID: "issue-1-attempt-1" });
       const rows = listSkillIntentAudits(db, { issueID: issue.id });
@@ -52,7 +52,7 @@ describe("skill intent audit", () => {
 });
 
 async function openFixture(): Promise<{ cwd: string; db: RunnerDatabase }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-skill-audit-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-skill-audit-"));
   tempRoots.push(root);
   const cwd = join(root, "project");
   await mkdir(cwd, { recursive: true });

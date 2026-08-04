@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
+LABEL="${XUANWU_LAUNCHD_LABEL:-com.xiaobei.xuanwu}"
 WEB_LABEL="${LABEL}.web"
 CORE_LABEL="${LABEL}.core"
 DOMAIN="gui/$(id -u)"

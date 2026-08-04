@@ -22,7 +22,7 @@ describe("Bun issue CLI", () => {
     const bodyFile = await tempIssueFile("修复 Bun CLI\n\n保持最小改动。");
     const requests: string[] = [];
     const fetcher = fetchStub(async (request) => {
-      expect(request.headers.get("x-codex-client")).toBe("codex-issue-runner-cli");
+      expect(request.headers.get("x-codex-client")).toBe("xuanwu-cli");
       requests.push(`${request.method} ${new URL(request.url).pathname}`);
       if (new URL(request.url).pathname === "/api/issues") {
         expect(request.method).toBe("POST");
@@ -198,7 +198,7 @@ type IssueBody = {
 };
 
 async function tempIssueFile(content: string): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-cli-issue-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-cli-issue-"));
   tempRoots.push(root);
   const path = join(root, "issue.md");
   await writeFile(path, content);

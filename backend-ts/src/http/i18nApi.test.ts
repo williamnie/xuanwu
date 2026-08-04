@@ -10,7 +10,7 @@ const BASE_URL = "http://127.0.0.1:3008";
 
 describe("i18n API", () => {
   test("persists the selected application language and injects it into the PI prompt", async () => {
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-i18n-"));
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-i18n-"));
     const database = await openDatabase({ stateDir: join(root, "state") });
     try {
       const router = createDefaultRouter({ database });
@@ -48,7 +48,7 @@ describe("i18n API", () => {
   });
 
   test("rejects unsupported languages without changing the preference", async () => {
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-i18n-invalid-"));
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-i18n-invalid-"));
     const database = await openDatabase({ stateDir: join(root, "state") });
     try {
       const router = createDefaultRouter({ database });

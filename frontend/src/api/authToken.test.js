@@ -5,7 +5,7 @@ import { clearAuthToken, getAuthToken, setAuthToken } from './authToken.js';
 
 test('getAuthToken falls back to cookie when localStorage is empty', () => {
   const restore = installBrowserAuthGlobals({
-    cookie: 'codex_runner_token=cookie-token',
+    cookie: 'xuanwu_token=cookie-token',
     storage: new MemoryStorage(),
   });
   try {
@@ -21,8 +21,8 @@ test('setAuthToken writes storage and same-origin cookie', () => {
   try {
     setAuthToken(' saved-token ');
 
-    assert.equal(storage.getItem('codex-runner-auth-token'), 'saved-token');
-    assert.match(globalThis.document.cookie, /codex_runner_token=saved-token/);
+    assert.equal(storage.getItem('xuanwu-auth-token'), 'saved-token');
+    assert.match(globalThis.document.cookie, /xuanwu_token=saved-token/);
   } finally {
     restore();
   }
@@ -31,15 +31,15 @@ test('setAuthToken writes storage and same-origin cookie', () => {
 test('clearAuthToken removes storage and expires cookie', () => {
   const storage = new MemoryStorage();
   const restore = installBrowserAuthGlobals({
-    cookie: 'codex_runner_token=old-token',
+    cookie: 'xuanwu_token=old-token',
     storage,
   });
   try {
-    storage.setItem('codex-runner-auth-token', 'old-token');
+    storage.setItem('xuanwu-auth-token', 'old-token');
 
     clearAuthToken();
 
-    assert.equal(storage.getItem('codex-runner-auth-token'), null);
+    assert.equal(storage.getItem('xuanwu-auth-token'), null);
     assert.match(globalThis.document.cookie, /Max-Age=0/);
   } finally {
     restore();

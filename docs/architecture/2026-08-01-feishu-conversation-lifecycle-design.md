@@ -16,7 +16,7 @@
 - **默认无限复用**：查 `feishu_conversation_state` 表，存在 `active_conversation_id` 则一直复用该 `pi_conversation`；仅当消息以 `/new` 开头时才 `bumpFeishuConversationEpoch` 生成新会话（命名 `feishu-chat-<chatID>-YYYYMMDD[-nN]`）。
 - **无任何规模/时间上限的自动轮换逻辑**；旧版本（7-21 之前）行为是"每天一个新会话"（`-YYYYMMDD` 后缀）。
 
-### 1.2 实测数据（live 库 `~/Library/Application Support/codex-issue-runner-bun-live/state/runner.db`）
+### 1.2 实测数据（live 库 `~/Library/Application Support/xuanwu-bun-live/state/runner.db`）
 
 | 观测项 | 数值 |
 | --- | --- |

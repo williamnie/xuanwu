@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 async function tempStateDir(): Promise<string> {
-  const path = await mkdtemp(join(tmpdir(), "codex-runner-config-"));
+  const path = await mkdtemp(join(tmpdir(), "xuanwu-config-"));
   tempRoots.push(path);
   return path;
 }
@@ -260,7 +260,7 @@ describe("Bun backend config", () => {
       [ENV_KEYS.feishuDefaultChatId]: "oc_default",
       [ENV_KEYS.feishuDefaultUserId]: "ou_default",
       [ENV_KEYS.feishuEncryptKey]: "encrypt-secret-value",
-      [ENV_KEYS.feishuProjectMappings]: "chat:oc_a=codex-runner",
+      [ENV_KEYS.feishuProjectMappings]: "chat:oc_a=xuanwu",
       [ENV_KEYS.feishuReceiveMode]: "callback",
       [ENV_KEYS.feishuVerificationToken]: "verify-secret-value",
       [ENV_KEYS.githubApiUrl]: "https://github.example/api/v3",
@@ -322,7 +322,7 @@ describe("Bun backend config", () => {
           defaultChatId: "oc_default",
           defaultUserId: "ou_default",
           encryptKey: "encrypt-secret-value",
-          projectMappings: [{ chatId: "oc_a", projectId: "codex-runner" }],
+          projectMappings: [{ chatId: "oc_a", projectId: "xuanwu" }],
           receiveMode: "callback",
           verificationToken: "verify-secret-value"
         },
@@ -535,8 +535,8 @@ describe("Bun backend config", () => {
       authMode: "environment",
       mode: "cli-fallback"
     });
-    expect(() => buildConfig({ claudeMode: "sdk", claudeAuthMode: "local-cli" })).toThrow("requires CODEX_RUNNER_CLAUDE_MODE=cli-fallback");
-    expect(() => buildConfig({ claudeMode: "cli-fallback", claudeAuthMode: "platform-profile" })).toThrow("requires CODEX_RUNNER_CLAUDE_MODE=sdk");
+    expect(() => buildConfig({ claudeMode: "sdk", claudeAuthMode: "local-cli" })).toThrow("requires XUANWU_CLAUDE_MODE=cli-fallback");
+    expect(() => buildConfig({ claudeMode: "cli-fallback", claudeAuthMode: "platform-profile" })).toThrow("requires XUANWU_CLAUDE_MODE=sdk");
     expect(() => buildConfig({ claudeAuthMode: "platform-profile", claudePlatformProfile: "../unsafe" })).toThrow("PLATFORM_PROFILE");
   });
 

@@ -24,7 +24,7 @@ describe("Automation repository", () => {
       const created = createAutomation(db, {
         id: "automation:weekday-triage", idempotency_namespace: "automation:weekday-triage", mode: "propose",
         name: "Weekday triage", next_run_at: "2026-07-17T09:00:00+08:00",
-        owner: { kind: "project", project_id: "codex-issue-runner" }, permission_policy_ref: "project-policy:codex-issue-runner",
+        owner: { kind: "project", project_id: "xuanwu" }, permission_policy_ref: "project-policy:xuanwu",
         status: "draft", workflow_ref: "workflow:investigate@1", trigger_created_by: "runner",
         trigger: { type: "cron", config: { expression: "0 9 * * 1-5", timezone: "Asia/Shanghai" } }
       }, NOW);
@@ -63,8 +63,8 @@ describe("Automation repository", () => {
 function input(trigger: { type: "cron" | "manual" | "webhook" | "continuous"; config: object }) {
   return {
     id: "automation:manual-triage", idempotency_namespace: "automation:manual-triage", mode: "propose" as const,
-    name: "Manual triage", owner: { kind: "project" as const, project_id: "codex-issue-runner" },
-    permission_policy_ref: "project-policy:codex-issue-runner", status: "draft" as const,
+    name: "Manual triage", owner: { kind: "project" as const, project_id: "xuanwu" },
+    permission_policy_ref: "project-policy:xuanwu", status: "draft" as const,
     workflow_ref: "workflow:investigate@1", trigger_created_by: "runner", trigger
   };
 }

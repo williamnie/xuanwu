@@ -8,7 +8,7 @@ const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
 
 async function tempWebDir(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-web-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-web-"));
   tempRoots.push(root);
   await mkdir(join(root, "assets"));
   await writeFile(join(root, "index.html"), "<main>runner ui</main>");

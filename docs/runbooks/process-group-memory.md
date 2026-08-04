@@ -69,7 +69,7 @@ bun test \
   src/benchmarks/xuanwuCapacity.test.ts \
   src/benchmarks/enduranceGate.test.ts
 
-CODEX_RUNNER_BINARY=/tmp/codex-issue-runner-memory-fixed \
+XUANWU_BINARY=/tmp/xuanwu-memory-fixed \
   ./scripts/build-binary.sh
 ```
 

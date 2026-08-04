@@ -171,7 +171,7 @@ function managedCapability(capability: ReturnType<typeof listPiMcpCapabilities>[
 }
 
 function registryConfig(options: McpRegistryOptions, diagnostics: McpRegistryDiagnostic[]): Record<string, unknown> {
-  const text = options.registryJson ?? Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON ?? registryFileText(diagnostics) ?? DEFAULT_REGISTRY;
+  const text = options.registryJson ?? Bun.env.XUANWU_MCP_REGISTRY_JSON ?? registryFileText(diagnostics) ?? DEFAULT_REGISTRY;
   const parsed = parseJSON(text);
   if (text.trim() !== "" && !isRegistryObject(parsed)) {
     diagnostics.push(diagnostic("registry_json_invalid", "registry", "MCP registry JSON is invalid"));
@@ -180,7 +180,7 @@ function registryConfig(options: McpRegistryOptions, diagnostics: McpRegistryDia
 }
 
 function registryFileText(diagnostics: McpRegistryDiagnostic[]): string | undefined {
-  const path = cleanString(Bun.env.CODEX_RUNNER_MCP_REGISTRY_FILE);
+  const path = cleanString(Bun.env.XUANWU_MCP_REGISTRY_FILE);
   if (path === "") return undefined;
   try { return readFileSync(path, "utf8"); } catch {
     diagnostics.push(diagnostic("registry_file_unavailable", "registry-file", "MCP registry file is unavailable"));

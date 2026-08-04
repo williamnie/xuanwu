@@ -32,7 +32,7 @@ async function createWork(args: string[], env: EnvReader, fetcher: Fetcher): Pro
   const occurredAt = timestamp(values["occurred-at"]);
   const response = await postJSON<Record<string, unknown>>(fetcher, common, "/api/works", {
     audit: {
-      actor: { id: "codex-issue-runner-cli", kind: "user" },
+      actor: { id: "xuanwu-cli", kind: "user" },
       correlation_id: `cli-work:${key}`,
       event_id: `cli-work:${key}`,
       occurred_at: occurredAt,

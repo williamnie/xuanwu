@@ -285,7 +285,7 @@ describe("Issue-backed Work compatibility adapter", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-issue-work-adapter-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-issue-work-adapter-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

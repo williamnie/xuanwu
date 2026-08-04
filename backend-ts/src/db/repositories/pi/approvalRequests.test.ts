@@ -147,7 +147,7 @@ describe("PI executor approval request repository", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-approval-repo-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-approval-repo-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

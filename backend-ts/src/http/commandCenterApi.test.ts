@@ -450,7 +450,7 @@ describe("Command Center aggregate API", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-command-center-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-command-center-"));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(`

@@ -440,7 +440,7 @@ describe("PI action proposals API", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-action-proposals-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-action-proposals-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_DIR="${CODEX_RUNNER_RELEASE_DIR:-$ROOT_DIR/dist/release}"
+OUT_DIR="${XUANWU_RELEASE_DIR:-$ROOT_DIR/dist/release}"
 WORK_DIR="$OUT_DIR/.work"
 DEFAULT_TARGETS=(bun-darwin-arm64 bun-darwin-x64 bun-linux-arm64 bun-linux-x64)
 APP_VERSION=""
@@ -91,7 +91,7 @@ stage_claude_sdk_executable() {
     source="$cache/package/claude"
   fi
   [ -f "$source" ] || fail "missing Claude Agent SDK native executable for $target"
-  install -m 0755 "$source" "$pkg_dir/codex-issue-runner.claude-agent-sdk"
+  install -m 0755 "$source" "$pkg_dir/xuanwu.claude-agent-sdk"
 }
 
 host_bun_target() {
@@ -109,12 +109,12 @@ smoke_host_binary() {
   host_target="$(host_bun_target)"
   [ -n "$host_target" ] && [ "$target" = "$host_target" ] || return 0
   case "$target" in
-    bun-darwin-arm64) asset="codex-issue-runner_darwin_arm64" ;;
-    bun-darwin-x64) asset="codex-issue-runner_darwin_amd64" ;;
-    bun-linux-arm64) asset="codex-issue-runner_linux_arm64" ;;
-    bun-linux-x64) asset="codex-issue-runner_linux_amd64" ;;
+    bun-darwin-arm64) asset="xuanwu_darwin_arm64" ;;
+    bun-darwin-x64) asset="xuanwu_darwin_amd64" ;;
+    bun-linux-arm64) asset="xuanwu_linux_arm64" ;;
+    bun-linux-x64) asset="xuanwu_linux_amd64" ;;
   esac
-  binary="$WORK_DIR/$asset/codex-issue-runner"
+  binary="$WORK_DIR/$asset/xuanwu"
   if [ ! -x "$binary" ] && [ -s "$OUT_DIR/$asset.tar.gz" ]; then
     mkdir -p "$WORK_DIR/$asset"
     tar -xzf "$OUT_DIR/$asset.tar.gz" -C "$WORK_DIR/$asset"
@@ -125,10 +125,10 @@ smoke_host_binary() {
 cleanup_target_work() {
   local target="$1" asset
   case "$target" in
-    bun-darwin-arm64) asset="codex-issue-runner_darwin_arm64" ;;
-    bun-darwin-x64) asset="codex-issue-runner_darwin_amd64" ;;
-    bun-linux-arm64) asset="codex-issue-runner_linux_arm64" ;;
-    bun-linux-x64) asset="codex-issue-runner_linux_amd64" ;;
+    bun-darwin-arm64) asset="xuanwu_darwin_arm64" ;;
+    bun-darwin-x64) asset="xuanwu_darwin_amd64" ;;
+    bun-linux-arm64) asset="xuanwu_linux_arm64" ;;
+    bun-linux-x64) asset="xuanwu_linux_amd64" ;;
     *) fail "unsupported Bun target: $target" ;;
   esac
   rm -rf "$WORK_DIR/$asset"
@@ -149,14 +149,14 @@ install_deps() {
 
 run_preflight_checks() {
   install_deps
-  if [ "${CODEX_RUNNER_ENFORCE_RELEASE:-0}" = "1" ] &&
+  if [ "${XUANWU_ENFORCE_RELEASE:-0}" = "1" ] &&
     [ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no)" ]; then
     fail "release checkout has tracked changes after dependency installation"
   fi
   run_step "backend-ts tests" bash -lc "cd '$ROOT_DIR/backend-ts' && bun test --timeout 60000"
   run_step "frontend lint" npm --prefix "$ROOT_DIR/frontend" run lint
   APP_VERSION="$(resolve_app_version)"
-  BUILD_STAMP="${CODEX_RUNNER_BUILD_STAMP:-$(resolve_build_stamp)}"
+  BUILD_STAMP="${XUANWU_BUILD_STAMP:-$(resolve_build_stamp)}"
   REVISION="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || printf nogit)"
   log "frontend version: $APP_VERSION"
   log "build stamp: $BUILD_STAMP"
@@ -172,23 +172,23 @@ package_target() {
     bun-linux-x64) arch="linux_amd64" ;;
     *) fail "unsupported Bun target: $target" ;;
   esac
-  asset="codex-issue-runner_${arch}"
-  if [ "${CODEX_RUNNER_RELEASE_RESUME:-0}" = "1" ] && [ -s "$OUT_DIR/$asset.tar.gz" ]; then
+  asset="xuanwu_${arch}"
+  if [ "${XUANWU_RELEASE_RESUME:-0}" = "1" ] && [ -s "$OUT_DIR/$asset.tar.gz" ]; then
     log "reusing completed $target archive"
     return 0
   fi
   pkg_dir="$WORK_DIR/$asset"
-  outfile="$pkg_dir/codex-issue-runner"
+  outfile="$pkg_dir/xuanwu"
   rm -rf "$pkg_dir"
   mkdir -p "$pkg_dir"
   log "building $target"
   (
     cd "$ROOT_DIR/backend-ts"
-    CODEX_RUNNER_BUILD_VERSION="$APP_VERSION" \
-    CODEX_RUNNER_BUILD_STAMP="$BUILD_STAMP" \
-      bun build ./src/main.ts --compile --target="$target" '--env=CODEX_RUNNER_BUILD_*' --outfile "$outfile"
+    XUANWU_BUILD_VERSION="$APP_VERSION" \
+    XUANWU_BUILD_STAMP="$BUILD_STAMP" \
+      bun build ./src/main.ts --compile --target="$target" '--env=XUANWU_BUILD_*' --outfile "$outfile"
   )
-  printf '%s\n' "$BUILD_STAMP" > "$pkg_dir/codex-issue-runner.build.stamp"
+  printf '%s\n' "$BUILD_STAMP" > "$pkg_dir/xuanwu.build.stamp"
   cp -R "$ROOT_DIR/frontend/dist" "$pkg_dir/web"
   cp "$ROOT_DIR/README.md" "$pkg_dir/README.md"
   cp "$ROOT_DIR/README.zh-CN.md" "$pkg_dir/README.zh-CN.md"
@@ -223,7 +223,7 @@ main() {
   require_cmd bun
   require_cmd npm
   require_cmd tar
-  if [ "${CODEX_RUNNER_RELEASE_RESUME:-0}" = "1" ]; then
+  if [ "${XUANWU_RELEASE_RESUME:-0}" = "1" ]; then
     rm -rf "$WORK_DIR"
   else
     rm -rf "$OUT_DIR"
@@ -247,7 +247,7 @@ main() {
     --build-stamp "$BUILD_STAMP"
     --output "$OUT_DIR/release.json"
   )
-  if [ "${CODEX_RUNNER_ENFORCE_RELEASE:-0}" = "1" ]; then
+  if [ "${XUANWU_ENFORCE_RELEASE:-0}" = "1" ]; then
     manifest_args+=(--require-changelog)
   fi
   for target in "${targets[@]}"; do manifest_args+=(--target "$target"); done

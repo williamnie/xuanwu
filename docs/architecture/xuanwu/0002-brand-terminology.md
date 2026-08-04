@@ -1,14 +1,14 @@
-# ADR-XW-0002：玄武品牌术语与兼容标识合同
+# ADR-XW-0002：玄武品牌术语与运行时标识合同
 
 - 状态：Accepted
 - 日期：2026-07-15
 - 依赖：[ADR-XW-0001](0001-product-positioning.md)
-- 决策范围：用户可见品牌、Supervisor/Runner 职责名称、内部兼容名称和逐文件迁移边界
+- 决策范围：用户可见品牌、Supervisor/Runner 职责名称、运行时标识和逐文件迁移边界
 - canonical 级别：本文件是玄武品牌术语的 source of truth
 
 ## 1. 决策
 
-玄武只有一个产品身份，不再把 PI Assistant、Runner Brain 或 Codex Issue Runner 当作并列产品展示。
+玄武只有一个产品身份，不再把 PI Assistant、Runner Brain 或 Xuanwu 当作并列产品展示。
 
 | 对象 | 用户可见名称 | 使用规则 |
 | --- | --- | --- |
@@ -20,14 +20,14 @@
 
 首选品牌锁定为“玄武 Xuanwu · AI Engineering Control Plane”。`Local-first · Verification-first` 可以作为短 tagline，但不能替代产品类别。
 
-## 2. 内部兼容名称
+## 2. 统一运行时标识
 
-下列名称继续存在仅为兼容，不得重新进入用户可见产品文案：
+下列名称是 Xuanwu 的 canonical 运行时标识：
 
-| 兼容名称 | 当前用途 | 本期决策 |
+| 标识 | 当前用途 | 本期决策 |
 | --- | --- | --- |
-| `codex-issue-runner` | 发行二进制、CLI、skill、Codex `clientInfo`、安装目录和服务标识 | **保留稳定**；它是兼容产品 ID，不是 UI 品牌名；GitHub 仓库从 `v0.2.0` 起使用 `xuanwu` |
-| `CODEX_RUNNER_*` | 环境变量和部署配置 | **保留稳定** |
+| `xuanwu` | 发行二进制、CLI、Skill、Codex `clientInfo`、安装目录和服务标识 | **canonical**；与 GitHub 仓库 `williamnie/xuanwu` 一致 |
+| `XUANWU_*` | 环境变量和部署配置 | **canonical** |
 | `/api/pi/supervisor*`、`pi_*`、`pi_agents`、`pi_agent_id` | 单例 Supervisor API、数据库表/列、事件与内部模块命名 | **canonical**；不再保留 `/api/pi/agents*` collection |
 | `runner-default` | 唯一 Supervisor runtime 的稳定 agent ID | **保留稳定**；迁移将历史引用统一到该 ID |
 | `PI_ASSISTANT_*`、`Pi*`、`pi-*` | 前端常量、组件、文件和 route ID | **保留稳定**，直到有独立的代码迁移 issue |
@@ -44,7 +44,7 @@
 2. 前端代码中的固定术语投影以 `frontend/src/brand.js` 为 source of truth。
 3. 运行状态继续以现有 SQLite、Bun API 与 Runner 状态机为 source of truth；UI 名称不能改变权限、状态或完成判定。
 4. `pi_agents.name` 仍是用户可编辑的 runtime metadata，不是产品品牌字段；精确命中的历史默认值由单例 Supervisor 数据迁移规范化，其他自定义名称原样保留。
-5. GitHub 仓库的 canonical slug 是 `williamnie/xuanwu`；GitHub 对旧 slug 的重定向只用于兼容历史链接，新文档、安装器和 Release metadata 不得继续生成旧 URL。
+5. GitHub 仓库的 canonical slug 是 `williamnie/xuanwu`；文档、安装器和 Release metadata 只生成该 URL。
 
 ### 3.2 新旧模型并存
 
@@ -69,12 +69,12 @@
 
 | 类型 | 稳定标识 |
 | --- | --- |
-| CLI / binary | `codex-issue-runner` |
-| Codex client | `clientInfo.name = codex-issue-runner` |
+| CLI / binary | `xuanwu` |
+| Codex client | `clientInfo.name = xuanwu` |
 | 默认 runtime ID | `runner-default` |
 | API | 单例 Supervisor 使用 `/api/pi/supervisor*`；其他 `/api/pi/*`、`/api/runner/*` 按各自合同 |
 | DB | `pi_agents`、所有现有 `pi_*` 表、`pi_agent_id` 和既有 migration 编号 |
-| 配置 / 部署 | `CODEX_RUNNER_*`、现有 state dir、launchd/systemd 标识 |
+| 配置 / 部署 | `XUANWU_*`、现有 state dir、launchd/systemd 标识 |
 
 用户可见改名不得成为绕过 action gate、Permission/Approval、审计事件或 Verification Policy 的理由。`055_collapse_pi_agents_to_supervisor` 是显式的一次性数据清理；它不新增外部写或权限旁路。
 
@@ -82,7 +82,7 @@
 
 | 文件 | 本期动作 | 兼容边界 / 后续 |
 | --- | --- | --- |
-| `README.md`、`README.zh-CN.md` | 以玄武作为产品标题，链接本合同；把发行物说明为 `codex-issue-runner` 兼容名 | GitHub URL 使用 `xuanwu`；安装后的命令、路径和 CLI 示例保持原值 |
+| `README.md`、`README.zh-CN.md` | 以玄武作为产品标题，链接本合同 | GitHub URL、命令、路径和 CLI 示例统一使用 Xuanwu 标识 |
 | `frontend/index.html` | 浏览器标题改为玄武产品类别 | favicon 路径保持不变 |
 | `frontend/src/brand.js` | 固定产品、Supervisor、Runner 术语与 descriptor/tagline | `BRAND.name` / `BRAND.hanzi` 保持现有组件 contract |
 | `frontend/src/components/BrandMark.jsx` | 继续从 `BRAND` 渲染，不新增第二套 logo | 组件名和资源名保持不变 |
@@ -111,6 +111,6 @@
 
 1. 产品、Supervisor、Runner 的 canonical 常量与本文件一致。
 2. live UI source 不再出现 PI Assistant、Runner Brain、PI Supervisor、PI Guardian、PI Memory、PI OAuth 或 Agent Guardian；旧文案只允许存在于数据迁移输入中。
-3. `codex-issue-runner` CLI/client、`runner-default`、`/api/pi/supervisor`、`pi_agents` 与 `pi_agent_id` 没有被误改。
+3. `xuanwu` CLI/client、`runner-default`、`/api/pi/supervisor`、`pi_agents` 与 `pi_agent_id` 没有被误改。
 
 术语审计失败时不得通过增加宽泛 allowlist 绕过；只能修正文案，或在新的 ADR 中说明一个精确、限期的兼容例外。

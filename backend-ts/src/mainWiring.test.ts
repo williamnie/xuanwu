@@ -49,7 +49,7 @@ describe("server entrypoint wiring", () => {
     expect(core).toContain("reclaimMemory: () => Bun.gc(true)");
     expect(core).toContain("runWithinActivity: (operation) => processGroupMemory.runMaintenance(operation)");
     expect(core).toContain("ownership.processes.map");
-    expect(core).toContain("codex-issue-runner-agentic");
+    expect(core).toContain("xuanwu-agentic");
     expect(core).not.toContain("Bun.spawnSync");
     expect(core).not.toContain("/usr/bin/footprint");
     expect(darwinMemory).toContain("proc_pid_rusage");

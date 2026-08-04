@@ -159,7 +159,7 @@ describe("Feishu message client", () => {
     const result = await client.sendTextMessage({
       receiveId,
       receiveIdType: Bun.env.FEISHU_SMOKE_RECEIVE_ID_TYPE?.trim() || "chat_id",
-      text: `codex-issue-runner Feishu smoke ${new Date().toISOString()}`
+      text: `xuanwu Feishu smoke ${new Date().toISOString()}`
     });
 
     expect(result.messageId).not.toBe("");

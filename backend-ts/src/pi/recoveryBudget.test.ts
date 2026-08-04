@@ -132,7 +132,7 @@ describe("PI recovery budget", () => {
 });
 
 async function fixtureDb(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-recovery-budget-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-recovery-budget-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

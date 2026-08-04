@@ -277,7 +277,7 @@ describe("PI Guardian runtime repositories", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-guardian-runtime-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-guardian-runtime-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

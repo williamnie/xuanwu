@@ -3,12 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$ROOT_DIR/scripts/assert-external-deploy-context.sh"
-ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
-APP_SUPPORT_DIR="${CODEX_RUNNER_APP_SUPPORT_DIR:-$HOME/Library/Application Support/codex-issue-runner-bun-live}"
-STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$APP_SUPPORT_DIR/state}"
-DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
-AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
-PREDEPLOY_BACKUP_RETAIN="${CODEX_RUNNER_PREDEPLOY_BACKUP_RETAIN:-5}"
+ADDR="${XUANWU_ADDR:-0.0.0.0:3008}"
+APP_SUPPORT_DIR="${XUANWU_APP_SUPPORT_DIR:-$HOME/Library/Application Support/xuanwu-bun-live}"
+STATE_DIR="${XUANWU_STATE_DIR:-$APP_SUPPORT_DIR/state}"
+DB_PATH="${XUANWU_DB:-${XUANWU_DEPLOY_DB:-$STATE_DIR/runner.db}}"
+AUTH_TOKEN_FILE="${XUANWU_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
+PREDEPLOY_BACKUP_RETAIN="${XUANWU_PREDEPLOY_BACKUP_RETAIN:-5}"
 
 log() { printf '[redeploy] %s\n' "$*"; }
 
@@ -23,8 +23,8 @@ service_url() {
 }
 
 api_token() {
-  if [ -n "${CODEX_RUNNER_AUTH_TOKEN:-}" ]; then
-    printf '%s' "$CODEX_RUNNER_AUTH_TOKEN"
+  if [ -n "${XUANWU_AUTH_TOKEN:-}" ]; then
+    printf '%s' "$XUANWU_AUTH_TOKEN"
   elif [ -f "$AUTH_TOKEN_FILE" ]; then
     tr -d '\n' < "$AUTH_TOKEN_FILE"
   fi
@@ -78,7 +78,7 @@ backup_live_database() {
   [ -f "$DB_PATH" ] || { log "no existing DB to back up: $DB_PATH"; return; }
   local backup_dir backup_path backup_root
   if ! [[ "$PREDEPLOY_BACKUP_RETAIN" =~ ^[1-9][0-9]*$ ]]; then
-    log "CODEX_RUNNER_PREDEPLOY_BACKUP_RETAIN must be a positive integer"
+    log "XUANWU_PREDEPLOY_BACKUP_RETAIN must be a positive integer"
     return 2
   fi
   backup_root="$APP_SUPPORT_DIR/backups"

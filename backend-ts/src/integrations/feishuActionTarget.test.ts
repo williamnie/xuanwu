@@ -98,7 +98,7 @@ describe("Feishu actionable notification target", () => {
 });
 
 async function fixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-action-target-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-action-target-"));
   roots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

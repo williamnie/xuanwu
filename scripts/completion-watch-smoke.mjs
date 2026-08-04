@@ -19,7 +19,7 @@ import { attachPiIssueCompletionWatchObserver } from "../backend-ts/src/pi/issue
 const SMOKE_DATE = new Date("2026-06-29T10:00:00Z");
 
 async function main() {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-completion-watch-smoke-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-completion-watch-smoke-"));
   try {
     const db = await openDatabase({ stateDir: join(root, "state") });
     try {

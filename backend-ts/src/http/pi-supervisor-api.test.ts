@@ -140,7 +140,7 @@ describe("PI supervisor issue API", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-supervisor-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-supervisor-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

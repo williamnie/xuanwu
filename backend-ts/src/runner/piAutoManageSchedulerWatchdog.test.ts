@@ -91,7 +91,7 @@ describe("PI auto-manage scheduler watchdog integration", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-watchdog-scheduler-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-watchdog-scheduler-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

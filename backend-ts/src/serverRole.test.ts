@@ -7,9 +7,9 @@ describe("server role", () => {
   });
 
   test("accepts env and CLI roles while removing the selector from core config args", () => {
-    expect(resolveServerRole(["--addr", "127.0.0.1:3009"], { CODEX_RUNNER_ROLE: "core" }))
+    expect(resolveServerRole(["--addr", "127.0.0.1:3009"], { XUANWU_ROLE: "core" }))
       .toEqual({ args: ["--addr", "127.0.0.1:3009"], role: "core" });
-    expect(resolveServerRole(["--role=web", "--web-dir", "/tmp/web"], { CODEX_RUNNER_ROLE: "all" }))
+    expect(resolveServerRole(["--role=web", "--web-dir", "/tmp/web"], { XUANWU_ROLE: "all" }))
       .toEqual({ args: ["--web-dir", "/tmp/web"], role: "web" });
   });
 

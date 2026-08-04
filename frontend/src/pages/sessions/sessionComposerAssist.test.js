@@ -8,8 +8,8 @@ import {
 
 test('builds slash commands and omits project @ suggestions on session pages', () => {
   const suggestions = buildSessionComposerSuggestions({
-    currentProject: { id: 'runner', name: 'Codex Runner' },
-    projects: [{ id: 'runner', name: 'Codex Runner', cwd: '/repo' }],
+    currentProject: { id: 'runner', name: 'Xuanwu' },
+    projects: [{ id: 'runner', name: 'Xuanwu', cwd: '/repo' }],
     issues: [{ id: 69, title: '增强 Session 输入', status: 'todo', project_id: 'runner' }],
   });
 
@@ -86,7 +86,7 @@ test('builds file and folder context reference suggestions', () => {
 
 test('slash suggestions expose structured command payloads', () => {
   const suggestions = buildSessionComposerSuggestions({
-    currentProject: { id: 'runner', name: 'Codex Runner' },
+    currentProject: { id: 'runner', name: 'Xuanwu' },
     linkedIssues: [{ id: 69, title: '增强 Session 输入' }],
   });
   const status = suggestions.find((item) => item.id === 'command-status');

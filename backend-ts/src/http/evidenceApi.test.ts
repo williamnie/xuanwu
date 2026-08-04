@@ -289,7 +289,7 @@ describe("Evidence HTTP API", () => {
 });
 
 async function fixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-evidence-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-evidence-api-"));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   const project = join(root, "project");

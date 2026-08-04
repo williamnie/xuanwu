@@ -8,11 +8,11 @@ import { createProject } from "../db/repositories/projects.ts";
 import { buildIssuePromptForTest } from "./projectLoop.ts";
 
 const tempRoots: string[] = [];
-const previousRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+const previousRegistry = Bun.env.XUANWU_MCP_REGISTRY_JSON;
 
 afterEach(async () => {
-  if (previousRegistry === undefined) delete Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
-  else Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = previousRegistry;
+  if (previousRegistry === undefined) delete Bun.env.XUANWU_MCP_REGISTRY_JSON;
+  else Bun.env.XUANWU_MCP_REGISTRY_JSON = previousRegistry;
   while (tempRoots.length > 0) {
     const path = tempRoots.pop();
     if (path) await rm(path, { recursive: true, force: true });
@@ -22,7 +22,7 @@ afterEach(async () => {
 describe("runner issue MCP prompt context", () => {
   test("injects MCP requirements and registry metadata into executor prompt", async () => {
     const { cwd, db } = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({
+    Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({
       servers: [{
         id: "docs",
         readiness: "ready",
@@ -57,7 +57,7 @@ describe("runner issue MCP prompt context", () => {
 });
 
 async function openFixture(): Promise<{ cwd: string; db: RunnerDatabase }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-mcp-prompt-context-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-mcp-prompt-context-"));
   tempRoots.push(root);
   const cwd = join(root, "project");
   await mkdir(cwd, { recursive: true });

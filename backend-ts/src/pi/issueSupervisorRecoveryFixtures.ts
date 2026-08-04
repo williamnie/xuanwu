@@ -18,7 +18,7 @@ export const issueSupervisorRecoveryFixtures: IssueSupervisorRecoveryFixture[] =
         payload_json: {
           recent_events: [{ at: "2026-06-10T01:58:00Z", summary: "Reconnecting... 1/5", type: "error" }]
         },
-        project_id: "codex-issue-runner",
+        project_id: "xuanwu",
         provider: "codex",
         provider_session_id: "thread-298",
         run_id: "issue-298-attempt-1"
@@ -45,7 +45,7 @@ export const issueSupervisorRecoveryFixtures: IssueSupervisorRecoveryFixture[] =
         event_type: "signal",
         issue_id: 301,
         payload_json: { retry_after_seconds: 600, status_code: 429 },
-        project_id: "codex-issue-runner",
+        project_id: "xuanwu",
         provider: "codex",
         provider_error_category: "rate_limit",
         retry_after_at: "2026-06-10T02:10:00Z"
@@ -72,7 +72,7 @@ export const issueSupervisorRecoveryFixtures: IssueSupervisorRecoveryFixture[] =
         event_type: "signal",
         issue_id: 302,
         payload_json: { status_code: 429, summary: "HTTP 429 too many requests without retry-after" },
-        project_id: "codex-issue-runner",
+        project_id: "xuanwu",
         provider: "codex",
         provider_error_category: "rate_limit"
       }
@@ -98,7 +98,7 @@ export const issueSupervisorRecoveryFixtures: IssueSupervisorRecoveryFixture[] =
         event_type: "signal",
         issue_id: 303,
         payload_json: { status_code: 401, summary: "HTTP 401 unauthorized" },
-        project_id: "codex-issue-runner",
+        project_id: "xuanwu",
         provider: "codex",
         provider_error_category: "auth"
       }
@@ -124,7 +124,7 @@ export const issueSupervisorRecoveryFixtures: IssueSupervisorRecoveryFixture[] =
         event_type: "signal",
         issue_id: 304,
         payload_json: { summary: "focused test failed with assertion error" },
-        project_id: "codex-issue-runner",
+        project_id: "xuanwu",
         provider: "codex",
         provider_error_category: "business_failure"
       }
@@ -150,7 +150,7 @@ export const issueSupervisorRecoveryFixtures: IssueSupervisorRecoveryFixture[] =
         event_type: "signal",
         issue_id: 298,
         payload_json: { attempts_24h: 2, last_outcome: "no_progress" },
-        project_id: "codex-issue-runner",
+        project_id: "xuanwu",
         provider: "codex",
         provider_session_id: "thread-298"
       }

@@ -9,7 +9,7 @@ type Sample = { asset_ms: number; index_ms: number };
 const AUTHORIZATION = "Bearer isolation-smoke-token";
 
 const args = parseArgs(Bun.argv.slice(2));
-const binary = resolve(args.binary ?? "dist/codex-issue-runner");
+const binary = resolve(args.binary ?? "dist/xuanwu");
 const webDir = resolve(args.webDir ?? "frontend/dist");
 const slowMs = boundedInteger(args.slowMs, 6_000, 5_000, 10_000);
 const samples = boundedInteger(args.samples, 30, 10, 100);
@@ -163,9 +163,9 @@ function spawnRole(role: "agentic" | "core" | "web", port: number): Child {
   const child = Bun.spawn([binary, ...roleArgs], {
     env: {
       ...Bun.env,
-      CODEX_RUNNER_AUTH_TOKEN: role === "web" ? "" : AUTHORIZATION.slice("Bearer ".length),
-      CODEX_RUNNER_AUTH_TOKEN_FILE: "",
-      ...(role === "core" ? { CODEX_RUNNER_TEST_BLOCK_MS: String(slowMs) } : {})
+      XUANWU_AUTH_TOKEN: role === "web" ? "" : AUTHORIZATION.slice("Bearer ".length),
+      XUANWU_AUTH_TOKEN_FILE: "",
+      ...(role === "core" ? { XUANWU_TEST_BLOCK_MS: String(slowMs) } : {})
     },
     stderr: "pipe",
     stdout: "pipe"

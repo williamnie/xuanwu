@@ -52,14 +52,14 @@ describe("Issue 784 intake observability live fixture", () => {
     const first = await sampleObservationWindow({
       dbPath,
       outputPath,
-      projectID: "codex-issue-runner",
+      projectID: "xuanwu",
       statePath,
       windowStartedAt: "2026-07-25T00:00:00Z"
     });
     const second = await sampleObservationWindow({
       dbPath,
       outputPath,
-      projectID: "codex-issue-runner",
+      projectID: "xuanwu",
       statePath
     });
     const report = reportFromSampleLog(outputPath);

@@ -91,7 +91,7 @@ describe("issue supervisor progress tracker", () => {
 });
 
 async function fixtureDb(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-progress-tracker-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-progress-tracker-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -99,7 +99,7 @@ async function fixtureDb(): Promise<RunnerDatabase> {
 function insertProject(db: RunnerDatabase, id: string): void {
   db.sqlite.run(`insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
     values (?, ?, ?, 'codex', 1, ?, ?)`,
-  [id, id, join(tmpdir(), `codex-runner-progress-${id}`), "2026-06-10T06:00:00Z", "2026-06-10T06:00:00Z"]);
+  [id, id, join(tmpdir(), `xuanwu-progress-${id}`), "2026-06-10T06:00:00Z", "2026-06-10T06:00:00Z"]);
 }
 
 function insertRunningIssue(db: RunnerDatabase, issueID: number, projectID: string, sessionID: string, turnID: string): void {

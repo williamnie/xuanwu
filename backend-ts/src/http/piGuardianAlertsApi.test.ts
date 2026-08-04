@@ -147,7 +147,7 @@ describe("PI guardian alerts API", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-alerts-api-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-alerts-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

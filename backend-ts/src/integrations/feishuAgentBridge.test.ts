@@ -145,7 +145,7 @@ describe("Feishu agent bridge", () => {
 
   test("passes ambiguous multi-project wording to PI without a pre-LLM project card", async () => {
     const database = await openFixtureDatabase();
-    insertProject(database, "codex-issue-runner", "Codex Issue Runner");
+    insertProject(database, "xuanwu", "Xuanwu");
     insertProject(database, "movo-mobile", "movo-mobile");
     const sent: FeishuTextMessageInput[] = [];
     const calls: Array<{ projectId: string; prompt: string }> = [];
@@ -452,7 +452,7 @@ describe("Feishu agent bridge", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-agent-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-agent-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

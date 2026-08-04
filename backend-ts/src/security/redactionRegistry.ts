@@ -13,8 +13,8 @@ const SENSITIVE_LINE_MARKERS = [
   "authorization:",
   "auth_token",
   "auth-token",
-  "codex_runner_auth_token",
-  "codex_runner_bun_auth_token",
+  "xuanwu_auth_token",
+  "xuanwu_bun_auth_token",
   "bearer "
 ];
 const SECRET_ASSIGNMENT_PATTERN =

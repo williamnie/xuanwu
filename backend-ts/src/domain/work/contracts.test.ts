@@ -134,7 +134,7 @@ function makeWork(id: number, patch: Partial<WorkLedgerEntry> = {}): WorkLedgerE
     created_at: NOW,
     goal: `complete Work ${id}`,
     id: makeDomainID("work", "issues", id),
-    owner: { kind: "project", project_id: "codex-issue-runner" },
+    owner: { kind: "project", project_id: "xuanwu" },
     provenance: {
       causes: [],
       origin: {

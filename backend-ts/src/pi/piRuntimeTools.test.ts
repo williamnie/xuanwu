@@ -91,7 +91,7 @@ describe("PI runtime tool registry adapter", () => {
 });
 
 async function openFixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-runtime-tools-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-runtime-tools-"));
   tempRoots.push(root);
   return await openDatabase({ stateDir: join(root, "state") });
 }

@@ -23,7 +23,7 @@ describe("Feishu pending project selection repository", () => {
     const db = await openFixtureDatabase();
     try {
       createFeishuPendingProjectSelection(db, {
-        candidates: ["codex-issue-runner", "demo"],
+        candidates: ["xuanwu", "demo"],
         chatId: "oc_group",
         conversationId: "feishu-chat-oc_group-20260613",
         expiresAt: "2026-06-13T02:00:00.000Z",
@@ -54,7 +54,7 @@ describe("Feishu pending project selection repository", () => {
 
       expect(first.status).toBe("consumed");
       expect(first.selection).toMatchObject({
-        candidates: ["codex-issue-runner", "demo"],
+        candidates: ["xuanwu", "demo"],
         original_prompt: "开始做吧",
         selected_project_id: "demo",
         status: "consumed"
@@ -110,7 +110,7 @@ describe("Feishu pending project selection repository", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-project-selection-repo-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-project-selection-repo-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

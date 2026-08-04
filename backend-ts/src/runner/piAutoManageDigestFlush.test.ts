@@ -75,7 +75,7 @@ describe("PI auto-manage digest flush integration", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-auto-digest-flush-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-auto-digest-flush-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

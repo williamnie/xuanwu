@@ -132,7 +132,7 @@ describe("PI local workspace tools", () => {
 });
 
 async function openFixture(): Promise<{ db: RunnerDatabase; root: string }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-local-workspace-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-local-workspace-"));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   ensureDefaultPiAgent(db);

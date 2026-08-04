@@ -18,7 +18,7 @@ import {
 } from "./agentic-activation-fixture.ts";
 
 const CONTRACT = "xw.agentic-activation.automation-standing-order.v1";
-const PROJECT_ID = "codex-issue-runner";
+const PROJECT_ID = "xuanwu";
 const DEFAULT_ARTIFACT_DIR = ".runner/artifacts/agentic-activation/issue-778";
 const TERMINAL_RUN_STATUSES = new Set(["failed", "skipped", "succeeded"]);
 
@@ -986,12 +986,12 @@ async function spawnDevRuntime(runtime: IsolatedRuntime): Promise<void> {
     cwd: runtime.options.repoRoot,
     env: {
       ...Bun.env,
-      CODEX_RUNNER_AUTH_TOKEN: "",
-      CODEX_RUNNER_AUTH_TOKEN_FILE: join(runtime.stateDir, "auth_token"),
-      CODEX_RUNNER_DB: runtime.db,
-      CODEX_RUNNER_DEV_ADDR: runtime.addr,
-      CODEX_RUNNER_STATE_DIR: runtime.stateDir,
-      CODEX_RUNNER_TEST_BLOCK_MS: "30000",
+      XUANWU_AUTH_TOKEN: "",
+      XUANWU_AUTH_TOKEN_FILE: join(runtime.stateDir, "auth_token"),
+      XUANWU_DB: runtime.db,
+      XUANWU_DEV_ADDR: runtime.addr,
+      XUANWU_STATE_DIR: runtime.stateDir,
+      XUANWU_TEST_BLOCK_MS: "30000",
       FRONTEND_HOST: "127.0.0.1",
       FRONTEND_PORT: String(runtime.options.frontendPort)
     },

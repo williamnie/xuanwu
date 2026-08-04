@@ -14,7 +14,7 @@ import { createIssueRun, ensureOpenIssueRun, updateIssueRuntime, updateOpenIssue
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-issue-run-repo-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-issue-run-repo-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -29,7 +29,7 @@ afterEach(async () => {
 describe("issue run repository", () => {
   test("captures the project HEAD as the immutable delivery baseline when a Run starts", async () => {
     const db = await openFixtureDatabase();
-    const repository = await mkdtemp(join(tmpdir(), "codex-runner-run-baseline-"));
+    const repository = await mkdtemp(join(tmpdir(), "xuanwu-run-baseline-"));
     tempRoots.push(repository);
     try {
       execFileSync("git", ["init", "-q"], { cwd: repository });

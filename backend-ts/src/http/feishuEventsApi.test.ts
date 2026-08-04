@@ -271,7 +271,7 @@ describe("Feishu events endpoint", () => {
   });
 
   test("returns a diagnostic error when connector config is incomplete", async () => {
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-http-"));
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-http-"));
     tempRoots.push(root);
     const database = await openDatabase({ stateDir: join(root, "state") });
     const config = buildConfig({ feishuAppId: "cli_app_id" });
@@ -299,7 +299,7 @@ async function fixtureHandler(options: {
   projectMappings?: string;
   runnerAuthToken?: string;
 }) {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-http-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-http-"));
   tempRoots.push(root);
   const bus = new EventBus();
   const database = await openDatabase({ stateDir: join(root, "state") });

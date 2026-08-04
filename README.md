@@ -72,9 +72,36 @@ Xuanwu is in active development. `v0.2.x` is intended for trusted individual dev
 small teams running it on machines they control. It is not a hardened multi-tenant boundary,
 and the Web UI should not be exposed directly to the public internet.
 
-The GitHub repository and product are named **Xuanwu**. The binary, CLI, environment variables,
-state directories, and compatibility APIs still use `codex-issue-runner` / `CODEX_RUNNER_*` so
-existing installations and automation continue to work.
+The GitHub repository, release assets, binary, CLI, Skill, environment variables, service names,
+and default state directories all use **Xuanwu**: the command is `xuanwu`, and environment
+variables use the `XUANWU_*` prefix.
+
+## Let your agent install Xuanwu (recommended)
+
+Xuanwu ships with an issue-management Skill. Once installed, Codex or Claude Code can register
+projects, create and start issues, inspect their status, and handle retries or cancellation for
+you. Xuanwu then dispatches each issue to the configured coding-agent provider.
+
+Send this prompt directly to Codex or Claude Code:
+
+```text
+Please install Xuanwu for me: https://github.com/williamnie/xuanwu
+
+Read the repository README and installation scripts first, then install the latest Release for
+this system. Detect whether you are running in Codex or Claude Code and install the repository's
+xuanwu Skill into the matching personal Skills directory. After installation, run
+xuanwu-daemon doctor, confirm that Xuanwu is healthy, and tell me where the Skill was installed. Do not
+print or copy the auth token, and do not change unrelated configuration.
+```
+
+If you have already cloned the repository, you can also install the Skill manually:
+
+```bash
+./scripts/install-agent-skill.sh codex   # Install for Codex
+./scripts/install-agent-skill.sh claude  # Install for Claude Code
+```
+
+You can then tell the agent: `Use Xuanwu to create a triage issue for this repository: fix the login-page error message.`
 
 ## Install a release
 
@@ -89,23 +116,23 @@ registers the Web Gateway, Runner Core, and Agentic Worker as user services. Pub
 releases also publish GitHub provenance attestations, which the installer verifies when available:
 
 ```bash
-export CODEX_RUNNER_ADDR=127.0.0.1:3008
+export XUANWU_ADDR=127.0.0.1:3008
 curl -fsSL https://raw.githubusercontent.com/williamnie/xuanwu/main/scripts/install-release.sh | bash
 ```
 
 Then open <http://127.0.0.1:3008/> and follow the in-product first-delivery guide.
 
 ```bash
-codex-issue-runner-daemon status
-codex-issue-runner-daemon doctor
+xuanwu-daemon status
+xuanwu-daemon doctor
 ```
 
-The installer keeps its compatibility paths:
+Default installation paths:
 
 ```text
-binary   ~/.local/bin/codex-issue-runner
-state    ~/.local/state/codex-issue-runner
-database ~/.local/state/codex-issue-runner/runner.db
+binary   ~/.local/bin/xuanwu
+state    ~/.local/state/xuanwu
+database ~/.local/state/xuanwu/runner.db
 ```
 
 To use another address, state directory, Codex executable, or Claude provider, review
@@ -156,18 +183,6 @@ bun scripts/run-golden-journeys.ts
 Fixtures do not prove that a real provider account, external connector, browser session, or
 production deployment is healthy. Live acceptance must be performed separately with the
 required credentials and environment.
-
-## Documentation
-
-- [10-minute first delivery](docs/first-delivery.md)
-- [Canonical architecture and domain contracts](docs/architecture/README.md)
-- [Provider matrix](docs/agent-provider-matrix.md)
-- [Codex integration](docs/codex-integration.md)
-- [Release, upgrade, and rollback](docs/runbooks/release-upgrade-rollback.md)
-- [Backup and restore](docs/backup-restore.md)
-- [Security policy](SECURITY.md)
-- [Contributing](CONTRIBUTING.md)
-- [Changelog](CHANGELOG.md)
 
 ## Security
 

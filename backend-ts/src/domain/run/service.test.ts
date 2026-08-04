@@ -216,7 +216,7 @@ type Fixture = { db: RunnerDatabase; stateDir: string };
 type ActiveRun = { issue_id: number; issue_run_id: string; run_id: `xw:run:${string}:${string}` };
 
 async function openFixture(slug: string): Promise<Fixture> {
-  const root = await mkdtemp(join(tmpdir(), `codex-runner-${slug}-`));
+  const root = await mkdtemp(join(tmpdir(), `xuanwu-${slug}-`));
   tempRoots.push(root);
   const stateDir = join(root, "state");
   const db = await openDatabase({ stateDir });

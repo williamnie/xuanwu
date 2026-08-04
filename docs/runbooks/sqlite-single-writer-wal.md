@@ -39,17 +39,17 @@ event summary 后台 worker 每批最多 100 行、每 tick 最多各执行一�
 先用 backup bundle 中的 `database/runner.db` 或 SQLite `VACUUM INTO` fresh copy 演练；不要用 `cp runner.db`。所有 report 路径应落在独立、可识别的 artifact 目录。
 
 ```bash
-codex-issue-runner maintenance db wal \
+xuanwu maintenance db wal \
   --operation dry-run --db <copy.db> --report <dry-run.json> --json
 
-codex-issue-runner maintenance db wal \
+xuanwu maintenance db wal \
   --operation apply --db <copy.db> --report <apply.json> --apply \
   --confirm-backup-tested --confirm-no-active-writers \
   --actor <operator> --actor-kind user \
   --audit-ref <approved-change-ref> \
   --reason 'verified WAL transition rehearsal' --json
 
-codex-issue-runner maintenance db wal \
+xuanwu maintenance db wal \
   --operation verify --db <copy.db> --report <verify.json> --json
 ```
 
@@ -60,7 +60,7 @@ Live apply 顺序不可交换：focused rehearsal/tests → fresh verified backu
 回切前保持 Core 停止：
 
 ```bash
-codex-issue-runner maintenance db wal \
+xuanwu maintenance db wal \
   --operation rollback --db <runner.db> --report <rollback.json> --apply \
   --confirm-backup-tested --confirm-no-active-writers \
   --actor <operator> --actor-kind user \

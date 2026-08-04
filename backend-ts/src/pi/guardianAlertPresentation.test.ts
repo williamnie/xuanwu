@@ -10,7 +10,7 @@ describe("Guardian alert presentation", () => {
       alert_type: "outbox_stalled",
       created_at: "2026-07-21T03:55:00Z",
       issue_id: 771,
-      project_id: "codex-issue-runner"
+      project_id: "xuanwu"
     }), NOW);
 
     expect(display).toMatchObject({
@@ -22,7 +22,7 @@ describe("Guardian alert presentation", () => {
       state_label: "当前故障 · PI 自动处理中",
       title: "通知发送暂时延迟"
     });
-    expect(display.location).toContain("项目 codex-issue-runner");
+    expect(display.location).toContain("项目 xuanwu");
     expect(display.location).toContain("Issue #771");
     expect(display.user_action).toContain("当前无需操作");
   });

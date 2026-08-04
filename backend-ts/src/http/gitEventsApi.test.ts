@@ -82,7 +82,7 @@ describe("Git provider event connector", () => {
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-git-events-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-git-events-"));
   roots.push(root);
   return await openDatabase({ dbPath: join(root, "runner.sqlite") });
 }

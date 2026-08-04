@@ -236,7 +236,7 @@ describe("PI Guardian missed intent sweep", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-missed-sweep-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-missed-sweep-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

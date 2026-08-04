@@ -10,7 +10,7 @@ import { getIssue, listIssueRuns } from "./issues.ts";
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-issue-actions-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-issue-actions-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

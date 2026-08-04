@@ -63,8 +63,8 @@ describe("unified Attention contracts", () => {
       "pi_guardian_alerts"
     ]);
 
-    const projectOnlyInbox = candidate({ source_ref: source("attention_inbox_items", "72", "project:codex-issue-runner") });
-    const projectOnlyGuardian = candidate({ source_ref: source("pi_guardian_alerts", "guardian-714", "project:codex-issue-runner") });
+    const projectOnlyInbox = candidate({ source_ref: source("attention_inbox_items", "72", "project:xuanwu") });
+    const projectOnlyGuardian = candidate({ source_ref: source("pi_guardian_alerts", "guardian-714", "project:xuanwu") });
     expect(attentionDedupeKey(projectOnlyInbox)).not.toBe(attentionDedupeKey(projectOnlyGuardian));
   });
 
@@ -75,13 +75,13 @@ describe("unified Attention contracts", () => {
     const action = attentionFromPiAction(piAction(), ["proposal:proposal-713"]);
 
     expect(inbox).toMatchObject({
-      owner: { kind: "project", project_id: "codex-issue-runner" },
+      owner: { kind: "project", project_id: "xuanwu" },
       source_ref: { authority: "attention_inbox_items", resolution: "active" },
       status: "open",
       type: "failure"
     });
     expect(guardian).toMatchObject({
-      source_ref: { authority: "pi_guardian_alerts", correlation_refs: ["issue:713", "project:codex-issue-runner"] },
+      source_ref: { authority: "pi_guardian_alerts", correlation_refs: ["issue:713", "project:xuanwu"] },
       type: "connection_issue"
     });
     expect(approval).toMatchObject({
@@ -191,7 +191,7 @@ function candidate(overrides: Partial<AttentionCandidate> = {}): AttentionCandid
   return {
     created_at: CREATED,
     next_action: "inspect failure",
-    owner: { kind: "project", project_id: "codex-issue-runner" },
+    owner: { kind: "project", project_id: "xuanwu" },
     reason_code: "runtime_failure",
     required_actor: "operator",
     severity: "medium",
@@ -238,8 +238,8 @@ function inboxItem(): AttentionInboxItemRecord {
     actor_refs: [], actor_refs_json: "[]", bundle_id: 1, confidence: 0.9,
     created_at: CREATED, evidence_refs: ["issue:713"], evidence_refs_json: '["issue:713"]',
     id: 71, intake_run_id: 2, kind: "attention", primary_intent: "runtime_error",
-    schema_item: { issue_id: 713, project_id: "codex-issue-runner" },
-    schema_item_json: '{"issue_id":713,"project_id":"codex-issue-runner"}',
+    schema_item: { issue_id: 713, project_id: "xuanwu" },
+    schema_item_json: '{"issue_id":713,"project_id":"xuanwu"}',
     secondary_intents: [], secondary_intents_json: "[]", source: "fixture",
     status: "failed", suggested_actions: ["inspect"], suggested_actions_json: '["inspect"]',
     summary: "Runtime failed", target_hints: [], target_hints_json: "[]", title: "Failure",
@@ -252,7 +252,7 @@ function guardianAlert(): PiGuardianAlert {
     alert_type: "provider_connection_unavailable", created_at: CREATED, direct_feishu_error: "",
     direct_feishu_message_id: "", direct_feishu_state: "not_attempted", evidence_json: "[]",
     id: "guardian-713", issue_id: 713, max_retry_count: 3, message: "Provider unavailable",
-    next_retry_at: "", project_id: "codex-issue-runner", retry_count: 0, run_group_id: "",
+    next_retry_at: "", project_id: "xuanwu", retry_count: 0, run_group_id: "",
     severity: "urgent", status: "open", ui_visible: 1, updated_at: CREATED, watchdog_seen_at: CREATED
   };
 }
@@ -262,7 +262,7 @@ function approvalRequest(): PiApprovalRequest {
     approval_id: "approval-713", approval_source: "provider", async_escalation_state: "",
     created_at: CREATED, decision: "", delivered_at: "", delivery_channel: "", delivery_state: "pending",
     fast_decision: "", fast_decision_reason: "", fast_policy_latency_ms: 0, fast_policy_rule: "",
-    issue_id: 713, project_id: "codex-issue-runner", provider: "codex", provider_approval_id: "approval-713",
+    issue_id: 713, project_id: "xuanwu", provider: "codex", provider_approval_id: "approval-713",
     raw_payload_json: "{}", request_summary: "Approve command", request_type: "command",
     resolver_attempt_count: 0, resolver_error: "", resolver_last_attempt_at: "", resolver_retryable: 0,
     resolver_status: "", resolved_at: "", resolved_decision: "", resolved_scope: "", risk: "medium",
@@ -277,7 +277,7 @@ function piAction(): PiAction {
     created_at: CREATED, decided_by: "", delegation_id: "", expected_state_json: "{}", gate_decision: "ask",
     gate_reason: "risk requires user confirmation", guardian_decision_id: "", heartbeat_id: "", id: "action-713",
     idempotency_key: "action-proposal:proposal-713:action-1", issue_id: 713, lease_expires_at: "", lease_key: "",
-    legacy_bypass_reason: "", payload_json: '{"proposal_id":"proposal-713"}', project_id: "codex-issue-runner",
+    legacy_bypass_reason: "", payload_json: '{"proposal_id":"proposal-713"}', project_id: "xuanwu",
     rationale: "Enqueue issue 713", requested_changes: "", requires_confirmation: 1, result_json: "{}",
     risk_level: "medium", snoozed_until: "", source: "action_proposal", status: "pending", updated_at: CREATED
   };

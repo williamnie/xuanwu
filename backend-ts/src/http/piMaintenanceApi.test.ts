@@ -69,7 +69,7 @@ describe("PI stale pending action maintenance API", () => {
 });
 
 async function openFixture(): Promise<{ db: RunnerDatabase; root: string }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-maintenance-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-maintenance-"));
   tempRoots.push(root);
   return { db: await openDatabase({ stateDir: join(root, "state") }), root };
 }

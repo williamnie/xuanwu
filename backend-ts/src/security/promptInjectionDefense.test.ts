@@ -39,7 +39,7 @@ describe("Prompt injection defense", () => {
       action_type: "issue.enqueue",
       issue_id: 728,
       payload: { issue_id: 728, prompt: malicious },
-      project_id: "codex-issue-runner",
+      project_id: "xuanwu",
       requires_confirmation: true,
       risk_level: "medium",
       source: "external_message"
@@ -47,12 +47,12 @@ describe("Prompt injection defense", () => {
 
     expect(decidePiAuthorization(untrustedWrite, {
       mode: "autonomous",
-      scope: { project_id: "codex-issue-runner" }
+      scope: { project_id: "xuanwu" }
     })).toMatchObject({ decision: "deny" });
     expect(decidePiAuthorization(untrustedWrite, {
       allowed_actions: ["issue.enqueue"],
       mode: "attended",
-      scope: { project_id: "codex-issue-runner" }
+      scope: { project_id: "xuanwu" }
     })).toMatchObject({ decision: "ask" });
   });
 

@@ -37,8 +37,8 @@ export function createWebGatewayHandler(config: WebGatewayConfig): (request: Req
       response = json({ status: "ok" }, {
         headers: {
           "cache-control": "no-store",
-          "x-codex-runner-build-stamp": build.stamp,
-          "x-codex-runner-role": "web"
+          "x-xuanwu-build-stamp": build.stamp,
+          "x-xuanwu-role": "web"
         }
       });
     } else if (pathname.startsWith("/api/")) {

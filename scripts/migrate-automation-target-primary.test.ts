@@ -69,7 +69,7 @@ describe("Automation target-primary migration", () => {
 });
 
 function args(db: string, backup: string, archive: string, report: string): string[] {
-  return ["--db",db,"--backup-db",backup,"--archive",archive,"--report",report,"--actor","codex-runner-migration","--correlation","issue-739-test","--reason","test target-primary cutover","--apply","--confirm-backup-tested","--confirm-no-active-writers"];
+  return ["--db",db,"--backup-db",backup,"--archive",archive,"--report",report,"--actor","xuanwu-migration","--correlation","issue-739-test","--reason","test target-primary cutover","--apply","--confirm-backup-tested","--confirm-no-active-writers"];
 }
 function seedArchiveTables(db: Awaited<ReturnType<typeof openDatabase>>) {
   db.sqlite.run("create table nightly_batches (id integer primary key, status text not null, created_at text not null, updated_at text not null)");

@@ -34,7 +34,7 @@
 startup 的 schema repair 也会保持这些表为已退役状态：
 
 ```bash
-codex-issue-runner maintenance db legacy-automation-drop \
+xuanwu maintenance db legacy-automation-drop \
   --db <runner.db> \
   --backup <fresh-before-drop.db> \
   --archive <legacy-automation-archive.json> \
@@ -61,7 +61,7 @@ codex-issue-runner maintenance db legacy-automation-drop \
 独立验证 archive：
 
 ```bash
-codex-issue-runner maintenance db legacy-automation-archive-verify \
+xuanwu maintenance db legacy-automation-archive-verify \
   --archive <legacy-automation-archive.json> --json
 ```
 

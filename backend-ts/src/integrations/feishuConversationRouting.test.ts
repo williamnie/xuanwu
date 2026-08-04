@@ -185,7 +185,7 @@ describe("Feishu conversation routing", () => {
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-route-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-route-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

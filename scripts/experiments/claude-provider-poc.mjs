@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 
-const MARKER = 'codex-issue-runner-claude-provider-poc';
+const MARKER = 'xuanwu-claude-provider-poc';
 
 function parseArgs(argv) {
   const opts = {
@@ -102,7 +102,7 @@ function outputPath(opts, cwdInfo) {
 
 function claudeArgs(opts) {
   const prompt = [
-    'You are running a Claude Code provider PoC for codex-issue-runner.',
+    'You are running a Claude Code provider PoC for xuanwu.',
     'Read README.md in the current working directory.',
     'Do not modify files. Do not run shell commands.',
     `Reply exactly with: ${MARKER}`,

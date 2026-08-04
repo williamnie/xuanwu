@@ -9,7 +9,7 @@ import { createDatabaseSecretService } from "../security/secrets/service.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const FIXTURE_TOKEN = "FIXTURE_CONNECTOR_TOKEN";
-const BROWSER_SNAPSHOT_ENV = "CODEX_RUNNER_BROWSER_SNAPSHOT_JSON";
+const BROWSER_SNAPSHOT_ENV = "XUANWU_BROWSER_SNAPSHOT_JSON";
 const previousBrowserSnapshot = process.env[BROWSER_SNAPSHOT_ENV];
 const tempRoots: string[] = [];
 
@@ -171,7 +171,7 @@ describe("PI connector health API", () => {
 });
 
 async function openFixtureRuntime(): Promise<{ db: RunnerDatabase; dir: string }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-connectors-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-connectors-"));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
   const dir = join(root, "connectors");

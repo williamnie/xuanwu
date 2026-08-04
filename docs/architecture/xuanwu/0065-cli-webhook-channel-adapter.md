@@ -26,7 +26,7 @@ W0 **双读=0、双写=0**：Webhook 创建的 Work 仍是 Issue-backed，现有
 CLI 复用 runner bearer auth 与 P02.06 HTTP contract：
 
 ```bash
-codex-issue-runner work create \
+xuanwu work create \
   --project demo \
   --title "修复 build" \
   --goal "定位并修复 build 失败" \
@@ -35,9 +35,9 @@ codex-issue-runner work create \
   --occurred-at 2026-07-18T00:00:00.000Z \
   --json
 
-codex-issue-runner work status --id xw:work:issues:123 --json
-codex-issue-runner work result --id xw:work:issues:123 --json
-codex-issue-runner work timeline --id xw:work:issues:123 --json
+xuanwu work status --id xw:work:issues:123 --json
+xuanwu work result --id xw:work:issues:123 --json
+xuanwu work timeline --id xw:work:issues:123 --json
 ```
 
 `create` 强制 caller 提供 `--idempotency-key` 和 `--occurred-at`。P02.06 的 authoritative audit fingerprint 包含完整 audit；CI/Agent 重试必须原样复用两者和业务 payload，才会返回原 Work，而不是被判定为冲突。CLI 不打印 bearer token；HTTP error 已沿用既有 redact 路径。

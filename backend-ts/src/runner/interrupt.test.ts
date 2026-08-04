@@ -11,7 +11,7 @@ import type { ExecutorProvider, InterruptInput, ProviderRunInput } from "../prov
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-interrupt-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-interrupt-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

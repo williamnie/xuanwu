@@ -14,7 +14,7 @@ const daemonScript = new URL('./daemon.sh', import.meta.url);
 
 test('launchd deployment atomically replaces the running Mach-O inode', () => {
   assert.match(source, /stage_file_atomically\(\)/);
-  assert.match(source, /mktemp "\$target_dir\/\.codex-runner-stage\.XXXXXX"/);
+  assert.match(source, /mktemp "\$target_dir\/\.xuanwu-stage\.XXXXXX"/);
   assert.match(source, /mv -f "\$staged" "\$target"/);
   assert.match(source, /stage_file_atomically "\$BINARY_PATH" "\$LAUNCHD_BINARY_PATH" 0755/);
   assert.doesNotMatch(source, /cp "\$BINARY_PATH" "\$LAUNCHD_BINARY_PATH"/);
@@ -28,32 +28,32 @@ test('launchd deployment stages controlled PI runtime resources with package ass
 });
 
 test('launchd deployment persists the explicit W1 automation shadow selector', () => {
-  assert.match(source, /AUTOMATION_SHADOW_W1="\$\{CODEX_RUNNER_AUTOMATION_SHADOW_W1:-0\}"/);
-  assert.match(source, /CODEX_RUNNER_AUTOMATION_SHADOW_W1 must be 0 or 1/);
-  assert.match(source, /<key>CODEX_RUNNER_AUTOMATION_SHADOW_W1<\/key>/);
+  assert.match(source, /AUTOMATION_SHADOW_W1="\$\{XUANWU_AUTOMATION_SHADOW_W1:-0\}"/);
+  assert.match(source, /XUANWU_AUTOMATION_SHADOW_W1 must be 0 or 1/);
+  assert.match(source, /<key>XUANWU_AUTOMATION_SHADOW_W1<\/key>/);
   assert.match(source, /<string>\$\(xml_escape "\$AUTOMATION_SHADOW_W1"\)<\/string>/);
 });
 
 test('launchd Core marks Runner-managed provider execution', () => {
-  assert.match(source, /<key>CODEX_RUNNER_MANAGED_EXECUTION<\/key>\s*<string>1<\/string>/);
+  assert.match(source, /<key>XUANWU_MANAGED_EXECUTION<\/key>\s*<string>1<\/string>/);
 });
 
 test('deployment persists Claude SDK auth through a mode-0600 key file instead of service arguments', () => {
   for (const script of [source, releaseSource]) {
-    assert.match(script, /CLAUDE_API_KEY_FILE="\$\{CODEX_RUNNER_CLAUDE_API_KEY_FILE:-\$STATE_DIR\/claude_api_key\}"/);
+    assert.match(script, /CLAUDE_API_KEY_FILE="\$\{XUANWU_CLAUDE_API_KEY_FILE:-\$STATE_DIR\/claude_api_key\}"/);
     assert.match(script, /printf '%s\\n' "\$CLAUDE_API_KEY" > "\$CLAUDE_API_KEY_FILE"/);
     assert.match(script, /chmod 600 "\$CLAUDE_API_KEY_FILE"/);
-    assert.match(script, /CODEX_RUNNER_CLAUDE_API_KEY_FILE/);
-    assert.doesNotMatch(script, /CODEX_RUNNER_CLAUDE_API_KEY<\/key>/);
-    assert.doesNotMatch(script, /Environment="CODEX_RUNNER_CLAUDE_API_KEY=/);
+    assert.match(script, /XUANWU_CLAUDE_API_KEY_FILE/);
+    assert.doesNotMatch(script, /XUANWU_CLAUDE_API_KEY<\/key>/);
+    assert.doesNotMatch(script, /Environment="XUANWU_CLAUDE_API_KEY=/);
   }
 });
 
 test('deployment persists explicit Claude local CLI and Anthropic platform profile auth selectors without tokens', () => {
   for (const script of [source, releaseSource]) {
-    assert.match(script, /CODEX_RUNNER_CLAUDE_AUTH_MODE/);
-    assert.match(script, /CODEX_RUNNER_CLAUDE_PLATFORM_CONFIG_DIR/);
-    assert.match(script, /CODEX_RUNNER_CLAUDE_PLATFORM_PROFILE/);
+    assert.match(script, /XUANWU_CLAUDE_AUTH_MODE/);
+    assert.match(script, /XUANWU_CLAUDE_PLATFORM_CONFIG_DIR/);
+    assert.match(script, /XUANWU_CLAUDE_PLATFORM_PROFILE/);
     assert.match(script, /local-cli/);
     assert.match(script, /platform-profile/);
     assert.doesNotMatch(script, /CLAUDE_CODE_OAUTH_TOKEN<\/key>/);
@@ -83,12 +83,13 @@ test('launchd deployment defaults to split Web/Core/Agentic roles from one artif
   assert.match(source, /wait_for_health "\$\(service_url "\$CORE_ADDR"\)"/);
   assert.match(source, /wait_for_health "\$\(service_url "\$AGENTIC_ADDR"\)"/);
   assert.match(source, /wait_for_health "\$\(service_url "\$ADDR"\)"/);
+  assert.match(source, /curl --connect-timeout 1 --max-time 2 -fsS/);
 });
 
 test('launchd deployment preserves rollback inputs before atomic replacement', () => {
   assert.match(source, /backup_current_runtime\(\)/);
   assert.match(source, /latest-runtime-rollback/);
-  assert.match(source, /backup_current_runtime\s*\nstage_launchd_binary/);
+  assert.match(source, /else\s+backup_current_runtime\s+fi\s+stage_launchd_binary/);
 });
 
 test('launchd deployment waits for old split services before bounded bootstrap retries', () => {
@@ -117,7 +118,7 @@ test('redeploy snapshots and quick-checks the live DB before replacing runtime',
 });
 
 test('redeploy bounds predeploy DB backups before creating a fresh snapshot', () => {
-  assert.match(redeploy, /CODEX_RUNNER_PREDEPLOY_BACKUP_RETAIN:-5/);
+  assert.match(redeploy, /XUANWU_PREDEPLOY_BACKUP_RETAIN:-5/);
   assert.match(redeploy, /predeploy-\\d\{8\}T\\d\{6\}Z/);
   assert.match(redeploy, /len\(backups\) - \(retain - 1\)/);
   assert.match(redeploy, /shutil\.rmtree\(path\)/);
@@ -125,10 +126,10 @@ test('redeploy bounds predeploy DB backups before creating a fresh snapshot', ()
 
 test('Runner-managed provider processes cannot enter live deployment', () => {
   const managedEnvironments = [
-    { ...process.env, CODEX_RUNNER_MANAGED_EXECUTION: '1' },
+    { ...process.env, XUANWU_MANAGED_EXECUTION: '1' },
     {
       ...process.env,
-      CODEX_RUNNER_CODEX_SERVER_MODE: 'cli',
+      XUANWU_CODEX_SERVER_MODE: 'cli',
       PI_PACKAGE_DIR: '/tmp/runner-managed-pi-package'
     }
   ];

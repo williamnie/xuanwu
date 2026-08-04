@@ -210,7 +210,7 @@ class FakeFeishuSender implements FeishuMessageSender {
 }
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-im-dispatcher-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-im-dispatcher-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }

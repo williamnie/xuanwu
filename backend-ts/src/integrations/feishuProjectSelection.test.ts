@@ -8,7 +8,7 @@ describe("Feishu project selection card", () => {
   test("builds a safe interactive card with project choices", () => {
     const card = buildFeishuProjectSelectionCard({
       candidates: [
-        { id: "codex-issue-runner", name: "Codex Issue Runner" },
+        { id: "xuanwu", name: "Xuanwu" },
         { id: "demo", name: "Demo Project" }
       ],
       originalPrompt: "开始做吧 CODEX_API_KEY=secret /Users/xiaobei/private",
@@ -17,7 +17,7 @@ describe("Feishu project selection card", () => {
     const text = JSON.stringify(card);
 
     expect(text).toContain("请选择 Runner 项目");
-    expect(text).toContain("codex-issue-runner");
+    expect(text).toContain("xuanwu");
     expect(text).toContain("fps_card_1");
     expect(text).toContain("feishu_project_select");
     expect(text).not.toContain("secret");

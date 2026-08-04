@@ -166,7 +166,7 @@ class TerminalExecutionProvider extends FakeExecutionProvider {
 }
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-project-loop-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-project-loop-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
 }
@@ -967,7 +967,7 @@ function insertIssue(db: RunnerDatabase, issue: IssueFixture): number {
 }
 
 async function insertUpload(db: RunnerDatabase, id: string): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-upload-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-upload-"));
   tempRoots.push(root);
   const path = join(root, `${id}.png`);
   await mkdir(root, { recursive: true });

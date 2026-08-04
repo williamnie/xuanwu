@@ -30,7 +30,7 @@ describe("PI executor issue proposal", () => {
   test("keeps executor proposal pending with parent, profile, skill intents, and audit source", async () => {
     const fixture = await openFixture();
     try {
-      insertAgentProfile(fixture.db, "executor-codex", "[\"codex-issue-runner\"]");
+      insertAgentProfile(fixture.db, "executor-codex", "[\"xuanwu\"]");
       const parentID = insertIssue(fixture.db, fixture.project.id);
 
       const action = createPiRunnerActions(fixture.db, { project: fixture.project }).createExecutorIssueProposal({
@@ -38,7 +38,7 @@ describe("PI executor issue proposal", () => {
         goal_id: "epic-217",
         instructions: "Implement the focused follow-up.",
         recommended_skill_intents: ["verification-before-completion"],
-        required_skill_intents: ["codex-issue-runner"],
+        required_skill_intents: ["xuanwu"],
         target_issue_id: parentID
       }) as { action_id: string };
       const proposal = readAction(fixture.db, action.action_id);
@@ -54,7 +54,7 @@ describe("PI executor issue proposal", () => {
         goal_id: "epic-217",
         parent_issue_id: parentID,
         recommended_skill_intents: ["verification-before-completion"],
-        required_skill_intents: ["codex-issue-runner"],
+        required_skill_intents: ["xuanwu"],
         status: "triage"
       });
       expect(String(proposal.payload.source_excerpt)).toContain(`parent_issue_id=${parentID}`);
@@ -79,13 +79,13 @@ describe("PI executor issue proposal", () => {
   test("approved executor proposal creates triage issue without enqueueing", async () => {
     const fixture = await openFixture();
     try {
-      insertAgentProfile(fixture.db, "executor-codex", "[\"codex-issue-runner\"]");
+      insertAgentProfile(fixture.db, "executor-codex", "[\"xuanwu\"]");
       const parentID = insertIssue(fixture.db, fixture.project.id);
       const action = createPiRunnerActions(fixture.db, { project: fixture.project }).createExecutorIssueProposal({
         agent_profile_id: "executor-codex",
         goal_id: "epic-217",
         recommended_skill_intents: ["verification-before-completion"],
-        required_skill_intents: ["codex-issue-runner"],
+        required_skill_intents: ["xuanwu"],
         target_issue_id: parentID
       }) as { action_id: string };
 
@@ -98,7 +98,7 @@ describe("PI executor issue proposal", () => {
       expect(created).toMatchObject({
         agent_profile_id: "executor-codex",
         recommended_skill_intents: "[\"verification-before-completion\"]",
-        required_skill_intents: "[\"codex-issue-runner\"]",
+        required_skill_intents: "[\"xuanwu\"]",
         source_excerpt: expect.stringContaining("goal_id=epic-217"),
         status: "triage"
       });
@@ -119,7 +119,7 @@ function fakeFixture(): { db: RunnerDatabase } {
 }
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-executor-issue-proposal-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-executor-issue-proposal-"));
   const db = await openDatabase({ stateDir: join(root, "state") });
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, sort_order, created_at, updated_at)

@@ -56,7 +56,7 @@ describe("Automation consolidation audit", () => {
     const sqlite = await openDatabase({ dbPath: fixture.dbPath, stateDir: fixture.root });
     sqlite.sqlite.run(`insert into cron_tasks
       (name, project_id, action, mode, time_of_day, next_run_at, status, created_at, updated_at, claim_token)
-      values ('active cron', 'codex-issue-runner', 'run', 'auto', '', '2026-07-19T00:00:00Z',
+      values ('active cron', 'xuanwu', 'run', 'auto', '', '2026-07-19T00:00:00Z',
         'active', '2026-07-19T00:00:00Z', '2026-07-19T00:00:00Z', 'claim-1')`);
     sqlite.sqlite.run("update nightly_batch_items set status='current' where batch_id=1 and issue_id=739");
     sqlite.close();
@@ -93,7 +93,7 @@ async function createFixture() {
   )`);
   db.sqlite.run(`insert into nightly_batches
     (id, project_id, policy, promotion_mode, status, created_at, updated_at)
-    values (1, 'codex-issue-runner', 'fail_stop', 'auto', 'done',
+    values (1, 'xuanwu', 'fail_stop', 'auto', 'done',
       '2026-07-19T00:00:00Z', '2026-07-19T01:00:00Z')`);
   db.sqlite.run(`insert into nightly_batch_items
     (batch_id, issue_id, position, status, updated_at)

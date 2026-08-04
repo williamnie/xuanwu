@@ -129,19 +129,19 @@ function parseArgs(argv) {
     values.set(key, value);
   }
   return {
-    baseUrl: values.get('--base-url') || process.env.CODEX_RUNNER_ADDR || '',
+    baseUrl: values.get('--base-url') || process.env.XUANWU_ADDR || '',
     concurrentIterations: integer(values.get('--concurrent-iterations'), DEFAULTS.concurrentIterations),
     hardLimitMs: positiveNumber(values.get('--hard-limit-ms'), DEFAULTS.hardLimitMs),
     pageSize: integer(values.get('--page-size'), DEFAULTS.pageSize),
     p95TargetMs: positiveNumber(values.get('--p95-target-ms'), DEFAULTS.p95TargetMs),
-    tokenFile: values.get('--token-file') || process.env.CODEX_RUNNER_AUTH_TOKEN_FILE || '',
+    tokenFile: values.get('--token-file') || process.env.XUANWU_AUTH_TOKEN_FILE || '',
     warmIterations: integer(values.get('--warm-iterations'), DEFAULTS.warmIterations),
     warmupIterations: integer(values.get('--warmup-iterations'), DEFAULTS.warmupIterations),
   };
 }
 
 async function readToken(tokenFile) {
-  if (process.env.CODEX_RUNNER_AUTH_TOKEN) return process.env.CODEX_RUNNER_AUTH_TOKEN.trim();
+  if (process.env.XUANWU_AUTH_TOKEN) return process.env.XUANWU_AUTH_TOKEN.trim();
   if (!tokenFile) return '';
   return (await readFile(tokenFile, 'utf8')).trim();
 }

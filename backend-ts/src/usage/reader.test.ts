@@ -171,7 +171,7 @@ describe("usage reader cache", () => {
 });
 
 async function tempDir(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "codex-runner-usage-reader-"));
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-usage-reader-"));
   tempRoots.push(root);
   return root;
 }

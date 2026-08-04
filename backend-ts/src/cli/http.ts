@@ -25,7 +25,7 @@ async function requestJSON<T>(
   body?: unknown
 ): Promise<T> {
   const headers = new Headers();
-  headers.set("x-codex-client", "codex-issue-runner-cli");
+  headers.set("x-codex-client", "xuanwu-cli");
   if (body !== undefined) headers.set("content-type", "application/json");
   if (flags.token.trim() !== "") headers.set("authorization", `Bearer ${flags.token.trim()}`);
   const response = await fetcher(endpoint(flags.addr, path), {
