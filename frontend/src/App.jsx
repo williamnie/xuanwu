@@ -24,7 +24,7 @@ import ToastContainer from './components/ToastContainer';
 import { message as toast } from './store/toastStore';
 import AuthGate from './components/AuthGate';
 import { issueIdFromWorkId, workIdFromIssueId, WORK_BOARD_ENABLED } from './pages/workBoardModel.js';
-import { handoffRouteFromHash } from './pages/handoffPageModel.js';
+import { appHashForRoute, appRouteFromHash } from './appRouteModel.js';
 import './App.css';
 import './GeekWorkbench.css';
 import './GeekWorkbenchPages.css';
@@ -84,19 +84,11 @@ function PageLoadingFallback() {
 
 export default function App() {
   const { refreshLanguage, t } = useI18n();
-  const initialHandoffRoute = handoffRouteFromHash(globalThis.location?.hash);
+  const initialRoute = appRouteFromHash(globalThis.location?.hash, { workBoardEnabled: WORK_BOARD_ENABLED });
   const [appState, updateAppState] = useImmer(() => ({
     // 路由与过滤状态
-    currentPage: initialHandoffRoute?.page || 'command-center', // 默认进入 Command Center，交付深链进入所属 Work
-    selectedIssueId: null,
-    selectedWorkId: initialHandoffRoute?.workId || '',
-    selectedRunId: '',
-    selectedSessionId: '',
-    selectedHandoffId: initialHandoffRoute?.handoffId || '',
-    selectedPiConversationId: '',
+    ...initialRoute,
     pageContext: null,
-    filterProject: '', // '' 表示 Any project
-    focusFilter: 'all', // 'all' | 'triage' | 'active' | 'failed' | 'archive'
 
     // 新增 Issue 弹窗的全局状态（可以从侧边栏 + 看板列头触发）
     isNewIssueOpen: false,
@@ -152,6 +144,14 @@ export default function App() {
       });
   }, [updateAppState]);
 
+  const writeBrowserRoute = useCallback((route, { replace = false } = {}) => {
+    if (!globalThis.history || !globalThis.location) return;
+    const hash = appHashForRoute(route);
+    if (globalThis.location.hash === hash) return;
+    const href = `${globalThis.location.pathname}${globalThis.location.search}${hash}`;
+    globalThis.history[replace ? 'replaceState' : 'pushState'](null, '', href);
+  }, []);
+
   const setIsNewIssueOpen = useCallback((open) => {
     updateAppState(draft => {
       const nextOpen = typeof open === 'function' ? open(draft.isNewIssueOpen) : open;
@@ -170,7 +170,15 @@ export default function App() {
         draft.focusFilter = value;
       }
     });
-  }, [updateAppState]);
+    if (currentPage === 'issues') {
+      writeBrowserRoute({
+        currentPage,
+        filterProject,
+        focusFilter: value,
+        selectedIssueId,
+      }, { replace: true });
+    }
+  }, [currentPage, filterProject, selectedIssueId, updateAppState, writeBrowserRoute]);
 
   const setFilterProject = useCallback((value) => {
     updateAppState(draft => {
@@ -178,7 +186,15 @@ export default function App() {
         draft.filterProject = value;
       }
     });
-  }, [updateAppState]);
+    if (currentPage === 'issues') {
+      writeBrowserRoute({
+        currentPage,
+        filterProject: value,
+        focusFilter,
+        selectedIssueId,
+      }, { replace: true });
+    }
+  }, [currentPage, focusFilter, selectedIssueId, updateAppState, writeBrowserRoute]);
 
   const setTheme = useCallback((nextTheme) => {
     updateAppState(draft => {
@@ -206,7 +222,6 @@ export default function App() {
         6000,
       );
     }
-    const hashRoute = handoffRouteFromHash(globalThis.location?.hash);
     const targetHandoffId = resolvedPage === 'handoffs' || resolvedPage === 'work' ? handoffId || '' : '';
     const targetIssueId = resolvedPage === 'issues'
       ? page === 'work' ? issueIdFromWorkId(issueId) : issueId
@@ -214,9 +229,18 @@ export default function App() {
     const targetWorkId = resolvedPage === 'work'
       ? page === 'issues' ? workIdFromIssueId(issueId) : String(issueId || '')
       : '';
-    if (hashRoute && !targetHandoffId && globalThis.history && globalThis.location) {
-      globalThis.history.replaceState(null, '', `${globalThis.location.pathname}${globalThis.location.search}`);
-    }
+    const compatSessionRoute = resolvedPage === 'runs' && page === 'sessions';
+    const targetRunId = resolvedPage === 'runs' && !compatSessionRoute ? sessionId || '' : '';
+    const targetSessionId = resolvedPage === 'runs' && compatSessionRoute ? sessionId || '' : '';
+    const targetRoute = {
+      currentPage: resolvedPage,
+      selectedHandoffId: targetHandoffId,
+      selectedIssueId: targetIssueId,
+      selectedPiConversationId: resolvedPage === 'ask-xuanwu' ? selectedPiConversationId : '',
+      selectedRunId: targetRunId,
+      selectedSessionId: targetSessionId,
+      selectedWorkId: targetWorkId,
+    };
     updateAppState(draft => {
       if (draft.currentPage !== resolvedPage) {
         draft.currentPage = resolvedPage;
@@ -228,14 +252,14 @@ export default function App() {
         draft.selectedWorkId = targetWorkId;
       }
       if (resolvedPage === 'runs') {
-        const compatSessionRoute = page === 'sessions';
-        draft.selectedRunId = compatSessionRoute ? '' : sessionId || '';
-        draft.selectedSessionId = compatSessionRoute ? sessionId || '' : '';
+        draft.selectedRunId = targetRunId;
+        draft.selectedSessionId = targetSessionId;
       }
       draft.selectedHandoffId = targetHandoffId;
       draft.pageContext = null;
     });
-  }, [updateAppState]);
+    writeBrowserRoute(targetRoute);
+  }, [selectedPiConversationId, updateAppState, writeBrowserRoute]);
 
   const setPageContext = useCallback((context) => {
     updateAppState(draft => {
@@ -247,41 +271,58 @@ export default function App() {
   }, [updateAppState]);
 
   const openSupervisorConversation = useCallback((conversationId) => {
+    const targetConversationId = conversationId || '';
     updateAppState(draft => {
-      draft.selectedPiConversationId = conversationId || '';
+      draft.selectedPiConversationId = targetConversationId;
       draft.currentPage = 'ask-xuanwu';
       draft.selectedIssueId = null;
       draft.selectedWorkId = '';
       draft.pageContext = null;
     });
-  }, [updateAppState]);
+    writeBrowserRoute({
+      currentPage: 'ask-xuanwu',
+      selectedPiConversationId: targetConversationId,
+    });
+  }, [updateAppState, writeBrowserRoute]);
 
   const rememberPiConversation = useCallback((conversationId) => {
+    const targetConversationId = conversationId || '';
     updateAppState(draft => {
-      draft.selectedPiConversationId = conversationId || '';
+      draft.selectedPiConversationId = targetConversationId;
     });
-  }, [updateAppState]);
+    writeBrowserRoute({
+      currentPage: 'ask-xuanwu',
+      selectedPiConversationId: targetConversationId,
+    }, { replace: true });
+  }, [updateAppState, writeBrowserRoute]);
 
   useEffect(() => {
     if (!globalThis.addEventListener) return undefined;
-    const syncHandoffHash = () => {
-      const route = handoffRouteFromHash(globalThis.location?.hash);
-      if (!route) return;
+    const syncBrowserRoute = () => {
+      const route = appRouteFromHash(globalThis.location?.hash, { workBoardEnabled: WORK_BOARD_ENABLED });
       updateAppState(draft => {
-        draft.currentPage = route.page;
-        draft.selectedHandoffId = route.handoffId;
-        draft.selectedIssueId = null;
-        draft.selectedWorkId = route.workId || '';
+        draft.currentPage = route.currentPage;
+        draft.filterProject = route.filterProject;
+        draft.focusFilter = route.focusFilter;
+        draft.selectedHandoffId = route.selectedHandoffId;
+        draft.selectedIssueId = route.selectedIssueId;
+        draft.selectedPiConversationId = route.selectedPiConversationId;
+        draft.selectedRunId = route.selectedRunId;
+        draft.selectedSessionId = route.selectedSessionId;
+        draft.selectedWorkId = route.selectedWorkId;
+        draft.pageContext = null;
       });
     };
-    globalThis.addEventListener('hashchange', syncHandoffHash);
-    return () => globalThis.removeEventListener('hashchange', syncHandoffHash);
+    globalThis.addEventListener('hashchange', syncBrowserRoute);
+    globalThis.addEventListener('popstate', syncBrowserRoute);
+    return () => {
+      globalThis.removeEventListener('hashchange', syncBrowserRoute);
+      globalThis.removeEventListener('popstate', syncBrowserRoute);
+    };
   }, [updateAppState]);
 
   const refreshVisibleData = useCallback(() => {
-    const slices = getReconcileSlices(currentPage, selectedIssueId);
-    if (slices.length === 0) return;
-    refreshData(slices);
+    refreshData(getReconcileSlices(currentPage, selectedIssueId));
   }, [currentPage, refreshData, selectedIssueId]);
 
   useEffect(() => {
@@ -335,6 +376,7 @@ export default function App() {
       draft.selectedIssueId = null;
       draft.selectedWorkId = '';
     });
+    writeBrowserRoute({ currentPage: 'issues' });
   };
 
   const assistantModule = assistantModuleForPage(currentPage);

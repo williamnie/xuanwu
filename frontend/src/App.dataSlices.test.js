@@ -24,3 +24,8 @@ test('Work board only reconciles project labels because it owns Work API loading
   assert.match(appSource, /work:\s*\['projects'\]/);
   assert.doesNotMatch(appSource, /work:\s*\[[^\]]*'issues'/);
 });
+
+test('pages without global slices still settle the initial loading state on a direct route', () => {
+  assert.match(appSource, /refreshData\(getReconcileSlices\(currentPage, selectedIssueId\)\)/);
+  assert.doesNotMatch(appSource, /const refreshVisibleData[\s\S]*?if \(slices\.length === 0\) return;/);
+});

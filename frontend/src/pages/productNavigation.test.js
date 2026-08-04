@@ -73,7 +73,9 @@ test('legacy page ids redirect into canonical product routes without replacing h
 });
 
 test('App routes canonical pages to the currently verified compatibility surfaces', () => {
-  assert.match(appSource, /currentPage: initialHandoffRoute\?\.page \|\| 'command-center'/);
+  assert.match(appSource, /appRouteFromHash\(globalThis\.location\?\.hash, \{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
+  assert.match(appSource, /history\[replace \? 'replaceState' : 'pushState'\]/);
+  assert.match(appSource, /addEventListener\('popstate', syncBrowserRoute\)/);
   assert.match(appSource, /resolveProductPage\(page, \{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
   assert.match(appSource, /recordLegacyRoute\(\{ family: page, target: resolvedPage \}\)/);
   assert.match(appSource, /workIdFromIssueId\(issueId\)/);
