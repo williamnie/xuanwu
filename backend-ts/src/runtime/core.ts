@@ -22,6 +22,7 @@ import { primeRuntimeObservability } from "../observability/runtimeObservability
 import { claudeProviderAppEvent, createClaudeExecutorProvider } from "../providers/claude/provider.ts";
 import { claudeFactory } from "../providers/claude/factory.ts";
 import { piFactory } from "../providers/pi/factory.ts";
+import { qoderFactory } from "../providers/qoder/factory.ts";
 import { createCodexExecutorProvider } from "../providers/codex/provider.ts";
 import { codexFactory } from "../providers/codex/factory.ts";
 import { createProviderRegistry } from "../providers/core/registry.ts";
@@ -72,6 +73,9 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   }
   if (config.providers.pi) {
     providersRegistry.registerFactory(piFactory({ command: config.providers.pi.command ?? "pi" }));
+  }
+  if (config.providers.qoder) {
+    providersRegistry.registerFactory(qoderFactory({}));
   }
   await providersRegistry.startConfigured(config.providers as Record<string, { enabled?: boolean } & Record<string, unknown>>);
   // P9：W2 观察窗——flag 开启时对比 manifest/实例 capabilities parity 并记录 drift（rollback 无 DB 回填）。

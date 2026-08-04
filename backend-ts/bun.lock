@@ -9,6 +9,7 @@
         "@anthropic-ai/sdk": "^0.93.0",
         "@earendil-works/pi-coding-agent": "^0.76.0",
         "@larksuiteoapi/node-sdk": "^1.66.1",
+        "@qoder-ai/qoder-agent-sdk": "1.0.17",
         "@sinclair/typebox": "^0.34.49",
       },
       "devDependencies": {
@@ -150,6 +151,8 @@
     "@protobufjs/pool": ["@protobufjs/pool@1.1.0", "", {}, "sha512-0kELaGSIDBKvcgS4zkjz1PeddatrjYcmMWOlAuAPwAeccUrPHdUqo/J6LiymHHEiJT5NrF1UVwxY14f+fy4WQw=="],
 
     "@protobufjs/utf8": ["@protobufjs/utf8@1.1.1", "", {}, "sha512-oOAWABowe8EAbMyWKM0tYDKi8Yaox52D+HWZhAIJqQXbqe0xI/GV7FhLWqlEKreMkfDjshR5FKgi3mnle0h6Eg=="],
+
+    "@qoder-ai/qoder-agent-sdk": ["@qoder-ai/qoder-agent-sdk@1.0.17", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.27.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-Y3qbIL8DTlZ+7f17w03rK/NMMGFTTMtaWLlFeZ4jUDJMGNCwRZjn2FhJLxUACXYJ653OuujO9bdwbqX3NBn98g=="],
 
     "@silvia-odwyer/photon-node": ["@silvia-odwyer/photon-node@0.3.4", "", {}, "sha512-bnly4BKB3KDTFxrUIcgCLbaeVVS8lrAkri1pEzskpmxu9MdfGQTy8b8EgcD83ywD3RPMsIulY8xJH5Awa+t9fA=="],
 

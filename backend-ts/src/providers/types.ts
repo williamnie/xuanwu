@@ -52,7 +52,7 @@ export function sessionRefFromExecutionRef(ref: ProviderExecutionRef): SessionRe
   };
 }
 
-export const EXECUTOR_PROVIDER_IDS = ["codex", "claude", "fake-execution-only", "fake-resumable", "fake-full-session", "pi"] as const;
+export const EXECUTOR_PROVIDER_IDS = ["codex", "claude", "fake-execution-only", "fake-resumable", "fake-full-session", "pi", "qoder"] as const;
 
 export type ExecutorProviderId = (typeof EXECUTOR_PROVIDER_IDS)[number];
 
