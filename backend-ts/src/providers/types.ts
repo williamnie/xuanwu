@@ -1,6 +1,58 @@
 import type { RunCost } from "../domain/run/contracts.ts";
 
-export const EXECUTOR_PROVIDER_IDS = ["codex", "claude", "fake-execution-only"] as const;
+// --- P1：ProviderId（branded string，替代闭合联合）---
+// 格式：^[a-z0-9][a-z0-9._-]{0,63}$；禁止 ":"（外部 Session key 为 `<provider>:<session_ref>`）。
+const PROVIDER_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+
+export type ProviderId = string & { readonly __brand: "ProviderId" };
+
+/** 校验并构造 ProviderId；非法格式（含冒号/空/大写开头/超长）抛错。 */
+export function asProviderId(value: string): ProviderId {
+  if (typeof value !== "string" || !PROVIDER_ID_RE.test(value)) {
+    throw new Error(`invalid provider id: ${JSON.stringify(value)}`);
+  }
+  return value as ProviderId;
+}
+
+export function isProviderId(value: unknown): value is ProviderId {
+  return typeof value === "string" && PROVIDER_ID_RE.test(value);
+}
+
+// --- P1：ProviderExecutionRef（canonical execution refs）---
+// invocationRef 必需；session/message/cursor 均为可选，语义见 0089 计划 §6.2。
+export type ProviderExecutionRef = {
+  providerId: ProviderId;
+  invocationRef: string;
+  sessionRef?: string;
+  messageRef?: string;
+  cursorRef?: string;
+};
+
+/**
+ * P1：legacy SessionRef（codex thread/turn 术语）→ ProviderExecutionRef 映射 adapter。
+ * invocationRef 由调用方提供（如 `run_attempts.provider_invocation_ref`）；
+ * 无原生 invocation 时使用持久化 intent 派生的本地 ref（计划 §6.2）。
+ */
+export function executionRefFromSessionRef(session: SessionRef, invocationRef: string): ProviderExecutionRef {
+  return {
+    providerId: asProviderId(session.provider),
+    invocationRef,
+    sessionRef: session.sessionId,
+    ...(session.turnId === undefined ? {} : { messageRef: session.turnId })
+  };
+}
+
+/** P1：ProviderExecutionRef → legacy SessionRef（兼容消费者用；仅当有 sessionRef 时返回）。 */
+export function sessionRefFromExecutionRef(ref: ProviderExecutionRef): SessionRef | undefined {
+  if (ref.sessionRef === undefined) return undefined;
+  return {
+    provider: ref.providerId,
+    sessionId: ref.sessionRef,
+    ...(ref.messageRef === undefined ? {} : { turnId: ref.messageRef })
+  };
+}
+
+export const EXECUTOR_PROVIDER_IDS = ["codex", "claude", "fake-execution-only", "fake-resumable", "fake-full-session"] as const;
 
 export type ExecutorProviderId = (typeof EXECUTOR_PROVIDER_IDS)[number];
 

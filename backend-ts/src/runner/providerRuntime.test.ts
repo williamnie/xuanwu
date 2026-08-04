@@ -604,6 +604,31 @@ describe("executor provider runtime seam", () => {
       db.close();
     }
   });
+
+  test("P1: execution-only Provider 完成 Attempt 不写 Session", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const provider = new ExecutionOnlyRuntimeProvider();
+      const events: ProviderEvent[] = [];
+
+      const result = await runIssueWithProvider(provider, {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd: "/tmp/p1-execution-only",
+        prompt: "execute",
+        onLog: (event) => events.push(event)
+      });
+
+      expect(result.session).toBeUndefined();
+      expect(events.some((event) => event.session !== undefined)).toBe(false);
+      expect(listIssueRuns(db, issueId).at(-1)?.provider_session_id ?? "").toBe("");
+    } finally {
+      db.close();
+    }
+  });
 });
 
 function insertProject(db: RunnerDatabase, id: string): void {
@@ -630,4 +655,18 @@ function insertIssue(
 
 function closeRun(db: RunnerDatabase, id: string): void {
   db.sqlite.run("update issue_runs set ended_at=?, status=? where id=?", ["2026-01-01T00:00:00Z", "done", id]);
+}
+
+class ExecutionOnlyRuntimeProvider implements ExecutorProvider {
+  readonly id = "fake-execution-only" as const;
+  readonly capabilities = ["issue_execution"] as const;
+
+  async run(input: ProviderRunInput) {
+    input.onEvent?.({
+      provider: this.id,
+      type: "provider.message",
+      text: "execution only"
+    });
+    return { runId: `p1-execution-${input.issueId}` };
+  }
 }

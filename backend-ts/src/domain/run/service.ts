@@ -64,8 +64,8 @@ export type PreparedProviderMutation = {
 
 export type ProviderAttemptStart = {
   invocation_ref: string;
-  provider_session_id: string;
-  provider_turn_id: string;
+  provider_session_id?: string;
+  provider_turn_id?: string;
 };
 
 export type NewRunRequestResult = {
@@ -249,8 +249,8 @@ export function completeRunAttemptStart(
     const attempt = mustGetAttempt(db, required(intent.payload.attempt_id, "attempt_id"));
     if (attempt.status !== "created") throw new RunCommandValidationError(`${attempt.attempt_id} is not prepared`);
     const invocation = required(result.invocation_ref, "invocation_ref");
-    const sessionID = required(result.provider_session_id, "provider_session_id");
-    const turnID = required(result.provider_turn_id, "provider_turn_id");
+    const sessionID = clean(result.provider_session_id);
+    const turnID = clean(result.provider_turn_id);
     const intendedSession = clean(intent.payload.provider_ref?.session_ref);
     if (intendedSession !== "" && intendedSession !== sessionID) {
       throw new RunCommandValidationError("provider result session does not match prepared Attempt");
