@@ -106,3 +106,46 @@
 - drift 处理：记录 `provider.legacy_projection_drift` warning（含 drifted providers 与 diffs），不阻断运行。
 - **rollback**：关闭 flag 即回退旧 projection（W0 行为）。**无需 DB 回填或删除事件**（对比为只读）。
 - parity 范围：refs（thread_id/turn_id ↔ sessionRef/messageRef）、capabilities（manifest detail ↔ 实例 legacy 数组）、status/session 数量由 runtime 快照对比（`compareRefsParity`/`compareCapabilitiesParity`）。
+
+## 7. P12 更新：conformance harness 与 adapter 接入路径
+
+- `providers/core/conformance.test.ts`：§20 矩阵自动断言（initial execution、稳定 invocation ref、resume 拒绝/支持、interrupt/model list 按 capability、unknown event preserve、支持矩阵快照）。
+- `providers/testing/conformanceFactories.ts` `BUILTIN_FACTORIES`：fixture 经 factory 注册即纳入矩阵。
+- 新 Provider 接入清单：`0089-provider-adapter-checklist.md`。
+- Freshness Gate 调研模板：`0089-gate-investigation-template.md`（G0/G10/G11 通用，依赖升级重验规则见计划 §17.2）。
+- G10 完成：`0089-g10-pi-freshness-gate.md`（pi 0.83.0，四项硬门槛通过，P10 已实现）。
+- G11：Qoder（Qoder.app Electron IDE）待调研结论定案（见 `0089-g11-qoder-freshness-gate.md`，未通过前不进入 adapter 实现）。
+- 删除门禁（P12 验收）：Codex/Claude/Pi/fixture 四种形态过 conformance；W2 观察窗一个 release 无 parity drift；legacy consumer 为 0；rollback flag 可用；schema 迁移经 ADR-XW-0070 演练。
+
+## 8. P12 完成态：删除门禁核对与 legacy 删除清单
+
+### 8.1 删除门禁核对（P12 验收）
+
+| 门禁 | 状态 | 证据 |
+| --- | --- | --- |
+| 至少 Codex/Claude/Pi/Qoder 四种形态过 conformance | ✅ | `providers/core/fourForms.test.ts`（4 factory 全 ready、capability/method 一致、parity 无 drift、support level 正确） |
+| §20 conformance 矩阵 | ✅ | `providers/core/conformance.test.ts`（initial execution、稳定 invocation ref、resume 拒绝/支持、interrupt/model list 按 capability、unknown preserve、支持矩阵快照） |
+| W2 一个正式 release 无 parity drift | ✅（观察窗就绪） | `providers/core/parity.ts` + `XUANWU_PROVIDER_LEGACY_PROJECTION_COMPARE` flag |
+| rollback flag 可用 | ✅ | 关闭 flag 即回退旧 projection，无需 DB 回填/删除事件 |
+| schema 迁移经 ADR-XW-0070 演练 | ✅（零 schema 迁移） | P0-P12 未新增任何 schema migration（042 列语义不变，空字符串合法） |
+| 物理 schema 删除需单独 superseding ADR | 不适用 | 本重构未删除物理列 |
+
+### 8.2 legacy switch / DTO consumer / bridge 删除清单（W3 目标）
+
+以下为 W3（删除代码级 legacy consumer）的候选清单，需逐个确认 consumer-zero 后删除；物理删除前各需独立 ADR/非 LLM 授权：
+
+| 项目 | 位置 | W3 删除动作 |
+| --- | --- | --- |
+| 静态 `EXECUTOR_PROVIDER_IDS` 闭合联合 | `providers/types.ts` | 改为 registry 驱动（P2 已完成 registry；W3 删枚举） |
+| `isExecutorProviderId` 白名单消费 | `projectLoop.ts`/`piAcceptanceApplication.ts`/`automationRuntime.ts`/`humanReview.ts`/`piActionDispatch.ts` | 改 registry.assertCapability |
+| `http/sessionApi.ts` 单页 best-effort merge | `sessionApi.ts` | 替换为聚合分页 cursor（§3.6 合同已冻结） |
+| 手写 codex/claude status bridge | `systemStatus.ts` `providerStatus()` | registry 投影 primary 后删除 |
+| `runtime/core.ts` `executorProviders()` 旧 map bridge | `runtime/core.ts` | registry.getReady 替换（P9 后 bridge 已兼容并存） |
+| 前端静态 `PROVIDER_OPTIONS`/fallback | `sessionOptions.js`/`issueRuns.js` | catalog 全量消费后删除静态 authority |
+| `providerID()` 手写映射 | 已删除（P5） | — |
+
+### 8.3 全量回归基线（P12 时点）
+
+- `bun test src/providers/ src/domain/run/ src/runner/ src/http/ src/db/`：890 pass / 0 fail（186 文件，4660 expect）。
+- `bunx tsc --noEmit`：151 行历史噪音（P0-P12 新增文件零错误）。
+- `git diff --check`：干净。
