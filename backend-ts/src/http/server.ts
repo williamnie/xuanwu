@@ -4,6 +4,7 @@ import { parseListenAddress } from "../config/listenAddress.ts";
 import { EventBus } from "../events/bus.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import type { ProviderRegistry } from "../providers/core/registry.ts";
 import { createAuthTokenManager, requireBearerAuth, type AuthTokenManager } from "./auth.ts";
 import { registerAuthTokenRoutes } from "./authTokenApi.ts";
 import { applyLocalCors, withCors } from "./cors.ts";
@@ -58,6 +59,8 @@ type DefaultRouterOptions = {
   processGroupMemory?: { snapshot(): Record<string, unknown> };
   projectionWorker?: { snapshot(): Record<string, unknown> };
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  /** P4：registry 装配后用于 status 投影（可选，W1 bridge 兼容窗口内不传也可用） */
+  providersRegistry?: ProviderRegistry;
   restartDelayMs?: number;
   restartProcess?: () => void;
   role?: "all" | "core";
@@ -191,6 +194,7 @@ export function registerSystemStatusRoute(
     feishuReceiverStatus: context.feishuReceiverStatus,
     processGroupMemory: context.processGroupMemory,
     projectionWorker: context.projectionWorker,
+    providersRegistry: context.providersRegistry,
     role: context.role ?? "all",
     startedAt,
     webhookSigningSecret: context.webhookSigningSecret

@@ -8,6 +8,8 @@ import { feishuConnectorStatus } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorCapability } from "../providers/types.ts";
+import type { ProviderRegistry } from "../providers/core/registry.ts";
+import { statusFromRegistry } from "../providers/core/status.ts";
 import { CLAUDE_AGENT_SDK_VERSION, resolveClaudeSdkExecutable } from "../providers/claude/provider.ts";
 import { claudeAuthenticationStatus } from "../providers/claude/auth.ts";
 import { inspectClaudeCliAuth } from "../providers/claude/cliProvider.ts";
@@ -27,13 +29,14 @@ type SystemStatusContext = {
   feishuReceiverStatus?: () => FeishuReceiverStatus;
   processGroupMemory?: { snapshot(): Record<string, unknown> };
   projectionWorker?: { snapshot(): Record<string, unknown> };
+  /** P4：registry 装配后由 registry.list() 投影 providers，替代手写 codex/claude switch */
+  providersRegistry?: ProviderRegistry;
   role?: "all" | "core";
   startedAt: Date;
   webhookSigningSecret?: string;
 };
 
 type CheckStatus = { ok: boolean; error?: string };
-type ProviderStatus = ReturnType<typeof providerStatus>[number];
 const commandVersionCache = new Map<string, string>();
 
 export function buildSystemStatus(context: SystemStatusContext): Record<string, unknown> {
@@ -47,7 +50,7 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
       timings[name] = roundedMs(performance.now() - started);
     }
   };
-  const providers = phase("providers", () => providerStatus(context.config));
+  const providers = phase("providers", () => providerStatus(context.config, context.providersRegistry));
   const receiver = phase("receiver", () => context.feishuReceiverStatus?.());
   const connectorHealth = phase("connector_health", () => buildStaticConnectorDiagnostics({
     config: context.config,
@@ -209,7 +212,7 @@ function codexStatus(config: RunnerConfig): Record<string, unknown> {
   };
 }
 
-export function providerStatus(config: RunnerConfig): Array<{
+export type ProviderStatus = {
   available: boolean;
   capabilities: string[];
   cli: Record<string, unknown>;
@@ -236,7 +239,14 @@ export function providerStatus(config: RunnerConfig): Array<{
   auth_source?: string;
   local_cli?: Record<string, unknown>;
   platform_profile?: Record<string, unknown>;
-}> {
+  /** P4 registry 投影附加字段 */
+  registry_state?: string;
+  support_level?: string;
+  runtime_version?: string;
+  failure?: { category: string; message: string };
+};
+
+export function providerStatus(config: RunnerConfig, registry?: ProviderRegistry): ProviderStatus[] {
   const out = [];
   const codex = config.providers.codex;
   if (codex) out.push(providerEntry({
@@ -248,7 +258,30 @@ export function providerStatus(config: RunnerConfig): Array<{
   }));
   const claude = config.providers.claude;
   if (claude) out.push(claudeProviderEntry(claude));
+  // P4：registry 装配后，额外输出 registry 投影（新测试 Provider 无需改 status builder switch）。
+  if (registry) {
+    out.push(...statusFromRegistry(registry.list()).map(registryStatusEntry));
+  }
   return out;
+}
+
+/** P4：ProviderStatusEntry → 兼容 ProviderStatus 形状（doctor/UI 无需修改）。 */
+function registryStatusEntry(entry: ReturnType<typeof statusFromRegistry>[number]): ProviderStatus {
+  return {
+    id: entry.id,
+    label: entry.label,
+    role: "executor",
+    status: entry.state,
+    available: entry.available,
+    enabled: entry.enabled,
+    capabilities: [...entry.capabilities],
+    registry_state: entry.state,
+    ready: entry.ready,
+    support_level: entry.supportLevel,
+    ...(entry.authSource === undefined ? {} : { auth_source: entry.authSource }),
+    ...(entry.runtimeVersion === undefined ? {} : { runtime_version: entry.runtimeVersion }),
+    ...(entry.failure === undefined ? {} : { failure: entry.failure })
+  };
 }
 
 function claudeProviderEntry(config: ProviderRuntimeConfig) {

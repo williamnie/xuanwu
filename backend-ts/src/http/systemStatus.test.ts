@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter, createRequestHandler, registerSystemStatusRoute } from "./server.ts";
+import { createProviderRegistry } from "../providers/core/registry.ts";
+import { asProviderId } from "../providers/types.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -665,3 +667,44 @@ type RuntimeDoctorBody = {
   observability: Record<string, unknown>;
   providers: Array<{ id: string } & Record<string, unknown>>;
 };
+
+describe("P4: registry 投影接入 system status", () => {
+  test("registry 注册的测试 Provider 出现在 API status，无需修改 status builder switch", async () => {
+    const { config, database } = await openFixtureRuntime({ claudeMode: "sdk" });
+    try {
+      const registry = createProviderRegistry();
+      registry.registerFactory({
+        manifest: {
+          id: asProviderId("fake-execution-only"),
+          displayName: "Fake Execution-Only",
+          supportLevel: "tested",
+          transports: ["stdio-json"],
+          capabilities: { issueExecution: true }
+        },
+        parseConfig: (raw: unknown) => ({ ...(raw as Record<string, unknown>) }),
+        autoDetect: () => ({ installed: true, ready: true }),
+        create: () => ({ id: "fake-execution-only", capabilities: ["issue_execution"], run: async () => ({ runId: "r" }) }) as never
+      });
+      await registry.startConfigured({});
+      const router = createDefaultRouter();
+      registerSystemStatusRoute(router, {
+        authToken: "status-secret",
+        config,
+        database,
+        providersRegistry: registry
+      });
+      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as SystemStatusBody;
+      const fake = body.providers.find((p) => p.id === "fake-execution-only");
+      expect(fake).toBeDefined();
+      expect(fake?.registry_state).toBe("ready");
+      expect(fake?.support_level).toBe("tested");
+      expect(fake?.capabilities).toContain("issue_execution");
+      // 现有 codex/claude bridge 仍输出（W1 兼容窗口）
+      expect(body.providers.some((p) => p.id === "codex")).toBe(true);
+    } finally {
+      database.close();
+    }
+  });
+});

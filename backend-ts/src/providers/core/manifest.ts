@@ -83,3 +83,14 @@ export function capabilityDetailFromLegacy(legacy: readonly string[]): ProviderC
     usage: { tokens: "attempt", money: "provider-reported" }
   };
 }
+
+/** P4：结构化 detail → legacy `ExecutorCapability[]` 的确定性投影（§8.4，兼容窗口用）。 */
+export function legacyCapabilitiesFromDetail(capabilities: ProviderCapabilities): readonly string[] {
+  const out: string[] = ["issue_execution"];
+  if (capabilities.sessions?.create || capabilities.sessions?.list || capabilities.sessions?.read) out.push("sessions");
+  if (capabilities.sessions?.resume) out.push("resume_session");
+  if (capabilities.control?.interrupt) out.push("interrupt");
+  if (capabilities.control?.approvals === "host-callback") out.push("approvals");
+  if (capabilities.models?.list) out.push("model_list");
+  return out;
+}
