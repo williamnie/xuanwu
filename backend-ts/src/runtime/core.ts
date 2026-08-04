@@ -20,6 +20,7 @@ import {
 } from "../observability/processGroupMemory.ts";
 import { primeRuntimeObservability } from "../observability/runtimeObservability.ts";
 import { claudeProviderAppEvent, createClaudeExecutorProvider } from "../providers/claude/provider.ts";
+import { claudeFactory } from "../providers/claude/factory.ts";
 import { createCodexExecutorProvider } from "../providers/codex/provider.ts";
 import { codexFactory } from "../providers/codex/factory.ts";
 import { createProviderRegistry } from "../providers/core/registry.ts";
@@ -60,6 +61,11 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     providersRegistry.registerFactory(codexFactory({
       appEventSink: (event) => bus?.publish(event),
       ownershipFile: codexOwnershipFile
+    }));
+  }
+  if (config.providers.claude) {
+    providersRegistry.registerFactory(claudeFactory({
+      eventSink: (event) => bus?.publish(claudeProviderAppEvent(event))
     }));
   }
   await providersRegistry.startConfigured(config.providers as Record<string, { enabled?: boolean } & Record<string, unknown>>);
