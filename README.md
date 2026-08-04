@@ -90,8 +90,9 @@ Please install Xuanwu for me: https://github.com/williamnie/xuanwu
 Read the repository README and installation scripts first, then install the latest Release for
 this system. Detect whether you are running in Codex or Claude Code and install the repository's
 xuanwu Skill into the matching personal Skills directory. After installation, run
-xuanwu-daemon doctor, confirm that Xuanwu is healthy, and tell me where the Skill was installed. Do not
-print or copy the auth token, and do not change unrelated configuration.
+xuanwu-daemon doctor, confirm that Xuanwu is healthy, and tell me where the Skill was installed.
+On a fresh interactive install, show me the one-time Remote access token and its file path so I can
+connect the browser. Do not write the token anywhere else or change unrelated configuration.
 ```
 
 If you have already cloned the repository, you can also install the Skill manually:
@@ -133,7 +134,20 @@ Default installation paths:
 binary   ~/.local/bin/xuanwu
 state    ~/.local/state/xuanwu
 database ~/.local/state/xuanwu/runner.db
+token    ~/.local/state/xuanwu/auth_token (mode 0600)
 ```
+
+On a fresh interactive installation, the installer prints the generated Remote access token once.
+It is never printed again during restart or upgrade. To read it later on the server:
+
+```bash
+cat ~/.local/state/xuanwu/auth_token
+```
+
+The first browser visit opens a connection page where you save this token locally. After signing in,
+use **Settings → Advanced → Runtime → Remote access token** to rotate it. Rotation invalidates the old
+token immediately and reveals the replacement once. If `XUANWU_AUTH_TOKEN` manages the credential,
+rotation remains a deployment-environment operation and is disabled in the UI.
 
 To use another address, state directory, Codex executable, or Claude provider, review
 [`scripts/install-release.sh --help`](scripts/install-release.sh) and the

@@ -24,6 +24,7 @@ LOG_DIR="${XUANWU_LOG_DIR:-$STATE_DIR/logs}"
 DB_PATH="${XUANWU_DB:-${XUANWU_DEPLOY_DB:-$STATE_DIR/runner.db}}"
 AUTH_TOKEN_FILE="${XUANWU_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 AUTH_TOKEN="${XUANWU_AUTH_TOKEN:-}"
+AUTH_TOKEN_CREATED=0
 BIN_PATH="$INSTALL_DIR/xuanwu"
 CLAUDE_SDK_EXECUTABLE_PATH="$BIN_PATH.claude-agent-sdk"
 DAEMON_PATH="$INSTALL_DIR/xuanwu-daemon"
@@ -454,12 +455,41 @@ auth_token_file_systemd_args() {
   fi
 }
 
-write_custom_auth_token_file() {
-  if [ -n "$AUTH_TOKEN" ]; then
-    mkdir -p "$(dirname "$AUTH_TOKEN_FILE")"
-    umask 077
-    printf '%s\n' "$AUTH_TOKEN" > "$AUTH_TOKEN_FILE"
+generate_auth_token() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 32 | tr -d '\n'
+    return
   fi
+  if [ -r /dev/urandom ] && command -v od >/dev/null 2>&1; then
+    od -An -N32 -tx1 /dev/urandom | tr -d ' \n'
+    return
+  fi
+  fail "cannot generate remote access token: install openssl or provide XUANWU_AUTH_TOKEN"
+}
+
+ensure_auth_token_file() {
+  mkdir -p "$(dirname "$AUTH_TOKEN_FILE")"
+  umask 077
+  if [ -n "$AUTH_TOKEN" ]; then
+    printf '%s\n' "$AUTH_TOKEN" > "$AUTH_TOKEN_FILE"
+  elif [ ! -s "$AUTH_TOKEN_FILE" ]; then
+    generate_auth_token > "$AUTH_TOKEN_FILE"
+    printf '\n' >> "$AUTH_TOKEN_FILE"
+    AUTH_TOKEN_CREATED=1
+  fi
+  chmod 600 "$AUTH_TOKEN_FILE"
+}
+
+print_auth_token_guidance() {
+  log "remote access token file: $AUTH_TOKEN_FILE"
+  if [ "$AUTH_TOKEN_CREATED" = "1" ] && [ -t 1 ]; then
+    printf '[install] remote access token (shown once): %s\n' "$(tr -d '\n' < "$AUTH_TOKEN_FILE")"
+  elif [ "$AUTH_TOKEN_CREATED" = "1" ]; then
+    log "remote access token generated; value hidden because output is not an interactive terminal"
+  else
+    log "existing or explicitly configured remote access token preserved"
+  fi
+  printf '[install] read later: cat %q\n' "$AUTH_TOKEN_FILE"
 }
 
 write_claude_api_key_file() {
@@ -615,7 +645,7 @@ main() {
   local os arch
   read -r os arch < <(detect_platform)
   download_binary "$os" "$arch"
-  write_custom_auth_token_file
+  ensure_auth_token_file
   write_claude_api_key_file
   case "$os" in
     darwin) install_macos_launchd ;;
@@ -625,6 +655,7 @@ main() {
   trap - ERR
   log "ready: $(service_url "$ADDR")/"
   log "data: $STATE_DIR"
+  print_auth_token_guidance
 }
 
 main "$@"

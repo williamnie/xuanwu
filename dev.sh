@@ -63,6 +63,25 @@ fi
 
 mkdir -p "$STATE_DIR" "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")"
 
+if [ -z "${XUANWU_AUTH_TOKEN:-}" ] && [ ! -s "$AUTH_TOKEN_FILE" ]; then
+  umask 077
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 32 > "$AUTH_TOKEN_FILE"
+  elif [ -r /dev/urandom ] && command -v od >/dev/null 2>&1; then
+    od -An -N32 -tx1 /dev/urandom | tr -d ' \n' > "$AUTH_TOKEN_FILE"
+    printf '\n' >> "$AUTH_TOKEN_FILE"
+  else
+    echo "[dev] cannot generate remote access token: install openssl or provide XUANWU_AUTH_TOKEN_FILE" >&2
+    exit 1
+  fi
+  chmod 600 "$AUTH_TOKEN_FILE"
+  if [ -t 1 ]; then
+    echo "[dev] remote access token (shown once): $(tr -d '\n' < "$AUTH_TOKEN_FILE")"
+  else
+    echo "[dev] remote access token generated; value hidden because output is not an interactive terminal"
+  fi
+fi
+
 trap cleanup EXIT INT TERM
 
 echo "[dev] backend  http://$BACKEND_ADDR"
@@ -71,6 +90,7 @@ echo "[dev] api proxy $FRONTEND_API_TARGET"
 echo "[dev] runner  $BACKEND_API_ADDR"
 echo "[dev] state    $STATE_DIR"
 echo "[dev] database $DB_PATH"
+echo "[dev] token    $AUTH_TOKEN_FILE"
 echo "[dev] press Ctrl+C to stop both services"
 echo
 

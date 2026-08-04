@@ -186,6 +186,113 @@
   text-transform: uppercase;
 }
 
+.remote-token-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.remote-token-header,
+.remote-token-summary,
+.remote-token-reveal-heading {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.remote-token-header h2 {
+  align-items: center;
+  display: flex;
+  font-size: 1.1rem;
+  gap: 8px;
+  margin: 3px 0 5px;
+}
+
+.remote-token-header p,
+.remote-token-summary p,
+.remote-token-confirm p,
+.remote-token-reveal p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 4px 0 0;
+}
+
+.remote-token-badge {
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  font-weight: 750;
+  gap: 6px;
+  padding: 7px 10px;
+}
+
+.remote-token-badge.active {
+  background: color-mix(in srgb, var(--success) 10%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--success) 34%, var(--border-color));
+  color: var(--success);
+}
+
+.remote-token-summary,
+.remote-token-confirm,
+.remote-token-reveal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.remote-token-confirm {
+  align-items: flex-start;
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--border-color));
+  display: flex;
+  gap: 12px;
+}
+
+.remote-token-confirm > svg { color: var(--warning); flex: 0 0 auto; }
+.remote-token-actions { display: flex; gap: 8px; margin-top: 12px; }
+
+.remote-token-reveal {
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border-color));
+  display: grid;
+  gap: 12px;
+}
+
+.remote-token-reveal-heading > div {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.remote-token-reveal-heading svg { color: var(--success); }
+
+.remote-token-reveal > code {
+  background: var(--brand-ink);
+  border-radius: 8px;
+  color: #f8fafc;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+  padding: 11px 12px;
+  user-select: all;
+}
+
+.remote-token-reveal > .btn { justify-self: start; }
+
+@media (max-width: 720px) {
+  .remote-token-header,
+  .remote-token-summary,
+  .remote-token-reveal-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .remote-token-badge { align-self: flex-start; }
+}
+
 .settings-permissions-panel,
 .settings-notification-panel {
   display: grid;

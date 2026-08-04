@@ -26,6 +26,13 @@ export const systemApi = {
 
   clearAuthToken,
 
+  getAuthTokenStatus: () => request('/api/auth/token'),
+
+  rotateAuthToken: () => request('/api/auth/token/rotate', {
+    method: 'POST',
+    body: JSON.stringify({ confirm: 'rotate' }),
+  }),
+
   getCodexUsage: (options = 0) => {
     const limit = typeof options === 'number' ? options : Number(options?.limit || 0);
     const compact = typeof options === 'object' && options?.compact === true;

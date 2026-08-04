@@ -22,8 +22,8 @@
 统计：
 
 - 87 张表：keep=55、merge=22、migrate=8、delete=2（85 张 current source + 2 张 captured live-only legacy）
-- 244 条用户 API route（以 `API_ROUTE_DISPOSITIONS` 的 family 映射为准）
-- 32 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
+- 245 条用户 API route（以 `API_ROUTE_DISPOSITIONS` 的 family 映射为准）
+- 34 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
 - 15 个后台调度/启动单元：keep=4、merge=8、migrate=3、delete=0
 - 145 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
 
@@ -139,7 +139,7 @@ API 清单以 **method + normalized path** 为逐项 identity。测试扫描 `ba
 | `integration-intake-delivery` | 23 | **keep** | Audited intake and external delivery adapters | external_events/external_links/outbox authorities |
 | `project-scope` | 17 | **keep** | Project/local control-plane scope | projects and scoped settings |
 | `run-session-drilldown` | 11 | **merge** | Run with provider Session drill-down | issue_runs; agent_sessions remains a reference |
-| `system-observability` | 10 | **keep** | Local runtime observability/control | live process, config, logs and event bus |
+| `system-observability` | 16 | **keep** | Local runtime observability/control | live process, config, logs and event bus |
 | `work-ledger` | 24 | **keep** | Work ledger compatibility API | issues remains authoritative |
 
 <details><summary><code>assistant-runtime</code> 的逐项 routes</summary>
@@ -375,14 +375,22 @@ GET /api/sessions/preferences
 <details><summary><code>system-observability</code> 的逐项 routes</summary>
 
 ```text
+GET /api/auth/token
+POST /api/auth/token/rotate
 GET /api/capabilities
 GET /api/codex/models
+GET /api/compatibility/legacy
+POST /api/compatibility/legacy/usage
 GET /api/events
+GET /api/event-summaries
+GET /api/issues/:id/event-summaries
+GET /api/system/agentic-health
 GET /api/system/doctor
 GET /api/system/logs
 POST /api/system/restart
 GET /api/system/status
 GET /api/usage/codex
+GET /api/usage/providers
 ```
 
 </details>
@@ -414,9 +422,9 @@ GET /api/issues/:id/runs
 | `assistant-runtime` | `pi-chat`, `pi-overview`, `pi-memory` | **keep** | Operator conversation and supporting memory/config | `PiAgentSettingsPanel.jsx`, `PiChat.jsx`, `PiChatComposerMeta.jsx`, `PiMemoryPanel.jsx` |
 | `attention` | `pi-inbox`, `attention-inbox` | **merge** | Attention projections with deterministic resolution gates | —（已合并到 Command Center） |
 | `automation` | `cron`, `pi-automations` | **migrate** | `automation_definitions/runs/events` API with legacy carrier compatibility | `Automations.jsx` |
-| `capability-policy` | `settings`, `pi-connectors`, `pi-skills`, `pi-policies` | **keep** | Capability registry and deterministic permission policy | `AssistantSettingsSections.jsx`, `ConnectorDiagnosticsPanel.jsx`, `FeishuSettingsPanel.jsx`, `NotificationSettingsPanel.jsx`, `PermissionsSettingsPanel.jsx`, `PiMcpManagementPanel.jsx`, `ProviderAvailabilityPanel.jsx`, `RunnerSettingsPanel.jsx`, `Settings.jsx`, `SettingsChrome.jsx`, `SkillsRuntimePanel.jsx`, `SourcePoliciesPanel.jsx` |
+| `capability-policy` | `settings`, `pi-connectors`, `pi-skills`, `pi-policies` | **keep** | Capability registry and deterministic permission policy | `AssistantSettingsSections.jsx`, `Connections.jsx`, `ConnectorDiagnosticsPanel.jsx`, `FeishuSettingsPanel.jsx`, `NotificationSettingsPanel.jsx`, `PermissionsSettingsPanel.jsx`, `PiMcpManagementPanel.jsx`, `ProviderAvailabilityPanel.jsx`, `RemoteAccessTokenPanel.jsx`, `RunnerSettingsPanel.jsx`, `Settings.jsx`, `SettingsChrome.jsx`, `SkillsRuntimePanel.jsx`, `SourcePoliciesPanel.jsx` |
 | `evidence-handoff` | `handoffs`, `pi-activity`, `pi-approvals` | **merge** | Evidence/Handoff read models and audited action requests | `ActivityTimelinePanel.jsx`, `Handoffs.jsx` |
-| `project-scope` | `projects` | **keep** | Project/local control-plane scope | `ProjectHoldNotice.jsx`, `Projects.jsx` |
+| `project-scope` | `projects` | **keep** | Project/local control-plane scope | `ProjectHoldNotice.jsx`, `ProjectSettingsEditor.jsx`, `Projects.jsx` |
 | `run-session-drilldown` | `runs`, `sessions` | **merge** | Run with provider Session drill-down | `Runs.jsx`, `Sessions.jsx` |
 | `system-observability` | `dashboard` | **keep** | Local runtime observability/control | `Dashboard.jsx` |
 | `work-ledger` | `issues`, `issue-detail`, `work-board`, `work-detail` | **keep** | Work ledger compatibility API | `IssueCard.jsx`, `IssueCardMoreActions.jsx`, `IssueDetail.jsx`, `Issues.jsx`, `IssueSupervisorPanel.jsx`, `WorkBoard.jsx`, `WorkDetail.jsx` |
@@ -739,4 +747,4 @@ bunx tsc --ignoreConfig --noEmit --target ES2022 --module ESNext \
   src/xuanwu/capabilityDispositionInventory.test.ts
 ```
 
-测试会验证：85 张 current source table + 2 张 captured live-only table = 87；244 条唯一用户 API route 全覆盖；32 个 JSX 页面组件与 151 个 PI 模块恰好归属一次；12 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。
+测试会验证：85 张 current source table + 2 张 captured live-only table = 87；245 条唯一用户 API route 全覆盖；34 个 JSX 页面组件与 151 个 PI 模块恰好归属一次；12 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。

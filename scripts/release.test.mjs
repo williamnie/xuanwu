@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -44,6 +44,13 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     const fresh = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], { env, encoding: 'utf8' });
     assert.equal(fresh.status, 0, `${fresh.stdout}\n${fresh.stderr}`);
     assert.match(runVersion(join(install, 'xuanwu'), env), /v1\.0\.0/);
+    const authTokenPath = join(state, 'auth_token');
+    const authToken = (await readFile(authTokenPath, 'utf8')).trim();
+    assert.match(authToken, /^(?:[A-Za-z0-9+/]{43}=|[a-f0-9]{64})$/);
+    assert.equal((await stat(authTokenPath)).mode & 0o777, 0o600);
+    assert.match(fresh.stdout, /remote access token generated; value hidden because output is not an interactive terminal/);
+    assert.match(fresh.stdout, /remote access token file:/);
+    assert.doesNotMatch(fresh.stdout, new RegExp(authToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     const unsignedAuto = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], {
       env: { ...env, XUANWU_VERIFY_ATTESTATION: 'auto', GH_ATTESTATION_FAIL: '1' }, encoding: 'utf8'
     });
@@ -88,6 +95,7 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     assert.equal(upgrade.status, 0, `${upgrade.stdout}\n${upgrade.stderr}`);
     assert.match(runVersion(join(install, 'xuanwu'), updateEnv), /v1\.1\.0/);
     assert.equal(await readFile(join(state, 'runner.db'), 'utf8'), 'authority-survives-release-changes');
+    assert.equal((await readFile(authTokenPath, 'utf8')).trim(), authToken);
 
     const rollback = spawnSync('bash', [updater, 'rollback', ...commonGate, '--snapshot', 'latest', '--confirm-data-compatible'], {
       env: updateEnv, encoding: 'utf8'
@@ -95,6 +103,7 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     assert.equal(rollback.status, 0, `${rollback.stdout}\n${rollback.stderr}`);
     assert.match(runVersion(join(install, 'xuanwu'), updateEnv), /v1\.0\.0/);
     assert.equal(await readFile(join(state, 'runner.db'), 'utf8'), 'authority-survives-release-changes');
+    assert.equal((await readFile(authTokenPath, 'utf8')).trim(), authToken);
 
     const audit = await readFile(join(state, 'logs', 'release-upgrade.log'), 'utf8');
     assert.match(audit, /action=upgrade outcome=applied from=v1\.0\.0 to=v1\.1\.0/);

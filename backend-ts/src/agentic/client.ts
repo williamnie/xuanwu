@@ -23,6 +23,7 @@ const DEFAULT_AGENTIC_TIMEOUT_MS = MAX_AGENTIC_TIMEOUT_MS;
 export function createHttpAgenticWorkerClient(input: {
   addr: string;
   authToken?: string;
+  authTokenProvider?: () => string | Promise<string>;
   now?: () => Date;
   timeoutMs?: number;
 }): AgenticWorkerClient {
@@ -32,17 +33,17 @@ export function createHttpAgenticWorkerClient(input: {
   return {
     activity: activity.snapshot,
     decideCommunication: (body) => activity.run(() => post<AgenticCommunicationDecisionResult>(
-      baseUrl, AGENTIC_COMMUNICATION_DECISION_PATH, body, input.authToken, timeoutMs, activity.observeWorker
+      baseUrl, AGENTIC_COMMUNICATION_DECISION_PATH, body, authToken(input), timeoutMs, activity.observeWorker
     )),
     decideIssueAcceptance: (card) => activity.run(() => post<AgenticIssueAcceptanceResult>(
-      baseUrl, AGENTIC_ISSUE_ACCEPTANCE_PATH, { card }, input.authToken, timeoutMs, activity.observeWorker
+      baseUrl, AGENTIC_ISSUE_ACCEPTANCE_PATH, { card }, authToken(input), timeoutMs, activity.observeWorker
     )),
     decideSupervisor: (context) => activity.run(() => post<AgenticSupervisorDecisionResult>(
-      baseUrl, AGENTIC_SUPERVISOR_DECISION_PATH, { context }, input.authToken, timeoutMs, activity.observeWorker
+      baseUrl, AGENTIC_SUPERVISOR_DECISION_PATH, { context }, authToken(input), timeoutMs, activity.observeWorker
     )),
     async health() {
       const response = await fetchWithTimeout(`${baseUrl}${AGENTIC_HEALTH_PATH}`, {
-        headers: authorizationHeaders(input.authToken)
+        headers: authorizationHeaders(await authToken(input))
       }, Math.min(timeoutMs, 5_000));
       observeWorkerResponse(response, activity.observeWorker);
       if (!response.ok) throw new Error(`Agentic Worker health failed: HTTP ${response.status}`);
@@ -51,7 +52,7 @@ export function createHttpAgenticWorkerClient(input: {
       return { ok: true, role: "agentic" };
     },
     runProjectCycle: (body) => activity.run(() => post<AgenticProjectCycleResult>(
-      baseUrl, AGENTIC_PROJECT_CYCLE_PATH, body, input.authToken, timeoutMs, activity.observeWorker
+      baseUrl, AGENTIC_PROJECT_CYCLE_PATH, body, authToken(input), timeoutMs, activity.observeWorker
     ))
   };
 }
@@ -60,13 +61,14 @@ async function post<T>(
   baseUrl: string,
   path: string,
   body: AgenticCommunicationDecisionRequest | AgenticProjectCycleRequest | Record<string, unknown>,
-  authToken: string | undefined,
+  authToken: string | Promise<string> | undefined,
   timeoutMs: number,
   observeWorker: (input: { pid: number; rss_bytes: number; started_at: string }) => void
 ): Promise<T> {
+  const resolvedToken = isPromise(authToken) ? await authToken : authToken;
   const response = await fetchWithTimeout(`${baseUrl}${path}`, {
     body: JSON.stringify(body),
-    headers: { ...authorizationHeaders(authToken), "content-type": "application/json" },
+    headers: { ...authorizationHeaders(resolvedToken), "content-type": "application/json" },
     method: "POST"
   }, timeoutMs);
   observeWorkerResponse(response, observeWorker);
@@ -76,6 +78,14 @@ async function post<T>(
     throw new Error(`Agentic Worker request failed: ${detail}`);
   }
   return payload.result;
+}
+
+function isPromise(value: unknown): value is Promise<string> {
+  return Boolean(value && typeof value === "object" && "then" in value);
+}
+
+function authToken(input: { authToken?: string; authTokenProvider?: () => string | Promise<string> }): string | Promise<string> | undefined {
+  return input.authTokenProvider ? input.authTokenProvider() : input.authToken;
 }
 
 function observeWorkerResponse(

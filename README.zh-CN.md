@@ -81,8 +81,9 @@ GitHub 仓库、Release 资产、二进制、CLI、Skill、环境变量、服务
 
 请先阅读仓库 README 和安装脚本，再安装适合当前系统的最新 Release；然后识别你当前是
 Codex 还是 Claude Code，把仓库中的 xuanwu Skill 安装到对应的个人 Skills 目录。
-安装后运行 xuanwu-daemon doctor，确认玄武服务健康，并告诉我 Skill 的安装路径。不要打印或复制
-auth token，也不要修改与本次安装无关的配置。
+安装后运行 xuanwu-daemon doctor，确认玄武服务健康，并告诉我 Skill 的安装路径。全新交互式安装时，
+把只显示一次的 Remote access token 和保存路径告诉我，方便浏览器首次连接；不要把 token 写入其他
+位置，也不要修改与本次安装无关的配置。
 ```
 
 如果已经克隆仓库，也可以手动安装 Skill：
@@ -124,7 +125,19 @@ xuanwu-daemon doctor
 二进制  ~/.local/bin/xuanwu
 状态    ~/.local/state/xuanwu
 数据库  ~/.local/state/xuanwu/runner.db
+Token   ~/.local/state/xuanwu/auth_token（权限 0600）
 ```
+
+全新交互式安装会在终端打印一次自动生成的 Remote access token；重启和升级不会再次打印。之后可在
+服务器上读取：
+
+```bash
+cat ~/.local/state/xuanwu/auth_token
+```
+
+浏览器首次打开时会进入连接页，将这个 token 保存到当前浏览器。登录后可在
+**设置 → 高级 → 运行环境 → Remote access token** 中轮换；旧 token 会立即失效，新 token 只显示一次。
+如果通过 `XUANWU_AUTH_TOKEN` 管理凭据，UI 会禁用轮换，需要在部署环境中修改。
 
 如需修改监听地址、状态目录、Codex 可执行文件或 Claude Provider，请查看
 [`scripts/install-release.sh --help`](scripts/install-release.sh) 和

@@ -34,6 +34,18 @@ test('launchd deployment persists the explicit W1 automation shadow selector', (
   assert.match(source, /<string>\$\(xml_escape "\$AUTOMATION_SHADOW_W1"\)<\/string>/);
 });
 
+test('deployment creates a mode-0600 remote access token and only reveals a fresh value on an interactive terminal', () => {
+  for (const script of [source, releaseSource]) {
+    assert.match(script, /ensure_auth_token_file\(\)/);
+    assert.match(script, /openssl rand -base64 32/);
+    assert.match(script, /chmod 600 "\$AUTH_TOKEN_FILE"/);
+    assert.match(script, /AUTH_TOKEN_CREATED/);
+    assert.match(script, /\[ -t 1 \]/);
+    assert.match(script, /remote access token \(shown once\)/);
+    assert.match(script, /read later: cat/);
+  }
+});
+
 test('launchd Core marks Runner-managed provider execution', () => {
   assert.match(source, /<key>XUANWU_MANAGED_EXECUTION<\/key>\s*<string>1<\/string>/);
 });

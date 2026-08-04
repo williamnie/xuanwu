@@ -518,6 +518,8 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/agent-profiles", family: "project-scope" },
   { method: "DELETE", path: "/api/agent-profiles/:id", family: "project-scope" },
   { method: "PATCH", path: "/api/agent-profiles/:id", family: "project-scope" },
+  { method: "GET", path: "/api/auth/token", family: "system-observability" },
+  { method: "POST", path: "/api/auth/token/rotate", family: "system-observability" },
   { method: "GET", path: "/api/capabilities", family: "system-observability" },
   { method: "POST", path: "/api/codex/approvals/:id/resolve", family: "run-session-drilldown" },
   { method: "GET", path: "/api/codex/models", family: "system-observability" },
@@ -738,7 +740,7 @@ export const PAGE_SURFACES = [
   {
     id: "capability-policy", disposition: "keep", target: "Capability registry and deterministic permission policy",
     page_ids: ["settings", "pi-connectors", "pi-skills", "pi-policies"],
-    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/Connections.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx"]
+    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/Connections.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RemoteAccessTokenPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx"]
   },
   {
     id: "evidence-handoff", disposition: "merge", target: "Evidence/Handoff read models and audited action requests",

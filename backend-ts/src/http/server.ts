@@ -4,7 +4,8 @@ import { parseListenAddress } from "../config/listenAddress.ts";
 import { EventBus } from "../events/bus.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
-import { loadAuthToken, requireBearerAuth } from "./auth.ts";
+import { createAuthTokenManager, requireBearerAuth, type AuthTokenManager } from "./auth.ts";
+import { registerAuthTokenRoutes } from "./authTokenApi.ts";
 import { applyLocalCors, withCors } from "./cors.ts";
 import { registerEventRoutes } from "./events.ts";
 import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
@@ -39,6 +40,7 @@ import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
 type DefaultRouterOptions = {
   agenticClient?: AgenticWorkerClient;
+  authTokenManager?: AuthTokenManager;
   auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
   bus?: EventBus;
   codexSessionsDir?: string;
@@ -69,6 +71,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   const router = createRouter();
   const bus = runtime.bus ?? new EventBus();
   router.get("/health", () => json({ status: "ok" }));
+  if (runtime.authTokenManager) registerAuthTokenRoutes(router, { manager: runtime.authTokenManager });
   if (runtime.agenticClient) {
     router.get("/api/system/agentic-health", async () => {
       try {
@@ -152,16 +155,21 @@ export async function startServer(
   router?: Router
 ): Promise<ReturnType<typeof Bun.serve>> {
   const address = parseListenAddress(config.addr);
-  const authToken = await loadAuthToken(config);
-  const activeRouter = router ?? createDefaultRouter({ ...runtime, codexSessionsDir: config.codexSessionsDir, config });
+  const authTokenManager = runtime.authTokenManager ?? await createAuthTokenManager(config);
+  const activeRouter = router ?? createDefaultRouter({
+    ...runtime,
+    authTokenManager,
+    codexSessionsDir: config.codexSessionsDir,
+    config
+  });
   registerControlledBlockRoute(activeRouter, runtime.testBlockMs ?? Number(Bun.env.XUANWU_TEST_BLOCK_MS ?? "0"));
-  registerSystemStatusRoute(activeRouter, { authToken, config, ...runtime });
+  registerSystemStatusRoute(activeRouter, { authToken: authTokenManager.current(), config, ...runtime });
   registerSystemLogsRoute(activeRouter, { config });
   return Bun.serve({
     hostname: address.hostname,
     idleTimeout: 120,
     port: address.port,
-    fetch: createRequestHandler(activeRouter, authToken, { database: runtime.database, webDir: config.webDir })
+    fetch: createRequestHandler(activeRouter, authTokenManager, { database: runtime.database, webDir: config.webDir })
   });
 }
 
@@ -210,13 +218,21 @@ const CONTROLLED_BLOCK_PATH = "/api/system/test/block";
 
 export function createRequestHandler(
   router: Router,
-  authToken: string,
+  authToken: string | AuthTokenManager,
   options: RequestHandlerOptions = {}
 ): (request: Request) => Promise<Response> {
   return async (request) => {
     const corsResponse = applyLocalCors(request);
     if (corsResponse) return corsResponse;
-    const response = requireBearerAuth(request, authToken) ?? await routeOrStatic(router, request, options);
+    let configuredToken: string;
+    try {
+      configuredToken = typeof authToken === "string"
+        ? authToken
+        : isApiPath(request) ? await authToken.refresh() : authToken.current();
+    } catch {
+      return withCors(request, jsonError(503, "remote access authentication is unavailable"));
+    }
+    const response = requireBearerAuth(request, configuredToken) ?? await routeOrStatic(router, request, options);
     return withCors(request, instrumentLegacyCompatibilityResponse(request, response, options.database));
   };
 }

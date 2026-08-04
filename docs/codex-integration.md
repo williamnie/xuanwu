@@ -160,5 +160,6 @@ curl -fsS http://127.0.0.1:3008/health
 - `/health` 免鉴权，供 launchd / systemd / 反代健康检查使用。
 - `/api/*`（包括 `/api/system/status`、`/api/system/doctor`、SSE `/api/events`）属于敏感 API；启用 token 时必须携带 `Authorization: Bearer ...` 或 UI cookie。
 - 默认浏览器 Origin 策略只允许本机 origin（`localhost` / `127.0.0.1` / `::1`）。
-- 远程访问必须启用 token。推荐保留默认生成的 state dir `auth_token`（权限 `0600`），或用 `XUANWU_AUTH_TOKEN_FILE` 指向权限受限文件；不要提交 token 文件。
+- 远程访问必须启用 token。首次启动会在 state dir 自动生成 `auth_token`（权限 `0600`）；交互式安装终端只显示新 token 一次，非交互安装只显示文件路径。也可用 `XUANWU_AUTH_TOKEN_FILE` 指向权限受限文件；不要提交 token 文件。
+- 首次浏览器访问把服务器 token 保存到当前浏览器。登录后可在 Settings 的 Advanced / Runtime 中原子轮换文件托管的 token；旧值立即失效，新值只返回一次。`XUANWU_AUTH_TOKEN` 环境变量托管时必须在部署环境中轮换，UI 不允许覆盖。
 - 对公网暴露时优先绑定 `127.0.0.1` 并通过 SSH tunnel、Caddy 或 nginx 反代终止 HTTPS。

@@ -6,7 +6,7 @@ import { loadConfig } from "../config/env.ts";
 import { openDatabase } from "../db/database.ts";
 import { EventBus } from "../events/bus.ts";
 import { BackgroundProjectionWorker } from "../events/projectionWorker.ts";
-import { loadAuthToken } from "../http/auth.ts";
+import { createAuthTokenManager } from "../http/auth.ts";
 import { startServer } from "../http/server.ts";
 import { primeProviderStatus } from "../http/systemStatus.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
@@ -43,8 +43,9 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   coldStartTrace("config_loaded");
   const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
   const readDatabase = await openDatabase({ readonlyImportPath: database.path });
+  const authTokenManager = await createAuthTokenManager(config);
   const agenticClient = role === "core"
-    ? createHttpAgenticWorkerClient({ addr: config.agenticAddr, authToken: await loadAuthToken(config) })
+    ? createHttpAgenticWorkerClient({ addr: config.agenticAddr, authTokenProvider: authTokenManager.refresh })
     : (await import("../agentic/embeddedClient.ts")).createEmbeddedAgenticWorkerClient(database);
   coldStartTrace("database_opened");
   const bus = new EventBus();
@@ -109,6 +110,7 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   primeProviderStatus(config);
   const server = await startServer(config, {
     agenticClient,
+    authTokenManager,
     bus,
     database,
     readDatabase,

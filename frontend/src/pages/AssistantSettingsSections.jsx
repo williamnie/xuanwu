@@ -7,6 +7,7 @@ import RunnerSettingsPanel from './RunnerSettingsPanel';
 import SkillsRuntimePanel from './SkillsRuntimePanel';
 import SourcePoliciesPanel from './SourcePoliciesPanel';
 import Projects from './Projects';
+import RemoteAccessTokenPanel from './RemoteAccessTokenPanel';
 import { RestartAction } from './SettingsChrome';
 import { useI18n } from '../i18n/context.js';
 
@@ -60,6 +61,7 @@ function AdvancedRuntimeSettingsTab({ RuntimeStatusPanel }) {
         <RestartAction />
       </section>
       <RuntimeStatusPanel />
+      <RemoteAccessTokenPanel />
       <RunnerSettingsPanel />
       <ProviderAvailabilityPanel />
     </>

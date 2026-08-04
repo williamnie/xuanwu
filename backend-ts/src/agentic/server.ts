@@ -3,7 +3,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getPiSupervisor } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { HttpError } from "../http/errors.ts";
-import { loadAuthToken, requireBearerAuth } from "../http/auth.ts";
+import { createAuthTokenManager, requireBearerAuth } from "../http/auth.ts";
 import { runProjectPiCycle } from "../http/piProjectControlApi.ts";
 import { parseListenAddress } from "../config/listenAddress.ts";
 import { decideAgentCommunicationWithRuntime } from "../notifications/agentCommunicationGateway.ts";
@@ -30,13 +30,19 @@ const AGENTIC_STARTED_AT = new Date().toISOString();
 
 export async function startAgenticServer(config: RunnerConfig, database: RunnerDatabase) {
   const address = parseListenAddress(config.addr);
-  const authToken = await loadAuthToken(config);
+  const authTokenManager = await createAuthTokenManager(config);
   const idleMemory = createAgenticIdleMemoryReclaimer();
   return Bun.serve({
     hostname: address.hostname,
     idleTimeout: 255,
     port: address.port,
     fetch: async (request) => {
+      let authToken: string;
+      try {
+        authToken = await authTokenManager.refresh();
+      } catch {
+        return rpcResponse({ error: "remote access authentication is unavailable", ok: false }, 503);
+      }
       const auth = requireBearerAuth(request, authToken);
       if (auth) return auth;
       const tracksActivity = request.method === "POST";

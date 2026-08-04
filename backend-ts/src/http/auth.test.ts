@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { json } from "./errors.ts";
 import { createRequestHandler } from "./server.ts";
 import { createRouter, type Router } from "./router.ts";
-import { loadAuthToken } from "./auth.ts";
+import { createAuthTokenManager, loadAuthToken } from "./auth.ts";
+import { registerAuthTokenRoutes } from "./authTokenApi.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -132,6 +133,73 @@ describe("Bun HTTP bearer auth", () => {
     const token = await loadAuthToken({ authToken: "", authTokenFile: file });
 
     expect(token).toBe("file-secret");
+  });
+
+  test("atomically creates one mode-0600 token for concurrent service startup", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "xuanwu-bun-auth-create-"));
+    const path = join(dir, "auth_token");
+
+    const [first, second] = await Promise.all([
+      createAuthTokenManager({ authToken: "", authTokenFile: path }),
+      createAuthTokenManager({ authToken: "", authTokenFile: path })
+    ]);
+
+    expect(first.current()).toBe(second.current());
+    expect(first.current()).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect((await stat(path)).mode & 0o777).toBe(0o600);
+    expect((await readFile(path, "utf8")).trim()).toBe(first.current());
+    expect(first.status()).toEqual({ configured: true, rotatable: true, source: "file" });
+  });
+
+  test("rotates a file-managed token once and invalidates the previous credential", async () => {
+    const file = await tempTokenFile("old-file-secret");
+    const manager = await createAuthTokenManager({ authToken: "", authTokenFile: file });
+    const router = protectedRouter();
+    registerAuthTokenRoutes(router, { manager });
+    const handle = createRequestHandler(router, manager);
+
+    const rotated = await handle(new Request(`${BASE_URL}/api/auth/token/rotate`, {
+      body: JSON.stringify({ confirm: "rotate" }),
+      headers: { authorization: "Bearer old-file-secret", "content-type": "application/json" },
+      method: "POST"
+    }));
+    const body = await rotated.json() as { token: string };
+    const oldCredential = await handle(new Request(`${BASE_URL}/api/protected`, {
+      headers: { authorization: "Bearer old-file-secret" }
+    }));
+    const newCredential = await handle(new Request(`${BASE_URL}/api/protected`, {
+      headers: { authorization: `Bearer ${body.token}` }
+    }));
+
+    expect(rotated.status).toBe(200);
+    expect(body.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(body.token).not.toBe("old-file-secret");
+    expect(rotated.headers.get("cache-control")).toBe("no-store");
+    expect(oldCredential.status).toBe(401);
+    expect(newCredential.status).toBe(200);
+    expect((await readFile(file, "utf8")).trim()).toBe(body.token);
+  });
+
+  test("reports environment-managed auth without exposing or rotating its value", async () => {
+    const manager = await createAuthTokenManager({ authToken: "environment-secret", authTokenFile: "" });
+    const router = protectedRouter();
+    registerAuthTokenRoutes(router, { manager });
+    const handle = createRequestHandler(router, manager);
+
+    const status = await handle(new Request(`${BASE_URL}/api/auth/token`, {
+      headers: { authorization: "Bearer environment-secret" }
+    }));
+    const rotate = await handle(new Request(`${BASE_URL}/api/auth/token/rotate`, {
+      body: JSON.stringify({ confirm: "rotate" }),
+      headers: { authorization: "Bearer environment-secret", "content-type": "application/json" },
+      method: "POST"
+    }));
+    const statusText = await status.text();
+    const rotateText = await rotate.text();
+
+    expect(JSON.parse(statusText)).toEqual({ configured: true, rotatable: false, source: "environment" });
+    expect(rotate.status).toBe(409);
+    expect(`${rotateText} ${statusText}`).not.toContain("environment-secret");
   });
 
   test("returns no auth token when env and token file are unconfigured", async () => {

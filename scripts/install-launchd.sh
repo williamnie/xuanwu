@@ -15,6 +15,7 @@ STATE_DIR="${XUANWU_STATE_DIR:-$APP_SUPPORT_DIR/state}"
 DB_PATH="${XUANWU_DB:-${XUANWU_DEPLOY_DB:-$STATE_DIR/runner.db}}"
 AUTH_TOKEN_FILE="${XUANWU_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 AUTH_TOKEN="${XUANWU_AUTH_TOKEN:-}"
+AUTH_TOKEN_CREATED=0
 SOURCE_WEB_DIR="${XUANWU_SOURCE_WEB_DIR:-$ROOT_DIR/frontend/dist}"
 WEB_DIR="${XUANWU_WEB_DIR:-$STATE_DIR/web}"
 BINARY_PATH="${XUANWU_BINARY:-$ROOT_DIR/dist/xuanwu}"
@@ -74,11 +75,42 @@ service_url() {
   fi
 }
 
-write_custom_auth_token_file() {
-  if [ -n "$AUTH_TOKEN" ]; then
-    umask 077
-    printf '%s\n' "$AUTH_TOKEN" > "$AUTH_TOKEN_FILE"
+generate_auth_token() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 32 | tr -d '\n'
+    return
   fi
+  if [ -r /dev/urandom ] && command -v od >/dev/null 2>&1; then
+    od -An -N32 -tx1 /dev/urandom | tr -d ' \n'
+    return
+  fi
+  echo "[launchd] cannot generate remote access token: install openssl or provide XUANWU_AUTH_TOKEN" >&2
+  return 1
+}
+
+ensure_auth_token_file() {
+  mkdir -p "$(dirname "$AUTH_TOKEN_FILE")"
+  umask 077
+  if [ -n "$AUTH_TOKEN" ]; then
+    printf '%s\n' "$AUTH_TOKEN" > "$AUTH_TOKEN_FILE"
+  elif [ ! -s "$AUTH_TOKEN_FILE" ]; then
+    generate_auth_token > "$AUTH_TOKEN_FILE"
+    printf '\n' >> "$AUTH_TOKEN_FILE"
+    AUTH_TOKEN_CREATED=1
+  fi
+  chmod 600 "$AUTH_TOKEN_FILE"
+}
+
+print_auth_token_guidance() {
+  echo "[launchd] remote access token file: $AUTH_TOKEN_FILE"
+  if [ "$AUTH_TOKEN_CREATED" = "1" ] && [ -t 1 ]; then
+    printf '[launchd] remote access token (shown once): %s\n' "$(tr -d '\n' < "$AUTH_TOKEN_FILE")"
+  elif [ "$AUTH_TOKEN_CREATED" = "1" ]; then
+    echo "[launchd] remote access token generated; value hidden because output is not an interactive terminal"
+  else
+    echo "[launchd] existing or explicitly configured remote access token preserved"
+  fi
+  printf '[launchd] read later: cat %q\n' "$AUTH_TOKEN_FILE"
 }
 
 write_claude_api_key_file() {
@@ -277,7 +309,7 @@ stage_launchd_binary
 stage_claude_sdk_executable
 stage_pi_package_assets
 stage_web_dir
-write_custom_auth_token_file
+ensure_auth_token_file
 write_claude_api_key_file
 
 cat > "$WEB_PLIST" <<PLIST
@@ -483,3 +515,4 @@ echo "[launchd] installed plists: $WEB_PLIST $CORE_PLIST $AGENTIC_PLIST"
 echo "[launchd] binary: $LAUNCHD_BINARY_PATH"
 echo "[launchd] web: $WEB_DIR"
 echo "[launchd] logs: $LOG_DIR/launchd.web.*.log $LOG_DIR/launchd.agentic.*.log $LOG_DIR/launchd.out.log $LOG_DIR/launchd.err.log"
+print_auth_token_guidance

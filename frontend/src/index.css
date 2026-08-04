@@ -982,9 +982,12 @@ textarea:focus-visible {
 }
 
 .auth-eyebrow {
+  align-items: center;
   color: var(--primary);
+  display: inline-flex;
   font-size: 0.72rem;
   font-weight: 700;
+  gap: 5px;
   letter-spacing: 0.08em;
   margin-bottom: 8px;
   text-transform: uppercase;
@@ -999,6 +1002,79 @@ textarea:focus-visible {
 .auth-copy {
   color: var(--text-secondary);
   font-size: 0.9rem;
+}
+
+.auth-token-guide {
+  background: color-mix(in srgb, var(--primary) 7%, var(--bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border-light));
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 13px 14px;
+}
+
+.auth-token-guide-title {
+  align-items: center;
+  display: flex;
+  font-size: 0.82rem;
+  font-weight: 750;
+  gap: 7px;
+}
+
+.auth-token-guide p {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.auth-token-guide > code {
+  background: var(--brand-ink);
+  border-radius: 7px;
+  color: #f8fafc;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  padding: 9px 10px;
+  white-space: nowrap;
+}
+
+.auth-token-guide .auth-token-guide-note {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.auth-token-guide-note code {
+  overflow-wrap: anywhere;
+}
+
+.auth-token-input-wrap {
+  position: relative;
+}
+
+.auth-token-input-wrap .form-control {
+  padding-right: 44px;
+}
+
+.auth-token-visibility {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  height: 36px;
+  justify-content: center;
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+}
+
+.auth-token-visibility:hover,
+.auth-token-visibility:focus-visible {
+  color: var(--primary);
+  outline: none;
 }
 
 /* Modals */
