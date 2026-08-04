@@ -151,7 +151,10 @@ export class CodexExecutorProvider implements ExecutorProvider {
         lease.bind(turn.provider_session_id, turn.turn_id);
         return turn;
       }
-      const turn = await this.adapter.startTurn(threadID, codexUserInputs(input), turnOptions(input));
+      const session = await this.adapter.resumeThread(threadID);
+      const resumedThreadID = session.provider_session_id || threadID;
+      lease.bind(resumedThreadID);
+      const turn = await this.adapter.startTurn(resumedThreadID, codexUserInputs(input), turnOptions(input));
       lease.bind(turn.provider_session_id, turn.turn_id);
       return turn;
     } catch (error) {

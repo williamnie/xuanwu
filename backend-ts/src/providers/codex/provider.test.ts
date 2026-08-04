@@ -274,7 +274,7 @@ describe("Codex executor provider", () => {
     ]);
   });
 
-  test("creates manual Sessions API turns and steers running turns", async () => {
+  test("creates manual Sessions API turns, resumes historical threads, and steers running turns", async () => {
     const adapter = new FakeCodexIssueAdapter();
     const provider = new CodexExecutorProvider(adapter, "manual instructions");
 
@@ -323,6 +323,7 @@ describe("Codex executor provider", () => {
         }
       },
       { method: "initialize" },
+      { method: "thread/resume", params: { threadID: "thread-1" } },
       {
         method: "turn/start",
         params: {
