@@ -24,6 +24,7 @@ import { claudeFactory } from "../providers/claude/factory.ts";
 import { createCodexExecutorProvider } from "../providers/codex/provider.ts";
 import { codexFactory } from "../providers/codex/factory.ts";
 import { createProviderRegistry } from "../providers/core/registry.ts";
+import { aggregateParityReports, compareCapabilitiesParity, legacyProjectionCompareEnabled } from "../providers/core/parity.ts";
 import { reconcileStaleCodexProcessOwnership } from "../providers/codex/processLifecycle.ts";
 import {
   createPiAgenticScheduler,
@@ -69,6 +70,19 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     }));
   }
   await providersRegistry.startConfigured(config.providers as Record<string, { enabled?: boolean } & Record<string, unknown>>);
+  // P9：W2 观察窗——flag 开启时对比 manifest/实例 capabilities parity 并记录 drift（rollback 无 DB 回填）。
+  if (legacyProjectionCompareEnabled()) {
+    const parityAggregated = aggregateParityReports(providersRegistry.list().map(compareCapabilitiesParity));
+    if (parityAggregated.ok) {
+      console.info(JSON.stringify({ event: "provider.legacy_projection_parity_ok" }));
+    } else {
+      console.warn(JSON.stringify({
+        event: "provider.legacy_projection_drift",
+        drifted_providers: parityAggregated.driftedProviders,
+        diffs: parityAggregated.diffs
+      }));
+    }
+  }
   const providers = executorProviders(config, bus, codexOwnershipFile);
   const runtimeStartedAt = new Date().toISOString();
   const providerRuntime = () => (providers.codex as ReturnType<typeof createCodexExecutorProvider> | undefined)?.runtimeSnapshot();

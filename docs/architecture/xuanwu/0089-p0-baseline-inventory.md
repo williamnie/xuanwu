@@ -82,3 +82,27 @@
 4. execution-only 完成 Attempt 不写 Session；resumable 无 message ref 可 recover；full-session 方法齐全。
 
 后续阶段基线：P1 迁移 `isExecutorProviderId` 消费点时应保持上述 1 不回归。
+
+## 6. P9 更新：consumer-zero inventory 与 W2 观察窗（rollback runbook）
+
+### 6.1 消费点迁移状态（P9 时点）
+
+| consumer | 状态 | 说明 |
+| --- | --- | --- |
+| `runtime/core.ts` `executorProviders()` | migrated | registry 装配（P7/P8），旧 map bridge 保留（W1→W2） |
+| `providers/core/registry.ts` | migrated | registry authority（P2） |
+| `providers/core/catalog.ts` + `http/providersCatalogApi.ts` | migrated | /api/providers（P6） |
+| `http/systemStatus.ts` `providerStatus()` | migrated | registry 投影 + 旧 bridge（P4） |
+| `runner/interrupt.ts` `providerID()` | migrated | 手写穷举删除（P5） |
+| `runner/recovery.ts` `providerID()` | migrated | 手写穷举删除（P5） |
+| `http/frontendCompatHandlers.ts` `resolveApproval` | migrated | provider 绑定路由（P5） |
+| `frontend sessionOptions.js/issueRuns.js` | migrated | catalog 派生 + 静态 authority 删除（P6） |
+| `http/sessionApi.ts` | legacy | P6 聚合分页 cursor 合同已冻结，sessionApi 重构仍待 P6 收尾（W2） |
+| `runner/projectLoop.ts`/`piAcceptanceApplication.ts`/`automationRuntime.ts`/`humanReview.ts`/`piActionDispatch.ts` | legacy | `isExecutorProviderId` 白名单校验（随 `ExecutorProviderId` 放宽收口） |
+
+### 6.2 W2 观察窗与 rollback runbook
+
+- 开关：`XUANWU_PROVIDER_LEGACY_PROJECTION_COMPARE=1` 开启 manifest/实例 capabilities parity 对比（`providers/core/parity.ts`）。
+- drift 处理：记录 `provider.legacy_projection_drift` warning（含 drifted providers 与 diffs），不阻断运行。
+- **rollback**：关闭 flag 即回退旧 projection（W0 行为）。**无需 DB 回填或删除事件**（对比为只读）。
+- parity 范围：refs（thread_id/turn_id ↔ sessionRef/messageRef）、capabilities（manifest detail ↔ 实例 legacy 数组）、status/session 数量由 runtime 快照对比（`compareRefsParity`/`compareCapabilitiesParity`）。
