@@ -242,7 +242,7 @@ async function startAutoRunLoops(
   agenticClient: AgenticWorkerClient,
   processGroupMemory: ProcessGroupMemoryObserver
 ): Promise<void> {
-  await recoverInProgressIssues({ database, providers }).catch((error) => {
+  await recoverInProgressIssues({ database }).catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", error: safeError(error) }));
   });
   reconcileStaleAgentSessions(database, processReconciliation, new Date(), { reconcileManagerConversations: false });

@@ -3,14 +3,13 @@ import { requeueUnstartedIssueClaim } from "../db/repositories/issueActions.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { listIssues, type Issue } from "../db/repositories/issues.ts";
 import type { RunnerDatabase } from "../db/database.ts";
-import type { ExecutorProvider, ExecutorProviderId, SessionRef } from "../providers/types.ts";
+import { isProviderId, type ExecutorProviderId, type SessionRef } from "../providers/types.ts";
 import { requestIssuePiAcceptance } from "./piAcceptanceRequest.ts";
 import { reconcileProviderOutcome, type ProviderReportedOutcome } from "./providerOutcome.ts";
 
 export type RecoveryInput = {
   database: RunnerDatabase;
   now?: Date;
-  providers: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
 export type RecoveryResult = { reconciled: number; requeued: number; signaled: number };
@@ -23,7 +22,6 @@ export type RecoveryResult = { reconciled: number; requeued: number; signaled: n
  */
 export async function recoverInProgressIssues(input: RecoveryInput): Promise<RecoveryResult> {
   const result: RecoveryResult = { reconciled: 0, requeued: 0, signaled: 0 };
-  void input.providers;
   for (const issue of listIssues(input.database, { status: "in_progress" })) {
     const outcome = await reconcileIssueOnStartup(input.database, issue, input.now ?? new Date());
     result[outcome] += 1;
@@ -120,7 +118,9 @@ function linkedSession(issue: Issue): SessionRef | null {
 }
 
 function providerID(value: string | undefined): ExecutorProviderId | null {
-  return value === "codex" || value === "claude" || value === "fake-execution-only" ? value : null;
+  // P5：合法 Provider ID 校验（branded，非闭合枚举）；恢复能力仍由 capability/session 状态决定。
+  if (!value) return null;
+  return isProviderId(value) ? (value as ExecutorProviderId) : null;
 }
 
 function canRequeueUnstartedClaim(db: RunnerDatabase, issue: Issue): boolean {

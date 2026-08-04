@@ -18,7 +18,7 @@ import { getIssue, listIssueRuns, listIssues, type Issue } from "../db/repositor
 import type { RunnerDatabase } from "../db/database.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
-import { isExecutorProviderId, type ExecutorProvider, type ExecutorProviderId, type InterruptInput, type SessionRef } from "../providers/types.ts";
+import { asProviderId, type ExecutorProvider, type ExecutorProviderId, type InterruptInput, type SessionRef } from "../providers/types.ts";
 
 export type InterruptRuntime = {
   bus?: Pick<EventBus, "publish">;
@@ -102,7 +102,9 @@ export async function interruptSession(
   if (linked) {
     return { interrupted: await interruptLinkedIssue(db, linked, SESSION_INTERRUPT_REASON, runtime) };
   }
-  if (!session.turnId && session.provider === "codex") return { interrupted: false };
+  // P5：无 turn（messageRef）时无法定位 active invocation；仅当 Provider 声明 session-level
+  // interrupt（interrupt 方法存在）才继续，否则 fail closed 跳过（避免误中断）。
+  if (!session.turnId && !runtime.providers?.[session.provider]?.interrupt) return { interrupted: false };
   const error = await interruptProviderTurn(db, 0, session, SESSION_INTERRUPT_REASON, runtime);
   return { interrupted: !error };
 }
@@ -205,7 +207,8 @@ function issueSessionRef(issue: Issue): SessionRef {
   if (run?.provider_session_id) {
     const turnId = run.provider_turn_id || issue.codex_turn_id;
     return {
-      provider: providerID(run.provider),
+      // P5：合法 ID 直接使用（不再回退到 codex 的手写穷举）；非法 ID fail closed。
+      provider: asProviderId(run.provider) as ExecutorProviderId,
       sessionId: run.provider_session_id,
       ...(turnId === "" ? {} : { turnId })
     };
@@ -333,13 +336,9 @@ function normalizeSessionKey(rawSessionID: string): string {
 function sessionRef(rawSessionID: string, turnID: string): SessionRef {
   const key = normalizeSessionKey(rawSessionID);
   const separator = key.indexOf(":");
-  const provider = key.slice(0, separator);
-  if (!isExecutorProviderId(provider)) throw new Error(`provider "${provider}" interrupt unavailable`);
+  // P5：合法 Provider ID 直接通过（含未来新注册 adapter），不再白名单穷举；非法 ID fail closed。
+  const provider = asProviderId(key.slice(0, separator)) as ExecutorProviderId;
   return { provider, sessionId: key.slice(separator + 1), ...(turnID === "" ? {} : { turnId: turnID }) };
-}
-
-function providerID(value: string): ExecutorProviderId {
-  return value === "claude" || value === "fake-execution-only" ? value : "codex";
 }
 
 function recordInterruptEvent(

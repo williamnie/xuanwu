@@ -20,7 +20,7 @@ describe("startup reconciliation delegates recovery to PI", () => {
       insertRun(db, issueID, { session: "thread-live" });
       insertSession(db, issueID, "thread-live", "disconnected");
 
-      const result = await recoverInProgressIssues({ database: db, providers: {} });
+      const result = await recoverInProgressIssues({ database: db });
 
       expect(result).toEqual({ reconciled: 0, requeued: 0, signaled: 1 });
       expect(getIssue(db, issueID)?.status).toBe("in_progress");
@@ -42,7 +42,7 @@ describe("startup reconciliation delegates recovery to PI", () => {
       insertRun(db, issueID, { session: "thread-done" });
       insertSession(db, issueID, "thread-done", "completed");
 
-      const result = await recoverInProgressIssues({ database: db, providers: {} });
+      const result = await recoverInProgressIssues({ database: db });
 
       expect(result).toEqual({ reconciled: 1, requeued: 0, signaled: 0 });
       expect(getIssue(db, issueID)?.status).toBe("in_progress");
@@ -63,7 +63,7 @@ describe("startup reconciliation delegates recovery to PI", () => {
       const issueID = insertIssue(db, "in_progress", "");
       insertRun(db, issueID, {});
 
-      const result = await recoverInProgressIssues({ database: db, providers: {} });
+      const result = await recoverInProgressIssues({ database: db });
 
       expect(result).toEqual({ reconciled: 0, requeued: 1, signaled: 0 });
       expect(getIssue(db, issueID)?.status).toBe("todo");

@@ -6,6 +6,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createAgentProfile, deleteAgentProfile, updateAgentProfile } from "../db/repositories/agentProfiles.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
+import { getPiApprovalRequest } from "../db/repositories/pi/approvalRequests.ts";
 import { listNotifications, markNotificationRead } from "../db/repositories/notifications.ts";
 import { clearProjectHold, deleteProject, reorderProjects } from "../db/repositories/projectsExtra.ts";
 import { getProject, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
@@ -178,11 +179,20 @@ async function resolveApproval(
   id: string,
   body: Record<string, unknown>
 ): Promise<Record<string, boolean>> {
+  // P5：approval request 与 provider 绑定——从 pi_approval_requests 查 request 归属 provider，
+  // 不再硬编码 codex；跨 provider 路由到对应实例，Provider 不支持 resolveApproval 时 fail closed。
+  const boundProvider = getPiApprovalRequest(context.database, id)?.provider.trim() ?? "";
+  const target = boundProvider !== "" ? boundProvider : "codex"; // 旧前端无绑定记录的请求按 codex 兼容
+  const instance = context.providers?.[target as ExecutorProviderId];
+  if (!instance?.resolveApproval) {
+    if (boundProvider === "") return { ok: true }; // 兼容：无绑定记录且无 codex provider 时静默成功
+    throw new HttpError(409, `approval request ${id} 的 provider ${target} 不支持 resolveApproval`);
+  }
   const decision = constrainApprovalGrantScope({
     decision: cleanString(body.decision),
     scope: cleanString(body.scope)
-  }, { provider: "codex" }).decision;
-  if (context.providers?.codex?.resolveApproval) await context.providers.codex.resolveApproval(id, decision);
+  }, { provider: target }).decision;
+  await instance.resolveApproval(id, decision);
   return { ok: true };
 }
 
