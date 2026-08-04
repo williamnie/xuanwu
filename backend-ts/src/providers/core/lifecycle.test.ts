@@ -39,14 +39,15 @@ describe("P5: 恢复能力由 capability 决定（非 ID 穷举）", () => {
   test("interrupt 可用性按方法存在性判断（无 interrupt 方法 → 不可用）", () => {
     const executionOnly = new ExecutionOnlyProvider();
     const resumable = new ResumableSessionProvider();
+    const hasInterrupt = (p: unknown) => typeof (p as { interrupt?: unknown }).interrupt === "function";
     // 两个均非 codex/claude；capability/method 决定 interrupt 可用性
-    expect(typeof executionOnly.interrupt).toBe("undefined");
-    expect(typeof resumable.interrupt).toBe("undefined");
+    expect(hasInterrupt(executionOnly)).toBe(false);
+    expect(hasInterrupt(resumable)).toBe(false);
     expect(executionOnly.capabilities).not.toContain("interrupt");
   });
 
   test("approval 可用性按方法存在性判断", () => {
     const executionOnly = new ExecutionOnlyProvider();
-    expect(typeof executionOnly.resolveApproval).toBe("undefined");
+    expect(typeof (executionOnly as { resolveApproval?: unknown }).resolveApproval).toBe("undefined");
   });
 });
