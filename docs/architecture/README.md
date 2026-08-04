@@ -57,6 +57,7 @@
 
 ### Run
 
+- [ADR-XW-0089：Provider Core 多 Coding Agent 重构计划（Proposed）](xuanwu/0089-provider-core-multi-code-agent-refactor-plan.md)
 - [ADR-XW-0020：Run / Attempt 生命周期合同](xuanwu/0020-run-attempt-lifecycle-contract.md)
 - [ADR-XW-0021：Run / Attempt 关联字段与迁移](xuanwu/0021-run-attempt-relations.md)
 - [ADR-XW-0022：Codex / Claude provider Run event contract](xuanwu/0022-provider-run-event-contract.md)
