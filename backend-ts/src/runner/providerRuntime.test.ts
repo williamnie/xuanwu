@@ -205,8 +205,8 @@ afterEach(async () => {
 });
 
 describe("executor provider runtime seam", () => {
-  test("PI is not modeled as an executor provider id", () => {
-    expect(isExecutorProviderId("pi")).toBe(false);
+  test("P10: Pi 已是 executor provider id（RPC adapter 注册后）", () => {
+    expect(isExecutorProviderId("pi")).toBe(true);
   });
 
   test("runner layer can execute a fake provider and observe session refs/events", async () => {
