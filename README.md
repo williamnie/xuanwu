@@ -3,12 +3,16 @@
 
 # Xuanwu
 
-**A local-first, verification-first AI Engineering Control Plane**
+**Run coding agents around the clock.**
 
-Turn engineering goals into tracked work, let coding agents execute for the long haul,
-and close the loop with auditable recovery, evidence, and handoffs.
+Xuanwu is an always-on AI engineering control plane for running coding agents across projects,
+providers, and sessions.
 
-[简体中文](README.zh-CN.md) · [First delivery](docs/first-delivery.md) · [Architecture](docs/architecture/README.md) · [Latest release](https://github.com/williamnie/xuanwu/releases/latest)
+Give it an engineering goal and a permission boundary. Xuanwu turns the goal into tracked work,
+keeps agents moving while you are away, recovers interrupted runs, inspects the actual results,
+and brings you back only when human judgment is needed.
+
+[简体中文](README.zh-CN.md) · [Roadmap](#roadmap) · [First delivery](docs/first-delivery.md) · [Architecture](docs/architecture/README.md) · [Latest release](https://github.com/williamnie/xuanwu/releases/latest)
 
 [![Release](https://img.shields.io/github/v/release/williamnie/xuanwu?display_name=tag)](https://github.com/williamnie/xuanwu/releases/latest)
 [![Release workflow](https://github.com/williamnie/xuanwu/actions/workflows/release.yml/badge.svg)](https://github.com/williamnie/xuanwu/actions/workflows/release.yml)
@@ -21,56 +25,89 @@ and close the loop with auditable recovery, evidence, and handoffs.
 > license permits noncommercial use; commercial use requires a separate license.
 > See [License](#license).
 
-## Why Xuanwu?
+## What happens while you are away
 
-Coding agents are good at producing code. The harder problem is operating them responsibly:
-keeping long-running work visible, recovering without duplicate side effects, deciding when
-the result is actually done, and returning something a human can review.
+Coding agents can produce code. Xuanwu keeps the engineering work moving after you leave the
+terminal:
 
-Xuanwu provides that control plane:
+- **Keeps work moving** — runs queued and dependency-aware work across multiple repositories.
+- **Supervises long-running agents** — tracks every Run and Attempt instead of depending on a
+  terminal window staying open.
+- **Recovers interruptions** — resumes or retries failed sessions within bounded recovery budgets.
+- **Knows when to ask** — continues safe work autonomously and raises Attention when requirements,
+  credentials, approvals, or business decisions are missing.
+- **Returns reviewable results** — preserves changed files, revisions, checks, Evidence, and
+  Handoffs instead of accepting an agent's “done” message.
+
+The control loop stays explicit:
 
 ```mermaid
 flowchart LR
   G["Goal or Automation"] --> S["Xuanwu Supervisor"]
-  S --> W["Work"]
-  W --> R["Run / Attempt"]
-  R --> E["Observed facts and Evidence"]
-  E --> V{"PI semantic acceptance"}
-  V -->|accepted| D["Work done"]
-  V -->|reviewable delivery| H["Handoff"]
-  V -->|blocked or unclear| A["Attention"]
-  R -->|recovery exhausted| A
+  S --> W["Tracked Work"]
+  W --> R["Coding Agent Run"]
+  R --> F["Session and workspace facts"]
+  F --> D{"Supervisor decision"}
+  D -->|continue or recover| R
+  D -->|reviewable result| H["Handoff"]
+  D -->|human judgment needed| A["Attention"]
 ```
 
-An agent saying “done” is never the completion authority. The Supervisor keeps the Work
-`in_progress` after a Provider Turn ends, inspects the actual Session and workspace facts, and
-lets PI decide whether it is `done`, `failed`, or `needs_user`. Evidence and Handoffs remain
-auditable delivery records, but are not manufactured as a universal completion gate.
+## Trust without babysitting
+
+An agent saying “done” is not the completion authority. The Supervisor inspects the actual Session
+and workspace facts, keeps recoverable work moving, and records whether the Work is complete,
+failed, or needs a person. Evidence and Handoffs make the result reviewable without forcing you to
+watch every turn.
 
 ## What it does
 
 - **Work and Run control** — turn goals into project-bound Work, track every Run and Attempt,
   and keep project, working directory, provider, permissions, and dependencies explicit.
-- **PI-owned semantic acceptance** — an ended Provider Turn stays `in_progress` until the
-  Supervisor evaluates actual Session/workspace facts and records the next Issue decision.
-- **Evidence and delivery records** — preserve test, lint, build, Git, HTTP, browser, approval,
-  and Handoff facts when the workflow produces them, without treating model text as proof.
+- **Unattended orchestration** — schedule recurring work, standing orders, heartbeats, and
+  dependency-aware queues so work can continue without an open terminal.
 - **Supervision and recovery** — resume or retry within bounded budgets, avoid replaying known
   side effects, and escalate to Attention when human input is required.
-- **Multi-project automation** — schedule recurring work, standing orders, heartbeats, and
-  dependency-aware queues without sharing mutable project state.
-- **Multiple coding-agent providers** — Codex is the default full-featured provider; Claude is
-  available through the Anthropic Agent SDK or an explicit CLI fallback.
+- **Actual-result review** — preserve test, lint, build, Git, HTTP, browser, approval, and Handoff
+  facts when the workflow produces them, without treating model text as proof.
+- **Provider-neutral execution** — route Work through a common Run/Attempt lifecycle instead of
+  coupling project state to one coding agent.
 - **Auditable delivery** — changed files, revisions, evidence, approvals, notifications, and
   release/PR actions converge into a Handoff rather than a model-generated success message.
-- **Local ownership** — the control plane and SQLite authority run on your machine. A Web
-  Gateway, Runner Core, and Agentic Worker are isolated OS processes in release installs.
+- **Controlled deployment** — the control plane and SQLite authority run on a machine you control.
+  A Web Gateway, Runner Core, and Agentic Worker are isolated OS processes in release installs.
+
+## Provider support
+
+Support labels describe real acceptance status, not merely the presence of adapter code.
+
+| Provider | Status | Notes |
+| --- | --- | --- |
+| Codex | **Tested** | Default full-featured provider; real execution, session, recovery, interrupt, and delivery paths have been exercised. |
+| Claude / Claude Code | **Preview — not live-tested** | SDK and explicit CLI-fallback integration exist with automated coverage, but the real-account end-to-end path has not yet completed live acceptance. Do not treat it as production-validated support. |
+
+## Roadmap
+
+Xuanwu is evolving toward a provider-neutral, remotely operable control plane for always-on
+engineering work.
+
+| Stage | Focus | What it unlocks |
+| --- | --- | --- |
+| Available | Tested Codex execution plus persistent Work/Run supervision, recovery, Attention, Evidence, and Handoff | Run long-lived engineering work across projects from one control plane |
+| Next | Telegram integration | Create and inspect Work, receive Attention and delivery updates, and approve gated actions remotely |
+| Planned | More coding-agent providers: Kimi Code, Pi, zcode, and OpenCode | Choose the right agent for each project without changing the Work/Run lifecycle |
+| Later | More IM channels and richer provider routing | Operate Xuanwu from more places and route work by capability, availability, and policy |
+
+Roadmap items describe direction, not release commitments. A capability is marked available only
+after its execution, recovery, and delivery paths pass the required real integration acceptance.
 
 ## Current status
 
 Xuanwu is in active development. `v0.2.x` is intended for trusted individual developers and
-small teams running it on machines they control. It is not a hardened multi-tenant boundary,
-and the Web UI should not be exposed directly to the public internet.
+small teams running it on machines they control. “Always-on” describes the daemon, scheduler, and
+recovery model; it is not an availability SLA and still depends on the host and configured provider
+being online. Xuanwu is not a hardened multi-tenant boundary, and the Web UI should not be exposed
+directly to the public internet.
 
 The GitHub repository, release assets, binary, CLI, Skill, environment variables, service names,
 and default state directories all use **Xuanwu**: the command is `xuanwu`, and environment
@@ -101,6 +138,9 @@ If you have already cloned the repository, you can also install the Skill manual
 ./scripts/install-agent-skill.sh codex   # Install for Codex
 ./scripts/install-agent-skill.sh claude  # Install for Claude Code
 ```
+
+Installing the Xuanwu Skill in Claude Code is separate from selecting Claude as Xuanwu's execution
+provider. The Skill integration does not change the Claude provider's **not live-tested** status above.
 
 You can then tell the agent: `Use Xuanwu to create a triage issue for this repository: fix the login-page error message.`
 

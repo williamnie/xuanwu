@@ -3,12 +3,15 @@
 
 # 玄武 Xuanwu
 
-**本地优先、验证优先的 AI Engineering Control Plane**
+**让 Coding Agent 24 小时持续工作。**
 
-把工程目标变成可追踪的工作，交给 Coding Agents 长时间执行，
-并以可审计的监督、恢复、证据和交付闭环收口。
+玄武是一个面向 Coding Agent 的常驻 AI 工程控制面，负责跨项目、跨 Provider、
+跨 Session 调度和管理工程工作。
 
-[English](README.md) · [首次交付](docs/first-delivery.md) · [架构文档](docs/architecture/README.md) · [最新版本](https://github.com/williamnie/xuanwu/releases/latest)
+你只需要给出工程目标和权限边界。玄武会把目标变成可追踪的工作，在无人值守时持续推进，
+恢复中断的执行，检查真实结果，并形成可审查的交付；只有确实需要人类判断时才把你叫回来。
+
+[English](README.md) · [路线图](#路线图) · [首次交付](docs/first-delivery.md) · [架构文档](docs/architecture/README.md) · [最新版本](https://github.com/williamnie/xuanwu/releases/latest)
 
 [![Release](https://img.shields.io/github/v/release/williamnie/xuanwu?display_name=tag)](https://github.com/williamnie/xuanwu/releases/latest)
 [![Release workflow](https://github.com/williamnie/xuanwu/actions/workflows/release.yml/badge.svg)](https://github.com/williamnie/xuanwu/actions/workflows/release.yml)
@@ -20,51 +23,79 @@
 > 玄武是**源码可用（source-available）**软件，不是 OSI 认可的开源软件。公开许可证
 > 允许非商业使用；商业使用需要单独授权，详见[许可证](#许可证)。
 
-## 为什么需要玄武？
+## 当你离开电脑以后
 
-Coding Agents 已经很会写代码，真正困难的是可靠地“运营”它们：让长时间工作始终可见，
-在不重复副作用的前提下恢复失败，判断结果是否真的完成，并把可复核的交付物交还给人。
+Coding Agent 会写代码，玄武负责在人离开终端以后继续推进工程工作：
 
-玄武提供这一层控制面：
+- **持续推进工作**：跨多个仓库运行队列和依赖感知的工程任务。
+- **监督长时间运行的 Agent**：跟踪每个 Run 与 Attempt，不依赖某个终端窗口一直打开。
+- **恢复中断**：在有界恢复预算内 resume 或 retry 失败的 Session。
+- **知道什么时候该问人**：安全范围内自主继续；缺少需求、凭据、审批或业务判断时进入 Attention。
+- **交回可审查结果**：保留 changed files、revision、检查、Evidence 与 Handoff，不接受 Agent
+  一句“完成”作为结果。
+
+整个控制循环保持明确：
 
 ```mermaid
 flowchart LR
   G["目标或自动化"] --> S["Xuanwu Supervisor"]
-  S --> W["Work"]
-  W --> R["Run / Attempt"]
-  R --> E["实际事实与 Evidence"]
-  E --> V{"PI 语义验收"}
-  V -->|接受| D["Work done"]
-  V -->|形成可审查交付| H["Handoff"]
-  V -->|阻塞或不明确| A["Attention"]
-  R -->|恢复预算耗尽| A
+  S --> W["可追踪 Work"]
+  W --> R["Coding Agent Run"]
+  R --> F["Session 与 workspace 事实"]
+  F --> D{"Supervisor 决策"}
+  D -->|继续或恢复| R
+  D -->|可审查结果| H["Handoff"]
+  D -->|需要人类判断| A["Attention"]
 ```
 
-Agent 说“完成”不等于完成。Provider Turn 结束后，Supervisor 仍让 Work 保持 `in_progress`，
-检查真实 Session 与 workspace 事实，再由 PI 判断进入 `done`、`failed` 或 `needs_user`。
-Evidence 与 Handoff 继续作为可审计交付记录，但不会被伪造成所有任务通用的完成门禁。
+## 不用盯着，也能信任结果
+
+Agent 说“完成”不等于完成。Supervisor 会检查真实 Session 与 workspace 事实，让可恢复的工作
+继续推进，并记录 Work 是已经完成、执行失败还是确实需要人。Evidence 与 Handoff 让结果可审查，
+而不要求你盯着每一个 Turn。
 
 ## 核心能力
 
 - **Work 与 Run 控制**：把目标变成绑定项目的 Work，跟踪每个 Run/Attempt，明确项目、
   工作目录、Provider、权限和依赖，不让模型猜测作用域。
-- **PI 掌握语义验收权**：Provider Turn 结束后仍保持 `in_progress`，由 Supervisor 基于真实
-  Session/workspace 事实记录下一步 Issue 决策。
-- **Evidence 与交付记录**：保留测试、lint、build、Git、HTTP、浏览器、Approval 与 Handoff
-  事实，但不把模型文案当成证明。
+- **无人值守编排**：支持周期任务、Standing Order、Heartbeat 和依赖感知队列，不打开终端也能持续推进。
 - **监督与恢复**：在有界预算内 resume/retry，避免重放已知副作用；需要人时进入 Attention。
-- **多项目自动化**：支持周期任务、Standing Order、Heartbeat 和依赖感知队列，同时隔离各项目状态。
-- **多 Coding Agent Provider**：Codex 是默认的完整 Provider；Claude 可通过 Anthropic Agent SDK
-  或显式 CLI fallback 接入。
+- **真实结果审查**：保留测试、lint、build、Git、HTTP、浏览器、Approval 与 Handoff 事实，
+  但不把模型文案当成证明。
+- **Provider-neutral 执行**：所有 Provider 进入统一的 Run/Attempt 生命周期，不让项目状态绑定某个 Agent。
 - **可审计交付**：changed files、revision、Evidence、Approval、通知和 release/PR 动作最终汇入
   Handoff，而不是停留在模型生成的成功文案。
-- **本地掌控**：控制面和 SQLite authority 运行在本机；Release 安装将 Web Gateway、Runner Core
-  与 Agentic Worker 隔离为三个系统进程。
+- **受控部署**：控制面与 SQLite authority 运行在你掌控的机器上；Release 安装将 Web Gateway、
+  Runner Core 与 Agentic Worker 隔离为三个系统进程。
+
+## Provider 支持状态
+
+这里的状态表示真实验收程度，不以“仓库里已经有 adapter 代码”冒充可用。
+
+| Provider | 状态 | 说明 |
+| --- | --- | --- |
+| Codex | **已测试** | 默认完整 Provider；真实执行、Session、恢复、中断和交付链路已经过测试。 |
+| Claude / Claude Code | **预览，尚未真实测试** | 已有 SDK 与显式 CLI fallback 接入，并有自动化测试覆盖，但真实账号端到端链路尚未完成 live acceptance，不能视为已经过生产验证。 |
+
+## 路线图
+
+玄武正在向一个 Provider-neutral、可远程操作、能够长期无人值守运行的 AI 工程控制面演进。
+
+| 阶段 | 重点 | 带来的能力 |
+| --- | --- | --- |
+| 已支持 | 经过测试的 Codex 执行，以及持久化 Work/Run、监督恢复、Attention、Evidence 与 Handoff | 从一个控制面跨项目运行长期工程任务 |
+| 下一步 | Telegram 接入 | 远程创建和查询 Work、接收异常与交付通知、审批受控动作 |
+| 随后 | 接入 Kimi Code、Pi、zcode、OpenCode 等 Coding Agent Provider | 在不改变 Work/Run 生命周期的情况下为项目选择不同 Agent |
+| 后续 | 更多 IM Channel 与更完整的 Provider 路由 | 按能力、健康状态和策略调度 Agent，并从更多入口管理工程工作 |
+
+路线图表达产品方向，不代表具体版本或交付日期。只有真实执行、恢复和交付链路通过所需的
+集成验收后，相关能力才会标记为“已支持”。
 
 ## 当前状态
 
-玄武仍在快速演进。`v0.2.x` 面向在自有可信机器上运行的个人开发者和小型团队；它不是经过
-加固的多租户隔离边界，Web UI 不应直接暴露到公网。
+玄武仍在快速演进。`v0.2.x` 面向在自有可信机器上运行的个人开发者和小型团队。“常驻”描述的是
+daemon、scheduler 与恢复模型，不是可用性 SLA；宿主机与配置的 Provider 仍需保持在线。玄武不是
+经过加固的多租户隔离边界，Web UI 不应直接暴露到公网。
 
 GitHub 仓库、Release 资产、二进制、CLI、Skill、环境变量、服务标识和默认数据目录统一使用
 **Xuanwu**：命令为 `xuanwu`，环境变量前缀为 `XUANWU_*`。
@@ -92,6 +123,9 @@ Codex 还是 Claude Code，把仓库中的 xuanwu Skill 安装到对应的个人
 ./scripts/install-agent-skill.sh codex   # 安装到 Codex
 ./scripts/install-agent-skill.sh claude  # 安装到 Claude Code
 ```
+
+把 Xuanwu Skill 安装到 Claude Code，与在玄武中选择 Claude 作为执行 Provider 是两件事；
+安装 Skill 不会改变上面 Claude Provider **尚未真实测试**的状态。
 
 安装后可以直接告诉 Agent：`请用 Xuanwu 为当前仓库创建一个 triage Issue：修复登录页错误提示。`
 

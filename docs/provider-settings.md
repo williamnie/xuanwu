@@ -4,8 +4,13 @@ Settings UI 不单独探测 provider；它消费 `/api/system/status.providers`�
 
 ## 当前 provider
 
-- `codex`：默认 executor，命令默认为 `codex app-server --listen stdio://`。
-- `claude`：默认使用 Bun 进程内的 `@anthropic-ai/claude-agent-sdk`；`claude` CLI 仅保留为显式 `cli-fallback`。
+- `codex`：**tested**。默认 executor，命令默认为 `codex app-server --listen stdio://`；真实执行、
+  Session、恢复、中断与交付主链已经过测试。
+- `claude`：**preview / not live-tested**。默认使用 Bun 进程内的
+  `@anthropic-ai/claude-agent-sdk`；`claude` CLI 仅保留为显式 `cli-fallback`。实现已有自动化测试，
+  但真实账号端到端链路尚未完成 live acceptance。
+
+Provider 状态以真实验收层级为准，adapter 存在、fixture 通过或能够保存配置都不等于 live-tested。
 
 Claude SDK 模式声明 `issue_execution`、`sessions`、`resume_session`、`interrupt`。当前没有接通 SDK 审批闭环或可靠 model list，因此不声明 `approvals` / `model_list`，UI 会允许手填 Claude model id。CLI fallback 只声明真实可用的执行和中断能力，不会被 Sessions API 暗中当作 SDK 使用。
 

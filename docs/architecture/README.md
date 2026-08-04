@@ -17,7 +17,7 @@
 
 | 主题 | canonical 入口 |
 | --- | --- |
-| 产品定位、术语、Golden Journey、核心对象 | [0001–0005](#foundation) |
+| 产品定位、术语、Golden Journey、核心对象 | [0088、0001–0005](#foundation) |
 | Issue/Event 存储与保留 | [0006–0009](#foundation) |
 | Work | [0011–0019](#work) |
 | Run / Attempt / provider lifecycle | [0020–0026](#run) |
@@ -31,7 +31,8 @@
 
 ### Foundation
 
-- [ADR-XW-0001：玄武产品定位、用户承诺与非目标](xuanwu/0001-product-positioning.md)
+- [ADR-XW-0088：常驻无人值守的 AI 工程控制面定位](xuanwu/0088-always-on-product-positioning.md)
+- [ADR-XW-0001：玄武产品定位、用户承诺与非目标（产品类别表述已被 0088 supersede）](xuanwu/0001-product-positioning.md)
 - [ADR-XW-0002：玄武品牌术语与兼容标识合同](xuanwu/0002-brand-terminology.md)
 - [ADR-XW-0003：六条 Golden Journey 端到端验收合同](xuanwu/0003-golden-journey-contracts.md)
 - [ADR-XW-0004：Work、Run、Evidence、Handoff、Attention、Automation 核心对象合同](xuanwu/0004-core-domain-objects.md)
@@ -147,6 +148,7 @@
 
 | 历史记录 | 当前规范 |
 | --- | --- |
+| [ADR-XW-0001 的“本地优先、验证优先”产品类别表述](xuanwu/0001-product-positioning.md) | [常驻无人值守的 AI 工程控制面定位](xuanwu/0088-always-on-product-positioning.md) |
 | [PI Guardian 完整技术设计](2026-06-17-pi-guardian-notification-supervisor-design.md) 与 [v1](2026-06-17-pi-guardian-design-review.md) / [v2](2026-06-17-pi-guardian-design-review-v2.md) 评审 | [Automation 语义](xuanwu/0060-automation-semantics.md)、[Approval / Action Gate](xuanwu/0063-approval-action-gate.md)、[通知 Outbox](xuanwu/0075-unified-notification-outbox.md)、[决策层收敛](xuanwu/0079-pi-decision-layer-consolidation.md) |
 | [PI Guardian 通知路由边界](2026-06-23-pi-guardian-notification-routing.md) | [统一通知 Outbox](xuanwu/0075-unified-notification-outbox.md)、[Feishu Connector 迁移](xuanwu/0077-feishu-channel-connector-migration.md) |
 | [provider worker outage 回归说明](2026-06-23-pi-provider-worker-outage-regression.md) | [Run 生命周期](xuanwu/0020-run-attempt-lifecycle-contract.md)、[provider event contract](xuanwu/0022-provider-run-event-contract.md)、[重启恢复不变量](xuanwu/0069-restart-recovery-invariants.md) |
