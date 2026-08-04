@@ -1,4 +1,5 @@
 import type {
+  ApprovalDecision,
   ExecutorCapability,
   ExecutorProvider,
   InterruptInput,
@@ -132,5 +133,9 @@ export class FullSessionProvider implements ExecutorProvider {
 
   async listModels(): Promise<unknown> {
     return [{ id: "fake-model", display_name: "Fake Model" }];
+  }
+
+  async resolveApproval(_requestId: string, _decision: ApprovalDecision): Promise<void> {
+    // P2：full-session fixture 声明 approvals=host-callback，需提供对应方法（conformance fail closed）
   }
 }
