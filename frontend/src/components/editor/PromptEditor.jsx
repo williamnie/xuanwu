@@ -10,6 +10,7 @@ import PromptEditorReferences from './PromptEditorReferences';
 import PromptEditorToolbar from './PromptEditorToolbar';
 import PromptSuggestionMenu from './PromptSuggestionMenu';
 import { applyPromptSuggestion, updatePromptSuggestionMenu, usePromptEditor } from './usePromptEditor';
+import { promptEditorImageFiles } from './promptEditorImageTransfer';
 import {
   createComposerImageAttachment,
   serializeComposerPrompt,
@@ -119,12 +120,13 @@ export default function PromptEditor({
   }, [setSuggestionMenu, suggestionMenu, visibleSuggestions.length]);
 
   async function uploadFiles(files) {
-    const images = Array.from(files).filter(file => file.type.startsWith('image/'));
+    const images = promptEditorImageFiles(files);
     if (!images.length || !editor) return;
     setUploading(true);
-    try {
-      const nextAttachments = [];
-      for (const image of images) {
+    const nextAttachments = [];
+    const failures = [];
+    for (const image of images) {
+      try {
         const upload = await systemApi.uploadImage(image);
         if (isComposer) {
           nextAttachments.push(createComposerImageAttachment(upload, image));
@@ -134,21 +136,21 @@ export default function PromptEditor({
             alt: upload.original_name || image.name,
           }).run();
         }
+      } catch (err) {
+        failures.push(`${image.name || '图片'}：${err.message || '网络异常'}`);
       }
-      if (isComposer && nextAttachments.length > 0) {
-        const current = splitComposerImageAttachments(valueRef.current);
-        const currentText = editor.getMarkdown();
-        emitChange(serializeComposerPrompt(
-          [...current.attachments, ...nextAttachments.filter(Boolean)],
-          currentText,
-        ));
-        editor.chain().focus().run();
-      }
-    } catch (err) {
-      message.error(`图片上传失败：${err.message || '网络异常'}`);
-    } finally {
-      setUploading(false);
     }
+    if (isComposer && nextAttachments.length > 0) {
+      const current = splitComposerImageAttachments(valueRef.current);
+      const currentText = editor.getMarkdown();
+      emitChange(serializeComposerPrompt(
+        [...current.attachments, ...nextAttachments.filter(Boolean)],
+        currentText,
+      ));
+      editor.chain().focus().run();
+    }
+    if (failures.length > 0) message.error(`图片添加失败：${failures.join('；')}`);
+    setUploading(false);
   }
 
   if (!editor) {
@@ -168,6 +170,12 @@ export default function PromptEditor({
   const editorShell = (
     <div className={`prompt-editor-shell ${isComposer ? 'composer' : ''} ${editor.isFocused ? 'focused' : ''}`}>
       {!isComposer && !hideToolbar && <PromptEditorToolbar editor={editor} onPickImage={() => fileInputRef.current?.click()} uploading={uploading} />}
+      {isComposer && (
+        <PromptEditorComposerImages
+          attachments={composerImageState.attachments}
+          onRemove={removeComposerImage}
+        />
+      )}
       <EditorContent editor={editor} className={`prompt-editor-content ${isComposer ? 'composer' : ''}`} style={{ minHeight }} />
       {suggestionMenu && visibleSuggestions.length > 0 && (
         <PromptSuggestionMenu
@@ -217,10 +225,6 @@ export default function PromptEditor({
 
   return (
     <div className="prompt-editor-composer-stack">
-      <PromptEditorComposerImages
-        attachments={composerImageState.attachments}
-        onRemove={removeComposerImage}
-      />
       {showReferenceChips && (
         <PromptEditorReferences
           details={referenceDetails}

@@ -5,6 +5,7 @@ import { workApi } from '../../api/work.js';
 import { projectsApi } from '../../api/projects.js';
 import { message } from '../../store/toastStore.js';
 import { useI18n } from '../../i18n/context.js';
+import PromptEditor from '../../components/editor/PromptEditor.jsx';
 import { editorDraft, effectiveProfilePreview } from './workProfileRouting.js';
 
 export default function WorkEditorDialog({ mode, onClose, onSaved, projects, work }) {
@@ -111,10 +112,16 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
             <span>{t('editor.title')}</span>
             <input autoFocus className="form-control" maxLength={180} onChange={event => setField('title', event.target.value)} required value={draft.title} />
           </label>
-          <label>
+          <div className="work-dialog-field">
             <span>{t('work.goal')}</span>
-            <textarea className="form-control work-goal-input" onChange={event => setField('goal', event.target.value)} required value={draft.goal} />
-          </label>
+            <PromptEditor
+              minHeight={150}
+              onChange={value => setField('goal', value)}
+              placeholder="描述目标、范围、验收方式；可直接粘贴或添加图片"
+              value={draft.goal}
+              variant="composer"
+            />
+          </div>
           <label>
             <span>Agent Profile</span>
             <select

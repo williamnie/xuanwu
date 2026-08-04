@@ -173,25 +173,21 @@ function NewSessionComposerActions({ settings, models, modelsError, modelsLoadin
   const tierOptions = serviceTierOptions(effectiveModelForSettings(settings, models), settings.serviceTier);
   return (
     <>
-      {modelsError ? (
-        <label className="composer-embedded-model-manual" title={`远端 model API 失败，已启用手填：${modelsError}`}>
-          <Brain size={13} />
-          <input aria-label="手动填写模型 ID" value={settings.model} onChange={(event) => onModelChange(event.target.value)} placeholder="手填 model ID" />
-        </label>
-      ) : (
-        <div className="composer-embedded-select">
-          <Brain size={13} />
-          <span>{modelsLoading ? '读取模型' : settings.model ? compactModelName(settings.model) : `${projectProviderLabel(settings.provider)} 默认`}</span>
-          <select disabled={modelsLoading} value={settings.model} onChange={(event) => onModelChange(event.target.value)}>
-            <option value="">{projectProviderLabel(settings.provider)} 默认</option>
-            {models.map((model) => (
-              <option key={model.id || model.model} value={model.id || model.model}>
-                {compactModelName(modelLabel(model))}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      <div className="composer-embedded-select" title={modelsError ? `模型列表暂未加载：${modelsError}` : '模型'}>
+        <Brain size={13} />
+        <span>{modelsLoading ? '读取模型' : settings.model ? compactModelName(settings.model) : `${projectProviderLabel(settings.provider)} 默认`}</span>
+        <select disabled={modelsLoading} value={settings.model} onChange={(event) => onModelChange(event.target.value)}>
+          <option value="">{projectProviderLabel(settings.provider)} 默认</option>
+          {models.map((model) => (
+            <option key={model.id || model.model} value={model.id || model.model}>
+              {compactModelName(modelLabel(model))}
+            </option>
+          ))}
+          {settings.model && !models.some((model) => model.id === settings.model || model.model === settings.model) ? (
+            <option value={settings.model}>{compactModelName(settings.model)}</option>
+          ) : null}
+        </select>
+      </div>
       <div className="composer-embedded-select">
         <Gauge size={13} />
         <span>{serviceTierLabel(settings, models)}</span>

@@ -180,32 +180,20 @@ function RuntimeControls({ settings, onSettingChange, models, modelsLoading, mod
   return (
     <>
       <PermissionSelect settings={settings} onSettingChange={onSettingChange} />
-      {modelsError ? (
-        <label className="session-composer-model-manual" title={`远端 model API 失败，已启用手填：${modelsError}`}>
-          <Cpu size={14} />
-          <input
-            aria-label="手动填写模型 ID"
-            value={settings.model}
-            onChange={(event) => onSettingChange('model', event.target.value)}
-            placeholder="手填 model ID"
-          />
-        </label>
-      ) : (
-        <CompactSelect
-          className="model"
-          icon={<Cpu size={14} />}
-          value={settings.model}
-          displayLabel={modelDisplayLabel(settings.model, effectiveModel, models)}
-          onChange={(value) => onSettingChange('model', value)}
-          title={modelHint(modelsLoading, modelsError)}
-        >
-          <option value="">{modelPlaceholder(modelsLoading, modelsError, effectiveModel)}</option>
-          {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{compactModelName(modelLabel(model))}</option>)}
-          {settings.model && !models.some((model) => model.id === settings.model || model.model === settings.model) && (
-            <option value={settings.model}>{settings.model}</option>
-          )}
-        </CompactSelect>
-      )}
+      <CompactSelect
+        className="model"
+        icon={<Cpu size={14} />}
+        value={settings.model}
+        displayLabel={modelDisplayLabel(settings.model, effectiveModel, models)}
+        onChange={(value) => onSettingChange('model', value)}
+        title={modelHint(modelsLoading, modelsError)}
+      >
+        <option value="">{modelPlaceholder(modelsLoading, modelsError, effectiveModel)}</option>
+        {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{compactModelName(modelLabel(model))}</option>)}
+        {settings.model && !models.some((model) => model.id === settings.model || model.model === settings.model) && (
+          <option value={settings.model}>{settings.model}</option>
+        )}
+      </CompactSelect>
       <CompactSelect
         className="effort"
         icon={<Brain size={14} />}
@@ -342,7 +330,7 @@ function visibleEffortOptions(model, selectedValue) {
 
 function modelHint(loading, error) {
   if (loading) return '正在读取真实 Codex 模型列表';
-  if (error) return '模型列表暂未加载';
+  if (error) return `模型列表暂未加载：${error}`;
   return '模型';
 }
 

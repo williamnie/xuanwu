@@ -111,14 +111,16 @@
   opacity: 0.55;
 }
 
-.work-dialog label {
+.work-dialog label,
+.work-dialog-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
 }
 
-.work-dialog label > span {
+.work-dialog label > span,
+.work-dialog-field > span {
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 0.61rem;
@@ -309,7 +311,7 @@
 .work-dialog form { display: flex; flex-direction: column; gap: 15px; padding-top: 18px; }
 .work-dialog-grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
 .work-dialog-contract { display: flex; flex-wrap: wrap; gap: 6px; }
-.work-goal-input { min-height: 170px; resize: vertical; }
+.work-dialog-field .prompt-editor-shell.composer { border-radius: 14px; }
 .work-dialog footer { justify-content: flex-end; margin-top: 4px; }
 .work-dialog-error { background: var(--error-bg); border: 1px solid color-mix(in srgb, var(--error) 28%, var(--border-color)); border-radius: var(--radius-sm); color: var(--error); font-size: 0.75rem; padding: 9px 11px; }
 

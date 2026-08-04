@@ -1,12 +1,16 @@
 export function imageFilesFromTransfer(dataTransfer) {
-  const files = Array.from(dataTransfer?.files || []).filter(isImageFile);
+  const files = promptEditorImageFiles(dataTransfer?.files);
   if (files.length > 0) return files;
 
   return Array.from(dataTransfer?.items || []).flatMap((item) => {
-    if (item?.kind !== 'file' || !isImageMime(item.type)) return [];
+    if (item?.kind !== 'file') return [];
     const file = item.getAsFile?.();
-    return file ? [file] : [];
+    return isPromptEditorImageFile(file) ? [file] : [];
   });
+}
+
+export function promptEditorImageFiles(files) {
+  return Array.from(files || []).filter(isPromptEditorImageFile);
 }
 
 export function handlePromptEditorImageTransfer(dataTransfer, uploadFiles) {
@@ -16,8 +20,9 @@ export function handlePromptEditorImageTransfer(dataTransfer, uploadFiles) {
   return true;
 }
 
-function isImageFile(file) {
-  return isImageMime(file?.type);
+export function isPromptEditorImageFile(file) {
+  if (!file) return false;
+  return isImageMime(file.type) || /\.(?:png|jpe?g|gif|webp)$/i.test(String(file.name || ''));
 }
 
 function isImageMime(type) {

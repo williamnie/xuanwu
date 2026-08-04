@@ -12,11 +12,13 @@ function ruleFor(css, selector) {
   return match[1];
 }
 
-test('composer image attachments render above the editable input area', () => {
+test('composer image attachments render inside the editable input shell', () => {
   const areaRule = ruleFor(imageCss, '.prompt-image-attachment-area');
   const cardRule = ruleFor(imageCss, '.prompt-image-attachment-card');
 
-  assert.match(promptEditorJsx, /<PromptEditorComposerImages[\s\S]*<PromptEditorReferences[\s\S]*\{editorShell\}/);
+  assert.match(promptEditorJsx, /const editorShell = \([\s\S]*<PromptEditorComposerImages[\s\S]*<EditorContent/);
   assert.match(areaRule, /display:\s*flex/);
-  assert.match(cardRule, /width:\s*112px/);
+  assert.match(areaRule, /padding:\s*12px\s+14px\s+0/);
+  assert.match(cardRule, /width:\s*92px/);
+  assert.match(cardRule, /height:\s*76px/);
 });

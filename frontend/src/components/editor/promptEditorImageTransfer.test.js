@@ -32,6 +32,21 @@ test('falls back to clipboard items when the files list is empty', () => {
   assert.deepEqual(uploaded, [image]);
 });
 
+test('accepts clipboard image files when the item mime type is empty', () => {
+  const image = { name: 'image.png', type: 'image/png' };
+  const transfer = {
+    files: [],
+    items: [{ kind: 'file', type: '', getAsFile: () => image }],
+  };
+
+  assert.deepEqual(imageFilesFromTransfer(transfer), [image]);
+});
+
+test('accepts known image extensions when clipboard file mime is empty', () => {
+  const image = { name: 'clipboard.webp', type: '' };
+  assert.deepEqual(imageFilesFromTransfer({ files: [image] }), [image]);
+});
+
 test('leaves ordinary text paste to the editor', () => {
   let uploadCalled = false;
 

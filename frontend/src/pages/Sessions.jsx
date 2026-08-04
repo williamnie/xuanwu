@@ -270,11 +270,13 @@ export default function Sessions({
     }
   }, [selectedId]);
 
-  const loadModels = useCallback(async (provider = 'codex') => {
+  const loadModels = useCallback(async (provider = 'codex', runtimeStatus = null) => {
     setModelsLoading(true);
     if (provider !== 'codex') {
-      setModels([]);
-      setModelsError(`${provider === 'claude' ? 'Claude Agent SDK' : provider} 未声明 model_list capability，请按需手填模型 ID`);
+      const providerStatus = (runtimeStatus?.providers || []).find(item => item.id === provider);
+      const defaultModel = String(providerStatus?.default_model || '').trim();
+      setModels(defaultModel ? [{ id: defaultModel, displayName: defaultModel, isDefault: true }] : []);
+      setModelsError(defaultModel ? '' : `${provider === 'claude' ? 'Claude Agent SDK' : provider} 未声明 model_list capability，使用 Provider 默认模型`);
       setModelsLoading(false);
       return;
     }
@@ -283,6 +285,7 @@ export default function Sessions({
       setModels(result.data || []);
       setModelsError('');
     } catch (err) {
+      setModels([]);
       setModelsError(err.message || '读取 Codex 模型列表失败');
     } finally {
       setModelsLoading(false);
@@ -332,7 +335,7 @@ export default function Sessions({
     return () => window.clearInterval(interval);
   }, [loadFirstPage]);
 
-  useEffect(() => { loadModels(sessionSettings.provider); }, [loadModels, sessionSettings.provider]);
+  useEffect(() => { loadModels(sessionSettings.provider, providerRuntimeStatus); }, [loadModels, providerRuntimeStatus, sessionSettings.provider]);
   useEffect(() => {
     let alive = true;
     systemApi.getSystemStatus()

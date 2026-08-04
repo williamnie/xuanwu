@@ -498,7 +498,7 @@ export default function Issues({
                   value={formDescription}
                   onChange={setFormDescription}
                   minHeight={180}
-                  hideToolbar={true}
+                  variant="composer"
                 />
               </div>
 

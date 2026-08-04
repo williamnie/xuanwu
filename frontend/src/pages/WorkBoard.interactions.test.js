@@ -5,6 +5,13 @@ import test from 'node:test';
 const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('./WorkBoard.css', import.meta.url), 'utf8');
 const composerCss = readFileSync(new URL('../components/GlobalAskComposer.css', import.meta.url), 'utf8');
+const editorDialog = readFileSync(new URL('./work/WorkEditorDialog.jsx', import.meta.url), 'utf8');
+
+test('new Work goal uses the image-capable prompt composer', () => {
+  assert.match(editorDialog, /<PromptEditor[\s\S]*onChange=\{value => setField\('goal', value\)\}[\s\S]*variant="composer"/);
+  assert.doesNotMatch(editorDialog, /<textarea[\s\S]*work-goal-input/);
+  assert.match(css, /\.work-dialog-field \.prompt-editor-shell\.composer/);
+});
 
 test('Work Board cards restore drag and drop through guarded Issue actions', () => {
   assert.match(board, /draggable=\{!moving\}/);
