@@ -1,6 +1,9 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { PiConversation } from "../db/repositories/pi.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+
+const LEGACY_APP_SUPPORT_SEGMENT = "/codex-issue-runner-bun-live/";
+const XUANWU_APP_SUPPORT_SEGMENT = "/xuanwu-bun-live/";
 
 export type PiConversationTranscriptItem = {
   created_at: string;
@@ -19,13 +22,20 @@ export function piConversationDetail(conversation: PiConversation): PiConversati
 }
 
 function readPiConversationTranscript(conversation: PiConversation): PiConversationTranscriptItem[] {
-  const file = conversation.session_file.trim();
+  const file = resolvePiConversationSessionFile(conversation.session_file);
   if (file === "") return [];
   try {
     return parsePiSessionJsonl(readFileSync(file, "utf8"), conversation);
   } catch {
     return [];
   }
+}
+
+export function resolvePiConversationSessionFile(value: string): string {
+  const file = value.trim();
+  if (file === "" || existsSync(file)) return file;
+  const migrated = file.replace(LEGACY_APP_SUPPORT_SEGMENT, XUANWU_APP_SUPPORT_SEGMENT);
+  return migrated !== file && existsSync(migrated) ? migrated : file;
 }
 
 function parsePiSessionJsonl(text: string, conversation: PiConversation): PiConversationTranscriptItem[] {

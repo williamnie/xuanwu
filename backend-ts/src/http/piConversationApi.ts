@@ -21,7 +21,7 @@ import { startProjectLoop } from "../runner/projectLoopManager.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { piConversationPromptImages } from "./piConversationImages.ts";
-import { piConversationDetail } from "./piConversationTranscript.ts";
+import { piConversationDetail, resolvePiConversationSessionFile } from "./piConversationTranscript.ts";
 import type { PiRuntimeResult, PiRuntimeSession } from "./piRuntime.ts";
 import { piTurnSessionEvent, publishPiSessionEvent, type PiTurnSessionEvent } from "./piSessionEvents.ts";
 import { PI_READ_ONLY_ACTION_TYPES } from "../pi/actionGate.ts";
@@ -645,7 +645,7 @@ async function openConversationRuntime(
     providers: context.providers,
     restartDelayMs: context.restartDelayMs,
     restartProcess: context.restartProcess,
-    sessionFile: conversation.session_file,
+    sessionFile: resolvePiConversationSessionFile(conversation.session_file),
     toolProject,
     source,
     sourceTurn: { id: turnID, source, userPrompt },
