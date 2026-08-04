@@ -84,7 +84,7 @@ Support labels describe real acceptance status, not merely the presence of adapt
 | Provider | Status | Notes |
 | --- | --- | --- |
 | Codex | **Tested** | Default full-featured provider; real execution, session, recovery, interrupt, and delivery paths have been exercised. |
-| Claude / Claude Code | **Preview — not live-tested** | SDK and explicit CLI-fallback integration exist with automated coverage, but the real-account end-to-end path has not yet completed live acceptance. Do not treat it as production-validated support. |
+| Claude / Claude Code | **Preview — not live-tested** | Reuses local Claude Code login, settings, and sessions, with explicit SDK authentication also available. Automated coverage exists, but the real-account end-to-end path has not completed live acceptance. |
 
 ## Roadmap
 

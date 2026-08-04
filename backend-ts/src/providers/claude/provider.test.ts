@@ -13,16 +13,75 @@ import { ClaudeExecutorProvider, type ClaudeProcessFactory } from "./provider.ts
 
 const tempRoots: string[] = [];
 
-describe("Claude execution-only provider", () => {
+describe("Claude Code provider", () => {
   test("keeps CLI fallback explicit and reports its real command readiness", () => {
     const injected = new ClaudeExecutorProvider(runtimeConfig({ mode: "cli-fallback" }), {
       processFactory: scriptedProcessFactory({}).factory
     });
     const missing = new ClaudeExecutorProvider(runtimeConfig({ command: "/definitely/missing/claude", mode: "cli-fallback" }));
 
-    expect(injected.capabilities).toEqual(["issue_execution", "interrupt"]);
+    expect(injected.capabilities).toEqual(["issue_execution", "sessions", "resume_session", "interrupt"]);
     expect(injected.runtimeStatus()).toMatchObject({ mode: "cli-fallback", ready: true });
     expect(missing.runtimeStatus()).toMatchObject({ mode: "cli-fallback", ready: false });
+  });
+
+  test("creates, discovers, reads, and resumes local Claude Code sessions", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-session-cwd-"));
+    tempRoots.push(cwd);
+    const factory = scriptedProcessFactory({ stdout: jsonl([
+      { type: "system", subtype: "init", session_id: "local-session" },
+      { type: "result", session_id: "local-session", uuid: "local-turn", is_error: false }
+    ]) });
+    const sessionInfo = {
+      sessionId: "local-session",
+      summary: "Local history",
+      firstPrompt: "first prompt",
+      customTitle: "",
+      lastModified: 2_000,
+      gitBranch: "main",
+      cwd
+    };
+    const provider = new ClaudeExecutorProvider(runtimeConfig({ authMode: "local-cli", mode: "cli-fallback" }), {
+      authInspector: () => ({ checked: true, logged_in: true }),
+      processFactory: factory.factory,
+      sessionFunctions: {
+        listSessions: async () => [sessionInfo],
+        getSessionInfo: async () => sessionInfo,
+        getSessionMessages: async () => [{
+          type: "user",
+          uuid: "user-1",
+          parent_tool_use_id: null,
+          session_id: "local-session",
+          message: { role: "user", content: "hello" }
+        }]
+      }
+    });
+
+    expect(await provider.listSessions({ limit: 20 })).toMatchObject({
+      data: [{ id: "claude:local-session", provider: "claude", provider_session_id: "local-session" }]
+    });
+    expect(await provider.readSession("local-session")).toMatchObject({
+      id: "claude:local-session",
+      cwd,
+      turns: [{ items: [{ type: "userMessage", text: "hello" }] }]
+    });
+    expect(await provider.createSession({ cwd, prompt: "create" })).toMatchObject({
+      provider: "claude",
+      provider_session_id: "local-session"
+    });
+    expect(await provider.sendSessionMessage({ sessionId: "local-session", prompt: "continue" })).toMatchObject({
+      provider_session_id: "local-session",
+      turn_id: "local-turn"
+    });
+    expect(await provider.recover({
+      ...runInput(),
+      cwd,
+      session: { provider: "claude", sessionId: "local-session", turnId: "local-turn" }
+    })).toMatchObject({ session: { sessionId: "local-session", turnId: "local-turn" } });
+    expect(factory.calls[0]?.command).not.toContain("--bare");
+    expect(factory.calls[1]?.command).toContain("--resume");
+    expect(factory.calls[1]?.command).toContain("local-session");
+    expect(factory.calls[2]?.command).toContain("--resume");
   });
 
   test("reports explicit local CLI login and does not pass parent API credentials to Claude", async () => {
@@ -79,7 +138,7 @@ describe("Claude execution-only provider", () => {
       expect(factory.calls[0].cwd).toBe(cwd);
       expect(factory.calls[0].env.XUANWU_MANAGED_EXECUTION).toBe("1");
       expect(factory.calls[0].command).toEqual([
-        "claude", "-p", "--verbose", "--bare", "--output-format", "stream-json",
+        "claude", "-p", "--verbose", "--output-format", "stream-json",
         "--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,LS,Edit,MultiEdit,Write,Bash",
         "--model", "sonnet", "--max-turns", "50", "issue prompt"
       ]);

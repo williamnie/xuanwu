@@ -1,5 +1,5 @@
 const DEFAULT_PROVIDER = 'codex';
-const SESSION_CAPABLE_PROVIDERS = new Set(['codex']);
+const SESSION_CAPABLE_PROVIDERS = new Set(['codex', 'claude']);
 
 export function latestIssueRun(issue) {
   return issue?.latest_run || null;

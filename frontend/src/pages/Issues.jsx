@@ -1,4 +1,5 @@
 import { workApi } from '../api/work.js';
+import { projectsApi } from '../api/projects.js';
 import { useEffect, useState } from 'react';
 import { message } from '../store/toastStore';
 import {
@@ -37,6 +38,9 @@ export default function Issues({
   const [formDescription, setFormDescription] = useState('');
   const [formProjectId, setFormProjectId] = useState(projects[0]?.id || '');
   const [formPriority, setFormPriority] = useState(0);
+  const [formAgentProfileId, setFormAgentProfileId] = useState('');
+  const [agentProfiles, setAgentProfiles] = useState([]);
+  const [agentProfilesLoading, setAgentProfilesLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -202,7 +206,13 @@ export default function Issues({
       refreshData(['projects']);
       setFormDescription(sourceMetadata?.source_excerpt || '');
       setFormPriority(0);
+      setFormAgentProfileId('');
       setFormError('');
+      setAgentProfilesLoading(true);
+      projectsApi.getAgentProfiles()
+        .then((items) => setAgentProfiles(Array.isArray(items) ? items : items?.items || []))
+        .catch((error) => setFormError(error.message || 'Agent Profiles 加载失败'))
+        .finally(() => setAgentProfilesLoading(false));
     }
   }, [isNewIssueOpen, refreshData, sourceMetadata]);
 
@@ -262,6 +272,7 @@ export default function Issues({
       project_id: finalProjectId,
       priority: parseInt(formPriority),
       status: prefilledStatus || 'triage',
+      agent_profile_id: formAgentProfileId,
     };
     addIssueSource(payload, sourceMetadata);
 
@@ -490,6 +501,26 @@ export default function Issues({
                   {sourceMetadata.source_turn_id && <> · Turn：<code>{sourceMetadata.source_turn_id}</code></>}
                 </div>
               )}
+
+              <div className="form-group">
+                <label>执行 Provider / Agent Profile</label>
+                <select
+                  className="form-control"
+                  value={formAgentProfileId}
+                  onChange={(event) => setFormAgentProfileId(event.target.value)}
+                  disabled={agentProfilesLoading}
+                >
+                  <option value="">继承项目默认 Provider</option>
+                  {agentProfiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.provider === 'claude' ? 'Claude Code' : profile.provider} · {profile.name} · {profile.model || 'default'}
+                    </option>
+                  ))}
+                </select>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                  可为单个 Issue 显式选择 Claude Code；未选择时沿用项目或项目默认 Profile。
+                </span>
+              </div>
 
               <div className="form-group">
                 <label>任务内容 / 需求描述 *</label>

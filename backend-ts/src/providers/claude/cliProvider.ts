@@ -1,3 +1,10 @@
+import {
+  getSessionInfo as sdkGetSessionInfo,
+  getSessionMessages as sdkGetSessionMessages,
+  listSessions as sdkListSessions,
+  type SDKSessionInfo,
+  type SessionMessage
+} from "@anthropic-ai/claude-agent-sdk";
 import { statSync } from "node:fs";
 import { splitCommand } from "../codex/jsonRpc.ts";
 import { parseClaudeStreamJSONL } from "./stream.ts";
@@ -5,8 +12,24 @@ import { redactSensitiveText } from "../../util/redact.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
 import { managedExecutionEnvironment } from "../managedExecution.ts";
 import { claudeProcessEnvironment, environmentAuthenticationStatus } from "./auth.ts";
+import { claudeTranscriptTurns, publicClaudeSessionSummary } from "./sessionHistory.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
-import type { ExecutorProvider, InterruptInput, ProviderEvent, ProviderRunInput, ProviderRunResult, ProviderRuntimeStatus, SessionRef } from "../types.ts";
+import type {
+  ExecutorProvider,
+  InterruptInput,
+  ProviderEvent,
+  ProviderRecoveryInput,
+  ProviderRunInput,
+  ProviderRunResult,
+  ProviderRuntimeStatus,
+  SessionCreateInput,
+  SessionCreateResult,
+  SessionListInput,
+  SessionListResult,
+  SessionMessageInput,
+  SessionMessageResult,
+  SessionRef
+} from "../types.ts";
 
 const PROVIDER = "claude";
 const DEFAULT_MAX_TURNS = "50";
@@ -35,22 +58,119 @@ export type ClaudeCliAuthInspection = {
 export type ClaudeCliProviderOptions = {
   authInspector?: (config: ProviderRuntimeConfig) => ClaudeCliAuthInspection;
   processFactory?: ClaudeProcessFactory;
+  sessionFunctions?: Partial<ClaudeCliSessionFunctions>;
+};
+
+type ClaudeCliSessionFunctions = {
+  getSessionInfo(sessionId: string, options?: { dir?: string }): Promise<SDKSessionInfo | undefined>;
+  getSessionMessages(sessionId: string, options?: { dir?: string; includeSystemMessages?: boolean }): Promise<SessionMessage[]>;
+  listSessions(options?: { dir?: string; limit?: number; offset?: number }): Promise<SDKSessionInfo[]>;
+};
+
+type ClaudeCliExecutionInput = Pick<SessionCreateInput,
+  "approvalPolicy" | "cwd" | "model" | "prompt" | "reasoningEffort" | "sandbox" | "serviceTier"
+> & {
+  issueId?: number;
+  onEvent?: (event: ProviderEvent) => void;
 };
 
 const cliAuthCache = new Map<string, { expiresAt: number; inspection: ClaudeCliAuthInspection }>();
 const CLI_AUTH_CACHE_MS = 5_000;
 
 export class ClaudeCliExecutorProvider implements ExecutorProvider {
-  readonly capabilities = ["issue_execution", "interrupt"] as const;
+  readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt"] as const;
   readonly id = PROVIDER;
   private readonly active = new Map<string, ClaudeProcess>();
 
   constructor(private readonly config: ProviderRuntimeConfig, private readonly options: ClaudeCliProviderOptions = {}) {}
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
+    return await this.execute(input);
+  }
+
+  async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
+    return await this.execute(input, input.session.sessionId);
+  }
+
+  async createSession(input: SessionCreateInput): Promise<SessionCreateResult> {
+    const prompt = clean(input.prompt);
+    if (prompt === "") throw new Error("Claude CLI session creation requires a prompt");
+    const result = await this.execute({ ...input, prompt });
+    const session = requiredSession(result);
+    return {
+      id: `${PROVIDER}:${session.sessionId}`,
+      provider: PROVIDER,
+      provider_session_id: session.sessionId,
+      provider_turn_id: session.turnId,
+      thread_id: session.sessionId,
+      turn_id: session.turnId
+    };
+  }
+
+  async sendSessionMessage(input: SessionMessageInput): Promise<SessionMessageResult> {
+    const sessionId = clean(input.sessionId);
+    if (sessionId === "") throw new Error("Claude CLI resume requires a session id");
+    if (clean(input.mode) === "steer") throw new Error('provider "claude" does not support live steer; interrupt or resume the session instead');
+    const discovered = clean(input.cwd) ? undefined : await this.sessionFunctions().getSessionInfo(sessionId);
+    const cwd = clean(input.cwd) || clean(discovered?.cwd) || clean(this.config.cwd);
+    const result = await this.execute({ ...input, cwd }, sessionId);
+    const session = requiredSession(result);
+    if (!session.turnId) throw new Error("Claude CLI completed without a provider turn ref");
+    return {
+      provider: PROVIDER,
+      provider_session_id: session.sessionId,
+      sessionId: session.sessionId,
+      turn_id: session.turnId
+    };
+  }
+
+  async listSessions(input: SessionListInput = {}): Promise<SessionListResult> {
+    this.assertReady();
+    const offset = numericCursor(input.cursor);
+    const limit = normalizeLimit(input.limit);
+    const sessions = await this.sessionFunctions().listSessions({
+      ...(clean(input.cwd) ? { dir: clean(input.cwd) } : {}),
+      limit,
+      offset
+    });
+    return {
+      data: sessions.map((session) => publicClaudeSessionSummary(session, this.active.has(session.sessionId))),
+      nextCursor: sessions.length === limit ? String(offset + sessions.length) : ""
+    };
+  }
+
+  async readSession(sessionId: string): Promise<Record<string, unknown>> {
+    this.assertReady();
+    const id = clean(sessionId);
+    if (id === "") throw new Error("Claude CLI session id is required");
+    const [info, messages] = await Promise.all([
+      this.sessionFunctions().getSessionInfo(id),
+      this.sessionFunctions().getSessionMessages(id, { includeSystemMessages: false })
+    ]);
+    if (!info && messages.length === 0) throw new Error(`Claude CLI session ${id} was not found`);
+    const running = this.active.has(id);
+    return {
+      id: `${PROVIDER}:${id}`,
+      provider: PROVIDER,
+      provider_session_id: id,
+      sessionId: id,
+      thread_id: id,
+      name: redactSensitiveText(info?.customTitle || info?.summary || "Claude session"),
+      preview: redactSensitiveText(info?.firstPrompt || info?.summary || ""),
+      cwd: info?.cwd || "",
+      status: running ? "running" : "idle",
+      isRunning: running,
+      createdAt: info ? Math.floor(info.lastModified / 1000) : 0,
+      updatedAt: info ? Math.floor(info.lastModified / 1000) : 0,
+      turns: claudeTranscriptTurns(messages)
+    };
+  }
+
+  private async execute(input: ClaudeCliExecutionInput, resume = ""): Promise<ProviderRunResult> {
     assertUsableCwd(input.cwd);
-    const runId = `cli:claude:${input.issueId}`;
-    const process = this.spawn(input);
+    this.assertReady();
+    const runId = input.issueId ? `cli:claude:${input.issueId}` : `cli:claude:${resume || "new-session"}`;
+    const process = this.spawn(input, resume);
     const session = runSession(runId);
     const aliases = new Set<string>();
     this.track(session, process, aliases);
@@ -106,12 +226,25 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
     };
   }
 
-  private spawn(input: ProviderRunInput): ClaudeProcess {
+  private spawn(input: ClaudeCliExecutionInput, resume: string): ClaudeProcess {
     return this.processFactory()({
-      command: claudeCommand(this.config, input),
+      command: claudeCommand(this.config, input, resume),
       cwd: input.cwd,
       env: managedExecutionEnvironment(claudeProcessEnvironment(this.config))
     });
+  }
+
+  private assertReady(): void {
+    const status = this.runtimeStatus();
+    if (!status.ready) throw new Error(status.reason || "Claude CLI is not ready");
+  }
+
+  private sessionFunctions(): ClaudeCliSessionFunctions {
+    return {
+      getSessionInfo: this.options.sessionFunctions?.getSessionInfo ?? sdkGetSessionInfo,
+      getSessionMessages: this.options.sessionFunctions?.getSessionMessages ?? sdkGetSessionMessages,
+      listSessions: this.options.sessionFunctions?.listSessions ?? sdkListSessions
+    };
   }
 
   private processFactory(): ClaudeProcessFactory {
@@ -159,7 +292,7 @@ export function inspectClaudeCliAuth(config: ProviderRuntimeConfig): ClaudeCliAu
     inspection = {
       checked: result.exitCode === 0,
       logged_in: result.exitCode === 0 && parsed.loggedIn === true,
-      ...(safeLabel(parsed.authMethod) ? { auth_method: safeLabel(parsed.authMethod) } : {}),
+      ...(safeAuthMethod(parsed.authMethod) ? { auth_method: safeAuthMethod(parsed.authMethod) } : {}),
       ...(safeLabel(parsed.apiProvider) ? { provider: safeLabel(parsed.apiProvider) } : {})
     };
   } catch {
@@ -169,17 +302,39 @@ export function inspectClaudeCliAuth(config: ProviderRuntimeConfig): ClaudeCliAu
   return inspection;
 }
 
-function claudeCommand(config: ProviderRuntimeConfig, input: ProviderRunInput): string[] {
+function claudeCommand(
+  config: ProviderRuntimeConfig,
+  input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "prompt" | "sandbox">,
+  resume = ""
+): string[] {
   const command = splitCommand(config.command);
   const args = [
-    "-p", "--verbose", "--bare", "--output-format", "stream-json",
+    "-p", "--verbose", "--output-format", "stream-json",
     "--permission-mode", claudePermissionMode(input.approvalPolicy),
     "--allowedTools", claudeAllowedTools(input.sandbox)
   ];
+  if (resume) args.push("--resume", resume);
   const model = clean(input.model) || clean(config.model);
   if (model !== "" && model !== "codex-default") args.push("--model", model);
-  args.push("--max-turns", DEFAULT_MAX_TURNS, input.prompt);
+  args.push("--max-turns", DEFAULT_MAX_TURNS, clean(input.prompt));
   return [...command, ...args];
+}
+
+function requiredSession(result: ProviderRunResult): SessionRef {
+  if (!result.session?.sessionId) throw new Error("Claude CLI completed without a provider session id");
+  return result.session;
+}
+
+function numericCursor(value: string | undefined): number {
+  const cursor = clean(value);
+  if (cursor === "") return 0;
+  const parsed = Number(cursor);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error("Claude session cursor is invalid");
+  return parsed;
+}
+
+function normalizeLimit(value: number | undefined): number {
+  return Number.isSafeInteger(value) && (value ?? 0) > 0 ? Math.min(value!, 100) : 50;
 }
 
 function claudeAllowedTools(sandbox?: string): string {
@@ -203,7 +358,7 @@ function runSession(runId: string): SessionRef {
   return { provider: PROVIDER, sessionId: runId, turnId: runId };
 }
 
-function startEvent(session: SessionRef, input: ProviderRunInput, config: ProviderRuntimeConfig): ProviderEvent {
+function startEvent(session: SessionRef, input: ClaudeCliExecutionInput, config: ProviderRuntimeConfig): ProviderEvent {
   return {
     provider: PROVIDER,
     type: "text",
@@ -255,7 +410,7 @@ async function readStream(stream: ReadableStream<Uint8Array> | null): Promise<st
   }
 }
 
-function emitStderr(input: ProviderRunInput, stderr: string, runId: string, secrets: string[]): void {
+function emitStderr(input: ClaudeCliExecutionInput, stderr: string, runId: string, secrets: string[]): void {
   for (const line of stderr.split(/\r?\n/)) {
     const text = redact(line, secrets).trim();
     if (text === "") continue;
@@ -321,6 +476,11 @@ function clean(value: string | undefined): string {
 function safeLabel(value: unknown): string {
   const text = typeof value === "string" ? value.trim() : "";
   return /^[A-Za-z0-9_. -]{1,64}$/.test(text) ? text : "";
+}
+
+function safeAuthMethod(value: unknown): string {
+  const method = safeLabel(value);
+  return method === "oauth_token" ? "oauth" : method;
 }
 
 function spawnClaudeProcess({ command, cwd, env }: Parameters<ClaudeProcessFactory>[0]): ClaudeProcess {

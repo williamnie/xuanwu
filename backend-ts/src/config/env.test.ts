@@ -43,11 +43,11 @@ describe("Bun backend config", () => {
         claude: {
           apiBaseUrl: "",
           apiPath: "",
-          authMode: "environment",
+          authMode: "local-cli",
           command: "claude",
           cwd: "",
           env: {},
-          mode: "sdk",
+          mode: "cli-fallback",
           model: "",
           platformConfigDir: "",
           platformProfile: "",
@@ -542,6 +542,10 @@ describe("Bun backend config", () => {
 
   test("keeps Claude CLI as an explicit fallback and rejects unsafe API bases", () => {
     expect(buildConfig({ claudeMode: "cli-fallback" }).providers.claude?.mode).toBe("cli-fallback");
+    expect(buildConfig({ claudeApiBaseUrl: "https://gateway.example" }).providers.claude).toMatchObject({
+      authMode: "environment",
+      mode: "sdk"
+    });
     expect(() => buildConfig({ claudeApiBaseUrl: "file:///tmp/proxy" })).toThrow("must be an http(s) URL");
   });
 });

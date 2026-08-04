@@ -11,7 +11,7 @@ import {
 import { accessSync, constants, statSync } from "node:fs";
 import { managedExecutionEnvironment } from "../managedExecution.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
-import { redactRegisteredSecrets, registerSecretForRedaction } from "../../security/redactionRegistry.ts";
+import { registerSecretForRedaction } from "../../security/redactionRegistry.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import type { AppEvent } from "../../events/bus.ts";
 import {
@@ -28,6 +28,7 @@ import {
   type ClaudeProcessFactory
 } from "./cliProvider.ts";
 import { claudeAuthenticationStatus, claudeProcessEnvironment } from "./auth.ts";
+import { claudeTranscriptContent, claudeTranscriptTurns, publicClaudeSessionSummary } from "./sessionHistory.ts";
 import type {
   ExecutorCapability,
   ExecutorProvider,
@@ -147,7 +148,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
       offset
     });
     return {
-      data: sessions.map((session) => publicSessionSummary(session, this.active.has(session.sessionId))),
+      data: sessions.map((session) => publicClaudeSessionSummary(session, this.active.has(session.sessionId))),
       nextCursor: sessions.length === limit ? String(offset + sessions.length) : ""
     };
   }
@@ -175,7 +176,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
       isRunning: running,
       createdAt: info ? Math.floor(info.lastModified / 1000) : 0,
       updatedAt: info ? Math.floor(info.lastModified / 1000) : 0,
-      turns: transcriptTurns(messages)
+      turns: claudeTranscriptTurns(messages)
     };
   }
 
@@ -332,7 +333,11 @@ export class ClaudeExecutorProvider implements ExecutorProvider {
   constructor(private readonly config: ProviderRuntimeConfig, options: ClaudeProviderOptions = {}) {
     const cliFallback = config.mode === "cli-fallback" || (config.mode === undefined && Boolean(options.processFactory) && !options.queryFactory);
     this.delegate = cliFallback
-      ? new ClaudeCliExecutorProvider(config, { processFactory: options.processFactory })
+      ? new ClaudeCliExecutorProvider(config, {
+        authInspector: options.authInspector,
+        processFactory: options.processFactory,
+        sessionFunctions: options.sessionFunctions
+      })
       : new ClaudeSdkExecutorProvider(config, options);
   }
 
@@ -365,7 +370,7 @@ export function createClaudeExecutorProvider(
 }
 
 export function claudeProviderAppEvent(event: ProviderEvent): AppEvent {
-  const rawPayload = transcriptContent(event.raw?.payload);
+  const rawPayload = claudeTranscriptContent(event.raw?.payload);
   return compactAppEvent({
     type: "claude.event",
     provider: event.provider,
@@ -375,7 +380,7 @@ export function claudeProviderAppEvent(event: ProviderEvent): AppEvent {
     method: event.raw?.method,
     raw_method: event.raw?.method,
     raw_payload: rawPayload,
-    payload: rawPayload || transcriptContent(event.payload),
+    payload: rawPayload || claudeTranscriptContent(event.payload),
     command: event.command,
     path: event.path,
     status: event.status,
@@ -442,82 +447,6 @@ function isRegularFile(path: string): boolean {
   } catch {
     return false;
   }
-}
-
-function publicSessionSummary(info: SDKSessionInfo, running = false): Record<string, unknown> {
-  return {
-    id: `${PROVIDER}:${info.sessionId}`,
-    provider: PROVIDER,
-    provider_session_id: info.sessionId,
-    sessionId: info.sessionId,
-    thread_id: info.sessionId,
-    name: redactSensitiveText(info.customTitle || info.summary || "Claude session"),
-    preview: redactSensitiveText(info.firstPrompt || info.summary || ""),
-    cwd: info.cwd || "",
-    status: running ? "running" : "idle",
-    isRunning: running,
-    createdAt: Math.floor(info.lastModified / 1000),
-    updatedAt: Math.floor(info.lastModified / 1000)
-  };
-}
-
-function transcriptTurns(messages: SessionMessage[]): Array<Record<string, unknown>> {
-  const turns: Array<{ id: string; items: Array<Record<string, unknown>> }> = [];
-  for (const entry of messages) {
-    const items = transcriptItems(entry);
-    if (items.length === 0) continue;
-    const startsUserTurn = entry.type === "user" && items.some((item) => item.type === "userMessage");
-    if (startsUserTurn || turns.length === 0) turns.push({ id: entry.uuid || `turn-${turns.length + 1}`, items: [] });
-    turns.at(-1)!.items.push(...items);
-  }
-  return turns;
-}
-
-function transcriptItems(entry: SessionMessage): Array<Record<string, unknown>> {
-  if (entry.type === "system") return [];
-  const message = objectValue(entry.message);
-  const content = Array.isArray(message.content) ? message.content : message.content ? [message.content] : [];
-  if (typeof message.content === "string") {
-    const text = redactSensitiveText(message.content);
-    return text ? [{ id: entry.uuid, type: entry.type === "assistant" ? "agentMessage" : "userMessage", text }] : [];
-  }
-  return content.flatMap((value, index) => {
-    const block = objectValue(value);
-    const id = stringValue(block.id) || `${entry.uuid}:${index}`;
-    if (block.type === "text") {
-      const text = redactSensitiveText(stringValue(block.text));
-      return text ? [{ id, type: entry.type === "assistant" ? "agentMessage" : "userMessage", text }] : [];
-    }
-    if (block.type === "tool_use") return [transcriptToolUse(id, block)];
-    if (block.type === "tool_result") {
-      return [{ id, type: "custom_tool_call_output", output: transcriptContent(block.content), status: block.is_error ? "failed" : "completed" }];
-    }
-    return [];
-  });
-}
-
-function transcriptToolUse(id: string, block: Record<string, unknown>): Record<string, unknown> {
-  const name = stringValue(block.name) || "tool";
-  const input = objectValue(block.input);
-  if (name === "Bash") {
-    return { id, type: "commandExecution", command: redactSensitiveText(stringValue(input.command)), text: "", status: "completed" };
-  }
-  if (name === "Edit" || name === "Write") {
-    return {
-      id,
-      type: "fileChange",
-      path: redactSensitiveText(stringValue(input.file_path)),
-      text: transcriptContent(input),
-      status: "completed"
-    };
-  }
-  return { id, type: "custom_tool_call", name, input: redactRegisteredSecrets(input) };
-}
-
-function transcriptContent(value: unknown): string {
-  if (value === undefined || value === null || value === "") return "";
-  if (typeof value === "string") return redactSensitiveText(value);
-  try { return redactSensitiveText(JSON.stringify(value, null, 2)); } catch { return redactSensitiveText(String(value)); }
 }
 
 function compactAppEvent(event: AppEvent): AppEvent {
@@ -596,14 +525,6 @@ function normalizeLimit(value: number | undefined): number {
 function requireMethod<T extends (...args: never[]) => unknown>(method: T | undefined, capability: string): T {
   if (!method) throw new Error(`provider "claude" does not support capability "${capability}" in the selected mode`);
   return method;
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function clean(value: unknown): string {

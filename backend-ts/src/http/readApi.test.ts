@@ -224,7 +224,10 @@ describe("Bun projects/issues read API", () => {
         location: "/api/automations"
       });
       expect(profiles.status).toBe(200);
-      expect(await profiles.json()).toEqual([]);
+      expect((await profiles.json() as Array<{ id: string; provider: string }>).map(({ id, provider }) => ({ id, provider }))).toEqual([
+        { id: "xuanwu-provider-claude", provider: "claude" },
+        { id: "xuanwu-provider-codex", provider: "codex" }
+      ]);
     } finally {
       database.close();
     }

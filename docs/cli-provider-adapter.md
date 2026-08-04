@@ -6,7 +6,8 @@
 
 - Runner issue 执行不直接假设某个 CLI 的输出等于成功；provider run completed 之后仍必须由 agent/provider 显式回写 issue 终态。
 - Codex provider 通过 `codex app-server --listen stdio://` 走 JSON-RPC。
-- Claude provider 通过 `claude` CLI 的 stream 输出接入 execution-only 能力。
+- Claude provider 通过 `claude` CLI 的 stream 输出接入 Issue 执行，并复用本地 Session 索引与
+  `--resume` 提供 Session 创建、读取和恢复能力。
 - CLI 短命令统一调用 Runner HTTP API，默认地址 `127.0.0.1:3008`。
 
 ## 最小事件语义

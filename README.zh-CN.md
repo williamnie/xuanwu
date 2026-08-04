@@ -75,7 +75,7 @@ Agent 说“完成”不等于完成。Supervisor 会检查真实 Session 与 wo
 | Provider | 状态 | 说明 |
 | --- | --- | --- |
 | Codex | **已测试** | 默认完整 Provider；真实执行、Session、恢复、中断和交付链路已经过测试。 |
-| Claude / Claude Code | **预览，尚未真实测试** | 已有 SDK 与显式 CLI fallback 接入，并有自动化测试覆盖，但真实账号端到端链路尚未完成 live acceptance，不能视为已经过生产验证。 |
+| Claude / Claude Code | **预览，尚未真实测试** | 可复用本机 Claude Code 登录、配置与 Session，也支持显式 SDK 认证；已有自动化测试覆盖，但真实账号端到端链路尚未完成 live acceptance。 |
 
 ## 路线图
 

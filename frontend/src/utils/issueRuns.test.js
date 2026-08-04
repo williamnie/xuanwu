@@ -30,7 +30,7 @@ test('latest issue run helpers prefer run runtime identity', () => {
   assert.equal(issueRunSessionRef(issue, run), 'codex:thread-run');
 });
 
-test('Claude execution-only runs expose provider metadata without opening a Codex Session ref', () => {
+test('Claude runs expose provider metadata and a provider-qualified Session ref', () => {
   const issue = {
     codex_thread_id: 'stale-codex-thread',
     codex_turn_id: 'stale-codex-turn',
@@ -44,7 +44,7 @@ test('Claude execution-only runs expose provider metadata without opening a Code
 
   assert.equal(issueRunSessionId(issue, run), 'claude-session');
   assert.equal(issueRunTurnId(issue, run), 'claude-turn');
-  assert.equal(issueRunSessionRef(issue, run), '');
+  assert.equal(issueRunSessionRef(issue, run), 'claude:claude-session');
   assert.deepEqual(issueRunMetadata(run), { run_id: 'cli:claude:184' });
 });
 

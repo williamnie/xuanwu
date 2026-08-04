@@ -256,7 +256,7 @@ function claudeProviderEntry(config: ProviderRuntimeConfig) {
   const executableReady = resolveClaudeSdkExecutable() !== "";
   if (mode === "cli-fallback") {
     const base = providerEntry({
-        capabilities: ["issue_execution", "interrupt"],
+        capabilities: claudeCapabilities(),
         config,
         defaultModel: config.model ?? "",
         id: "claude",
@@ -301,7 +301,7 @@ function claudeProviderEntry(config: ProviderRuntimeConfig) {
     status: ready ? "available" : "configuration_required",
     available: ready,
     enabled: true,
-    capabilities: claudeCapabilities(mode),
+    capabilities: claudeCapabilities(),
     command: "bundled:@anthropic-ai/claude-agent-sdk",
     cli: { available: false, mode: "not_used" },
     cwd_configured: config.cwd.trim() !== "",
@@ -439,10 +439,8 @@ function codexCapabilities(): ExecutorCapability[] {
   return ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"];
 }
 
-function claudeCapabilities(mode: string): ExecutorCapability[] {
-  return mode === "cli-fallback"
-    ? ["issue_execution", "interrupt"]
-    : ["issue_execution", "sessions", "resume_session", "interrupt"];
+function claudeCapabilities(): ExecutorCapability[] {
+  return ["issue_execution", "sessions", "resume_session", "interrupt"];
 }
 
 function diagnosticEnvKeys(env: Record<string, string>): string[] {

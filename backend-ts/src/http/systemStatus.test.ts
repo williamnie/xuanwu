@@ -33,7 +33,7 @@ describe("Bun system status endpoints", () => {
   });
 
   test("returns a compact authenticated Web-shell status without heavy projections", async () => {
-    const { config, database } = await openFixtureRuntime();
+    const { config, database } = await openFixtureRuntime({ claudeMode: "sdk" });
     try {
       const router = createDefaultRouter();
       registerSystemStatusRoute(router, {
@@ -61,7 +61,7 @@ describe("Bun system status endpoints", () => {
   });
 
   test("returns service db auth and config summary", async () => {
-    const { config, database } = await openFixtureRuntime();
+    const { config, database } = await openFixtureRuntime({ claudeMode: "sdk" });
     try {
       const router = createDefaultRouter();
       registerSystemStatusRoute(router, {
@@ -427,7 +427,7 @@ describe("Bun system status endpoints", () => {
         auth_mode: "local-cli",
         auth_source: "local_cli",
         available: true,
-        capabilities: ["issue_execution", "interrupt"],
+        capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"],
         local_cli: { checked: true, logged_in: true },
         mode: "cli-fallback",
         ready: true,
@@ -472,7 +472,7 @@ describe("Bun system status endpoints", () => {
         status: "missing",
         available: false,
         enabled: true,
-        capabilities: ["issue_execution", "interrupt"]
+        capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"]
       });
       expect(text).not.toContain(secret);
       expect(text).not.toContain("doctor-secret");
@@ -539,6 +539,7 @@ describe("Bun system status endpoints", () => {
     const secret = "fixture-status-secret";
     const { config, database } = await openFixtureRuntime({
       secret,
+      claudeMode: "sdk",
       codexCommand: "codex --token=runtime-secret app-server --listen stdio://",
       codexEnv: "CODEX_API_KEY=runtime-secret,SAFE_VALUE=ok"
     });

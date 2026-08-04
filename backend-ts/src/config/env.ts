@@ -427,7 +427,6 @@ export function buildCodexRuntimeConfig(
 
 function buildClaudeRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
   const legacyEnv = parseEnvOverrides(cleanValue(overrides.claudeEnv) ?? "");
-  const mode = normalizeClaudeProviderMode(overrides.claudeMode);
   const apiPath = normalizeClaudeApiPath(overrides.claudeApiPath);
   const configuredBase = cleanValue(overrides.claudeApiBaseUrl) ?? cleanValue(legacyEnv.ANTHROPIC_BASE_URL) ?? "";
   const apiBaseUrl = joinClaudeApiBase(configuredBase, apiPath);
@@ -442,6 +441,12 @@ function buildClaudeRuntimeConfig(overrides: ProviderRuntimeOverrides): Provider
     cleanValue(overrides.claudePlatformProfile) ?? cleanValue(legacyEnv.ANTHROPIC_PROFILE) ?? ""
   );
   const environmentAuthConfigured = Boolean(apiKey || authToken || oauthToken);
+  const mode = normalizeClaudeProviderMode(
+    overrides.claudeMode,
+    overrides.claudeAuthMode,
+    environmentAuthConfigured,
+    Boolean(apiBaseUrl || platformConfigDir || platformProfile)
+  );
   const authMode = normalizeClaudeAuthMode(overrides.claudeAuthMode, mode, environmentAuthConfigured);
   if (authMode !== "environment") {
     delete legacyEnv.ANTHROPIC_API_KEY;
@@ -493,8 +498,19 @@ function readSecretFile(pathValue: string | undefined): string | undefined {
   }
 }
 
-function normalizeClaudeProviderMode(value: string | undefined): "sdk" | "cli-fallback" {
-  const mode = cleanValue(value)?.toLowerCase() ?? "sdk";
+function normalizeClaudeProviderMode(
+  value: string | undefined,
+  authValue: string | undefined,
+  environmentAuthConfigured: boolean,
+  explicitSdkConfiguration: boolean
+): "sdk" | "cli-fallback" {
+  const configured = cleanValue(value)?.toLowerCase();
+  const authMode = cleanValue(authValue)?.toLowerCase();
+  const mode = configured ?? (
+    authMode === "platform-profile" || authMode === "environment" || environmentAuthConfigured || explicitSdkConfiguration
+      ? "sdk"
+      : "cli-fallback"
+  );
   if (mode === "sdk" || mode === "cli-fallback") return mode;
   throw new Error(`XUANWU_CLAUDE_MODE must be sdk or cli-fallback, received ${mode}`);
 }

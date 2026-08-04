@@ -65,6 +65,7 @@ import { piPersonaMigration } from "./063_pi_persona.ts";
 import { unlimitedProjectRecoveryBudgetMigration } from "./065_unlimited_project_recovery_budget.ts";
 import { piContextMemoryAuthorityMigration } from "./066_pi_context_memory_authority.ts";
 import { compactEventSummaryCreatedAtMigration } from "./067_compact_event_summary_created_at.ts";
+import { builtinExecutorProfilesMigration } from "./068_builtin_executor_profiles.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -133,5 +134,6 @@ export const migrations = [
   piOwnedIssueLifecycleMigration,
   unlimitedProjectRecoveryBudgetMigration,
   piContextMemoryAuthorityMigration,
-  compactEventSummaryCreatedAtMigration
+  compactEventSummaryCreatedAtMigration,
+  builtinExecutorProfilesMigration
 ];

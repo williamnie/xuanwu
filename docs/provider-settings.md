@@ -6,13 +6,17 @@ Settings UI 不单独探测 provider；它消费 `/api/system/status.providers`�
 
 - `codex`：**tested**。默认 executor，命令默认为 `codex app-server --listen stdio://`；真实执行、
   Session、恢复、中断与交付主链已经过测试。
-- `claude`：**preview / not live-tested**。默认使用 Bun 进程内的
-  `@anthropic-ai/claude-agent-sdk`；`claude` CLI 仅保留为显式 `cli-fallback`。实现已有自动化测试，
-  但真实账号端到端链路尚未完成 live acceptance。
+- `claude`：**preview / not live-tested**。没有显式 API / Anthropic Platform profile 配置时，默认复用
+  同一系统用户的 Claude Code CLI 登录与本地配置；显式配置 API 或 Platform profile 时使用 Bun 进程内的
+  `@anthropic-ai/claude-agent-sdk`。实现已有自动化测试，但真实账号端到端链路尚未完成 live acceptance。
 
 Provider 状态以真实验收层级为准，adapter 存在、fixture 通过或能够保存配置都不等于 live-tested。
 
-Claude SDK 模式声明 `issue_execution`、`sessions`、`resume_session`、`interrupt`。当前没有接通 SDK 审批闭环或可靠 model list，因此不声明 `approvals` / `model_list`，UI 会允许手填 Claude model id。CLI fallback 只声明真实可用的执行和中断能力，不会被 Sessions API 暗中当作 SDK 使用。
+Claude SDK 与 Claude Code CLI 模式都声明 `issue_execution`、`sessions`、`resume_session`、`interrupt`。
+当前没有接通 Claude 审批闭环或可靠 model list，因此不声明 `approvals` / `model_list`，UI 会允许手填
+Claude model id。CLI 模式通过官方 `claude -p`、`--resume` 与 Claude 的本地 Session 索引实现这些能力。
+新建数据库会幂等准备 Codex 与 Claude Code 两个内置 Agent Profile，因此新建 Issue/Work 可以直接选择
+执行 Provider；已有同 ID Profile 不会被覆盖。
 
 ## 配置入口
 
@@ -44,7 +48,8 @@ Claude 认证模式：
 
 - `environment`：SDK 或 CLI 使用 API key / gateway auth token；这是 SDK 默认值。
 - `platform-profile`：SDK 使用 `ant auth login` 创建的 Anthropic Platform OAuth profile，Runner 不读取或复制 access/refresh token。
-- `local-cli`：仅可与 `XUANWU_CLAUDE_MODE=cli-fallback` 配合，复用同一系统用户的 Claude Code CLI 登录。
+- `local-cli`：与 `XUANWU_CLAUDE_MODE=cli-fallback` 配合，复用同一系统用户的 Claude Code CLI 登录、
+  user/project/local settings 与持久化 Session；没有显式 Claude API/Profile 配置时这是默认组合。
 
 #### API key / gateway environment
 
@@ -71,7 +76,7 @@ export XUANWU_CLAUDE_CMD=/absolute/path/to/claude
 ./redeploy.sh
 ```
 
-SDK 配置缺失时 `claude` 会显示 `configuration_required`，不会静默转到 Codex 或 CLI fallback。
+显式选择 SDK 但配置缺失时 `claude` 会显示 `configuration_required`，不会静默转到 Codex 或 CLI。
 
 #### 复用本地 Claude Code CLI 登录
 
@@ -91,7 +96,11 @@ export XUANWU_CLAUDE_AUTH_MODE=local-cli
 ./redeploy.sh
 ```
 
-Runner 只执行 `claude auth status --json` 并保留 `loggedIn` 等非敏感摘要；不会读取、复制或输出 macOS Keychain/本地 credential。status 应显示 `auth_mode=local-cli`、`auth_source=local_cli`、`auth_configured=true` 和 `local_cli.logged_in=true`。该模式保留 issue execution/interrupt，但不伪装为 SDK Sessions provider。
+Runner 只用 `claude auth status --json` 检查认证摘要，并把执行、创建与恢复请求交给官方 Claude Code CLI；
+不会读取、复制或输出 macOS Keychain/本地 credential。status 应显示 `auth_mode=local-cli`、
+`auth_source=local_cli`、`auth_configured=true`、`local_cli.logged_in=true`，capabilities 包含
+`issue_execution,sessions,resume_session,interrupt`。Runner 不再传 `--bare`，因为该参数会禁用本地
+OAuth/keychain 与 settings 读取。
 
 #### Anthropic Platform OAuth profile
 
