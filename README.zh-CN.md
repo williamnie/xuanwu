@@ -169,6 +169,14 @@ Token   ~/.local/state/xuanwu/auth_token（权限 0600）
 cat ~/.local/state/xuanwu/auth_token
 ```
 
+如果是在 macOS 上从源码执行 `./deploy.sh` 部署到 launchd，默认路径不同：
+
+```bash
+cat "$HOME/Library/Application Support/xuanwu-bun-live/state/auth_token"
+```
+
+自定义部署请以 `XUANWU_AUTH_TOKEN_FILE` 或 `XUANWU_STATE_DIR` 为准。
+
 浏览器首次打开时会进入连接页，将这个 token 保存到当前浏览器。登录后可在
 **设置 → 高级 → 运行环境 → Remote access token** 中轮换；旧 token 会立即失效，新 token 只显示一次。
 如果通过 `XUANWU_AUTH_TOKEN` 管理凭据，UI 会禁用轮换，需要在部署环境中修改。

@@ -40,9 +40,22 @@ export default function AuthGate({ onUnlock }) {
         </div>
         <div className="auth-token-guide">
           <div className="auth-token-guide-title"><Terminal size={15} /> 去哪里找 token</div>
-          <p>首次交互安装会在终端显示一次。之后可在服务器执行：</p>
-          <code>cat ~/.local/state/xuanwu/auth_token</code>
-          <p className="auth-token-guide-note">从源码部署到 macOS 时，部署终端也会打印实际保存路径；自定义路径以 <code>XUANWU_AUTH_TOKEN_FILE</code> 为准。</p>
+          <p>首次交互安装会在终端显示一次。之后请按部署方式在服务器执行：</p>
+          <div className="auth-token-platforms">
+            <div className="auth-token-platform">
+              <strong>macOS · 源码部署（./deploy.sh / launchd）</strong>
+              <code>cat "$HOME/Library/Application Support/xuanwu-bun-live/state/auth_token"</code>
+            </div>
+            <div className="auth-token-platform">
+              <strong>macOS · Release 安装器</strong>
+              <code>cat "$HOME/.local/state/xuanwu/auth_token"</code>
+            </div>
+            <div className="auth-token-platform">
+              <strong>Linux · Release 安装器 / systemd</strong>
+              <code>cat "$HOME/.local/state/xuanwu/auth_token"</code>
+            </div>
+          </div>
+          <p className="auth-token-guide-note">如果设置了 <code>XUANWU_AUTH_TOKEN_FILE</code> 或 <code>XUANWU_STATE_DIR</code>，请以部署终端打印的实际路径为准。</p>
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label htmlFor="runner-auth-token">Token</label>

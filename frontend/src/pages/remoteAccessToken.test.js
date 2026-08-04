@@ -7,10 +7,15 @@ const panel = readFileSync(new URL('./RemoteAccessTokenPanel.jsx', import.meta.u
 const sections = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
 const systemApi = readFileSync(new URL('../api/system.js', import.meta.url), 'utf8');
 
-test('first browser connection explains the one-time installer token and its default file', () => {
+test('first browser connection explains macOS and Linux token locations', () => {
   assert.match(authGate, /首次连接/);
-  assert.match(authGate, /cat ~\/\.local\/state\/xuanwu\/auth_token/);
+  assert.match(authGate, /macOS · 源码部署/);
+  assert.match(authGate, /Library\/Application Support\/xuanwu-bun-live\/state\/auth_token/);
+  assert.match(authGate, /macOS · Release 安装器/);
+  assert.match(authGate, /Linux · Release 安装器 \/ systemd/);
+  assert.match(authGate, /\.local\/state\/xuanwu\/auth_token/);
   assert.match(authGate, /XUANWU_AUTH_TOKEN_FILE/);
+  assert.match(authGate, /XUANWU_STATE_DIR/);
   assert.match(authGate, /setAuthToken\(value\)/);
   assert.doesNotMatch(authGate, /window\.(?:alert|confirm)/);
 });

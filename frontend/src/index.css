@@ -1028,10 +1028,28 @@ textarea:focus-visible {
   margin: 0;
 }
 
-.auth-token-guide > code {
+.auth-token-platforms {
+  display: grid;
+  gap: 9px;
+}
+
+.auth-token-platform {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.auth-token-platform strong {
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.auth-token-platform code {
   background: var(--brand-ink);
   border-radius: 7px;
   color: #f8fafc;
+  display: block;
   font-size: 0.75rem;
   overflow-x: auto;
   padding: 9px 10px;

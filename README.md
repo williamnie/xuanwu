@@ -184,6 +184,14 @@ It is never printed again during restart or upgrade. To read it later on the ser
 cat ~/.local/state/xuanwu/auth_token
 ```
 
+For a macOS source deployment installed into launchd with `./deploy.sh`, use the separate default path:
+
+```bash
+cat "$HOME/Library/Application Support/xuanwu-bun-live/state/auth_token"
+```
+
+Custom deployments should follow `XUANWU_AUTH_TOKEN_FILE` or `XUANWU_STATE_DIR`.
+
 The first browser visit opens a connection page where you save this token locally. After signing in,
 use **Settings → Advanced → Runtime → Remote access token** to rotate it. Rotation invalidates the old
 token immediately and reveals the replacement once. If `XUANWU_AUTH_TOKEN` manages the credential,

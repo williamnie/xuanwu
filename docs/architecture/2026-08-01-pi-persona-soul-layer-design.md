@@ -27,7 +27,7 @@ pi 的 system prompt 由 `buildPiRuntimeSystemPrompt()`（`backend-ts/src/http/p
 24. Supervisor 承诺投影（JSON）
 25. 记忆上下文（JSON）
 
-当前实际生效配置（live 库 `~/Library/Application Support/xuanwu-bun-live/state/runner.db`）：
+当前实际生效配置（live 库 `~/Library/Application Support/codex-issue-runner-bun-live/state/runner.db`）：
 
 | 项 | 值 |
 | --- | --- |
