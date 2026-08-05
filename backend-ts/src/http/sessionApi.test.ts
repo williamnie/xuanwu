@@ -378,6 +378,35 @@ describe("Bun Sessions API compatibility", () => {
     }
   });
 
+  test("reads an indexed Pi session when the provider has no native readSession", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new IndexedOnlyProvider();
+    try {
+      upsertAgentSession(database, {
+        provider: "pi-coding-agent",
+        provider_session_id: "pi-session-1",
+        project_id: "demo",
+        title: "Pi session",
+        raw_ref: { model: "openai/gpt-5" },
+        status: "idle"
+      });
+
+      const response = await createDefaultRouter({ database, providers: { "pi-coding-agent": provider } })
+        .handle(new Request(`${BASE_URL}/api/sessions/pi-coding-agent:pi-session-1`));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        id: "pi-coding-agent:pi-session-1",
+        provider: "pi-coding-agent",
+        provider_session_id: "pi-session-1",
+        title: "Pi session",
+        model: "openai/gpt-5"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("routes provider-qualified Claude create/read/message/list/interrupt without Codex reconciliation", async () => {
     const database = await openFixtureDatabase();
     const codex = new SessionsProvider();
@@ -644,6 +673,15 @@ class ClaudeSessionsProvider implements ExecutorProvider {
       sessionId: String(input.sessionId),
       turn_id: "claude-turn-follow-up"
     };
+  }
+}
+
+class IndexedOnlyProvider implements ExecutorProvider {
+  readonly id = "pi-coding-agent" as const;
+  readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt"] as const;
+
+  async run(_input: ProviderRunInput) {
+    throw new Error("not implemented");
   }
 }
 

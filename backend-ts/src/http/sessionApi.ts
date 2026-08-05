@@ -115,6 +115,18 @@ async function readSession(context: SessionApiContext, rawSessionID: string) {
     if (!indexed) throw new Error(`session provider "${ref.provider}" 当前 runner 未注册`);
     return indexed;
   }
+  if (typeof registeredProvider.readSession !== "function") {
+    const indexed = publicAgentSessionOrNull(getAgentSession(context.database, ref.key));
+    if (!indexed) {
+      throw new Error(`provider "${ref.provider}" 未提供 readSession，且 runner 没有可用的 session 索引`);
+    }
+    return await withSessionRuntimeSettings(
+      context.database,
+      ref.sessionId,
+      qualifiedProviderSession(ref.provider, indexed),
+      ref.provider
+    );
+  }
   const provider = capableProvider(context, ref.provider, "sessions", "readSession");
   let result: Record<string, unknown>;
   try {
@@ -154,9 +166,10 @@ function capableProvider(
   if (!isExecutorProviderId(providerID)) throw new Error(`session provider "${providerID}" 当前 runner 未注册`);
   const provider = context.providers?.[providerID];
   if (!provider) throw new Error(`provider "${providerID}" 当前 runner 未注册`);
-  if (!provider.capabilities.includes(capability) || typeof provider[method] !== "function") {
+  if (!provider.capabilities.includes(capability)) {
     throw new Error(`provider "${providerID}" 不支持 capability "${capability}"`);
   }
+  if (typeof provider[method] !== "function") throw new Error(`provider "${providerID}" 未实现 ${method}`);
   const status = provider.runtimeStatus?.();
   if (status?.ready === false) {
     throw new Error(`provider "${providerID}" 尚未就绪: ${status.reason || "configuration required"}`);
