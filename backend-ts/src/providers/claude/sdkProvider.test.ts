@@ -243,6 +243,11 @@ describe("Claude Agent SDK provider", () => {
     expect(detail.turns[0]?.items.map((item) => item.type)).toEqual([
       "userMessage", "agentMessage", "custom_tool_call", "custom_tool_call_output", "agentMessage"
     ]);
+    expect(detail.turns[0]?.items[0]).toEqual({
+      id: "user-1",
+      type: "userMessage",
+      content: [{ type: "input_text", text: "hello" }]
+    });
   });
 
   test("discovers the persisted Claude cwd when resuming a provider-listed session", async () => {

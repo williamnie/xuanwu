@@ -78,7 +78,7 @@ function transcriptItems(entry: SessionMessageEntry): Array<Record<string, unkno
   const message = entry.message;
   if (message.role === "user") {
     const text = messageText(message.content);
-    return text ? [{ id: entry.id, type: "userMessage", text }] : [];
+    return text ? [{ id: entry.id, type: "userMessage", content: [{ type: "input_text", text }] }] : [];
   }
   if (message.role === "toolResult") {
     return [{

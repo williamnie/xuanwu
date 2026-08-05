@@ -99,7 +99,7 @@ describe("P10: Pi executor（fake transport）", () => {
       id: "pi-coding-agent:pi-history",
       cwd: "/tmp/demo",
       status: "idle",
-      turns: [{ id: "user-1", items: [{ type: "userMessage", text: "hello" }] }]
+      turns: [{ id: "user-1", items: [{ type: "userMessage", content: [{ type: "input_text", text: "hello" }] }] }]
     });
   });
 

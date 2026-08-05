@@ -34,7 +34,7 @@ describe("Pi session history projection", () => {
     expect(piTranscriptTurns(entries)).toEqual([{
       id: "user",
       items: [
-        { id: "user", type: "userMessage", text: "你好" },
+        { id: "user", type: "userMessage", content: [{ type: "input_text", text: "你好" }] },
         { id: "assistant:0", type: "reasoning", content: [{ type: "text", text: "简短回复" }] },
         { id: "assistant:1", type: "agentMessage", text: "你好！" },
         { id: "call-1", type: "custom_tool_call", name: "read", input: { path: "README.md" } },

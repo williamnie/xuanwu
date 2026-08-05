@@ -61,4 +61,19 @@ describe("provider-neutral Session View", () => {
       sessionRef: "claude-1"
     }), { detail: true })).toThrow("invalid xw.provider-session.v1 view");
   });
+
+  test("requires canonical public message shapes so user bubbles cannot render empty", () => {
+    expect(() => assertProviderSessionView("pi-coding-agent", providerSessionDetail("pi-coding-agent", {
+      sessionRef: "pi-1",
+      turns: [{ id: "turn-1", items: [{ type: "userMessage", text: "legacy native text" }] }]
+    }), { detail: true })).toThrow("invalid xw.provider-session.v1 view");
+    expect(() => assertProviderSessionView("pi-coding-agent", providerSessionDetail("pi-coding-agent", {
+      sessionRef: "pi-1",
+      turns: [{ id: "turn-1", items: [{ type: "userMessage", content: [] }] }]
+    }), { detail: true })).toThrow("invalid xw.provider-session.v1 view");
+    expect(() => assertProviderSessionView("pi-coding-agent", providerSessionDetail("pi-coding-agent", {
+      sessionRef: "pi-1",
+      turns: [{ id: "turn-1", items: [{ type: "userMessage", content: [{ type: "input_text", text: "你好" }] }] }]
+    }), { detail: true })).not.toThrow();
+  });
 });

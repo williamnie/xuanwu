@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const sessionsSource = readFileSync(new URL('./Sessions.jsx', import.meta.url), 'utf8');
 const transcriptSource = readFileSync(new URL('./sessions/SessionTranscript.jsx', import.meta.url), 'utf8');
+const chatWorkspaceSource = readFileSync(new URL('./sessions/SessionChatWorkspace.jsx', import.meta.url), 'utf8');
 
 test('session detail keeps a low-frequency reconcile timer while selected', () => {
   assert.match(sessionsSource, /SESSION_DETAIL_RECONCILE_INTERVAL_MS\s*=\s*30_000/);
@@ -28,6 +29,16 @@ test('live thinking state avoids duplicate thinking labels', () => {
   assert.doesNotMatch(
     transcriptSource,
     /<div className="chat-bubble-sender">Agent <span className="streaming-badge">Thinking\.\.\.<\/span><\/div>\s*<div className="chat-bubble-body thinking-placeholder">/,
+  );
+});
+
+test('an in-flight send renders the optimistic user message before the existing working turn', () => {
+  assert.match(chatWorkspaceSource, /<SessionTranscript[\s\S]*sending=\{sending\}/);
+  assert.match(transcriptSource, /const working = Boolean\(running \|\| sending\);/);
+  assert.match(transcriptSource, /shouldRenderLiveTurn\(liveEvents, working\)/);
+  assert.match(
+    transcriptSource,
+    /localUserMessages\.map[\s\S]*<OptimisticUserMessageBubble[\s\S]*\{showLiveTurn && \([\s\S]*<LiveTurnItem/,
   );
 });
 

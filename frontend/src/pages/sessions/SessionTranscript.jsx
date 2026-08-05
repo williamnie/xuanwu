@@ -124,13 +124,14 @@ function filesFromFileChangeTool(tool) {
   return parseDiff(tool.text || '');
 }
 
-export default function SessionTranscript({ session, project, liveEvents, optimisticUserMessages, running, pendingApproval, navigateTo }) {
+export default function SessionTranscript({ session, project, liveEvents, optimisticUserMessages, running, sending, pendingApproval, navigateTo }) {
   const turns = useMemo(() => session?.turns || [], [session?.turns]);
   const localUserMessages = useMemo(
     () => optimisticUserMessages.filter((message) => message.sessionId === session?.id),
     [optimisticUserMessages, session?.id],
   );
-  const showLiveTurn = shouldRenderLiveTurn(liveEvents, running);
+  const working = Boolean(running || sending);
+  const showLiveTurn = shouldRenderLiveTurn(liveEvents, working);
   const provider = providerLabel(session?.provider);
   const providerId = String(session?.provider || 'codex').toLowerCase();
   const providerSessionId = session?.provider_session_id || session?.sessionId || session?.id || '';
@@ -145,7 +146,7 @@ export default function SessionTranscript({ session, project, liveEvents, optimi
     liveEvents.length,
     lastLiveEvent?.method || lastLiveEvent?.agent_event_type || '',
     lastLiveEvent?.payload || lastLiveEvent?.text || lastLiveEvent?.error || '',
-    running ? 'running' : 'idle',
+    working ? 'running' : 'idle',
     pendingApproval ? 'approval' : '',
   ].join(':');
   const {
@@ -203,7 +204,7 @@ export default function SessionTranscript({ session, project, liveEvents, optimi
           <span>Provider: {provider}</span>
           <code title={providerSessionId}>{providerSessionId}</code>
         </div>
-        <RuntimeStatusPill running={running} pendingApproval={pendingApproval} />
+        <RuntimeStatusPill running={working} pendingApproval={pendingApproval} />
         <div className="session-runtime-actions">
           <div className="session-export-actions">
             {codexAppUrl ? (

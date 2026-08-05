@@ -65,6 +65,7 @@ export default function SessionChatWorkspace({
             project={selectedSessionProject}
             liveEvents={liveEvents}
             running={sessionRunning}
+            sending={sending}
             optimisticUserMessages={optimisticUserMessages}
             pendingApproval={pendingApproval}
             navigateTo={navigateTo}

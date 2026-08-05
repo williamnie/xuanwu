@@ -129,8 +129,20 @@ function validTurns(value: unknown): value is ProviderSessionTurn[] {
     if (!turn || typeof turn !== "object" || Array.isArray(turn)) return false;
     const record = turn as Record<string, unknown>;
     return typeof record.id === "string" && Array.isArray(record.items) &&
-      record.items.every((item) => Boolean(item) && typeof item === "object" && !Array.isArray(item));
+      record.items.every(validTurnItem);
   });
+}
+
+function validTurnItem(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  if (item.type === "userMessage") {
+    return Array.isArray(item.content) && item.content.length > 0 && item.content.every((part) =>
+      Boolean(part) && typeof part === "object" && !Array.isArray(part)
+    );
+  }
+  if (item.type === "agentMessage") return typeof item.text === "string";
+  return true;
 }
 
 function sessionExtensions(value: Record<string, unknown> | undefined): Record<string, unknown> {

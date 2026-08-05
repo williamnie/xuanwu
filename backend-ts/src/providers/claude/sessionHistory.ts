@@ -71,14 +71,14 @@ function transcriptItems(entry: SessionMessage): Array<Record<string, unknown>> 
   const content = Array.isArray(message.content) ? message.content : message.content ? [message.content] : [];
   if (typeof message.content === "string") {
     const text = redactSensitiveText(message.content);
-    return text ? [{ id: entry.uuid, type: entry.type === "assistant" ? "agentMessage" : "userMessage", text }] : [];
+    return text ? [messageItem(entry.uuid, entry.type, text)] : [];
   }
   return content.flatMap((value, index) => {
     const block = objectValue(value);
     const id = stringValue(block.id) || `${entry.uuid}:${index}`;
     if (block.type === "text") {
       const text = redactSensitiveText(stringValue(block.text));
-      return text ? [{ id, type: entry.type === "assistant" ? "agentMessage" : "userMessage", text }] : [];
+      return text ? [messageItem(id, entry.type, text)] : [];
     }
     if (block.type === "tool_use") return [transcriptToolUse(id, block)];
     if (block.type === "tool_result") {
@@ -86,6 +86,11 @@ function transcriptItems(entry: SessionMessage): Array<Record<string, unknown>> 
     }
     return [];
   });
+}
+
+function messageItem(id: string, type: SessionMessage["type"], text: string): Record<string, unknown> {
+  if (type === "assistant") return { id, type: "agentMessage", text };
+  return { id, type: "userMessage", content: [{ type: "input_text", text }] };
 }
 
 function transcriptToolUse(id: string, block: Record<string, unknown>): Record<string, unknown> {

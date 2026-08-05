@@ -63,7 +63,7 @@ describe("Claude Code provider", () => {
     expect(await provider.readSession("local-session")).toMatchObject({
       id: "claude:local-session",
       cwd,
-      turns: [{ items: [{ type: "userMessage", text: "hello" }] }]
+      turns: [{ items: [{ type: "userMessage", content: [{ type: "input_text", text: "hello" }] }] }]
     });
     expect(await provider.createSession({ cwd, prompt: "create" })).toMatchObject({
       provider: "claude",

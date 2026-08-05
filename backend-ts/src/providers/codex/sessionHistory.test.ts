@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { assertProviderSessionView } from "../core/sessionView.ts";
 import { publicCodexSessionDetail } from "./sessionHistory.ts";
 
 describe("Codex session adapter projection", () => {
@@ -11,7 +12,10 @@ describe("Codex session adapter projection", () => {
       ephemeral: false,
       path: "/tmp/rollout.jsonl",
       status: { type: "notLoaded" },
-      turns: [{ id: "turn-1", items: [{ type: "agentMessage", text: "done" }] }]
+      turns: [{ id: "turn-1", items: [
+        { type: "userMessage", content: [{ type: "input_text", text: "hello" }] },
+        { type: "agentMessage", text: "done" }
+      ] }]
     });
 
     expect(detail).toMatchObject({
@@ -21,7 +25,11 @@ describe("Codex session adapter projection", () => {
       provider_session_id: "thread-1",
       path: "/tmp/rollout.jsonl",
       status: { type: "notLoaded" },
-      turns: [{ id: "turn-1", items: [{ type: "agentMessage", text: "done" }] }]
+      turns: [{ id: "turn-1", items: [
+        { type: "userMessage", content: [{ type: "input_text", text: "hello" }] },
+        { type: "agentMessage", text: "done" }
+      ] }]
     });
+    expect(() => assertProviderSessionView("codex", detail, { detail: true })).not.toThrow();
   });
 });
