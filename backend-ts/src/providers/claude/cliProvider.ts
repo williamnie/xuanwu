@@ -12,7 +12,7 @@ import { redactSensitiveText } from "../../util/redact.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
 import { managedExecutionEnvironment } from "../managedExecution.ts";
 import { claudeProcessEnvironment, environmentAuthenticationStatus } from "./auth.ts";
-import { claudeTranscriptTurns, publicClaudeSessionSummary } from "./sessionHistory.ts";
+import { publicClaudeSessionDetail, publicClaudeSessionSummary } from "./sessionHistory.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import type {
   ExecutorProvider,
@@ -149,21 +149,7 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
     ]);
     if (!info && messages.length === 0) throw new Error(`Claude CLI session ${id} was not found`);
     const running = this.active.has(id);
-    return {
-      id: `${PROVIDER}:${id}`,
-      provider: PROVIDER,
-      provider_session_id: id,
-      sessionId: id,
-      thread_id: id,
-      name: redactSensitiveText(info?.customTitle || info?.summary || "Claude session"),
-      preview: redactSensitiveText(info?.firstPrompt || info?.summary || ""),
-      cwd: info?.cwd || "",
-      status: running ? "running" : "idle",
-      isRunning: running,
-      createdAt: info ? Math.floor(info.lastModified / 1000) : 0,
-      updatedAt: info ? Math.floor(info.lastModified / 1000) : 0,
-      turns: claudeTranscriptTurns(messages)
-    };
+    return publicClaudeSessionDetail(id, info, messages, running);
   }
 
   private async execute(input: ClaudeCliExecutionInput, resume = ""): Promise<ProviderRunResult> {

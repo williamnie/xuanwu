@@ -40,7 +40,8 @@ export function piManifest(): ExecutorProviderManifest {
           { value: "max", label: "Max" }
         ] }
       ]
-    }
+    },
+    sessionPresentation: { viewContract: "xw.provider-session.v1" }
   };
 }
 

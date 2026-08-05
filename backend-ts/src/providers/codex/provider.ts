@@ -21,6 +21,7 @@ import type {
 import type { CodexInitializeResult, ThreadSummary, TurnStartResult } from "./adapter.ts";
 import { CodexStdioJsonRpcTransport, type CodexProcessLease } from "./jsonRpc.ts";
 import { recoverCodexRolloutExecEvents } from "./rolloutExecRecovery.ts";
+import { publicCodexSessionDetail, publicCodexSessionSummary } from "./sessionHistory.ts";
 
 const PROVIDER_CODEX = "codex";
 const DEFAULT_DEVELOPER_INSTRUCTIONS = "Keep changes scoped to the runner issue and explicitly update the issue status when done.";
@@ -108,12 +109,13 @@ export class CodexExecutorProvider implements ExecutorProvider {
 
   async listSessions(input: SessionListInput = {}): Promise<SessionListResult> {
     await this.adapter.initialize();
-    return await this.adapter.listThreads(input);
+    const result = await this.adapter.listThreads(input);
+    return { ...result, data: result.data.map(publicCodexSessionSummary) };
   }
 
-  async readSession(sessionId: string): Promise<ThreadSummary> {
+  async readSession(sessionId: string) {
     await this.adapter.initialize();
-    return await this.adapter.readThread(sessionId.trim());
+    return publicCodexSessionDetail(await this.adapter.readThread(sessionId.trim()));
   }
 
   async createSession(input: SessionCreateInput): Promise<SessionCreateResult> {

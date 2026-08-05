@@ -220,7 +220,7 @@ describe("Claude Agent SDK provider", () => {
         }),
         getSessionMessages: async () => [
           { type: "user", uuid: "user-1", parent_tool_use_id: null, session_id: "session-history", message: { role: "user", content: "hello" } },
-          { type: "assistant", uuid: "assistant-1", parent_tool_use_id: null, session_id: "session-history", message: { role: "assistant", content: [{ type: "text", text: "hi" }, { type: "tool_use", id: "tool-1", name: "Read", input: { file_path: "README.md" } }] } },
+          { type: "assistant", uuid: "assistant-1", parent_tool_use_id: null, session_id: "session-history", message: { role: "assistant", model: "claude-sonnet-4-5", content: [{ type: "text", text: "hi" }, { type: "tool_use", id: "tool-1", name: "Read", input: { file_path: "README.md" } }] } },
           { type: "user", uuid: "tool-result-1", parent_tool_use_id: "tool-1", session_id: "session-history", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "tool-1", content: "README content" }] } },
           { type: "assistant", uuid: "assistant-2", parent_tool_use_id: null, session_id: "session-history", message: { role: "assistant", content: [{ type: "text", text: "done" }] } }
         ]
@@ -233,8 +233,10 @@ describe("Claude Agent SDK provider", () => {
     });
     const detail = await provider.readSession("session-history") as { turns: Array<{ items: Array<{ type: string }> }> } & Record<string, unknown>;
     expect(detail).toMatchObject({
+      session_contract: "xw.provider-session.v1",
       id: "claude:session-history",
       provider: "claude",
+      model: "claude-sonnet-4-5",
       cwd
     });
     expect(detail.turns).toHaveLength(1);

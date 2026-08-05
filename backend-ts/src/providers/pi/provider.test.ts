@@ -219,6 +219,7 @@ describe("P10: Pi factory 与 manifest", () => {
     expect(manifest.capabilities.sessions?.steerWhileRunning).toBe(false);
     expect(manifest.capabilities.sessions?.list).toBe(false);
     expect(manifest.capabilities.sessions?.read).toBe(true);
+    expect(manifest.sessionPresentation?.viewContract).toBe("xw.provider-session.v1");
     expect(manifest.capabilities.control?.interrupt).toBe(true);
     expect(manifest.capabilities.models?.list).toBe(true);
     expect(typeof (new PiExecutorProvider({ transport: new FakePiTransport() }) as { listSessions?: unknown }).listSessions).toBe("undefined");

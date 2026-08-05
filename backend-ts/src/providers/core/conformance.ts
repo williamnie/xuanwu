@@ -1,5 +1,6 @@
 import { providerRegistryError } from "./errors.ts";
 import { capabilityMethodChecks, type ExecutorProviderManifest } from "./manifest.ts";
+import { PROVIDER_SESSION_VIEW_CONTRACT } from "./sessionView.ts";
 
 /**
  * P2：capability/method conformance（设计 §2.8，fail closed）。
@@ -31,6 +32,14 @@ export function checkManifest(manifest: ExecutorProviderManifest, instance: Reco
     throw providerRegistryError(
       "capability_unsupported",
       `provider ${manifest.id} declares capability but method is missing: ${detail}`
+    );
+  }
+  const sessions = manifest.capabilities.sessions;
+  if ((sessions?.list || sessions?.read) &&
+      manifest.sessionPresentation?.viewContract !== PROVIDER_SESSION_VIEW_CONTRACT) {
+    throw providerRegistryError(
+      "capability_unsupported",
+      `provider ${manifest.id} declares session list/read but does not declare ${PROVIDER_SESSION_VIEW_CONTRACT}`
     );
   }
 }

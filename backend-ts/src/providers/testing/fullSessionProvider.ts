@@ -15,6 +15,7 @@ import type {
   SessionMessageResult,
   SessionRef
 } from "../types.ts";
+import { providerSessionDetail, providerSessionSummary } from "../core/sessionView.ts";
 
 /**
  * P0 fixture：full-session 形态（Codex-like）。
@@ -96,27 +97,22 @@ export class FullSessionProvider implements ExecutorProvider {
 
   async listSessions(_input: SessionListInput): Promise<SessionListResult> {
     return {
-      data: [...this.sessions.entries()].map(([id, s]) => ({
-        id,
-        provider: this.id,
-        provider_session_id: id,
-        thread_id: id,
-        title: `fake session ${id}`,
-        created_at: s.created,
-        updated_at: s.created
+      data: [...this.sessions.entries()].map(([id, s]) => providerSessionSummary(this.id, {
+        sessionRef: id,
+        name: `fake session ${id}`,
+        createdAt: Math.floor(Date.parse(s.created) / 1000),
+        updatedAt: Math.floor(Date.parse(s.created) / 1000)
       })),
       nextCursor: undefined
     };
   }
 
   async readSession(sessionId: string): Promise<Record<string, unknown>> {
-    return {
-      id: sessionId,
-      provider: this.id,
-      provider_session_id: sessionId,
-      thread_id: sessionId,
-      title: `fake session ${sessionId}`
-    };
+    return providerSessionDetail(this.id, {
+      sessionRef: sessionId,
+      name: `fake session ${sessionId}`,
+      turns: []
+    });
   }
 
   async sendSessionMessage(input: SessionMessageInput): Promise<SessionMessageResult> {

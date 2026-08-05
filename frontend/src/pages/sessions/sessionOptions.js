@@ -106,7 +106,13 @@ export function defaultMessageSettings(project) {
 export function sessionSettingsForProject(project, currentSettings = null, preserveProvider = false) {
   const next = defaultSessionSettings(project);
   const currentProvider = String(currentSettings?.provider || '').trim();
-  if (preserveProvider && currentProvider) next.provider = currentProvider;
+  if (preserveProvider && currentProvider) {
+    next.provider = currentProvider;
+    if (currentProvider !== providerValue(project)) {
+      next.model = '';
+      next.serviceTier = SERVICE_TIER_STANDARD;
+    }
+  }
   return next;
 }
 

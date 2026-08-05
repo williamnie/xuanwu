@@ -15,6 +15,7 @@ describe("P7: Codex manifest 全能力", () => {
     expect(manifest.capabilities.control?.interrupt).toBe(true);
     expect(manifest.capabilities.control?.approvals).toBe("host-callback");
     expect(manifest.capabilities.models?.list).toBe(true);
+    expect(manifest.sessionPresentation?.viewContract).toBe("xw.provider-session.v1");
     expect(manifest.sessionPresentation?.nativeActions?.[0]).toMatchObject({ id: "open-in-codex-app", kind: "open-in-app" });
   });
 

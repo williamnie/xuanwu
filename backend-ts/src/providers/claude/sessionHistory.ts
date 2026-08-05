@@ -1,16 +1,18 @@
 import type { SDKSessionInfo, SessionMessage } from "@anthropic-ai/claude-agent-sdk";
 import { redactRegisteredSecrets } from "../../security/redactionRegistry.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
+import {
+  providerSessionDetail,
+  providerSessionSummary,
+  type ProviderSessionDetailView,
+  type ProviderSessionView
+} from "../core/sessionView.ts";
 
 const PROVIDER = "claude";
 
-export function publicClaudeSessionSummary(info: SDKSessionInfo, running = false): Record<string, unknown> {
-  return {
-    id: `${PROVIDER}:${info.sessionId}`,
-    provider: PROVIDER,
-    provider_session_id: info.sessionId,
-    sessionId: info.sessionId,
-    thread_id: info.sessionId,
+export function publicClaudeSessionSummary(info: SDKSessionInfo, running = false): ProviderSessionView {
+  return providerSessionSummary(PROVIDER, {
+    sessionRef: info.sessionId,
     name: redactSensitiveText(info.customTitle || info.summary || "Claude session"),
     preview: redactSensitiveText(info.firstPrompt || info.summary || ""),
     cwd: info.cwd || "",
@@ -18,7 +20,37 @@ export function publicClaudeSessionSummary(info: SDKSessionInfo, running = false
     isRunning: running,
     createdAt: Math.floor(info.lastModified / 1000),
     updatedAt: Math.floor(info.lastModified / 1000)
-  };
+  });
+}
+
+export function publicClaudeSessionDetail(
+  sessionId: string,
+  info: SDKSessionInfo | undefined,
+  messages: SessionMessage[],
+  running = false
+): ProviderSessionDetailView {
+  return providerSessionDetail(PROVIDER, {
+    sessionRef: sessionId,
+    name: redactSensitiveText(info?.customTitle || info?.summary || "Claude session"),
+    preview: redactSensitiveText(info?.firstPrompt || info?.summary || ""),
+    cwd: info?.cwd || "",
+    status: running ? "running" : "idle",
+    isRunning: running,
+    createdAt: info ? Math.floor(info.lastModified / 1000) : 0,
+    updatedAt: info ? Math.floor(info.lastModified / 1000) : 0,
+    model: claudeSessionModel(messages),
+    turns: claudeTranscriptTurns(messages)
+  });
+}
+
+export function claudeSessionModel(messages: SessionMessage[]): string {
+  let model = "";
+  for (const entry of messages) {
+    const record = objectValue(entry);
+    const message = objectValue(record.message);
+    model = stringValue(message.model) || stringValue(record.model) || model;
+  }
+  return model;
 }
 
 export function claudeTranscriptTurns(messages: SessionMessage[]): Array<Record<string, unknown>> {

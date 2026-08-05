@@ -15,6 +15,9 @@
 - [ ] `provider.ts`：`<X>ExecutorProvider implements ExecutorProvider`：
   - `run` 两阶段：accepted（本地 invocation anchor）→ terminal 收敛（唯一终态渠道）；
   - `recover`/`createSession`/`interrupt`/`listModels` 等按实际能力实现；缺失方法不声明。
+  - native Session 数据必须先在 adapter 内映射为 `core/sessionView.ts` candidate，再由 `providerSessionSummary/providerSessionDetail` 生成 `xw.provider-session.v1`；HTTP/UI 不解析 provider-native 字段。
+  - `manifest.sessionPresentation.viewContract` 声明 `xw.provider-session.v1`；声明后 Session API 校验 list/read 输出，native shape 泄漏必须 fail closed。
+  - adapter 能读到实际 model 时写入 Session View；读不到则留空，禁止用其它 Provider 或项目默认值补齐。
 - [ ] `factory.ts`：`<x>Factory()` + `<x>Manifest()`：
   - manifest 声明**实际实现**的能力（capability 只声明 true）；未实现不声明；
   - `sessionPresentation.nativeActions`（如 "Open in App"）经 manifest action 提供；
@@ -32,6 +35,8 @@
 - [ ] provider 行为测试（fake transport：run/recover/interrupt/model list 时序与 terminal 收敛）。
 - [ ] factory/manifest 测试（capability 只声明实际实现）。
 - [ ] registry 装配测试（注册后可发现；catalog/session actions 投影正确）。
+- [ ] Session View contract 测试：identity/status/turns/model 来自 adapter 映射；未知 native shape 不泄漏为公共字段。
+- [ ] settings provenance 测试：持久化 `settings_provider`，切换 Provider/项目时 model、reasoning、service tier 不跨 Provider 继承。
 - [ ] 纳入 `core/conformance.test.ts` §20 矩阵（initial execution、稳定 invocation ref、resume 拒绝/支持、interrupt 按 capability、unknown event preserve）。
 
 ## 4. Parity 与观察窗

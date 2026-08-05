@@ -158,6 +158,21 @@ describe("P2: conformance 校验（fail closed）", () => {
     expect(() => checkManifest(manifest, { run: async () => ({}), recover: async () => ({}) })).not.toThrow();
   });
 
+  test("session list/read adapter 未声明统一 Session View contract 时 fail closed", () => {
+    const manifest: ExecutorProviderManifest = {
+      id: asProviderId("native-session-leak"),
+      displayName: "native session leak",
+      supportLevel: "experimental",
+      transports: ["sdk"],
+      capabilities: { issueExecution: true, sessions: { list: true, read: true } }
+    };
+    expect(() => checkManifest(manifest, {
+      run: async () => ({}),
+      listSessions: async () => ({ data: [] }),
+      readSession: async () => ({})
+    })).toThrow("does not declare xw.provider-session.v1");
+  });
+
   test("parseConfig 抛错 → failed + config_invalid", async () => {
     const registry = createProviderRegistry();
     const factory = factoryOf("bad-config", { issueExecution: true }, { run: async () => ({ runId: "r" }) });

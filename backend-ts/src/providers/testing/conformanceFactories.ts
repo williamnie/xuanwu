@@ -29,7 +29,10 @@ function wrap(fixture: ExecutorProvider, capabilities: ProviderCapabilities, dis
     displayName,
     supportLevel: "tested",
     transports: ["stdio-json"],
-    capabilities
+    capabilities,
+    ...((capabilities.sessions?.list || capabilities.sessions?.read)
+      ? { sessionPresentation: { viewContract: "xw.provider-session.v1" as const } }
+      : {})
   };
   return {
     manifest,

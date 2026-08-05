@@ -4,7 +4,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import type { SessionCreateInput, SessionMessageInput } from "../providers/types.ts";
 
-type RuntimeSettings = {
+export type RuntimeSettings = {
   approval_policy?: string;
   model?: string;
   reasoning_effort?: string;
@@ -29,15 +29,58 @@ export async function withSessionRuntimeSettings(
 
 export function runtimeRawRef(
   input: SessionCreateInput | SessionMessageInput,
-  turnId = ""
+  turnId = "",
+  provider = ""
 ): Record<string, string> {
   const settings = runtimeSettings(input);
-  return turnId ? { ...settings, provider_turn_id: turnId } : settings;
+  return {
+    ...settings,
+    ...(provider.trim() ? { settings_provider: provider.trim() } : {}),
+    ...(turnId ? { provider_turn_id: turnId } : {})
+  };
 }
 
 export function runtimeSettingsFromAgentSession(db: RunnerDatabase, sessionId: string, provider = "codex"): RuntimeSettings {
   const raw = jsonRecord(getAgentSession(db, `${provider}:${sessionId}`)?.raw_ref);
-  return runtimeSettings(raw);
+  return providerScopedRuntimeSettings(raw, provider);
+}
+
+/**
+ * 纠正旧索引中的跨 Provider settings；adapter 提供的权威设置优先。
+ * 返回 null 表示无需改写，避免每次 read 都刷新 updated_at。
+ */
+export function correctedRuntimeRawRef(
+  rawRef: string,
+  provider: string,
+  detail: Record<string, unknown>
+): Record<string, unknown> | null {
+  const raw = jsonRecord(rawRef);
+  if (Object.keys(raw).length === 0) return null;
+  const next = { ...raw };
+  let changed = false;
+  const sourceProvider = stringValue(raw.settings_provider);
+  if (sourceProvider && sourceProvider !== provider) {
+    for (const key of ["model", "reasoning_effort", "service_tier"]) {
+      if (key in next) {
+        delete next[key];
+        changed = true;
+      }
+    }
+  }
+  if (provider !== "codex" && next.model === "codex-default") {
+    delete next.model;
+    changed = true;
+  }
+  const authoritative = runtimeSettings(detail);
+  for (const key of ["model", "reasoning_effort", "service_tier"] as const) {
+    const value = authoritative[key];
+    if (value && next[key] !== value) {
+      next[key] = value;
+      changed = true;
+    }
+  }
+  if (changed && next.settings_provider !== provider) next.settings_provider = provider;
+  return changed ? next : null;
 }
 
 async function runtimeSettingsFromRolloutPath(path: string): Promise<RuntimeSettings> {
@@ -75,6 +118,18 @@ function runtimeSettings(input: Record<string, unknown>): RuntimeSettings {
     approval_policy: firstNonEmpty(stringValue(input.approval_policy), stringValue(input.approvalPolicy)),
     sandbox: firstNonEmpty(stringValue(input.sandbox), sandboxFromPolicy(input.sandbox_policy ?? input.sandboxPolicy))
   });
+}
+
+function providerScopedRuntimeSettings(raw: Record<string, unknown>, provider: string): RuntimeSettings {
+  const settings = runtimeSettings(raw);
+  const sourceProvider = stringValue(raw.settings_provider);
+  if (sourceProvider && sourceProvider !== provider) {
+    delete settings.model;
+    delete settings.reasoning_effort;
+    delete settings.service_tier;
+  }
+  if (provider !== "codex" && settings.model === "codex-default") delete settings.model;
+  return settings;
 }
 
 function collaborationSettings(context: Record<string, unknown>): Record<string, unknown> {

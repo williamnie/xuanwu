@@ -6,6 +6,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { redactRegisteredSecrets } from "../../security/redactionRegistry.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
+import { providerSessionDetail, type ProviderSessionDetailView } from "../core/sessionView.ts";
 
 const PROVIDER = "pi-coding-agent";
 
@@ -43,14 +44,10 @@ export const defaultPiSessionFunctions: PiSessionFunctions = {
   }
 };
 
-export function publicPiSessionDetail(snapshot: PiSessionSnapshot, running = false): Record<string, unknown> {
+export function publicPiSessionDetail(snapshot: PiSessionSnapshot, running = false): ProviderSessionDetailView {
   const preview = firstUserText(snapshot.entries);
-  return {
-    id: `${PROVIDER}:${snapshot.id}`,
-    provider: PROVIDER,
-    provider_session_id: snapshot.id,
-    sessionId: snapshot.id,
-    thread_id: snapshot.id,
+  return providerSessionDetail(PROVIDER, {
+    sessionRef: snapshot.id,
     name: redactSensitiveText(snapshot.name || preview || "Pi session"),
     preview: redactSensitiveText(preview),
     cwd: snapshot.cwd,
@@ -60,7 +57,7 @@ export function publicPiSessionDetail(snapshot: PiSessionSnapshot, running = fal
     updatedAt: snapshot.updatedAt,
     model: latestModel(snapshot.entries),
     turns: piTranscriptTurns(snapshot.entries)
-  };
+  });
 }
 
 export function piTranscriptTurns(entries: SessionEntry[]): Array<Record<string, unknown>> {

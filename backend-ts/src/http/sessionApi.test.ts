@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { createDefaultRouter } from "./server.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
+import { claudeManifest } from "../providers/claude/factory.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const EMPTY_ROLLOUT_ERROR = [
@@ -485,7 +486,7 @@ describe("Bun Sessions API compatibility", () => {
         provider: "claude",
         provider_session_id: "claude-existing",
         project_id: "claude-demo",
-        raw_ref: { provider_turn_id: "claude-turn-existing" },
+        raw_ref: { model: "codex-default", provider_turn_id: "claude-turn-existing" },
         status: "running"
       });
       const router = createDefaultRouter({ database, providers: { codex, claude } });
@@ -496,6 +497,7 @@ describe("Bun Sessions API compatibility", () => {
         prompt: "hello Claude"
       }));
       const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=claude&limit=20`));
+      const legacyDetail = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-existing`));
       const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-new`));
       const message = await router.handle(jsonRequest("/api/sessions/claude:claude-new/messages", { prompt: "continue" }));
       const interrupt = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-new/interrupt`, { method: "POST" }));
@@ -520,6 +522,11 @@ describe("Bun Sessions API compatibility", () => {
         provider: "claude"
       });
       expect(getAgentSession(database, "claude:claude-existing")?.status).toBe("running");
+      expect(legacyDetail.status).toBe(200);
+      const legacyBody = await legacyDetail.json() as Record<string, unknown>;
+      expect(legacyBody).not.toHaveProperty("model");
+      expect(legacyBody.raw_ref).not.toContain("codex-default");
+      expect(getAgentSession(database, "claude:claude-existing")?.raw_ref).not.toContain("codex-default");
       expect(detail.status).toBe(200);
       expect(await detail.json()).toMatchObject({ id: "claude:claude-new", provider: "claude" });
       expect(message.status).toBe(201);
@@ -540,6 +547,7 @@ describe("Bun Sessions API compatibility", () => {
       expect(claude.calls).toEqual([
         ["createSession", { cwd: "/tmp/claude-demo", prompt: "hello Claude" }],
         ["listSessions", { limit: 20 }],
+        ["readSession", { sessionId: "claude-existing" }],
         ["readSession", { sessionId: "claude-new" }],
         ["sendSessionMessage", { cwd: "/tmp/claude-demo", sessionId: "claude-new", prompt: "continue" }]
       ]);
@@ -619,6 +627,25 @@ describe("Bun Sessions API compatibility", () => {
       expect(await create.text()).toContain("尚未就绪");
       expect(codex.calls).toEqual([]);
       expect(claude.calls).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("fails closed when a migrated adapter leaks provider-native session data", async () => {
+    const database = await openFixtureDatabase();
+    const claude = Object.assign(new ClaudeSessionsProvider(), { manifest: claudeManifest() });
+    try {
+      const router = createDefaultRouter({ database, providers: { claude } });
+      const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=claude`));
+      const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-existing`));
+
+      expect(list.status).toBe(200);
+      expect(await list.json()).toMatchObject({
+        provider_errors: [{ provider: "claude", error: expect.stringContaining("invalid xw.provider-session.v1 view") }]
+      });
+      expect(detail.status).toBe(400);
+      expect(await detail.text()).toContain("invalid xw.provider-session.v1 view");
     } finally {
       database.close();
     }

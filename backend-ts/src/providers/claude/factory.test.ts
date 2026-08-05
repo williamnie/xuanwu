@@ -17,7 +17,7 @@ describe("P8: Claude manifest 只声明实际实现（preview parity）", () => 
     expect(manifest.capabilities.control?.approvals).toBe("none");
     expect(manifest.capabilities.models?.list).toBe(false);
     // 不出现 Codex 假设
-    expect(manifest.sessionPresentation).toBeUndefined();
+    expect(manifest.sessionPresentation?.viewContract).toBe("xw.provider-session.v1");
     expect(manifest.capabilities.sessions?.steerWhileRunning).toBe(false);
   });
 

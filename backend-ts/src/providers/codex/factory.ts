@@ -48,6 +48,7 @@ export function codexManifest(): ExecutorProviderManifest {
     },
     sessionPresentation: {
       emptySession: false,
+      viewContract: "xw.provider-session.v1",
       nativeActions: [{ id: "open-in-codex-app", label: "Open in Codex App", kind: "open-in-app" }]
     }
   };

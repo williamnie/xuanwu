@@ -28,7 +28,7 @@ import {
   type ClaudeProcessFactory
 } from "./cliProvider.ts";
 import { claudeAuthenticationStatus, claudeProcessEnvironment } from "./auth.ts";
-import { claudeTranscriptContent, claudeTranscriptTurns, publicClaudeSessionSummary } from "./sessionHistory.ts";
+import { claudeTranscriptContent, publicClaudeSessionDetail, publicClaudeSessionSummary } from "./sessionHistory.ts";
 import type {
   ExecutorCapability,
   ExecutorProvider,
@@ -163,21 +163,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     ]);
     if (!info && messages.length === 0) throw new Error(`Claude SDK session ${id} was not found`);
     const running = this.active.has(id);
-    return {
-      id: `${PROVIDER}:${id}`,
-      provider: PROVIDER,
-      provider_session_id: id,
-      sessionId: id,
-      thread_id: id,
-      name: redactSensitiveText(info?.customTitle || info?.summary || "Claude session"),
-      preview: redactSensitiveText(info?.firstPrompt || info?.summary || ""),
-      cwd: info?.cwd || "",
-      status: running ? "running" : "idle",
-      isRunning: running,
-      createdAt: info ? Math.floor(info.lastModified / 1000) : 0,
-      updatedAt: info ? Math.floor(info.lastModified / 1000) : 0,
-      turns: claudeTranscriptTurns(messages)
-    };
+    return publicClaudeSessionDetail(id, info, messages, running);
   }
 
   async interrupt(input: InterruptInput): Promise<void> {

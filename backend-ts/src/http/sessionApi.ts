@@ -12,11 +12,13 @@ import {
   type SessionCreateInput,
   type SessionMessageInput
 } from "../providers/types.ts";
-import { runtimeRawRef, runtimeSettingsFromAgentSession, withSessionRuntimeSettings } from "./sessionRuntimeSettings.ts";
+import { correctedRuntimeRawRef, runtimeRawRef, runtimeSettingsFromAgentSession, withSessionRuntimeSettings } from "./sessionRuntimeSettings.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { reconcileCodexSessionIndex, reconcileCodexSessionIndexes } from "./sessionIndexReconciler.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
+import { assertProviderSessionView, providerSessionDetail, PROVIDER_SESSION_VIEW_CONTRACT } from "../providers/core/sessionView.ts";
+import type { ExecutorProviderManifest } from "../providers/core/manifest.ts";
 
 export type SessionApiContext = {
   bus?: EventBus;
@@ -72,6 +74,7 @@ async function listSessions(context: SessionApiContext, request: Request) {
         ...sessionListInput(request),
         ...(project ? { cwd: project.cwd } : {})
       });
+      for (const raw of result.data) validateDeclaredSessionView(provider, raw, false);
       if (provider.id === "codex") reconcileCodexSessionIndexes(context.database, result.data);
       for (const raw of result.data) {
         const item = qualifiedProviderSession(provider.id, raw);
@@ -132,6 +135,7 @@ async function readSession(context: SessionApiContext, rawSessionID: string) {
   let result: Record<string, unknown>;
   try {
     result = await provider.readSession!(ref.sessionId);
+    validateDeclaredSessionView(provider, result, true);
   } catch (error) {
     const fallback = ref.provider === "codex" ? pendingCodexSessionFallback(context.database, ref.sessionId, error) : null;
     if (!fallback) throw error;
@@ -194,6 +198,12 @@ function providersForList(context: SessionApiContext, filter: { projectId: strin
     if (!provider.capabilities.includes("sessions") || typeof provider.listSessions !== "function") return false;
     return wanted !== "" || provider.runtimeStatus?.().ready !== false;
   });
+}
+
+function validateDeclaredSessionView(provider: ExecutorProvider, value: Record<string, unknown>, detail: boolean): void {
+  const manifest = (provider as ExecutorProvider & { manifest?: ExecutorProviderManifest }).manifest;
+  if (manifest?.sessionPresentation?.viewContract !== PROVIDER_SESSION_VIEW_CONTRACT) return;
+  assertProviderSessionView(provider.id, value, { detail });
 }
 
 function sessionListInput(request: Request): { cursor: string; limit: number } {
@@ -323,7 +333,7 @@ function persistSession(
     provider_session_id: sessionId,
     project_id: input.projectId ?? "",
     preview: sessionPreview(input.prompt ?? ""),
-    raw_ref: runtimeRawRef(input, turnId),
+    raw_ref: runtimeRawRef(input, turnId, provider),
     status
   });
 }
@@ -343,7 +353,7 @@ function persistSessionTurn(
     project_id: input.projectId ?? "",
     raw_ref: {
       ...runtimeSettingsFromAgentSession(context.database, sessionId, provider),
-      ...runtimeRawRef(input, turnId)
+      ...runtimeRawRef(input, turnId, provider)
     },
     status
   });
@@ -375,7 +385,7 @@ function reconcileProviderSessionMetadata(
   const indexed = getAgentSession(db, `${provider}:${sessionId}`);
   if (provider === "codex" || !indexed) return detail;
   const status = stringValue(detail.status) || (detail.isRunning === true ? "running" : "");
-  const rawRef = correctedProviderRawRef(indexed.raw_ref, detail);
+  const rawRef = correctedRuntimeRawRef(indexed.raw_ref, provider, detail);
   if (!status && !rawRef) return detail;
   const updated = upsertAgentSession(db, {
     provider,
@@ -384,21 +394,6 @@ function reconcileProviderSessionMetadata(
     ...(rawRef ? { raw_ref: rawRef } : {})
   });
   return { ...detail, raw_ref: updated.raw_ref, status: status || detail.status };
-}
-
-function correctedProviderRawRef(rawRef: string, detail: Record<string, unknown>): Record<string, unknown> | null {
-  let raw: Record<string, unknown>;
-  try {
-    const parsed = JSON.parse(rawRef) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    raw = parsed as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-  if (raw.model !== "codex-default") return null;
-  const model = stringValue(detail.model);
-  if (!model || model === "codex-default") return null;
-  return { ...raw, model };
 }
 
 function latestSessionTurnID(db: RunnerDatabase, ref: QualifiedSessionRef): string {
@@ -438,17 +433,15 @@ function pendingCodexSessionFallback(db: RunnerDatabase, sessionId: string, erro
   if (!isEmptyRolloutError(error)) return null;
   const session = getAgentSession(db, `codex:${sessionId}`);
   if (!session) return null;
-  return {
-    id: session.session_key,
-    sessionId: session.provider_session_id,
-    provider: "codex",
-    provider_session_id: session.provider_session_id,
-    ephemeral: false,
+  return providerSessionDetail("codex", {
+    sessionRef: session.provider_session_id,
+    name: session.preview,
     preview: session.preview,
     status: session.status || "running",
     turns: [],
-    isRunning: ["running", "active", "busy", "inprogress"].includes(session.status.toLowerCase())
-  };
+    isRunning: ["running", "active", "busy", "inprogress"].includes(session.status.toLowerCase()),
+    extensions: { ephemeral: false }
+  });
 }
 
 function isEmptyRolloutError(error: unknown): boolean {

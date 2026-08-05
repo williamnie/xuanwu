@@ -58,7 +58,12 @@ export type ExecutorProviderManifest = {
   /** P6：Provider-specific settings descriptor（renderer 用） */
   executionSettings?: ProviderSettingsDescriptor;
   /** P6：session presentation（空 Session 支持 + native action） */
-  sessionPresentation?: { emptySession?: boolean; nativeActions?: readonly ProviderNativeAction[] };
+  sessionPresentation?: {
+    emptySession?: boolean;
+    nativeActions?: readonly ProviderNativeAction[];
+    /** Adapter 的 list/read 输出已经通过 Core Session View builder 归一化。 */
+    viewContract?: "xw.provider-session.v1";
+  };
 };
 
 /** P2：capability 声明 → 校验方法名 的确定性投影（conformance 用）。 */

@@ -41,7 +41,8 @@ export function claudeManifest(): ExecutorProviderManifest {
           { value: "runner-env", label: "Runner env" }
         ] }
       ]
-    }
+    },
+    sessionPresentation: { viewContract: "xw.provider-session.v1" }
   };
 }
 

@@ -32,10 +32,12 @@ test('switching providers clears provider-scoped model and service tier', () => 
 
 test('an explicitly selected provider survives a later project selection', () => {
   const settings = sessionSettingsForProject(
-    { provider: 'codex', approval_policy: 'never', sandbox: 'workspace-write' },
-    { provider: 'pi-coding-agent' },
+    { provider: 'pi-coding-agent', model: 'deepseek/deepseek-v4-flash', approval_policy: 'never', sandbox: 'workspace-write' },
+    { provider: 'claude', model: 'claude-sonnet', serviceTier: 'priority' },
     true,
   );
 
-  assert.equal(settings.provider, 'pi-coding-agent');
+  assert.equal(settings.provider, 'claude');
+  assert.equal(settings.model, '');
+  assert.equal(settings.serviceTier, '');
 });
