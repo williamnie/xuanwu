@@ -21,8 +21,8 @@ async function fourFormRegistry() {
   registry.registerFactory(qoderFactory({ facade: createFakeQoderSdkFacade([]).facade }));
   await registry.startConfigured({
     codex: { command: "codex" },
-    claude: { mode: "sdk", env: {} },
-    pi: { command: "pi" },
+    claude: { authMode: "environment", mode: "sdk", env: { ANTHROPIC_API_KEY: "test-key" } },
+    "pi-coding-agent": { command: "pi" },
     qoder: {}
   });
   return registry;
@@ -32,7 +32,7 @@ describe("P12: 四种形态 conformance（Codex/Claude/Pi/Qoder）", () => {
   test("四种 factory 全部 ready 且 capability/method 一致", async () => {
     const registry = await fourFormRegistry();
     const ids = registry.list().map((e) => String(e.id)).sort();
-    expect(ids).toEqual(["claude", "codex", "pi", "qoder"]);
+    expect(ids).toEqual(["claude", "codex", "pi-coding-agent", "qoder"]);
     for (const entry of registry.list()) {
       expect(entry.state).toBe("ready");
       expect(() => checkManifest(entry.manifest, entry.instance as unknown as Record<string, unknown>)).not.toThrow();
@@ -52,7 +52,7 @@ describe("P12: 四种形态 conformance（Codex/Claude/Pi/Qoder）", () => {
     const byId = new Map(registry.list().map((e) => [String(e.id), e.manifest.supportLevel]));
     expect(byId.get("codex")).toBe("tested");
     expect(byId.get("claude")).toBe("preview");
-    expect(byId.get("pi")).toBe("preview");
+    expect(byId.get("pi-coding-agent")).toBe("preview");
     expect(byId.get("qoder")).toBe("preview");
   });
 });

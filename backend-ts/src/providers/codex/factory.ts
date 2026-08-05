@@ -2,6 +2,7 @@ import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import { asProviderId, type ExecutorProvider } from "../types.ts";
 import type { ExecutorProviderManifest, ProviderCapabilities } from "../core/manifest.ts";
 import type { ProviderFactory, ProviderRuntimeConfig as RegistryProviderConfig, RegisteredProvider } from "../core/registry.ts";
+import { detectProviderCommand } from "../core/command.ts";
 import { createCodexExecutorProvider, type CodexAppEventSink } from "./provider.ts";
 
 /**
@@ -63,7 +64,10 @@ export function codexFactory(options: CodexFactoryOptions = {}): ProviderFactory
     manifest,
     // env.ts 已把 providers.codex 解析为 ProviderRuntimeConfig；直接透传
     parseConfig: (raw: unknown) => (raw ?? {}) as RegistryProviderConfig,
-    autoDetect: () => ({ installed: true, ready: true }),
+    autoDetect: (config) => {
+      const detected = detectProviderCommand(config.command);
+      return { ...detected, ready: detected.installed };
+    },
     create: (config: RegistryProviderConfig) => {
       const instance = createCodexExecutorProvider(config as ProviderRuntimeConfig, options.appEventSink, {
         ownershipFile: options.ownershipFile

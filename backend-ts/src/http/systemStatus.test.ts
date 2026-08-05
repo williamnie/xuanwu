@@ -701,8 +701,12 @@ describe("P4: registry 投影接入 system status", () => {
       expect(fake?.registry_state).toBe("ready");
       expect(fake?.support_level).toBe("tested");
       expect(fake?.capabilities).toContain("issue_execution");
-      // 现有 codex/claude bridge 仍输出（W1 兼容窗口）
-      expect(body.providers.some((p) => p.id === "codex")).toBe(true);
+      expect(body.providers.map((provider) => provider.id)).toEqual(["fake-execution-only"]);
+
+      const compactResponse = await router.handle(new Request(`${BASE_URL}/api/system/status?compact=1`));
+      expect(compactResponse.status).toBe(200);
+      const compactBody = (await compactResponse.json()) as SystemStatusBody;
+      expect(compactBody.providers.map((provider) => provider.id)).toEqual(["fake-execution-only"]);
     } finally {
       database.close();
     }

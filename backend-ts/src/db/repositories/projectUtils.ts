@@ -24,14 +24,15 @@ export type NormalizedProjectWrite = {
 
 export function normalizeProjectForWrite(input: ProjectWriteInput): NormalizedProjectWrite {
   const cwd = cleanString(input.cwd);
+  const provider = normalizeProjectProvider(input.provider);
   return {
     id: cleanString(input.id),
     name: cleanString(input.name) || projectNameFromCWD(cwd),
     cwd,
-    provider: normalizeProjectProvider(input.provider),
+    provider,
     provider_config_json: normalizeProjectProviderConfig(input.provider_config_json),
     auto_run: normalizeProjectAutoRun(input.auto_run),
-    model: normalizeProjectModel(input.model),
+    model: normalizeProjectModel(input.model, provider),
     approval_policy: cleanString(input.approval_policy) || "never",
     sandbox: cleanString(input.sandbox) || "workspace-write",
     default_agent_profile_id: normalizeIdentifier(input.default_agent_profile_id),
@@ -49,7 +50,8 @@ export function normalizeProjectPatch(current: NormalizedProjectWrite, input: Pr
   if (hasPatchValue(input, "provider")) patch.provider = normalizeProjectProvider(input.provider);
   if (hasPatchValue(input, "provider_config_json")) patch.provider_config_json = normalizeProjectProviderConfig(input.provider_config_json);
   if (hasPatchValue(input, "auto_run")) patch.auto_run = normalizeProjectAutoRun(input.auto_run);
-  if (hasPatchValue(input, "model")) patch.model = normalizeProjectModel(input.model);
+  if (hasPatchValue(input, "model")) patch.model = normalizeProjectModel(input.model, patch.provider ?? current.provider);
+  else if (patch.provider && patch.provider !== current.provider) patch.model = normalizeProjectModel(current.model, patch.provider);
   if (hasPatchValue(input, "approval_policy")) patch.approval_policy = cleanString(input.approval_policy);
   if (hasPatchValue(input, "sandbox")) patch.sandbox = cleanString(input.sandbox);
   if (hasPatchValue(input, "default_agent_profile_id")) patch.default_agent_profile_id = normalizeIdentifier(input.default_agent_profile_id);
@@ -67,9 +69,10 @@ export function normalizeProjectProviderConfig(value: unknown): string {
   return cleanString(value) || "{}";
 }
 
-export function normalizeProjectModel(value: unknown): string {
+export function normalizeProjectModel(value: unknown, provider = "codex"): string {
   const model = cleanString(value);
-  if (model === "" || model.toLowerCase().startsWith("gemini-")) return "codex-default";
+  if (provider !== "codex" && model === "codex-default") return "";
+  if (model === "" || model.toLowerCase().startsWith("gemini-")) return provider === "codex" ? "codex-default" : "";
   return model;
 }
 

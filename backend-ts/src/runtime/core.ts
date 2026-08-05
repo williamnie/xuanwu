@@ -19,13 +19,13 @@ import {
   writeProcessGroupMemoryAlert
 } from "../observability/processGroupMemory.ts";
 import { primeRuntimeObservability } from "../observability/runtimeObservability.ts";
-import { claudeProviderAppEvent, createClaudeExecutorProvider } from "../providers/claude/provider.ts";
+import { claudeProviderAppEvent } from "../providers/claude/provider.ts";
 import { claudeFactory } from "../providers/claude/factory.ts";
 import { piFactory } from "../providers/pi/factory.ts";
 import { qoderFactory } from "../providers/qoder/factory.ts";
-import { createCodexExecutorProvider } from "../providers/codex/provider.ts";
+import type { CodexExecutorProvider } from "../providers/codex/provider.ts";
 import { codexFactory } from "../providers/codex/factory.ts";
-import { createProviderRegistry } from "../providers/core/registry.ts";
+import { createProviderRegistry, type ProviderProcessLease, type ProviderRegistry, type RegisteredProvider } from "../providers/core/registry.ts";
 import { aggregateParityReports, compareCapabilitiesParity, legacyProjectionCompareEnabled } from "../providers/core/parity.ts";
 import { reconcileStaleCodexProcessOwnership } from "../providers/codex/processLifecycle.ts";
 import {
@@ -71,8 +71,8 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
       eventSink: (event) => bus?.publish(claudeProviderAppEvent(event))
     }));
   }
-  if (config.providers.pi) {
-    providersRegistry.registerFactory(piFactory({ command: config.providers.pi.command ?? "pi" }));
+  if (config.providers["pi-coding-agent"]) {
+    providersRegistry.registerFactory(piFactory({ command: config.providers["pi-coding-agent"].command ?? "pi" }));
   }
   if (config.providers.qoder) {
     providersRegistry.registerFactory(qoderFactory({}));
@@ -91,9 +91,13 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
       }));
     }
   }
-  const providers = executorProviders(config, bus, codexOwnershipFile);
+  const providers = providersRegistry.readyProviders();
   const runtimeStartedAt = new Date().toISOString();
-  const providerRuntime = () => (providers.codex as ReturnType<typeof createCodexExecutorProvider> | undefined)?.runtimeSnapshot();
+  const providerRuntime = () => {
+    const codex = providers.codex as (RegisteredProvider & { runtimeSnapshot?: CodexExecutorProvider["runtimeSnapshot"] }) | undefined;
+    return codex?.runtimeSnapshot?.();
+  };
+  const providerLeases = () => providersRegistry.collectProcessLeases();
   const processGroupMemory = new ProcessGroupMemoryObserver({
     activeRuns: () => database.sqlite.query<{ count: number }, []>(
       "select count(*) as count from issue_runs where ended_at=''"
@@ -102,7 +106,7 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     // The observer uses non-suspending proc_pid_rusage for physical footprint.
     // Keep process discovery allocation-free on the HTTP loop while retaining
     // provider descendants from the lifecycle-owned runtime snapshot.
-    inspect: () => runtimeMemoryRows(runtimeStartedAt, providerRuntime(), agenticClient.activity()),
+    inspect: () => runtimeMemoryRows(runtimeStartedAt, providerRuntime(), agenticClient.activity(), providerLeases()),
     onAlert: (alert) => writeProcessGroupMemoryAlert(database, alert),
     onRecovery: (recovery) => resolveRecoveredProcessGroupMemoryAlerts(database, recovery),
     providerRuntime,
@@ -162,7 +166,7 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     providersRegistry,
     role
   });
-  installTerminationHandlers(providers, database, readDatabase, server, processGroupMemory, projectionWorker);
+  installTerminationHandlers(providersRegistry, database, readDatabase, server, processGroupMemory, projectionWorker);
   coldStartTrace("http_routes_registered");
   void restartFeishuReceiver(config.integrations.feishu);
   projectionWorker.start();
@@ -196,8 +200,9 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
 
 function runtimeMemoryRows(
   runtimeStartedAt: string,
-  runtime: ReturnType<ReturnType<typeof createCodexExecutorProvider>["runtimeSnapshot"]>,
-  agentic: ReturnType<AgenticWorkerClient["activity"]>
+  runtime: ReturnType<CodexExecutorProvider["runtimeSnapshot"]>,
+  agentic: ReturnType<AgenticWorkerClient["activity"]>,
+  leases: readonly ProviderProcessLease[] = []
 ) {
   const root = {
     command: `${runtimeStartedAt}\txuanwu-core`,
@@ -216,36 +221,27 @@ function runtimeMemoryRows(
       rss_bytes: Math.max(0, agentic.worker_rss_bytes ?? 0)
     });
   }
-  const ownership = runtime?.process;
-  if (!ownership) return rows;
-  return [...rows, ...ownership.processes.map((row) => ({
+  const ownershipRows = runtime?.process?.processes.map((row) => ({
     ...row,
-    command: `${ownership.started_at}\t${rawProcessCommand(row.command)}`
-  }))];
+    command: `${runtime?.process?.started_at}\t${rawProcessCommand(row.command)}`
+  })) ?? [];
+  const known = new Set([root.pid, ...ownershipRows.map((row) => row.pid)]);
+  const leaseRows = leases.filter((lease) => !known.has(lease.pid)).map((lease) => ({
+    command: `${lease.startedAt}\t${lease.commandLabel}`,
+    pgid: lease.pgid ?? lease.pid,
+    pid: lease.pid,
+    ppid: process.pid,
+    rss_bytes: 0
+  }));
+  return [...rows, ...ownershipRows, ...leaseRows];
 }
 
 function rawProcessCommand(command: string): string {
   return command.includes("\t") ? command.slice(command.indexOf("\t") + 1) : command;
 }
 
-function executorProviders(config: ReturnType<typeof loadConfig>, bus?: EventBus, codexOwnershipFile = "") {
-  const providers: Partial<Record<"codex" | "claude", ReturnType<typeof createCodexExecutorProvider> | ReturnType<typeof createClaudeExecutorProvider>>> = {};
-  const codexConfig = config.providers.codex;
-  const claudeConfig = config.providers.claude;
-  if (codexConfig) providers.codex = createCodexExecutorProvider(
-    codexConfig,
-    (event) => bus?.publish(event),
-    { ownershipFile: codexOwnershipFile }
-  );
-  if (claudeConfig) providers.claude = createClaudeExecutorProvider(
-    claudeConfig,
-    (event) => bus?.publish(claudeProviderAppEvent(event))
-  );
-  return providers;
-}
-
 function installTerminationHandlers(
-  providers: ReturnType<typeof executorProviders>,
+  providersRegistry: ProviderRegistry,
   database: Awaited<ReturnType<typeof openDatabase>>,
   readDatabase: Awaited<ReturnType<typeof openDatabase>>,
   server: { stop(closeActiveConnections?: boolean): void },
@@ -260,10 +256,7 @@ function installTerminationHandlers(
     processGroupMemory.stop();
     projectionWorker.stop();
     server.stop(true);
-    await Promise.all(Object.values(providers).map(async (provider) => {
-      const stopProvider = (provider as { stop?: () => Promise<void> } | undefined)?.stop;
-      if (stopProvider) await stopProvider.call(provider).catch(() => {});
-    }));
+    await providersRegistry.stopAll();
     readDatabase.close();
     database.close();
     process.exit(0);
@@ -274,7 +267,7 @@ function installTerminationHandlers(
 
 async function startAutoRunLoops(
   database: Awaited<ReturnType<typeof openDatabase>>,
-  providers: ReturnType<typeof executorProviders>,
+  providers: Record<string, RegisteredProvider>,
   bus: EventBus,
   codexSessionsDir: string,
   config: ReturnType<typeof loadConfig>,

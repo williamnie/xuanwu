@@ -18,7 +18,10 @@ export type AgentProfile = {
   updated_at: string;
 };
 
-type AgentProfileRow = Record<keyof AgentProfile, unknown>;
+type AgentProfileRow = Omit<Record<keyof AgentProfile, unknown>, "plugin_intents" | "skill_intents"> & {
+  plugin_intents_json: unknown;
+  skill_intents_json: unknown;
+};
 type AgentProfileInput = Partial<Record<keyof AgentProfile, unknown>>;
 
 const AGENT_PROFILE_COLUMNS = `id, name, provider, model, reasoning_effort,
@@ -78,10 +81,11 @@ export function deleteAgentProfile(db: RunnerDatabase, id: string): void {
 }
 
 function normalizeAgentProfile(input: AgentProfileInput): AgentProfile {
+  const provider = cleanString(input.provider).toLowerCase() || "codex";
   return {
     id: normalizeIdentifier(input.id), name: cleanString(input.name),
-    provider: cleanString(input.provider).toLowerCase() || "codex",
-    model: normalizeModel(input.model), reasoning_effort: cleanString(input.reasoning_effort),
+    provider,
+    model: normalizeModel(input.model, provider), reasoning_effort: cleanString(input.reasoning_effort),
     approval_policy: cleanString(input.approval_policy), sandbox: cleanString(input.sandbox),
     service_tier: cleanString(input.service_tier),
     default_instructions: cleanString(input.default_instructions),
@@ -95,9 +99,12 @@ function patchValues(input: AgentProfileInput): AgentProfileInput {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null && value !== undefined));
 }
 
-function normalizeModel(value: unknown): string {
+function normalizeModel(value: unknown, provider = "codex"): string {
   const model = cleanString(value);
-  return model === "" || model.toLowerCase().startsWith("gemini-") ? "codex-default" : model;
+  if (provider !== "codex" && model === "codex-default") return "";
+  return model === "" || model.toLowerCase().startsWith("gemini-")
+    ? provider === "codex" ? "codex-default" : ""
+    : model;
 }
 
 function normalizeJSONList(value: unknown): string {
@@ -111,11 +118,12 @@ function mustGetAgentProfile(db: RunnerDatabase, id: string): AgentProfile {
 }
 
 function mapAgentProfileRow(row: AgentProfileRow): AgentProfile {
+  const provider = optionalString(row.provider, "codex");
   return {
     id: requiredString(row.id, "agent_profiles.id"),
     name: requiredString(row.name, "agent_profiles.name"),
-    provider: optionalString(row.provider, "codex"),
-    model: optionalString(row.model, "codex-default"),
+    provider,
+    model: normalizeModel(optionalString(row.model), provider),
     reasoning_effort: optionalString(row.reasoning_effort),
     approval_policy: optionalString(row.approval_policy),
     sandbox: optionalString(row.sandbox),

@@ -9,7 +9,7 @@ import {
   normalizeAgentProfileForm,
 } from '../utils/agentProfiles.js';
 import { serviceTierOptions } from '../utils/serviceTier.js';
-import { PROVIDER_OPTIONS } from './sessions/sessionOptions.js';
+import { PROVIDER_OPTIONS, providerOptionsFromCatalog } from './sessions/sessionOptions.js';
 import './ProjectSettingsEditor.css';
 
 const DEFAULT_PROJECT_NAME = 'project';
@@ -26,11 +26,12 @@ function projectIdFromPath(cwd) {
   return base.replace(/^-+|-+$/g, '') || DEFAULT_PROJECT_NAME;
 }
 
-function normalizeCodexModel(model) {
-  return String(model || '').trim() || DEFAULT_CODEX_MODEL;
+function normalizeProviderModel(provider, model) {
+  const value = String(model || '').trim();
+  return value || (provider === DEFAULT_PROVIDER ? DEFAULT_CODEX_MODEL : '');
 }
 
-function buildCodexModelOptions(models, ...selectedValues) {
+function buildProviderModelOptions(provider, models, ...selectedValues) {
   const options = [];
   const seen = new Set();
   const pushOption = (value, label) => {
@@ -40,11 +41,16 @@ function buildCodexModelOptions(models, ...selectedValues) {
     options.push({ value: normalizedValue, label: String(label || normalizedValue).trim() || normalizedValue });
   };
 
-  pushOption(DEFAULT_CODEX_MODEL, '系统默认模型');
+  if (provider === DEFAULT_PROVIDER) {
+    pushOption(DEFAULT_CODEX_MODEL, '系统默认模型');
+  } else {
+    seen.add('');
+    options.push({ value: '', label: 'Provider 默认模型' });
+  }
   const liveModels = Array.isArray(models) ? models.filter(model => !model?.hidden) : [];
   liveModels.forEach(model => pushOption(model?.id || model?.model, model?.displayName || model?.name || model?.id || model?.model));
   selectedValues.forEach(value => {
-    const normalizedValue = normalizeCodexModel(value);
+    const normalizedValue = normalizeProviderModel(provider, value);
     if (normalizedValue !== DEFAULT_CODEX_MODEL) pushOption(normalizedValue, normalizedValue);
   });
   return options;
@@ -55,7 +61,7 @@ function projectForm(project) {
     formAgentProfileId: project?.default_agent_profile_id || '',
     formApproval: project?.approval_policy || 'never',
     formCwd: project?.cwd || '',
-    formModel: normalizeCodexModel(project?.model),
+    formModel: normalizeProviderModel(project?.provider || DEFAULT_PROVIDER, project?.model),
     formProvider: project?.provider || DEFAULT_PROVIDER,
     formProviderConfig: project?.provider_config_json || '{}',
     formSandbox: project?.sandbox || 'workspace-write',
@@ -74,6 +80,8 @@ function initialEditorState(project) {
     profileForm: emptyAgentProfileForm(),
     profiles: [],
     profilesLoading: false,
+    providerCatalog: [],
+    providerCatalogError: '',
     saving: false,
   };
 }
@@ -103,20 +111,21 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
     }
   }, [updateUi]);
 
-  const loadCodexModels = useCallback(async () => {
+  const loadProviderModels = useCallback(async (provider = DEFAULT_PROVIDER) => {
     updateUi(draft => {
       draft.codexModelsLoading = true;
       draft.codexModelsError = '';
     });
     try {
-      const result = await systemApi.getCodexModels();
+      const result = await systemApi.getProviderModels(provider);
       updateUi(draft => {
-        draft.codexModels = Array.isArray(result?.data) ? result.data : [];
+        const data = Array.isArray(result?.data?.data) ? result.data.data : result?.data;
+        draft.codexModels = Array.isArray(data) ? data : [];
       });
     } catch (error) {
       updateUi(draft => {
         draft.codexModels = [];
-        draft.codexModelsError = error.message || '读取 Codex 模型列表失败';
+        draft.codexModelsError = error.message || '读取 Provider 模型列表失败';
       });
     } finally {
       updateUi(draft => {
@@ -125,10 +134,26 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
     }
   }, [updateUi]);
 
+  const loadProviderCatalog = useCallback(async () => {
+    try {
+      const catalog = await systemApi.getProviders();
+      updateUi(draft => {
+        draft.providerCatalog = Array.isArray(catalog) ? catalog : [];
+        draft.providerCatalogError = '';
+      });
+    } catch (error) {
+      updateUi(draft => {
+        draft.providerCatalog = [];
+        draft.providerCatalogError = error.message || '读取 Provider 列表失败';
+      });
+    }
+  }, [updateUi]);
+
   useEffect(() => {
-    loadCodexModels();
+    loadProviderCatalog();
+    loadProviderModels(project?.provider || DEFAULT_PROVIDER);
     if (mode === 'edit') loadAgentProfiles();
-  }, [loadAgentProfiles, loadCodexModels, mode]);
+  }, [loadAgentProfiles, loadProviderCatalog, loadProviderModels, mode, project?.provider]);
 
   useEffect(() => {
     updateUi(draft => {
@@ -143,9 +168,33 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
     });
   };
 
+  const setProjectRuntimeField = (field, value) => {
+    if (field !== 'formProvider') {
+      setFormField(field, value);
+      return;
+    }
+    updateUi(draft => {
+      draft.formProvider = value;
+      draft.formModel = normalizeProviderModel(value, '');
+      draft.formServiceTier = '';
+      if (value === 'pi-coding-agent') {
+        draft.formApproval = 'never';
+        if (draft.formSandbox === 'workspace-write') draft.formSandbox = 'read-only';
+      }
+    });
+    loadProviderModels(value);
+  };
+
   const setProfileFormField = (field, value) => {
     updateUi(draft => {
       draft.profileForm[field] = value;
+      if (field === 'provider') {
+        draft.profileForm.model = normalizeProviderModel(value, '');
+        if (value === 'pi-coding-agent') {
+          draft.profileForm.approval_policy = 'never';
+          if (!draft.profileForm.sandbox || draft.profileForm.sandbox === 'workspace-write') draft.profileForm.sandbox = 'read-only';
+        }
+      }
     });
   };
 
@@ -163,7 +212,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       cwd: ui.formCwd,
       provider: ui.formProvider,
       provider_config_json: ui.formProviderConfig,
-      model: normalizeCodexModel(ui.formModel),
+      model: normalizeProviderModel(ui.formProvider, ui.formModel),
       approval_policy: ui.formApproval,
       sandbox: ui.formSandbox,
       default_service_tier: ui.formServiceTier,
@@ -217,7 +266,9 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
     }
   };
 
-  const modelOptions = buildCodexModelOptions(ui.codexModels, ui.formModel, ui.profileForm.model);
+  const discoveredProviderOptions = providerOptionsFromCatalog(ui.providerCatalog);
+  const providerOptions = discoveredProviderOptions.length > 0 ? discoveredProviderOptions : PROVIDER_OPTIONS;
+  const modelOptions = buildProviderModelOptions(ui.formProvider, ui.codexModels, ui.formModel, ui.profileForm.model);
   const modal = layout === 'modal';
 
   return (
@@ -245,11 +296,11 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
           <details className="project-settings-advanced">
             <summary>高级运行配置（可选）</summary>
             <p>不确定时无需修改。默认使用 Codex、系统默认模型、标准速度，并仅允许写入当前项目目录。</p>
-            <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setFormField} ui={ui} />
+            <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setProjectRuntimeField} providerOptions={providerOptions} ui={ui} />
           </details>
         ) : (
           <>
-            <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setFormField} ui={ui} />
+            <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setProjectRuntimeField} providerOptions={providerOptions} ui={ui} />
             <details className="project-settings-advanced project-profile-settings">
               <summary>Agent Profile（可选）</summary>
               <p>只有需要复用一组模型、权限或指令预设时才配置；普通项目可以完全忽略。</p>
@@ -265,12 +316,13 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
                 form={ui.profileForm}
                 loading={ui.profilesLoading}
                 modelOptions={modelOptions}
-                modelsError={ui.codexModelsError}
+                modelsError={ui.codexModelsError || (ui.profileForm.provider !== ui.formProvider ? '当前 Profile 使用其他 Provider' : '')}
                 modelsLoading={ui.codexModelsLoading}
                 onEdit={profile => updateUi(draft => { draft.profileForm = normalizeAgentProfileForm(profile); draft.profileError = ''; })}
                 onFieldChange={setProfileFormField}
                 onReset={() => updateUi(draft => { draft.profileForm = emptyAgentProfileForm(); draft.profileError = ''; })}
                 onSubmit={handleProfileSubmit}
+                providerOptions={providerOptions}
                 profiles={ui.profiles}
               />
             </details>
@@ -288,13 +340,13 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
   );
 }
 
-function ProjectRuntimeFields({ modelOptions, onFieldChange, ui }) {
+function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui }) {
   return (
     <div className="project-runtime-fields">
       <div className="form-group">
         <label>执行引擎</label>
         <select className="form-control" onChange={event => onFieldChange('formProvider', event.target.value)} value={ui.formProvider}>
-          {PROVIDER_OPTIONS.map(option => (
+          {providerOptions.map(option => (
             <option disabled={!option.enabled} key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
@@ -313,10 +365,10 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, ui }) {
           )}
           <span className="project-settings-hint">
             {ui.codexModelsLoading
-              ? '正在读取 Codex 模型列表…'
+                ? '正在读取 Provider 模型列表…'
               : ui.codexModelsError
                 ? `远端 model API 读取失败，已启用手填：${ui.codexModelsError}`
-                : '系统默认会跟随当前 Codex 配置。'}
+                : '模型列表来自当前 Provider。'}
           </span>
         </div>
         <div className="form-group">
@@ -345,7 +397,11 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, ui }) {
             <option value="read-only">只读</option>
             <option value="danger-full-access">允许访问整个系统</option>
           </select>
-          <span className="project-settings-hint">同时影响执行器的文件、进程和本机网络访问边界。</span>
+          <span className="project-settings-hint">
+            {ui.formProvider === 'pi-coding-agent'
+              ? 'Pi 当前仅支持可证明的“只读”或显式“整个系统”；不支持 workspace-write。'
+              : '同时影响执行器的文件、进程和本机网络访问边界。'}
+          </span>
           {ui.formSandbox !== 'danger-full-access' && (
             <div className="project-settings-permission-notice" role="status">
               {ui.formSandbox === 'read-only'
@@ -359,7 +415,7 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, ui }) {
   );
 }
 
-function AgentProfileManager({ profiles, loading, form, error, modelOptions, modelsError, modelsLoading, onFieldChange, onSubmit, onEdit, onReset }) {
+function AgentProfileManager({ profiles, loading, form, error, modelOptions, modelsError, modelsLoading, onFieldChange, onSubmit, onEdit, onReset, providerOptions }) {
   return (
     <div className="project-profile-manager">
       <div>
@@ -386,7 +442,7 @@ function AgentProfileManager({ profiles, loading, form, error, modelOptions, mod
           <div className="project-settings-grid project-profile-grid">
             <label className="form-group">执行引擎
               <select className="form-control" value={form.provider} onChange={event => onFieldChange('provider', event.target.value)}>
-                {PROVIDER_OPTIONS.map(option => <option key={option.value} value={option.value} disabled={!option.enabled}>{option.label}</option>)}
+                {providerOptions.map(option => <option key={option.value} value={option.value} disabled={!option.enabled}>{option.label}</option>)}
               </select>
             </label>
             <label className="form-group">默认模型

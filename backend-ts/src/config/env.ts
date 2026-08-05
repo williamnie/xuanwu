@@ -48,6 +48,11 @@ export const ENV_KEYS = {
   claudePlatformProfile: "XUANWU_CLAUDE_PLATFORM_PROFILE",
   claudeModel: "XUANWU_CLAUDE_MODEL",
   claudeTimeoutMs: "XUANWU_CLAUDE_TIMEOUT_MS",
+  piCommand: "XUANWU_PI_CMD",
+  piCwd: "XUANWU_PI_CWD",
+  piEnabled: "XUANWU_PI_ENABLED",
+  piEnv: "XUANWU_PI_ENV",
+  piTimeoutMs: "XUANWU_PI_TIMEOUT_MS",
   feishuAllowedChatIds: "FEISHU_ALLOWED_CHAT_IDS",
   feishuAllowedUserIds: "FEISHU_ALLOWED_USER_IDS",
   feishuAppId: "FEISHU_APP_ID",
@@ -101,6 +106,7 @@ export type ProviderRuntimeConfig = {
   authMode?: "environment" | "local-cli" | "platform-profile";
   command: string;
   cwd: string;
+  enabled?: boolean;
   env: Record<string, string>;
   mode?: "sdk" | "cli-fallback";
   model?: string;
@@ -171,7 +177,12 @@ const FLAG_KEYS: Record<string, ConfigKey> = {
   "--claude-platform-config-dir": "claudePlatformConfigDir",
   "--claude-platform-profile": "claudePlatformProfile",
   "--claude-model": "claudeModel",
-  "--claude-timeout-ms": "claudeTimeoutMs"
+  "--claude-timeout-ms": "claudeTimeoutMs",
+  "--pi-cmd": "piCommand",
+  "--pi-cwd": "piCwd",
+  "--pi-enabled": "piEnabled",
+  "--pi-env": "piEnv",
+  "--pi-timeout-ms": "piTimeoutMs"
 };
 
 export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): RunnerConfig {
@@ -185,11 +196,16 @@ export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): Runner
     env
   );
   const localCodex = localOverrides.providers?.codex ?? {};
+  const localPi = localOverrides.providers?.["pi-coding-agent"] ?? {};
   return buildConfig({
     ...baseOverrides,
     codexServerMode: localCodex.serverMode ?? baseOverrides.codexServerMode,
     codexCommand: localCodex.cliCommand ?? baseOverrides.codexCommand,
     codexAppCommand: localCodex.appCommand ?? baseOverrides.codexAppCommand,
+    piCommand: localPi.command ?? baseOverrides.piCommand,
+    piCwd: localPi.cwd ?? baseOverrides.piCwd,
+    piEnabled: localPi.enabled ?? baseOverrides.piEnabled,
+    piTimeoutMs: localPi.timeoutMs ?? baseOverrides.piTimeoutMs,
     runner: { maxParallelProjects: localOverrides.runner?.maxParallelProjects ?? baseOverrides.runnerMaxParallelProjects },
     integrations: {
       feishu: localOverrides.integrations?.feishu ?? {},
@@ -213,7 +229,8 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
     cliConnectors: buildCliConnectorConfig(overrides),
     providers: {
       codex: buildCodexRuntimeConfig(overrides, codexServer),
-      claude: buildClaudeRuntimeConfig(overrides)
+      claude: buildClaudeRuntimeConfig(overrides),
+      "pi-coding-agent": buildPiRuntimeConfig(overrides)
     },
     runner: buildRunnerConcurrencyConfig(overrides.runner ?? {
       maxParallelProjects: overrides.runnerMaxParallelProjects
@@ -312,6 +329,11 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     claudeOauthToken: cleanValue(env.CLAUDE_CODE_OAUTH_TOKEN),
     claudeModel: cleanValue(env[ENV_KEYS.claudeModel]),
     claudeTimeoutMs: cleanValue(env[ENV_KEYS.claudeTimeoutMs]),
+    piCommand: cleanValue(env[ENV_KEYS.piCommand]),
+    piCwd: cleanValue(env[ENV_KEYS.piCwd]),
+    piEnabled: cleanValue(env[ENV_KEYS.piEnabled]),
+    piEnv: cleanValue(env[ENV_KEYS.piEnv]),
+    piTimeoutMs: cleanValue(env[ENV_KEYS.piTimeoutMs]),
     feishuAllowedChatIds: cleanValue(env[ENV_KEYS.feishuAllowedChatIds]),
     feishuAllowedUserIds: cleanValue(env[ENV_KEYS.feishuAllowedUserIds]),
     feishuAppId: cleanValue(env[ENV_KEYS.feishuAppId]),
@@ -386,9 +408,15 @@ type ProviderRuntimeOverrides = {
   codexServerMode?: string;
   codexSessionsDir?: string;
   codexTimeoutMs?: number | string;
+  piCommand?: string;
+  piCwd?: string;
+  piEnabled?: boolean | string;
+  piEnv?: string;
+  piTimeoutMs?: number | string;
 };
 
 const DEFAULT_CLAUDE_COMMAND = "claude";
+const DEFAULT_PI_COMMAND = "pi";
 const DEFAULT_PROVIDER_TIMEOUT_MS = 30 * 60 * 1000;
 export const DEFAULT_MAX_PARALLEL_PROJECTS = 1;
 export const MAX_PARALLEL_PROJECTS_LIMIT = 8;
@@ -481,6 +509,19 @@ function buildClaudeRuntimeConfig(overrides: ProviderRuntimeOverrides): Provider
     model: cleanValue(overrides.claudeModel) ?? "",
     platformConfigDir,
     platformProfile
+  };
+}
+
+export function buildPiRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
+  return {
+    ...buildProviderRuntimeConfig({
+      command: overrides.piCommand,
+      cwd: overrides.piCwd,
+      defaultCommand: DEFAULT_PI_COMMAND,
+      env: overrides.piEnv,
+      timeoutMs: overrides.piTimeoutMs
+    }),
+    enabled: parseBoolean(overrides.piEnabled, true)
   };
 }
 
@@ -616,6 +657,15 @@ function parsePositiveInteger(value: number | string | undefined, fallback: numb
   if (text === undefined) return fallback;
   const parsed = Number(text);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseBoolean(value: boolean | string | undefined, fallback: boolean): boolean {
+  if (typeof value === "boolean") return value;
+  const text = cleanValue(value)?.toLowerCase();
+  if (text === undefined) return fallback;
+  if (["1", "true", "yes", "on"].includes(text)) return true;
+  if (["0", "false", "no", "off"].includes(text)) return false;
+  return fallback;
 }
 
 export function normalizeMaxParallelProjects(value: unknown, fallback: number): number {

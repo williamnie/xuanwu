@@ -18,11 +18,13 @@ export function emptyAgentProfileForm() {
 }
 
 export function normalizeAgentProfileForm(profile = {}) {
+  const provider = profile.provider || DEFAULT_PROVIDER;
+  const model = String(profile.model || '').trim();
   return {
     ...emptyAgentProfileForm(),
     ...profile,
-    provider: profile.provider || DEFAULT_PROVIDER,
-    model: profile.model || 'codex-default',
+    provider,
+    model: provider === DEFAULT_PROVIDER ? (model || 'codex-default') : (model === 'codex-default' ? '' : model),
     skill_intents: normalizeIntentText(profile.skill_intents),
     plugin_intents: normalizeIntentText(profile.plugin_intents),
   };

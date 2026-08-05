@@ -104,7 +104,7 @@ export function buildCompactSystemStatus(context: SystemStatusContext): Record<s
     auth: { enabled: context.authEnabled },
     config: configStatus(context),
     codex: { command, command_ok: command.trim() !== "" },
-    providers: providerStatus(context.config),
+    providers: providerStatus(context.config, context.providersRegistry),
     runner: runnerStatus(context.database)
   };
 }
@@ -247,6 +247,7 @@ export type ProviderStatus = {
 };
 
 export function providerStatus(config: RunnerConfig, registry?: ProviderRegistry): ProviderStatus[] {
+  if (registry) return statusFromRegistry(registry.list()).map(registryStatusEntry);
   const out = [];
   const codex = config.providers.codex;
   if (codex) out.push(providerEntry({
@@ -258,10 +259,6 @@ export function providerStatus(config: RunnerConfig, registry?: ProviderRegistry
   }));
   const claude = config.providers.claude;
   if (claude) out.push(claudeProviderEntry(claude));
-  // P4：registry 装配后，额外输出 registry 投影（新测试 Provider 无需改 status builder switch）。
-  if (registry) {
-    out.push(...statusFromRegistry(registry.list()).map(registryStatusEntry));
-  }
   return out;
 }
 
@@ -275,6 +272,13 @@ function registryStatusEntry(entry: ReturnType<typeof statusFromRegistry>[number
     available: entry.available,
     enabled: entry.enabled,
     capabilities: [...entry.capabilities],
+    command: "",
+    cli: { available: entry.available, mode: "provider_registry" },
+    cwd_configured: false,
+    env_keys: [],
+    secrets: {},
+    settings_mode: "provider_registry",
+    timeout_ms: 0,
     registry_state: entry.state,
     ready: entry.ready,
     support_level: entry.supportLevel,

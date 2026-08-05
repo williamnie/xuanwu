@@ -82,6 +82,23 @@ describe("P6: /api/providers discovery catalog", () => {
     expect(catalog[0].session_actions).toEqual([]);
   });
 
+  test("model_list Provider 通过通用 catalog 路由返回模型", async () => {
+    const registry = createProviderRegistry();
+    registry.registerFactory(
+      factoryFor("model-provider", { issueExecution: true, models: { list: true } }, {
+        id: "model-provider",
+        capabilities: ["issue_execution", "model_list"],
+        run: async () => ({ runId: "r" }),
+        listModels: async () => [{ id: "model-1" }]
+      } as never)
+    );
+    await registry.startConfigured({});
+    const router = createDefaultRouter({ providersRegistry: registry });
+    const response = await router.handle(new Request("http://127.0.0.1/api/providers/model-provider/models"));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ data: [{ id: "model-1" }] });
+  });
+
   test("not-ready Provider 可见但 submittable=false（不可提交）", async () => {
     const registry = createProviderRegistry();
     registry.registerFactory(
@@ -97,6 +114,23 @@ describe("P6: /api/providers discovery catalog", () => {
     expect(catalog[0].id).toBe("uninstalled");
     expect(catalog[0].state).toBe("not_ready");
     expect(catalog[0].submittable).toBe(false);
+  });
+
+  test("readiness_reason 对外输出前脱敏", async () => {
+    const registry = createProviderRegistry();
+    const factory = factoryFor("secretive", { issueExecution: true }, {
+      id: "secretive",
+      capabilities: ["issue_execution"],
+      run: async () => ({ runId: "r" })
+    } as never);
+    factory.create = () => {
+      throw new Error("token=secret-value credential /Users/private/credentials.json");
+    };
+    registry.registerFactory(factory);
+    await registry.startConfigured({});
+    const catalog = await catalogBody(createDefaultRouter({ providersRegistry: registry }));
+    expect(JSON.stringify(catalog)).not.toContain("secret-value");
+    expect(JSON.stringify(catalog)).not.toContain("/Users/private/credentials.json");
   });
 
   test("未注册 Provider 的单项查询 404（不进入可提交 selector）", async () => {

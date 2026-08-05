@@ -109,7 +109,8 @@ async function createSession(context: SessionApiContext, body: Record<string, un
 
 async function readSession(context: SessionApiContext, rawSessionID: string) {
   const ref = parseSessionRef(rawSessionID);
-  if (!isExecutorProviderId(ref.provider)) {
+  const registeredProvider = isExecutorProviderId(ref.provider) ? context.providers?.[ref.provider] : undefined;
+  if (!registeredProvider) {
     const indexed = publicAgentSessionOrNull(getAgentSession(context.database, ref.key));
     if (!indexed) throw new Error(`session provider "${ref.provider}" 当前 runner 未注册`);
     return indexed;

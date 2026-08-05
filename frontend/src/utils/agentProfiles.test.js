@@ -67,4 +67,6 @@ test('normalizes editable profile form defaults', () => {
   assert.equal(form.provider, 'codex');
   assert.equal(form.skill_intents, 'a, b');
   assert.equal(form.service_tier, '');
+  assert.equal(agentProfilePayload({ name: 'Pi review', provider: 'pi-coding-agent', model: '' }).model, '');
+  assert.equal(normalizeAgentProfileForm({ provider: 'claude', model: 'codex-default' }).model, '');
 });

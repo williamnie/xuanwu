@@ -24,7 +24,7 @@
 
 ## 3. headless transport（结构化执行）
 
-**RPC mode（默认候选）**：`pi rpc`，JSON lines over stdin/stdout（`rpc-mode.d.ts` 协议注释）：
+**RPC mode（默认候选）**：`pi --mode rpc`，JSON lines over stdin/stdout（`rpc-types.d.ts` 协议注释）：
 
 ```text
 Commands: JSON objects with `type` field, optional `id` for correlation
@@ -56,7 +56,7 @@ Events: AgentSessionEvent streamed as they occur
 | --- | --- | --- |
 | interrupt | RPC `abort` command | 支持（invocation-level） |
 | steer | RPC `steer` / `follow_up` | 支持（独立命令） |
-| approval | `pi-ai` host callback（`@earendil-works/pi-ai` 的审批机制）+ 本地 `ProjectTrustStore` | 支持（host-callback 映射） |
+| approval | RPC 没有 host approval response command；`ProjectTrustStore` 只决定项目本地资源是否加载 | 不声明；仅 `never` 可执行，`danger-only` / `always` fail closed |
 | model list | RPC `get_available_models` | 支持 |
 | usage/cost | `SessionStats`、model-runtime usage | 支持（attempt 级） |
 
@@ -71,7 +71,7 @@ Events: AgentSessionEvent streamed as they occur
 | --- | --- | --- |
 | 结构化 headless execution | RPC JSON-lines stdio | ✅ |
 | 可信 terminal signal | AgentEndEvent/AgentSettledEvent/TurnEndEvent | ✅ |
-| 安全 policy 映射 | ProjectTrust + settings approval policy → ExecutionPolicy | ✅ |
+| 安全 policy 映射 | approval 仅 `never`；`read-only` 映射为 `--tools read,grep,find,ls`；`danger-full-access` 必须显式选择；无法由 Pi 原生证明的 `workspace-write` fail closed | ✅（capability-limited） |
 | 稳定 invocation ref | RPC command id + sessionId + AgentEndEvent 终态 | ✅ |
 
 四项硬门槛全部满足 → **P10 进入 adapter 实现**。

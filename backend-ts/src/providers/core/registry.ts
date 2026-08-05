@@ -13,7 +13,7 @@ export type ProviderDeps = Record<string, never>;
 export interface ProviderFactory {
   manifest: ExecutorProviderManifest;
   parseConfig(raw: unknown): ProviderRuntimeConfig;
-  autoDetect(): { installed: boolean; ready: boolean; reason?: string };
+  autoDetect(config: ProviderRuntimeConfig): { installed: boolean; ready: boolean; reason?: string };
   create(config: ProviderRuntimeConfig, deps: ProviderDeps): RegisteredProvider;
 }
 
@@ -53,6 +53,7 @@ export interface ProviderRegistry {
   registerFactory(factory: ProviderFactory): void;
   startConfigured(config: Record<string, ProviderRuntimeConfig | undefined>): Promise<void>;
   getReady(id: ProviderId): RegisteredProvider;
+  readyProviders(): Record<string, RegisteredProvider>;
   describe(id: ProviderId): RegistryEntry;
   list(): RegistryEntry[];
   stopAll(): Promise<void>;
@@ -113,15 +114,27 @@ export function createProviderRegistry(): ProviderRegistry {
             return;
           }
           setState(id, "starting");
-          const probe = factory.autoDetect();
+          const parsed = factory.parseConfig(raw ?? {});
+          const probe = factory.autoDetect(parsed);
           if (!probe.installed) {
-            setState(id, "not_ready");
+            setState(id, "not_ready", {
+              failure: { category: "not_ready", message: probe.reason ?? `provider ${id} is not installed` }
+            });
             return;
           }
-          const parsed = factory.parseConfig(raw ?? {});
           const instance = factory.create(parsed, {});
           checkManifest(factory.manifest, instance as unknown as Record<string, unknown>);
-          setState(id, probe.ready ? "ready" : "not_ready", { instance });
+          const runtime = instance.runtimeStatus?.();
+          const ready = probe.ready && runtime?.ready !== false;
+          setState(id, ready ? "ready" : "not_ready", {
+            instance,
+            ...(ready ? {} : {
+              failure: {
+                category: "not_ready",
+                message: runtime?.reason ?? probe.reason ?? `provider ${id} is not ready`
+              }
+            })
+          });
         } catch (err) {
           setState(id, "failed", {
             failure: { category: categoryOf(err), message: messageOf(err) }
@@ -141,6 +154,7 @@ export function createProviderRegistry(): ProviderRegistry {
     entry.state = state;
     if (patch?.instance) entry.instance = patch.instance;
     if (patch?.failure) entry.failure = patch.failure;
+    else if (state === "ready" || state === "stopped") entry.failure = undefined;
   }
 
   function getReady(id: ProviderId): RegisteredProvider {
@@ -191,10 +205,21 @@ export function createProviderRegistry(): ProviderRegistry {
     registerFactory,
     startConfigured,
     getReady,
+    readyProviders: () => Object.fromEntries(
+      [...entries.values()]
+        .filter((entry): entry is RegistryEntry & { instance: RegisteredProvider } => entry.state === "ready" && !!entry.instance)
+        .map((entry) => [String(entry.id), entry.instance])
+    ),
     describe,
     list: () => [...entries.values()],
     stopAll,
-    collectProcessLeases: () => [],
+    collectProcessLeases: () => [...entries.values()].flatMap((entry) => {
+      const source = entry.instance as RegisteredProvider & {
+        processLeases?: () => readonly Omit<ProviderProcessLease, "provider">[];
+      } | undefined;
+      if (!source?.processLeases) return [];
+      return source.processLeases().map((lease) => ({ ...lease, provider: entry.id }));
+    }),
     injectFactoryForTest(factory: ProviderFactory): Disposable {
       if (catalog.has(factory.manifest.id)) {
         throw providerRegistryError("duplicate_id", `provider ${factory.manifest.id} is already registered`);

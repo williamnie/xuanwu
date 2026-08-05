@@ -2,6 +2,7 @@ import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import { asProviderId, type ExecutorProvider, type ProviderEvent } from "../types.ts";
 import type { ExecutorProviderManifest, ProviderCapabilities } from "../core/manifest.ts";
 import type { ProviderFactory, ProviderRuntimeConfig as RegistryProviderConfig, RegisteredProvider } from "../core/registry.ts";
+import { detectProviderCommand } from "../core/command.ts";
 import { createClaudeExecutorProvider } from "./provider.ts";
 
 /**
@@ -53,7 +54,11 @@ export function claudeFactory(options: ClaudeFactoryOptions = {}): ProviderFacto
   return {
     manifest,
     parseConfig: (raw: unknown) => (raw ?? {}) as RegistryProviderConfig,
-    autoDetect: () => ({ installed: true, ready: true }),
+    autoDetect: (config) => {
+      if (config.mode !== "cli-fallback") return { installed: true, ready: true };
+      const detected = detectProviderCommand(config.command);
+      return { ...detected, ready: detected.installed };
+    },
     create: (config: RegistryProviderConfig) => {
       const instance = createClaudeExecutorProvider(config as ProviderRuntimeConfig, options.eventSink) as ExecutorProvider;
       return Object.assign(instance, { manifest }) as RegisteredProvider;

@@ -110,6 +110,7 @@ describe("Bun frontend API compatibility", () => {
       const router = createDefaultRouter({ database });
       const project = await requestJSON(router, "/api/projects", "POST", { id: "demo", cwd }, 201);
       const profile = await requestJSON(router, "/api/agent-profiles", "POST", { id: "Nightly Codex!", name: "Nightly", skill_intents: "[\"test\"]" }, 201);
+      const piProfile = await requestJSON(router, "/api/agent-profiles", "POST", { id: "Pi Review", name: "Pi Review", provider: "pi-coding-agent", model: "" }, 201);
       const patchedProfile = await requestJSON(router, "/api/agent-profiles/nightly-codex", "PATCH", { reasoning_effort: "high" });
       const projectsAfterProfile = await requestJSON(router, "/api/projects/demo", "PATCH", { default_agent_profile_id: "nightly-codex" });
       const reordered = await requestJSON(router, "/api/projects", "PATCH", { project_ids: ["demo"] });
@@ -125,6 +126,7 @@ describe("Bun frontend API compatibility", () => {
 
       expect(project).toMatchObject({ id: "demo", cwd });
       expect(profile).toMatchObject({ id: "nightly-codex", name: "Nightly", skill_intents: "[\"test\"]" });
+      expect(piProfile).toMatchObject({ id: "pi-review", provider: "pi-coding-agent", model: "" });
       expect(patchedProfile).toMatchObject({ id: "nightly-codex", reasoning_effort: "high" });
       expect(projectsAfterProfile).toMatchObject({ id: "demo", default_agent_profile_id: "nightly-codex" });
       expect((reordered as Array<Record<string, unknown>>).map((item) => item.id)).toEqual(["demo"]);

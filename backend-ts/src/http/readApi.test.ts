@@ -226,7 +226,8 @@ describe("Bun projects/issues read API", () => {
       expect(profiles.status).toBe(200);
       expect((await profiles.json() as Array<{ id: string; provider: string }>).map(({ id, provider }) => ({ id, provider }))).toEqual([
         { id: "xuanwu-provider-claude", provider: "claude" },
-        { id: "xuanwu-provider-codex", provider: "codex" }
+        { id: "xuanwu-provider-codex", provider: "codex" },
+        { id: "xuanwu-provider-pi", provider: "pi-coding-agent" }
       ]);
     } finally {
       database.close();

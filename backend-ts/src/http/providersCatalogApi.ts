@@ -3,6 +3,7 @@ import type { ProviderRegistry } from "../providers/core/registry.ts";
 import { catalogEntryFromRegistry } from "../providers/core/catalog.ts";
 import { json, jsonError } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { redactedUserVisibleText } from "../util/redact.ts";
 
 /**
  * P6：/api/providers Provider discovery API（设计 §3.7 / 计划 P6）。
@@ -16,6 +17,20 @@ export function registerProvidersCatalogRoute(
   router.get("/api/providers", () => {
     if (!context.providersRegistry) return json([]);
     return json(context.providersRegistry.list().map(catalogEntryFromRegistry));
+  });
+  router.get("/api/providers/:id/models", async (request: Request) => {
+    if (!context.providersRegistry) return jsonError(404, "provider catalog unavailable");
+    const parts = new URL(request.url).pathname.split("/");
+    const id = decodeURIComponent(parts.at(-2) ?? "");
+    try {
+      const provider = context.providersRegistry.getReady(asProviderId(id));
+      if (!provider.capabilities.includes("model_list") || !provider.listModels) {
+        return jsonError(409, `provider "${id}" does not support model_list`);
+      }
+      return json({ data: await provider.listModels() });
+    } catch (error) {
+      return jsonError(409, redactedUserVisibleText(error instanceof Error ? error.message : `provider "${id}" is not ready`));
+    }
   });
   router.get("/api/providers/:id", (request: Request) => {
     if (!context.providersRegistry) return jsonError(404, "provider catalog unavailable");

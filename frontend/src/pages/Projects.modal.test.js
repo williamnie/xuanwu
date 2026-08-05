@@ -103,9 +103,11 @@ test('project card actions share one compact control height', () => {
   assert.match(css, /\.project-card-delete-btn:hover:not\(:disabled\)\s*\{/);
 });
 
-test('project config modal reads Codex model options from provider API', () => {
-  assert.match(editorSource, /systemApi\.getCodexModels\(\)/);
-  assert.match(editorSource, /buildCodexModelOptions\(ui\.codexModels, ui\.formModel, ui\.profileForm\.model\)/);
+test('project config modal reads Provider catalog and models from generic APIs', () => {
+  assert.match(editorSource, /systemApi\.getProviders\(\)/);
+  assert.match(editorSource, /systemApi\.getProviderModels\(provider\)/);
+  assert.match(editorSource, /providerOptionsFromCatalog\(ui\.providerCatalog\)/);
+  assert.match(editorSource, /buildProviderModelOptions\(ui\.formProvider, ui\.codexModels, ui\.formModel, ui\.profileForm\.model\)/);
   assert.match(editorSource, /modelOptions\.map\(option =>/);
   assert.match(editorSource, /远端 model API 读取失败，已启用手填/);
   assert.match(editorSource, /模型 API 失败，请手动填写 model ID/);

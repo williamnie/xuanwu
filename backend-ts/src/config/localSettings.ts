@@ -4,6 +4,13 @@ import { dirname, join } from "node:path";
 
 export const LOCAL_SETTINGS_FILENAME = "runner-settings.local.json";
 
+type PiLocalSettings = {
+  command?: string;
+  cwd?: string;
+  enabled?: boolean;
+  timeoutMs?: number;
+};
+
 export type RunnerLocalSettings = {
   integrations?: {
     feishu?: Record<string, unknown>;
@@ -16,6 +23,9 @@ export type RunnerLocalSettings = {
       cliCommand?: string;
       serverMode?: "cli" | "app";
     };
+    "pi-coding-agent"?: PiLocalSettings;
+    /** 早期 feature/provider 工作树兼容读取；规范化后只输出 pi-coding-agent。 */
+    pi?: PiLocalSettings;
   };
   runner?: { maxParallelProjects?: number };
 };
@@ -89,7 +99,13 @@ function normalizedRunnerSettings(value: unknown): Pick<RunnerLocalSettings, "ru
 function normalizedProviderSettings(value: unknown): Pick<RunnerLocalSettings, "providers"> {
   const raw = recordValue(value);
   const codex = normalizedCodexSettings(raw.codex);
-  return Object.keys(codex).length === 0 ? {} : { providers: { codex } };
+  const pi = normalizedPiSettings(raw["pi-coding-agent"] ?? raw.pi);
+  return Object.keys(codex).length === 0 && Object.keys(pi).length === 0 ? {} : {
+    providers: {
+      ...(Object.keys(codex).length === 0 ? {} : { codex }),
+      ...(Object.keys(pi).length === 0 ? {} : { "pi-coding-agent": pi })
+    }
+  };
 }
 
 function normalizedCodexSettings(value: unknown): NonNullable<NonNullable<RunnerLocalSettings["providers"]>["codex"]> {
@@ -101,6 +117,19 @@ function normalizedCodexSettings(value: unknown): NonNullable<NonNullable<Runner
     ...(serverMode ? { serverMode } : {}),
     ...(cliCommand ? { cliCommand } : {}),
     ...(appCommand ? { appCommand } : {})
+  };
+}
+
+function normalizedPiSettings(value: unknown): NonNullable<NonNullable<RunnerLocalSettings["providers"]>["pi-coding-agent"]> {
+  const raw = recordValue(value);
+  const command = stringValue(raw.command);
+  const cwd = stringValue(raw.cwd);
+  const timeoutMs = Number(raw.timeoutMs);
+  return {
+    ...(command ? { command } : {}),
+    ...(cwd ? { cwd } : {}),
+    ...(typeof raw.enabled === "boolean" ? { enabled: raw.enabled } : {}),
+    ...(Number.isInteger(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {})
   };
 }
 

@@ -48,6 +48,11 @@ test('Claude runs expose provider metadata and a provider-qualified Session ref'
   assert.deepEqual(issueRunMetadata(run), { run_id: 'cli:claude:184' });
 });
 
+test('Pi runs expose an opaque provider-qualified Session ref', () => {
+  const run = { provider: 'pi-coding-agent', provider_session_id: '019fcd8a-1772-7068-9ebb-46ae9ef5e3fc' };
+  assert.equal(issueRunSessionRef({}, run), 'pi-coding-agent:019fcd8a-1772-7068-9ebb-46ae9ef5e3fc');
+});
+
 test('issue failure summary falls back through issue and run fields', () => {
   assert.equal(issueFailureReason({ error: 'issue boom' }, { error: 'run boom' }), 'issue boom');
   assert.equal(issueFailureReason({}, { error: 'run boom' }), 'run boom');

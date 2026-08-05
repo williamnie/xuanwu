@@ -1,6 +1,6 @@
 const DEFAULT_PROVIDER = 'codex';
 // P6：静态 SESSION_CAPABLE_PROVIDERS 不再作为 authority——由 catalog capabilities.sessions 派生（见 sessionCapableFromCatalog）。
-const SESSION_CAPABLE_PROVIDERS_FALLBACK = new Set(['codex', 'claude']);
+const SESSION_CAPABLE_PROVIDERS_FALLBACK = new Set(['codex', 'claude', 'pi-coding-agent']);
 
 /**
  * P6：从 catalog 派生 session-capable Provider 集合（唯一权威，替代静态 SESSION_CAPABLE_PROVIDERS）。
@@ -92,7 +92,7 @@ function providerSessionKey(provider, sessionId) {
 }
 
 function providerSupportsSessionOpen(provider) {
-  return SESSION_CAPABLE_PROVIDERS.has(String(provider || DEFAULT_PROVIDER).trim().toLowerCase());
+  return isSessionCapableProvider(provider);
 }
 
 function parseMetadata(value) {

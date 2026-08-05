@@ -1,5 +1,6 @@
 import type { ProviderCapabilities } from "./manifest.ts";
 import type { RegistryEntry } from "./registry.ts";
+import { redactedUserVisibleText } from "../../util/redact.ts";
 
 /**
  * P6：Provider discovery catalog projection。
@@ -46,7 +47,7 @@ export function catalogEntryFromRegistry(entry: RegistryEntry): ProviderCatalogE
     session_actions: sessionActionsFromCapabilities(entry.manifest.capabilities),
     settings: entry.manifest.executionSettings ?? { settings: [] },
     native_actions: entry.manifest.sessionPresentation?.nativeActions ?? [],
-    readiness_reason: entry.failure?.message
+    ...(entry.failure ? { readiness_reason: redactedUserVisibleText(entry.failure.message) } : {})
   };
 }
 

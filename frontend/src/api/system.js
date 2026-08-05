@@ -78,6 +78,10 @@ export const systemApi = {
 
   getCodexModels: () => request('/api/codex/models'),
 
+  getProviders: () => request('/api/providers'),
+
+  getProviderModels: (id) => request(`/api/providers/${encodeURIComponent(id)}/models`),
+
   getCapabilities: () => request('/api/capabilities'),
 
   uploadImage,

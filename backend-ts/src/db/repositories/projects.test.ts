@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../database.ts";
-import { getProject, listProjects } from "./projects.ts";
+import { createProject, getProject, listProjects } from "./projects.ts";
 
 const tempRoots: string[] = [];
 
@@ -71,6 +71,17 @@ describe("project read repository", () => {
         updated_at: "2026-01-01T00:00:00Z"
       });
       expect(getProject(db, "missing")).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps codex-default scoped to Codex projects", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const cwd = tempRoots.at(-1)!;
+      const pi = createProject(db, { id: "pi-project", cwd, provider: "pi-coding-agent", model: "" });
+      expect(pi).toMatchObject({ provider: "pi-coding-agent", model: "" });
     } finally {
       db.close();
     }

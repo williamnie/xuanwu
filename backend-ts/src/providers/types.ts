@@ -52,9 +52,14 @@ export function sessionRefFromExecutionRef(ref: ProviderExecutionRef): SessionRe
   };
 }
 
-export const EXECUTOR_PROVIDER_IDS = ["codex", "claude", "fake-execution-only", "fake-resumable", "fake-full-session", "pi", "qoder"] as const;
+export const EXECUTOR_PROVIDER_IDS = ["codex", "claude", "fake-execution-only", "fake-resumable", "fake-full-session", "pi-coding-agent", "qoder"] as const;
 
-export type ExecutorProviderId = (typeof EXECUTOR_PROVIDER_IDS)[number];
+export type BuiltinExecutorProviderId = (typeof EXECUTOR_PROVIDER_IDS)[number];
+/**
+ * 执行器 ID 允许 registry 在不修改闭合联合的情况下注册新 Provider。
+ * 内置字面量仍保留，避免让现有调用方为了构造 codex/claude ref 被迫断言 branded string。
+ */
+export type ExecutorProviderId = BuiltinExecutorProviderId | ProviderId;
 
 export type ExecutorCapability =
   | "issue_execution"
@@ -225,5 +230,5 @@ export interface ExecutorProvider {
 }
 
 export function isExecutorProviderId(value: string): value is ExecutorProviderId {
-  return EXECUTOR_PROVIDER_IDS.includes(value as ExecutorProviderId);
+  return isProviderId(value);
 }

@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { providerLabel, providerOptionsFromCatalog, sessionSettingsForProject } from './sessionOptions.js';
+
+test('provider catalog drives selector labels and readiness', () => {
+  const catalog = [
+    { id: 'codex', label: 'Codex', state: 'ready', submittable: true },
+    { id: 'pi', label: 'Pi Coding Agent', state: 'not_ready', submittable: false },
+  ];
+
+  assert.deepEqual(providerOptionsFromCatalog(catalog), [
+    { value: 'codex', label: 'Codex', enabled: true, state: 'ready' },
+    { value: 'pi', label: 'Pi Coding Agent', enabled: false, state: 'not_ready' },
+  ]);
+  assert.equal(providerLabel('pi', catalog), 'Pi Coding Agent');
+});
+
+test('an explicitly selected provider survives a later project selection', () => {
+  const settings = sessionSettingsForProject(
+    { provider: 'codex', approval_policy: 'never', sandbox: 'workspace-write' },
+    { provider: 'pi-coding-agent' },
+    true,
+  );
+
+  assert.equal(settings.provider, 'pi-coding-agent');
+});

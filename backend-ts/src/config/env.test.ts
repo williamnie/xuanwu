@@ -52,7 +52,8 @@ describe("Bun backend config", () => {
           platformConfigDir: "",
           platformProfile: "",
           timeoutMs: 1_800_000
-        }
+        },
+        "pi-coding-agent": { command: "pi", cwd: "", enabled: true, env: {}, timeoutMs: 1_800_000 }
       },
       runner: { maxParallelProjects: 1 },
       integrations: {
@@ -212,6 +213,30 @@ describe("Bun backend config", () => {
     });
   });
 
+  test("loads Pi runtime settings from local settings", async () => {
+    const stateDir = await tempStateDir();
+    await writeFile(join(stateDir, "runner-settings.local.json"), JSON.stringify({
+      providers: {
+        pi: {
+          command: "local-pi --offline",
+          cwd: "/tmp/local-pi-project",
+          enabled: false,
+          timeoutMs: 9876
+        }
+      }
+    }), "utf8");
+
+    const config = loadConfig([], { [ENV_KEYS.stateDir]: stateDir });
+
+    expect(config.providers["pi-coding-agent"]).toEqual({
+      command: "local-pi --offline",
+      cwd: "/tmp/local-pi-project",
+      enabled: false,
+      env: {},
+      timeoutMs: 9876
+    });
+  });
+
   test("selects Codex App server mode from environment", () => {
     const config = loadConfig([], {
       [ENV_KEYS.codexServerMode]: "app",
@@ -253,6 +278,11 @@ describe("Bun backend config", () => {
       [ENV_KEYS.claudeEnv]: "ANTHROPIC_API_KEY=anthropic-secret,SAFE_CLAUDE=ok",
       [ENV_KEYS.claudeModel]: "claude-sonnet-4-5",
       [ENV_KEYS.claudeTimeoutMs]: "2345",
+      [ENV_KEYS.piCommand]: "/opt/bin/pi --offline",
+      [ENV_KEYS.piCwd]: "/tmp/pi-project",
+      [ENV_KEYS.piEnabled]: "false",
+      [ENV_KEYS.piEnv]: "SAFE_PI=ok",
+      [ENV_KEYS.piTimeoutMs]: "3456",
       [ENV_KEYS.feishuAllowedChatIds]: "oc_a,oc_b",
       [ENV_KEYS.feishuAllowedUserIds]: "ou_1",
       [ENV_KEYS.feishuAppId]: "cli_app_id",
@@ -310,6 +340,13 @@ describe("Bun backend config", () => {
           platformConfigDir: "",
           platformProfile: "",
           timeoutMs: 2345
+        },
+        "pi-coding-agent": {
+          command: "/opt/bin/pi --offline",
+          cwd: "/tmp/pi-project",
+          enabled: false,
+          env: { SAFE_PI: "ok" },
+          timeoutMs: 3456
         }
       },
       runner: { maxParallelProjects: 3 },
@@ -371,7 +408,12 @@ describe("Bun backend config", () => {
       "--claude-cwd=/tmp/cli-claude-project",
       "--claude-env", "ANTHROPIC_API_KEY=cli-secret",
       "--claude-model", "claude-opus",
-      "--claude-timeout-ms", "6789"
+      "--claude-timeout-ms", "6789",
+      "--pi-cmd", "cli-pi --offline",
+      "--pi-cwd=/tmp/cli-pi-project",
+      "--pi-enabled", "false",
+      "--pi-env", "SAFE_PI=cli-ok",
+      "--pi-timeout-ms", "7890"
     ], env);
 
     expect(config).toEqual({
@@ -409,6 +451,13 @@ describe("Bun backend config", () => {
           platformConfigDir: "",
           platformProfile: "",
           timeoutMs: 6789
+        },
+        "pi-coding-agent": {
+          command: "cli-pi --offline",
+          cwd: "/tmp/cli-pi-project",
+          enabled: false,
+          env: { SAFE_PI: "cli-ok" },
+          timeoutMs: 7890
         }
       },
       runner: { maxParallelProjects: 4 },

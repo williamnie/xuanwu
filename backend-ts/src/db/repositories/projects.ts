@@ -128,15 +128,16 @@ function getProjectByCWD(db: RunnerDatabase, cwd: string): Project | null {
 }
 
 function mapProjectRow(row: ProjectRow): Project {
+  const provider = normalizeProjectProvider(row.provider);
   return {
     id: requiredString(row.id, "projects.id"),
     name: requiredString(row.name, "projects.name"),
     pi_managed: integerValue(row.pi_managed, "projects.pi_managed"),
     cwd: requiredString(row.cwd, "projects.cwd"),
-    provider: normalizeProjectProvider(row.provider),
+    provider,
     provider_config_json: normalizeProjectProviderConfig(row.provider_config_json),
     auto_run: integerValue(row.auto_run, "projects.auto_run"),
-    model: normalizeProjectModel(row.model),
+    model: normalizeProjectModel(row.model, provider),
     approval_policy: optionalString(row.approval_policy, "never"),
     sandbox: optionalString(row.sandbox, "workspace-write"),
     default_agent_profile_id: optionalString(row.default_agent_profile_id),

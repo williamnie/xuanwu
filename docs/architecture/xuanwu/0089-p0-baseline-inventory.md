@@ -1,7 +1,7 @@
 # ADR-XW-0089 P0：基线、consumer inventory 与 fixture 冻结
 
 - 关联：0089 Provider Core 多 Coding Agent 重构 [计划](0089-provider-core-multi-code-agent-refactor-plan.md) / [设计](0089-provider-core-multi-code-agent-refactor-design.md)
-- 状态：完成（branch `feature/provider`）
+- 状态：实现修复中（branch `feature/provider`；W2 正式 release 观察窗尚未开始）
 - 性质：P0 只冻结清单、fixture 与检测基线，无运行行为变化，可整体回滚
 
 ## 1. Provider ID / label / capability / session field 生产 consumer 清单
@@ -89,7 +89,7 @@
 
 | consumer | 状态 | 说明 |
 | --- | --- | --- |
-| `runtime/core.ts` `executorProviders()` | migrated | registry 装配（P7/P8），旧 map bridge 保留（W1→W2） |
+| `runtime/core.ts` Provider 装配 | migrated | registry 的 ready 实例是 Runner/HTTP/调度/关停唯一运行时投影；不再构造第二套 Codex/Claude executor map |
 | `providers/core/registry.ts` | migrated | registry authority（P2） |
 | `providers/core/catalog.ts` + `http/providersCatalogApi.ts` | migrated | /api/providers（P6） |
 | `http/systemStatus.ts` `providerStatus()` | migrated | registry 投影 + 旧 bridge（P4） |
@@ -104,7 +104,7 @@
 
 - 开关：`XUANWU_PROVIDER_LEGACY_PROJECTION_COMPARE=1` 开启 manifest/实例 capabilities parity 对比（`providers/core/parity.ts`）。
 - drift 处理：记录 `provider.legacy_projection_drift` warning（含 drifted providers 与 diffs），不阻断运行。
-- **rollback**：关闭 flag 即回退旧 projection（W0 行为）。**无需 DB 回填或删除事件**（对比为只读）。
+- **rollback**：该 flag 只控制只读 parity telemetry，不是执行链切换开关。Registry primary 发布前仍须保留上一可运行 release；发现 drift 时回滚部署版本。对比不写 DB，因此无需 DB 回填或删除事件。
 - parity 范围：refs（thread_id/turn_id ↔ sessionRef/messageRef）、capabilities（manifest detail ↔ 实例 legacy 数组）、status/session 数量由 runtime 快照对比（`compareRefsParity`/`compareCapabilitiesParity`）。
 
 ## 7. P12 更新：conformance harness 与 adapter 接入路径
@@ -113,20 +113,21 @@
 - `providers/testing/conformanceFactories.ts` `BUILTIN_FACTORIES`：fixture 经 factory 注册即纳入矩阵。
 - 新 Provider 接入清单：`0089-provider-adapter-checklist.md`。
 - Freshness Gate 调研模板：`0089-gate-investigation-template.md`（G0/G10/G11 通用，依赖升级重验规则见计划 §17.2）。
-- G10 完成：`0089-g10-pi-freshness-gate.md`（pi 0.83.0，四项硬门槛通过，P10 已实现）。
+- G10 freshness 调研完成：`0089-g10-pi-freshness-gate.md`（pi 0.83.0）；P10 仍须以真实 RPC/Runner/Chrome acceptance 记录闭环。
+- Pi Coding Agent 的 canonical Provider ID 固定为 `pi-coding-agent`；`pi` 只指 CLI 命令或玄武 PI Supervisor 前缀，不作为 Provider ID。
 - G11：Qoder（Qoder.app Electron IDE）待调研结论定案（见 `0089-g11-qoder-freshness-gate.md`，未通过前不进入 adapter 实现）。
-- 删除门禁（P12 验收）：Codex/Claude/Pi/fixture 四种形态过 conformance；W2 观察窗一个 release 无 parity drift；legacy consumer 为 0；rollback flag 可用；schema 迁移经 ADR-XW-0070 演练。
+- 删除门禁当前未满足：Qoder acceptance、W2 一个正式 release、legacy consumer-zero 与 rollback 演练均需独立证据；测试 fixture 或 flag 就绪不能替代观察窗。
 
-## 8. P12 完成态：删除门禁核对与 legacy 删除清单
+## 8. P12 当前状态：删除门禁核对与 legacy 删除清单
 
 ### 8.1 删除门禁核对（P12 验收）
 
 | 门禁 | 状态 | 证据 |
 | --- | --- | --- |
-| 至少 Codex/Claude/Pi/Qoder 四种形态过 conformance | ✅ | `providers/core/fourForms.test.ts`（4 factory 全 ready、capability/method 一致、parity 无 drift、support level 正确） |
-| §20 conformance 矩阵 | ✅ | `providers/core/conformance.test.ts`（initial execution、稳定 invocation ref、resume 拒绝/支持、interrupt/model list 按 capability、unknown preserve、支持矩阵快照） |
-| W2 一个正式 release 无 parity drift | ✅（观察窗就绪） | `providers/core/parity.ts` + `XUANWU_PROVIDER_LEGACY_PROJECTION_COMPARE` flag |
-| rollback flag 可用 | ✅ | 关闭 flag 即回退旧 projection，无需 DB 回填/删除事件 |
+| 至少 Codex/Claude/Pi/Qoder 四种形态过 conformance | ⏳ | fixture conformance 存在；Qoder 按当前决策延期到本机安装后验收，不能标记完成 |
+| §20 conformance 矩阵 | ⚠️ | fixture 自动化覆盖存在；生产 adapter 仍需分别附真实调用 acceptance |
+| W2 一个正式 release 无 parity drift | ❌ | 尚未开始正式 release 观察窗；`XUANWU_PROVIDER_LEGACY_PROJECTION_COMPARE` 仅表示 telemetry 就绪 |
+| rollback 演练 | ❌ | 需用上一可运行 release 做部署级演练；关闭 parity flag 不等于执行链回滚 |
 | schema 迁移经 ADR-XW-0070 演练 | ✅（零 schema 迁移） | P0-P12 未新增任何 schema migration（042 列语义不变，空字符串合法） |
 | 物理 schema 删除需单独 superseding ADR | 不适用 | 本重构未删除物理列 |
 
@@ -140,7 +141,7 @@
 | `isExecutorProviderId` 白名单消费 | `projectLoop.ts`/`piAcceptanceApplication.ts`/`automationRuntime.ts`/`humanReview.ts`/`piActionDispatch.ts` | 改 registry.assertCapability |
 | `http/sessionApi.ts` 单页 best-effort merge | `sessionApi.ts` | 替换为聚合分页 cursor（§3.6 合同已冻结） |
 | 手写 codex/claude status bridge | `systemStatus.ts` `providerStatus()` | registry 投影 primary 后删除 |
-| `runtime/core.ts` `executorProviders()` 旧 map bridge | `runtime/core.ts` | registry.getReady 替换（P9 后 bridge 已兼容并存） |
+| `runtime/core.ts` 旧 executor map bridge | 已删除 | Registry ready projection 已成为唯一运行时实例来源 |
 | 前端静态 `PROVIDER_OPTIONS`/fallback | `sessionOptions.js`/`issueRuns.js` | catalog 全量消费后删除静态 authority |
 | `providerID()` 手写映射 | 已删除（P5） | — |
 

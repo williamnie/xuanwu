@@ -69,6 +69,36 @@ describe("P2: registry 注册与发现", () => {
     expect(registry.list().map((e) => String(e.id))).not.toContain("ephemeral-provider");
   });
 
+  test("readyProviders 只投影 ready 实例，process lease 保留 Provider 归属", async () => {
+    const registry = createProviderRegistry();
+    registry.registerFactory(factoryOf("leased-provider", { issueExecution: true }, {
+      id: "leased-provider",
+      capabilities: ["issue_execution"],
+      run: async () => ({ runId: "r" }),
+      processLeases: () => [{
+        commandLabel: "leased cli",
+        invocationOwner: "issue:1",
+        pid: 321,
+        startedAt: "2026-08-04T00:00:00.000Z"
+      }]
+    }));
+    registry.registerFactory(factoryOf("disabled-provider", { issueExecution: true }, {
+      id: "disabled-provider",
+      capabilities: ["issue_execution"],
+      run: async () => ({ runId: "off" })
+    }));
+    await registry.startConfigured({ "disabled-provider": { enabled: false } });
+
+    expect(Object.keys(registry.readyProviders())).toEqual(["leased-provider"]);
+    expect(registry.collectProcessLeases()).toEqual([{
+      commandLabel: "leased cli",
+      invocationOwner: "issue:1",
+      pid: 321,
+      provider: asProviderId("leased-provider"),
+      startedAt: "2026-08-04T00:00:00.000Z"
+    }]);
+  });
+
   test("duplicate ID 注册 fail closed", () => {
     const registry = createProviderRegistry();
     const f = factoryOf("codex", { issueExecution: true }, { run: async () => ({ runId: "r" }) });

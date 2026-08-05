@@ -34,7 +34,8 @@ describe("P8: Claude factory 经 registry 装配", () => {
     registry.registerFactory(claudeFactory({}));
     await registry.startConfigured({ claude: { mode: "sdk", env: {} } });
     const catalog = catalogEntryFromRegistry(registry.describe(asProviderId("claude")));
-    expect(catalog.submittable).toBe(true);
+    expect(catalog.submittable).toBe(false);
+    expect(catalog.state).toBe("not_ready");
     expect(catalog.session_actions).toEqual(expect.arrayContaining(["create", "resume", "interrupt"]));
     // Claude 无 approvals → 不显示 approval action 相关能力
     expect(catalog.legacy_capabilities).not.toContain("approvals");
