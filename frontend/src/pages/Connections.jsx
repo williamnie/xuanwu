@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { Bot, Cable, PlugZap, Workflow } from 'lucide-react';
+import { Bot, Cable, PlugZap, Terminal, Workflow } from 'lucide-react';
 import { PRODUCT_NAV_LABELS } from '../brand.js';
 import ConnectorDiagnosticsPanel from './ConnectorDiagnosticsPanel';
 import FeishuSettingsPanel from './FeishuSettingsPanel';
 import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import PiMcpManagementPanel from './PiMcpManagementPanel';
+import CodeAgentsPanel from './CodeAgentsPanel';
 import './Connections.css';
 
 const CONNECTION_SECTIONS = Object.freeze([
+  { id: 'code-agents', label: 'Code Agents', icon: Terminal },
   { id: 'providers', label: 'AI Providers', icon: Bot },
   { id: 'pi-agent', label: 'PI Agent', icon: Workflow },
   { id: 'integrations', label: 'Integrations', icon: Cable },
@@ -40,6 +42,7 @@ export default function Connections({ initialSection = 'providers' }) {
         ))}
       </nav>
       <main className="connections-content" role="tabpanel">
+        {activeSection === 'code-agents' && <CodeAgentsPanel />}
         {activeSection === 'providers' && <PiAgentSettingsPanel view="connection" />}
         {activeSection === 'pi-agent' && <PiAgentSettingsPanel view="agent" />}
         {activeSection === 'integrations' && <IntegrationsSection />}

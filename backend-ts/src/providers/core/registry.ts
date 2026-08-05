@@ -52,6 +52,8 @@ export type Disposable = { dispose(): void };
 export interface ProviderRegistry {
   registerFactory(factory: ProviderFactory): void;
   startConfigured(config: Record<string, ProviderRuntimeConfig | undefined>): Promise<void>;
+  refreshConfigured(config: Record<string, ProviderRuntimeConfig | undefined>): Promise<void>;
+  setEnabled(id: ProviderId, enabled: boolean, config: ProviderRuntimeConfig): Promise<RegistryEntry>;
   getReady(id: ProviderId): RegisteredProvider;
   readyProviders(): Record<string, RegisteredProvider>;
   describe(id: ProviderId): RegistryEntry;
@@ -104,57 +106,90 @@ export function createProviderRegistry(): ProviderRegistry {
   async function startConfigured(config: Record<string, ProviderRuntimeConfig | undefined>): Promise<void> {
     const factories = [...catalog.values()].map((f) => f.factory);
     // 并发启动；每个 provider 独立失败状态，不阻塞其余（与 stopAll 同一容错原则）。
-    await Promise.all(
-      factories.map(async (factory) => {
-        const id = factory.manifest.id;
-        const raw = config[id];
-        try {
-          if (raw?.enabled === false) {
-            setState(id, "disabled");
-            return;
+    await Promise.all(factories.map((factory) => configureFactory(factory, config[factory.manifest.id] ?? {}, false)));
+  }
+
+  async function refreshConfigured(config: Record<string, ProviderRuntimeConfig | undefined>): Promise<void> {
+    const factories = [...catalog.values()].map((item) => item.factory);
+    await Promise.all(factories.map((factory) => configureFactory(factory, config[factory.manifest.id] ?? {}, true)));
+  }
+
+  async function setEnabled(id: ProviderId, enabled: boolean, config: ProviderRuntimeConfig): Promise<RegistryEntry> {
+    const factory = catalog.get(id)?.factory;
+    if (!factory) throw providerRegistryError("unknown_provider", `provider ${id} is not registered`);
+    const entry = entries.get(id);
+    if (!entry) throw providerRegistryError("not_found", `provider ${id} is not registered`);
+    if (!enabled) {
+      try {
+        await entry.instance?.stop?.();
+        setState(id, "disabled", { clearInstance: true });
+      } catch (err) {
+        setState(id, "failed", {
+          failure: { category: "stop_failed", message: messageOf(err) }
+        });
+        throw err;
+      }
+      return entry;
+    }
+    await configureFactory(factory, { ...config, enabled: true }, true);
+    return entry;
+  }
+
+  async function configureFactory(
+    factory: ProviderFactory,
+    raw: ProviderRuntimeConfig,
+    reuseInstance: boolean
+  ): Promise<void> {
+    const id = factory.manifest.id;
+    const entry = entries.get(id);
+    try {
+      if (raw.enabled === false) {
+        setState(id, "disabled", { clearInstance: true });
+        return;
+      }
+      setState(id, "starting");
+      const parsed = factory.parseConfig(raw);
+      const probe = factory.autoDetect(parsed);
+      if (!probe.installed) {
+        setState(id, "not_ready", {
+          ...(reuseInstance && entry?.instance ? { instance: entry.instance } : {}),
+          failure: { category: "not_ready", message: probe.reason ?? `provider ${id} is not installed` }
+        });
+        return;
+      }
+      const instance = reuseInstance && entry?.instance ? entry.instance : factory.create(parsed, {});
+      checkManifest(factory.manifest, instance as unknown as Record<string, unknown>);
+      const runtime = instance.runtimeStatus?.();
+      const ready = probe.ready && runtime?.ready !== false;
+      setState(id, ready ? "ready" : "not_ready", {
+        instance,
+        ...(ready ? {} : {
+          failure: {
+            category: "not_ready",
+            message: runtime?.reason ?? probe.reason ?? `provider ${id} is not ready`
           }
-          setState(id, "starting");
-          const parsed = factory.parseConfig(raw ?? {});
-          const probe = factory.autoDetect(parsed);
-          if (!probe.installed) {
-            setState(id, "not_ready", {
-              failure: { category: "not_ready", message: probe.reason ?? `provider ${id} is not installed` }
-            });
-            return;
-          }
-          const instance = factory.create(parsed, {});
-          checkManifest(factory.manifest, instance as unknown as Record<string, unknown>);
-          const runtime = instance.runtimeStatus?.();
-          const ready = probe.ready && runtime?.ready !== false;
-          setState(id, ready ? "ready" : "not_ready", {
-            instance,
-            ...(ready ? {} : {
-              failure: {
-                category: "not_ready",
-                message: runtime?.reason ?? probe.reason ?? `provider ${id} is not ready`
-              }
-            })
-          });
-        } catch (err) {
-          setState(id, "failed", {
-            failure: { category: categoryOf(err), message: messageOf(err) }
-          });
-        }
-      })
-    );
+        })
+      });
+    } catch (err) {
+      setState(id, "failed", {
+        ...(reuseInstance && entry?.instance ? { instance: entry.instance } : {}),
+        failure: { category: categoryOf(err), message: messageOf(err) }
+      });
+    }
   }
 
   function setState(
     id: string,
     state: RegistryState,
-    patch?: { instance?: RegisteredProvider; failure?: RegistryEntry["failure"] }
+    patch?: { clearInstance?: boolean; instance?: RegisteredProvider; failure?: RegistryEntry["failure"] }
   ): void {
     const entry = entries.get(id);
     if (!entry) return;
     entry.state = state;
-    if (patch?.instance) entry.instance = patch.instance;
+    if (patch?.clearInstance) entry.instance = undefined;
+    else if (patch?.instance) entry.instance = patch.instance;
     if (patch?.failure) entry.failure = patch.failure;
-    else if (state === "ready" || state === "stopped") entry.failure = undefined;
+    else if (state === "disabled" || state === "ready" || state === "stopped") entry.failure = undefined;
   }
 
   function getReady(id: ProviderId): RegisteredProvider {
@@ -204,6 +239,8 @@ export function createProviderRegistry(): ProviderRegistry {
   return {
     registerFactory,
     startConfigured,
+    refreshConfigured,
+    setEnabled,
     getReady,
     readyProviders: () => Object.fromEntries(
       [...entries.values()]

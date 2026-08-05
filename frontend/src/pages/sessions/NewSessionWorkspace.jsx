@@ -39,6 +39,7 @@ export default function NewSessionWorkspace({
   sessionProjects,
   providerOptions = [],
 }) {
+  const selectedProviderAvailable = providerOptions.some(option => option.id === sessionSettings.provider);
   return (
     <div className="new-session-container animate-fade-in">
       <div className="new-session-center-card">
@@ -111,11 +112,9 @@ export default function NewSessionWorkspace({
 
           <div className="bottom-tag-select">
             <SlidersHorizontal size={13} />
-            <span>Provider: {projectProviderLabel(sessionSettings.provider)}</span>
-            <select value={sessionSettings.provider} onChange={(event) => handleSettingChange('provider', event.target.value)}>
-              {!providerOptions.some(option => option.id === sessionSettings.provider) ? (
-                <option value={sessionSettings.provider}>{projectProviderLabel(sessionSettings.provider)}（未就绪）</option>
-              ) : null}
+            <span>Provider: {selectedProviderAvailable ? projectProviderLabel(sessionSettings.provider) : '未选择'}</span>
+            <select value={selectedProviderAvailable ? sessionSettings.provider : ''} onChange={(event) => handleSettingChange('provider', event.target.value)}>
+              {!selectedProviderAvailable ? <option disabled value="">选择可用 Provider</option> : null}
               {providerOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
             </select>
           </div>

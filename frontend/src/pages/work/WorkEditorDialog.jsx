@@ -3,10 +3,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Pencil, X } from 'lucide-react';
 import { workApi } from '../../api/work.js';
 import { projectsApi } from '../../api/projects.js';
+import { systemApi } from '../../api/system.js';
 import { message } from '../../store/toastStore.js';
 import { useI18n } from '../../i18n/context.js';
 import PromptEditor from '../../components/editor/PromptEditor.jsx';
 import { editorDraft, effectiveProfilePreview } from './workProfileRouting.js';
+import { availableAgentProfiles, codeAgentAvailable, effectiveProjectProvider } from '../../utils/codeAgents.js';
 
 export default function WorkEditorDialog({ mode, onClose, onSaved, projects, work }) {
   const { t } = useI18n();
@@ -15,18 +17,36 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [profiles, setProfiles] = useState([]);
+  const [providerCatalog, setProviderCatalog] = useState([]);
   const [profilesLoading, setProfilesLoading] = useState(true);
   const selectedProject = useMemo(
     () => projects.find(project => project.id === draft.project_id) || null,
     [draft.project_id, projects],
   );
   const effectivePreview = effectiveProfilePreview(draft.agent_profile_id, selectedProject, profiles);
+  const availableProfiles = useMemo(
+    () => availableAgentProfiles(profiles, providerCatalog),
+    [profiles, providerCatalog],
+  );
+  const inheritedProviderAvailable = codeAgentAvailable(effectiveProjectProvider(selectedProject, profiles), providerCatalog);
+  const selectedCodeAgentAvailable = draft.agent_profile_id
+    ? availableProfiles.some(profile => profile.id === draft.agent_profile_id)
+    : inheritedProviderAvailable;
 
   useEffect(() => {
     let alive = true;
-    projectsApi.getAgentProfiles()
-      .then((items) => { if (alive) setProfiles(Array.isArray(items) ? items : items?.items || []); })
-      .catch((loadError) => { if (alive) setError(loadError.message || 'Agent Profiles 加载失败'); })
+    Promise.all([projectsApi.getAgentProfiles(), systemApi.getProviders()])
+      .then(([items, catalog]) => {
+        if (!alive) return;
+        setProfiles(Array.isArray(items) ? items : items?.items || []);
+        setProviderCatalog(Array.isArray(catalog) ? catalog : []);
+      })
+      .catch((loadError) => {
+        if (!alive) return;
+        setProfiles([]);
+        setProviderCatalog([]);
+        setError(loadError.message || 'Code Agents 加载失败');
+      })
       .finally(() => { if (alive) setProfilesLoading(false); });
     return () => { alive = false; };
   }, []);
@@ -37,6 +57,10 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
     event.preventDefault();
     if (!draft.goal.trim() || (!editing && !draft.project_id)) {
       setError(t('editor.required'));
+      return;
+    }
+    if (!selectedCodeAgentAvailable) {
+      setError('请选择当前已启用且可用的 Code Agent');
       return;
     }
     setSaving(true);
@@ -131,8 +155,10 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
               onChange={event => setField('agent_profile_id', event.target.value)}
               value={draft.agent_profile_id}
             >
-              <option value="">继承项目默认</option>
-              {profiles.map(profile => (
+              <option disabled={!inheritedProviderAvailable} value="">
+                {inheritedProviderAvailable ? '继承项目默认' : '请选择可用 Code Agent'}
+              </option>
+              {availableProfiles.map(profile => (
                 <option key={profile.id} value={profile.id}>
                   {profile.name} · {codeAgentLabel(profile.provider)} · {profile.model || 'default'}
                 </option>

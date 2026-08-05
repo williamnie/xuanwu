@@ -208,6 +208,35 @@ describe("P2: startConfigured 状态机", () => {
     expect(registry.list().map((e) => String(e.id))).toContain("uninstalled-provider");
     expect(() => registry.getReady(asProviderId("uninstalled-provider"))).toThrow(/not ready/);
   });
+
+  test("运行期可停用、重新启用并刷新 Provider 可用性", async () => {
+    let installed = true;
+    let stopped = 0;
+    const registry = createProviderRegistry();
+    registry.registerFactory(factoryOf("managed-provider", { issueExecution: true }, {
+      id: "managed-provider",
+      capabilities: ["issue_execution"],
+      run: async () => ({ runId: "r" })
+    }, {
+      autoDetect: () => ({ installed, ready: installed, ...(installed ? {} : { reason: "CLI not found" }) }),
+      stop: async () => { stopped += 1; }
+    }));
+    await registry.startConfigured({ "managed-provider": { enabled: true } });
+
+    await registry.setEnabled(asProviderId("managed-provider"), false, { enabled: false });
+    expect(registry.describe(asProviderId("managed-provider")).state).toBe("disabled");
+    expect(registry.readyProviders()).toEqual({});
+    expect(stopped).toBe(1);
+
+    installed = false;
+    await registry.setEnabled(asProviderId("managed-provider"), true, { enabled: true });
+    expect(registry.describe(asProviderId("managed-provider")).state).toBe("not_ready");
+
+    installed = true;
+    await registry.refreshConfigured({ "managed-provider": { enabled: true } });
+    expect(registry.describe(asProviderId("managed-provider")).state).toBe("ready");
+    expect(Object.keys(registry.readyProviders())).toEqual(["managed-provider"]);
+  });
 });
 
 describe("P2: stopAll 有界容错", () => {

@@ -9,7 +9,8 @@ import {
   normalizeAgentProfileForm,
 } from '../utils/agentProfiles.js';
 import { serviceTierOptions } from '../utils/serviceTier.js';
-import { PROVIDER_OPTIONS, providerOptionsFromCatalog } from './sessions/sessionOptions.js';
+import { availableAgentProfiles } from '../utils/codeAgents.js';
+import { providerOptionsFromCatalog } from './sessions/sessionOptions.js';
 import './ProjectSettingsEditor.css';
 
 const DEFAULT_PROJECT_NAME = 'project';
@@ -137,21 +138,30 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
   const loadProviderCatalog = useCallback(async () => {
     try {
       const catalog = await systemApi.getProviders();
+      const providerOptions = providerOptionsFromCatalog(catalog);
+      const requestedProvider = project?.provider || DEFAULT_PROVIDER;
+      const selectedProvider = mode === 'create' && !providerOptions.some(option => option.value === requestedProvider)
+        ? providerOptions[0]?.value || ''
+        : requestedProvider;
       updateUi(draft => {
         draft.providerCatalog = Array.isArray(catalog) ? catalog : [];
         draft.providerCatalogError = '';
+        if (mode === 'create' && selectedProvider !== draft.formProvider) {
+          draft.formProvider = selectedProvider;
+          draft.formModel = normalizeProviderModel(selectedProvider, '');
+        }
       });
+      if (selectedProvider) await loadProviderModels(selectedProvider);
     } catch (error) {
       updateUi(draft => {
         draft.providerCatalog = [];
         draft.providerCatalogError = error.message || '读取 Provider 列表失败';
       });
     }
-  }, [updateUi]);
+  }, [loadProviderModels, mode, project?.provider, updateUi]);
 
   useEffect(() => {
     loadProviderCatalog();
-    loadProviderModels(project?.provider || DEFAULT_PROVIDER);
     if (mode === 'edit') loadAgentProfiles();
   }, [loadAgentProfiles, loadProviderCatalog, loadProviderModels, mode, project?.provider]);
 
@@ -206,6 +216,18 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       });
       return;
     }
+    if (!providerOptions.some(option => option.value === ui.formProvider)) {
+      updateUi(draft => {
+        draft.formError = '请选择当前已启用且可用的 Code Agent';
+      });
+      return;
+    }
+    if (ui.formAgentProfileId && !availableProfiles.some(profile => profile.id === ui.formAgentProfileId)) {
+      updateUi(draft => {
+        draft.formError = '项目默认 Profile 的 Code Agent 当前不可用，请改选可用 Profile 或清除默认 Profile';
+      });
+      return;
+    }
 
     const payload = {
       name: projectNameFromPath(ui.formCwd),
@@ -249,6 +271,12 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       });
       return;
     }
+    if (!providerOptions.some(option => option.value === payload.provider)) {
+      updateUi(draft => {
+        draft.profileError = 'Profile 必须选择当前已启用且可用的 Code Agent';
+      });
+      return;
+    }
     try {
       const exists = ui.profiles.some(profile => profile.id === payload.id);
       const saved = exists
@@ -267,7 +295,8 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
   };
 
   const discoveredProviderOptions = providerOptionsFromCatalog(ui.providerCatalog);
-  const providerOptions = discoveredProviderOptions.length > 0 ? discoveredProviderOptions : PROVIDER_OPTIONS;
+  const providerOptions = discoveredProviderOptions;
+  const availableProfiles = availableAgentProfiles(ui.profiles, ui.providerCatalog);
   const modelOptions = buildProviderModelOptions(ui.formProvider, ui.codexModels, ui.formModel, ui.profileForm.model);
   const modal = layout === 'modal';
 
@@ -308,7 +337,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
                 <label>项目默认 Profile</label>
                 <select className="form-control" onChange={event => setFormField('formAgentProfileId', event.target.value)} value={ui.formAgentProfileId}>
                   <option value="">不使用 Profile（沿用项目运行配置）</option>
-                  {ui.profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.id}</option>)}
+                  {availableProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.id}</option>)}
                 </select>
               </div>
               <AgentProfileManager
@@ -347,7 +376,7 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
         <label>执行引擎</label>
         <select className="form-control" onChange={event => onFieldChange('formProvider', event.target.value)} value={ui.formProvider}>
           {providerOptions.map(option => (
-            <option disabled={!option.enabled} key={option.value} value={option.value}>{option.label}</option>
+            <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
         <span className="project-settings-hint">决定由哪个执行器处理项目；通常保持 Codex。</span>
@@ -442,7 +471,7 @@ function AgentProfileManager({ profiles, loading, form, error, modelOptions, mod
           <div className="project-settings-grid project-profile-grid">
             <label className="form-group">执行引擎
               <select className="form-control" value={form.provider} onChange={event => onFieldChange('provider', event.target.value)}>
-                {providerOptions.map(option => <option key={option.value} value={option.value} disabled={!option.enabled}>{option.label}</option>)}
+                {providerOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
             <label className="form-group">默认模型

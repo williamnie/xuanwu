@@ -47,6 +47,12 @@ test('new session model field receives remote model state and remains a selector
   assert.match(newSessionSource, /select disabled=\{modelsLoading\}/);
 });
 
+test('new session provider selector hides unavailable providers', () => {
+  assert.match(newSessionSource, /selectedProviderAvailable/);
+  assert.match(newSessionSource, /选择可用 Provider/);
+  assert.doesNotMatch(newSessionSource, /（未就绪）/);
+});
+
 test('new session permission control labels every authorization preset explicitly', () => {
   assert.match(newSessionSource, /function permissionPresetLabel/);
   assert.match(newSessionSource, /permissionPresetLabel\(settings\)/);

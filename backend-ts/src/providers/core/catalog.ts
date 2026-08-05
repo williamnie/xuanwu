@@ -15,6 +15,7 @@ export type ProviderCatalogEntry = {
   label: string;
   supportLevel: "experimental" | "preview" | "tested";
   capabilities: ProviderCapabilities;
+  enabled: boolean;
   legacy_capabilities: readonly string[];
   state: string;
   /** 可提交（ready 且未 disabled）；not-ready 可见但不可提交 */
@@ -41,6 +42,7 @@ export function catalogEntryFromRegistry(entry: RegistryEntry): ProviderCatalogE
     label: entry.manifest.displayName,
     supportLevel: entry.manifest.supportLevel,
     capabilities: entry.manifest.capabilities,
+    enabled: entry.state !== "disabled",
     legacy_capabilities: legacyCapabilities(entry.manifest.capabilities),
     state: entry.state,
     submittable: entry.state === "ready",

@@ -30,15 +30,15 @@ export const PROVIDER_OPTIONS = [
 
 /**
  * P6：从后端 /api/providers catalog 派生可提交 option（唯一权威）。
- * 未注册/planned Provider（如 opencode/kimicode）不进入；not-ready 可见但 disabled。
+ * 未注册、未启用或 not-ready Provider 不进入新建/配置选择器。
  */
 export function providerOptionsFromCatalog(catalog) {
   return (Array.isArray(catalog) ? catalog : [])
-    .filter((entry) => entry && typeof entry.id === 'string')
+    .filter((entry) => entry && typeof entry.id === 'string' && entry.enabled !== false && entry.submittable === true)
     .map((entry) => ({
       value: entry.id,
       label: entry.label || entry.id,
-      enabled: entry.submittable !== false,
+      enabled: true,
       state: entry.state,
     }));
 }

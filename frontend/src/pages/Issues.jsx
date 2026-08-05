@@ -1,5 +1,6 @@
 import { workApi } from '../api/work.js';
 import { projectsApi } from '../api/projects.js';
+import { systemApi } from '../api/system.js';
 import { useEffect, useState } from 'react';
 import { message } from '../store/toastStore';
 import {
@@ -19,6 +20,7 @@ import IssueEditModal from '../components/IssueEditModal';
 import IssueCard from './IssueCard';
 import { sortIssuesByIdDesc } from '../utils/issueSort';
 import { serviceTierPayload } from '../utils/serviceTier';
+import { availableAgentProfiles, codeAgentAvailable, effectiveProjectProvider } from '../utils/codeAgents.js';
 
 export default function Issues({
   filterProject,
@@ -40,9 +42,17 @@ export default function Issues({
   const [formPriority, setFormPriority] = useState(0);
   const [formAgentProfileId, setFormAgentProfileId] = useState('');
   const [agentProfiles, setAgentProfiles] = useState([]);
+  const [providerCatalog, setProviderCatalog] = useState([]);
   const [agentProfilesLoading, setAgentProfilesLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const availableProfiles = availableAgentProfiles(agentProfiles, providerCatalog);
+  const selectedProject = projects.find(project => project.id === formProjectId) || null;
+  const inheritedProvider = effectiveProjectProvider(selectedProject, agentProfiles);
+  const inheritedProviderAvailable = codeAgentAvailable(inheritedProvider, providerCatalog);
+  const selectedCodeAgentAvailable = formAgentProfileId
+    ? availableProfiles.some(profile => profile.id === formAgentProfileId)
+    : inheritedProviderAvailable;
 
   // 拖拽相关的局部交互状态
   const [draggingIssueId, setDraggingIssueId] = useState(null);
@@ -209,9 +219,16 @@ export default function Issues({
       setFormAgentProfileId('');
       setFormError('');
       setAgentProfilesLoading(true);
-      projectsApi.getAgentProfiles()
-        .then((items) => setAgentProfiles(Array.isArray(items) ? items : items?.items || []))
-        .catch((error) => setFormError(error.message || 'Agent Profiles 加载失败'))
+      Promise.all([projectsApi.getAgentProfiles(), systemApi.getProviders()])
+        .then(([items, catalog]) => {
+          setAgentProfiles(Array.isArray(items) ? items : items?.items || []);
+          setProviderCatalog(Array.isArray(catalog) ? catalog : []);
+        })
+        .catch((error) => {
+          setAgentProfiles([]);
+          setProviderCatalog([]);
+          setFormError(error.message || 'Code Agents 加载失败');
+        })
         .finally(() => setAgentProfilesLoading(false));
     }
   }, [isNewIssueOpen, refreshData, sourceMetadata]);
@@ -261,6 +278,10 @@ export default function Issues({
     const finalProjectId = formProjectId || (projects[0]?.id || '');
     if (!finalProjectId) {
       setFormError('请先创建项目');
+      return;
+    }
+    if (!selectedCodeAgentAvailable) {
+      setFormError('请选择当前已启用且可用的 Code Agent');
       return;
     }
 
@@ -510,8 +531,10 @@ export default function Issues({
                   onChange={(event) => setFormAgentProfileId(event.target.value)}
                   disabled={agentProfilesLoading}
                 >
-                  <option value="">继承项目默认 Provider</option>
-                  {agentProfiles.map((profile) => (
+                  <option disabled={!inheritedProviderAvailable} value="">
+                    {inheritedProviderAvailable ? '继承项目默认 Provider' : '请选择可用 Code Agent'}
+                  </option>
+                  {availableProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {codeAgentLabel(profile.provider)} · {profile.name} · {profile.model || 'default'}
                     </option>

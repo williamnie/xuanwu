@@ -97,6 +97,108 @@
   padding-bottom: 24px;
 }
 
+.code-agents-panel {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px;
+}
+
+.code-agents-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+}
+
+.code-agents-header h2 {
+  font-size: 1.35rem;
+  margin: 5px 0 0;
+}
+
+.code-agents-header p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 7px 0 0;
+  max-width: 760px;
+}
+
+.code-agents-error {
+  background: color-mix(in srgb, var(--error) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error) 24%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--error);
+  font-size: 0.82rem;
+  padding: 10px 12px;
+}
+
+.code-agents-list {
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+}
+
+.code-agent-row {
+  align-items: center;
+  border-bottom: 1px solid var(--border-light);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 92px;
+  padding: 16px 4px;
+}
+
+.code-agent-status {
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+}
+
+.code-agent-status.available,
+.code-agent-title span.available {
+  color: var(--success);
+}
+
+.code-agent-copy {
+  min-width: 0;
+}
+
+.code-agent-title {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.code-agent-title strong {
+  font-size: 0.95rem;
+}
+
+.code-agent-title span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.code-agent-copy p,
+.code-agent-copy small {
+  color: var(--text-muted);
+  display: block;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.code-agents-empty {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  padding: 24px 4px;
+}
+
 @media (max-width: 720px) {
   .connections-tabs {
     display: grid;
@@ -108,5 +210,19 @@
   .connections-tab {
     min-width: 0;
     padding: 0 8px;
+  }
+
+  .code-agents-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .code-agent-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .code-agent-row > .btn {
+    grid-column: 2;
+    justify-self: start;
   }
 }

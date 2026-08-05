@@ -21,8 +21,10 @@ export type RunnerLocalSettings = {
     codex?: {
       appCommand?: string;
       cliCommand?: string;
+      enabled?: boolean;
       serverMode?: "cli" | "app";
     };
+    claude?: { enabled?: boolean };
     "pi-coding-agent"?: PiLocalSettings;
     /** 早期 feature/provider 工作树兼容读取；规范化后只输出 pi-coding-agent。 */
     pi?: PiLocalSettings;
@@ -99,10 +101,12 @@ function normalizedRunnerSettings(value: unknown): Pick<RunnerLocalSettings, "ru
 function normalizedProviderSettings(value: unknown): Pick<RunnerLocalSettings, "providers"> {
   const raw = recordValue(value);
   const codex = normalizedCodexSettings(raw.codex);
+  const claude = normalizedEnabledSettings(raw.claude);
   const pi = normalizedPiSettings(raw["pi-coding-agent"] ?? raw.pi);
-  return Object.keys(codex).length === 0 && Object.keys(pi).length === 0 ? {} : {
+  return Object.keys(codex).length === 0 && Object.keys(claude).length === 0 && Object.keys(pi).length === 0 ? {} : {
     providers: {
       ...(Object.keys(codex).length === 0 ? {} : { codex }),
+      ...(Object.keys(claude).length === 0 ? {} : { claude }),
       ...(Object.keys(pi).length === 0 ? {} : { "pi-coding-agent": pi })
     }
   };
@@ -116,8 +120,14 @@ function normalizedCodexSettings(value: unknown): NonNullable<NonNullable<Runner
   return {
     ...(serverMode ? { serverMode } : {}),
     ...(cliCommand ? { cliCommand } : {}),
-    ...(appCommand ? { appCommand } : {})
+    ...(appCommand ? { appCommand } : {}),
+    ...(typeof raw.enabled === "boolean" ? { enabled: raw.enabled } : {})
   };
+}
+
+function normalizedEnabledSettings(value: unknown): { enabled?: boolean } {
+  const raw = recordValue(value);
+  return typeof raw.enabled === "boolean" ? { enabled: raw.enabled } : {};
 }
 
 function normalizedPiSettings(value: unknown): NonNullable<NonNullable<RunnerLocalSettings["providers"]>["pi-coding-agent"]> {

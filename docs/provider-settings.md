@@ -26,10 +26,12 @@ Claude model id。CLI 模式通过官方 `claude -p`、`--resume` 与 Claude 的
 XUANWU_CODEX_CMD
 XUANWU_CODEX_CWD
 XUANWU_CODEX_ENV
+XUANWU_CODEX_ENABLED
 XUANWU_CODEX_TIMEOUT_MS
 XUANWU_CLAUDE_CMD
 XUANWU_CLAUDE_CWD
 XUANWU_CLAUDE_ENV
+XUANWU_CLAUDE_ENABLED
 XUANWU_CLAUDE_MODE
 XUANWU_CLAUDE_AUTH_MODE
 XUANWU_CLAUDE_API_BASE_URL
@@ -40,7 +42,14 @@ XUANWU_CLAUDE_PLATFORM_CONFIG_DIR
 XUANWU_CLAUDE_PLATFORM_PROFILE
 XUANWU_CLAUDE_MODEL
 XUANWU_CLAUDE_TIMEOUT_MS
+XUANWU_PI_ENABLED
+XUANWU_PI_CMD
 ```
+
+`Connections → Code Agents` 会自动重新探测已注册执行器，并把启用状态写入
+`${XUANWU_STATE_DIR}/runner-settings.local.json`。只有 `enabled && ready` 的 Code Agent
+会出现在新建 Issue、Work、Project 与 Agent Profile 的选择器中；停用正在执行 Run 或持有活动进程的
+Agent 会被拒绝。
 
 ### Claude Agent SDK live 配置
 

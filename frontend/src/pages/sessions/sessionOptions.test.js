@@ -11,7 +11,6 @@ test('provider catalog drives selector labels and readiness', () => {
 
   assert.deepEqual(providerOptionsFromCatalog(catalog), [
     { value: 'codex', label: 'Codex', enabled: true, state: 'ready' },
-    { value: 'pi', label: 'Pi Coding Agent', enabled: false, state: 'not_ready' },
   ]);
   assert.equal(providerLabel('pi', catalog), 'Pi Coding Agent');
 });

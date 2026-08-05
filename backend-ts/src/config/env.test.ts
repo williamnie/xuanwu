@@ -39,13 +39,14 @@ describe("Bun backend config", () => {
       webDir: "",
       cliConnectors: { manifestDirs: [] },
       providers: {
-        codex: { command: "codex app-server --listen stdio://", cwd: "", env: {}, timeoutMs: 1_800_000 },
+        codex: { command: "codex app-server --listen stdio://", cwd: "", enabled: true, env: {}, timeoutMs: 1_800_000 },
         claude: {
           apiBaseUrl: "",
           apiPath: "",
           authMode: "local-cli",
           command: "claude",
           cwd: "",
+          enabled: true,
           env: {},
           mode: "cli-fallback",
           model: "",
@@ -213,6 +214,22 @@ describe("Bun backend config", () => {
     });
   });
 
+  test("loads persisted Code Agent enablement for Codex, Claude and Pi", async () => {
+    const stateDir = await tempStateDir();
+    await writeFile(join(stateDir, "runner-settings.local.json"), JSON.stringify({
+      providers: {
+        codex: { enabled: false },
+        claude: { enabled: false },
+        "pi-coding-agent": { enabled: false }
+      }
+    }), "utf8");
+
+    const config = loadConfig([], { [ENV_KEYS.stateDir]: stateDir });
+    expect(config.providers.codex?.enabled).toBe(false);
+    expect(config.providers.claude?.enabled).toBe(false);
+    expect(config.providers["pi-coding-agent"]?.enabled).toBe(false);
+  });
+
   test("loads Pi runtime settings from local settings", async () => {
     const stateDir = await tempStateDir();
     await writeFile(join(stateDir, "runner-settings.local.json"), JSON.stringify({
@@ -325,6 +342,7 @@ describe("Bun backend config", () => {
         codex: {
           command: "/opt/bin/codex app-server --listen stdio://",
           cwd: "/tmp/project",
+          enabled: true,
           env: { CODEX_HOME: "/tmp/codex", SAFE_VALUE: "ok", CODEX_API_KEY: "secret" },
           timeoutMs: 1234
         },
@@ -334,6 +352,7 @@ describe("Bun backend config", () => {
           authMode: "environment",
           command: "/opt/bin/claude",
           cwd: "/tmp/claude-project",
+          enabled: true,
           env: { ANTHROPIC_API_KEY: "anthropic-secret", SAFE_CLAUDE: "ok" },
           mode: "sdk",
           model: "claude-sonnet-4-5",
@@ -436,6 +455,7 @@ describe("Bun backend config", () => {
         codex: {
           command: "cli-codex app-server --listen stdio://",
           cwd: "/tmp/cli-project",
+          enabled: true,
           env: { CODEX_HOME: "/tmp/cli-codex" },
           timeoutMs: 5678
         },
@@ -445,6 +465,7 @@ describe("Bun backend config", () => {
           authMode: "environment",
           command: "cli-claude",
           cwd: "/tmp/cli-claude-project",
+          enabled: true,
           env: { ANTHROPIC_API_KEY: "cli-secret" },
           mode: "sdk",
           model: "claude-opus",

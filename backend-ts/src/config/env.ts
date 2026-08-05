@@ -32,12 +32,14 @@ export const ENV_KEYS = {
   codexAppCommand: "XUANWU_CODEX_APP_CMD",
   codexCwd: "XUANWU_CODEX_CWD",
   codexEnv: "XUANWU_CODEX_ENV",
+  codexEnabled: "XUANWU_CODEX_ENABLED",
   codexTimeoutMs: "XUANWU_CODEX_TIMEOUT_MS",
   runnerMaxParallelProjects: "XUANWU_MAX_PARALLEL_PROJECTS",
   cliConnectorDirs: "XUANWU_CLI_CONNECTOR_DIRS",
   claudeCommand: "XUANWU_CLAUDE_CMD",
   claudeCwd: "XUANWU_CLAUDE_CWD",
   claudeEnv: "XUANWU_CLAUDE_ENV",
+  claudeEnabled: "XUANWU_CLAUDE_ENABLED",
   claudeMode: "XUANWU_CLAUDE_MODE",
   claudeAuthMode: "XUANWU_CLAUDE_AUTH_MODE",
   claudeApiBaseUrl: "XUANWU_CLAUDE_API_BASE_URL",
@@ -164,12 +166,14 @@ const FLAG_KEYS: Record<string, ConfigKey> = {
   "--codex-app-cmd": "codexAppCommand",
   "--codex-cwd": "codexCwd",
   "--codex-env": "codexEnv",
+  "--codex-enabled": "codexEnabled",
   "--codex-timeout-ms": "codexTimeoutMs",
   "--max-parallel-projects": "runnerMaxParallelProjects",
   "--cli-connector-dirs": "cliConnectorDirs",
   "--claude-cmd": "claudeCommand",
   "--claude-cwd": "claudeCwd",
   "--claude-env": "claudeEnv",
+  "--claude-enabled": "claudeEnabled",
   "--claude-mode": "claudeMode",
   "--claude-auth-mode": "claudeAuthMode",
   "--claude-api-base-url": "claudeApiBaseUrl",
@@ -196,12 +200,15 @@ export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): Runner
     env
   );
   const localCodex = localOverrides.providers?.codex ?? {};
+  const localClaude = localOverrides.providers?.claude ?? {};
   const localPi = localOverrides.providers?.["pi-coding-agent"] ?? {};
   return buildConfig({
     ...baseOverrides,
     codexServerMode: localCodex.serverMode ?? baseOverrides.codexServerMode,
     codexCommand: localCodex.cliCommand ?? baseOverrides.codexCommand,
     codexAppCommand: localCodex.appCommand ?? baseOverrides.codexAppCommand,
+    codexEnabled: localCodex.enabled ?? baseOverrides.codexEnabled,
+    claudeEnabled: localClaude.enabled ?? baseOverrides.claudeEnabled,
     piCommand: localPi.command ?? baseOverrides.piCommand,
     piCwd: localPi.cwd ?? baseOverrides.piCwd,
     piEnabled: localPi.enabled ?? baseOverrides.piEnabled,
@@ -311,12 +318,14 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     codexAppCommand: cleanValue(env[ENV_KEYS.codexAppCommand]),
     codexCwd: cleanValue(env[ENV_KEYS.codexCwd]),
     codexEnv: cleanValue(env[ENV_KEYS.codexEnv]),
+    codexEnabled: cleanValue(env[ENV_KEYS.codexEnabled]),
     codexTimeoutMs: cleanValue(env[ENV_KEYS.codexTimeoutMs]),
     runnerMaxParallelProjects: cleanValue(env[ENV_KEYS.runnerMaxParallelProjects]),
     claudeCommand: cleanValue(env[ENV_KEYS.claudeCommand]),
     claudeCwd: cleanValue(env[ENV_KEYS.claudeCwd]),
     cliConnectorDirs: cleanValue(env[ENV_KEYS.cliConnectorDirs]),
     claudeEnv: cleanValue(env[ENV_KEYS.claudeEnv]),
+    claudeEnabled: cleanValue(env[ENV_KEYS.claudeEnabled]),
     claudeMode: cleanValue(env[ENV_KEYS.claudeMode]),
     claudeAuthMode: cleanValue(env[ENV_KEYS.claudeAuthMode]),
     claudeApiBaseUrl: cleanValue(env[ENV_KEYS.claudeApiBaseUrl]) ?? cleanValue(env.ANTHROPIC_BASE_URL),
@@ -395,6 +404,7 @@ type ProviderRuntimeOverrides = {
   claudeCommand?: string;
   claudeCwd?: string;
   claudeEnv?: string;
+  claudeEnabled?: boolean | string;
   claudeMode?: string;
   claudeModel?: string;
   claudeOauthToken?: string;
@@ -405,6 +415,7 @@ type ProviderRuntimeOverrides = {
   codexCommand?: string;
   codexCwd?: string;
   codexEnv?: string;
+  codexEnabled?: boolean | string;
   codexServerMode?: string;
   codexSessionsDir?: string;
   codexTimeoutMs?: number | string;
@@ -449,6 +460,7 @@ export function buildCodexRuntimeConfig(
   return {
     ...config,
     command: normalizeCodexCommand(config.command),
+    enabled: parseBoolean(overrides.codexEnabled, true),
     env: server.mode === "app" ? { ...server.appEnv, ...providerEnv } : providerEnv
   };
 }
@@ -504,6 +516,7 @@ function buildClaudeRuntimeConfig(overrides: ProviderRuntimeOverrides): Provider
     apiBaseUrl,
     apiPath,
     authMode,
+    enabled: parseBoolean(overrides.claudeEnabled, true),
     env,
     mode,
     model: cleanValue(overrides.claudeModel) ?? "",

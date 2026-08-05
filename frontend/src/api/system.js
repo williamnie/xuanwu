@@ -80,6 +80,18 @@ export const systemApi = {
 
   getProviders: () => request('/api/providers'),
 
+  getCodeAgents: () => request('/api/code-agents'),
+
+  discoverCodeAgents: () => request('/api/code-agents/discover', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
+  updateCodeAgent: (id, enabled) => request(`/api/code-agents/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ enabled }),
+  }),
+
   getProviderModels: (id) => request(`/api/providers/${encodeURIComponent(id)}/models`),
 
   getCapabilities: () => request('/api/capabilities'),

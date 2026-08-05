@@ -35,6 +35,7 @@ import { buildPiGuardianSystemStatus } from "./piGuardianStatus.ts";
 import { buildCompactSystemStatus, buildRuntimeDoctor, buildSystemStatus } from "./systemStatus.ts";
 import { registerSystemRestartRoute, type SystemRestartAuditEvent } from "./systemRestartApi.ts";
 import { registerProvidersCatalogRoute } from "./providersCatalogApi.ts";
+import { registerCodeAgentsRoutes } from "./codeAgentsApi.ts";
 import { setProjectLoopMaxParallelProjects } from "../runner/projectLoopManager.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
@@ -104,6 +105,14 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     providers: runtime.providers
   });
   if (runtime.database) {
+    if (runtime.config && runtime.providers && runtime.providersRegistry) {
+      registerCodeAgentsRoutes(router, {
+        config: runtime.config,
+        database: runtime.database,
+        providers: runtime.providers,
+        providersRegistry: runtime.providersRegistry
+      });
+    }
     attachFeishuNotificationObservers({
       bus,
       config: runtime.config?.integrations.feishu,
