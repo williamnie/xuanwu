@@ -13,7 +13,7 @@ const clientSource = readFileSync(new URL('../api/runs.js', import.meta.url), 'u
 test('Runs is the canonical page while old Sessions navigation remains a deep-link adapter', () => {
   assert.match(appSource, /lazy\(\(\) => import\('\.\/pages\/Runs'\)\)/);
   assert.match(appSource, /resolveProductPage\(page, \{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
-  assert.match(appSource, /const compatSessionRoute = page === 'sessions'/);
+  assert.match(appSource, /const compatSessionRoute = resolvedPage === 'runs' && \(page === 'sessions'/);
   assert.match(appSource, /currentPage === 'runs'/);
   assert.match(modulesSource, /page: 'runs',[\s\S]*label: PRODUCT_NAV_LABELS\.runs/);
   assert.match(sidebarSource, /aria-label=\{navLabel\(item\)\}/);
@@ -30,8 +30,8 @@ test('Runs list uses the canonical API and provider sessions keep Run authority 
   assert.match(pageSource, /selectedSessionId=\{selectedSessionId\}[\s\S]*showEvidence=\{false\}/);
   assert.match(pageSource, /surface === 'run' \? \([\s\S]*<RunSidebar/);
   assert.match(pageSource, /surface === 'new-session' \? \([\s\S]*keepNewSessionRoute[\s\S]*showEvidence=\{false\}[\s\S]*showSidebar/);
-  assert.match(sessionsSource, /if \(keepNewSessionRoute\) navigateTo\?\.\('sessions', null, newSessionId\)/);
-  assert.match(sessionsSource, /if \(keepNewSessionRoute\) navigateTo\?\.\('sessions', null, id\)/);
+  assert.match(sessionsSource, /if \(keepNewSessionRoute\) navigateTo\?\.\('runs', null, '', '', \{ sessionId: newSessionId \}\)/);
+  assert.match(sessionsSource, /if \(keepNewSessionRoute\) navigateTo\?\.\('runs', null, '', '', \{ sessionId: id \}\)/);
   assert.match(sessionsSource, /showSidebar \? \(/);
   assert.match(sessionsSource, /observationNotice,/);
 });

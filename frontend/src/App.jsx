@@ -213,9 +213,11 @@ export default function App() {
     });
   }, [updateAppState]);
 
-  const navigateTo = useCallback((page, issueId = null, sessionId = '', handoffId = '') => {
+  const navigateTo = useCallback((page, issueId = null, sessionId = '', handoffId = '', navigationOptions = {}) => {
     const resolvedPage = resolveProductPage(page, { workBoardEnabled: WORK_BOARD_ENABLED });
-    if ((page === 'issues' || page === 'sessions') && resolvedPage !== page) {
+    const internalProviderSessionId = String(navigationOptions?.sessionId || '').trim();
+    const suppressLegacyWarning = navigationOptions?.suppressLegacyWarning === true;
+    if ((page === 'issues' || page === 'sessions') && resolvedPage !== page && !suppressLegacyWarning) {
       compatibilityApi.recordLegacyRoute({ family: page, target: resolvedPage }).catch(() => {});
       toast.warning(
         `${page === 'issues' ? 'Issues' : 'Sessions'} 旧入口已迁移到 ${resolvedPage === 'work' ? 'Work' : 'Runs'}；compat v1 保留至 v0.3.x。`,
@@ -229,9 +231,11 @@ export default function App() {
     const targetWorkId = resolvedPage === 'work'
       ? page === 'issues' ? workIdFromIssueId(issueId) : String(issueId || '')
       : '';
-    const compatSessionRoute = resolvedPage === 'runs' && page === 'sessions';
+    const compatSessionRoute = resolvedPage === 'runs' && (page === 'sessions' || Boolean(internalProviderSessionId));
     const targetRunId = resolvedPage === 'runs' && !compatSessionRoute ? sessionId || '' : '';
-    const targetSessionId = resolvedPage === 'runs' && compatSessionRoute ? sessionId || '' : '';
+    const targetSessionId = resolvedPage === 'runs' && compatSessionRoute
+      ? internalProviderSessionId || sessionId || ''
+      : '';
     const targetRoute = {
       currentPage: resolvedPage,
       selectedHandoffId: targetHandoffId,

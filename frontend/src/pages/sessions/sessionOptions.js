@@ -103,6 +103,13 @@ export function defaultMessageSettings(project) {
   return defaultSessionSettings(project);
 }
 
+export function sessionSettingsForProject(project, currentSettings = null, preserveProvider = false) {
+  const next = defaultSessionSettings(project);
+  const currentProvider = String(currentSettings?.provider || '').trim();
+  if (preserveProvider && currentProvider) next.provider = currentProvider;
+  return next;
+}
+
 export function modelLabel(model) {
   return model?.displayName || model?.id || model?.model || 'Unknown model';
 }

@@ -23,7 +23,7 @@ import {
 } from './sessions/sessionMessageQueue';
 import { PROJECT_REQUIRED_MESSAGE, canCreateSession, readySessionProviders, resolveLastSessionProject } from './sessions/newSessionGuards';
 import { buildRunnerCommandRequest, clearSessionCommandState, validateSessionCommand } from './sessions/sessionCommands';
-import { defaultMessageSettings, defaultSessionSettings } from './sessions/sessionOptions';
+import { defaultMessageSettings, defaultSessionSettings, sessionSettingsForProject } from './sessions/sessionOptions';
 import { orderedProjectsAfterMove } from './sessions/projectOrder';
 import { messageSettingsForRuntimeKey } from './sessions/sessionRuntimeSettings';
 import { hasComposerContent, sessionPayloadWithReferences } from './sessions/sessionReferences';
@@ -131,6 +131,7 @@ export default function Sessions({
   const interruptStateRef = useRef(interruptState);
   const messageQueueRef = useRef(messageQueue);
   const activeQueuedSendsRef = useRef(new Set());
+  const providerSelectionTouchedRef = useRef(false);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -313,7 +314,7 @@ export default function Sessions({
     if (!project) return;
     setProjectId(project.id);
     setCwd(project.cwd);
-    setSessionSettings(defaultSessionSettings(project));
+    setSessionSettings(sessionSettingsForProject(project));
   }, [lastProjectId, projectId, sessionProjects]);
   
   useEffect(() => {
@@ -436,7 +437,11 @@ export default function Sessions({
     const project = sessionProjects.find((item) => item.id === id) || null;
     setProjectId(id);
     setCwd(project?.cwd || cwd);
-    setSessionSettings(defaultSessionSettings(project));
+    setSessionSettings((current) => sessionSettingsForProject(
+      project,
+      current,
+      providerSelectionTouchedRef.current,
+    ));
   };
 
   const handleReorderProjects = useCallback(async (sourceId, targetId) => {
@@ -457,6 +462,7 @@ export default function Sessions({
   }, [projects, setProjects]);
 
   const handleSettingChange = (field, value) => {
+    if (field === 'provider') providerSelectionTouchedRef.current = true;
     setSessionSettings((current) => ({ ...current, [field]: value }));
   };
 
@@ -765,7 +771,7 @@ export default function Sessions({
       setPromptReferences([]);
       setPromptCommand(clearSessionCommandState());
       await loadFirstPage({ preserveLoaded: true });
-      if (keepNewSessionRoute) navigateTo?.('sessions', null, newSessionId);
+      if (keepNewSessionRoute) navigateTo?.('runs', null, '', '', { sessionId: newSessionId });
     } catch (err) {
       toast.error(err.message || '创建 session 失败');
     } finally {
@@ -780,7 +786,7 @@ export default function Sessions({
     setActiveView('chat');
     setLiveEvents([]);
     setSessionRunning(isSessionRunning(nextSession));
-    if (keepNewSessionRoute) navigateTo?.('sessions', null, id);
+    if (keepNewSessionRoute) navigateTo?.('runs', null, '', '', { sessionId: id });
   }, [keepNewSessionRoute, navigateTo, sessions]);
 
   const openNewSession = useCallback(() => {

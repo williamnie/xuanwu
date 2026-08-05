@@ -88,7 +88,7 @@ export default function SessionSidebar({
         </>
       )}
 
-      <div className="sidebar-section-title">项目</div>
+      <div className="sidebar-section-title">会话</div>
       <div className="sidebar-scroll-area">
         {loading ? (
           <div className="session-list-loading">

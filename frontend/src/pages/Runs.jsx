@@ -213,7 +213,6 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
 
       {surface === 'compat-session' ? (
         <div className="run-session-surface">
-          <CompatibilitySessionNotice />
           <Sessions
             autoSelectFirstSession={false}
             keepNewSessionRoute
@@ -343,15 +342,6 @@ function RunContextBar({ navigateTo, onRunChanged, run }) {
         </div>
       ) : null}
 
-    </div>
-  );
-}
-
-function CompatibilitySessionNotice() {
-  return (
-    <div className="run-surface-notice compat">
-      <strong>Provider session</strong>
-      <span>这是 Run 的底层会话记录；返回 Runs 可查看执行结论。</span>
     </div>
   );
 }
