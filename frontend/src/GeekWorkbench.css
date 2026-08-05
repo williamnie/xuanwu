@@ -80,7 +80,7 @@
   --sessions-message-max-width: 900px;
   --sessions-composer-max-width: 900px;
   --sessions-page-gutter: clamp(18px, 6vw, 88px);
-  --sessions-composer-radius: 20px;
+  --sessions-composer-radius: 14px;
 }
 
 [data-theme="dark"] {

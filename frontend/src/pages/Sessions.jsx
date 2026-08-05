@@ -552,6 +552,7 @@ export default function Sessions({
   const sendMessage = async (event) => {
     event.preventDefault();
     const promptText = message.trim();
+    const referencesSnapshot = messageReferences;
     const wantsOppositeMode = Boolean(event.metaKey || event.ctrlKey);
     const canSteer = String(selectedSession?.provider || selectedId.split(':')[0] || 'codex') === 'codex';
     const shouldGuide = canSteer && sessionRunning && (wantsOppositeMode ? !followRunningTurn : followRunningTurn);
@@ -568,13 +569,13 @@ export default function Sessions({
     if (shouldGuide) {
       const optimisticMessage = addOptimisticUserMessage(selectedId, promptText);
       setSending(true);
+      clearMessageDraft();
       try {
         await steerSessionMessage(selectedId, promptText, messageSettings, messageReferences);
-        setMessage('');
-        setMessageReferences([]);
         toast.info('已引导当前响应。');
       } catch (err) {
         removeOptimisticUserMessage(optimisticMessage?.id);
+        restoreMessageDraft(promptText, referencesSnapshot);
         toast.error(err.message || '引导当前响应失败');
       } finally {
         setSending(false);
@@ -590,22 +591,31 @@ export default function Sessions({
         settings: messageSettings,
       });
       setMessageQueue((current) => enqueueQueuedSessionMessage(current, queued));
-      setMessage('');
-      setMessageReferences([]);
+      clearMessageDraft();
       toast.info(sessionRunning ? '已排队为下一条消息。' : '已追加到消息队列。');
       return;
     }
     setSending(true);
+    clearMessageDraft();
     try {
       await startSessionMessage(selectedId, promptText, messageSettings, messageReferences);
-      setMessage('');
-      setMessageReferences([]);
       setMessageCommand(clearSessionCommandState());
     } catch (err) {
+      restoreMessageDraft(promptText, referencesSnapshot);
       toast.error(err.message || '发送消息失败');
     } finally {
       setSending(false);
     }
+  };
+
+  const clearMessageDraft = () => {
+    setMessage('');
+    setMessageReferences([]);
+  };
+
+  const restoreMessageDraft = (promptText, references = []) => {
+    setMessage((current) => current.trim() ? current : promptText);
+    setMessageReferences((current) => current.length > 0 ? current : references);
   };
 
 

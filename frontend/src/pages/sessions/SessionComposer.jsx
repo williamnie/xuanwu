@@ -268,7 +268,7 @@ function ComposerActions({
   onFollowModeChange,
   onStop,
 }) {
-  const modeSwitch = running && onFollowModeChange ? (
+  const modeSwitch = running && onFollowModeChange && canSend ? (
     <ComposerModeSwitch value={followMode} onChange={onFollowModeChange} disabled={sending || interrupting} />
   ) : null;
   if (running) {

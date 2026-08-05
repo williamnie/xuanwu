@@ -91,7 +91,7 @@
 .session-composer-circle {
   width: 32px;
   height: 32px;
-  border-radius: 999px;
+  border-radius: 9px;
   background: #141820;
   color: #fff;
   border: 0;
@@ -120,25 +120,25 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid #d8dee8;
-  border-radius: 999px;
+  border-radius: 8px;
   padding: 2px;
   background: #f8fafc;
 }
 
 .session-composer-mode-switch button {
   border: 0;
-  border-radius: 999px;
-  padding: 5px 10px;
+  border-radius: 6px;
+  padding: 5px 9px;
   background: transparent;
   color: #64748b;
   cursor: pointer;
-  font-size: 0.76rem;
-  font-weight: 760;
+  font-size: 0.74rem;
+  font-weight: 700;
 }
 
 .session-composer-mode-switch button.active {
-  background: #111827;
-  color: #fff;
+  background: #e7edf3;
+  color: #1f2937;
 }
 
 .session-composer-mode-switch button:disabled {
@@ -317,8 +317,8 @@
 }
 
 [data-theme="dark"] .session-composer-mode-switch button.active {
-  background: #f8fafc;
-  color: #020617;
+  background: rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
 }
 
 [data-theme="dark"] .session-interrupt-status {
@@ -402,8 +402,10 @@
 
 .client-chat-composer-section .prompt-editor-shell.composer,
 .new-session-composer-wrapper .prompt-editor-shell.composer,
+.pi-chat-composer .prompt-editor-shell.composer,
 [data-theme="dark"] .client-chat-composer-section .prompt-editor-shell.composer,
-[data-theme="dark"] .new-session-composer-wrapper .prompt-editor-shell.composer {
+[data-theme="dark"] .new-session-composer-wrapper .prompt-editor-shell.composer,
+[data-theme="dark"] .pi-chat-composer .prompt-editor-shell.composer {
   width: 100%;
   background: color-mix(in srgb, var(--bg-card) 94%, transparent);
   border: 1px solid var(--border-color);

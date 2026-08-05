@@ -26,13 +26,18 @@ test('queued messages stay compact directly above composer input', () => {
 });
 
 test('running composer defaults to guidance without top queue hint', () => {
-  assert.match(source, /running && onFollowModeChange/);
+  assert.match(source, /running && onFollowModeChange && canSend/);
   assert.match(source, /<ComposerModeSwitch value=\{followMode\}/);
   assert.match(source, /followMode = true/);
   assert.match(sessionsSource, /\[followRunningTurn,\s*setFollowRunningTurn\]\s*=\s*useState\(true\)/);
   assert.doesNotMatch(css, /session-message-queue-hint/);
   assert.doesNotMatch(source, /className="session-message-queue-hint" role="status"/);
   assert.doesNotMatch(source, /发送会排队为下一条/);
+});
+
+test('session send clears the draft while the provider request is pending', () => {
+  assert.match(sessionsSource, /setSending\(true\);\s*clearMessageDraft\(\);\s*try \{\s*await startSessionMessage/);
+  assert.match(sessionsSource, /catch \(err\) \{\s*restoreMessageDraft\(promptText, referencesSnapshot\)/);
 });
 
 test('running stop action is visibly distinct from disabled sending spinner', () => {
