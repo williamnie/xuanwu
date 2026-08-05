@@ -7,12 +7,12 @@ import { PiExecutorProvider, type PiExecutorProviderOptions } from "./provider.t
 /**
  * P10：Pi Coding Agent ProviderFactory（G10 gate 已通过）。
  * RPC transport（pi 0.83.0，JSON lines stdio）；session 语义为 tree session（fork/parentSession）。
- * capability-limited：list/read session 未实现（Pi RPC 无 list 命令），不伪造能力。
+ * capability-limited：通过 Pi 权威 JSONL Session 文件提供 read；RPC 仍不提供 list 命令。
  */
 
 const PI_CAPABILITIES: ProviderCapabilities = {
   issueExecution: true,
-  sessions: { create: true, resume: true, fork: false, list: false, read: false, steerWhileRunning: false, export: false },
+  sessions: { create: true, resume: true, fork: false, list: false, read: true, steerWhileRunning: false, export: false },
   // RPC 无法注入 approval 决定（host callback 属于 Pi 内部），不伪造能力 → none
   control: { interrupt: true, approvals: "none" },
   models: { list: true, switchDuringSession: true },

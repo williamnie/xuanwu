@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { providerLabel, providerOptionsFromCatalog, sessionSettingsForProject } from './sessionOptions.js';
+import { providerLabel, providerOptionsFromCatalog, sessionSettingsForProject, sessionSettingsForProvider } from './sessionOptions.js';
 
 test('provider catalog drives selector labels and readiness', () => {
   const catalog = [
@@ -14,6 +14,20 @@ test('provider catalog drives selector labels and readiness', () => {
     { value: 'pi', label: 'Pi Coding Agent', enabled: false, state: 'not_ready' },
   ]);
   assert.equal(providerLabel('pi', catalog), 'Pi Coding Agent');
+});
+
+test('switching providers clears provider-scoped model and service tier', () => {
+  assert.deepEqual(sessionSettingsForProvider({
+    provider: 'codex',
+    model: 'codex-default',
+    serviceTier: 'priority',
+    sandbox: 'danger-full-access',
+  }, 'pi-coding-agent'), {
+    provider: 'pi-coding-agent',
+    model: '',
+    serviceTier: '',
+    sandbox: 'danger-full-access',
+  });
 });
 
 test('an explicitly selected provider survives a later project selection', () => {

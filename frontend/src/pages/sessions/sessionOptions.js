@@ -110,6 +110,12 @@ export function sessionSettingsForProject(project, currentSettings = null, prese
   return next;
 }
 
+export function sessionSettingsForProvider(currentSettings, provider) {
+  const current = currentSettings || defaultSessionSettings(null);
+  if (current.provider === provider) return current;
+  return { ...current, provider, model: '', serviceTier: SERVICE_TIER_STANDARD };
+}
+
 export function modelLabel(model) {
   return model?.displayName || model?.id || model?.model || 'Unknown model';
 }

@@ -54,9 +54,11 @@ describe("Bun Sessions API compatibility", () => {
       expect(created.status).toBe(201);
       expect(await created.json()).toEqual({
         id: "codex:thread-new",
+        isRunning: true,
         provider: "codex",
         provider_session_id: "thread-new",
         provider_turn_id: "turn-initial",
+        status: "running",
         thread_id: "thread-new",
         turn_id: "turn-initial"
       });
@@ -65,7 +67,13 @@ describe("Bun Sessions API compatibility", () => {
       expect(detail.status).toBe(200);
       expect(await detail.json()).toMatchObject({ id: "codex:thread-new", provider_session_id: "thread-new" });
       expect(message.status).toBe(201);
-      expect(await message.json()).toEqual({ thread_id: "thread-new", turn_id: "turn-follow-up" });
+      expect(await message.json()).toEqual({
+        isRunning: true,
+        provider: "codex",
+        status: "running",
+        thread_id: "thread-new",
+        turn_id: "turn-follow-up"
+      });
       expect(interrupt.status).toBe(200);
       expect(await interrupt.json()).toEqual({ interrupted: true });
       expect(provider.interrupts).toEqual([{ sessionId: "thread-new", turnId: "turn-follow-up" }]);
@@ -99,7 +107,13 @@ describe("Bun Sessions API compatibility", () => {
       }));
 
       expect(response.status).toBe(201);
-      expect(await response.json()).toEqual({ thread_id: "thread-running", turn_id: "turn-running" });
+      expect(await response.json()).toEqual({
+        isRunning: true,
+        provider: "codex",
+        status: "running",
+        thread_id: "thread-running",
+        turn_id: "turn-running"
+      });
       expect(provider.calls).toEqual([
         ["sendSessionMessage", { sessionId: "thread-running", prompt: "adjust", mode: "steer", turnId: "turn-running" }]
       ]);
@@ -407,6 +421,41 @@ describe("Bun Sessions API compatibility", () => {
     }
   });
 
+  test("keeps Codex project defaults out of an explicitly selected Pi session and persists terminal state", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new PiSessionProvider();
+    try {
+      insertProject(database, {
+        id: "xuanwu",
+        cwd: "/tmp/xuanwu",
+        provider: "codex",
+        model: "codex-default"
+      });
+      const router = createDefaultRouter({ database, providers: { "pi-coding-agent": provider } });
+      const created = await router.handle(jsonRequest("/api/sessions", {
+        project_id: "xuanwu",
+        provider: "pi-coding-agent",
+        prompt: "hello Pi"
+      }));
+
+      expect(created.status).toBe(201);
+      expect(await created.json()).toMatchObject({
+        id: "pi-coding-agent:pi-created",
+        isRunning: false,
+        provider: "pi-coding-agent",
+        status: "idle"
+      });
+      expect(provider.createInputs).toEqual([{ cwd: "/tmp/xuanwu", model: "", prompt: "hello Pi" }]);
+      expect(getAgentSession(database, "pi-coding-agent:pi-created")).toMatchObject({
+        project_id: "xuanwu",
+        status: "idle"
+      });
+      expect(getAgentSession(database, "pi-coding-agent:pi-created")?.raw_ref).not.toContain("codex-default");
+    } finally {
+      database.close();
+    }
+  });
+
   test("routes provider-qualified Claude create/read/message/list/interrupt without Codex reconciliation", async () => {
     const database = await openFixtureDatabase();
     const codex = new SessionsProvider();
@@ -455,7 +504,13 @@ describe("Bun Sessions API compatibility", () => {
       expect(detail.status).toBe(200);
       expect(await detail.json()).toMatchObject({ id: "claude:claude-new", provider: "claude" });
       expect(message.status).toBe(201);
-      expect(await message.json()).toEqual({ thread_id: "claude-new", turn_id: "claude-turn-follow-up" });
+      expect(await message.json()).toEqual({
+        isRunning: false,
+        provider: "claude",
+        status: "idle",
+        thread_id: "claude-new",
+        turn_id: "claude-turn-follow-up"
+      });
       expect(interrupt.status).toBe(200);
       expect(await interrupt.json()).toEqual({ interrupted: true });
       expect(claude.interrupts).toEqual([
@@ -685,6 +740,24 @@ class IndexedOnlyProvider implements ExecutorProvider {
   }
 }
 
+class PiSessionProvider implements ExecutorProvider {
+  readonly id = "pi-coding-agent" as const;
+  readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt"] as const;
+  readonly createInputs: Array<Record<string, unknown>> = [];
+
+  async run(_input: ProviderRunInput) { throw new Error("not implemented"); }
+
+  async createSession(input: Record<string, unknown>) {
+    this.createInputs.push({ cwd: input.cwd, model: input.model, prompt: input.prompt });
+    return {
+      id: "pi-created",
+      provider: "pi-coding-agent" as const,
+      provider_session_id: "pi-created",
+      thread_id: "pi-created"
+    };
+  }
+}
+
 type SessionCreateFixture = {
   id: string;
   provider: "codex";
@@ -694,11 +767,11 @@ type SessionCreateFixture = {
   turn_id?: string;
 };
 
-function insertProject(db: RunnerDatabase, project: { cwd: string; id: string; provider?: string }): void {
+function insertProject(db: RunnerDatabase, project: { cwd: string; id: string; model?: string; provider?: string }): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, provider, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [project.id, project.id, project.cwd, project.provider ?? "codex", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into projects (id, name, cwd, provider, model, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?)`,
+    [project.id, project.id, project.cwd, project.provider ?? "codex", project.model ?? "", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 

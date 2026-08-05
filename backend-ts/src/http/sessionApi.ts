@@ -100,11 +100,12 @@ async function createSession(context: SessionApiContext, body: Record<string, un
   const project = projectForSession(context, stringBody(body, "project_id"));
   const providerID = firstNonEmpty(stringBody(body, "provider"), project?.provider ?? "codex");
   const provider = capableProvider(context, providerID, "sessions", "createSession");
-  const input = sessionCreateInput(body, project);
+  const input = sessionCreateInput(body, project, provider.id);
   const result = await provider.createSession!(input);
   assertProviderResult(provider.id, result.provider);
-  persistSession(context, provider.id, input, result.provider_session_id, result.provider_turn_id ?? "");
-  return { ...result, id: `${provider.id}:${result.provider_session_id}`, provider: provider.id };
+  const status = completedOperationStatus(provider.id, input.prompt, result.provider_turn_id ?? result.turn_id ?? "");
+  persistSession(context, provider.id, input, result.provider_session_id, result.provider_turn_id ?? "", status);
+  return { ...result, id: `${provider.id}:${result.provider_session_id}`, provider: provider.id, status, isRunning: status === "running" };
 }
 
 async function readSession(context: SessionApiContext, rawSessionID: string) {
@@ -137,10 +138,14 @@ async function readSession(context: SessionApiContext, rawSessionID: string) {
     result = fallback;
   }
   if (ref.provider === "codex") reconcileCodexSessionIndex(context.database, ref.sessionId, result);
+  const qualified = qualifiedProviderSession(ref.provider, result);
+  const indexed = publicAgentSessionOrNull(getAgentSession(context.database, ref.key));
+  const detail = { ...(indexed ?? {}), ...qualified };
+  reconcileProviderSessionStatus(context.database, ref.provider, ref.sessionId, detail);
   return await withSessionRuntimeSettings(
     context.database,
     ref.sessionId,
-    qualifiedProviderSession(ref.provider, result),
+    detail,
     ref.provider
   );
 }
@@ -152,8 +157,9 @@ async function sessionMessage(context: SessionApiContext, rawSessionID: string, 
   const input = sessionMessageInput(context, ref, body);
   const result = await provider.sendSessionMessage!(input);
   assertProviderResult(provider.id, result.provider);
-  persistSessionTurn(context, provider.id, input, result.provider_session_id, result.turn_id);
-  return { thread_id: result.provider_session_id, turn_id: result.turn_id };
+  const status = completedOperationStatus(provider.id, input.prompt, result.turn_id);
+  persistSessionTurn(context, provider.id, input, result.provider_session_id, result.turn_id, status);
+  return { thread_id: result.provider_session_id, turn_id: result.turn_id, provider: provider.id, status, isRunning: status === "running" };
 }
 
 function capableProvider(
@@ -191,11 +197,15 @@ function sessionListInput(request: Request): { cursor: string; limit: number } {
   return { cursor: cleanParam(params.get("cursor")), limit: sessionLimit(params.get("limit")) };
 }
 
-function sessionCreateInput(body: Record<string, unknown>, project: Project | null): SessionCreateInput {
+function sessionCreateInput(
+  body: Record<string, unknown>,
+  project: Project | null,
+  provider: ExecutorProviderId
+): SessionCreateInput {
   return {
     projectId: project?.id,
     cwd: firstNonEmpty(stringBody(body, "cwd"), project?.cwd ?? ""),
-    model: firstNonEmpty(stringBody(body, "model"), project?.model ?? ""),
+    model: sessionModel(body, project, provider),
     reasoningEffort: stringBody(body, "reasoning_effort"),
     serviceTier: stringBody(body, "service_tier"),
     approvalPolicy: firstNonEmpty(stringBody(body, "approval_policy"), project?.approval_policy ?? ""),
@@ -216,7 +226,7 @@ function sessionMessageInput(context: SessionApiContext, ref: QualifiedSessionRe
     turnId: mode === "steer" ? latestSessionTurnID(context.database, ref) : "",
     prompt: stringBody(body, "prompt"),
     mode,
-    model: firstNonEmpty(stringBody(body, "model"), stored.model ?? ""),
+    model: providerScopedModel(ref.provider, firstNonEmpty(stringBody(body, "model"), stored.model ?? "")),
     reasoningEffort: firstNonEmpty(stringBody(body, "reasoning_effort"), stored.reasoning_effort ?? ""),
     serviceTier: firstNonEmpty(stringBody(body, "service_tier"), stored.service_tier ?? ""),
     approvalPolicy: firstNonEmpty(stringBody(body, "approval_policy"), stored.approval_policy ?? ""),
@@ -300,7 +310,8 @@ function persistSession(
   provider: ExecutorProviderId,
   input: SessionCreateInput,
   sessionId: string,
-  turnId: string
+  turnId: string,
+  status: string
 ): void {
   if (sessionId === "") return;
   upsertAgentSession(context.database, {
@@ -309,7 +320,7 @@ function persistSession(
     project_id: input.projectId ?? "",
     preview: sessionPreview(input.prompt ?? ""),
     raw_ref: runtimeRawRef(input, turnId),
-    status: provider === "claude" ? "idle" : input.prompt?.trim() ? "running" : "idle"
+    status
   });
 }
 
@@ -318,9 +329,10 @@ function persistSessionTurn(
   provider: ExecutorProviderId,
   input: SessionMessageInput,
   sessionId: string,
-  turnId: string
+  turnId: string,
+  status: string
 ): void {
-  if (sessionId === "" || turnId === "") return;
+  if (sessionId === "") return;
   upsertAgentSession(context.database, {
     provider,
     provider_session_id: sessionId,
@@ -329,8 +341,37 @@ function persistSessionTurn(
       ...runtimeSettingsFromAgentSession(context.database, sessionId, provider),
       ...runtimeRawRef(input, turnId)
     },
-    status: provider === "claude" ? "idle" : "running"
+    status
   });
+}
+
+function sessionModel(body: Record<string, unknown>, project: Project | null, provider: ExecutorProviderId): string {
+  const explicit = stringBody(body, "model");
+  if (explicit) return providerScopedModel(provider, explicit);
+  if (project?.provider !== provider) return "";
+  return providerScopedModel(provider, project.model);
+}
+
+function providerScopedModel(provider: string, model: string): string {
+  const value = model.trim();
+  return provider !== "codex" && value === "codex-default" ? "" : value;
+}
+
+function completedOperationStatus(provider: ExecutorProviderId, prompt: string | undefined, turnId: string): string {
+  if (provider !== "codex") return "idle";
+  return prompt?.trim() || turnId.trim() ? "running" : "idle";
+}
+
+function reconcileProviderSessionStatus(
+  db: RunnerDatabase,
+  provider: string,
+  sessionId: string,
+  detail: Record<string, unknown>
+): void {
+  if (provider === "codex" || !getAgentSession(db, `${provider}:${sessionId}`)) return;
+  const status = stringValue(detail.status) || (detail.isRunning === true ? "running" : "");
+  if (!status) return;
+  upsertAgentSession(db, { provider, provider_session_id: sessionId, status });
 }
 
 function latestSessionTurnID(db: RunnerDatabase, ref: QualifiedSessionRef): string {

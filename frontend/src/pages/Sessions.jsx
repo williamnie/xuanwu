@@ -23,7 +23,7 @@ import {
 } from './sessions/sessionMessageQueue';
 import { PROJECT_REQUIRED_MESSAGE, canCreateSession, readySessionProviders, resolveLastSessionProject } from './sessions/newSessionGuards';
 import { buildRunnerCommandRequest, clearSessionCommandState, validateSessionCommand } from './sessions/sessionCommands';
-import { defaultMessageSettings, defaultSessionSettings, sessionSettingsForProject } from './sessions/sessionOptions';
+import { defaultMessageSettings, defaultSessionSettings, sessionSettingsForProject, sessionSettingsForProvider } from './sessions/sessionOptions';
 import { orderedProjectsAfterMove } from './sessions/projectOrder';
 import { messageSettingsForRuntimeKey } from './sessions/sessionRuntimeSettings';
 import { hasComposerContent, sessionPayloadWithReferences } from './sessions/sessionReferences';
@@ -463,7 +463,9 @@ export default function Sessions({
 
   const handleSettingChange = (field, value) => {
     if (field === 'provider') providerSelectionTouchedRef.current = true;
-    setSessionSettings((current) => ({ ...current, [field]: value }));
+    setSessionSettings((current) => field === 'provider'
+      ? sessionSettingsForProvider(current, value)
+      : { ...current, [field]: value });
   };
 
   const handleMessageSettingChange = (field, value) => {
@@ -507,21 +509,23 @@ export default function Sessions({
   const startSessionMessage = useCallback(async (sessionId, promptText, settings, references = []) => {
     const optimisticMessage = addOptimisticUserMessage(sessionId, promptText);
     try {
-      await runsApi.sendSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
+      const result = await runsApi.sendSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
         model: settings.model,
         reasoning_effort: settings.reasoningEffort,
         service_tier: settings.serviceTier,
         approval_policy: settings.approvalPolicy,
         sandbox: settings.sandbox,
       }, references));
-      setSessionRunning(true);
-      setSessions((prev) => setSessionRunningInList(prev, sessionId, true));
+      const running = isSessionRunning(result);
+      setSessionRunning(running);
+      setSessions((prev) => setSessionRunningInList(prev, sessionId, running));
       setLiveEvents([]);
+      if (!running) await loadSelected(false);
     } catch (err) {
       removeOptimisticUserMessage(optimisticMessage?.id);
       throw err;
     }
-  }, [addOptimisticUserMessage, removeOptimisticUserMessage]);
+  }, [addOptimisticUserMessage, loadSelected, removeOptimisticUserMessage]);
 
   const steerSessionMessage = useCallback(async (sessionId, promptText, settings, references = []) => {
     await runsApi.steerSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {

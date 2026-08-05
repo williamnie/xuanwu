@@ -71,6 +71,38 @@ describe("P10: Pi RPC transport 协议", () => {
 });
 
 describe("P10: Pi executor（fake transport）", () => {
+  test("readSession 从 Pi 权威 session 文件投影 transcript", async () => {
+    const provider = new PiExecutorProvider({
+      sessionFunctions: {
+        async resolve(id) { return id === "pi-history" ? "/tmp/pi-history.jsonl" : undefined; },
+        read(path) {
+          expect(path).toBe("/tmp/pi-history.jsonl");
+          return {
+            id: "pi-history",
+            cwd: "/tmp/demo",
+            name: "Pi history",
+            createdAt: 10,
+            updatedAt: 20,
+            entries: [{
+              type: "message",
+              id: "user-1",
+              parentId: null,
+              timestamp: "2026-08-05T00:00:00Z",
+              message: { role: "user", content: [{ type: "text", text: "hello" }], timestamp: 1 }
+            }]
+          };
+        }
+      }
+    });
+
+    expect(await provider.readSession("pi-history")).toMatchObject({
+      id: "pi-coding-agent:pi-history",
+      cwd: "/tmp/demo",
+      status: "idle",
+      turns: [{ id: "user-1", items: [{ type: "userMessage", text: "hello" }] }]
+    });
+  });
+
   test("run 发送 prompt，agent_settled 收敛 terminal，返回 session", async () => {
     const transport = new FakePiTransport();
     const provider = new PiExecutorProvider({ transport });
@@ -176,7 +208,7 @@ describe("P10: Pi executor（fake transport）", () => {
 });
 
 describe("P10: Pi factory 与 manifest", () => {
-  test("manifest 声明实际能力（无 list/read，不伪造）", () => {
+  test("manifest 声明实际能力（native read、无 list，不伪造）", () => {
     const manifest = piManifest();
     expect(String(manifest.id)).toBe("pi-coding-agent");
     expect(manifest.supportLevel).toBe("preview");
@@ -186,7 +218,7 @@ describe("P10: Pi factory 与 manifest", () => {
     expect(manifest.capabilities.sessions?.fork).toBe(false);
     expect(manifest.capabilities.sessions?.steerWhileRunning).toBe(false);
     expect(manifest.capabilities.sessions?.list).toBe(false);
-    expect(manifest.capabilities.sessions?.read).toBe(false);
+    expect(manifest.capabilities.sessions?.read).toBe(true);
     expect(manifest.capabilities.control?.interrupt).toBe(true);
     expect(manifest.capabilities.models?.list).toBe(true);
     expect(typeof (new PiExecutorProvider({ transport: new FakePiTransport() }) as { listSessions?: unknown }).listSessions).toBe("undefined");

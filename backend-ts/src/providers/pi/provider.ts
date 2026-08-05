@@ -16,6 +16,11 @@ import type {
 import { PiRpcTransport, type PiRpcEvent } from "./rpcTransport.ts";
 import { detectProviderCommand } from "../core/command.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
+import {
+  defaultPiSessionFunctions,
+  publicPiSessionDetail,
+  type PiSessionFunctions
+} from "./sessionHistory.ts";
 
 /**
  * P10：Pi Coding Agent executor（RPC transport，G10 gate 已通过）。
@@ -29,6 +34,7 @@ export type PiExecutorProviderOptions = {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
+  sessionFunctions?: PiSessionFunctions;
   timeoutMs?: number;
 };
 
@@ -39,6 +45,7 @@ export class PiExecutorProvider implements ExecutorProvider {
   private transportCwd = "";
   private active = false;
   private lastSessionRef = "";
+  private readonly sessionPaths = new Map<string, string>();
 
   constructor(private readonly options: PiExecutorProviderOptions = {}) {
     this.transport = options.transport;
@@ -98,6 +105,19 @@ export class PiExecutorProvider implements ExecutorProvider {
     } finally {
       this.active = false;
     }
+  }
+
+  async readSession(sessionId: string): Promise<Record<string, unknown>> {
+    const id = sessionId.trim();
+    if (id === "") throw new Error("Pi session id is required");
+    let path = this.sessionPaths.get(id);
+    if (!path) {
+      path = await this.sessionFunctions().resolve(id);
+      if (path) this.sessionPaths.set(id, path);
+    }
+    if (!path) throw new Error(`Pi session ${id} was not found`);
+    const snapshot = this.sessionFunctions().read(path);
+    return publicPiSessionDetail(snapshot, this.active && this.lastSessionRef === id);
   }
 
   async interrupt(_input: InterruptInput): Promise<void> {
@@ -161,6 +181,7 @@ export class PiExecutorProvider implements ExecutorProvider {
   private async beginOperation(cwd = "", sessionRef = "", tools: readonly string[] = []): Promise<PiRpcTransport> {
     if (this.active) throw new Error("Pi provider is already executing another operation");
     this.active = true;
+    this.lastSessionRef = sessionRef.trim();
     try {
       const targetCwd = cwd.trim() || this.options.cwd?.trim() || "";
       if (!this.transport || (!this.options.transport && this.transportCwd !== targetCwd)) {
@@ -181,14 +202,20 @@ export class PiExecutorProvider implements ExecutorProvider {
     }
   }
 
-  private async sessionState(transport: PiRpcTransport): Promise<{ sessionId: string; sessionRef: string } | undefined> {
+  private async sessionState(transport: PiRpcTransport): Promise<{ sessionFile: string; sessionId: string; sessionRef: string } | undefined> {
     const data = await transport.send({ type: "get_state" });
     if (data && typeof data === "object" && "sessionId" in data) {
-      const state = data as { sessionId: unknown };
+      const state = data as { sessionFile?: unknown; sessionId: unknown };
       const sessionId = String(state.sessionId ?? "");
-      return { sessionId, sessionRef: sessionId };
+      const sessionFile = String(state.sessionFile ?? "");
+      if (sessionId && sessionFile) this.sessionPaths.set(sessionId, sessionFile);
+      return { sessionFile, sessionId, sessionRef: sessionId };
     }
     return undefined;
+  }
+
+  private sessionFunctions(): PiSessionFunctions {
+    return this.options.sessionFunctions ?? defaultPiSessionFunctions;
   }
 
   private async promptAndWait(

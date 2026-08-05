@@ -10,6 +10,7 @@ import {
 import { isProjectSessionGroupCollapsed } from './projectSessionCollapse';
 import { filterProjectSessionGroups, isSessionListFilterActive } from './sessionListFilters';
 import { providerSupports } from './sessionOptions';
+import { projectForSession } from './projectSessionGrouping';
 import './ProjectSessionPagination.css';
 
 function projectNameFromPath(cwd) {
@@ -94,6 +95,7 @@ export default function VirtualSessionList({
   const [dragOverProjectId, setDragOverProjectId] = useState('');
 
   const projectsByCwd = useMemo(() => new Map(projects.map((project) => [project.cwd, project])), [projects]);
+  const projectsById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
 
   // 分组与排序逻辑
   const groups = useMemo(() => {
@@ -112,7 +114,7 @@ export default function VirtualSessionList({
     const virtualGroups = new Map();
     for (const session of sessions) {
       const cwd = session.cwd || '';
-      const matchedProject = projectsByCwd.get(cwd);
+      const matchedProject = projectForSession(session, projectsById, projectsByCwd);
       if (matchedProject) {
         groupMap.get(matchedProject.id).sessions.push(session);
       } else {
@@ -138,7 +140,7 @@ export default function VirtualSessionList({
       ...Array.from(groupMap.values()),
       ...virtualProjectGroups,
     ];
-  }, [sessions, projects, projectsByCwd]);
+  }, [sessions, projects, projectsByCwd, projectsById]);
 
   const filteredGroups = useMemo(() => (
     filterProjectSessionGroups(groups, { query: searchTerm, mode: filterMode })
@@ -151,7 +153,7 @@ export default function VirtualSessionList({
     const activeSession = sessions.find((s) => s.id === selectedId);
     if (!activeSession) return;
 
-    const matchedProject = projectsByCwd.get(activeSession.cwd || '');
+    const matchedProject = projectForSession(activeSession, projectsById, projectsByCwd);
     const projId = matchedProject ? matchedProject.id : `virtual-${activeSession.cwd || 'no-cwd'}`;
 
     setCollapsed((prev) => {
@@ -160,7 +162,7 @@ export default function VirtualSessionList({
       }
       return prev;
     });
-  }, [selectedId, sessions, projectsByCwd]);
+  }, [selectedId, sessions, projectsByCwd, projectsById]);
 
   const toggleCollapse = (group, isCollapsed) => {
     setCollapsed((prev) => ({ ...prev, [group.id]: !isCollapsed }));
