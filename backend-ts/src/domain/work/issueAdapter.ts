@@ -46,7 +46,7 @@ export type IssueWorkCreateCommand = {
     source_event_id: string;
   };
   status: "todo" | "triage" | "in_progress";
-  title: string;
+  title?: string;
   type: "engineering_task";
 };
 
@@ -565,7 +565,6 @@ function effectiveAgentProfile(issue: Issue, selection: AgentRecommendation): No
 function createViolations(command: IssueWorkCreateCommand): string[] {
   const violations: string[] = [];
   if (!command.project_id.trim()) violations.push("project_id is required");
-  if (!command.title.trim()) violations.push("Work title is required");
   if (!command.goal.trim()) violations.push("Work goal is required");
   if (command.type !== "engineering_task") {
     violations.push("Issue-backed Work type must be engineering_task");

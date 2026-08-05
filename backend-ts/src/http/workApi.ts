@@ -95,7 +95,7 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
       goal: requiredString(body.goal, "goal"),
       project_id: projectID,
       status,
-      title: requiredString(body.title, "title"),
+      ...(optionalString(body.title) ? { title: optionalString(body.title) } : {}),
       type
     });
     kickProject(context, result.work);
@@ -117,7 +117,7 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
     const patch = {
       ...(requestedAgentProfileID !== undefined ? { agent_profile_id: requestedAgentProfileID } : {}),
       ...(Object.hasOwn(body, "goal") ? { goal: requiredString(body.goal, "goal") } : {}),
-      ...(Object.hasOwn(body, "title") ? { title: requiredString(body.title, "title") } : {})
+      ...(Object.hasOwn(body, "title") && optionalString(body.title) ? { title: optionalString(body.title) } : {})
     };
     if (Object.keys(patch).length === 0) throw workError(400, "invalid_request", "Work patch is empty");
     const result = updateIssueBackedWork(context.database, {

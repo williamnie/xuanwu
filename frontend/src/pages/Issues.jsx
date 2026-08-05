@@ -503,7 +503,7 @@ export default function Issues({
               )}
 
               <div className="form-group">
-                <label>执行 Provider / Agent Profile</label>
+                <label>Code Agent</label>
                 <select
                   className="form-control"
                   value={formAgentProfileId}
@@ -513,12 +513,12 @@ export default function Issues({
                   <option value="">继承项目默认 Provider</option>
                   {agentProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
-                      {profile.provider === 'claude' ? 'Claude Code' : profile.provider} · {profile.name} · {profile.model || 'default'}
+                      {codeAgentLabel(profile.provider)} · {profile.name} · {profile.model || 'default'}
                     </option>
                   ))}
                 </select>
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                  可为单个 Issue 显式选择 Claude Code；未选择时沿用项目或项目默认 Profile。
+                  可为单个工作项显式选择 Code Agent；未选择时沿用项目默认配置。
                 </span>
               </div>
 
@@ -580,6 +580,12 @@ export default function Issues({
 
     </div>
   );
+}
+
+function codeAgentLabel(provider) {
+  if (provider === 'claude') return 'Claude Code';
+  if (provider === 'pi-coding-agent') return 'Pi';
+  return provider || 'Code Agent';
 }
 
 function issueWithPendingServiceTier(issue, pendingServiceTiers) {

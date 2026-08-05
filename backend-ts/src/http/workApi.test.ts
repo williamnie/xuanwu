@@ -223,6 +223,29 @@ describe("Work HTTP API", () => {
     }
   });
 
+  test("derives a Work title from the goal when the title is omitted", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const router = createDefaultRouter({ database: db });
+      const response = await createRequestHandler(router, AUTH_TOKEN)(authenticatedJsonRequest("/api/works", "POST", {
+        audit: audit("work-create-without-title", "user"),
+        goal: "Investigate the failing form",
+        project_id: "demo",
+        status: "triage",
+        type: "engineering_task"
+      }));
+
+      expect(response.status).toBe(201);
+      expect((await body(response)).work).toMatchObject({
+        goal: "Investigate the failing form",
+        title: "Investigate the failing form"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("returns stable errors for illegal state, missing Work and untrusted request gate input", async () => {
     const db = await openFixtureDatabase();
     try {

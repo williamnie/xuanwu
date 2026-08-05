@@ -35,7 +35,7 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!draft.title.trim() || !draft.goal.trim() || (!editing && !draft.project_id)) {
+    if (!draft.goal.trim() || (!editing && !draft.project_id)) {
       setError(t('editor.required'));
       return;
     }
@@ -46,13 +46,14 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
       const agentProfilePatch = !editing || draft.agent_profile_id !== (work?.agent_profile_id || '')
         ? { agent_profile_id: draft.agent_profile_id }
         : {};
+      const title = draft.title.trim();
       const response = editing
         ? await workApi.updateWork(work.id, {
           audit,
           expected_revision: work.revision,
           ...agentProfilePatch,
           goal: draft.goal.trim(),
-          title: draft.title.trim(),
+          ...(title ? { title } : {}),
         })
         : await workApi.createWork({
           audit,
@@ -60,7 +61,7 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
           goal: draft.goal.trim(),
           project_id: draft.project_id,
           status: draft.status,
-          title: draft.title.trim(),
+          ...(title ? { title } : {}),
           type: 'engineering_task',
         });
       message.success(t(editing ? 'editor.updated' : 'editor.created'));
@@ -109,8 +110,8 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
             </div>
           )}
           <label>
-            <span>{t('editor.title')}</span>
-            <input autoFocus className="form-control" maxLength={180} onChange={event => setField('title', event.target.value)} required value={draft.title} />
+            <span>{t('editor.title')} <small>（可选）</small></span>
+            <input className="form-control" maxLength={180} onChange={event => setField('title', event.target.value)} placeholder="留空时根据问题首行生成" value={draft.title} />
           </label>
           <div className="work-dialog-field">
             <span>{t('work.goal')}</span>
@@ -123,7 +124,7 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
             />
           </div>
           <label>
-            <span>Agent Profile</span>
+            <span>Code Agent</span>
             <select
               className="form-control"
               disabled={profilesLoading || (editing && work.status === 'in_progress')}
@@ -133,7 +134,7 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
               <option value="">继承项目默认</option>
               {profiles.map(profile => (
                 <option key={profile.id} value={profile.id}>
-                  {profile.name} · {profile.provider} · {profile.model || 'default'}
+                  {profile.name} · {codeAgentLabel(profile.provider)} · {profile.model || 'default'}
                 </option>
               ))}
             </select>
@@ -154,6 +155,12 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
     </div>,
     document.body,
   );
+}
+
+function codeAgentLabel(provider) {
+  if (provider === 'claude') return 'Claude Code';
+  if (provider === 'pi-coding-agent') return 'Pi';
+  return provider || 'Code Agent';
 }
 
 function workEditorAudit(operation) {

@@ -5,18 +5,19 @@ import { join } from "node:path";
 import { openDatabase } from "./database.ts";
 import { listAgentProfiles } from "./repositories/agentProfiles.ts";
 
-test("seeds selectable Codex and Claude executor profiles idempotently", async () => {
+test("seeds selectable code agent profiles idempotently", async () => {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-builtin-provider-profiles-"));
   try {
     const first = await openDatabase({ stateDir: root });
     expect(listAgentProfiles(first).map((profile) => ({ id: profile.id, provider: profile.provider }))).toEqual([
       { id: "xuanwu-provider-claude", provider: "claude" },
-      { id: "xuanwu-provider-codex", provider: "codex" }
+      { id: "xuanwu-provider-codex", provider: "codex" },
+      { id: "xuanwu-provider-pi", provider: "pi-coding-agent" }
     ]);
     first.close();
 
     const second = await openDatabase({ stateDir: root });
-    expect(listAgentProfiles(second)).toHaveLength(2);
+    expect(listAgentProfiles(second)).toHaveLength(3);
     second.close();
   } finally {
     await rm(root, { recursive: true, force: true });

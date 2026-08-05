@@ -13,6 +13,13 @@ test('new Work goal uses the image-capable prompt composer', () => {
   assert.match(css, /\.work-dialog-field \.prompt-editor-shell\.composer/);
 });
 
+test('new Work makes the title optional and calls the executor choice Code Agent', () => {
+  assert.match(editorDialog, /<span>\{t\('editor\.title'\)\} <small>（可选）<\/small><\/span>/);
+  assert.doesNotMatch(editorDialog, /onChange=\{event => setField\('title', event\.target\.value\)\} required/);
+  assert.match(editorDialog, /<span>Code Agent<\/span>/);
+  assert.match(editorDialog, /provider === 'pi-coding-agent'\) return 'Pi'/);
+});
+
 test('Work Board cards restore drag and drop through guarded Issue actions', () => {
   assert.match(board, /draggable=\{!moving\}/);
   assert.match(board, /onDrop=\{event => onDrop\(event, status\)\}/);
