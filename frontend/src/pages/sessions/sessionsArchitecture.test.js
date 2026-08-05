@@ -10,6 +10,7 @@ const newSessionSource = readFileSync(new URL('./NewSessionWorkspace.jsx', impor
 const transcriptSource = readFileSync(new URL('./SessionTranscript.jsx', import.meta.url), 'utf8');
 const infoSource = readFileSync(new URL('./SessionInfoPanel.jsx', import.meta.url), 'utf8');
 const selectorsSource = readFileSync(new URL('./useSessionPageSelectors.js', import.meta.url), 'utf8');
+const composerSource = readFileSync(new URL('./SessionComposer.jsx', import.meta.url), 'utf8');
 
 test('Sessions stays an orchestration container below half of the original monolith size', () => {
   const lineCount = pageSource.split('\n').length;
@@ -41,4 +42,10 @@ test('local portal persistence selectors and reference search effects live below
   assert.match(selectorsSource, /buildSessionComposerSuggestions/);
   assert.doesNotMatch(pageSource, /searchProjectReferences/);
   assert.doesNotMatch(pageSource, /codex-pinned-sessions/);
+});
+
+test('shared session composer copy remains provider neutral', () => {
+  assert.match(composerSource, /给当前 Provider session 发送消息/);
+  assert.match(composerSource, /Provider 默认/);
+  assert.doesNotMatch(composerSource, /当前 Codex session|Codex 默认|真实 Codex 模型列表/);
 });

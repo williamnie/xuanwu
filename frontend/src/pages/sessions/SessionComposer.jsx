@@ -30,7 +30,7 @@ export default function SessionComposer({
   running,
   interruptState,
   selectedId,
-  placeholder = "给当前 Codex session 发送消息...",
+  placeholder = "给当前 Provider session 发送消息...",
   queuedMessages = [],
   followMode = true,
   onFollowModeChange = null,
@@ -329,15 +329,15 @@ function visibleEffortOptions(model, selectedValue) {
 }
 
 function modelHint(loading, error) {
-  if (loading) return '正在读取真实 Codex 模型列表';
+  if (loading) return '正在读取 Provider 模型列表';
   if (error) return `模型列表暂未加载：${error}`;
   return '模型';
 }
 
 function modelPlaceholder(loading, _error, model) {
   if (loading) return '读取模型';
-  if (!model) return 'Codex 默认';
-  return compactModelName(modelLabel(model)) || 'Codex 默认';
+  if (!model) return 'Provider 默认';
+  return compactModelName(modelLabel(model)) || 'Provider 默认';
 }
 
 function modelDisplayLabel(value, effectiveModel, models) {
