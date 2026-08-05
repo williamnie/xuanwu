@@ -140,8 +140,12 @@ async function readSession(context: SessionApiContext, rawSessionID: string) {
   if (ref.provider === "codex") reconcileCodexSessionIndex(context.database, ref.sessionId, result);
   const qualified = qualifiedProviderSession(ref.provider, result);
   const indexed = publicAgentSessionOrNull(getAgentSession(context.database, ref.key));
-  const detail = { ...(indexed ?? {}), ...qualified };
-  reconcileProviderSessionStatus(context.database, ref.provider, ref.sessionId, detail);
+  const detail = reconcileProviderSessionMetadata(
+    context.database,
+    ref.provider,
+    ref.sessionId,
+    { ...(indexed ?? {}), ...qualified }
+  );
   return await withSessionRuntimeSettings(
     context.database,
     ref.sessionId,
@@ -362,16 +366,39 @@ function completedOperationStatus(provider: ExecutorProviderId, prompt: string |
   return prompt?.trim() || turnId.trim() ? "running" : "idle";
 }
 
-function reconcileProviderSessionStatus(
+function reconcileProviderSessionMetadata(
   db: RunnerDatabase,
   provider: string,
   sessionId: string,
   detail: Record<string, unknown>
-): void {
-  if (provider === "codex" || !getAgentSession(db, `${provider}:${sessionId}`)) return;
+): Record<string, unknown> {
+  const indexed = getAgentSession(db, `${provider}:${sessionId}`);
+  if (provider === "codex" || !indexed) return detail;
   const status = stringValue(detail.status) || (detail.isRunning === true ? "running" : "");
-  if (!status) return;
-  upsertAgentSession(db, { provider, provider_session_id: sessionId, status });
+  const rawRef = correctedProviderRawRef(indexed.raw_ref, detail);
+  if (!status && !rawRef) return detail;
+  const updated = upsertAgentSession(db, {
+    provider,
+    provider_session_id: sessionId,
+    status,
+    ...(rawRef ? { raw_ref: rawRef } : {})
+  });
+  return { ...detail, raw_ref: updated.raw_ref, status: status || detail.status };
+}
+
+function correctedProviderRawRef(rawRef: string, detail: Record<string, unknown>): Record<string, unknown> | null {
+  let raw: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(rawRef) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    raw = parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  if (raw.model !== "codex-default") return null;
+  const model = stringValue(detail.model);
+  if (!model || model === "codex-default") return null;
+  return { ...raw, model };
 }
 
 function latestSessionTurnID(db: RunnerDatabase, ref: QualifiedSessionRef): string {

@@ -451,6 +451,25 @@ describe("Bun Sessions API compatibility", () => {
         status: "idle"
       });
       expect(getAgentSession(database, "pi-coding-agent:pi-created")?.raw_ref).not.toContain("codex-default");
+
+      upsertAgentSession(database, {
+        provider: "pi-coding-agent",
+        provider_session_id: "pi-legacy",
+        project_id: "xuanwu",
+        status: "running",
+        raw_ref: { model: "codex-default", approval_policy: "never" }
+      });
+      const detail = await router.handle(new Request("http://localhost/api/sessions/pi-coding-agent:pi-legacy"));
+      expect(detail.status).toBe(200);
+      const detailBody = await detail.json() as Record<string, unknown>;
+      expect(detailBody).toMatchObject({
+        model: "deepseek/deepseek-v4-flash",
+        project_id: "xuanwu",
+        status: "idle",
+        runtime_settings: { model: "deepseek/deepseek-v4-flash" }
+      });
+      expect(detailBody.raw_ref).not.toContain("codex-default");
+      expect(getAgentSession(database, "pi-coding-agent:pi-legacy")?.raw_ref).not.toContain("codex-default");
     } finally {
       database.close();
     }
@@ -754,6 +773,18 @@ class PiSessionProvider implements ExecutorProvider {
       provider: "pi-coding-agent" as const,
       provider_session_id: "pi-created",
       thread_id: "pi-created"
+    };
+  }
+
+  async readSession(sessionId: string) {
+    return {
+      id: `pi-coding-agent:${sessionId}`,
+      provider: "pi-coding-agent" as const,
+      provider_session_id: sessionId,
+      model: "deepseek/deepseek-v4-flash",
+      status: "idle",
+      isRunning: false,
+      turns: []
     };
   }
 }
