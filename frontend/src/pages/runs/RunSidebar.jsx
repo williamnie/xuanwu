@@ -89,6 +89,7 @@ export default function RunSidebar({
 function providerLabel(provider) {
   if (provider === 'codex') return 'Codex';
   if (provider === 'claude') return 'Claude';
+  if (provider === 'pi-coding-agent') return 'Pi Coding Agent';
   return provider || 'Unknown';
 }
 

@@ -106,8 +106,30 @@ export function eventSessionKey(event) {
 }
 
 export function sessionIDFromCreateResult(result) {
-  return result?.id ||
-    providerSessionKey(result?.provider || DEFAULT_SESSION_PROVIDER, result?.provider_session_id || result?.thread_id || '');
+  const provider = result?.provider || DEFAULT_SESSION_PROVIDER;
+  return providerSessionKey(provider, result?.provider_session_id || result?.thread_id || result?.id || '');
+}
+
+export function sessionFromCreateResult(result, project = null) {
+  const id = sessionIDFromCreateResult(result);
+  if (!id) return null;
+  const provider = String(result?.provider || id.split(':', 1)[0] || DEFAULT_SESSION_PROVIDER).trim();
+  const providerSessionId = String(result?.provider_session_id || result?.thread_id || id.slice(provider.length + 1) || '').trim();
+  const turnId = result?.turn_id || result?.provider_turn_id || '';
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    id,
+    provider,
+    provider_session_id: providerSessionId,
+    thread_id: providerSessionId,
+    project_id: project?.id || '',
+    cwd: project?.cwd || '',
+    preview: '',
+    status: turnId ? 'running' : 'idle',
+    isRunning: Boolean(turnId),
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 export function providerLabel(provider) {
@@ -116,6 +138,8 @@ export function providerLabel(provider) {
       return 'Codex';
     case 'claude':
       return 'Claude';
+    case 'pi-coding-agent':
+      return 'Pi Coding Agent';
     case 'opencode':
       return 'opencode';
     case 'kimicode':

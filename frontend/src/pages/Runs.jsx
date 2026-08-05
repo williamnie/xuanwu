@@ -197,33 +197,36 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
 
   return (
     <section className="runs-page-shell">
-      <RunSidebar
-        hasMore={hasMore}
-        loading={loading}
-        loadingMore={loadingMore}
-        onLoadMore={loadMore}
-        onNewProviderSession={openNewProviderSession}
-        onRefresh={() => loadFirstPage()}
-        onSelectRun={selectRun}
-        runs={runs}
-        selectedRunId={surface === 'run' ? activeRunId : ''}
-      />
+      {surface === 'run' ? (
+        <RunSidebar
+          hasMore={hasMore}
+          loading={loading}
+          loadingMore={loadingMore}
+          onLoadMore={loadMore}
+          onNewProviderSession={openNewProviderSession}
+          onRefresh={() => loadFirstPage()}
+          onSelectRun={selectRun}
+          runs={runs}
+          selectedRunId={activeRunId}
+        />
+      ) : null}
 
       {surface === 'compat-session' ? (
         <div className="run-session-surface">
           <CompatibilitySessionNotice />
           <Sessions
             autoSelectFirstSession={false}
+            keepNewSessionRoute
             navigateTo={navigateTo}
             selectedSessionId={selectedSessionId}
             showEvidence={false}
-            showSidebar={false}
+            showSidebar
           />
         </div>
       ) : surface === 'new-session' ? (
         <div className="run-session-surface">
           <NewProviderSessionNotice />
-          <Sessions autoSelectFirstSession={false} navigateTo={navigateTo} showSidebar={false} />
+          <Sessions autoSelectFirstSession={false} keepNewSessionRoute navigateTo={navigateTo} showEvidence={false} showSidebar />
         </div>
       ) : error && runs.length === 0 ? (
         <RunLoadError error={error} onRetry={() => loadFirstPage()} />

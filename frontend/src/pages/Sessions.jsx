@@ -58,6 +58,7 @@ import {
   queuedMessageId,
   readQueuedSessionMessages,
   sessionIDFromCreateResult,
+  sessionFromCreateResult,
   setSessionRunningInList,
   syncSessionRuntimeInList,
   upsertRunningSessionFromEvent,
@@ -79,6 +80,7 @@ export default function Sessions({
   selectedSessionId = '',
   showEvidence = true,
   showSidebar = true,
+  keepNewSessionRoute = false,
 }) {
   const projects = useDataStore(selectProjects);
   const refreshData = useDataStore(selectRefreshData);
@@ -749,15 +751,21 @@ export default function Sessions({
         sandbox: sessionSettings.sandbox,
       }, promptReferences));
       const newSessionId = sessionIDFromCreateResult(result);
+      const createdSession = sessionFromCreateResult(result, selectedProject);
+      if (!newSessionId || !createdSession) throw new Error('Provider session 创建成功，但响应缺少有效 session ref');
       addOptimisticUserMessage(newSessionId, prompt.trim());
       setSelectedId(newSessionId);
-      setSessionRunning(Boolean(result.turn_id));
-      setSessions((prev) => setSessionRunningInList(prev, newSessionId, Boolean(result.turn_id)));
+      setSessionRunning(Boolean(result.turn_id || result.provider_turn_id));
+      setSessions((prev) => mergeRefreshedSessions(prev, [{
+        ...createdSession,
+        preview: prompt.trim().replace(/\s+/g, ' ').slice(0, 120),
+      }]));
       setLiveEvents([]);
       setPrompt('');
       setPromptReferences([]);
       setPromptCommand(clearSessionCommandState());
-      await loadFirstPage();
+      await loadFirstPage({ preserveLoaded: true });
+      if (keepNewSessionRoute) navigateTo?.('sessions', null, newSessionId);
     } catch (err) {
       toast.error(err.message || '创建 session 失败');
     } finally {
@@ -772,12 +780,13 @@ export default function Sessions({
     setActiveView('chat');
     setLiveEvents([]);
     setSessionRunning(isSessionRunning(nextSession));
-  }, [sessions]);
+    if (keepNewSessionRoute) navigateTo?.('sessions', null, id);
+  }, [keepNewSessionRoute, navigateTo, sessions]);
 
   const openNewSession = useCallback(() => {
     ignorePropSelectionRef.current = true;
     autoSelectFirstSessionRef.current = false;
-    navigateTo?.('sessions');
+    if (!keepNewSessionRoute) navigateTo?.('sessions');
     setSelectedId('');
     setActiveView('new');
     setPrompt('');
@@ -785,7 +794,7 @@ export default function Sessions({
     setPromptCommandResult(null);
     setPromptCommandError('');
     setSessionRunning(false);
-  }, [navigateTo]);
+  }, [keepNewSessionRoute, navigateTo]);
 
   return (
     <>

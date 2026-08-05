@@ -28,6 +28,10 @@ test('Runs list uses the canonical API and provider sessions keep Run authority 
   assert.match(detailSource, /<Sessions/);
   assert.match(detailSource, /showEvidence=\{false\}/);
   assert.match(pageSource, /selectedSessionId=\{selectedSessionId\}[\s\S]*showEvidence=\{false\}/);
+  assert.match(pageSource, /surface === 'run' \? \([\s\S]*<RunSidebar/);
+  assert.match(pageSource, /surface === 'new-session' \? \([\s\S]*keepNewSessionRoute[\s\S]*showEvidence=\{false\}[\s\S]*showSidebar/);
+  assert.match(sessionsSource, /if \(keepNewSessionRoute\) navigateTo\?\.\('sessions', null, newSessionId\)/);
+  assert.match(sessionsSource, /if \(keepNewSessionRoute\) navigateTo\?\.\('sessions', null, id\)/);
   assert.match(sessionsSource, /showSidebar \? \(/);
   assert.match(sessionsSource, /observationNotice,/);
 });

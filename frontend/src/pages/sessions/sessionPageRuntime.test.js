@@ -9,7 +9,9 @@ import {
   normalizePendingApprovals,
   parseApprovalPayload,
   providerSessionKey,
+  providerLabel,
   sessionIDFromCreateResult,
+  sessionFromCreateResult,
   syncSessionRuntimeInList,
   upsertRunningSessionFromEvent,
   visibleApprovalsForSession,
@@ -20,6 +22,32 @@ test('provider session keys preserve the existing provider-prefixed identity', (
   assert.equal(providerSessionKey('codex', 'codex:thread-1'), 'codex:thread-1');
   assert.equal(eventSessionKey({ provider: 'claude', threadId: 'session-2' }), 'claude:session-2');
   assert.equal(sessionIDFromCreateResult({ provider: 'codex', thread_id: 'thread-3' }), 'codex:thread-3');
+  assert.equal(sessionIDFromCreateResult({ provider: 'pi-coding-agent', id: 'pi-session-1' }), 'pi-coding-agent:pi-session-1');
+  assert.equal(providerLabel('pi-coding-agent'), 'Pi Coding Agent');
+  const created = sessionFromCreateResult({
+    provider: 'pi-coding-agent',
+    provider_session_id: 'pi-session-1',
+    provider_turn_id: 'turn-1',
+  }, { id: 'demo', cwd: '/tmp/demo' });
+  assert.deepEqual({
+    ...created,
+    createdAt: 0,
+    updatedAt: 0,
+  }, {
+    id: 'pi-coding-agent:pi-session-1',
+    provider: 'pi-coding-agent',
+    provider_session_id: 'pi-session-1',
+    thread_id: 'pi-session-1',
+    project_id: 'demo',
+    cwd: '/tmp/demo',
+    preview: '',
+    status: 'running',
+    isRunning: true,
+    createdAt: 0,
+    updatedAt: 0,
+  });
+  assert.ok(Number.isInteger(created.createdAt));
+  assert.ok(Number.isInteger(created.updatedAt));
 });
 
 test('Claude SDK live events retain provider-qualified identity', () => {

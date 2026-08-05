@@ -36,6 +36,8 @@ function providerLabel(provider) {
       return 'Codex';
     case 'claude':
       return 'Claude';
+    case 'pi-coding-agent':
+      return 'Pi Coding Agent';
     case 'opencode':
       return 'opencode';
     case 'kimicode':
