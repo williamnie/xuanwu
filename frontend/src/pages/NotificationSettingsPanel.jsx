@@ -130,7 +130,7 @@ function NotificationChannels({ connectors }) {
       <label><CheckCircle2 size={15} color="var(--success)" /> Runner UI <small>本地通知始终可用</small></label>
       <label>
         <span className={`status-dot ${feishuReady ? 'active' : 'idle'}`} />
-        Feishu <small>{feishuReady ? '已连接' : '未配置或异常；请在 Connections 配置'}</small>
+        Feishu <small>{feishuReady ? '已连接' : '未配置或异常；请在设置 → Integrations 配置'}</small>
       </label>
     </div>
   );

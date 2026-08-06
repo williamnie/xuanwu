@@ -40,7 +40,6 @@ const Handoffs = lazy(() => import('./pages/Handoffs'));
 const PiChat = lazy(() => import('./pages/PiChat'));
 const GlobalAskComposer = lazy(() => import('./components/GlobalAskComposer'));
 const Automations = lazy(() => import('./pages/Automations'));
-const Connections = lazy(() => import('./pages/Connections'));
 const Settings = lazy(() => import('./pages/Settings'));
 
 const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
@@ -117,6 +116,7 @@ export default function App() {
     selectedSessionId,
     selectedHandoffId,
     selectedPiConversationId,
+    settingsSection,
     pageContext,
     filterProject,
     focusFilter,
@@ -236,6 +236,9 @@ export default function App() {
     const targetSessionId = resolvedPage === 'runs' && compatSessionRoute
       ? internalProviderSessionId || sessionId || ''
       : '';
+    const targetSettingsSection = resolvedPage === 'settings'
+      ? String(navigationOptions?.settingsSection || 'general').trim()
+      : '';
     const targetRoute = {
       currentPage: resolvedPage,
       selectedHandoffId: targetHandoffId,
@@ -244,6 +247,7 @@ export default function App() {
       selectedRunId: targetRunId,
       selectedSessionId: targetSessionId,
       selectedWorkId: targetWorkId,
+      settingsSection: targetSettingsSection,
     };
     updateAppState(draft => {
       if (draft.currentPage !== resolvedPage) {
@@ -259,11 +263,16 @@ export default function App() {
         draft.selectedRunId = targetRunId;
         draft.selectedSessionId = targetSessionId;
       }
+      draft.settingsSection = targetSettingsSection;
       draft.selectedHandoffId = targetHandoffId;
       draft.pageContext = null;
     });
     writeBrowserRoute(targetRoute);
   }, [selectedPiConversationId, updateAppState, writeBrowserRoute]);
+
+  const navigateToSettingsSection = useCallback((section) => {
+    navigateTo('settings', null, '', '', { settingsSection: section });
+  }, [navigateTo]);
 
   const setPageContext = useCallback((context) => {
     updateAppState(draft => {
@@ -313,6 +322,7 @@ export default function App() {
         draft.selectedPiConversationId = route.selectedPiConversationId;
         draft.selectedRunId = route.selectedRunId;
         draft.selectedSessionId = route.selectedSessionId;
+        draft.settingsSection = route.settingsSection;
         draft.selectedWorkId = route.selectedWorkId;
         draft.pageContext = null;
       });
@@ -468,13 +478,11 @@ export default function App() {
                 onConversationChange={rememberPiConversation}
               />
             ) : isAssistantModulePage(currentPage) ? (
-              <Settings initialTab={assistantModule?.tab} navigateTo={navigateTo} />
+              <Settings initialTab={assistantModule?.tab} navigateTo={navigateTo} onSectionChange={navigateToSettingsSection} />
             ) : currentPage === 'automations' ? (
               <Automations />
-            ) : currentPage === 'connections' ? (
-              <Connections />
             ) : currentPage === 'settings' ? (
-              <Settings navigateTo={navigateTo} />
+              <Settings initialTab={settingsSection || 'general'} navigateTo={navigateTo} onSectionChange={navigateToSettingsSection} />
             ) : (
               <Dashboard navigateTo={navigateTo} />
             )}

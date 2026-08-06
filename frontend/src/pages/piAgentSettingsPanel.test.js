@@ -7,7 +7,7 @@ const panelStylesSource = readFileSync(new URL('./PiAgentSettingsPanel.css', imp
 const stateSource = readFileSync(new URL('./piAgentSettingsState.js', import.meta.url), 'utf8');
 const assistantSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
 
-test('PI Agent Settings exposes runtime prompt summary debug without secret echo', () => {
+test('Xuanwu Supervisor Settings exposes runtime prompt summary debug without secret echo', () => {
   assert.match(panelSource, /当前生效 Prompt 摘要/);
   assert.match(panelSource, /不回显 API key\/token/);
   assert.match(panelSource, /Custom instructions:/);
@@ -18,7 +18,7 @@ test('PI Agent Settings exposes runtime prompt summary debug without secret echo
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
 });
 
-test('PI Agent Settings exposes revisioned presentation-only Chat Persona controls', () => {
+test('Xuanwu Supervisor Settings exposes revisioned presentation-only Chat Persona controls', () => {
   assert.match(panelSource, /Chat 表达风格/);
   assert.match(panelSource, /只对 chat profile 的最终回复生效/);
   assert.match(panelSource, /不改变权限、审批、工具调用、Issue 状态和完成判定/);
@@ -36,7 +36,7 @@ test('PI Agent Settings exposes revisioned presentation-only Chat Persona contro
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
 });
 
-test('PI Agent Settings exposes OpenAI Codex OAuth and user agent controls', () => {
+test('Xuanwu Supervisor Settings exposes OpenAI Codex OAuth and user agent controls', () => {
   assert.match(panelSource, /Codex OAuth/);
   assert.match(panelSource, /复制登录地址/);
   assert.match(panelSource, /state\.oauthStatus\?\.auth_url/);
@@ -53,14 +53,14 @@ test('PI Agent Settings exposes OpenAI Codex OAuth and user agent controls', () 
   assert.match(assistantSource, /\/api\/pi\/oauth\/openai-codex\/login/);
 });
 
-test('Connections provider view uses recommended cards, connection state, and discovered models', () => {
+test('Supervisor page uses recommended provider cards, connection state, and discovered models', () => {
   assert.match(panelSource, /import '\.\/PiAgentSettingsPanel\.css'/);
   assert.match(panelStylesSource, /\.provider-preset-grid/);
   assert.match(panelStylesSource, /\.provider-preset-card\.selected/);
   assert.match(panelStylesSource, /\.provider-recommended-config/);
   assert.match(panelStylesSource, /\.provider-advanced-disclosure/);
-  assert.match(panelSource, /view === 'connection'/);
-  assert.match(panelSource, /return <ProviderConnectionSettings state=\{state\} \/>/);
+  assert.match(panelSource, /title="模型与 Provider"/);
+  assert.match(panelSource, /<ProviderConnectionSettings state=\{state\} \/>/);
   assert.match(panelSource, /ProviderPresetCards/);
   assert.match(panelSource, /provider-connection-chip/);
   assert.match(panelSource, /测试连接并发现模型/);
@@ -69,7 +69,7 @@ test('Connections provider view uses recommended cards, connection state, and di
   assert.match(panelSource, /自定义 \/ 高级 Provider/);
   assert.match(panelSource, /仅在接入自定义网关、代理或兼容 API 时使用/);
   assert.match(panelSource, /<AdvancedProviderDisclosure state=\{state\} \/>/);
-  assert.doesNotMatch(panelSource, /Connections · Custom Provider/);
+  assert.doesNotMatch(panelSource, /Connections/);
   assert.match(stateSource, /getPiProviderCatalog/);
   assert.match(stateSource, /testPiProviderConnection/);
   assert.match(stateSource, /getPiProviderModels/);
@@ -87,10 +87,10 @@ test('Connections provider view uses recommended cards, connection state, and di
   assert.doesNotMatch(connectionSaveSource, /saveAgent\(/);
 });
 
-test('Connections PI Agent registers a newly discovered model without rewriting provider credentials', () => {
-  assert.match(panelSource, /view === 'agent'/);
+test('Supervisor behavior registers a newly discovered model without rewriting provider credentials', () => {
+  assert.match(panelSource, /title="Supervisor 行为"/);
   assert.match(panelSource, /<SupervisorBehaviorSettings state=\{state\} \/>/);
-  assert.match(panelSource, /provider 凭据和连接测试统一在 Connections 管理/);
+  assert.match(panelSource, /模型连接、Supervisor 行为与工具授权/);
   assert.match(panelSource, /state\.handleAgentSave/);
   assert.match(stateSource, /savePiSupervisorSettings/);
   const agentSaveStart = stateSource.indexOf('async function savePiSupervisorSettings');
@@ -117,7 +117,7 @@ test('Supervisor settings no longer expose multi-agent creation controls', () =>
   assert.match(panelSource, /自定义 \/ 高级 Provider/);
   assert.doesNotMatch(panelSource, /PI Assistant/);
   assert.doesNotMatch(panelSource, /Runner Brain/);
-  assert.match(panelSource, /配置唯一 Supervisor/);
+  assert.match(panelSource, /Xuanwu Supervisor/);
   assert.doesNotMatch(panelSource, /label="Agent ID"/);
   assert.doesNotMatch(panelSource, /Runner Agent Settings/);
   assert.doesNotMatch(stateSource, /assistantApi\.createPiAgent/);

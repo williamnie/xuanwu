@@ -3,11 +3,12 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const panelSource = readFileSync(new URL('./FeishuSettingsPanel.jsx', import.meta.url), 'utf8');
-const connectionsSource = readFileSync(new URL('./Connections.jsx', import.meta.url), 'utf8');
+const settingsSectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
 const connectorsSource = readFileSync(new URL('../api/connectors.js', import.meta.url), 'utf8');
 
-test('Connections exposes a Feishu bot configuration panel backed by integration settings API', () => {
-  assert.match(connectionsSource, /FeishuSettingsPanel/);
+test('Settings Integrations exposes a Feishu bot configuration panel backed by integration settings API', () => {
+  assert.match(settingsSectionsSource, /<FeishuSettingsPanel \/>/);
+  assert.match(settingsSectionsSource, /IntegrationsSettingsTab/);
   assert.match(panelSource, /飞书 Bot/);
   assert.match(panelSource, /长连接/);
   assert.match(panelSource, /无需公网域名/);

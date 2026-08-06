@@ -4,11 +4,12 @@ import assert from 'node:assert/strict';
 import { mcpServerLifecycleStates } from '../utils/mcpLifecycle.js';
 
 const panelSource = readFileSync(new URL('./PiMcpManagementPanel.jsx', import.meta.url), 'utf8');
-const connectionsSource = readFileSync(new URL('./Connections.jsx', import.meta.url), 'utf8');
+const settingsSectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
 const connectorsSource = readFileSync(new URL('../api/connectors.js', import.meta.url), 'utf8');
 
-test('Connections exposes MCP discovery and enablement management without secret echo', () => {
-  assert.match(connectionsSource, /PiMcpManagementPanel/);
+test('Supervisor Settings exposes MCP discovery and enablement management without secret echo', () => {
+  assert.match(settingsSectionsSource, /<PiMcpManagementPanel embedded \/>/);
+  assert.match(settingsSectionsSource, /工具与 MCP/);
   assert.match(panelSource, /Detected MCP servers/);
   assert.match(panelSource, /Manual MCP servers/);
   assert.match(panelSource, /Capabilities/);

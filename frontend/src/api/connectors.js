@@ -7,12 +7,12 @@ export const connectorsApi = {
 
   testPiConnector: (id) => request(`/api/pi/connectors/${encodeURIComponent(id)}/test-connection`, {
     method: 'POST',
-    body: JSON.stringify({ reason: 'Connections test' }),
+    body: JSON.stringify({ reason: 'Settings integration test' }),
   }),
 
   revokePiConnectorSecret: (id, secretRef) => request(`/api/pi/connectors/${encodeURIComponent(id)}/revoke`, {
     method: 'POST',
-    body: JSON.stringify({ reason: 'Connections revoke', secret_ref: secretRef }),
+    body: JSON.stringify({ reason: 'Settings integration revoke', secret_ref: secretRef }),
   }),
 
   getFeishuSettings: () => request('/api/integrations/feishu/settings'),

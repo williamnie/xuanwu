@@ -13,7 +13,7 @@ test('round-trips product pages and their selected entity parameters', () => {
     { currentPage: 'runs', selectedRunId: 'xw:run:issue_runs:issue-917-attempt-2' },
     { currentPage: 'runs', selectedSessionId: '019fc000-1111-7222-8333-123456789abc' },
     { currentPage: 'ask-xuanwu', selectedPiConversationId: 'pi:conversation/917' },
-    { currentPage: 'connections' },
+    { currentPage: 'settings', settingsSection: 'supervisor' },
     { currentPage: 'pi-memory' },
   ];
 
@@ -22,6 +22,11 @@ test('round-trips product pages and their selected entity parameters', () => {
     assert.equal(parsed.currentPage, route.currentPage);
     for (const [key, value] of Object.entries(route)) assert.equal(parsed[key], value);
   }
+});
+
+test('retired Connections route is not routable and Settings sections are canonical', () => {
+  assert.deepEqual(appRouteFromHash('#/connections'), DEFAULT_APP_ROUTE);
+  assert.equal(appHashForRoute({ currentPage: 'settings', settingsSection: 'integrations' }), '#/settings?section=integrations');
 });
 
 test('keeps existing Handoff deep links compatible', () => {

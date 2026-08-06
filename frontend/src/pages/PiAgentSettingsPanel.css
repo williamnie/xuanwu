@@ -1,3 +1,79 @@
+.supervisor-settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.supervisor-settings-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+}
+
+.supervisor-settings-header .settings-entry-eyebrow {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.supervisor-settings-header h2 {
+  font-size: 1.35rem;
+  letter-spacing: -0.025em;
+  margin: 5px 0 0;
+}
+
+.supervisor-settings-header p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 7px 0 0;
+  max-width: 760px;
+}
+
+.supervisor-readiness {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.supervisor-readiness-item {
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px 12px;
+}
+
+.supervisor-readiness-item.ready {
+  background: color-mix(in srgb, var(--success) 7%, var(--bg-secondary));
+  border-color: color-mix(in srgb, var(--success) 24%, var(--border-light));
+  color: var(--success);
+}
+
+.supervisor-readiness-item > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.supervisor-readiness-item small {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.supervisor-readiness-item strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .provider-preset-grid {
   display: grid;
   gap: 12px;
@@ -324,6 +400,15 @@
 .persona-profile-badge { color: var(--text-muted); font-size: 0.76rem; }
 
 @media (max-width: 720px) {
+  .supervisor-settings-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .supervisor-readiness {
+    grid-template-columns: 1fr;
+  }
+
   .provider-preset-grid {
     grid-template-columns: 1fr;
   }

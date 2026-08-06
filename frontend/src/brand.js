@@ -14,7 +14,6 @@ export const PRODUCT_NAV_LABELS = Object.freeze({
   runs: 'Runs',
   automations: 'Automations',
   projects: 'Projects',
-  connections: 'Connections',
   settings: 'Settings',
 });
 

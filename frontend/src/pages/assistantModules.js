@@ -38,13 +38,6 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
     availability: 'compatibility',
   },
   {
-    page: 'connections',
-    label: PRODUCT_NAV_LABELS.connections,
-    icon: 'connections',
-    placement: 'primary',
-    availability: 'available',
-  },
-  {
     page: 'settings',
     label: PRODUCT_NAV_LABELS.settings,
     icon: 'settings',
@@ -61,7 +54,6 @@ export const PRODUCT_COMPAT_ROUTE_REDIRECTS = Object.freeze({
   cron: 'automations',
   'pi-automations': 'automations',
   'pi-approvals': 'command-center',
-  'pi-connectors': 'connections',
   'attention-inbox': 'command-center',
   'pi-inbox': 'command-center',
   projects: 'settings',
@@ -84,20 +76,6 @@ export function productNavPageForRoute(page) {
 }
 
 export const PI_ASSISTANT_CONFIG_MODULES = [
-  {
-    page: 'pi-overview',
-    tab: 'assistant',
-    label: 'Overview',
-    title: 'Overview',
-    description: '唯一 Xuanwu Supervisor 的管理中心，集中展示 runtime 配置、能力边界与入口。'
-  },
-  {
-    page: 'pi-connectors',
-    tab: 'connectors',
-    label: 'Connectors',
-    title: 'Connectors',
-    description: '管理外部来源、tool provider 与只读健康诊断，不把具体来源硬编码进核心 runtime。'
-  },
   {
     page: 'pi-skills',
     tab: 'skills',

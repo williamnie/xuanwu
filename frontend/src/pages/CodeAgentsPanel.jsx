@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, CircleAlert, Power, RefreshCw, Terminal } from 'lucide-react';
 import { systemApi } from '../api/system.js';
+import './CodeAgentsPanel.css';
 
 const AGENT_DESCRIPTIONS = Object.freeze({
   codex: 'Codex CLI / Codex App 执行器',
@@ -41,7 +42,7 @@ export default function CodeAgentsPanel() {
     <section className="code-agents-panel">
       <header className="code-agents-header">
         <div>
-          <span className="connections-kicker"><Terminal size={14} /> Execution runtimes</span>
+          <span className="code-agents-kicker"><Terminal size={14} /> Execution runtimes</span>
           <h2>Code Agents</h2>
           <p>自动探测本机已注册的代码执行器。只有已启用且可用的 Agent 才会出现在新建 Issue、Work、Project 和 Profile 的选择器中。</p>
         </div>

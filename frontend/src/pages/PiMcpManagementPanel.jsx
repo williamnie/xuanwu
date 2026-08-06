@@ -7,13 +7,13 @@ import { mcpServerLifecycleStates } from '../utils/mcpLifecycle.js';
 const emptyForm = { args: '', command: '', envKeys: '', name: '' };
 const redactedText = '[redacted]';
 
-export default function PiMcpManagementPanel() {
+export default function PiMcpManagementPanel({ embedded = false }) {
   const state = useMcpManagementState();
   const detected = state.servers.filter((server) => server.source !== 'manual');
   const manual = state.servers.filter((server) => server.source === 'manual');
   return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <PanelHeader loading={state.loading} onRefresh={state.loadAll} onScan={state.scan} scanning={state.scanning} />
+    <section className={embedded ? 'pi-mcp-management-panel' : 'glass-card'} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <PanelHeader embedded={embedded} loading={state.loading} onRefresh={state.loadAll} onScan={state.scan} scanning={state.scanning} />
       <Notice error={state.error} />
       <Sources sources={state.sources} />
       <ServerGroup title="Detected MCP servers" servers={detected} state={state} />
@@ -48,13 +48,14 @@ function useMcpManagementState() {
   return { addManualServer, approvalGrants, capabilities, error, form, forgetServer, introspectServer, loadAll, loading, revokeGrant, saving, scan, scanning, servers, setApprovalMode, setForm, sources, toggleCapability, toggleServer };
 }
 
-function PanelHeader({ loading, onRefresh, onScan, scanning }) {
+function PanelHeader({ embedded, loading, onRefresh, onScan, scanning }) {
+  const Heading = embedded ? 'h3' : 'h2';
   return (
     <div style={{ alignItems: 'flex-start', display: 'flex', gap: '12px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
       <div>
-        <h2 style={{ alignItems: 'center', display: 'flex', fontSize: '1.1rem', fontWeight: 700, gap: '8px' }}>
+        <Heading style={{ alignItems: 'center', display: 'flex', fontSize: '1.1rem', fontWeight: 700, gap: '8px' }}>
           <PlugZap size={18} color="var(--primary)" /> MCP discovery & access
-        </h2>
+        </Heading>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
           发现不等于启用；Supervisor 只会使用你显式启用的 server 和 capability，secret/env/header 始终显示为 {redactedText}。
         </p>

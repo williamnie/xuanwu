@@ -20,7 +20,6 @@ const EXPECTED_PAGES = [
   'work',
   'runs',
   'automations',
-  'connections',
   'settings',
 ];
 
@@ -52,7 +51,6 @@ test('legacy page ids redirect into canonical product routes without replacing h
     cron: 'automations',
     'pi-automations': 'automations',
     'pi-approvals': 'command-center',
-    'pi-connectors': 'connections',
     'attention-inbox': 'command-center',
     'pi-inbox': 'command-center',
     projects: 'settings',
@@ -82,8 +80,8 @@ test('App routes canonical pages to the currently verified compatibility surface
   assert.match(appSource, /currentPage === 'command-center'[\s\S]*<Dashboard navigateTo=\{navigateTo\} \/>/);
   assert.match(appSource, /currentPage === 'ask-xuanwu'[\s\S]*<PiChat[\s\S]*initialConversationId=\{selectedPiConversationId\}[\s\S]*onConversationChange=\{rememberPiConversation\}/);
   assert.match(appSource, /currentPage === 'automations'[\s\S]*<Automations \/>/);
-  assert.match(appSource, /const Connections = lazy\(\(\) => import\('\.\/pages\/Connections'\)\)/);
-  assert.match(appSource, /currentPage === 'connections'[\s\S]*<Connections \/>/);
+  assert.doesNotMatch(appSource, /pages\/Connections|currentPage === 'connections'/);
+  assert.match(appSource, /currentPage === 'settings'[\s\S]*settingsSection \|\| 'general'/);
   assert.doesNotMatch(appSource, /currentPage === 'projects'|<Projects/);
   assert.doesNotMatch(appSource, /AttentionInbox|currentPage === 'attention-inbox'|currentPage === 'pi-inbox'/);
 });

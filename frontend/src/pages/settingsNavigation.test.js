@@ -7,14 +7,17 @@ import {
   settingsRouteId,
 } from './settingsNavigation.js';
 
-test('Settings exposes behavior tabs and keeps runtime details in Advanced', () => {
+test('Settings exposes runtime configuration tabs and keeps diagnostics in Advanced', () => {
   assert.deepEqual(SETTINGS_PRIMARY_TABS.map(tab => tab.label), [
     'Projects',
+    'Xuanwu Supervisor',
+    'Code Agents',
+    'Integrations',
     'Permissions',
     'Notifications',
   ]);
   assert.deepEqual(SETTINGS_ADVANCED_TABS.map(tab => tab.id), [
-    'runtime',
+    'diagnostics',
     'skills',
     'memory',
     'activity',
@@ -22,12 +25,15 @@ test('Settings exposes behavior tabs and keeps runtime details in Advanced', () 
   ]);
 });
 
-test('Settings migrates configuration tabs but excludes product work queues', () => {
+test('Settings accepts only current configuration sections', () => {
+  assert.deepEqual(resolveSettingsRoute('supervisor'), { tier: 'primary', tab: 'supervisor' });
+  assert.deepEqual(resolveSettingsRoute('code-agents'), { tier: 'primary', tab: 'code-agents' });
+  assert.deepEqual(resolveSettingsRoute('integrations'), { tier: 'primary', tab: 'integrations' });
   assert.deepEqual(resolveSettingsRoute('assistant'), { tier: 'primary', tab: 'general' });
-  assert.deepEqual(resolveSettingsRoute('runner-brain'), { tier: 'advanced', tab: 'runtime' });
-  assert.deepEqual(resolveSettingsRoute('connections'), { tier: 'product', tab: 'connections' });
-  assert.deepEqual(resolveSettingsRoute('connectors'), { tier: 'product', tab: 'connections' });
-  assert.deepEqual(resolveSettingsRoute('advanced:model-runtime'), { tier: 'product', tab: 'connections' });
+  assert.deepEqual(resolveSettingsRoute('runner-brain'), { tier: 'primary', tab: 'general' });
+  assert.deepEqual(resolveSettingsRoute('connections'), { tier: 'primary', tab: 'general' });
+  assert.deepEqual(resolveSettingsRoute('connectors'), { tier: 'primary', tab: 'general' });
+  assert.deepEqual(resolveSettingsRoute('advanced:model-runtime'), { tier: 'primary', tab: 'general' });
   assert.deepEqual(resolveSettingsRoute('skills'), { tier: 'advanced', tab: 'skills' });
   assert.deepEqual(resolveSettingsRoute('automations'), { tier: 'primary', tab: 'general' });
   assert.deepEqual(resolveSettingsRoute('approvals'), { tier: 'primary', tab: 'general' });
@@ -37,9 +43,9 @@ test('Settings migrates configuration tabs but excludes product work queues', ()
 });
 
 test('Settings canonical routes round-trip and unknown routes fail safe to Projects', () => {
-  const advanced = resolveSettingsRoute('advanced:runtime');
-  assert.deepEqual(advanced, { tier: 'advanced', tab: 'runtime' });
-  assert.equal(settingsRouteId(advanced), 'advanced:runtime');
+  const advanced = resolveSettingsRoute('advanced:diagnostics');
+  assert.deepEqual(advanced, { tier: 'advanced', tab: 'diagnostics' });
+  assert.equal(settingsRouteId(advanced), 'advanced:diagnostics');
   assert.equal(settingsRouteId(resolveSettingsRoute('notifications')), 'notifications');
   assert.deepEqual(resolveSettingsRoute('unknown'), { tier: 'primary', tab: 'general' });
 });

@@ -26,6 +26,7 @@ export const DEFAULT_APP_ROUTE = Object.freeze({
   selectedRunId: '',
   selectedSessionId: '',
   selectedWorkId: '',
+  settingsSection: '',
 });
 
 export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
@@ -79,6 +80,9 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
   if (currentPage === 'ask-xuanwu') {
     route.selectedPiConversationId = routeParam(params, 'conversationId');
   }
+  if (currentPage === 'settings') {
+    route.settingsSection = routeParam(params, 'section');
+  }
 
   return route;
 }
@@ -110,6 +114,10 @@ export function appHashForRoute(route) {
   if (page === 'ask-xuanwu') {
     const conversationId = cleanRouteValue(route?.selectedPiConversationId);
     if (conversationId) params.set('conversationId', conversationId);
+  }
+  if (page === 'settings') {
+    const section = cleanRouteValue(route?.settingsSection);
+    if (section) params.set('section', section);
   }
 
   const query = params.toString();

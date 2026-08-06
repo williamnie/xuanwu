@@ -10,26 +10,24 @@ import { buildRuntimeDiagnosticsBundle, formatRuntimeDiagnosticsBundle } from '.
 import { APP_VERSION, buildVersionSummary } from '../version';
 import SettingsTabContent from './AssistantSettingsSections';
 import { SettingsHeader } from './SettingsChrome';
-import { resolveSettingsRoute } from './settingsNavigation';
+import { resolveSettingsRoute, settingsRouteId } from './settingsNavigation';
 import './Settings.css';
 
-export default function Settings({ initialTab = 'general', navigateTo, pageTitle }) {
+export default function Settings({ initialTab = 'general', navigateTo, onSectionChange, pageTitle }) {
   const [route, setRoute] = useState(() => resolveSettingsRoute(initialTab));
 
   useEffect(() => {
-    const nextRoute = resolveSettingsRoute(initialTab);
-    if (nextRoute.tier === 'product') {
-      navigateTo?.(nextRoute.tab);
-      return;
-    }
-    setRoute(nextRoute);
-  }, [initialTab, navigateTo]);
+    setRoute(resolveSettingsRoute(initialTab));
+  }, [initialTab]);
 
-  if (route.tier === 'product') return null;
+  const handleRouteChange = (nextRoute) => {
+    setRoute(nextRoute);
+    onSectionChange?.(settingsRouteId(nextRoute));
+  };
 
   return (
     <div className="settings-page animate-fade-in">
-      <SettingsHeader onRouteChange={setRoute} route={route} title={pageTitle} />
+      <SettingsHeader onRouteChange={handleRouteChange} route={route} title={pageTitle} />
       <div className="settings-tab-content" role="tabpanel">
         <SettingsTabContent activeTab={route.tab} tier={route.tier} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />
       </div>

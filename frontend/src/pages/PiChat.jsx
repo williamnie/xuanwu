@@ -111,7 +111,7 @@ function PiChatSidebarHeader({ loading, navigateTo, onRefresh }) {
         <button className="pi-chat-icon-button" onClick={onRefresh} disabled={loading} title={t('chat.refresh')}>
           <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
         </button>
-        <button className="pi-chat-icon-button" onClick={() => navigateTo('connections')} title={t('chat.openConnections')}>
+        <button className="pi-chat-icon-button" onClick={() => openSupervisorSettings(navigateTo)} title={t('chat.openSupervisorSettings')}>
           <Settings2 size={15} />
         </button>
       </div>
@@ -369,7 +369,7 @@ function AgentStatus({ agent }) {
         <AlertTriangle size={14} />
         <div>
           <strong>{t('chat.notConnected')}</strong>
-          <span>{t('chat.configureConnections')}</span>
+          <span>{t('chat.configureSupervisor')}</span>
         </div>
       </div>
     );
@@ -379,7 +379,7 @@ function AgentStatus({ agent }) {
       {agent.enabled ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
       <div>
         <strong>{agent.enabled ? t('chat.connected') : t('chat.agentUnavailable')}</strong>
-        <span>{agent.enabled ? t('chat.ready') : t('chat.checkConnections')}</span>
+        <span>{agent.enabled ? t('chat.ready') : t('chat.checkSupervisorSettings')}</span>
       </div>
     </div>
   );
@@ -410,7 +410,7 @@ function ChatErrorState({ error, navigateTo, onRetry }) {
         >
           <Copy size={14} /> {t('chat.copyDebug')}
         </button>
-        <button className="btn btn-secondary" onClick={() => navigateTo('connections')} type="button">{t('chat.openConnections')}</button>
+        <button className="btn btn-secondary" onClick={() => openSupervisorSettings(navigateTo)} type="button">{t('chat.openSupervisorSettings')}</button>
       </div>
     </div>
   );
@@ -433,9 +433,13 @@ function EmptyChat({ hasRuntime, navigateTo, onPromptSelect }) {
           ))}
         </div>
       )}
-      {!hasRuntime && <button className="btn btn-secondary" onClick={() => navigateTo('connections')}>{t('chat.openConnections')}</button>}
+      {!hasRuntime && <button className="btn btn-secondary" onClick={() => openSupervisorSettings(navigateTo)}>{t('chat.openSupervisorSettings')}</button>}
     </div>
   );
+}
+
+function openSupervisorSettings(navigateTo) {
+  navigateTo('settings', null, '', '', { settingsSection: 'supervisor' });
 }
 
 function ChatBubble({ conversation, item }) {

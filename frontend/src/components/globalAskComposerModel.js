@@ -9,7 +9,6 @@ const PAGE_LABELS = {
   'ask-xuanwu': 'Ask Xuanwu',
   automations: 'Automations',
   'command-center': 'Command Center',
-  connections: 'Connections',
   handoffs: 'Handoffs',
   issues: 'Work',
   projects: 'Projects',

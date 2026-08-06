@@ -34,7 +34,7 @@ function SettingsNavigation({ onRouteChange, route }) {
   const toggleAdvanced = () => {
     onRouteChange(advanced
       ? { tier: 'primary', tab: lastPrimaryTab.current }
-      : { tier: 'advanced', tab: 'runtime' });
+      : { tier: 'advanced', tab: 'diagnostics' });
   };
 
   return (

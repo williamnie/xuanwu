@@ -4,37 +4,82 @@ import { PanelLoader } from '../components/TurtleLoader';
 import { usePiAgentSettingsState } from './piAgentSettingsState';
 import './PiAgentSettingsPanel.css';
 
-export default function PiAgentSettingsPanel({ view = 'agent' }) {
+export default function PiAgentSettingsPanel() {
   const state = usePiAgentSettingsState();
 
   return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <PanelHeader loading={state.loading} onRefresh={state.loadSettings} view={view} />
+    <section className="glass-card supervisor-settings-panel">
+      <PanelHeader loading={state.loading} onRefresh={state.loadSettings} />
       {state.loading ? (
         <PanelLoader label="玄武正在读取 Supervisor 配置…" />
       ) : (
-        <PiSettingsForm state={state} view={view} />
+        <SupervisorSettingsForm state={state} />
       )}
     </section>
   );
 }
 
-function PiSettingsForm({ state, view }) {
-  if (view === 'connection') return <ProviderConnectionSettings state={state} />;
-  if (view === 'agent') return <SupervisorBehaviorSettings state={state} />;
-  return <SupervisorBehaviorSettings state={state} />;
+function SupervisorSettingsForm({ state }) {
+  return (
+    <>
+      <SupervisorReadiness state={state} />
+      <ConfigurationStage
+        description="连接用于 Supervisor 推理的模型服务，测试凭据并从远端发现可用模型。"
+        index="01"
+        title="模型与 Provider"
+      >
+        <ProviderConnectionSettings state={state} />
+      </ConfigurationStage>
+      <ConfigurationStage
+        description="选择已保存的 Provider 和模型，配置玄武的身份、thinking、运行指令与对话表达。"
+        index="02"
+        title="Supervisor 行为"
+      >
+        <SupervisorBehaviorSettings state={state} />
+      </ConfigurationStage>
+    </>
+  );
+}
+
+function SupervisorReadiness({ state }) {
+  const providerSaved = Boolean(state.selectedProvider);
+  const modelSelected = Boolean(state.form.modelProvider.trim() && state.form.modelId.trim());
+  return (
+    <div className="supervisor-readiness" aria-label="Supervisor readiness">
+      <ReadinessItem label="Provider" ready={providerSaved} value={providerSaved ? '已保存' : '待配置'} />
+      <ReadinessItem label="Model" ready={modelSelected} value={modelSelected ? `${state.form.modelProvider} · ${state.form.modelId}` : '待选择'} />
+      <ReadinessItem label="Supervisor" ready={state.form.enabled} value={state.form.enabled ? '已启用' : '已停用'} />
+    </div>
+  );
+}
+
+function ReadinessItem({ label, ready, value }) {
+  return (
+    <div className={`supervisor-readiness-item ${ready ? 'ready' : ''}`}>
+      {ready ? <CheckCircle2 size={16} /> : <CircleDashed size={16} />}
+      <span><small>{label}</small><strong>{value}</strong></span>
+    </div>
+  );
+}
+
+function ConfigurationStage({ children, description, index, title }) {
+  return (
+    <section className="settings-configuration-stage">
+      <header className="settings-stage-header">
+        <span>{index}</span>
+        <div>
+          <h3>{title}</h3>
+          <p>{description}</p>
+        </div>
+      </header>
+      <div className="settings-stage-content">{children}</div>
+    </section>
+  );
 }
 
 function SupervisorBehaviorSettings({ state }) {
   return (
     <>
-      <div className="provider-advanced-heading">
-        <Bot size={17} />
-        <div>
-          <strong>Supervisor behavior</strong>
-          <span>选择已经配置的 provider/model，并维护名称、thinking 与运行指令；连接凭据统一在 Connections 管理。</span>
-        </div>
-      </div>
       <SupervisorSettingsGrid state={state} />
       <Field label="Runtime Instructions">
         <textarea className="form-control" rows={4} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
@@ -278,16 +323,16 @@ function providerCardStatus(state, preset) {
   return { Icon: CircleDashed, label: '未连接', tone: 'idle' };
 }
 
-function PanelHeader({ loading, onRefresh, view }) {
-  const copy = panelHeaderCopy(view);
+function PanelHeader({ loading, onRefresh }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+    <div className="supervisor-settings-header">
       <div>
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Bot size={18} color="var(--primary)" /> {copy.title}
+        <span className="settings-entry-eyebrow"><Bot size={14} /> Guardian runtime</span>
+        <h2>
+          Xuanwu Supervisor
         </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-          {copy.description}
+        <p>
+          用一个连续页面完成模型连接、Supervisor 行为与工具授权；每个区块仍按自己的 authority 独立保存。
         </p>
       </div>
       <button className="btn btn-secondary" onClick={onRefresh} disabled={loading}>
@@ -295,19 +340,6 @@ function PanelHeader({ loading, onRefresh, view }) {
       </button>
     </div>
   );
-}
-
-function panelHeaderCopy(view) {
-  if (view === 'connection') {
-    return {
-      title: 'AI Providers',
-      description: '配置 OpenAI、Codex、Anthropic 或兼容 provider 的凭据、可用模型与连接测试。',
-    };
-  }
-  return {
-    title: 'PI Agent',
-    description: '配置唯一 Supervisor 的模型选择、thinking 与运行指令；provider 凭据和连接测试统一在 Connections 管理。',
-  };
 }
 
 function Field({ children, label }) {

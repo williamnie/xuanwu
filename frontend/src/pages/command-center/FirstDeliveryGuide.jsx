@@ -178,8 +178,8 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
       {!state.completed ? (
         <div className="first-delivery-actions">
           {!state.steps[1].complete ? (
-            <ActionCard title="连接 Agent" description="在 Connections → AI Providers 中选择推荐连接、测试并保存。">
-              <button className="btn btn-primary" onClick={() => navigateTo('connections')} type="button"><Settings2 size={14} /> 打开连接向导</button>
+            <ActionCard title="配置玄武" description="在设置 → Xuanwu Supervisor 中选择 Provider、测试连接并保存。">
+              <button className="btn btn-primary" onClick={() => navigateTo('settings', null, '', '', { settingsSection: 'supervisor' })} type="button"><Settings2 size={14} /> 打开 Supervisor 设置</button>
             </ActionCard>
           ) : null}
           {state.steps[1].complete && !state.steps[2].complete ? (

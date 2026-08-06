@@ -43,7 +43,7 @@ function PanelHeader({ loading, onRefresh }) {
     <div style={{ alignItems: 'center', display: 'flex', gap: '16px', justifyContent: 'space-between' }}>
       <div>
         <h2 style={{ alignItems: 'center', display: 'flex', fontSize: '1.1rem', fontWeight: 700, gap: '8px' }}>
-          <Cable size={18} color="var(--primary)" /> Connections
+          <Cable size={18} color="var(--primary)" /> Integration health
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
           查看 Feishu、Git、Tracker、Webhook 与本地 connector 的配置健康；测试和撤销均使用现有受审计 API。

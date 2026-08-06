@@ -12,7 +12,7 @@ test('connection configure guides reuse declared secret refs and existing provid
   const webhook = configureGuide({ id: 'webhook', secret_refs: [{ ref: 'env://XUANWU_WEBHOOK_SIGNING_SECRET' }] });
 
   assert.match(github.title, /Git provider/);
-  assert.match(github.body, /不在 Connections 创建第二份 token/);
+  assert.match(github.body, /不在 Integrations 创建第二份 token/);
   assert.equal(github.refs, 'secret://integrations/github/token');
   assert.match(tracker.title, /Tracker provider/);
   assert.match(tracker.body, /Issue authority/);

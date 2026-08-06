@@ -4,7 +4,6 @@ import test from 'node:test';
 
 const settingsSource = readFileSync(new URL('./Settings.jsx', import.meta.url), 'utf8');
 const chromeSource = readFileSync(new URL('./SettingsChrome.jsx', import.meta.url), 'utf8');
-const connectionsSource = readFileSync(new URL('./Connections.jsx', import.meta.url), 'utf8');
 const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
 const settingsNavigationSource = readFileSync(new URL('./settingsNavigation.js', import.meta.url), 'utf8');
 const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
@@ -31,10 +30,10 @@ const runtimeDiagnosticsSource = readFileSync(new URL('../utils/runtimeDiagnosti
 test('Settings renders behavior sections and gates internal panels behind Advanced', () => {
   assert.match(settingsSource, /initialTab = 'general'/);
   assert.match(settingsSource, /resolveSettingsRoute\(initialTab\)/);
-  for (const tab of ['general', 'permissions', 'notifications']) {
+  for (const tab of ['general', 'supervisor', 'code-agents', 'integrations', 'permissions', 'notifications']) {
     assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
   }
-  for (const tab of ['runtime', 'skills', 'memory', 'activity', 'policies']) {
+  for (const tab of ['diagnostics', 'skills', 'memory', 'activity', 'policies']) {
     assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
   }
   assert.match(sectionsSource, /tier === 'advanced'/);
@@ -48,9 +47,10 @@ test('Settings renders behavior sections and gates internal panels behind Advanc
   assert.match(stylesSource, /\.settings-tab \{[\s\S]*?border-radius: var\(--radius-sm\);/);
   assert.doesNotMatch(settingsSource, /CronTasksPanel/);
   assert.doesNotMatch(chromeSource, /Cron 任务已在侧边栏/);
-  assert.doesNotMatch(settingsNavigationSource, /label: 'Connections'/);
-  assert.doesNotMatch(settingsNavigationSource, /id: 'mcp'/);
-  assert.doesNotMatch(settingsNavigationSource, /id: 'model-runtime'/);
+  assert.match(settingsNavigationSource, /id: 'supervisor'/);
+  assert.match(settingsNavigationSource, /id: 'code-agents'/);
+  assert.match(settingsNavigationSource, /id: 'integrations'/);
+  assert.doesNotMatch(settingsNavigationSource, /id: 'connections'/);
 });
 
 test('Settings primary IA owns the complete project list and editor flow', () => {
@@ -71,9 +71,15 @@ test('Settings primary IA owns the complete project list and editor flow', () =>
   assert.doesNotMatch(sidebarSource, /sidebar-language-row|APP_VERSION|sidebar-version/);
   assert.match(settingsNavigationSource, /Permissions/);
   assert.match(settingsNavigationSource, /Notifications/);
-  assert.doesNotMatch(settingsNavigationSource, /Models & Agents|models-agents/);
-  assert.doesNotMatch(sectionsSource, /PiAgentSettingsPanel|ModelsAgentsSettingsTab/);
-  assert.match(piAgentSource, /view === 'connection'/);
+  assert.match(settingsNavigationSource, /Xuanwu Supervisor/);
+  assert.match(settingsNavigationSource, /Code Agents/);
+  assert.match(settingsNavigationSource, /Integrations/);
+  assert.match(sectionsSource, /PiAgentSettingsPanel/);
+  assert.match(sectionsSource, /CodeAgentsPanel/);
+  assert.match(sectionsSource, /ConnectorDiagnosticsPanel/);
+  assert.match(sectionsSource, /FeishuSettingsPanel/);
+  assert.match(sectionsSource, /PiMcpManagementPanel/);
+  assert.match(piAgentSource, /SupervisorSettingsForm/);
   assert.match(piAgentSource, /<ProviderCredentialFields state=\{state\} \/>/);
   assert.match(piAgentSource, /<ApiTypeField form=\{state\.form\} updateField=\{state\.updateField\} \/>/);
   assert.match(piAgentSource, /<ProviderSummary providers=\{state\.providers\} \/>/);
@@ -85,20 +91,23 @@ test('Settings primary IA owns the complete project list and editor flow', () =>
   assert.match(sectionsSource, /SourcePoliciesPanel/);
 });
 
-test('ordinary Settings route does not render raw runtime controls', () => {
-  const primaryStart = sectionsSource.indexOf('function GeneralSettingsTab');
-  const advancedStart = sectionsSource.indexOf('function AdvancedSettingsTab');
-  const primarySource = sectionsSource.slice(primaryStart, advancedStart);
-  assert.doesNotMatch(primarySource, /Runtime API Type|User-Agent|Prompt 摘要|PiMcpManagementPanel|RuntimeStatusPanel/);
-  assert.match(piAgentSource, /view = 'agent'/);
-  assert.match(piAgentSource, /return <SupervisorBehaviorSettings state=\{state\} \/>/);
+test('Supervisor Settings keeps provider, behavior and MCP on one page with separate authorities', () => {
+  assert.match(sectionsSource, /function SupervisorSettingsTab/);
+  assert.match(sectionsSource, /<PiAgentSettingsPanel \/>/);
+  assert.match(sectionsSource, /<PiMcpManagementPanel embedded \/>/);
+  assert.match(sectionsSource, /工具与 MCP/);
+  assert.match(piAgentSource, /模型与 Provider/);
+  assert.match(piAgentSource, /Supervisor 行为/);
+  assert.match(piAgentSource, /handleConnectionSave/);
+  assert.match(piAgentSource, /handleAgentSave/);
+  assert.match(piAgentSource, /<SupervisorBehaviorSettings state=\{state\} \/>/);
   assert.match(piAgentSource, /<AdvancedProviderGrid state=\{state\} \/>/);
   assert.match(piAgentSource, /<ProviderCredentialFields/);
   assert.doesNotMatch(sectionsSource, /ApiTypeField|ProviderCredentialFields/);
   assert.match(piAgentSource, /<ProviderSummary/);
 });
 
-test('advanced Runtime status exposes process-group memory freshness, roles, P95, and budget state', () => {
+test('advanced Diagnostics exposes process-group memory freshness, roles, P95, and budget state', () => {
   assert.match(settingsSource, /status\.process_group_memory/);
   assert.match(settingsSource, /Runner process-group memory/);
   assert.match(settingsSource, /memory\.freshness/);
@@ -115,7 +124,7 @@ test('advanced Runtime status exposes process-group memory freshness, roles, P95
   assert.match(settingsSource, /no auto-restart/);
 });
 
-test('advanced Runtime status distinguishes the project manager from the independent Guardian supervisor', () => {
+test('advanced Diagnostics distinguishes the project manager from the independent Guardian supervisor', () => {
   assert.match(settingsSource, /PI project manager/);
   assert.match(settingsSource, /Guardian supervisor/);
   assert.match(settingsSource, /manager_active_projects/);
@@ -127,12 +136,12 @@ test('advanced Runtime status distinguishes the project manager from the indepen
 test('Xuanwu product sidebar removes the PI section and keeps internal config behind Settings', () => {
   const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
-  for (const route of ['pi-overview', 'pi-connectors', 'pi-skills', 'pi-memory', 'pi-activity', 'pi-policies']) {
+  for (const route of ['pi-skills', 'pi-memory', 'pi-activity', 'pi-policies']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
   assert.match(modulesSource, /'pi-automations': 'automations'/);
   assert.match(modulesSource, /'pi-approvals': 'command-center'/);
-  for (const route of ['command-center', 'ask-xuanwu', 'work', 'runs', 'automations', 'connections', 'settings']) {
+  for (const route of ['command-center', 'ask-xuanwu', 'work', 'runs', 'automations', 'settings']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
   assert.doesNotMatch(modulesSource, /page: 'projects'/);
@@ -152,24 +161,24 @@ test('Xuanwu product sidebar removes the PI section and keeps internal config be
   assert.match(appSource, /currentPage === 'command-center'/);
   assert.match(appSource, /currentPage === 'ask-xuanwu'/);
   assert.match(appSource, /currentPage === 'automations'/);
-  assert.match(appSource, /currentPage === 'connections'/);
+  assert.doesNotMatch(appSource, /currentPage === 'connections'/);
   assert.match(appSource, /isAssistantModulePage\(currentPage\)/);
-  assert.match(appSource, /<Settings initialTab=\{assistantModule\?\.tab\} navigateTo=\{navigateTo\} \/>/);
+  assert.match(appSource, /<Settings initialTab=\{assistantModule\?\.tab\} navigateTo=\{navigateTo\} onSectionChange=\{navigateToSettingsSection\} \/>/);
   assert.doesNotMatch(appSource, /from '\.\/pages\/AssistantModulePage'/);
 });
 
-test('Settings restart action moves from the page header into Advanced Runtime', () => {
+test('Settings restart action lives in Advanced Diagnostics', () => {
   assert.match(chromeSource, /settings-danger-button/);
   assert.match(chromeSource, /settings-restart-confirm/);
   assert.match(chromeSource, /export function RestartAction/);
-  assert.match(sectionsSource, /AdvancedRuntimeSettingsTab/);
+  assert.match(sectionsSource, /AdvancedDiagnosticsSettingsTab/);
   assert.match(sectionsSource, /<RestartAction \/>/);
   assert.ok(stylesSource.includes('.settings-danger-button'));
   assert.ok(stylesSource.includes('var(--error)'));
   assert.doesNotMatch(chromeSource, /window\\.confirm|window\\.alert/);
 });
 
-test('Advanced Runtime exports one redacted diagnostics bundle from existing system APIs', () => {
+test('Advanced Diagnostics exports one redacted diagnostics bundle from existing system APIs', () => {
   assert.match(settingsSource, /downloadDiagnostics/);
   assert.match(settingsSource, /systemApi\.getRuntimeDoctor\(\)/);
   assert.match(settingsSource, /systemApi\.getRuntimeLogs\(120\)/);
@@ -180,21 +189,17 @@ test('Advanced Runtime exports one redacted diagnostics bundle from existing sys
   assert.doesNotMatch(settingsSource, /window\.confirm|window\.alert/);
 });
 
-test('Connections owns provider, connector and MCP management without Settings duplication', () => {
-  assert.match(connectionsSource, /CodeAgentsPanel/);
-  assert.match(connectionsSource, /PiAgentSettingsPanel view="connection"/);
-  assert.match(connectionsSource, /PiAgentSettingsPanel view="agent"/);
-  assert.doesNotMatch(connectionsSource, /PiAgentSettingsPanel view="advanced"/);
-  assert.match(connectionsSource, /ConnectorDiagnosticsPanel/);
-  assert.match(connectionsSource, /FeishuSettingsPanel/);
-  assert.match(connectionsSource, /PiMcpManagementPanel/);
-  assert.doesNotMatch(sectionsSource, /ConnectorDiagnosticsPanel|FeishuSettingsPanel|PiMcpManagementPanel/);
-  assert.doesNotMatch(sectionsSource, /PiAgentSettingsPanel/);
+test('Settings owns provider, Code Agent, integration and MCP management', () => {
+  assert.match(sectionsSource, /CodeAgentsPanel/);
+  assert.match(sectionsSource, /PiAgentSettingsPanel/);
+  assert.match(sectionsSource, /ConnectorDiagnosticsPanel/);
+  assert.match(sectionsSource, /FeishuSettingsPanel/);
+  assert.match(sectionsSource, /PiMcpManagementPanel/);
   assert.match(connectorsApiSource, /getPiConnectors:\s*\(\)\s*=>\s*request\('\/api\/pi\/connectors'\)/);
   assert.match(connectorsApiSource, /testPiConnector/);
   assert.match(connectorsApiSource, /revokePiConnectorSecret/);
   assert.match(connectorDiagnosticsSource, /connectorsApi\.getPiConnectors\(\)/);
-  assert.match(connectorDiagnosticsSource, /> Connections/);
+  assert.match(connectorDiagnosticsSource, /> Integration health/);
   assert.match(connectorDiagnosticsSource, /配置/);
   assert.match(connectorDiagnosticsSource, /configureGuide/);
   assert.match(connectorDiagnosticsSource, /测试连接/);

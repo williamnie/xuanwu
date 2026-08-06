@@ -8,6 +8,11 @@ import SkillsRuntimePanel from './SkillsRuntimePanel';
 import SourcePoliciesPanel from './SourcePoliciesPanel';
 import Projects from './Projects';
 import RemoteAccessTokenPanel from './RemoteAccessTokenPanel';
+import PiAgentSettingsPanel from './PiAgentSettingsPanel';
+import PiMcpManagementPanel from './PiMcpManagementPanel';
+import CodeAgentsPanel from './CodeAgentsPanel';
+import ConnectorDiagnosticsPanel from './ConnectorDiagnosticsPanel';
+import FeishuSettingsPanel from './FeishuSettingsPanel';
 import { RestartAction } from './SettingsChrome';
 import { Languages } from 'lucide-react';
 import { useState } from 'react';
@@ -23,9 +28,54 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navi
   return (
     <>
       {activeTab === 'general' && <GeneralSettingsTab />}
+      {activeTab === 'supervisor' && <SupervisorSettingsTab />}
+      {activeTab === 'code-agents' && <CodeAgentsPanel />}
+      {activeTab === 'integrations' && <IntegrationsSettingsTab />}
       {activeTab === 'permissions' && <PermissionsSettingsTab navigateTo={navigateTo} />}
       {activeTab === 'notifications' && <NotificationsSettingsTab />}
     </>
+  );
+}
+
+function SupervisorSettingsTab() {
+  return (
+    <div className="settings-supervisor-page">
+      <PiAgentSettingsPanel />
+      <section className="glass-card settings-configuration-stage settings-supervisor-tools">
+        <SettingsStageHeader
+          description="发现并启用 Supervisor 可以调用的工具，分别控制 server、capability 与写入审批。"
+          index="03"
+          title="工具与 MCP"
+        />
+        <PiMcpManagementPanel embedded />
+      </section>
+    </div>
+  );
+}
+
+function IntegrationsSettingsTab() {
+  return (
+    <div className="settings-integrations-page">
+      <section className="settings-section-intro">
+        <div className="settings-entry-eyebrow">External channels</div>
+        <h2>Integrations</h2>
+        <p>管理飞书、Git、Tracker、Webhook 等外部事件入口、通知出口与同步健康；Supervisor 主动调用的工具在“工具与 MCP”中管理。</p>
+      </section>
+      <ConnectorDiagnosticsPanel />
+      <FeishuSettingsPanel />
+    </div>
+  );
+}
+
+function SettingsStageHeader({ description, index, title }) {
+  return (
+    <header className="settings-stage-header">
+      <span>{index}</span>
+      <div>
+        <h2>{title}</h2>
+        <p>{description}</p>
+      </div>
+    </header>
   );
 }
 
@@ -91,7 +141,7 @@ function NotificationsSettingsTab() {
 function AdvancedSettingsTab({ activeTab, RuntimeStatusPanel, navigateTo }) {
   return (
     <>
-      {activeTab === 'runtime' && <AdvancedRuntimeSettingsTab RuntimeStatusPanel={RuntimeStatusPanel} />}
+      {activeTab === 'diagnostics' && <AdvancedDiagnosticsSettingsTab RuntimeStatusPanel={RuntimeStatusPanel} />}
       {activeTab === 'skills' && <AdvancedSkillsSettingsTab />}
       {activeTab === 'memory' && <MemorySettingsTab />}
       {activeTab === 'activity' && <ActivityTimelinePanel navigateTo={navigateTo} />}
@@ -100,13 +150,13 @@ function AdvancedSettingsTab({ activeTab, RuntimeStatusPanel, navigateTo }) {
   );
 }
 
-function AdvancedRuntimeSettingsTab({ RuntimeStatusPanel }) {
+function AdvancedDiagnosticsSettingsTab({ RuntimeStatusPanel }) {
   const { t } = useI18n();
   return (
     <>
       <section className="glass-card settings-advanced-danger-zone">
         <div>
-          <div className="settings-entry-eyebrow">{t('settings.advancedRuntime')}</div>
+          <div className="settings-entry-eyebrow">{t('settings.advancedDiagnostics')}</div>
           <h2>{t('settings.serviceLifecycle')}</h2>
           <p>{t('settings.restartDescription')}</p>
         </div>

@@ -5,7 +5,6 @@ import {
   Layers,
   MessageSquare,
   Moon,
-  Plug,
   Settings,
   Sun,
   LayoutDashboard,
@@ -33,7 +32,6 @@ const NAV_ICONS = {
   work: BriefcaseBusiness,
   runs: Layers,
   automations: CalendarClock,
-  connections: Plug,
   settings: Settings,
 };
 
@@ -43,7 +41,6 @@ const NAV_TRANSLATION_KEYS = {
   work: 'nav.work',
   runs: 'nav.runs',
   automations: 'nav.automations',
-  connections: 'nav.connections',
   settings: 'nav.settings',
 };
 
