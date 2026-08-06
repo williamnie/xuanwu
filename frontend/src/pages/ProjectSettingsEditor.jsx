@@ -83,6 +83,7 @@ function initialEditorState(project) {
     profilesLoading: false,
     providerCatalog: [],
     providerCatalogError: '',
+    providerCatalogLoading: true,
     saving: false,
   };
 }
@@ -136,6 +137,10 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
   }, [updateUi]);
 
   const loadProviderCatalog = useCallback(async () => {
+    updateUi(draft => {
+      draft.providerCatalogError = '';
+      draft.providerCatalogLoading = true;
+    });
     try {
       const catalog = await systemApi.getProviders();
       const providerOptions = providerOptionsFromCatalog(catalog);
@@ -146,6 +151,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       updateUi(draft => {
         draft.providerCatalog = Array.isArray(catalog) ? catalog : [];
         draft.providerCatalogError = '';
+        draft.providerCatalogLoading = false;
         if (mode === 'create' && selectedProvider !== draft.formProvider) {
           draft.formProvider = selectedProvider;
           draft.formModel = normalizeProviderModel(selectedProvider, '');
@@ -156,6 +162,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       updateUi(draft => {
         draft.providerCatalog = [];
         draft.providerCatalogError = error.message || '读取 Provider 列表失败';
+        draft.providerCatalogLoading = false;
       });
     }
   }, [loadProviderModels, mode, project?.provider, updateUi]);
@@ -299,6 +306,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
   const availableProfiles = availableAgentProfiles(ui.profiles, ui.providerCatalog);
   const modelOptions = buildProviderModelOptions(ui.formProvider, ui.codexModels, ui.formModel, ui.profileForm.model);
   const modal = layout === 'modal';
+  const providerReady = providerOptions.some(option => option.value === ui.formProvider);
 
   return (
     <form className={modal ? 'project-config-modal-form' : 'project-settings-editor-form'} onSubmit={handleSubmit}>
@@ -361,7 +369,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
 
       <div className={modal ? 'project-config-modal-footer' : 'project-settings-editor-footer'}>
         {onCancel && <button className="btn btn-secondary" disabled={ui.saving} onClick={onCancel} type="button">取消</button>}
-        <button className="btn btn-primary" disabled={ui.saving} type="submit">
+        <button className="btn btn-primary" disabled={ui.saving || ui.providerCatalogLoading || !providerReady} type="submit">
           {ui.saving ? '正在保存…' : mode === 'create' ? '添加并接管' : '保存项目设置'}
         </button>
       </div>
@@ -370,16 +378,43 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
 }
 
 function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui }) {
+  const providerReady = providerOptions.some(option => option.value === ui.formProvider);
+  const providerSelectDisabled = ui.providerCatalogLoading || Boolean(ui.providerCatalogError) || providerOptions.length === 0;
+
   return (
     <div className="project-runtime-fields">
       <div className="form-group">
         <label>执行引擎</label>
-        <select className="form-control" onChange={event => onFieldChange('formProvider', event.target.value)} value={ui.formProvider}>
+        <select
+          aria-busy={ui.providerCatalogLoading}
+          className={`form-control${ui.providerCatalogLoading ? ' project-settings-control-loading' : ''}`}
+          disabled={providerSelectDisabled}
+          onChange={event => onFieldChange('formProvider', event.target.value)}
+          value={providerReady ? ui.formProvider : ''}
+        >
+          {ui.providerCatalogLoading && <option value="">正在读取可用执行引擎…</option>}
+          {!ui.providerCatalogLoading && ui.providerCatalogError && <option value="">执行引擎加载失败</option>}
+          {!ui.providerCatalogLoading && !ui.providerCatalogError && providerOptions.length === 0 && <option value="">暂无可用执行引擎</option>}
+          {!ui.providerCatalogLoading && !ui.providerCatalogError && providerOptions.length > 0 && !providerReady && (
+            <option disabled value="">当前执行引擎不可用，请重新选择</option>
+          )}
           {providerOptions.map(option => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
-        <span className="project-settings-hint">决定由哪个执行器处理项目；通常保持 Codex。</span>
+        <span
+          aria-live="polite"
+          className={`project-settings-hint${ui.providerCatalogLoading ? ' project-settings-loading-hint' : ''}${ui.providerCatalogError || (!ui.providerCatalogLoading && !providerReady) ? ' project-settings-hint-error' : ''}`}
+          role="status"
+        >
+          {ui.providerCatalogLoading
+            ? '正在读取已启用且可用的 Code Agent…'
+            : ui.providerCatalogError
+              ? `读取执行引擎失败：${ui.providerCatalogError}`
+              : !providerReady
+                ? '项目原执行引擎当前不可用，请从可用列表中重新选择。'
+                : '决定由哪个执行器处理项目；通常保持 Codex。'}
+        </span>
       </div>
 
       <div className="project-settings-grid">

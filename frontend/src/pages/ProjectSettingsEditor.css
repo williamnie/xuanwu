@@ -23,6 +23,38 @@
   margin-top: 6px;
 }
 
+.project-settings-loading-hint {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+}
+
+.project-settings-loading-hint::before {
+  animation: xuanwu-spin 0.8s linear infinite;
+  border: 2px solid color-mix(in srgb, var(--primary) 24%, transparent);
+  border-radius: 50%;
+  border-top-color: var(--primary);
+  content: '';
+  flex: 0 0 auto;
+  height: 10px;
+  width: 10px;
+}
+
+.project-settings-hint-error {
+  color: var(--error);
+}
+
+.project-settings-control-loading {
+  color: var(--text-muted);
+  cursor: wait;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-settings-loading-hint::before {
+    animation: none;
+  }
+}
+
 .project-settings-permission-notice {
   margin-top: 8px;
   padding: 8px 10px;

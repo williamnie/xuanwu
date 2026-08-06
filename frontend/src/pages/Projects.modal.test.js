@@ -115,6 +115,19 @@ test('project config modal reads Provider catalog and models from generic APIs',
   assert.doesNotMatch(editorSource, /CODEX_MODEL_OPTIONS\.some\(option => option\.value === model\)/);
 });
 
+test('project config modal shows provider loading and failure states instead of a blank engine field', () => {
+  assert.match(editorSource, /providerCatalogLoading: true/);
+  assert.match(editorSource, /aria-busy=\{ui\.providerCatalogLoading\}/);
+  assert.match(editorSource, /正在读取可用执行引擎…/);
+  assert.match(editorSource, /正在读取已启用且可用的 Code Agent…/);
+  assert.match(editorSource, /读取执行引擎失败：\$\{ui\.providerCatalogError\}/);
+  assert.match(editorSource, /disabled=\{ui\.saving \|\| ui\.providerCatalogLoading \|\| !providerReady\}/);
+
+  const editorCss = readFileSync(new URL('./ProjectSettingsEditor.css', import.meta.url), 'utf8');
+  assert.match(editorCss, /\.project-settings-loading-hint::before\s*\{[\s\S]*?animation:\s*xuanwu-spin/);
+  assert.match(editorCss, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
 test('new project form defaults to one required field and keeps optional controls collapsed', () => {
   assert.match(editorSource, /<label>项目路径 \*<\/label>/);
   assert.match(editorSource, /mode === 'create'[\s\S]*<details className="project-settings-advanced">/);
