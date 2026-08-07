@@ -21,6 +21,21 @@ import { ackPiGuardianAlert, upsertPiGuardianAlert } from "../db/repositories/pi
 const MIB = 1024 * 1024;
 
 describe("runner process-group memory observer", () => {
+  test("returns an isolated JSON snapshot without sharing nested state", () => {
+    const observer = new ProcessGroupMemoryObserver({
+      footprint: false,
+      inspect: () => [fixtureRows(180, 0)[0]!],
+      memoryUsage: () => memoryUsage(180),
+      now: () => new Date("2026-07-27T03:00:00.000Z"),
+      runnerPid: 50
+    });
+
+    const first = observer.sample() as Snapshot;
+    first.activity.status = "mutated";
+
+    expect((observer.snapshot() as Snapshot).activity.status).toBe("idle");
+  });
+
   test("treats Agentic RPC work and its idle grace as active workload instead of idle", async () => {
     let nowMs = Date.parse("2026-07-27T03:00:00.000Z");
     let activity = { in_flight: 1, last_activity_at: new Date(nowMs).toISOString() };

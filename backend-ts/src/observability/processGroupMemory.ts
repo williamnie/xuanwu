@@ -198,7 +198,7 @@ export class ProcessGroupMemoryObserver {
     const sampledAt = Date.parse(String(this.sampleValue.sampled_at ?? ""));
     const age = Number.isFinite(sampledAt) ? Math.max(0, this.now().getTime() - sampledAt) : Number.MAX_SAFE_INTEGER;
     return {
-      ...structuredClone(this.sampleValue),
+      ...clonePublicSnapshot(this.sampleValue),
       freshness: {
         age_ms: age,
         stale_after_ms: PROCESS_GROUP_MEMORY_FRESHNESS_MS,
@@ -691,6 +691,10 @@ function isProcessRow(value: ProcessTreeEntry | undefined): value is ProcessTree
 
 function positiveBytes(value: number | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function clonePublicSnapshot(value: Record<string, unknown>): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
 }
 
 function highestMemorySeverity(values: string[]): string {
