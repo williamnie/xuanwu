@@ -4,12 +4,23 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-07
+
+### Added / 新增
+
+- 增加 registry-driven Code Agent Provider 架构、动态 catalog、conformance harness，
+  以及 Codex、Claude、Pi 与 Qoder adapter。
+- 增加 Code Agent 管理界面、Project/Work/Session Provider 选择与真实 Attempt 归属展示。
+- 增加 Remote access token 的首次生成、浏览器连接、轮换与服务端保护链路。
+
 ### Changed / 变更
 
 - **Breaking:** Release 资产、二进制与 CLI 统一为 `xuanwu`，配套命令统一为
   `xuanwu-daemon`、`xuanwu-install` 与 `xuanwu-update`。
 - 环境变量统一使用 `XUANWU_*`，Skill ID、服务标识和默认状态目录同步统一为 Xuanwu。
 - 不提供旧命令、旧环境变量或旧服务名的兼容别名；升级前应先备份 `runner.db`。
+- 统一 Settings、Project、Work 与 Session 中的 Code Agent 配置和路由体验，并修复历史
+  Session 恢复、消息顺序、发送反馈与草稿保留问题。
 
 ## [0.2.0] - 2026-08-03
 
@@ -37,6 +48,7 @@
 
 - 首个 GitHub Release，包含 macOS/Linux 的 arm64、amd64 预构建资产和一键安装脚本。
 
-[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/williamnie/xuanwu/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/williamnie/xuanwu/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/williamnie/xuanwu/releases/tag/v0.1.0
