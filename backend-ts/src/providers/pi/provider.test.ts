@@ -228,7 +228,7 @@ describe("P10: Pi factory 与 manifest", () => {
   test("factory 注册后可发现", async () => {
     const registry = createProviderRegistry();
     registry.registerFactory(piFactory({}));
-    await registry.startConfigured({});
+    await registry.startConfigured({ "pi-coding-agent": { command: process.execPath } });
     expect(registry.list().map((e) => String(e.id))).toContain("pi-coding-agent");
     expect(registry.describe(asProviderId("pi-coding-agent")).state).toBe("ready");
   });

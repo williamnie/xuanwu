@@ -35,7 +35,7 @@ describe("P7: Codex factory 经 registry 装配", () => {
   test("注册后 getReady/list 发现（无需白名单改动），catalog 输出 native action 与 session actions", async () => {
     const registry = createProviderRegistry();
     registry.registerFactory(codexFactory({}));
-    await registry.startConfigured({ codex: { command: "codex" } });
+    await registry.startConfigured({ codex: { command: process.execPath } });
     expect(String(registry.getReady(registryEntryId("codex")).id)).toBe("codex");
     expect(registry.list().map((e) => String(e.id))).toContain("codex");
     const catalog = catalogEntryFromRegistry(registry.describe(registryEntryId("codex")));

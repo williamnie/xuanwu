@@ -20,9 +20,9 @@ async function fourFormRegistry() {
   registry.registerFactory(piFactory({}));
   registry.registerFactory(qoderFactory({ facade: createFakeQoderSdkFacade([]).facade }));
   await registry.startConfigured({
-    codex: { command: "codex" },
+    codex: { command: process.execPath },
     claude: { authMode: "environment", mode: "sdk", env: { ANTHROPIC_API_KEY: "test-key" } },
-    "pi-coding-agent": { command: "pi" },
+    "pi-coding-agent": { command: process.execPath },
     qoder: {}
   });
   return registry;

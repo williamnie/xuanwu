@@ -36,7 +36,7 @@ describe("P9: capabilities parity（manifest detail ↔ 实例 legacy 数组）"
   test("Codex factory 注册后 manifest 与实例 capabilities 无 drift", async () => {
     const registry = createProviderRegistry();
     registry.registerFactory(codexFactory({}));
-    await registry.startConfigured({ codex: { command: "codex" } });
+    await registry.startConfigured({ codex: { command: process.execPath } });
     const report = compareCapabilitiesParity(registry.describe(asProviderId("codex")));
     expect(report.ok).toBe(true);
   });
