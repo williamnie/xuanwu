@@ -11,6 +11,7 @@ const CREATE_FLAGS = [
   { name: "body-file" },
   { name: "status" },
   { name: "priority" },
+  { name: "agent-profile" },
   { name: "source-session" },
   { name: "source-turn" },
   { name: "source-excerpt" },
@@ -23,6 +24,7 @@ const UPDATE_FLAGS = [
   { name: "id", required: true },
   { name: "status" },
   { name: "error" },
+  { name: "agent-profile" },
   { name: "required-skill" },
   { name: "recommended-skill" }
 ] as const;
@@ -66,8 +68,16 @@ async function getIssue(args: string[], env: EnvReader, fetcher: Fetcher): Promi
 
 async function updateIssue(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
   const { common, values } = parseCommandArgs(args, [...UPDATE_FLAGS], env);
-  const payload = updatePayload(values.status ?? "", values.error ?? "", values["required-skill"] ?? "", values["recommended-skill"] ?? "");
-  if (Object.keys(payload).length === 0) throw new Error("--status, --error, --required-skill or --recommended-skill is required");
+  const payload = updatePayload(
+    values.status ?? "",
+    values.error ?? "",
+    values["agent-profile"],
+    values["required-skill"] ?? "",
+    values["recommended-skill"] ?? ""
+  );
+  if (Object.keys(payload).length === 0) {
+    throw new Error("--status, --error, --agent-profile, --required-skill or --recommended-skill is required");
+  }
   const issue = await patchJSON<IssueDTO>(fetcher, common, `/api/issues/${issueID(values.id)}`, payload);
   return formatIssue(issue, common.json);
 }
@@ -129,6 +139,7 @@ function createPayload(values: Record<string, string>, env: EnvReader, body: str
     description: body,
     status: values.status || "triage",
     priority: integerValue(values.priority, "--priority"),
+    agent_profile_id: values["agent-profile"] ?? "",
     source_session_id: values["source-session"] ?? env("CODEX_THREAD_ID") ?? "",
     source_turn_id: values["source-turn"] ?? env("CODEX_TURN_ID") ?? "",
     source_excerpt: values["source-excerpt"] ?? "",
@@ -137,7 +148,13 @@ function createPayload(values: Record<string, string>, env: EnvReader, body: str
   };
 }
 
-function updatePayload(status: string, error: string, requiredSkill = "", recommendedSkill = ""): Record<string, unknown> {
+function updatePayload(
+  status: string,
+  error: string,
+  agentProfile: string | undefined,
+  requiredSkill = "",
+  recommendedSkill = ""
+): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
   const cleanStatus = status.trim();
   const cleanError = error.trim();
@@ -146,6 +163,7 @@ function updatePayload(status: string, error: string, requiredSkill = "", recomm
     if (cleanStatus !== "failed") payload.error = "";
   }
   if (cleanError !== "") payload.error = cleanError;
+  if (agentProfile !== undefined) payload.agent_profile_id = agentProfile;
   if (requiredSkill.trim() !== "") payload.required_skill_intents = intentList(requiredSkill);
   if (recommendedSkill.trim() !== "") payload.recommended_skill_intents = intentList(recommendedSkill);
   return payload;

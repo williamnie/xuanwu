@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { createAgentProfile } from "../db/repositories/agentProfiles.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createDefaultRouter } from "./server.ts";
@@ -29,6 +30,7 @@ describe("Bun issue patch API", () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
+      createAgentProfile(database, { id: "codex-pro", name: "Codex Pro", provider: "codex" });
       const issueId = insertIssue(database, "demo");
       const response = await patchIssue(database, issueId, fullPatchPayload());
       const body = await response.json() as Record<string, unknown>;
@@ -38,6 +40,21 @@ describe("Bun issue patch API", () => {
       expect(listEvents(database)).toEqual([
         { type: "issue.status_changed", payload: "{\"status\":\"todo\"}" }
       ]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("rejects an unknown agent profile instead of silently falling back", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueId = insertIssue(database, "demo");
+
+      const response = await patchIssue(database, issueId, { agent_profile_id: "missing-profile" });
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ message: "Agent Profile \"missing-profile\" was not found" });
     } finally {
       database.close();
     }

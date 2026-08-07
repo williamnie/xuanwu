@@ -7,6 +7,8 @@ const PROJECT_CREATE_FLAGS = [
   { name: "id", required: true },
   { name: "name" },
   { name: "cwd", required: true },
+  { name: "provider" },
+  { name: "default-agent-profile" },
   { name: "model" },
   { name: "approval-policy" },
   { name: "sandbox" }
@@ -30,6 +32,8 @@ function projectPayload(values: Record<string, string>): Record<string, unknown>
     id: values.id,
     name: values.name ?? "",
     cwd: values.cwd,
+    provider: values.provider ?? "codex",
+    default_agent_profile_id: values["default-agent-profile"] ?? "",
     model: values.model ?? "",
     approval_policy: values["approval-policy"] ?? "never",
     sandbox: values.sandbox ?? "workspace-write"

@@ -28,6 +28,7 @@ describe("Bun issue CLI", () => {
         expect(request.method).toBe("POST");
         expect(await request.json()).toMatchObject({
           description: "修复 Bun CLI\n\n保持最小改动。",
+          agent_profile_id: "xuanwu-provider-claude",
           priority: 2,
           project_id: "demo",
           source_session_id: "thread-env",
@@ -42,7 +43,7 @@ describe("Bun issue CLI", () => {
     });
     const { code, stdout, stderr } = await run([
       "issue", "create", "--project", "demo", "--title", "创建 CLI", "--body-file", bodyFile,
-      "--priority", "2", "--run", "--json"
+      "--priority", "2", "--agent-profile", "xuanwu-provider-claude", "--run", "--json"
     ], { env: envMap({ CODEX_THREAD_ID: "thread-env" }), fetcher });
 
     expect(code).toBe(0);
@@ -55,11 +56,16 @@ describe("Bun issue CLI", () => {
     const fetcher = fetchStub(async (request) => {
       expect(request.method).toBe("PATCH");
       expect(request.url).toBe("http://127.0.0.1:3008/api/issues/7");
-      expect(await request.json()).toEqual({ status: "done", error: "" });
+      expect(await request.json()).toEqual({
+        status: "done",
+        error: "",
+        agent_profile_id: "xuanwu-provider-codex"
+      });
       return jsonResponse(issueBody({ id: 7, status: "done", title: "完成任务" }));
     });
     const { code, stdout, stderr } = await run([
-      "issue", "update", "--id", "7", "--status", "done", "--json"
+      "issue", "update", "--id", "7", "--status", "done",
+      "--agent-profile", "xuanwu-provider-codex", "--json"
     ], { fetcher });
 
     expect(code).toBe(0);

@@ -118,13 +118,16 @@ describe("Bun CLI dispatcher", () => {
       const body = await request.json() as Record<string, unknown>;
       expect(body).toMatchObject({
         id: "demo",
-        cwd: "/tmp/demo"
+        cwd: "/tmp/demo",
+        provider: "claude",
+        default_agent_profile_id: "xuanwu-provider-claude"
       });
       expect(body).not.toHaveProperty("auto_run");
       return jsonResponse({ id: "demo", cwd: "/tmp/demo", auto_run: 1, pi_managed: 1, loop_status: "stopped" }, 201);
     });
     const { code, stdout, stderr } = await run([
-      "project", "create", "--id", "demo", "--cwd", "/tmp/demo"
+      "project", "create", "--id", "demo", "--cwd", "/tmp/demo",
+      "--provider", "claude", "--default-agent-profile", "xuanwu-provider-claude"
     ], { fetcher });
 
     expect(code).toBe(0);

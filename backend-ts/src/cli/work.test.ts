@@ -28,11 +28,13 @@ describe("Work CLI", () => {
 
       const created = await invoke([
         "work", "create", "--project", "demo", "--title", "CLI Work", "--goal", "Create through the CLI",
-        "--idempotency-key", "ci-719-create", "--occurred-at", "2026-07-18T00:00:00.000Z", "--json"
+        "--agent-profile", "xuanwu-provider-claude", "--idempotency-key", "ci-719-create",
+        "--occurred-at", "2026-07-18T00:00:00.000Z", "--json"
       ], env, fetcher);
       const replay = await invoke([
         "work", "create", "--project", "demo", "--title", "CLI Work", "--goal", "Create through the CLI",
-        "--idempotency-key", "ci-719-create", "--occurred-at", "2026-07-18T00:00:00.000Z", "--json"
+        "--agent-profile", "xuanwu-provider-claude", "--idempotency-key", "ci-719-create",
+        "--occurred-at", "2026-07-18T00:00:00.000Z", "--json"
       ], env, fetcher);
       expect(created).toMatchObject({ code: 0, stderr: "" });
       expect(replay).toMatchObject({ code: 0, stderr: "" });
@@ -40,7 +42,9 @@ describe("Work CLI", () => {
       const status = await invoke(["work", "status", "--id", workID, "--json"], env, fetcher);
       const result = await invoke(["work", "result", "--id", workID, "--json"], env, fetcher);
 
-      expect(JSON.parse(created.stdout)).toMatchObject({ work: { id: workID, status: "triage" } });
+      expect(JSON.parse(created.stdout)).toMatchObject({
+        work: { agent_profile_id: "xuanwu-provider-claude", id: workID, status: "triage" }
+      });
       expect(JSON.parse(replay.stdout)).toMatchObject({ work: { id: workID } });
       expect(status).toMatchObject({ code: 0, stderr: "" });
       expect(JSON.parse(status.stdout)).toMatchObject({ work: { id: workID, status: "triage" } });

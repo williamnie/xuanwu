@@ -8,6 +8,7 @@ const CREATE_FLAGS = [
   { name: "title", required: true },
   { name: "goal", required: true },
   { name: "status" },
+  { name: "agent-profile" },
   { name: "occurred-at", required: true },
   { name: "idempotency-key", required: true }
 ] as const;
@@ -38,6 +39,7 @@ async function createWork(args: string[], env: EnvReader, fetcher: Fetcher): Pro
       occurred_at: occurredAt,
       reason: "CLI Work create"
     },
+    agent_profile_id: values["agent-profile"] ?? "",
     goal: values.goal,
     project_id: values.project,
     status: values.status || "triage",

@@ -1,10 +1,10 @@
-import { createIssue } from "../db/repositories/issueCreate.ts";
+import { createIssue, normalizeIdentifier } from "../db/repositories/issueCreate.ts";
 import { deleteIssue, enqueueIssue, type IssueActionOptions } from "../db/repositories/issueActions.ts";
 import {
   createIssueComment,
   type ListIssueEventsOptions
 } from "../db/repositories/issueEvents.ts";
-import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
+import { getAgentProfile, listAgentProfiles } from "../db/repositories/agentProfiles.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { auditIssueSkillIntents } from "../skills/intentAudit.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
@@ -80,10 +80,17 @@ export function createReadApiDomainHandlers(context: ReadApiContext) {
       update: (id: number, body: Record<string, unknown>) => updateIssueAndKickLoop(context, id, body)
     },
     projects: {
-      create: (body: Record<string, unknown>) => createAutomaticallyManagedProject(context.database, body),
+      create: (body: Record<string, unknown>) => {
+        validateAgentProfileReference(context.database, body, "default_agent_profile_id");
+        return createAutomaticallyManagedProject(context.database, body);
+      },
       list: () => listProjects(context.database),
       read: (id: string) => mustGetProject(context.database, id),
-      update: (id: string, body: Record<string, unknown>) => updateAutomaticallyManagedProject(context.database, id, body)
+      update: (id: string, body: Record<string, unknown>) => {
+        mustGetProject(context.database, id);
+        validateAgentProfileReference(context.database, body, "default_agent_profile_id");
+        return updateAutomaticallyManagedProject(context.database, id, body);
+      }
     }
   };
 }
@@ -100,6 +107,7 @@ function listIssueEventsForApi(
 export type ReadApiDomainHandlers = ReturnType<typeof createReadApiDomainHandlers>;
 
 function createIssueAndKickLoop(context: ReadApiContext, body: Record<string, unknown>): Issue {
+  validateAgentProfileReference(context.database, body, "agent_profile_id");
   const issue = createIssue(context.database, body);
   if (issue.status === "todo") kickAutoProject(context, issue.project_id);
   return issue;
@@ -110,9 +118,10 @@ async function updateIssueAndKickLoop(
   id: number,
   body: Record<string, unknown>
 ): Promise<Issue> {
-  if (isStartIssuePatch(body)) return startIssueFromPatch(context, id, body);
   const current = getIssue(context.database, id);
   if (!current) throw new ProjectNotFoundError();
+  validateAgentProfileReference(context.database, body, "agent_profile_id");
+  if (isStartIssuePatch(body)) return startIssueFromPatch(context, id, body);
   const requestedStatus = stringBody(body.status);
   if (requestedStatus === "failed" || requestedStatus === "needs_user") {
     throw new Error(`${requestedStatus} 只能由 PI 语义决策写入`);
@@ -141,6 +150,18 @@ async function updateIssueAndKickLoop(
   if (terminalForSkillAudit(issue.status)) safeAuditSkillIntents(context.database, issue.id);
   if (shouldKickAfterWrite(issue.status)) kickAutoProject(context, issue.project_id);
   return issue;
+}
+
+function validateAgentProfileReference(
+  database: RunnerDatabase,
+  body: Record<string, unknown>,
+  field: "agent_profile_id" | "default_agent_profile_id"
+): void {
+  if (!Object.hasOwn(body, field)) return;
+  const profileID = normalizeIdentifier(body[field]);
+  if (profileID !== "" && !getAgentProfile(database, profileID)) {
+    throw new Error(`Agent Profile "${profileID}" was not found`);
+  }
 }
 
 function startIssueFromPatch(context: ReadApiContext, id: number, body: Record<string, unknown>): Issue {

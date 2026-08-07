@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { createAgentProfile } from "../db/repositories/agentProfiles.ts";
 import { createDefaultRouter } from "./server.ts";
 import { isProjectLoopActive } from "../runner/projectLoopManager.ts";
 import { getIssueAsWork, issueIDToWorkID } from "../domain/work/issueAdapter.ts";
@@ -182,6 +183,10 @@ describe("Bun projects/issues read API", () => {
       const invalidCWD = await router.handle(new Request(`${BASE_URL}/api/projects`, {
         method: "POST", body: JSON.stringify({ id: "bad", cwd: join(cwd, "missing") })
       }));
+      const invalidProfile = await router.handle(new Request(`${BASE_URL}/api/projects`, {
+        method: "POST",
+        body: JSON.stringify({ id: "bad-profile", cwd, default_agent_profile_id: "missing-profile" })
+      }));
       await router.handle(new Request(`${BASE_URL}/api/projects`, {
         method: "POST", body: JSON.stringify({ id: "demo", cwd })
       }));
@@ -198,6 +203,8 @@ describe("Bun projects/issues read API", () => {
       expect(await withoutID.json()).toEqual({ message: "project id 不能为空" });
       expect(invalidCWD.status).toBe(400);
       expect(await invalidCWD.json()).toEqual({ message: "cwd 不存在" });
+      expect(invalidProfile.status).toBe(400);
+      expect(await invalidProfile.json()).toEqual({ message: "Agent Profile \"missing-profile\" was not found" });
       expect(duplicateID.status).toBe(400);
       expect((await duplicateID.json() as { message: string }).message).toContain("UNIQUE constraint failed: projects.id");
       expect(missing.status).toBe(404);
@@ -345,6 +352,7 @@ describe("Bun projects/issues read API", () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
+      createAgentProfile(database, { id: "codex-pro", name: "Codex Pro", provider: "codex" });
       const router = createDefaultRouter({ database });
 
       const created = await router.handle(new Request(`${BASE_URL}/api/issues`, {
@@ -393,6 +401,14 @@ describe("Bun projects/issues read API", () => {
       expect(await readBack.json()).toMatchObject(createdIssue);
       expect((await list.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual([createdIssue.id]);
       expect(event).toEqual({ type: "issue.created", payload: "" });
+
+      const invalidProfile = await router.handle(new Request(`${BASE_URL}/api/issues`, {
+        method: "POST",
+        body: JSON.stringify({ project_id: "demo", title: "Bad profile", agent_profile_id: "missing-profile" }),
+        headers: { "content-type": "application/json" }
+      }));
+      expect(invalidProfile.status).toBe(400);
+      expect(await invalidProfile.json()).toEqual({ message: "Agent Profile \"missing-profile\" was not found" });
     } finally {
       database.close();
     }

@@ -61,10 +61,14 @@ xuanwu project create \
   --addr "${XUANWU_ADDR:-127.0.0.1:3008}" \
   --id <project-id> \
   --cwd /absolute/path/to/repo \
+  --provider <code-agent-id> \
+  --default-agent-profile <agent-profile-id> \
   --json
 ```
 
 注册 Project 即表示交给玄武接管；服务会自动绑定 Supervisor 并启用 Issue Loop，不提供 inert Project 或 `--auto-run` 选择。
+
+`--provider` is the Project fallback Code Agent. `--default-agent-profile` is the preferred durable execution profile and may also define model, sandbox, approval policy, reasoning effort, and service tier. Keep the profile's provider aligned with the Project fallback unless an intentional cross-provider default is required.
 
 If project list is needed and CLI support is missing, query the API:
 
@@ -72,6 +76,20 @@ If project list is needed and CLI support is missing, query the API:
 curl -fsS -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" \
   "http://${XUANWU_ADDR:-127.0.0.1:3008}/api/projects"
 ```
+
+## Discover Code Agents and Profiles
+
+Code Agent runtime ids and Agent Profile ids are different contracts. Use a runtime id such as `codex`, `claude`, or `pi-coding-agent` for `--provider`; use a durable Agent Profile id for Issue/Work routing.
+
+```bash
+curl -fsS -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" \
+  "http://${XUANWU_ADDR:-127.0.0.1:3008}/api/code-agents"
+
+curl -fsS -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" \
+  "http://${XUANWU_ADDR:-127.0.0.1:3008}/api/agent-profiles"
+```
+
+Fresh databases include `xuanwu-provider-codex`, `xuanwu-provider-claude`, and `xuanwu-provider-pi`. Query the API instead of assuming those profiles were not customized or removed. An unknown explicit profile is rejected; omit the option to inherit the Project default/fallback.
 
 ## Create Issues
 
@@ -83,6 +101,7 @@ xuanwu issue create \
   --project <project-id> \
   --title "<short title>" \
   --body-file /tmp/codex-issue.md \
+  --agent-profile <agent-profile-id> \
   --status triage \
   --json
 ```
@@ -95,10 +114,13 @@ xuanwu issue create \
   --project <project-id> \
   --title "<short title>" \
   --body-file /tmp/codex-issue.md \
+  --agent-profile <agent-profile-id> \
   --status todo \
   --run \
   --json
 ```
+
+`--agent-profile` selects the Code Agent for this Issue. Omit it to inherit `default_agent_profile_id`, then the Project `provider`. Change an unstarted Issue with `xuanwu issue update --id <issue-id> --agent-profile <agent-profile-id> --json`; pass an empty value only when intentionally clearing an explicit assignment.
 
 ## Inspect / Retry / Cancel / Delete
 
