@@ -119,7 +119,7 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
         await runsApi.controlRun(item.latest_run.id, 'interrupt', buildRunControlPayload(detail, 'interrupt', {
           correlationPrefix: 'command-center',
           eventId: `command-center:pause:${nonce}`,
-          reasonPrefix: 'Command Center Active Work',
+          reasonPrefix: 'Dashboard Active Work',
         }));
         toast.success('Run 暂停已审计提交');
       } else {

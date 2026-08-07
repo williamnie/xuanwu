@@ -79,7 +79,7 @@ test('open actions accept only the returned matching Handoff link and HTTP(S) UR
   })).externalHref, '');
 });
 
-test('Command Center trusts the aggregate Handoff status without per-card hydration or a write path', () => {
+test('Dashboard trusts the aggregate Handoff status without per-card hydration or a write path', () => {
   const page = readFileSync(new URL('./RecentDeliveriesSection.jsx', import.meta.url), 'utf8');
   const dashboard = readFileSync(new URL('../Dashboard.jsx', import.meta.url), 'utf8');
   assert.match(page, /sections: \['recent_deliveries'\]/);

@@ -26,14 +26,14 @@ test('Attention commands carry a human allow gate, revision, audit identifiers, 
       event_id: 'command-center:attention:acknowledge:fixture',
       gate: { authority: 'human_approval', decision: 'allow', policy_ref: 'command-center:human-attention-action' },
       occurred_at: '2026-07-17T08:00:00.000Z',
-      reason: 'Command Center user requested Attention acknowledge',
+      reason: 'Dashboard user requested Attention acknowledge',
     },
     expected_revision: 3,
   });
   assert.equal(attentionActionPayload(ITEM, 'snooze', input).snoozed_until, '2026-07-17T09:00:00.000Z');
 });
 
-test('Command Center Attention has grouped cards, canonical source links, empty state, and post-action refresh', () => {
+test('Dashboard Attention has grouped cards, canonical source links, empty state, and post-action refresh', () => {
   const page = readFileSync(new URL('./AttentionSection.jsx', import.meta.url), 'utf8');
   const dashboard = readFileSync(new URL('../Dashboard.jsx', import.meta.url), 'utf8');
   const api = readFileSync(new URL('../../api/commandCenter.js', import.meta.url), 'utf8');

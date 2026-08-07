@@ -20,7 +20,7 @@ import {
 } from './firstDeliveryGuideModel.js';
 import './FirstDeliveryGuide.css';
 
-const EMPTY_SNAPSHOT = { connectionTest: null, doctor: null, evidence: [], handoffs: [], works: [] };
+const EMPTY_SNAPSHOT = { codeAgents: [], connectionTest: null, doctor: null, evidence: [], handoffs: [], works: [] };
 
 export default function FirstDeliveryGuide({ navigateTo, projects }) {
   const refreshData = useDataStore(selectRefreshData);
@@ -39,12 +39,13 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
     const controller = new AbortController();
     const promise = Promise.all([
       systemApi.getRuntimeDoctor(),
+      systemApi.getCodeAgents(),
       workApi.getWorks({ pageSize: 8 }, { signal: controller.signal }),
       handoffsApi.getHandoffs({ limit: 20 }),
     ]);
     requestRef.current = { controller, promise };
     try {
-      const [doctor, worksPage, handoffPage] = await promise;
+      const [doctor, codeAgentsResponse, worksPage, handoffPage] = await promise;
       const works = worksPage?.items || [];
       const handoffs = handoffPage?.items || [];
       const sample = works.find(work => work?.title === FIRST_DELIVERY_TITLE);
@@ -58,7 +59,14 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
         : null;
       const evidence = evidencePage?.items || [];
       if (controller.signal.aborted) return;
-      setSnapshot({ connectionTest: readFirstDeliveryConnectionTest(), doctor, evidence, handoffs, works });
+      setSnapshot({
+        codeAgents: Array.isArray(codeAgentsResponse?.agents) ? codeAgentsResponse.agents : [],
+        connectionTest: readFirstDeliveryConnectionTest(),
+        doctor,
+        evidence,
+        handoffs,
+        works,
+      });
       setError('');
       setCreationNeedsRefresh(false);
     } catch (loadError) {
@@ -84,6 +92,7 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
     [projects, snapshot],
   );
   const recovery = firstDeliveryRecovery(state, snapshot.doctor);
+  const steps = Object.fromEntries(state.steps.map(step => [step.id, step]));
 
   const createProject = async (event) => {
     event.preventDefault();
@@ -92,7 +101,7 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
     setBusy('project');
     setError('');
     try {
-      const provider = state.availableProviders[0]?.id || 'codex';
+      const provider = state.availableCodeAgents[0]?.id || 'codex';
       const id = onboardingProjectID(path);
       await projectsApi.createProject({
         approval_policy: 'never',
@@ -177,12 +186,17 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
       {error ? <div className="first-delivery-error" role="alert"><AlertTriangle size={15} /> {error}</div> : null}
       {!state.completed ? (
         <div className="first-delivery-actions">
-          {!state.steps[1].complete ? (
+          {!steps['code-agent'].complete ? (
+            <ActionCard title="选择 Code Agent" description="启用一个可执行的 Agent；Codex 可明确选择 CLI 或 App app-server。">
+              <button className="btn btn-primary" onClick={() => navigateTo('settings', null, '', '', { settingsSection: 'code-agents' })} type="button"><Settings2 size={14} /> 打开 Code Agents</button>
+            </ActionCard>
+          ) : null}
+          {steps['code-agent'].complete && !steps.supervisor.complete ? (
             <ActionCard title="配置玄武" description="在设置 → Xuanwu Supervisor 中选择 Provider、测试连接并保存。">
               <button className="btn btn-primary" onClick={() => navigateTo('settings', null, '', '', { settingsSection: 'supervisor' })} type="button"><Settings2 size={14} /> 打开 Supervisor 设置</button>
             </ActionCard>
           ) : null}
-          {state.steps[1].complete && !state.steps[2].complete ? (
+          {steps.supervisor.complete && !steps.project.complete ? (
             <ActionCard title="添加第一个项目" description="路径必须是 Runner 所在机器上已存在的目录。">
               <form className="first-delivery-project-form" onSubmit={createProject}>
                 <input aria-label="本地项目绝对路径" className="form-control" onChange={event => setCwd(event.target.value)} placeholder="/absolute/path/to/repository" value={cwd} />
@@ -192,7 +206,7 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
               </form>
             </ActionCard>
           ) : null}
-          {state.steps[2].complete && !state.steps[3].complete ? (
+          {steps.project.complete && !steps.work.complete ? (
             <ActionCard title="运行只读示例 Work" description="只检查 README / manifest / Git 状态，不改文件、不 commit、不对外写入。">
               <div className="first-delivery-work-action">
                 <select aria-label="示例 Work 项目" className="form-control" onChange={event => setSelectedProjectID(event.target.value)} value={selectedProjectID || projects[0]?.id || ''}>
@@ -204,7 +218,7 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
               </div>
             </ActionCard>
           ) : null}
-          {state.steps[3].complete ? (
+          {steps.work.complete ? (
             <ActionCard title={state.targetWork?.title || '首个 Work'} description={`${state.targetWork?.id || ''} · ${state.targetWork?.status || 'unknown'}`}>
               <button className="btn btn-secondary" onClick={() => navigateTo('work', state.targetWork?.id)} type="button">打开 Work <ChevronRight size={14} /></button>
             </ActionCard>

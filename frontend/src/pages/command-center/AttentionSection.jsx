@@ -97,7 +97,7 @@ export default function AttentionSection() {
       await commandCenterApi.controlAttention(approval.detail.attention.id, decision, {
         actor: 'frontend:user',
         decision_ref: target.ref,
-        reason: `Command Center user ${decision}d ${target.kind}`,
+        reason: `Dashboard user ${decision}d ${target.kind}`,
         scope: 'turn',
       });
       toast.success(decision === 'approve_always'

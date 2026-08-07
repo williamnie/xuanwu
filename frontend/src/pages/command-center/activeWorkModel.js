@@ -74,7 +74,7 @@ export function buildActiveWorkActionPayload(item, action, {
       correlation_id: `command-center:${item?.id || 'unknown'}`,
       event_id: `command-center:${action}:${eventNonce}`,
       occurred_at: occurredAt,
-      reason: `Command Center Active Work requested ${action}`,
+      reason: `Dashboard Active Work requested ${action}`,
     },
     expected_revision: Number(item?.revision || 0),
   };

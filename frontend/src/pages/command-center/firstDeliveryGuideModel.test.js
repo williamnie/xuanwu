@@ -13,22 +13,28 @@ const readyDoctor = {
   providers: [{ available: true, id: 'codex', label: 'Codex' }],
   service: { alive: true },
 };
+const readyCodeAgents = [{ enabled: true, id: 'codex', submittable: true }];
 
 test('clean state starts at project setup after runtime and Agent pass', () => {
   const waiting = firstDeliveryState({ doctor: readyDoctor });
   assert.equal(waiting.currentStep, 1);
-  assert.deepEqual(waiting.steps.map(step => step.complete), [true, false, false, false, false]);
-  assert.match(firstDeliveryRecovery(waiting, readyDoctor), /连接测试/);
+  assert.deepEqual(waiting.steps.map(step => step.complete), [true, false, false, false, false, false]);
+  assert.match(firstDeliveryRecovery(waiting, readyDoctor), /Code Agents/);
 
-  const state = firstDeliveryState({ connectionTest: { ok: true }, doctor: readyDoctor });
-  assert.equal(state.currentStep, 2);
-  assert.deepEqual(state.steps.map(step => step.complete), [true, true, false, false, false]);
+  const supervisorWaiting = firstDeliveryState({ codeAgents: readyCodeAgents, doctor: readyDoctor });
+  assert.equal(supervisorWaiting.currentStep, 2);
+  assert.match(firstDeliveryRecovery(supervisorWaiting, readyDoctor), /Supervisor Provider/);
+
+  const state = firstDeliveryState({ codeAgents: readyCodeAgents, connectionTest: { ok: true }, doctor: readyDoctor });
+  assert.equal(state.currentStep, 3);
+  assert.deepEqual(state.steps.map(step => step.complete), [true, true, true, false, false, false]);
   assert.match(firstDeliveryRecovery(state, readyDoctor), /绝对路径/);
 });
 
 test('success requires done Work plus passed Evidence and Handoff for the same Work', () => {
   const work = { id: 'xw:work:issues:1', status: 'done', title: FIRST_DELIVERY_TITLE };
   const state = firstDeliveryState({
+    codeAgents: readyCodeAgents,
     doctor: readyDoctor,
     connectionTest: { ok: true },
     evidence: [{ status: 'passed', work_id: work.id }],
@@ -37,9 +43,10 @@ test('success requires done Work plus passed Evidence and Handoff for the same W
     works: [work],
   });
   assert.equal(state.completed, true);
-  assert.deepEqual(state.steps.map(step => step.complete), [true, true, true, true, true]);
+  assert.deepEqual(state.steps.map(step => step.complete), [true, true, true, true, true, true]);
 
   const wrongWork = firstDeliveryState({
+    codeAgents: readyCodeAgents,
     doctor: readyDoctor,
     connectionTest: { ok: true },
     evidence: [{ status: 'passed', work_id: work.id }],
@@ -62,14 +69,14 @@ test('sample mutation is uniquely audited and strictly read-only', () => {
 
 test('recovery keeps a failed or partially delivered Work on its existing authority', () => {
   const failed = firstDeliveryState({
-    connectionTest: { ok: true }, doctor: readyDoctor, projects: [{ id: 'demo' }],
+    codeAgents: readyCodeAgents, connectionTest: { ok: true }, doctor: readyDoctor, projects: [{ id: 'demo' }],
     works: [{ id: 'xw:work:issues:4', status: 'failed', title: FIRST_DELIVERY_TITLE }],
   });
   assert.match(firstDeliveryRecovery(failed, readyDoctor), /Retry/);
   assert.match(firstDeliveryRecovery(failed, readyDoctor), /不要新建重复 Work/);
 
   const evidenceOnly = firstDeliveryState({
-    connectionTest: { ok: true }, doctor: readyDoctor,
+    codeAgents: readyCodeAgents, connectionTest: { ok: true }, doctor: readyDoctor,
     evidence: [{ status: 'passed', work_id: 'xw:work:issues:5' }],
     projects: [{ id: 'demo' }],
     works: [{ id: 'xw:work:issues:5', status: 'done', title: FIRST_DELIVERY_TITLE }],

@@ -15,7 +15,7 @@ test('Automations page only reconciles project labels because it owns Automation
   assert.doesNotMatch(appSource, /automations:\s*\[[^\]]*'cronTasks'/);
 });
 
-test('Command Center keeps the existing bounded dashboard data slices', () => {
+test('Dashboard keeps the existing bounded data slices', () => {
   assert.match(appSource, /'command-center':\s*\['projects',\s*'issues'\]/);
   assert.doesNotMatch(appSource, /dashboard:\s*\[/);
 });

@@ -46,7 +46,7 @@ export function formatSystemDoctor(doctor: SystemDoctorDTO, asJSON: boolean): st
   ];
   const fixes = doctorFixes(doctor, providers);
   lines.push(...fixes.map(fix => `fix: ${fix}\n`));
-  if (fixes.length === 0) lines.push("next: open Command Center and complete the 10-minute first-delivery checklist\n");
+  if (fixes.length === 0) lines.push("next: open Dashboard and complete the 10-minute first-delivery checklist\n");
   return lines.join("");
 }
 

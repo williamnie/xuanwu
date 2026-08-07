@@ -3,7 +3,7 @@ export const SUPPORTED_LANGUAGES = Object.freeze(['zh-CN', 'en-US']);
 export const LANGUAGE_STORAGE_KEY = 'xuanwu-language';
 
 const ZH_CN = Object.freeze({
-  'nav.commandCenter': '指挥中心',
+  'nav.commandCenter': 'Dashboard',
   'nav.askXuanwu': '问玄武',
   'nav.work': '工作项',
   'nav.runs': '运行记录',
@@ -479,7 +479,7 @@ const ZH_CN = Object.freeze({
 });
 
 const EN_US = Object.freeze({
-  'nav.commandCenter': 'Command Center', 'nav.askXuanwu': 'Ask Xuanwu', 'nav.work': 'Work',
+  'nav.commandCenter': 'Dashboard', 'nav.askXuanwu': 'Ask Xuanwu', 'nav.work': 'Work',
   'nav.runs': 'Runs', 'nav.automations': 'Automations', 'nav.projects': 'Projects',
   'nav.settings': 'Settings',
   'app.loadingPage': 'Loading page…', 'app.wakingWorkbench': 'Xuanwu is waking the workbench…',

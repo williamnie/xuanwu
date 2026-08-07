@@ -56,7 +56,7 @@ test('Runs coalesces lifecycle refreshes, aborts stale reads, and loads detail o
   assert.match(runsSource, /silent \? mergeRunPages\(firstPage, current\) : firstPage/);
 });
 
-test('Command Center trusts bounded summaries instead of hydrating every card detail', () => {
+test('Dashboard trusts bounded summaries instead of hydrating every card detail', () => {
   assert.doesNotMatch(activeWorkSource, /hydrateRunDetails/);
   assert.doesNotMatch(recentDeliveriesSource, /hydrateDeliveryStatuses|handoffsApi\.getHandoff/);
   assert.match(recentDeliveriesSource, /if \(!visible\) return undefined/);
@@ -69,6 +69,7 @@ test('Command Center trusts bounded summaries instead of hydrating every card de
 
 test('first delivery onboarding uses bounded Work and Evidence reads', () => {
   assert.match(firstDeliverySource, /workApi\.getWorks\(\{ pageSize: 8 \}/);
+  assert.match(firstDeliverySource, /systemApi\.getCodeAgents\(\)/);
   assert.doesNotMatch(firstDeliverySource, /workApi\.getAllWorks\(\)/);
   assert.doesNotMatch(firstDeliverySource, /Promise\.allSettled/);
   assert.match(firstDeliverySource, /candidateWorkID/);

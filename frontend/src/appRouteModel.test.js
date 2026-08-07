@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { appHashForRoute, appRouteFromHash, DEFAULT_APP_ROUTE } from './appRouteModel.js';
 
-test('defaults to Command Center only when the URL has no valid app route', () => {
+test('defaults to Dashboard only when the URL has no valid app route', () => {
   assert.deepEqual(appRouteFromHash(''), DEFAULT_APP_ROUTE);
   assert.deepEqual(appRouteFromHash('#/not-a-page'), DEFAULT_APP_ROUTE);
 });

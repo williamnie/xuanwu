@@ -86,7 +86,7 @@
 .project-card-stat strong { font-family: var(--font-mono); }
 .project-card-footer { border-color: var(--border-light); }
 /* PI Chat owns its responsive workspace surface in pages/PiChat*.css. */
-/* Settings and Command Center Attention */
+/* Settings and Dashboard Attention */
 .attention-card {
   background: var(--panel-gradient);
   border-color: var(--border-color);

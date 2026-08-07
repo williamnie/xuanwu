@@ -16,7 +16,7 @@ export function attentionActionPayload(item, action, { nonce = eventNonce(), occ
       event_id: `command-center:attention:${action}:${nonce}`,
       gate: { authority: 'human_approval', decision: 'allow', policy_ref: 'command-center:human-attention-action' },
       occurred_at: occurredAt,
-      reason: `Command Center user requested Attention ${action}`,
+      reason: `Dashboard user requested Attention ${action}`,
     },
     expected_revision: Number(item?.revision || 0),
   };

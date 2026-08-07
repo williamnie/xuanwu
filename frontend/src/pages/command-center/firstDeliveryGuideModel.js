@@ -1,8 +1,9 @@
 export const FIRST_DELIVERY_TITLE = '玄武首次交付：只读项目体检';
 
-export function firstDeliveryState({ connectionTest = null, doctor, evidence = [], handoffs = [], projects = [], works = [] } = {}) {
+export function firstDeliveryState({ codeAgents = [], connectionTest = null, doctor, evidence = [], handoffs = [], projects = [], works = [] } = {}) {
   const runtimeReady = Boolean(doctor?.service?.alive && doctor?.db?.ok);
-  const availableProviders = (doctor?.providers || []).filter(provider => provider?.available);
+  const availableCodeAgents = (Array.isArray(codeAgents) ? codeAgents : [])
+    .filter(agent => agent?.enabled !== false && agent?.submittable === true);
   const workByID = new Map(works.map(work => [work?.id, work]));
   const passedEvidenceWorkIDs = new Set(
     evidence.filter(item => item?.status === 'passed').map(item => item?.work_id).filter(Boolean),
@@ -25,24 +26,29 @@ export function firstDeliveryState({ connectionTest = null, doctor, evidence = [
     && targetEvidence.length > 0
     && targetHandoff,
   );
-  const agentReady = availableProviders.length > 0 && connectionTest?.ok === true;
+  const codeAgentReady = availableCodeAgents.length > 0;
+  const supervisorReady = connectionTest?.ok === true;
 
   return {
-    availableProviders,
+    availableCodeAgents,
+    codeAgentReady,
     completed: deliveryReady,
-    currentStep: deliveryReady ? 5
+    currentStep: deliveryReady ? 6
       : !runtimeReady ? 0
-        : !agentReady ? 1
-          : projects.length === 0 ? 2
-            : !targetWork ? 3
-              : 4,
+        : !codeAgentReady ? 1
+          : !supervisorReady ? 2
+            : projects.length === 0 ? 3
+              : !targetWork ? 4
+                : 5,
     steps: [
       { id: 'runtime', complete: runtimeReady, label: '运行环境可用' },
-      { id: 'agent', complete: agentReady, label: 'Agent 连接测试通过' },
+      { id: 'code-agent', complete: codeAgentReady, label: 'Code Agent 已选择并就绪' },
+      { id: 'supervisor', complete: supervisorReady, label: 'Supervisor 连接测试通过' },
       { id: 'project', complete: projects.length > 0, label: '已添加项目' },
       { id: 'work', complete: Boolean(targetWork), label: '已创建首个 Work' },
       { id: 'delivery', complete: deliveryReady, label: 'Work 已完成且有 Evidence / Handoff' },
     ],
+    supervisorReady,
     targetEvidence,
     targetHandoff,
     targetWork,
@@ -51,19 +57,19 @@ export function firstDeliveryState({ connectionTest = null, doctor, evidence = [
 
 export function firstDeliveryRecovery(state, doctor) {
   if (!state.steps[0].complete) {
-    return '运行环境未就绪。先执行 `xuanwu doctor` 和 `./scripts/daemon.sh doctor`；修复 API/DB 后回到 Command Center 点击“重新检查”。';
+    return '运行环境未就绪。先执行 `xuanwu doctor` 和 `./scripts/daemon.sh doctor`；修复 API/DB 后回到 Dashboard 点击“重新检查”。';
   }
   if (!state.steps[1].complete) {
-    const available = state.availableProviders.length > 0;
-    const providers = (doctor?.providers || []).map(provider => provider?.label || provider?.id).filter(Boolean).join(' / ') || 'Codex';
-    return available
-      ? '执行器 CLI 已可用，但当前浏览器会话还没有成功的 provider 连接测试。在设置 → Xuanwu Supervisor 测试并保存；无需进入 Advanced。'
-      : `未找到可用执行器（${providers}）。先确认 CLI 已安装并登录，再到设置 → Xuanwu Supervisor 执行连接测试。`;
+    const discovered = (doctor?.providers || []).map(provider => provider?.label || provider?.id).filter(Boolean).join(' / ') || 'Codex';
+    return `没有已启用且就绪的 Code Agent（已发现：${discovered}）。到设置 → Code Agents 选择 Codex CLI / Codex App 或其他执行器，并确认状态为“可用”。`;
   }
   if (!state.steps[2].complete) {
-    return '还没有项目。输入一个已存在的本地仓库绝对路径；创建失败时保留原路径，修正后可直接重试。';
+    return 'Code Agent 已可用，但当前浏览器会话还没有成功的 Supervisor Provider 连接测试。在设置 → Xuanwu Supervisor 测试并保存；无需进入 Advanced。';
   }
   if (!state.steps[3].complete) {
+    return '还没有项目。输入一个已存在的本地仓库绝对路径；创建失败时保留原路径，修正后可直接重试。';
+  }
+  if (!state.steps[4].complete) {
     return '创建只读示例 Work。操作会先检查 Issue-backed Work authority；请求超时后必须先“重新检查”，确认未落库后才可再创建。';
   }
   const workID = state.targetWork?.id || '<work-id>';

@@ -169,7 +169,7 @@ export function formatGuardianOperationsDailyReport(snapshot: GuardianOperations
     `过去 24 小时发现 ${value.alerts_detected} 个运行告警，已自动恢复 ${value.alerts_recovered} 个。`,
     `恢复会话 ${value.session_recoveries} 个，自动重试并恢复 Issue ${value.issue_retries_recovered} 个。`,
     value.active_user_action_required > 0
-      ? `仍有 ${value.active_user_action_required} 项需要你处理，已集中放入 Command Center。`
+      ? `仍有 ${value.active_user_action_required} 项需要你处理，已集中放入 Dashboard。`
       : `当前没有需要你介入的运行告警。`,
     value.active_pi_handling > 0 ? `PI 正在继续处理 ${value.active_pi_handling} 项，其余过程不会逐条打扰你。` : "PI 当前没有待处理的运行告警。"
   ];

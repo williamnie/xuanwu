@@ -73,7 +73,7 @@ test('pause uses controllable Run detail while stop uses audited Work revision',
       correlation_id: 'command-center:xw:work:issues:696',
       event_id: 'command-center:cancel:1',
       occurred_at: '2026-07-17T08:00:00Z',
-      reason: 'Command Center Active Work requested cancel',
+      reason: 'Dashboard Active Work requested cancel',
     },
     expected_revision: 7,
   });
@@ -81,21 +81,21 @@ test('pause uses controllable Run detail while stop uses audited Work revision',
     correlationPrefix: 'command-center',
     eventId: 'command-center:pause:1',
     occurredAt: '2026-07-17T08:00:00Z',
-    reasonPrefix: 'Command Center Active Work',
+    reasonPrefix: 'Dashboard Active Work',
   }), {
     audit: {
       actor: { id: 'frontend:user', kind: 'user' },
       correlation_id: 'command-center:xw:run:issue_runs:run-696',
       event_id: 'command-center:pause:1',
       occurred_at: '2026-07-17T08:00:00Z',
-      reason: 'Command Center Active Work requested interrupt',
+      reason: 'Dashboard Active Work requested interrupt',
     },
     expected_attempt_revision: 3,
     expected_revision: 5,
   });
 });
 
-test('Command Center reads aggregate facts and writes only through Work and Run controls', () => {
+test('Dashboard reads aggregate facts and writes only through Work and Run controls', () => {
   const apiSource = readFileSync(new URL('../../api/commandCenter.js', import.meta.url), 'utf8');
   const clientSource = readFileSync(new URL('../../api/work.js', import.meta.url), 'utf8');
   const pageSource = readFileSync(new URL('./ActiveWorkSection.jsx', import.meta.url), 'utf8');

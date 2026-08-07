@@ -8,7 +8,7 @@ export const PRODUCT_TERMS = Object.freeze({
 });
 
 export const PRODUCT_NAV_LABELS = Object.freeze({
-  commandCenter: 'Command Center',
+  commandCenter: 'Dashboard',
   askXuanwu: 'Ask Xuanwu',
   work: 'Work',
   runs: 'Runs',

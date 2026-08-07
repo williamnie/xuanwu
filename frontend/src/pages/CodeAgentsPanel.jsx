@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, CircleAlert, Power, RefreshCw, Terminal } from 'lucide-react';
+import { CheckCircle2, CircleAlert, Monitor, Power, RefreshCw, Terminal } from 'lucide-react';
 import { systemApi } from '../api/system.js';
+import { message } from '../store/toastStore.js';
+import { codexBackendChoices, codexBackendUpdatePayload } from '../utils/codexBackends.js';
 import './CodeAgentsPanel.css';
 
 const AGENT_DESCRIPTIONS = Object.freeze({
@@ -10,14 +12,17 @@ const AGENT_DESCRIPTIONS = Object.freeze({
 });
 
 export default function CodeAgentsPanel() {
-  const [state, setState] = useState({ agents: [], error: '', loading: true });
+  const [state, setState] = useState({ agents: [], error: '', loading: true, runnerSettings: null });
   const [busyAgentID, setBusyAgentID] = useState('');
 
   const load = useCallback(async (discover = false) => {
     setState(current => ({ ...current, error: '', loading: true }));
     try {
-      const response = discover ? await systemApi.discoverCodeAgents() : await systemApi.getCodeAgents();
-      setState({ agents: Array.isArray(response?.agents) ? response.agents : [], error: '', loading: false });
+      const [response, runnerSettings] = await Promise.all([
+        discover ? systemApi.discoverCodeAgents() : systemApi.getCodeAgents(),
+        systemApi.getRunnerSettings(),
+      ]);
+      setState({ agents: Array.isArray(response?.agents) ? response.agents : [], error: '', loading: false, runnerSettings });
     } catch (error) {
       setState(current => ({ ...current, error: error.message || '读取 Code Agents 失败', loading: false }));
     }
@@ -30,9 +35,28 @@ export default function CodeAgentsPanel() {
     setState(current => ({ ...current, error: '' }));
     try {
       const response = await systemApi.updateCodeAgent(agent.id, !agent.enabled);
-      setState({ agents: Array.isArray(response?.agents) ? response.agents : [], error: '', loading: false });
+      setState(current => ({ ...current, agents: Array.isArray(response?.agents) ? response.agents : [], error: '', loading: false }));
     } catch (error) {
       setState(current => ({ ...current, error: error.message || '更新 Code Agent 失败' }));
+    } finally {
+      setBusyAgentID('');
+    }
+  };
+
+  const selectCodexBackend = async (mode) => {
+    setBusyAgentID('codex-backend');
+    setState(current => ({ ...current, error: '' }));
+    try {
+      const runnerSettings = await systemApi.updateRunnerSettings(codexBackendUpdatePayload(mode));
+      const response = await systemApi.discoverCodeAgents();
+      setState({ agents: Array.isArray(response?.agents) ? response.agents : [], error: '', loading: false, runnerSettings });
+      if (runnerSettings?.runtime_apply?.codexTransport === 'deferred_active_sessions') {
+        message.warning('Codex app-server 选择已保存；当前 Session 结束后请再次选择，或重启服务以切换 transport');
+      } else {
+        message.success(`新的 Codex 任务将使用 ${mode === 'app' ? 'Codex App' : 'Codex CLI'} app-server`);
+      }
+    } catch (error) {
+      setState(current => ({ ...current, error: error.message || '更新 Codex app-server 失败' }));
     } finally {
       setBusyAgentID('');
     }
@@ -54,7 +78,14 @@ export default function CodeAgentsPanel() {
       {state.error ? <div className="code-agents-error" role="alert">{state.error}</div> : null}
       <div className="code-agents-list">
         {state.agents.map(agent => (
-          <CodeAgentRow agent={agent} busy={busyAgentID === agent.id} key={agent.id} onToggle={toggle} />
+          <CodeAgentRow
+            agent={agent}
+            busy={busyAgentID === agent.id || (agent.id === 'codex' && busyAgentID === 'codex-backend')}
+            key={agent.id}
+            onSelectCodexBackend={selectCodexBackend}
+            onToggle={toggle}
+            runnerSettings={state.runnerSettings}
+          />
         ))}
         {!state.loading && state.agents.length === 0 ? <div className="code-agents-empty">没有已注册的 Code Agent。</div> : null}
       </div>
@@ -62,7 +93,7 @@ export default function CodeAgentsPanel() {
   );
 }
 
-function CodeAgentRow({ agent, busy, onToggle }) {
+function CodeAgentRow({ agent, busy, onSelectCodexBackend, onToggle, runnerSettings }) {
   const available = agent.enabled && agent.submittable;
   const status = agent.enabled ? (available ? '可用' : '未就绪') : '已停用';
   return (
@@ -77,6 +108,9 @@ function CodeAgentRow({ agent, busy, onToggle }) {
         </div>
         <p>{AGENT_DESCRIPTIONS[agent.id] || agent.id}</p>
         {agent.enabled && !available && agent.readiness_reason ? <small>{agent.readiness_reason}</small> : null}
+        {agent.id === 'codex' ? (
+          <CodexBackendSelector busy={busy || !agent.enabled} onSelect={onSelectCodexBackend} settings={runnerSettings} />
+        ) : null}
       </div>
       <button
         className={`btn ${agent.enabled ? 'btn-secondary' : 'btn-primary'}`}
@@ -87,5 +121,40 @@ function CodeAgentRow({ agent, busy, onToggle }) {
         <Power size={14} /> {busy ? '处理中…' : agent.enabled ? '停用' : '启用'}
       </button>
     </article>
+  );
+}
+
+function CodexBackendSelector({ busy, onSelect, settings }) {
+  const choices = codexBackendChoices(settings || {});
+  return (
+    <div className="codex-backend-selector">
+      <div className="codex-backend-heading">
+        <strong>Codex app-server</strong>
+        <span>同一个 Codex Code Agent 的运行后端；历史 Provider / Session 标识保持不变。</span>
+      </div>
+      <div className="codex-backend-options">
+        {choices.map(choice => (
+          <button
+            aria-pressed={choice.active}
+            className={`codex-backend-option ${choice.active ? 'active' : ''}`}
+            disabled={busy || choice.active || !choice.status.ready}
+            key={choice.id}
+            onClick={() => onSelect(choice.id)}
+            type="button"
+          >
+            <span className="codex-backend-option-title">
+              {choice.id === 'app' ? <Monitor size={15} /> : <Terminal size={15} />}
+              <strong>{choice.label}</strong>
+              {choice.active ? <em>当前默认</em> : null}
+            </span>
+            <span>{choice.description}</span>
+            <small className={choice.status.ready ? 'ready' : ''}>
+              {choice.status.ready ? '可用' : '未就绪'} · {choice.status.detail}
+            </small>
+          </button>
+        ))}
+      </div>
+      <p className="codex-backend-note">每次只选择一个默认 app-server；不会在 CLI 与 App 不可用时静默 fallback。</p>
+    </div>
   );
 }
