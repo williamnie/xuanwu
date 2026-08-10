@@ -42,7 +42,7 @@ export async function cancelIssueWithInterrupt(
   runtime: InterruptRuntime = {}
 ): Promise<Issue> {
   const issue = issueWithLatestRun(db, mustGetIssue(db, issueID));
-  if (shouldInterruptIssue(issue)) {
+  if (shouldInterruptIssue(issue, runtime)) {
     await interruptLinkedIssue(db, issue, ISSUE_CANCEL_REASON, runtime);
   }
   return cancelIssue(db, issueID, ISSUE_CANCEL_REASON);
@@ -55,7 +55,7 @@ export async function interruptIssueForStatusTransition(
   runtime: InterruptRuntime = {}
 ): Promise<Issue> {
   const issue = issueWithLatestRun(db, mustGetIssue(db, issueID));
-  if (!shouldInterruptIssue(issue)) return issue;
+  if (!shouldInterruptIssue(issue, runtime)) return issue;
   const interrupted = await interruptLinkedIssue(db, issue, reason, runtime);
   if (!interrupted) throw new Error("旧 Session 中断失败，Issue 状态未更新");
   return issue;
@@ -73,7 +73,7 @@ export async function retryIssueWithInterrupt(
     reconcileTerminalSessionForRetry(db, issue, runtime);
     return forceRetryIssue(db, issueID, options);
   }
-  if (!shouldInterruptIssue(issue)) {
+  if (!shouldInterruptIssue(issue, runtime)) {
     if (hasDeferredStartupFailure(db, issue)) return requeueUnstartedIssueClaim(db, issueID);
     throw new Error("Issue 正在启动 provider session，请稍后再重试");
   }
@@ -104,17 +104,27 @@ export async function interruptSession(
   }
   // P5：无 turn（messageRef）时无法定位 active invocation；仅当 Provider 声明 session-level
   // interrupt（interrupt 方法存在）才继续，否则 fail closed 跳过（避免误中断）。
-  if (!session.turnId && !runtime.providers?.[session.provider]?.interrupt) return { interrupted: false };
+  const provider = runtime.providers?.[session.provider];
+  // 兼容已迁移前的 Provider：历史契约以存在 interrupt 方法表示 session-level；
+  // 只有显式声明 turn scope 时才要求 turn id。Pi 声明 active，可中断独占 transport。
+  if (!session.turnId && (!provider?.interrupt || provider.interruptScope === "turn")) {
+    return { interrupted: false };
+  }
   const error = await interruptProviderTurn(db, 0, session, SESSION_INTERRUPT_REASON, runtime);
   return { interrupted: !error };
 }
 
-function shouldInterruptIssue(issue: Issue): boolean {
+function shouldInterruptIssue(issue: Issue, runtime: InterruptRuntime): boolean {
   if (!isOpenRunningIssue(issue)) return false;
   const run = issue.latest_run;
   if (!run) return false;
-  return (run.provider_session_id !== "" && run.provider_turn_id !== "") ||
-    (issue.codex_thread_id !== "" && issue.codex_turn_id !== "");
+  const provider = runtime.providers?.[run.provider as ExecutorProviderId];
+  if (!provider?.interrupt) return false;
+  if (provider.interruptScope === "active") return true;
+  const sessionID = run.provider_session_id || issue.codex_thread_id;
+  const turnID = run.provider_turn_id || issue.codex_turn_id;
+  if (provider.interruptScope === "session") return sessionID !== "";
+  return sessionID !== "" && turnID !== "";
 }
 
 function isOpenRunningIssue(issue: Issue): boolean {
@@ -213,7 +223,14 @@ function issueSessionRef(issue: Issue): SessionRef {
       ...(turnId === "" ? {} : { turnId })
     };
   }
-  return sessionRef(issue.codex_thread_id, issue.codex_turn_id);
+  if (issue.codex_thread_id !== "") return sessionRef(issue.codex_thread_id, issue.codex_turn_id);
+  if (run?.provider) {
+    return {
+      provider: asProviderId(run.provider) as ExecutorProviderId,
+      sessionId: ""
+    };
+  }
+  return sessionRef("", "");
 }
 
 function linkedSessionIsTerminal(db: RunnerDatabase, issue: Issue): boolean {

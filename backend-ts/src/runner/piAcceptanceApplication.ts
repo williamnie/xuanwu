@@ -13,6 +13,7 @@ import { resolveExecutorSelection } from "../pi/agentOrchestration.ts";
 import type { PiAcceptanceDecision } from "../pi/issueAcceptance.ts";
 import {
   isExecutorProviderId,
+  isProviderInterruptedError,
   type ExecutorProvider,
   type ExecutorProviderId
 } from "../providers/types.ts";
@@ -23,6 +24,7 @@ import { reconcileProviderOutcome } from "./providerOutcome.ts";
 export const PI_ACCEPTANCE_DECISION_EVENT = "issue.pi_acceptance_decision.v1";
 export const PI_ACCEPTANCE_APPLIED_EVENT = "issue.pi_acceptance_applied.v1";
 export const PI_HUMAN_ACCEPTANCE_HONORED_EVENT = "issue.pi_human_acceptance_honored.v1";
+export const MAX_AUTOMATIC_FRESH_SESSION_RETRIES = 2;
 
 export type PiAcceptanceApplicationRuntime = {
   bus?: Pick<EventBus, "publish">;
@@ -186,6 +188,7 @@ async function continueSameSession(
     });
     return mustGetIssue(db, issue.id);
   } catch (error) {
+    if (isProviderInterruptedError(error)) return mustGetIssue(db, issue.id);
     const message = safeError(error);
     recordIssueEvent(db, issue.id, "issue.pi_acceptance_continuation_failed.v1", {
       card_fingerprint: card.fingerprint,
@@ -211,6 +214,21 @@ async function retryInNewSession(
 ): Promise<Issue> {
   const db = runtime.database;
   const issue = mustGetIssue(db, card.issue.id);
+  const automaticRetries = listIssueEvents(db, issue.id, {
+    limit: 500,
+    types: [PI_ACCEPTANCE_APPLIED_EVENT]
+  }).filter((event) => cleanString(objectValue(parseJson(event.payload)).action) === "retry").length;
+  if (automaticRetries >= MAX_AUTOMATIC_FRESH_SESSION_RETRIES) {
+    return requestUser(runtime, card, {
+      ...decision,
+      decision: "needs_user",
+      rationale: `同一 Issue 已自动创建 ${automaticRetries} 个新执行 Session，已达到安全上限；为避免重复执行、并发修改和资源浪费，Runner 已停止继续重试。${decision.rationale}`,
+      unmet_requirements: [
+        ...decision.unmet_requirements,
+        "需要人工检查现有 Session、工作区改动和失败原因后再决定继续或重试。"
+      ]
+    });
+  }
   const project = getProject(db, issue.project_id);
   if (!project) throw new Error(`Project ${issue.project_id} not found`);
   const previousRun = listIssueRuns(db, issue.id).find((run) => run.id === card.run.id);
@@ -266,7 +284,7 @@ async function retryInNewSession(
       providerRunID: result.runId
     });
   } catch (error) {
-    await reconcileProviderOutcome({
+    if (!isProviderInterruptedError(error)) await reconcileProviderOutcome({
       bus: runtime.bus,
       database: db,
       issueID: issue.id,

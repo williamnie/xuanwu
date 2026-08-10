@@ -3,10 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import type {
   ExecutorProvider,
   InterruptInput,
   ProviderRunInput,
+  ProviderRunResult,
   SessionMessageInput
 } from "../providers/types.ts";
 import { createDefaultRouter, createRequestHandler } from "./server.ts";
@@ -23,6 +25,64 @@ afterEach(async () => {
 });
 
 describe("Run HTTP API", () => {
+  test("exposes a Pi Run session reference and provider-neutral transcript drill-down", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new PiRunDetailProvider();
+    try {
+      insertProject(db, "demo");
+      const issueID = insertIssue(db, "demo", "Pi transcript", "failed");
+      const runID = insertRun(db, issueID, "failed", {
+        endedAt: timestamp(2),
+        provider: "pi-coding-agent",
+        sessionID: "pi-session-1",
+        startedAt: timestamp(1)
+      });
+      upsertAgentSession(db, {
+        issue_id: issueID,
+        project_id: "demo",
+        provider: "pi-coding-agent",
+        provider_session_id: "pi-session-1",
+        status: "failed"
+      });
+      const router = createDefaultRouter({ database: db, providers: { "pi-coding-agent": provider } });
+
+      const runResponse = await router.handle(new Request(`${BASE_URL}/api/runs/${encodeURIComponent(runID)}`));
+      const runBody = await runResponse.json() as Record<string, any>;
+      const sessionRef = runBody.run.attempts[0].provider_ref.observation_ref;
+      const sessionResponse = await router.handle(new Request(
+        `${BASE_URL}/api/sessions/${encodeURIComponent(sessionRef)}`
+      ));
+
+      expect(runResponse.status).toBe(200);
+      expect(runBody.run).toMatchObject({
+        provider: "pi-coding-agent",
+        attempts: [{
+          agent_session_key: "pi-coding-agent:pi-session-1",
+          links: { provider_session: expect.stringContaining("pi-coding-agent%3Api-session-1") },
+          provider_ref: {
+            observation_ref: "pi-coding-agent:pi-session-1",
+            provider: "pi-coding-agent",
+            session_ref: "pi-session-1"
+          }
+        }]
+      });
+      expect(sessionResponse.status).toBe(200);
+      expect(await sessionResponse.json()).toMatchObject({
+        id: "pi-coding-agent:pi-session-1",
+        provider: "pi-coding-agent",
+        turns: [{ items: [
+          { type: "userMessage" },
+          { type: "reasoning" },
+          { type: "agentMessage" },
+          { type: "custom_tool_call" },
+          { type: "custom_tool_call_output" }
+        ] }]
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("lists and details a large Run set with bounded pagination and dimension filters", async () => {
     const db = await openFixtureDatabase();
     try {
@@ -287,7 +347,7 @@ class ControlProvider implements ExecutorProvider {
   readonly interrupts: InterruptInput[] = [];
   readonly messages: SessionMessageInput[] = [];
 
-  async run(_input: ProviderRunInput) {
+  async run(_input: ProviderRunInput): Promise<ProviderRunResult> {
     throw new Error("not implemented");
   }
 
@@ -334,18 +394,19 @@ function insertRun(
   db: RunnerDatabase,
   issueID: number,
   status: string,
-  input: { endedAt?: string; sessionID?: string; startedAt: string; turnID?: string }
+  input: { endedAt?: string; provider?: string; sessionID?: string; startedAt: string; turnID?: string }
 ): string {
   const id = `issue-${issueID}-attempt-1`;
   db.sqlite.run(
     `insert into issue_runs
       (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id,
        started_at, ended_at, exit_reason, error)
-     values (?, ?, 1, ?, 'codex', ?, ?, ?, ?, ?, ?)`,
+     values (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       issueID,
       status,
+      input.provider ?? "codex",
       input.sessionID ?? "",
       input.turnID ?? "",
       input.startedAt,
@@ -355,6 +416,39 @@ function insertRun(
     ]
   );
   return `xw:run:issue_runs:${id}`;
+}
+
+class PiRunDetailProvider implements ExecutorProvider {
+  readonly id = "pi-coding-agent" as const;
+  readonly capabilities = ["issue_execution", "sessions"] as const;
+
+  async run(_input: ProviderRunInput): Promise<ProviderRunResult> {
+    throw new Error("not implemented");
+  }
+
+  async readSession(sessionId: string): Promise<Record<string, unknown>> {
+    return {
+      id: `pi-coding-agent:${sessionId}`,
+      provider: "pi-coding-agent",
+      provider_session_id: sessionId,
+      sessionId,
+      thread_id: sessionId,
+      name: "Pi transcript",
+      preview: "inspect run",
+      cwd: "/tmp/demo",
+      status: "idle",
+      isRunning: false,
+      createdAt: 1,
+      updatedAt: 2,
+      turns: [{ id: "turn-1", items: [
+        { id: "user", type: "userMessage", content: [{ type: "input_text", text: "inspect run" }] },
+        { id: "reasoning", type: "reasoning", content: [{ type: "text", text: "inspect" }] },
+        { id: "answer", type: "agentMessage", text: "done" },
+        { id: "tool", type: "custom_tool_call", name: "read", input: { path: "README.md" } },
+        { id: "tool", type: "custom_tool_call_output", output: "contents", status: "completed" }
+      ] }]
+    };
+  }
 }
 
 function audit(eventID: string, kind: string): Record<string, unknown> {

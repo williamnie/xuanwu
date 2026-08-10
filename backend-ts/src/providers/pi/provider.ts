@@ -1,17 +1,18 @@
-import type {
-  ExecutorCapability,
-  ExecutorProvider,
-  InterruptInput,
-  ProviderEvent,
-  ProviderRecoveryInput,
-  ProviderRunInput,
-  ProviderRunResult,
-  ProviderRuntimeStatus,
-  SessionCreateInput,
-  SessionCreateResult,
-  SessionMessageInput,
-  SessionMessageResult,
-  SessionRef
+import {
+  ProviderInterruptedError,
+  type ExecutorCapability,
+  type ExecutorProvider,
+  type InterruptInput,
+  type ProviderEvent,
+  type ProviderRecoveryInput,
+  type ProviderRunInput,
+  type ProviderRunResult,
+  type ProviderRuntimeStatus,
+  type SessionCreateInput,
+  type SessionCreateResult,
+  type SessionMessageInput,
+  type SessionMessageResult,
+  type SessionRef
 } from "../types.ts";
 import { PiRpcTransport, type PiRpcEvent } from "./rpcTransport.ts";
 import { detectProviderCommand } from "../core/command.ts";
@@ -25,8 +26,8 @@ import {
 /**
  * P10：Pi Coding Agent executor（RPC transport，G10 gate 已通过）。
  * - terminal 收敛：`agent_settled`（fully settled，无自动 retry/compaction）为 authoritative terminal；
- * - session：以 `get_state.sessionFile` 作为可恢复 ref；recover 用 `switch_session` 后发送 prompt；
- * - interrupt：`abort` command；model list：`get_available_models`。
+ * - session：prompt 前持久化 `get_state.sessionId`；recover 用 `--session` 启动后发送 prompt；
+ * - interrupt：有界 `abort` 后停止独占 transport；model list：`get_available_models`。
  */
 
 export type PiExecutorProviderOptions = {
@@ -41,9 +42,11 @@ export type PiExecutorProviderOptions = {
 export class PiExecutorProvider implements ExecutorProvider {
   readonly id = "pi-coding-agent" as const;
   readonly capabilities: readonly ExecutorCapability[] = ["issue_execution", "sessions", "resume_session", "interrupt", "model_list"];
+  readonly interruptScope = "active" as const;
   private transport?: PiRpcTransport;
   private transportCwd = "";
   private active = false;
+  private interruptRequested = false;
   private lastSessionRef = "";
   private readonly sessionPaths = new Map<string, string>();
 
@@ -117,12 +120,20 @@ export class PiExecutorProvider implements ExecutorProvider {
     }
     if (!path) throw new Error(`Pi session ${id} was not found`);
     const snapshot = this.sessionFunctions().read(path);
+    if (snapshot.id !== id) throw new Error(`Pi session ${id} resolved to mismatched history ${snapshot.id}`);
     return publicPiSessionDetail(snapshot, this.active && this.lastSessionRef === id);
   }
 
   async interrupt(_input: InterruptInput): Promise<void> {
     if (!this.transport?.running) return;
-    await this.transport.send({ type: "abort" });
+    this.interruptRequested = true;
+    try {
+      await boundedPiAbort(this.transport, 200);
+    } finally {
+      // Pi RPC 的 abort 只表示已接收中断，不代表进程已经退出。Issue 状态切换前
+      // 必须收掉本次独占 transport，避免已取消的 Agent 继续修改工作区。
+      await this.transport.stop(1000);
+    }
   }
 
   async listModels(): Promise<unknown> {
@@ -181,6 +192,7 @@ export class PiExecutorProvider implements ExecutorProvider {
   private async beginOperation(cwd = "", sessionRef = "", tools: readonly string[] = []): Promise<PiRpcTransport> {
     if (this.active) throw new Error("Pi provider is already executing another operation");
     this.active = true;
+    this.interruptRequested = false;
     this.lastSessionRef = sessionRef.trim();
     try {
       const targetCwd = cwd.trim() || this.options.cwd?.trim() || "";
@@ -222,11 +234,29 @@ export class PiExecutorProvider implements ExecutorProvider {
     transport: PiRpcTransport,
     prompt: string,
     sink: ProviderRunInput["onEvent"],
-    input: { projectId?: string; issueId?: number; prompt?: string }
+    input: { cwd?: string; projectId?: string; issueId?: number; prompt?: string }
   ): Promise<{ invocationRef: string; sessionRef: string }> {
     if (prompt.trim() === "") throw new Error("Pi RPC prompt must not be empty");
+    const state = await this.sessionState(transport);
+    if (!state?.sessionRef) throw new Error("pi rpc did not provide a durable session before prompt");
+    this.lastSessionRef = state.sessionRef;
+    const session = { provider: this.id, sessionId: state.sessionRef } as const;
+    sink?.({
+      provider: this.id,
+      raw: { method: "pi-coding-agent/session_started" },
+      runEvent: normalizedRunEvent({
+        kind: "started",
+        method: "pi-coding-agent/session_started",
+        outcome: "running",
+        provider: this.id,
+        session
+      }),
+      session,
+      status: "running",
+      type: "provider.session_started"
+    });
     const invocationRef = `pi-rpc-${crypto.randomUUID()}`;
-    const terminal = this.waitForTerminal(transport, sink, input);
+    const terminal = this.waitForTerminal(transport, sink, input, state.sessionRef);
     try {
       await transport.send({ id: invocationRef, type: "prompt", message: prompt });
       return { invocationRef, ...await terminal };
@@ -265,26 +295,86 @@ export class PiExecutorProvider implements ExecutorProvider {
   private waitForTerminal(
     transport: PiRpcTransport,
     sink: ProviderRunInput["onEvent"],
-    input: { projectId?: string; issueId?: number; prompt?: string }
+    input: { cwd?: string; projectId?: string; issueId?: number; prompt?: string },
+    initialSessionRef: string
   ): Promise<{ sessionRef: string }> {
     return new Promise((resolve, reject) => {
       let settled = false;
       let failureReason = "";
-      const settleTimeout = setTimeout(() => {
+      const activeTools = new Map<string, PiToolObservation>();
+      const inactivityMs = this.options.timeoutMs ?? 30 * 60 * 1000;
+      let inactivityTimeout: ReturnType<typeof setTimeout> | undefined;
+      const sessionForEvent = () => {
+        const sessionRef = this.lastSessionRef || initialSessionRef;
+        return sessionRef ? { provider: this.id, sessionId: sessionRef } as const : undefined;
+      };
+      const armInactivityTimeout = () => {
+        if (inactivityTimeout) clearTimeout(inactivityTimeout);
+        inactivityTimeout = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          const error = new Error(`pi rpc agent had no activity for ${inactivityMs}ms`);
+          const session = sessionForEvent();
+          sink?.({
+            error: error.message,
+            provider: this.id,
+            raw: { method: "pi-coding-agent/inactivity_timeout" },
+            runEvent: normalizedRunEvent({
+              kind: "error",
+              method: "pi-coding-agent/inactivity_timeout",
+              outcome: "failed",
+              provider: this.id,
+              retryable: true,
+              session
+            }),
+            session,
+            status: "failed",
+            type: "provider.error"
+          });
+          reject(error);
+        }, inactivityMs);
+        inactivityTimeout.unref?.();
+      };
+      const cleanup = () => {
+        if (inactivityTimeout) clearTimeout(inactivityTimeout);
+        inactivityTimeout = undefined;
+        off();
+      };
+      const rejectTerminal = (error: Error, method: string) => {
         if (!settled) {
           settled = true;
           cleanup();
-          reject(new Error("pi rpc agent did not settle within timeout"));
+          const session = sessionForEvent();
+          sink?.({
+            error: error.message,
+            provider: this.id,
+            raw: { method },
+            runEvent: normalizedRunEvent({
+              kind: "error",
+              method,
+              outcome: "failed",
+              provider: this.id,
+              session
+            }),
+            session,
+            status: "failed",
+            type: "provider.error"
+          });
+          reject(error);
         }
-      }, this.options.timeoutMs ?? 30 * 60 * 1000);
-      const cleanup = () => {
-        clearTimeout(settleTimeout);
-        off();
       };
       const off = transport.onEvent((event: PiRpcEvent) => {
+        if (!settled) armInactivityTimeout();
         switch (event.type) {
           case "agent_settled":
             if (settled) break;
+            if (this.interruptRequested) {
+              settled = true;
+              cleanup();
+              reject(new ProviderInterruptedError("pi rpc execution was interrupted by host"));
+              break;
+            }
             settled = true;
             cleanup();
             void this.sessionState(transport).then((state) => {
@@ -328,10 +418,18 @@ export class PiExecutorProvider implements ExecutorProvider {
             break;
           case "error":
           case "exit":
-            if (settled) break;
-            settled = true;
-            cleanup();
-            reject(new Error(event.type === "exit" ? "pi rpc exited before agent settled" : String(event.message ?? "pi rpc error")));
+            if (this.interruptRequested) {
+              if (!settled) {
+                settled = true;
+                cleanup();
+                reject(new ProviderInterruptedError("pi rpc execution was interrupted by host"));
+              }
+              break;
+            }
+            rejectTerminal(
+              new Error(event.type === "exit" ? "pi rpc exited before agent settled" : String(event.message ?? "pi rpc error")),
+              event.type === "exit" ? "pi-coding-agent/process_exit" : "pi-coding-agent/error"
+            );
             break;
           case "stderr":
             sink?.({ provider: this.id, type: "provider.error", text: String(event.text ?? "") });
@@ -340,8 +438,66 @@ export class PiExecutorProvider implements ExecutorProvider {
             const update = recordValue(event.assistantMessageEvent);
             if (update.type === "error") failureReason = String(update.error ?? update.reason ?? "Pi model request failed");
             if (update.type === "text_delta" && typeof update.delta === "string" && update.delta !== "") {
-              sink?.({ provider: this.id, type: "provider.message", text: update.delta });
+              const session = sessionForEvent();
+              sink?.({
+                provider: this.id,
+                raw: { method: "item/agentMessage/delta" },
+                runEvent: normalizedRunEvent({
+                  kind: "progress",
+                  method: "item/agentMessage/delta",
+                  outcome: "running",
+                  provider: this.id,
+                  session
+                }),
+                session,
+                text: update.delta,
+                type: "provider.message"
+              });
             }
+            break;
+          }
+          case "tool_execution_start": {
+            const observation = piToolObservation(event, input.cwd ?? "");
+            if (observation) activeTools.set(observation.id, observation);
+            break;
+          }
+          case "tool_execution_end": {
+            const id = stringValue(event.toolCallId);
+            const observation = activeTools.get(id);
+            activeTools.delete(id);
+            if (!observation) break;
+            const session = sessionForEvent();
+            const failed = event.isError === true;
+            const output = piToolOutput(event.result);
+            const exitCode = piToolExitCode(event.result, failed, output);
+            const durationMs = Math.max(0, Date.now() - observation.startedAt);
+            const item = {
+              aggregatedOutput: output,
+              command: observation.command,
+              cwd: observation.cwd,
+              durationMs,
+              exitCode,
+              id: observation.id,
+              status: failed ? "failed" : "completed",
+              type: "commandExecution"
+            };
+            sink?.({
+              command: observation.command,
+              payload: item,
+              provider: this.id,
+              raw: { method: "item/completed", payload: JSON.stringify({ item }) },
+              runEvent: normalizedRunEvent({
+                kind: "progress",
+                method: "item/completed",
+                outcome: "running",
+                provider: this.id,
+                session
+              }),
+              session,
+              status: item.status,
+              text: output,
+              type: "tool"
+            });
             break;
           }
           case "auto_retry_end":
@@ -351,11 +507,64 @@ export class PiExecutorProvider implements ExecutorProvider {
             break;
         }
       });
-      // 立即 get_state 拿到 session id（prompt 前后皆可）
-      void this.sessionState(transport).then((state) => {
-        if (state?.sessionRef) this.lastSessionRef = state.sessionRef;
-      }).catch(() => {});
+      armInactivityTimeout();
     });
+  }
+}
+
+type PiToolObservation = {
+  command: string;
+  cwd: string;
+  id: string;
+  startedAt: number;
+};
+
+function piToolObservation(event: PiRpcEvent, defaultCwd: string): PiToolObservation | undefined {
+  const toolName = stringValue(event.toolName).toLowerCase();
+  if (toolName !== "bash") return undefined;
+  const args = recordValue(event.args);
+  const command = stringValue(args.command) || stringValue(args.cmd);
+  const id = stringValue(event.toolCallId);
+  if (command === "" || id === "") return undefined;
+  return {
+    command,
+    cwd: stringValue(args.cwd) || defaultCwd || ".",
+    id,
+    startedAt: Date.now()
+  };
+}
+
+function piToolOutput(value: unknown): string {
+  const result = recordValue(value);
+  if (!Array.isArray(result.content)) return stringValue(result.text);
+  return result.content.map(recordValue).map((item) => stringValue(item.text)).filter(Boolean).join("\n");
+}
+
+function piToolExitCode(value: unknown, failed: boolean, output: string): number {
+  const result = recordValue(value);
+  const details = recordValue(result.details);
+  if (typeof details.exitCode === "number" && Number.isSafeInteger(details.exitCode)) return details.exitCode;
+  const match = output.match(/Command exited with code (\d+)/);
+  if (match) return Number(match[1]);
+  return failed ? 1 : 0;
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+async function boundedPiAbort(transport: PiRpcTransport, timeoutMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      transport.send({ type: "abort" }).then(() => undefined, () => undefined),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+        timer.unref?.();
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

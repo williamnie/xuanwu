@@ -10,7 +10,6 @@ import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.t
 import type { Project } from "../db/repositories/projects.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { EventBus } from "../events/bus.ts";
-import { isExecutorProviderId } from "../providers/types.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 import { issuePromptImages } from "./issuePromptImages.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
@@ -18,7 +17,13 @@ import { publicMcpRegistry } from "../mcp/registry.ts";
 import { mergeSkillIntents, parseSkillPolicy } from "../skills/intents.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
 import { resolveExecutorSelection, type AgentRecommendation } from "../pi/agentOrchestration.ts";
-import type { ExecutorProvider, ExecutorProviderId, ProviderRunResult } from "../providers/types.ts";
+import {
+  isExecutorProviderId,
+  isProviderInterruptedError,
+  type ExecutorProvider,
+  type ExecutorProviderId,
+  type ProviderRunResult
+} from "../providers/types.ts";
 import { reconcileProviderOutcome } from "./providerOutcome.ts";
 
 export type ProjectLoopInput = {
@@ -131,7 +136,7 @@ async function runClaimedIssue(
     });
     return result;
   } catch (error) {
-    if (!issueExecutionNoLongerCurrent(input.database, issue.id, claimedRunID)) {
+    if (!isProviderInterruptedError(error) && !issueExecutionNoLongerCurrent(input.database, issue.id, claimedRunID)) {
       await reconcileProviderOutcome({
         bus: input.bus,
         database: input.database,

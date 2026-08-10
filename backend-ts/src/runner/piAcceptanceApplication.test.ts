@@ -110,6 +110,33 @@ describe("PI acceptance decision application", () => {
     }
   });
 
+  test("stops automatic fresh-session retries at the safety limit", async () => {
+    const db = await fixture();
+    const provider = new FreshSessionProvider();
+    try {
+      const issue = completedIssue(db, "Retry guard", "session-latest", "turn-latest");
+      recordIssueEvent(db, issue.id, "issue.pi_acceptance_applied.v1", { action: "retry", run_id: "old-1" });
+      recordIssueEvent(db, issue.id, "issue.pi_acceptance_applied.v1", { action: "retry", run_id: "old-2" });
+      const card = await buildIssueCompletionCard(db, issue.id);
+
+      const updated = await applyPiAcceptanceDecision(
+        { database: db, providers: { codex: provider } },
+        card,
+        decision("retry", "再开一个 Session 重试。")
+      );
+
+      expect(updated.status).toBe("needs_user");
+      expect(provider.inputs).toHaveLength(0);
+      expect(listIssueRuns(db, issue.id)).toHaveLength(1);
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+        owner: "human",
+        phase: "human_review"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("accepted delivery review blocks PI retry from creating another Provider Session", async () => {
     const db = await fixture();
     const provider = new FreshSessionProvider();

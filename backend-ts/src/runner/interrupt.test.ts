@@ -6,7 +6,12 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { runProjectLoopOnce } from "./projectLoop.ts";
 import { cancelIssueWithInterrupt, retryIssueWithInterrupt } from "./interrupt.ts";
-import type { ExecutorProvider, InterruptInput, ProviderRunInput } from "../providers/types.ts";
+import {
+  ProviderInterruptedError,
+  type ExecutorProvider,
+  type InterruptInput,
+  type ProviderRunInput
+} from "../providers/types.ts";
 
 const tempRoots: string[] = [];
 
@@ -46,6 +51,30 @@ describe("Bun issue interrupt runtime", () => {
       expect(eventTypes).toContain("issue.interrupted");
       expect(latestRun(db, issueId)).toMatchObject({ status: "cancelled", exit_reason: "issue_cancel" });
       expect(latestAttempt(db, issueId)).toMatchObject({ status: "interrupted" });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("cancel interrupts an active Pi run before Session or Turn refs exist", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new ActiveInterruptProvider();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo", "in_progress", "", "");
+      insertOpenRun(db, issueId, "pi-coding-agent");
+
+      const issue = await cancelIssueWithInterrupt(db, issueId, {
+        providers: { "pi-coding-agent": provider }
+      });
+
+      expect(issue.status).toBe("cancelled");
+      expect(provider.interrupts).toEqual([{
+        reason: "issue_cancel",
+        session: { provider: "pi-coding-agent", sessionId: "" }
+      }]);
+      expect(eventWithType(db, "issue.interrupted")).toBeDefined();
+      expect(latestRun(db, issueId)).toMatchObject({ status: "cancelled", exit_reason: "issue_cancel" });
     } finally {
       db.close();
     }
@@ -190,6 +219,37 @@ describe("Bun issue interrupt runtime", () => {
       db.close();
     }
   });
+
+  test("an immediate Pi interrupt cannot race the cancelled Run back to failed", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new ImmediatelyInterruptedProvider();
+    try {
+      insertProject(db, "demo");
+      db.sqlite.run("update projects set provider='pi-coding-agent' where id='demo'");
+      const issueId = insertIssue(db, "demo", "todo", "", "");
+      const running = runProjectLoopOnce({
+        database: db,
+        projectId: "demo",
+        providers: { "pi-coding-agent": provider }
+      });
+      await waitFor(() => latestRun(db, issueId)?.provider_session_id === "pi-running");
+
+      const cancelled = await cancelIssueWithInterrupt(db, issueId, {
+        providers: { "pi-coding-agent": provider }
+      });
+      await running;
+
+      expect(cancelled.status).toBe("cancelled");
+      expect(getIssue(db, issueId)).toMatchObject({ status: "cancelled" });
+      expect(latestRun(db, issueId)).toMatchObject({
+        status: "cancelled",
+        exit_reason: "issue_cancel",
+        error: ""
+      });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 class InterruptCaptureProvider implements ExecutorProvider {
@@ -199,7 +259,7 @@ class InterruptCaptureProvider implements ExecutorProvider {
 
   constructor(private readonly behavior: { hang?: boolean; reject?: Error } = {}) {}
 
-  async run(_input: ProviderRunInput) {
+  async run(_input: ProviderRunInput): Promise<never> {
     throw new Error("not implemented");
   }
 
@@ -207,6 +267,21 @@ class InterruptCaptureProvider implements ExecutorProvider {
     this.interrupts.push(input);
     if (this.behavior.reject) throw this.behavior.reject;
     if (this.behavior.hang) return await new Promise(() => {});
+  }
+}
+
+class ActiveInterruptProvider implements ExecutorProvider {
+  readonly id = "pi-coding-agent" as const;
+  readonly capabilities = ["interrupt"] as const;
+  readonly interruptScope = "active" as const;
+  readonly interrupts: InterruptInput[] = [];
+
+  async run(_input: ProviderRunInput): Promise<never> {
+    throw new Error("not implemented");
+  }
+
+  async interrupt(input: InterruptInput): Promise<void> {
+    this.interrupts.push(input);
   }
 }
 
@@ -233,6 +308,29 @@ class RestartableExecutionProvider implements ExecutorProvider {
   }
 }
 
+class ImmediatelyInterruptedProvider implements ExecutorProvider {
+  readonly id = "pi-coding-agent" as const;
+  readonly capabilities = ["issue_execution", "interrupt"] as const;
+  readonly interruptScope = "active" as const;
+  private rejectRun?: (error: Error) => void;
+
+  async run(input: ProviderRunInput) {
+    input.onEvent?.({
+      provider: this.id,
+      session: { provider: this.id, sessionId: "pi-running" },
+      status: "running",
+      type: "provider.session_started"
+    });
+    return await new Promise<never>((_resolve, reject) => {
+      this.rejectRun = reject;
+    });
+  }
+
+  async interrupt(): Promise<void> {
+    this.rejectRun?.(new ProviderInterruptedError("pi interrupted"));
+  }
+}
+
 function insertProject(db: RunnerDatabase, id: string): void {
   db.sqlite.run(
     `insert into projects (id, name, cwd, created_at, updated_at) values (?, ?, ?, ?, ?)`,
@@ -251,11 +349,11 @@ function insertIssue(db: RunnerDatabase, projectId: string, status: string, thre
   return row.id;
 }
 
-function insertOpenRun(db: RunnerDatabase, issueId: number): void {
+function insertOpenRun(db: RunnerDatabase, issueId: number, provider = "codex"): void {
   db.sqlite.run(
-    `insert into issue_runs (id, issue_id, attempt, status, started_at)
-     values (?, ?, ?, ?, ?)`,
-    [`issue-${issueId}-attempt-1`, issueId, 1, "in_progress", "2026-01-01T00:00:00Z"]
+    `insert into issue_runs (id, issue_id, attempt, status, provider, started_at)
+     values (?, ?, ?, ?, ?, ?)`,
+    [`issue-${issueId}-attempt-1`, issueId, 1, "in_progress", provider, "2026-01-01T00:00:00Z"]
   );
 }
 

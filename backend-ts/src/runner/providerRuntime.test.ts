@@ -191,6 +191,18 @@ class ThrowingProvider implements ExecutorProvider {
   }
 }
 
+class SessionThenThrowProvider implements ExecutorProvider {
+  readonly id = "pi-coding-agent" as const;
+  readonly capabilities = ["issue_execution", "sessions"] as const;
+
+  async run(input: ProviderRunInput): Promise<never> {
+    const session = { provider: this.id, sessionId: "pi-durable-session" } as const;
+    input.onEvent?.({ provider: this.id, session, status: "running", type: "provider.session_started" });
+    input.onEvent?.({ provider: this.id, session, status: "failed", error: "idle timeout", type: "error" });
+    throw new Error("idle timeout");
+  }
+}
+
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-provider-runtime-"));
   tempRoots.push(root);
@@ -291,6 +303,36 @@ describe("executor provider runtime seam", () => {
       type: "error"
     });
     expect(JSON.stringify(events)).not.toContain("fixture-secret");
+  });
+
+  test("persists an early Pi Session even when the provider later fails", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+
+      await expect(runIssueWithProvider(new SessionThenThrowProvider(), {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd: "/tmp/project",
+        prompt: "issue prompt"
+      })).rejects.toThrow("idle timeout");
+
+      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
+        provider: "pi-coding-agent",
+        provider_session_id: "pi-durable-session",
+        provider_turn_id: ""
+      });
+      expect(getAgentSession(db, "pi-coding-agent:pi-durable-session")).toMatchObject({
+        issue_id: issueId,
+        provider: "pi-coding-agent",
+        provider_session_id: "pi-durable-session",
+        status: "failed"
+      });
+    } finally {
+      db.close();
+    }
   });
 
   test("persists provider session refs into issue_runs and agent_sessions", async () => {

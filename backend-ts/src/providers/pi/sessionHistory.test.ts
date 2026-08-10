@@ -1,8 +1,43 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { piTranscriptTurns, publicPiSessionDetail } from "./sessionHistory.ts";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { piTranscriptTurns, publicPiSessionDetail, resolvePiSessionFile } from "./sessionHistory.ts";
 
 describe("Pi session history projection", () => {
+  test("resolves a Run session by filename without parsing unrelated transcripts", async () => {
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-session-index-"));
+    try {
+      const projectDirectory = join(root, "--tmp-demo--");
+      await mkdir(projectDirectory);
+      await writeFile(join(projectDirectory, "unrelated.jsonl"), "not-json\n");
+      const expected = join(projectDirectory, "2026-08-10T00-00-00-000Z_pi-session-1.jsonl");
+      await writeFile(expected, "not-parsed-by-resolver\n");
+
+      expect(await resolvePiSessionFile("pi-session-1", [root])).toBe(expected);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("session filename resolution rejects invalid and ambiguous identities", async () => {
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-session-index-"));
+    try {
+      const first = join(root, "first");
+      const second = join(root, "second");
+      await mkdir(first);
+      await mkdir(second);
+      await writeFile(join(first, "a_duplicate.jsonl"), "{}\n");
+      await writeFile(join(second, "b_duplicate.jsonl"), "{}\n");
+
+      await expect(resolvePiSessionFile("../escape", [root])).rejects.toThrow("Pi session id is invalid");
+      await expect(resolvePiSessionFile("duplicate", [root])).rejects.toThrow("resolves to multiple files");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("projects native Pi messages, reasoning, tools, and model into provider-neutral turns", () => {
     const entries = [
       { type: "model_change", id: "model", parentId: null, timestamp: "2026-08-05T00:00:00Z", provider: "deepseek", modelId: "deepseek-v4-flash" },

@@ -12,14 +12,15 @@ import { projectNormalizedRunEvent } from "../db/repositories/runAttemptEvents.t
 import type { RunnerDatabase } from "../db/database.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 import { normalizedRunEvent } from "../providers/runEvents.ts";
-import type {
-  ExecutorProvider,
-  ExecutorProviderId,
-  ProviderEvent,
-  ProviderRecoveryInput,
-  ProviderRunInput,
-  ProviderRunResult,
-  SessionRef
+import {
+  isProviderInterruptedError,
+  type ExecutorProvider,
+  type ExecutorProviderId,
+  type ProviderEvent,
+  type ProviderRecoveryInput,
+  type ProviderRunInput,
+  type ProviderRunResult,
+  type SessionRef
 } from "../providers/types.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { makeRunAttemptID } from "../domain/run/contracts.ts";
@@ -84,7 +85,9 @@ export async function runIssueWithProvider(
   try {
     result = await provider.run(providerInput(input, eventSink.push));
   } catch (error) {
-    if (!eventSink.hasFailure()) eventSink.push(providerRunErrorEvent(providerID, error));
+    if (!isProviderInterruptedError(error) && !eventSink.hasFailure()) {
+      eventSink.push(providerRunErrorEvent(providerID, error));
+    }
     throw error;
   } finally {
     await eventSink.flush();
@@ -128,7 +131,9 @@ export async function recoverIssueWithProvider(
   try {
     result = await provider.recover(providerRecoveryInput(input, eventSink.push));
   } catch (error) {
-    if (!eventSink.hasFailure()) eventSink.push(providerRunErrorEvent(providerID, error));
+    if (!isProviderInterruptedError(error) && !eventSink.hasFailure()) {
+      eventSink.push(providerRunErrorEvent(providerID, error));
+    }
     throw error;
   } finally {
     await eventSink.flush();
@@ -346,6 +351,9 @@ function eventSessionStatus(event: ProviderEvent): string {
   if (terminal === "succeeded") return event.status || "completed";
   if (terminal === "interrupted" || terminal === "cancelled") return "interrupted";
   if (terminal === "failed") return event.status || "failed";
+  if (event.type === "provider.session_started" || event.runEvent?.kind === "started") {
+    return event.status || "running";
+  }
   if (event.type === "turn_started" || method === "turn/started") return event.status || "running";
   if (method === "thread/status/changed") return event.status || "";
   if (method === "turn/completed") return event.status || "completed";

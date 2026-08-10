@@ -11,6 +11,7 @@ class FakePiTransport extends PiRpcTransport {
   readonly emitted: PiRpcEvent[] = [];
   readonly sessionRefs: string[] = [];
   readonly toolSets: string[][] = [];
+  hangAbort = false;
   started = false;
 
   constructor() {
@@ -37,6 +38,7 @@ class FakePiTransport extends PiRpcTransport {
 
   override async send(command: PiRpcCommand): Promise<unknown> {
     this.sent.push(command);
+    if (command.type === "abort" && this.hangAbort) return await new Promise(() => {});
     if (command.type === "get_state") return { sessionId: "pi-session-1", thinkingLevel: "medium", isStreaming: false, isCompacting: false, steeringMode: "all", followUpMode: "all", autoCompactionEnabled: true, messageCount: 1, pendingMessageCount: 0 };
     if (command.type === "get_available_models") return [{ id: "glm-5.2", display_name: "GLM 5.2" }];
     return {};
@@ -103,6 +105,28 @@ describe("P10: Pi executor（fake transport）", () => {
     });
   });
 
+  test("readSession 对解析到其他 identity 的历史文件 fail closed", async () => {
+    const provider = new PiExecutorProvider({
+      sessionFunctions: {
+        async resolve() { return "/tmp/mismatched.jsonl"; },
+        read() {
+          return {
+            id: "different-session",
+            cwd: "/tmp/demo",
+            name: "",
+            createdAt: 10,
+            updatedAt: 20,
+            entries: []
+          };
+        }
+      }
+    });
+
+    await expect(provider.readSession("requested-session")).rejects.toThrow(
+      "Pi session requested-session resolved to mismatched history different-session"
+    );
+  });
+
   test("run 发送 prompt，agent_settled 收敛 terminal，返回 session", async () => {
     const transport = new FakePiTransport();
     const provider = new PiExecutorProvider({ transport });
@@ -116,6 +140,12 @@ describe("P10: Pi executor（fake transport）", () => {
     expect(result.runId).toMatch(/^pi-rpc-/);
     expect(transport.sent).toContainEqual(expect.objectContaining({ id: result.runId, message: "do it", type: "prompt" }));
     expect(events).toContainEqual(expect.objectContaining({ provider: "pi-coding-agent", text: "done", type: "provider.message" }));
+    expect(events[0]).toMatchObject({
+      provider: "pi-coding-agent",
+      session: { provider: "pi-coding-agent", sessionId: "pi-session-1" },
+      status: "running",
+      type: "provider.session_started"
+    });
     expect(events.at(-1)).toMatchObject({
       provider: "pi-coding-agent",
       runEvent: { contract: "xw.run-event.v1", kind: "completed", outcome: "succeeded", terminal: true },
@@ -167,6 +197,160 @@ describe("P10: Pi executor（fake transport）", () => {
     await transport.start();
     await provider.interrupt({ session: { provider: "pi-coding-agent", sessionId: "s" } });
     expect(transport.sent.some((c) => c.type === "abort")).toBe(true);
+    expect(transport.running).toBe(false);
+  });
+
+  test("host interrupt 不会被重新报告成 Provider failure", async () => {
+    const transport = new FakePiTransport();
+    const provider = new PiExecutorProvider({ transport });
+    const events: ProviderEvent[] = [];
+    const runPromise = provider.run({
+      issueId: 10,
+      projectId: "p",
+      cwd: "/tmp",
+      prompt: "wait",
+      sandbox: "danger-full-access",
+      onEvent: (event) => events.push(event)
+    });
+    await Bun.sleep(0);
+
+    await provider.interrupt({
+      reason: "issue_cancel",
+      session: { provider: "pi-coding-agent", sessionId: "pi-session-1" }
+    });
+    transport.pushEvent({ type: "exit", signal: "SIGTERM" });
+
+    await expect(runPromise).rejects.toThrow("interrupted by host");
+    expect(events.some((event) => event.runEvent?.outcome === "failed")).toBe(false);
+  });
+
+  test("abort RPC 无响应时仍会在 Host 门限内停止 transport", async () => {
+    const transport = new FakePiTransport();
+    transport.hangAbort = true;
+    const provider = new PiExecutorProvider({ transport });
+    await transport.start();
+    const startedAt = Date.now();
+
+    await provider.interrupt({
+      reason: "issue_cancel",
+      session: { provider: "pi-coding-agent", sessionId: "pi-session-1" }
+    });
+
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(transport.running).toBe(false);
+  });
+
+  test("活动事件续期空闲超时，长任务不会被总时长误杀", async () => {
+    const transport = new FakePiTransport();
+    const provider = new PiExecutorProvider({ timeoutMs: 25, transport });
+    const runPromise = provider.run({
+      issueId: 7,
+      projectId: "p",
+      cwd: "/tmp",
+      prompt: "keep working",
+      sandbox: "danger-full-access"
+    });
+    setTimeout(() => transport.pushEvent({ type: "agent_start" }), 15);
+    setTimeout(() => transport.pushEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "progress" } }), 30);
+    setTimeout(() => transport.pushEvent({ type: "agent_settled" }), 45);
+
+    await expect(runPromise).resolves.toMatchObject({
+      session: { provider: "pi-coding-agent", sessionId: "pi-session-1" }
+    });
+  });
+
+  test("空闲超时仍保留 Session 并发出可恢复终态", async () => {
+    const transport = new FakePiTransport();
+    const provider = new PiExecutorProvider({ timeoutMs: 10, transport });
+    const events: ProviderEvent[] = [];
+
+    await expect(provider.run({
+      issueId: 8,
+      projectId: "p",
+      cwd: "/tmp",
+      prompt: "stall",
+      sandbox: "danger-full-access",
+      onEvent: (event) => events.push(event)
+    })).rejects.toThrow("pi rpc agent had no activity");
+
+    expect(events.at(-1)).toMatchObject({
+      error: "pi rpc agent had no activity for 10ms",
+      runEvent: { kind: "error", outcome: "failed", retryable: true, terminal: true },
+      session: { provider: "pi-coding-agent", sessionId: "pi-session-1" },
+      type: "provider.error"
+    });
+    expect(transport.running).toBe(false);
+  });
+
+  test("bash tool 终态投影为带 Session 的命令证据", async () => {
+    const transport = new FakePiTransport();
+    const provider = new PiExecutorProvider({ transport });
+    const events: ProviderEvent[] = [];
+    const runPromise = provider.run({
+      issueId: 9,
+      projectId: "p",
+      cwd: "/tmp/project",
+      prompt: "test",
+      sandbox: "danger-full-access",
+      onEvent: (event) => events.push(event)
+    });
+    setTimeout(() => transport.pushEvent({
+      args: { command: "bun test" },
+      toolCallId: "tool-1",
+      toolName: "bash",
+      type: "tool_execution_start"
+    }), 5);
+    setTimeout(() => transport.pushEvent({
+      isError: false,
+      result: { content: [{ type: "text", text: "1 pass" }] },
+      toolCallId: "tool-1",
+      toolName: "bash",
+      type: "tool_execution_end"
+    }), 10);
+    setTimeout(() => transport.pushEvent({ type: "agent_settled" }), 15);
+
+    await runPromise;
+    expect(events).toContainEqual(expect.objectContaining({
+      command: "bun test",
+      raw: expect.objectContaining({ method: "item/completed" }),
+      session: { provider: "pi-coding-agent", sessionId: "pi-session-1" },
+      status: "completed",
+      text: "1 pass",
+      type: "tool"
+    }));
+  });
+
+  test("bash tool 保留非零退出码", async () => {
+    const transport = new FakePiTransport();
+    const provider = new PiExecutorProvider({ transport });
+    const events: ProviderEvent[] = [];
+    const runPromise = provider.run({
+      issueId: 11,
+      projectId: "p",
+      cwd: "/tmp/project",
+      prompt: "test failure",
+      sandbox: "danger-full-access",
+      onEvent: (event) => events.push(event)
+    });
+    setTimeout(() => transport.pushEvent({
+      args: { command: "exit 7" },
+      toolCallId: "tool-failed",
+      toolName: "bash",
+      type: "tool_execution_start"
+    }), 5);
+    setTimeout(() => transport.pushEvent({
+      isError: true,
+      result: { content: [{ type: "text", text: "Command exited with code 7" }] },
+      toolCallId: "tool-failed",
+      toolName: "bash",
+      type: "tool_execution_end"
+    }), 10);
+    setTimeout(() => transport.pushEvent({ type: "agent_settled" }), 15);
+
+    await runPromise;
+    const command = events.find((event) => event.command === "exit 7");
+    expect(command?.raw?.payload).toContain('"exitCode":7');
+    expect(command?.status).toBe("failed");
   });
 
   test("需要 host approval 的策略 fail closed", async () => {

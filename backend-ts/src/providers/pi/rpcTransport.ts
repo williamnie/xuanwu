@@ -113,7 +113,7 @@ export class PiRpcTransport {
     await this.start();
   }
 
-  async stop(): Promise<void> {
+  async stop(graceMs = 2000): Promise<void> {
     const child = this.process;
     if (!child || child.exitCode !== null) return;
     child.kill("SIGTERM");
@@ -121,7 +121,7 @@ export class PiRpcTransport {
       const timer = setTimeout(() => {
         child.kill("SIGKILL");
         resolve();
-      }, 2000);
+      }, Math.max(0, graceMs));
       child.once("exit", () => {
         clearTimeout(timer);
         resolve();

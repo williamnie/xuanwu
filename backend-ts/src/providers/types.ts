@@ -210,11 +210,23 @@ export type InterruptInput = {
   session: SessionRef;
   reason?: string;
 };
+
+export class ProviderInterruptedError extends Error {
+  override readonly name = "ProviderInterruptedError";
+}
+
+export function isProviderInterruptedError(value: unknown): value is ProviderInterruptedError {
+  return value instanceof ProviderInterruptedError ||
+    (value instanceof Error && value.name === "ProviderInterruptedError");
+}
+
 export type ApprovalDecision = { decision: string; scope?: string };
 
 export interface ExecutorProvider {
   id: ExecutorProviderId;
   capabilities: readonly ExecutorCapability[];
+  /** turn 需要 message/turn ref；session 只需 session ref；active 可中断当前独占执行。 */
+  interruptScope?: "active" | "session" | "turn";
   run(input: ProviderRunInput): Promise<ProviderRunResult>;
   createSession?(input: SessionCreateInput): Promise<SessionCreateResult>;
   recover?(input: ProviderRecoveryInput): Promise<ProviderRunResult>;
