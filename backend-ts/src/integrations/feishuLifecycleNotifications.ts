@@ -5,6 +5,7 @@ import {
   getPiRunGroup,
   listPiActions,
   listPiNotificationIntents,
+  updatePiNotificationIntent,
   type PiNotificationIntent
 } from "../db/repositories/pi.ts";
 import { issueCompletionAutomationOwnsTargetForIssue } from "../pi/issueCompletionAutomation.ts";
@@ -111,6 +112,7 @@ function createLifecycleIntent(
     issue,
     now,
     target: target ? {
+      connectorID: "feishu",
       chatID: target.chatID,
       messageID: target.messageID,
       threadID: target.threadID
@@ -241,7 +243,7 @@ function queueDigestIntent(
   intent: PiNotificationIntent,
   result: DigestQueueResult
 ): void {
-  if (intent.target_channel !== "feishu" || intent.sent_outbox_id > 0) {
+  if ((intent.target_channel !== "" && intent.target_channel !== "feishu") || intent.sent_outbox_id > 0) {
     result.skipped += 1;
     return;
   }
@@ -251,10 +253,19 @@ function queueDigestIntent(
     result.failed += 1;
     return;
   }
+  const routedIntent = intent.target_channel === "feishu" && intent.target_chat_id === target.chatID &&
+    intent.target_message_id === target.messageID && intent.target_thread_id === target.threadID
+    ? intent
+    : updatePiNotificationIntent(db, intent.id, {
+      target_channel: "feishu",
+      target_chat_id: target.chatID,
+      target_message_id: target.messageID,
+      target_thread_id: target.threadID
+    });
   const queued = queueExistingNotificationIntent(db, {
     content: formatRunGroupDigest(intent),
     deepLink: `/api/pi/guardian/run-groups/${encodeURIComponent(intent.run_group_id)}`,
-    intent,
+    intent: routedIntent,
     notificationID: digestNotificationID(intent),
     notificationType: DIGEST_NOTIFY_TYPE,
     route: {

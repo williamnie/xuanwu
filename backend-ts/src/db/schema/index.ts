@@ -67,6 +67,13 @@ import { piContextMemoryAuthorityMigration } from "./066_pi_context_memory_autho
 import { compactEventSummaryCreatedAtMigration } from "./067_compact_event_summary_created_at.ts";
 import { builtinExecutorProfilesMigration } from "./068_builtin_executor_profiles.ts";
 import { builtinPiExecutorProfileMigration } from "./069_builtin_pi_executor_profile.ts";
+import { imConversationStateMigration } from "./070_im_conversation_state.ts";
+import { imConversationStateBackfillMigration } from "./070a_im_conversation_state_backfill.ts";
+import { imInteractionBindingsMigration } from "./071_im_interaction_bindings.ts";
+import { imProjectSelectionsBackfillMigration } from "./071a_im_project_selections_backfill.ts";
+import { imInteractionBindingConstraintsMigration } from "./072_im_interaction_binding_constraints.ts";
+import { imInteractionResolutionLeaseMigration } from "./073_im_interaction_resolution_lease.ts";
+import { imOutboundDedupeMigration } from "./074_im_outbound_dedupe.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -137,5 +144,12 @@ export const migrations = [
   piContextMemoryAuthorityMigration,
   compactEventSummaryCreatedAtMigration,
   builtinExecutorProfilesMigration,
-  builtinPiExecutorProfileMigration
+  builtinPiExecutorProfileMigration,
+  imConversationStateMigration,
+  imConversationStateBackfillMigration,
+  imInteractionBindingsMigration,
+  imProjectSelectionsBackfillMigration,
+  imInteractionBindingConstraintsMigration,
+  imInteractionResolutionLeaseMigration,
+  imOutboundDedupeMigration
 ];

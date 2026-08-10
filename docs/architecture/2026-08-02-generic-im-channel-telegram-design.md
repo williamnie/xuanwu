@@ -1,6 +1,6 @@
-# 通用 IM Channel 底座与 Telegram 接入设计（Draft）
+# 通用 IM Channel 底座与 Telegram 接入设计
 
-> 状态：Draft，待用户 review；不是当前实现规范，不授权修改 runtime、public API 或数据库
+> 状态：Accepted；Issue #864 已完成阶段 A 的离线实现，等待真实 Feishu 验收；Telegram 仍属于后续阶段 B
 >
 > 日期：2026-08-02
 >
@@ -13,6 +13,8 @@
 > [统一通知 Outbox](./xuanwu/0075-unified-notification-outbox.md)、
 > [Connector Health / Secret / Diagnostics](./xuanwu/0076-connector-health-secrets-diagnostics.md)、
 > [Feishu Connector 迁移](./xuanwu/0077-feishu-channel-connector-migration.md)
+
+> 实施边界（2026-08-10）：生产发送入口已收敛到 registry 驱动的 `draft -> sync_outbox -> dispatchImOutbox -> ChannelConnector.deliver`；即时回复、reaction、Guardian 提醒也先落同一 durable outbox，Feishu adapter 只负责把 canonical interaction/Markdown 渲染为卡片。入站先归一化为 `ImInboundMessageV1`，再由通用 inbox writer 写 `external_events`。新卡片只携带 opaque token、action index 与 revision，actor/scope/action/expiry 在服务端 binding 中 fail closed；旧 Feishu approval、PI action、project selection callback 会先收编成兼容 binding，再进入同一 interaction service。迁移 070–074 均为 additive，073 为 resolver 增加可恢复 lease，074 只约束 canonical IM dedupe key；均未对 live DB 执行。真实 Feishu callback/发送和旧 binary rollback 仍是发布门禁。
 
 ## 1. 结论摘要
 
@@ -1232,4 +1234,4 @@ audit payload 只放 connector ID、stable refs、分类错误和时间，不放
 - 最后接 Telegram long polling，并用 TG 证明业务 core 不再依赖 Feishu；
 - QQ 等第三渠道只有在 Telegram 完成后再立项，以真实协议检验而不是继续预先抽象。
 
-在本文从 Draft 转为 Accepted 前，不应创建 schema migration、公共 route、Telegram client 或 runtime cutover 实现。
+阶段 B（Telegram）必须另开 Issue，并以本次阶段 A 的 live Feishu 验收、迁移 rehearsal 与 W1 compatibility 指标为前置条件；不得在 #864 中顺带加入 Telegram transport。

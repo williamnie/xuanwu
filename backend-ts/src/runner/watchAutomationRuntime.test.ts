@@ -80,6 +80,43 @@ describe("Watch Automation runtime", () => {
     } finally { db.close(); }
   });
 
+  test("preserves a non-Feishu connector through watch storage and generic outbox routing", async () => {
+    const db = await fixture();
+    try {
+      const watched = issue(db, "telegram");
+      const watch = createIssueWatch(db, "telegram", watched.id, "", "telegram");
+      expect(getAutomationWatch(db, watch.automation_id)?.notification_target).toEqual({
+        connector_id: "telegram",
+        conversation_id: "chat-watch",
+        reply_to_message_id: "message-watch",
+        thread_id: "thread-watch"
+      });
+      setIssueStatus(db, watched.id, "done");
+      expect(runWatchAutomationsOnce(db, { now: EVALUATED_AT })).toMatchObject({ queued: 1, satisfied: 1 });
+      expect(db.sqlite.query<{ target_channel: string }, []>(
+        "select target_channel from pi_notification_intents limit 1"
+      ).get()?.target_channel).toBe("telegram");
+      await flushAgentMessages(db);
+      expect(db.sqlite.query<{ source: string }, []>(
+        "select source from sync_outbox limit 1"
+      ).get()?.source).toBe("telegram");
+    } finally { db.close(); }
+  });
+
+  test("normalizes historical Feishu target JSON without breaking dedupe replay", async () => {
+    const db = await fixture();
+    try {
+      const watched = issue(db, "legacy-target-json");
+      const watch = createIssueWatch(db, "legacy-target-json", watched.id);
+      db.sqlite.run("update automation_watches set notification_target_json=? where automation_id=?", [
+        JSON.stringify({ channel: "feishu", chat_id: "chat-watch", message_id: "message-watch", thread_id: "thread-watch" }),
+        watch.automation_id
+      ]);
+      expect(getAutomationWatch(db, watch.automation_id)?.notification_target).toEqual(notificationTarget());
+      expect(createIssueWatch(db, "legacy-target-json", watched.id).automation_id).toBe(watch.automation_id);
+    } finally { db.close(); }
+  });
+
   test("observes only new matching external thread events and advances an audited cursor", async () => {
     const db = await fixture();
     try {
@@ -157,22 +194,27 @@ function issue(db: RunnerDatabase, suffix: string) {
   return createIssue(db, { description: suffix, project_id: "demo", status: "in_progress", title: `Watch ${suffix}` });
 }
 
-function createIssueWatch(db: RunnerDatabase, suffix: string, issueID: number, expiresAt = "") {
+function createIssueWatch(db: RunnerDatabase, suffix: string, issueID: number, expiresAt = "", connectorID = "feishu") {
   const input: CreateAutomationWatchInput = {
     condition: { match: "all", statuses: ["done", "failed", "cancelled"], type: "issue_status" },
     dedupe_key: `watch:${suffix}`,
     expires_at: expiresAt,
     id: `automation:watch-${suffix}` as AutomationID,
     name: `Watch ${suffix}`,
-    notification_target: notificationTarget(),
+    notification_target: notificationTarget(connectorID),
     project_id: "demo",
     subject: { issue_ids: [issueID], kind: "issues" }
   };
   return createAutomationWatch(db, input, audit(`create-${suffix}`, CREATED_AT));
 }
 
-function notificationTarget() {
-  return { channel: "feishu" as const, chat_id: "chat-watch", message_id: "message-watch", thread_id: "thread-watch" };
+function notificationTarget(connectorID = "feishu") {
+  return {
+    connector_id: connectorID,
+    conversation_id: "chat-watch",
+    reply_to_message_id: "message-watch",
+    thread_id: "thread-watch"
+  };
 }
 
 function audit(eventID: string, occurredAt: string): AutomationAudit {
@@ -212,7 +254,7 @@ function markQueuedOutboxesSent(db: RunnerDatabase): void {
     "select id from sync_outbox where status in ('pending', 'queued', 'retry') order by id"
   ).all();
   ids.forEach(({ id }, index) => markSyncOutboxSent(db, id, {
-    feishuMessageId: `feishu-message-${id}`,
+    providerRequestRef: `feishu-message-${id}`,
     timestamp: new Date(`2026-07-18T00:06:0${index}.000Z`)
   }));
 }

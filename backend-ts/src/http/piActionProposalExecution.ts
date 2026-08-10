@@ -152,6 +152,9 @@ function replyPayload(
 ): JsonObject {
   const event = firstExternalEvent(db, [...stringList(payload.evidence_refs), ...action.evidence_refs, ...proposal.evidence_refs]);
   const normalized = objectValue(event?.normalized_message);
+  const conversation = objectValue(normalized.conversation);
+  const thread = objectValue(normalized.thread);
+  const sender = objectValue(normalized.sender);
   return {
     ...payload,
     content: replyText(payload),
@@ -159,16 +162,16 @@ function replyPayload(
     risk: action.risk,
     source: cleanString(payload.source) || event?.source || "action_proposal",
     actor: cleanString(payload.actor) || firstString(
-      normalized.actor_id, normalized.actorId, normalized.sender_id,
+      sender.id, normalized.actor_id, normalized.actorId, normalized.sender_id,
       normalized.senderId, normalized.user_id, normalized.userId, event?.actor
     ),
     target_person_id: cleanString(payload.target_person_id) || firstString(
-      normalized.person_id, normalized.personId, normalized.sender_id,
+      sender.id, normalized.person_id, normalized.personId, normalized.sender_id,
       normalized.senderId, normalized.user_id, normalized.userId, event?.actor
     ),
-    target_chat_id: cleanString(payload.target_chat_id) || firstString(normalized.chat_id, normalized.chatId),
+    target_chat_id: cleanString(payload.target_chat_id) || firstString(normalized.chat_id, normalized.chatId, conversation.id),
     target_message_id: cleanString(payload.target_message_id) || firstString(normalized.message_id, normalized.messageId, event?.external_id),
-    target_thread_id: cleanString(payload.target_thread_id) || firstString(normalized.thread_id, normalized.threadId)
+    target_thread_id: cleanString(payload.target_thread_id) || firstString(normalized.thread_id, normalized.threadId, thread.id)
   };
 }
 

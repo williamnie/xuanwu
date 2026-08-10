@@ -95,6 +95,40 @@ describe("PI digest flush scheduler", () => {
       db.close();
     }
   });
+
+  test("inherits a non-Feishu connector and target from lifecycle intents", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertIssue(db, 701, "Telegram done", "done");
+      createPiRunGroup(db, { id: "group-telegram", project_id: "demo", expected_issue_count: 1 });
+      addPiRunGroupItem(db, {
+        run_group_id: "group-telegram",
+        issue_id: 701,
+        position: 1,
+        enqueue_status: "completed",
+        final_issue_status: "done"
+      });
+      createPiNotificationIntent(db, {
+        ...lifecycleIntent("life-701", 701, "group-telegram", "issue_done"),
+        target_channel: "telegram",
+        target_chat_id: "-100opaque",
+        target_message_id: "message-7",
+        target_thread_id: "topic-1"
+      });
+
+      expect(runDigestFlushSchedulerOnce(db, { now: "2026-06-18T03:00:00Z" })).toEqual({
+        flushed: 1,
+        scanned: 1,
+        skipped: 0
+      });
+      expect(digestIntents(listPiNotificationIntents(db, { runGroupId: "group-telegram" }))).toMatchObject([{
+        target_channel: "telegram",
+        target_chat_id: "-100opaque",
+        target_message_id: "message-7",
+        target_thread_id: "topic-1"
+      }]);
+    } finally { db.close(); }
+  });
 });
 
 function lifecycleIntent(id: string, issueID: number, runGroupID: string, kind: string, state = "aggregated") {

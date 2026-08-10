@@ -16,7 +16,7 @@ import { EventBus } from "../events/bus.ts";
 import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
 import { createDefaultRouter } from "../http/server.ts";
 import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
-import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
+import { dispatchFeishuOutbox, type FeishuMessageSender } from "./feishuOutboxDispatcherCompat.ts";
 import { queueFeishuIssueStatusNotification, queueFeishuPiNeedsUserNotification } from "./feishuNotifications.ts";
 
 const tempRoots: string[] = [];

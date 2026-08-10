@@ -8,6 +8,7 @@ import {
   getFeishuConversationState,
   setFeishuConversationActiveProject
 } from "./feishuConversationState.ts";
+import { getImConversationState } from "./imConversationState.ts";
 
 const tempRoots: string[] = [];
 
@@ -18,7 +19,7 @@ afterEach(async () => {
   }
 });
 
-describe("Feishu conversation state repository", () => {
+describe("Feishu conversation state repository (W1 compatibility shim)", () => {
   test("stores and advances the active conversation epoch for a scope", async () => {
     const db = await openFixtureDatabase();
     try {
@@ -45,77 +46,62 @@ describe("Feishu conversation state repository", () => {
         active_project_source: "",
         epoch: 2,
         scope_key: "feishu-chat-oc_group-20260613",
-        started_at: "2026-06-13T02:00:00.000Z"
+        // The epoch scope keeps its original start across bumps; only
+        // updated_at advances.
+        started_at: "2026-06-13T01:02:03.000Z",
+        updated_at: "2026-06-13T02:00:00.000Z"
       });
       expect(getFeishuConversationState(db, "feishu-chat-oc_group-20260613")).toEqual(second);
+
+      // The provider-neutral table is the single application writer.
+      expect(getImConversationState(db, "feishu", "feishu-chat-oc_group-20260613")).toMatchObject({
+        active_conversation_id: "feishu-chat-oc_group-20260613-n2",
+        base_conversation_id: "feishu-chat-oc_group-20260613",
+        connector_id: "feishu",
+        epoch: 2
+      });
+      // The legacy table is a read-only historical carrier during W1.
+      expect(db.sqlite.query<{ count: number }, []>(
+        "select count(*) as count from feishu_conversation_state"
+      ).get()).toEqual({ count: 0 });
     } finally {
       db.close();
     }
   });
 
-  test("stores active project state for a Feishu conversation scope", async () => {
+  test("never persists an active project; the legacy writer is a no-op", async () => {
     const db = await openFixtureDatabase();
     try {
-      const saved = setFeishuConversationActiveProject(db, {
+      bumpFeishuConversationEpoch(db, {
+        baseConversationId: "feishu-chat-oc_group-20260613",
+        scopeKey: "feishu-chat-oc_group-20260613"
+      }, new Date("2026-06-13T01:02:03Z"));
+
+      const returned = setFeishuConversationActiveProject(db, {
         activeConversationId: "feishu-chat-oc_group-20260613",
         activeProjectId: "xuanwu",
         scopeKey: "feishu-chat-oc_group-20260613",
         source: "user_switch"
       }, new Date("2026-06-13T03:00:00Z"));
-      const updated = setFeishuConversationActiveProject(db, {
-        activeProjectId: "demo",
-        scopeKey: "feishu-chat-oc_group-20260613",
-        source: "issue_ref"
-      }, new Date("2026-06-13T04:00:00Z"));
 
-      expect(saved).toMatchObject({
-        active_conversation_id: "feishu-chat-oc_group-20260613",
-        active_project_id: "xuanwu",
-        active_project_source: "user_switch",
-        epoch: 0,
-        scope_key: "feishu-chat-oc_group-20260613",
-        started_at: "2026-06-13T03:00:00.000Z",
-        updated_at: "2026-06-13T03:00:00.000Z"
-      });
-      expect(updated).toMatchObject({
-        active_conversation_id: "feishu-chat-oc_group-20260613",
-        active_project_id: "demo",
-        active_project_source: "issue_ref",
-        epoch: 0,
-        scope_key: "feishu-chat-oc_group-20260613",
-        started_at: "2026-06-13T03:00:00.000Z",
-        updated_at: "2026-06-13T04:00:00.000Z"
-      });
-      expect(getFeishuConversationState(db, "feishu-chat-oc_group-20260613")).toEqual(updated);
-    } finally {
-      db.close();
-    }
-  });
-
-  test("preserves active project state when starting a new conversation epoch", async () => {
-    const db = await openFixtureDatabase();
-    try {
-      setFeishuConversationActiveProject(db, {
-        activeConversationId: "feishu-chat-oc_group-20260613",
-        activeProjectId: "xuanwu",
-        scopeKey: "feishu-chat-oc_group-20260613",
-        source: "card_select"
-      }, new Date("2026-06-13T03:00:00Z"));
-
-      const bumped = bumpFeishuConversationEpoch(db, {
-        baseConversationId: "feishu-chat-oc_group-20260613",
-        scopeKey: "feishu-chat-oc_group-20260613"
-      }, new Date("2026-06-13T05:00:00Z"));
-
-      expect(bumped).toMatchObject({
+      // The shim keeps the legacy return shape but the epoch state is
+      // unchanged and no project is persisted anywhere.
+      expect(returned).toMatchObject({
         active_conversation_id: "feishu-chat-oc_group-20260613-n1",
-        active_project_id: "xuanwu",
-        active_project_source: "card_select",
-        epoch: 1,
-        scope_key: "feishu-chat-oc_group-20260613",
-        started_at: "2026-06-13T05:00:00.000Z",
-        updated_at: "2026-06-13T05:00:00.000Z"
+        active_project_id: "",
+        active_project_source: "",
+        epoch: 1
       });
+      const state = getFeishuConversationState(db, "feishu-chat-oc_group-20260613");
+      expect(state).toMatchObject({
+        active_conversation_id: "feishu-chat-oc_group-20260613-n1",
+        active_project_id: "",
+        active_project_source: "",
+        epoch: 1
+      });
+      expect(db.sqlite.query<{ count: number }, []>(
+        "select count(*) as count from feishu_conversation_state"
+      ).get()).toEqual({ count: 0 });
     } finally {
       db.close();
     }

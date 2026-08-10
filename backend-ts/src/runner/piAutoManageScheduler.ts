@@ -2,20 +2,18 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import { isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
-import { queueReadyFeishuDigestNotifications } from "../integrations/feishuLifecycleNotifications.ts";
-import { queuePendingPiActionNotifications } from "../integrations/feishuNotifications.ts";
-import type { PiGuardianDirectFeishuOptions } from "../integrations/feishuGuardianAlerts.ts";
-import type { FeishuMessageClient } from "../integrations/feishuClient.ts";
-import { createFeishuMessageClient } from "../integrations/feishuClient.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
+import { queueReadyImDigestNotifications } from "../pi/digestNotifications.ts";
+import { queuePendingImActionNotifications } from "../pi/pendingActionNotifications.ts";
 import { queueDailyNotificationDigests, type DailyDigestResult } from "../notifications/dailyDigest.ts";
 import {
   runAgentCommunicationGatewayOnce,
   type AgentCommunicationDecider,
   type AgentCommunicationGatewayResult
 } from "../notifications/agentCommunicationGateway.ts";
-import { sendMissedDigestPendingFeishuFallback } from "../pi/guardianMissedDigestFallback.ts";
+import { sendMissedDigestPendingFallback } from "../pi/guardianMissedDigestFallback.ts";
+import type { GuardianAlertDelivery } from "../pi/guardianAlertDelivery.ts";
 import {
   runGuardianMissedIntentSweepOnce,
   type GuardianMissedIntentSweepResult
@@ -53,7 +51,8 @@ import {
 } from "./automationScheduler.ts";
 import { createNativeAutomationExecutor } from "./automationRuntime.ts";
 import { runWatchAutomationsOnce } from "./watchAutomationRuntime.ts";
-import { dispatchFeishuOutbox } from "../pi/imReplyOutboxDispatcher.ts";
+import type { ImChannelRegistry } from "../integrations/imChannelContracts.ts";
+import { dispatchImOutbox } from "../pi/imReplyOutboxDispatcher.ts";
 import {
   signalOpenRunTerminalProviderErrors,
   type ProviderTerminalBackfillSummary
@@ -102,7 +101,8 @@ export type PiAutoManageCycleInput = {
   config?: RunnerConfig;
   database: RunnerDatabase;
   decideIssueAcceptance?: PiIssueAcceptanceRunner;
-  guardianDirectFeishuSender?: FeishuMessageClient;
+  guardianAlertDelivery?: GuardianAlertDelivery;
+  imChannels?: ImChannelRegistry;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   runAutomationCore?: AutomationExecutor;
   runProjectCycle: PiAutoManageProjectCycle;
@@ -225,15 +225,14 @@ export async function runGuardianControlPlaneCycle(
     providers: input.providers
   }));
   const digestFlush = await timedSchedulePhase("digest_flush", () => runDigestFlushSchedulerOnce(input.database));
-  const directFeishu = guardianDirectFeishuOptions(input);
   const watchdog = await timedSchedulePhase("guardian_watchdog", () => runPiGuardianWatchdogOnce(input.database, {
-    directFeishu,
+    delivery: input.guardianAlertDelivery,
     now: input.watchdogNow,
     staleAfterMs: input.watchdogStaleAfterMs
   }));
   const missedIntentSweep = await timedSchedulePhase(
     "missed_intent_sweep",
-    () => runMissedIntentSweepWithFallback(input, watchdog, directFeishu)
+    () => runMissedIntentSweepWithFallback(input, watchdog, input.guardianAlertDelivery)
   );
   await timedSchedulePhase("resolve_recovered_alerts", () => (
     resolveRecoveredAlerts(input.database, watchdog.checks, cycleNowText(input.watchdogNow))
@@ -245,14 +244,8 @@ export async function runGuardianControlPlaneCycle(
     "watch_automations",
     () => runWatchAutomationsOnce(input.database, { now: input.watchdogNow })
   );
-  const watchFeishuConfig = input.config;
-  if (watchResult.queued > 0 && watchFeishuConfig) {
-    await timedSchedulePhase("watch_feishu_outbox", () => dispatchFeishuOutbox({
-      config: watchFeishuConfig.integrations.feishu,
-      database: input.database,
-      now: optionalDate(input.watchdogNow),
-      sender: input.guardianDirectFeishuSender ?? createFeishuMessageClient({ config: watchFeishuConfig.integrations.feishu })
-    }));
+  if (watchResult.queued > 0 && input.imChannels) {
+    await timedSchedulePhase("watch_im_outbox", () => dispatchSchedulerImOutbox(input));
   }
   const dailyDigestNotifications = await timedSchedulePhase(
     "daily_digest_notifications",
@@ -260,7 +253,7 @@ export async function runGuardianControlPlaneCycle(
   );
   const digestNotifications = await timedSchedulePhase(
     "digest_notifications",
-    () => queueReadyFeishuDigestNotifications(input.database)
+    () => queueReadyImDigestNotifications(input.database)
   );
   const completionWatchNotifications = { failed: 0, queued: 0, scanned: 0, skipped: 0 };
   const issueWatchdog = await timedSchedulePhase("issue_watchdog", () => runAutoRunIssueWatchdogOnce({
@@ -312,24 +305,13 @@ export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<Ag
     skipped: acceptance.skipped,
     started: acceptance.started
   };
-  if (input.config) {
-    await timedSchedulePhase("pending_action_notifications", () => queuePendingPiActionNotifications(
-      input.database,
-      input.config?.integrations.feishu
-    ));
-  }
+  await timedSchedulePhase("pending_action_notifications", () => queuePendingImActionNotifications(input.database));
   const agentCommunications = await timedSchedulePhase("agent_communications", () => runAgentCommunicationGatewayOnce(input.database, {
     decide: input.agentCommunicationDecider,
     now: optionalDate(input.watchdogNow)
   }));
-  const communicationFeishuConfig = input.config;
-  if ((agentCommunications.queued > 0 || agentCommunications.fallback > 0) && communicationFeishuConfig) {
-    await timedSchedulePhase("communication_feishu_outbox", () => dispatchFeishuOutbox({
-      config: communicationFeishuConfig.integrations.feishu,
-      database: input.database,
-      now: optionalDate(input.watchdogNow),
-      sender: input.guardianDirectFeishuSender ?? createFeishuMessageClient({ config: communicationFeishuConfig.integrations.feishu })
-    }));
+  if ((agentCommunications.queued > 0 || agentCommunications.fallback > 0) && input.imChannels) {
+    await timedSchedulePhase("communication_im_outbox", () => dispatchSchedulerImOutbox(input));
   }
   // PI decisions can take tens of seconds. Runtime wiring executes this whole
   // agentic cycle independently from the Guardian/control-plane scheduler.
@@ -450,20 +432,29 @@ function defaultClock<Timer>(): PiAutoManageSchedulerClock<Timer> {
 async function runMissedIntentSweepWithFallback(
   input: PiAutoManageCycleInput,
   watchdog: PiGuardianWatchdogSummary,
-  directFeishu: PiGuardianDirectFeishuOptions | undefined
+  delivery: GuardianAlertDelivery | undefined
 ): Promise<GuardianMissedIntentSweepResult> {
-  const result = runGuardianMissedIntentSweepOnce(input.database, { now: input.watchdogNow, watchdog });
-  await sendMissedDigestPendingFeishuFallback(input.database, result.pendingAlertIds, directFeishu);
+  const result = runGuardianMissedIntentSweepOnce(input.database, {
+    fallbackConnectorID: singleImConnectorID(input.imChannels),
+    now: input.watchdogNow,
+    watchdog
+  });
+  await sendMissedDigestPendingFallback(input.database, result.pendingAlertIds, delivery);
   return result;
 }
 
-function guardianDirectFeishuOptions(input: PiAutoManageCycleInput): PiGuardianDirectFeishuOptions | undefined {
-  if (!input.config) return undefined;
-  return {
-    config: input.config.integrations.feishu,
+function singleImConnectorID(registry: ImChannelRegistry | undefined): string {
+  const ids = registry?.list().map((module) => module.id) ?? [];
+  return ids.length === 1 ? ids[0]! : "";
+}
+
+function dispatchSchedulerImOutbox(input: PiAutoManageCycleInput) {
+  if (!input.imChannels) throw new Error("im channel registry is not configured");
+  return dispatchImOutbox({
+    database: input.database,
     now: optionalDate(input.watchdogNow),
-    sender: input.guardianDirectFeishuSender
-  };
+    resolveConnector: (source) => input.imChannels!.get(source).connector
+  });
 }
 
 function optionalDate(value: Date | string | undefined): Date | undefined {

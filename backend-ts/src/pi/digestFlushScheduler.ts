@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { findImConversationStateByConversationID } from "../db/repositories/imConversationState.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import {
   createPiNotificationIntent,
@@ -32,7 +33,6 @@ type DigestPayload = DigestCounts & {
 };
 
 const DEFAULT_LIMIT = 50;
-const DIGEST_CHANNEL = "feishu";
 const MINUTE_MS = 60_000;
 const activeDigestFlushGroups = new Set<string>();
 
@@ -95,6 +95,7 @@ function flushGroupDigest(
       });
       const items = listPiRunGroupItems(db, group.id);
       const payload = digestPayload(group.id, group.expected_issue_count, items);
+      const target = digestTarget(db, current);
       markCoveredLifecycleIntents(db, group.id);
       createPiNotificationIntent(db, {
         conversation_id: group.origin_conversation_id,
@@ -108,13 +109,30 @@ function flushGroupDigest(
         source_event_type: "digest.flush_due",
         state: "ready",
         summary: digestSummary(reason, payload),
-        target_channel: DIGEST_CHANNEL
+        target_channel: target.channel,
+        target_chat_id: target.chatID,
+        target_message_id: target.messageID,
+        target_thread_id: target.threadID
       });
       return true;
     }).immediate();
   } finally {
     activeDigestFlushGroups.delete(group.id);
   }
+}
+
+function digestTarget(db: RunnerDatabase, group: PiRunGroup) {
+  const prior = listPiNotificationIntents(db, { runGroupId: group.id })
+    .filter((intent) => intent.target_channel !== "")
+    .at(-1);
+  if (prior) return {
+    channel: prior.target_channel,
+    chatID: prior.target_chat_id,
+    messageID: prior.target_message_id,
+    threadID: prior.target_thread_id
+  };
+  const conversation = findImConversationStateByConversationID(db, group.origin_conversation_id);
+  return { channel: conversation?.connector_id ?? "", chatID: "", messageID: "", threadID: "" };
 }
 
 function nextGroupStatus(currentStatus: string, reason: FlushReason): string {

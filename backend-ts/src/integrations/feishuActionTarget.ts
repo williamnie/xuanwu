@@ -39,15 +39,18 @@ function repliedNotificationTargets(db: RunnerDatabase, event: FeishuNormalizedM
   const refs = [cleanString(event.thread_id), cleanString(event.root_id)].filter(Boolean);
   if (refs.length === 0) return [];
   const placeholders = refs.map(() => "?").join(",");
+  // provider_request_ref is the authoritative delivery receipt; legacy rows
+  // whose receipt only exists in the feishu_message_id compatibility carrier
+  // still match while the bounded compat window is open.
   return db.sqlite.query<TargetRow, string[]>(
     `select o.issue_id, coalesce(i.project_id, '') as project_id,
-            o.feishu_message_id as ref, o.created_at
+            o.provider_request_ref as ref, o.created_at
        from sync_outbox o
        left join issues i on i.id=o.issue_id
       where o.source='feishu' and o.status='sent' and o.issue_id>0
-        and o.feishu_message_id in (${placeholders})
+        and (o.provider_request_ref in (${placeholders}) or o.feishu_message_id in (${placeholders}))
       order by o.created_at desc, o.id desc`
-  ).all(...refs);
+  ).all(...refs, ...refs);
 }
 
 function openActionableNotificationTargets(

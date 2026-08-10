@@ -15,11 +15,8 @@ import {
 import { queueDailyNotificationDigests } from "./dailyDigest.ts";
 import { flushAgentCommunicationTestMessages } from "./agentCommunicationGateway.testSupport.ts";
 import { runAgentCommunicationGatewayOnce } from "./agentCommunicationGateway.ts";
-import {
-  dispatchNotificationOutbox,
-  NotificationChannelError,
-  type NotificationChannelSender
-} from "./notificationOutbox.ts";
+import { dispatchImOutbox } from "../pi/imReplyOutboxDispatcher.ts";
+import type { ChannelConnector, ConnectorDeliveryReceipt } from "../integrations/channelConnectorContracts.ts";
 import { routeNotification } from "./unifiedNotificationPipeline.ts";
 import { queueFeishuHandoffNotification } from "../integrations/feishuNotifications.ts";
 
@@ -112,17 +109,22 @@ describe("unified notification intent/outbox", () => {
       expect(outbox.every((item) => item.content.includes(`/api/issues/${issue.id}`))).toBe(true);
       expect(intents.every((intent) => JSON.parse(intent.payload_json).deep_link === `/api/issues/${issue.id}`)).toBe(true);
 
-      const webhook = new SequenceSender([
-        new NotificationChannelError("temporary outage", { retryAfterSeconds: 5 }),
-        { deliveryID: "hook-delivered" }
+      const connectors = new Map<string, ChannelConnector>([
+        ["feishu", fixtureConnector("feishu", [{ deliveryID: "om-delivered" }])],
+        ["webhook", fixtureConnector("webhook", [
+          fixtureRetryableError(5),
+          { deliveryID: "hook-delivered" }
+        ])]
       ]);
-      const firstDispatch = await dispatchNotificationOutbox({
+      const resolveFixtureConnector = (source: string): ChannelConnector => {
+        const connector = connectors.get(source);
+        if (!connector) throw new Error(`im channel module is not registered: ${source}`);
+        return connector;
+      };
+      const firstDispatch = await dispatchImOutbox({
         database: db,
         now: new Date("2026-07-18T12:01:00.000Z"),
-        senders: {
-          feishu: new SequenceSender([{ deliveryID: "om-delivered" }]),
-          webhook
-        }
+        resolveConnector: resolveFixtureConnector
       });
       const retry = listSyncOutbox(db, { source: "webhook" })[0]!;
 
@@ -130,16 +132,24 @@ describe("unified notification intent/outbox", () => {
       expect(retry).toMatchObject({ attempt_count: 1, status: "retry" });
       expect(retry.cooldown_until).toBe("2026-07-18T12:01:05.000Z");
 
-      const secondDispatch = await dispatchNotificationOutbox({
+      const secondDispatch = await dispatchImOutbox({
         database: db,
         now: new Date("2026-07-18T12:01:06.000Z"),
-        senders: { webhook }
+        resolveConnector: resolveFixtureConnector,
+        source: "webhook"
       });
       expect(secondDispatch).toMatchObject({ failed: 0, processed: 1, retry: 0, sent: 1 });
-      expect(getSyncOutbox(db, retry.id)).toMatchObject({
+      const sentRow = getSyncOutbox(db, retry.id)!;
+      expect(sentRow).toMatchObject({
         attempt_count: 2,
-        feishu_message_id: "hook-delivered",
+        provider_request_ref: "hook-delivered",
         status: "sent"
+      });
+      // The legacy feishu carrier is only dual-written for feishu rows.
+      expect(sentRow.feishu_message_id).toBe("");
+      expect(JSON.parse(sentRow.result_json)).toMatchObject({
+        provider_request_ref: "hook-delivered",
+        schema_version: "xuanwu.im-delivery-receipt.v1"
       });
     } finally {
       db.close();
@@ -275,15 +285,42 @@ describe("unified notification intent/outbox", () => {
   });
 });
 
-class SequenceSender implements NotificationChannelSender {
-  constructor(private readonly outcomes: Array<{ deliveryID: string } | Error>) {}
+/**
+ * Fixture channel connectors stand in for registry-resolved modules; delivery
+ * still crosses the same `ChannelConnector.deliver(OutboundEnvelope)` boundary
+ * as production. There is exactly one dispatcher (dispatchImOutbox).
+ */
+function fixtureConnector(
+  id: string,
+  outcomes: Array<{ deliveryID: string } | Error>
+): ChannelConnector {
+  return {
+    manifest: {
+      auth_refs: [],
+      capabilities: [
+        { id: "message.receive", kind: "inbound", requires_authorization: true },
+        { id: "message.reply", kind: "outbound", requires_authorization: true }
+      ],
+      contract_version: 1,
+      display_name: id,
+      id,
+      kind: "channel"
+    },
+    health: () => ({ checked_at: new Date().toISOString(), last_error: "", reconnect_attempts: 0, state: "healthy" }),
+    deliver: async (): Promise<ConnectorDeliveryReceipt> => {
+      const next = outcomes.shift();
+      if (next instanceof Error) throw next;
+      if (!next) throw new Error("unexpected fixture delivery");
+      return { provider_request_ref: next.deliveryID, replayed: false, target: `${id}://fixture` };
+    }
+  };
+}
 
-  async send(): Promise<{ deliveryID: string }> {
-    const next = this.outcomes.shift();
-    if (next instanceof Error) throw next;
-    if (!next) throw new Error("unexpected fixture send");
-    return next;
-  }
+/** A generic transient failure with provider Retry-After semantics. */
+function fixtureRetryableError(retryAfterSeconds: number): Error {
+  const error = new Error("temporary outage");
+  (error as { retryAfterSeconds?: number }).retryAfterSeconds = retryAfterSeconds;
+  return error;
 }
 
 async function fixture(): Promise<RunnerDatabase> {

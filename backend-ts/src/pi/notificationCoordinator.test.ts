@@ -182,6 +182,31 @@ describe("PI notification coordinator preference boundaries", () => {
       db.close();
     }
   });
+
+  test("persists the caller connector instead of assuming Feishu", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issue = createIssue(db, { project_id: "demo", status: "done", title: "Telegram lifecycle" });
+      const event = guardianEvent(db, issue, "event-telegram");
+      const result = coordinateIssueLifecycleNotification(db, {
+        event,
+        issue,
+        target: {
+          connectorID: "telegram",
+          chatID: "-100opaque",
+          messageID: "message-9",
+          threadID: "topic-4"
+        }
+      });
+      expect(result.intent).toMatchObject({
+        target_channel: "telegram",
+        target_chat_id: "-100opaque",
+        target_message_id: "message-9",
+        target_thread_id: "topic-4"
+      });
+      expect(result.intent.idempotency_key.endsWith(":telegram")).toBe(true);
+    } finally { db.close(); }
+  });
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {

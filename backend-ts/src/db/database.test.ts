@@ -11,6 +11,8 @@ import {
   openDatabase,
   type RunnerDatabase
 } from "./database.ts";
+import { imInteractionBindingConstraintsMigration } from "./schema/072_im_interaction_binding_constraints.ts";
+import { imInteractionResolutionLeaseMigration } from "./schema/073_im_interaction_resolution_lease.ts";
 
 const tempRoots: string[] = [];
 
@@ -28,6 +30,30 @@ afterEach(async () => {
 });
 
 describe("Bun SQLite database connection", () => {
+  test("upgrades an early 071 interaction table additively and idempotently", () => {
+    const sqlite = new Database(":memory:");
+    try {
+      sqlite.run(`create table im_interaction_bindings (
+        interaction_id text primary key,
+        connector_id text not null,
+        action_kind text not null,
+        action_ref text not null,
+        scope_key text not null,
+        status text not null default 'pending'
+      )`);
+      imInteractionBindingConstraintsMigration.apply?.(sqlite);
+      imInteractionBindingConstraintsMigration.apply?.(sqlite);
+      imInteractionResolutionLeaseMigration.apply?.(sqlite);
+      imInteractionResolutionLeaseMigration.apply?.(sqlite);
+      expect(columnNames({ sqlite } as RunnerDatabase, "im_interaction_bindings")).toEqual(expect.arrayContaining([
+        "actions_json", "actor_id", "actor_open_id", "claimed_action_id", "lease_id",
+        "lease_expires_at", "resolution_json", "resolved_at"
+      ]));
+    } finally {
+      sqlite.close();
+    }
+  });
+
   test("creates the state directory and default runner database", async () => {
     const root = await tempPath("xuanwu-db-");
     const stateDir = join(root, "state");
@@ -86,6 +112,9 @@ describe("Bun SQLite database connection", () => {
         "feishu_project_selections",
         "git_repo_mapping_events",
         "git_repo_mappings",
+        "im_conversation_state",
+        "im_interaction_bindings",
+        "im_project_selections",
         "im_reply_drafts",
         "intake_runs",
         "issue_events",
@@ -263,7 +292,14 @@ describe("Bun SQLite database connection", () => {
         { id: "066_pi_context_memory_authority" },
         { id: "067_compact_event_summary_created_at" },
         { id: "068_builtin_executor_profiles" },
-        { id: "069_builtin_pi_executor_profile" }
+        { id: "069_builtin_pi_executor_profile" },
+        { id: "070_im_conversation_state" },
+        { id: "070a_im_conversation_state_backfill" },
+        { id: "071_im_interaction_bindings" },
+        { id: "071a_im_project_selections_backfill" },
+        { id: "072_im_interaction_binding_constraints" },
+        { id: "073_im_interaction_resolution_lease" },
+        { id: "074_im_outbound_dedupe" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
@@ -361,6 +397,12 @@ describe("Bun SQLite database connection", () => {
       expect(indexSQL(connection, "idx_sync_outbox_reply_draft")).toContain("where reply_draft_id > 0");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_updated");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_project");
+      expect(indexNames(connection, "im_conversation_state")).toContain("idx_im_conversation_state_updated");
+      expect(indexNames(connection, "im_interaction_bindings")).toContain("idx_im_interaction_bindings_status");
+      expect(indexNames(connection, "im_project_selections")).toEqual(expect.arrayContaining([
+        "idx_im_project_selections_status",
+        "idx_im_project_selections_scope"
+      ]));
       expect(indexNames(connection, "intake_runs")).toContain("idx_intake_runs_bundle");
       expect(indexNames(connection, "attention_inbox_items")).toContain("idx_attention_inbox_items_intake_run");
       expect(indexNames(connection, "pi_automations")).toContain("idx_pi_automations_due");
@@ -891,7 +933,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 68 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 75 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

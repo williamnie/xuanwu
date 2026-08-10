@@ -692,36 +692,9 @@ function gitRunSummary(
 ): CompletionCardGit {
   const observed = terminalGitObservation(events, run);
   if (observed) return observed;
-  const baseline = gitObjectID(run.git_base_revision) ? run.git_base_revision.toLowerCase() : "";
-  const final = run.ended_at === "" ? "" : gitText(repository, ["rev-list", "-1", `--before=${run.ended_at}`, "HEAD"]);
-  if (!gitObjectID(baseline) || !gitObjectID(final)) {
-    return {
-      baseline_revision: baseline,
-      changed_files: [],
-      commit_count: 0,
-      commits: [],
-      final_revision: gitObjectID(final) ? final : "",
-      has_diff: false,
-      observed_at: run.ended_at,
-      source: "legacy_reconstruction",
-      working_tree_dirty: false
-    };
-  }
-  const changedFiles = gitNullList(repository, [
-    "diff", "--name-only", "--no-ext-diff", "--no-renames", "-z", baseline, final, "--"
-  ]).slice(0, MAX_CHANGED_FILES);
-  const grouped = gitCommitSummary(repository, baseline, final);
-  return {
-    baseline_revision: baseline,
-    changed_files: changedFiles,
-    commit_count: grouped.length,
-    commits: grouped,
-    final_revision: final,
-    has_diff: baseline !== final || changedFiles.length > 0,
-    observed_at: run.ended_at,
-    source: "legacy_reconstruction",
-    working_tree_dirty: false
-  };
+  // Completion Card 只针对最新的已结束 Run 构建。若终态观察事件因异常路径缺失，
+  // 必须读取当前工作区作为降级事实，不能把未提交修改伪造为 clean/无改动。
+  return liveGitSummary(repository, run, run.ended_at);
 }
 
 function liveGitSummary(repository: string, run: IssueRun, observedAt: string): CompletionCardGit {

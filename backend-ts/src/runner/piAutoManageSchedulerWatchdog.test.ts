@@ -56,7 +56,8 @@ describe("PI auto-manage scheduler watchdog integration", () => {
         kind: "issue_failed",
         project_id: "demo",
         state: "failed",
-        target_channel: "feishu"
+        target_channel: "feishu",
+        target_chat_id: "oc_group"
       });
       db.sqlite.run("update pi_notification_intents set created_at=?, updated_at=? where id=?", [
         "2026-06-19T00:02:00Z", "2026-06-19T00:02:00Z", "missed-failed-intent"

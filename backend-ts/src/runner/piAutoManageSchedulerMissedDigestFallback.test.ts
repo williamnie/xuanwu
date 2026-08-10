@@ -38,7 +38,6 @@ describe("PI auto-manage missed digest handling", () => {
       const result = await runScheduleLayerCycle({
         config: feishuConfig(),
         database: db,
-        guardianDirectFeishuSender: sender,
         runProjectCycle: async () => ({}),
         watchdogNow: new Date("2026-06-19T00:10:00Z"),
         watchdogStaleAfterMs: 60_000

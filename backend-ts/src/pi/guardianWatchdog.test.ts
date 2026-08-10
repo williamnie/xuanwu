@@ -11,6 +11,7 @@ import {
 } from "../db/repositories/pi.ts";
 import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
 import { FeishuClientError } from "../integrations/feishuClient.ts";
+import { sendDirectFeishuGuardianAlert } from "../integrations/feishuGuardianAlerts.ts";
 import { runPiGuardianWatchdogOnce } from "./guardianWatchdog.ts";
 
 const tempRoots: string[] = [];
@@ -25,7 +26,7 @@ afterEach(async () => {
 });
 
 describe("PI Guardian watchdog detector", () => {
-  test("writes UI alert before direct Feishu and records sent id without pipeline side effects", async () => {
+  test("writes UI alert before durable Feishu delivery and records its sent receipt", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianFeishuSender([{ messageId: "om_guardian_sent_1" }], () => {
       const alert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
@@ -36,7 +37,7 @@ describe("PI Guardian watchdog detector", () => {
 
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: NOW,
         staleAfterMs: STALE_MS
       });
@@ -63,9 +64,9 @@ describe("PI Guardian watchdog detector", () => {
       expect(sender.calls[0]?.text).not.toContain("/Users/demo");
       expect(sideEffectCounts(db)).toEqual({
         conversations: 0,
-        drafts: 0,
+        drafts: 1,
         intents: 0,
-        outbox: 0
+        outbox: 1
       });
     } finally {
       db.close();
@@ -85,7 +86,7 @@ describe("PI Guardian watchdog detector", () => {
 
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: NOW,
         staleAfterMs: STALE_MS
       });
@@ -104,9 +105,9 @@ describe("PI Guardian watchdog detector", () => {
       expect(alert.direct_feishu_error).not.toContain("/Users/demo");
       expect(sideEffectCounts(db)).toEqual({
         conversations: 0,
-        drafts: 0,
+        drafts: 1,
         intents: 0,
-        outbox: 0
+        outbox: 1
       });
     } finally {
       db.close();
@@ -125,31 +126,31 @@ describe("PI Guardian watchdog detector", () => {
 
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: NOW,
         staleAfterMs: STALE_MS
       });
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: new Date("2026-06-19T01:10:00Z"),
         staleAfterMs: STALE_MS
       });
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: new Date("2026-06-19T01:15:00Z"),
         staleAfterMs: STALE_MS
       });
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: new Date("2026-06-19T02:15:00Z"),
         staleAfterMs: STALE_MS
       });
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: new Date("2026-06-19T06:15:00Z"),
         staleAfterMs: STALE_MS
       });
@@ -182,37 +183,37 @@ describe("PI Guardian watchdog detector", () => {
 
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: NOW,
         staleAfterMs: STALE_MS
       });
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: new Date("2026-06-19T01:10:00Z"),
         staleAfterMs: STALE_MS
       });
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: new Date("2026-06-19T01:15:00Z"),
         staleAfterMs: STALE_MS
       });
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: new Date("2026-06-19T02:15:00Z"),
         staleAfterMs: STALE_MS
       });
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: new Date("2026-06-19T06:15:00Z"),
         staleAfterMs: STALE_MS
       });
       await runPiGuardianWatchdogOnce(db, {
         checks: [failingProbe()],
-        directFeishu: { config: feishuConfig(), sender },
+        delivery: guardianDelivery(db, sender),
         now: new Date("2026-06-19T10:15:00Z"),
         staleAfterMs: STALE_MS
       });
@@ -240,7 +241,7 @@ describe("PI Guardian watchdog detector", () => {
         insertProject(db, "demo");
         await runPiGuardianWatchdogOnce(db, {
           checks: [failingProbe()],
-          directFeishu: { config: feishuConfig(), sender },
+          delivery: guardianDelivery(db, sender),
           now: NOW,
           staleAfterMs: STALE_MS
         });
@@ -250,7 +251,7 @@ describe("PI Guardian watchdog detector", () => {
 
         await runPiGuardianWatchdogOnce(db, {
           checks: [failingProbe()],
-          directFeishu: { config: feishuConfig(), sender },
+          delivery: guardianDelivery(db, sender),
           now: new Date("2026-06-19T01:15:00Z"),
           staleAfterMs: STALE_MS
         });
@@ -274,14 +275,14 @@ describe("PI Guardian watchdog detector", () => {
     try {
       insertProject(db, "demo");
       await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()], directFeishu: { config: feishuConfig(), sender }, now: NOW, staleAfterMs: STALE_MS
+        checks: [failingProbe()], delivery: guardianDelivery(db, sender), now: NOW, staleAfterMs: STALE_MS
       });
       const first = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
       if (!first) throw new Error("expected first alert");
       markAlertStatus(db, first.id, "resolved");
 
       await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()], directFeishu: { config: feishuConfig(), sender },
+        checks: [failingProbe()], delivery: guardianDelivery(db, sender),
         now: new Date("2026-06-19T01:15:00Z"), staleAfterMs: STALE_MS
       });
 
@@ -550,6 +551,21 @@ function feishuConfig() {
     feishuAppSecret: "app-secret-value",
     feishuProjectMappings: "chat:oc_guardian=demo"
   });
+}
+
+function guardianDelivery(db: RunnerDatabase, sender: FakeGuardianFeishuSender) {
+  return {
+    connectorID: "feishu",
+    send: (alert: Parameters<typeof sendDirectFeishuGuardianAlert>[1], options: {
+      formatText?: (value: Parameters<typeof sendDirectFeishuGuardianAlert>[1]) => string;
+      now?: Date;
+    } = {}) => sendDirectFeishuGuardianAlert(db, alert, {
+      config: feishuConfig(),
+      formatText: options.formatText,
+      now: options.now,
+      sender
+    })
+  };
 }
 
 class FakeGuardianFeishuSender {

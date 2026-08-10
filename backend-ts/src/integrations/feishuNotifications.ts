@@ -21,7 +21,10 @@ import {
   recordCodexApprovalResolved,
   resolvePiApprovalRequestFromFeishu
 } from "./feishuApprovalRequests.ts";
-import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
+import { dispatchFeishuOutbox, type FeishuMessageSender } from "./feishuOutboxDispatcherCompat.ts";
+import type { ImChannelRegistry } from "./imChannelContracts.ts";
+import type { ChannelConnector } from "./channelConnectorContracts.ts";
+import { dispatchImOutbox } from "../pi/imReplyOutboxDispatcher.ts";
 import { routeNotification } from "../notifications/unifiedNotificationPipeline.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import {
@@ -55,6 +58,8 @@ export function attachFeishuNotificationObservers(input: {
   bus: Pick<EventBus, "observe">;
   config?: FeishuConnectorConfig;
   database: RunnerDatabase;
+  imChannels?: ImChannelRegistry;
+  connector?: ChannelConnector;
   sender?: FeishuMessageSender;
 }): () => void {
   return input.bus.observe((event) => {
@@ -105,9 +110,29 @@ export function attachFeishuNotificationObservers(input: {
 function dispatchIfQueued(input: {
   config?: FeishuConnectorConfig;
   database: RunnerDatabase;
+  imChannels?: ImChannelRegistry;
+  connector?: ChannelConnector;
   sender?: FeishuMessageSender;
 }, result: QueueResult): void {
-  if (!result.queued || !input.config) return;
+  if (!result.queued) return;
+  if (input.imChannels) {
+    void dispatchImOutbox({
+      database: input.database,
+      resolveConnector: (source) => input.imChannels!.get(source).connector
+    }).catch(() => {});
+    return;
+  }
+  if (input.connector) {
+    void dispatchImOutbox({
+      database: input.database,
+      resolveConnector: (source) => {
+        if (source !== input.connector!.manifest.id) throw new Error(`im channel module is not registered: ${source}`);
+        return input.connector!;
+      }
+    }).catch(() => {});
+    return;
+  }
+  if (!input.config) return;
   const sender = input.sender ?? createFeishuMessageClient({ config: input.config });
   void dispatchFeishuOutbox({ config: input.config, database: input.database, sender }).catch(() => {});
 }

@@ -108,6 +108,41 @@ describe("completion card", () => {
       db.close();
     }
   });
+
+  test("falls back to the live workspace instead of reporting a false clean tree", async () => {
+    const root = await mkdtemp(join(tmpdir(), "completion-card-live-fallback-"));
+    roots.push(root);
+    git(root, "init");
+    git(root, "config", "user.email", "test@example.com");
+    git(root, "config", "user.name", "Test");
+    await writeFile(join(root, "README.md"), "base\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "base");
+    const db = await openDatabase({ stateDir: join(root, ".state") });
+    try {
+      db.sqlite.run(
+        `insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
+         values ('demo', 'Demo', ?, 'pi-coding-agent', 1, ?, ?)`,
+        [root, "2026-07-31T05:00:00Z", "2026-07-31T05:00:00Z"]
+      );
+      const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Pi fallback" });
+      const run = createIssueRun(db, issue.id);
+      await writeFile(join(root, "pi-change.ts"), "export const changed = true;\n");
+      const endedAt = new Date().toISOString();
+      db.sqlite.run("update issue_runs set status='failed', ended_at=?, error=? where id=?", [endedAt, "idle timeout", run.id]);
+
+      const card = await buildIssueCompletionCard(db, issue.id);
+
+      expect(card.git).toMatchObject({
+        has_diff: true,
+        source: "session_observation",
+        working_tree_dirty: true
+      });
+      expect(card.git.changed_files).toContain("pi-change.ts");
+    } finally {
+      db.close();
+    }
+  });
 });
 
 function commandEvent(id: string, command: string, exitCode: number, aggregatedOutput: string) {

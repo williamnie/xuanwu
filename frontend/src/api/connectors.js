@@ -1,6 +1,8 @@
 import { request } from './base.js';
 
 export const connectorsApi = {
+  getImChannels: () => request('/api/integrations/im/channels'),
+
   getPiConnectors: () => request('/api/pi/connectors'),
 
   getPiConnectorDiagnostics: () => request('/api/pi/connectors/diagnostics'),

@@ -46,7 +46,7 @@ type CommunicationEnvelope = {
   contentSeed: string;
   notificationID: string;
   notificationType: string;
-  target: { chatID: string; messageID: string; threadID: string };
+  target: { chatID: string; eventID: number; messageID: string; threadID: string };
 };
 
 const DEFAULT_LIMIT = 50;
@@ -318,10 +318,15 @@ function communicationEnvelope(intent: PiNotificationIntent): CommunicationEnvel
     notificationType: cleanString(value.notification_type),
     target: {
       chatID: cleanString(route.chatID) || cleanString(route.chat_id) || intent.target_chat_id,
+      eventID: positiveInteger(route.eventID) || positiveInteger(route.event_id),
       messageID: cleanString(route.messageID) || cleanString(route.message_id) || intent.target_message_id,
       threadID: cleanString(route.threadID) || cleanString(route.thread_id) || intent.target_thread_id
     }
   };
+}
+
+function positiveInteger(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }
 
 function markSent(db: RunnerDatabase, intent: PiNotificationIntent, outboxID: number, now: Date): void {

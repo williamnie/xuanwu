@@ -27,7 +27,8 @@ const DRAFT_COLUMNS = `id, source, external_event_id, issue_id, target_chat_id,
 const OUTBOX_COLUMNS = `id, source, reply_draft_id, external_event_id, issue_id,
   target_chat_id, target_thread_id, target_message_id, content, status, risk,
   created_by, approval_action_id, attempt_count, cooldown_until, feishu_message_id,
-  last_error, max_attempts, retry_after_seconds, sent_at, created_at, updated_at`;
+  last_error, max_attempts, retry_after_seconds, sent_at, created_at, updated_at,
+  provider_request_ref, result_json, operation_kind, dedupe_key, payload_json, correlation_id`;
 const PATCH_COLUMNS = [
   "source", "external_event_id", "issue_id", "target_chat_id", "target_thread_id",
   "target_message_id", "content", "status", "risk", "created_by", "approval_action_id",
@@ -100,6 +101,34 @@ export function getSyncOutbox(db: RunnerDatabase, id: number): SyncOutboxRecord 
     `select ${OUTBOX_COLUMNS} from sync_outbox where id=?`
   ).get(id);
   return row ? mapOutbox(row) : null;
+}
+
+export function getSyncOutboxByDedupe(
+  db: RunnerDatabase,
+  source: string,
+  dedupeKey: string
+): SyncOutboxRecord | null {
+  const row = db.sqlite.query<Record<string, unknown>, [string, string]>(
+    `select ${OUTBOX_COLUMNS} from sync_outbox
+     where source=? and operation_kind='im_reply' and dedupe_key=? limit 1`
+  ).get(cleanValue(source), cleanValue(dedupeKey));
+  return row ? mapOutbox(row) : null;
+}
+
+export function setSyncOutboxCanonicalEnvelope(
+  db: RunnerDatabase,
+  id: number,
+  input: { correlationId: string; dedupeKey: string; payloadJson: string; timestamp?: Date }
+): SyncOutboxRecord {
+  const timestamp = input.timestamp ?? new Date();
+  db.sqlite.run(
+    `update sync_outbox set dedupe_key=?, payload_json=?, correlation_id=?, updated_at=?
+     where id=? and operation_kind='im_reply'`,
+    [cleanValue(input.dedupeKey), cleanValue(input.payloadJson), cleanValue(input.correlationId), timestamp.toISOString(), id]
+  );
+  const outbox = getSyncOutbox(db, id);
+  if (!outbox) throw new Error("sync outbox missing after canonical envelope write");
+  return outbox;
 }
 
 function createSyncOutbox(db: RunnerDatabase, draft: ImReplyDraftRecord, timestamp: Date): SyncOutboxRecord {
@@ -189,9 +218,15 @@ function mapOutbox(row: Record<string, unknown>): SyncOutboxRecord {
     approval_action_id: optionalString(row.approval_action_id),
     attempt_count: integerRow(row.attempt_count, "sync_outbox.attempt_count"),
     cooldown_until: optionalString(row.cooldown_until),
+    correlation_id: optionalString(row.correlation_id),
+    dedupe_key: optionalString(row.dedupe_key),
     feishu_message_id: optionalString(row.feishu_message_id),
     last_error: optionalString(row.last_error),
+    provider_request_ref: optionalString(row.provider_request_ref),
+    result_json: optionalString(row.result_json),
     max_attempts: integerRow(row.max_attempts, "sync_outbox.max_attempts"),
+    operation_kind: optionalString(row.operation_kind) || "im_reply",
+    payload_json: optionalString(row.payload_json),
     retry_after_seconds: integerRow(row.retry_after_seconds, "sync_outbox.retry_after_seconds"),
     sent_at: optionalString(row.sent_at),
     created_at: requiredString(row.created_at, "sync_outbox.created_at"),

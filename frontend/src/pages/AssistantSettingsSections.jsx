@@ -13,6 +13,7 @@ import PiMcpManagementPanel from './PiMcpManagementPanel';
 import CodeAgentsPanel from './CodeAgentsPanel';
 import ConnectorDiagnosticsPanel from './ConnectorDiagnosticsPanel';
 import FeishuSettingsPanel from './FeishuSettingsPanel';
+import ImChannelRegistryPanel from './ImChannelRegistryPanel';
 import { RestartAction } from './SettingsChrome';
 import { Languages } from 'lucide-react';
 import { useState } from 'react';
@@ -62,6 +63,7 @@ function IntegrationsSettingsTab() {
         <p>管理飞书、Git、Tracker、Webhook 等外部事件入口、通知出口与同步健康；Supervisor 主动调用的工具在“工具与 MCP”中管理。</p>
       </section>
       <ConnectorDiagnosticsPanel />
+      <ImChannelRegistryPanel />
       <FeishuSettingsPanel />
     </div>
   );

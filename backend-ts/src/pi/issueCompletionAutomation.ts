@@ -41,9 +41,12 @@ export function createIssueCompletionAutomation(
     ? original.terminal_statuses.map(clean).filter((status) => ISSUE_COMPLETION_TERMINAL_STATUSES.has(status))
     : [...ISSUE_COMPLETION_TERMINAL_STATUSES];
   const target = {
-    channel: "feishu" as const,
-    chat_id: clean(input.target_chat_id),
-    message_id: clean(input.target_message_id),
+    // W1 callers omitted target_channel because only Feishu existed. Explicit
+    // connector ids now pass through unchanged; the fallback only reads that
+    // historical API shape.
+    connector_id: clean(input.target_channel) || "feishu",
+    conversation_id: clean(input.target_chat_id),
+    reply_to_message_id: clean(input.target_message_id),
     thread_id: clean(input.target_thread_id)
   };
   const requestedID = clean(input.id);
@@ -59,7 +62,7 @@ export function createIssueCompletionAutomation(
         requested_by: clean(input.requested_by),
         source_event_id: clean(input.source_event_id),
         source_message_id: clean(input.source_message_id),
-        target_channel: clean(input.target_channel) || "feishu"
+        target_channel: target.connector_id
       },
       statuses: [...new Set(statuses)].sort(),
       type: "issue_status"
@@ -144,7 +147,7 @@ export function issueCompletionAutomationOwnsTargetForIssue(db: RunnerDatabase, 
     watch.subject.kind === "issues" &&
     watch.subject.issue_ids.includes(issueID) &&
     (watch.status === "watching" || watch.status === "satisfied") &&
-    watch.notification_target.chat_id !== ""
+    watch.notification_target.conversation_id !== ""
   );
 }
 
@@ -198,9 +201,9 @@ export function projectIssueCompletionAutomation(db: RunnerDatabase, watch: Auto
     source_event_id: clean(metadata.source_event_id),
     source_message_id: clean(metadata.source_message_id),
     status,
-    target_channel: clean(metadata.target_channel) || watch.notification_target.channel,
-    target_chat_id: watch.notification_target.chat_id,
-    target_message_id: watch.notification_target.message_id,
+    target_channel: watch.notification_target.connector_id,
+    target_chat_id: watch.notification_target.conversation_id,
+    target_message_id: watch.notification_target.reply_to_message_id,
     target_thread_id: watch.notification_target.thread_id,
     updated_at: watch.updated_at
   };

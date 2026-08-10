@@ -12,9 +12,7 @@ import { ingestFeishuMessageEvent, publishFeishuAudit, rawPayloadRef } from "../
 import { normalizeFeishuMessageEvent } from "../integrations/feishu.ts";
 import { normalizeFeishuProjectSelectionAction } from "../integrations/feishuProjectSelection.ts";
 import { normalizeFeishuApprovalAction } from "../integrations/feishuApprovalCards.ts";
-import { resolvePiApprovalRequestFromFeishu } from "../integrations/feishuApprovalRequests.ts";
 import { normalizeFeishuPiActionCardAction } from "../integrations/feishuPiActionCards.ts";
-import { resolvePiActionFromFeishu } from "../integrations/feishuPiActionResolve.ts";
 import { projectSelectionCallbackAcceptedBody } from "../integrations/feishuCardCallbackResponse.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import {
@@ -26,6 +24,13 @@ import type { EventRouterSourcePolicy } from "../pi/eventRouter.ts";
 import type { LlmIntakeModel } from "../pi/llmIntake.ts";
 import { json, jsonError } from "./errors.ts";
 import type { Router } from "./router.ts";
+import {
+  normalizeFeishuImInteraction,
+  resolveFeishuImInteraction,
+  resolveLegacyFeishuApprovalInteraction,
+  resolveLegacyFeishuPiActionInteraction,
+  resolveLegacyFeishuProjectSelectionInteraction
+} from "../integrations/feishuInteractionAdapter.ts";
 
 export type FeishuEventRoutesContext = {
   agentBridge?: ReturnType<typeof createFeishuAgentBridge>;
@@ -50,7 +55,7 @@ export function registerFeishuEventRoutes(router: Router, context: FeishuEventRo
   router.post("/api/integrations/feishu/events", (request) => handleFeishuEvent(request, context));
 }
 
-async function handleFeishuEvent(request: Request, context: FeishuEventRoutesContext): Promise<Response> {
+export async function handleFeishuEvent(request: Request, context: FeishuEventRoutesContext): Promise<Response> {
   if (connectorDisabled(context.config)) return jsonError(503, "feishu connector is not configured");
   const rawBody = await request.text();
   const rawRef = rawPayloadRef(rawBody);
@@ -63,6 +68,17 @@ async function handleFeishuEvent(request: Request, context: FeishuEventRoutesCon
   if (!validToken(parsed.body, context.config.verificationToken)) {
     return reject(context, "invalid_verification_token", rawRef, 401, parsed.encrypted);
   }
+  const interaction = normalizeFeishuImInteraction(parsed.body);
+  if (interaction) {
+    if (!context.database) return json({ ok: false, reason: "database_unavailable" }, { status: 503 });
+    try {
+      const result = await resolveFeishuImInteraction({ ...context, database: context.database }, interaction);
+      const accepted = result.reason === "consumed" || result.reason === "already_consumed";
+      return json(result, { status: accepted ? 202 : result.reason === "actor_mismatch" ? 403 : 409 });
+    } catch (error) {
+      return reject(context, "im_interaction_callback_failed", rawRef, 409, parsed.encrypted, safeError(error));
+    }
+  }
   const approvalAction = normalizeFeishuApprovalAction(parsed.body);
   if (approvalAction) {
     if (!context.database) return json({ ok: false, reason: "database_unavailable" }, { status: 503 });
@@ -70,11 +86,8 @@ async function handleFeishuEvent(request: Request, context: FeishuEventRoutesCon
       return reject(context, "approval_callback_forbidden", rawRef, 403, parsed.encrypted, "feishu approval callback is not allowed");
     }
     try {
-      const result = await resolvePiApprovalRequestFromFeishu(context.database, {
-        ...approvalAction,
-        providers: context.providers
-      });
-      return json(result, { status: 202 });
+      const result = await resolveLegacyFeishuApprovalInteraction({ ...context, database: context.database }, approvalAction);
+      return interactionResponse(result);
     } catch (error) {
       return reject(context, "approval_callback_failed", rawRef, 409, parsed.encrypted, safeError(error));
     }
@@ -86,28 +99,35 @@ async function handleFeishuEvent(request: Request, context: FeishuEventRoutesCon
       return reject(context, "pi_action_callback_forbidden", rawRef, 403, parsed.encrypted, "feishu approval callback is not allowed");
     }
     try {
-      return json(await resolvePiActionFromFeishu({ ...context, database: context.database }, piAction), { status: 202 });
+      return interactionResponse(await resolveLegacyFeishuPiActionInteraction({ ...context, database: context.database }, piAction));
     } catch (error) {
       return reject(context, "pi_action_callback_failed", rawRef, 409, parsed.encrypted, safeError(error));
     }
   }
   const projectAction = normalizeFeishuProjectSelectionAction(parsed.body);
   if (projectAction) {
-    void context.agentBridge?.handleProjectSelectionAction(projectAction).catch((error) => {
-      console.warn(JSON.stringify({
-        action: "feishu_project_selection_callback",
-        error: safeError(error),
-        ok: false,
-        selection_id: projectAction.selection_id
-      }));
-    });
-    return projectSelectionCallbackAccepted();
+    if (!context.database) return json({ ok: false, reason: "database_unavailable" }, { status: 503 });
+    try {
+      const result = await resolveLegacyFeishuProjectSelectionInteraction({ ...context, database: context.database }, projectAction);
+      return result.reason === "consumed" || result.reason === "already_consumed"
+        ? projectSelectionCallbackAccepted()
+        : interactionResponse(result);
+    } catch (error) {
+      return reject(context, "project_selection_callback_failed", rawRef, 409, parsed.encrypted, safeError(error));
+    }
   }
   return await acceptMessageEvent(parsed.body, context, rawRef, parsed.encrypted);
 }
 
 function projectSelectionCallbackAccepted(): Response {
   return json(projectSelectionCallbackAcceptedBody());
+}
+
+function interactionResponse(result: Awaited<ReturnType<typeof resolveFeishuImInteraction>>): Response {
+  const accepted = result.reason === "consumed" || result.reason === "already_consumed";
+  return json(result.resolution ?? result, {
+    status: accepted ? 202 : result.reason === "actor_mismatch" ? 403 : 409
+  });
 }
 
 async function acceptMessageEvent(

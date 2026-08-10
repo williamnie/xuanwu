@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getPiApprovalRequest, upsertPiApprovalRequest } from "../db/repositories/pi.ts";
+import { createFeishuPendingProjectSelection } from "../db/repositories/feishuProjectSelection.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { createDefaultRouter, createRequestHandler } from "./server.ts";
@@ -25,10 +26,30 @@ describe("Feishu project selection callback endpoint", () => {
     const bridge = bridgeFixture(actions);
     const { database, handle } = await fixtureHandler(bridge);
     try {
+      createFeishuPendingProjectSelection(database, {
+        candidates: ["demo"],
+        chatId: "oc_group",
+        conversationId: "conversation-card-1",
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        originalPrompt: "处理这个任务",
+        scopeKey: "oc_group",
+        selectionId: "fps_1",
+        sourceMessageId: "om_card_1",
+        userId: "ou_user_1",
+        userOpenId: "ou_open_1"
+      });
       const response = await postFeishu(handle, projectSelectionCallback());
+      const replay = await postFeishu(handle, projectSelectionCallback());
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({
+        toast: {
+          content: "已收到项目选择，正在继续处理。",
+          type: "info"
+        }
+      });
+      expect(replay.status).toBe(200);
+      expect(await replay.json()).toEqual({
         toast: {
           content: "已收到项目选择，正在继续处理。",
           type: "info"
@@ -82,6 +103,10 @@ describe("Feishu project selection callback endpoint", () => {
         resolved_decision: "approve",
         resolved_scope: "turn",
         status: "approved"
+      });
+      expect(legacyBinding(database, "pi_approval_requests:approval-card-1")).toMatchObject({
+        resolution_json: expect.stringContaining('"status":"approved"'),
+        status: "consumed"
       });
     } finally {
       database.close();
@@ -201,11 +226,17 @@ function approvalProvider(resolutions: Array<{ decision: string; id: string; sco
 function bridgeFixture(actions: unknown[]): ReturnType<typeof createFeishuAgentBridge> {
   return {
     handle: async () => ({ reason: "unused", replied: false }),
-    handleProjectSelectionAction: async (action: unknown) => {
+    resolveProjectSelectionAction: async (action: unknown) => {
       actions.push(action);
       return { reason: "project_selection_continued", replied: true };
     }
   } as ReturnType<typeof createFeishuAgentBridge>;
+}
+
+function legacyBinding(database: RunnerDatabase, actionRef: string): Record<string, unknown> | null {
+  return database.sqlite.query<Record<string, unknown>, [string]>(
+    "select status, resolution_json from im_interaction_bindings where action_ref=?"
+  ).get(actionRef) ?? null;
 }
 
 async function postFeishu(handle: (request: Request) => Promise<Response>, body: unknown): Promise<Response> {

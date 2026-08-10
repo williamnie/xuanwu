@@ -1,4 +1,21 @@
 import type { RunnerDatabase } from "../database.ts";
+import {
+  consumeImProjectSelection,
+  createImProjectSelection,
+  getImProjectSelection,
+  type ImProjectSelection
+} from "./imProjectSelections.ts";
+
+/**
+ * W1 compatibility shim over the provider-neutral `im_project_selections`
+ * repository (design 2026-08-02-generic-im-channel-telegram-design.md §13.2).
+ * The generic table is the single application writer; this module only keeps
+ * the legacy Feishu call-sites and read shape working during the bounded
+ * compatibility window. The physical `feishu_project_selections` table stays
+ * as a read-only historical carrier (backfilled by 071/071a) until a separate
+ * destructive migration removes it.
+ */
+export const FEISHU_IM_CONNECTOR_ID = "feishu";
 
 export type FeishuProjectSelectionStatus = "pending" | "consumed";
 export type FeishuPendingProjectSelection = {
@@ -43,169 +60,69 @@ export type FeishuProjectSelectionConsumeResult = {
   status: "already_consumed" | "consumed" | "expired" | "invalid_project" | "missing" | "source_mismatch";
 };
 
-type SQLValue = number | string;
-
-const COLUMNS = `selection_id, scope_key, conversation_id, chat_id, user_id,
-  user_open_id, source_message_id, original_prompt, candidates_json, status,
-  selected_project_id, created_at, expires_at, consumed_at`;
-
 export function createFeishuPendingProjectSelection(
   db: RunnerDatabase,
   input: FeishuPendingProjectSelectionInput,
   timestamp = new Date()
 ): FeishuPendingProjectSelection {
-  const record = normalizeCreate(input, timestamp);
-  db.sqlite.run(
-    `insert into feishu_project_selections (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    insertValues(record)
-  );
-  const saved = getFeishuPendingProjectSelection(db, record.selection_id);
-  if (!saved) throw new Error("Feishu project selection missing after write");
-  return saved;
+  return legacyView(createImProjectSelection(db, {
+    candidates: input.candidates,
+    chatId: input.chatId,
+    connectorId: FEISHU_IM_CONNECTOR_ID,
+    conversationId: input.conversationId,
+    expiresAt: input.expiresAt,
+    originalPrompt: input.originalPrompt,
+    scopeKey: input.scopeKey,
+    selectionId: input.selectionId,
+    sourceMessageId: input.sourceMessageId,
+    userId: input.userId,
+    userOpenId: input.userOpenId
+  }, timestamp));
 }
 
 export function getFeishuPendingProjectSelection(
   db: RunnerDatabase,
   selectionId: string
 ): FeishuPendingProjectSelection | null {
-  const id = cleanString(selectionId);
-  if (id === "") return null;
-  const row = db.sqlite.query<Record<string, unknown>, [string]>(
-    `select ${COLUMNS} from feishu_project_selections where selection_id=?`
-  ).get(id);
-  return row ? mapSelection(row) : null;
+  const selection = getImProjectSelection(db, selectionId);
+  return selection ? legacyView(selection) : null;
 }
 
 export function consumeFeishuPendingProjectSelection(
   db: RunnerDatabase,
   input: FeishuProjectSelectionConsumeInput
 ): FeishuProjectSelectionConsumeResult {
-  const write = db.transaction(() => consumeSelection(db, input));
-  return write.immediate();
-}
-
-function consumeSelection(
-  db: RunnerDatabase,
-  input: FeishuProjectSelectionConsumeInput
-): FeishuProjectSelectionConsumeResult {
-  const current = getFeishuPendingProjectSelection(db, input.selectionId);
-  if (!current) return result("missing", null);
-  if (current.status === "consumed") return result("already_consumed", current);
-  if (Date.parse(current.expires_at) <= input.now.getTime()) return result("expired", current);
-  if (!sourceMatches(current, input)) return result("source_mismatch", current);
-  const projectID = cleanString(input.projectId);
-  if (!current.candidates.includes(projectID)) return result("invalid_project", current);
-  db.sqlite.run(
-    `update feishu_project_selections set status='consumed', selected_project_id=?, consumed_at=? where selection_id=? and status='pending'`,
-    [projectID, input.now.toISOString(), current.selection_id]
-  );
-  return result("consumed", getFeishuPendingProjectSelection(db, current.selection_id));
-}
-
-function sourceMatches(
-  current: FeishuPendingProjectSelection,
-  input: FeishuProjectSelectionConsumeInput
-): boolean {
-  const chatMatches = current.chat_id === "" || current.chat_id === cleanString(input.chatId);
-  const userID = cleanString(input.userId);
-  const openID = cleanString(input.userOpenId);
-  const userMatches = current.user_id === "" || current.user_id === userID || current.user_id === openID ||
-    current.user_open_id === userID || current.user_open_id === openID;
-  return chatMatches && userMatches;
-}
-
-function normalizeCreate(
-  input: FeishuPendingProjectSelectionInput,
-  timestamp: Date
-): FeishuPendingProjectSelection {
-  const candidates = unique(input.candidates.map(cleanString).filter(Boolean));
-  const record = {
-    candidates,
-    candidates_json: JSON.stringify(candidates),
-    chat_id: cleanString(input.chatId),
-    consumed_at: "",
-    conversation_id: requireString(input.conversationId, "conversation_id"),
-    created_at: timestamp.toISOString(),
-    expires_at: requireString(input.expiresAt, "expires_at"),
-    original_prompt: requireString(input.originalPrompt, "original_prompt"),
-    scope_key: requireString(input.scopeKey, "scope_key"),
-    selected_project_id: "",
-    selection_id: requireString(input.selectionId, "selection_id"),
-    source_message_id: cleanString(input.sourceMessageId),
-    status: "pending" as const,
-    user_id: cleanString(input.userId),
-    user_open_id: cleanString(input.userOpenId)
-  };
-  if (record.candidates.length === 0) throw new Error("candidates are required");
-  return record;
-}
-
-function insertValues(record: FeishuPendingProjectSelection): SQLValue[] {
-  return [
-    record.selection_id, record.scope_key, record.conversation_id, record.chat_id,
-    record.user_id, record.user_open_id, record.source_message_id,
-    record.original_prompt, record.candidates_json, record.status,
-    record.selected_project_id, record.created_at, record.expires_at, record.consumed_at
-  ];
-}
-
-function mapSelection(row: Record<string, unknown>): FeishuPendingProjectSelection {
-  const candidatesJson = requireString(row.candidates_json, "candidates_json");
+  const consumed = consumeImProjectSelection(db, {
+    chatId: input.chatId,
+    connectorId: FEISHU_IM_CONNECTOR_ID,
+    now: input.now,
+    projectId: input.projectId,
+    selectionId: input.selectionId,
+    userId: input.userId,
+    userOpenId: input.userOpenId
+  });
   return {
-    candidates: parseCandidates(candidatesJson),
-    candidates_json: candidatesJson,
-    chat_id: optionalString(row.chat_id),
-    consumed_at: optionalString(row.consumed_at),
-    conversation_id: requireString(row.conversation_id, "conversation_id"),
-    created_at: requireString(row.created_at, "created_at"),
-    expires_at: requireString(row.expires_at, "expires_at"),
-    original_prompt: requireString(row.original_prompt, "original_prompt"),
-    scope_key: requireString(row.scope_key, "scope_key"),
-    selected_project_id: optionalString(row.selected_project_id),
-    selection_id: requireString(row.selection_id, "selection_id"),
-    source_message_id: optionalString(row.source_message_id),
-    status: selectionStatus(row.status),
-    user_id: optionalString(row.user_id),
-    user_open_id: optionalString(row.user_open_id)
+    selection: consumed.selection ? legacyView(consumed.selection) : null,
+    status: consumed.status
   };
 }
 
-function result(
-  status: FeishuProjectSelectionConsumeResult["status"],
-  selection: FeishuPendingProjectSelection | null
-): FeishuProjectSelectionConsumeResult {
-  return { selection, status };
-}
-
-function parseCandidates(value: string): string[] {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) ? unique(parsed.map(cleanString).filter(Boolean)) : [];
-  } catch {
-    return [];
-  }
-}
-
-function selectionStatus(value: unknown): FeishuProjectSelectionStatus {
-  return cleanString(value) === "consumed" ? "consumed" : "pending";
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function optionalString(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value !== "string") throw new Error("expected string row value");
-  return value.trim();
-}
-
-function requireString(value: unknown, label: string): string {
-  const text = typeof value === "string" ? value.trim() : "";
-  if (text === "") throw new Error(`${label} is required`);
-  return text;
+function legacyView(selection: ImProjectSelection): FeishuPendingProjectSelection {
+  return {
+    candidates: selection.candidates,
+    candidates_json: selection.candidates_json,
+    chat_id: selection.chat_id,
+    consumed_at: selection.consumed_at,
+    conversation_id: selection.conversation_id,
+    created_at: selection.created_at,
+    expires_at: selection.expires_at,
+    original_prompt: selection.original_prompt,
+    scope_key: selection.scope_key,
+    selected_project_id: selection.selected_project_id,
+    selection_id: selection.selection_id,
+    source_message_id: selection.source_message_id,
+    status: selection.status,
+    user_id: selection.user_id,
+    user_open_id: selection.user_open_id
+  };
 }

@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { findImConversationStateByConversationID } from "../db/repositories/imConversationState.ts";
 import {
   createPiNotificationIntent,
   getPiRunGroup,
@@ -25,6 +26,7 @@ import {
 } from "./guardianMissedIntentDigest.ts";
 
 export type GuardianMissedIntentSweepInput = {
+  fallbackConnectorID?: string;
   limit?: number;
   now?: Date | string;
   watchdog?: PiGuardianWatchdogSummary;
@@ -43,7 +45,7 @@ export type GuardianMissedIntentSweepResult = {
 
 type DigestTarget = {
   conversation_id: string; target_chat_id: string; target_message_id: string;
-  target_thread_id: string;
+  target_channel: string; target_thread_id: string;
 };
 type MissedDigestInput = {
   alerts: PiGuardianAlert[]; intents: PiNotificationIntent[]; window: GuardianMissedOutageWindow;
@@ -51,7 +53,6 @@ type MissedDigestInput = {
 type SweepContext = { db: RunnerDatabase; nowText: string; result: GuardianMissedIntentSweepResult };
 
 const DEFAULT_LIMIT = 50;
-const DIGEST_CHANNEL = "feishu";
 const OUTAGE_ALERT_COMPONENTS: Record<string, PiGuardianWatchdogComponent> = {
   approval_fast_path_error: "approval",
   coordinator_stalled: "coordinator",
@@ -88,18 +89,22 @@ export function runGuardianMissedIntentSweepOnce(
       result.skipped += 1;
       continue;
     }
-    writeMissedDigest({ db, nowText, result }, { alerts: openAlerts, intents, window });
+    writeMissedDigest(
+      { db, nowText, result },
+      { alerts: openAlerts, intents, window },
+      text(input.fallbackConnectorID)
+    );
   }
   return result;
 }
 
-function writeMissedDigest(context: SweepContext, input: MissedDigestInput): void {
+function writeMissedDigest(context: SweepContext, input: MissedDigestInput, fallbackConnectorID: string): void {
   const { db, nowText, result } = context;
   const { alerts, intents, window } = input;
   const digestScope = missedDigestScope(window);
   const flushBucket = missedFlushBucket(window);
   const existing = hasRecoveryDigest(db, digestScope, flushBucket);
-  const target = digestTarget(db, input);
+  const target = digestTarget(db, input, fallbackConnectorID);
   try {
     const digest = createPiNotificationIntent(db, {
       ...target,
@@ -113,13 +118,13 @@ function writeMissedDigest(context: SweepContext, input: MissedDigestInput): voi
       source_event_type: "guardian.missed_intent_sweep",
       state: "ready",
       summary: missedDigestSummary(window, intents, alerts),
-      target_channel: DIGEST_CHANNEL
+      target_channel: target.target_channel
     });
     if (!targetMissing(target) && targetMissing(digest)) {
       updatePiNotificationIntent(db, digest.id, {
         ...target,
         state: "ready",
-        target_channel: DIGEST_CHANNEL
+        target_channel: target.target_channel
       });
     }
     if (!existing) result.summaries += 1;
@@ -220,15 +225,19 @@ function markMissedDigestPending(
 
 function digestTarget(
   db: RunnerDatabase,
-  input: MissedDigestInput
+  input: MissedDigestInput,
+  fallbackConnectorID: string
 ): DigestTarget {
   const intent = input.intents.find(hasTargetFields);
   const groupConversation = input.alerts.map((alert) => getPiRunGroup(db, alert.run_group_id)?.origin_conversation_id ?? "")
     .find((conversationID) => conversationID !== "") ?? "";
   const fallback = latestDigestTarget(db, input.window.projectID);
+  const conversationID = intent?.conversation_id || groupConversation || fallback.conversation_id;
   return {
-    conversation_id: intent?.conversation_id || groupConversation || fallback.conversation_id,
+    conversation_id: conversationID,
     target_chat_id: intent?.target_chat_id || fallback.target_chat_id,
+    target_channel: intent?.target_channel || fallback.target_channel ||
+      findImConversationStateByConversationID(db, conversationID)?.connector_id || fallbackConnectorID,
     target_message_id: intent?.target_message_id || fallback.target_message_id,
     target_thread_id: intent?.target_thread_id || fallback.target_thread_id
   };
@@ -238,15 +247,16 @@ function latestDigestTarget(db: RunnerDatabase, projectID: string): DigestTarget
   const condition = projectID === "" ? "" : "and project_id=?";
   const args = projectID === "" ? [] : [projectID];
   const row = db.sqlite.query<Record<string, unknown>, string[]>(`
-    select conversation_id, target_chat_id, target_message_id, target_thread_id
+    select conversation_id, target_channel, target_chat_id, target_message_id, target_thread_id
     from pi_notification_intents
-    where target_channel=? ${condition}
+    where target_channel<>'' ${condition}
       and (conversation_id<>'' or target_chat_id<>'' or target_message_id<>'' or target_thread_id<>'')
     order by updated_at desc, created_at desc, id desc limit 1
-  `).get(DIGEST_CHANNEL, ...args);
+  `).get(...args);
   return {
     conversation_id: text(row?.conversation_id),
     target_chat_id: text(row?.target_chat_id),
+    target_channel: text(row?.target_channel),
     target_message_id: text(row?.target_message_id),
     target_thread_id: text(row?.target_thread_id)
   };

@@ -4,19 +4,22 @@ import { createExternalLink, listExternalLinksByExternal } from "../db/repositor
 import { redactSensitiveText } from "../util/redact.ts";
 import type { FeishuConnectorConfig, FeishuNormalizedMessageEvent } from "./feishu.ts";
 import { createFeishuMessageClient, type FeishuMessageClient, type FeishuTextMessageResult } from "./feishuClient.ts";
-import { createFeishuChannelConnector, createFeishuOutboundEnvelope } from "./feishuChannelConnector.ts";
+import { createFeishuChannelConnector, createFeishuImOutboundEnvelope } from "./feishuChannelConnector.ts";
 import {
   routeFeishuConversation,
   type FeishuConversationClock,
   type FeishuConversationRoute
 } from "./feishuConversationRouting.ts";
 import {
-  handleFeishuProjectSelectionAction,
+  resolveFeishuProjectSelectionBusinessAction,
   type FeishuProjectSelectionAction
 } from "./feishuProjectSelectionBridge.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
 import { ingestPiGuardianEvent } from "../pi/guardianEventIngest.ts";
 import { resolveFeishuActionTarget } from "./feishuActionTarget.ts";
+import { createImConversationCoordinator } from "./imConversationCoordinator.ts";
+import type { ChannelConnector } from "./channelConnectorContracts.ts";
+import { deliverImOutboundNow } from "./imOutboundDelivery.ts";
 
 export type FeishuConversationRunner = (input: FeishuRunnerInput) => Promise<FeishuRunnerResult>;
 export type FeishuRunnerInput = {
@@ -37,6 +40,7 @@ export type FeishuRunnerResult = {
 type FeishuAgentBridgeOptions = {
   clock?: FeishuConversationClock;
   config: () => FeishuConnectorConfig;
+  connector?: ChannelConnector;
   database: RunnerDatabase;
   runConversation?: FeishuConversationRunner;
   sender?: FeishuMessageClient;
@@ -50,43 +54,28 @@ const ACK_REACTION_EMOJI_TYPE = "OK";
 const NEW_CONVERSATION_ACK_TEXT = "已开启新的 Supervisor 上下文。你可以继续发下一条消息。";
 
 export function createFeishuAgentBridge(options: FeishuAgentBridgeOptions) {
-  const inFlightReplies = new Set<string>();
+  const coordinator = createImConversationCoordinator<
+    FeishuBridgeHandleInput,
+    { projectContext: FeishuProjectContextResult; route: FeishuConversationRoute },
+    FeishuRunnerResult
+  >({
+    acknowledge: (input) => sendAckReaction(options, input),
+    alreadyHandled: (input) => alreadyReplied(options.database, input.event),
+    dedupeKey: (input) => replyDedupeKey(input.event),
+    policy: replyPolicy,
+    prepare: (input) => {
+      const route = conversationRoute(options, input);
+      return { projectContext: projectContextForRoute(options, input, route), route };
+    },
+    reply: (input, runner) => sendReply(options, input, cleanString(runner.text), runner, "agent_reply_sent"),
+    run: (input, prepared) => runnerReply(options, input, prepared.route, prepared.projectContext),
+    text: (runner) => runner.text
+  });
   return {
-    handle: (input: FeishuBridgeHandleInput) => handleFeishuAgentMessage(options, input, inFlightReplies),
-    handleProjectSelectionAction: (action: FeishuProjectSelectionAction) =>
-      handleFeishuProjectSelectionAction(options, action)
+    handle: (input: FeishuBridgeHandleInput) => coordinator.handle(input),
+    resolveProjectSelectionAction: (action: FeishuProjectSelectionAction) =>
+      resolveFeishuProjectSelectionBusinessAction(options, action)
   };
-}
-
-async function handleFeishuAgentMessage(
-  options: FeishuAgentBridgeOptions,
-  input: FeishuBridgeHandleInput,
-  inFlightReplies: Set<string>
-): Promise<FeishuBridgeHandleResult> {
-  const policy = replyPolicy(input);
-  if (policy) return { reason: policy, replied: false };
-  const replyKey = replyDedupeKey(input.event);
-  if (inFlightReplies.has(replyKey)) return { reason: "duplicate_reply_in_flight", replied: false };
-  inFlightReplies.add(replyKey);
-  try {
-    return await handleFeishuAgentMessageOnce(options, input);
-  } finally {
-    inFlightReplies.delete(replyKey);
-  }
-}
-
-async function handleFeishuAgentMessageOnce(
-  options: FeishuAgentBridgeOptions,
-  input: FeishuBridgeHandleInput
-): Promise<FeishuBridgeHandleResult> {
-  if (alreadyReplied(options.database, input.event)) return { reason: "duplicate_reply", replied: false };
-  await sendAckReaction(options, input);
-  const route = conversationRoute(options, input);
-  const projectContext = projectContextForRoute(options, input, route);
-  const runner = await runnerReply(options, input, route, projectContext);
-  const text = cleanString(runner.text);
-  if (text === "") return { reason: "empty_agent_reply", replied: false };
-  return sendReply(options, input, text, runner, "agent_reply_sent");
 }
 
 async function sendReply(
@@ -97,10 +86,8 @@ async function sendReply(
   reason: string
 ): Promise<FeishuBridgeHandleResult> {
   const eventRef = input.ingest.event_id > 0 ? `external_events:${input.ingest.event_id}` : input.event.dedupe_key;
-  const receipt = await createFeishuChannelConnector({
-    config: options.config,
-    sender: messageSender(options)
-  }).deliver!(createFeishuOutboundEnvelope({
+  const connector = deliveryConnector(options);
+  const envelope = createFeishuImOutboundEnvelope({
     actionGateRef: `${eventRef}:reply-policy`,
     actionID: `feishu-reply:${input.event.message_id}`,
     authority: "deterministic_policy",
@@ -109,10 +96,20 @@ async function sendReply(
     idempotencyKey: `feishu-reply:${input.event.dedupe_key}`,
     occurredAt: input.event.timestamp,
     operation: "message.reply",
-    payload: { text },
     receiveID: input.event.chat_id,
-    receiveIDType: "chat_id"
-  }));
+    receiveIDType: "chat_id",
+    text
+  });
+  const receipt = await deliverImOutboundNow({
+    connector,
+    content: text,
+    database: options.database,
+    envelope,
+    externalEventId: input.ingest.event_id,
+    targetChatId: input.event.chat_id,
+    targetMessageId: input.event.message_id,
+    targetThreadId: input.event.thread_id || input.event.root_id
+  });
   const sent: FeishuTextMessageResult = {
     messageId: receipt.provider_request_ref
   };
@@ -178,16 +175,22 @@ function messageSender(options: FeishuAgentBridgeOptions): FeishuMessageClient {
   return options.sender ?? createFeishuMessageClient({ config: options.config() });
 }
 
+function deliveryConnector(options: FeishuAgentBridgeOptions): ChannelConnector {
+  return options.connector ?? createFeishuChannelConnector({ config: options.config, sender: messageSender(options) });
+}
+
 async function sendAckReaction(
   options: FeishuAgentBridgeOptions,
   input: FeishuBridgeHandleInput
 ): Promise<void> {
-  const sender = messageSender(options);
-  if (!sender.addMessageReaction) return;
+  if (options.connector) {
+    if (!options.connector.manifest.capabilities.some((capability) => capability.id === "reaction.add")) return;
+  } else if (!messageSender(options).addMessageReaction) return;
   if (alreadyAcknowledged(options.database, input.event)) return;
   try {
     const eventRef = input.ingest.event_id > 0 ? `external_events:${input.ingest.event_id}` : input.event.dedupe_key;
-    const receipt = await createFeishuChannelConnector({ config: options.config, sender }).deliver!(createFeishuOutboundEnvelope({
+    const connector = deliveryConnector(options);
+    const envelope = createFeishuImOutboundEnvelope({
       actionGateRef: `${eventRef}:ack-policy`,
       actionID: `feishu-ack:${input.event.message_id}`,
       authority: "deterministic_policy",
@@ -196,10 +199,21 @@ async function sendAckReaction(
       idempotencyKey: `feishu-ack:${input.event.dedupe_key}`,
       occurredAt: input.event.timestamp,
       operation: "reaction.add",
-      payload: { emoji_type: ACK_REACTION_EMOJI_TYPE, message_id: input.event.message_id },
+      reaction: ACK_REACTION_EMOJI_TYPE,
       receiveID: input.event.chat_id,
-      receiveIDType: "chat_id"
-    }));
+      receiveIDType: "chat_id",
+      replyToMessageID: input.event.message_id
+    });
+    const receipt = await deliverImOutboundNow({
+      connector,
+      content: `[reaction:${ACK_REACTION_EMOJI_TYPE}]`,
+      database: options.database,
+      envelope,
+      externalEventId: input.ingest.event_id,
+      targetChatId: input.event.chat_id,
+      targetMessageId: input.event.message_id,
+      targetThreadId: input.event.thread_id || input.event.root_id
+    });
     createExternalLink(options.database, {
       conversation_id: fallbackConversationID(input.event),
       external_event_id: input.ingest.event_id,

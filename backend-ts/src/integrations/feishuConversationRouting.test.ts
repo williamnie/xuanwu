@@ -34,6 +34,9 @@ describe("Feishu conversation routing", () => {
       expect(second.conversationId).toBe("feishu-chat-oc_group");
       expect(first.prompt).toBe("hi");
       expect(second.prompt).toBe("next");
+      expect(db.sqlite.query<{ connector_id: string }, []>(
+        "select connector_id from im_conversation_state"
+      ).get()?.connector_id).toBe("feishu");
     } finally {
       db.close();
     }
@@ -178,6 +181,10 @@ describe("Feishu conversation routing", () => {
 
       expect(route.scopeKey).toBe("feishu-message-om_message_only");
       expect(route.conversationId).toBe("feishu-message-om_message_only");
+      // Message-level one-shot scopes are never persisted (design §7.1).
+      expect(db.sqlite.query<{ count: number }, []>(
+        "select count(*) as count from im_conversation_state"
+      ).get()).toEqual({ count: 0 });
     } finally {
       db.close();
     }

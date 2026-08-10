@@ -110,7 +110,7 @@ function saveSentNotification(db: RunnerDatabase, issueID: number, content: stri
   }, new Date(timestamp));
   const { outbox } = approveImReplyDraft(db, draft.id, new Date(timestamp));
   markSyncOutboxSent(db, outbox.id, {
-    feishuMessageId: `om_notification_${issueID}`,
+    providerRequestRef: `om_notification_${issueID}`,
     timestamp: new Date(timestamp)
   });
 }

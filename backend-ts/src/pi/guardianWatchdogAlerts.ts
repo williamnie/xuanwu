@@ -4,10 +4,7 @@ import {
   upsertPiGuardianAlert
 } from "../db/repositories/pi.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
-import {
-  sendDirectFeishuGuardianAlert,
-  type PiGuardianDirectFeishuOptions
-} from "../integrations/feishuGuardianAlerts.ts";
+import type { GuardianAlertDelivery } from "./guardianAlertDelivery.ts";
 import type {
   PiGuardianWatchdogCheck,
   PiGuardianWatchdogContext
@@ -19,14 +16,14 @@ export async function writeGuardianWatchdogAlerts(
   db: RunnerDatabase,
   checks: PiGuardianWatchdogCheck[],
   context: PiGuardianWatchdogContext,
-  options: PiGuardianDirectFeishuOptions | undefined
+  delivery: GuardianAlertDelivery | undefined
 ): Promise<WatchdogAlertWriteResult> {
   const alerts = writeAlerts(db, checks, context.nowText);
   try {
-    await sendDirectFeishuAlerts(db, alerts, options, context.now);
+    await sendGuardianAlerts(alerts, delivery, context.now);
     return { alerts: alerts.length, error: "" };
   } catch (error) {
-    return { alerts: alerts.length, error: `direct_feishu: ${safeError(error)}` };
+    return { alerts: alerts.length, error: `${delivery?.connectorID || "im"}: ${safeError(error)}` };
   }
 }
 
@@ -52,15 +49,14 @@ function writeAlerts(
   return alerts;
 }
 
-async function sendDirectFeishuAlerts(
-  db: RunnerDatabase,
+async function sendGuardianAlerts(
   alerts: PiGuardianAlert[],
-  options: PiGuardianDirectFeishuOptions | undefined,
+  delivery: GuardianAlertDelivery | undefined,
   now: Date
 ): Promise<void> {
-  if (!options) return;
+  if (!delivery) return;
   for (const alert of alerts) {
-    await sendDirectFeishuGuardianAlert(db, alert, { ...options, now: options.now ?? now });
+    await delivery.send(alert, { now });
   }
 }
 

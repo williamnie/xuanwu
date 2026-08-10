@@ -40,7 +40,8 @@ const REPAIRABLE_MIGRATION_IDS = new Set([
   "035_pi_automations",
   "036_pi_automation_scheduler",
   "039_pi_mcp_discovery",
-  "059_pi_automatic_takeover"
+  "059_pi_automatic_takeover",
+  "070_im_conversation_state"
 ]);
 
 const MIGRATIONS_TABLE_SQL = `

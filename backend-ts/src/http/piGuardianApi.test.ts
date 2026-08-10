@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { adoptImConversationState } from "../db/repositories/imConversationState.ts";
 import {
   addPiRunGroupItem,
   createPiGuardianEvent,
@@ -131,8 +132,15 @@ describe("PI Guardian API", () => {
     const database = await openFixtureDatabase();
     try {
       insertIssue(database, 801, "Still active", "in_progress");
+      adoptImConversationState(database, {
+        activeConversationId: "telegram-conversation-manual",
+        baseConversationId: "telegram-conversation-manual",
+        connectorId: "telegram",
+        scopeKey: "telegram:manual-digest"
+      });
       createPiRunGroup(database, {
         id: "group-manual",
+        origin_conversation_id: "telegram-conversation-manual",
         project_id: "demo",
         expected_issue_count: 1,
         max_interval_minutes: 120
@@ -156,7 +164,8 @@ describe("PI Guardian API", () => {
         flush_reason: "manual",
         flush_sequence: 1,
         payload_summary: { counts: { active: 1, total: 1 } },
-        state: "ready"
+        state: "ready",
+        target_channel: "telegram"
       }]);
     } finally {
       database.close();

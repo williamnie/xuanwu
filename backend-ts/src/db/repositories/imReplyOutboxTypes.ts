@@ -19,10 +19,24 @@ export type ImReplyDraftRecord = {
 export type SyncOutboxRecord = Omit<ImReplyDraftRecord, "rejection_reason"> & {
   attempt_count: number;
   cooldown_until: string;
+  correlation_id: string;
+  dedupe_key: string;
+  /**
+   * Compatibility carrier only: the authoritative delivery receipt for
+   * `operation_kind='im_reply'` rows is `provider_request_ref` + `result_json`.
+   * New sends keep dual-writing this column during the bounded W1 window so
+   * legacy readers keep working; no production decision may read it first.
+   */
   feishu_message_id: string;
   last_error: string;
   max_attempts: number;
+  operation_kind: string;
+  payload_json: string;
+  /** Authoritative provider-neutral receipt reference (W1 cutover). */
+  provider_request_ref: string;
   reply_draft_id: number;
+  /** Bounded `xuanwu.im-delivery-receipt.v1` JSON for im_reply rows. */
+  result_json: string;
   retry_after_seconds: number;
   sent_at: string;
 };

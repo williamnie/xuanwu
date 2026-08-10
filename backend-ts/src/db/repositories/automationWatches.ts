@@ -13,6 +13,7 @@ import {
   type AutomationID
 } from "../../domain/automation/contracts.ts";
 import { INVESTIGATE_WORKFLOW_REF } from "../../workflows/investigate.ts";
+import type { ImTargetV1 } from "../../integrations/imChannelContracts.ts";
 
 export type AutomationWatchStatus = "watching" | "satisfied" | "notified" | "expired" | "cancelled" | "failed";
 export type AutomationWatchOutcome = "" | "completion" | "failure" | "cancelled" | "thread_event" | "timeout";
@@ -22,11 +23,14 @@ export type AutomationWatchCondition =
 export type AutomationWatchSubject =
   | { issue_ids: number[]; kind: "issues" }
   | { kind: "external_thread"; provider: string; thread_id: string };
-export type AutomationWatchNotificationTarget = {
-  channel: "feishu";
-  chat_id: string;
-  message_id: string;
+export type AutomationWatchNotificationTarget = Pick<ImTargetV1, "connector_id" | "conversation_id"> & {
+  reply_to_message_id: string;
   thread_id: string;
+};
+type LegacyAutomationWatchNotificationTarget = {
+  channel?: unknown;
+  chat_id?: unknown;
+  message_id?: unknown;
 };
 export type AutomationWatch = {
   automation_id: AutomationID;
@@ -388,9 +392,9 @@ function desiredShadow(legacy: PiIssueCompletionWatch): DesiredShadow {
     expiresAt: legacyExpiry(parsed),
     legacy,
     notificationTarget: normalizeNotificationTarget({
-      channel: "feishu",
-      chat_id: legacy.target_chat_id,
-      message_id: legacy.target_message_id,
+      connector_id: clean(legacy.target_channel) || "feishu",
+      conversation_id: legacy.target_chat_id,
+      reply_to_message_id: legacy.target_message_id,
       thread_id: legacy.target_thread_id
     }, false),
     outcome: legacyOutcome(legacy),
@@ -464,13 +468,13 @@ function sameWatch(
     definition.name === desired.name && existing.migration_mode === "native" && existing.dedupe_key === desired.dedupeKey &&
     existing.expires_at === desired.expiresAt &&
     existing.condition_json === stableJson(desired.condition) && existing.subject_json === stableJson(desired.subject) &&
-    existing.notification_target_json === stableJson(desired.notificationTarget);
+    stableJson(existing.notification_target) === stableJson(desired.notificationTarget);
 }
 
 function sameShadow(existing: AutomationWatch, desired: DesiredShadow): boolean {
   return existing.migration_mode === "legacy_shadow" && existing.condition_json === stableJson(desired.condition) &&
     existing.subject_json === stableJson(desired.subject) &&
-    existing.notification_target_json === stableJson(desired.notificationTarget) &&
+    stableJson(existing.notification_target) === stableJson(desired.notificationTarget) &&
     existing.expires_at === desired.expiresAt && existing.status === desired.status &&
     existing.outcome === desired.outcome && existing.satisfied_at === desired.legacy.completed_at &&
     existing.notified_at === desired.legacy.notified_at && existing.error === desired.legacy.error;
@@ -515,7 +519,7 @@ function mapWatch(row: Row): AutomationWatch {
   return {
     ...stored,
     condition: parseObject(stored.condition_json) as AutomationWatchCondition,
-    notification_target: parseObject(stored.notification_target_json) as AutomationWatchNotificationTarget,
+    notification_target: normalizeNotificationTarget(parseObject(stored.notification_target_json), false),
     subject: parseObject(stored.subject_json) as AutomationWatchSubject
   };
 }
@@ -553,15 +557,18 @@ function normalizeSubject(db: RunnerDatabase, value: AutomationWatchSubject, pro
   throw new Error("unsupported automation watch subject");
 }
 
-function normalizeNotificationTarget(value: Partial<AutomationWatchNotificationTarget>, required: boolean): AutomationWatchNotificationTarget {
-  if (value?.channel !== "feishu") throw new Error("automation watch currently requires a feishu notification target");
+function normalizeNotificationTarget(
+  value: Partial<AutomationWatchNotificationTarget> & LegacyAutomationWatchNotificationTarget,
+  required: boolean
+): AutomationWatchNotificationTarget {
   const target = {
-    channel: "feishu" as const,
-    chat_id: clean(value.chat_id),
-    message_id: clean(value.message_id),
+    connector_id: clean(value.connector_id) || clean(value.channel),
+    conversation_id: clean(value.conversation_id) || clean(value.chat_id),
+    reply_to_message_id: clean(value.reply_to_message_id) || clean(value.message_id),
     thread_id: clean(value.thread_id)
   };
-  if (required && target.chat_id === "" && target.message_id === "") {
+  if (target.connector_id === "") throw new Error("automation watch notification connector_id is required");
+  if (required && target.conversation_id === "" && target.reply_to_message_id === "" && target.thread_id === "") {
     throw new Error("automation watch notification target is required");
   }
   return target;

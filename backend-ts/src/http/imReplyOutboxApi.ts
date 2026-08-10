@@ -8,7 +8,9 @@ import {
 import type { RunnerDatabase } from "../db/database.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import { createFeishuMessageClient } from "../integrations/feishuClient.ts";
-import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
+import { dispatchFeishuOutbox, type FeishuMessageSender } from "../integrations/feishuOutboxDispatcherCompat.ts";
+import type { ImChannelRegistry } from "../integrations/imChannelContracts.ts";
+import { dispatchImOutbox } from "../pi/imReplyOutboxDispatcher.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -16,6 +18,7 @@ type ImReplyOutboxContext = {
   config?: FeishuConnectorConfig;
   database: RunnerDatabase;
   feishuSender?: FeishuMessageSender;
+  imChannels?: ImChannelRegistry;
 };
 
 export function registerImReplyOutboxRoutes(router: Router, context: ImReplyOutboxContext): void {
@@ -53,9 +56,17 @@ async function rejectResponse(context: ImReplyOutboxContext, request: Request): 
 }
 
 async function dispatchResponse(context: ImReplyOutboxContext, request: Request): Promise<Response> {
-  if (!context.config) throw new HttpError(503, "feishu connector is not configured");
   const body = await optionalObjectBody(request);
   try {
+    if (context.imChannels) {
+      return json(await dispatchImOutbox({
+        database: context.database,
+        limit: positiveNumber(body.limit),
+        resolveConnector: (source) => context.imChannels!.get(source).connector,
+        source: cleanString(body.source) || undefined
+      }));
+    }
+    if (!context.config) throw new HttpError(503, "im channel registry is not configured");
     return json(await dispatchFeishuOutbox({
       config: context.config,
       database: context.database,

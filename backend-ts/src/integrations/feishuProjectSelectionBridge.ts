@@ -9,23 +9,27 @@ import {
   createFeishuMessageClient,
   type FeishuMessageClient
 } from "./feishuClient.ts";
-import { createFeishuChannelConnector, createFeishuOutboundEnvelope } from "./feishuChannelConnector.ts";
+import { createFeishuChannelConnector, createFeishuImOutboundEnvelope } from "./feishuChannelConnector.ts";
 import type { FeishuConversationClock } from "./feishuConversationRouting.ts";
 import type {
   FeishuBridgeHandleResult,
   FeishuConversationRunner
 } from "./feishuAgentBridge.ts";
 import type { FeishuProjectSelectionAction } from "./feishuProjectSelection.ts";
+import type { ChannelConnector } from "./channelConnectorContracts.ts";
+import { deliverImOutboundNow } from "./imOutboundDelivery.ts";
 
 export type FeishuProjectSelectionBridgeOptions = {
   clock?: FeishuConversationClock;
   config: () => FeishuConnectorConfig;
+  connector?: ChannelConnector;
   database: RunnerDatabase;
   runConversation?: FeishuConversationRunner;
   sender?: FeishuMessageClient;
 };
 
-export async function handleFeishuProjectSelectionAction(
+/** Business resolver used after either the canonical or W1 legacy token gate. */
+export async function resolveFeishuProjectSelectionBusinessAction(
   options: FeishuProjectSelectionBridgeOptions,
   action: FeishuProjectSelectionAction
 ): Promise<FeishuBridgeHandleResult> {
@@ -114,7 +118,8 @@ async function sendActionText(
   correlation: string
 ): Promise<void> {
   const ref = `feishu-project-selection:${correlation}`;
-  await createFeishuChannelConnector({ config: options.config, sender: messageSender(options) }).deliver!(createFeishuOutboundEnvelope({
+  const connector = deliveryConnector(options);
+  const envelope = createFeishuImOutboundEnvelope({
     actionGateRef: `${ref}:consumed`,
     actionID: `${ref}:reply`,
     authority: "deterministic_policy",
@@ -122,10 +127,17 @@ async function sendActionText(
     eventRef: ref,
     idempotencyKey: `${ref}:reply:${stableTextKey(text)}`,
     operation: "message.reply",
-    payload: { text },
     receiveID: chatId,
-    receiveIDType: "chat_id"
-  }));
+    receiveIDType: "chat_id",
+    text
+  });
+  await deliverImOutboundNow({
+    connector,
+    content: text,
+    database: options.database,
+    envelope,
+    targetChatId: chatId
+  });
 }
 
 function pendingEvent(selection: FeishuPendingProjectSelection): FeishuNormalizedMessageEvent {
@@ -149,6 +161,10 @@ function pendingEvent(selection: FeishuPendingProjectSelection): FeishuNormalize
 
 function messageSender(options: FeishuProjectSelectionBridgeOptions): FeishuMessageClient {
   return options.sender ?? createFeishuMessageClient({ config: options.config() });
+}
+
+function deliveryConnector(options: FeishuProjectSelectionBridgeOptions): ChannelConnector {
+  return options.connector ?? createFeishuChannelConnector({ config: options.config, sender: messageSender(options) });
 }
 
 function safeError(error: unknown): string {

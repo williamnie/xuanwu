@@ -1,22 +1,19 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { getPiGuardianAlert, type PiGuardianAlert } from "../db/repositories/pi.ts";
-import {
-  sendDirectFeishuGuardianAlert,
-  type PiGuardianDirectFeishuOptions
-} from "../integrations/feishuGuardianAlerts.ts";
+import type { GuardianAlertDelivery } from "./guardianAlertDelivery.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 
-export async function sendMissedDigestPendingFeishuFallback(
+export async function sendMissedDigestPendingFallback(
   db: RunnerDatabase,
   alertIds: string[],
-  options: PiGuardianDirectFeishuOptions | undefined
+  delivery: GuardianAlertDelivery | undefined
 ): Promise<void> {
-  if (!options) return;
+  if (!delivery) return;
   for (const id of unique(alertIds)) {
     const alert = getPiGuardianAlert(db, id);
     if (!isMissedDigestPending(alert)) continue;
-    await sendDirectFeishuGuardianAlert(db, alert, { ...options, formatText: missedDigestText });
+    await delivery.send(alert, { formatText: missedDigestText });
   }
 }
 

@@ -9,6 +9,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { createPiAction, getPiAction } from "../db/repositories/pi.ts";
+import { createFeishuPendingProjectSelection } from "../db/repositories/feishuProjectSelection.ts";
 import { EventBus } from "../events/bus.ts";
 
 const tempRoots: string[] = [];
@@ -109,13 +110,67 @@ describe("Feishu WebSocket receiver", () => {
     database.close();
   });
 
+  test("ignores message, card and health callbacks from a stopped receiver generation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-ws-generation-"));
+    tempRoots.push(root);
+    const database = await openDatabase({ stateDir: join(root, "state") });
+    const generations: Parameters<FeishuWsFactory>[0][] = [];
+    const manager = createFeishuReceiverManager({
+      database,
+      wsFactory: async (input) => {
+        generations.push(input);
+        return { close: () => undefined, start: async () => input.onReady() };
+      }
+    });
+    const config = buildFeishuConnectorConfig({
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+
+    await manager.restart(config);
+    await manager.restart(config);
+    expect(generations).toHaveLength(2);
+    const staleMessage = messageEvent("stale");
+    (staleMessage.message as Record<string, unknown>).message_id = "om_stale_generation";
+    expect(await generations[0]!.onCardAction(projectSelectionActionEvent())).toEqual({
+      ok: false,
+      reason: "stale_receiver_generation"
+    });
+    await generations[0]!.onMessage(staleMessage);
+    generations[0]!.onError(new Error("stale error"));
+    generations[0]!.onReconnecting();
+    expect(listExternalEvents(database, { source: "feishu" })).toHaveLength(0);
+    expect(manager.status()).toMatchObject({ connected: true, last_error: "", state: "connected" });
+
+    const currentMessage = messageEvent("current");
+    (currentMessage.message as Record<string, unknown>).message_id = "om_current_generation";
+    await generations[1]!.onMessage(currentMessage);
+    expect(listExternalEvents(database, { source: "feishu" }).map((event) => event.external_id))
+      .toEqual(["om_current_generation"]);
+    manager.stop();
+    expect(manager.status()).toMatchObject({ connected: false, state: "disabled" });
+    database.close();
+  });
+
   test("dispatches flattened project selection actions from the long-connection SDK", async () => {
     const { database, factory, messages } = await receiverFixture();
     const actions: unknown[] = [];
+    createFeishuPendingProjectSelection(database, {
+      candidates: ["demo"],
+      chatId: "oc_group",
+      conversationId: "conversation-ws-1",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      originalPrompt: "处理这个任务",
+      scopeKey: "oc_group",
+      selectionId: "fps_ws_1",
+      sourceMessageId: "om_card_ws_1",
+      userId: "ou_user_1",
+      userOpenId: "ou_open_1"
+    });
     const manager = createFeishuReceiverManager({
       agentBridge: {
         handle: async () => ({ reason: "unused", replied: false }),
-        handleProjectSelectionAction: async (action: unknown) => {
+        resolveProjectSelectionAction: async (action: unknown) => {
           actions.push(action);
           return { reason: "project_selection_continued", replied: true };
         }

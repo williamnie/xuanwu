@@ -21,11 +21,14 @@ import {
   FeishuClientError,
   type FeishuMessageClient
 } from "./feishuClient.ts";
-import { createFeishuChannelConnector, createFeishuOutboundEnvelope } from "./feishuChannelConnector.ts";
+import { createFeishuChannelConnector, createFeishuImOutboundEnvelope } from "./feishuChannelConnector.ts";
 import { feishuTargetForConversation, feishuTargetForIssue } from "./feishuNotificationTargets.ts";
+import type { ChannelConnector } from "./channelConnectorContracts.ts";
+import { deliverImOutboundNow } from "./imOutboundDelivery.ts";
 
 export type PiGuardianDirectFeishuOptions = {
   config: FeishuConnectorConfig;
+  connector?: ChannelConnector;
   formatText?: (alert: PiGuardianAlert) => string;
   now?: Date;
   sender?: FeishuMessageClient;
@@ -50,21 +53,35 @@ export async function sendDirectFeishuGuardianAlert(
     return recordFailure(db, alert, `${target.receiveIdType} is not allowed`, options.now, true);
   }
   try {
-    const sender = options.sender ?? createFeishuMessageClient({ config: options.config });
     const alertRef = `pi_guardian_alerts:${alert.id}`;
-    const receipt = await createFeishuChannelConnector({ config: options.config, sender }).deliver!(createFeishuOutboundEnvelope({
+    const connector = options.connector ?? createFeishuChannelConnector({
+      config: options.config,
+      sender: options.sender ?? createFeishuMessageClient({ config: options.config })
+    });
+    const text = alertText(alert, options, presentation);
+    const envelope = createFeishuImOutboundEnvelope({
       actionGateRef: `${alertRef}:retry-policy`,
       actionID: `${alertRef}:direct-feishu`,
       authority: "deterministic_policy",
       correlationID: alert.run_group_id || alertRef,
       eventRef: alertRef,
-      idempotencyKey: `${alertRef}:direct-feishu`,
+      idempotencyKey: `${alertRef}:direct-feishu:${alert.direct_feishu_state}:${alert.retry_count}`,
       occurredAt: options.now?.toISOString(),
       operation: "message.reply",
-      payload: { text: alertText(alert, options, presentation) },
       receiveID: target.receiveId,
-      receiveIDType: target.receiveIdType
-    }));
+      receiveIDType: target.receiveIdType,
+      text
+    });
+    const receipt = await deliverImOutboundNow({
+      connector,
+      content: text,
+      database: db,
+      envelope,
+      issueId: alert.issue_id,
+      retryAuthority: "caller",
+      targetChatId: target.receiveId,
+      timestamp: options.now
+    });
     updatePiGuardianAlert(db, alert.id, sentGuardianAlertRetryPatch({
       alert,
       messageId: receipt.provider_request_ref,

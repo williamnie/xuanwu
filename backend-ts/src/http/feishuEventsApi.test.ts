@@ -96,7 +96,7 @@ describe("Feishu events endpoint", () => {
         });
         return { reason: "agent_reply_sent", replied: true };
       },
-      handleProjectSelectionAction: async () => ({ reason: "unused", replied: false })
+      resolveProjectSelectionAction: async () => ({ reason: "unused", replied: false })
     };
     const { database, handle } = await fixtureHandler({
       agentBridge: bridge,
@@ -123,7 +123,7 @@ describe("Feishu events endpoint", () => {
         bridgeCalls.push(event.message_id);
         return { reason: "agent_reply_sent", replied: true };
       },
-      handleProjectSelectionAction: async () => ({ reason: "unused", replied: false })
+      resolveProjectSelectionAction: async () => ({ reason: "unused", replied: false })
     };
     const { database, handle } = await fixtureHandler({
       agentBridge: bridge,

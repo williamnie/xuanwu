@@ -47,7 +47,8 @@ describe("PI auto-manage digest flush integration", () => {
         project_id: "enabled",
         run_group_id: "group-scheduled",
         state: "pending",
-        target_channel: "feishu"
+        target_channel: "feishu",
+        target_chat_id: "oc_group"
       });
 
       const result = await runScheduleLayerCycle({

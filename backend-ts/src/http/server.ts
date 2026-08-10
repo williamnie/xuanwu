@@ -19,7 +19,7 @@ import { registerImReplyOutboxRoutes } from "./imReplyOutboxApi.ts";
 import { registerWebhookEventRoutes } from "./webhookEventsApi.ts";
 import { registerGitEventRoutes } from "./gitEventsApi.ts";
 import { registerTrackerEventRoutes } from "./trackerEventsApi.ts";
-import type { FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
+import type { FeishuMessageSender } from "../integrations/feishuOutboxDispatcherCompat.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import type { PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
 import type { EventRouterSourcePolicy } from "../pi/eventRouter.ts";
@@ -39,6 +39,8 @@ import { registerCodeAgentsRoutes } from "./codeAgentsApi.ts";
 import { setProjectLoopMaxParallelProjects } from "../runner/projectLoopManager.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
+import type { ImChannelRegistry } from "../integrations/imChannelContracts.ts";
+import { registerImChannelRoutes } from "./imChannelsApi.ts";
 
 type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
 type DefaultRouterOptions = {
@@ -52,6 +54,7 @@ type DefaultRouterOptions = {
   readDatabase?: RunnerDatabase;
   feishuReceiverStatus?: () => FeishuReceiverStatus;
   interruptTimeoutMs?: number;
+  imChannels?: ImChannelRegistry;
   onFeishuConfigChanged?: (config: FeishuConnectorConfig) => Promise<void> | void;
   feishuAgentBridge?: ReturnType<typeof createFeishuAgentBridge>;
   feishuIntakeModel?: LlmIntakeModel;
@@ -94,16 +97,22 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     supervisorManaged: runtime.supervisorManaged
   });
   registerProvidersCatalogRoute(router, { providersRegistry: runtime.providersRegistry });
+  if (runtime.imChannels) {
+    registerImChannelRoutes(router, { registry: runtime.imChannels });
+    for (const module of runtime.imChannels.list()) void module.notifications?.start();
+  }
   registerEventRoutes(router, { bus });
-  registerFeishuEventRoutes(router, {
-    agentBridge: runtime.feishuAgentBridge,
-    bus,
-    config: runtime.config?.integrations.feishu ?? buildFeishuConnectorConfig(),
-    database: runtime.database,
-    feishuIntakeModel: runtime.feishuIntakeModel,
-    feishuIntakePolicy: runtime.feishuIntakePolicy,
-    providers: runtime.providers
-  });
+  if (!runtime.imChannels?.list().some((module) => module.callback?.path === "/api/integrations/feishu/events")) {
+    registerFeishuEventRoutes(router, {
+      agentBridge: runtime.feishuAgentBridge,
+      bus,
+      config: runtime.config?.integrations.feishu ?? buildFeishuConnectorConfig(),
+      database: runtime.database,
+      feishuIntakeModel: runtime.feishuIntakeModel,
+      feishuIntakePolicy: runtime.feishuIntakePolicy,
+      providers: runtime.providers
+    });
+  }
   if (runtime.database) {
     if (runtime.config && runtime.providers && runtime.providersRegistry) {
       registerCodeAgentsRoutes(router, {
@@ -113,12 +122,14 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
         providersRegistry: runtime.providersRegistry
       });
     }
-    attachFeishuNotificationObservers({
-      bus,
-      config: runtime.config?.integrations.feishu,
-      database: runtime.database,
-      sender: runtime.feishuSender
-    });
+    if (!runtime.imChannels) {
+      attachFeishuNotificationObservers({
+        bus,
+        config: runtime.config?.integrations.feishu,
+        database: runtime.database,
+        sender: runtime.feishuSender
+      });
+    }
     registerFeishuSettingsRoutes(router, {
       config: runtime.config,
       database: runtime.database,
@@ -141,7 +152,8 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     registerImReplyOutboxRoutes(router, {
       config: runtime.config?.integrations.feishu,
       database: runtime.database,
-      feishuSender: runtime.feishuSender
+      feishuSender: runtime.feishuSender,
+      imChannels: runtime.imChannels
     });
     registerReadApiRoutes(router, {
       agenticClient: runtime.agenticClient,

@@ -1,16 +1,16 @@
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../db/database.ts";
-import { upsertExternalEvent } from "../db/repositories/externalEvents.ts";
+import type { ExternalEventRecord } from "../db/repositories/externalEvents.ts";
 import { listProjects } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
 import { decidePiAttention, type PiAttentionDecision } from "../pi/attentionRouter.ts";
 import {
-  feishuExternalEventInput,
   normalizeFeishuMessageEvent,
   type FeishuConnectorConfig,
   type FeishuNormalizedMessageEvent
 } from "./feishu.ts";
-import { createFeishuChannelConnector, feishuInboundEnvelopeForEvent } from "./feishuChannelConnector.ts";
+import { feishuInboundEnvelopeForEvent } from "./feishuChannelConnector.ts";
+import { ingestImInboundEnvelope } from "./imInboundService.ts";
 
 export type FeishuIngestContext = {
   bus?: EventBus;
@@ -52,13 +52,16 @@ export function ingestFeishuMessageEvent(
   const attention = attentionDecision(context, event);
   const envelope = feishuInboundEnvelopeForEvent(event, attention.project_id);
   const summary = normalizedSummary(event, attention.project_id, attention);
-  let inboxEvent: ReturnType<typeof saveInboxEvent> = null;
-  // ChannelConnector is the runtime boundary; its callback delegates to the
-  // existing external_events writer instead of introducing a second inbox.
-  void createFeishuChannelConnector({
-    config: context.config,
-    onInbound: () => { inboxEvent = saveInboxEvent(context, event, attention, raw); }
-  }).ingest!(envelope);
+  // The Feishu adapter owns normalization; the provider-neutral service is the
+  // single durable writer. Do not instantiate a second connector per event.
+  const inboxEvent: ExternalEventRecord | null = context.database
+    ? ingestImInboundEnvelope(context.database, envelope, {
+      projectId: attention.project_id,
+      raw,
+      status: inboxStatus("", attention),
+      summary: { ...summary, attention_decision: attention }
+    })
+    : null;
   publishAudit(context, {
     connector: "feishu",
     dedupe_key: event.dedupe_key,
@@ -108,22 +111,6 @@ function normalizedSummary(
     sender_type: event.sender.type,
     text_length: event.text.length
   };
-}
-
-function saveInboxEvent(
-  context: FeishuIngestContext,
-  event: FeishuNormalizedMessageEvent,
-  attention: PiAttentionDecision,
-  raw: unknown
-) {
-  if (!context.database) return null;
-  const input = feishuExternalEventInput(event, { projectId: attention.project_id });
-  return upsertExternalEvent(context.database, {
-    ...input,
-    raw_json: raw,
-    status: inboxStatus(input.status, attention),
-    summary: { ...input.summary, attention_decision: attention }
-  });
 }
 
 function attentionDecision(context: FeishuIngestContext, event: FeishuNormalizedMessageEvent): PiAttentionDecision {

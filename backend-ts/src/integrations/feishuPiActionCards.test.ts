@@ -9,10 +9,11 @@ import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getSyncOutbox, listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
+import { createImInteractionBinding } from "../db/repositories/imInteractionBindings.ts";
 import { createPiAction, getPiAction, listPiActionEvents, listPiNotificationIntents } from "../db/repositories/pi.ts";
 import { createDefaultRouter, createRequestHandler } from "../http/server.ts";
 import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
-import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
+import { dispatchFeishuOutbox, type FeishuMessageSender } from "./feishuOutboxDispatcherCompat.ts";
 import { queueFeishuPiActionPendingNotification, queuePendingPiActionNotifications } from "./feishuNotifications.ts";
 
 const tempRoots: string[] = [];
@@ -90,7 +91,8 @@ describe("Feishu PI action cards", () => {
         database: db,
         sender
       });
-      expect(JSON.stringify(sender.cardCalls[0]?.card)).toContain("当前项目始终允许");
+      expect(sender.cardCalls).toEqual([]);
+      expect(sender.calls[0]?.text).toContain("mcp-push");
     } finally { db.close(); }
   });
 
@@ -180,6 +182,42 @@ describe("Feishu PI action cards", () => {
         status: "completed"
       });
       expect(listIssueEvents(database, issue.id).map((event) => event.type)).toContain("issue.comment");
+      expect(database.sqlite.query<Record<string, unknown>, [string]>(
+        "select status, resolution_json from im_interaction_bindings where action_ref=?"
+      ).get("pi_actions:pi-action-callback-approve")).toMatchObject({
+        resolution_json: expect.stringContaining('"status":"completed"'),
+        status: "consumed"
+      });
+      expect(listPiActionEvents(database, { actionId: "pi-action-callback-approve" })
+        .filter((event) => event.event_type === "feishu_callback")).toHaveLength(1);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("resolves post-cutover opaque interaction callbacks once through the generic service", async () => {
+    const { database, handle } = await fixtureHandler();
+    try {
+      const issue = createIssue(database, { project_id: "demo", status: "triage", title: "Generic callback target" });
+      createPendingPiAction(database, "pi-action-generic-callback", issue.id, "Approved through generic IM");
+      const binding = createImInteractionBinding(database, {
+        actionKind: "pi_action",
+        actionRef: "pi_actions:pi-action-generic-callback",
+        actions: [{ action_id: "approve", value: "approve" }],
+        actor: { id: "ou_user_1", openId: "ou_open_1" },
+        connectorId: "feishu",
+        expiresAt: "2027-01-01T00:00:00.000Z",
+        scopeKey: "oc_group"
+      });
+      const callback = imInteractionCallback(binding.interaction_id, "approve");
+      const first = await postFeishu(handle, callback);
+      const replay = await postFeishu(handle, callback);
+
+      expect(first.status).toBe(202);
+      expect(await first.json()).toMatchObject({ reason: "consumed", resolution: { ok: true, status: "completed" } });
+      expect(replay.status).toBe(202);
+      expect(await replay.json()).toMatchObject({ reason: "already_consumed" });
+      expect(getPiAction(database, "pi-action-generic-callback")?.status).toBe("completed");
     } finally {
       database.close();
     }
@@ -275,7 +313,11 @@ function linkedFeishuIssue(db: RunnerDatabase): number {
     content: "帮我修复问题",
     dedupe_key: "feishu:message:om_task",
     external_id: "om_task",
-    normalized_message: { chat_id: "oc_group", message_id: "om_task" },
+    normalized_message: {
+      chat_id: "oc_group",
+      message_id: "om_task",
+      sender: { id: "ou_user_1", open_id: "ou_open_1" }
+    },
     source: "feishu"
   });
   createExternalLink(db, {
@@ -323,6 +365,18 @@ function piActionCallback(
       action: { value: { action: "pi_action_resolve", action_id: actionID, comment: "Needs changes from Feishu", decision, snooze_minutes: options.snoozeMinutes } },
       context: { open_chat_id: options.chatId ?? "oc_group", open_message_id: `om_${actionID}` },
       operator: { operator_id: { open_id: options.userOpenId ?? "ou_open_1", user_id: options.userId ?? "ou_user_1" } }
+    },
+    schema: "2.0"
+  };
+}
+
+function imInteractionCallback(interactionID: string, actionID: string): Record<string, unknown> {
+  return {
+    header: { event_id: `event-${interactionID}`, event_type: "card.action.trigger", token: "verify-token" },
+    event: {
+      action: { value: { action: "xuanwu_im_interaction", action_id: actionID, interaction_id: interactionID, revision: 1 } },
+      context: { open_chat_id: "oc_group", open_message_id: "om_generic" },
+      operator: { operator_id: { open_id: "ou_open_1", user_id: "ou_user_1" } }
     },
     schema: "2.0"
   };

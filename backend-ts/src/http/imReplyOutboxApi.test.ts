@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildConfig } from "../config/env.ts";
-import type { FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
+import type { FeishuMessageSender } from "../integrations/feishuOutboxDispatcherCompat.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createRequestHandler, createDefaultRouter } from "./server.ts";
 

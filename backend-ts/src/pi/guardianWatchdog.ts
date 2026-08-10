@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getPiGuardianWatchdogStatus, upsertPiGuardianWatchdogStatus } from "../db/repositories/pi.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
-import type { PiGuardianDirectFeishuOptions } from "../integrations/feishuGuardianAlerts.ts";
+import type { GuardianAlertDelivery } from "./guardianAlertDelivery.ts";
 import { ROUTABLE_INTENT_SQL, suppressUnroutableLifecycleIntents } from "./guardianWatchdogMaintenance.ts";
 import { writeGuardianWatchdogAlerts, type WatchdogAlertWriteResult } from "./guardianWatchdogAlerts.ts";
 import { expirePendingMcpApprovals } from "./mcpApprovalExpiry.ts";
@@ -28,7 +28,7 @@ export type PiGuardianWatchdogContext = {
 
 export type PiGuardianWatchdogInput = {
   checks?: PiGuardianWatchdogProbe[]; limit?: number; now?: Date | string;
-  directFeishu?: PiGuardianDirectFeishuOptions;
+  delivery?: GuardianAlertDelivery;
   schedulerStaleAfterMs?: number; staleAfterMs?: number;
 };
 
@@ -67,7 +67,7 @@ export async function runPiGuardianWatchdogOnce(
   suppressUnroutableLifecycleIntents(db);
   for (const probe of probes) {
     summary.scanned += 1;
-    const result = await runProbe(db, probe, context, input.directFeishu);
+    const result = await runProbe(db, probe, context, input.delivery);
     summary.checks.push(...result.checks);
     summary.alerts += result.alerts;
     if (result.error !== "") {
@@ -83,11 +83,11 @@ async function runProbe(
   db: RunnerDatabase,
   probe: PiGuardianWatchdogProbe,
   context: PiGuardianWatchdogContext,
-  directFeishu: PiGuardianDirectFeishuOptions | undefined
+  delivery: GuardianAlertDelivery | undefined
 ): Promise<WatchdogAlertWriteResult & { checks: PiGuardianWatchdogCheck[] }> {
   try {
     const checks = asArray(probe.run(context));
-    const writer = await writeGuardianWatchdogAlerts(db, checks, context, directFeishu);
+    const writer = await writeGuardianWatchdogAlerts(db, checks, context, delivery);
     return { checks, ...writer };
   } catch (error) {
     const message = safeError(error);
@@ -163,7 +163,7 @@ function outboxChecks(context: PiGuardianWatchdogContext): PiGuardianWatchdogChe
       min(o.created_at) as oldest_created_at
     from sync_outbox o left join issues i on i.id=o.issue_id
     where o.status in ('pending','queued','retry','sending','failed')
-      and o.feishu_message_id='' and o.created_at<=?
+      and o.provider_request_ref='' and o.created_at<=?
       and not (
         o.status='failed' and o.attempt_count=0
         and o.last_error='historical_pending_backfill_suppressed'

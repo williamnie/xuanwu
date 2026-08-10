@@ -2,17 +2,8 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createExternalLink, listExternalLinksByExternal } from "../db/repositories/externalLinks.ts";
 import {
   approveImReplyDraft,
-  createImReplyDraft,
-  getImReplyDraft,
-  type SyncOutboxRecord
+  createImReplyDraft
 } from "../db/repositories/imReplyOutbox.ts";
-import {
-  claimSyncOutboxSending,
-  listDispatchableSyncOutbox,
-  markSyncOutboxFailed,
-  markSyncOutboxRetry,
-  markSyncOutboxSent
-} from "../db/repositories/imReplyOutboxDispatch.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
 export type NotificationOutboxTarget = {
@@ -40,20 +31,6 @@ export type QueueNotificationOutboxResult = {
   reason: "duplicate" | "queued";
 };
 
-export type NotificationChannelSendInput = {
-  approvalActionID: string;
-  channel: string;
-  content: string;
-  idempotencyKey: string;
-  issueID: number;
-  outboxID: number;
-  target: NotificationOutboxTarget;
-};
-
-export type NotificationChannelSender = {
-  send(input: NotificationChannelSendInput): Promise<{ deliveryID: string }>;
-};
-
 export class NotificationChannelError extends Error {
   readonly retryAfterSeconds?: number;
   readonly retryable: boolean;
@@ -73,6 +50,11 @@ export type NotificationOutboxDispatchResult = {
   sent: number;
   skipped: number;
 };
+
+// The production delivery authority for `operation_kind='im_reply'` rows is
+// the registry-driven `dispatchImOutbox` in pi/imReplyOutboxDispatcher.ts.
+// There is intentionally no second channel-sender dispatcher here: outbox
+// rows claim/send/receipt exactly once through the generic dispatcher.
 
 /**
  * sync_outbox remains the only external-delivery authority. The source column is
@@ -130,104 +112,6 @@ export function alreadyQueuedNotification(
   }).length > 0;
 }
 
-/**
- * Channel-neutral fixture/runtime dispatcher. Production Feishu continues to
- * use its card-aware dispatcher; additional channels can share retry/dedupe
- * semantics without adding another outbox.
- */
-export async function dispatchNotificationOutbox(input: {
-  database: RunnerDatabase;
-  limit?: number;
-  now?: Date;
-  senders: Record<string, NotificationChannelSender>;
-}): Promise<NotificationOutboxDispatchResult> {
-  const result = emptyDispatchResult();
-  const now = input.now ?? new Date();
-  const channels = Object.keys(input.senders).map(cleanString).filter(Boolean).sort();
-  for (const channel of channels) {
-    const candidates = listDispatchableSyncOutbox(input.database, {
-      limit: input.limit,
-      now,
-      source: channel
-    });
-    for (const candidate of candidates) {
-      const claimed = claimSyncOutboxSending(input.database, candidate.id, now);
-      if (!claimed) {
-        result.skipped += 1;
-        continue;
-      }
-      await dispatchOne(input.database, claimed, channel, input.senders[channel]!, now, result);
-    }
-  }
-  return result;
-}
-
-async function dispatchOne(
-  db: RunnerDatabase,
-  outbox: SyncOutboxRecord,
-  channel: string,
-  sender: NotificationChannelSender,
-  now: Date,
-  result: NotificationOutboxDispatchResult
-): Promise<void> {
-  result.processed += 1;
-  const policyError = deliveryPolicyError(db, outbox, channel);
-  if (policyError !== "") {
-    markSyncOutboxFailed(db, outbox.id, { error: policyError, timestamp: now });
-    result.failed += 1;
-    return;
-  }
-  try {
-    const delivery = await sender.send({
-      approvalActionID: outbox.approval_action_id,
-      channel,
-      content: outbox.content,
-      idempotencyKey: `sync_outbox:${outbox.id}`,
-      issueID: outbox.issue_id,
-      outboxID: outbox.id,
-      target: {
-        chatID: outbox.target_chat_id,
-        messageID: outbox.target_message_id,
-        threadID: outbox.target_thread_id
-      }
-    });
-    markSyncOutboxSent(db, outbox.id, {
-      // Compatibility carrier: this column is the provider delivery receipt for
-      // im_reply rows until the P09 connector cutover, not Feishu authority.
-      feishuMessageId: requiredText(delivery.deliveryID, "deliveryID"),
-      timestamp: now
-    });
-    result.sent += 1;
-  } catch (error) {
-    const channelError = error instanceof NotificationChannelError ? error : null;
-    if (channelError && !channelError.retryable) {
-      markSyncOutboxFailed(db, outbox.id, { error: safeError(error), timestamp: now });
-      result.failed += 1;
-      return;
-    }
-    const next = markSyncOutboxRetry(db, outbox.id, {
-      error: safeError(error),
-      retryAfterSeconds: channelError?.retryAfterSeconds,
-      timestamp: now
-    });
-    if (next.status === "failed") result.failed += 1;
-    else result.retry += 1;
-  }
-}
-
-function deliveryPolicyError(db: RunnerDatabase, outbox: SyncOutboxRecord, channel: string): string {
-  if (outbox.source !== channel) return `outbox source does not match channel ${channel}`;
-  if (outbox.status !== "sending") return `outbox is not claimed for sending: ${outbox.status}`;
-  if (getImReplyDraft(db, outbox.reply_draft_id)?.status !== "approved") return "reply draft is not approved";
-  if (outbox.feishu_message_id !== "") return "outbox already has delivery receipt";
-  if (outbox.content.trim() === "") return "outbox content is empty";
-  if (outbox.risk !== "low") return `outbox risk is not allowed: ${outbox.risk}`;
-  if (outbox.target_chat_id === "" && outbox.target_thread_id === "" && outbox.target_message_id === "") {
-    return "outbox target is empty";
-  }
-  return "";
-}
-
 function normalizeQueueInput(input: QueueNotificationOutboxInput) {
   const target = {
     chatID: cleanString(input.target.chatID),
@@ -249,14 +133,6 @@ function normalizeQueueInput(input: QueueNotificationOutboxInput) {
     projectID: cleanString(input.projectID),
     target
   };
-}
-
-function emptyDispatchResult(): NotificationOutboxDispatchResult {
-  return { failed: 0, processed: 0, retry: 0, sent: 0, skipped: 0 };
-}
-
-function safeError(error: unknown): string {
-  return redactSensitiveText(error instanceof Error ? error.message : String(error));
 }
 
 function requiredText(value: unknown, label: string): string {

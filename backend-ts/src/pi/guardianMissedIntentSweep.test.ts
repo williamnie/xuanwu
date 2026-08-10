@@ -14,7 +14,8 @@ import {
 } from "../db/repositories/pi.ts";
 import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuTextMessageInput, FeishuTextMessageResult } from "../integrations/feishuClient.ts";
-import { sendMissedDigestPendingFeishuFallback } from "./guardianMissedDigestFallback.ts";
+import { sendDirectFeishuGuardianAlert } from "../integrations/feishuGuardianAlerts.ts";
+import { sendMissedDigestPendingFallback } from "./guardianMissedDigestFallback.ts";
 import { runGuardianMissedIntentSweepOnce } from "./guardianMissedIntentSweep.ts";
 import type { PiGuardianWatchdogComponent } from "./guardianWatchdog.ts";
 import type { PiGuardianWatchdogSummary } from "./guardianWatchdog.ts";
@@ -66,7 +67,11 @@ describe("PI Guardian missed intent sweep", () => {
       insertProject(db, "demo");
       insertOutageAlert(db, "coordinator_stalled");
 
-      const result = runGuardianMissedIntentSweepOnce(db, { now: NOW, watchdog: recoveredWatchdog("coordinator") });
+      const result = runGuardianMissedIntentSweepOnce(db, {
+        fallbackConnectorID: "feishu",
+        now: NOW,
+        watchdog: recoveredWatchdog("coordinator")
+      });
       const alerts = listPiGuardianAlerts(db, { projectId: "demo", status: "open" });
       const pending = alerts.find((alert) => alert.alert_type === "missed_digest_pending");
 
@@ -166,11 +171,7 @@ describe("PI Guardian missed intent sweep", () => {
         now: NOW,
         watchdog: unavailableDigestWatchdog()
       });
-      await sendMissedDigestPendingFeishuFallback(db, first.pendingAlertIds, {
-        config: defaultFeishuConfig(),
-        now: new Date(NOW),
-        sender
-      });
+      await sendMissedDigestPendingFallback(db, first.pendingAlertIds, guardianDelivery(db, sender, new Date(NOW)));
       const alert = getPiGuardianAlert(db, first.pendingAlertIds[0] ?? "");
 
       expect(first.pendingAlertIds).toHaveLength(1);
@@ -188,11 +189,11 @@ describe("PI Guardian missed intent sweep", () => {
         now: "2026-06-19T00:11:00Z",
         watchdog: unavailableDigestWatchdog()
       });
-      await sendMissedDigestPendingFeishuFallback(db, repeat.pendingAlertIds, {
-        config: defaultFeishuConfig(),
-        now: new Date("2026-06-19T00:11:00Z"),
-        sender
-      });
+      await sendMissedDigestPendingFallback(
+        db,
+        repeat.pendingAlertIds,
+        guardianDelivery(db, sender, new Date("2026-06-19T00:11:00Z"))
+      );
 
       expect(repeat.pendingAlertIds).toEqual(first.pendingAlertIds);
       expect(sender.calls).toHaveLength(0);
@@ -213,11 +214,7 @@ describe("PI Guardian missed intent sweep", () => {
         now: NOW,
         watchdog: unavailableDigestWatchdog()
       });
-      await sendMissedDigestPendingFeishuFallback(db, result.pendingAlertIds, {
-        config: defaultFeishuConfig(),
-        now: new Date(NOW),
-        sender
-      });
+      await sendMissedDigestPendingFallback(db, result.pendingAlertIds, guardianDelivery(db, sender, new Date(NOW)));
       const alert = getPiGuardianAlert(db, result.pendingAlertIds[0] ?? "");
 
       expect(sender.calls).toHaveLength(0);
@@ -318,6 +315,21 @@ function defaultFeishuConfig() {
     feishuAppSecret: "app-secret-value",
     feishuDefaultChatId: "oc_default"
   });
+}
+
+function guardianDelivery(db: RunnerDatabase, sender: FakeGuardianSender, now: Date) {
+  return {
+    connectorID: "feishu",
+    send: (alert: Parameters<typeof sendDirectFeishuGuardianAlert>[1], options: {
+      formatText?: (value: Parameters<typeof sendDirectFeishuGuardianAlert>[1]) => string;
+      now?: Date;
+    } = {}) => sendDirectFeishuGuardianAlert(db, alert, {
+      config: defaultFeishuConfig(),
+      formatText: options.formatText,
+      now: options.now ?? now,
+      sender
+    })
+  };
 }
 
 class FakeGuardianSender {

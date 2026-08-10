@@ -137,6 +137,9 @@ function createThreadMonitor(db: RunnerDatabase, action: PiAction, payload: Json
   if (threadID === "") throw new Error("watch_thread thread_id or issue_ids is required");
   const projectID = requiredProjectID(action, payload);
   const audit = proposalAutomationAudit(action, "thread-watch");
+  // `provider` was the W1 field name. New actions should send target_channel;
+  // both resolve to an opaque connector id without provider-specific parsing.
+  const connectorID = firstString(payload.target_channel, payload.provider, "feishu");
   const automation = createAutomationWatch(db, {
     allow_empty_notification_target: true,
     condition: {
@@ -147,13 +150,13 @@ function createThreadMonitor(db: RunnerDatabase, action: PiAction, payload: Json
     dedupe_key: `watch-thread:${action.id}`,
     name: firstString(payload.title, payload.summary, `Watch thread ${threadID}`),
     notification_target: {
-      channel: "feishu",
-      chat_id: cleanString(payload.target_chat_id),
-      message_id: cleanString(payload.target_message_id),
+      connector_id: connectorID,
+      conversation_id: cleanString(payload.target_chat_id),
+      reply_to_message_id: cleanString(payload.target_message_id),
       thread_id: firstString(payload.target_thread_id, threadID)
     },
     project_id: projectID,
-    subject: { kind: "external_thread", provider: firstString(payload.provider, "feishu"), thread_id: threadID }
+    subject: { kind: "external_thread", provider: firstString(payload.provider, connectorID), thread_id: threadID }
   }, audit);
   return {
     automation_id: automation.automation_id,

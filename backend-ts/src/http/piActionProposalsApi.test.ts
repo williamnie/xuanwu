@@ -283,7 +283,7 @@ describe("PI action proposals API", () => {
             action("watch_thread", {
               issue_ids: [watched.id],
               project_id: "demo",
-              target_channel: "feishu",
+              target_channel: "telegram",
               target_chat_id: "oc_watch"
             }, "low", false),
             action("reminder.create", {
@@ -328,6 +328,7 @@ describe("PI action proposals API", () => {
       expect(byType.get("ask_user")?.result).toMatchObject({ question: "要把这个提醒发到群里吗？", status: "needs_user" });
       expect(getPiIssueCompletionWatch(db, watchID)).toMatchObject({
         status: "active",
+        target_channel: "telegram",
         target_chat_id: "oc_watch",
         items: [expect.objectContaining({ issue_id: watched.id })]
       });

@@ -9,10 +9,8 @@ import { BackgroundProjectionWorker } from "../events/projectionWorker.ts";
 import { createAuthTokenManager } from "../http/auth.ts";
 import { startServer } from "../http/server.ts";
 import { primeProviderStatus } from "../http/systemStatus.ts";
-import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
-import { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
-import { buildFeishuConversationPromptContext } from "../integrations/feishuConversationContext.ts";
-import { createFeishuReceiverManager } from "../integrations/feishuReceiver.ts";
+import { createFeishuChannelModule, createBuiltinImChannelRegistry } from "../integrations/feishuChannelModule.ts";
+import { createImReceiverRuntime, type ImReceiverRuntime } from "../integrations/imChannelContracts.ts";
 import {
   ProcessGroupMemoryObserver,
   resolveRecoveredProcessGroupMemoryAlerts,
@@ -39,9 +37,6 @@ import { reconcileStaleAgentSessions } from "../runner/staleSessionReconciler.ts
 import { assertInternalCoreAddress } from "../serverRole.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
-type FeishuReceiver = ReturnType<typeof createFeishuReceiverManager>;
-let activeFeishuReceiver: FeishuReceiver | undefined;
-
 export async function startCoreRuntime(args: string[], role: "all" | "core"): Promise<void> {
   const loadedConfig = loadConfig(args);
   const config = role === "core" ? { ...loadedConfig, webDir: "" } : loadedConfig;
@@ -58,6 +53,14 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   const projectionWorker = new BackgroundProjectionWorker(database);
   const codexOwnershipFile = join(config.stateDir, "codex-process-ownership.json");
   const processReconciliation = await reconcileStaleCodexProcessOwnership(codexOwnershipFile);
+  // W1 receipt cutover: provider_request_ref/result_json are the authoritative
+  // im_reply receipts. Idempotent backfill promotes historical rows that only
+  // carry the legacy feishu_message_id compat carrier.
+  const { backfillImReplyProviderRequestRef } = await import("../db/repositories/imReplyOutboxDispatch.ts");
+  const backfilled = backfillImReplyProviderRequestRef(database);
+  if (backfilled > 0) {
+    console.info(JSON.stringify({ event: "im.outbox_receipt_backfill", rows: backfilled }));
+  }
   // P7：registry 装配——codex factory 编译期内置；/api/providers 与 system status 由 registry 投影。
   const providersRegistry = createProviderRegistry();
   if (config.providers.codex) {
@@ -121,28 +124,29 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   );
   coldStartTrace("providers_initialized");
   setProjectLoopMaxParallelProjects(config.runner.maxParallelProjects);
-  const feishuBridge = createFeishuAgentBridge({
+  const feishuModule = createFeishuChannelModule({
+    bus,
     config: () => config.integrations.feishu,
     database,
-    runConversation: async ({ conversationId, event, projectId, prompt, targetIssueId, targetProjectId, targetProjectSource }) => {
+    providers,
+    runSupervisorConversation: async ({ channelContext, conversationId, prompt, targetIssueId, targetProjectId, targetProjectSource, title }) => {
       const { runPiConversationPrompt } = await import("../http/piConversationApi.ts");
-      const oneShotTargetProjectId = targetProjectId || projectId;
       const result = await runPiConversationPrompt({ bus, database, providers }, {
-        channelContext: buildFeishuConversationPromptContext(database, { event }),
+        channelContext,
         clearProjectId: true,
         conversationId,
         projectId: "",
         prompt,
-        targetProjectId: oneShotTargetProjectId,
+        targetProjectId,
         targetProjectSource,
         targetIssueId,
-        title: `Feishu · ${event.chat_id || event.message_id}`
+        title
       });
-      return { conversationId: result.conversation_id, projectId: "", targetProjectId: oneShotTargetProjectId, text: result.text };
+      return { conversationId: result.conversation_id, targetProjectId, text: result.text };
     }
   });
-  const feishuReceiver = createFeishuReceiverManager({ agentBridge: feishuBridge, bus, database, providers });
-  activeFeishuReceiver = feishuReceiver;
+  const imChannels = createBuiltinImChannelRegistry({ feishu: feishuModule.module });
+  const imReceiverRuntime = createImReceiverRuntime(imChannels);
   coldStartTrace("connectors_initialized");
   await primeRuntimeObservability(readDatabase).catch((error) => {
     console.warn(JSON.stringify({
@@ -157,18 +161,21 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     bus,
     database,
     readDatabase,
-    feishuAgentBridge: feishuBridge,
-    feishuReceiverStatus: () => feishuReceiver.status(),
-    onFeishuConfigChanged: restartFeishuReceiver,
+    feishuAgentBridge: feishuModule.agentBridge,
+    feishuReceiverStatus: () => feishuModule.receiverStatus(),
+    imChannels,
+    onFeishuConfigChanged: (next) => feishuModule.onConfigChanged?.(next),
     processGroupMemory,
     projectionWorker,
     providers,
     providersRegistry,
     role
   });
-  installTerminationHandlers(providersRegistry, database, readDatabase, server, processGroupMemory, projectionWorker);
+  installTerminationHandlers(providersRegistry, database, readDatabase, server, processGroupMemory, projectionWorker, imReceiverRuntime);
   coldStartTrace("http_routes_registered");
-  void restartFeishuReceiver(config.integrations.feishu);
+  void imReceiverRuntime.start().catch((error) => {
+    console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", component: "im-receiver-runtime", error: safeError(error) }));
+  });
   projectionWorker.start();
   void startAutoRunLoops(
     database,
@@ -178,7 +185,9 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     config,
     processReconciliation,
     agenticClient,
-    processGroupMemory
+    processGroupMemory,
+    imChannels,
+    feishuModule.guardianAlertDelivery
   );
   coldStartTrace("scheduler_watchdog_initialized");
 
@@ -246,7 +255,8 @@ function installTerminationHandlers(
   readDatabase: Awaited<ReturnType<typeof openDatabase>>,
   server: { stop(closeActiveConnections?: boolean): void },
   processGroupMemory: ProcessGroupMemoryObserver,
-  projectionWorker: BackgroundProjectionWorker
+  projectionWorker: BackgroundProjectionWorker,
+  imReceiverRuntime: ImReceiverRuntime
 ): void {
   let stopping = false;
   const stop = async (signal: string) => {
@@ -255,6 +265,7 @@ function installTerminationHandlers(
     console.info(JSON.stringify({ event: "runner.shutdown_started", role: "core", signal }));
     processGroupMemory.stop();
     projectionWorker.stop();
+    await imReceiverRuntime.stop();
     server.stop(true);
     await providersRegistry.stopAll();
     readDatabase.close();
@@ -273,7 +284,9 @@ async function startAutoRunLoops(
   config: ReturnType<typeof loadConfig>,
   processReconciliation: Awaited<ReturnType<typeof reconcileStaleCodexProcessOwnership>>,
   agenticClient: AgenticWorkerClient,
-  processGroupMemory: ProcessGroupMemoryObserver
+  processGroupMemory: ProcessGroupMemoryObserver,
+  imChannels: ReturnType<typeof createBuiltinImChannelRegistry>,
+  guardianAlertDelivery: import("../pi/guardianAlertDelivery.ts").GuardianAlertDelivery
 ): Promise<void> {
   await recoverInProgressIssues({ database }).catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", error: safeError(error) }));
@@ -294,6 +307,8 @@ async function startAutoRunLoops(
     },
     agentCommunicationDecider: (input) => agenticClient.decideCommunication(input),
     providers,
+    imChannels,
+    guardianAlertDelivery,
     onError: (error) => {
       console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", error: safeError(error) }));
     },
@@ -307,12 +322,6 @@ async function startAutoRunLoops(
 
 function logProjectLoopError(error: unknown, projectId: string): void {
   console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", projectId, error: safeError(error) }));
-}
-
-async function restartFeishuReceiver(feishuConfig: FeishuConnectorConfig): Promise<void> {
-  await activeFeishuReceiver?.restart(feishuConfig).catch((error) => {
-    console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", connector: "feishu", error: safeError(error) }));
-  });
 }
 
 function safeError(error: unknown): string {

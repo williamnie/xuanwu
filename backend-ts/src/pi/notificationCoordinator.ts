@@ -39,7 +39,7 @@ export function coordinateIssueLifecycleNotification(
     conversation_id: input.event.conversation_id,
     decision,
     flush_after_at: decision === "aggregate" ? quietUntil : "",
-    idempotency_key: lifecycleIntentKey(input.issue, input.event, runGroupID),
+    idempotency_key: lifecycleIntentKey(input.issue, input.event, runGroupID, input.target?.connectorID ?? ""),
     issue_id: input.issue.id,
     kind: lifecycleKind(input.issue.status),
     payload_json: lifecycleIntentPayload(input.issue),
@@ -52,7 +52,7 @@ export function coordinateIssueLifecycleNotification(
     source_event_type: input.event.event_type,
     state: lifecycleIntentState(decision),
     summary: lifecycleSummary(input.issue),
-    target_channel: input.target ? "feishu" : "",
+    target_channel: input.target?.connectorID ?? "",
     target_chat_id: input.target?.chatID ?? "",
     target_message_id: input.target?.messageID ?? "",
     target_thread_id: input.target?.threadID ?? ""
@@ -107,7 +107,7 @@ export function suppressLifecycleIntent(
   });
 }
 
-export type LifecycleTarget = { chatID: string; messageID: string; threadID: string };
+export type LifecycleTarget = { connectorID: string; chatID: string; messageID: string; threadID: string };
 
 function latestRunGroupItemForIssue(db: RunnerDatabase, issueID: number): PiRunGroupItem | null {
   const row = db.sqlite.query<{ run_group_id: string }, [number]>(
@@ -197,9 +197,9 @@ function lifecycleKind(status: string): string {
   return `issue_${status}`;
 }
 
-function lifecycleIntentKey(issue: Issue, event: PiGuardianEvent, runGroupID: string): string {
+function lifecycleIntentKey(issue: Issue, event: PiGuardianEvent, runGroupID: string, connectorID: string): string {
   const source = isStartStatus(issue.status) ? "start" : event.id;
-  return `${lifecycleKind(issue.status)}:${issue.project_id}:${issue.id}:${runGroupID}:${source}:feishu`;
+  return `${lifecycleKind(issue.status)}:${issue.project_id}:${issue.id}:${runGroupID}:${source}:${connectorID}`;
 }
 
 function lifecycleSummary(issue: Issue): string {

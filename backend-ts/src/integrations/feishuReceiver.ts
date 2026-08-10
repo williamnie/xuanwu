@@ -7,10 +7,16 @@ import { projectSelectionCallbackAcceptedBody } from "./feishuCardCallbackRespon
 import { ingestFeishuMessageEvent, publishFeishuAudit, rawPayloadRef } from "./feishuIngest.ts";
 import { normalizeFeishuProjectSelectionAction } from "./feishuProjectSelection.ts";
 import { normalizeFeishuApprovalAction } from "./feishuApprovalCards.ts";
-import { resolvePiApprovalRequestFromFeishu } from "./feishuApprovalRequests.ts";
 import { normalizeFeishuPiActionCardAction } from "./feishuPiActionCards.ts";
-import { resolvePiActionFromFeishu } from "./feishuPiActionResolve.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import {
+  normalizeFeishuImInteraction,
+  resolveFeishuImInteraction,
+  resolveLegacyFeishuApprovalInteraction,
+  resolveLegacyFeishuPiActionInteraction,
+  resolveLegacyFeishuProjectSelectionInteraction
+} from "./feishuInteractionAdapter.ts";
+import type { ImInteractionHandleResult } from "./imInteractionService.ts";
 
 export type FeishuReceiverStatus = {
   connected: boolean;
@@ -75,6 +81,7 @@ export function createFeishuReceiverManager(options: FeishuReceiverManagerOption
     retryTimer = undefined;
     client?.close({ force: true });
     client = null;
+    status = { ...status, connected: false, state: "disabled" };
   }
 
   async function startClient(config: FeishuConnectorConfig, expectedGeneration: number): Promise<void> {
@@ -82,12 +89,14 @@ export function createFeishuReceiverManager(options: FeishuReceiverManagerOption
     try {
       const next = await factory({
         config,
-        onCardAction: (event) => ingestCardAction(event, config),
-        onError: (error) => fail(error),
-        onMessage: (event) => ingest(event, config),
-        onReady: () => connect(),
-        onReconnected: () => connect(),
-        onReconnecting: () => reconnect()
+        onCardAction: (event) => expectedGeneration === generation
+          ? ingestCardAction(event, config)
+          : Promise.resolve({ ok: false, reason: "stale_receiver_generation" }),
+        onError: (error) => { if (expectedGeneration === generation) fail(error); },
+        onMessage: (event) => expectedGeneration === generation ? ingest(event, config) : Promise.resolve(),
+        onReady: () => { if (expectedGeneration === generation) connect(); },
+        onReconnected: () => { if (expectedGeneration === generation) connect(); },
+        onReconnecting: () => { if (expectedGeneration === generation) reconnect(); }
       });
       if (expectedGeneration !== generation) {
         next.close({ force: true });
@@ -150,24 +159,43 @@ export function createFeishuReceiverManager(options: FeishuReceiverManagerOption
   async function ingestCardAction(event: unknown, config: FeishuConnectorConfig): Promise<unknown> {
     status = { ...status, last_event_at: new Date().toISOString() };
     const rawRef = rawPayloadRef(event);
+    const interaction = normalizeFeishuImInteraction(event);
+    if (interaction) {
+      const result = await resolveFeishuImInteraction(receiverContext(config), interaction);
+      if (result.reason !== "consumed" && result.reason !== "already_consumed") {
+        return publishRejectedCardAction(config, rawRef, `im_interaction_${result.reason}`);
+      }
+      return result;
+    }
     const approvalAction = normalizeFeishuApprovalAction(event);
     if (approvalAction) {
       if (!cardActionAllowed(config, approvalAction)) return publishRejectedCardAction(config, rawRef, "approval_callback_forbidden");
-      return resolvePiApprovalRequestFromFeishu(options.database, { ...approvalAction, providers: options.providers });
+      return acceptedInteractionResult(
+        await resolveLegacyFeishuApprovalInteraction(receiverContext(config), approvalAction),
+        config,
+        rawRef
+      );
     }
     const piAction = normalizeFeishuPiActionCardAction(event);
     if (piAction) {
       if (!cardActionAllowed(config, piAction)) return publishRejectedCardAction(config, rawRef, "pi_action_callback_forbidden");
-      return resolvePiActionFromFeishu(receiverContext(config), piAction);
+      return acceptedInteractionResult(
+        await resolveLegacyFeishuPiActionInteraction(receiverContext(config), piAction),
+        config,
+        rawRef
+      );
     }
     const projectAction = normalizeFeishuProjectSelectionAction(event);
     if (!projectAction) return publishRejectedCardAction(config, rawRef, "unsupported_card_action");
-    await options.agentBridge?.handleProjectSelectionAction(projectAction);
-    return projectSelectionCallbackAcceptedBody();
+    const result = await resolveLegacyFeishuProjectSelectionInteraction(receiverContext(config), projectAction);
+    const accepted = acceptedInteractionResult(result, config, rawRef);
+    return result.reason === "consumed" || result.reason === "already_consumed"
+      ? projectSelectionCallbackAcceptedBody()
+      : accepted;
   }
 
   function receiverContext(config: FeishuConnectorConfig) {
-    return { bus: options.bus, config, database: options.database, providers: options.providers };
+    return { agentBridge: options.agentBridge, bus: options.bus, config, database: options.database, providers: options.providers };
   }
 
   function connect(): void {
@@ -236,6 +264,18 @@ function publishRejectedCardAction(config: FeishuConnectorConfig, rawRef: string
     reason,
     transport: "websocket"
   });
+}
+
+function acceptedInteractionResult(
+  result: ImInteractionHandleResult,
+  config: FeishuConnectorConfig,
+  rawRef: string
+): unknown {
+  if (result.reason === "consumed" || result.reason === "already_consumed") {
+    return result.resolution ?? result;
+  }
+  publishRejectedCardAction(config, rawRef, `im_interaction_${result.reason}`);
+  return result;
 }
 
 function cardActionAllowed(

@@ -45,7 +45,7 @@ type Match = {
 type WatchEvaluation = { cursor?: number; match?: Match };
 
 const WATCH_INTENT_KIND = "automation_watch_terminal";
-const WATCH_NOTIFICATION_TYPE = "feishu_automation_watch_notification";
+const WATCH_NOTIFICATION_TYPE = "automation_watch_notification";
 
 export function runWatchAutomationsOnce(
   db: RunnerDatabase,
@@ -105,7 +105,7 @@ function settleAndNotify(db: RunnerDatabase, watch: AutomationWatch, match: Matc
       recordSupervisorCommitmentTerminalOutcome(db, terminal.automation_id);
     }
     const intent = createPiNotificationIntent(db, {
-      conversation_id: terminal.notification_target.thread_id || terminal.notification_target.chat_id || watchOriginConversation(terminal),
+      conversation_id: terminal.notification_target.thread_id || terminal.notification_target.conversation_id || watchOriginConversation(terminal),
       decision: "send_now",
       id: intentID(watch),
       idempotency_key: `automation_watch_terminal:${watch.automation_id}`,
@@ -123,9 +123,9 @@ function settleAndNotify(db: RunnerDatabase, watch: AutomationWatch, match: Matc
       source_event_type: match.sourceEventType,
       state: "ready",
       summary: `Watch ${watch.automation_id} reached ${match.outcome}`,
-      target_channel: terminal.notification_target.channel,
-      target_chat_id: terminal.notification_target.chat_id,
-      target_message_id: terminal.notification_target.message_id,
+      target_channel: terminal.notification_target.connector_id,
+      target_chat_id: terminal.notification_target.conversation_id,
+      target_message_id: terminal.notification_target.reply_to_message_id,
       target_thread_id: terminal.notification_target.thread_id
     });
     if (!hasExternalNotificationTarget(terminal)) {
@@ -138,10 +138,10 @@ function settleAndNotify(db: RunnerDatabase, watch: AutomationWatch, match: Matc
       notificationID: watch.automation_id,
       notificationType: WATCH_NOTIFICATION_TYPE,
       route: {
-        channel: terminal.notification_target.channel,
-        chatID: terminal.notification_target.chat_id,
+        channel: terminal.notification_target.connector_id,
+        chatID: terminal.notification_target.conversation_id,
         eventID: sourceExternalEventID(match.sourceEventID),
-        messageID: terminal.notification_target.message_id,
+        messageID: terminal.notification_target.reply_to_message_id,
         threadID: terminal.notification_target.thread_id
       }
     });
@@ -154,8 +154,8 @@ function settleAndNotify(db: RunnerDatabase, watch: AutomationWatch, match: Matc
 
 function hasExternalNotificationTarget(watch: AutomationWatch): boolean {
   return Boolean(
-    watch.notification_target.chat_id ||
-    watch.notification_target.message_id ||
+    watch.notification_target.conversation_id ||
+    watch.notification_target.reply_to_message_id ||
     watch.notification_target.thread_id
   );
 }
