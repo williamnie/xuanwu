@@ -16,7 +16,7 @@ import { inspectClaudeCliAuth } from "../providers/claude/cliProvider.ts";
 import { codexAppServerRpcTimeoutMs } from "../providers/codex/jsonRpc.ts";
 import { projectLoopMaxParallelProjects, runningProjectLoopCount } from "../runner/projectLoopManager.ts";
 import { redactSensitiveText } from "../util/redact.ts";
-import { eventProjectionStatus } from "../db/repositories/eventSummaryProjection.ts";
+import { eventProjectionStatusForRead } from "../db/repositories/compactEventSummaryProjection.ts";
 import { runProgressProjectionStatus } from "../db/repositories/runProgress.ts";
 import { isSensitiveFieldName } from "../security/redactionRegistry.ts";
 import { buildRuntimeObservability } from "../observability/runtimeObservability.ts";
@@ -58,7 +58,7 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
     feishuReceiverStatus: receiver,
     webhookSigningSecret: context.webhookSigningSecret
   }));
-  const eventProjection = phase("event_projection", () => eventProjectionStatus(context.database));
+  const eventProjection = phase("event_projection", () => eventProjectionStatusForRead(context.database));
   const runProgressProjection = phase("run_progress_projection", () => runProgressProjectionStatus(context.database));
   const observability = phase("observability", () => buildRuntimeObservability(context.database));
   const status = {

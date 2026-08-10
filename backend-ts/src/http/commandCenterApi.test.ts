@@ -13,6 +13,10 @@ import {
   upsertPiGuardianAlert
 } from "../db/repositories/pi.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import {
+  projectPendingCompactEventSummaries,
+  updateEventSummaryProjectionSwitch
+} from "../db/repositories/compactEventSummaryProjection.ts";
 import type { HandoffRecord } from "../domain/handoff/contracts.ts";
 import { issueIDToWorkID } from "../domain/work/issueAdapter.ts";
 import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
@@ -52,6 +56,15 @@ describe("Command Center aggregate API", () => {
       recordHandoff(db, issue.id, handoff(issue.id), {
         recorded_at: SOURCE_TIME,
         source: "command-center-test"
+      });
+      projectPendingCompactEventSummaries(db);
+      updateEventSummaryProjectionSwitch(db, {
+        cutover_at: "2026-07-17T08:00:01.000Z",
+        expectedRevision: 0,
+        observation_expires_at: "2026-07-17T08:00:01.000Z",
+        observation_started_at: "2026-07-16T08:00:00.000Z",
+        read_version: "v2",
+        updatedAt: "2026-07-17T08:00:01.000Z"
       });
       const router = createRouter();
       registerCommandCenterRoutes(router, { database: db }, { now: () => new Date(NOW) });
@@ -116,6 +129,8 @@ describe("Command Center aggregate API", () => {
             status: "ok",
             summary: {
               database: { status: "ready" },
+              event_projection: { lag_rows: 0, last_event_id: 2, status: "ready" },
+              overall: "healthy",
               run_progress: { active_runs: 1, projection_mode: "read_through_rebuild" }
             }
           }

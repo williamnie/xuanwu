@@ -4,6 +4,7 @@ import type { RunnerDatabase } from "../database.ts";
 import { hydrateStoredIssueLogPayload } from "./issueEvents.ts";
 import {
   EVENT_SUMMARY_SOURCE,
+  eventProjectionStatus,
   listEventSummaryProjection,
   listSourceIssueEvents,
   type EventProjectionWatermark,
@@ -56,7 +57,15 @@ export function projectPendingCompactEventSummaries(
   }
   let batches = 0;
   let projectedRows = 0;
-  let projectedRowCount = compactRowCount(db);
+  let projectedRowCount = watermark.projected_row_count;
+  const hasPendingRows = listSourceIssueEvents(db, {
+    afterID: watermark.last_event_id,
+    hydrateIssueLogs: false,
+    limit: 1
+  }).length > 0;
+  if (!hasPendingRows) {
+    return { batches, paused: false, projected_rows: projectedRows, watermark };
+  }
   const runRefs = dictionaryRefs(db, "event_summary_projection_runs", "run_ref", "run_id");
   const typeRefs = dictionaryRefs(db, "event_summary_projection_types", "event_type_ref", "event_type");
   const projectRefs = dictionaryRefs(db, "event_summary_projection_projects", "project_ref", "project_id");
@@ -151,12 +160,17 @@ export function compactProjectionStatus(db: RunnerDatabase): EventProjectionWate
   ).get(watermark.last_event_id)?.value ?? 0);
   return {
     ...watermark,
-    projected_row_count: compactRowCount(db),
     lag_rows: lagRows,
     source_last_event_id: sourceLastEventID,
     source_of_truth: EVENT_SUMMARY_SOURCE,
     status: lagRows === 0 ? "ready" : "lagging"
   };
+}
+
+export function eventProjectionStatusForRead(db: RunnerDatabase): ReturnType<typeof eventProjectionStatus> {
+  return getEventSummaryProjectionSwitch(db).read_version === "v2"
+    ? compactProjectionStatus(db)
+    : eventProjectionStatus(db);
 }
 
 export function listCompactEventSummaryProjection(
@@ -482,12 +496,6 @@ function saveCompactWatermark(
     COMPACT_EVENT_SUMMARY_PROJECTION_ID
   ]);
   return compactWatermark(db);
-}
-
-function compactRowCount(db: RunnerDatabase): number {
-  return Number(db.sqlite.query<{ value: number }, []>(
-    "select count(*) as value from event_summary_projection_compact"
-  ).get()?.value ?? 0);
 }
 
 function observationActive(state: EventSummaryProjectionSwitch, now: Date): boolean {

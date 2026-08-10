@@ -7,6 +7,11 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter, createRequestHandler, registerSystemStatusRoute } from "./server.ts";
 import { createProviderRegistry } from "../providers/core/registry.ts";
 import { asProviderId } from "../providers/types.ts";
+import { createIssue } from "../db/repositories/issueCreate.ts";
+import {
+  projectPendingCompactEventSummaries,
+  updateEventSummaryProjectionSwitch
+} from "../db/repositories/compactEventSummaryProjection.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -225,6 +230,51 @@ describe("Bun system status endpoints", () => {
     }
   });
 
+  test("reports projection health from the active V2 reader", async () => {
+    const { config, database } = await openFixtureRuntime({ claudeMode: "sdk" });
+    try {
+      database.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)
+        values ('projection-status', 'Projection status', '/tmp/projection-status', ?, ?)`, [
+        "2026-05-28T00:00:00.000Z",
+        "2026-05-28T00:00:00.000Z"
+      ]);
+      createIssue(database, {
+        description: "Verify V2 projection status",
+        project_id: "projection-status",
+        title: "V2 status"
+      });
+      projectPendingCompactEventSummaries(database);
+      updateEventSummaryProjectionSwitch(database, {
+        cutover_at: "2026-05-28T00:00:01.000Z",
+        expectedRevision: 0,
+        observation_expires_at: "2026-05-28T00:00:01.000Z",
+        observation_started_at: "2026-05-27T00:00:00.000Z",
+        read_version: "v2",
+        updatedAt: "2026-05-28T00:00:01.000Z"
+      });
+      const router = createDefaultRouter();
+      registerSystemStatusRoute(router, {
+        authToken: "",
+        config,
+        database,
+        startedAt: new Date("2026-05-28T00:00:00.000Z")
+      });
+
+      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+      const body = await response.json() as SystemStatusBody;
+
+      expect(response.status).toBe(200);
+      expect(body.event_projection).toMatchObject({
+        projection_id: "issue_events_summary_v2",
+        last_event_id: 1,
+        lag_rows: 0,
+        projected_row_count: 1,
+        status: "ready"
+      });
+    } finally {
+      database.close();
+    }
+  });
 
   test("reports partially configured Feishu connector as error summary", async () => {
     const { config, database } = await openFixtureRuntime({ feishuAppId: "cli_app_id" });

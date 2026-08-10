@@ -17,6 +17,7 @@ import { queryEventSummaries } from "./eventSummaryQuery.ts";
 import { projectPendingEventSummaries, projectSourceIssueEvent } from "./eventSummaryProjector.ts";
 import {
   clearCompactEventSummaryProjection,
+  compactProjectionStatus,
   listCompactEventSummaryProjection,
   projectPendingCompactEventSummaries,
   updateEventSummaryProjectionSwitch
@@ -164,6 +165,42 @@ describe("event summary projector", () => {
       expect(queryEventSummaries(db, { issueID }).items).toHaveLength(4);
       db.sqlite.run("delete from event_summary_projection_compact where source_event_id=2");
       expect(() => queryEventSummaries(db, { issueID })).toThrow("event summary projection parity conflict");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("uses the persisted compact watermark when the V2 reader is active", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issueID = seedIssueEvents(db);
+      const projected = projectPendingCompactEventSummaries(db);
+      updateEventSummaryProjectionSwitch(db, {
+        cutover_at: "2026-01-02T00:00:00.000Z",
+        expectedRevision: 0,
+        observation_expires_at: "2026-01-02T00:00:00.000Z",
+        observation_started_at: "2026-01-01T00:00:00.000Z",
+        read_version: "v2",
+        updatedAt: "2026-01-02T00:00:00.000Z"
+      });
+
+      expect(projected.watermark).toMatchObject({ last_event_id: 4, projected_row_count: 4 });
+      expect(projectPendingCompactEventSummaries(db)).toMatchObject({
+        batches: 0,
+        paused: false,
+        projected_rows: 0,
+        watermark: { last_event_id: 4, projected_row_count: 4 }
+      });
+      expect(compactProjectionStatus(db)).toMatchObject({
+        last_event_id: 4,
+        projected_row_count: 4,
+        status: "ready"
+      });
+      expect(queryEventSummaries(db, { issueID }).watermark).toMatchObject({
+        projection_id: "issue_events_summary_v2",
+        last_event_id: 4,
+        projected_row_count: 4
+      });
     } finally {
       db.close();
     }

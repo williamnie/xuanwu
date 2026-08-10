@@ -1,13 +1,11 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import {
-  eventProjectionStatus,
   type EventSummaryProjection,
   type EventSummaryProjectionFilter
 } from "../db/repositories/eventSummaryProjection.ts";
 import {
-  compactProjectionStatus,
-  getEventSummaryProjectionSwitch,
+  eventProjectionStatusForRead,
   listEventSummaryProjectionForRead
 } from "../db/repositories/compactEventSummaryProjection.ts";
 import { ProjectNotFoundError } from "../db/repositories/projects.ts";
@@ -39,7 +37,7 @@ export type EventSummaryQueryResult = {
   items: PublicEventSummary[];
   schema_version: typeof EVENT_SUMMARY_QUERY_SCHEMA_VERSION;
   source_of_truth: "issue_events";
-  watermark: ReturnType<typeof eventProjectionStatus> | ReturnType<typeof compactProjectionStatus>;
+  watermark: ReturnType<typeof eventProjectionStatusForRead>;
 };
 
 export function queryEventSummaries(
@@ -47,14 +45,11 @@ export function queryEventSummaries(
   filter: EventSummaryProjectionFilter = {}
 ): EventSummaryQueryResult {
   if (filter.issueID !== undefined && !getIssue(db, filter.issueID)) throw new ProjectNotFoundError();
-  const projectionSwitch = getEventSummaryProjectionSwitch(db);
   return {
     items: listEventSummaryProjectionForRead(db, filter).map(publicSummary),
     schema_version: EVENT_SUMMARY_QUERY_SCHEMA_VERSION,
     source_of_truth: "issue_events",
-    watermark: projectionSwitch.read_version === "v2"
-      ? compactProjectionStatus(db)
-      : eventProjectionStatus(db)
+    watermark: eventProjectionStatusForRead(db)
   };
 }
 

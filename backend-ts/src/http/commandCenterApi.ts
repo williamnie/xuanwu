@@ -17,7 +17,7 @@ import {
   type PiAction
 } from "../db/repositories/pi.ts";
 import type { AttentionCommand, AttentionRecord, AttentionTransitionAudit } from "../domain/attention/contracts.ts";
-import { eventProjectionStatus } from "../db/repositories/eventSummaryProjection.ts";
+import { eventProjectionStatusForRead } from "../db/repositories/compactEventSummaryProjection.ts";
 import {
   countRunsByStatus,
   listLatestRunsForWorkIDs,
@@ -256,7 +256,7 @@ function recentDeliveriesSection(db: RunnerDatabase, input: SectionInput): Comma
 function systemHealthSection(db: RunnerDatabase, input: SectionInput): CommandCenterSectionPayload {
   db.sqlite.query("select 1 as ok").get();
   const runCounts = countRunsByStatus(db);
-  const projection = eventProjectionStatus(db);
+  const projection = eventProjectionStatusForRead(db);
   const totalRuns = Object.values(runCounts).reduce((total, count) => total + count, 0);
   const degraded = projection.status !== "ready";
   return {
