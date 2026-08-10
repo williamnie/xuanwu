@@ -11,6 +11,8 @@ import {
   openDatabase,
   type RunnerDatabase
 } from "./database.ts";
+import { runMigrations } from "./migrations.ts";
+import { migrations } from "./schema/index.ts";
 import { imInteractionBindingConstraintsMigration } from "./schema/072_im_interaction_binding_constraints.ts";
 import { imInteractionResolutionLeaseMigration } from "./schema/073_im_interaction_resolution_lease.ts";
 
@@ -299,10 +301,15 @@ describe("Bun SQLite database connection", () => {
         { id: "071a_im_project_selections_backfill" },
         { id: "072_im_interaction_binding_constraints" },
         { id: "073_im_interaction_resolution_lease" },
-        { id: "074_im_outbound_dedupe" }
+        { id: "074_im_outbound_dedupe" },
+        { id: "075_issue_event_query_indexes" },
+        { id: "076_run_revision_issue_scope_invariant" },
+        { id: "077_pi_action_event_connector_test_index" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
+      expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_type_id");
+      expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_run_event_v1_id_desc");
       expect(columnNames(connection, "issues")).toContain("issue_log_mode");
       expect(columnNames(connection, "issues")).not.toContain("template_id");
       expect(columnNames(connection, "issues")).not.toContain("prompt_template");
@@ -355,6 +362,7 @@ describe("Bun SQLite database connection", () => {
         "fast_policy_rule"
       ]));
       expect(indexNames(connection, "pi_action_events")).toContain("idx_pi_action_events_action");
+      expect(indexNames(connection, "pi_action_events")).toContain("idx_pi_action_events_connector_test_history");
       expect(indexNames(connection, "pi_heartbeat_events")).toContain("idx_pi_heartbeat_events_run");
       expect(indexNames(connection, "pi_delegations")).toContain("idx_pi_delegations_active");
       expect(indexNames(connection, "pi_delegations")).toContain("idx_pi_delegations_window");
@@ -933,10 +941,121 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 75 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 78 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
+    }
+  });
+
+  test("upgrades the current live 069 schema through the P0 query indexes", async () => {
+    const root = await tempPath("xuanwu-bun-live-069-upgrade-");
+    const stateDir = join(root, "state");
+    const dbPath = join(stateDir, "runner.db");
+    await mkdir(stateDir, { recursive: true });
+    const legacy = new Database(dbPath);
+    try {
+      runMigrations(legacy, migrationsBefore("070_im_conversation_state"));
+      expect(legacy.query("select max(id) as id from schema_migrations").get()).toEqual({
+        id: "069_builtin_pi_executor_profile"
+      });
+    } finally {
+      legacy.close();
+    }
+
+    const upgraded = await openDatabase({ stateDir });
+    try {
+      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 78 });
+      expect(tableNames(upgraded)).toEqual(expect.arrayContaining([
+        "im_conversation_state",
+        "im_interaction_bindings",
+        "im_project_selections"
+      ]));
+      expect(indexNames(upgraded, "issue_events")).toEqual(expect.arrayContaining([
+        "idx_issue_events_type_id",
+        "idx_issue_events_run_event_v1_id_desc"
+      ]));
+    } finally {
+      upgraded.close();
+    }
+  });
+
+  test("upgrades a 074 database and fails fast when a required query index drifts", async () => {
+    const root = await tempPath("xuanwu-bun-query-indexes-");
+    const stateDir = join(root, "state");
+    const dbPath = join(stateDir, "runner.db");
+    await mkdir(stateDir, { recursive: true });
+    const legacy = new Database(dbPath);
+    try {
+      runMigrations(legacy, migrationsBefore("075_issue_event_query_indexes"));
+    } finally {
+      legacy.close();
+    }
+
+    const upgraded = await openDatabase({ stateDir });
+    try {
+      expect(upgraded.sqlite.query(
+        "select count(*) as count from schema_migrations where id='075_issue_event_query_indexes'"
+      ).get()).toEqual({ count: 1 });
+      expect(upgraded.sqlite.query(
+        "select count(*) as count from schema_migrations where id='076_run_revision_issue_scope_invariant'"
+      ).get()).toEqual({ count: 1 });
+      expect(indexNames(upgraded, "issue_events")).toEqual(expect.arrayContaining([
+        "idx_issue_events_type_id",
+        "idx_issue_events_run_event_v1_id_desc"
+      ]));
+    } finally {
+      upgraded.close();
+    }
+
+    const drifted = new Database(dbPath);
+    try {
+      drifted.run("drop index idx_issue_events_run_event_v1_id_desc");
+    } finally {
+      drifted.close();
+    }
+    await expect(openDatabase({ stateDir })).rejects.toThrow(
+      "Runner database schema invariant failed: missing required indexes: idx_issue_events_run_event_v1_id_desc"
+    );
+  });
+
+  test("fails the scoped Run revision migration when historical events belong to another Issue", async () => {
+    const root = await tempPath("xuanwu-bun-run-revision-scope-");
+    const stateDir = join(root, "state");
+    const dbPath = join(stateDir, "runner.db");
+    await mkdir(stateDir, { recursive: true });
+    const legacy = new Database(dbPath);
+    try {
+      runMigrations(legacy, migrationsBefore("076_run_revision_issue_scope_invariant"));
+      const at = "2026-08-10T00:00:00.000Z";
+      legacy.run(`insert into projects (id, name, cwd, provider, created_at, updated_at)
+        values ('scope', 'scope', '/tmp/scope', 'codex', ?, ?)`, [at, at]);
+      legacy.run(`insert into issues (project_id, title, status, created_at, updated_at)
+        values ('scope', 'run issue', 'in_progress', ?, ?)`, [at, at]);
+      const runIssueID = Number(legacy.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id);
+      legacy.run(`insert into issues (project_id, title, status, created_at, updated_at)
+        values ('scope', 'event issue', 'in_progress', ?, ?)`, [at, at]);
+      const eventIssueID = Number(legacy.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id);
+      legacy.run(`insert into issue_runs (id, issue_id, attempt, status, started_at)
+        values ('legacy-run', ?, 1, 'in_progress', ?)`, [runIssueID, at]);
+      legacy.run(`insert into issue_events (issue_id, type, payload, created_at)
+        values (?, 'run.lifecycle.run_requested.v1', ?, ?)`, [
+        eventIssueID,
+        JSON.stringify({ after_revision: 1, run_id: "xw:run:issue_runs:legacy-run" }),
+        at
+      ]);
+    } finally {
+      legacy.close();
+    }
+
+    await expect(openDatabase({ stateDir })).rejects.toThrow("Run revision Issue scope invariant failed");
+    const check = new Database(dbPath, { readonly: true });
+    try {
+      expect(check.query(
+        "select count(*) as count from schema_migrations where id='076_run_revision_issue_scope_invariant'"
+      ).get()).toEqual({ count: 0 });
+    } finally {
+      check.close();
     }
   });
 
@@ -1016,6 +1135,12 @@ function createFixtureDatabase(path: string): void {
   } finally {
     db.close();
   }
+}
+
+function migrationsBefore(id: string): typeof migrations {
+  const index = migrations.findIndex((migration) => migration.id === id);
+  if (index < 0) throw new Error(`Unknown migration fixture boundary: ${id}`);
+  return migrations.slice(0, index);
 }
 
 function failingInsertTransaction(connection: RunnerDatabase): (name: string) => void {

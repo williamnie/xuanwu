@@ -164,7 +164,7 @@ export function runProgressProjectionStatus(db: RunnerDatabase, now = new Date()
     // issue_events table. Walking the integer primary key backwards can stop
     // at the first matching normalized event and is equivalent.
     latest_source_event_id: db.sqlite.query<{ id: number }, []>(`
-      select id from issue_events
+      select id from issue_events indexed by idx_issue_events_run_event_v1_id_desc
       where type='issue.log' and json_valid(payload)
         and json_extract(payload, '$.run_event.contract')='${NORMALIZED_RUN_EVENT_CONTRACT}'
       order by id desc limit 1

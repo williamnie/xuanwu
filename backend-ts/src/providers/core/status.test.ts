@@ -43,6 +43,23 @@ async function registryWith(
 }
 
 describe("P4: 四种状态一致投影", () => {
+  test("status projection reuses the configuration snapshot without probing provider CLIs", async () => {
+    let probes = 0;
+    const registry = await registryWith([{
+      factory: factoryWith("snapshot-provider", { issueExecution: true }, { run: async () => ({ runId: "r" }) }, {
+        runtimeStatus: () => {
+          probes += 1;
+          return { ready: true, version: "1.2.3", auth_source: "local-cli", active_sessions: 0, mode: "sdk" };
+        }
+      })
+    }]);
+
+    expect(probes).toBe(1);
+    expect(statusFromRegistry(registry.list())[0]).toMatchObject({ runtimeVersion: "1.2.3", authSource: "local-cli" });
+    expect(statusFromRegistry(registry.list())[0]).toMatchObject({ runtimeVersion: "1.2.3", authSource: "local-cli" });
+    expect(probes).toBe(1);
+  });
+
   test("ready / not_ready（未安装未登录）/ failed（配置错误）/ disabled 一致出现", async () => {
     const registry = await registryWith([
       {

@@ -74,6 +74,9 @@ import { imProjectSelectionsBackfillMigration } from "./071a_im_project_selectio
 import { imInteractionBindingConstraintsMigration } from "./072_im_interaction_binding_constraints.ts";
 import { imInteractionResolutionLeaseMigration } from "./073_im_interaction_resolution_lease.ts";
 import { imOutboundDedupeMigration } from "./074_im_outbound_dedupe.ts";
+import { issueEventQueryIndexesMigration } from "./075_issue_event_query_indexes.ts";
+import { runRevisionIssueScopeInvariantMigration } from "./076_run_revision_issue_scope_invariant.ts";
+import { piActionEventConnectorTestIndexMigration } from "./077_pi_action_event_connector_test_index.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -151,5 +154,8 @@ export const migrations = [
   imProjectSelectionsBackfillMigration,
   imInteractionBindingConstraintsMigration,
   imInteractionResolutionLeaseMigration,
-  imOutboundDedupeMigration
+  imOutboundDedupeMigration,
+  issueEventQueryIndexesMigration,
+  runRevisionIssueScopeInvariantMigration,
+  piActionEventConnectorTestIndexMigration
 ];

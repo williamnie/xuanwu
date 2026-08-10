@@ -81,12 +81,25 @@ describe("connector diagnostics", () => {
           result_json: JSON.stringify(result)
         });
       }
+      createPiActionEvent(fixture.db, {
+        action_id: "connector-test:malformed",
+        event_type: "connector.tested",
+        payload_json: "not-json",
+        result_json: JSON.stringify(result)
+      });
       const history = connectorTestHistory(fixture.db, "github-events", new Date("2026-07-18T03:00:30.000Z"));
       const config = buildConfig({ githubToken: "diagnostic-secret", stateDir: fixture.dir });
       const bundle = buildConnectorDiagnosticBundle({ config, database: fixture.db, now: () => NOW });
       const text = JSON.stringify(bundle);
 
       expect(history).toMatchObject({ attempts: 2, blocked: true, retry_at: "2026-07-18T03:02:00.000Z" });
+      const plan = fixture.db.sqlite.query<{ detail: string }, [string]>(`explain query plan
+        select payload_json, result_json from pi_action_events
+        where event_type='connector.tested' and json_valid(payload_json)
+          and json_extract(payload_json, '$.connector_id')=?
+        order by id desc limit 20
+      `).all("github-events").map((row) => row.detail);
+      expect(plan.some((detail) => detail.includes("idx_pi_action_events_connector_test_history"))).toBe(true);
       expect(bundle).toMatchObject({ schema_version: "xuanwu.connector-diagnostics.v1" });
       expect(text).not.toContain("diagnostic-secret");
     } finally {

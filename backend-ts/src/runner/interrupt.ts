@@ -173,7 +173,7 @@ function prepareLinkedRunInterrupt(
   `).get(run.id);
   if (!attempt) throw new Error("Run Attempt 不存在，无法中断");
   const runID = `xw:run:issue_runs:${run.id}` as const;
-  const runRevision = readRunRevision(db, runID);
+  const runRevision = readRunRevision(db, issue.id, runID);
   const eventID = interruptLifecycleEventID(attempt.attempt_id, reason, runRevision, attempt.revision);
   const prepared = prepareRunInterrupt(db, {
     attempt_id: attempt.attempt_id,

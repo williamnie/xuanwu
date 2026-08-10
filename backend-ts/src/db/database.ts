@@ -5,6 +5,7 @@ import { buildRunnerPaths } from "../config/paths.ts";
 import { ensureDefaultPiAgent } from "./defaultPiAgent.ts";
 import { ensureDefaultPiPersona } from "./defaultPiPersona.ts";
 import { runMigrations } from "./migrations.ts";
+import { ISSUE_EVENT_QUERY_INDEX_NAMES } from "./schema/075_issue_event_query_indexes.ts";
 
 type OpenDatabaseOptions = {
   dbPath?: string;
@@ -43,25 +44,40 @@ export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<R
     readwrite: !target.readonly,
     strict: true
   });
-  const writerBusyTimeout = boundedWriterBusyTimeout(options.writerBusyTimeoutMs);
-  sqlite.run(`pragma busy_timeout = ${target.readonly ? READONLY_BUSY_TIMEOUT_MS : writerBusyTimeout}`);
-  sqlite.run("pragma foreign_keys = on");
-  if (target.readonly) sqlite.run("pragma query_only = on");
-  if (!target.readonly) {
-    runMigrations(sqlite);
-    ensureDefaultPiAgent({ readonly: false, sqlite });
-    ensureDefaultPiPersona({ readonly: false, sqlite });
-    configureWalConnection(sqlite);
-  }
+  try {
+    const writerBusyTimeout = boundedWriterBusyTimeout(options.writerBusyTimeoutMs);
+    sqlite.run(`pragma busy_timeout = ${target.readonly ? READONLY_BUSY_TIMEOUT_MS : writerBusyTimeout}`);
+    sqlite.run("pragma foreign_keys = on");
+    if (target.readonly) sqlite.run("pragma query_only = on");
+    if (!target.readonly) {
+      runMigrations(sqlite);
+      assertRuntimeSchema(sqlite);
+      ensureDefaultPiAgent({ readonly: false, sqlite });
+      ensureDefaultPiPersona({ readonly: false, sqlite });
+      configureWalConnection(sqlite);
+    }
 
-  return {
-    connectionRole: target.readonly ? "reader" : "writer",
-    path: target.path,
-    readonly: target.readonly,
-    sqlite,
-    close: () => sqlite.close(),
-    transaction: (inside) => sqlite.transaction(inside)
-  };
+    return {
+      connectionRole: target.readonly ? "reader" : "writer",
+      path: target.path,
+      readonly: target.readonly,
+      sqlite,
+      close: () => sqlite.close(),
+      transaction: (inside) => sqlite.transaction(inside)
+    };
+  } catch (error) {
+    sqlite.close();
+    throw error;
+  }
+}
+
+function assertRuntimeSchema(sqlite: SQLiteDatabase): void {
+  const missing = ISSUE_EVENT_QUERY_INDEX_NAMES.filter((name) => !sqlite.query<{ name: string }, [string]>(
+    "select name from sqlite_master where type='index' and name=?"
+  ).get(name));
+  if (missing.length > 0) {
+    throw new Error(`Runner database schema invariant failed: missing required indexes: ${missing.join(", ")}`);
+  }
 }
 
 function boundedWriterBusyTimeout(value: number | undefined): number {

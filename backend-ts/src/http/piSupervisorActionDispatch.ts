@@ -85,6 +85,7 @@ async function resumeSessionFollowup(
   }
   const lifecycle = prepareSupervisorResumeAttempt(
     context.database,
+    issueID,
     action,
     payload,
     prepared.attempt.id,
@@ -130,6 +131,7 @@ async function resumeSessionFollowup(
 
 function prepareSupervisorResumeAttempt(
   db: RunnerDatabase,
+  issueID: number,
   action: PiAction,
   payload: Record<string, unknown>,
   recoveryAttemptID: string,
@@ -165,7 +167,7 @@ function prepareSupervisorResumeAttempt(
       reason: "Supervisor resume follow-up"
     },
     expected_attempt_revision: attempt.revision,
-    expected_revision: readRunRevision(db, runID),
+    expected_revision: readRunRevision(db, issueID, runID),
     issue_run_id: issueRunID,
     kind: "resume",
     previous_attempt_terminal: {

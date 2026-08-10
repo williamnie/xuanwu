@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../database.ts";
 import { normalizedRunEvent } from "../../providers/runEvents.ts";
+import { NORMALIZED_RUN_EVENT_CONTRACT } from "../../providers/types.ts";
 import { getRun } from "./runs.ts";
 import {
   rebuildRunProgressProjection,
@@ -103,6 +104,16 @@ describe("Run progress repository", () => {
         status: "ready",
         waiting_approval_runs: 1
       });
+      const plan = db.sqlite.query<{ detail: string }, []>(`
+        explain query plan select id from issue_events
+          indexed by idx_issue_events_run_event_v1_id_desc
+        where type='issue.log' and json_valid(payload)
+          and json_extract(payload, '$.run_event.contract')='${NORMALIZED_RUN_EVENT_CONTRACT}'
+        order by id desc limit 1
+      `).all().map((row) => row.detail);
+      expect(plan).toEqual(expect.arrayContaining([
+        expect.stringContaining("idx_issue_events_run_event_v1_id_desc")
+      ]));
     } finally {
       db.close();
     }

@@ -41,7 +41,7 @@ export type ProviderStatusEntry = {
 
 export function statusFromRegistry(list: readonly RegistryEntry[]): ProviderStatusEntry[] {
   return list.map((entry) => {
-    const runtimeStatus = entry.instance?.runtimeStatus?.();
+    const runtimeStatus = entry.runtimeStatus;
     return {
       id: String(entry.id),
       label: entry.manifest.displayName,

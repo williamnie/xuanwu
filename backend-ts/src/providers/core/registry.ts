@@ -1,4 +1,9 @@
-import { asProviderId, type ExecutorProvider, type ProviderId } from "../types.ts";
+import {
+  asProviderId,
+  type ExecutorProvider,
+  type ProviderId,
+  type ProviderRuntimeStatus
+} from "../types.ts";
 import { checkManifest } from "./conformance.ts";
 import { providerRegistryError, type ProviderErrorCategory } from "./errors.ts";
 import type { ExecutorProviderManifest } from "./manifest.ts";
@@ -35,6 +40,8 @@ export interface RegistryEntry {
   manifest: ExecutorProviderManifest;
   state: RegistryState;
   instance?: RegisteredProvider;
+  /** Snapshot refreshed only by provider configuration, never by read-only status projection. */
+  runtimeStatus?: ProviderRuntimeStatus;
   failure?: { category: ProviderErrorCategory; message: string };
 }
 
@@ -122,7 +129,7 @@ export function createProviderRegistry(): ProviderRegistry {
     if (!enabled) {
       try {
         await entry.instance?.stop?.();
-        setState(id, "disabled", { clearInstance: true });
+        setState(id, "disabled", { clearInstance: true, clearRuntimeStatus: true });
       } catch (err) {
         setState(id, "failed", {
           failure: { category: "stop_failed", message: messageOf(err) }
@@ -144,7 +151,7 @@ export function createProviderRegistry(): ProviderRegistry {
     const entry = entries.get(id);
     try {
       if (raw.enabled === false) {
-        setState(id, "disabled", { clearInstance: true });
+        setState(id, "disabled", { clearInstance: true, clearRuntimeStatus: true });
         return;
       }
       setState(id, "starting");
@@ -153,6 +160,7 @@ export function createProviderRegistry(): ProviderRegistry {
       if (!probe.installed) {
         setState(id, "not_ready", {
           ...(reuseInstance && entry?.instance ? { instance: entry.instance } : {}),
+          clearRuntimeStatus: true,
           failure: { category: "not_ready", message: probe.reason ?? `provider ${id} is not installed` }
         });
         return;
@@ -163,6 +171,7 @@ export function createProviderRegistry(): ProviderRegistry {
       const ready = probe.ready && runtime?.ready !== false;
       setState(id, ready ? "ready" : "not_ready", {
         instance,
+        ...(runtime ? { runtimeStatus: runtime } : { clearRuntimeStatus: true }),
         ...(ready ? {} : {
           failure: {
             category: "not_ready",
@@ -181,13 +190,21 @@ export function createProviderRegistry(): ProviderRegistry {
   function setState(
     id: string,
     state: RegistryState,
-    patch?: { clearInstance?: boolean; instance?: RegisteredProvider; failure?: RegistryEntry["failure"] }
+    patch?: {
+      clearInstance?: boolean;
+      clearRuntimeStatus?: boolean;
+      instance?: RegisteredProvider;
+      runtimeStatus?: ProviderRuntimeStatus;
+      failure?: RegistryEntry["failure"];
+    }
   ): void {
     const entry = entries.get(id);
     if (!entry) return;
     entry.state = state;
     if (patch?.clearInstance) entry.instance = undefined;
     else if (patch?.instance) entry.instance = patch.instance;
+    if (patch?.clearRuntimeStatus) entry.runtimeStatus = undefined;
+    else if (patch?.runtimeStatus) entry.runtimeStatus = patch.runtimeStatus;
     if (patch?.failure) entry.failure = patch.failure;
     else if (state === "disabled" || state === "ready" || state === "stopped") entry.failure = undefined;
   }

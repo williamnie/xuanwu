@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../../db/database.ts";
+import {
+  findRunRevisionIssueScopeMismatches,
+  RUN_REVISION_EVENT_TYPES,
+  type RunRevisionIssueScopeMismatch
+} from "../../db/runRevisionScopeAudit.ts";
 import { issueTimestamp } from "../../db/repositories/issueCreate.ts";
 import {
   emptyRunCost,
@@ -12,10 +17,10 @@ import {
 } from "./contracts.ts";
 
 export const RUN_LIFECYCLE_EVENT_TYPES = {
-  intent: "run.lifecycle.intent.v1",
-  outcome: "run.lifecycle.outcome.v1",
-  runMaterialized: "run.lifecycle.run_materialized.v1",
-  runRequested: "run.lifecycle.run_requested.v1"
+  intent: RUN_REVISION_EVENT_TYPES[0],
+  outcome: RUN_REVISION_EVENT_TYPES[1],
+  runMaterialized: RUN_REVISION_EVENT_TYPES[2],
+  runRequested: RUN_REVISION_EVENT_TYPES[3]
 } as const;
 
 export type RunAttemptCommand = {
@@ -150,14 +155,24 @@ export class RunCommandConflictError extends Error {
   }
 }
 
-export function readRunRevision(db: RunnerDatabase, runID: RunID): number {
-  const row = db.sqlite.query<{ revision: number | null }, [string, string, string, string, string]>(`
+/** Deployment preflight for the historical invariant required by Issue-scoped revision reads. */
+export function auditRunRevisionIssueScope(
+  db: RunnerDatabase,
+  limit = 20
+): RunRevisionIssueScopeMismatch[] {
+  return findRunRevisionIssueScopeMismatches(db.sqlite, limit);
+}
+
+export function readRunRevision(db: RunnerDatabase, issueID: number, runID: RunID): number {
+  const row = db.sqlite.query<{ revision: number | null }, [number, string, string, string, string, string]>(`
     select max(cast(json_extract(payload, '$.after_revision') as integer)) as revision
     from issue_events
-    where type in (?, ?, ?, ?)
+    where issue_id=?
+      and type in (?, ?, ?, ?)
       and json_valid(payload)
       and json_extract(payload, '$.run_id')=?
   `).get(
+    issueID,
     RUN_LIFECYCLE_EVENT_TYPES.intent,
     RUN_LIFECYCLE_EVENT_TYPES.outcome,
     RUN_LIFECYCLE_EVENT_TYPES.runMaterialized,
@@ -601,7 +616,7 @@ function commandViolations(
   audit: RunTransitionAudit
 ): string[] {
   const violations: string[] = [];
-  const revision = readRunRevision(db, run.run_id as RunID);
+  const revision = readRunRevision(db, run.issue_id, run.run_id as RunID);
   if (revision !== expectedRevision) violations.push(`Run revision mismatch: expected ${expectedRevision}, actual ${revision}`);
   if (audit.gate.decision !== "allow") violations.push(`gate decision ${audit.gate.decision} does not allow mutation`);
   return violations;

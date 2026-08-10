@@ -140,7 +140,7 @@ function requestIssueRun(
   const target = listIssueRuns(db, issue.id).at(-1);
   if (!target) return queueIssue(db, issue, options);
   const runID = canonicalRunID(target);
-  const revision = readRunRevision(db, runID);
+  const revision = readRunRevision(db, issue.id, runID);
   const result = requestNewRun(db, {
     audit: {
       actor: { id: "issue-actions", kind: "runner" },

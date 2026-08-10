@@ -130,7 +130,8 @@ export function connectorTestHistory(
 ): { attempts: number; blocked: boolean; retry_at: string; test: ConnectorProbeResult | null } {
   const rows = database.sqlite.query<{ payload_json: string; result_json: string }, [string]>(`
     select payload_json, result_json from pi_action_events
-    where event_type='connector.tested' and json_extract(payload_json, '$.connector_id')=?
+    where event_type='connector.tested' and json_valid(payload_json)
+      and json_extract(payload_json, '$.connector_id')=?
     order by id desc limit 20
   `).all(connectorID);
   const results = rows.map((row) => probeResult(row.result_json)).filter((item): item is ConnectorProbeResult => item !== null);
