@@ -5,6 +5,7 @@ import {
   providerSessionDetail,
   providerSessionSummary,
   type ProviderSessionDetailView,
+  type ProviderSessionTurn,
   type ProviderSessionView
 } from "../core/sessionView.ts";
 
@@ -53,8 +54,26 @@ export function claudeSessionModel(messages: SessionMessage[]): string {
   return model;
 }
 
-export function claudeTranscriptTurns(messages: SessionMessage[]): Array<Record<string, unknown>> {
-  const turns: Array<{ id: string; items: Array<Record<string, unknown>> }> = [];
+export function assertClaudeSessionHistoryIdentity(
+  sessionId: string,
+  info: SDKSessionInfo | undefined,
+  messages: SessionMessage[]
+): void {
+  const expected = sessionId.trim();
+  if (info && info.sessionId !== expected) {
+    throw new Error(`Claude session ${expected} resolved to mismatched history ${info.sessionId}`);
+  }
+  const mismatched = messages.find((message) => {
+    const observed = stringValue(message.session_id);
+    return observed !== "" && observed !== expected;
+  });
+  if (mismatched) {
+    throw new Error(`Claude session ${expected} transcript contains mismatched history ${mismatched.session_id}`);
+  }
+}
+
+export function claudeTranscriptTurns(messages: SessionMessage[]): ProviderSessionTurn[] {
+  const turns: ProviderSessionTurn[] = [];
   for (const entry of messages) {
     const items = transcriptItems(entry);
     if (items.length === 0) continue;
@@ -80,9 +99,18 @@ function transcriptItems(entry: SessionMessage): Array<Record<string, unknown>> 
       const text = redactSensitiveText(stringValue(block.text));
       return text ? [messageItem(id, entry.type, text)] : [];
     }
+    if (block.type === "thinking") {
+      const text = redactSensitiveText(stringValue(block.thinking));
+      return text ? [{ id, type: "reasoning", content: [{ type: "text", text }] }] : [];
+    }
     if (block.type === "tool_use") return [transcriptToolUse(id, block)];
     if (block.type === "tool_result") {
-      return [{ id, type: "custom_tool_call_output", output: claudeTranscriptContent(block.content), status: block.is_error ? "failed" : "completed" }];
+      return [{
+        id: stringValue(block.tool_use_id) || id,
+        type: "custom_tool_call_output",
+        output: claudeTranscriptContent(block.content),
+        status: block.is_error ? "failed" : "completed"
+      }];
     }
     return [];
   });

@@ -44,6 +44,7 @@ describe("Claude Code provider", () => {
     const provider = new ClaudeExecutorProvider(runtimeConfig({ authMode: "local-cli", mode: "cli-fallback" }), {
       authInspector: () => ({ checked: true, logged_in: true }),
       processFactory: factory.factory,
+      sessionIdFactory: () => "local-session",
       sessionFunctions: {
         listSessions: async () => [sessionInfo],
         getSessionInfo: async () => sessionInfo,
@@ -94,7 +95,8 @@ describe("Claude Code provider", () => {
       mode: "cli-fallback"
     }), {
       authInspector: () => ({ auth_method: "claude.ai", checked: true, logged_in: true, provider: "firstParty" }),
-      processFactory: factory.factory
+      processFactory: factory.factory,
+      sessionIdFactory: () => "local-session"
     });
     expect(provider.runtimeStatus()).toMatchObject({
       auth_configured: true,
@@ -122,7 +124,10 @@ describe("Claude Code provider", () => {
       tempRoots.push(cwd);
       insertProject(db, "demo", cwd);
       const issueId = insertIssue(db, "demo");
-      const provider = new ClaudeExecutorProvider(runtimeConfig({ model: "sonnet" }), { processFactory: factory.factory });
+      const provider = new ClaudeExecutorProvider(runtimeConfig({ model: "sonnet" }), {
+        processFactory: factory.factory,
+        sessionIdFactory: () => "sess-1"
+      });
 
       const result = await runIssueWithProvider(provider, {
         database: db,
@@ -140,6 +145,7 @@ describe("Claude Code provider", () => {
       expect(factory.calls[0].command).toEqual([
         "claude", "-p", "--verbose", "--output-format", "stream-json",
         "--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,LS,Edit,MultiEdit,Write,Bash",
+        "--session-id", "sess-1",
         "--model", "sonnet", "--max-turns", "50", "issue prompt"
       ]);
       expect(result).toEqual({ runId: `cli:claude:${issueId}`, session: { provider: "claude", sessionId: "sess-1", turnId: "turn-1" } });
@@ -178,7 +184,10 @@ describe("Claude Code provider", () => {
     const factory = scriptedProcessFactory({ stdout: jsonl([
       { type: "result", session_id: "sess-read", uuid: "turn-read", is_error: false }
     ]) });
-    const provider = new ClaudeExecutorProvider(runtimeConfig(), { processFactory: factory.factory });
+    const provider = new ClaudeExecutorProvider(runtimeConfig(), {
+      processFactory: factory.factory,
+      sessionIdFactory: () => "sess-read"
+    });
 
     await provider.run({ ...runInput(), sandbox: "read-only" });
 
@@ -194,10 +203,31 @@ describe("Claude Code provider", () => {
     expect(factory.killed).toBe(true);
   });
 
+  test("escalates a host interrupt when the Claude child ignores SIGTERM", async () => {
+    const factory = stubbornProcessFactory();
+    const provider = new ClaudeExecutorProvider(runtimeConfig({ timeoutMs: 30_000 }), {
+      processFactory: factory.factory,
+      sessionIdFactory: () => "session-stubborn"
+    });
+    const running = provider.run(runInput());
+    await waitFor(() => provider.runtimeStatus().active_sessions === 1);
+
+    await provider.interrupt({
+      reason: "issue_cancel",
+      session: { provider: "claude", sessionId: "session-stubborn" }
+    });
+
+    await expect(running).rejects.toThrow("issue_cancel");
+    expect(factory.signals).toEqual(["SIGTERM", "SIGKILL"]);
+  });
+
   test("cancel interrupts the active Claude child process and closes the run", async () => {
     const db = await openFixtureDatabase();
     const factory = hangingProcessFactory();
-    const provider = new ClaudeExecutorProvider(runtimeConfig({ timeoutMs: 30_000 }), { processFactory: factory.factory });
+    const provider = new ClaudeExecutorProvider(runtimeConfig({ timeoutMs: 30_000 }), {
+      processFactory: factory.factory,
+      sessionIdFactory: () => "session-cancel"
+    });
     try {
       const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-cancel-cwd-"));
       tempRoots.push(cwd);
@@ -211,24 +241,25 @@ describe("Claude Code provider", () => {
         prompt: "issue prompt"
       });
 
-      await waitFor(() => listIssueRuns(db, issueId)[0]?.provider_session_id === `cli:claude:${issueId}`);
+      await waitFor(() => listIssueRuns(db, issueId)[0]?.provider_session_id === "session-cancel");
       const issue = await cancelIssueWithInterrupt(db, issueId, {
         interruptTimeoutMs: 50,
         providers: { claude: provider }
       });
-      await expect(running).rejects.toThrow("Claude Code run failed: exit code 143");
+      await expect(running).rejects.toThrow("issue_cancel");
 
       expect(factory.killed).toBe(true);
       expect(issue.status).toBe("cancelled");
       expect(getIssue(db, issueId)).toMatchObject({ status: "cancelled", codex_thread_id: "", codex_turn_id: "" });
       expect(listIssueRuns(db, issueId)).toMatchObject([{
         provider: "claude",
-        provider_session_id: `cli:claude:${issueId}`,
-        provider_turn_id: `cli:claude:${issueId}`,
+        provider_session_id: "session-cancel",
+        provider_turn_id: "",
         codex_thread_id: "",
         codex_turn_id: "",
-        status: "failed",
-        exit_reason: "provider_reported_failed"
+        status: "cancelled",
+        exit_reason: "issue_cancel",
+        error: ""
       }]);
       const eventTypes = listIssueEvents(db, issueId).map((event) => event.type);
       expect(eventTypes).toContain("issue.interrupt_requested");
@@ -238,10 +269,13 @@ describe("Claude Code provider", () => {
     }
   });
 
-  test("cancelled Claude run failure does not pollute the next project loop claim", async () => {
+  test("cancelled Claude run does not fail or pollute the next project loop claim", async () => {
     const db = await openFixtureDatabase();
     const factory = hangingProcessFactory();
-    const provider = new ClaudeExecutorProvider(runtimeConfig({ timeoutMs: 30_000 }), { processFactory: factory.factory });
+    const provider = new ClaudeExecutorProvider(runtimeConfig({ timeoutMs: 30_000 }), {
+      processFactory: factory.factory,
+      sessionIdFactory: () => "session-next-cancel"
+    });
     try {
       const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-next-cwd-"));
       tempRoots.push(cwd);
@@ -249,7 +283,7 @@ describe("Claude Code provider", () => {
       const issueId = insertIssue(db, "demo", "todo");
       const running = runProjectLoopOnce({ database: db, projectId: "demo", providers: { claude: provider } });
 
-      await waitFor(() => listIssueRuns(db, issueId)[0]?.provider_session_id === `cli:claude:${issueId}`);
+      await waitFor(() => listIssueRuns(db, issueId)[0]?.provider_session_id === "session-next-cancel");
       await cancelIssueWithInterrupt(db, issueId, {
         interruptTimeoutMs: 50,
         providers: { claude: provider }
@@ -258,9 +292,9 @@ describe("Claude Code provider", () => {
 
       expect(getIssue(db, issueId)).toMatchObject({ status: "cancelled", error: "" });
       expect(listIssueRuns(db, issueId)[0]).toMatchObject({
-        status: "failed",
-        exit_reason: "provider_reported_failed",
-        error: expect.stringContaining("missing result event")
+        status: "cancelled",
+        exit_reason: "issue_cancel",
+        error: ""
       });
     } finally {
       db.close();
@@ -329,6 +363,26 @@ function hangingProcessFactory() {
     }
   });
   return { factory, get killed() { return killed; } };
+}
+
+function stubbornProcessFactory() {
+  const signals: Array<string | number | undefined> = [];
+  let closeStdout: (() => void) | undefined;
+  let closeStderr: (() => void) | undefined;
+  let resolveExit: ((code: number) => void) | undefined;
+  const factory: ClaudeProcessFactory = () => ({
+    stdout: closableStream((close) => { closeStdout = close; }),
+    stderr: closableStream((close) => { closeStderr = close; }),
+    exited: new Promise<number>((resolve) => { resolveExit = resolve; }),
+    kill: (signal) => {
+      signals.push(signal);
+      if (signal !== "SIGKILL") return;
+      closeStdout?.();
+      closeStderr?.();
+      resolveExit?.(137);
+    }
+  });
+  return { factory, signals };
 }
 
 function streamFrom(text: string): ReadableStream<Uint8Array> {

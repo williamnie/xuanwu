@@ -8,6 +8,7 @@ class FakeCodexIssueAdapter {
   readonly calls: Array<{ method: string; params?: unknown }> = [];
   readThreadResult: ThreadSummary | null = null;
   resumeThreadResult: ThreadSummary | null = null;
+  startTurnError: Error | null = null;
 
   async initialize(): Promise<CodexInitializeResult> {
     this.calls.push({ method: "initialize" });
@@ -36,6 +37,7 @@ class FakeCodexIssueAdapter {
 
   async startTurn(threadID: string, input: CodexUserInput[], options: TurnStartOptions = {}): Promise<TurnStartResult> {
     this.calls.push({ method: "turn/start", params: { threadID, input, options } });
+    if (this.startTurnError) throw this.startTurnError;
     return { provider: "codex", provider_session_id: threadID, sessionId: threadID, turn_id: "turn-1" };
   }
 
@@ -105,8 +107,14 @@ describe("Codex executor provider", () => {
       runId: "codex:thread-1:turn-1",
       session: { provider: "codex", sessionId: "thread-1", turnId: "turn-1" }
     });
-    expect(events).toHaveLength(1);
+    expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({
+      provider: "codex",
+      type: "provider.session_started",
+      status: "running",
+      session: { provider: "codex", sessionId: "thread-1" }
+    });
+    expect(events[1]).toMatchObject({
       provider: "codex",
       type: "turn_started",
       status: "inProgress",
@@ -196,6 +204,7 @@ describe("Codex executor provider", () => {
 
     await Bun.sleep(1);
     expect(events).toMatchObject([
+      { type: "provider.session_started" },
       { type: "turn_started" },
       { type: "text", text: "live output" },
       { type: "done", status: "completed" }
@@ -204,6 +213,25 @@ describe("Codex executor provider", () => {
     expect(runtime.acquired).toEqual(["project:demo:issue:160:run"]);
     expect(runtime.released).toBe(1);
     expect(adapter.calls.filter((call) => call.method === "thread/read")).toHaveLength(0);
+  });
+
+  test("keeps the durable Codex thread observable when turn start fails", async () => {
+    const adapter = new FakeCodexIssueAdapter();
+    adapter.startTurnError = new Error("turn start failed");
+    const events: ProviderEvent[] = [];
+
+    await expect(new CodexExecutorProvider(adapter).run({
+      issueId: 162,
+      projectId: "demo",
+      cwd: "/tmp/demo",
+      prompt: "issue body",
+      onEvent: (event) => events.push(event)
+    })).rejects.toThrow("turn start failed");
+
+    expect(events).toMatchObject([{
+      type: "provider.session_started",
+      session: { provider: "codex", sessionId: "thread-1" }
+    }]);
   });
 
   test("reads manual Sessions API detail passively with turns included", async () => {

@@ -9,7 +9,7 @@ describe("Claude Agent SDK provider", () => {
     let release!: () => void;
     const paused = new Promise<void>((resolve) => { release = resolve; });
     const events: ProviderEvent[] = [];
-    const provider = sdkProvider(async function* () {
+    const provider = sdkProvider("session-incremental", async function* () {
       yield init("session-incremental", "turn-init");
       yield {
         type: "stream_event",
@@ -32,8 +32,8 @@ describe("Claude Agent SDK provider", () => {
 
     const running = provider.run(runInput((event) => events.push(event)));
     await waitFor(() => events.some((event) => event.type === "text_delta"));
-    expect(events.map((event) => event.type)).toEqual(["turn_started", "text_delta"]);
-    expect(events[1]?.text).toBe("first chunk");
+    expect(events.map((event) => event.type)).toEqual(["provider.session_started", "turn_started", "text_delta"]);
+    expect(events[2]?.text).toBe("first chunk");
 
     release();
     const result = await running;
@@ -63,30 +63,30 @@ describe("Claude Agent SDK provider", () => {
 
   test("resumes/recover sessions with the real SDK resume ref and cleans aliases", async () => {
     const calls: Array<{ prompt: unknown; resume?: string }> = [];
-    let sequence = 0;
     const provider = new ClaudeSdkExecutorProvider(config(), {
       queryFactory: ((input) => {
         calls.push({ prompt: input.prompt, resume: input.options?.resume });
-        sequence += 1;
+        const sessionId = input.options?.resume || input.options?.sessionId || "";
         return fromMessages([
-          init(`session-${sequence}`, `turn-init-${sequence}`),
-          success(`session-${sequence}`, `turn-${sequence}`)
+          init(sessionId, "turn-init"),
+          success(sessionId, "turn-result")
         ]);
-      }) as ClaudeQueryFactory
+      }) as ClaudeQueryFactory,
+      sessionIdFactory: () => "session-1"
     });
 
     const created = await provider.createSession({ cwd, prompt: "create" });
-    expect(created).toMatchObject({ provider: "claude", provider_session_id: "session-1", provider_turn_id: "turn-1" });
+    expect(created).toMatchObject({ provider: "claude", provider_session_id: "session-1", provider_turn_id: "turn-result" });
 
     const messaged = await provider.sendSessionMessage({ cwd, prompt: "continue", sessionId: "session-1" });
-    expect(messaged).toMatchObject({ provider: "claude", provider_session_id: "session-2", turn_id: "turn-2" });
+    expect(messaged).toMatchObject({ provider: "claude", provider_session_id: "session-1", turn_id: "turn-result" });
 
     const recovered = await provider.recover({
       ...runInput(),
-      session: { provider: "claude", sessionId: "session-2", turnId: "turn-2" }
+      session: { provider: "claude", sessionId: "session-1", turnId: "turn-result" }
     });
-    expect(recovered.session?.sessionId).toBe("session-3");
-    expect(calls.map((call) => call.resume)).toEqual([undefined, "session-1", "session-2"]);
+    expect(recovered.session?.sessionId).toBe("session-1");
+    expect(calls.map((call) => call.resume)).toEqual([undefined, "session-1", "session-1"]);
     expect(provider.runtimeStatus().active_sessions).toBe(0);
   });
 
@@ -104,13 +104,14 @@ describe("Claude Agent SDK provider", () => {
           close: () => { closed += 1; },
           interrupt: async () => { interrupted += 1; }
         });
-      }) as ClaudeQueryFactory
+      }) as ClaudeQueryFactory,
+      sessionIdFactory: () => "session-interrupt"
     });
 
     const running = provider.run(runInput((event) => events.push(event)));
     await waitFor(() => provider.runtimeStatus().active_sessions === 1);
     await provider.interrupt({ session: { provider: "claude", sessionId: "session-interrupt", turnId: "turn-interrupt" } });
-    await running;
+    await expect(running).rejects.toThrow("runner interrupt");
 
     expect(interrupted).toBe(1);
     expect(observedSignal?.aborted).toBe(true);
@@ -120,12 +121,37 @@ describe("Claude Agent SDK provider", () => {
     expect(provider.interrupt({ session: { provider: "claude", sessionId: "session-interrupt" } })).rejects.toThrow("is not active");
   });
 
+  test("can interrupt a preallocated Session before the SDK init event arrives", async () => {
+    const events: ProviderEvent[] = [];
+    const provider = new ClaudeSdkExecutorProvider(config(), {
+      queryFactory: (() => waitingQuery([], {
+        close: () => undefined,
+        interrupt: async () => undefined
+      })) as ClaudeQueryFactory,
+      sessionIdFactory: () => "session-pre-init"
+    });
+
+    const running = provider.run(runInput((event) => events.push(event)));
+    await waitFor(() => events.some((event) => event.type === "provider.session_started"));
+    await provider.interrupt({
+      reason: "issue_cancel",
+      session: { provider: "claude", sessionId: "session-pre-init" }
+    });
+
+    await expect(running).rejects.toThrow("issue_cancel");
+    expect(events).toMatchObject([
+      { type: "provider.session_started", session: { sessionId: "session-pre-init" } },
+      { type: "error", status: "interrupted", session: { sessionId: "session-pre-init" } }
+    ]);
+  });
+
   test("maps provider timeouts to retryable failures and clears the active query", async () => {
     const events: ProviderEvent[] = [];
     const provider = new ClaudeSdkExecutorProvider(config({ timeoutMs: 2 }), {
       queryFactory: (() => waitingQuery([
         init("session-timeout", "turn-timeout")
-      ], { close: () => undefined, interrupt: async () => undefined })) as ClaudeQueryFactory
+      ], { close: () => undefined, interrupt: async () => undefined })) as ClaudeQueryFactory,
+      sessionIdFactory: () => "session-timeout"
     });
 
     await expect(provider.run(runInput((event) => events.push(event)))).rejects.toThrow("timed out after 2ms");
@@ -139,7 +165,7 @@ describe("Claude Agent SDK provider", () => {
 
   test("preserves unknown SDK events and maps provider result errors", async () => {
     const events: ProviderEvent[] = [];
-    const provider = sdkProvider(async function* () {
+    const provider = sdkProvider("session-error", async function* () {
       yield init("session-error", "turn-error");
       yield { type: "future_event", session_id: "session-error", uuid: "turn-error", secret: "sk-ant-secret" };
       yield {
@@ -155,8 +181,8 @@ describe("Claude Agent SDK provider", () => {
     });
 
     await expect(provider.run(runInput((event) => events.push(event)))).rejects.toThrow("Claude SDK query failed");
-    expect(events[1]).toMatchObject({ type: "unknown", raw: { method: "future_event" }, runEvent: { kind: "unknown" } });
-    expect(String(events[1]?.raw?.payload)).not.toContain("sk-ant-secret");
+    expect(events[2]).toMatchObject({ type: "unknown", raw: { method: "future_event" }, runEvent: { kind: "unknown" } });
+    expect(String(events[2]?.raw?.payload)).not.toContain("sk-ant-secret");
     expect(events.at(-1)).toMatchObject({ type: "error", error: "tool failed", runEvent: { kind: "error", outcome: "failed", terminal: true } });
     expect(provider.runtimeStatus().active_sessions).toBe(0);
   });
@@ -187,7 +213,8 @@ describe("Claude Agent SDK provider", () => {
         message: { content: [{ type: "tool_result", content: [{ type: "text", text: `token is ${secret}` }] }] }
       };
       yield success("session-redaction", "turn-result");
-      })() as ClaudeQuery) as ClaudeQueryFactory
+      })() as ClaudeQuery) as ClaudeQueryFactory,
+      sessionIdFactory: () => "session-redaction"
     });
 
     await provider.run(runInput((event) => events.push(event)));
@@ -231,7 +258,9 @@ describe("Claude Agent SDK provider", () => {
       data: [{ id: "claude:session-history", provider: "claude", provider_session_id: "session-history" }],
       nextCursor: ""
     });
-    const detail = await provider.readSession("session-history") as { turns: Array<{ items: Array<{ type: string }> }> } & Record<string, unknown>;
+    const detail = await provider.readSession("session-history") as {
+      turns: Array<{ items: Array<Record<string, unknown> & { type: string }> }>;
+    } & Record<string, unknown>;
     expect(detail).toMatchObject({
       session_contract: "xw.provider-session.v1",
       id: "claude:session-history",
@@ -287,9 +316,10 @@ describe("Claude Agent SDK provider", () => {
   });
 });
 
-function sdkProvider(factory: () => AsyncGenerator<unknown>): ClaudeSdkExecutorProvider {
+function sdkProvider(sessionId: string, factory: () => AsyncGenerator<unknown>): ClaudeSdkExecutorProvider {
   return new ClaudeSdkExecutorProvider(config(), {
-    queryFactory: (() => factory() as ClaudeQuery) as ClaudeQueryFactory
+    queryFactory: (() => factory() as ClaudeQuery) as ClaudeQueryFactory,
+    sessionIdFactory: () => sessionId
   });
 }
 

@@ -135,7 +135,7 @@ async function readSession(context: SessionApiContext, rawSessionID: string) {
   let result: Record<string, unknown>;
   try {
     result = await provider.readSession!(ref.sessionId);
-    validateDeclaredSessionView(provider, result, true);
+    validateDeclaredSessionView(provider, result, true, ref.sessionId);
   } catch (error) {
     const fallback = ref.provider === "codex" ? pendingCodexSessionFallback(context.database, ref.sessionId, error) : null;
     if (!fallback) throw error;
@@ -200,10 +200,15 @@ function providersForList(context: SessionApiContext, filter: { projectId: strin
   });
 }
 
-function validateDeclaredSessionView(provider: ExecutorProvider, value: Record<string, unknown>, detail: boolean): void {
+function validateDeclaredSessionView(
+  provider: ExecutorProvider,
+  value: Record<string, unknown>,
+  detail: boolean,
+  expectedSessionRef = ""
+): void {
   const manifest = (provider as ExecutorProvider & { manifest?: ExecutorProviderManifest }).manifest;
   if (manifest?.sessionPresentation?.viewContract !== PROVIDER_SESSION_VIEW_CONTRACT) return;
-  assertProviderSessionView(provider.id, value, { detail });
+  assertProviderSessionView(provider.id, value, { detail, expectedSessionRef });
 }
 
 function sessionListInput(request: Request): { cursor: string; limit: number } {

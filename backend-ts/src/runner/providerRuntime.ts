@@ -367,7 +367,10 @@ function providerTerminalOutcome(event: ProviderEvent): ReturnType<typeof parseP
     if (event.runEvent.outcome === "succeeded") return { outcome: "completed", reason: "Provider Turn completed" };
     if (event.runEvent.outcome === "failed") return { outcome: "failed", reason: event.error || event.status || "Provider Turn failed" };
     if (event.runEvent.outcome === "cancelled" || event.runEvent.outcome === "interrupted") {
-      return { outcome: "failed", reason: event.error || event.status || `Provider Turn ${event.runEvent.outcome}` };
+      // Host interrupt lifecycle owns Run/Attempt cancellation and retry state.
+      // Reconciling a provider acknowledgement as a failure races the explicit
+      // cancel command and can turn a cancelled Run back into failed.
+      return null;
     }
   }
   const method = event.raw?.method ?? "";

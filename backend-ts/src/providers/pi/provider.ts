@@ -16,6 +16,7 @@ import {
 } from "../types.ts";
 import { PiRpcTransport, type PiRpcEvent } from "./rpcTransport.ts";
 import { detectProviderCommand } from "../core/command.ts";
+import { providerSessionStartedEvent } from "../core/sessionLifecycle.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
 import {
   defaultPiSessionFunctions,
@@ -240,21 +241,9 @@ export class PiExecutorProvider implements ExecutorProvider {
     const state = await this.sessionState(transport);
     if (!state?.sessionRef) throw new Error("pi rpc did not provide a durable session before prompt");
     this.lastSessionRef = state.sessionRef;
-    const session = { provider: this.id, sessionId: state.sessionRef } as const;
-    sink?.({
-      provider: this.id,
-      raw: { method: "pi-coding-agent/session_started" },
-      runEvent: normalizedRunEvent({
-        kind: "started",
-        method: "pi-coding-agent/session_started",
-        outcome: "running",
-        provider: this.id,
-        session
-      }),
-      session,
-      status: "running",
-      type: "provider.session_started"
-    });
+    sink?.(providerSessionStartedEvent(this.id, state.sessionRef, {
+      method: "pi-coding-agent/session_started"
+    }));
     const invocationRef = `pi-rpc-${crypto.randomUUID()}`;
     const terminal = this.waitForTerminal(transport, sink, input, state.sessionRef);
     try {

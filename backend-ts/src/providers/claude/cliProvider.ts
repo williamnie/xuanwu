@@ -10,25 +10,31 @@ import { splitCommand } from "../codex/jsonRpc.ts";
 import { parseClaudeStreamJSONL } from "./stream.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
+import { providerSessionStartedEvent } from "../core/sessionLifecycle.ts";
 import { managedExecutionEnvironment } from "../managedExecution.ts";
 import { claudeProcessEnvironment, environmentAuthenticationStatus } from "./auth.ts";
-import { publicClaudeSessionDetail, publicClaudeSessionSummary } from "./sessionHistory.ts";
+import {
+  assertClaudeSessionHistoryIdentity,
+  publicClaudeSessionDetail,
+  publicClaudeSessionSummary
+} from "./sessionHistory.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
-import type {
-  ExecutorProvider,
-  InterruptInput,
-  ProviderEvent,
-  ProviderRecoveryInput,
-  ProviderRunInput,
-  ProviderRunResult,
-  ProviderRuntimeStatus,
-  SessionCreateInput,
-  SessionCreateResult,
-  SessionListInput,
-  SessionListResult,
-  SessionMessageInput,
-  SessionMessageResult,
-  SessionRef
+import {
+  ProviderInterruptedError,
+  type ExecutorProvider,
+  type InterruptInput,
+  type ProviderEvent,
+  type ProviderRecoveryInput,
+  type ProviderRunInput,
+  type ProviderRunResult,
+  type ProviderRuntimeStatus,
+  type SessionCreateInput,
+  type SessionCreateResult,
+  type SessionListInput,
+  type SessionListResult,
+  type SessionMessageInput,
+  type SessionMessageResult,
+  type SessionRef
 } from "../types.ts";
 
 const PROVIDER = "claude";
@@ -58,7 +64,14 @@ export type ClaudeCliAuthInspection = {
 export type ClaudeCliProviderOptions = {
   authInspector?: (config: ProviderRuntimeConfig) => ClaudeCliAuthInspection;
   processFactory?: ClaudeProcessFactory;
+  sessionIdFactory?: () => string;
   sessionFunctions?: Partial<ClaudeCliSessionFunctions>;
+};
+
+type ActiveClaudeProcess = {
+  interrupted: boolean;
+  process: ClaudeProcess;
+  reason: string;
 };
 
 type ClaudeCliSessionFunctions = {
@@ -80,7 +93,8 @@ const CLI_AUTH_CACHE_MS = 5_000;
 export class ClaudeCliExecutorProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt"] as const;
   readonly id = PROVIDER;
-  private readonly active = new Map<string, ClaudeProcess>();
+  readonly interruptScope = "session" as const;
+  private readonly active = new Map<string, ActiveClaudeProcess>();
 
   constructor(private readonly config: ProviderRuntimeConfig, private readonly options: ClaudeCliProviderOptions = {}) {}
 
@@ -148,6 +162,7 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
       this.sessionFunctions().getSessionMessages(id, { includeSystemMessages: false })
     ]);
     if (!info && messages.length === 0) throw new Error(`Claude CLI session ${id} was not found`);
+    assertClaudeSessionHistoryIdentity(id, info, messages);
     const running = this.active.has(id);
     return publicClaudeSessionDetail(id, info, messages, running);
   }
@@ -156,18 +171,30 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
     assertUsableCwd(input.cwd);
     this.assertReady();
     const runId = input.issueId ? `cli:claude:${input.issueId}` : `cli:claude:${resume || "new-session"}`;
-    const process = this.spawn(input, resume);
-    const session = runSession(runId);
+    const durableSessionID = resume || clean(this.options.sessionIdFactory?.()) || crypto.randomUUID();
+    const process = this.spawn(input, resume, durableSessionID);
+    const active: ActiveClaudeProcess = { interrupted: false, process, reason: "" };
+    const session: SessionRef = { provider: PROVIDER, sessionId: durableSessionID };
     const aliases = new Set<string>();
-    this.track(session, process, aliases);
-    input.onEvent?.(startEvent(session, input, this.config));
+    this.track(session, active, aliases);
+    input.onEvent?.(providerSessionStartedEvent(PROVIDER, durableSessionID, {
+      method: resume ? "claude-cli/session_resumed" : "claude-cli/session_started",
+      metadata: { model: clean(input.model) || clean(this.config.model), sdk_transport: "cli" }
+    }));
     try {
       const [stdout, stderr, exitCode] = await waitForProcess(process, this.config.timeoutMs);
       const secrets = secretValues(this.config.env);
+      if (active.interrupted) {
+        input.onEvent?.(interruptedCliEvent(session, active.reason));
+        throw new ProviderInterruptedError(active.reason || "Claude CLI interrupted by host");
+      }
       emitStderr(input, stderr, runId, secrets);
-      const parsed = parseClaudeStreamJSONL(stdout, { runId, secrets });
+      const parsed = parseClaudeStreamJSONL(stdout, { runId, secrets, sessionId: durableSessionID });
       parsed.events.forEach((event) => {
-        if (event.session) this.track(event.session, process, aliases);
+        if (event.session?.sessionId && event.session.sessionId !== durableSessionID) {
+          throw new Error(`Claude session ${durableSessionID} returned mismatched runtime ${event.session.sessionId}`);
+        }
+        if (event.session) this.track(event.session, active, aliases);
         input.onEvent?.(event);
       });
       if (exitCode !== 0) throw new Error(commandError(stderr, exitCode, secrets));
@@ -179,9 +206,11 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
   }
 
   async interrupt(input: InterruptInput): Promise<void> {
-    const process = this.lookup(input.session);
-    if (!process) return;
-    process.kill("SIGTERM");
+    const active = this.lookup(input.session);
+    if (!active) return;
+    active.interrupted = true;
+    active.reason = input.reason || "runner interrupt";
+    await terminateClaudeProcess(active.process, 500);
   }
 
   runtimeStatus(): ProviderRuntimeStatus {
@@ -212,9 +241,9 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
     };
   }
 
-  private spawn(input: ClaudeCliExecutionInput, resume: string): ClaudeProcess {
+  private spawn(input: ClaudeCliExecutionInput, resume: string, sessionID: string): ClaudeProcess {
     return this.processFactory()({
-      command: claudeCommand(this.config, input, resume),
+      command: claudeCommand(this.config, input, resume, sessionID),
       cwd: input.cwd,
       env: managedExecutionEnvironment(claudeProcessEnvironment(this.config))
     });
@@ -237,10 +266,10 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
     return this.options.processFactory ?? spawnClaudeProcess;
   }
 
-  private track(session: SessionRef, process: ClaudeProcess, aliases: Set<string>): void {
+  private track(session: SessionRef, active: ActiveClaudeProcess, aliases: Set<string>): void {
     for (const id of [session.sessionId, session.turnId]) {
       if (!id) continue;
-      this.active.set(id, process);
+      this.active.set(id, active);
       aliases.add(id);
     }
   }
@@ -249,7 +278,7 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
     aliases.forEach((id) => this.active.delete(id));
   }
 
-  private lookup(session: SessionRef): ClaudeProcess | undefined {
+  private lookup(session: SessionRef): ActiveClaudeProcess | undefined {
     return this.active.get(session.sessionId) ?? (session.turnId ? this.active.get(session.turnId) : undefined);
   }
 }
@@ -291,7 +320,8 @@ export function inspectClaudeCliAuth(config: ProviderRuntimeConfig): ClaudeCliAu
 function claudeCommand(
   config: ProviderRuntimeConfig,
   input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "prompt" | "sandbox">,
-  resume = ""
+  resume = "",
+  sessionID = ""
 ): string[] {
   const command = splitCommand(config.command);
   const args = [
@@ -300,6 +330,7 @@ function claudeCommand(
     "--allowedTools", claudeAllowedTools(input.sandbox)
   ];
   if (resume) args.push("--resume", resume);
+  else args.push("--session-id", sessionID);
   const model = clean(input.model) || clean(config.model);
   if (model !== "" && model !== "codex-default") args.push("--model", model);
   args.push("--max-turns", DEFAULT_MAX_TURNS, clean(input.prompt));
@@ -340,22 +371,19 @@ function claudePermissionMode(policy?: string): string {
   }
 }
 
-function runSession(runId: string): SessionRef {
-  return { provider: PROVIDER, sessionId: runId, turnId: runId };
-}
-
-function startEvent(session: SessionRef, input: ClaudeCliExecutionInput, config: ProviderRuntimeConfig): ProviderEvent {
+function interruptedCliEvent(session: SessionRef, reason: string): ProviderEvent {
+  const error = redactSensitiveText(reason || "Claude CLI interrupted by host");
   return {
     provider: PROVIDER,
-    type: "text",
-    status: "started",
+    type: "error",
+    status: "interrupted",
+    error,
     session,
-    raw: { method: "start", payload: "Claude Code child process started" },
+    raw: { method: "claude-cli/interrupted", payload: error },
     runEvent: normalizedRunEvent({
-      kind: "started",
-      metadata: { model: clean(input.model) || clean(config.model) },
-      method: "start",
-      outcome: "running",
+      kind: "error",
+      method: "claude-cli/interrupted",
+      outcome: "interrupted",
       provider: PROVIDER,
       session
     })
@@ -365,17 +393,37 @@ function startEvent(session: SessionRef, input: ClaudeCliExecutionInput, config:
 async function waitForProcess(process: ClaudeProcess, timeoutMs: number): Promise<[string, string, number]> {
   const output = Promise.all([readStream(process.stdout), readStream(process.stderr), process.exited]) as Promise<[string, string, number]>;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      process.kill("SIGTERM");
-      reject(new Error(`Claude Code run timed out after ${timeoutMs}ms`));
-    }, Math.max(1, timeoutMs));
+  const timedOut = Symbol("claude-timeout");
+  const timeout = new Promise<typeof timedOut>((resolve) => {
+    timer = setTimeout(() => resolve(timedOut), Math.max(1, timeoutMs));
   });
   try {
-    return await Promise.race([output, timeout]);
+    const result = await Promise.race([output, timeout]);
+    if (result !== timedOut) return result;
+    await terminateClaudeProcess(process, 500);
+    throw new Error(`Claude Code run timed out after ${timeoutMs}ms`);
   } finally {
     if (timer) clearTimeout(timer);
     output.catch(() => undefined);
+  }
+}
+
+async function terminateClaudeProcess(process: ClaudeProcess, graceMs: number): Promise<void> {
+  process.kill("SIGTERM");
+  if (await exitsWithin(process, graceMs)) return;
+  process.kill("SIGKILL");
+  await exitsWithin(process, graceMs);
+}
+
+async function exitsWithin(process: ClaudeProcess, timeoutMs: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      process.exited.then(() => true, () => true),
+      new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), Math.max(1, timeoutMs)); })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

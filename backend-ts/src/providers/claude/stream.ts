@@ -5,7 +5,7 @@ import type { NormalizedRunEvent, ProviderEvent, SessionRef } from "../types.ts"
 const PROVIDER = "claude";
 const RAW_LIMIT = 240;
 
-export type ClaudeStreamParseOptions = { runId: string; secrets?: string[] };
+export type ClaudeStreamParseOptions = { runId: string; secrets?: string[]; sessionId?: string };
 export type ClaudeStreamParseResult = {
   completed: boolean;
   diagnostic?: string;
@@ -263,7 +263,16 @@ function sessionRef(state: ParseState): SessionRef {
 }
 
 function initialState(options: ClaudeStreamParseOptions): ParseState {
-  return { runId: options.runId, secrets: options.secrets ?? [], events: [], sessionId: "", turnId: "", terminal: false, completed: false, transient: false };
+  return {
+    runId: options.runId,
+    secrets: options.secrets ?? [],
+    events: [],
+    sessionId: options.sessionId?.trim() ?? "",
+    turnId: "",
+    terminal: false,
+    completed: false,
+    transient: false
+  };
 }
 
 function streamLines(input: string): string[] {

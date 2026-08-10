@@ -76,4 +76,15 @@ describe("provider-neutral Session View", () => {
       turns: [{ id: "turn-1", items: [{ type: "userMessage", content: [{ type: "input_text", text: "你好" }] }] }]
     }), { detail: true })).not.toThrow();
   });
+
+  test("fails closed when a detail adapter returns a different requested Session", () => {
+    const detail = providerSessionDetail("claude", {
+      sessionRef: "session-b",
+      turns: []
+    });
+    expect(() => assertProviderSessionView("claude", detail, {
+      detail: true,
+      expectedSessionRef: "session-a"
+    })).toThrow("invalid xw.provider-session.v1 view");
+  });
 });

@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
+import { piManifest } from "../providers/pi/factory.ts";
+import { providerSessionDetail } from "../providers/core/sessionView.ts";
 import type {
   ExecutorProvider,
   InterruptInput,
@@ -421,18 +423,15 @@ function insertRun(
 class PiRunDetailProvider implements ExecutorProvider {
   readonly id = "pi-coding-agent" as const;
   readonly capabilities = ["issue_execution", "sessions"] as const;
+  readonly manifest = piManifest();
 
   async run(_input: ProviderRunInput): Promise<ProviderRunResult> {
     throw new Error("not implemented");
   }
 
   async readSession(sessionId: string): Promise<Record<string, unknown>> {
-    return {
-      id: `pi-coding-agent:${sessionId}`,
-      provider: "pi-coding-agent",
-      provider_session_id: sessionId,
-      sessionId,
-      thread_id: sessionId,
+    return providerSessionDetail(this.id, {
+      sessionRef: sessionId,
       name: "Pi transcript",
       preview: "inspect run",
       cwd: "/tmp/demo",
@@ -447,7 +446,7 @@ class PiRunDetailProvider implements ExecutorProvider {
         { id: "tool", type: "custom_tool_call", name: "read", input: { path: "README.md" } },
         { id: "tool", type: "custom_tool_call_output", output: "contents", status: "completed" }
       ] }]
-    };
+    });
   }
 }
 

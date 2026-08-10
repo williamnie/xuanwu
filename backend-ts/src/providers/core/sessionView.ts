@@ -88,13 +88,15 @@ export function providerSessionDetail(
 export function assertProviderSessionView(
   provider: ExecutorProviderId,
   value: Record<string, unknown>,
-  options: { detail?: boolean } = {}
+  options: { detail?: boolean; expectedSessionRef?: string } = {}
 ): asserts value is ProviderSessionView | ProviderSessionDetailView {
   const sessionRef = stringValue(value.provider_session_id);
+  const expectedSessionRef = stringValue(options.expectedSessionRef);
   const expectedID = sessionRef ? `${provider}:${sessionRef}` : "";
   const valid = value.session_contract === PROVIDER_SESSION_VIEW_CONTRACT &&
     value.provider === provider &&
     sessionRef !== "" &&
+    (expectedSessionRef === "" || sessionRef === expectedSessionRef) &&
     value.id === expectedID &&
     value.sessionId === sessionRef &&
     value.thread_id === sessionRef &&

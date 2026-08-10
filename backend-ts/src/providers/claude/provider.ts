@@ -28,23 +28,30 @@ import {
   type ClaudeProcessFactory
 } from "./cliProvider.ts";
 import { claudeAuthenticationStatus, claudeProcessEnvironment } from "./auth.ts";
-import { claudeTranscriptContent, publicClaudeSessionDetail, publicClaudeSessionSummary } from "./sessionHistory.ts";
-import type {
-  ExecutorCapability,
-  ExecutorProvider,
-  InterruptInput,
-  ProviderEvent,
-  ProviderRecoveryInput,
-  ProviderRunInput,
-  ProviderRunResult,
-  ProviderRuntimeStatus,
-  SessionCreateInput,
-  SessionCreateResult,
-  SessionListInput,
-  SessionListResult,
-  SessionMessageInput,
-  SessionMessageResult,
-  SessionRef
+import { providerSessionStartedEvent } from "../core/sessionLifecycle.ts";
+import {
+  assertClaudeSessionHistoryIdentity,
+  claudeTranscriptContent,
+  publicClaudeSessionDetail,
+  publicClaudeSessionSummary
+} from "./sessionHistory.ts";
+import {
+  ProviderInterruptedError,
+  type ExecutorCapability,
+  type ExecutorProvider,
+  type InterruptInput,
+  type ProviderEvent,
+  type ProviderRecoveryInput,
+  type ProviderRunInput,
+  type ProviderRunResult,
+  type ProviderRuntimeStatus,
+  type SessionCreateInput,
+  type SessionCreateResult,
+  type SessionListInput,
+  type SessionListResult,
+  type SessionMessageInput,
+  type SessionMessageResult,
+  type SessionRef
 } from "../types.ts";
 
 export type { ClaudeProcess, ClaudeProcessFactory };
@@ -69,6 +76,7 @@ export type ClaudeSessionFunctions = {
 export type ClaudeSdkProviderOptions = {
   eventSink?: (event: ProviderEvent) => void;
   queryFactory?: ClaudeQueryFactory;
+  sessionIdFactory?: () => string;
   sessionFunctions?: Partial<ClaudeSessionFunctions>;
   skipReadinessCheck?: boolean;
 };
@@ -86,6 +94,7 @@ type ActiveQuery = {
 export class ClaudeSdkExecutorProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt"] as const;
   readonly id = PROVIDER;
+  readonly interruptScope = "session" as const;
   private readonly active = new Map<string, ActiveQuery>();
 
   constructor(private readonly config: ProviderRuntimeConfig, private readonly options: ClaudeSdkProviderOptions = {}) {
@@ -162,6 +171,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
       this.sessionFunctions().getSessionMessages(id, { includeSystemMessages: false })
     ]);
     if (!info && messages.length === 0) throw new Error(`Claude SDK session ${id} was not found`);
+    assertClaudeSessionHistoryIdentity(id, info, messages);
     const running = this.active.has(id);
     return publicClaudeSessionDetail(id, info, messages, running);
   }
@@ -169,10 +179,10 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
   async interrupt(input: InterruptInput): Promise<void> {
     const active = this.lookup(input.session);
     if (!active) throw new Error(`Claude SDK session ${input.session.sessionId} is not active`);
+    active.controller.abort(input.reason || "runner interrupt");
     try {
-      await active.query?.interrupt?.();
+      await boundedClaudeSdkInterrupt(active.query, 200);
     } finally {
-      active.controller.abort(input.reason || "runner interrupt");
       active.query?.close?.();
     }
   }
@@ -217,14 +227,23 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     resumeAlias = ""
   ): Promise<ProviderRunResult> {
     this.assertReady();
+    const durableSessionID = resumeAlias || clean(options.sessionId) ||
+      clean(this.options.sessionIdFactory?.()) || crypto.randomUUID();
+    if (!resumeAlias) options.sessionId = durableSessionID;
+    const state = createClaudeSdkStreamState();
+    state.sessionId = durableSessionID;
     const active: ActiveQuery = {
       aliases: new Set(),
       controller: options.abortController ?? new AbortController(),
-      state: createClaudeSdkStreamState(),
+      state,
       timedOut: false
     };
     options.abortController = active.controller;
-    if (resumeAlias) this.trackAlias(active, resumeAlias);
+    this.trackAlias(active, durableSessionID);
+    this.emit(providerSessionStartedEvent(this.id, durableSessionID, {
+      method: resumeAlias ? "claude-sdk/session_resumed" : "claude-sdk/session_started",
+      metadata: { sdk_transport: "query" }
+    }), onEvent);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const query = this.queryFactory()({ prompt, options });
@@ -238,6 +257,9 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
       }, Math.max(1, this.config.timeoutMs));
       for await (const message of query) {
         const events = projectClaudeSdkMessage(message, active.state);
+        if (active.state.sessionId && active.state.sessionId !== durableSessionID) {
+          throw new Error(`Claude session ${durableSessionID} returned mismatched runtime ${active.state.sessionId}`);
+        }
         if (active.state.sessionId) this.trackAlias(active, active.state.sessionId);
         if (active.state.turnId) this.trackAlias(active, active.state.turnId);
         for (const event of events) this.emit(event, onEvent);
@@ -245,22 +267,24 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
       if (active.controller.signal.aborted && !active.state.terminal) {
         this.emit(abortEvent(active), onEvent);
       }
+      if (active.controller.signal.aborted) {
+        if (active.timedOut) throw new Error(abortReason(active.controller));
+        throw new ProviderInterruptedError(abortReason(active.controller));
+      }
       if (active.timedOut) throw new Error(abortReason(active.controller));
       if (!active.state.terminal) throw new Error("Claude SDK query ended without a terminal result event");
       if (!active.state.completed && !active.state.interrupted) throw new Error("Claude SDK query failed");
       const session = sessionRef(active.state);
+      if (!session) throw new Error(`Claude SDK completed without durable session ${durableSessionID}`);
       return {
-        runId: `sdk:claude:${session?.sessionId || "unknown"}:${session?.turnId || "unknown"}`,
+        runId: `sdk:claude:${session.sessionId}:${session.turnId || "unknown"}`,
         session
       };
     } catch (error) {
       if (active.controller.signal.aborted) {
         if (!active.state.terminal) this.emit(abortEvent(active), onEvent);
         if (active.timedOut) throw new Error(abortReason(active.controller));
-        return {
-          runId: `sdk:claude:${active.state.sessionId || "interrupted"}:${active.state.turnId || "interrupted"}`,
-          session: sessionRef(active.state)
-        };
+        throw new ProviderInterruptedError(abortReason(active.controller));
       }
       throw new Error(redactSensitiveText(error instanceof Error ? error.message : String(error)));
     } finally {
@@ -322,12 +346,14 @@ export class ClaudeExecutorProvider implements ExecutorProvider {
       ? new ClaudeCliExecutorProvider(config, {
         authInspector: options.authInspector,
         processFactory: options.processFactory,
+        sessionIdFactory: options.sessionIdFactory,
         sessionFunctions: options.sessionFunctions
       })
       : new ClaudeSdkExecutorProvider(config, options);
   }
 
   get capabilities(): readonly ExecutorCapability[] { return this.delegate.capabilities; }
+  get interruptScope(): ExecutorProvider["interruptScope"] { return this.delegate.interruptScope; }
   run(input: ProviderRunInput) { return this.delegate.run(input); }
   createSession(input: SessionCreateInput) { return requireMethod(this.delegate.createSession, "sessions").call(this.delegate, input); }
   recover(input: ProviderRecoveryInput) { return requireMethod(this.delegate.recover, "resume_session").call(this.delegate, input); }
@@ -494,6 +520,20 @@ function abortEvent(active: ActiveQuery): ProviderEvent {
   return active.timedOut
     ? timedOutClaudeSdkEvent(active.state, reason)
     : interruptedClaudeSdkEvent(active.state, reason);
+}
+
+async function boundedClaudeSdkInterrupt(query: ClaudeQuery | undefined, timeoutMs: number): Promise<void> {
+  const interrupt = query?.interrupt;
+  if (!interrupt) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      interrupt.call(query),
+      new Promise<void>((resolve) => { timer = setTimeout(resolve, Math.max(1, timeoutMs)); })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function numericCursor(value: string | undefined): number {

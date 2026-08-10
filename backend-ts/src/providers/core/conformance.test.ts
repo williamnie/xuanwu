@@ -3,6 +3,7 @@ import { createProviderRegistry } from "./registry.ts";
 import { BUILTIN_FACTORIES } from "../testing/conformanceFactories.ts";
 import { checkManifest } from "./conformance.ts";
 import { normalizeTranscriptItem } from "./transcript.ts";
+import { assertProviderSessionView } from "./sessionView.ts";
 import { asProviderId } from "../types.ts";
 
 /**
@@ -60,6 +61,17 @@ describe("P12: conformance matrix（§20）", () => {
     expect(full.capabilities).toContain("model_list");
     expect(typeof full.interrupt).toBe("function");
     expect(typeof full.listModels).toBe("function");
+  });
+
+  test("声明 v1 Session 详情的 adapter 返回请求对应的通用视图", async () => {
+    const registry = await fixtureRegistry();
+    const full = registry.getReady(asProviderId("fake-full-session"));
+    const detail = await full.readSession!("session-contract-check");
+
+    expect(() => assertProviderSessionView(full.id, detail, {
+      detail: true,
+      expectedSessionRef: "session-contract-check"
+    })).not.toThrow();
   });
 
   test("unknown event preserve（不改变状态，kind=unknown）", () => {

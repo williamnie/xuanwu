@@ -1,6 +1,7 @@
 import { CodexAdapter } from "./adapter.ts";
 import { localImageInput, textInput } from "./threadLifecycle.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
+import { providerSessionStartedEvent } from "../core/sessionLifecycle.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import type { AppEvent } from "../../events/bus.ts";
 import type {
@@ -65,6 +66,7 @@ class CodexEventHub implements CodexEventSource {
 export class CodexExecutorProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"] as const;
   readonly id = PROVIDER_CODEX;
+  readonly interruptScope = "turn" as const;
   constructor(
     private readonly adapter: CodexIssueAdapter,
     private readonly developerInstructions = DEFAULT_DEVELOPER_INSTRUCTIONS,
@@ -88,6 +90,10 @@ export class CodexExecutorProvider implements ExecutorProvider {
         threadSource: "subagent"
       });
       lease.bind(thread.provider_session_id);
+      input.onEvent?.(providerSessionStartedEvent(this.id, thread.provider_session_id, {
+        method: "thread/started",
+        metadata: { protocol_version: initialized.protocolVersion }
+      }));
       await this.nameThread(thread.provider_session_id, input.issueId);
       stopForwarding = this.forwardRunEvents(input, thread, () => lease.release());
       const turn = await this.adapter.startTurn(thread.provider_session_id, codexUserInputs(input), {
@@ -173,6 +179,10 @@ export class CodexExecutorProvider implements ExecutorProvider {
       const session = await this.adapter.resumeThread(input.session.sessionId);
       const threadID = session.provider_session_id || input.session.sessionId;
       lease.bind(threadID);
+      input.onEvent?.(providerSessionStartedEvent(this.id, threadID, {
+        method: "thread/resumed",
+        metadata: { protocol_version: initialized.protocolVersion }
+      }));
       stopForwarding = this.forwardRunEvents(input, session, () => lease.release());
       const turn = await this.adapter.startTurn(threadID, codexUserInputs(input), {
         model: input.model,

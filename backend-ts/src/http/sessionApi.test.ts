@@ -7,6 +7,7 @@ import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSes
 import { createDefaultRouter } from "./server.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { claudeManifest } from "../providers/claude/factory.ts";
+import { providerSessionDetail } from "../providers/core/sessionView.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const EMPTY_ROLLOUT_ERROR = [
@@ -644,6 +645,25 @@ describe("Bun Sessions API compatibility", () => {
       expect(await list.json()).toMatchObject({
         provider_errors: [{ provider: "claude", error: expect.stringContaining("invalid xw.provider-session.v1 view") }]
       });
+      expect(detail.status).toBe(400);
+      expect(await detail.text()).toContain("invalid xw.provider-session.v1 view");
+    } finally {
+      database.close();
+    }
+  });
+
+  test("fails closed when a migrated adapter returns another Session detail", async () => {
+    const database = await openFixtureDatabase();
+    const claude = Object.assign(new ClaudeSessionsProvider(), {
+      manifest: claudeManifest(),
+      async readSession() {
+        return providerSessionDetail("claude", { sessionRef: "claude-other", turns: [] });
+      }
+    });
+    try {
+      const detail = await createDefaultRouter({ database, providers: { claude } })
+        .handle(new Request(`${BASE_URL}/api/sessions/claude:claude-requested`));
+
       expect(detail.status).toBe(400);
       expect(await detail.text()).toContain("invalid xw.provider-session.v1 view");
     } finally {
