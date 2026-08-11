@@ -1,3 +1,4 @@
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -5,6 +6,7 @@ import type { PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import type { CompletionCard } from "../domain/acceptance/completionCard.ts";
 import { appLanguage } from "../i18n/language.ts";
+import { redactSensitiveText } from "../util/redact.ts";
 import { piInternalReadAuthorization } from "./internalReadAuthorization.ts";
 
 export const PI_ACCEPTANCE_DECISIONS = [
@@ -69,23 +71,38 @@ export async function runPiIssueAcceptance(input: {
     heartbeatID: `pi-acceptance:${input.project.id}:${input.card.issue.id}:${input.card.fingerprint.slice(0, 12)}`,
     promptProfile: "acceptance",
     project: input.project,
-    retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0 } },
+    retry: { baseDelayMs: 1_000, enabled: true, maxRetries: 2, provider: { maxRetries: 0 } },
     source: "pi_issue_acceptance"
   });
   runtime.session.setActiveToolsByName(ACCEPTANCE_TOOL_NAMES);
   try {
     await promptWithTimeout(runtime.session, acceptancePrompt(input.card, appLanguage(input.database)));
     const raw = runtime.session.getLastAssistantText() ?? "";
-    const decision = parseAcceptanceDecision(raw);
-    if (decision) return { decision, raw_text: raw, valid: true };
-    return {
-      error: "PI acceptance returned invalid JSON or schema",
-      raw_text: raw,
-      valid: false
-    };
+    return interpretAcceptanceResponse(raw, piSessionError(runtime.session));
   } finally {
     runtime.dispose();
   }
+}
+
+export function interpretAcceptanceResponse(
+  raw: string,
+  providerError = ""
+): PiAcceptanceRuntimeResult {
+  const error = providerError.trim();
+  if (error) {
+    return {
+      error: `PI acceptance provider failed: ${redactSensitiveText(error)}`,
+      raw_text: raw,
+      valid: false
+    };
+  }
+  const decision = parseAcceptanceDecision(raw);
+  if (decision) return { decision, raw_text: raw, valid: true };
+  return {
+    error: "PI acceptance returned invalid JSON or schema",
+    raw_text: raw,
+    valid: false
+  };
 }
 
 export function parseAcceptanceDecision(raw: string): PiAcceptanceDecision | null {
@@ -162,4 +179,15 @@ function extractJson(raw: string): string {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   return start >= 0 && end > start ? text.slice(start, end + 1) : text;
+}
+
+function piSessionError(session: AgentSession): string {
+  const stateError = session.state.errorMessage?.trim();
+  if (stateError) return stateError;
+  for (const message of session.state.messages.slice().reverse()) {
+    if (message.role !== "assistant") continue;
+    const error = message.errorMessage?.trim();
+    if (error) return error;
+  }
+  return "";
 }

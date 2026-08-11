@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseAcceptanceDecision } from "./issueAcceptance.ts";
+import { interpretAcceptanceResponse, parseAcceptanceDecision } from "./issueAcceptance.ts";
 
 describe("PI issue acceptance decision", () => {
   test("accepts only the explicit five-way JSON schema", () => {
@@ -23,5 +23,18 @@ describe("PI issue acceptance decision", () => {
 
   test("does not regex-normalize prose into a decision", () => {
     expect(parseAcceptanceDecision("看起来应该继续重试一下")).toBeNull();
+  });
+
+  test("reports Provider failures instead of misclassifying an empty response as invalid JSON", () => {
+    expect(interpretAcceptanceResponse("", "Codex error: server_is_overloaded")).toEqual({
+      error: "PI acceptance provider failed: Codex error: server_is_overloaded",
+      raw_text: "",
+      valid: false
+    });
+    expect(interpretAcceptanceResponse("not json")).toEqual({
+      error: "PI acceptance returned invalid JSON or schema",
+      raw_text: "not json",
+      valid: false
+    });
   });
 });
