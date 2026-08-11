@@ -6,6 +6,7 @@ import { editorDraft, effectiveProfilePreview, workProfileSummary } from './work
 const profiles = [
   { id: 'codex-default', name: 'Codex Default', provider: 'codex', model: 'gpt-5.6' },
   { id: 'claude-work', name: 'Claude Work', provider: 'claude', model: 'claude-sonnet' },
+  { id: 'pi-local', name: 'Pi Local', provider: 'pi-coding-agent', model: '' },
 ];
 const project = { id: 'demo', provider: 'codex', model: 'codex-default', default_agent_profile_id: 'codex-default' };
 
@@ -32,4 +33,12 @@ test('Work detail distinguishes effective selection from latest Run actual provi
     source: 'work',
     runProvider: 'codex',
   });
+});
+
+test('Work detail renders an empty provider-scoped model as provider default', () => {
+  assert.equal(workProfileSummary({
+    agent_profile_id: 'pi-local',
+    effective_provider: 'pi-coding-agent',
+    effective_agent_profile: { id: 'pi-local', name: 'Pi Local', model: '', source: 'work' },
+  }, { provider: 'pi-coding-agent' }).effectiveModel, 'provider default');
 });

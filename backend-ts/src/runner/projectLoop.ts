@@ -116,7 +116,7 @@ async function runClaimedIssue(
       cwd: project.cwd,
       images: issuePromptImages(input.database, prompt),
       prompt,
-      model: selection.model || project.model,
+      model: selection.model,
       onProjectSlotReleased: input.onProjectSlotReleased,
       reasoningEffort: selection.reasoning_effort,
       approvalPolicy: selection.approval_policy || project.approval_policy,

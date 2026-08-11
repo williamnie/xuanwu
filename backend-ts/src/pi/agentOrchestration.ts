@@ -170,7 +170,7 @@ function recommendationFor(
     agent_role: role,
     approval_policy: profile?.approval_policy || project.approval_policy,
     issue_id: issue?.id ?? 0,
-    model: profile?.model || project.model,
+    model: profile ? profile.model : project.model,
     profile_id: profile?.id ?? "",
     profile_name: profile?.name ?? "",
     project_id: project.id,

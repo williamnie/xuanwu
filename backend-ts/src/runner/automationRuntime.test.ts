@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { createAgentProfile } from "../db/repositories/agentProfiles.ts";
 import { getAutomationExecutionLink } from "../db/repositories/automationExecutionLinks.ts";
 import { createAutomation, listAutomationRuns } from "../db/repositories/automations.ts";
 import { listStoredEvidence } from "../db/repositories/evidence.ts";
@@ -98,6 +99,15 @@ describe("native Automation scheduler composition", () => {
     const db = await fixture();
     const provider = new FixtureProvider();
     try {
+      createAgentProfile(db, {
+        id: "provider-default",
+        model: "",
+        name: "Provider Default",
+        provider: provider.id
+      });
+      db.sqlite.run(
+        "update projects set model='codex-default', default_agent_profile_id='provider-default' where id='demo'"
+      );
       const automation = createFixture(db, "success", "execute_allowed");
       const first = await cycle(db, provider, NOW);
       const duplicate = await cycle(db, provider, NOW);
@@ -106,6 +116,7 @@ describe("native Automation scheduler composition", () => {
       expect(duplicate.automationCore).toMatchObject({ executed: 0, scanned: 0 });
       expect(provider.inputs).toHaveLength(1);
       expect(provider.inputs[0]?.prompt).toContain(`Workflow ${INVESTIGATE_WORKFLOW_REF}`);
+      expect(provider.inputs[0]?.model).toBe("");
 
       const automationRun = listAutomationRuns(db, automation.id)[0]!;
       const link = getAutomationExecutionLink(db, automationRun.run_id)!;

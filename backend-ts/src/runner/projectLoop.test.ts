@@ -727,6 +727,26 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
+  test("passes an assigned provider profile's empty model through to execution", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", model: "codex-default", provider: provider.id });
+      insertAgentProfile(db, { id: "provider-default", model: "", provider: provider.id });
+      const issueId = insertIssue(db, {
+        agentProfileId: "provider-default",
+        projectId: "demo",
+        title: "use provider default model"
+      });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      expect(provider.inputs[0]).toMatchObject({ issueId, model: "" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("freezes different Codex and Claude Work providers into Run and Attempt history", async () => {
     const db = await openFixtureDatabase();
     const codex = new NamedExecutionProvider("codex");
@@ -922,7 +942,7 @@ describe("Bun project loop claim execution", () => {
   });
 });
 
-type ProjectFixture = { autoRun?: number; cwd?: string; id: string; provider: string; serviceTier?: string };
+type ProjectFixture = { autoRun?: number; cwd?: string; id: string; model?: string; provider: string; serviceTier?: string };
 
 type IssueFixture = {
   agentProfileId?: string;
@@ -939,10 +959,10 @@ type IssueFixture = {
 
 function insertProject(db: RunnerDatabase, project: ProjectFixture): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, provider, auto_run, default_service_tier, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [project.id, project.id, project.cwd ?? `/tmp/${project.id}`, project.provider, project.autoRun ?? 0,
-      project.serviceTier ?? "",
+    `insert into projects (id, name, cwd, provider, model, auto_run, default_service_tier, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [project.id, project.id, project.cwd ?? `/tmp/${project.id}`, project.provider, project.model ?? "codex-default",
+      project.autoRun ?? 0, project.serviceTier ?? "",
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }

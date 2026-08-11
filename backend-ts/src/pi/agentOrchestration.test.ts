@@ -3,7 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { recommendExecutorProfile } from "./agentOrchestration.ts";
+import { getIssue } from "../db/repositories/issues.ts";
+import { getProject } from "../db/repositories/projects.ts";
+import { recommendExecutorProfile, resolveExecutorSelection } from "./agentOrchestration.ts";
 
 const tempRoots: string[] = [];
 
@@ -41,6 +43,35 @@ describe("PI agent orchestration profile selection", () => {
       db.close();
     }
   });
+
+  test("preserves an assigned provider profile's empty model instead of leaking the project model", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, {
+        defaultSkillPolicy: {},
+        id: "demo",
+        model: "codex-default",
+        provider: "codex"
+      });
+      insertAgentProfile(db, "pi-local", "[]", { model: "", provider: "pi-coding-agent" });
+      const piIssueID = insertIssue(db, "demo", "Use Pi provider default", "pi-local");
+      const projectIssueID = insertIssue(db, "demo", "Use project default");
+      const project = getProject(db, "demo")!;
+
+      expect(resolveExecutorSelection(db, project, getIssue(db, piIssueID)!)).toMatchObject({
+        model: "",
+        profile_id: "pi-local",
+        provider: "pi-coding-agent"
+      });
+      expect(resolveExecutorSelection(db, project, getIssue(db, projectIssueID)!)).toMatchObject({
+        model: "codex-default",
+        profile_id: "",
+        provider: "codex"
+      });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
@@ -49,27 +80,33 @@ async function openFixtureDatabase(): Promise<RunnerDatabase> {
   return openDatabase({ stateDir: join(root, "state") });
 }
 
-function insertProject(db: RunnerDatabase, input: { defaultSkillPolicy: unknown; id: string; provider: string }): void {
+function insertProject(db: RunnerDatabase, input: { defaultSkillPolicy: unknown; id: string; model?: string; provider: string }): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, provider, default_skill_policy_json, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?)`,
-    [input.id, input.id, `/tmp/${input.id}`, input.provider, JSON.stringify(input.defaultSkillPolicy),
+    `insert into projects (id, name, cwd, provider, model, default_skill_policy_json, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [input.id, input.id, `/tmp/${input.id}`, input.provider, input.model ?? "codex-default", JSON.stringify(input.defaultSkillPolicy),
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 
-function insertAgentProfile(db: RunnerDatabase, id: string, skillIntents: string): void {
+function insertAgentProfile(
+  db: RunnerDatabase,
+  id: string,
+  skillIntents: string,
+  input: { model?: string; provider?: string } = {}
+): void {
   db.sqlite.run(
     `insert into agent_profiles (id, name, provider, model, skill_intents_json, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?)`,
-    [id, id, "codex", "gpt-test", skillIntents, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    [id, id, input.provider ?? "codex", input.model ?? "gpt-test", skillIntents,
+      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 
-function insertIssue(db: RunnerDatabase, projectID: string, title: string): number {
+function insertIssue(db: RunnerDatabase, projectID: string, title: string, agentProfileID = ""): number {
   db.sqlite.run(
-    `insert into issues (project_id, title, status, created_at, updated_at) values (?, ?, ?, ?, ?)`,
-    [projectID, title, "todo", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into issues (project_id, title, status, agent_profile_id, created_at, updated_at) values (?, ?, ?, ?, ?, ?)`,
+    [projectID, title, "todo", agentProfileID, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing issue id");

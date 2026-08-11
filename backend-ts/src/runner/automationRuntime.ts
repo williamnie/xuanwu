@@ -93,7 +93,7 @@ export function createNativeWorkflowDispatcher(
       cwd: project.cwd,
       database: options.database,
       issueId: issueID,
-      model: selection.model || project.model,
+      model: selection.model,
       projectId: project.id,
       prompt: workflowPrompt(automation, automation_run_id, workflow, context),
       reasoningEffort: selection.reasoning_effort,

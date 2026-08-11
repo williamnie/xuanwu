@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { createAgentProfile } from "../db/repositories/agentProfiles.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
@@ -87,17 +88,19 @@ describe("PI acceptance decision application", () => {
 
   test("PI retry creates a fresh Provider Session and a new canonical Run", async () => {
     const db = await fixture();
-    const provider = new FreshSessionProvider();
+    const provider = new FreshSessionProvider("claude");
     try {
-      const issue = completedIssue(db, "Retry delivery", "session-broken", "turn-broken");
+      const issue = completedIssue(db, "Retry delivery", "session-broken", "turn-broken", "claude");
+      selectProviderDefaultProfile(db, issue.id, "claude");
       const card = await buildIssueCompletionCard(db, issue.id);
       const updated = await applyPiAcceptanceDecision(
-        { database: db, providers: { codex: provider } },
+        { database: db, providers: { claude: provider } },
         card,
         decision("retry", "原 Session 已损坏，读取工作区后从剩余步骤继续。")
       );
 
       expect(provider.inputs).toHaveLength(1);
+      expect(provider.inputs[0]?.model).toBe("");
       expect(provider.inputs[0]?.prompt).toContain("原 Session 已损坏");
       expect(provider.inputs[0]?.prompt).toContain("新 Session");
       expect(updated.status).toBe("in_progress");
@@ -217,20 +220,22 @@ describe("PI acceptance decision application", () => {
 
   test("continues in the same Provider Session and creates a new canonical Run", async () => {
     const db = await fixture();
-    const provider = new ContinuingProvider();
+    const provider = new ContinuingProvider("claude");
     try {
-      const issue = completedIssue(db, "Continue delivery", "session-original", "turn-original");
+      const issue = completedIssue(db, "Continue delivery", "session-original", "turn-original", "claude");
+      selectProviderDefaultProfile(db, issue.id, "claude");
       const card = await buildIssueCompletionCard(db, issue.id);
       const updated = await applyPiAcceptanceDecision(
-        { database: db, providers: { codex: provider } },
+        { database: db, providers: { claude: provider } },
         card,
         decision("continue_same_session", "补充 Node 22 下的完整回归并报告退出码。")
       );
 
       expect(provider.inputs).toHaveLength(1);
+      expect(provider.inputs[0]?.model).toBe("");
       expect(provider.inputs[0]).toMatchObject({
         issueId: issue.id,
-        session: { provider: "codex", sessionId: "session-original", turnId: "turn-original" }
+        session: { provider: "claude", sessionId: "session-original", turnId: "turn-original" }
       });
       expect(provider.inputs[0]?.prompt).toContain("补充 Node 22 下的完整回归并报告退出码");
       expect(updated.status).toBe("in_progress");
@@ -303,8 +308,9 @@ describe("PI acceptance decision application", () => {
 
 class ContinuingProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution", "resume_session"] as const;
-  readonly id = "codex" as const;
   readonly inputs: ProviderRecoveryInput[] = [];
+
+  constructor(readonly id: "codex" | "claude" = "codex") {}
 
   async run(_input: ProviderRunInput): Promise<ProviderRunResult> {
     throw new Error("run must not be used for PI continuation");
@@ -332,8 +338,9 @@ class ContinuingProvider implements ExecutorProvider {
 
 class FreshSessionProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution", "resume_session"] as const;
-  readonly id = "codex" as const;
   readonly inputs: ProviderRunInput[] = [];
+
+  constructor(readonly id: "codex" | "claude" = "codex") {}
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     this.inputs.push(input);
@@ -366,13 +373,14 @@ function completedIssue(
   db: RunnerDatabase,
   title: string,
   sessionID = "session-fixture",
-  turnID = "turn-fixture"
+  turnID = "turn-fixture",
+  provider: "codex" | "claude" = "codex"
 ) {
   const issue = createIssue(db, { project_id: "demo", status: "in_progress", title });
   const run = createIssueRun(db, issue.id);
   updateIssueRuntime(db, issue.id, {
     issue_run_id: run.id,
-    provider: "codex",
+    provider,
     provider_session_id: sessionID,
     provider_turn_id: turnID
   });
@@ -382,6 +390,17 @@ function completedIssue(
   );
   recordIssueEvent(db, issue.id, "issue.pi_acceptance_requested.v1", { issue_run_id: run.id });
   return getIssue(db, issue.id)!;
+}
+
+function selectProviderDefaultProfile(db: RunnerDatabase, issueID: number, provider: "claude"): void {
+  createAgentProfile(db, {
+    id: `provider-default-${issueID}`,
+    model: "",
+    name: "Provider Default",
+    provider
+  });
+  db.sqlite.run("update projects set model='codex-default' where id='demo'");
+  db.sqlite.run("update issues set agent_profile_id=? where id=?", [`provider-default-${issueID}`, issueID]);
 }
 
 function decision(

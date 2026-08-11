@@ -371,10 +371,15 @@ describe("Work HTTP API", () => {
       insertProject(db, "demo");
       createAgentProfile(db, { id: "codex-work", name: "Codex Work", provider: "codex", model: "gpt-5.6" });
       createAgentProfile(db, { id: "claude-work", name: "Claude Work", provider: "claude", model: "claude-sonnet" });
+      createAgentProfile(db, { id: "pi-work", name: "Pi Work", provider: "pi-coding-agent", model: "" });
       db.sqlite.run("update projects set default_agent_profile_id='codex-work' where id='demo'");
       const router = createDefaultRouter({
         database: db,
-        providers: { codex: readyProvider("codex"), claude: readyProvider("claude") }
+        providers: {
+          codex: readyProvider("codex"),
+          claude: readyProvider("claude"),
+          "pi-coding-agent": readyProvider("pi-coding-agent")
+        }
       });
 
       const inherited = await router.handle(jsonRequest("/api/works", "POST", {
@@ -395,8 +400,18 @@ describe("Work HTTP API", () => {
         title: "Claude Work",
         type: "engineering_task"
       }));
+      const piCreated = await router.handle(jsonRequest("/api/works", "POST", {
+        audit: audit("work-pi", "user"),
+        agent_profile_id: "pi-work",
+        goal: "use Pi provider default",
+        project_id: "demo",
+        status: "triage",
+        title: "Pi Work",
+        type: "engineering_task"
+      }));
       const inheritedWork = (await body(inherited)).work as Record<string, any>;
       const claudeWork = (await body(claudeCreated)).work as Record<string, any>;
+      const piWork = (await body(piCreated)).work as Record<string, any>;
 
       expect(inheritedWork).toMatchObject({
         agent_profile_id: "",
@@ -407,6 +422,11 @@ describe("Work HTTP API", () => {
         agent_profile_id: "claude-work",
         effective_provider: "claude",
         effective_agent_profile: { id: "claude-work", model: "claude-sonnet", source: "work" }
+      });
+      expect(piWork).toMatchObject({
+        agent_profile_id: "pi-work",
+        effective_provider: "pi-coding-agent",
+        effective_agent_profile: { id: "pi-work", model: "", source: "work" }
       });
 
       const patched = await router.handle(jsonRequest(
@@ -463,7 +483,7 @@ describe("Work HTTP API", () => {
   });
 });
 
-function readyProvider(id: "codex" | "claude"): ExecutorProvider {
+function readyProvider(id: "codex" | "claude" | "pi-coding-agent"): ExecutorProvider {
   return {
     id: id as ExecutorProviderId,
     capabilities: ["issue_execution"],
@@ -471,7 +491,7 @@ function readyProvider(id: "codex" | "claude"): ExecutorProvider {
     runtimeStatus: () => ({
       active_sessions: 0,
       api_key_configured: id === "claude",
-      mode: id === "claude" ? "sdk" : "app-server",
+      mode: id === "claude" ? "sdk" : id === "pi-coding-agent" ? "local" : "app-server",
       ready: true,
       version: "fixture"
     })
@@ -487,8 +507,8 @@ async function openFixtureDatabase(): Promise<RunnerDatabase> {
 function insertProject(db: RunnerDatabase, id: string): void {
   const timestamp = "2026-07-16T00:00:00Z";
   db.sqlite.run(`insert into projects
-    (id, name, cwd, provider, auto_run, created_at, updated_at)
-    values (?, ?, ?, 'codex', 0, ?, ?)`, [id, id, `/tmp/${id}`, timestamp, timestamp]);
+    (id, name, cwd, provider, model, auto_run, created_at, updated_at)
+    values (?, ?, ?, 'codex', 'codex-default', 0, ?, ?)`, [id, id, `/tmp/${id}`, timestamp, timestamp]);
 }
 
 function audit(eventID: string, kind: "supervisor" | "user") {
