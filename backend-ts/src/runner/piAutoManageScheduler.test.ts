@@ -238,6 +238,31 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
+  test("supports a one-time initial offset before returning to the normal interval", async () => {
+    const db = await openFixtureDatabase();
+    const clock = new FakeClock();
+    const runner = new FakePiCycleRunner();
+    try {
+      const scheduler = createPiAgenticScheduler({
+        clock,
+        database: db,
+        initialDelayMs: 15_000,
+        intervalMs: 30_000,
+        runProjectCycle: runner.run.bind(runner),
+        runSupervisor: false
+      });
+
+      scheduler.start();
+      expect(clock.timers.map((timer) => timer.delayMs)).toEqual([15_000]);
+      await clock.runNext();
+      await waitUntil(() => clock.timers.length === 1);
+      expect(clock.timers.map((timer) => timer.delayMs)).toEqual([30_000]);
+      scheduler.stop();
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps Guardian ticking while an independent agentic cycle is awaiting the model", async () => {
     const db = await openFixtureDatabase();
     const wrapped = new SlowSupervisorDatabase(db);

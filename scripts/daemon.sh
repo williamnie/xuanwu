@@ -54,20 +54,20 @@ audit() {
 
 start_macos() {
   if [ -f "$WEB_PLIST" ] && [ -f "$CORE_PLIST" ] && [ -f "$AGENTIC_PLIST" ]; then
-    launchctl bootstrap "$DOMAIN" "$CORE_PLIST" >/dev/null 2>&1 || true
-    launchctl bootstrap "$DOMAIN" "$AGENTIC_PLIST" >/dev/null 2>&1 || true
-    launchctl bootstrap "$DOMAIN" "$WEB_PLIST" >/dev/null 2>&1 || true
     launchctl enable "$DOMAIN/$CORE_LABEL"
     launchctl enable "$DOMAIN/$AGENTIC_LABEL"
     launchctl enable "$DOMAIN/$WEB_LABEL"
+    launchctl bootstrap "$DOMAIN" "$CORE_PLIST" >/dev/null 2>&1 || true
+    launchctl bootstrap "$DOMAIN" "$AGENTIC_PLIST" >/dev/null 2>&1 || true
+    launchctl bootstrap "$DOMAIN" "$WEB_PLIST" >/dev/null 2>&1 || true
     launchctl kickstart -k "$DOMAIN/$CORE_LABEL"
     launchctl kickstart -k "$DOMAIN/$AGENTIC_LABEL"
     launchctl kickstart -k "$DOMAIN/$WEB_LABEL"
     return
   fi
   [ -f "$PLIST" ] || { echo "[daemon] missing launchd split plists: $WEB_PLIST $CORE_PLIST $AGENTIC_PLIST" >&2; return 1; }
-  launchctl bootstrap "$DOMAIN" "$PLIST" >/dev/null 2>&1 || true
   launchctl enable "$DOMAIN/$LABEL"
+  launchctl bootstrap "$DOMAIN" "$PLIST" >/dev/null 2>&1 || true
   launchctl kickstart -k "$DOMAIN/$LABEL"
 }
 

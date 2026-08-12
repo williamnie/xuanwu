@@ -30,6 +30,8 @@ export type DatabaseSpaceStats = {
 type EventRow = Omit<MaintenanceEventRow, "raw_method"> & { raw_method: unknown };
 type NumericRow = Record<string, number | bigint | null>;
 
+// Provider events are flushed asynchronously after a run ends. Keep the
+// association bounded so an old run cannot absorb unrelated later events.
 export function listMaintenanceEvents(
   sqlite: SQLiteDatabase,
   input: { afterID: number; before?: string; limit: number }
@@ -46,8 +48,10 @@ export function listMaintenanceEvents(
     join issues i on i.id=e.issue_id
     left join issue_runs r on r.id=(
       select candidate.id from issue_runs candidate
-      where candidate.issue_id=e.issue_id and candidate.started_at<=e.created_at
-        and (candidate.ended_at='' or candidate.ended_at>=e.created_at)
+      where candidate.issue_id=e.issue_id
+        and julianday(candidate.started_at)<=julianday(e.created_at)
+        and (candidate.ended_at='' or
+          julianday(candidate.ended_at)>=julianday(e.created_at, '-15 minutes'))
       order by candidate.started_at desc, candidate.attempt desc limit 1
     )
     where e.id>? ${beforeClause}
@@ -95,8 +99,10 @@ export function currentIssueEventRows(sqlite: SQLiteDatabase, ids: number[]): Ma
     join issues i on i.id=e.issue_id
     left join issue_runs r on r.id=(
       select candidate.id from issue_runs candidate
-      where candidate.issue_id=e.issue_id and candidate.started_at<=e.created_at
-        and (candidate.ended_at='' or candidate.ended_at>=e.created_at)
+      where candidate.issue_id=e.issue_id
+        and julianday(candidate.started_at)<=julianday(e.created_at)
+        and (candidate.ended_at='' or
+          julianday(candidate.ended_at)>=julianday(e.created_at, '-15 minutes'))
       order by candidate.started_at desc, candidate.attempt desc limit 1
     )
     where e.id in (${placeholders}) order by e.id asc

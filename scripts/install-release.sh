@@ -558,18 +558,18 @@ install_macos_launchd() {
   launchctl bootout "$domain/$WEB_LABEL" >/dev/null 2>&1 || true
   launchctl bootout "$domain/$CORE_LABEL" >/dev/null 2>&1 || true
   launchctl bootout "$domain/$AGENTIC_LABEL" >/dev/null 2>&1 || true
-  launchctl bootstrap "$domain" "$core_plist"
   launchctl enable "$domain/$CORE_LABEL" >/dev/null 2>&1 || true
+  launchctl bootstrap "$domain" "$core_plist"
   launchctl kickstart -k "$domain/$CORE_LABEL"
   core_url="$(service_url "$CORE_ADDR")"
   wait_until_ready "$core_url" || fail "Core did not become ready at $core_url"
-  launchctl bootstrap "$domain" "$agentic_plist"
   launchctl enable "$domain/$AGENTIC_LABEL" >/dev/null 2>&1 || true
+  launchctl bootstrap "$domain" "$agentic_plist"
   launchctl kickstart -k "$domain/$AGENTIC_LABEL"
   agentic_url="$(service_url "$AGENTIC_ADDR")"
   wait_until_ready "$agentic_url" || fail "Agentic Worker did not become ready at $agentic_url"
-  launchctl bootstrap "$domain" "$web_plist"
   launchctl enable "$domain/$WEB_LABEL" >/dev/null 2>&1 || true
+  launchctl bootstrap "$domain" "$web_plist"
   launchctl kickstart -k "$domain/$WEB_LABEL"
   web_url="$(service_url "$ADDR")"
   wait_until_ready "$web_url" || fail "Web did not become ready at $web_url"

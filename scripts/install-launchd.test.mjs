@@ -128,6 +128,11 @@ test('launchd deployment waits for old split services before bounded bootstrap r
       source.indexOf('bootstrap_service "$CORE_LABEL" "$CORE_PLIST"'),
     'Core bootstrap must happen only after the previous Core PID exits'
   );
+  assert.ok(
+    source.indexOf('launchctl enable "$DOMAIN/$CORE_LABEL"') <
+      source.indexOf('bootstrap_service "$CORE_LABEL" "$CORE_PLIST"'),
+    'Core label must be enabled before bootstrap after a maintenance stop'
+  );
 });
 
 test('redeploy snapshots and quick-checks the live DB before replacing runtime', () => {

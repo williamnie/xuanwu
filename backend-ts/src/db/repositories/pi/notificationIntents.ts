@@ -28,6 +28,7 @@ export type PiNotificationIntentInput = PatchInput<PiNotificationIntent>;
 export type PiNotificationIntentFilter = {
   issueId?: number; kind?: string; projectId?: string; runGroupId?: string; state?: string;
 };
+export type PiNotificationIntentState = Pick<PiNotificationIntent, "source_event_id" | "state">;
 
 type SQLValue = string | number;
 const TABLE = "pi_notification_intents";
@@ -86,6 +87,21 @@ export function listPiNotificationIntents(
     ["kind=?", filter.kind],
     ["state=?", filter.state]
   ], "created_at asc, flush_sequence asc, id asc"));
+}
+
+export function listPiNotificationIntentStatesByKind(
+  db: RunnerDatabase,
+  kind: string
+): PiNotificationIntentState[] {
+  const value = cleanString(kind);
+  if (value === "") return [];
+  return db.sqlite.query<Record<string, unknown>, [string]>(`
+    select source_event_id, state from ${TABLE} indexed by idx_pi_notification_intents_kind_source
+    where kind=? order by source_event_id asc, created_at asc, id asc
+  `).all(value).map((row) => ({
+    source_event_id: optionalString(row.source_event_id),
+    state: requiredString(row.state, `${TABLE}.state`)
+  }));
 }
 
 export function updatePiNotificationIntent(

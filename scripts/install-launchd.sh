@@ -536,16 +536,16 @@ wait_for_process_exit "$old_legacy_pid" "$LABEL"
 wait_for_process_exit "$old_web_pid" "$WEB_LABEL"
 wait_for_process_exit "$old_core_pid" "$CORE_LABEL"
 wait_for_process_exit "$old_agentic_pid" "$AGENTIC_LABEL"
-bootstrap_service "$CORE_LABEL" "$CORE_PLIST"
 launchctl enable "$DOMAIN/$CORE_LABEL" >/dev/null 2>&1 || true
+bootstrap_service "$CORE_LABEL" "$CORE_PLIST"
 launchctl kickstart -k "$DOMAIN/$CORE_LABEL"
 wait_for_health "$(service_url "$CORE_ADDR")"
-bootstrap_service "$AGENTIC_LABEL" "$AGENTIC_PLIST"
 launchctl enable "$DOMAIN/$AGENTIC_LABEL" >/dev/null 2>&1 || true
+bootstrap_service "$AGENTIC_LABEL" "$AGENTIC_PLIST"
 launchctl kickstart -k "$DOMAIN/$AGENTIC_LABEL"
 wait_for_health "$(service_url "$AGENTIC_ADDR")"
-bootstrap_service "$WEB_LABEL" "$WEB_PLIST"
 launchctl enable "$DOMAIN/$WEB_LABEL" >/dev/null 2>&1 || true
+bootstrap_service "$WEB_LABEL" "$WEB_PLIST"
 launchctl kickstart -k "$DOMAIN/$WEB_LABEL"
 wait_for_health "$(service_url "$ADDR")"
 

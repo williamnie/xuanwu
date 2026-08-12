@@ -36,6 +36,9 @@ export type PiActionEvent = {
 
 export type PiActionInput = PatchInput<PiAction>;
 export type PiActionEventInput = PatchInput<PiActionEvent>;
+export type PendingPiActionNotification = Pick<PiAction,
+  "action_type" | "conversation_id" | "created_at" | "id" | "issue_id" |
+  "payload_json" | "project_id" | "status">;
 export type PiActionFilter = { conversationId?: string; issueId?: number; projectId?: string; status?: string };
 export type PiActionEventFilter = {
   actionId?: string;
@@ -96,6 +99,30 @@ export function listPiActions(db: RunnerDatabase, filter: PiActionFilter = {}): 
     ["issue_id=?", filter.issueId],
     ["status=?", filter.status]
   ], "created_at asc, id asc"));
+}
+
+export function listPendingPiActionNotifications(
+  db: RunnerDatabase,
+  createdAfter: string
+): PendingPiActionNotification[] {
+  return db.sqlite.query<Record<string, unknown>, [string]>(`
+    select id, project_id, issue_id, conversation_id, action_type, status,
+      payload_json, created_at
+    from ${TABLE} indexed by idx_pi_actions_pending_notification
+    where status='pending'
+      and action_type in ('assistant.tool.call', 'mcp.tool.call')
+      and created_at>=?
+    order by created_at asc, id asc
+  `).all(createdAfter).map((row) => ({
+    action_type: requiredString(row.action_type, `${TABLE}.action_type`),
+    conversation_id: optionalString(row.conversation_id),
+    created_at: requiredString(row.created_at, `${TABLE}.created_at`),
+    id: requiredString(row.id, `${TABLE}.id`),
+    issue_id: integerValue(row.issue_id, `${TABLE}.issue_id`),
+    payload_json: jsonText(row.payload_json, "{}"),
+    project_id: optionalString(row.project_id),
+    status: requiredString(row.status, `${TABLE}.status`)
+  }));
 }
 
 /**

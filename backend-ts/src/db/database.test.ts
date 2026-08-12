@@ -305,12 +305,20 @@ describe("Bun SQLite database connection", () => {
         { id: "075_issue_event_query_indexes" },
         { id: "076_run_revision_issue_scope_invariant" },
         { id: "077_pi_action_event_connector_test_index" },
-        { id: "078_builtin_qoder_executor_profile" }
+        { id: "078_builtin_qoder_executor_profile" },
+        { id: "079_scheduler_performance_indexes" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_type_id");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_run_event_v1_id_desc");
+      expect(indexNames(connection, "pi_actions")).toEqual(expect.arrayContaining([
+        "idx_pi_actions_pending_notification",
+        "idx_pi_actions_pending_mcp_expiry"
+      ]));
+      expect(indexNames(connection, "pi_notification_intents"))
+        .toContain("idx_pi_notification_intents_kind_source");
+      expect(indexNames(connection, "agent_sessions")).toContain("idx_agent_sessions_issue_updated");
       expect(columnNames(connection, "issues")).toContain("issue_log_mode");
       expect(columnNames(connection, "issues")).not.toContain("template_id");
       expect(columnNames(connection, "issues")).not.toContain("prompt_template");
@@ -942,7 +950,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 79 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 80 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
@@ -966,7 +974,7 @@ describe("Bun SQLite database connection", () => {
 
     const upgraded = await openDatabase({ stateDir });
     try {
-      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 79 });
+      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 80 });
       expect(tableNames(upgraded)).toEqual(expect.arrayContaining([
         "im_conversation_state",
         "im_interaction_bindings",
