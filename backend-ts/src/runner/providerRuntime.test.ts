@@ -13,6 +13,11 @@ import { runIssueWithProvider } from "./providerRuntime.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
 import { normalizeCodexEvent } from "../providers/codex/events.ts";
 import type { ExecutorProvider, ProviderEvent, ProviderRunInput } from "../providers/types.ts";
+import type { SDKResultMessage, SDKSystemInitMessage } from "@qoder-ai/qoder-agent-sdk";
+import { buildConfig } from "../config/env.ts";
+import { QoderExecutorProvider } from "../providers/qoder/provider.ts";
+import { createFakeQoderSdkFacade } from "../providers/qoder/sdkFacade.ts";
+import type { QoderRuntimeProbe } from "../providers/qoder/runtime.ts";
 
 const tempRoots: string[] = [];
 
@@ -388,6 +393,85 @@ describe("executor provider runtime seam", () => {
     }
   });
 
+  test("Qoder init persists a recoverable Session before an SDK failure", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const sessionId = "qoder-early-session";
+      const { facade } = createFakeQoderSdkFacade([qoderInit(sessionId), "throw"]);
+      const provider = new QoderExecutorProvider(buildConfig().providers.qoder!, {
+        facade,
+        invocationIdFactory: () => "qoder-inv-early",
+        readiness: qoderReadyProbe(),
+        sessionIdFactory: () => sessionId
+      });
+
+      await expect(runIssueWithProvider(provider, {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd: "/tmp/project",
+        prompt: "issue prompt"
+      })).rejects.toThrow("sdk failure");
+
+      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
+        provider: "qoder",
+        provider_session_id: sessionId,
+        provider_turn_id: ""
+      });
+      expect(getAgentSession(db, `qoder:${sessionId}`)).toMatchObject({
+        issue_id: issueId,
+        provider: "qoder",
+        provider_session_id: sessionId,
+        status: "failed"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("Qoder main result persists invocation, Session and message refs through the existing runtime", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const sessionId = "qoder-terminal-session";
+      const { facade } = createFakeQoderSdkFacade([qoderInit(sessionId), qoderResult(sessionId)]);
+      const provider = new QoderExecutorProvider(buildConfig().providers.qoder!, {
+        facade,
+        invocationIdFactory: () => "qoder-inv-terminal",
+        readiness: qoderReadyProbe(),
+        sessionIdFactory: () => sessionId
+      });
+
+      const result = await runIssueWithProvider(provider, {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd: "/tmp/project",
+        prompt: "issue prompt"
+      });
+
+      expect(result).toEqual({
+        runId: "qoder-inv-terminal",
+        session: { provider: "qoder", sessionId, turnId: "qoder-result-1" }
+      });
+      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
+        provider: "qoder",
+        provider_session_id: sessionId,
+        provider_turn_id: "qoder-result-1",
+        runtime_metadata_json: "{\"run_id\":\"qoder-inv-terminal\"}"
+      });
+      expect(JSON.parse(getAgentSession(db, `qoder:${sessionId}`)?.raw_ref ?? "{}")).toEqual({
+        provider_turn_id: "qoder-result-1",
+        run_id: "qoder-inv-terminal"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps completed PTY output as an artifact without synthesizing verification Evidence", async () => {
     const db = await openFixtureDatabase();
     try {
@@ -711,4 +795,69 @@ class ExecutionOnlyRuntimeProvider implements ExecutorProvider {
     });
     return { runId: `p1-execution-${input.issueId}` };
   }
+}
+
+function qoderInit(sessionId: string): SDKSystemInitMessage {
+  return {
+    type: "system",
+    subtype: "init",
+    apiKeySource: "none",
+    qodercli_version: "1.1.18",
+    protocol_version: "1.2.0",
+    cwd: "/tmp/project",
+    tools: [],
+    mcp_servers: [],
+    model: "performance",
+    permissionMode: "dontAsk",
+    slash_commands: [],
+    output_style: "default",
+    skills: [],
+    plugins: [],
+    uuid: "qoder-init-1",
+    session_id: sessionId
+  };
+}
+
+function qoderResult(sessionId: string): SDKResultMessage {
+  return {
+    type: "result",
+    subtype: "success",
+    duration_ms: 12,
+    duration_api_ms: 8,
+    is_error: false,
+    num_turns: 1,
+    result: "ok",
+    stop_reason: "end_turn",
+    total_cost_usd: 0,
+    usage: {
+      cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 0 },
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+      inference_geo: "",
+      input_tokens: 1,
+      iterations: [],
+      output_tokens: 1,
+      server_tool_use: { web_fetch_requests: 0, web_search_requests: 0 },
+      service_tier: "",
+      speed: ""
+    },
+    modelUsage: {},
+    permission_denials: [],
+    uuid: "qoder-result-1",
+    session_id: sessionId
+  };
+}
+
+function qoderReadyProbe(): QoderRuntimeProbe {
+  return {
+    installed: true,
+    ready: true,
+    status: {
+      active_sessions: 0,
+      api_key_configured: true,
+      mode: "sdk",
+      ready: true,
+      version: "1.0.20"
+    }
+  };
 }

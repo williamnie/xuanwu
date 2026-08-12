@@ -180,16 +180,57 @@ describe("Qoder Q0: SDK/CLI freshness contract", () => {
   });
 
   test("resume and new sessionId are distinct query options", () => {
-    expect(buildQoderQueryOptions({ resume: "old-session", sessionId: "must-not-win", model: "performance" })).toEqual({
+    expect(buildQoderQueryOptions({ cwd: "/fixture/project", invocationKey: "inv-1", resume: "old-session", sessionId: "must-not-win", model: "performance" })).toMatchObject({
+      cwd: "/fixture/project",
       model: "performance",
       resume: "old-session",
       sessionId: undefined
     });
-    expect(buildQoderQueryOptions({ sessionId: "new-session" })).toEqual({
+    expect(buildQoderQueryOptions({ cwd: "/fixture/project", invocationKey: "inv-2", sessionId: "new-session" })).toMatchObject({
+      cwd: "/fixture/project",
       model: undefined,
       resume: undefined,
       sessionId: "new-session"
     });
+  });
+
+  test("maps cwd, CLI, config dir, timeout-owned policy and system prompt without dropping fields", () => {
+    const config = buildConfig({
+      qoderAuthMode: "pat-env",
+      qoderCommand: "/fixture/qodercli",
+      qoderConfigDir: "/fixture/qoder-config",
+      qoderModel: "performance",
+      qoderPat: "fixture-pat"
+    }).providers.qoder!;
+    expect(buildQoderQueryOptions({
+      approvalPolicy: "never",
+      cwd: "/fixture/project",
+      invocationKey: "inv-options",
+      sandbox: "read-only",
+      systemPrompt: "runner instructions"
+    }, config)).toMatchObject({
+      auth: { type: "accessToken", accessToken: { envVar: "QODER_PERSONAL_ACCESS_TOKEN" } },
+      cwd: "/fixture/project",
+      disallowedTools: ["Agent", "Bash", "Edit", "NotebookEdit", "Write"],
+      env: {
+        QODER_CONFIG_DIR: "/fixture/qoder-config",
+        QODER_PERSONAL_ACCESS_TOKEN: "fixture-pat",
+        XUANWU_MANAGED_EXECUTION: "1"
+      },
+      model: "performance",
+      pathToQoderCLIExecutable: "/fixture/qodercli",
+      permissionMode: "dontAsk",
+      systemPrompt: { type: "preset", preset: "qodercli", append: "runner instructions" }
+    });
+  });
+
+  test("unsupported approval and unsafe sandbox policies fail closed", () => {
+    expect(() => buildQoderQueryOptions({
+      approvalPolicy: "danger-only", cwd: "/fixture/project", invocationKey: "inv-policy"
+    })).toThrow("later approval integration");
+    expect(() => buildQoderQueryOptions({
+      cwd: "/fixture/project", invocationKey: "inv-sandbox", sandbox: "danger-full-access"
+    })).toThrow("disabled");
   });
 
   test("maps four redacted Runner auth contracts to typed SDK auth", () => {
