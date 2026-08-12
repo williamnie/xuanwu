@@ -1,5 +1,6 @@
 import type { ProviderCapabilities } from "./manifest.ts";
 import type { RegistryEntry } from "./registry.ts";
+import type { ProviderRuntimeStatus } from "../types.ts";
 import { redactedUserVisibleText } from "../../util/redact.ts";
 
 /**
@@ -24,6 +25,7 @@ export type ProviderCatalogEntry = {
   settings: { settings: readonly unknown[] };
   native_actions: readonly unknown[];
   readiness_reason?: string;
+  runtime?: ProviderRuntimeStatus;
 };
 
 export function sessionActionsFromCapabilities(capabilities: ProviderCapabilities): readonly ProviderSessionAction[] {
@@ -49,6 +51,7 @@ export function catalogEntryFromRegistry(entry: RegistryEntry): ProviderCatalogE
     session_actions: sessionActionsFromCapabilities(entry.manifest.capabilities),
     settings: entry.manifest.executionSettings ?? { settings: [] },
     native_actions: entry.manifest.sessionPresentation?.nativeActions ?? [],
+    ...(entry.runtimeStatus ? { runtime: entry.runtimeStatus } : {}),
     ...(entry.failure ? { readiness_reason: redactedUserVisibleText(entry.failure.message) } : {})
   };
 }

@@ -22,6 +22,8 @@ BINARY_PATH="${XUANWU_BINARY:-$ROOT_DIR/dist/xuanwu}"
 LAUNCHD_BINARY_PATH="${XUANWU_LAUNCHD_BINARY:-$APP_SUPPORT_DIR/bin/xuanwu}"
 CLAUDE_SDK_EXECUTABLE_SOURCE="$BINARY_PATH.claude-agent-sdk"
 CLAUDE_SDK_EXECUTABLE_PATH="$LAUNCHD_BINARY_PATH.claude-agent-sdk"
+QODERCLI_EXECUTABLE_SOURCE="$BINARY_PATH.qodercli.mjs"
+QODERCLI_EXECUTABLE_PATH="$LAUNCHD_BINARY_PATH.qodercli.mjs"
 PI_PACKAGE_ASSET_SOURCE="${XUANWU_PI_PACKAGE_ASSET_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@earendil-works/pi-coding-agent}"
 PI_PACKAGE_ASSET_DIR="${XUANWU_PI_PACKAGE_ASSET_DIR:-$APP_SUPPORT_DIR/pi-coding-agent}"
 RUNNER_SKILLS_SOURCE="${XUANWU_SKILLS_SOURCE:-$ROOT_DIR/skills}"
@@ -39,6 +41,10 @@ CLAUDE_API_KEY="${XUANWU_CLAUDE_API_KEY:-${ANTHROPIC_API_KEY:-}}"
 CLAUDE_API_KEY_FILE="${XUANWU_CLAUDE_API_KEY_FILE:-$STATE_DIR/claude_api_key}"
 CLAUDE_PLATFORM_CONFIG_DIR="${XUANWU_CLAUDE_PLATFORM_CONFIG_DIR:-${ANTHROPIC_CONFIG_DIR:-}}"
 CLAUDE_PLATFORM_PROFILE="${XUANWU_CLAUDE_PLATFORM_PROFILE:-${ANTHROPIC_PROFILE:-}}"
+QODER_AUTH_MODE="${XUANWU_QODER_AUTH_MODE:-local-cli}"
+QODER_CONFIG_DIR="${XUANWU_QODER_CONFIG_DIR:-}"
+QODER_CREDENTIAL_REF="${XUANWU_QODER_CREDENTIAL_REF:-}"
+QODER_MODEL="${XUANWU_QODER_MODEL:-}"
 if [ -z "$CLAUDE_MODE" ]; then
   if [ -n "$CLAUDE_API_KEY" ] || [ -s "$CLAUDE_API_KEY_FILE" ] || [ "$CLAUDE_AUTH_MODE" = "environment" ] || [ "$CLAUDE_AUTH_MODE" = "platform-profile" ] || [ -n "$CLAUDE_PLATFORM_CONFIG_DIR" ] || [ -n "$CLAUDE_PLATFORM_PROFILE" ]; then
     CLAUDE_MODE="sdk"
@@ -159,9 +165,17 @@ stage_claude_sdk_executable() {
   stage_file_atomically "$CLAUDE_SDK_EXECUTABLE_SOURCE" "$CLAUDE_SDK_EXECUTABLE_PATH" 0755
 }
 
+stage_qodercli_executable() {
+  [ -f "$QODERCLI_EXECUTABLE_SOURCE" ] || {
+    echo "[launchd] missing exact-pinned Qoder CLI executable: $QODERCLI_EXECUTABLE_SOURCE" >&2
+    exit 1
+  }
+  stage_file_atomically "$QODERCLI_EXECUTABLE_SOURCE" "$QODERCLI_EXECUTABLE_PATH" 0755
+}
+
 backup_current_runtime() {
   local rollback_dir="" source
-  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.claude-agent-sdk" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST"; do
+  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.claude-agent-sdk" "$LAUNCHD_BINARY_PATH.qodercli.mjs" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST"; do
     [ -e "$source" ] || continue
     if [ -z "$rollback_dir" ]; then
       rollback_dir="$APP_SUPPORT_DIR/rollback/$(date -u '+%Y%m%dT%H%M%SZ')"
@@ -285,6 +299,13 @@ case "$CLAUDE_AUTH_MODE" in
     ;;
   *) echo "[launchd] XUANWU_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile" >&2; exit 1 ;;
 esac
+case "$QODER_AUTH_MODE" in
+  local-cli|pat-env) ;;
+  pat-secret-ref|service-account-secret-ref)
+    [ -n "$QODER_CREDENTIAL_REF" ] || { echo "[launchd] XUANWU_QODER_CREDENTIAL_REF is required for $QODER_AUTH_MODE" >&2; exit 1; }
+    ;;
+  *) echo "[launchd] XUANWU_QODER_AUTH_MODE must be local-cli, pat-env, pat-secret-ref, or service-account-secret-ref" >&2; exit 1 ;;
+esac
 if [ -n "$CLAUDE_PLATFORM_PROFILE" ] && [[ ! "$CLAUDE_PLATFORM_PROFILE" =~ ^[A-Za-z0-9_.-]+$ || "$CLAUDE_PLATFORM_PROFILE" = "." || "$CLAUDE_PLATFORM_PROFILE" = ".." ]]; then
   echo "[launchd] XUANWU_CLAUDE_PLATFORM_PROFILE is invalid" >&2
   exit 1
@@ -314,6 +335,7 @@ else
 fi
 stage_launchd_binary
 stage_claude_sdk_executable
+stage_qodercli_executable
 stage_pi_package_assets
 stage_web_dir
 ensure_auth_token_file
@@ -416,6 +438,16 @@ cat > "$CORE_PLIST" <<PLIST
     <string>$(xml_escape "$CLAUDE_PLATFORM_CONFIG_DIR")</string>
     <key>XUANWU_CLAUDE_PLATFORM_PROFILE</key>
     <string>$(xml_escape "$CLAUDE_PLATFORM_PROFILE")</string>
+    <key>XUANWU_QODER_CMD</key>
+    <string>$(xml_escape "$QODERCLI_EXECUTABLE_PATH")</string>
+    <key>XUANWU_QODER_AUTH_MODE</key>
+    <string>$(xml_escape "$QODER_AUTH_MODE")</string>
+    <key>XUANWU_QODER_CONFIG_DIR</key>
+    <string>$(xml_escape "$QODER_CONFIG_DIR")</string>
+    <key>XUANWU_QODER_CREDENTIAL_REF</key>
+    <string>$(xml_escape "$QODER_CREDENTIAL_REF")</string>
+    <key>XUANWU_QODER_MODEL</key>
+    <string>$(xml_escape "$QODER_MODEL")</string>
     <key>XUANWU_MANAGED_EXECUTION</key>
     <string>1</string>
     <key>XUANWU_AUTOMATION_SHADOW_W1</key>

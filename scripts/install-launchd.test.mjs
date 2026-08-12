@@ -82,6 +82,14 @@ test('deployment stages the adjacent Claude SDK native executable atomically and
   assert.match(releaseSource, /mv -f "\$sdk_staged" "\$CLAUDE_SDK_EXECUTABLE_PATH"/);
 });
 
+test('deployment requires, stages, and snapshots the exact-pinned Qoder CLI asset', () => {
+  assert.match(source, /stage_file_atomically "\$QODERCLI_EXECUTABLE_SOURCE" "\$QODERCLI_EXECUTABLE_PATH" 0755/);
+  assert.match(source, /"\$LAUNCHD_BINARY_PATH\.qodercli\.mjs"/);
+  assert.match(releaseSource, /release asset does not contain exact-pinned Qoder CLI executable/);
+  assert.match(releaseSource, /Qoder CLI version \$qoder_version does not match required 1\.1\.18/);
+  assert.match(releaseSource, /mv -f "\$qoder_staged" "\$QODERCLI_EXECUTABLE_PATH"/);
+});
+
 test('launchd deployment defaults to split Web/Core/Agentic roles from one artifact', () => {
   assert.match(source, /WEB_LABEL="\$\{LABEL\}\.web"/);
   assert.match(source, /CORE_LABEL="\$\{LABEL\}\.core"/);

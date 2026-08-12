@@ -94,6 +94,16 @@ stage_claude_sdk_executable() {
   install -m 0755 "$source" "$pkg_dir/xuanwu.claude-agent-sdk"
 }
 
+stage_qodercli_executable() {
+  local pkg_dir="$1" package_dir source version
+  package_dir="$ROOT_DIR/backend-ts/node_modules/@qoder-ai/qodercli"
+  source="$package_dir/bundle/qodercli.js"
+  [ -f "$source" ] || fail "missing exact-pinned Qoder CLI bundle: $source"
+  version="$(node -p "require('$package_dir/package.json').version")"
+  [ "$version" = "1.1.18" ] || fail "Qoder CLI version $version does not match required 1.1.18"
+  install -m 0755 "$source" "$pkg_dir/xuanwu.qodercli.mjs"
+}
+
 host_bun_target() {
   case "$(uname -s)-$(uname -m)" in
     Darwin-arm64) printf 'bun-darwin-arm64' ;;
@@ -205,6 +215,7 @@ package_target() {
   cp "$ROOT_DIR/docs/architecture/xuanwu/0070-db-migration-rehearsal-gate.md" "$pkg_dir/docs/migration-rehearsal.md"
   stage_pi_package_assets "$pkg_dir"
   stage_claude_sdk_executable "$target" "$pkg_dir"
+  stage_qodercli_executable "$pkg_dir"
   (cd "$pkg_dir" && LC_ALL=C tar -czf "$OUT_DIR/$asset.tar.gz" .)
 }
 

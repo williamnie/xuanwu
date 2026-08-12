@@ -11,6 +11,18 @@ type PiLocalSettings = {
   timeoutMs?: number;
 };
 
+export type QoderLocalSettings = {
+  authMode?: "pat-env" | "pat-secret-ref" | "service-account-secret-ref" | "local-cli";
+  command?: string;
+  configDir?: string;
+  /** Resolved in-memory by SecretService; normalization never persists this field. */
+  credential?: string;
+  credentialRef?: string;
+  enabled?: boolean;
+  model?: string;
+  timeoutMs?: number;
+};
+
 export type RunnerLocalSettings = {
   integrations?: {
     feishu?: Record<string, unknown>;
@@ -26,6 +38,7 @@ export type RunnerLocalSettings = {
     };
     claude?: { enabled?: boolean };
     "pi-coding-agent"?: PiLocalSettings;
+    qoder?: QoderLocalSettings;
     /** 早期 feature/provider 工作树兼容读取；规范化后只输出 pi-coding-agent。 */
     pi?: PiLocalSettings;
   };
@@ -103,12 +116,36 @@ function normalizedProviderSettings(value: unknown): Pick<RunnerLocalSettings, "
   const codex = normalizedCodexSettings(raw.codex);
   const claude = normalizedEnabledSettings(raw.claude);
   const pi = normalizedPiSettings(raw["pi-coding-agent"] ?? raw.pi);
-  return Object.keys(codex).length === 0 && Object.keys(claude).length === 0 && Object.keys(pi).length === 0 ? {} : {
+  const qoder = normalizedQoderSettings(raw.qoder);
+  return Object.keys(codex).length === 0 && Object.keys(claude).length === 0 &&
+    Object.keys(pi).length === 0 && Object.keys(qoder).length === 0 ? {} : {
     providers: {
       ...(Object.keys(codex).length === 0 ? {} : { codex }),
       ...(Object.keys(claude).length === 0 ? {} : { claude }),
-      ...(Object.keys(pi).length === 0 ? {} : { "pi-coding-agent": pi })
+      ...(Object.keys(pi).length === 0 ? {} : { "pi-coding-agent": pi }),
+      ...(Object.keys(qoder).length === 0 ? {} : { qoder })
     }
+  };
+}
+
+function normalizedQoderSettings(value: unknown): QoderLocalSettings {
+  const raw = recordValue(value);
+  const authMode = typeof raw.authMode === "string" && [
+    "pat-env", "pat-secret-ref", "service-account-secret-ref", "local-cli"
+  ].includes(raw.authMode) ? raw.authMode as QoderLocalSettings["authMode"] : undefined;
+  const command = stringValue(raw.command);
+  const configDir = stringValue(raw.configDir);
+  const credentialRef = stringValue(raw.credentialRef);
+  const model = stringValue(raw.model);
+  const timeoutMs = Number(raw.timeoutMs);
+  return {
+    ...(authMode ? { authMode } : {}),
+    ...(command ? { command } : {}),
+    ...(configDir ? { configDir } : {}),
+    ...(credentialRef ? { credentialRef } : {}),
+    ...(typeof raw.enabled === "boolean" ? { enabled: raw.enabled } : {}),
+    ...(model ? { model } : {}),
+    ...(Number.isInteger(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {})
   };
 }
 

@@ -18,7 +18,12 @@ export type ProviderDeps = Record<string, never>;
 export interface ProviderFactory {
   manifest: ExecutorProviderManifest;
   parseConfig(raw: unknown): ProviderRuntimeConfig;
-  autoDetect(config: ProviderRuntimeConfig): { installed: boolean; ready: boolean; reason?: string };
+  autoDetect(config: ProviderRuntimeConfig): {
+    installed: boolean;
+    ready: boolean;
+    reason?: string;
+    runtimeStatus?: ProviderRuntimeStatus;
+  };
   create(config: ProviderRuntimeConfig, deps: ProviderDeps): RegisteredProvider;
 }
 
@@ -160,7 +165,7 @@ export function createProviderRegistry(): ProviderRegistry {
       if (!probe.installed) {
         setState(id, "not_ready", {
           ...(reuseInstance && entry?.instance ? { instance: entry.instance } : {}),
-          clearRuntimeStatus: true,
+          ...(probe.runtimeStatus ? { runtimeStatus: probe.runtimeStatus } : { clearRuntimeStatus: true }),
           failure: { category: "not_ready", message: probe.reason ?? `provider ${id} is not installed` }
         });
         return;

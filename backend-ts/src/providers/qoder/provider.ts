@@ -10,17 +10,20 @@ import type {
   SessionCreateResult,
   SessionRef
 } from "../types.ts";
+import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import { createQoderSdkFacade, type QoderSdkFacade } from "./sdkFacade.ts";
+import { probeQoderRuntime, type QoderRuntimeProbe } from "./runtime.ts";
 
 /**
- * P11：Qoder executor（SDK facade，G11 gate 已通过）。
- * - terminal 收敛：task_notification（completed/failed/stopped）/ mirror_error；
- * - session：SDK session_id（UUID）每条消息携带；recover 用 sessionId 续接；
+ * P11：Qoder executor（SDK facade，Q0 freshness gate 已刷新）。
+ * - terminal 收敛：只认主 SDKResultMessage；task_notification 仅表示子任务进度；
+ * - session：SDK session_id（UUID）每条消息携带；recover 用 resume 续接；
  * - interrupt：Query.interrupt()。
  */
 
 export type QoderExecutorProviderOptions = {
   facade?: QoderSdkFacade;
+  readiness?: QoderRuntimeProbe;
 };
 
 export class QoderExecutorProvider implements ExecutorProvider {
@@ -28,8 +31,11 @@ export class QoderExecutorProvider implements ExecutorProvider {
   readonly capabilities: readonly ExecutorCapability[] = ["issue_execution", "sessions", "resume_session", "interrupt"];
   private readonly facade: QoderSdkFacade;
 
-  constructor(options: QoderExecutorProviderOptions = {}) {
-    this.facade = options.facade ?? createQoderSdkFacade();
+  constructor(
+    private readonly config: ProviderRuntimeConfig,
+    private readonly options: QoderExecutorProviderOptions = {}
+  ) {
+    this.facade = options.facade ?? createQoderSdkFacade(config);
   }
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
@@ -41,7 +47,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
   }
 
   async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
-    const outcome = await this.facade.run(input.prompt, { sessionId: input.session.sessionId, model: input.model });
+    const outcome = await this.facade.run(input.prompt, { resume: input.session.sessionId, model: input.model });
     return {
       runId: `qoder-recover-${input.issueId}`,
       session: outcome.sessionId ? { provider: this.id, sessionId: outcome.sessionId } : undefined
@@ -65,16 +71,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
   }
 
   runtimeStatus(): ProviderRuntimeStatus {
-    return {
-      active_sessions: 0,
-      api_key_configured: false,
-      auth_configured: true,
-      auth_source: "qodercli-local",
-      executable_ready: this.facade.available,
-      mode: "sdk",
-      ready: this.facade.available,
-      version: "1.0.17"
-    };
+    return (this.options.readiness ?? probeQoderRuntime(this.config)).status;
   }
 
   async stop(): Promise<void> {

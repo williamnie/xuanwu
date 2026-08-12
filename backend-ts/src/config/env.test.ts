@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ENV_KEYS, buildConfig, loadConfig } from "./env.ts";
@@ -54,7 +54,20 @@ describe("Bun backend config", () => {
           platformProfile: "",
           timeoutMs: 1_800_000
         },
-        "pi-coding-agent": { command: "pi", cwd: "", enabled: true, env: {}, timeoutMs: 1_800_000 }
+        "pi-coding-agent": { command: "pi", cwd: "", enabled: true, env: {}, timeoutMs: 1_800_000 },
+        qoder: {
+          authMode: "local-cli",
+          command: "qodercli",
+          configDir: "",
+          credential: "",
+          credentialRef: "",
+          cwd: "",
+          enabled: true,
+          env: {},
+          mode: "sdk",
+          model: "",
+          timeoutMs: 1_800_000
+        }
       },
       runner: { maxParallelProjects: 1 },
       integrations: {
@@ -254,6 +267,83 @@ describe("Bun backend config", () => {
     });
   });
 
+  test("loads Qoder local settings over CLI flags and environment without persisting credentials", async () => {
+    const stateDir = await tempStateDir();
+    await writeFile(join(stateDir, "runner-settings.local.json"), JSON.stringify({
+      providers: {
+        qoder: {
+          authMode: "service-account-secret-ref",
+          command: "/local/xuanwu.qodercli",
+          configDir: "/local/qoder-config",
+          credentialRef: "env://QODER_TEST_SERVICE_ACCOUNT",
+          enabled: false,
+          model: "local-model",
+          timeoutMs: 9876
+        }
+      }
+    }), "utf8");
+
+    const config = loadConfig([
+      "--qoder-auth-mode", "pat-secret-ref",
+      "--qoder-cmd", "/flag/xuanwu.qodercli",
+      "--qoder-config-dir", "/flag/qoder-config",
+      "--qoder-credential-ref", "env://QODER_FLAG_PAT",
+      "--qoder-enabled", "true",
+      "--qoder-model", "flag-model",
+      "--qoder-timeout-ms", "8765"
+    ], {
+      [ENV_KEYS.stateDir]: stateDir,
+      [ENV_KEYS.qoderCommand]: "/env/xuanwu.qodercli",
+      [ENV_KEYS.qoderAuthMode]: "pat-env",
+      QODER_PERSONAL_ACCESS_TOKEN: "env-pat-secret",
+      QODER_TEST_SERVICE_ACCOUNT: "local-service-account-secret",
+      QODER_FLAG_PAT: "flag-pat-secret"
+    });
+
+    expect(config.providers.qoder).toEqual({
+      authMode: "service-account-secret-ref",
+      command: "/local/xuanwu.qodercli",
+      configDir: "/local/qoder-config",
+      credential: "local-service-account-secret",
+      credentialRef: "env://QODER_TEST_SERVICE_ACCOUNT",
+      cwd: "",
+      enabled: false,
+      env: {},
+      mode: "sdk",
+      model: "local-model",
+      timeoutMs: 9876
+    });
+    const persisted = await readFile(join(stateDir, "runner-settings.local.json"), "utf8");
+    expect(persisted).not.toContain("local-service-account-secret");
+    expect(redactSensitiveText("local-service-account-secret env-pat-secret")).toBe("[redacted] [redacted]");
+  });
+
+  test("lets Qoder CLI flags override environment and keeps PAT out of argv", () => {
+    const config = loadConfig([
+      "--qoder-auth-mode", "pat-env",
+      "--qoder-cmd", "/flag/xuanwu.qodercli",
+      "--qoder-config-dir", "/flag/qoder-config",
+      "--qoder-model", "flag-model",
+      "--qoder-timeout-ms", "7654"
+    ], {
+      [ENV_KEYS.qoderCommand]: "/env/xuanwu.qodercli",
+      [ENV_KEYS.qoderConfigDir]: "/env/qoder-config",
+      [ENV_KEYS.qoderModel]: "env-model",
+      [ENV_KEYS.qoderTimeoutMs]: "6543",
+      QODER_PERSONAL_ACCESS_TOKEN: "qoder-pat-secret"
+    });
+
+    expect(config.providers.qoder).toMatchObject({
+      authMode: "pat-env",
+      command: "/flag/xuanwu.qodercli",
+      configDir: "/flag/qoder-config",
+      env: { QODER_PERSONAL_ACCESS_TOKEN: "qoder-pat-secret" },
+      model: "flag-model",
+      timeoutMs: 7654
+    });
+    expect(() => loadConfig(["--qoder-pat", "must-not-appear-in-process-args"], {})).toThrow("Unknown config argument");
+  });
+
   test("selects Codex App server mode from environment", () => {
     const config = loadConfig([], {
       [ENV_KEYS.codexServerMode]: "app",
@@ -366,6 +456,19 @@ describe("Bun backend config", () => {
           enabled: false,
           env: { SAFE_PI: "ok" },
           timeoutMs: 3456
+        },
+        qoder: {
+          authMode: "local-cli",
+          command: "qodercli",
+          configDir: "",
+          credential: "",
+          credentialRef: "",
+          cwd: "",
+          enabled: true,
+          env: {},
+          mode: "sdk",
+          model: "",
+          timeoutMs: 1_800_000
         }
       },
       runner: { maxParallelProjects: 3 },
@@ -479,6 +582,19 @@ describe("Bun backend config", () => {
           enabled: false,
           env: { SAFE_PI: "cli-ok" },
           timeoutMs: 7890
+        },
+        qoder: {
+          authMode: "local-cli",
+          command: "qodercli",
+          configDir: "",
+          credential: "",
+          credentialRef: "",
+          cwd: "",
+          enabled: true,
+          env: {},
+          mode: "sdk",
+          model: "",
+          timeoutMs: 1_800_000
         }
       },
       runner: { maxParallelProjects: 4 },

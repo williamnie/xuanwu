@@ -16,6 +16,7 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     const install = join(temp, 'install');
     const state = join(temp, 'state');
     const calls = join(temp, 'calls.log');
+    const releaseMissingQoder = await createRelease(temp, 'missing-qoder', 'v0.9.0', { includeQoder: false });
     const releaseV1 = await createRelease(temp, 'v1', 'v1.0.0');
     const releaseV2 = await createRelease(temp, 'v2', 'v1.1.0');
     await mkdir(join(home, 'Library', 'LaunchAgents'), { recursive: true });
@@ -41,9 +42,16 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
       FIXTURE_RELEASE_DIR: releaseV1,
     };
 
+    const missingQoder = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], {
+      env: { ...env, FIXTURE_RELEASE_DIR: releaseMissingQoder }, encoding: 'utf8'
+    });
+    assert.notEqual(missingQoder.status, 0);
+    assert.match(missingQoder.stderr, /does not contain exact-pinned Qoder CLI executable/);
+
     const fresh = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], { env, encoding: 'utf8' });
     assert.equal(fresh.status, 0, `${fresh.stdout}\n${fresh.stderr}`);
     assert.match(runVersion(join(install, 'xuanwu'), env), /v1\.0\.0/);
+    assert.match(await readFile(join(install, 'xuanwu.qodercli.mjs'), 'utf8'), /release-v1/);
     const authTokenPath = join(state, 'auth_token');
     const authToken = (await readFile(authTokenPath, 'utf8')).trim();
     assert.match(authToken, /^(?:[A-Za-z0-9+/]{43}=|[a-f0-9]{64})$/);
@@ -94,6 +102,7 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     });
     assert.equal(upgrade.status, 0, `${upgrade.stdout}\n${upgrade.stderr}`);
     assert.match(runVersion(join(install, 'xuanwu'), updateEnv), /v1\.1\.0/);
+    assert.match(await readFile(join(install, 'xuanwu.qodercli.mjs'), 'utf8'), /release-v2/);
     assert.equal(await readFile(join(state, 'runner.db'), 'utf8'), 'authority-survives-release-changes');
     assert.equal((await readFile(authTokenPath, 'utf8')).trim(), authToken);
 
@@ -102,6 +111,7 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     });
     assert.equal(rollback.status, 0, `${rollback.stdout}\n${rollback.stderr}`);
     assert.match(runVersion(join(install, 'xuanwu'), updateEnv), /v1\.0\.0/);
+    assert.match(await readFile(join(install, 'xuanwu.qodercli.mjs'), 'utf8'), /release-v1/);
     assert.equal(await readFile(join(state, 'runner.db'), 'utf8'), 'authority-survives-release-changes');
     assert.equal((await readFile(authTokenPath, 'utf8')).trim(), authToken);
 
@@ -158,6 +168,8 @@ test('release package keeps Bun runtime assets beside the executable and smokes 
   assert.match(script, /run_step "packaged host binary smoke" "\$binary" --version/);
   assert.match(script, /stage_claude_sdk_executable "\$target" "\$pkg_dir"/);
   assert.match(script, /"\$pkg_dir\/xuanwu\.claude-agent-sdk"/);
+  assert.match(script, /stage_qodercli_executable "\$pkg_dir"/);
+  assert.match(script, /"\$pkg_dir\/xuanwu\.qodercli\.mjs"/);
   assert.match(script, /"\$ROOT_DIR\/README\.zh-CN\.md" "\$pkg_dir\/README\.zh-CN\.md"/);
   assert.match(script, /"\$ROOT_DIR\/LICENSE" "\$pkg_dir\/LICENSE"/);
   assert.match(script, /"\$ROOT_DIR\/NOTICE" "\$pkg_dir\/NOTICE"/);
@@ -178,16 +190,21 @@ test('release rollback snapshots split and compatibility service registrations',
   assert.match(updater, /\$SERVICE_NAME-core\.service/);
   assert.match(updater, /snapshot\/bin\/xuanwu\.claude-agent-sdk/);
   assert.match(updater, /restore_file "\$snapshot\/bin\/xuanwu\.claude-agent-sdk" "\$CLAUDE_SDK_EXECUTABLE_PATH"/);
+  assert.match(updater, /snapshot\/bin\/xuanwu\.qodercli\.mjs/);
+  assert.match(updater, /restore_file "\$snapshot\/bin\/xuanwu\.qodercli\.mjs" "\$QODERCLI_EXECUTABLE_PATH"/);
   assert.match(updater, /restore_service_registration "\$snapshot"/);
 });
 
-async function createRelease(temp, name, version) {
+async function createRelease(temp, name, version, options = {}) {
   const release = join(temp, `release-${name}`);
   const fixture = join(temp, `fixture-${name}`);
   await mkdir(release, { recursive: true });
   await mkdir(join(fixture, 'web'), { recursive: true });
   await writeExecutable(join(fixture, 'xuanwu'), `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "xuanwu ${version} build=test bun=test"; fi\nexit 0\n`);
   await writeExecutable(join(fixture, 'xuanwu.claude-agent-sdk'), '#!/bin/sh\nexit 0\n');
+  if (options.includeQoder !== false) {
+    await writeExecutable(join(fixture, 'xuanwu.qodercli.mjs'), `#!/bin/sh\n# release-${name}\necho 1.1.18\n`);
+  }
   await writeFile(join(fixture, 'web', 'index.html'), version);
   for (const script of ['daemon.sh', 'install-release.sh', 'update-release.sh']) {
     await writeFile(join(fixture, script), await readFile(join(root, 'scripts', script)));

@@ -83,6 +83,27 @@ stage_claude_sdk_executable() {
   echo "[bun-build] claude sdk executable: $target"
 }
 
+stage_qodercli_executable() {
+  local source target_dir staged target version
+  source="$BACKEND_TS_DIR/node_modules/@qoder-ai/qodercli/bundle/qodercli.js"
+  [ -f "$source" ] || {
+    echo "[bun-build] missing exact-pinned Qoder CLI bundle: $source" >&2
+    exit 1
+  }
+  version="$(bun -e "console.log(require('$BACKEND_TS_DIR/node_modules/@qoder-ai/qodercli/package.json').version)")"
+  [ "$version" = "1.1.18" ] || {
+    echo "[bun-build] Qoder CLI version $version does not match required 1.1.18" >&2
+    exit 1
+  }
+  target="$OUTFILE.qodercli.mjs"
+  target_dir="$(dirname "$target")"
+  staged="$(mktemp "$target_dir/.qodercli-stage.XXXXXX")"
+  cp -p "$source" "$staged"
+  chmod 0755 "$staged"
+  mv -f "$staged" "$target"
+  echo "[bun-build] qodercli executable: $target"
+}
+
 resolve_build_stamp() {
   local revision dirty
   revision="nogit"
@@ -113,6 +134,7 @@ echo "[bun-build] outfile: $OUTFILE"
 )
 
 stage_claude_sdk_executable
+stage_qodercli_executable
 sign_binary_if_possible
 printf '%s\n' "$BUILD_STAMP" > "$OUTFILE.build.stamp"
 echo "[bun-build] binary: $OUTFILE"

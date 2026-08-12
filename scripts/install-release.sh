@@ -27,6 +27,7 @@ AUTH_TOKEN="${XUANWU_AUTH_TOKEN:-}"
 AUTH_TOKEN_CREATED=0
 BIN_PATH="$INSTALL_DIR/xuanwu"
 CLAUDE_SDK_EXECUTABLE_PATH="$BIN_PATH.claude-agent-sdk"
+QODERCLI_EXECUTABLE_PATH="$BIN_PATH.qodercli.mjs"
 DAEMON_PATH="$INSTALL_DIR/xuanwu-daemon"
 INSTALLER_PATH="$INSTALL_DIR/xuanwu-install"
 UPDATER_PATH="$INSTALL_DIR/xuanwu-update"
@@ -42,6 +43,10 @@ CLAUDE_API_KEY="${XUANWU_CLAUDE_API_KEY:-${ANTHROPIC_API_KEY:-}}"
 CLAUDE_API_KEY_FILE="${XUANWU_CLAUDE_API_KEY_FILE:-$STATE_DIR/claude_api_key}"
 CLAUDE_PLATFORM_CONFIG_DIR="${XUANWU_CLAUDE_PLATFORM_CONFIG_DIR:-${ANTHROPIC_CONFIG_DIR:-}}"
 CLAUDE_PLATFORM_PROFILE="${XUANWU_CLAUDE_PLATFORM_PROFILE:-${ANTHROPIC_PROFILE:-}}"
+QODER_AUTH_MODE="${XUANWU_QODER_AUTH_MODE:-local-cli}"
+QODER_CONFIG_DIR="${XUANWU_QODER_CONFIG_DIR:-}"
+QODER_CREDENTIAL_REF="${XUANWU_QODER_CREDENTIAL_REF:-}"
+QODER_MODEL="${XUANWU_QODER_MODEL:-}"
 if [ -z "$CLAUDE_MODE" ]; then
   if [ -n "$CLAUDE_API_KEY" ] || [ -s "$CLAUDE_API_KEY_FILE" ] || [ "$CLAUDE_AUTH_MODE" = "environment" ] || [ "$CLAUDE_AUTH_MODE" = "platform-profile" ] || [ -n "$CLAUDE_PLATFORM_CONFIG_DIR" ] || [ -n "$CLAUDE_PLATFORM_PROFILE" ]; then
     CLAUDE_MODE="sdk"
@@ -83,6 +88,9 @@ Useful environment variables:
   XUANWU_CLAUDE_API_KEY=...     Claude API key (persisted to a mode-0600 state file)
   XUANWU_CLAUDE_PLATFORM_CONFIG_DIR=... Anthropic profile config directory
   XUANWU_CLAUDE_PLATFORM_PROFILE=... Anthropic profile name
+  XUANWU_QODER_AUTH_MODE=local-cli|pat-env|pat-secret-ref|service-account-secret-ref
+  XUANWU_QODER_CONFIG_DIR=...     Qoder CLI config directory
+  XUANWU_QODER_CREDENTIAL_REF=secret://...|env://... Qoder credential locator
   XUANWU_AUTH_TOKEN=...          Custom bearer token for remote access
   XUANWU_AUTH_TOKEN_FILE=...     Generated token file path
   XUANWU_VERIFY_ATTESTATION=auto|require|skip
@@ -101,6 +109,13 @@ case "$CLAUDE_AUTH_MODE" in
   local-cli) [ "$CLAUDE_MODE" = "cli-fallback" ] || fail "XUANWU_CLAUDE_AUTH_MODE=local-cli requires cli-fallback mode" ;;
   platform-profile) [ "$CLAUDE_MODE" = "sdk" ] || fail "XUANWU_CLAUDE_AUTH_MODE=platform-profile requires sdk mode" ;;
   *) fail "XUANWU_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile" ;;
+esac
+case "$QODER_AUTH_MODE" in
+  local-cli|pat-env) ;;
+  pat-secret-ref|service-account-secret-ref)
+    [ -n "$QODER_CREDENTIAL_REF" ] || fail "XUANWU_QODER_CREDENTIAL_REF is required for $QODER_AUTH_MODE"
+    ;;
+  *) fail "XUANWU_QODER_AUTH_MODE must be local-cli, pat-env, pat-secret-ref, or service-account-secret-ref" ;;
 esac
 if [ -n "$CLAUDE_PLATFORM_PROFILE" ] && [[ ! "$CLAUDE_PLATFORM_PROFILE" =~ ^[A-Za-z0-9_.-]+$ || "$CLAUDE_PLATFORM_PROFILE" = "." || "$CLAUDE_PLATFORM_PROFILE" = ".." ]]; then
   fail "XUANWU_CLAUDE_PLATFORM_PROFILE is invalid"
@@ -227,7 +242,7 @@ resolve_codex_cmd() {
 }
 
 download_binary() {
-  local os="$1" arch="$2" asset url tmp archive checksums metadata staged sdk_staged binary_version
+  local os="$1" arch="$2" asset url tmp archive checksums metadata staged sdk_staged qoder_staged binary_version qoder_version
   asset="xuanwu_${os}_${arch}.tar.gz"
   url="$(release_asset_url "$asset")"
   tmp="$(mktemp -d)"
@@ -250,13 +265,21 @@ download_binary() {
   [ -x "$tmp/xuanwu" ] || fail "release asset does not contain executable binary"
   [ -x "$tmp/xuanwu.claude-agent-sdk" ] \
     || fail "release asset does not contain Claude Agent SDK native executable"
+  [ -x "$tmp/xuanwu.qodercli.mjs" ] \
+    || fail "release asset does not contain exact-pinned Qoder CLI executable"
   binary_version="$("$tmp/xuanwu" --version | awk 'NR == 1 { print $2 }')"
   [ "$binary_version" = "$RESOLVED_VERSION" ] \
     || fail "binary version $binary_version does not match release metadata $RESOLVED_VERSION"
+  qoder_version="$("$tmp/xuanwu.qodercli.mjs" --version | awk 'NR == 1 { print $1 }')"
+  [ "$qoder_version" = "1.1.18" ] \
+    || fail "Qoder CLI version $qoder_version does not match required 1.1.18"
   mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$LOG_DIR" "$(dirname "$AUTH_TOKEN_FILE")"
   sdk_staged="$INSTALL_DIR/.xuanwu.claude-agent-sdk.stage.$$"
   install -m 0755 "$tmp/xuanwu.claude-agent-sdk" "$sdk_staged"
   mv -f "$sdk_staged" "$CLAUDE_SDK_EXECUTABLE_PATH"
+  qoder_staged="$INSTALL_DIR/.xuanwu.qodercli.mjs.stage.$$"
+  install -m 0755 "$tmp/xuanwu.qodercli.mjs" "$qoder_staged"
+  mv -f "$qoder_staged" "$QODERCLI_EXECUTABLE_PATH"
   staged="$INSTALL_DIR/.xuanwu.stage.$$"
   install -m 0755 "$tmp/xuanwu" "$staged"
   mv -f "$staged" "$BIN_PATH"
@@ -391,6 +414,16 @@ PLIST
     <string>$(xml_escape "$CLAUDE_PLATFORM_CONFIG_DIR")</string>
     <key>XUANWU_CLAUDE_PLATFORM_PROFILE</key>
     <string>$(xml_escape "$CLAUDE_PLATFORM_PROFILE")</string>
+    <key>XUANWU_QODER_CMD</key>
+    <string>$(xml_escape "$QODERCLI_EXECUTABLE_PATH")</string>
+    <key>XUANWU_QODER_AUTH_MODE</key>
+    <string>$(xml_escape "$QODER_AUTH_MODE")</string>
+    <key>XUANWU_QODER_CONFIG_DIR</key>
+    <string>$(xml_escape "$QODER_CONFIG_DIR")</string>
+    <key>XUANWU_QODER_CREDENTIAL_REF</key>
+    <string>$(xml_escape "$QODER_CREDENTIAL_REF")</string>
+    <key>XUANWU_QODER_MODEL</key>
+    <string>$(xml_escape "$QODER_MODEL")</string>
     <key>XUANWU_MANAGED_EXECUTION</key>
     <string>1</string>
   </dict>
@@ -574,6 +607,11 @@ Environment="XUANWU_CLAUDE_API_PATH=$CLAUDE_API_PATH"
 Environment="XUANWU_CLAUDE_API_KEY_FILE=$CLAUDE_API_KEY_FILE"
 Environment="XUANWU_CLAUDE_PLATFORM_CONFIG_DIR=$CLAUDE_PLATFORM_CONFIG_DIR"
 Environment="XUANWU_CLAUDE_PLATFORM_PROFILE=$CLAUDE_PLATFORM_PROFILE"
+Environment="XUANWU_QODER_CMD=$QODERCLI_EXECUTABLE_PATH"
+Environment="XUANWU_QODER_AUTH_MODE=$QODER_AUTH_MODE"
+Environment="XUANWU_QODER_CONFIG_DIR=$QODER_CONFIG_DIR"
+Environment="XUANWU_QODER_CREDENTIAL_REF=$QODER_CREDENTIAL_REF"
+Environment="XUANWU_QODER_MODEL=$QODER_MODEL"
 Environment=XUANWU_MANAGED_EXECUTION=1
 ExecStart=$BIN_PATH serve --role core --addr $CORE_ADDR --agentic-addr $AGENTIC_ADDR --state-dir $STATE_DIR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
 Restart=always
@@ -646,6 +684,7 @@ main() {
   require_cmd tar
   require_cmd uname
   require_cmd awk
+  require_cmd node
   if ! command -v sha256sum >/dev/null 2>&1; then require_cmd shasum; fi
   audit requested
   trap 'audit failed' ERR
