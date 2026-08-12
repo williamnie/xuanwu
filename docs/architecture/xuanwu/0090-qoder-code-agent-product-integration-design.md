@@ -933,11 +933,20 @@ Code Agent 状态可展示：
 - usage/Credits 语义 gate；
 - UI extensions 和 observability。
 
-### Q6：真实验收与 support level
+### Q6：离线集成、发布回归与人工 handoff
 
-- 完成真实账号、并发、重启、release 包验收；
-- 记录版本/平台/账号类型/预算；
-- 仅全部通过后评估 `preview → tested`。
+- 以 fake/isolated fixture 串联 enable、Profile、Issue、Run/Attempt/Event、Session、Runs Provider、
+  两轮 resume 和 invocation-scoped interrupt；
+- 完成 focused/full tests、lint/build、binary/package/release、migration rehearsal 与 rollback asset 回归；
+- 输出可执行的 [Qoder release 与真实账号验收手册](../../runbooks/qoder-live-acceptance.md)，但不安装、登录、
+  调用真实模型、deploy 或修改 live DB；
+- Q6 通过只证明离线完成定义，不提升 support level。
+
+### Q7：真实验收与 support level
+
+- 由操作者显式授权并完成真实账号、并发、重启、release 包安装/升级/回滚验收；
+- 记录版本、平台、账号类型、显式 turn/Credits 预算与 usage 对账；
+- 仅全部通过并 review live evidence 后，另开独立变更评估 `preview → tested`。
 
 每个阶段都应独立可回滚。capability 只在对应阶段实现和验证后开启。
 

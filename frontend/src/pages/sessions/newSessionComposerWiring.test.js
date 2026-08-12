@@ -40,10 +40,11 @@ test('new and existing session payloads include service tier', () => {
   assert.match(newSessionSource, /onServiceTierChange=\{\(value\) => handleSettingChange\('serviceTier', value\)\}/);
 });
 
-test('new session model field receives remote model state and remains a selector on error', () => {
+test('new session model field uses remote choices and falls back to manual input when unverified', () => {
   assert.match(sessionsSource, /modelsError,[\s\S]*modelsLoading,[\s\S]*projectId/);
-  assert.doesNotMatch(newSessionSource, /aria-label="手动填写模型 ID"/);
-  assert.match(newSessionSource, /模型列表暂未加载/);
+  assert.match(newSessionSource, /manualModel = Boolean\(modelsError \|\| models\.some/);
+  assert.match(newSessionSource, /aria-label="手动填写模型 ID"/);
+  assert.match(newSessionSource, /list="new-session-provider-model-suggestions"/);
   assert.match(newSessionSource, /select disabled=\{modelsLoading\}/);
 });
 
