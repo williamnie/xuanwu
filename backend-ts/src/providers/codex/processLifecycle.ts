@@ -37,6 +37,8 @@ type ProcessLifecycleOptions = {
 export class CodexProcessGroupLifecycle {
   private fileOperation = Promise.resolve();
   private ownership?: CodexProcessOwnership;
+  private refreshOperation?: { promise: Promise<void>; rootPID: number };
+  private refreshRequested = false;
 
   constructor(
     private readonly ownershipFile: string,
@@ -61,28 +63,67 @@ export class CodexProcessGroupLifecycle {
     await this.persist();
   }
 
-  async refresh(process: OwnedProcess): Promise<void> {
-    const rootPID = positiveInteger(process.pid);
+  async refresh(process: OwnedProcess | undefined): Promise<void> {
+    const rootPID = positiveInteger(process?.pid);
     if (!this.ownership || rootPID === 0 || this.ownership.root_pid !== rootPID) return;
+    const active = this.refreshOperation;
+    if (active) {
+      if (active.rootPID === rootPID) this.refreshRequested = true;
+      await active.promise;
+      if (active.rootPID === rootPID) return;
+      await this.refresh(process);
+      return;
+    }
+    this.refreshRequested = true;
+    const promise = this.drainRefresh(rootPID);
+    this.refreshOperation = { promise, rootPID };
+    try {
+      await promise;
+    } finally {
+      if (this.refreshOperation?.promise === promise) this.refreshOperation = undefined;
+    }
+  }
+
+  private async drainRefresh(rootPID: number): Promise<void> {
+    // Let notifications drained from the same stdout chunk share one process-table scan.
+    await Promise.resolve();
+    do {
+      this.refreshRequested = false;
+      await this.performRefresh(rootPID);
+    } while (this.refreshRequested && this.ownership?.root_pid === rootPID);
+  }
+
+  private async performRefresh(rootPID: number): Promise<void> {
+    const ownership = this.ownership;
+    if (!ownership || ownership.root_pid !== rootPID) return;
     const processes = this.ownedTree(rootPID);
     if (processes.length === 0) return;
-    this.ownership.processes = processes;
-    this.ownership.observed_at = this.now().toISOString();
-    await this.persist();
+    const refreshed = {
+      ...ownership,
+      observed_at: this.now().toISOString(),
+      processes
+    };
+    this.ownership = refreshed;
+    await this.persist(refreshed);
   }
 
   async stop(process: OwnedProcess): Promise<void> {
     await this.refresh(process);
     const ownership = this.ownership;
-    if (!ownership || ownership.processes.length === 0 || ownedGroupsStillMatching(ownership, this.inspect()).length === 0) {
+    const rootPID = positiveInteger(process.pid);
+    if (!ownership || ownership.root_pid !== rootPID || ownership.processes.length === 0
+      || ownedGroupsStillMatching(ownership, this.inspect()).length === 0) {
       process.kill("SIGTERM");
       await boundedExit(process.exited, this.stopGraceMs(), () => process.kill("SIGKILL"));
-      this.ownership = undefined;
-      await this.removePersistedOwnership();
+      if (this.ownership?.root_pid === rootPID || (!this.ownership && !ownership)) {
+        this.ownership = undefined;
+        await this.removePersistedOwnership();
+      }
       return;
     }
     await terminateOwnedGroups(ownership, this.runtimeOptions());
     await boundedExit(process.exited, this.stopGraceMs(), () => this.signalOwned(ownership, "SIGKILL"));
+    if (this.ownership?.root_pid !== rootPID) return;
     this.ownership = undefined;
     await this.removePersistedOwnership();
   }
@@ -90,7 +131,9 @@ export class CodexProcessGroupLifecycle {
   async processExited(process: OwnedProcess): Promise<void> {
     await this.refresh(process);
     const ownership = this.ownership;
+    if (!ownership || ownership.root_pid !== positiveInteger(process.pid)) return;
     if (ownership) await terminateOwnedGroups(ownership, this.runtimeOptions());
+    if (this.ownership?.root_pid !== ownership.root_pid) return;
     this.ownership = undefined;
     await this.removePersistedOwnership();
   }
@@ -99,15 +142,19 @@ export class CodexProcessGroupLifecycle {
     return this.ownership ? structuredClone(this.ownership) : undefined;
   }
 
-  private async persist(): Promise<void> {
-    if (!this.ownershipFile || !this.ownership) return;
-    const serialized = `${JSON.stringify(this.ownership)}\n`;
+  private async persist(ownership = this.ownership): Promise<void> {
+    if (!this.ownershipFile || !ownership) return;
+    const serialized = `${JSON.stringify(ownership)}\n`;
     await this.enqueueFileOperation(async () => {
       await mkdir(dirname(this.ownershipFile), { recursive: true });
       const temporary = `${this.ownershipFile}.${globalThis.process.pid}.${randomUUID()}.tmp`;
-      await writeFile(temporary, serialized, "utf8");
-      await chmod(temporary, 0o600);
-      await rename(temporary, this.ownershipFile);
+      try {
+        await writeFile(temporary, serialized, "utf8");
+        await chmod(temporary, 0o600);
+        await rename(temporary, this.ownershipFile);
+      } finally {
+        await rm(temporary, { force: true });
+      }
     });
   }
 
