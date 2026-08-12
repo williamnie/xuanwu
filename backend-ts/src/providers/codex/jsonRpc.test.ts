@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { codexAppServerRpcTimeoutMs, CodexStdioJsonRpcTransport, runCodexTransportInitializeSmoke } from "./jsonRpc.ts";
 import type { ProviderEvent } from "../types.ts";
 import type { CodexJsonRpcProcess, CodexJsonRpcProcessFactory } from "./jsonRpc.ts";
+import { CodexProcessGroupLifecycle, type ProcessTreeEntry } from "./processLifecycle.ts";
 
 class FakeCodexProcess implements CodexJsonRpcProcess {
+  pid?: number;
   readonly stdin = new FakeStdin((line) => this.onRequest(line));
   readonly stdout: ReadableStream<Uint8Array>;
   readonly stderr: ReadableStream<Uint8Array>;
@@ -543,6 +545,68 @@ describe("Codex stdio JSON-RPC transport", () => {
         payload: "{\"threadId\":\"thread-1\",\"turnId\":\"turn-1\",\"error\":{\"message\":\"boom\",\"additionalDetails\":\"CODEX_API_KEY=[redacted]\"}}"
       }
     }]);
+  });
+
+  test("keeps health responsive and skips process inspection through a streaming delta flood", async () => {
+    let fake!: FakeCodexProcess;
+    let delivered = 0;
+    let inspections = 0;
+    const rows: ProcessTreeEntry[] = [
+      { command: "/opt/codex app-server --listen stdio://", pgid: 100, pid: 100, ppid: 50, rss_bytes: 16_384 }
+    ];
+    const lifecycle = new CodexProcessGroupLifecycle("", ["codex", "app-server"], {
+      inspect: () => {
+        inspections += 1;
+        Bun.sleepSync(1);
+        return rows;
+      },
+      runnerPid: 50,
+      signalGroup: (_pgid, signal) => { if (signal === "SIGTERM") fake.exit(0); },
+      sleep: async () => {},
+      stopGraceMs: 1
+    });
+    const transport = new CodexStdioJsonRpcTransport(config, {
+      onEvent: () => { delivered += 1; },
+      processFactory: () => {
+        fake = new FakeCodexProcess(() => {});
+        fake.pid = 100;
+        return fake;
+      },
+      processLifecycle: lifecycle
+    });
+    const health = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => Response.json({ ok: true })
+    });
+    try {
+      await transport.start();
+      expect(inspections).toBe(1);
+      const flood = Array.from({ length: 2_000 }, (_, index) => JSON.stringify({
+        method: "item/agentMessage/delta",
+        params: { delta: `token-${index}`, threadId: "thread-flood", turnId: "turn-flood" }
+      })).join("\n");
+      const started = performance.now();
+      const response = new Promise<Response>((resolve, reject) => {
+        setTimeout(() => { void fetch(new URL("/health", health.url)).then(resolve, reject); }, 0);
+      });
+      fake.sendStdoutChunk(`${flood}\n`);
+
+      await expect(response).resolves.toMatchObject({ status: 200 });
+      expect(performance.now() - started).toBeLessThan(750);
+      await waitFor(() => delivered === 2_000);
+      expect(inspections).toBe(1);
+
+      fake.sendStdoutChunk([
+        JSON.stringify({ method: "item/started", params: { item: { id: "one", type: "commandExecution" } } }),
+        JSON.stringify({ method: "item/completed", params: { item: { id: "one", type: "commandExecution" } } })
+      ].join("\n") + "\n");
+      await waitFor(() => inspections === 2);
+      expect(inspections).toBe(2);
+    } finally {
+      health.stop(true);
+      await transport.stop();
+    }
   });
 });
 

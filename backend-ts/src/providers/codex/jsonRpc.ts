@@ -57,6 +57,14 @@ const MAX_STDERR_LINES = 50;
 const MAX_LINE_BYTES = 10 * 1024 * 1024;
 export const CODEX_APP_SERVER_RPC_TIMEOUT_MS = 90_000;
 export const CODEX_APP_SERVER_IDLE_TTL_MS = 15_000;
+const CODEX_PROCESS_STRUCTURE_EVENTS = new Set([
+  "error",
+  "item/completed",
+  "item/started",
+  "thread/status/changed",
+  "turn/completed",
+  "turn/started"
+]);
 
 export class CodexStdioJsonRpcTransport {
   private nextId = 0;
@@ -268,7 +276,9 @@ export class CodexStdioJsonRpcTransport {
 
   private deliverEvent(method: string, params: unknown): void {
     const event = normalizeCodexEvent({ method, params });
-    void this.processLifecycle.refresh(this.process as CodexJsonRpcProcess).catch(() => {});
+    if (CODEX_PROCESS_STRUCTURE_EVENTS.has(method)) {
+      void this.processLifecycle.refresh(this.process).catch(() => {});
+    }
     if (event.runEvent?.terminal && event.session?.sessionId) {
       this.releaseSession(event.session.sessionId, event.session.turnId);
     }
@@ -301,7 +311,7 @@ export class CodexStdioJsonRpcTransport {
       this.processGeneration += 1;
       this.leases.clear();
       this.cancelIdleStop();
-      void this.processLifecycle.processExited(process).catch(() => {});
+      this.trackExitCleanup(process);
       if (!this.stopped) this.failPending(new Error(`codex app-server exited before response (code ${code})`));
     }, (error) => {
       if (this.process !== process) return;
@@ -309,8 +319,18 @@ export class CodexStdioJsonRpcTransport {
       this.processGeneration += 1;
       this.leases.clear();
       this.cancelIdleStop();
-      void this.processLifecycle.processExited(process).catch(() => {});
+      this.trackExitCleanup(process);
       this.failPending(asError(error));
+    });
+  }
+
+  private trackExitCleanup(process: CodexJsonRpcProcess): void {
+    const cleanup = this.processLifecycle.processExited(process).catch((error) => {
+      this.emitDiagnostic("process/exit_cleanup_failed", asError(error).message, asError(error).message);
+    });
+    this.stopping = cleanup;
+    void cleanup.finally(() => {
+      if (this.stopping === cleanup) this.stopping = undefined;
     });
   }
 
