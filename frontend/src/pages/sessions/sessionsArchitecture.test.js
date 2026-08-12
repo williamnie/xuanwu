@@ -32,6 +32,9 @@ test('list workspace transcript composer and info areas have explicit component 
   assert.match(chatSource, /className="client-chat-composer-section"/);
   assert.match(newSessionSource, /<PromptEditor/);
   assert.match(transcriptSource, /<SessionInfoPopover/);
+  assert.match(infoSource, /Qoder Credits/);
+  assert.match(infoSource, /不换算 USD\/CNY/);
+  assert.match(infoSource, /累计语义未验证/);
   assert.match(infoSource, /className="session-info-panel"/);
 });
 

@@ -280,21 +280,16 @@ export default function Sessions({
 
   const loadModels = useCallback(async (provider = 'codex', runtimeStatus = null) => {
     setModelsLoading(true);
-    if (provider !== 'codex') {
+    try {
+      const result = await systemApi.getProviderModels(provider);
+      const data = Array.isArray(result?.data?.data) ? result.data.data : result?.data;
+      setModels(Array.isArray(data) ? data : []);
+      setModelsError('');
+    } catch (err) {
       const providerStatus = (runtimeStatus?.providers || []).find(item => item.id === provider);
       const defaultModel = String(providerStatus?.default_model || '').trim();
       setModels(defaultModel ? [{ id: defaultModel, displayName: defaultModel, isDefault: true }] : []);
-      setModelsError(defaultModel ? '' : `${provider === 'claude' ? 'Claude Agent SDK' : provider} 未声明 model_list capability，使用 Provider 默认模型`);
-      setModelsLoading(false);
-      return;
-    }
-    try {
-      const result = await systemApi.getCodexModels();
-      setModels(result.data || []);
-      setModelsError('');
-    } catch (err) {
-      setModels([]);
-      setModelsError(err.message || '读取 Codex 模型列表失败');
+      setModelsError(err.message || `读取 ${provider} 模型列表失败，请手工输入 model ID`);
     } finally {
       setModelsLoading(false);
     }

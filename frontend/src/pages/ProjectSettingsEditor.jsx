@@ -362,6 +362,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
                 form={ui.profileForm}
                 loading={ui.profilesLoading}
                 modelOptions={modelOptions}
+                models={ui.codexModels}
                 modelsError={ui.codexModelsError || (ui.profileForm.provider !== ui.formProvider ? '当前 Profile 使用其他 Provider' : '')}
                 modelsLoading={ui.codexModelsLoading}
                 onEdit={profile => updateUi(draft => { draft.profileForm = normalizeAgentProfileForm(profile); draft.profileError = ''; })}
@@ -430,8 +431,13 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
       <div className="project-settings-grid">
         <div className="form-group">
           <label>默认模型</label>
-          {ui.codexModelsError ? (
-            <input className="form-control" onChange={event => onFieldChange('formModel', event.target.value)} placeholder="模型 API 失败，请手动填写 model ID" value={ui.formModel} />
+          {ui.formProvider === 'qoder' || ui.codexModelsError ? (
+            <>
+              <input className="form-control" list="project-provider-model-suggestions" onChange={event => onFieldChange('formModel', event.target.value)} placeholder="Provider 默认，或手动填写 model ID" value={ui.formModel} />
+              <datalist id="project-provider-model-suggestions">
+                {modelOptions.filter(option => option.value).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </datalist>
+            </>
           ) : (
             <select className="form-control" disabled={ui.codexModelsLoading} onChange={event => onFieldChange('formModel', event.target.value)} value={ui.formModel}>
               {modelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -442,16 +448,18 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
                 ? '正在读取 Provider 模型列表…'
               : ui.codexModelsError
                 ? `远端 model API 读取失败，已启用手填：${ui.codexModelsError}`
-                : '模型列表来自当前 Provider。'}
+                : ui.formProvider === 'qoder' && ui.codexModels.some(model => model?.verified === false)
+                  ? 'Qoder 账号发现不可用；候选仅是静态建议，当前值保留为未验证手工 model ID。'
+                  : '模型列表来自当前 Provider。'}
           </span>
         </div>
-        <div className="form-group">
+        {ui.formProvider !== 'qoder' ? <div className="form-group">
           <label>执行速度</label>
           <select className="form-control" onChange={event => onFieldChange('formServiceTier', event.target.value)} value={ui.formServiceTier}>
             {serviceTierOptions(ui.formServiceTier).map(option => <option key={option.value || 'standard'} value={option.value}>{option.label}</option>)}
           </select>
           <span className="project-settings-hint">标准速度适合大多数项目。</span>
-        </div>
+        </div> : null}
       </div>
 
       <div className="project-settings-grid">
@@ -469,16 +477,20 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
           <select className="form-control" onChange={event => onFieldChange('formSandbox', event.target.value)} value={ui.formSandbox}>
             <option value="workspace-write">仅当前项目可写（推荐）</option>
             <option value="read-only">只读</option>
-            <option value="danger-full-access">允许访问整个系统</option>
+            <option disabled={ui.formProvider === 'qoder'} value="danger-full-access">允许访问整个系统{ui.formProvider === 'qoder' ? '（Qoder 不支持）' : ''}</option>
           </select>
           <span className="project-settings-hint">
-            {ui.formProvider === 'pi-coding-agent'
+            {ui.formProvider === 'qoder'
+              ? 'Qoder permission 只提供工具级策略，不等于 Codex 或操作系统 sandbox；Bash 与整个系统访问会 fail closed。'
+              : ui.formProvider === 'pi-coding-agent'
               ? 'Pi 当前仅支持可证明的“只读”或显式“整个系统”；不支持 workspace-write。'
               : '同时影响执行器的文件、进程和本机网络访问边界。'}
           </span>
           {ui.formSandbox !== 'danger-full-access' && (
             <div className="project-settings-permission-notice" role="status">
-              {ui.formSandbox === 'read-only'
+              {ui.formProvider === 'qoder'
+                ? 'Qoder 的 workspace-write 仅允许能证明位于当前项目内的文件工具；Bash、外部路径与无法验证的访问会被拒绝。'
+                : ui.formSandbox === 'read-only'
                 ? '只读模式不能修改项目文件，也可能阻止需要写入缓存或构建产物的任务。'
                 : '如果任务需要访问项目目录外文件，或调用 127.0.0.1 / localhost 服务，执行器可能被沙箱拦截；请改用“允许访问整个系统”或收窄任务边界。'}
             </div>
@@ -489,7 +501,7 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
   );
 }
 
-function AgentProfileManager({ profiles, loading, form, error, modelOptions, modelsError, modelsLoading, onFieldChange, onSubmit, onEdit, onReset, providerCatalog, providerOptions }) {
+function AgentProfileManager({ profiles, loading, form, error, modelOptions, models, modelsError, modelsLoading, onFieldChange, onSubmit, onEdit, onReset, providerCatalog, providerOptions }) {
   const providerReady = providerOptions.some(option => option.value === form.provider);
   return (
     <div className="project-profile-manager">
@@ -522,24 +534,27 @@ function AgentProfileManager({ profiles, loading, form, error, modelOptions, mod
               </select>
             </label>
             <label className="form-group">默认模型
-              {modelsError ? (
-                <input className="form-control" placeholder="模型 API 失败，请手动填写 model ID" value={form.model} onChange={event => onFieldChange('model', event.target.value)} />
+              {form.provider === 'qoder' || modelsError ? (
+                <input className="form-control" list="profile-provider-model-suggestions" placeholder="Provider 默认，或手动填写 model ID" value={form.model} onChange={event => onFieldChange('model', event.target.value)} />
               ) : (
                 <select className="form-control" disabled={modelsLoading} value={form.model} onChange={event => onFieldChange('model', event.target.value)}>
                   {modelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               )}
+              <datalist id="profile-provider-model-suggestions">
+                {modelOptions.filter(option => option.value).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </datalist>
             </label>
             <label className="form-group">推理深度
               <select className="form-control" value={form.reasoning_effort} onChange={event => onFieldChange('reasoning_effort', event.target.value)}>
-                <option value="">沿用默认值</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">极高</option>
+                {profileEffortOptions(form, models).map(option => <option key={option.value || 'default'} value={option.value}>{option.label}</option>)}
               </select>
             </label>
-            <label className="form-group">执行速度
+            {form.provider !== 'qoder' ? <label className="form-group">执行速度
               <select className="form-control" value={form.service_tier} onChange={event => onFieldChange('service_tier', event.target.value)}>
                 {serviceTierOptions(form.service_tier).map(option => <option key={option.value || 'standard'} value={option.value}>{option.label}</option>)}
               </select>
-            </label>
+            </label> : null}
             <label className="form-group">操作确认
               <select className="form-control" value={form.approval_policy} onChange={event => onFieldChange('approval_policy', event.target.value)}>
                 <option value="">沿用项目设置</option><option value="never">自动运行</option><option value="danger-only">敏感操作时确认</option><option value="always">每次都确认</option>
@@ -547,7 +562,7 @@ function AgentProfileManager({ profiles, loading, form, error, modelOptions, mod
             </label>
             <label className="form-group">文件访问范围
               <select className="form-control" value={form.sandbox} onChange={event => onFieldChange('sandbox', event.target.value)}>
-                <option value="">沿用项目设置</option><option value="workspace-write">仅当前项目可写</option><option value="read-only">只读</option><option value="danger-full-access">整个系统</option>
+                <option value="">沿用项目设置</option><option value="workspace-write">仅当前项目可写</option><option value="read-only">只读</option><option disabled={form.provider === 'qoder'} value="danger-full-access">整个系统{form.provider === 'qoder' ? '（Qoder 不支持）' : ''}</option>
               </select>
             </label>
           </div>
@@ -568,4 +583,23 @@ function AgentProfileManager({ profiles, loading, form, error, modelOptions, mod
       {profiles.length > 0 && <div className="project-profile-list">{profiles.map(profile => <button key={profile.id} type="button" className="kanban-card-action-btn" onClick={() => onEdit(profile)}>{profile.name} · {profile.id}</button>)}</div>}
     </div>
   );
+}
+
+function profileEffortOptions(form, models = []) {
+  const inherited = { value: '', label: '沿用默认值' };
+  if (form.provider !== 'qoder') return [
+    inherited,
+    { value: 'low', label: '低' },
+    { value: 'medium', label: '中' },
+    { value: 'high', label: '高' },
+    { value: 'xhigh', label: '极高' },
+  ];
+  const selected = models.find(model => (model?.id || model?.model) === form.model);
+  const efforts = Array.isArray(selected?.supportedReasoningEfforts)
+    ? selected.supportedReasoningEfforts.map(item => item?.reasoningEffort).filter(Boolean)
+    : [];
+  if (!selected?.verified || !efforts.length) {
+    return form.reasoning_effort ? [inherited, { value: form.reasoning_effort, label: `${form.reasoning_effort}（未验证）` }] : [inherited];
+  }
+  return [inherited, ...efforts.map(value => ({ value, label: value }))];
 }

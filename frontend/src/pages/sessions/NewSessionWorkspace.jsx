@@ -121,11 +121,11 @@ export default function NewSessionWorkspace({
 
           <div className="bottom-tag-select">
             <SlidersHorizontal size={13} />
-            <span>沙箱: {sessionSettings.sandbox === 'danger-full-access' ? '完全访问模式' : '安全沙箱'}</span>
+            <span>{sessionSettings.provider === 'qoder' ? 'Qoder 工具权限（非 OS sandbox）' : `沙箱: ${sessionSettings.sandbox === 'danger-full-access' ? '完全访问模式' : '安全沙箱'}`}</span>
             <select value={sessionSettings.sandbox} onChange={(event) => handleSettingChange('sandbox', event.target.value)}>
-              <option value="workspace-write">本地安全沙箱</option>
-              <option value="danger-full-access">完全访问模式</option>
-              <option value="read-only">只读沙箱模式</option>
+              <option value="workspace-write">{sessionSettings.provider === 'qoder' ? '工作区工具策略' : '本地安全沙箱'}</option>
+              <option disabled={sessionSettings.provider === 'qoder'} value="danger-full-access">完全访问模式{sessionSettings.provider === 'qoder' ? '（Qoder 不支持）' : ''}</option>
+              <option value="read-only">{sessionSettings.provider === 'qoder' ? '只读工具策略' : '只读沙箱模式'}</option>
             </select>
           </div>
         </div>
@@ -147,7 +147,7 @@ function NewSessionPermissionControl({ settings, onSettingChange }) {
           onSettingChange('approvalPolicy', approvalPolicy);
         }}
       >
-        <option value="danger-full-access|never">完全访问权限</option>
+        <option disabled={settings.provider === 'qoder'} value="danger-full-access|never">完全访问权限{settings.provider === 'qoder' ? '（Qoder 不支持）' : ''}</option>
         <option value="workspace-write|never">工作区写入</option>
         <option value="workspace-write|danger-only">按需授权</option>
         <option value="workspace-write|always">每次授权</option>
@@ -170,9 +170,24 @@ function permissionPresetLabel(settings) {
 
 function NewSessionComposerActions({ settings, models, modelsError, modelsLoading, sending, canSubmit, onModelChange, onServiceTierChange, onSubmit }) {
   const tierOptions = serviceTierOptions(effectiveModelForSettings(settings, models), settings.serviceTier);
+  const manualModel = Boolean(modelsError || models.some((model) => model?.verified === false));
   return (
     <>
-      <div className="composer-embedded-select" title={modelsError ? `模型列表暂未加载：${modelsError}` : '模型'}>
+      {manualModel ? (
+        <label className="composer-embedded-model-manual" title="模型列表未验证，可手工输入 Qoder model ID">
+          <Brain size={13} />
+          <input
+            aria-label="手动填写模型 ID"
+            list="new-session-provider-model-suggestions"
+            placeholder={`${projectProviderLabel(settings.provider)} 默认 / 手填 model ID`}
+            value={settings.model}
+            onChange={(event) => onModelChange(event.target.value)}
+          />
+          <datalist id="new-session-provider-model-suggestions">
+            {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{modelLabel(model)}</option>)}
+          </datalist>
+        </label>
+      ) : <div className="composer-embedded-select" title={modelsError ? `模型列表暂未加载：${modelsError}` : '模型'}>
         <Brain size={13} />
         <span>{modelsLoading ? '读取模型' : settings.model ? compactModelName(settings.model) : `${projectProviderLabel(settings.provider)} 默认`}</span>
         <select disabled={modelsLoading} value={settings.model} onChange={(event) => onModelChange(event.target.value)}>
@@ -186,8 +201,8 @@ function NewSessionComposerActions({ settings, models, modelsError, modelsLoadin
             <option value={settings.model}>{compactModelName(settings.model)}</option>
           ) : null}
         </select>
-      </div>
-      <div className="composer-embedded-select">
+      </div>}
+      {settings.provider !== 'qoder' ? <div className="composer-embedded-select">
         <Gauge size={13} />
         <span>{serviceTierLabel(settings, models)}</span>
         <select value={settings.serviceTier || ''} onChange={(event) => onServiceTierChange(event.target.value)}>
@@ -195,7 +210,7 @@ function NewSessionComposerActions({ settings, models, modelsError, modelsLoadin
             <option key={tier.value || 'standard'} value={tier.value}>{tier.shortLabel || tier.label}</option>
           ))}
         </select>
-      </div>
+      </div> : null}
       <button
         type="button"
         className="composer-circle-submit"

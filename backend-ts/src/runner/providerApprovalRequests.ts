@@ -26,7 +26,7 @@ export function syncProviderApprovalRequest(
   event: ProviderEvent,
   activeRunID: string
 ): void {
-  if (event.provider !== "codex") return;
+  if (!event.provider || !["codex", "qoder"].includes(String(event.provider))) return;
   const method = event.raw?.method?.trim() ?? "";
   if (method === "approval/requested") {
     recordApprovalRequested(input, event, activeRunID);
@@ -52,7 +52,7 @@ function recordApprovalRequested(input: ApprovalRuntimeContext, event: ProviderE
   if (approvalID === "") return;
   upsertPiApprovalRequest(input.database, {
     approval_id: approvalID,
-    approval_source: "codex_provider_event",
+    approval_source: `${event.provider}_provider_event`,
     issue_id: input.issueId,
     project_id: input.projectId,
     provider: event.provider,

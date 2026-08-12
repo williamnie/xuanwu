@@ -1,10 +1,14 @@
 import type {
   AuthOptions,
+  CanUseTool,
+  ModelInfo,
+  ModelPolicyProvider,
   Options,
   ProcessTransportOptions,
   Query,
   QueryTransportProvider,
   SDKMessage,
+  SDKResultMessage,
   Transport
 } from "@qoder-ai/qoder-agent-sdk";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
@@ -15,12 +19,14 @@ import {
   qoderResultFailure,
   type QoderFailureDetails
 } from "./events.ts";
+import { qoderPermissionOptions } from "./permissionBroker.ts";
 export { QODER_VERSION_PAIR } from "./version.ts";
 
 export type QoderTerminal = "succeeded" | "failed" | "interrupted" | "cancelled";
 
 export type QoderRunOptions = {
   approvalPolicy?: string;
+  canUseTool?: CanUseTool;
   cwd: string;
   invocationKey: string;
   model?: string;
@@ -37,7 +43,35 @@ export type QoderQueryResult = {
   messageRef: string;
   sessionId: string;
   terminal: QoderTerminal;
-  usage?: { totalTokens?: number; toolUses?: number; durationMs?: number };
+  usage?: QoderUsageProjection;
+};
+
+export type QoderUsageProjection = {
+  assistant_requests: Array<Record<string, unknown>>;
+  credits: {
+    request?: { billable?: boolean; original_value?: number; provenance: "result.usage"; value: number };
+    session?: {
+      completeness: "partial";
+      provenance: "query.getUsageInfo.session" | "result.total_credits";
+      semantics: "session_cumulative_unverified";
+      value: number;
+    };
+  };
+  model_usage: Record<string, Record<string, unknown>>;
+  money: { completeness: "unavailable"; reason: "qoder_credits_are_not_currency" };
+  result: {
+    cached_input_tokens?: number;
+    duration_ms: number;
+    input_tokens: number;
+    output_tokens: number;
+    provenance: "result.usage";
+    total_tokens: number;
+  };
+};
+
+export type QoderMessageContext = {
+  interrupted: boolean;
+  usage?: QoderUsageProjection;
 };
 
 export type QoderProcessLease = {
@@ -60,8 +94,9 @@ export interface QoderSdkFacade {
   run(
     prompt: string,
     options: QoderRunOptions,
-    onMessage?: (message: SDKMessage, context: { interrupted: boolean }) => void
+    onMessage?: (message: SDKMessage, context: QoderMessageContext) => void
   ): Promise<QoderQueryResult>;
+  listModels(): Promise<ModelInfo[]>;
   /** 精确中断 invocation 对应的 active Query。 */
   interrupt(invocationKey: string): Promise<void>;
   activeCount(): number;
@@ -72,17 +107,22 @@ export interface QoderSdkFacade {
 export type QoderSdkFacadeOptions = {
   /** Offline fake-stream seam; production uses the pinned SDK query export. */
   queryFactory?: (input: { prompt: string; options: Options }) => Query;
+  /** Offline control-query seam; production starts a prompt-free SDK query. */
+  discoveryQueryFactory?: (input: { options: Options }) => Promise<Query> | Query;
+  modelCacheTtlMs?: number;
+  now?: () => number;
 };
 
 export function buildQoderQueryOptions(
   options: Partial<QoderRunOptions> = {},
   runtime?: ProviderRuntimeConfig
 ): Pick<Options,
-  "abortController" | "allowedTools" | "auth" | "cwd" | "disallowedTools" | "env" | "model" |
-  "pathToQoderCLIExecutable" | "permissionMode" | "resume" | "sessionId" | "systemPrompt" | "tools"
+  "abortController" | "allowedTools" | "auth" | "canUseTool" | "cwd" | "disallowedTools" | "env" | "model" |
+  "pathToQoderCLIExecutable" | "permissionMode" | "resolveModel" | "resume" | "sessionId" | "systemPrompt" | "tools"
 > {
-  const policy = qoderPolicyOptions(options.approvalPolicy, options.sandbox);
+  const policy = qoderPermissionOptions(options.approvalPolicy, options.sandbox, options.canUseTool);
   const model = clean(options.model) || clean(runtime?.model);
+  const resolveModel = qoderModelPolicy(model, options.reasoningEffort);
   const systemPrompt = clean(options.systemPrompt);
   return {
     ...(runtime ? {
@@ -95,7 +135,8 @@ export function buildQoderQueryOptions(
     } : {}),
     ...policy,
     cwd: clean(options.cwd) || undefined,
-    model: model || undefined,
+    model: resolveModel ? undefined : model || undefined,
+    resolveModel,
     resume: clean(options.resume) || undefined,
     sessionId: clean(options.resume) === "" ? clean(options.sessionId) || undefined : undefined,
     systemPrompt: systemPrompt ? { type: "preset", preset: "qodercli", append: systemPrompt } : undefined
@@ -143,6 +184,7 @@ type ActiveQuery = {
 class RealQoderSdkFacade implements QoderSdkFacade {
   available = true;
   private readonly active = new Map<string, ActiveQuery>();
+  private modelCache?: { expiresAt: number; models: ModelInfo[] };
 
   constructor(
     private readonly config: ProviderRuntimeConfig,
@@ -152,11 +194,10 @@ class RealQoderSdkFacade implements QoderSdkFacade {
   async run(
     prompt: string,
     options: QoderRunOptions,
-    onMessage?: (message: SDKMessage, context: { interrupted: boolean }) => void
+    onMessage?: (message: SDKMessage, context: QoderMessageContext) => void
   ): Promise<QoderQueryResult> {
     const invocationKey = required(options.invocationKey, "Qoder invocation key");
     if (this.active.has(invocationKey)) throw qoderError("configuration", `Qoder invocation ${invocationKey} is already active`);
-    assertQoderReasoningEffort(options.reasoningEffort);
     const active: ActiveQuery = {
       controller: new AbortController(),
       interruptAcknowledged: false,
@@ -175,6 +216,7 @@ class RealQoderSdkFacade implements QoderSdkFacade {
     let initSeen = false;
     let resultMessage: Extract<SDKMessage, { type: "result" }> | undefined;
     let resultCount = 0;
+    const assistantRequests: SDKMessage[] = [];
     try {
       const query = this.options.queryFactory
         ? this.options.queryFactory({ prompt, options: queryOptions })
@@ -192,6 +234,7 @@ class RealQoderSdkFacade implements QoderSdkFacade {
           resultMessage = message;
           continue;
         }
+        if (message.type === "assistant") assistantRequests.push(message);
         if (message.type === "system" && message.subtype === "init") initSeen = true;
         onMessage?.(message, { interrupted: active.interruptRequested });
       }
@@ -208,7 +251,8 @@ class RealQoderSdkFacade implements QoderSdkFacade {
         throw qoderError("protocol", `Qoder query produced ${resultCount} result messages`, { sessionId: active.sessionId });
       }
       if (!initSeen) throw qoderError("protocol", "Qoder query produced a result before system/init", { sessionId: active.sessionId });
-      onMessage?.(resultMessage, { interrupted: active.interruptRequested });
+      const usage = await qoderUsageProjection(resultMessage, assistantRequests, query);
+      onMessage?.(resultMessage, { interrupted: active.interruptRequested, usage });
       const terminal = active.interruptRequested ? "interrupted" : qoderMessageTerminal(resultMessage);
       if (terminal === "failed") throw new QoderExecutionError(qoderResultFailure(resultMessage));
       if (!terminal) throw qoderError("protocol", "Qoder result did not map to a terminal", { sessionId: active.sessionId });
@@ -217,10 +261,7 @@ class RealQoderSdkFacade implements QoderSdkFacade {
         messageRef: clean(resultMessage.uuid),
         sessionId: clean(resultMessage.session_id) || active.sessionId,
         terminal,
-        usage: {
-          durationMs: resultMessage.duration_ms,
-          totalTokens: resultMessage.usage.input_tokens + resultMessage.usage.output_tokens
-        }
+        usage
       };
     } catch (error) {
       if (error instanceof QoderExecutionError) throw error;
@@ -256,6 +297,40 @@ class RealQoderSdkFacade implements QoderSdkFacade {
     }
   }
 
+  async listModels(): Promise<ModelInfo[]> {
+    const now = this.options.now?.() ?? Date.now();
+    if (this.modelCache && now < this.modelCache.expiresAt) return structuredClone(this.modelCache.models);
+    const queryOptions: Options = {
+      ...buildQoderQueryOptions({
+        approvalPolicy: "never",
+        cwd: clean(this.config.cwd) || process.cwd(),
+        invocationKey: "qoder-model-discovery",
+        sandbox: "read-only"
+      }, this.config),
+      persistSession: false
+    };
+    let query: Query | undefined;
+    try {
+      query = this.options.discoveryQueryFactory
+        ? await this.options.discoveryQueryFactory({ options: queryOptions })
+        : await this.productionDiscoveryQuery(queryOptions);
+      await query.initializationResult();
+      const models = await query.getAvailableModels({ fetchStrategy: "live" });
+      if (!Array.isArray(models) || models.length === 0) throw new Error("Qoder model discovery returned no models");
+      const normalized = models.filter(validModelInfo).map((model) => structuredClone(model));
+      if (normalized.length === 0) throw new Error("Qoder model discovery returned malformed models");
+      this.modelCache = {
+        expiresAt: now + Math.max(1, this.options.modelCacheTtlMs ?? 30_000),
+        models: normalized
+      };
+      return structuredClone(normalized);
+    } catch (error) {
+      throw qoderError("sdk", `Qoder model discovery failed: ${redactSensitiveText(error instanceof Error ? error.message : String(error))}`);
+    } finally {
+      await query?.interrupt().catch(() => undefined);
+    }
+  }
+
   activeCount(): number {
     return this.active.size;
   }
@@ -283,6 +358,7 @@ class RealQoderSdkFacade implements QoderSdkFacade {
       active.transport?.close();
       if (this.active.get(key) === active) this.active.delete(key);
     }));
+    this.modelCache = undefined;
   }
 
   private async productionQuery(prompt: string, options: Options, active: ActiveQuery): Promise<Query> {
@@ -295,6 +371,11 @@ class RealQoderSdkFacade implements QoderSdkFacade {
       }
     };
     return sdk.query({ prompt, options: { ...options, transport } });
+  }
+
+  private async productionDiscoveryQuery(options: Options): Promise<Query> {
+    const sdk = await import("@qoder-ai/qoder-agent-sdk");
+    return sdk.query({ prompt: emptyPrompt(), options });
   }
 }
 
@@ -328,7 +409,8 @@ export function createFakeQoderSdkFacade(
         }
         if (resultCount > 1) throw qoderError("protocol", `Qoder query produced ${resultCount} result messages`, { sessionId });
         if (result && !initSeen) throw qoderError("protocol", "Qoder query produced a result before system/init", { sessionId });
-        if (result) onMessage?.(result, { interrupted: interrupted.keys.includes(runOptions.invocationKey) });
+        const usage = result ? await qoderUsageProjection(result, [], undefined) : undefined;
+        if (result) onMessage?.(result, { interrupted: interrupted.keys.includes(runOptions.invocationKey), usage });
         const terminal = interrupted.keys.includes(runOptions.invocationKey)
           ? "interrupted"
           : result ? qoderMessageTerminal(result) : options.terminal;
@@ -338,7 +420,8 @@ export function createFakeQoderSdkFacade(
           invocationRef: runOptions.invocationKey,
           messageRef: result ? clean(result.uuid) : "",
           sessionId,
-          terminal
+          terminal,
+          usage
         };
       } finally {
         active.delete(runOptions.invocationKey);
@@ -349,48 +432,110 @@ export function createFakeQoderSdkFacade(
       interrupted.keys.push(invocationKey);
     },
     activeCount: () => active.size,
+    async listModels() { throw new Error("fake Qoder model discovery is not configured"); },
     processLeases: () => [],
     async close() { active.clear(); }
   };
   return { facade, interrupted, calls };
 }
 
-function qoderPolicyOptions(
-  approvalPolicy: string | undefined,
-  sandbox: string | undefined
-): Pick<Options, "allowedTools" | "disallowedTools" | "permissionMode" | "tools"> {
-  const approval = clean(approvalPolicy) || "never";
-  if (approval !== "never") {
-    throw qoderError("policy_input", `Qoder approval policy ${approval} requires the later approval integration`);
-  }
-  const mode = clean(sandbox) || "workspace-write";
-  if (mode === "danger-full-access") {
-    throw qoderError("policy_input", "Qoder danger-full-access is disabled until an explicit unsafe policy exists");
-  }
-  if (mode === "read-only") {
-    const allowedTools = ["Read", "Grep", "Glob"];
-    return {
-      allowedTools,
-      disallowedTools: ["Agent", "Bash", "Edit", "NotebookEdit", "Write"],
-      permissionMode: "dontAsk",
-      tools: allowedTools
-    };
-  }
-  if (mode !== "workspace-write") throw qoderError("policy_input", `Unsupported Qoder sandbox ${mode}`);
-  const allowedTools = ["Read", "Grep", "Glob", "Edit", "Write"];
-  return {
-    allowedTools,
-    disallowedTools: ["Bash", "NotebookEdit"],
-    permissionMode: "dontAsk",
-    tools: allowedTools
+function qoderModelPolicy(modelValue: string, effortValue: string | undefined): ModelPolicyProvider | undefined {
+  const effort = clean(effortValue);
+  if (!effort) return undefined;
+  const model = clean(modelValue);
+  if (!model) throw qoderError("policy_input", "Qoder reasoning effort requires an explicitly selected model");
+  return ({ availableModels }) => {
+    const selected = availableModels.find((item) => item.value === model || item.modelId === model || item.model === model);
+    if (!selected) throw qoderError("policy_input", `Qoder model ${model} is not in the current account model list`);
+    const efforts = Array.isArray(selected.efforts) ? selected.efforts.map(clean).filter(Boolean) : [];
+    if (!efforts.includes(effort)) {
+      throw qoderError("policy_input", `Qoder model ${model} does not support reasoning effort ${effort}`);
+    }
+    return { model, parameters: { reasoningEffort: effort } };
   };
 }
 
-function assertQoderReasoningEffort(value: string | undefined): void {
-  const effort = clean(value);
-  if (effort !== "") {
-    throw qoderError("policy_input", `Qoder reasoning effort ${effort} has no stable typed SDK mapping in the pinned runtime`);
-  }
+async function qoderUsageProjection(
+  result: SDKResultMessage,
+  assistantMessages: SDKMessage[],
+  query: Query | undefined
+): Promise<QoderUsageProjection> {
+  const resultUsage = result.usage;
+  const requestCredits = finiteNumber(resultUsage.credits);
+  const totalCredits = finiteNumber(result.total_credits);
+  const usagePromise = query && typeof query.getUsageInfo === "function" ? query.getUsageInfo() : Promise.resolve(null);
+  const usageInfo = await usagePromise.catch(() => null);
+  const sessionCredits = finiteNumber(usageInfo?.session?.total_credits);
+  return {
+    assistant_requests: assistantMessages.flatMap((message) => {
+      if (message.type !== "assistant") return [];
+      const usage = message.message.usage;
+      if (!usage) return [];
+      return [compactObject({
+        billable: usage.billable,
+        credits: finiteNumber(usage.credits),
+        input_tokens: finiteNumber(usage.input_tokens),
+        model: clean(message.message.model),
+        original_credits: finiteNumber(usage.original_credits),
+        output_tokens: finiteNumber(usage.output_tokens),
+        provenance: "assistant.message.usage",
+        request_id: clean(message.request_id) || clean(resultUsage.request_id)
+      })];
+    }),
+    credits: {
+      ...(requestCredits === undefined ? {} : {
+        request: compactObject({
+          billable: resultUsage.billable,
+          original_value: finiteNumber(resultUsage.original_credits),
+          provenance: "result.usage",
+          value: requestCredits
+        }) as QoderUsageProjection["credits"]["request"]
+      }),
+      ...(sessionCredits === undefined && totalCredits === undefined ? {} : {
+        session: {
+          completeness: "partial",
+          provenance: sessionCredits === undefined ? "result.total_credits" : "query.getUsageInfo.session",
+          semantics: "session_cumulative_unverified",
+          value: sessionCredits ?? totalCredits!
+        }
+      })
+    },
+    model_usage: Object.fromEntries(Object.entries(result.modelUsage).map(([model, usage]) => [model, compactObject({
+      cache_creation_input_tokens: finiteNumber(usage.cacheCreationInputTokens),
+      cache_read_input_tokens: finiteNumber(usage.cacheReadInputTokens),
+      credits: finiteNumber(usage.credits),
+      input_tokens: finiteNumber(usage.inputTokens),
+      output_tokens: finiteNumber(usage.outputTokens),
+      web_search_requests: finiteNumber(usage.webSearchRequests)
+    })])),
+    money: { completeness: "unavailable", reason: "qoder_credits_are_not_currency" },
+    result: {
+      ...(finiteNumber(resultUsage.cache_read_input_tokens) === undefined ? {} : {
+        cached_input_tokens: finiteNumber(resultUsage.cache_read_input_tokens)
+      }),
+      duration_ms: result.duration_ms,
+      input_tokens: resultUsage.input_tokens,
+      output_tokens: resultUsage.output_tokens,
+      provenance: "result.usage",
+      total_tokens: resultUsage.input_tokens + resultUsage.output_tokens
+    }
+  };
+}
+
+function validModelInfo(value: ModelInfo): boolean {
+  return clean(value?.value) !== "" && clean(value?.displayName) !== "" && value?.isEnabled !== false;
+}
+
+function emptyPrompt(): AsyncIterable<never> {
+  return { async *[Symbol.asyncIterator]() {} };
+}
+
+function compactObject(input: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined && value !== ""));
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 function qoderException(error: unknown, sessionId: string): QoderExecutionError {

@@ -13,9 +13,9 @@ import { probeQoderRuntime, type QoderRuntimeProbe } from "./runtime.ts";
 const QODER_CAPABILITIES: ProviderCapabilities = {
   issueExecution: true,
   sessions: { create: true, resume: true, list: true, read: true, fork: false, steerWhileRunning: false, export: false },
-  control: { interrupt: true, approvals: "none" },
-  models: { list: false, switchDuringSession: false },
-  usage: { tokens: "attempt", money: "provider-reported" }
+  control: { interrupt: true, approvals: "host-callback" },
+  models: { list: true, switchDuringSession: false },
+  usage: { tokens: "attempt" }
 };
 
 export function qoderManifest(): ExecutorProviderManifest {

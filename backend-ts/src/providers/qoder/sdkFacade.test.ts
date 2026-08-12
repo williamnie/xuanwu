@@ -24,7 +24,11 @@ function init(sessionId: string): SDKSystemInitMessage {
   };
 }
 
-function result(sessionId: string, uuid = `result-${sessionId}`): SDKResultMessage {
+function result(
+  sessionId: string,
+  uuid = `result-${sessionId}`,
+  overrides: Partial<SDKResultMessage> = {}
+): SDKResultMessage {
   return {
     type: "result",
     subtype: "success",
@@ -50,11 +54,97 @@ function result(sessionId: string, uuid = `result-${sessionId}`): SDKResultMessa
     modelUsage: {},
     permission_denials: [],
     uuid,
-    session_id: sessionId
-  };
+    session_id: sessionId,
+    ...overrides
+  } as SDKResultMessage;
 }
 
 describe("Qoder Q2 real facade with offline fake streams", () => {
+  test("prompt-free model discovery uses a short TTL cache and refreshes explicitly", async () => {
+    let now = 1_000;
+    let discoveries = 0;
+    let interrupts = 0;
+    const facade = createQoderSdkFacade(config(1_000), {
+      modelCacheTtlMs: 50,
+      now: () => now,
+      discoveryQueryFactory: () => ({
+        initializationResult: async () => ({ session_id: "discover" }),
+        getAvailableModels: async () => {
+          discoveries += 1;
+          return [{ value: `performance-${discoveries}`, displayName: "Performance", description: "fixture", isEnabled: true }];
+        },
+        interrupt: async () => { interrupts += 1; }
+      } as unknown as Query)
+    });
+
+    await expect(facade.listModels()).resolves.toMatchObject([{ value: "performance-1" }]);
+    await expect(facade.listModels()).resolves.toMatchObject([{ value: "performance-1" }]);
+    expect(discoveries).toBe(1);
+    now += 51;
+    await expect(facade.listModels()).resolves.toMatchObject([{ value: "performance-2" }]);
+    expect(discoveries).toBe(2);
+    expect(interrupts).toBe(2);
+  });
+
+  test("projects result, model, assistant-request, and session Credits with explicit provenance", async () => {
+    const facade = createQoderSdkFacade(config(1_000), {
+      queryFactory: ({ options }) => {
+        const sessionId = options.sessionId ?? "";
+        const stream = new FakeQuery(options);
+        stream.setUsageInfo({ session: { total_credits: 7, model_usage: { performance: { credits: 7 } } } });
+        stream.push(init(sessionId));
+        stream.push({
+          type: "assistant",
+          message: {
+            content: [],
+            id: "message-1",
+            model: "performance",
+            role: "assistant",
+            stop_reason: "end_turn",
+            stop_sequence: null,
+            type: "message",
+            usage: { credits: 1.25, input_tokens: 10, output_tokens: 4 }
+          },
+          parent_tool_use_id: null,
+          request_id: "request-1",
+          session_id: sessionId,
+          uuid: "assistant-1"
+        } as unknown as SDKMessage);
+        stream.push(result(sessionId, "result-usage", {
+          total_credits: 7,
+          usage: { ...result(sessionId).usage, credits: 1.25, input_tokens: 10, output_tokens: 4 },
+          modelUsage: {
+            performance: {
+              cacheCreationInputTokens: 0,
+              cacheReadInputTokens: 2,
+              contextWindow: 128_000,
+              costUSD: 0,
+              credits: 1.25,
+              inputTokens: 10,
+              maxOutputTokens: 8_192,
+              outputTokens: 4,
+              webSearchRequests: 0
+            }
+          }
+        }));
+        stream.end();
+        return stream.query;
+      }
+    });
+
+    const outcome = await facade.run("go", runOptions("inv-usage", "session-usage"));
+    expect(outcome.usage).toMatchObject({
+      assistant_requests: [{ credits: 1.25, provenance: "assistant.message.usage", request_id: "request-1" }],
+      credits: {
+        request: { provenance: "result.usage", value: 1.25 },
+        session: { completeness: "partial", provenance: "query.getUsageInfo.session", value: 7 }
+      },
+      model_usage: { performance: { credits: 1.25, input_tokens: 10, output_tokens: 4 } },
+      money: { completeness: "unavailable", reason: "qoder_credits_are_not_currency" },
+      result: { input_tokens: 10, output_tokens: 4, provenance: "result.usage", total_tokens: 14 }
+    });
+  });
+
   test("active queries are invocation-scoped and interrupt does not cross streams", async () => {
     const streams = new Map<string, FakeQuery>();
     const facade = createQoderSdkFacade(config(1_000), {
@@ -159,6 +249,7 @@ class FakeQuery {
   interruptCount = 0;
   private done = false;
   private failure: unknown;
+  private usageInfo: Awaited<ReturnType<Query["getUsageInfo"]>> = null;
   private readonly queued: Array<IteratorResult<SDKMessage>> = [];
   private readonly pending: Array<{
     reject: (error: unknown) => void;
@@ -172,6 +263,7 @@ class FakeQuery {
     const iterator = {
       [Symbol.asyncIterator]: () => iterator,
       interrupt: async () => { this.interruptCount += 1; },
+      getUsageInfo: async () => this.usageInfo,
       next: () => this.next(),
       return: async () => ({ done: true as const, value: undefined }),
       throw: async (error?: unknown) => { throw error; }
@@ -184,6 +276,10 @@ class FakeQuery {
     const waiter = this.pending.shift();
     if (waiter) waiter.resolve({ done: false, value: message });
     else this.queued.push({ done: false, value: message });
+  }
+
+  setUsageInfo(value: Awaited<ReturnType<Query["getUsageInfo"]>>): void {
+    this.usageInfo = value;
   }
 
   end(): void {

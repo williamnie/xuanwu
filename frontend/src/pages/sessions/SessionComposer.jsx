@@ -58,7 +58,7 @@ export default function SessionComposer({
   const selectedModel = models.find((model) => model.id === settings.model || model.model === settings.model);
   const defaultModel = models.find((model) => model.isDefault) || models[0] || null;
   const effectiveModel = selectedModel || defaultModel;
-  const effortOptions = visibleEffortOptions(effectiveModel, settings.reasoningEffort);
+  const effortOptions = visibleEffortOptions(effectiveModel, settings.reasoningEffort, settings.provider);
   const tierOptions = serviceTierOptions(effectiveModel, settings.serviceTier);
   const composerRuntimeControls = runtimeControls ?? (
     <RuntimeControls
@@ -177,23 +177,40 @@ function queueMessagePreview(item) {
 }
 
 function RuntimeControls({ settings, onSettingChange, models, modelsLoading, modelsError, effortOptions, tierOptions, effectiveModel }) {
+  const manualModel = Boolean(modelsError || models.some((model) => model?.verified === false));
   return (
     <>
       <PermissionSelect settings={settings} onSettingChange={onSettingChange} />
-      <CompactSelect
-        className="model"
-        icon={<Cpu size={14} />}
-        value={settings.model}
-        displayLabel={modelDisplayLabel(settings.model, effectiveModel, models)}
-        onChange={(value) => onSettingChange('model', value)}
-        title={modelHint(modelsLoading, modelsError)}
-      >
-        <option value="">{modelPlaceholder(modelsLoading, modelsError, effectiveModel)}</option>
-        {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{compactModelName(modelLabel(model))}</option>)}
-        {settings.model && !models.some((model) => model.id === settings.model || model.model === settings.model) && (
-          <option value={settings.model}>{settings.model}</option>
-        )}
-      </CompactSelect>
+      {manualModel ? (
+        <label className="session-composer-model-manual" title="模型列表未验证，可手工输入 Qoder model ID">
+          <Cpu size={14} />
+          <input
+            aria-label="手动填写模型 ID"
+            list="session-provider-model-suggestions"
+            placeholder="Provider 默认 / 手填 model ID"
+            value={settings.model}
+            onChange={(event) => onSettingChange('model', event.target.value)}
+          />
+          <datalist id="session-provider-model-suggestions">
+            {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{modelLabel(model)}</option>)}
+          </datalist>
+        </label>
+      ) : (
+        <CompactSelect
+          className="model"
+          icon={<Cpu size={14} />}
+          value={settings.model}
+          displayLabel={modelDisplayLabel(settings.model, effectiveModel, models)}
+          onChange={(value) => onSettingChange('model', value)}
+          title={modelHint(modelsLoading, modelsError)}
+        >
+          <option value="">{modelPlaceholder(modelsLoading, modelsError, effectiveModel)}</option>
+          {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{compactModelName(modelLabel(model))}</option>)}
+          {settings.model && !models.some((model) => model.id === settings.model || model.model === settings.model) && (
+            <option value={settings.model}>{settings.model}</option>
+          )}
+        </CompactSelect>
+      )}
       <CompactSelect
         className="effort"
         icon={<Brain size={14} />}
@@ -206,7 +223,7 @@ function RuntimeControls({ settings, onSettingChange, models, modelsLoading, mod
           <option key={effortOptionKey(option)} value={option.value}>{option.shortLabel || option.label}</option>
         ))}
       </CompactSelect>
-      <CompactSelect
+      {settings.provider !== 'qoder' ? <CompactSelect
         className="speed"
         icon={<Gauge size={14} />}
         value={settings.serviceTier || SERVICE_TIER_STANDARD}
@@ -217,7 +234,7 @@ function RuntimeControls({ settings, onSettingChange, models, modelsLoading, mod
         {tierOptions.map((option) => (
           <option key={serviceTierOptionKey(option)} value={option.value}>{option.shortLabel || option.label}</option>
         ))}
-      </CompactSelect>
+      </CompactSelect> : null}
     </>
   );
 }
@@ -239,7 +256,15 @@ function PermissionSelect({ settings, onSettingChange }) {
       }}
       title="权限与授权策略"
     >
-      {PERMISSION_PRESETS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      {PERMISSION_PRESETS.map((option) => (
+        <option
+          disabled={settings.provider === 'qoder' && option.sandbox === 'danger-full-access'}
+          key={option.value}
+          value={option.value}
+        >
+          {option.label}{settings.provider === 'qoder' && option.sandbox === 'danger-full-access' ? '（Qoder 不支持）' : ''}
+        </option>
+      ))}
     </CompactSelect>
   );
 }
@@ -321,9 +346,24 @@ function queueStatusLabel(status, index) {
   return `排队 ${index + 1}`;
 }
 
-function visibleEffortOptions(model, selectedValue) {
+function visibleEffortOptions(model, selectedValue, provider) {
   const supported = supportedEffortValues(model);
   const inherited = { value: '', label: '默认推理强度', shortLabel: effortShortLabel(model?.defaultReasoningEffort) || '默认' };
+  if (provider === 'qoder') {
+    if (model?.verified !== true || !supported.length) {
+      return selectedValue
+        ? [inherited, { value: selectedValue, label: `${selectedValue}（未验证）`, shortLabel: selectedValue }]
+        : [inherited];
+    }
+    const qoderOptions = supported.map((value) => {
+      const known = REASONING_EFFORT_OPTIONS.find((option) => option.value === value);
+      return known || { value, label: value, shortLabel: value };
+    });
+    if (selectedValue && !supported.includes(selectedValue)) {
+      qoderOptions.push({ value: selectedValue, label: `${selectedValue}（当前模型不支持）`, shortLabel: selectedValue });
+    }
+    return [inherited, ...qoderOptions];
+  }
   if (!supported.length) return [inherited, ...REASONING_EFFORT_OPTIONS.filter((option) => option.value)];
   return [inherited, ...REASONING_EFFORT_OPTIONS.filter((option) => supported.includes(option.value) || option.value === selectedValue)];
 }

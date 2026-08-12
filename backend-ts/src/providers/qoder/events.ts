@@ -3,12 +3,15 @@ import { redactionRegistry } from "../../security/redactionRegistry.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
 import { normalizedRunEvent, providerEventSourceRef, providerRunCost, unknownRunEvent } from "../runEvents.ts";
 import type { NormalizedRunEvent, ProviderEvent, ProviderMetadataValue, SessionRef } from "../types.ts";
+import type { QoderUsageProjection } from "./sdkFacade.ts";
 
 const PROVIDER = "qoder" as const;
 
 export type QoderEventContext = {
   interrupted?: boolean;
   invocationRef: string;
+  resume?: boolean;
+  usage?: QoderUsageProjection;
 };
 
 export type QoderFailureCategory =
@@ -40,7 +43,7 @@ export function projectQoderMessage(message: SDKMessage, context: QoderEventCont
   const session = messageSession(raw);
   const event: ProviderEvent = {
     provider: PROVIDER,
-    raw: { method, payload: redactedRawSummary(raw) },
+    raw: { method, payload: redactedRawSummary(raw, context.usage) },
     type: providerEventType(raw)
   };
   if (session) event.session = session;
@@ -157,8 +160,8 @@ function qoderRunEvent(
 ): NormalizedRunEvent {
   const type = clean(raw.type);
   const subtype = clean(raw.subtype);
-  const metadata = qoderMetadata(raw, context.invocationRef);
-  if (type === "result") return qoderResultRunEvent(method, raw, event.session, metadata, context.interrupted === true);
+  const metadata = qoderMetadata(raw, context);
+  if (type === "result") return qoderResultRunEvent(method, raw, event.session, metadata, context);
   if (type === "system" && subtype === "init") {
     return normalizedRunEvent({ kind: "started", metadata, method, outcome: "running", provider: PROVIDER, session: event.session });
   }
@@ -186,13 +189,13 @@ function qoderResultRunEvent(
   raw: Record<string, unknown>,
   session: SessionRef | undefined,
   metadata: Record<string, ProviderMetadataValue>,
-  interrupted: boolean
+  context: QoderEventContext
 ): NormalizedRunEvent {
-  if (interrupted) {
+  if (context.interrupted) {
     return normalizedRunEvent({ kind: "error", metadata, method, outcome: "interrupted", provider: PROVIDER, session });
   }
   const succeeded = clean(raw.subtype) === "success" && raw.is_error === false;
-  const cost = qoderResultCost(method, raw, session);
+  const cost = context.resume ? undefined : qoderResultCost(method, raw, session, context.usage);
   return normalizedRunEvent({
     ...(cost ? { cost } : {}),
     kind: succeeded ? "completed" : "error",
@@ -205,14 +208,21 @@ function qoderResultRunEvent(
   });
 }
 
-function qoderResultCost(method: string, raw: Record<string, unknown>, session?: SessionRef) {
-  const usage = recordValue(raw.usage);
+function qoderResultCost(
+  method: string,
+  raw: Record<string, unknown>,
+  session: SessionRef | undefined,
+  projection?: QoderUsageProjection
+) {
+  const usage: Record<string, unknown> = projection?.result
+    ? { ...projection.result }
+    : recordValue(raw.usage);
   const input = safeNumber(usage.input_tokens);
   const output = safeNumber(usage.output_tokens);
   return providerRunCost({
     sourceRef: providerEventSourceRef(PROVIDER, method, session),
     usage: {
-      cached_input_tokens: safeNumber(usage.cache_read_input_tokens),
+      cached_input_tokens: safeNumber("cached_input_tokens" in usage ? usage.cached_input_tokens : usage.cache_read_input_tokens),
       input_tokens: input,
       output_tokens: output,
       total_tokens: input === undefined || output === undefined ? undefined : input + output
@@ -311,11 +321,11 @@ function messageSession(raw: Record<string, unknown>): SessionRef | undefined {
   return { provider: PROVIDER, sessionId, ...(messageRef ? { turnId: messageRef } : {}) };
 }
 
-function qoderMetadata(raw: Record<string, unknown>, invocationRef: string): Record<string, ProviderMetadataValue> {
+function qoderMetadata(raw: Record<string, unknown>, context: QoderEventContext): Record<string, ProviderMetadataValue> {
   const patch = recordValue(raw.patch);
   return compactMetadata({
     error_code: safeNumber(raw.error_code),
-    invocation_ref: invocationRef,
+    invocation_ref: context.invocationRef,
     message_ref: clean(raw.uuid),
     model: clean(raw.model) || clean(recordValue(raw.message).model),
     native_subtype: clean(raw.subtype),
@@ -323,11 +333,12 @@ function qoderMetadata(raw: Record<string, unknown>, invocationRef: string): Rec
     qodercli_version: clean(raw.qodercli_version),
     task_id: clean(raw.task_id),
     task_status: clean(raw.status) || clean(patch.status),
-    tool_use_id: clean(raw.tool_use_id)
+    tool_use_id: clean(raw.tool_use_id),
+    usage_scope: context.resume ? "resume_semantics_unverified" : raw.type === "result" ? "attempt" : ""
   });
 }
 
-function redactedRawSummary(raw: Record<string, unknown>): unknown {
+function redactedRawSummary(raw: Record<string, unknown>, usageProjection?: QoderUsageProjection): unknown {
   const type = clean(raw.type);
   const subtype = clean(raw.subtype);
   const summary: Record<string, unknown> = {
@@ -350,6 +361,9 @@ function redactedRawSummary(raw: Record<string, unknown>): unknown {
     summary.stop_reason = raw.stop_reason;
     summary.terminal_reason = raw.terminal_reason;
     summary.usage = raw.usage;
+    summary.model_usage = raw.modelUsage;
+    summary.total_credits = raw.total_credits;
+    summary.usage_projection = usageProjection;
   }
   return redactionRegistry.redactValue(compactObject(summary));
 }

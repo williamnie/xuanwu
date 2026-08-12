@@ -16,6 +16,7 @@ import type {
 } from "../types.ts";
 import { ProviderInterruptedError } from "../types.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
+import { redactSensitiveText } from "../../util/redact.ts";
 import { projectQoderMessage, qoderFailureEvent, qoderInterruptedEvent } from "./events.ts";
 import {
   createQoderSdkFacade,
@@ -24,6 +25,7 @@ import {
   type QoderRunOptions,
   type QoderSdkFacade
 } from "./sdkFacade.ts";
+import { QoderPermissionBroker } from "./permissionBroker.ts";
 import { probeQoderRuntime, type QoderRuntimeProbe } from "./runtime.ts";
 import {
   assertQoderSessionHistoryIdentity,
@@ -37,6 +39,7 @@ import {
 const SYSTEM_PROMPT = "You are executing a Xuanwu-managed Issue. Follow the Issue prompt and report only verified outcomes.";
 
 export type QoderExecutorProviderOptions = {
+  approvalTimeoutMs?: number;
   facade?: QoderSdkFacade;
   invocationIdFactory?: () => string;
   readiness?: QoderRuntimeProbe;
@@ -55,9 +58,10 @@ type ActiveInvocation = {
 
 export class QoderExecutorProvider implements ExecutorProvider {
   readonly id = "qoder" as const;
-  readonly capabilities: readonly ExecutorCapability[] = ["issue_execution", "sessions", "resume_session", "interrupt"];
+  readonly capabilities: readonly ExecutorCapability[] = ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"];
   readonly interruptScope = "session" as const;
   private readonly facade: QoderSdkFacade;
+  private readonly permissionBroker: QoderPermissionBroker;
   private readonly active = new Map<string, ActiveInvocation>();
 
   constructor(
@@ -65,6 +69,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
     private readonly options: QoderExecutorProviderOptions = {}
   ) {
     this.facade = options.facade ?? createQoderSdkFacade(config);
+    this.permissionBroker = new QoderPermissionBroker({ timeoutMs: options.approvalTimeoutMs });
   }
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
@@ -177,7 +182,29 @@ export class QoderExecutorProvider implements ExecutorProvider {
     const active = this.lookup(input.session);
     if (!active) throw new Error(`Qoder session ${input.session.sessionId} is not active`);
     active.interrupted = true;
+    this.permissionBroker.rejectInvocation(active.invocationRef, "Qoder invocation interrupted while approval was pending");
     await this.facade.interrupt(active.invocationRef);
+  }
+
+  async listModels(): Promise<unknown> {
+    this.assertReady();
+    try {
+      return (await this.facade.listModels()).map(qoderModelView);
+    } catch (error) {
+      return QODER_STATIC_MODEL_SUGGESTIONS.map((id) => ({
+        displayName: id,
+        id,
+        model: id,
+        source: "static_suggestion",
+        verified: false,
+        warning: "账号模型发现失败；此项仅为 Qoder 静态建议，可手工输入其他 model ID",
+        discovery_error: redactModelError(error)
+      }));
+    }
+  }
+
+  async resolveApproval(requestId: string, decision: import("../types.ts").ApprovalDecision): Promise<void> {
+    await this.permissionBroker.resolveApproval(requestId, decision);
   }
 
   runtimeStatus(): ProviderRuntimeStatus {
@@ -191,6 +218,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
   }
 
   async stop(): Promise<void> {
+    this.permissionBroker.rejectAll();
     await this.facade.close();
     this.active.clear();
   }
@@ -214,6 +242,16 @@ export class QoderExecutorProvider implements ExecutorProvider {
     const options: QoderRunOptions = {
       ...sessionOptions,
       approvalPolicy: input.approvalPolicy,
+      canUseTool: this.permissionBroker.callback({
+        approvalPolicy: input.approvalPolicy,
+        cwd: input.cwd,
+        invocationRef,
+        onEvent: input.onEvent,
+        sandbox: input.sandbox,
+        session: () => active.sessionRef
+          ? { provider: "qoder", sessionId: active.sessionRef, ...(active.messageRef ? { turnId: active.messageRef } : {}) }
+          : undefined
+      }),
       cwd: input.cwd,
       invocationKey: invocationRef,
       model: input.model,
@@ -225,7 +263,9 @@ export class QoderExecutorProvider implements ExecutorProvider {
       const outcome = await this.facade.run(input.prompt, options, (message, context) => {
         const event = projectQoderMessage(message, {
           interrupted: context.interrupted || active.interrupted,
-          invocationRef
+          invocationRef,
+          resume: clean(sessionOptions.resume) !== "",
+          usage: context.usage
         });
         const sessionRef = clean(event.session?.sessionId);
         if (sessionRef) {
@@ -318,6 +358,29 @@ export class QoderExecutorProvider implements ExecutorProvider {
       protocol_version: clean(platform.protocol_version)
     };
   }
+}
+
+const QODER_STATIC_MODEL_SUGGESTIONS = ["auto", "ultimate", "performance", "efficient", "lite"] as const;
+
+function qoderModelView(model: import("@qoder-ai/qoder-agent-sdk").ModelInfo): Record<string, unknown> {
+  const id = clean(model.value);
+  const efforts = Array.isArray(model.efforts) ? model.efforts.map(clean).filter(Boolean) : [];
+  return {
+    displayName: clean(model.displayName) || id,
+    id,
+    model: id,
+    isDefault: model.isDefault === true,
+    source: "qoder_account_live",
+    verified: true,
+    supportedReasoningEfforts: efforts.map((reasoningEffort) => ({ reasoningEffort })),
+    ...(clean(model.defaultEffort) ? { defaultReasoningEffort: clean(model.defaultEffort) } : {}),
+    ...(model.priceFactor === undefined ? {} : { creditsMultiplier: model.priceFactor })
+  };
+}
+
+function redactModelError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return redactSensitiveText(message).slice(0, 240);
 }
 
 function qoderRunResult(outcome: QoderQueryResult): ProviderRunResult {

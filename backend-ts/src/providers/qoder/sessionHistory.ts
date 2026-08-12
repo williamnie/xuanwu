@@ -271,11 +271,26 @@ function qoderHistoryExtensions(messages: SessionMessage[]): Record<string, unkn
   let last: Record<string, number> = {};
   let qodercliVersion = "";
   let protocolVersion = "";
+  let requestCredits = 0;
+  let requestCreditCount = 0;
+  let sessionCredits: number | undefined;
+  let lastRequestCredits: number | undefined;
   for (const entry of messages) {
     const raw = recordValue(entry);
     qodercliVersion = stringValue(raw.qodercli_version) || qodercliVersion;
     protocolVersion = stringValue(raw.protocol_version) || protocolVersion;
     const usage = recordValue(recordValue(raw.message).usage);
+    const resultUsage = recordValue(raw.usage);
+    const assistantCredits = finiteNumber(usage.credits);
+    if (assistantCredits !== undefined) {
+      requestCredits += assistantCredits;
+      requestCreditCount += 1;
+      lastRequestCredits = assistantCredits;
+    }
+    if (stringValue(raw.type) === "result") {
+      sessionCredits = finiteNumber(raw.total_credits) ?? sessionCredits;
+      lastRequestCredits = finiteNumber(resultUsage.credits) ?? lastRequestCredits;
+    }
     if (Object.keys(usage).length === 0) continue;
     last = tokenNumbers(usage);
     total.input_tokens += last.input_tokens ?? 0;
@@ -286,6 +301,27 @@ function qoderHistoryExtensions(messages: SessionMessage[]): Record<string, unkn
   const hasUsage = total.total_tokens > 0 || total.cache_read_input_tokens > 0;
   return compactObject({
     cli_version: qodercliVersion,
+    credits: requestCreditCount > 0 || sessionCredits !== undefined || lastRequestCredits !== undefined ? {
+      ...(lastRequestCredits === undefined ? {} : {
+        last_request: { value: lastRequestCredits, provenance: "result_or_assistant_request_usage" }
+      }),
+      ...(requestCreditCount === 0 ? {} : {
+        observed_requests: {
+          count: requestCreditCount,
+          value: requestCredits,
+          provenance: "assistant.message.usage.credits"
+        }
+      }),
+      ...(sessionCredits === undefined ? {} : {
+        session: {
+          completeness: "partial",
+          provenance: "result.total_credits",
+          semantics: "session_cumulative_unverified",
+          value: sessionCredits
+        }
+      }),
+      money: { completeness: "unavailable", reason: "qoder_credits_are_not_currency" }
+    } : undefined,
     protocol_version: protocolVersion,
     token_usage: hasUsage ? {
       total_token_usage: total,

@@ -110,7 +110,9 @@ test('project config modal reads Provider catalog and models from generic APIs',
   assert.match(editorSource, /buildProviderModelOptions\(ui\.formProvider, ui\.codexModels, ui\.formModel, ui\.profileForm\.model\)/);
   assert.match(editorSource, /modelOptions\.map\(option =>/);
   assert.match(editorSource, /远端 model API 读取失败，已启用手填/);
-  assert.match(editorSource, /模型 API 失败，请手动填写 model ID/);
+  assert.match(editorSource, /手动填写 model ID/);
+  assert.match(editorSource, /Qoder permission 只提供工具级策略，不等于 Codex 或操作系统 sandbox/);
+  assert.match(editorSource, /静态建议，当前值保留为未验证手工 model ID/);
   assert.doesNotMatch(editorSource, /FALLBACK_CODEX_MODEL_OPTIONS/);
   assert.doesNotMatch(editorSource, /CODEX_MODEL_OPTIONS\.some\(option => option\.value === model\)/);
 });

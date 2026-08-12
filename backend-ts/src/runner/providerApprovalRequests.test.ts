@@ -136,6 +136,48 @@ describe("provider runtime approval request sync", () => {
     }
   });
 
+  test("Qoder approval events use the same durable carrier with redacted summaries", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const event: ProviderEvent = {
+        provider: "qoder",
+        type: "approval",
+        status: "pending",
+        session: { provider: "qoder", sessionId: "qoder-session" },
+        raw: { method: "approval/requested" },
+        payload: {
+          id: "qoder-session:tool-1",
+          method: "qoder/canUseTool",
+          params: { path: "<workspace>/src/app.ts", threadId: "qoder-session", tool_name: "Edit" }
+        }
+      };
+
+      syncProviderApprovalRequest({ database: db, issueId, projectId: "demo" }, event, "issue-run-qoder");
+      expect(getPiApprovalRequest(db, "qoder-session:tool-1")).toMatchObject({
+        approval_source: "qoder_provider_event",
+        provider: "qoder",
+        request_type: "file",
+        run_id: "issue-run-qoder",
+        status: "pending"
+      });
+      syncProviderApprovalRequest({ database: db, issueId, projectId: "demo" }, {
+        ...event,
+        status: "approve",
+        raw: { method: "approval/resolved" },
+        payload: { decision: "approve", id: "qoder-session:tool-1", scope: "turn" }
+      }, "issue-run-qoder");
+      expect(getPiApprovalRequest(db, "qoder-session:tool-1")).toMatchObject({
+        resolved_decision: "approve",
+        resolved_scope: "turn",
+        status: "approved"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("ignores approval words in ordinary provider output", async () => {
     const db = await openFixtureDatabase();
     try {

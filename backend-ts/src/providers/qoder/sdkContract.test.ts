@@ -211,7 +211,7 @@ describe("Qoder Q0: SDK/CLI freshness contract", () => {
     }, config)).toMatchObject({
       auth: { type: "accessToken", accessToken: { envVar: "QODER_PERSONAL_ACCESS_TOKEN" } },
       cwd: "/fixture/project",
-      disallowedTools: ["Agent", "Bash", "Edit", "NotebookEdit", "Write"],
+      disallowedTools: ["Agent", "Bash", "NotebookEdit", "Edit", "Write"],
       env: {
         QODER_CONFIG_DIR: "/fixture/qoder-config",
         QODER_PERSONAL_ACCESS_TOKEN: "fixture-pat",
@@ -224,10 +224,36 @@ describe("Qoder Q0: SDK/CLI freshness contract", () => {
     });
   });
 
-  test("unsupported approval and unsafe sandbox policies fail closed", () => {
-    expect(() => buildQoderQueryOptions({
-      approvalPolicy: "danger-only", cwd: "/fixture/project", invocationKey: "inv-policy"
-    })).toThrow("later approval integration");
+  test("approval modes map to callbacks and model metadata constrains reasoning effort", async () => {
+    const options = buildQoderQueryOptions({
+      approvalPolicy: "danger-only",
+      canUseTool: async (_toolName, _input, options) => ({
+        behavior: "allow",
+        decisionClassification: "user_temporary",
+        toolUseID: options.toolUseID
+      }),
+      cwd: "/fixture/project",
+      invocationKey: "inv-policy",
+      model: "performance",
+      reasoningEffort: "high"
+    });
+    expect(options).toMatchObject({
+      model: undefined,
+      permissionMode: "default",
+      disallowedTools: ["Agent", "Bash", "NotebookEdit"]
+    });
+    expect(await options.resolveModel?.({
+      availableModels: [{ value: "performance", displayName: "Performance", description: "fixture", efforts: ["low", "high"], isEnabled: true }],
+      purpose: "main",
+      sessionId: "session-policy",
+      turnIndex: 0
+    })).toEqual({ model: "performance", parameters: { reasoningEffort: "high" } });
+    expect(() => options.resolveModel?.({
+      availableModels: [{ value: "performance", displayName: "Performance", description: "fixture", efforts: ["low"], isEnabled: true }],
+      purpose: "main",
+      sessionId: "session-policy",
+      turnIndex: 0
+    })).toThrow("does not support reasoning effort high");
     expect(() => buildQoderQueryOptions({
       cwd: "/fixture/project", invocationKey: "inv-sandbox", sandbox: "danger-full-access"
     })).toThrow("disabled");

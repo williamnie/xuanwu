@@ -80,6 +80,24 @@
   font-weight: 690;
 }
 
+.session-composer-model-manual {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: #475569;
+}
+
+.session-composer-model-manual input {
+  width: 164px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  padding: 5px 7px;
+  background: #fff;
+  color: #111827;
+  font-size: 0.75rem;
+}
+
 .session-composer-select.effort .session-composer-select-value {
   color: #6b7280;
 }
