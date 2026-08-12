@@ -8,6 +8,7 @@ export function SessionInfoPopover({ session, provider, sessionId, model, naviga
   const linkedIssue = session?.linked_issue || null;
   const sourceIssues = session?.source_issues || [];
   const tokens = tokenSummary(session?.token_usage);
+  const versions = versionSummary(session);
   return (
     <details className="session-info-popover">
       <summary className="session-info-trigger" title="查看会话信息" aria-label="查看会话信息">
@@ -19,6 +20,7 @@ export function SessionInfoPopover({ session, provider, sessionId, model, naviga
           <InfoRow label="ID" value={<code>{displayValue(sessionId)}</code>} />
           <InfoRow label="Provider" value={displayValue(provider)} />
           <InfoRow label="Model" value={displayValue(model, '未提供')} />
+          {versions.map((item) => <InfoRow key={item.label} label={item.label} value={item.value} />)}
         </div>
         <div className="session-info-section">
           <span className="session-info-section-title">关联 Issue</span>
@@ -135,4 +137,13 @@ function tokenSummary(usage) {
     reasoning: formatTokenNumber(total.reasoning_output_tokens),
     capturedAt: usage.captured_at || '',
   };
+}
+
+function versionSummary(session) {
+  return [
+    { label: 'Provider version', value: session?.provider_version },
+    { label: 'SDK version', value: session?.sdk_version },
+    { label: 'CLI version', value: session?.cli_version },
+    { label: 'Protocol', value: session?.protocol_version },
+  ].filter((item) => String(item.value || '').trim());
 }

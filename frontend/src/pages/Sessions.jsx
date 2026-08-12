@@ -89,6 +89,7 @@ export default function Sessions({
   const [cursor, setCursor] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [selectedSession, setSelectedSession] = useState(null);
+  const [detailError, setDetailError] = useState('');
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -249,6 +250,7 @@ export default function Sessions({
     if (isSwitching) {
       setDetailLoading(true);
       setSelectedSession(null);
+      setDetailError('');
     }
     const requestId = selectedId;
     try {
@@ -256,6 +258,7 @@ export default function Sessions({
       if (selectedIdRef.current !== requestId) return;
       const running = isSessionRunning(detail);
       setSelectedSession(detail);
+      setDetailError('');
       setSessionRunning(running);
       setSessions((prev) => syncSessionRuntimeInList(prev, detail, running));
       setApprovalQueue((current) => syncApprovalsForSession(
@@ -265,7 +268,9 @@ export default function Sessions({
       ));
     } catch (err) {
       if (selectedIdRef.current !== requestId) return;
-      toast.error(err.message || '读取 session 详情失败');
+      const message = err.message || '读取 session 详情失败';
+      setDetailError(message);
+      toast.error(message);
     } finally {
       if (selectedIdRef.current === requestId) {
         setDetailLoading(false);
@@ -787,6 +792,7 @@ export default function Sessions({
     const nextSession = sessions.find((item) => item.id === id);
     ignorePropSelectionRef.current = false;
     setSelectedId(id);
+    setDetailError('');
     setActiveView('chat');
     setLiveEvents([]);
     setSessionRunning(isSessionRunning(nextSession));
@@ -798,6 +804,7 @@ export default function Sessions({
     autoSelectFirstSessionRef.current = false;
     if (!keepNewSessionRoute) navigateTo?.('sessions');
     setSelectedId('');
+    setDetailError('');
     setActiveView('new');
     setPrompt('');
     setPromptCommand(clearSessionCommandState());
@@ -829,6 +836,7 @@ export default function Sessions({
         activeView={activeView}
         chatProps={{
           detailLoading,
+          detailError,
           selectedSession,
           selectedSessionProject,
           liveEvents,

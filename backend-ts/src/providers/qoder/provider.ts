@@ -8,6 +8,10 @@ import type {
   ProviderRuntimeStatus,
   SessionCreateInput,
   SessionCreateResult,
+  SessionListInput,
+  SessionListResult,
+  SessionMessageInput,
+  SessionMessageResult,
   SessionRef
 } from "../types.ts";
 import { ProviderInterruptedError } from "../types.ts";
@@ -21,6 +25,14 @@ import {
   type QoderSdkFacade
 } from "./sdkFacade.ts";
 import { probeQoderRuntime, type QoderRuntimeProbe } from "./runtime.ts";
+import {
+  assertQoderSessionHistoryIdentity,
+  defaultQoderSessionFunctions,
+  publicQoderSessionDetail,
+  publicQoderSessionSummary,
+  readQoderSessionHistory,
+  type QoderSessionFunctions
+} from "./sessionHistory.ts";
 
 const SYSTEM_PROMPT = "You are executing a Xuanwu-managed Issue. Follow the Issue prompt and report only verified outcomes.";
 
@@ -29,6 +41,7 @@ export type QoderExecutorProviderOptions = {
   invocationIdFactory?: () => string;
   readiness?: QoderRuntimeProbe;
   sessionIdFactory?: () => string;
+  sessionFunctions?: Partial<QoderSessionFunctions>;
 };
 
 type ActiveInvocation = {
@@ -83,6 +96,80 @@ export class QoderExecutorProvider implements ExecutorProvider {
       provider_turn_id: session.turnId,
       thread_id: session.sessionId,
       turn_id: session.turnId
+    };
+  }
+
+  async listSessions(input: SessionListInput = {}): Promise<SessionListResult> {
+    this.assertReady();
+    const offset = numericCursor(input.cursor);
+    const limit = normalizeLimit(input.limit);
+    const sessions = await this.sessionFunctions().listSessions({
+      ...(clean(input.cwd) ? { dir: clean(input.cwd) } : {}),
+      limit,
+      offset
+    });
+    if (!Array.isArray(sessions)) throw new Error("Qoder session list returned malformed history");
+    return {
+      data: sessions.map((session) => publicQoderSessionSummary(session, this.active.has(session.sessionId))),
+      nextCursor: sessions.length === limit ? String(offset + sessions.length) : ""
+    };
+  }
+
+  async readSession(sessionId: string): Promise<Record<string, unknown>> {
+    this.assertReady();
+    const id = required(sessionId, "Qoder session id");
+    const functions = this.sessionFunctions();
+    const info = await functions.getSessionInfo(id);
+    const history = await readQoderSessionHistory(functions, id, clean(info?.cwd));
+    if (!info && history.messages.length === 0) throw new Error(`Qoder session ${id} was not found`);
+    assertQoderSessionHistoryIdentity(id, info, history.messages);
+    return publicQoderSessionDetail(id, info, history.messages, {
+      extensions: this.sessionRuntimeExtensions(),
+      running: this.active.has(id),
+      truncated: history.truncated
+    });
+  }
+
+  async sendSessionMessage(input: SessionMessageInput): Promise<SessionMessageResult> {
+    this.assertReady();
+    const sessionId = required(input.sessionId, "Qoder resume session id");
+    if (clean(input.mode) === "steer") {
+      throw new Error('provider "qoder" does not support live steer; interrupt or resume the session instead');
+    }
+    const prompt = required(input.prompt, "Qoder session message prompt");
+    const functions = this.sessionFunctions();
+    const historyOptions = clean(input.cwd) ? { dir: clean(input.cwd) } : {};
+    const info = await functions.getSessionInfo(sessionId, historyOptions);
+    if (!info) throw new Error(`Qoder session ${sessionId} was not found; refusing to create an empty replacement`);
+    const history = await functions.getSessionMessages(sessionId, {
+      ...historyOptions,
+      includeSystemMessages: true,
+      limit: 1,
+      offset: 0
+    });
+    if (!Array.isArray(history) || history.length === 0) {
+      throw new Error(`Qoder session ${sessionId} history is empty; refusing to create an empty replacement`);
+    }
+    assertQoderSessionHistoryIdentity(sessionId, info, history);
+    const cwd = clean(input.cwd) || clean(info.cwd) || clean(this.config.cwd);
+    const result = await this.execute({
+      issueId: 0,
+      projectId: input.projectId ?? "",
+      cwd,
+      prompt,
+      model: input.model,
+      reasoningEffort: input.reasoningEffort,
+      serviceTier: input.serviceTier,
+      approvalPolicy: input.approvalPolicy,
+      sandbox: input.sandbox
+    }, { resume: sessionId }, sessionId);
+    const session = requiredSession(result);
+    const turnId = required(session.turnId, "Qoder resumed result message ref");
+    return {
+      provider: this.id,
+      provider_session_id: session.sessionId,
+      sessionId: session.sessionId,
+      turn_id: turnId
     };
   }
 
@@ -207,6 +294,30 @@ export class QoderExecutorProvider implements ExecutorProvider {
     return this.active.get(clean(session.sessionId)) ??
       (session.turnId ? this.active.get(clean(session.turnId)) : undefined);
   }
+
+  private assertReady(): void {
+    const status = this.runtimeStatus();
+    if (!status.ready) throw new Error(status.reason || "Qoder runtime is unavailable");
+  }
+
+  private sessionFunctions(): QoderSessionFunctions {
+    return {
+      getSessionInfo: this.options.sessionFunctions?.getSessionInfo ?? defaultQoderSessionFunctions.getSessionInfo,
+      getSessionMessages: this.options.sessionFunctions?.getSessionMessages ?? defaultQoderSessionFunctions.getSessionMessages,
+      listSessions: this.options.sessionFunctions?.listSessions ?? defaultQoderSessionFunctions.listSessions
+    };
+  }
+
+  private sessionRuntimeExtensions(): Record<string, unknown> {
+    const status = this.runtimeStatus();
+    const platform = status.platform_profile ?? {};
+    return {
+      provider_version: status.version,
+      sdk_version: clean(platform.sdk_version),
+      cli_version: clean(platform.cli_version),
+      protocol_version: clean(platform.protocol_version)
+    };
+  }
 }
 
 function qoderRunResult(outcome: QoderQueryResult): ProviderRunResult {
@@ -231,4 +342,14 @@ function required(value: unknown, label: string): string {
 
 function clean(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function numericCursor(value: string | undefined): number {
+  const cursor = Number(value);
+  return Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0;
+}
+
+function normalizeLimit(value: number | undefined): number {
+  if (!Number.isSafeInteger(value) || (value ?? 0) <= 0) return 50;
+  return Math.min(value!, 100);
 }

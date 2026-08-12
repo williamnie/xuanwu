@@ -8,6 +8,7 @@ import { clearSessionCommandState, createSessionCommandState } from './sessionCo
 
 export default function SessionChatWorkspace({
   detailLoading,
+  detailError,
   selectedSession,
   selectedSessionProject,
   liveEvents,
@@ -60,16 +61,23 @@ export default function SessionChatWorkspace({
             <TurtleLoader label="玄武正在翻阅会话记录…" />
           </div>
         ) : selectedSession ? (
-          <SessionTranscript
-            session={selectedSession}
-            project={selectedSessionProject}
-            liveEvents={liveEvents}
-            running={sessionRunning}
-            sending={sending}
-            optimisticUserMessages={optimisticUserMessages}
-            pendingApproval={pendingApproval}
-            navigateTo={navigateTo}
-          />
+          <>
+            {detailError ? <div className="session-detail-error" role="alert">Provider session 刷新失败：{detailError}</div> : null}
+            <SessionTranscript
+              session={selectedSession}
+              project={selectedSessionProject}
+              liveEvents={liveEvents}
+              running={sessionRunning}
+              sending={sending}
+              optimisticUserMessages={optimisticUserMessages}
+              pendingApproval={pendingApproval}
+              navigateTo={navigateTo}
+            />
+          </>
+        ) : detailError ? (
+          <div className="session-detail-error session-detail-error-empty" role="alert">
+            Provider session 无法加载：{detailError}
+          </div>
         ) : (
           <div className="session-empty">选择一个 provider session 查看历史，或创建新 session。</div>
         )}

@@ -64,6 +64,7 @@ async function listSessions(context: SessionApiContext, request: Request) {
   const providers = providersForList(context, filter);
   const merged = new Map(indexed.map((item) => [String(item.id), item]));
   const providerErrors: Array<{ error: string; provider: string }> = [];
+  const providerNextCursors: string[] = [];
   for (const provider of providers) {
     try {
       const runtimeStatus = provider.runtimeStatus?.();
@@ -74,19 +75,23 @@ async function listSessions(context: SessionApiContext, request: Request) {
         ...sessionListInput(request),
         ...(project ? { cwd: project.cwd } : {})
       });
+      providerNextCursors.push(result.nextCursor ?? "");
       for (const raw of result.data) validateDeclaredSessionView(provider, raw, false);
       if (provider.id === "codex") reconcileCodexSessionIndexes(context.database, result.data);
       for (const raw of result.data) {
         const item = qualifiedProviderSession(provider.id, raw);
         const key = String(item.id);
         const existing = merged.get(key);
+        const preserveIndexedActivity = provider.id !== "codex" && indexedActivityWins(existing, item);
+        const preserveIndexedStatus = provider.id !== "codex" && existing?.status;
         merged.set(key, {
           ...(existing ?? {}),
           ...item,
           // agent_sessions is the provider-neutral lifecycle index. Provider
           // discovery enriches it, but must not downgrade an indexed running
           // session to an idle historical summary.
-          ...(provider.id !== "codex" && existing?.status ? { status: existing.status } : {})
+          ...(preserveIndexedStatus ? { status: existing?.status } : {}),
+          ...(preserveIndexedActivity ? { isRunning: true } : {})
         });
       }
     } catch (error) {
@@ -96,7 +101,8 @@ async function listSessions(context: SessionApiContext, request: Request) {
   const data = [...merged.values()]
     .filter((item) => !filter.provider || item.provider === filter.provider)
     .slice(0, limit);
-  return { data, nextCursor: "", ...(providerErrors.length > 0 ? { provider_errors: providerErrors } : {}) };
+  const nextCursor = providers.length === 1 ? providerNextCursors[0] ?? "" : "";
+  return { data, nextCursor, ...(providerErrors.length > 0 ? { provider_errors: providerErrors } : {}) };
 }
 
 async function createSession(context: SessionApiContext, body: Record<string, unknown>) {
@@ -144,11 +150,15 @@ async function readSession(context: SessionApiContext, rawSessionID: string) {
   if (ref.provider === "codex") reconcileCodexSessionIndex(context.database, ref.sessionId, result);
   const qualified = qualifiedProviderSession(ref.provider, result);
   const indexed = publicAgentSessionOrNull(getAgentSession(context.database, ref.key));
+  const merged = { ...(indexed ?? {}), ...qualified };
+  const activityAware = ref.provider === "qoder" && indexedActivityWins(indexed, qualified)
+    ? { ...merged, status: indexed?.status, isRunning: true }
+    : merged;
   const detail = reconcileProviderSessionMetadata(
     context.database,
     ref.provider,
     ref.sessionId,
-    { ...(indexed ?? {}), ...qualified }
+    activityAware
   );
   return await withSessionRuntimeSettings(
     context.database,
@@ -428,6 +438,19 @@ function stringValue(value: unknown): string {
 
 function firstNonEmpty(...values: string[]): string {
   return values.find((value) => value.trim() !== "")?.trim() ?? "";
+}
+
+function indexedActivityWins(
+  indexed: Record<string, unknown> | null | undefined,
+  discovered: Record<string, unknown>
+): boolean {
+  if (!indexed || !activeSessionStatus(indexed.status)) return false;
+  return discovered.isRunning !== true && !activeSessionStatus(discovered.status);
+}
+
+function activeSessionStatus(value: unknown): boolean {
+  const normalized = stringValue(value).toLowerCase().replaceAll("_", "-");
+  return ["active", "busy", "in-progress", "inprogress", "running", "streaming"].includes(normalized);
 }
 
 function cleanParam(value: string | null): string {

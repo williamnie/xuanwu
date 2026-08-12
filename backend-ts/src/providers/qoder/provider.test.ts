@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { SDKMessage, SDKResultMessage, SDKSystemInitMessage } from "@qoder-ai/qoder-agent-sdk";
+import type { SDKMessage, SDKResultMessage, SDKSessionInfo, SDKSystemInitMessage, SessionMessage } from "@qoder-ai/qoder-agent-sdk";
 import { buildConfig } from "../../config/env.ts";
 import { checkManifest } from "../core/conformance.ts";
 import { createProviderRegistry } from "../core/registry.ts";
@@ -13,6 +13,7 @@ import {
   type QoderSdkFacade
 } from "./sdkFacade.ts";
 import type { QoderRuntimeProbe } from "./runtime.ts";
+import type { QoderSessionFunctions } from "./sessionHistory.ts";
 
 const qoderConfig = buildConfig().providers.qoder!;
 const readyProbe: QoderRuntimeProbe = {
@@ -27,7 +28,8 @@ const readyProbe: QoderRuntimeProbe = {
     executable_ready: true,
     mode: "sdk",
     ready: true,
-    version: "1.0.20"
+    version: "1.0.20",
+    platform_profile: { cli_version: "1.1.18", protocol_version: "1.2.0", sdk_version: "1.0.20" }
   }
 };
 
@@ -98,13 +100,15 @@ function sdkResult(sessionId = "qoder-session-9", overrides: Partial<SDKResultMe
 
 function provider(
   facade: QoderSdkFacade,
-  ids: { invocation?: string; session?: string } = {}
+  ids: { invocation?: string; session?: string } = {},
+  sessionFunctions?: Partial<QoderSessionFunctions>
 ): QoderExecutorProvider {
   return new QoderExecutorProvider(qoderConfig, {
     facade,
     invocationIdFactory: () => ids.invocation ?? "qoder-inv-1",
     readiness: readyProbe,
-    sessionIdFactory: () => ids.session ?? "qoder-session-9"
+    sessionIdFactory: () => ids.session ?? "qoder-session-9",
+    sessionFunctions
   });
 }
 
@@ -251,11 +255,12 @@ describe("Qoder Q2 factory conformance", () => {
       supportLevel: "preview",
       capabilities: {
         issueExecution: true,
-        sessions: { create: true, resume: true, list: false, read: false },
+        sessions: { create: true, resume: true, list: true, read: true },
         control: { interrupt: true }
       },
       processObservability: "lease"
     });
+    expect(manifest.sessionPresentation?.viewContract).toBe("xw.provider-session.v1");
   });
 
   test("factory registers Qoder as ready with the fake runtime", async () => {
@@ -267,6 +272,115 @@ describe("Qoder Q2 factory conformance", () => {
     await registry.startConfigured({});
     expect(registry.list().map((entry) => String(entry.id))).toContain("qoder");
     expect(registry.describe(asProviderId("qoder")).state).toBe("ready");
+  });
+});
+
+describe("Qoder Q3 Sessions", () => {
+  const sessionInfo: SDKSessionInfo = {
+    sessionId: "qoder-session-9",
+    summary: "Qoder session",
+    firstPrompt: "hello",
+    cwd: "/fixture/project",
+    createdAt: 1_700_000_000_000,
+    lastModified: 1_700_000_100_000
+  };
+  const history = [{
+    type: "user",
+    uuid: "user-1",
+    session_id: sessionInfo.sessionId,
+    message: { role: "user", content: "hello" },
+    parent_tool_use_id: null,
+    parent_agent_id: null
+  }] as SessionMessage[];
+
+  test("lists and reads normalized history with bounded cursors", async () => {
+    const calls: unknown[] = [];
+    const subject = provider(createFakeQoderSdkFacade([init(), sdkResult()]).facade, {}, {
+      async listSessions(options) {
+        calls.push(options);
+        return Array.from({ length: 100 }, (_, index) => ({
+          ...sessionInfo,
+          sessionId: `qoder-session-${index + 9}`
+        }));
+      },
+      async getSessionInfo() { return sessionInfo; },
+      async getSessionMessages(_id, options) { calls.push(options); return (options?.offset ?? 0) === 0 ? history : []; }
+    });
+
+    const list = await subject.listSessions({ cursor: "40", cwd: "/fixture/project", limit: 500 });
+    const detail = await subject.readSession(sessionInfo.sessionId);
+
+    expect(list.nextCursor).toBe("140");
+    expect(list.data).toHaveLength(100);
+    expect(list.data[0]).toMatchObject({ id: "qoder:qoder-session-9" });
+    expect(detail).toMatchObject({
+      session_contract: "xw.provider-session.v1",
+      id: "qoder:qoder-session-9",
+      provider_version: "1.0.20",
+      cli_version: "1.1.18",
+      turns: [{ items: [{ type: "userMessage" }] }]
+    });
+    expect(calls[0]).toEqual({ dir: "/fixture/project", limit: 100, offset: 40 });
+    expect(calls[1]).toMatchObject({ dir: "/fixture/project", includeSystemMessages: true, limit: 100, offset: 0 });
+  });
+
+  test("resumes only an existing history with options.resume and returns the same session plus a new result ref", async () => {
+    const fake = createFakeQoderSdkFacade([init(), sdkResult()]);
+    const subject = provider(fake.facade, {}, {
+      async getSessionInfo() { return sessionInfo; },
+      async getSessionMessages() { return history; },
+      async listSessions() { return [sessionInfo]; }
+    });
+
+    const result = await subject.sendSessionMessage({ sessionId: sessionInfo.sessionId, prompt: "continue" });
+    expect(result).toEqual({
+      provider: "qoder",
+      provider_session_id: sessionInfo.sessionId,
+      sessionId: sessionInfo.sessionId,
+      turn_id: "result-1"
+    });
+    expect(fake.calls[0]).toMatchObject({ resume: sessionInfo.sessionId });
+    expect(fake.calls[0]?.sessionId).toBeUndefined();
+  });
+
+  test("missing resume history fails before a model invocation instead of creating an empty session", async () => {
+    const fake = createFakeQoderSdkFacade([init(), sdkResult()]);
+    const subject = provider(fake.facade, {}, {
+      async getSessionInfo() { return undefined; },
+      async getSessionMessages() { return []; },
+      async listSessions() { return []; }
+    });
+
+    await expect(subject.sendSessionMessage({ sessionId: "missing", prompt: "continue" })).rejects.toThrow("refusing to create");
+    expect(fake.calls).toEqual([]);
+  });
+
+  test("known metadata with an empty transcript also fails before resume", async () => {
+    const fake = createFakeQoderSdkFacade([init(), sdkResult()]);
+    const subject = provider(fake.facade, {}, {
+      async getSessionInfo() { return sessionInfo; },
+      async getSessionMessages() { return []; },
+      async listSessions() { return []; }
+    });
+
+    await expect(subject.sendSessionMessage({ sessionId: sessionInfo.sessionId, prompt: "continue" })).rejects.toThrow("history is empty");
+    expect(fake.calls).toEqual([]);
+  });
+
+  test("empty known history reads as an empty transcript while an unknown session fails", async () => {
+    const known = provider(createFakeQoderSdkFacade([]).facade, {}, {
+      async getSessionInfo() { return sessionInfo; },
+      async getSessionMessages() { return []; },
+      async listSessions() { return []; }
+    });
+    const missing = provider(createFakeQoderSdkFacade([]).facade, {}, {
+      async getSessionInfo() { return undefined; },
+      async getSessionMessages() { return []; },
+      async listSessions() { return []; }
+    });
+
+    await expect(known.readSession(sessionInfo.sessionId)).resolves.toMatchObject({ turns: [] });
+    await expect(missing.readSession("missing")).rejects.toThrow("was not found");
   });
 });
 

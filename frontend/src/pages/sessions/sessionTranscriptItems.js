@@ -94,6 +94,9 @@ function toolTypeLabel(type) {
     tool_search_call: 'Tool search',
     web_search_call: 'Web search',
     image_generation_call: 'Image generation',
+    permission: 'Permission',
+    qoderNative: 'Provider event',
+    subagent: 'Subagent',
   };
   return labels[type] || type || '事件详情';
 }

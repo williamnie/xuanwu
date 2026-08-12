@@ -7,12 +7,12 @@ import { probeQoderRuntime, type QoderRuntimeProbe } from "./runtime.ts";
 
 /**
  * P11：Qoder ProviderFactory（G11 gate 已通过）。
- * SDK 1.0.20 / CLI 1.1.18；capability 只声明实际实现（create/resume/interrupt；无 list/read/model list facade）。
+ * SDK 1.0.20 / CLI 1.1.18；capability 只声明实际实现。
  */
 
 const QODER_CAPABILITIES: ProviderCapabilities = {
   issueExecution: true,
-  sessions: { create: true, resume: true, list: false, read: false, fork: false, steerWhileRunning: false, export: false },
+  sessions: { create: true, resume: true, list: true, read: true, fork: false, steerWhileRunning: false, export: false },
   control: { interrupt: true, approvals: "none" },
   models: { list: false, switchDuringSession: false },
   usage: { tokens: "attempt", money: "provider-reported" }
@@ -26,6 +26,7 @@ export function qoderManifest(): ExecutorProviderManifest {
     transports: ["sdk"],
     capabilities: QODER_CAPABILITIES,
     processObservability: "lease",
+    sessionPresentation: { viewContract: "xw.provider-session.v1" },
     executionSettings: {
       settings: [
         { kind: "string", key: "model", label: "Model" },

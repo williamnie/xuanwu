@@ -7,6 +7,9 @@ const apiSource = readFileSync(new URL('../../api/runs.js', import.meta.url), 'u
 const modelSource = readFileSync(new URL('./runDetailModel.js', import.meta.url), 'utf8');
 
 const runsPageSource = readFileSync(new URL('../Runs.jsx', import.meta.url), 'utf8');
+const sessionsSource = readFileSync(new URL('../Sessions.jsx', import.meta.url), 'utf8');
+const chatSource = readFileSync(new URL('../sessions/SessionChatWorkspace.jsx', import.meta.url), 'utf8');
+const infoSource = readFileSync(new URL('../sessions/SessionInfoPanel.jsx', import.meta.url), 'utf8');
 
 test('Run Detail puts Provider first and hides a single Attempt selector', () => {
   for (const label of ['Provider', 'Summary', 'Logs', 'Evidence', 'Advanced']) {
@@ -30,6 +33,18 @@ test('provider observation is an embedded primary tab without duplicate Evidence
   assert.doesNotMatch(detailSource, /interruptSession\(/);
   assert.doesNotMatch(detailSource, /sendSessionMessage\(/);
   assert.doesNotMatch(runsPageSource, /> Provider session/);
+});
+
+test('embedded provider transcript exposes read failures and provider-neutral version/usage extensions', () => {
+  assert.match(sessionsSource, /setDetailError\(message\)/);
+  assert.match(chatSource, /Provider session 无法加载/);
+  assert.match(chatSource, /role="alert"/);
+  for (const field of ['provider_version', 'sdk_version', 'cli_version', 'protocol_version']) {
+    assert.match(infoSource, new RegExp(field));
+  }
+  assert.match(infoSource, /session\?\.token_usage/);
+  assert.doesNotMatch(chatSource, /message\.content|qodercli_version/);
+  assert.doesNotMatch(infoSource, /qodercli_version|message\.content/);
 });
 
 test('logs and raw events reuse bounded existing APIs instead of expanding the Run contract', () => {

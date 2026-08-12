@@ -7,7 +7,8 @@ import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSes
 import { createDefaultRouter } from "./server.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { claudeManifest } from "../providers/claude/factory.ts";
-import { providerSessionDetail } from "../providers/core/sessionView.ts";
+import { providerSessionDetail, providerSessionSummary } from "../providers/core/sessionView.ts";
+import { qoderManifest } from "../providers/qoder/factory.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const EMPTY_ROLLOUT_ERROR = [
@@ -557,6 +558,68 @@ describe("Bun Sessions API compatibility", () => {
     }
   });
 
+  test("serves Qoder list/read contracts, keeps indexed running activity, and propagates bounded provider pagination", async () => {
+    const database = await openFixtureDatabase();
+    const qoder = new QoderSessionsProvider();
+    try {
+      upsertAgentSession(database, {
+        provider: "qoder",
+        provider_session_id: "qoder-existing",
+        project_id: "qoder-demo",
+        status: "running"
+      });
+      const router = createDefaultRouter({ database, providers: { qoder } });
+      const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=qoder&limit=20`));
+      const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/qoder:qoder-existing`));
+
+      expect(list.status).toBe(200);
+      expect(await list.json()).toMatchObject({
+        data: [{
+          id: "qoder:qoder-existing",
+          isRunning: true,
+          provider: "qoder",
+          session_contract: "xw.provider-session.v1",
+          status: "running"
+        }],
+        nextCursor: "20"
+      });
+      expect(detail.status).toBe(200);
+      expect(await detail.json()).toMatchObject({
+        id: "qoder:qoder-existing",
+        isRunning: true,
+        provider: "qoder",
+        session_contract: "xw.provider-session.v1",
+        status: "running",
+        turns: []
+      });
+      expect(getAgentSession(database, "qoder:qoder-existing")?.status).toBe("running");
+    } finally {
+      database.close();
+    }
+  });
+
+  test("reports Qoder provider-unavailable state without a native-history fallback", async () => {
+    const database = await openFixtureDatabase();
+    const qoder = new QoderSessionsProvider();
+    qoder.ready = false;
+    try {
+      const router = createDefaultRouter({ database, providers: { qoder } });
+      const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=qoder`));
+      const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/qoder:qoder-existing`));
+
+      expect(list.status).toBe(200);
+      expect(await list.json()).toMatchObject({
+        data: [],
+        provider_errors: [{ provider: "qoder", error: expect.stringContaining("configuration required") }]
+      });
+      expect(detail.status).toBe(400);
+      expect(await detail.text()).toContain("configuration required");
+      expect(qoder.calls).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test("keeps legacy bare session ids routed to Codex", async () => {
     const database = await openFixtureDatabase();
     const codex = new SessionsProvider();
@@ -803,6 +866,49 @@ class IndexedOnlyProvider implements ExecutorProvider {
 
   async run(_input: ProviderRunInput) {
     throw new Error("not implemented");
+  }
+}
+
+class QoderSessionsProvider implements ExecutorProvider {
+  readonly id = "qoder" as const;
+  readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt"] as const;
+  readonly manifest = qoderManifest();
+  readonly calls: string[] = [];
+  ready = true;
+
+  runtimeStatus() {
+    return {
+      active_sessions: 0,
+      api_key_configured: this.ready,
+      mode: "sdk",
+      ready: this.ready,
+      ...(this.ready ? {} : { reason: "configuration required" }),
+      version: "1.0.20"
+    };
+  }
+
+  async run(_input: ProviderRunInput) { throw new Error("not implemented"); }
+
+  async listSessions() {
+    this.calls.push("listSessions");
+    return {
+      data: [providerSessionSummary("qoder", {
+        sessionRef: "qoder-existing",
+        name: "Qoder session",
+        status: "idle"
+      })],
+      nextCursor: "20"
+    };
+  }
+
+  async readSession(sessionId: string) {
+    this.calls.push("readSession");
+    return providerSessionDetail("qoder", {
+      sessionRef: sessionId,
+      name: "Qoder session",
+      status: "idle",
+      turns: []
+    });
   }
 }
 
