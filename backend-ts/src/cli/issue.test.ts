@@ -28,7 +28,7 @@ describe("Bun issue CLI", () => {
         expect(request.method).toBe("POST");
         expect(await request.json()).toMatchObject({
           description: "修复 Bun CLI\n\n保持最小改动。",
-          agent_profile_id: "xuanwu-provider-claude",
+          agent_profile_id: "xuanwu-provider-qoder",
           priority: 2,
           project_id: "demo",
           source_session_id: "thread-env",
@@ -43,7 +43,7 @@ describe("Bun issue CLI", () => {
     });
     const { code, stdout, stderr } = await run([
       "issue", "create", "--project", "demo", "--title", "创建 CLI", "--body-file", bodyFile,
-      "--priority", "2", "--agent-profile", "xuanwu-provider-claude", "--run", "--json"
+      "--priority", "2", "--agent-profile", "xuanwu-provider-qoder", "--run", "--json"
     ], { env: envMap({ CODEX_THREAD_ID: "thread-env" }), fetcher });
 
     expect(code).toBe(0);

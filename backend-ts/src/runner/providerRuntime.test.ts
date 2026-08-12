@@ -363,14 +363,14 @@ describe("executor provider runtime seam", () => {
         provider_turn_id: "fake-turn",
         codex_thread_id: "",
         codex_turn_id: "",
-        runtime_metadata_json: "{\"run_id\":\"fake-run\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
+        runtime_metadata_json: "{\"run_id\":\"fake-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"},\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
       }]);
       expect(getAgentSession(db, "fake-execution-only:fake-session")).toMatchObject({
         provider: "fake-execution-only",
         provider_session_id: "fake-session",
         project_id: "demo",
         issue_id: issueId,
-        raw_ref: "{\"provider_turn_id\":\"fake-turn\",\"run_id\":\"fake-run\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
+        raw_ref: "{\"provider_turn_id\":\"fake-turn\",\"run_id\":\"fake-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"},\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
       });
       const issueEvents = listIssueEvents(db, issueId);
       expect(issueEvents).toMatchObject([{
@@ -461,11 +461,19 @@ describe("executor provider runtime seam", () => {
         provider: "qoder",
         provider_session_id: sessionId,
         provider_turn_id: "qoder-result-1",
-        runtime_metadata_json: "{\"run_id\":\"qoder-inv-terminal\"}"
+        runtime_metadata_json: "{\"run_id\":\"qoder-inv-terminal\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
       });
       expect(JSON.parse(getAgentSession(db, `qoder:${sessionId}`)?.raw_ref ?? "{}")).toEqual({
         provider_turn_id: "qoder-result-1",
-        run_id: "qoder-inv-terminal"
+        run_id: "qoder-inv-terminal",
+        resolved_settings: {
+          approval_policy: "",
+          model: "",
+          reasoning_effort: "",
+          sandbox: "",
+          service_tier: "",
+          service_tier_source: "standard"
+        }
       });
     } finally {
       db.close();
@@ -628,14 +636,14 @@ describe("executor provider runtime seam", () => {
           codex_thread_id: "",
           codex_turn_id: "",
           exit_reason: "pi_semantic_decision",
-          runtime_metadata_json: "{\"run_id\":\"claude-run\"}"
+          runtime_metadata_json: "{\"run_id\":\"claude-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
         }
       ]);
       expect(getAgentSession(db, "claude:claude-session")).toMatchObject({
         provider: "claude",
         provider_session_id: "claude-session",
         issue_id: issueId,
-        raw_ref: "{\"provider_turn_id\":\"claude-turn\",\"run_id\":\"claude-run\"}"
+        raw_ref: "{\"provider_turn_id\":\"claude-turn\",\"run_id\":\"claude-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
       });
     } finally {
       db.close();

@@ -424,20 +424,29 @@ function rawPayloadText(value: unknown): string | undefined {
 function runtimeMetadata(
   input: RunnerIssueExecutionInput,
   metadata: Record<string, string>
-): Record<string, string> {
+): Record<string, unknown> {
   const serviceTier = cleanString(input.serviceTier);
-  if (serviceTier === "") return metadata;
   return {
     ...metadata,
-    service_tier: serviceTier,
-    service_tier_source: cleanString(input.serviceTierSource) || "unknown"
+    resolved_settings: {
+      approval_policy: cleanString(input.approvalPolicy),
+      model: cleanString(input.model),
+      reasoning_effort: cleanString(input.reasoningEffort),
+      sandbox: cleanString(input.sandbox),
+      service_tier: serviceTier,
+      service_tier_source: cleanString(input.serviceTierSource) || (serviceTier ? "unknown" : "standard")
+    },
+    ...(serviceTier === "" ? {} : {
+      service_tier: serviceTier,
+      service_tier_source: cleanString(input.serviceTierSource) || "unknown"
+    })
   };
 }
 
 type PersistRuntimeInput = {
   db: RunnerDatabase;
   input: RunnerIssueExecutionInput;
-  metadata: Record<string, string>;
+  metadata: Record<string, unknown>;
   provider: string;
   session: SessionRef;
   status: string;

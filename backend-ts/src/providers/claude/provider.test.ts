@@ -158,7 +158,17 @@ describe("Claude Code provider", () => {
         codex_turn_id: "",
         status: "succeeded",
         ended_at: expect.any(String),
-        runtime_metadata_json: `{"run_id":"cli:claude:${issueId}"}`
+        runtime_metadata_json: JSON.stringify({
+          run_id: `cli:claude:${issueId}`,
+          resolved_settings: {
+            approval_policy: "never",
+            model: "",
+            reasoning_effort: "",
+            sandbox: "workspace-write",
+            service_tier: "",
+            service_tier_source: "standard"
+          }
+        })
       }]);
       const payloads = listIssueEvents(db, issueId).map((event) => event.payload).join("\n");
       expect(payloads).toContain("hello from claude");

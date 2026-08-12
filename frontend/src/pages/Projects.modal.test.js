@@ -121,7 +121,9 @@ test('project config modal shows provider loading and failure states instead of 
   assert.match(editorSource, /正在读取可用执行引擎…/);
   assert.match(editorSource, /正在读取已启用且可用的 Code Agent…/);
   assert.match(editorSource, /读取执行引擎失败：\$\{ui\.providerCatalogError\}/);
-  assert.match(editorSource, /disabled=\{ui\.saving \|\| ui\.providerCatalogLoading \|\| !providerReady\}/);
+  assert.match(editorSource, /!providerReady && !historicalProviderPreserved/);
+  assert.match(editorSource, /codeAgentLabel\(ui\.formProvider, ui\.providerCatalog\).*（不可用）/);
+  assert.match(editorSource, /<AgentProfileSelectOptions/);
 
   const editorCss = readFileSync(new URL('./ProjectSettingsEditor.css', import.meta.url), 'utf8');
   assert.match(editorCss, /\.project-settings-loading-hint::before\s*\{[\s\S]*?animation:\s*xuanwu-spin/);

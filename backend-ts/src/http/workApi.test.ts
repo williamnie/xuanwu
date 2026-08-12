@@ -372,13 +372,15 @@ describe("Work HTTP API", () => {
       createAgentProfile(db, { id: "codex-work", name: "Codex Work", provider: "codex", model: "gpt-5.6" });
       createAgentProfile(db, { id: "claude-work", name: "Claude Work", provider: "claude", model: "claude-sonnet" });
       createAgentProfile(db, { id: "pi-work", name: "Pi Work", provider: "pi-coding-agent", model: "" });
+      createAgentProfile(db, { id: "qoder-work", name: "Qoder Work", provider: "qoder", model: "performance" });
       db.sqlite.run("update projects set default_agent_profile_id='codex-work' where id='demo'");
       const router = createDefaultRouter({
         database: db,
         providers: {
           codex: readyProvider("codex"),
           claude: readyProvider("claude"),
-          "pi-coding-agent": readyProvider("pi-coding-agent")
+          "pi-coding-agent": readyProvider("pi-coding-agent"),
+          qoder: readyProvider("qoder")
         }
       });
 
@@ -409,9 +411,19 @@ describe("Work HTTP API", () => {
         title: "Pi Work",
         type: "engineering_task"
       }));
+      const qoderCreated = await router.handle(jsonRequest("/api/works", "POST", {
+        audit: audit("work-qoder", "user"),
+        agent_profile_id: "qoder-work",
+        goal: "use Qoder performance",
+        project_id: "demo",
+        status: "triage",
+        title: "Qoder Work",
+        type: "engineering_task"
+      }));
       const inheritedWork = (await body(inherited)).work as Record<string, any>;
       const claudeWork = (await body(claudeCreated)).work as Record<string, any>;
       const piWork = (await body(piCreated)).work as Record<string, any>;
+      const qoderWork = (await body(qoderCreated)).work as Record<string, any>;
 
       expect(inheritedWork).toMatchObject({
         agent_profile_id: "",
@@ -427,6 +439,11 @@ describe("Work HTTP API", () => {
         agent_profile_id: "pi-work",
         effective_provider: "pi-coding-agent",
         effective_agent_profile: { id: "pi-work", model: "", source: "work" }
+      });
+      expect(qoderWork).toMatchObject({
+        agent_profile_id: "qoder-work",
+        effective_provider: "qoder",
+        effective_agent_profile: { id: "qoder-work", model: "performance", source: "work" }
       });
 
       const patched = await router.handle(jsonRequest(

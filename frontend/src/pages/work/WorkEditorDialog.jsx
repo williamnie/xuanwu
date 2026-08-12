@@ -7,6 +7,7 @@ import { systemApi } from '../../api/system.js';
 import { message } from '../../store/toastStore.js';
 import { useI18n } from '../../i18n/context.js';
 import PromptEditor from '../../components/editor/PromptEditor.jsx';
+import AgentProfileSelectOptions from '../../components/AgentProfileSelectOptions.jsx';
 import { editorDraft, effectiveProfilePreview } from './workProfileRouting.js';
 import { availableAgentProfiles, codeAgentAvailable, effectiveProjectProvider } from '../../utils/codeAgents.js';
 
@@ -29,7 +30,9 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
     [profiles, providerCatalog],
   );
   const inheritedProviderAvailable = codeAgentAvailable(effectiveProjectProvider(selectedProject, profiles), providerCatalog);
-  const selectedCodeAgentAvailable = draft.agent_profile_id
+  const selectedCodeAgentAvailable = editing && draft.agent_profile_id === (work?.agent_profile_id || '')
+    ? true
+    : draft.agent_profile_id
     ? availableProfiles.some(profile => profile.id === draft.agent_profile_id)
     : inheritedProviderAvailable;
 
@@ -158,11 +161,11 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
               <option disabled={!inheritedProviderAvailable} value="">
                 {inheritedProviderAvailable ? '继承项目默认' : '请选择可用 Code Agent'}
               </option>
-              {availableProfiles.map(profile => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name} · {codeAgentLabel(profile.provider)} · {profile.model || 'default'}
-                </option>
-              ))}
+              <AgentProfileSelectOptions
+                catalog={providerCatalog}
+                profiles={profiles}
+                selectedProfileID={draft.agent_profile_id}
+              />
             </select>
             <small>
               Effective: {effectivePreview.name || 'Project provider'} · {effectivePreview.provider || 'unknown'} · {effectivePreview.model || 'default'}
@@ -181,12 +184,6 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
     </div>,
     document.body,
   );
-}
-
-function codeAgentLabel(provider) {
-  if (provider === 'claude') return 'Claude Code';
-  if (provider === 'pi-coding-agent') return 'Pi';
-  return provider || 'Code Agent';
 }
 
 function workEditorAudit(operation) {

@@ -8,6 +8,7 @@ export function canEditIssue(issue) {
 
 export function issueToEditDraft(issue) {
   return {
+    agent_profile_id: issue?.agent_profile_id || '',
     project_id: issue?.project_id || '',
     title: issue?.title || '',
     description: issue?.description || '',
@@ -28,6 +29,7 @@ export function validateIssueDraft(draft) {
 export function issueDraftToPatch(draft) {
   const description = cleanText(draft.description);
   return {
+    agent_profile_id: cleanText(draft.agent_profile_id),
     project_id: cleanText(draft.project_id),
     title: cleanText(draft.title) || deriveIssueTitle(description),
     description,

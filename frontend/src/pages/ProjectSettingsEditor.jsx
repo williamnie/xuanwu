@@ -9,8 +9,9 @@ import {
   normalizeAgentProfileForm,
 } from '../utils/agentProfiles.js';
 import { serviceTierOptions } from '../utils/serviceTier.js';
-import { availableAgentProfiles } from '../utils/codeAgents.js';
+import { availableAgentProfiles, codeAgentLabel } from '../utils/codeAgents.js';
 import { providerOptionsFromCatalog } from './sessions/sessionOptions.js';
+import AgentProfileSelectOptions from '../components/AgentProfileSelectOptions.jsx';
 import './ProjectSettingsEditor.css';
 
 const DEFAULT_PROJECT_NAME = 'project';
@@ -223,13 +224,15 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       });
       return;
     }
-    if (!providerOptions.some(option => option.value === ui.formProvider)) {
+    const providerChanged = ui.formProvider !== (project?.provider || DEFAULT_PROVIDER);
+    if (!providerOptions.some(option => option.value === ui.formProvider) && (mode === 'create' || providerChanged)) {
       updateUi(draft => {
         draft.formError = '请选择当前已启用且可用的 Code Agent';
       });
       return;
     }
-    if (ui.formAgentProfileId && !availableProfiles.some(profile => profile.id === ui.formAgentProfileId)) {
+    const profileChanged = ui.formAgentProfileId !== (project?.default_agent_profile_id || '');
+    if (ui.formAgentProfileId && !availableProfiles.some(profile => profile.id === ui.formAgentProfileId) && profileChanged) {
       updateUi(draft => {
         draft.formError = '项目默认 Profile 的 Code Agent 当前不可用，请改选可用 Profile 或清除默认 Profile';
       });
@@ -278,15 +281,16 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       });
       return;
     }
-    if (!providerOptions.some(option => option.value === payload.provider)) {
+    const existing = ui.profiles.find(profile => profile.id === payload.id);
+    const historicalProviderPreserved = existing?.provider === payload.provider;
+    if (!providerOptions.some(option => option.value === payload.provider) && !historicalProviderPreserved) {
       updateUi(draft => {
         draft.profileError = 'Profile 必须选择当前已启用且可用的 Code Agent';
       });
       return;
     }
     try {
-      const exists = ui.profiles.some(profile => profile.id === payload.id);
-      const saved = exists
+      const saved = existing
         ? await projectsApi.updateAgentProfile(payload.id, payload)
         : await projectsApi.createAgentProfile(payload);
       updateUi(draft => {
@@ -307,6 +311,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
   const modelOptions = buildProviderModelOptions(ui.formProvider, ui.codexModels, ui.formModel, ui.profileForm.model);
   const modal = layout === 'modal';
   const providerReady = providerOptions.some(option => option.value === ui.formProvider);
+  const historicalProviderPreserved = mode === 'edit' && ui.formProvider === (project?.provider || DEFAULT_PROVIDER);
 
   return (
     <form className={modal ? 'project-config-modal-form' : 'project-settings-editor-form'} onSubmit={handleSubmit}>
@@ -345,7 +350,11 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
                 <label>项目默认 Profile</label>
                 <select className="form-control" onChange={event => setFormField('formAgentProfileId', event.target.value)} value={ui.formAgentProfileId}>
                   <option value="">不使用 Profile（沿用项目运行配置）</option>
-                  {availableProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.id}</option>)}
+                  <AgentProfileSelectOptions
+                    catalog={ui.providerCatalog}
+                    profiles={ui.profiles}
+                    selectedProfileID={ui.formAgentProfileId}
+                  />
                 </select>
               </div>
               <AgentProfileManager
@@ -360,6 +369,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
                 onReset={() => updateUi(draft => { draft.profileForm = emptyAgentProfileForm(); draft.profileError = ''; })}
                 onSubmit={handleProfileSubmit}
                 providerOptions={providerOptions}
+                providerCatalog={ui.providerCatalog}
                 profiles={ui.profiles}
               />
             </details>
@@ -369,7 +379,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
 
       <div className={modal ? 'project-config-modal-footer' : 'project-settings-editor-footer'}>
         {onCancel && <button className="btn btn-secondary" disabled={ui.saving} onClick={onCancel} type="button">取消</button>}
-        <button className="btn btn-primary" disabled={ui.saving || ui.providerCatalogLoading || !providerReady} type="submit">
+        <button className="btn btn-primary" disabled={ui.saving || ui.providerCatalogLoading || (!providerReady && !historicalProviderPreserved)} type="submit">
           {ui.saving ? '正在保存…' : mode === 'create' ? '添加并接管' : '保存项目设置'}
         </button>
       </div>
@@ -390,13 +400,13 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
           className={`form-control${ui.providerCatalogLoading ? ' project-settings-control-loading' : ''}`}
           disabled={providerSelectDisabled}
           onChange={event => onFieldChange('formProvider', event.target.value)}
-          value={providerReady ? ui.formProvider : ''}
+          value={ui.formProvider}
         >
           {ui.providerCatalogLoading && <option value="">正在读取可用执行引擎…</option>}
           {!ui.providerCatalogLoading && ui.providerCatalogError && <option value="">执行引擎加载失败</option>}
           {!ui.providerCatalogLoading && !ui.providerCatalogError && providerOptions.length === 0 && <option value="">暂无可用执行引擎</option>}
-          {!ui.providerCatalogLoading && !ui.providerCatalogError && providerOptions.length > 0 && !providerReady && (
-            <option disabled value="">当前执行引擎不可用，请重新选择</option>
+          {!ui.providerCatalogLoading && !ui.providerCatalogError && ui.formProvider && !providerReady && (
+            <option disabled value={ui.formProvider}>{codeAgentLabel(ui.formProvider, ui.providerCatalog)}（不可用）</option>
           )}
           {providerOptions.map(option => (
             <option key={option.value} value={option.value}>{option.label}</option>
@@ -479,7 +489,8 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
   );
 }
 
-function AgentProfileManager({ profiles, loading, form, error, modelOptions, modelsError, modelsLoading, onFieldChange, onSubmit, onEdit, onReset, providerOptions }) {
+function AgentProfileManager({ profiles, loading, form, error, modelOptions, modelsError, modelsLoading, onFieldChange, onSubmit, onEdit, onReset, providerCatalog, providerOptions }) {
+  const providerReady = providerOptions.some(option => option.value === form.provider);
   return (
     <div className="project-profile-manager">
       <div>
@@ -506,6 +517,7 @@ function AgentProfileManager({ profiles, loading, form, error, modelOptions, mod
           <div className="project-settings-grid project-profile-grid">
             <label className="form-group">执行引擎
               <select className="form-control" value={form.provider} onChange={event => onFieldChange('provider', event.target.value)}>
+                {!providerReady && form.provider ? <option disabled value={form.provider}>{codeAgentLabel(form.provider, providerCatalog)}（不可用）</option> : null}
                 {providerOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
