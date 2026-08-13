@@ -23,6 +23,8 @@ import {
 } from "./sdkStream.ts";
 import {
   ClaudeCliExecutorProvider,
+  inspectClaudeCliAuth,
+  type ClaudeCliAuthInspection,
   type ClaudeCliProviderOptions,
   type ClaudeProcess,
   type ClaudeProcessFactory
@@ -75,6 +77,7 @@ export type ClaudeSessionFunctions = {
 };
 
 export type ClaudeSdkProviderOptions = {
+  authInspector?: (config: ProviderRuntimeConfig) => ClaudeCliAuthInspection;
   eventSink?: (event: ProviderEvent) => void;
   queryFactory?: ClaudeQueryFactory;
   sessionIdFactory?: () => string;
@@ -207,24 +210,31 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
 
   runtimeStatus(): ProviderRuntimeStatus {
     const authentication = claudeAuthenticationStatus(this.config);
+    const localAuth = this.config.authMode === "local-cli"
+      ? (this.options.authInspector ?? inspectClaudeCliAuth)(this.config)
+      : undefined;
     const executableReady = resolveClaudeSdkExecutable() !== "";
     const injectedRuntime = this.options.skipReadinessCheck === true || Boolean(this.options.queryFactory);
-    const ready = injectedRuntime || (authentication.configured && executableReady);
+    const authConfigured = localAuth ? localAuth.checked && localAuth.logged_in : authentication.configured;
+    const authUsable = localAuth ? !localAuth.checked || localAuth.logged_in : authentication.configured;
+    const ready = injectedRuntime || (authUsable && executableReady);
     return {
       ready,
       mode: "sdk",
       version: CLAUDE_AGENT_SDK_VERSION,
       active_sessions: new Set(this.active.values()).size,
       api_key_configured: this.config.authMode === "environment" && clean(this.config.env.ANTHROPIC_API_KEY) !== "",
-      auth_configured: authentication.configured,
-      auth_mode: authentication.mode,
-      auth_source: authentication.source,
+      auth_configured: authConfigured,
+      auth_mode: localAuth ? "local-cli" : authentication.mode,
+      auth_source: localAuth ? "local_cli" : authentication.source,
       executable_ready: executableReady,
       ...(authentication.platform_profile ? { platform_profile: authentication.platform_profile } : {}),
       ...(ready ? {} : {
-        reason: authentication.configured
+        reason: authUsable
           ? "Claude SDK native executable is unavailable"
-          : authentication.reason || "Claude SDK authentication is not configured"
+          : localAuth?.checked
+            ? "Claude CLI local login is unavailable; run `claude auth login` as the service user"
+            : authentication.reason || "Claude SDK authentication is not configured"
       })
     };
   }

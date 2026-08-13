@@ -501,6 +501,8 @@ Claude SDK 当前类型提供 `tools`、`allowedTools`、`disallowedTools`、`pe
 
 当前 SDK 路径已实现下表映射，包括 `canUseTool` host callback 和 full unattended 的双开关 bypass。CLI fallback 只支持它能证明的 unattended read-only 与 unrestricted-host 组合；需要 host approval 或无法证明项目写入 ceiling 的组合返回 unsupported，并附可选组合。
 
+Xuanwu 默认使用 Claude SDK transport。未配置 API key、OAuth token 或 Anthropic platform profile 时，SDK 复用服务用户的本地 Claude Code 登录。认证来源和 transport 分开配置：`local-cli` 表示凭据来源，不表示使用 CLI fallback。CLI fallback 仅在显式配置 `XUANWU_CLAUDE_MODE=cli-fallback` 时启用。
+
 | Xuanwu request | Claude SDK mapping |
 | --- | --- |
 | `read-only + unattended` | tools=`Read/Grep/Glob`，写/命令 deny，permissionMode=`dontAsk` |

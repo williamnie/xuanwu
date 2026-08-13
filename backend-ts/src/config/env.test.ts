@@ -48,7 +48,7 @@ describe("Bun backend config", () => {
           cwd: "",
           enabled: true,
           env: {},
-          mode: "cli-fallback",
+          mode: "sdk",
           model: "",
           platformConfigDir: "",
           platformProfile: "",
@@ -712,7 +712,11 @@ describe("Bun backend config", () => {
     expect(config.providers.claude?.env).not.toHaveProperty("ANTHROPIC_AUTH_TOKEN");
   });
 
-  test("defaults CLI fallback to local login and fails closed for incompatible auth modes", () => {
+  test("defaults SDK and explicit CLI fallback to local login and rejects incompatible profile auth", () => {
+    expect(buildConfig().providers.claude).toMatchObject({
+      authMode: "local-cli",
+      mode: "sdk"
+    });
     expect(buildConfig({ claudeMode: "cli-fallback" }).providers.claude).toMatchObject({
       authMode: "local-cli",
       mode: "cli-fallback"
@@ -721,7 +725,10 @@ describe("Bun backend config", () => {
       authMode: "environment",
       mode: "cli-fallback"
     });
-    expect(() => buildConfig({ claudeMode: "sdk", claudeAuthMode: "local-cli" })).toThrow("requires XUANWU_CLAUDE_MODE=cli-fallback");
+    expect(buildConfig({ claudeMode: "sdk", claudeAuthMode: "local-cli" }).providers.claude).toMatchObject({
+      authMode: "local-cli",
+      mode: "sdk"
+    });
     expect(() => buildConfig({ claudeMode: "cli-fallback", claudeAuthMode: "platform-profile" })).toThrow("requires XUANWU_CLAUDE_MODE=sdk");
     expect(() => buildConfig({ claudeAuthMode: "platform-profile", claudePlatformProfile: "../unsafe" })).toThrow("PLATFORM_PROFILE");
   });
@@ -729,7 +736,7 @@ describe("Bun backend config", () => {
   test("keeps Claude CLI as an explicit fallback and rejects unsafe API bases", () => {
     expect(buildConfig({ claudeMode: "cli-fallback" }).providers.claude?.mode).toBe("cli-fallback");
     expect(buildConfig({ claudeApiBaseUrl: "https://gateway.example" }).providers.claude).toMatchObject({
-      authMode: "environment",
+      authMode: "local-cli",
       mode: "sdk"
     });
     expect(() => buildConfig({ claudeApiBaseUrl: "file:///tmp/proxy" })).toThrow("must be an http(s) URL");

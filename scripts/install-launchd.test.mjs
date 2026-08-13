@@ -75,6 +75,14 @@ test('deployment persists explicit Claude local CLI and Anthropic platform profi
   }
 });
 
+test('deployment defaults Claude to SDK transport with reusable local CLI authentication', () => {
+  for (const script of [source, releaseSource]) {
+    assert.match(script, /if \[ -z "\$CLAUDE_MODE" \]; then\s+CLAUDE_MODE="sdk"\s+fi/);
+    assert.match(script, /elif \[ -z "\$CLAUDE_API_KEY" \] && \[ ! -s "\$CLAUDE_API_KEY_FILE" \]; then\s+CLAUDE_AUTH_MODE="local-cli"/);
+    assert.doesNotMatch(script, /XUANWU_CLAUDE_AUTH_MODE=local-cli requires (?:cli-fallback|XUANWU_CLAUDE_MODE=cli-fallback)/);
+  }
+});
+
 test('deployment stages the adjacent Claude SDK native executable atomically and snapshots it', () => {
   assert.match(source, /stage_file_atomically "\$CLAUDE_SDK_EXECUTABLE_SOURCE" "\$CLAUDE_SDK_EXECUTABLE_PATH" 0755/);
   assert.match(source, /"\$LAUNCHD_BINARY_PATH\.claude-agent-sdk"/);

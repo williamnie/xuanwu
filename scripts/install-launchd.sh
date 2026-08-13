@@ -51,14 +51,12 @@ QODER_CONFIG_DIR="${XUANWU_QODER_CONFIG_DIR:-}"
 QODER_CREDENTIAL_REF="${XUANWU_QODER_CREDENTIAL_REF:-}"
 QODER_MODEL="${XUANWU_QODER_MODEL:-}"
 if [ -z "$CLAUDE_MODE" ]; then
-  if [ -n "$CLAUDE_API_KEY" ] || [ -s "$CLAUDE_API_KEY_FILE" ] || [ "$CLAUDE_AUTH_MODE" = "environment" ] || [ "$CLAUDE_AUTH_MODE" = "platform-profile" ] || [ -n "$CLAUDE_PLATFORM_CONFIG_DIR" ] || [ -n "$CLAUDE_PLATFORM_PROFILE" ]; then
-    CLAUDE_MODE="sdk"
-  else
-    CLAUDE_MODE="cli-fallback"
-  fi
+  CLAUDE_MODE="sdk"
 fi
 if [ -z "$CLAUDE_AUTH_MODE" ]; then
-  if [ "$CLAUDE_MODE" = "cli-fallback" ] && [ -z "$CLAUDE_API_KEY" ]; then
+  if [ -n "$CLAUDE_PLATFORM_CONFIG_DIR" ] || [ -n "$CLAUDE_PLATFORM_PROFILE" ]; then
+    CLAUDE_AUTH_MODE="platform-profile"
+  elif [ -z "$CLAUDE_API_KEY" ] && [ ! -s "$CLAUDE_API_KEY_FILE" ]; then
     CLAUDE_AUTH_MODE="local-cli"
   else
     CLAUDE_AUTH_MODE="environment"
@@ -335,9 +333,7 @@ fi
 
 case "$CLAUDE_AUTH_MODE" in
   environment) ;;
-  local-cli)
-    [ "$CLAUDE_MODE" = "cli-fallback" ] || { echo "[launchd] XUANWU_CLAUDE_AUTH_MODE=local-cli requires cli-fallback mode" >&2; exit 1; }
-    ;;
+  local-cli) ;;
   platform-profile)
     [ "$CLAUDE_MODE" = "sdk" ] || { echo "[launchd] XUANWU_CLAUDE_AUTH_MODE=platform-profile requires sdk mode" >&2; exit 1; }
     ;;

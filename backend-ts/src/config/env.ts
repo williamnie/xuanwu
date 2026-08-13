@@ -553,12 +553,7 @@ function buildClaudeRuntimeConfig(overrides: ProviderRuntimeOverrides): Provider
     cleanValue(overrides.claudePlatformProfile) ?? cleanValue(legacyEnv.ANTHROPIC_PROFILE) ?? ""
   );
   const environmentAuthConfigured = Boolean(apiKey || authToken || oauthToken);
-  const mode = normalizeClaudeProviderMode(
-    overrides.claudeMode,
-    overrides.claudeAuthMode,
-    environmentAuthConfigured,
-    Boolean(apiBaseUrl || platformConfigDir || platformProfile)
-  );
+  const mode = normalizeClaudeProviderMode(overrides.claudeMode);
   const authMode = normalizeClaudeAuthMode(overrides.claudeAuthMode, mode, environmentAuthConfigured);
   if (authMode !== "environment") {
     delete legacyEnv.ANTHROPIC_API_KEY;
@@ -660,19 +655,9 @@ function readSecretFile(pathValue: string | undefined): string | undefined {
   }
 }
 
-function normalizeClaudeProviderMode(
-  value: string | undefined,
-  authValue: string | undefined,
-  environmentAuthConfigured: boolean,
-  explicitSdkConfiguration: boolean
-): "sdk" | "cli-fallback" {
+function normalizeClaudeProviderMode(value: string | undefined): "sdk" | "cli-fallback" {
   const configured = cleanValue(value)?.toLowerCase();
-  const authMode = cleanValue(authValue)?.toLowerCase();
-  const mode = configured ?? (
-    authMode === "platform-profile" || authMode === "environment" || environmentAuthConfigured || explicitSdkConfiguration
-      ? "sdk"
-      : "cli-fallback"
-  );
+  const mode = configured ?? "sdk";
   if (mode === "sdk" || mode === "cli-fallback") return mode;
   throw new Error(`XUANWU_CLAUDE_MODE must be sdk or cli-fallback, received ${mode}`);
 }
@@ -683,12 +668,9 @@ function normalizeClaudeAuthMode(
   environmentAuthConfigured: boolean
 ): "environment" | "local-cli" | "platform-profile" {
   const configured = cleanValue(value)?.toLowerCase();
-  const mode = configured ?? (providerMode === "cli-fallback" && !environmentAuthConfigured ? "local-cli" : "environment");
+  const mode = configured ?? (!environmentAuthConfigured ? "local-cli" : "environment");
   if (mode !== "environment" && mode !== "local-cli" && mode !== "platform-profile") {
     throw new Error(`XUANWU_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile, received ${mode}`);
-  }
-  if (providerMode === "sdk" && mode === "local-cli") {
-    throw new Error("XUANWU_CLAUDE_AUTH_MODE=local-cli requires XUANWU_CLAUDE_MODE=cli-fallback");
   }
   if (providerMode === "cli-fallback" && mode === "platform-profile") {
     throw new Error("XUANWU_CLAUDE_AUTH_MODE=platform-profile requires XUANWU_CLAUDE_MODE=sdk");

@@ -41,6 +41,36 @@ describe("Claude Code provider", () => {
     }
   });
 
+  test("SDK local login keeps unattended native development inside the host tool gate", async () => {
+    let captured: ClaudeSdkOptions | undefined;
+    const provider = new ClaudeSdkExecutorProvider(runtimeConfig({ authMode: "local-cli", mode: "sdk" }), {
+      authInspector: () => ({ auth_method: "oauth_token", checked: true, logged_in: true, provider: "firstParty" }),
+      queryFactory: ({ options }) => {
+        captured = options;
+        return (async function* () {})();
+      }
+    });
+
+    await provider.run({
+      ...runInput(),
+      policy: claudePolicy({ access: "provider-native-development", approval: "unattended" })
+    }).catch(() => undefined);
+
+    expect(provider.runtimeStatus()).toMatchObject({
+      auth_mode: "local-cli",
+      auth_source: "local_cli",
+      mode: "sdk",
+      ready: true
+    });
+    expect(captured).toMatchObject({
+      allowedTools: ["Read", "Grep", "Glob"],
+      permissionMode: "default",
+      tools: ["Read", "Grep", "Glob", "Edit", "Write", "Bash"]
+    });
+    expect(captured?.allowDangerouslySkipPermissions).toBeUndefined();
+    expect(typeof captured?.canUseTool).toBe("function");
+  });
+
   test("keeps CLI fallback explicit and reports its real command readiness", () => {
     const injected = new ClaudeExecutorProvider(runtimeConfig({ mode: "cli-fallback" }), {
       processFactory: scriptedProcessFactory({}).factory
@@ -407,7 +437,10 @@ function runInput() {
   return { issueId: 183, projectId: "demo", cwd: "/tmp", prompt: "issue prompt" };
 }
 
-function claudePolicy(request: { access: "unrestricted-host"; approval: "ask-every-side-effect" | "unattended" }) {
+function claudePolicy(request: {
+  access: "provider-native-development" | "unrestricted-host";
+  approval: "ask-every-side-effect" | "unattended";
+}) {
   return resolveExecutionPolicy({ contract: "xw.execution-policy.v1", ...request }, {
     cwd: "/tmp",
     invocationRef: "claude-test",
