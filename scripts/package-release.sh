@@ -94,14 +94,19 @@ stage_claude_sdk_executable() {
   install -m 0755 "$source" "$pkg_dir/xuanwu.claude-agent-sdk"
 }
 
-stage_qodercli_executable() {
-  local pkg_dir="$1" package_dir source version
+stage_qodercli_runtime() {
+  local pkg_dir="$1" package_dir source target version
   package_dir="$ROOT_DIR/backend-ts/node_modules/@qoder-ai/qodercli"
-  source="$package_dir/bundle/qodercli.js"
-  [ -f "$source" ] || fail "missing exact-pinned Qoder CLI bundle: $source"
+  source="$package_dir/bundle"
+  [ -f "$source/qodercli.js" ] || fail "missing exact-pinned Qoder CLI bundle: $source/qodercli.js"
+  [ -f "$source/policies/sandbox-default.toml" ] || fail "missing Qoder CLI runtime policies"
   version="$(node -p "require('$package_dir/package.json').version")"
   [ "$version" = "1.1.18" ] || fail "Qoder CLI version $version does not match required 1.1.18"
-  install -m 0755 "$source" "$pkg_dir/xuanwu.qodercli.mjs"
+  target="$pkg_dir/xuanwu.qodercli"
+  mkdir -p "$target"
+  cp -R "$source/." "$target/"
+  mv "$target/qodercli.js" "$target/qodercli.mjs"
+  chmod 0755 "$target/qodercli.mjs"
 }
 
 stage_pi_policy_extension() {
@@ -222,7 +227,7 @@ package_target() {
   stage_pi_package_assets "$pkg_dir"
   stage_pi_policy_extension "$pkg_dir"
   stage_claude_sdk_executable "$target" "$pkg_dir"
-  stage_qodercli_executable "$pkg_dir"
+  stage_qodercli_runtime "$pkg_dir"
   (cd "$pkg_dir" && LC_ALL=C tar -czf "$OUT_DIR/$asset.tar.gz" .)
 }
 

@@ -83,11 +83,12 @@ stage_claude_sdk_executable() {
   echo "[bun-build] claude sdk executable: $target"
 }
 
-stage_qodercli_executable() {
-  local source target_dir staged target version
-  source="$BACKEND_TS_DIR/node_modules/@qoder-ai/qodercli/bundle/qodercli.js"
-  [ -f "$source" ] || {
-    echo "[bun-build] missing exact-pinned Qoder CLI bundle: $source" >&2
+stage_qodercli_runtime() {
+  local source executable target_dir staged target version
+  source="$BACKEND_TS_DIR/node_modules/@qoder-ai/qodercli/bundle"
+  executable="$source/qodercli.js"
+  [ -f "$executable" ] || {
+    echo "[bun-build] missing exact-pinned Qoder CLI bundle: $executable" >&2
     exit 1
   }
   version="$(bun -e "console.log(require('$BACKEND_TS_DIR/node_modules/@qoder-ai/qodercli/package.json').version)")"
@@ -95,13 +96,16 @@ stage_qodercli_executable() {
     echo "[bun-build] Qoder CLI version $version does not match required 1.1.18" >&2
     exit 1
   }
-  target="$OUTFILE.qodercli.mjs"
+  target="$OUTFILE.qodercli"
   target_dir="$(dirname "$target")"
-  staged="$(mktemp "$target_dir/.qodercli-stage.XXXXXX")"
-  cp -p "$source" "$staged"
-  chmod 0755 "$staged"
+  staged="$(mktemp -d "$target_dir/.qodercli-stage.XXXXXX")"
+  cp -R "$source/." "$staged/"
+  mv "$staged/qodercli.js" "$staged/qodercli.mjs"
+  chmod 0755 "$staged/qodercli.mjs"
+  rm -rf "$target"
   mv -f "$staged" "$target"
-  echo "[bun-build] qodercli executable: $target"
+  rm -f "$OUTFILE.qodercli.mjs"
+  echo "[bun-build] qodercli runtime: $target"
 }
 
 stage_pi_policy_extension() {
@@ -150,7 +154,7 @@ echo "[bun-build] outfile: $OUTFILE"
 )
 
 stage_claude_sdk_executable
-stage_qodercli_executable
+stage_qodercli_runtime
 stage_pi_policy_extension
 sign_binary_if_possible
 printf '%s\n' "$BUILD_STAMP" > "$OUTFILE.build.stamp"

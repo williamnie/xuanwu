@@ -1,5 +1,5 @@
-import { statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import { detectProviderCommand } from "../core/command.ts";
@@ -38,7 +38,7 @@ export function probeQoderRuntime(
 ): QoderRuntimeProbe {
   const authentication = (options.inspectAuth ?? qoderAuthenticationStatus)(config);
   const cli = (options.inspectCli ?? inspectQoderCli)(config.command, config.env);
-  const cliReady = cli.installed && cli.version === QODER_VERSION_PAIR.cli;
+  const cliReady = cli.installed && cli.version === QODER_VERSION_PAIR.cli && !cli.reason;
   const ready = cliReady && authentication.configured;
   const reason = !cli.installed
     ? cli.reason ?? "Qoder CLI is unavailable"
@@ -141,6 +141,9 @@ function inspectQoderCli(command: string, env: Record<string, string>): { instal
   if (!version) return { installed: true, reason: "Qoder CLI did not report a semantic version" };
   if (version !== QODER_VERSION_PAIR.cli) {
     return { installed: true, version, reason: `Qoder CLI version ${version} does not match ${QODER_VERSION_PAIR.cli}` };
+  }
+  if (/\.[cm]?js$/.test(detected.path) && !existsSync(join(dirname(detected.path), "policies/sandbox-default.toml"))) {
+    return { installed: true, version, reason: "Qoder CLI runtime policies are missing" };
   }
   return { installed: true, version };
 }

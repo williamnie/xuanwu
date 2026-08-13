@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildConfig } from "../../config/env.ts";
@@ -43,6 +43,28 @@ describe("Qoder Q1 offline runtime readiness", () => {
           sdk_version: "1.0.20"
         }
       }
+    });
+  });
+
+  test("requires runtime policies beside a pinned JavaScript CLI", async () => {
+    const root = await mkdtemp(join(tmpdir(), "qoder-runtime-assets-"));
+    roots.push(root);
+    const command = join(root, "qodercli.mjs");
+    await writeFile(command, "#!/bin/sh\necho 1.1.18\n", "utf8");
+    await chmod(command, 0o755);
+    const config = buildConfig({ qoderAuthMode: "pat-env", qoderPat: "fixture-pat" }).providers.qoder!;
+
+    expect(probeQoderRuntime({ ...config, command })).toMatchObject({
+      installed: true,
+      ready: false,
+      reason: "Qoder CLI runtime policies are missing"
+    });
+
+    await mkdir(join(root, "policies"));
+    await writeFile(join(root, "policies", "sandbox-default.toml"), "[sandbox]\n", "utf8");
+    expect(probeQoderRuntime({ ...config, command })).toMatchObject({
+      installed: true,
+      ready: true
     });
   });
 

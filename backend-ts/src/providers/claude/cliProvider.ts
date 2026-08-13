@@ -222,8 +222,14 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
         ? { checked: false, logged_in: true }
         : (this.options.authInspector ?? inspectClaudeCliAuth)(this.config)
       : { checked: true, logged_in: environmentAuth.configured };
-    const authConfigured = authMode === "local-cli" ? auth.logged_in : environmentAuth.configured;
-    const ready = commandReady && (Boolean(this.options.processFactory) || authConfigured);
+    const authConfigured = authMode === "local-cli"
+      ? Boolean(this.options.processFactory) || (auth.checked && auth.logged_in)
+      : environmentAuth.configured;
+    // 本地 CLI 探测可能因启动超时或非 JSON 输出而暂时不可用。只有 Claude 明确返回
+    // loggedIn=false 时才阻止执行；不确定状态交给真实 CLI 调用验证，避免一次探测故障
+    // 永久把 Provider 固定为 not_ready。
+    const localAuthUsable = Boolean(this.options.processFactory) || !auth.checked || auth.logged_in;
+    const ready = commandReady && (authMode === "local-cli" ? localAuthUsable : environmentAuth.configured);
     return {
       active_sessions: new Set(this.active.values()).size,
       api_key_configured: authMode === "environment" && clean(this.config.env.ANTHROPIC_API_KEY) !== "",
@@ -304,12 +310,14 @@ export function inspectClaudeCliAuth(config: ProviderRuntimeConfig): ClaudeCliAu
       timeout: 3_000
     });
     const parsed = JSON.parse(new TextDecoder().decode(result.stdout)) as Record<string, unknown>;
-    inspection = {
-      checked: result.exitCode === 0,
-      logged_in: result.exitCode === 0 && parsed.loggedIn === true,
-      ...(safeAuthMethod(parsed.authMethod) ? { auth_method: safeAuthMethod(parsed.authMethod) } : {}),
-      ...(safeLabel(parsed.apiProvider) ? { provider: safeLabel(parsed.apiProvider) } : {})
-    };
+    if (typeof parsed.loggedIn === "boolean") {
+      inspection = {
+        checked: true,
+        logged_in: parsed.loggedIn,
+        ...(safeAuthMethod(parsed.authMethod) ? { auth_method: safeAuthMethod(parsed.authMethod) } : {}),
+        ...(safeLabel(parsed.apiProvider) ? { provider: safeLabel(parsed.apiProvider) } : {})
+      };
+    }
   } catch {
     // Authentication remains unavailable without exposing command output.
   }

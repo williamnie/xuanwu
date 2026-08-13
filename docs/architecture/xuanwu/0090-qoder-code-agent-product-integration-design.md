@@ -232,10 +232,17 @@ verifiedPlatforms
 ```text
 xuanwu
 xuanwu.claude-agent-sdk
-xuanwu.qodercli
+xuanwu.qodercli/
+  qodercli.mjs
+  policies/
+  proto/
+  qoder-worker-runtime.mjs
+  sandbox-macos-*.sb
 ```
 
-SDK query 显式传 `pathToQoderCLIExecutable`。开发态可以覆盖路径，但生产不从不确定的 PATH 或 Qoder Desktop 中猜测。
+SDK query 显式传 `pathToQoderCLIExecutable=xuanwu.qodercli/qodercli.mjs`。Qoder CLI 的相邻 runtime assets
+是不可拆分的发布单元，构建、安装、升级和回滚都必须复制整个目录。开发态可以覆盖路径，但生产不从不确定的
+PATH 或 Qoder Desktop 中猜测。
 
 需要修改：
 

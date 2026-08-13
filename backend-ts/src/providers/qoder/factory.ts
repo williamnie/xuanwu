@@ -80,6 +80,8 @@ export function qoderFactory(options: QoderFactoryOptions = {}): ProviderFactory
 export function withPinnedQoderCli(config: ProviderRuntimeConfig): ProviderRuntimeConfig {
   const configured = typeof config.command === "string" ? config.command.trim() : "";
   if (configured !== "" && configured !== "qodercli") return config;
+  const adjacentRuntime = `${process.execPath}.qodercli/qodercli.mjs`;
+  if (existsSync(adjacentRuntime)) return { ...config, command: adjacentRuntime };
   const adjacent = `${process.execPath}.qodercli.mjs`;
   if (existsSync(adjacent)) return { ...config, command: adjacent };
   const bundled = join(import.meta.dir, "../../../node_modules/@qoder-ai/qodercli/bundle/qodercli.js");

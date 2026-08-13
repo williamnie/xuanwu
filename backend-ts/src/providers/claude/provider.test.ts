@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
@@ -10,6 +10,7 @@ import { cancelIssueWithInterrupt } from "../../runner/interrupt.ts";
 import { runProjectLoopOnce } from "../../runner/projectLoop.ts";
 import { runIssueWithProvider } from "../../runner/providerRuntime.ts";
 import { ClaudeExecutorProvider, ClaudeSdkExecutorProvider, type ClaudeProcessFactory } from "./provider.ts";
+import { inspectClaudeCliAuth } from "./cliProvider.ts";
 import type { Options as ClaudeSdkOptions } from "@anthropic-ai/claude-agent-sdk";
 import { CLAUDE_EXECUTION_POLICY_CAPABILITIES, claudeExecutionPolicyAdapter } from "./executionPolicy.ts";
 import { resolveExecutionPolicy } from "../core/policyResolution.ts";
@@ -49,6 +50,51 @@ describe("Claude Code provider", () => {
     expect(injected.capabilities).toEqual(["issue_execution", "sessions", "resume_session", "interrupt"]);
     expect(injected.runtimeStatus()).toMatchObject({ mode: "cli-fallback", ready: true });
     expect(missing.runtimeStatus()).toMatchObject({ mode: "cli-fallback", ready: false });
+  });
+
+  test("only blocks local CLI execution when the auth probe explicitly reports logged out", () => {
+    const inconclusive = new ClaudeExecutorProvider(runtimeConfig({ command: process.execPath, mode: "cli-fallback" }), {
+      authInspector: () => ({ checked: false, logged_in: false })
+    });
+    const loggedOut = new ClaudeExecutorProvider(runtimeConfig({ command: process.execPath, mode: "cli-fallback" }), {
+      authInspector: () => ({ checked: true, logged_in: false })
+    });
+
+    expect(inconclusive.runtimeStatus()).toMatchObject({
+      auth_configured: false,
+      auth_source: "local_cli",
+      ready: true
+    });
+    expect(inconclusive.runtimeStatus().reason).toBeUndefined();
+    expect(loggedOut.runtimeStatus()).toMatchObject({
+      auth_configured: false,
+      auth_source: "local_cli",
+      ready: false,
+      reason: "Claude CLI local login is unavailable; run `claude auth login` as the service user"
+    });
+  });
+
+  test("treats a parsed logged-out response as authoritative even when the CLI exits non-zero", async () => {
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-claude-auth-probe-"));
+    tempRoots.push(root);
+    const loggedOutCommand = join(root, "claude-logged-out");
+    const invalidCommand = join(root, "claude-invalid-status");
+    await writeFile(
+      loggedOutCommand,
+      "#!/bin/sh\nprintf '%s\\n' '{\"loggedIn\":false,\"authMethod\":\"none\",\"apiProvider\":\"firstParty\"}'\nexit 1\n",
+      { mode: 0o700 }
+    );
+    await writeFile(invalidCommand, "#!/bin/sh\nprintf '%s\\n' 'status unavailable'\nexit 1\n", { mode: 0o700 });
+
+    expect(inspectClaudeCliAuth(runtimeConfig({ command: loggedOutCommand }))).toMatchObject({
+      checked: true,
+      logged_in: false,
+      provider: "firstParty"
+    });
+    expect(inspectClaudeCliAuth(runtimeConfig({ command: invalidCommand }))).toEqual({
+      checked: false,
+      logged_in: false
+    });
   });
 
   test("creates, discovers, reads, and resumes local Claude Code sessions", async () => {

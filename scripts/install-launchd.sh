@@ -22,8 +22,11 @@ BINARY_PATH="${XUANWU_BINARY:-$ROOT_DIR/dist/xuanwu}"
 LAUNCHD_BINARY_PATH="${XUANWU_LAUNCHD_BINARY:-$APP_SUPPORT_DIR/bin/xuanwu}"
 CLAUDE_SDK_EXECUTABLE_SOURCE="$BINARY_PATH.claude-agent-sdk"
 CLAUDE_SDK_EXECUTABLE_PATH="$LAUNCHD_BINARY_PATH.claude-agent-sdk"
-QODERCLI_EXECUTABLE_SOURCE="$BINARY_PATH.qodercli.mjs"
-QODERCLI_EXECUTABLE_PATH="$LAUNCHD_BINARY_PATH.qodercli.mjs"
+QODERCLI_RUNTIME_SOURCE="$BINARY_PATH.qodercli"
+QODERCLI_RUNTIME_PATH="$LAUNCHD_BINARY_PATH.qodercli"
+QODERCLI_EXECUTABLE_SOURCE="$QODERCLI_RUNTIME_SOURCE/qodercli.mjs"
+QODERCLI_EXECUTABLE_PATH="$QODERCLI_RUNTIME_PATH/qodercli.mjs"
+LEGACY_QODERCLI_EXECUTABLE_PATH="$LAUNCHD_BINARY_PATH.qodercli.mjs"
 PI_POLICY_EXTENSION_SOURCE="$BINARY_PATH.pi-policy-extension.ts"
 PI_POLICY_EXTENSION_PATH="$LAUNCHD_BINARY_PATH.pi-policy-extension.ts"
 PI_PACKAGE_ASSET_SOURCE="${XUANWU_PI_PACKAGE_ASSET_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@earendil-works/pi-coding-agent}"
@@ -149,6 +152,26 @@ stage_file_atomically() {
   fi
 }
 
+stage_dir_atomically() {
+  local source="$1" target="$2"
+  local target_dir staged previous
+  target_dir="$(dirname "$target")"
+  mkdir -p "$target_dir"
+  staged="$(mktemp -d "$target_dir/.xuanwu-dir-stage.XXXXXX")"
+  previous="$target_dir/.xuanwu-dir-previous.$$"
+  rm -rf "$previous"
+  if ! cp -R "$source/." "$staged/"; then
+    rm -rf "$staged"
+    return 1
+  fi
+  if [ -e "$target" ]; then mv "$target" "$previous"; fi
+  if ! mv "$staged" "$target"; then
+    [ -e "$previous" ] && mv "$previous" "$target"
+    return 1
+  fi
+  [ -e "$previous" ] && rm -rf "$previous"
+}
+
 stage_launchd_binary() {
   # Never truncate a running Mach-O in place. macOS can mark that vnode's code
   # pages as tainted, after which launchd rejects even a valid new signature.
@@ -167,12 +190,16 @@ stage_claude_sdk_executable() {
   stage_file_atomically "$CLAUDE_SDK_EXECUTABLE_SOURCE" "$CLAUDE_SDK_EXECUTABLE_PATH" 0755
 }
 
-stage_qodercli_executable() {
+stage_qodercli_runtime() {
   [ -f "$QODERCLI_EXECUTABLE_SOURCE" ] || {
     echo "[launchd] missing exact-pinned Qoder CLI executable: $QODERCLI_EXECUTABLE_SOURCE" >&2
     exit 1
   }
-  stage_file_atomically "$QODERCLI_EXECUTABLE_SOURCE" "$QODERCLI_EXECUTABLE_PATH" 0755
+  [ -f "$QODERCLI_RUNTIME_SOURCE/policies/sandbox-default.toml" ] || {
+    echo "[launchd] missing Qoder CLI runtime policies: $QODERCLI_RUNTIME_SOURCE/policies/sandbox-default.toml" >&2
+    exit 1
+  }
+  stage_dir_atomically "$QODERCLI_RUNTIME_SOURCE" "$QODERCLI_RUNTIME_PATH"
 }
 
 stage_pi_policy_extension() {
@@ -185,13 +212,17 @@ stage_pi_policy_extension() {
 
 backup_current_runtime() {
   local rollback_dir="" source
-  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.claude-agent-sdk" "$LAUNCHD_BINARY_PATH.qodercli.mjs" "$LAUNCHD_BINARY_PATH.pi-policy-extension.ts" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST"; do
+  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.claude-agent-sdk" "$QODERCLI_RUNTIME_PATH" "$LEGACY_QODERCLI_EXECUTABLE_PATH" "$LAUNCHD_BINARY_PATH.pi-policy-extension.ts" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST"; do
     [ -e "$source" ] || continue
     if [ -z "$rollback_dir" ]; then
       rollback_dir="$APP_SUPPORT_DIR/rollback/$(date -u '+%Y%m%dT%H%M%SZ')"
       mkdir -p "$rollback_dir"
     fi
-    cp -p "$source" "$rollback_dir/$(basename "$source")"
+    if [ -d "$source" ]; then
+      cp -R "$source" "$rollback_dir/$(basename "$source")"
+    else
+      cp -p "$source" "$rollback_dir/$(basename "$source")"
+    fi
   done
   if [ -n "$rollback_dir" ]; then
     printf '%s\n' "$rollback_dir" > "$STATE_DIR/latest-runtime-rollback"
@@ -345,7 +376,7 @@ else
 fi
 stage_launchd_binary
 stage_claude_sdk_executable
-stage_qodercli_executable
+stage_qodercli_runtime
 stage_pi_policy_extension
 stage_pi_package_assets
 stage_web_dir
