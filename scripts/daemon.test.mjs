@@ -113,6 +113,7 @@ test('release installer can repeat an atomic macOS upgrade without replacing sta
     await writeExecutable(join(fixture, 'xuanwu'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "xuanwu v1.2.3 build=test bun=test"; fi\nexit 0\n');
     await writeExecutable(join(fixture, 'xuanwu.claude-agent-sdk'), '#!/bin/sh\nexit 0\n');
     await writeExecutable(join(fixture, 'xuanwu.qodercli.mjs'), '#!/bin/sh\necho 1.1.18\n');
+    await writeFile(join(fixture, 'xuanwu.pi-policy-extension.ts'), 'export default function extension() {}\n');
     await writeFile(join(fixture, 'daemon.sh'), await readFile(daemon));
     await chmod(join(fixture, 'daemon.sh'), 0o755);
     assert.equal(spawnSync('tar', ['-czf', archive, '-C', fixture, '.']).status, 0);

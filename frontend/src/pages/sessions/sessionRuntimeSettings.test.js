@@ -24,6 +24,11 @@ test('message settings prefer selected session runtime values over project defau
     serviceTier: 'priority',
     approvalPolicy: 'always',
     sandbox: 'danger-full-access',
+    executionPolicy: {
+      contract: 'xw.execution-policy.v1',
+      access: 'unrestricted-host',
+      approval: 'ask-every-side-effect',
+    },
   });
 });
 

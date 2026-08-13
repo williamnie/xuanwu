@@ -104,6 +104,7 @@ export default function Sessions({
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState('');
   const [providerRuntimeStatus, setProviderRuntimeStatus] = useState(null);
+  const [providerCatalog, setProviderCatalog] = useState([]);
   const [message, setMessage] = useState('');
   const [messageReferences, setMessageReferences] = useState([]);
   const [messageCommand, setMessageCommand] = useState(null);
@@ -341,9 +342,11 @@ export default function Sessions({
   useEffect(() => { loadModels(sessionSettings.provider, providerRuntimeStatus); }, [loadModels, providerRuntimeStatus, sessionSettings.provider]);
   useEffect(() => {
     let alive = true;
-    systemApi.getSystemStatus()
-      .then((status) => { if (alive) setProviderRuntimeStatus(status); })
-      .catch(() => { if (alive) setProviderRuntimeStatus({ providers: [] }); });
+    Promise.allSettled([systemApi.getSystemStatus(), systemApi.getProviders()]).then(([status, catalog]) => {
+      if (!alive) return;
+      setProviderRuntimeStatus(status.status === 'fulfilled' ? status.value : { providers: [] });
+      setProviderCatalog(catalog.status === 'fulfilled' && Array.isArray(catalog.value) ? catalog.value : []);
+    });
     return () => { alive = false; };
   }, []);
   useEffect(() => {
@@ -515,6 +518,7 @@ export default function Sessions({
         service_tier: settings.serviceTier,
         approval_policy: settings.approvalPolicy,
         sandbox: settings.sandbox,
+        execution_policy: settings.executionPolicy,
       }, references));
       const running = isSessionRunning(result);
       setSessionRunning(running);
@@ -534,6 +538,7 @@ export default function Sessions({
       service_tier: settings.serviceTier,
       approval_policy: settings.approvalPolicy,
       sandbox: settings.sandbox,
+      execution_policy: settings.executionPolicy,
     }, references));
   }, []);
 
@@ -759,6 +764,7 @@ export default function Sessions({
         service_tier: sessionSettings.serviceTier,
         approval_policy: sessionSettings.approvalPolicy,
         sandbox: sessionSettings.sandbox,
+        execution_policy: sessionSettings.executionPolicy,
       }, promptReferences));
       const newSessionId = sessionIDFromCreateResult(result);
       const createdSession = sessionFromCreateResult(result, selectedProject);
@@ -852,6 +858,7 @@ export default function Sessions({
           models,
           modelsLoading,
           modelsError,
+          providerCatalog,
           sending,
           interruptState,
           selectedId,
@@ -905,6 +912,7 @@ export default function Sessions({
           handleProjectChange,
           sessionProjects,
           providerOptions: readySessionProviders(providerRuntimeStatus),
+          providerCatalog,
         }}
       />
     </>

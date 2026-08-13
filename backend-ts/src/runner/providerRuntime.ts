@@ -29,6 +29,10 @@ import { syncProviderApprovalRequest } from "./providerApprovalRequests.ts";
 import { signalProviderTerminalEvent } from "./providerTerminalSignals.ts";
 import { createIssueLogPersistence, type IssueLogMode } from "./issueLogPersistence.ts";
 import { parseProviderOutcomeMarker, reconcileProviderOutcome } from "./providerOutcome.ts";
+import { ExecutionPolicyError, type ExecutionPolicyRequest, type ProviderPolicyContext } from "../providers/core/policyContracts.ts";
+import type { ProviderTransport } from "../providers/core/manifest.ts";
+import { translateLegacyExecutionPolicy } from "../providers/core/legacyExecutionPolicy.ts";
+import { resolveExecutionPolicy } from "../providers/core/policyResolution.ts";
 
 export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   agentProfileId?: string;
@@ -42,6 +46,12 @@ export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   onRunStart?: (input: ProviderRuntimeStart) => void;
   onRuntimeEvent?: ProviderRunInput["onEvent"];
   selectionReason?: string;
+  executionPolicyRequest?: ExecutionPolicyRequest;
+  executionPolicyCapabilityRevision?: string;
+  executionPolicyResolutionSource?: "default" | "legacy" | "profile" | "project" | "session" | "explicit";
+  executionPolicyProviderVersion?: string;
+  executionPolicyTransport?: ProviderTransport;
+  executionSource?: ProviderPolicyContext["source"];
 };
 export type RunnerIssueRecoveryInput = RunnerIssueExecutionInput & { session: SessionRef };
 
@@ -55,7 +65,7 @@ export type ProviderRuntimeStart = {
 export type ProviderRuntimeComplete = Omit<ProviderRuntimeStart, "metadata"> & ProviderRunResult;
 
 export async function runIssueWithProvider(
-  provider: Pick<ExecutorProvider, "capabilities" | "id" | "run">,
+  provider: Pick<ExecutorProvider, "capabilities" | "id" | "manifest" | "policyAdapter" | "run" | "runtimeStatus">,
   input: RunnerIssueExecutionInput
 ): Promise<ProviderRunResult> {
   if (!provider.capabilities.includes("issue_execution")) {
@@ -70,20 +80,27 @@ export async function runIssueWithProvider(
     metadata: { cwd: input.cwd }
   });
   const activeRunID = activeRun?.id ?? openIssueRunID(input.database, input.issueId);
-  if (input.database) {
-    updateIssueRuntime(input.database, input.issueId, {
-      agent_profile_id: input.agentProfileId,
-      capability_summary: input.capabilitySummary,
+  const resolvedInput = await resolveRuntimePolicyOrPersist(
+    provider,
+    input,
+    activeRunID,
+    activeRun?.attempt ?? 0,
+    input.executionSource ?? "local-user"
+  );
+  if (resolvedInput.database) {
+    updateIssueRuntime(resolvedInput.database, resolvedInput.issueId, {
+      agent_profile_id: resolvedInput.agentProfileId,
+      capability_summary: resolvedInput.capabilitySummary,
       issue_run_id: activeRunID,
-      metadata: runtimeMetadata(input, { source: "provider_start" }),
+      metadata: runtimeMetadata(resolvedInput, { source: "provider_start" }),
       provider: providerID,
-      selection_reason: input.selectionReason
+      selection_reason: resolvedInput.selectionReason
     });
   }
-  const eventSink = providerEventSink(input, activeRunID, activeRun?.attempt ?? 0);
+  const eventSink = providerEventSink(resolvedInput, activeRunID, activeRun?.attempt ?? 0);
   let result: ProviderRunResult;
   try {
-    result = await provider.run(providerInput(input, eventSink.push));
+    result = await provider.run(providerInput(resolvedInput, eventSink.push));
   } catch (error) {
     if (!isProviderInterruptedError(error) && !eventSink.hasFailure()) {
       eventSink.push(providerRunErrorEvent(providerID, error));
@@ -91,10 +108,10 @@ export async function runIssueWithProvider(
     throw error;
   } finally {
     await eventSink.flush();
-    resetDebugIssueLogMode(input, eventSink.mode, providerID);
+    resetDebugIssueLogMode(resolvedInput, eventSink.mode, providerID);
   }
-  persistRuntimeResult(input, providerID, result, activeRunID);
-  input.onRunComplete?.({
+  persistRuntimeResult(resolvedInput, providerID, result, activeRunID);
+  resolvedInput.onRunComplete?.({
     provider: providerID,
     issueId: input.issueId,
     projectId: input.projectId,
@@ -105,7 +122,7 @@ export async function runIssueWithProvider(
 }
 
 export async function recoverIssueWithProvider(
-  provider: Pick<ExecutorProvider, "capabilities" | "id" | "recover">,
+  provider: Pick<ExecutorProvider, "capabilities" | "id" | "manifest" | "policyAdapter" | "recover" | "runtimeStatus">,
   input: RunnerIssueRecoveryInput
 ): Promise<ProviderRunResult> {
   if (!provider.capabilities.includes("resume_session") || !provider.recover) {
@@ -114,22 +131,29 @@ export async function recoverIssueWithProvider(
   const providerID = provider.id;
   const activeRun = input.database ? ensureOpenIssueRun(input.database, input.issueId) : undefined;
   const activeRunID = activeRun?.id ?? openIssueRunID(input.database, input.issueId);
-  if (input.database) {
-    updateIssueRuntime(input.database, input.issueId, {
-      agent_profile_id: input.agentProfileId,
-      capability_summary: input.capabilitySummary,
+  const resolvedInput = await resolveRuntimePolicyOrPersist(
+    provider,
+    input,
+    activeRunID,
+    activeRun?.attempt ?? 0,
+    "recovery"
+  ) as RunnerIssueRecoveryInput;
+  if (resolvedInput.database) {
+    updateIssueRuntime(resolvedInput.database, resolvedInput.issueId, {
+      agent_profile_id: resolvedInput.agentProfileId,
+      capability_summary: resolvedInput.capabilitySummary,
       issue_run_id: activeRunID,
-      metadata: runtimeMetadata(input, { source: "provider_recovery_start" }),
+      metadata: runtimeMetadata(resolvedInput, { source: "provider_recovery_start" }),
       provider: providerID,
-      provider_session_id: input.session.sessionId,
-      provider_turn_id: input.session.turnId ?? "",
-      selection_reason: input.selectionReason
+      provider_session_id: resolvedInput.session.sessionId,
+      provider_turn_id: resolvedInput.session.turnId ?? "",
+      selection_reason: resolvedInput.selectionReason
     });
   }
-  const eventSink = providerEventSink(input, activeRunID, activeRun?.attempt ?? 0);
+  const eventSink = providerEventSink(resolvedInput, activeRunID, activeRun?.attempt ?? 0);
   let result: ProviderRunResult;
   try {
-    result = await provider.recover(providerRecoveryInput(input, eventSink.push));
+    result = await provider.recover(providerRecoveryInput(resolvedInput, eventSink.push));
   } catch (error) {
     if (!isProviderInterruptedError(error) && !eventSink.hasFailure()) {
       eventSink.push(providerRunErrorEvent(providerID, error));
@@ -137,9 +161,9 @@ export async function recoverIssueWithProvider(
     throw error;
   } finally {
     await eventSink.flush();
-    resetDebugIssueLogMode(input, eventSink.mode, providerID);
+    resetDebugIssueLogMode(resolvedInput, eventSink.mode, providerID);
   }
-  persistRuntimeResult(input, providerID, result, activeRunID);
+  persistRuntimeResult(resolvedInput, providerID, result, activeRunID);
   return result;
 }
 
@@ -277,8 +301,98 @@ function providerInput(input: RunnerIssueExecutionInput, onEvent: ProviderRunInp
     serviceTierSource: input.serviceTierSource,
     approvalPolicy: input.approvalPolicy,
     sandbox: input.sandbox,
+    policy: input.policy,
     onEvent
   };
+}
+
+function withResolvedExecutionPolicy(
+  provider: Pick<ExecutorProvider, "id" | "manifest" | "policyAdapter" | "runtimeStatus">,
+  input: RunnerIssueExecutionInput,
+  activeRunID: string,
+  source: ProviderPolicyContext["source"]
+): RunnerIssueExecutionInput {
+  if (input.policy) return input;
+  const capabilities = provider.manifest?.executionPolicy;
+  if (!capabilities || !provider.policyAdapter) return input;
+  const translated = input.executionPolicyRequest
+    ? { policy: input.executionPolicyRequest, warnings: [] as string[] }
+    : translateLegacyExecutionPolicy({
+      scope: "project",
+      sandbox: input.sandbox,
+      approvalPolicy: input.approvalPolicy
+    });
+  if (!translated.policy) return input;
+  const runtime = provider.runtimeStatus?.();
+  const transport = selectedProviderTransport(provider);
+  const providerVersion = runtime?.version ?? "";
+  const policy = resolveExecutionPolicy(translated.policy, {
+    cwd: input.cwd,
+    invocationRef: activeRunID || `issue:${input.issueId}:pending`,
+    projectId: input.projectId,
+    providerId: provider.manifest!.id,
+    providerVersion,
+    source,
+    transport
+  }, capabilities, provider.policyAdapter);
+  if (translated.warnings.length > 0) {
+    policy.warnings = [...new Set([...policy.warnings, ...translated.warnings])];
+  }
+  return {
+    ...input,
+    executionPolicyRequest: translated.policy,
+    executionPolicyCapabilityRevision: capabilities.contract,
+    executionPolicyProviderVersion: providerVersion,
+    executionPolicyTransport: transport,
+    policy
+  };
+}
+
+async function resolveRuntimePolicyOrPersist(
+  provider: Pick<ExecutorProvider, "id" | "manifest" | "policyAdapter" | "runtimeStatus">,
+  input: RunnerIssueExecutionInput,
+  activeRunID: string,
+  activeAttempt: number,
+  source: ProviderPolicyContext["source"]
+): Promise<RunnerIssueExecutionInput> {
+  try {
+    return withResolvedExecutionPolicy(provider, input, activeRunID, source);
+  } catch (error) {
+    const code = error instanceof ExecutionPolicyError ? error.code : "policy_resolution_failed";
+    const message = redactSensitiveText(error instanceof Error ? error.message : String(error));
+    if (input.database) {
+      updateIssueRuntime(input.database, input.issueId, {
+        agent_profile_id: input.agentProfileId,
+        capability_summary: input.capabilitySummary,
+        issue_run_id: activeRunID,
+        metadata: {
+          source: source === "recovery" ? "provider_recovery_policy_error" : "provider_policy_error",
+          configuration_error: { code, message },
+          requested_execution_policy: input.executionPolicyRequest ?? null,
+          provider: provider.id,
+          provider_version: input.executionPolicyProviderVersion ?? provider.runtimeStatus?.().version ?? "",
+          transport: input.executionPolicyTransport ?? selectedProviderTransport(provider),
+          resolution_source: input.executionPolicyResolutionSource ?? (input.executionPolicyRequest ? "explicit" : "legacy")
+        },
+        provider: provider.id,
+        selection_reason: input.selectionReason
+      });
+    }
+    const eventSink = providerEventSink(input, activeRunID, activeAttempt);
+    eventSink.push(policyResolutionErrorEvent(provider.id, code, message));
+    await eventSink.flush();
+    resetDebugIssueLogMode(input, eventSink.mode, provider.id);
+    throw error;
+  }
+}
+
+function selectedProviderTransport(
+  provider: Pick<ExecutorProvider, "manifest" | "runtimeStatus">
+): ProviderTransport {
+  const transports = provider.manifest?.transports ?? [];
+  const mode = provider.runtimeStatus?.().mode?.trim() ?? "";
+  const mapped = mode === "cli-fallback" ? "stdio-json" : mode;
+  return (transports.includes(mapped as ProviderTransport) ? mapped : transports[0] ?? "sdk") as ProviderTransport;
 }
 
 function providerRecoveryInput(
@@ -436,6 +550,23 @@ function runtimeMetadata(
       service_tier: serviceTier,
       service_tier_source: cleanString(input.serviceTierSource) || (serviceTier ? "unknown" : "standard")
     },
+    ...(input.policy ? {
+      requested_execution_policy: input.policy.requested,
+      resolved_execution_policy: {
+        contract: input.policy.contract,
+        effects: input.policy.effects,
+        isolation: input.policy.isolation,
+        native_summary: input.policy.nativeSummary,
+        proof: input.policy.proof
+      },
+      provider_policy_capability_revision: input.executionPolicyCapabilityRevision ?? "",
+      provider_version: input.executionPolicyProviderVersion ?? "",
+      transport: input.executionPolicyTransport ?? "",
+      resolution_source: input.executionPolicyResolutionSource ?? (input.executionPolicyRequest ? "explicit" : "legacy"),
+      classifier_authority: input.policy.proof.some((proof) => proof.kind === "adapter-callback") ? "host" : "provider",
+      proof_strength: [...new Set(input.policy.proof.map((proof) => proof.strength))],
+      warnings: input.policy.warnings
+    } : {}),
     ...(serviceTier === "" ? {} : {
       service_tier: serviceTier,
       service_tier_source: cleanString(input.serviceTierSource) || "unknown"
@@ -495,6 +626,22 @@ function providerRunErrorEvent(provider: ExecutorProviderId, error: unknown): Pr
     raw: { method: "provider/run_error", payload: message },
     runEvent: normalizedRunEvent({ kind: "error", method: "provider/run_error", outcome: "failed", provider }),
     status: "failed",
+    type: "error"
+  };
+}
+
+function policyResolutionErrorEvent(provider: ExecutorProviderId, code: string, message: string): ProviderEvent {
+  return {
+    error: message,
+    provider,
+    raw: { method: "execution-policy/resolve_error", payload: { code, message } },
+    runEvent: normalizedRunEvent({
+      kind: "error",
+      method: "execution-policy/resolve_error",
+      outcome: "failed",
+      provider
+    }),
+    status: "configuration_error",
     type: "error"
   };
 }

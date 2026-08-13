@@ -257,7 +257,7 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
     actionTool("issue_read", "Issue Read", "Read one runner Issue with its full body, dependency readiness, compact Run state, recent events, and current PI decision state.",
       Type.Object({ id: positiveID }, objectOptions), actions.readIssue),
     actionTool("human_review_response", "Human Review Response",
-      "Answer the current open human review. accept re-runs PI acceptance against the completed Run without creating a new execution Session; request_changes continues the same Provider Session in a new Run/Turn. Never replace this with issue_status_update.",
+      "Answer the current open human review. For decision/risk_acceptance, accept records the requested choice or authorization and re-runs PI acceptance, which may continue execution; it is not delivery acceptance. For acceptance, accept accepts the current delivery as-is. request_changes immediately continues the same Provider Session in a new Run/Turn. Supplying authorization, budget, credentials-ready state, installation details, or other requested information must never be treated as accepting an incomplete delivery. Never replace this with issue_status_update.",
       Type.Object({
         action: Type.Union([
           Type.Literal("accept"),

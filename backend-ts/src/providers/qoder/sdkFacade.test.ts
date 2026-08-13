@@ -2,8 +2,11 @@ import { describe, expect, test } from "bun:test";
 import type { Options, Query, SDKMessage, SDKResultMessage, SDKSystemInitMessage } from "@qoder-ai/qoder-agent-sdk";
 import { buildConfig } from "../../config/env.ts";
 import { createQoderSdkFacade, QoderExecutionError } from "./sdkFacade.ts";
+import { QODER_EXECUTION_POLICY_CAPABILITIES, qoderExecutionPolicyAdapter } from "./executionPolicy.ts";
+import { resolveExecutionPolicy } from "../core/policyResolution.ts";
+import type { ExecutionPolicyRequest } from "../core/policyContracts.ts";
 
-function init(sessionId: string): SDKSystemInitMessage {
+function init(sessionId: string, permissionMode: SDKSystemInitMessage["permissionMode"] = "dontAsk"): SDKSystemInitMessage {
   return {
     type: "system",
     subtype: "init",
@@ -14,7 +17,7 @@ function init(sessionId: string): SDKSystemInitMessage {
     tools: [],
     mcp_servers: [],
     model: "performance",
-    permissionMode: "dontAsk",
+    permissionMode,
     slash_commands: [],
     output_style: "default",
     skills: [],
@@ -242,6 +245,28 @@ describe("Qoder Q2 real facade with offline fake streams", () => {
     expect((timeoutFailure as QoderExecutionError).details).toMatchObject({ category: "timeout", retryable: true });
     expect(timeoutFacade.activeCount()).toBe(0);
   });
+
+  test("full unattended passes Qoder double bypass and rejects an observed downgrade", async () => {
+    let captured: Options | undefined;
+    const policy = resolvedPolicy({ access: "unrestricted-host", approval: "unattended" });
+    const facade = createQoderSdkFacade(config(1_000), {
+      queryFactory: ({ options }) => {
+        captured = options;
+        const stream = new FakeQuery(options);
+        stream.push(init(options.sessionId ?? "", "dontAsk"));
+        stream.end();
+        return stream.query;
+      }
+    });
+
+    const failure = await facade.run("go", { ...runOptions("inv-policy", "session-policy"), policy }).catch((error) => error);
+    expect(captured).toMatchObject({
+      allowDangerouslySkipPermissions: true,
+      permissionMode: "bypassPermissions"
+    });
+    expect(failure).toBeInstanceOf(QoderExecutionError);
+    expect((failure as QoderExecutionError).details).toMatchObject({ code: "provider_policy_downgraded", retryable: false });
+  });
 });
 
 class FakeQuery {
@@ -316,5 +341,18 @@ function config(timeoutMs: number) {
 }
 
 function runOptions(invocationKey: string, sessionId: string) {
-  return { cwd: "/fixture/project", invocationKey, sessionId };
+  return { cwd: "/fixture/project", invocationKey, sandbox: "read-only", sessionId };
+}
+
+function resolvedPolicy(input: Omit<ExecutionPolicyRequest, "contract">) {
+  const request: ExecutionPolicyRequest = { contract: "xw.execution-policy.v1", ...input };
+  return resolveExecutionPolicy(request, {
+    cwd: "/fixture/project",
+    invocationRef: "inv-policy",
+    projectId: "project-policy",
+    providerId: "qoder",
+    providerVersion: "1.0.20",
+    source: "local-user",
+    transport: "sdk"
+  }, QODER_EXECUTION_POLICY_CAPABILITIES, qoderExecutionPolicyAdapter);
 }

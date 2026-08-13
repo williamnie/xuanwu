@@ -33,6 +33,7 @@ import {
 import {
   createHumanReviewRequest,
   readIssueDecisionProjection,
+  reopenIncorrectlyAcceptedHumanReview,
   reviewHumanIssue
 } from "../domain/review/humanReview.ts";
 import { requestPiAcceptanceCycle } from "../runner/piAcceptanceCoordinator.ts";
@@ -311,8 +312,14 @@ function requestHumanReviewWithActor(
   const current = getIssue(context.database, id);
   if (!current) throw new ProjectNotFoundError();
   assertExecutorDoesNotOwnLifecycle(context, current, actor, "human_review_request");
-  const request = createHumanReviewRequest(context.database, id, body, { bus: context.bus });
-  recordLifecycleControl(context.database, current, getIssue(context.database, id) ?? current, actor, "human_review_request");
+  const request = Object.hasOwn(body, "reopen_accepted_request_id")
+    ? reopenIncorrectlyAcceptedHumanReview(context.database, id, body, { bus: context.bus })
+    : createHumanReviewRequest(context.database, id, body, { bus: context.bus });
+  const updated = getIssue(context.database, id) ?? current;
+  recordLifecycleControl(context.database, current, updated, actor, "human_review_request");
+  if (updated.status !== current.status) {
+    publishIssueStatusChange(context, updated, { status: updated.status }, actor);
+  }
   return request;
 }
 

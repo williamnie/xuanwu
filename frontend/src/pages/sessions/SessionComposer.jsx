@@ -9,14 +9,7 @@ import {
 } from './sessionOptions';
 import SessionCommandPanel from './SessionCommandPanel';
 import './SessionComposer.css';
-
-const PERMISSION_PRESETS = [
-  { value: 'danger-full-access|never', sandbox: 'danger-full-access', approvalPolicy: 'never', label: '完全访问权限', tone: 'danger' },
-  { value: 'workspace-write|never', sandbox: 'workspace-write', approvalPolicy: 'never', label: '工作区写入', tone: 'default' },
-  { value: 'workspace-write|danger-only', sandbox: 'workspace-write', approvalPolicy: 'danger-only', label: '按需授权', tone: 'default' },
-  { value: 'workspace-write|always', sandbox: 'workspace-write', approvalPolicy: 'always', label: '每次授权', tone: 'default' },
-  { value: 'read-only|always', sandbox: 'read-only', approvalPolicy: 'always', label: '只读模式', tone: 'default' },
-];
+import { applyExecutionPolicy, executionPolicyPresets, executionPolicyValue, policyFromValue, settingsExecutionPolicy } from '../../utils/executionPolicy.js';
 
 export default function SessionComposer({
   value,
@@ -53,6 +46,7 @@ export default function SessionComposer({
   onExecuteCommand = null,
   onCancelCommand = null,
   runtimeControls = null,
+  providerCatalog = [],
   requirePrompt = false,
 }) {
   const selectedModel = models.find((model) => model.id === settings.model || model.model === settings.model);
@@ -70,6 +64,7 @@ export default function SessionComposer({
       effortOptions={effortOptions}
       tierOptions={tierOptions}
       effectiveModel={effectiveModel}
+      providerCatalog={providerCatalog}
     />
   );
   const hasQueuedMessages = queuedMessages.length > 0;
@@ -176,11 +171,11 @@ function queueMessagePreview(item) {
   return refs.length ? `已附加 ${refs.length} 个 references` : '';
 }
 
-function RuntimeControls({ settings, onSettingChange, models, modelsLoading, modelsError, effortOptions, tierOptions, effectiveModel }) {
+function RuntimeControls({ settings, onSettingChange, models, modelsLoading, modelsError, effortOptions, tierOptions, effectiveModel, providerCatalog }) {
   const manualModel = Boolean(modelsError || models.some((model) => model?.verified === false));
   return (
     <>
-      <PermissionSelect settings={settings} onSettingChange={onSettingChange} />
+      <PermissionSelect settings={settings} onSettingChange={onSettingChange} providerCatalog={providerCatalog} />
       {manualModel ? (
         <label className="session-composer-model-manual" title="模型列表未验证，可手工输入 Qoder model ID">
           <Cpu size={14} />
@@ -239,9 +234,11 @@ function RuntimeControls({ settings, onSettingChange, models, modelsLoading, mod
   );
 }
 
-function PermissionSelect({ settings, onSettingChange }) {
-  const value = permissionValue(settings);
-  const preset = PERMISSION_PRESETS.find((item) => item.value === value) || PERMISSION_PRESETS[1];
+function PermissionSelect({ settings, onSettingChange, providerCatalog }) {
+  const policy = settingsExecutionPolicy(settings);
+  const value = executionPolicyValue(policy);
+  const presets = executionPolicyPresets(providerCatalog, settings.provider, policy);
+  const preset = presets.find((item) => item.value === value) || presets[0];
   return (
     <CompactSelect
       className={`permission ${preset.tone}`}
@@ -249,20 +246,20 @@ function PermissionSelect({ settings, onSettingChange }) {
       value={preset.value}
       displayLabel={preset.label}
       onChange={(nextValue) => {
-        const next = PERMISSION_PRESETS.find((item) => item.value === nextValue);
-        if (!next) return;
+        const next = applyExecutionPolicy(settings, policyFromValue(nextValue));
+        onSettingChange('executionPolicy', next.executionPolicy);
         onSettingChange('sandbox', next.sandbox);
         onSettingChange('approvalPolicy', next.approvalPolicy);
       }}
       title="权限与授权策略"
     >
-      {PERMISSION_PRESETS.map((option) => (
+      {presets.map((option) => (
         <option
-          disabled={settings.provider === 'qoder' && option.sandbox === 'danger-full-access'}
+          disabled={option.disabled}
           key={option.value}
           value={option.value}
         >
-          {option.label}{settings.provider === 'qoder' && option.sandbox === 'danger-full-access' ? '（Qoder 不支持）' : ''}
+          {option.label}{option.disabled ? '（当前 transport 不支持）' : ''}
         </option>
       ))}
     </CompactSelect>
@@ -415,10 +412,4 @@ function compactModelName(value) {
 
 function effortShortLabel(value) {
   return REASONING_EFFORT_OPTIONS.find((option) => option.value === value)?.shortLabel || '';
-}
-
-function permissionValue(settings) {
-  const sandbox = settings.sandbox || 'workspace-write';
-  const approvalPolicy = settings.approvalPolicy || 'never';
-  return `${sandbox}|${approvalPolicy}`;
 }

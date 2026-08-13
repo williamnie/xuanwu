@@ -82,7 +82,7 @@ type ClaudeCliSessionFunctions = {
 
 type ClaudeCliExecutionInput = Pick<SessionCreateInput,
   "approvalPolicy" | "cwd" | "model" | "prompt" | "reasoningEffort" | "sandbox" | "serviceTier"
-> & {
+> & Pick<ProviderRunInput, "policy"> & {
   issueId?: number;
   onEvent?: (event: ProviderEvent) => void;
 };
@@ -319,22 +319,37 @@ export function inspectClaudeCliAuth(config: ProviderRuntimeConfig): ClaudeCliAu
 
 function claudeCommand(
   config: ProviderRuntimeConfig,
-  input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "prompt" | "sandbox">,
+  input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "prompt" | "sandbox"> & Pick<ProviderRunInput, "policy">,
   resume = "",
   sessionID = ""
 ): string[] {
   const command = splitCommand(config.command);
   const args = [
     "-p", "--verbose", "--output-format", "stream-json",
-    "--permission-mode", claudePermissionMode(input.approvalPolicy),
-    "--allowedTools", claudeAllowedTools(input.sandbox)
+    "--permission-mode", claudeNativePermissionMode(input),
+    "--allowedTools", claudeNativeAllowedTools(input)
   ];
+  if (input.policy?.nativeSummary.allowDangerouslySkipPermissions === true) {
+    args.push("--dangerously-skip-permissions");
+  }
   if (resume) args.push("--resume", resume);
   else args.push("--session-id", sessionID);
   const model = clean(input.model) || clean(config.model);
   if (model !== "" && model !== "codex-default") args.push("--model", model);
   args.push("--max-turns", DEFAULT_MAX_TURNS, clean(input.prompt));
   return [...command, ...args];
+}
+
+function claudeNativePermissionMode(input: Pick<ProviderRunInput, "policy"> & { approvalPolicy?: string }): string {
+  const native = input.policy?.nativeSummary.permissionMode;
+  return typeof native === "string" && native.trim() !== "" ? native : claudePermissionMode(input.approvalPolicy);
+}
+
+function claudeNativeAllowedTools(input: Pick<ProviderRunInput, "policy"> & { sandbox?: string }): string {
+  const native = input.policy?.nativeSummary.tools;
+  return Array.isArray(native) && native.every((item) => typeof item === "string")
+    ? native.join(",")
+    : claudeAllowedTools(input.sandbox);
 }
 
 function requiredSession(result: ProviderRunResult): SessionRef {
@@ -356,7 +371,7 @@ function normalizeLimit(value: number | undefined): number {
 
 function claudeAllowedTools(sandbox?: string): string {
   return clean(sandbox).toLowerCase() === "read-only"
-    ? "Read,Grep,Glob,LS,Bash(xuanwu issue update:*),Bash(curl:*)"
+    ? "Read,Grep,Glob,LS"
     : "Read,Grep,Glob,LS,Edit,MultiEdit,Write,Bash";
 }
 

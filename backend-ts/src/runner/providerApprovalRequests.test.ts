@@ -178,6 +178,60 @@ describe("provider runtime approval request sync", () => {
     }
   });
 
+  test.each([
+    { provider: "claude" as const, id: "claude-inv:tool-1", method: "claude/canUseTool" },
+    { provider: "pi-coding-agent" as const, id: "pi-inv:ui-1", method: "pi/extension-ui-confirm" }
+  ])("$provider approval events persist callback identity and resolve through the shared carrier", async ({ provider, id, method }) => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const session = { provider, sessionId: `${provider}-session` };
+      const payload = {
+        id,
+        method,
+        params: {
+          callback_owner_ref: `${provider}-inv`,
+          invocation_ref: `${provider}-inv`,
+          policy_revision: "xw.resolved-execution-policy.v1",
+          threadId: session.sessionId,
+          tool_name: "Write",
+          tool_use_id: "tool-1"
+        }
+      };
+      syncProviderApprovalRequest({ database: db, issueId, projectId: "demo" }, {
+        payload,
+        provider,
+        raw: { method: "approval/requested", payload },
+        session,
+        status: "pending",
+        type: "approval"
+      }, `issue-run-${provider}`);
+
+      const stored = getPiApprovalRequest(db, id);
+      expect(stored).toMatchObject({ provider, provider_approval_id: id, status: "pending" });
+      expect(JSON.parse(stored?.raw_payload_json ?? "{}")).toMatchObject({
+        params: {
+          callback_owner_ref: `${provider}-inv`,
+          invocation_ref: `${provider}-inv`,
+          policy_revision: "xw.resolved-execution-policy.v1"
+        }
+      });
+
+      syncProviderApprovalRequest({ database: db, issueId, projectId: "demo" }, {
+        payload: { decision: "deny", id, scope: "turn" },
+        provider,
+        raw: { method: "approval/resolved" },
+        session,
+        status: "deny",
+        type: "approval"
+      }, `issue-run-${provider}`);
+      expect(getPiApprovalRequest(db, id)).toMatchObject({ resolved_decision: "deny", status: "rejected" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("ignores approval words in ordinary provider output", async () => {
     const db = await openFixtureDatabase();
     try {

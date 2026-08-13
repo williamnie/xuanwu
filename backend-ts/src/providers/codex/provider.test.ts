@@ -3,6 +3,9 @@ import { CodexExecutorProvider, type CodexEventHandler } from "./provider.ts";
 import type { CodexInitializeResult, ThreadStartResult, ThreadSummary, TurnStartResult } from "./adapter.ts";
 import type { CodexUserInput, ThreadStartInput, TurnStartOptions } from "./threadLifecycle.ts";
 import type { ProviderEvent } from "../types.ts";
+import { CODEX_EXECUTION_POLICY_CAPABILITIES, codexExecutionPolicyAdapter } from "./executionPolicy.ts";
+import { resolveExecutionPolicy } from "../core/policyResolution.ts";
+import { EXECUTION_ACCESS_VALUES, EXECUTION_APPROVAL_VALUES } from "../core/policyContracts.ts";
 
 class FakeCodexIssueAdapter {
   readonly calls: Array<{ method: string; params?: unknown }> = [];
@@ -162,6 +165,45 @@ describe("Codex executor provider", () => {
         }
       }
     ]);
+  });
+
+  test("resolved policy is applied consistently to Codex thread and turn options", async () => {
+    const sandboxByAccess = {
+      "read-only": "read-only",
+      "provider-native-development": "workspace-write",
+      "unrestricted-host": "danger-full-access"
+    } as const;
+    const approvalByRequest = {
+      unattended: "never",
+      "ask-sensitive": "on-request",
+      "ask-every-side-effect": "untrusted"
+    } as const;
+    for (const access of EXECUTION_ACCESS_VALUES) {
+      for (const approval of EXECUTION_APPROVAL_VALUES) {
+        const adapter = new FakeCodexIssueAdapter();
+        const policy = resolveExecutionPolicy({ contract: "xw.execution-policy.v1", access, approval }, {
+          cwd: "/tmp/demo",
+          invocationRef: `codex-${access}-${approval}`,
+          projectId: "demo",
+          providerId: "codex",
+          providerVersion: "0.146.0",
+          source: "local-user",
+          transport: "rpc"
+        }, CODEX_EXECUTION_POLICY_CAPABILITIES, codexExecutionPolicyAdapter);
+        await new CodexExecutorProvider(adapter).run({
+          issueId: 170,
+          projectId: "demo",
+          cwd: "/tmp/demo",
+          prompt: "policy",
+          approvalPolicy: "legacy-must-not-win",
+          sandbox: "legacy-must-not-win",
+          policy
+        });
+        const expected = { approvalPolicy: approvalByRequest[approval], sandbox: sandboxByAccess[access] };
+        expect(adapter.calls.find((call) => call.method === "thread/start")?.params).toMatchObject(expected);
+        expect((adapter.calls.find((call) => call.method === "turn/start")?.params as { options?: unknown })?.options).toMatchObject(expected);
+      }
+    }
   });
 
   test("forwards live Codex app-server notifications for the issue thread", async () => {

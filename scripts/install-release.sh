@@ -28,6 +28,7 @@ AUTH_TOKEN_CREATED=0
 BIN_PATH="$INSTALL_DIR/xuanwu"
 CLAUDE_SDK_EXECUTABLE_PATH="$BIN_PATH.claude-agent-sdk"
 QODERCLI_EXECUTABLE_PATH="$BIN_PATH.qodercli.mjs"
+PI_POLICY_EXTENSION_PATH="$BIN_PATH.pi-policy-extension.ts"
 DAEMON_PATH="$INSTALL_DIR/xuanwu-daemon"
 INSTALLER_PATH="$INSTALL_DIR/xuanwu-install"
 UPDATER_PATH="$INSTALL_DIR/xuanwu-update"
@@ -242,7 +243,7 @@ resolve_codex_cmd() {
 }
 
 download_binary() {
-  local os="$1" arch="$2" asset url tmp archive checksums metadata staged sdk_staged qoder_staged binary_version qoder_version
+  local os="$1" arch="$2" asset url tmp archive checksums metadata staged sdk_staged qoder_staged pi_policy_staged binary_version qoder_version
   asset="xuanwu_${os}_${arch}.tar.gz"
   url="$(release_asset_url "$asset")"
   tmp="$(mktemp -d)"
@@ -267,6 +268,8 @@ download_binary() {
     || fail "release asset does not contain Claude Agent SDK native executable"
   [ -x "$tmp/xuanwu.qodercli.mjs" ] \
     || fail "release asset does not contain exact-pinned Qoder CLI executable"
+  [ -f "$tmp/xuanwu.pi-policy-extension.ts" ] \
+    || fail "release asset does not contain Pi policy extension"
   binary_version="$("$tmp/xuanwu" --version | awk 'NR == 1 { print $2 }')"
   [ "$binary_version" = "$RESOLVED_VERSION" ] \
     || fail "binary version $binary_version does not match release metadata $RESOLVED_VERSION"
@@ -280,6 +283,9 @@ download_binary() {
   qoder_staged="$INSTALL_DIR/.xuanwu.qodercli.mjs.stage.$$"
   install -m 0755 "$tmp/xuanwu.qodercli.mjs" "$qoder_staged"
   mv -f "$qoder_staged" "$QODERCLI_EXECUTABLE_PATH"
+  pi_policy_staged="$INSTALL_DIR/.xuanwu.pi-policy-extension.ts.stage.$$"
+  install -m 0644 "$tmp/xuanwu.pi-policy-extension.ts" "$pi_policy_staged"
+  mv -f "$pi_policy_staged" "$PI_POLICY_EXTENSION_PATH"
   staged="$INSTALL_DIR/.xuanwu.stage.$$"
   install -m 0755 "$tmp/xuanwu" "$staged"
   mv -f "$staged" "$BIN_PATH"

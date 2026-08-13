@@ -72,7 +72,7 @@ describe("provider Run event fixture conformance", () => {
     const events: ProviderEvent[] = [];
     const provider = new ClaudeExecutorProvider(
       { command: "claude", cwd: "", env: {}, model: "sonnet", timeoutMs: 1000 },
-      { processFactory: completedProcess(stdout) }
+      { processFactory: completedProcess(stdout), sessionIdFactory: () => "claude-session" }
     );
 
     await provider.run({

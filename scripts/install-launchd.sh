@@ -24,6 +24,8 @@ CLAUDE_SDK_EXECUTABLE_SOURCE="$BINARY_PATH.claude-agent-sdk"
 CLAUDE_SDK_EXECUTABLE_PATH="$LAUNCHD_BINARY_PATH.claude-agent-sdk"
 QODERCLI_EXECUTABLE_SOURCE="$BINARY_PATH.qodercli.mjs"
 QODERCLI_EXECUTABLE_PATH="$LAUNCHD_BINARY_PATH.qodercli.mjs"
+PI_POLICY_EXTENSION_SOURCE="$BINARY_PATH.pi-policy-extension.ts"
+PI_POLICY_EXTENSION_PATH="$LAUNCHD_BINARY_PATH.pi-policy-extension.ts"
 PI_PACKAGE_ASSET_SOURCE="${XUANWU_PI_PACKAGE_ASSET_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@earendil-works/pi-coding-agent}"
 PI_PACKAGE_ASSET_DIR="${XUANWU_PI_PACKAGE_ASSET_DIR:-$APP_SUPPORT_DIR/pi-coding-agent}"
 RUNNER_SKILLS_SOURCE="${XUANWU_SKILLS_SOURCE:-$ROOT_DIR/skills}"
@@ -173,9 +175,17 @@ stage_qodercli_executable() {
   stage_file_atomically "$QODERCLI_EXECUTABLE_SOURCE" "$QODERCLI_EXECUTABLE_PATH" 0755
 }
 
+stage_pi_policy_extension() {
+  [ -f "$PI_POLICY_EXTENSION_SOURCE" ] || {
+    echo "[launchd] missing Pi policy extension: $PI_POLICY_EXTENSION_SOURCE" >&2
+    exit 1
+  }
+  stage_file_atomically "$PI_POLICY_EXTENSION_SOURCE" "$PI_POLICY_EXTENSION_PATH" 0644
+}
+
 backup_current_runtime() {
   local rollback_dir="" source
-  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.claude-agent-sdk" "$LAUNCHD_BINARY_PATH.qodercli.mjs" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST"; do
+  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.claude-agent-sdk" "$LAUNCHD_BINARY_PATH.qodercli.mjs" "$LAUNCHD_BINARY_PATH.pi-policy-extension.ts" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST"; do
     [ -e "$source" ] || continue
     if [ -z "$rollback_dir" ]; then
       rollback_dir="$APP_SUPPORT_DIR/rollback/$(date -u '+%Y%m%dT%H%M%SZ')"
@@ -336,6 +346,7 @@ fi
 stage_launchd_binary
 stage_claude_sdk_executable
 stage_qodercli_executable
+stage_pi_policy_extension
 stage_pi_package_assets
 stage_web_dir
 ensure_auth_token_file

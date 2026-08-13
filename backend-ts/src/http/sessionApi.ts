@@ -12,13 +12,18 @@ import {
   type SessionCreateInput,
   type SessionMessageInput
 } from "../providers/types.ts";
-import { correctedRuntimeRawRef, runtimeRawRef, runtimeSettingsFromAgentSession, withSessionRuntimeSettings } from "./sessionRuntimeSettings.ts";
+import { correctedRuntimeRawRef, executionPolicyFromAgentSession, runtimeRawRef, runtimeSettingsFromAgentSession, withSessionRuntimeSettings } from "./sessionRuntimeSettings.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { reconcileCodexSessionIndex, reconcileCodexSessionIndexes } from "./sessionIndexReconciler.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
 import { assertProviderSessionView, providerSessionDetail, PROVIDER_SESSION_VIEW_CONTRACT } from "../providers/core/sessionView.ts";
 import type { ExecutorProviderManifest } from "../providers/core/manifest.ts";
+import type { ProviderTransport } from "../providers/core/manifest.ts";
+import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicyRequest } from "../providers/core/policyContracts.ts";
+import { parseExecutionPolicyWrite } from "../providers/core/policyPersistence.ts";
+import { resolveExecutionPolicy } from "../providers/core/policyResolution.ts";
+import { translateLegacyExecutionPolicy } from "../providers/core/legacyExecutionPolicy.ts";
 
 export type SessionApiContext = {
   bus?: EventBus;
@@ -109,7 +114,7 @@ async function createSession(context: SessionApiContext, body: Record<string, un
   const project = projectForSession(context, stringBody(body, "project_id"));
   const providerID = firstNonEmpty(stringBody(body, "provider"), project?.provider ?? "codex");
   const provider = capableProvider(context, providerID, "sessions", "createSession");
-  const input = sessionCreateInput(body, project, provider.id);
+  const input = withSessionPolicy(provider, sessionCreateInput(body, project, provider.id), "local-user");
   const result = await provider.createSession!(input);
   assertProviderResult(provider.id, result.provider);
   const status = completedOperationStatus(provider.id, input.prompt, result.provider_turn_id ?? result.turn_id ?? "");
@@ -172,7 +177,7 @@ async function sessionMessage(context: SessionApiContext, rawSessionID: string, 
   const ref = parseSessionRef(rawSessionID);
   if (!isExecutorProviderId(ref.provider)) throw new Error(`provider "${ref.provider}" 不支持 capability "resume_session"`);
   const provider = capableProvider(context, ref.provider, "resume_session", "sendSessionMessage");
-  const input = sessionMessageInput(context, ref, body);
+  const input = withSessionPolicy(provider, sessionMessageInput(context, ref, body), "local-user");
   const result = await provider.sendSessionMessage!(input);
   assertProviderResult(provider.id, result.provider);
   const status = completedOperationStatus(provider.id, input.prompt, result.turn_id);
@@ -231,6 +236,10 @@ function sessionCreateInput(
   project: Project | null,
   provider: ExecutorProviderId
 ): SessionCreateInput {
+  const inheritedPolicy = project?.execution_policy ?? structuredClone(DEFAULT_EXECUTION_POLICY);
+  const executionPolicy = explicitExecutionPolicy(body)
+    ?? legacyExecutionPolicyBody(body, inheritedPolicy)
+    ?? inheritedPolicy;
   return {
     projectId: project?.id,
     cwd: firstNonEmpty(stringBody(body, "cwd"), project?.cwd ?? ""),
@@ -239,6 +248,7 @@ function sessionCreateInput(
     serviceTier: stringBody(body, "service_tier"),
     approvalPolicy: firstNonEmpty(stringBody(body, "approval_policy"), project?.approval_policy ?? ""),
     sandbox: firstNonEmpty(stringBody(body, "sandbox"), project?.sandbox ?? ""),
+    executionPolicy,
     prompt: stringBody(body, "prompt")
   };
 }
@@ -248,6 +258,12 @@ function sessionMessageInput(context: SessionApiContext, ref: QualifiedSessionRe
   const indexed = getAgentSession(context.database, ref.key);
   const project = indexed?.project_id ? getProject(context.database, indexed.project_id) : null;
   const stored = runtimeSettingsFromAgentSession(context.database, ref.sessionId, ref.provider);
+  const inheritedPolicy = executionPolicyFromAgentSession(context.database, ref.sessionId, ref.provider)
+    ?? project?.execution_policy
+    ?? structuredClone(DEFAULT_EXECUTION_POLICY);
+  const executionPolicy = explicitExecutionPolicy(body)
+    ?? legacyExecutionPolicyBody(body, inheritedPolicy)
+    ?? inheritedPolicy;
   return {
     projectId: project?.id,
     cwd: project?.cwd ?? "",
@@ -259,8 +275,61 @@ function sessionMessageInput(context: SessionApiContext, ref: QualifiedSessionRe
     reasoningEffort: firstNonEmpty(stringBody(body, "reasoning_effort"), stored.reasoning_effort ?? ""),
     serviceTier: firstNonEmpty(stringBody(body, "service_tier"), stored.service_tier ?? ""),
     approvalPolicy: firstNonEmpty(stringBody(body, "approval_policy"), stored.approval_policy ?? ""),
-    sandbox: firstNonEmpty(stringBody(body, "sandbox"), stored.sandbox ?? "")
+    sandbox: firstNonEmpty(stringBody(body, "sandbox"), stored.sandbox ?? ""),
+    executionPolicy
   };
+}
+
+function explicitExecutionPolicy(body: Record<string, unknown>): ExecutionPolicyRequest | undefined {
+  if (!Object.hasOwn(body, "execution_policy") && !Object.hasOwn(body, "execution_policy_json")) return undefined;
+  return parseExecutionPolicyWrite(
+    Object.hasOwn(body, "execution_policy") ? body.execution_policy : body.execution_policy_json,
+    { allowEmpty: false }
+  );
+}
+
+function legacyExecutionPolicyBody(
+  body: Record<string, unknown>,
+  inherited: ExecutionPolicyRequest
+): ExecutionPolicyRequest | undefined {
+  if (!Object.hasOwn(body, "sandbox") && !Object.hasOwn(body, "approval_policy")) return undefined;
+  const translated = translateLegacyExecutionPolicy({
+    approvalPolicy: body.approval_policy,
+    inherited,
+    sandbox: body.sandbox,
+    scope: "profile"
+  });
+  if (translated.unknown.length > 0) {
+    throw new Error(`unknown legacy execution policy value for ${translated.unknown.map((item) => item.field).join(", ")}`);
+  }
+  return translated.policy;
+}
+
+function withSessionPolicy<T extends SessionCreateInput | SessionMessageInput>(
+  provider: ExecutorProvider,
+  input: T,
+  source: "local-user" | "recovery"
+): T {
+  const capabilities = provider.manifest?.executionPolicy;
+  if (!capabilities || !provider.policyAdapter || !input.executionPolicy) return input;
+  const runtime = provider.runtimeStatus?.();
+  const transport = sessionProviderTransport(provider, runtime?.mode ?? "");
+  const policy = resolveExecutionPolicy(input.executionPolicy, {
+    cwd: input.cwd ?? "",
+    invocationRef: `session:${crypto.randomUUID()}`,
+    projectId: input.projectId ?? "",
+    providerId: provider.manifest!.id,
+    providerVersion: runtime?.version ?? "",
+    source,
+    transport
+  }, capabilities, provider.policyAdapter);
+  return { ...input, policy };
+}
+
+function sessionProviderTransport(provider: ExecutorProvider, mode: string): ProviderTransport {
+  const transports = provider.manifest?.transports ?? [];
+  const mapped = mode.trim() === "cli-fallback" ? "stdio-json" : mode.trim();
+  return (transports.includes(mapped as ProviderTransport) ? mapped : transports[0] ?? "sdk") as ProviderTransport;
 }
 
 async function parseObjectBody(request: Request): Promise<Record<string, unknown>> {

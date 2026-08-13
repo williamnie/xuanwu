@@ -20,6 +20,7 @@ import {
   type QoderFailureDetails
 } from "./events.ts";
 import { qoderPermissionOptions } from "./permissionBroker.ts";
+import type { ResolvedExecutionPolicy } from "../core/policyContracts.ts";
 export { QODER_VERSION_PAIR } from "./version.ts";
 
 export type QoderTerminal = "succeeded" | "failed" | "interrupted" | "cancelled";
@@ -30,6 +31,7 @@ export type QoderRunOptions = {
   cwd: string;
   invocationKey: string;
   model?: string;
+  policy?: ResolvedExecutionPolicy;
   reasoningEffort?: string;
   /** 仅用于预分配新 Session；恢复历史 Session 必须使用 resume。 */
   sessionId?: string;
@@ -129,10 +131,10 @@ export function buildQoderQueryOptions(
   options: Partial<QoderRunOptions> = {},
   runtime?: ProviderRuntimeConfig
 ): Pick<Options,
-  "abortController" | "allowedTools" | "auth" | "canUseTool" | "cwd" | "disallowedTools" | "env" | "model" |
+  "abortController" | "allowDangerouslySkipPermissions" | "allowedTools" | "auth" | "canUseTool" | "cwd" | "disallowedTools" | "env" | "model" |
   "pathToQoderCLIExecutable" | "permissionMode" | "resolveModel" | "resume" | "sessionId" | "systemPrompt" | "tools"
 > {
-  const policy = qoderPermissionOptions(options.approvalPolicy, options.sandbox, options.canUseTool);
+  const policy = qoderPermissionOptions(options.approvalPolicy, options.sandbox, options.canUseTool, options.policy);
   const model = clean(options.model) || clean(runtime?.model);
   const resolveModel = qoderModelPolicy(model, options.reasoningEffort);
   const systemPrompt = clean(options.systemPrompt);
@@ -257,7 +259,10 @@ class RealQoderSdkFacade implements QoderSdkFacade {
           continue;
         }
         if (message.type === "assistant") assistantRequests.push(message);
-        if (message.type === "system" && message.subtype === "init") initSeen = true;
+        if (message.type === "system" && message.subtype === "init") {
+          assertObservedPermissionMode(message, options.policy, active.sessionId);
+          initSeen = true;
+        }
         onMessage?.(message, { interrupted: active.interruptRequested });
       }
       if (active.timedOut) {
@@ -399,6 +404,22 @@ class RealQoderSdkFacade implements QoderSdkFacade {
     const sdk = await import("@qoder-ai/qoder-agent-sdk");
     return sdk.query({ prompt: emptyPrompt(), options });
   }
+}
+
+function assertObservedPermissionMode(
+  message: SDKMessage,
+  policy: ResolvedExecutionPolicy | undefined,
+  sessionId: string
+): void {
+  if (!policy || message.type !== "system" || message.subtype !== "init") return;
+  const expected = clean(policy.nativeSummary.permissionMode);
+  const observed = clean((message as unknown as Record<string, unknown>).permissionMode);
+  if (expected === "" || observed === "" || expected === observed) return;
+  throw qoderError(
+    "configuration",
+    `provider_policy_downgraded: Qoder initialized permission mode ${observed} instead of ${expected}`,
+    { code: "provider_policy_downgraded", retryable: false, sessionId }
+  );
 }
 
 export function createFakeQoderSdkFacade(

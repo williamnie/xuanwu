@@ -27,6 +27,10 @@ export type QoderRuntimeProbeOptions = {
   inspectCli?: (command: string, env: Record<string, string>) => { installed: boolean; version?: string; reason?: string };
 };
 
+export type QoderAuthenticationProbeOptions = {
+  inspectLocalLogin?: (config: ProviderRuntimeConfig) => boolean;
+};
+
 /** Offline-only readiness: executable/version and local configuration checks; never calls a model API. */
 export function probeQoderRuntime(
   config: ProviderRuntimeConfig,
@@ -70,7 +74,10 @@ export function probeQoderRuntime(
   };
 }
 
-export function qoderAuthenticationStatus(config: ProviderRuntimeConfig): QoderAuthenticationStatus {
+export function qoderAuthenticationStatus(
+  config: ProviderRuntimeConfig,
+  options: QoderAuthenticationProbeOptions = {}
+): QoderAuthenticationStatus {
   const mode = normalizeAuthMode(config.authMode);
   if (mode === "pat-env") {
     const configured = clean(config.env.QODER_PERSONAL_ACCESS_TOKEN) !== "";
@@ -86,10 +93,27 @@ export function qoderAuthenticationStatus(config: ProviderRuntimeConfig): QoderA
       : { configured: false, mode, source, reason: "Qoder credential secret ref is missing or unresolved" };
   }
   const configDir = qoderConfigDir(config);
-  const configured = LOCAL_AUTH_MARKERS.some((name) => privateNonemptyFile(join(configDir, name)));
+  const configured = LOCAL_AUTH_MARKERS.some((name) => privateNonemptyFile(join(configDir, name)))
+    || (options.inspectLocalLogin ?? inspectQoderLocalCliLogin)(config);
   return configured
     ? { configured: true, mode, source: "local_cli" }
     : { configured: false, mode, source: "local_cli", reason: "Qoder local CLI login state was not found" };
+}
+
+/** Qoder may keep desktop/CLI login state outside ~/.qoder; `status` verifies it without a model request. */
+function inspectQoderLocalCliLogin(config: ProviderRuntimeConfig): boolean {
+  const detected = detectProviderCommand(config.command);
+  if (!detected.installed || !detected.path) return false;
+  const configDir = qoderConfigDir(config);
+  const args = configDir ? ["--config-dir", configDir, "status"] : ["status"];
+  const result = spawnSync(detected.path, args, {
+    encoding: "utf8",
+    env: { ...process.env, ...config.env },
+    timeout: 5_000
+  });
+  if (result.error || result.status !== 0) return false;
+  const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+  return /^Username:\s*\S.+$/m.test(output) && /^Email:\s*\S.+$/m.test(output);
 }
 
 export function qoderConfigDir(config: ProviderRuntimeConfig, env: Record<string, string | undefined> = Bun.env): string {

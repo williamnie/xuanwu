@@ -95,6 +95,8 @@ describe("PI runner action tools", () => {
       review_request_id: "human-review-827",
       review_revision: 1
     });
+    expect(humanReviewResponse.description).toContain("For decision/risk_acceptance");
+    expect(humanReviewResponse.description).toContain("must never be treated as accepting an incomplete delivery");
     expect(validateArgs(watchCreate, {
       issue_ids: [7, 8],
       note: "提醒我",

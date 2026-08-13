@@ -88,8 +88,8 @@ export class CodexExecutorProvider implements ExecutorProvider {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
         serviceTier: input.serviceTier,
-        approvalPolicy: input.approvalPolicy,
-        sandbox: input.sandbox,
+        approvalPolicy: nativePolicyString(input, "approvalPolicy", input.approvalPolicy),
+        sandbox: nativePolicyString(input, "sandbox", input.sandbox),
         developerInstructions: this.developerInstructions,
         threadSource: "subagent"
       });
@@ -104,8 +104,8 @@ export class CodexExecutorProvider implements ExecutorProvider {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
         serviceTier: input.serviceTier,
-        approvalPolicy: input.approvalPolicy,
-        sandbox: input.sandbox
+        approvalPolicy: nativePolicyString(input, "approvalPolicy", input.approvalPolicy),
+        sandbox: nativePolicyString(input, "sandbox", input.sandbox)
       });
       lease.bind(turn.provider_session_id, turn.turn_id);
       input.onEvent?.(turnStartedEvent(turn, input, initialized));
@@ -192,8 +192,8 @@ export class CodexExecutorProvider implements ExecutorProvider {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
         serviceTier: input.serviceTier,
-        approvalPolicy: input.approvalPolicy,
-        sandbox: input.sandbox
+        approvalPolicy: nativePolicyString(input, "approvalPolicy", input.approvalPolicy),
+        sandbox: nativePolicyString(input, "sandbox", input.sandbox)
       });
       lease.bind(turn.provider_session_id, turn.turn_id);
       input.onEvent?.(turnStartedEvent(turn, input, initialized));
@@ -380,19 +380,19 @@ function threadOptions(input: SessionCreateInput, developerInstructions: string)
     model: input.model,
     reasoningEffort: input.reasoningEffort,
     serviceTier: input.serviceTier,
-    approvalPolicy: input.approvalPolicy,
-    sandbox: input.sandbox,
+    approvalPolicy: nativePolicyString(input, "approvalPolicy", input.approvalPolicy),
+    sandbox: nativePolicyString(input, "sandbox", input.sandbox),
     developerInstructions
   }) as Parameters<CodexAdapter["startThread"]>[0];
 }
 
-function turnOptions(input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "reasoningEffort" | "serviceTier" | "sandbox">) {
+function turnOptions(input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "policy" | "reasoningEffort" | "serviceTier" | "sandbox">) {
   return compactOptions({
     model: input.model,
     reasoningEffort: input.reasoningEffort,
     serviceTier: input.serviceTier,
-    approvalPolicy: input.approvalPolicy,
-    sandbox: input.sandbox
+    approvalPolicy: nativePolicyString(input, "approvalPolicy", input.approvalPolicy),
+    sandbox: nativePolicyString(input, "sandbox", input.sandbox)
   });
 }
 
@@ -403,6 +403,11 @@ function codexUserInputs(input: { images?: ProviderRunInput["images"]; prompt?: 
     if (path !== "") items.push(localImageInput(path, image.detail));
   }
   return items;
+}
+
+function nativePolicyString(input: Pick<ProviderRunInput, "policy">, key: string, fallback: string | undefined): string | undefined {
+  const value = input.policy?.nativeSummary[key];
+  return typeof value === "string" && value.trim() !== "" ? value : fallback;
 }
 
 function sameThreadEvent(event: ProviderEvent, threadID: string): boolean {

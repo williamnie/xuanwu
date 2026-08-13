@@ -1,4 +1,6 @@
 import type { RunCost } from "../domain/run/contracts.ts";
+import type { ExecutionPolicyRequest, ProviderPolicyAdapter, ResolvedExecutionPolicy } from "./core/policyContracts.ts";
+import type { ExecutorProviderManifest } from "./core/manifest.ts";
 
 // --- P1：ProviderId（branded string，替代闭合联合）---
 // 格式：^[a-z0-9][a-z0-9._-]{0,63}$；禁止 ":"（外部 Session key 为 `<provider>:<session_ref>`）。
@@ -142,6 +144,8 @@ export type ProviderRunInput = {
   serviceTierSource?: string;
   approvalPolicy?: string;
   sandbox?: string;
+  /** v1 authority. Legacy sandbox/approvalPolicy remain only during the compatibility window. */
+  policy?: ResolvedExecutionPolicy;
   onEvent?: (event: ProviderEvent) => void;
 };
 
@@ -183,6 +187,9 @@ export type SessionCreateInput = {
   reasoningEffort?: string;
   serviceTier?: string;
   sandbox?: string;
+  executionPolicy?: ExecutionPolicyRequest;
+  /** Authoritative per-invocation resolution produced by Provider Core. */
+  policy?: ResolvedExecutionPolicy;
 };
 export type SessionCreateResult = {
   id: string;
@@ -225,6 +232,8 @@ export type ApprovalDecision = { decision: string; scope?: string };
 export interface ExecutorProvider {
   id: ExecutorProviderId;
   capabilities: readonly ExecutorCapability[];
+  manifest?: ExecutorProviderManifest;
+  policyAdapter?: ProviderPolicyAdapter;
   /** turn 需要 message/turn ref；session 只需 session ref；active 可中断当前独占执行。 */
   interruptScope?: "active" | "session" | "turn";
   run(input: ProviderRunInput): Promise<ProviderRunResult>;

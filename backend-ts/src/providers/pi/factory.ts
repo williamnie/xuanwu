@@ -3,6 +3,9 @@ import type { ExecutorProviderManifest, ProviderCapabilities } from "../core/man
 import type { ProviderFactory, RegisteredProvider } from "../core/registry.ts";
 import { detectProviderCommand } from "../core/command.ts";
 import { PiExecutorProvider, type PiExecutorProviderOptions } from "./provider.ts";
+import { PI_EXECUTION_POLICY_CAPABILITIES, piExecutionPolicyAdapter } from "./executionPolicy.ts";
+import { join } from "node:path";
+import { existsSync } from "node:fs";
 
 /**
  * P10：Pi Coding Agent ProviderFactory（G10 gate 已通过）。
@@ -14,7 +17,7 @@ const PI_CAPABILITIES: ProviderCapabilities = {
   issueExecution: true,
   sessions: { create: true, resume: true, fork: false, list: false, read: true, steerWhileRunning: false, export: false },
   // RPC 无法注入 approval 决定（host callback 属于 Pi 内部），不伪造能力 → none
-  control: { interrupt: true, approvals: "none" },
+  control: { interrupt: true, approvals: "host-callback" },
   models: { list: true, switchDuringSession: true },
   usage: { tokens: "attempt", money: "provider-reported" }
 };
@@ -26,6 +29,7 @@ export function piManifest(): ExecutorProviderManifest {
     supportLevel: "preview",
     transports: ["rpc"],
     capabilities: PI_CAPABILITIES,
+    executionPolicy: PI_EXECUTION_POLICY_CAPABILITIES,
     processObservability: "lease",
     executionSettings: {
       settings: [
@@ -62,9 +66,20 @@ export function piFactory(options: PiFactoryOptions = {}): ProviderFactory {
         command: String(config.command ?? options.command ?? "pi"),
         cwd: typeof config.cwd === "string" ? config.cwd : undefined,
         env: config.env && typeof config.env === "object" ? config.env as Record<string, string> : undefined,
-        timeoutMs: typeof config.timeoutMs === "number" ? config.timeoutMs : undefined
+        timeoutMs: typeof config.timeoutMs === "number" ? config.timeoutMs : undefined,
+        policyExtensionPath: typeof config.policyExtensionPath === "string"
+          ? config.policyExtensionPath
+          : options.policyExtensionPath ?? defaultPiPolicyExtensionPath()
       }) as ExecutorProvider;
-      return Object.assign(instance, { manifest }) as RegisteredProvider;
+      return Object.assign(instance, { manifest, policyAdapter: piExecutionPolicyAdapter }) as RegisteredProvider;
     }
   };
+}
+
+export function defaultPiPolicyExtensionPath(): string {
+  const configured = process.env.XUANWU_PI_POLICY_EXTENSION?.trim();
+  if (configured) return configured;
+  const adjacent = `${process.execPath}.pi-policy-extension.ts`;
+  if (existsSync(adjacent)) return adjacent;
+  return join(import.meta.dir, "xuanwuPolicyExtension.ts");
 }

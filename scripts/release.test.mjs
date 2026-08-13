@@ -170,6 +170,8 @@ test('release package keeps Bun runtime assets beside the executable and smokes 
   assert.match(script, /"\$pkg_dir\/xuanwu\.claude-agent-sdk"/);
   assert.match(script, /stage_qodercli_executable "\$pkg_dir"/);
   assert.match(script, /"\$pkg_dir\/xuanwu\.qodercli\.mjs"/);
+  assert.match(script, /stage_pi_policy_extension "\$pkg_dir"/);
+  assert.match(script, /"\$pkg_dir\/xuanwu\.pi-policy-extension\.ts"/);
   assert.match(script, /"\$ROOT_DIR\/README\.zh-CN\.md" "\$pkg_dir\/README\.zh-CN\.md"/);
   assert.match(script, /"\$ROOT_DIR\/LICENSE" "\$pkg_dir\/LICENSE"/);
   assert.match(script, /"\$ROOT_DIR\/NOTICE" "\$pkg_dir\/NOTICE"/);
@@ -192,6 +194,8 @@ test('release rollback snapshots split and compatibility service registrations',
   assert.match(updater, /restore_file "\$snapshot\/bin\/xuanwu\.claude-agent-sdk" "\$CLAUDE_SDK_EXECUTABLE_PATH"/);
   assert.match(updater, /snapshot\/bin\/xuanwu\.qodercli\.mjs/);
   assert.match(updater, /restore_file "\$snapshot\/bin\/xuanwu\.qodercli\.mjs" "\$QODERCLI_EXECUTABLE_PATH"/);
+  assert.match(updater, /snapshot\/bin\/xuanwu\.pi-policy-extension\.ts/);
+  assert.match(updater, /restore_file "\$snapshot\/bin\/xuanwu\.pi-policy-extension\.ts" "\$PI_POLICY_EXTENSION_PATH" 0644/);
   assert.match(updater, /restore_service_registration "\$snapshot"/);
 });
 
@@ -205,6 +209,7 @@ async function createRelease(temp, name, version, options = {}) {
   if (options.includeQoder !== false) {
     await writeExecutable(join(fixture, 'xuanwu.qodercli.mjs'), `#!/bin/sh\n# release-${name}\necho 1.1.18\n`);
   }
+  await writeFile(join(fixture, 'xuanwu.pi-policy-extension.ts'), `// release-${name}\nexport default function extension() {}\n`);
   await writeFile(join(fixture, 'web', 'index.html'), version);
   for (const script of ['daemon.sh', 'install-release.sh', 'update-release.sh']) {
     await writeFile(join(fixture, script), await readFile(join(root, 'scripts', script)));

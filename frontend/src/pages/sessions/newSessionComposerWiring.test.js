@@ -54,11 +54,12 @@ test('new session provider selector hides unavailable providers', () => {
   assert.doesNotMatch(newSessionSource, /（未就绪）/);
 });
 
-test('new session permission control labels every authorization preset explicitly', () => {
-  assert.match(newSessionSource, /function permissionPresetLabel/);
-  assert.match(newSessionSource, /permissionPresetLabel\(settings\)/);
-  assert.match(newSessionSource, /case 'workspace-write\|always':\s*return '每次授权'/);
-  assert.doesNotMatch(newSessionSource, /settings\.approvalPolicy === 'never' \? '完全访问权限' : '工作区写入'/);
+test('new session permission control is catalog-driven and preserves legacy projection', () => {
+  assert.match(newSessionSource, /executionPolicyPresets\(providerCatalog, settings\.provider, policy\)/);
+  assert.match(newSessionSource, /applyExecutionPolicy\(settings, policyFromValue\(event\.target\.value\)\)/);
+  assert.match(newSessionSource, /onSettingChange\('executionPolicy', next\.executionPolicy\)/);
+  assert.match(newSessionSource, /isolationLabel\(providerCatalog, sessionSettings\.provider\)/);
+  assert.doesNotMatch(newSessionSource, /function permissionPresetLabel/);
 });
 
 test('approval event parsing accepts object payloads and fallback approval ids', () => {

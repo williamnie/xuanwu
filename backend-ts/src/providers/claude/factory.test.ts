@@ -5,7 +5,7 @@ import { catalogEntryFromRegistry } from "../core/catalog.ts";
 import { claudeFactory, claudeManifest } from "./factory.ts";
 
 describe("P8: Claude manifest 只声明实际实现（preview parity）", () => {
-  test("capability 仅含 SDK/CLI 实际实现（无 approvals/model_list），supportLevel=preview", () => {
+  test("capability 仅含 SDK 实际实现的 host approvals（无 model_list），supportLevel=preview", () => {
     const manifest = claudeManifest();
     expect(String(manifest.id)).toBe("claude");
     expect(manifest.supportLevel).toBe("preview");
@@ -13,8 +13,7 @@ describe("P8: Claude manifest 只声明实际实现（preview parity）", () => 
     expect(manifest.capabilities.sessions?.create).toBe(true);
     expect(manifest.capabilities.sessions?.resume).toBe(true);
     expect(manifest.capabilities.control?.interrupt).toBe(true);
-    // 未实现的不声明
-    expect(manifest.capabilities.control?.approvals).toBe("none");
+    expect(manifest.capabilities.control?.approvals).toBe("host-callback");
     expect(manifest.capabilities.models?.list).toBe(false);
     // 不出现 Codex 假设
     expect(manifest.sessionPresentation?.viewContract).toBe("xw.provider-session.v1");
@@ -37,8 +36,7 @@ describe("P8: Claude factory 经 registry 装配", () => {
     expect(catalog.submittable).toBe(false);
     expect(catalog.state).toBe("not_ready");
     expect(catalog.session_actions).toEqual(expect.arrayContaining(["create", "resume", "interrupt"]));
-    // Claude 无 approvals → 不显示 approval action 相关能力
-    expect(catalog.legacy_capabilities).not.toContain("approvals");
+    expect(catalog.legacy_capabilities).toContain("approvals");
     expect(catalog.legacy_capabilities).not.toContain("model_list");
     expect(catalog.native_actions).toEqual([]);
   });

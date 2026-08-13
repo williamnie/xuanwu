@@ -79,7 +79,7 @@ describe("PI acceptance decision application", () => {
       expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
         owner: "human",
         phase: "human_review",
-        request: { question: "需要在原 Session 补充明确工作。" }
+        request: { kind: "decision", question: "需要在原 Session 补充明确工作。" }
       });
     } finally {
       db.close();
@@ -295,8 +295,58 @@ describe("PI acceptance decision application", () => {
       expect(updated.status).toBe("needs_user");
       expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
         owner: "human",
-        request: { kind: "acceptance", revision: 2, status: "open" }
+        request: { kind: "decision", revision: 2, status: "open" }
       });
+      expect(db.sqlite.query<{ count: number }, [number]>(
+        "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
+      ).get(issue.id)?.count).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("Q7 authorization review resumes the original Codex Session instead of accepting delivery", async () => {
+    const db = await fixture();
+    const provider = new ContinuingProvider();
+    try {
+      const issue = completedIssue(db, "Qoder Q7：安装登录与真实账号最终验收", "q7-codex-session", "q7-blocked-turn");
+      const originCard = await buildIssueCompletionCard(db, issue.id);
+      await applyPiAcceptanceDecision(
+        { database: db },
+        originCard,
+        decision(
+          "needs_user",
+          "请授权安装、登录和真实付费测试，并提供认证方式及预算上限。",
+          "risk_acceptance"
+        )
+      );
+      const request = readIssueDecisionProjection(db, issue.id).request!;
+      expect(request).toMatchObject({ kind: "risk_acceptance", status: "open" });
+
+      await reviewHumanIssue(db, issue.id, {
+        action: "accept",
+        comment: "授权真实测试；认证使用已登录的 local-cli；MAX_PAID_TURNS=10；MAX_CREDITS=3。",
+        review_request_id: request.id,
+        review_revision: request.revision
+      });
+      const answeredCard = await buildIssueCompletionCard(db, issue.id);
+      const updated = await applyPiAcceptanceDecision(
+        { database: db, providers: { codex: provider } },
+        answeredCard,
+        decision("continue_same_session", "按已授权预算继续 Q7 真实验收。")
+      );
+
+      expect(updated.status).toBe("in_progress");
+      expect(provider.inputs).toHaveLength(1);
+      expect(provider.inputs[0]).toMatchObject({
+        session: { provider: "codex", sessionId: "q7-codex-session", turnId: "q7-blocked-turn" }
+      });
+      expect(provider.inputs[0]?.prompt).toContain("已认证的人类回复类型：risk_acceptance");
+      expect(provider.inputs[0]?.prompt).toContain("MAX_PAID_TURNS=10；MAX_CREDITS=3");
+      expect(listIssueRuns(db, issue.id)).toMatchObject([
+        { attempt: 1, provider_session_id: "q7-codex-session", provider_turn_id: "q7-blocked-turn" },
+        { attempt: 2, provider_session_id: "q7-codex-session", provider_turn_id: "turn-next" }
+      ]);
       expect(db.sqlite.query<{ count: number }, [number]>(
         "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
       ).get(issue.id)?.count).toBe(0);
@@ -405,7 +455,8 @@ function selectProviderDefaultProfile(db: RunnerDatabase, issueID: number, provi
 
 function decision(
   value: PiAcceptanceDecision["decision"],
-  followUp?: string
+  followUp?: string,
+  humanReviewKind?: PiAcceptanceDecision["human_review_kind"]
 ): PiAcceptanceDecision {
   return {
     confidence: "high",
@@ -413,6 +464,7 @@ function decision(
     evidence_refs: ["run:fixture"],
     rationale: value === "accept" ? "当前事实满足 Issue。" : "需要在原 Session 补充明确工作。",
     unmet_requirements: value === "accept" ? [] : ["缺少一项明确验证"],
+    ...(humanReviewKind ? { human_review_kind: humanReviewKind } : {}),
     ...(followUp ? { follow_up_prompt: followUp } : {})
   };
 }

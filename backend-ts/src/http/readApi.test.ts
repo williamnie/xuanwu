@@ -117,7 +117,12 @@ describe("Bun projects/issues read API", () => {
         pi_managed: 1,
         model: "codex-default",
         approval_policy: "never",
-        sandbox: "workspace-write",
+        sandbox: "danger-full-access",
+        execution_policy: {
+          contract: "xw.execution-policy.v1",
+          access: "unrestricted-host",
+          approval: "unattended"
+        },
         sort_order: 1,
         loop_status: "stopped",
         provider_capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"]

@@ -29,6 +29,7 @@ export default function SessionChatWorkspace({
   models,
   modelsLoading,
   modelsError,
+  providerCatalog,
   sending,
   interruptState,
   selectedId,
@@ -102,6 +103,7 @@ export default function SessionChatWorkspace({
             models={models}
             modelsLoading={modelsLoading}
             modelsError={modelsError}
+            providerCatalog={providerCatalog}
             sending={sending}
             running={sessionRunning}
             interruptState={interruptState}

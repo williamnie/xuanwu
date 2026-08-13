@@ -180,13 +180,13 @@ describe("Qoder Q0: SDK/CLI freshness contract", () => {
   });
 
   test("resume and new sessionId are distinct query options", () => {
-    expect(buildQoderQueryOptions({ cwd: "/fixture/project", invocationKey: "inv-1", resume: "old-session", sessionId: "must-not-win", model: "performance" })).toMatchObject({
+    expect(buildQoderQueryOptions({ cwd: "/fixture/project", invocationKey: "inv-1", resume: "old-session", sessionId: "must-not-win", model: "performance", sandbox: "read-only" })).toMatchObject({
       cwd: "/fixture/project",
       model: "performance",
       resume: "old-session",
       sessionId: undefined
     });
-    expect(buildQoderQueryOptions({ cwd: "/fixture/project", invocationKey: "inv-2", sessionId: "new-session" })).toMatchObject({
+    expect(buildQoderQueryOptions({ cwd: "/fixture/project", invocationKey: "inv-2", sessionId: "new-session", sandbox: "read-only" })).toMatchObject({
       cwd: "/fixture/project",
       model: undefined,
       resume: undefined,
@@ -222,7 +222,7 @@ describe("Qoder Q0: SDK/CLI freshness contract", () => {
       permissionMode: "dontAsk",
       systemPrompt: { type: "preset", preset: "qodercli", append: "runner instructions" }
     });
-    const environment = buildQoderQueryOptions({}, config).env ?? {};
+    const environment = buildQoderQueryOptions({ approvalPolicy: "never", sandbox: "read-only" }, config).env ?? {};
     if (process.env.HOME) expect(environment.HOME).toBe(process.env.HOME);
     if (process.env.PATH) expect(environment.PATH).toBe(process.env.PATH);
     expect(environment.ANTHROPIC_API_KEY).toBeUndefined();
@@ -259,9 +259,12 @@ describe("Qoder Q0: SDK/CLI freshness contract", () => {
       sessionId: "session-policy",
       turnIndex: 0
     })).toThrow("does not support reasoning effort high");
-    expect(() => buildQoderQueryOptions({
+    expect(buildQoderQueryOptions({
       cwd: "/fixture/project", invocationKey: "inv-sandbox", sandbox: "danger-full-access"
-    })).toThrow("disabled");
+    })).toMatchObject({
+      allowDangerouslySkipPermissions: true,
+      permissionMode: "bypassPermissions"
+    });
   });
 
   test("maps four redacted Runner auth contracts to typed SDK auth", () => {

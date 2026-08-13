@@ -96,7 +96,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     restartProcess: runtime.restartProcess,
     supervisorManaged: runtime.supervisorManaged
   });
-  registerProvidersCatalogRoute(router, { providersRegistry: runtime.providersRegistry });
+  registerProvidersCatalogRoute(router, { database: runtime.database, providersRegistry: runtime.providersRegistry });
   if (runtime.imChannels) {
     registerImChannelRoutes(router, { registry: runtime.imChannels });
     for (const module of runtime.imChannels.list()) void module.notifications?.start();

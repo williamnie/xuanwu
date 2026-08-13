@@ -70,6 +70,12 @@ export type CreateHumanReviewRequestInput = {
   recommendation?: unknown;
 };
 
+export type ReopenIncorrectAcceptanceInput = CreateHumanReviewRequestInput & {
+  recovery_reason?: unknown;
+  reopen_accepted_request_id?: unknown;
+  reopen_accepted_revision?: unknown;
+};
+
 export type HumanReviewRuntime = {
   bus?: Pick<EventBus, "publish">;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
@@ -143,6 +149,45 @@ export function createHumanReviewRequest(
     })
   });
   return request;
+}
+
+/**
+ * Operator-only repair for a historical review that was incorrectly classified as delivery
+ * acceptance. The old accepted request stays immutable; a corrected revision is appended.
+ */
+export function reopenIncorrectlyAcceptedHumanReview(
+  db: RunnerDatabase,
+  issueID: number,
+  input: ReopenIncorrectAcceptanceInput,
+  runtime: HumanReviewRuntime = {}
+): HumanReviewRequest {
+  const issue = mustGetIssue(db, issueID);
+  if (issue.status !== "done") throw new Error("只有错误完成的 done Issue 才能恢复错误验收");
+  if (listIssueRuns(db, issueID).some((run) => run.ended_at === "")) {
+    throw new Error("存在运行中的 Run，不能恢复错误验收");
+  }
+  const accepted = readIssueDecisionProjection(db, issueID).request;
+  const requestID = requiredText(input.reopen_accepted_request_id, "reopen_accepted_request_id");
+  const revision = positiveInteger(input.reopen_accepted_revision, "reopen_accepted_revision");
+  if (!accepted || accepted.status !== "accepted" || accepted.kind !== "acceptance"
+    || accepted.id !== requestID || accepted.revision !== revision) {
+    throw new HumanReviewConflictError("待恢复的 delivery acceptance 已变化，请刷新后重试");
+  }
+  const correctedKind = reviewKind(input.kind);
+  if (correctedKind === "acceptance") {
+    throw new Error("恢复后的审核类型只能是 decision 或 risk_acceptance");
+  }
+  const reason = requiredText(input.recovery_reason, "recovery_reason");
+  return db.transaction(() => {
+    recordIssueEvent(db, issueID, "issue.human_review_incorrect_acceptance_reopened.v1", {
+      accepted_request_id: accepted.id,
+      accepted_revision: accepted.revision,
+      corrected_kind: correctedKind,
+      reason
+    });
+    updateIssue(db, issueID, { error: "", status: "needs_user" });
+    return createHumanReviewRequest(db, issueID, { ...input, kind: correctedKind }, runtime);
+  }).immediate();
 }
 
 export function readIssueDecisionProjection(

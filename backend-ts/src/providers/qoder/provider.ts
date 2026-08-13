@@ -52,6 +52,7 @@ type ActiveInvocation = {
   invocationRef: string;
   interrupted: boolean;
   messageRef: string;
+  sessionObserved: boolean;
   sessionRef: string;
   terminalProjected: boolean;
 };
@@ -90,6 +91,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
       prompt: input.prompt ?? "",
       model: input.model,
       reasoningEffort: input.reasoningEffort,
+      policy: input.policy,
       approvalPolicy: input.approvalPolicy,
       sandbox: input.sandbox
     }, { sessionId: clean(this.options.sessionIdFactory?.()) || crypto.randomUUID() });
@@ -165,6 +167,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
       model: input.model,
       reasoningEffort: input.reasoningEffort,
       serviceTier: input.serviceTier,
+      policy: input.policy,
       approvalPolicy: input.approvalPolicy,
       sandbox: input.sandbox
     }, { resume: sessionId }, sessionId);
@@ -234,6 +237,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
       interrupted: false,
       invocationRef,
       messageRef: "",
+      sessionObserved: false,
       sessionRef: clean(resumeAlias) || clean(sessionOptions.sessionId),
       terminalProjected: false
     };
@@ -247,6 +251,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
         cwd: input.cwd,
         invocationRef,
         onEvent: input.onEvent,
+        policy: input.policy,
         sandbox: input.sandbox,
         session: () => active.sessionRef
           ? { provider: "qoder", sessionId: active.sessionRef, ...(active.messageRef ? { turnId: active.messageRef } : {}) }
@@ -255,6 +260,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
       cwd: input.cwd,
       invocationKey: invocationRef,
       model: input.model,
+      policy: input.policy,
       reasoningEffort: input.reasoningEffort,
       sandbox: input.sandbox,
       systemPrompt: SYSTEM_PROMPT
@@ -269,6 +275,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
         });
         const sessionRef = clean(event.session?.sessionId);
         if (sessionRef) {
+          active.sessionObserved = true;
           if (active.sessionRef && active.sessionRef !== sessionRef) {
             throw new Error(`Qoder invocation ${invocationRef} returned mismatched session ${sessionRef}`);
           }
@@ -298,14 +305,19 @@ export class QoderExecutorProvider implements ExecutorProvider {
       }
       if (error instanceof QoderExecutionError) {
         // result error 已由 message adapter 投影；SDK/process/no-result failure 需在此补 terminal。
-        if (!active.terminalProjected) input.onEvent?.(qoderFailureEvent(error.details, invocationRef));
+        if (!active.terminalProjected) {
+          input.onEvent?.(qoderFailureEvent({
+            ...error.details,
+            sessionId: active.sessionObserved ? error.details.sessionId : ""
+          }, invocationRef));
+        }
         throw error;
       }
       const wrapped = new QoderExecutionError({
         category: "sdk",
         message: error instanceof Error ? error.message : String(error),
         retryable: false,
-        sessionId: active.sessionRef
+        sessionId: active.sessionObserved ? active.sessionRef : ""
       });
       input.onEvent?.(qoderFailureEvent(wrapped.details, invocationRef));
       throw wrapped;

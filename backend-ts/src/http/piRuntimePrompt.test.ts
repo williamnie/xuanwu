@@ -218,6 +218,8 @@ describe("Xuanwu PI runtime prompt", () => {
       expect(prompt).toContain("triage, todo, in_progress, or cancelled");
       expect(prompt).toContain("It must never move needs_user to in_progress");
       expect(prompt).toContain("call human_review_response with the current request id/revision");
+      expect(prompt).toContain("accept on decision/risk_acceptance");
+      expect(prompt).toContain("requested information are not delivery acceptance");
       expect(prompt).toContain("without a new execution Session");
       expect(prompt).toContain("run_control interrupt stops only the current Run");
       expect(prompt).toContain("Never leave an ended Run with an in_progress Issue");

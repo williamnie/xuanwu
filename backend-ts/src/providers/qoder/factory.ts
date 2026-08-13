@@ -4,6 +4,9 @@ import type { ExecutorProviderManifest, ProviderCapabilities } from "../core/man
 import type { ProviderFactory, RegisteredProvider } from "../core/registry.ts";
 import { QoderExecutorProvider, type QoderExecutorProviderOptions } from "./provider.ts";
 import { probeQoderRuntime, type QoderRuntimeProbe } from "./runtime.ts";
+import { QODER_EXECUTION_POLICY_CAPABILITIES, qoderExecutionPolicyAdapter } from "./executionPolicy.ts";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * P11：Qoder ProviderFactory（G11 gate 已通过）。
@@ -25,6 +28,7 @@ export function qoderManifest(): ExecutorProviderManifest {
     supportLevel: "preview",
     transports: ["sdk"],
     capabilities: QODER_CAPABILITIES,
+    executionPolicy: QODER_EXECUTION_POLICY_CAPABILITIES,
     processObservability: "lease",
     sessionPresentation: { viewContract: "xw.provider-session.v1" },
     executionSettings: {
@@ -55,7 +59,8 @@ export function qoderFactory(options: QoderFactoryOptions = {}): ProviderFactory
     manifest,
     parseConfig: (raw: unknown) => (raw ?? {}) as Record<string, unknown>,
     autoDetect: (config) => {
-      const result = runtimeProbe?.(config as ProviderRuntimeConfig) ?? probeQoderRuntime(config as ProviderRuntimeConfig);
+      const runtimeConfig = withPinnedQoderCli(config as ProviderRuntimeConfig);
+      const result = runtimeProbe?.(runtimeConfig) ?? probeQoderRuntime(runtimeConfig);
       return {
         installed: result.installed,
         ready: result.ready,
@@ -64,9 +69,19 @@ export function qoderFactory(options: QoderFactoryOptions = {}): ProviderFactory
       };
     },
     create: (config) => {
-      const readiness = runtimeProbe?.(config as ProviderRuntimeConfig) ?? probeQoderRuntime(config as ProviderRuntimeConfig);
-      const instance = new QoderExecutorProvider(config as ProviderRuntimeConfig, { ...providerOptions, readiness }) as ExecutorProvider;
-      return Object.assign(instance, { manifest }) as RegisteredProvider;
+      const runtimeConfig = withPinnedQoderCli(config as ProviderRuntimeConfig);
+      const readiness = runtimeProbe?.(runtimeConfig) ?? probeQoderRuntime(runtimeConfig);
+      const instance = new QoderExecutorProvider(runtimeConfig, { ...providerOptions, readiness }) as ExecutorProvider;
+      return Object.assign(instance, { manifest, policyAdapter: qoderExecutionPolicyAdapter }) as RegisteredProvider;
     }
   };
+}
+
+export function withPinnedQoderCli(config: ProviderRuntimeConfig): ProviderRuntimeConfig {
+  const configured = typeof config.command === "string" ? config.command.trim() : "";
+  if (configured !== "" && configured !== "qodercli") return config;
+  const adjacent = `${process.execPath}.qodercli.mjs`;
+  if (existsSync(adjacent)) return { ...config, command: adjacent };
+  const bundled = join(import.meta.dir, "../../../node_modules/@qoder-ai/qodercli/bundle/qodercli.js");
+  return existsSync(bundled) ? { ...config, command: bundled } : config;
 }

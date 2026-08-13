@@ -4,6 +4,7 @@ import type { ExecutorProviderManifest, ProviderCapabilities } from "../core/man
 import type { ProviderFactory, ProviderRuntimeConfig as RegistryProviderConfig, RegisteredProvider } from "../core/registry.ts";
 import { detectProviderCommand } from "../core/command.ts";
 import { createClaudeExecutorProvider } from "./provider.ts";
+import { CLAUDE_EXECUTION_POLICY_CAPABILITIES, claudeExecutionPolicyAdapter } from "./executionPolicy.ts";
 
 /**
  * P8：Claude ProviderFactory——SDK 与 CLI transport 共享 manifest/session projection。
@@ -16,7 +17,7 @@ import { createClaudeExecutorProvider } from "./provider.ts";
 const CLAUDE_CAPABILITIES: ProviderCapabilities = {
   issueExecution: true,
   sessions: { create: true, list: true, read: true, resume: true, fork: false, steerWhileRunning: false, export: false },
-  control: { interrupt: true, approvals: "none" },
+  control: { interrupt: true, approvals: "host-callback" },
   models: { list: false, switchDuringSession: false },
   usage: { tokens: "attempt", money: "provider-reported" }
 };
@@ -28,6 +29,7 @@ export function claudeManifest(): ExecutorProviderManifest {
     supportLevel: "preview",
     transports: ["sdk", "stdio-json"],
     capabilities: CLAUDE_CAPABILITIES,
+    executionPolicy: CLAUDE_EXECUTION_POLICY_CAPABILITIES,
     processObservability: "lease",
     executionSettings: {
       settings: [
@@ -62,7 +64,7 @@ export function claudeFactory(options: ClaudeFactoryOptions = {}): ProviderFacto
     },
     create: (config: RegistryProviderConfig) => {
       const instance = createClaudeExecutorProvider(config as ProviderRuntimeConfig, options.eventSink) as ExecutorProvider;
-      return Object.assign(instance, { manifest }) as RegisteredProvider;
+      return Object.assign(instance, { manifest, policyAdapter: claudeExecutionPolicyAdapter }) as RegisteredProvider;
     }
   };
 }

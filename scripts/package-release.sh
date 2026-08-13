@@ -104,6 +104,12 @@ stage_qodercli_executable() {
   install -m 0755 "$source" "$pkg_dir/xuanwu.qodercli.mjs"
 }
 
+stage_pi_policy_extension() {
+  local pkg_dir="$1" source="$ROOT_DIR/backend-ts/src/providers/pi/xuanwuPolicyExtension.ts"
+  [ -f "$source" ] || fail "missing Pi policy extension: $source"
+  install -m 0644 "$source" "$pkg_dir/xuanwu.pi-policy-extension.ts"
+}
+
 host_bun_target() {
   case "$(uname -s)-$(uname -m)" in
     Darwin-arm64) printf 'bun-darwin-arm64' ;;
@@ -214,6 +220,7 @@ package_target() {
   cp "$ROOT_DIR/docs/backup-restore.md" "$pkg_dir/docs/backup-restore.md"
   cp "$ROOT_DIR/docs/architecture/xuanwu/0070-db-migration-rehearsal-gate.md" "$pkg_dir/docs/migration-rehearsal.md"
   stage_pi_package_assets "$pkg_dir"
+  stage_pi_policy_extension "$pkg_dir"
   stage_claude_sdk_executable "$target" "$pkg_dir"
   stage_qodercli_executable "$pkg_dir"
   (cd "$pkg_dir" && LC_ALL=C tar -czf "$OUT_DIR/$asset.tar.gz" .)

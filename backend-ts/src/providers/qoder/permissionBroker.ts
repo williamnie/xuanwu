@@ -6,19 +6,21 @@ import { redactSensitiveText } from "../../util/redact.ts";
 import { constrainApprovalGrantScope } from "../../pi/approvalGrantScope.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
 import type { ApprovalDecision, ProviderEvent, SessionRef } from "../types.ts";
+import type { ResolvedExecutionPolicy } from "../core/policyContracts.ts";
 
 const READ_TOOLS = ["Read", "Grep", "Glob"] as const;
 const WRITE_TOOLS = new Set(["Edit", "Write"]);
 const BLOCKED_TOOLS = ["Agent", "Bash", "NotebookEdit"] as const;
 
 export type QoderApprovalPolicy = "never" | "danger-only" | "always";
-export type QoderSandbox = "read-only" | "workspace-write";
+export type QoderSandbox = "danger-full-access" | "read-only" | "workspace-write";
 
 export type QoderPermissionContext = {
   approvalPolicy?: string;
   cwd: string;
   invocationRef: string;
   onEvent?: (event: ProviderEvent) => void;
+  policy?: ResolvedExecutionPolicy;
   sandbox?: string;
   session: () => SessionRef | undefined;
 };
@@ -48,10 +50,18 @@ export class QoderPermissionBroker {
 
   callback(context: QoderPermissionContext): CanUseTool {
     return async (toolName, input, options) => {
+      if (context.policy) return await this.policyDecision(toolName, input, options, context);
       const policy = normalizePolicy(context.approvalPolicy);
       const sandbox = normalizeSandbox(context.sandbox);
       if (READ_TOOLS.includes(toolName as typeof READ_TOOLS[number])) return allowResult(options.toolUseID);
       if (sandbox === "read-only") return denyResult(options.toolUseID, "Qoder read-only policy denies side-effect tools");
+      if (sandbox === "danger-full-access") {
+        if (policy === "never") return allowResult(options.toolUseID);
+        if (policy === "danger-only" && toolSensitivity(toolName, input, context.cwd) === "routine") {
+          return allowResult(options.toolUseID);
+        }
+        return await this.request(toolName, input, options, context);
+      }
       if (BLOCKED_TOOLS.includes(toolName as typeof BLOCKED_TOOLS[number])) {
         return denyResult(options.toolUseID, "Qoder permission policy cannot provide OS-level containment for this tool");
       }
@@ -62,6 +72,36 @@ export class QoderPermissionBroker {
       if (policy === "never") return allowResult(options.toolUseID);
       return await this.request(toolName, input, options, context);
     };
+  }
+
+  private async policyDecision(
+    toolName: string,
+    input: Record<string, unknown>,
+    options: CanUseToolOptions,
+    context: QoderPermissionContext
+  ): Promise<PermissionResult> {
+    const policy = context.policy!;
+    if (READ_TOOLS.includes(toolName as typeof READ_TOOLS[number])) return allowResult(options.toolUseID);
+    if (policy.requested.access === "read-only") {
+      return denyResult(options.toolUseID, "Qoder read-only policy denies side-effect tools");
+    }
+    const pathTool = WRITE_TOOLS.has(toolName) || toolName === "NotebookEdit";
+    if (pathTool && !await inputPathWithinWorkspace(input, context.cwd)) {
+      return denyResult(options.toolUseID, "Qoder write path is outside or cannot be proven inside the project");
+    }
+    if (policy.requested.access === "provider-native-development") {
+      if (toolName === "Bash" && !routineDevelopmentCommand(input)) {
+        return denyResult(options.toolUseID, "Qoder project-scoped policy denies commands that cannot be proven to stay within normal development effects");
+      }
+      if (!pathTool && toolName !== "Bash") {
+        return denyResult(options.toolUseID, `Qoder tool ${toolName} is outside the project development policy`);
+      }
+    }
+    if (policy.requested.approval === "unattended") return allowResult(options.toolUseID);
+    if (policy.requested.approval === "ask-sensitive" && toolSensitivity(toolName, input, context.cwd) === "routine") {
+      return allowResult(options.toolUseID);
+    }
+    return await this.request(toolName, input, options, context);
   }
 
   async resolveApproval(requestId: string, decision: ApprovalDecision): Promise<void> {
@@ -180,23 +220,70 @@ export class QoderPermissionBroker {
 export function qoderPermissionOptions(
   approvalPolicy: string | undefined,
   sandboxValue: string | undefined,
-  canUseTool?: CanUseTool
-): Pick<Options, "allowedTools" | "canUseTool" | "disallowedTools" | "permissionMode" | "tools"> {
+  canUseTool?: CanUseTool,
+  resolvedPolicy?: ResolvedExecutionPolicy
+): Pick<Options, "allowDangerouslySkipPermissions" | "allowedTools" | "canUseTool" | "disallowedTools" | "permissionMode" | "tools"> {
+  if (resolvedPolicy) {
+    const native = resolvedPolicy.nativeSummary;
+    const tools = stringArray(native.tools);
+    const permissionMode = clean(native.permissionMode);
+    const bridge = native.approvalBridge === true;
+    const requireCallback = bridge || (resolvedPolicy.requested.access === "provider-native-development" && resolvedPolicy.requested.approval === "unattended");
+    if (requireCallback && !canUseTool) throw new Error("Qoder resolved execution policy requires a canUseTool callback");
+    return {
+      allowDangerouslySkipPermissions: native.allowDangerouslySkipPermissions === true,
+      allowedTools: resolvedPolicy.requested.access === "read-only" ? [...READ_TOOLS] : [...READ_TOOLS],
+      ...(canUseTool ? { canUseTool } : {}),
+      disallowedTools: resolvedPolicy.requested.access === "read-only"
+        ? ["Agent", "Bash", "Edit", "Write", "NotebookEdit"]
+        : [],
+      permissionMode: permissionMode as Options["permissionMode"],
+      tools
+    };
+  }
   const approval = normalizePolicy(approvalPolicy);
   const sandbox = normalizeSandbox(sandboxValue);
-  if (approval !== "never" && !canUseTool) {
+  if (sandbox === "danger-full-access" && approval === "never") {
+    return {
+      allowDangerouslySkipPermissions: true,
+      allowedTools: [...READ_TOOLS],
+      disallowedTools: [],
+      permissionMode: "bypassPermissions",
+      tools: [...READ_TOOLS, "Edit", "Write", "Bash", "NotebookEdit"]
+    };
+  }
+  // workspace-write must always pass through the broker so its path/symlink
+  // containment checks cannot be bypassed by an SDK auto-approval mode.
+  if ((approval !== "never" || sandbox === "workspace-write") && !canUseTool) {
     throw new Error(`Qoder approval policy ${approval} requires a canUseTool callback`);
   }
   const tools = sandbox === "read-only" ? [...READ_TOOLS] : [...READ_TOOLS, "Edit", "Write"];
   return {
-    allowedTools: approval === "never" ? tools : [...READ_TOOLS],
+    allowDangerouslySkipPermissions: false,
+    allowedTools: [...READ_TOOLS],
     ...(canUseTool ? { canUseTool } : {}),
     disallowedTools: sandbox === "read-only" ? [...BLOCKED_TOOLS, "Edit", "Write"] : [...BLOCKED_TOOLS],
-    permissionMode: approval === "never"
-      ? sandbox === "workspace-write" ? "acceptEdits" : "dontAsk"
-      : "default",
+    permissionMode: approval === "never" && sandbox === "read-only" ? "dontAsk" : "default",
     tools
   };
+}
+
+function toolSensitivity(toolName: string, input: Record<string, unknown>, cwd: string): "routine" | "sensitive" {
+  if (WRITE_TOOLS.has(toolName)) return "routine";
+  if (toolName === "NotebookEdit") return "routine";
+  if (toolName === "Bash") return routineDevelopmentCommand(input) ? "routine" : "sensitive";
+  const path = firstText(input.file_path, input.path, input.notebook_path);
+  return path && redactedPath(path, cwd).startsWith("<workspace>") ? "routine" : "sensitive";
+}
+
+function routineDevelopmentCommand(input: Record<string, unknown>): boolean {
+  const command = clean(input.command ?? input.cmd);
+  if (command === "") return false;
+  return /^(?:git\s+(?:status|diff|show|log)(?:\s|$)|(?:bun|npm|pnpm|yarn)\s+(?:test|run\s+(?:test|lint|build|format|check))(?:\s|$)|(?:cargo|go)\s+(?:test|check|build)(?:\s|$)|(?:pytest|python\s+-m\s+pytest|swift\s+test|xcodebuild\b))/.test(command);
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : [];
 }
 
 function permissionEvent(
@@ -210,12 +297,15 @@ function permissionEvent(
     id: pending.id,
     method: "qoder/canUseTool",
     params: {
+      callback_owner_ref: pending.context.invocationRef,
       agent_id: clean(pending.options.agentID),
       blocked_path: redactedPath(pending.options.blockedPath, pending.context.cwd),
       decision_reason: redactSensitiveText(clean(pending.options.decisionReason)),
       description: redactSensitiveText(clean(pending.options.description)),
       display_name: redactSensitiveText(clean(pending.options.displayName)),
       path: WRITE_TOOLS.has(pending.toolName) ? pending.path : "",
+      invocation_ref: pending.context.invocationRef,
+      policy_revision: pending.context.policy?.contract ?? "legacy",
       threadId: session?.sessionId ?? "",
       tool_input_summary: pending.inputSummary,
       tool_name: pending.toolName,
@@ -250,10 +340,7 @@ function normalizePolicy(value: string | undefined): QoderApprovalPolicy {
 
 function normalizeSandbox(value: string | undefined): QoderSandbox {
   const sandbox = clean(value) || "workspace-write";
-  if (sandbox === "danger-full-access") {
-    throw new Error("Qoder danger-full-access is disabled because Qoder permission policy is not an OS sandbox");
-  }
-  if (sandbox === "read-only" || sandbox === "workspace-write") return sandbox;
+  if (sandbox === "danger-full-access" || sandbox === "read-only" || sandbox === "workspace-write") return sandbox;
   throw new Error(`Unsupported Qoder sandbox ${sandbox}`);
 }
 

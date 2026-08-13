@@ -72,6 +72,41 @@ describe("PI agent orchestration profile selection", () => {
       db.close();
     }
   });
+
+  test("inherits the project execution policy only when the selected profile has no policy", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, {
+        defaultSkillPolicy: {},
+        id: "demo",
+        provider: "codex"
+      });
+      db.sqlite.run("update projects set execution_policy_json=? where id=?", [
+        JSON.stringify({ contract: "xw.execution-policy.v1", access: "read-only", approval: "ask-sensitive" }),
+        "demo"
+      ]);
+      insertAgentProfile(db, "inherit-policy", "[]");
+      insertAgentProfile(db, "profile-policy", "[]");
+      db.sqlite.run("update agent_profiles set execution_policy_json=? where id=?", [
+        JSON.stringify({ contract: "xw.execution-policy.v1", access: "unrestricted-host", approval: "ask-every-side-effect" }),
+        "profile-policy"
+      ]);
+      const inheritedIssueID = insertIssue(db, "demo", "Inherit project policy", "inherit-policy");
+      const explicitIssueID = insertIssue(db, "demo", "Use profile policy", "profile-policy");
+      const project = getProject(db, "demo")!;
+
+      expect(resolveExecutorSelection(db, project, getIssue(db, inheritedIssueID)!)).toMatchObject({
+        execution_policy: { access: "read-only", approval: "ask-sensitive" },
+        execution_policy_source: "project"
+      });
+      expect(resolveExecutorSelection(db, project, getIssue(db, explicitIssueID)!)).toMatchObject({
+        execution_policy: { access: "unrestricted-host", approval: "ask-every-side-effect" },
+        execution_policy_source: "profile"
+      });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {

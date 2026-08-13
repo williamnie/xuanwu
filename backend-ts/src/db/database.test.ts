@@ -306,7 +306,8 @@ describe("Bun SQLite database connection", () => {
         { id: "076_run_revision_issue_scope_invariant" },
         { id: "077_pi_action_event_connector_test_index" },
         { id: "078_builtin_qoder_executor_profile" },
-        { id: "079_scheduler_performance_indexes" }
+        { id: "079_scheduler_performance_indexes" },
+        { id: "080_execution_policy_json" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
@@ -950,7 +951,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 80 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 81 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
@@ -974,7 +975,7 @@ describe("Bun SQLite database connection", () => {
 
     const upgraded = await openDatabase({ stateDir });
     try {
-      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 80 });
+      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 81 });
       expect(tableNames(upgraded)).toEqual(expect.arrayContaining([
         "im_conversation_state",
         "im_interaction_bindings",

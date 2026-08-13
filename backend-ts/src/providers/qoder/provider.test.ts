@@ -177,6 +177,24 @@ describe("Qoder Q2 executor lifecycle", () => {
     }
   });
 
+  test("preflight failure does not publish a synthetic Provider Session", async () => {
+    const events: ProviderEvent[] = [];
+    const { facade } = createFakeQoderSdkFacade(["throw"]);
+
+    await expect(provider(facade, { session: "synthetic-session" }).run({
+      issueId: 3,
+      projectId: "p",
+      cwd: "/tmp",
+      prompt: "go",
+      onEvent: (event) => events.push(event)
+    })).rejects.toThrow();
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: "error", runEvent: { outcome: "failed", terminal: true } });
+    expect(events[0]?.session).toBeUndefined();
+    expect(events[0]?.runEvent?.metadata.provider_session_id).toBeUndefined();
+  });
+
   test("result error and duplicate result never become fake success", async () => {
     const failed = sdkResult("qoder-session-9", {
       subtype: "error_during_execution",

@@ -7,6 +7,7 @@ import { getProject, ProjectNotFoundError, type Project } from "../db/repositori
 import { mergeSkillIntents, parseSkillPolicy } from "../skills/intents.ts";
 import { needsUserComment, workflowIssuePayload } from "./agentOrchestrationPayloads.ts";
 import { selectRoleProfile, type RoleProfileSelection } from "./roleProfileSelector.ts";
+import type { ExecutionPolicyRequest } from "../providers/core/policyContracts.ts";
 
 export const AGENT_ROLES = EXECUTION_AGENT_ROLES;
 export type AgentRole = ExecutionAgentRole;
@@ -46,6 +47,8 @@ export type AgentOrchestrationProposal = {
 export type AgentRecommendation = {
   agent_role: AgentRole;
   approval_policy: string;
+  execution_policy: ExecutionPolicyRequest;
+  execution_policy_source: "profile" | "project";
   issue_id: number;
   model: string;
   profile_id: string;
@@ -166,9 +169,12 @@ function recommendationFor(
   selection: RoleProfileSelection
 ): AgentRecommendation {
   const profile = selection.profile;
+  const profilePolicy = profile?.execution_policy;
   return {
     agent_role: role,
     approval_policy: profile?.approval_policy || project.approval_policy,
+    execution_policy: profilePolicy ?? project.execution_policy,
+    execution_policy_source: profilePolicy ? "profile" : "project",
     issue_id: issue?.id ?? 0,
     model: profile ? profile.model : project.model,
     profile_id: profile?.id ?? "",

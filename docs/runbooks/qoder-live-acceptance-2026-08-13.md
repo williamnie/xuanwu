@@ -26,7 +26,7 @@ read-only、同 Session resume、Runner 重启恢复、workspace-write、显式 
 | read-only | PASS | 只读 README，隔离仓库保持 clean |
 | 同 Session 两轮 resume | PASS | Session `8b1e…332c` 保持不变，三个 turn ref 各不相同 |
 | Runner 重启后 resume | PASS | 重启前后 Session、history turn 数与 Credits 连续，随后仍在原 Session resume |
-| workspace-write | PASS（修复后） | `qoder-acceptance.txt` 内容精确为 `workspace-write-ok\n`，无其他写入 |
+| workspace-write | PARTIAL | `acceptEdits` 诊断下目标文件写入成功且无其他写入；后续安全复核发现该模式会绕过 workspace path callback，最终 containment-safe 映射只有离线回归，预算内未再次付费复验 |
 | allow approval | PASS | 并发 A 收到一次 approval request，显式 approve 后写入成功 |
 | deny approval | PASS | 并发 B 收到一次 approval request，显式 deny，目标文件不存在 |
 | 两路并发与精确 interrupt | PASS | 同时观察到 2 个不同 invocation lease；只中断 B，A 正常成功；最终 lease 为 0 |
@@ -43,7 +43,7 @@ read-only、同 Session resume、Runner 重启恢复、workspace-write、显式 
 | `25bd…c680` | 1 | 0.12401928571428572 | 修复前 workspace-write 被 `dontAsk` 拒绝 |
 | `379e…e603` | 1 | 0.5688632142857143 | 长轮次在上限窗口内人工中断，无文件写入 |
 | `a97f…aeb8` | 1 | 0.1598182142857143 | `allowedTools` 修复后仍被 `dontAsk` 拒绝 |
-| `9386…0ce7` | 1 | 0.13651857142857143 | `acceptEdits` 修复后 workspace-write 通过 |
+| `9386…0ce7` | 1 | 0.13651857142857143 | `acceptEdits` 诊断下 workspace-write 通过，但该映射随后因绕过 containment callback 被废弃 |
 | `c6d1…0c47` | 1 | 0.06445357142857142 | 并发 allow，正常成功 |
 | `8717…6728` | 1 | 0.05723571428571428 | 并发 deny，精确 interrupted |
 
@@ -53,8 +53,10 @@ read-only、同 Session resume、Runner 重启恢复、workspace-write、显式 
    `initialize` 稳定在 120 秒超时。修复为只透传运行所需的宿主环境 allowlist，不透传 Claude、Codex 或
    其他 ambient secret。
 2. `approval_policy=never + workspace-write` 被映射为 Qoder `dontAsk`，真实 tool result 明确表示所有需权限
-   的工具会自动拒绝。修复为该组合使用 `acceptEdits`，read-only 仍为 `dontAsk`，`always/danger-only`
-   仍通过 host callback。
+   的工具会自动拒绝。`acceptEdits` 虽能完成功能样本，但会自动批准写工具并绕过 Runner 的 workspace
+   path/symlink containment callback，因此最终修复为 `default + canUseTool`：`never` 仍不询问用户，但只对
+   可证明位于 workspace 内的 `Edit/Write` 自动 allow，越界写入 deny；read-only 仍为 `dontAsk`，
+   `always/danger-only` 仍通过 host callback。最终安全映射已通过离线回归，未在耗尽的本轮预算内追加真实调用。
 
 ## 未通过或未执行项
 
@@ -69,6 +71,8 @@ read-only、同 Session resume、Runner 重启恢复、workspace-write、显式 
   fixture 证据，不能替代真实失败样本。
 - `result.total_credits` 与 assistant usage 的非零 Credits 不一致；Runner 正确保留 partial provenance，但在
   上游语义澄清前不能宣称 result/assistant/session 完整对账。
+- 唯一验收 commit `bc3d171` 记录的是预算内真实证据，但其中的 `acceptEdits` 候选映射已被提交后的
+  containment 安全复核否定；当前工作区的安全修正尚未纳入该 commit，因此该 commit 不可直接合并。
 
 在修复 release 完整资产交付、补齐不创建业务 Issue 的 Runs transcript 验收入口，并以新的授权预算完成失败
 矩阵前，不应评估 `preview → tested`。

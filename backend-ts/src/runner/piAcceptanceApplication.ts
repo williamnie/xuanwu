@@ -159,6 +159,8 @@ async function continueSameSession(
       agentProfileId: selection.profile_id,
       agentRole: selection.agent_role,
       approvalPolicy: selection.approval_policy || project.approval_policy,
+      executionPolicyRequest: selection.execution_policy,
+      executionPolicyResolutionSource: selection.execution_policy_source,
       bus: runtime.bus,
       capabilitySummary: provider.capabilities.join(","),
       cwd: project.cwd,
@@ -166,7 +168,7 @@ async function continueSameSession(
       issueId: issue.id,
       model: selection.model,
       projectId: project.id,
-      prompt: continuationPrompt(issue, decision),
+      prompt: continuationPrompt(issue, decision, card.human_review),
       reasoningEffort: selection.reasoning_effort,
       sandbox: selection.sandbox || project.sandbox,
       selectionReason: selection.selection_reason,
@@ -261,6 +263,8 @@ async function retryInNewSession(
       agentProfileId: selection.profile_id,
       agentRole: selection.agent_role,
       approvalPolicy: selection.approval_policy || project.approval_policy,
+      executionPolicyRequest: selection.execution_policy,
+      executionPolicyResolutionSource: selection.execution_policy_source,
       bus: runtime.bus,
       capabilitySummary: provider.capabilities.join(","),
       cwd: project.cwd,
@@ -312,7 +316,8 @@ function requestUser(
     acceptance_summary: decision.evidence_refs,
     consequences: decision.unmet_requirements.join("；"),
     evidence_refs: [`completion-card:${card.fingerprint}`, ...decision.evidence_refs],
-    kind: "acceptance",
+    // 缺少结构化类型时按普通决策处理，绝不能把补充信息或授权误当成接受当前交付。
+    kind: decision.human_review_kind ?? "decision",
     question: decision.rationale,
     recommendation: decision.follow_up_prompt || "请查看小结卡片并决定接受、要求调整或拒绝。"
   }, { bus: runtime.bus });
@@ -386,11 +391,18 @@ function applied(db: RunnerDatabase, issueID: number, fingerprint: string): bool
     .some((event) => cleanString(objectValue(parseJson(event.payload)).card_fingerprint) === fingerprint);
 }
 
-function continuationPrompt(issue: Issue, decision: PiAcceptanceDecision): string {
+function continuationPrompt(
+  issue: Issue,
+  decision: PiAcceptanceDecision,
+  humanReview: CompletionCard["human_review"]
+): string {
   return [
     `继续处理 Issue #${issue.id}：${issue.title}`,
     "",
     "这是 PI 对上一 Run 小结卡片的验收结论。必须在同一个 Provider Session 的新 Run/Turn 中继续，不得创建新的业务 Issue 或 Verifier Issue。",
+    humanReview ? `已认证的人类回复类型：${humanReview.request.kind}` : "",
+    humanReview ? `原人类问题：${humanReview.request.question}` : "",
+    humanReview?.comment ? `已认证的人类回复：${humanReview.comment}` : "",
     `验收动作：${decision.decision}`,
     `理由：${decision.rationale}`,
     decision.unmet_requirements.length > 0 ? `未满足项：${decision.unmet_requirements.join("；")}` : "",

@@ -12,6 +12,14 @@ import { serviceTierOptions } from '../utils/serviceTier.js';
 import { availableAgentProfiles, codeAgentLabel } from '../utils/codeAgents.js';
 import { providerOptionsFromCatalog } from './sessions/sessionOptions.js';
 import AgentProfileSelectOptions from '../components/AgentProfileSelectOptions.jsx';
+import {
+  executionPolicyPayload,
+  executionPolicyPresets,
+  executionPolicyValue,
+  isolationLabel,
+  policyFromValue,
+  projectExecutionPolicy,
+} from '../utils/executionPolicy.js';
 import './ProjectSettingsEditor.css';
 
 const DEFAULT_PROJECT_NAME = 'project';
@@ -59,6 +67,7 @@ function buildProviderModelOptions(provider, models, ...selectedValues) {
 }
 
 function projectForm(project) {
+  const executionPolicy = projectExecutionPolicy(project);
   return {
     formAgentProfileId: project?.default_agent_profile_id || '',
     formApproval: project?.approval_policy || 'never',
@@ -67,6 +76,7 @@ function projectForm(project) {
     formProvider: project?.provider || DEFAULT_PROVIDER,
     formProviderConfig: project?.provider_config_json || '{}',
     formSandbox: project?.sandbox || 'workspace-write',
+    formExecutionPolicy: executionPolicy,
     formServiceTier: project?.default_service_tier || '',
   };
 }
@@ -195,10 +205,6 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       draft.formProvider = value;
       draft.formModel = normalizeProviderModel(value, '');
       draft.formServiceTier = '';
-      if (value === 'pi-coding-agent') {
-        draft.formApproval = 'never';
-        if (draft.formSandbox === 'workspace-write') draft.formSandbox = 'read-only';
-      }
     });
     loadProviderModels(value);
   };
@@ -208,10 +214,6 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       draft.profileForm[field] = value;
       if (field === 'provider') {
         draft.profileForm.model = normalizeProviderModel(value, '');
-        if (value === 'pi-coding-agent') {
-          draft.profileForm.approval_policy = 'never';
-          if (!draft.profileForm.sandbox || draft.profileForm.sandbox === 'workspace-write') draft.profileForm.sandbox = 'read-only';
-        }
       }
     });
   };
@@ -247,6 +249,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       model: normalizeProviderModel(ui.formProvider, ui.formModel),
       approval_policy: ui.formApproval,
       sandbox: ui.formSandbox,
+      execution_policy: executionPolicyPayload(ui.formExecutionPolicy),
       default_service_tier: ui.formServiceTier,
       default_agent_profile_id: ui.formAgentProfileId,
     };
@@ -256,6 +259,11 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       draft.saving = true;
     });
     try {
+      const preview = await systemApi.resolveProviderExecutionPolicy(ui.formProvider, {
+        project_id: projectID,
+        policy: executionPolicyPayload(ui.formExecutionPolicy),
+      });
+      if (preview?.supported === false) throw new Error(preview.reason || '当前 Provider 不支持所选执行策略');
       const saved = mode === 'create'
         ? await projectsApi.createProject({ id: projectIdFromPath(ui.formCwd), ...payload })
         : await projectsApi.updateProject(projectID, payload);
@@ -290,6 +298,13 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       return;
     }
     try {
+      if (payload.execution_policy && Object.keys(payload.execution_policy).length > 0) {
+        const preview = await systemApi.resolveProviderExecutionPolicy(payload.provider, {
+          project_id: projectID,
+          policy: payload.execution_policy,
+        });
+        if (preview?.supported === false) throw new Error(preview.reason || '当前 Provider 不支持所选 Profile 执行策略');
+      }
       const saved = existing
         ? await projectsApi.updateAgentProfile(payload.id, payload)
         : await projectsApi.createAgentProfile(payload);
@@ -337,7 +352,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
         {mode === 'create' ? (
           <details className="project-settings-advanced">
             <summary>高级运行配置（可选）</summary>
-            <p>不确定时无需修改。默认使用 Codex、系统默认模型、标准速度，并仅允许写入当前项目目录。</p>
+            <p>不确定时无需修改。默认使用无人值守开发策略，允许当前 Provider 使用本机开发能力且不逐次等待确认。</p>
             <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setProjectRuntimeField} providerOptions={providerOptions} ui={ui} />
           </details>
         ) : (
@@ -391,6 +406,8 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
 function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui }) {
   const providerReady = providerOptions.some(option => option.value === ui.formProvider);
   const providerSelectDisabled = ui.providerCatalogLoading || Boolean(ui.providerCatalogError) || providerOptions.length === 0;
+  const policyOptions = executionPolicyPresets(ui.providerCatalog, ui.formProvider, ui.formExecutionPolicy);
+  const policyValue = executionPolicyValue(ui.formExecutionPolicy);
 
   return (
     <div className="project-runtime-fields">
@@ -462,40 +479,17 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
         </div> : null}
       </div>
 
-      <div className="project-settings-grid">
-        <div className="form-group">
-          <label>操作确认</label>
-          <select className="form-control" onChange={event => onFieldChange('formApproval', event.target.value)} value={ui.formApproval}>
-            <option value="never">自动运行，不逐次确认</option>
-            <option value="danger-only">敏感操作时确认</option>
-            <option value="always">每次执行都确认</option>
-          </select>
-          <span className="project-settings-hint">控制执行过程中何时需要人工确认。</span>
-        </div>
-        <div className="form-group">
-          <label>执行权限范围</label>
-          <select className="form-control" onChange={event => onFieldChange('formSandbox', event.target.value)} value={ui.formSandbox}>
-            <option value="workspace-write">仅当前项目可写（推荐）</option>
-            <option value="read-only">只读</option>
-            <option disabled={ui.formProvider === 'qoder'} value="danger-full-access">允许访问整个系统{ui.formProvider === 'qoder' ? '（Qoder 不支持）' : ''}</option>
-          </select>
-          <span className="project-settings-hint">
-            {ui.formProvider === 'qoder'
-              ? 'Qoder permission 只提供工具级策略，不等于 Codex 或操作系统 sandbox；Bash 与整个系统访问会 fail closed。'
-              : ui.formProvider === 'pi-coding-agent'
-              ? 'Pi 当前仅支持可证明的“只读”或显式“整个系统”；不支持 workspace-write。'
-              : '同时影响执行器的文件、进程和本机网络访问边界。'}
-          </span>
-          {ui.formSandbox !== 'danger-full-access' && (
-            <div className="project-settings-permission-notice" role="status">
-              {ui.formProvider === 'qoder'
-                ? 'Qoder 的 workspace-write 仅允许能证明位于当前项目内的文件工具；Bash、外部路径与无法验证的访问会被拒绝。'
-                : ui.formSandbox === 'read-only'
-                ? '只读模式不能修改项目文件，也可能阻止需要写入缓存或构建产物的任务。'
-                : '如果任务需要访问项目目录外文件，或调用 127.0.0.1 / localhost 服务，执行器可能被沙箱拦截；请改用“允许访问整个系统”或收窄任务边界。'}
-            </div>
-          )}
-        </div>
+      <div className="form-group">
+        <label>执行权限与确认</label>
+        <select className="form-control" onChange={event => onFieldChange('formExecutionPolicy', policyFromValue(event.target.value))} value={policyValue}>
+          {policyOptions.map(option => (
+            <option disabled={option.disabled} key={option.id} value={option.value} title={option.reason}>{option.label}{option.disabled ? '（当前 transport 不支持）' : ''}</option>
+          ))}
+        </select>
+        <span className="project-settings-hint">隔离能力：{isolationLabel(ui.providerCatalog, ui.formProvider)}。低权限仍会启动；越权操作会被拒绝，需要确认的操作会暂停并通知你。</span>
+        {ui.formExecutionPolicy.access !== 'unrestricted-host' || ui.formExecutionPolicy.approval !== 'unattended' ? (
+          <div className="project-settings-permission-notice" role="status">任务可能等待审批或因当前权限不足而无法完成，但不会仅因选择低权限而拒绝启动。</div>
+        ) : null}
       </div>
     </div>
   );
@@ -503,6 +497,8 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
 
 function AgentProfileManager({ profiles, loading, form, error, modelOptions, models, modelsError, modelsLoading, onFieldChange, onSubmit, onEdit, onReset, providerCatalog, providerOptions }) {
   const providerReady = providerOptions.some(option => option.value === form.provider);
+  const profilePolicyOptions = executionPolicyPresets(providerCatalog, form.provider, form.execution_policy, true);
+  const profilePolicyValue = form.execution_policy ? executionPolicyValue(form.execution_policy) : '';
   return (
     <div className="project-profile-manager">
       <div>
@@ -555,14 +551,9 @@ function AgentProfileManager({ profiles, loading, form, error, modelOptions, mod
                 {serviceTierOptions(form.service_tier).map(option => <option key={option.value || 'standard'} value={option.value}>{option.label}</option>)}
               </select>
             </label> : null}
-            <label className="form-group">操作确认
-              <select className="form-control" value={form.approval_policy} onChange={event => onFieldChange('approval_policy', event.target.value)}>
-                <option value="">沿用项目设置</option><option value="never">自动运行</option><option value="danger-only">敏感操作时确认</option><option value="always">每次都确认</option>
-              </select>
-            </label>
-            <label className="form-group">文件访问范围
-              <select className="form-control" value={form.sandbox} onChange={event => onFieldChange('sandbox', event.target.value)}>
-                <option value="">沿用项目设置</option><option value="workspace-write">仅当前项目可写</option><option value="read-only">只读</option><option disabled={form.provider === 'qoder'} value="danger-full-access">整个系统{form.provider === 'qoder' ? '（Qoder 不支持）' : ''}</option>
+            <label className="form-group">执行权限与确认
+              <select className="form-control" value={profilePolicyValue} onChange={event => onFieldChange('execution_policy', event.target.value ? policyFromValue(event.target.value) : null)}>
+                {profilePolicyOptions.map(option => <option disabled={option.disabled} key={option.id} value={option.value}>{option.label}{option.disabled ? '（当前 transport 不支持）' : ''}</option>)}
               </select>
             </label>
           </div>

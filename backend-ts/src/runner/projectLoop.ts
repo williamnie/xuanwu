@@ -120,6 +120,8 @@ async function runClaimedIssue(
       onProjectSlotReleased: input.onProjectSlotReleased,
       reasoningEffort: selection.reasoning_effort,
       approvalPolicy: selection.approval_policy || project.approval_policy,
+      executionPolicyRequest: selection.execution_policy,
+      executionPolicyResolutionSource: selection.execution_policy_source,
       sandbox: selection.sandbox || project.sandbox,
       serviceTier: serviceTier.value,
       serviceTierSource: serviceTier.source,

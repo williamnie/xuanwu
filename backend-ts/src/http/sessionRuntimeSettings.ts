@@ -3,6 +3,7 @@ import { createInterface } from "node:readline";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import type { SessionCreateInput, SessionMessageInput } from "../providers/types.ts";
+import { executionPolicyRequest, type ExecutionPolicyRequest } from "../providers/core/policyContracts.ts";
 
 export type RuntimeSettings = {
   approval_policy?: string;
@@ -31,13 +32,33 @@ export function runtimeRawRef(
   input: SessionCreateInput | SessionMessageInput,
   turnId = "",
   provider = ""
-): Record<string, string> {
+): Record<string, unknown> {
   const settings = runtimeSettings(input);
   return {
     ...settings,
     ...(provider.trim() ? { settings_provider: provider.trim() } : {}),
-    ...(turnId ? { provider_turn_id: turnId } : {})
+    ...(turnId ? { provider_turn_id: turnId } : {}),
+    ...(input.policy ? {
+      requested_execution_policy: input.policy.requested,
+      resolved_execution_policy: {
+        contract: input.policy.contract,
+        effects: input.policy.effects,
+        isolation: input.policy.isolation,
+        native_summary: input.policy.nativeSummary,
+        proof: input.policy.proof,
+        warnings: input.policy.warnings
+      }
+    } : input.executionPolicy ? { requested_execution_policy: input.executionPolicy } : {})
   };
+}
+
+export function executionPolicyFromAgentSession(
+  db: RunnerDatabase,
+  sessionId: string,
+  provider = "codex"
+): ExecutionPolicyRequest | undefined {
+  const raw = jsonRecord(getAgentSession(db, `${provider}:${sessionId}`)?.raw_ref);
+  try { return executionPolicyRequest(raw.requested_execution_policy); } catch { return undefined; }
 }
 
 export function runtimeSettingsFromAgentSession(db: RunnerDatabase, sessionId: string, provider = "codex"): RuntimeSettings {

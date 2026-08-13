@@ -18,6 +18,8 @@ import { buildConfig } from "../config/env.ts";
 import { QoderExecutorProvider } from "../providers/qoder/provider.ts";
 import { createFakeQoderSdkFacade } from "../providers/qoder/sdkFacade.ts";
 import type { QoderRuntimeProbe } from "../providers/qoder/runtime.ts";
+import { claudeManifest } from "../providers/claude/factory.ts";
+import { claudeExecutionPolicyAdapter } from "../providers/claude/executionPolicy.ts";
 
 const tempRoots: string[] = [];
 
@@ -763,6 +765,72 @@ describe("executor provider runtime seam", () => {
       db.close();
     }
   });
+
+  test("策略组合不受支持时记录配置错误且不启动 Provider Session", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "policy-error");
+      const issueId = insertIssue(db, "policy-error");
+      const provider = new UnsupportedPolicyRuntimeProvider();
+
+      await expect(runIssueWithProvider(provider, {
+        database: db,
+        issueId,
+        projectId: "policy-error",
+        cwd: "/tmp/policy-error",
+        prompt: "execute",
+        executionPolicyRequest: {
+          contract: "xw.execution-policy.v1",
+          access: "provider-native-development",
+          approval: "ask-sensitive"
+        },
+        executionPolicyResolutionSource: "explicit"
+      })).rejects.toThrow("cannot provide the required host approval");
+
+      expect(provider.runCalls).toBe(0);
+      const run = listIssueRuns(db, issueId).at(-1);
+      expect(run?.provider_session_id).toBe("");
+      expect(JSON.parse(run?.runtime_metadata_json ?? "{}")).toMatchObject({
+        configuration_error: { code: "policy_combination_unsupported" },
+        provider: "claude",
+        resolution_source: "explicit",
+        transport: "stdio-json"
+      });
+      expect(listIssueEvents(db, issueId).some((event) => event.payload.includes("execution-policy/resolve_error"))).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("成功解析时记录 Provider policy capability contract 而不是 resolved policy contract", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "policy-metadata");
+      const issueId = insertIssue(db, "policy-metadata");
+      const provider = new SupportedPolicyRuntimeProvider();
+
+      await runIssueWithProvider(provider, {
+        database: db,
+        issueId,
+        projectId: "policy-metadata",
+        cwd: "/tmp/policy-metadata",
+        prompt: "execute",
+        executionPolicyRequest: {
+          contract: "xw.execution-policy.v1",
+          access: "unrestricted-host",
+          approval: "unattended"
+        },
+        executionPolicyResolutionSource: "explicit"
+      });
+
+      expect(JSON.parse(listIssueRuns(db, issueId).at(-1)?.runtime_metadata_json ?? "{}")).toMatchObject({
+        provider_policy_capability_revision: "xw.provider-execution-policy-capabilities.v1",
+        resolved_execution_policy: { contract: "xw.resolved-execution-policy.v1" }
+      });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 function insertProject(db: RunnerDatabase, id: string): void {
@@ -802,6 +870,38 @@ class ExecutionOnlyRuntimeProvider implements ExecutorProvider {
       text: "execution only"
     });
     return { runId: `p1-execution-${input.issueId}` };
+  }
+}
+
+class UnsupportedPolicyRuntimeProvider implements ExecutorProvider {
+  readonly id = "claude" as const;
+  readonly capabilities = ["issue_execution"] as const;
+  readonly manifest = claudeManifest();
+  readonly policyAdapter = claudeExecutionPolicyAdapter;
+  runCalls = 0;
+
+  runtimeStatus() {
+    return { active_sessions: 0, api_key_configured: false, mode: "cli-fallback", ready: true, version: "2.1.221" };
+  }
+
+  async run(_input: ProviderRunInput) {
+    this.runCalls += 1;
+    return { runId: "must-not-run" };
+  }
+}
+
+class SupportedPolicyRuntimeProvider implements ExecutorProvider {
+  readonly id = "claude" as const;
+  readonly capabilities = ["issue_execution"] as const;
+  readonly manifest = claudeManifest();
+  readonly policyAdapter = claudeExecutionPolicyAdapter;
+
+  runtimeStatus() {
+    return { active_sessions: 0, api_key_configured: true, mode: "sdk", ready: true, version: "0.3.152" };
+  }
+
+  async run(_input: ProviderRunInput) {
+    return { runId: "policy-metadata-run" };
   }
 }
 

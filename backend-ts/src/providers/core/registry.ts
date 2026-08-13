@@ -28,7 +28,7 @@ export interface ProviderFactory {
 }
 
 /** P2：运行期实例 = 现有 ExecutorProvider 形态 + manifest；P3+ 迁移到 facet 形态。 */
-export type RegisteredProvider = ExecutorProvider & { manifest: ExecutorProviderManifest };
+export type RegisteredProvider = ExecutorProvider & { manifest: ExecutorProviderManifest; policyAdapter?: import("./policyContracts.ts").ProviderPolicyAdapter };
 
 export type RegistryState =
   | "registered"

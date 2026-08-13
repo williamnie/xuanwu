@@ -104,6 +104,22 @@ stage_qodercli_executable() {
   echo "[bun-build] qodercli executable: $target"
 }
 
+stage_pi_policy_extension() {
+  local source target_dir staged target
+  source="$BACKEND_TS_DIR/src/providers/pi/xuanwuPolicyExtension.ts"
+  [ -f "$source" ] || {
+    echo "[bun-build] missing Pi policy extension: $source" >&2
+    exit 1
+  }
+  target="$OUTFILE.pi-policy-extension.ts"
+  target_dir="$(dirname "$target")"
+  staged="$(mktemp "$target_dir/.pi-policy-extension-stage.XXXXXX")"
+  cp -p "$source" "$staged"
+  chmod 0644 "$staged"
+  mv -f "$staged" "$target"
+  echo "[bun-build] pi policy extension: $target"
+}
+
 resolve_build_stamp() {
   local revision dirty
   revision="nogit"
@@ -135,6 +151,7 @@ echo "[bun-build] outfile: $OUTFILE"
 
 stage_claude_sdk_executable
 stage_qodercli_executable
+stage_pi_policy_extension
 sign_binary_if_possible
 printf '%s\n' "$BUILD_STAMP" > "$OUTFILE.build.stamp"
 echo "[bun-build] binary: $OUTFILE"

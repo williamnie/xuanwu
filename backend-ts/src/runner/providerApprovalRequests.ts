@@ -26,7 +26,7 @@ export function syncProviderApprovalRequest(
   event: ProviderEvent,
   activeRunID: string
 ): void {
-  if (!event.provider || !["codex", "qoder"].includes(String(event.provider))) return;
+  if (!event.provider || !["codex", "claude", "pi-coding-agent", "qoder"].includes(String(event.provider))) return;
   const method = event.raw?.method?.trim() ?? "";
   if (method === "approval/requested") {
     recordApprovalRequested(input, event, activeRunID);

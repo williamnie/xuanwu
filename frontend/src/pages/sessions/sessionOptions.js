@@ -1,3 +1,5 @@
+import { projectExecutionPolicy } from '../../utils/executionPolicy.js';
+
 export const REASONING_EFFORT_OPTIONS = [
   { value: '', label: '默认', shortLabel: '默认' },
   { value: 'minimal', label: 'Minimal', shortLabel: 'Min' },
@@ -96,6 +98,7 @@ export function defaultSessionSettings(project) {
     serviceTier: SERVICE_TIER_STANDARD,
     approvalPolicy: project?.approval_policy || 'never',
     sandbox: project?.sandbox || 'workspace-write',
+    executionPolicy: projectExecutionPolicy(project),
   };
 }
 

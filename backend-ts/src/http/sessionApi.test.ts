@@ -9,6 +9,7 @@ import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { claudeManifest } from "../providers/claude/factory.ts";
 import { providerSessionDetail, providerSessionSummary } from "../providers/core/sessionView.ts";
 import { qoderManifest } from "../providers/qoder/factory.ts";
+import { qoderExecutionPolicyAdapter } from "../providers/qoder/executionPolicy.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const EMPTY_ROLLOUT_ERROR = [
@@ -620,6 +621,50 @@ describe("Bun Sessions API compatibility", () => {
     }
   });
 
+  test("Session create and resume use the shared resolver for legacy and explicit policy inputs", async () => {
+    const database = await openFixtureDatabase();
+    const qoder = new PolicySessionsProvider();
+    try {
+      const router = createDefaultRouter({ database, providers: { qoder } });
+      const created = await router.handle(jsonRequest("/api/sessions", {
+        approval_policy: "always",
+        cwd: "/tmp",
+        prompt: "legacy policy",
+        provider: "qoder",
+        sandbox: "danger-full-access"
+      }));
+      expect(created.status).toBe(201);
+      expect(qoder.createPolicies[0]?.requested).toEqual({
+        contract: "xw.execution-policy.v1",
+        access: "unrestricted-host",
+        approval: "ask-every-side-effect"
+      });
+      expect(JSON.parse(getAgentSession(database, "qoder:policy-session")?.raw_ref ?? "{}")).toMatchObject({
+        requested_execution_policy: {
+          access: "unrestricted-host",
+          approval: "ask-every-side-effect"
+        }
+      });
+
+      const resumed = await router.handle(jsonRequest("/api/sessions/qoder:policy-session/messages", {
+        execution_policy: {
+          contract: "xw.execution-policy.v1",
+          access: "read-only",
+          approval: "unattended"
+        },
+        prompt: "explicit policy"
+      }));
+      expect(resumed.status).toBe(201);
+      expect(qoder.messagePolicies[0]?.requested).toEqual({
+        contract: "xw.execution-policy.v1",
+        access: "read-only",
+        approval: "unattended"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("keeps legacy bare session ids routed to Codex", async () => {
     const database = await openFixtureDatabase();
     const codex = new SessionsProvider();
@@ -909,6 +954,42 @@ class QoderSessionsProvider implements ExecutorProvider {
       status: "idle",
       turns: []
     });
+  }
+}
+
+class PolicySessionsProvider implements ExecutorProvider {
+  readonly id = "qoder" as const;
+  readonly capabilities = ["issue_execution", "sessions", "resume_session"] as const;
+  readonly manifest = qoderManifest();
+  readonly policyAdapter = qoderExecutionPolicyAdapter;
+  readonly createPolicies: Array<NonNullable<ProviderRunInput["policy"]>> = [];
+  readonly messagePolicies: Array<NonNullable<ProviderRunInput["policy"]>> = [];
+
+  runtimeStatus() {
+    return { active_sessions: 0, api_key_configured: true, mode: "sdk", ready: true, version: "1.0.20" };
+  }
+
+  async run(_input: ProviderRunInput) { return { runId: "unused" }; }
+
+  async createSession(input: Parameters<NonNullable<ExecutorProvider["createSession"]>>[0]) {
+    if (input.policy) this.createPolicies.push(input.policy);
+    return {
+      id: "qoder:policy-session",
+      provider: "qoder" as const,
+      provider_session_id: "policy-session",
+      thread_id: "policy-session",
+      turn_id: ""
+    };
+  }
+
+  async sendSessionMessage(input: Parameters<NonNullable<ExecutorProvider["sendSessionMessage"]>>[0]) {
+    if (input.policy) this.messagePolicies.push(input.policy);
+    return {
+      provider: "qoder" as const,
+      provider_session_id: input.sessionId,
+      sessionId: input.sessionId,
+      turn_id: "policy-turn"
+    };
   }
 }
 

@@ -9,11 +9,37 @@ import { getIssue, listIssueRuns } from "../../db/repositories/issues.ts";
 import { cancelIssueWithInterrupt } from "../../runner/interrupt.ts";
 import { runProjectLoopOnce } from "../../runner/projectLoop.ts";
 import { runIssueWithProvider } from "../../runner/providerRuntime.ts";
-import { ClaudeExecutorProvider, type ClaudeProcessFactory } from "./provider.ts";
+import { ClaudeExecutorProvider, ClaudeSdkExecutorProvider, type ClaudeProcessFactory } from "./provider.ts";
+import type { Options as ClaudeSdkOptions } from "@anthropic-ai/claude-agent-sdk";
+import { CLAUDE_EXECUTION_POLICY_CAPABILITIES, claudeExecutionPolicyAdapter } from "./executionPolicy.ts";
+import { resolveExecutionPolicy } from "../core/policyResolution.ts";
 
 const tempRoots: string[] = [];
 
 describe("Claude Code provider", () => {
+  test("SDK full unattended uses explicit bypass and ask modes install a host callback", async () => {
+    for (const request of [
+      { access: "unrestricted-host", approval: "unattended" },
+      { access: "unrestricted-host", approval: "ask-every-side-effect" }
+    ] as const) {
+      let captured: ClaudeSdkOptions | undefined;
+      const provider = new ClaudeSdkExecutorProvider(runtimeConfig({ mode: "sdk" }), {
+        queryFactory: ({ options }) => {
+          captured = options;
+          return (async function* () {})();
+        }
+      });
+      await provider.run({ ...runInput(), policy: claudePolicy(request) }).catch(() => undefined);
+      if (request.approval === "unattended") {
+        expect(captured).toMatchObject({ allowDangerouslySkipPermissions: true, permissionMode: "bypassPermissions" });
+      } else {
+        expect(captured?.permissionMode).toBe("default");
+        expect(typeof captured?.canUseTool).toBe("function");
+        expect(captured?.allowedTools).toEqual(["Read", "Grep", "Glob"]);
+      }
+    }
+  });
+
   test("keeps CLI fallback explicit and reports its real command readiness", () => {
     const injected = new ClaudeExecutorProvider(runtimeConfig({ mode: "cli-fallback" }), {
       processFactory: scriptedProcessFactory({}).factory
@@ -201,7 +227,9 @@ describe("Claude Code provider", () => {
 
     await provider.run({ ...runInput(), sandbox: "read-only" });
 
-    expect(factory.calls[0].command).toContain("Read,Grep,Glob,LS,Bash(xuanwu issue update:*),Bash(curl:*)");
+    expect(factory.calls[0].command).toContain("Read,Grep,Glob,LS");
+    expect(factory.calls[0].command.join(" ")).not.toContain("xuanwu issue update");
+    expect(factory.calls[0].command.join(" ")).not.toContain("Bash(curl:*)");
   });
 
   test("times out and kills the Claude child process", async () => {
@@ -331,6 +359,18 @@ function runtimeConfig(overrides: Partial<ProviderRuntimeConfig> = {}): Provider
 
 function runInput() {
   return { issueId: 183, projectId: "demo", cwd: "/tmp", prompt: "issue prompt" };
+}
+
+function claudePolicy(request: { access: "unrestricted-host"; approval: "ask-every-side-effect" | "unattended" }) {
+  return resolveExecutionPolicy({ contract: "xw.execution-policy.v1", ...request }, {
+    cwd: "/tmp",
+    invocationRef: "claude-test",
+    projectId: "demo",
+    providerId: "claude",
+    providerVersion: "0.3.152",
+    source: "local-user",
+    transport: "sdk"
+  }, CLAUDE_EXECUTION_POLICY_CAPABILITIES, claudeExecutionPolicyAdapter);
 }
 
 async function rejectedError(promise: Promise<unknown>): Promise<Error> {

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildConfig } from "../../config/env.ts";
 import { probeQoderRuntime, qoderAuthenticationStatus } from "./runtime.ts";
+import { withPinnedQoderCli } from "./factory.ts";
 
 const roots: string[] = [];
 
@@ -15,6 +16,12 @@ afterEach(async () => {
 });
 
 describe("Qoder Q1 offline runtime readiness", () => {
+  test("default command uses the SDK-pinned CLI instead of an incompatible global qodercli", () => {
+    const config = buildConfig({ qoderAuthMode: "local-cli" }).providers.qoder!;
+    expect(withPinnedQoderCli(config).command.endsWith("@qoder-ai/qodercli/bundle/qodercli.js")).toBe(true);
+    expect(withPinnedQoderCli({ ...config, command: "/custom/qodercli" }).command).toBe("/custom/qodercli");
+  });
+
   test("reports missing CLI as not-ready without calling Qoder", () => {
     const config = buildConfig({ qoderAuthMode: "pat-env", qoderPat: "fixture-pat" }).providers.qoder!;
     const probe = probeQoderRuntime(config, {
@@ -116,5 +123,21 @@ describe("Qoder Q1 offline runtime readiness", () => {
       expect(JSON.stringify(status)).not.toContain("fixture-pat");
       expect(JSON.stringify(status)).not.toContain("fixture-service-account");
     }
+  });
+
+  test("recognizes a successful local CLI status when Qoder stores login outside the marker directory", async () => {
+    const configDir = await mkdtemp(join(tmpdir(), "xuanwu-qoder-auth-status-"));
+    roots.push(configDir);
+    const local = buildConfig({ qoderAuthMode: "local-cli", qoderConfigDir: configDir }).providers.qoder!;
+
+    expect(qoderAuthenticationStatus(local, { inspectLocalLogin: () => true })).toMatchObject({
+      configured: true,
+      mode: "local-cli",
+      source: "local_cli"
+    });
+    expect(qoderAuthenticationStatus(local, { inspectLocalLogin: () => false })).toMatchObject({
+      configured: false,
+      reason: "Qoder local CLI login state was not found"
+    });
   });
 });

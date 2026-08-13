@@ -3,6 +3,8 @@ import { createDefaultRouter } from "./server.ts";
 import { createProviderRegistry, type ProviderFactory } from "../providers/core/registry.ts";
 import { asProviderId, type ExecutorProvider } from "../providers/types.ts";
 import type { ProviderCapabilities } from "../providers/core/manifest.ts";
+import { claudeManifest } from "../providers/claude/factory.ts";
+import { claudeExecutionPolicyAdapter } from "../providers/claude/executionPolicy.ts";
 
 function factoryFor(
   id: string,
@@ -143,5 +145,47 @@ describe("P6: /api/providers discovery catalog", () => {
   test("无 registry 时 catalog 为空数组（兼容）", async () => {
     const router = createDefaultRouter();
     expect(await catalogBody(router)).toEqual([]);
+  });
+
+  test("execution policy resolve reflects the active Claude CLI transport", async () => {
+    const registry = createProviderRegistry();
+    const manifest = { ...claudeManifest(), capabilities: { issueExecution: true } };
+    registry.registerFactory({
+      manifest,
+      parseConfig: () => ({}),
+      autoDetect: () => ({ installed: true, ready: true }),
+      create: () => ({
+        id: "claude",
+        capabilities: ["issue_execution"],
+        manifest,
+        policyAdapter: claudeExecutionPolicyAdapter,
+        run: async () => ({ runId: "unused" }),
+        runtimeStatus: () => ({ active_sessions: 0, api_key_configured: false, mode: "cli-fallback", ready: true, version: "2.1.221" })
+      } as never)
+    });
+    await registry.startConfigured({});
+    const router = createDefaultRouter({ providersRegistry: registry });
+    const response = await router.handle(new Request("http://127.0.0.1/api/providers/claude/execution-policy/resolve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        policy: {
+          contract: "xw.execution-policy.v1",
+          access: "provider-native-development",
+          approval: "ask-sensitive"
+        }
+      })
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      alternatives: expect.arrayContaining([
+        { access: "read-only", approval: "unattended" },
+        { access: "unrestricted-host", approval: "unattended" }
+      ]),
+      code: "policy_combination_unsupported",
+      supported: false,
+      reason: expect.stringContaining("cannot provide the required host approval")
+    });
   });
 });

@@ -18,6 +18,22 @@ describe("PI issue acceptance decision", () => {
       rationale: "事实充分。",
       unmet_requirements: []
     }))).toBeNull();
+    expect(parseAcceptanceDecision(JSON.stringify({
+      confidence: "high",
+      decision: "needs_user",
+      evidence_refs: ["run:fixture"],
+      human_review_kind: "risk_acceptance",
+      rationale: "需要明确付费授权。",
+      unmet_requirements: ["缺少预算上限"]
+    }))).toMatchObject({ decision: "needs_user", human_review_kind: "risk_acceptance" });
+    expect(parseAcceptanceDecision(JSON.stringify({
+      confidence: "high",
+      decision: "needs_user",
+      evidence_refs: ["run:fixture"],
+      human_review_kind: "information",
+      rationale: "需要信息。",
+      unmet_requirements: ["缺少信息"]
+    }))).toBeNull();
     expect(parseAcceptanceDecision("not json")).toBeNull();
   });
 

@@ -79,6 +79,7 @@ import { runRevisionIssueScopeInvariantMigration } from "./076_run_revision_issu
 import { piActionEventConnectorTestIndexMigration } from "./077_pi_action_event_connector_test_index.ts";
 import { builtinQoderExecutorProfileMigration } from "./078_builtin_qoder_executor_profile.ts";
 import { schedulerPerformanceIndexesMigration } from "./079_scheduler_performance_indexes.ts";
+import { executionPolicyJsonMigration } from "./080_execution_policy_json.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -161,5 +162,6 @@ export const migrations = [
   runRevisionIssueScopeInvariantMigration,
   piActionEventConnectorTestIndexMigration,
   builtinQoderExecutorProfileMigration,
-  schedulerPerformanceIndexesMigration
+  schedulerPerformanceIndexesMigration,
+  executionPolicyJsonMigration
 ];
