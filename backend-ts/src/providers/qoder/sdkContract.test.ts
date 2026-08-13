@@ -222,6 +222,11 @@ describe("Qoder Q0: SDK/CLI freshness contract", () => {
       permissionMode: "dontAsk",
       systemPrompt: { type: "preset", preset: "qodercli", append: "runner instructions" }
     });
+    const environment = buildQoderQueryOptions({}, config).env ?? {};
+    if (process.env.HOME) expect(environment.HOME).toBe(process.env.HOME);
+    if (process.env.PATH) expect(environment.PATH).toBe(process.env.PATH);
+    expect(environment.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(environment.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
   });
 
   test("approval modes map to callbacks and model metadata constrains reasoning effort", async () => {

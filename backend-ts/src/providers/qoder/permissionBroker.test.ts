@@ -20,6 +20,11 @@ describe("Qoder Q5 permission and approval gate", () => {
     await expect(readOnly("Write", { file_path: "README.md" }, toolOptions("write-1"))).resolves.toMatchObject({ behavior: "deny" });
     expect(() => qoderPermissionOptions("never", "danger-full-access")).toThrow("not an OS sandbox");
     expect(() => qoderPermissionOptions("always", "workspace-write")).toThrow("requires a canUseTool callback");
+    expect(qoderPermissionOptions("never", "workspace-write")).toMatchObject({
+      allowedTools: ["Read", "Grep", "Glob", "Edit", "Write"],
+      permissionMode: "acceptEdits",
+      tools: ["Read", "Grep", "Glob", "Edit", "Write"]
+    });
   });
 
   test("workspace writes reject symlink escapes because a lexical prefix is not containment", async () => {

@@ -113,6 +113,18 @@ export type QoderSdkFacadeOptions = {
   now?: () => number;
 };
 
+const QODER_HOST_ENV_KEYS = [
+  "HOME",
+  "PATH",
+  "TMPDIR",
+  "USER",
+  "SystemRoot",
+  "ComSpec",
+  "PATHEXT",
+  "APPDATA",
+  "LOCALAPPDATA"
+] as const;
+
 export function buildQoderQueryOptions(
   options: Partial<QoderRunOptions> = {},
   runtime?: ProviderRuntimeConfig
@@ -128,6 +140,7 @@ export function buildQoderQueryOptions(
     ...(runtime ? {
       auth: buildQoderAuthOptions(runtime),
       env: managedExecutionEnvironment({
+        ...qoderHostEnvironment(),
         ...runtime.env,
         ...(runtime.configDir ? { QODER_CONFIG_DIR: runtime.configDir } : {})
       }),
@@ -141,6 +154,15 @@ export function buildQoderQueryOptions(
     sessionId: clean(options.resume) === "" ? clean(options.sessionId) || undefined : undefined,
     systemPrompt: systemPrompt ? { type: "preset", preset: "qodercli", append: systemPrompt } : undefined
   };
+}
+
+function qoderHostEnvironment(
+  environment: Record<string, string | undefined> = process.env
+): Record<string, string> {
+  return Object.fromEntries(QODER_HOST_ENV_KEYS.flatMap((key) => {
+    const value = environment[key]?.trim();
+    return value ? [[key, value]] : [];
+  }));
 }
 
 export function buildQoderAuthOptions(config: ProviderRuntimeConfig): AuthOptions {

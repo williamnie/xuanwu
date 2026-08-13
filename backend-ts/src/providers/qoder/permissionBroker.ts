@@ -189,10 +189,12 @@ export function qoderPermissionOptions(
   }
   const tools = sandbox === "read-only" ? [...READ_TOOLS] : [...READ_TOOLS, "Edit", "Write"];
   return {
-    allowedTools: [...READ_TOOLS],
+    allowedTools: approval === "never" ? tools : [...READ_TOOLS],
     ...(canUseTool ? { canUseTool } : {}),
     disallowedTools: sandbox === "read-only" ? [...BLOCKED_TOOLS, "Edit", "Write"] : [...BLOCKED_TOOLS],
-    permissionMode: approval === "never" ? "dontAsk" : "default",
+    permissionMode: approval === "never"
+      ? sandbox === "workspace-write" ? "acceptEdits" : "dontAsk"
+      : "default",
     tools
   };
 }
