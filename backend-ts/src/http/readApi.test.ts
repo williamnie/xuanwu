@@ -538,7 +538,7 @@ describe("Bun projects/issues read API", () => {
     }
   });
 
-  test("auto-run issue create sends only the canonical title and description", async () => {
+  test("auto-run issue create sends the canonical body plus execution ownership contract", async () => {
     const database = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
     try {
@@ -563,7 +563,9 @@ describe("Bun projects/issues read API", () => {
       expect(body).not.toHaveProperty("prompt_template");
       await waitForProviderStart(provider);
       const prompt = provider.inputs[0]?.prompt ?? "";
-      expect(prompt).toBe("# 直接执行\n\n直接发给 runner");
+      expect(prompt).toContain("# 直接执行\n\n直接发给 runner");
+      expect(prompt).toContain("## Xuanwu execution context (authoritative)");
+      expect(prompt).toContain("RUNNER_OUTCOME: needs_user | <reason>");
     } finally {
       database.close();
     }

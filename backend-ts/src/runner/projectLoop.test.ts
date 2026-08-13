@@ -220,7 +220,7 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
-  test("sends the canonical issue prompt without generic runner contracts", async () => {
+  test("sends the canonical issue prompt with the authoritative execution contract", async () => {
     const db = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
     try {
@@ -234,7 +234,11 @@ describe("Bun project loop claim execution", () => {
       await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
 
       const prompt = provider.inputs[0]?.prompt ?? "";
-      expect(prompt).toBe("# prompt contract\n\nAdd the focused runner prompt guidance.");
+      expect(prompt).toContain("# prompt contract\n\nAdd the focused runner prompt guidance.");
+      expect(prompt).toContain("## Xuanwu execution context (authoritative)");
+      expect(prompt).toContain("already claimed Issue #1");
+      expect(prompt).toContain("Do not create, deduplicate, enqueue, retry, cancel, delete, or change the status of this Issue");
+      expect(prompt).toContain("RUNNER_OUTCOME: needs_user | <reason>");
     } finally {
       db.close();
     }
@@ -294,7 +298,36 @@ describe("Bun project loop claim execution", () => {
       expect(prompt).not.toContain("## Goal Contract");
       expect(prompt).not.toContain("Deliver the requested end state");
       expect(prompt).not.toContain("## Runner lifecycle contract");
+      expect(prompt).toContain("## Xuanwu execution context (authoritative)");
       expect(prompt).toContain("## Stop policy / escalation\nReport blockers.");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("treats pre-dispatch triage wording as non-conflicting while preserving substantive gates", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      const issueID = insertIssue(db, {
+        description: [
+          "## 前置门禁",
+          "- 本 Issue 保持 triage，不要自动入队。",
+          "- 必须等待用户提供真实账号认证方式。"
+        ].join("\n"),
+        projectId: "demo",
+        title: "Qoder final acceptance"
+      });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      const prompt = provider.inputs[0]?.prompt ?? "";
+      expect(prompt).toContain("本 Issue 保持 triage，不要自动入队");
+      expect(prompt).toContain(`already claimed Issue #${issueID}`);
+      expect(prompt).toContain("is not a reason to undo this active Run");
+      expect(prompt).toContain("credentials, budget, external authorization, or user-supplied choices");
+      expect(prompt).toContain("RUNNER_OUTCOME: needs_user | <reason>");
     } finally {
       db.close();
     }

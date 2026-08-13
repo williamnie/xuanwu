@@ -38,7 +38,17 @@ describe("Bun issue patch API", () => {
       expect(response.status).toBe(200);
       expect(body).toMatchObject(expectedPatchedIssue(issueId));
       expect(listEvents(database)).toEqual([
-        { type: "issue.status_changed", payload: "{\"status\":\"todo\"}" }
+        { type: "issue.status_changed", payload: "{\"status\":\"todo\"}" },
+        {
+          type: "issue.lifecycle_control.v1",
+          payload: JSON.stringify({
+            actor: { kind: "operator", source: "http", thread_id: "" },
+            after_status: "todo",
+            before_status: "triage",
+            issue_run_id: "",
+            operation: "status_update"
+          })
+        }
       ]);
     } finally {
       database.close();

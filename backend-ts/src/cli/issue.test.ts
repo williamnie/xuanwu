@@ -135,6 +135,23 @@ describe("Bun issue CLI", () => {
     expect(JSON.parse(cancel.stdout)).toMatchObject({ status: "cancelled" });
   });
 
+  test("identifies lifecycle requests issued from a Xuanwu-managed executor", async () => {
+    const fetcher = fetchStub((request) => {
+      expect(request.headers.get("x-xuanwu-managed-execution")).toBe("1");
+      expect(request.headers.get("x-xuanwu-caller-thread-id")).toBe("thread-managed");
+      expect(request.headers.get("x-codex-client")).toBe("xuanwu-cli");
+      return jsonResponse(issueBody({ id: 9, status: "in_progress", title: "Managed" }));
+    });
+
+    const result = await run(["issue", "status", "--id", "9"], {
+      env: envMap({ CODEX_THREAD_ID: "thread-managed", XUANWU_MANAGED_EXECUTION: "1" }),
+      fetcher
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
   test("deletes issue with DELETE request and returns deletion summary", async () => {
     const fetcher = fetchStub((request) => {
       expect(request.method).toBe("DELETE");

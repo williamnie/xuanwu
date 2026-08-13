@@ -288,7 +288,18 @@ function buildIssuePrompt(project: Project, issue: Issue, database?: RunnerDatab
   const base = description === "" || description === title
     ? title
     : [`# ${title}`, "", description].join("\n");
-  return withRunnerContext(project, issue, base, database);
+  return withRunnerContext(project, issue, [base, "", issueExecutionContext(issue)].join("\n"), database);
+}
+
+function issueExecutionContext(issue: Issue): string {
+  return [
+    "## Xuanwu execution context (authoritative)",
+    `You are executing the existing, already claimed Issue #${issue.id}. The Runner and PI own its lifecycle.`,
+    "- Do not create, deduplicate, enqueue, retry, cancel, delete, or change the status of this Issue, and do not stop its current Run through Xuanwu CLI/API calls.",
+    "- An active `in_progress` state is expected. Issue-authored wording such as `keep triage`, `do not enqueue`, or `do not auto-start` describes the pre-dispatch planning state and is not a reason to undo this active Run.",
+    "- Pre-dispatch state wording does not prove that substantive prerequisites such as credentials, budget, external authorization, or user-supplied choices are satisfied. If one is still missing, do not perform the gated action; report the exact blocker for PI.",
+    "- End the final response with exactly one marker: `RUNNER_OUTCOME: completed`, `RUNNER_OUTCOME: failed | <reason>`, or `RUNNER_OUTCOME: needs_user | <reason>`. The Host will reconcile the Run and PI will decide the Issue status."
+  ].join("\n");
 }
 
 function withRunnerContext(project: Project, issue: Issue, prompt: string, database?: RunnerDatabase): string {

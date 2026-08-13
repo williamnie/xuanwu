@@ -142,7 +142,7 @@ describe("Codex executor provider", () => {
           serviceTier: "priority",
           approvalPolicy: "never",
           sandbox: "workspace-write",
-          developerInstructions: "Keep changes scoped to the runner issue and explicitly update the issue status when done.",
+          developerInstructions: "Keep changes scoped to the runner issue. You are executing an Issue already claimed by Xuanwu. Never use Xuanwu CLI or API lifecycle commands to create, deduplicate, enqueue, retry, cancel, delete, or change the status of the current Issue, and never stop its current Run. Report the result with the RUNNER_OUTCOME marker required by the execution context; the Host reconciles the Run and PI alone decides semantic Issue status.",
           threadSource: "subagent"
         }
       },

@@ -4,7 +4,9 @@ import type { EnvReader } from "./types.ts";
 
 export type CommonFlags = {
   addr: string;
+  callerThreadId: string;
   json: boolean;
+  managedExecution: boolean;
   token: string;
 };
 
@@ -36,7 +38,9 @@ export function parseCommandArgs(args: string[], specs: FlagSpec[], env: EnvRead
 export function parseCommonArgs(args: string[], env: EnvReader): ParsedCommonArgs {
   const rest: string[] = [];
   let addr = env("XUANWU_ADDR")?.trim() || DEFAULT_ADDR;
+  const callerThreadId = env("CODEX_THREAD_ID")?.trim() || "";
   let json = false;
+  const managedExecution = env("XUANWU_MANAGED_EXECUTION")?.trim() === "1";
   let token = envToken(env);
 
   for (let index = 0; index < args.length; index += 1) {
@@ -62,7 +66,7 @@ export function parseCommonArgs(args: string[], env: EnvReader): ParsedCommonArg
     }
   }
 
-  return { flags: { addr, json, token }, rest };
+  return { flags: { addr, callerThreadId, json, managedExecution, token }, rest };
 }
 
 function parseSpecificFlags(args: string[], specs: FlagSpec[]): Record<string, string> {

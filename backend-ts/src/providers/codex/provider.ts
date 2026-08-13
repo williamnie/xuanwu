@@ -25,7 +25,11 @@ import { recoverCodexRolloutExecEvents } from "./rolloutExecRecovery.ts";
 import { publicCodexSessionDetail, publicCodexSessionSummary } from "./sessionHistory.ts";
 
 const PROVIDER_CODEX = "codex";
-const DEFAULT_DEVELOPER_INSTRUCTIONS = "Keep changes scoped to the runner issue and explicitly update the issue status when done.";
+const DEFAULT_DEVELOPER_INSTRUCTIONS = [
+  "Keep changes scoped to the runner issue.",
+  "You are executing an Issue already claimed by Xuanwu. Never use Xuanwu CLI or API lifecycle commands to create, deduplicate, enqueue, retry, cancel, delete, or change the status of the current Issue, and never stop its current Run.",
+  "Report the result with the RUNNER_OUTCOME marker required by the execution context; the Host reconciles the Run and PI alone decides semantic Issue status."
+].join(" ");
 
 type CodexIssueAdapter = {
   initialize(): Promise<CodexInitializeResult>;

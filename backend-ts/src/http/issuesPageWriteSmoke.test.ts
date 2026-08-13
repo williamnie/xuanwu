@@ -62,8 +62,10 @@ describe("Bun Issues page write smoke", () => {
         "issue.created",
         "issue.comment",
         "issue.status_changed",
+        "issue.lifecycle_control.v1",
         "issue.status_changed",
-        "issue.status_changed"
+        "issue.status_changed",
+        "issue.lifecycle_control.v1"
       ]);
       expect(issues).toHaveLength(1);
       expect(issues[0]).toMatchObject({ id, comment_count: 1, status: "cancelled" });
