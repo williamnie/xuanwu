@@ -84,6 +84,7 @@ test('deployment stages the adjacent Claude SDK native executable atomically and
 
 test('deployment requires, stages, and snapshots the exact-pinned Qoder CLI runtime', () => {
   assert.match(source, /stage_dir_atomically "\$QODERCLI_RUNTIME_SOURCE" "\$QODERCLI_RUNTIME_PATH"/);
+  assert.match(source, /if \[ -e "\$previous" \]; then\s+rm -rf "\$previous"\s+fi\s+return 0/);
   assert.match(source, /policies\/sandbox-default\.toml/);
   assert.match(source, /"\$QODERCLI_RUNTIME_PATH"/);
   assert.match(releaseSource, /release asset does not contain exact-pinned Qoder CLI executable/);

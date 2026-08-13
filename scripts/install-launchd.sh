@@ -169,7 +169,10 @@ stage_dir_atomically() {
     [ -e "$previous" ] && mv "$previous" "$target"
     return 1
   fi
-  [ -e "$previous" ] && rm -rf "$previous"
+  if [ -e "$previous" ]; then
+    rm -rf "$previous"
+  fi
+  return 0
 }
 
 stage_launchd_binary() {
