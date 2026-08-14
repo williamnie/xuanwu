@@ -300,6 +300,8 @@ function issueExecutionContext(issue: Issue): string {
     "- Do not create, deduplicate, enqueue, retry, cancel, delete, or change the status of this Issue, and do not stop its current Run through Xuanwu CLI/API calls.",
     "- An active `in_progress` state is expected. Issue-authored wording such as `keep triage`, `do not enqueue`, or `do not auto-start` describes the pre-dispatch planning state and is not a reason to undo this active Run.",
     "- Pre-dispatch state wording does not prove that substantive prerequisites such as credentials, budget, external authorization, or user-supplied choices are satisfied. If one is still missing, do not perform the gated action; report the exact blocker for PI.",
+    "- Report `completed` when you have satisfied the Issue goal, including answers or explanations that require no code or tool use.",
+    "- Report `needs_user` only when progress is blocked on new user input, authorization, credentials, or a decision. Do not use it merely because the Issue is conversational or requires no repository changes.",
     "- End the final response with exactly one marker: `RUNNER_OUTCOME: completed`, `RUNNER_OUTCOME: failed | <reason>`, or `RUNNER_OUTCOME: needs_user | <reason>`. The Host will reconcile the Run and PI will decide the Issue status."
   ].join("\n");
 }

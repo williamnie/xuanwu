@@ -238,6 +238,8 @@ describe("Bun project loop claim execution", () => {
       expect(prompt).toContain("## Xuanwu execution context (authoritative)");
       expect(prompt).toContain("already claimed Issue #1");
       expect(prompt).toContain("Do not create, deduplicate, enqueue, retry, cancel, delete, or change the status of this Issue");
+      expect(prompt).toContain("Report `completed` when you have satisfied the Issue goal");
+      expect(prompt).toContain("Do not use it merely because the Issue is conversational or requires no repository changes");
       expect(prompt).toContain("RUNNER_OUTCOME: needs_user | <reason>");
     } finally {
       db.close();

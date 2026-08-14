@@ -409,6 +409,7 @@ function continuationPrompt(
     `具体后续：${decision.follow_up_prompt || "修复上述问题并补充最小充分的真实验证。"}`,
     "",
     "先读取当前工作区，避免重复已经成功的步骤。完成后报告改动文件、命令和退出码。Runner Host 负责最终状态写回。",
+    "已满足 Issue 目标时使用 completed，包括不需要代码或工具的回答与解释。只有确实缺少新的用户输入、授权、凭据或决策时才使用 needs_user；不要因为任务是对话或没有仓库改动而使用 needs_user。",
     "最终回复必须以 RUNNER_OUTCOME: completed、RUNNER_OUTCOME: failed | <reason> 或 RUNNER_OUTCOME: needs_user | <reason> 结尾。"
   ].filter(Boolean).join("\n");
 }
@@ -423,6 +424,7 @@ function retryPrompt(issue: Issue, decision: PiAcceptanceDecision): string {
     `具体后续：${decision.follow_up_prompt || "读取当前工作区，完成剩余工作并执行最小充分验证。"}`,
     "",
     "必须先读取当前工作区和已有改动，避免重复或覆盖已完成步骤。Runner Host 负责最终状态写回。",
+    "已满足 Issue 目标时使用 completed，包括不需要代码或工具的回答与解释。只有确实缺少新的用户输入、授权、凭据或决策时才使用 needs_user；不要因为任务是对话或没有仓库改动而使用 needs_user。",
     "最终回复必须以 RUNNER_OUTCOME: completed、RUNNER_OUTCOME: failed | <reason> 或 RUNNER_OUTCOME: needs_user | <reason> 结尾。"
   ].filter(Boolean).join("\n");
 }

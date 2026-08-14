@@ -103,6 +103,7 @@ describe("PI acceptance decision application", () => {
       expect(provider.inputs[0]?.model).toBe("");
       expect(provider.inputs[0]?.prompt).toContain("原 Session 已损坏");
       expect(provider.inputs[0]?.prompt).toContain("新 Session");
+      expect(provider.inputs[0]?.prompt).toContain("不要因为任务是对话或没有仓库改动而使用 needs_user");
       expect(updated.status).toBe("in_progress");
       expect(listIssueRuns(db, issue.id)).toMatchObject([
         { attempt: 1, provider_session_id: "session-broken" },
@@ -238,6 +239,7 @@ describe("PI acceptance decision application", () => {
         session: { provider: "claude", sessionId: "session-original", turnId: "turn-original" }
       });
       expect(provider.inputs[0]?.prompt).toContain("补充 Node 22 下的完整回归并报告退出码");
+      expect(provider.inputs[0]?.prompt).toContain("不要因为任务是对话或没有仓库改动而使用 needs_user");
       expect(updated.status).toBe("in_progress");
       expect(listIssueRuns(db, issue.id)).toMatchObject([
         { attempt: 1, provider_session_id: "session-original", provider_turn_id: "turn-original" },
