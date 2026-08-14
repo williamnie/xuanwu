@@ -73,69 +73,69 @@ describe("Command Center aggregate API", () => {
       const body = await response.json() as Record<string, any>;
 
       expect(response.status).toBe(200);
-      expect(body).toMatchObject({
-        compatibility: {
+      expect(body).toEqual(expect.objectContaining({
+        compatibility: expect.objectContaining({
           attention_command_audit_authority: "attention_command_events-append-only-overlay",
           dual_write: "none-legacy-facts-remain-single-writer",
           handoff_read_authority: "issue_events:handoff.*.v1",
           work_read_authority: "issues-via-Work-adapter"
-        },
+        }),
         contract: "xw.command-center.summary.v1",
         failed_sections: [],
         generated_at: NOW,
-        limits: { maximum: 25, requested: 5 },
+        limits: expect.objectContaining({ maximum: 25, requested: 5 }),
         partial: false,
         requested_sections: ["attention", "active_work", "recent_deliveries", "system_health"],
-        sections: {
-          active_work: {
-            counts: { returned: 1, total: 1 },
-            freshness: { queried_at: NOW, state: "current" },
-            items: [{
+        sections: expect.objectContaining({
+          active_work: expect.objectContaining({
+            counts: expect.objectContaining({ returned: 1, total: 1 }),
+            freshness: expect.objectContaining({ queried_at: NOW, state: "current" }),
+            items: [expect.objectContaining({
               id: issueIDToWorkID(issue.id),
-              latest_run: {
+              latest_run: expect.objectContaining({
                 id: runID,
                 phase: "running",
                 status: "running"
-              },
-              links: { self: expect.stringContaining("/api/works/") },
-              readiness: { status: "not_required" },
+              }),
+              links: expect.objectContaining({ self: expect.stringContaining("/api/works/") }),
+              readiness: expect.objectContaining({ status: "not_required" }),
               status: "in_progress"
-            }],
+            })],
             status: "ok"
-          },
-          attention: {
-            counts: { returned: 1, total: 1 },
-            items: [{
+          }),
+          attention: expect.objectContaining({
+            counts: expect.objectContaining({ returned: 1, total: 1 }),
+            items: [expect.objectContaining({
               id: "xw:attention:attention_inbox_items:1",
               priority: "p1",
-              links: { self: "/api/pi/attention-inbox/items/1" },
+              links: expect.objectContaining({ self: "/api/pi/attention-inbox/items/1" }),
               status: "open"
-            }],
+            })],
             status: "ok"
-          },
-          recent_deliveries: {
-            counts: { returned: 1, skipped_invalid: 0, total: 1 },
-            items: [{
+          }),
+          recent_deliveries: expect.objectContaining({
+            counts: expect.objectContaining({ returned: 1, skipped_invalid: 0, total: 1 }),
+            items: [expect.objectContaining({
               id: makeDomainID("handoff", "derived", `command-center-${issue.id}`),
-              issue: { id: issue.id, status: "in_progress", title: "Command Center" },
-              links: { view: expect.stringContaining("#/work/") },
+              issue: expect.objectContaining({ id: issue.id, status: "in_progress", title: "Command Center" }),
+              links: expect.objectContaining({ view: expect.stringContaining("#/work/") }),
               status: "draft"
-            }],
+            })],
             status: "ok"
-          },
-          system_health: {
-            counts: { running: 1, total: 1 },
-            links: { status: "/api/system/status" },
+          }),
+          system_health: expect.objectContaining({
+            counts: expect.objectContaining({ running: 1, total: 1 }),
+            links: expect.objectContaining({ status: "/api/system/status" }),
             status: "ok",
-            summary: {
-              database: { status: "ready" },
-              event_projection: { lag_rows: 0, last_event_id: 2, status: "ready" },
+            summary: expect.objectContaining({
+              database: expect.objectContaining({ status: "ready" }),
+              event_projection: expect.objectContaining({ lag_rows: 0, last_event_id: 2, status: "ready" }),
               overall: "healthy",
-              run_progress: { active_runs: 1, projection_mode: "read_through_rebuild" }
-            }
-          }
-        }
-      });
+              run_progress: expect.objectContaining({ active_runs: 1, projection_mode: "read_through_rebuild" })
+            })
+          })
+        })
+      }));
       expect(body.sections.active_work.items[0].latest_run.progress).not.toHaveProperty("timeline");
     } finally {
       db.close();
