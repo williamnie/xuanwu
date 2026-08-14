@@ -36,6 +36,12 @@ test('Runs list uses the canonical API and provider sessions keep Run authority 
   assert.match(sessionsSource, /observationNotice,/);
 });
 
+test('Runs list reconciles every five seconds', () => {
+  assert.match(pageSource, /RUN_RECONCILE_INTERVAL_MS\s*=\s*5_000/);
+  assert.match(pageSource, /if \(listRequest\.current\)[\s\S]*await listRequest\.current\.catch/);
+  assert.match(pageSource, /await loadFirstPage\(\{ silent: true \}\)/);
+});
+
 test('Run controls remain audited without exposing migration internals in the product UI', () => {
   assert.match(pageSource, /runsApi\.controlRun\(run\.id, action, buildRunControlPayload/);
   assert.match(pageSource, /actions\.interrupt/);

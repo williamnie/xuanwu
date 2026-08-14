@@ -48,6 +48,8 @@ const EMPTY_FILTERS = {
   type: '',
 };
 
+const WORK_REFRESH_INTERVAL_MS = 5_000;
+
 export default function WorkBoard({ navigateTo, onPageContextChange, selectedHandoffId = '', selectedWorkId = '' }) {
   const { t } = useI18n();
   const projects = useDataStore(selectProjects);
@@ -58,48 +60,84 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
   const [loading, setLoading] = useState(true);
   const [loadingMoreStatus, setLoadingMoreStatus] = useState('');
   const [error, setError] = useState('');
-  const [refreshVersion, setRefreshVersion] = useState(0);
   const [lanePages, setLanePages] = useState({});
   const [totalWorks, setTotalWorks] = useState(0);
   const [draggingWork, setDraggingWork] = useState(null);
   const [draggedOverStatus, setDraggedOverStatus] = useState('');
   const [movingWorkId, setMovingWorkId] = useState('');
+  const boardRequest = useRef(null);
+  const boardController = useRef(null);
   const loadMoreController = useRef(null);
   const loadingMoreStatusRef = useRef('');
   const laneScrollArmed = useRef(new Map(WORK_BOARD_STATUSES.map(status => [status, true])));
+
+  const loadBoard = useCallback(async ({ silent = false } = {}) => {
+    if (selectedWorkId || (silent && loadingMoreStatusRef.current)) return undefined;
+    if (boardRequest.current) {
+      await boardRequest.current.catch(() => {});
+      return undefined;
+    }
+
+    if (!silent) {
+      loadMoreController.current?.abort();
+      loadingMoreStatusRef.current = '';
+      laneScrollArmed.current = new Map(WORK_BOARD_STATUSES.map(status => [status, true]));
+      setLoadingMoreStatus('');
+      setLoading(true);
+      setError('');
+    }
+
+    const controller = new AbortController();
+    boardController.current = controller;
+    const pending = workApi.getWorkBoard({}, { signal: controller.signal });
+    boardRequest.current = pending;
+    try {
+      const boardResponse = await pending;
+      const snapshot = normalizeBoardSnapshot(boardResponse);
+      setWorks(current => silent ? mergeRefreshedWorks(current, snapshot.items) : snapshot.items);
+      setLanePages(current => silent ? mergeRefreshedLanePages(current, snapshot.lanePages) : snapshot.lanePages);
+      setTotalWorks(snapshot.total);
+      setError('');
+    } catch (loadError) {
+      if (!silent && loadError?.name !== 'AbortError') setError(loadError.message || t('board.loadFailed'));
+    } finally {
+      if (boardRequest.current === pending) boardRequest.current = null;
+      if (boardController.current === controller) boardController.current = null;
+      if (!silent) setLoading(false);
+    }
+    return undefined;
+  }, [selectedWorkId, t]);
 
   useEffect(() => {
     if (selectedWorkId) {
       setLoading(false);
       return undefined;
     }
-    const controller = new AbortController();
-    let active = true;
-    loadMoreController.current?.abort();
-    loadingMoreStatusRef.current = '';
-    laneScrollArmed.current = new Map(WORK_BOARD_STATUSES.map(status => [status, true]));
-    setLoadingMoreStatus('');
-    setLoading(true);
-    setError('');
-    workApi.getWorkBoard({}, { signal: controller.signal })
-      .then((boardResponse) => {
-        if (!active) return;
-        const snapshot = normalizeBoardSnapshot(boardResponse);
-        setWorks(snapshot.items);
-        setLanePages(snapshot.lanePages);
-        setTotalWorks(snapshot.total);
-      })
-      .catch((loadError) => {
-        if (active && loadError?.name !== 'AbortError') setError(loadError.message || t('board.loadFailed'));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    void loadBoard();
     return () => {
-      active = false;
-      controller.abort();
+      const controller = boardController.current;
+      boardController.current = null;
+      boardRequest.current = null;
+      controller?.abort();
     };
-  }, [refreshVersion, selectedWorkId, t]);
+  }, [loadBoard, selectedWorkId]);
+
+  useEffect(() => {
+    if (selectedWorkId) return undefined;
+    let stopped = false;
+    let timer = 0;
+    const schedule = () => {
+      timer = window.setTimeout(async () => {
+        await loadBoard({ silent: true });
+        if (!stopped) schedule();
+      }, WORK_REFRESH_INTERVAL_MS);
+    };
+    schedule();
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [loadBoard, selectedWorkId]);
 
   useEffect(() => () => loadMoreController.current?.abort(), []);
 
@@ -161,8 +199,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
   }, [onPageContextChange, selectedWorkId]);
 
   const refresh = () => {
-    loadMoreController.current?.abort();
-    setRefreshVersion(version => version + 1);
+    void loadBoard();
   };
 
   const handleDragStart = (event, work) => {
@@ -424,6 +461,21 @@ function mergeWorks(current, incoming) {
   const merged = new Map(current.map(work => [work.id, work]));
   incoming.forEach(work => merged.set(work.id, work));
   return [...merged.values()];
+}
+
+function mergeRefreshedWorks(current, refreshed) {
+  const refreshedIds = new Set(refreshed.map(work => work.id));
+  return [...refreshed, ...current.filter(work => !refreshedIds.has(work.id))];
+}
+
+function mergeRefreshedLanePages(current, refreshed) {
+  return Object.fromEntries(WORK_BOARD_STATUSES.map(status => [
+    status,
+    {
+      ...refreshed[status],
+      page: Math.max(Number(current[status]?.page || 1), Number(refreshed[status]?.page || 1)),
+    },
+  ]));
 }
 
 function normalizeBoardSnapshot(response) {

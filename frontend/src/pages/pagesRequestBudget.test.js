@@ -48,7 +48,7 @@ test('project writes avoid refreshAllData fan-out', () => {
 });
 
 test('Runs coalesces lifecycle refreshes, aborts stale reads, and loads detail only after selection', () => {
-  assert.match(runsSource, /if \(listRequest\.current\) return listRequest\.current/);
+  assert.match(runsSource, /if \(listRequest\.current\)[\s\S]*await listRequest\.current\.catch/);
   assert.match(runsSource, /signal: controller\.signal/);
   assert.match(runsSource, /window\.setTimeout/);
   assert.doesNotMatch(runsSource, /window\.setInterval/);

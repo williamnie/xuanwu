@@ -25,7 +25,7 @@ import {
 import './runs/Runs.css';
 
 const RUN_PAGE_SIZE = 30;
-const RUN_RECONCILE_INTERVAL_MS = 30_000;
+const RUN_RECONCILE_INTERVAL_MS = 5_000;
 const RUN_REFRESH_EVENT_TYPES = new Set([
   'issue.runtime_updated',
   'issue.status_changed',
@@ -50,7 +50,10 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
   const loadMoreController = useRef(null);
 
   const loadFirstPage = useCallback(async ({ silent = false } = {}) => {
-    if (listRequest.current) return listRequest.current;
+    if (listRequest.current) {
+      await listRequest.current.catch(() => {});
+      return undefined;
+    }
     if (!silent) setLoading(true);
     const controller = new AbortController();
     listController.current = controller;

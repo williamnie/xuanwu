@@ -49,6 +49,15 @@ test('Work Board opens from one grouped snapshot and loads only the scrolled lan
   assert.doesNotMatch(board, /getAllWorks|getAllWorkRelations/);
 });
 
+test('Work Board silently refreshes every five seconds without overlapping requests', () => {
+  assert.match(board, /WORK_REFRESH_INTERVAL_MS\s*=\s*5_000/);
+  assert.match(board, /if \(boardRequest\.current\)[\s\S]*await boardRequest\.current\.catch/);
+  assert.match(board, /await loadBoard\(\{ silent: true \}\)/);
+  assert.match(board, /silent \? mergeRefreshedWorks\(current, snapshot\.items\) : snapshot\.items/);
+  assert.match(board, /silent \? mergeRefreshedLanePages\(current, snapshot\.lanePages\) : snapshot\.lanePages/);
+  assert.match(board, /window\.clearTimeout\(timer\)/);
+});
+
 test('Work Board avoids learned intrinsic card heights that move the lane scrollbar', () => {
   assert.match(css, /\.work-card\s*\{[\s\S]*contain:\s*layout paint style;/);
   assert.doesNotMatch(css, /content-visibility|contain-intrinsic-size/);
