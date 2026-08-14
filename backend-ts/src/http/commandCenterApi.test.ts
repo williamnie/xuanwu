@@ -73,70 +73,68 @@ describe("Command Center aggregate API", () => {
       const body = await response.json() as Record<string, any>;
 
       expect(response.status).toBe(200);
-      expect(body).toEqual(expect.objectContaining({
-        compatibility: expect.objectContaining({
-          attention_command_audit_authority: "attention_command_events-append-only-overlay",
-          dual_write: "none-legacy-facts-remain-single-writer",
-          handoff_read_authority: "issue_events:handoff.*.v1",
-          work_read_authority: "issues-via-Work-adapter"
-        }),
-        contract: "xw.command-center.summary.v1",
-        failed_sections: [],
-        generated_at: NOW,
-        limits: expect.objectContaining({ maximum: 25, requested: 5 }),
-        partial: false,
-        requested_sections: ["attention", "active_work", "recent_deliveries", "system_health"],
-        sections: expect.objectContaining({
-          active_work: expect.objectContaining({
-            counts: expect.objectContaining({ returned: 1, total: 1 }),
-            freshness: expect.objectContaining({ queried_at: NOW, state: "current" }),
-            items: [expect.objectContaining({
-              id: issueIDToWorkID(issue.id),
-              latest_run: expect.objectContaining({
-                id: runID,
-                phase: "running",
-                status: "running"
-              }),
-              links: expect.objectContaining({ self: expect.stringContaining("/api/works/") }),
-              readiness: expect.objectContaining({ status: "not_required" }),
-              status: "in_progress"
-            })],
-            status: "ok"
-          }),
-          attention: expect.objectContaining({
-            counts: expect.objectContaining({ returned: 1, total: 1 }),
-            items: [expect.objectContaining({
-              id: "xw:attention:attention_inbox_items:1",
-              priority: "p1",
-              links: expect.objectContaining({ self: "/api/pi/attention-inbox/items/1" }),
-              status: "open"
-            })],
-            status: "ok"
-          }),
-          recent_deliveries: expect.objectContaining({
-            counts: expect.objectContaining({ returned: 1, skipped_invalid: 0, total: 1 }),
-            items: [expect.objectContaining({
-              id: makeDomainID("handoff", "derived", `command-center-${issue.id}`),
-              issue: expect.objectContaining({ id: issue.id, status: "in_progress", title: "Command Center" }),
-              links: expect.objectContaining({ view: expect.stringContaining("#/work/") }),
-              status: "draft"
-            })],
-            status: "ok"
-          }),
-          system_health: expect.objectContaining({
-            counts: expect.objectContaining({ running: 1, total: 1 }),
-            links: expect.objectContaining({ status: "/api/system/status" }),
-            status: "ok",
-            summary: expect.objectContaining({
-              database: expect.objectContaining({ status: "ready" }),
-              event_projection: expect.objectContaining({ lag_rows: 0, last_event_id: 2, status: "ready" }),
-              overall: "healthy",
-              run_progress: expect.objectContaining({ active_runs: 1, projection_mode: "read_through_rebuild" })
-            })
-          })
-        })
-      }));
-      expect(body.sections.active_work.items[0].latest_run.progress).not.toHaveProperty("timeline");
+      expect(body.contract).toBe("xw.command-center.summary.v1");
+      expect(body.failed_sections).toEqual([]);
+      expect(body.generated_at).toBe(NOW);
+      expect(body.limits.maximum).toBe(25);
+      expect(body.limits.requested).toBe(5);
+      expect(body.partial).toBe(false);
+      expect(body.requested_sections).toEqual(["attention", "active_work", "recent_deliveries", "system_health"]);
+      expect(body.compatibility.attention_command_audit_authority)
+        .toBe("attention_command_events-append-only-overlay");
+      expect(body.compatibility.dual_write).toBe("none-legacy-facts-remain-single-writer");
+      expect(body.compatibility.handoff_read_authority).toBe("issue_events:handoff.*.v1");
+      expect(body.compatibility.work_read_authority).toBe("issues-via-Work-adapter");
+
+      const activeWork = body.sections.active_work;
+      expect(activeWork.status).toBe("ok");
+      expect(activeWork.counts.returned).toBe(1);
+      expect(activeWork.counts.total).toBe(1);
+      expect(activeWork.freshness.queried_at).toBe(NOW);
+      expect(activeWork.freshness.state).toBe("current");
+      expect(activeWork.items).toHaveLength(1);
+      expect(activeWork.items[0].id).toBe(issueIDToWorkID(issue.id));
+      expect(activeWork.items[0].latest_run.id).toBe(runID);
+      expect(activeWork.items[0].latest_run.phase).toBe("running");
+      expect(activeWork.items[0].latest_run.status).toBe("running");
+      expect(activeWork.items[0].links.self).toContain("/api/works/");
+      expect(activeWork.items[0].readiness.status).toBe("not_required");
+      expect(activeWork.items[0].status).toBe("in_progress");
+      expect(activeWork.items[0].latest_run.progress).not.toHaveProperty("timeline");
+
+      const attention = body.sections.attention;
+      expect(attention.status).toBe("ok");
+      expect(attention.counts.returned).toBe(1);
+      expect(attention.counts.total).toBe(1);
+      expect(attention.items).toHaveLength(1);
+      expect(attention.items[0].id).toBe("xw:attention:attention_inbox_items:1");
+      expect(attention.items[0].priority).toBe("p1");
+      expect(attention.items[0].links.self).toBe("/api/pi/attention-inbox/items/1");
+      expect(attention.items[0].status).toBe("open");
+
+      const deliveries = body.sections.recent_deliveries;
+      expect(deliveries.status).toBe("ok");
+      expect(deliveries.counts.returned).toBe(1);
+      expect(deliveries.counts.skipped_invalid).toBe(0);
+      expect(deliveries.counts.total).toBe(1);
+      expect(deliveries.items).toHaveLength(1);
+      expect(deliveries.items[0].id).toBe(makeDomainID("handoff", "derived", `command-center-${issue.id}`));
+      expect(deliveries.items[0].issue).toEqual({ id: issue.id, status: "in_progress", title: "Command Center" });
+      expect(deliveries.items[0].links.view).toContain("#/work/");
+      expect(deliveries.items[0].status).toBe("draft");
+
+      const systemHealth = body.sections.system_health;
+      expect(systemHealth.status).toBe("ok");
+      expect(systemHealth.counts.running).toBe(1);
+      expect(systemHealth.counts.total).toBe(1);
+      expect(systemHealth.links.status).toBe("/api/system/status");
+      expect(systemHealth.summary.database.status).toBe("ready");
+      expect(systemHealth.summary.event_projection.lag_rows).toBe(0);
+      expect(systemHealth.summary.event_projection.last_event_id).toBe(2);
+      expect(systemHealth.summary.event_projection.status).toBe("ready");
+      expect(systemHealth.summary.overall).toBe("healthy");
+      expect(systemHealth.summary.run_progress.active_runs).toBe(1);
+      expect(systemHealth.summary.run_progress.projection_mode).toBe("read_through_rebuild");
     } finally {
       db.close();
     }
