@@ -47,7 +47,7 @@
 .codex-token-stat {
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xs);
   padding: 14px;
 }
 

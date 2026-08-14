@@ -12,7 +12,7 @@
 .recent-deliveries-freshness.stale { background: var(--warning-bg); color: var(--warning); }
 
 .recent-deliveries-list { display: flex; flex-direction: column; gap: 10px; }
-.recent-delivery-card { background: var(--panel-gradient); border: 1px solid var(--border-color); border-left: 3px solid var(--text-muted); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 15px 16px 12px; }
+.recent-delivery-card { background: var(--panel-gradient); border: 1px solid var(--border-color); border-left: 3px solid var(--text-muted); border-radius: var(--radius-xs); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 15px 16px 12px; }
 .recent-delivery-card.green { border-left-color: var(--success); }
 .recent-delivery-card.blue { border-left-color: var(--info); }
 .recent-delivery-card.amber { border-left-color: var(--warning); }

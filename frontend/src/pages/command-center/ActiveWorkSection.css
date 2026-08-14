@@ -59,7 +59,7 @@
   background: var(--panel-gradient);
   border: 1px solid var(--border-color);
   border-left: 3px solid var(--info);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xs);
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;

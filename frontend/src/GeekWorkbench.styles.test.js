@@ -26,8 +26,8 @@ test('light and dark themes use separate workbench palettes', () => {
   assert.match(foundationCss, /--font-mono:/);
   assert.match(foundationCss, /--font-sans:\s*'PingFang SC'/);
   assert.match(foundationCss, /--font-display:\s*var\(--font-sans\)/);
-  assert.match(foundationCss, /--radius-lg:\s*9px/);
-  assert.match(foundationCss, /--radius-xl:\s*11px/);
+  assert.match(foundationCss, /--radius-lg:\s*8px/);
+  assert.match(foundationCss, /--radius-xl:\s*10px/);
   assert.match(foundationCss, /--button-radius:\s*0px/);
   assert.match(foundationCss, /--button-height:\s*40px/);
   assert.match(foundationCss, /--sessions-transcript-max-width:\s*980px/);
