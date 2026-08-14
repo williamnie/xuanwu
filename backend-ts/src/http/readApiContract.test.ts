@@ -92,12 +92,10 @@ describe("read API route contracts", () => {
       "POST /api/command-center/attention/:id/actions/:action"
     ]);
     expect(COMMAND_CENTER_SUMMARY_CONTRACT).toBe("xw.command-center.summary.v1");
-    expect(COMMAND_CENTER_COMPATIBILITY_POLICY).toMatchObject({
-      dual_read: expect.stringContaining("none"),
-      dual_write: expect.stringContaining("none"),
-      handoff_read_authority: "issue_events:handoff.*.v1",
-      work_read_authority: "issues-via-Work-adapter"
-    });
+    expect(COMMAND_CENTER_COMPATIBILITY_POLICY.dual_read).toContain("none");
+    expect(COMMAND_CENTER_COMPATIBILITY_POLICY.dual_write).toContain("none");
+    expect(COMMAND_CENTER_COMPATIBILITY_POLICY.handoff_read_authority).toBe("issue_events:handoff.*.v1");
+    expect(COMMAND_CENTER_COMPATIBILITY_POLICY.work_read_authority).toBe("issues-via-Work-adapter");
   });
 
   test("locks native Automation methods and single-authority contract", () => {
