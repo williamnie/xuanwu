@@ -75,11 +75,30 @@ test('deployment persists explicit Claude local CLI and Anthropic platform profi
   }
 });
 
+test('deployment defaults Claude to SDK transport with reusable local CLI authentication', () => {
+  for (const script of [source, releaseSource]) {
+    assert.match(script, /if \[ -z "\$CLAUDE_MODE" \]; then\s+CLAUDE_MODE="sdk"\s+fi/);
+    assert.match(script, /elif \[ -z "\$CLAUDE_API_KEY" \] && \[ ! -s "\$CLAUDE_API_KEY_FILE" \]; then\s+CLAUDE_AUTH_MODE="local-cli"/);
+    assert.doesNotMatch(script, /XUANWU_CLAUDE_AUTH_MODE=local-cli requires (?:cli-fallback|XUANWU_CLAUDE_MODE=cli-fallback)/);
+  }
+});
+
 test('deployment stages the adjacent Claude SDK native executable atomically and snapshots it', () => {
   assert.match(source, /stage_file_atomically "\$CLAUDE_SDK_EXECUTABLE_SOURCE" "\$CLAUDE_SDK_EXECUTABLE_PATH" 0755/);
   assert.match(source, /"\$LAUNCHD_BINARY_PATH\.claude-agent-sdk"/);
   assert.match(releaseSource, /release asset does not contain Claude Agent SDK native executable/);
   assert.match(releaseSource, /mv -f "\$sdk_staged" "\$CLAUDE_SDK_EXECUTABLE_PATH"/);
+});
+
+test('deployment requires, stages, and snapshots the exact-pinned Qoder CLI runtime', () => {
+  assert.match(source, /stage_dir_atomically "\$QODERCLI_RUNTIME_SOURCE" "\$QODERCLI_RUNTIME_PATH"/);
+  assert.match(source, /if \[ -e "\$previous" \]; then\s+rm -rf "\$previous"\s+fi\s+return 0/);
+  assert.match(source, /policies\/sandbox-default\.toml/);
+  assert.match(source, /"\$QODERCLI_RUNTIME_PATH"/);
+  assert.match(releaseSource, /release asset does not contain exact-pinned Qoder CLI executable/);
+  assert.match(releaseSource, /release asset does not contain Qoder CLI runtime policies/);
+  assert.match(releaseSource, /Qoder CLI version \$qoder_version does not match required 1\.1\.18/);
+  assert.match(releaseSource, /mv "\$qoder_staged" "\$QODERCLI_RUNTIME_PATH"/);
 });
 
 test('launchd deployment defaults to split Web/Core/Agentic roles from one artifact', () => {
@@ -119,6 +138,11 @@ test('launchd deployment waits for old split services before bounded bootstrap r
     source.indexOf('wait_for_process_exit "$old_core_pid" "$CORE_LABEL"') <
       source.indexOf('bootstrap_service "$CORE_LABEL" "$CORE_PLIST"'),
     'Core bootstrap must happen only after the previous Core PID exits'
+  );
+  assert.ok(
+    source.indexOf('launchctl enable "$DOMAIN/$CORE_LABEL"') <
+      source.indexOf('bootstrap_service "$CORE_LABEL" "$CORE_PLIST"'),
+    'Core label must be enabled before bootstrap after a maintenance stop'
   );
 });
 

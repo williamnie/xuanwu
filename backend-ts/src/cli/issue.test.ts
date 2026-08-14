@@ -28,7 +28,7 @@ describe("Bun issue CLI", () => {
         expect(request.method).toBe("POST");
         expect(await request.json()).toMatchObject({
           description: "修复 Bun CLI\n\n保持最小改动。",
-          agent_profile_id: "xuanwu-provider-claude",
+          agent_profile_id: "xuanwu-provider-qoder",
           priority: 2,
           project_id: "demo",
           source_session_id: "thread-env",
@@ -43,7 +43,7 @@ describe("Bun issue CLI", () => {
     });
     const { code, stdout, stderr } = await run([
       "issue", "create", "--project", "demo", "--title", "创建 CLI", "--body-file", bodyFile,
-      "--priority", "2", "--agent-profile", "xuanwu-provider-claude", "--run", "--json"
+      "--priority", "2", "--agent-profile", "xuanwu-provider-qoder", "--run", "--json"
     ], { env: envMap({ CODEX_THREAD_ID: "thread-env" }), fetcher });
 
     expect(code).toBe(0);
@@ -133,6 +133,23 @@ describe("Bun issue CLI", () => {
     expect(status.stdout).toBe("#9 [todo] demo - 查状态\n");
     expect(JSON.parse(retry.stdout)).toMatchObject({ status: "todo" });
     expect(JSON.parse(cancel.stdout)).toMatchObject({ status: "cancelled" });
+  });
+
+  test("identifies lifecycle requests issued from a Xuanwu-managed executor", async () => {
+    const fetcher = fetchStub((request) => {
+      expect(request.headers.get("x-xuanwu-managed-execution")).toBe("1");
+      expect(request.headers.get("x-xuanwu-caller-thread-id")).toBe("thread-managed");
+      expect(request.headers.get("x-codex-client")).toBe("xuanwu-cli");
+      return jsonResponse(issueBody({ id: 9, status: "in_progress", title: "Managed" }));
+    });
+
+    const result = await run(["issue", "status", "--id", "9"], {
+      env: envMap({ CODEX_THREAD_ID: "thread-managed", XUANWU_MANAGED_EXECUTION: "1" }),
+      fetcher
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe("");
   });
 
   test("deletes issue with DELETE request and returns deletion summary", async () => {

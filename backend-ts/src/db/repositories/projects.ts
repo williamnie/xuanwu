@@ -2,6 +2,8 @@ import { statSync } from "node:fs";
 import type { RunnerDatabase } from "../database.ts";
 import { getAgentProfile, type AgentProfile } from "./agentProfiles.ts";
 import { normalizeProjectForWrite, normalizeProjectModel, normalizeProjectPatch, normalizeProjectProvider, normalizeProjectProviderConfig, type NormalizedProjectWrite, type ProjectPatchInput, type ProjectWriteInput } from "./projectUtils.ts";
+import type { ExecutionPolicyRequest } from "../../providers/core/policyContracts.ts";
+import { readStoredExecutionPolicy } from "../../providers/core/policyPersistence.ts";
 
 type ProjectRow = {
   hold_since: unknown;
@@ -18,6 +20,7 @@ type ProjectRow = {
   default_mcp_policy_json: unknown;
   default_service_tier: unknown;
   default_skill_policy_json: unknown;
+  execution_policy_json: unknown;
   id: unknown;
   model: unknown;
   name: unknown;
@@ -45,6 +48,10 @@ export type Project = {
   default_mcp_policy: string;
   default_service_tier: string;
   default_skill_policy: string;
+  execution_policy: ExecutionPolicyRequest;
+  execution_policy_json: string;
+  execution_policy_source: string;
+  execution_policy_warnings: string[];
   hold?: ProjectHold;
   id: string;
   loop_status: string;
@@ -60,7 +67,7 @@ export type Project = {
 };
 
 const PROJECT_COLUMNS = `p.id, p.name, p.cwd, p.provider, p.provider_config_json, p.auto_run,
-  p.model, p.approval_policy, p.sandbox, p.default_agent_profile_id, p.default_skill_policy_json,
+  p.model, p.approval_policy, p.sandbox, p.execution_policy_json, p.default_agent_profile_id, p.default_skill_policy_json,
   p.default_mcp_policy_json, p.default_service_tier, p.sort_order,
   p.created_at, p.updated_at, h.reason, h.message, h.hold_since, h.next_check_at,
   h.last_check_at, h.last_check_error,
@@ -76,11 +83,11 @@ export function createProject(db: RunnerDatabase, input: CreateProjectInput): Pr
   const sortOrder = nextProjectSortOrder(db);
   db.sqlite.run(`insert into projects
     (id, name, cwd, provider, provider_config_json, auto_run, model,
-     approval_policy, sandbox, default_agent_profile_id, default_skill_policy_json, default_mcp_policy_json,
+     approval_policy, sandbox, execution_policy_json, default_agent_profile_id, default_skill_policy_json, default_mcp_policy_json,
      default_service_tier, sort_order, created_at, updated_at)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [project.id, project.name, project.cwd, project.provider, project.provider_config_json,
-      project.auto_run, project.model, project.approval_policy, project.sandbox,
+      project.auto_run, project.model, project.approval_policy, project.sandbox, project.execution_policy_json,
       project.default_agent_profile_id, project.default_skill_policy, project.default_mcp_policy,
       project.default_service_tier, sortOrder, timestamp, timestamp]);
   return mustGetProject(db, project.id);
@@ -94,10 +101,10 @@ export function updateProject(db: RunnerDatabase, id: string, input: UpdateProje
   const next = { ...projectToWriteShape(current), ...patch };
   validateProjectForWrite(projectID, next.cwd);
   db.sqlite.run(`update projects set name=?, cwd=?, provider=?, provider_config_json=?,
-    auto_run=?, model=?, approval_policy=?, sandbox=?, default_agent_profile_id=?,
+    auto_run=?, model=?, approval_policy=?, sandbox=?, execution_policy_json=?, default_agent_profile_id=?,
     default_skill_policy_json=?, default_mcp_policy_json=?, default_service_tier=?, updated_at=? where id=?`,
     [next.name, next.cwd, next.provider, next.provider_config_json, next.auto_run,
-      next.model, next.approval_policy, next.sandbox, next.default_agent_profile_id,
+      next.model, next.approval_policy, next.sandbox, next.execution_policy_json, next.default_agent_profile_id,
       next.default_skill_policy, next.default_mcp_policy, next.default_service_tier, now(), projectID]);
   return mustGetProject(db, projectID);
 }
@@ -129,6 +136,12 @@ function getProjectByCWD(db: RunnerDatabase, cwd: string): Project | null {
 
 function mapProjectRow(row: ProjectRow): Project {
   const provider = normalizeProjectProvider(row.provider);
+  const storedPolicy = readStoredExecutionPolicy({
+    approvalPolicy: row.approval_policy,
+    json: row.execution_policy_json,
+    sandbox: row.sandbox,
+    scope: "project"
+  });
   return {
     id: requiredString(row.id, "projects.id"),
     name: requiredString(row.name, "projects.name"),
@@ -140,6 +153,10 @@ function mapProjectRow(row: ProjectRow): Project {
     model: normalizeProjectModel(row.model, provider),
     approval_policy: optionalString(row.approval_policy, "never"),
     sandbox: optionalString(row.sandbox, "workspace-write"),
+    execution_policy: storedPolicy.policy!,
+    execution_policy_json: optionalString(row.execution_policy_json, "{}"),
+    execution_policy_source: storedPolicy.source,
+    execution_policy_warnings: storedPolicy.warnings,
     default_agent_profile_id: optionalString(row.default_agent_profile_id),
     default_mcp_policy: optionalString(row.default_mcp_policy_json, "{}"),
     default_service_tier: optionalString(row.default_service_tier),
@@ -199,6 +216,7 @@ function projectToWriteShape(project: Project): NormalizedProjectWrite {
     model: project.model,
     approval_policy: project.approval_policy,
     sandbox: project.sandbox,
+    execution_policy_json: project.execution_policy_json,
     default_agent_profile_id: project.default_agent_profile_id,
     default_service_tier: project.default_service_tier,
     default_mcp_policy: project.default_mcp_policy,

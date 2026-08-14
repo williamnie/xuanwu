@@ -45,6 +45,16 @@ test('tool output transcript items expose output text', () => {
   });
 });
 
+test('normalized subagent, permission, and provider-native fallback items remain readable', () => {
+  assert.deepEqual(toolDisplayForItem({ type: 'subagent', text: 'review complete', status: 'completed' }), {
+    kind: 'generic',
+    title: 'Subagent',
+    body: 'review complete',
+  });
+  assert.equal(toolDisplayForItem({ type: 'permission', text: 'Bash denied' }).title, 'Permission');
+  assert.equal(toolDisplayForItem({ type: 'qoderNative', text: '{"future":true}' }).title, 'Provider event');
+});
+
 test('live stream parser keeps generic completed items from SSE payload', () => {
   const parsed = parseLiveSessionEvents([
     {

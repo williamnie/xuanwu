@@ -7,7 +7,7 @@ import { asProviderId, type ExecutorProvider, type ExecutorProviderId } from "..
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
-const MANAGED_CODE_AGENT_IDS = ["codex", "claude", "pi-coding-agent"] as const;
+const MANAGED_CODE_AGENT_IDS = ["codex", "claude", "pi-coding-agent", "qoder"] as const;
 type ManagedCodeAgentID = typeof MANAGED_CODE_AGENT_IDS[number];
 
 type CodeAgentsContext = {
@@ -81,6 +81,9 @@ function withEnabled(settings: RunnerLocalSettings, id: ManagedCodeAgentID, enab
   }
   if (id === "claude") {
     return { ...settings, providers: { ...providers, claude: { ...providers.claude, enabled } } };
+  }
+  if (id === "qoder") {
+    return { ...settings, providers: { ...providers, qoder: { ...providers.qoder, enabled } } };
   }
   return {
     ...settings,

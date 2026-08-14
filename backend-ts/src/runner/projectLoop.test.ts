@@ -131,7 +131,7 @@ class NamedExecutionProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution"] as const;
   readonly inputs: ProviderRunInput[] = [];
 
-  constructor(readonly id: "codex" | "claude") {}
+  constructor(readonly id: "codex" | "claude" | "qoder") {}
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     this.inputs.push(input);
@@ -206,7 +206,7 @@ describe("Bun project loop claim execution", () => {
         provider: "fake-execution-only",
         provider_session_id: `fake-session-${firstHigh}`,
         provider_turn_id: `fake-turn-${firstHigh}`,
-        runtime_metadata_json: `{"run_id":"fake-run-${firstHigh}"}`,
+        runtime_metadata_json: `{"run_id":"fake-run-${firstHigh}","resolved_settings":{"approval_policy":"never","model":"","reasoning_effort":"","sandbox":"workspace-write","service_tier":"","service_tier_source":"standard"}}`,
         ended_at: ""
       }]);
       expect(getAgentSession(db, `fake-execution-only:fake-session-${firstHigh}`)).toMatchObject({
@@ -220,7 +220,7 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
-  test("sends the canonical issue prompt without generic runner contracts", async () => {
+  test("sends the canonical issue prompt with the authoritative execution contract", async () => {
     const db = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
     try {
@@ -234,7 +234,13 @@ describe("Bun project loop claim execution", () => {
       await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
 
       const prompt = provider.inputs[0]?.prompt ?? "";
-      expect(prompt).toBe("# prompt contract\n\nAdd the focused runner prompt guidance.");
+      expect(prompt).toContain("# prompt contract\n\nAdd the focused runner prompt guidance.");
+      expect(prompt).toContain("## Xuanwu execution context (authoritative)");
+      expect(prompt).toContain("already claimed Issue #1");
+      expect(prompt).toContain("Do not create, deduplicate, enqueue, retry, cancel, delete, or change the status of this Issue");
+      expect(prompt).toContain("Report `completed` when you have satisfied the Issue goal");
+      expect(prompt).toContain("Do not use it merely because the Issue is conversational or requires no repository changes");
+      expect(prompt).toContain("RUNNER_OUTCOME: needs_user | <reason>");
     } finally {
       db.close();
     }
@@ -294,7 +300,36 @@ describe("Bun project loop claim execution", () => {
       expect(prompt).not.toContain("## Goal Contract");
       expect(prompt).not.toContain("Deliver the requested end state");
       expect(prompt).not.toContain("## Runner lifecycle contract");
+      expect(prompt).toContain("## Xuanwu execution context (authoritative)");
       expect(prompt).toContain("## Stop policy / escalation\nReport blockers.");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("treats pre-dispatch triage wording as non-conflicting while preserving substantive gates", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      const issueID = insertIssue(db, {
+        description: [
+          "## 前置门禁",
+          "- 本 Issue 保持 triage，不要自动入队。",
+          "- 必须等待用户提供真实账号认证方式。"
+        ].join("\n"),
+        projectId: "demo",
+        title: "Qoder final acceptance"
+      });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      const prompt = provider.inputs[0]?.prompt ?? "";
+      expect(prompt).toContain("本 Issue 保持 triage，不要自动入队");
+      expect(prompt).toContain(`already claimed Issue #${issueID}`);
+      expect(prompt).toContain("is not a reason to undo this active Run");
+      expect(prompt).toContain("credentials, budget, external authorization, or user-supplied choices");
+      expect(prompt).toContain("RUNNER_OUTCOME: needs_user | <reason>");
     } finally {
       db.close();
     }
@@ -799,6 +834,105 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
+  test("routes Qoder project defaults and Issue overrides in both directions with resolved settings", async () => {
+    const db = await openFixtureDatabase();
+    const codex = new NamedExecutionProvider("codex");
+    const qoder = new NamedExecutionProvider("qoder");
+    try {
+      insertAgentProfile(db, { id: "codex-work", model: "gpt-5.6", provider: "codex" });
+      insertAgentProfile(db, { id: "qoder-work", model: "performance", provider: "qoder" });
+      insertProject(db, {
+        id: "demo",
+        provider: "codex",
+        defaultAgentProfileId: "qoder-work"
+      });
+      const codexOverride = insertIssue(db, {
+        agentProfileId: "codex-work",
+        priority: 10,
+        projectId: "demo",
+        title: "Codex overrides Qoder project default"
+      });
+      const qoderInherited = insertIssue(db, {
+        priority: 5,
+        projectId: "demo",
+        title: "Qoder project default"
+      });
+      const providers = { codex, qoder } satisfies Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers });
+      closeClaimedIssue(db, codexOverride);
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers });
+      closeClaimedIssue(db, qoderInherited);
+
+      db.sqlite.run("update projects set default_agent_profile_id='codex-work' where id='demo'");
+      const qoderOverride = insertIssue(db, {
+        agentProfileId: "qoder-work",
+        projectId: "demo",
+        title: "Qoder overrides Codex project default"
+      });
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers });
+
+      expect(codex.inputs.map((input) => input.issueId)).toEqual([codexOverride]);
+      expect(qoder.inputs.map((input) => input.issueId)).toEqual([qoderInherited, qoderOverride]);
+      expect(listIssueRuns(db, codexOverride).at(-1)).toMatchObject({
+        agent_profile_id: "codex-work",
+        provider: "codex",
+        selection_reason: "issue assigned agent_profile_id"
+      });
+      expect(listIssueRuns(db, qoderInherited).at(-1)).toMatchObject({
+        agent_profile_id: "qoder-work",
+        provider: "qoder",
+        selection_reason: "project default_agent_profile_id"
+      });
+      expect(listIssueRuns(db, qoderOverride).at(-1)).toMatchObject({
+        agent_profile_id: "qoder-work",
+        provider: "qoder",
+        selection_reason: "issue assigned agent_profile_id"
+      });
+      expect(latestRunMetadata(db, qoderOverride)).toMatchObject({
+        resolved_settings: {
+          approval_policy: "on-request",
+          model: "performance",
+          reasoning_effort: "high",
+          sandbox: "danger-full-access",
+          service_tier: "",
+          service_tier_source: "standard"
+        }
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps a historical Qoder profile fail-closed when Qoder runtime is unavailable", async () => {
+    const db = await openFixtureDatabase();
+    const codex = new NamedExecutionProvider("codex");
+    try {
+      insertAgentProfile(db, { id: "qoder-work", model: "performance", provider: "qoder" });
+      insertProject(db, {
+        id: "demo",
+        provider: "codex",
+        defaultAgentProfileId: "qoder-work"
+      });
+      const issueID = insertIssue(db, { projectId: "demo", title: "Historical Qoder selection" });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { codex } });
+
+      expect(codex.inputs).toEqual([]);
+      expect(getIssue(db, issueID)).toMatchObject({ status: "todo", attempt_count: 0 });
+      expect(listIssueRuns(db, issueID)).toEqual([]);
+      expect(latestEventPayload(db, issueID, "issue.runner_scope_decision")).toMatchObject({
+        authority: "runner.providers",
+        decision: "stop",
+        provider: "qoder",
+        reason: "provider_runtime",
+        scope: "provider:qoder"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("resolves issue, profile, and project service tier before provider execution", async () => {
     const db = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
@@ -847,16 +981,40 @@ describe("Bun project loop claim execution", () => {
       ]);
       expect(latestRunMetadata(db, profileIssue)).toEqual({
         run_id: `fake-run-${profileIssue}`,
+        resolved_settings: {
+          approval_policy: "on-request",
+          model: "profile-model",
+          reasoning_effort: "high",
+          sandbox: "danger-full-access",
+          service_tier: "profile-fast",
+          service_tier_source: "agent_profile"
+        },
         service_tier: "profile-fast",
         service_tier_source: "agent_profile"
       });
       expect(latestRunMetadata(db, issueOverride)).toEqual({
         run_id: `fake-run-${issueOverride}`,
+        resolved_settings: {
+          approval_policy: "never",
+          model: "",
+          reasoning_effort: "",
+          sandbox: "workspace-write",
+          service_tier: "priority",
+          service_tier_source: "issue"
+        },
         service_tier: "priority",
         service_tier_source: "issue"
       });
       expect(latestRunMetadata(db, projectIssue)).toEqual({
         run_id: `fake-run-${projectIssue}`,
+        resolved_settings: {
+          approval_policy: "never",
+          model: "",
+          reasoning_effort: "",
+          sandbox: "workspace-write",
+          service_tier: "project-fast",
+          service_tier_source: "project"
+        },
         service_tier: "project-fast",
         service_tier_source: "project"
       });
@@ -942,7 +1100,7 @@ describe("Bun project loop claim execution", () => {
   });
 });
 
-type ProjectFixture = { autoRun?: number; cwd?: string; id: string; model?: string; provider: string; serviceTier?: string };
+type ProjectFixture = { autoRun?: number; cwd?: string; defaultAgentProfileId?: string; id: string; model?: string; provider: string; serviceTier?: string };
 
 type IssueFixture = {
   agentProfileId?: string;
@@ -959,10 +1117,10 @@ type IssueFixture = {
 
 function insertProject(db: RunnerDatabase, project: ProjectFixture): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, provider, model, auto_run, default_service_tier, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `insert into projects (id, name, cwd, provider, model, auto_run, default_agent_profile_id, default_service_tier, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [project.id, project.id, project.cwd ?? `/tmp/${project.id}`, project.provider, project.model ?? "codex-default",
-      project.autoRun ?? 0, project.serviceTier ?? "",
+      project.autoRun ?? 0, project.defaultAgentProfileId ?? "", project.serviceTier ?? "",
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }

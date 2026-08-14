@@ -23,6 +23,8 @@ import {
 } from "./sdkStream.ts";
 import {
   ClaudeCliExecutorProvider,
+  inspectClaudeCliAuth,
+  type ClaudeCliAuthInspection,
   type ClaudeCliProviderOptions,
   type ClaudeProcess,
   type ClaudeProcessFactory
@@ -53,6 +55,7 @@ import {
   type SessionMessageResult,
   type SessionRef
 } from "../types.ts";
+import { ClaudePermissionBroker } from "./permissionBroker.ts";
 
 export type { ClaudeProcess, ClaudeProcessFactory };
 
@@ -74,6 +77,7 @@ export type ClaudeSessionFunctions = {
 };
 
 export type ClaudeSdkProviderOptions = {
+  authInspector?: (config: ProviderRuntimeConfig) => ClaudeCliAuthInspection;
   eventSink?: (event: ProviderEvent) => void;
   queryFactory?: ClaudeQueryFactory;
   sessionIdFactory?: () => string;
@@ -87,15 +91,17 @@ type ActiveQuery = {
   aliases: Set<string>;
   controller: AbortController;
   query?: ClaudeQuery;
+  invocationRef: string;
   state: ClaudeSdkStreamState;
   timedOut: boolean;
 };
 
 export class ClaudeSdkExecutorProvider implements ExecutorProvider {
-  readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt"] as const;
+  readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt", "approvals"] as const;
   readonly id = PROVIDER;
   readonly interruptScope = "session" as const;
   private readonly active = new Map<string, ActiveQuery>();
+  private readonly permissionBroker = new ClaudePermissionBroker();
 
   constructor(private readonly config: ProviderRuntimeConfig, private readonly options: ClaudeSdkProviderOptions = {}) {
     registerClaudeAuthSecrets(config.env);
@@ -103,19 +109,19 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     assertUsableCwd(input.cwd);
-    return await this.execute(input.prompt, sdkInput(input, this.config), input.onEvent);
+    return await this.execute(input.prompt, sdkInput(input, this.config), input.onEvent, "", input);
   }
 
   async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
     assertUsableCwd(input.cwd);
-    return await this.execute(input.prompt, sdkInput(input, this.config, input.session.sessionId), input.onEvent, input.session.sessionId);
+    return await this.execute(input.prompt, sdkInput(input, this.config, input.session.sessionId), input.onEvent, input.session.sessionId, input);
   }
 
   async createSession(input: SessionCreateInput): Promise<SessionCreateResult> {
     assertUsableCwd(input.cwd);
     const prompt = clean(input.prompt);
     if (prompt === "") throw new Error("Claude SDK session creation requires a prompt");
-    const result = await this.execute(prompt, sdkInput(input, this.config), undefined);
+    const result = await this.execute(prompt, sdkInput(input, this.config), undefined, "", input);
     const session = requiredSession(result);
     return {
       id: `${PROVIDER}:${session.sessionId}`,
@@ -136,7 +142,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     assertUsableCwd(cwd);
     const prompt = clean(input.prompt);
     if (prompt === "") throw new Error("Claude SDK session message requires a prompt");
-    const result = await this.execute(prompt, sdkInput({ ...input, cwd }, this.config, sessionId), undefined, sessionId);
+    const result = await this.execute(prompt, sdkInput({ ...input, cwd }, this.config, sessionId), undefined, sessionId, { ...input, cwd });
     const session = requiredSession(result);
     if (!session.turnId) throw new Error("Claude SDK completed without a provider turn ref");
     return {
@@ -180,6 +186,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     const active = this.lookup(input.session);
     if (!active) throw new Error(`Claude SDK session ${input.session.sessionId} is not active`);
     active.controller.abort(input.reason || "runner interrupt");
+    this.permissionBroker.rejectInvocation(active.invocationRef, "Claude invocation interrupted while approval was pending");
     try {
       await boundedClaudeSdkInterrupt(active.query, 200);
     } finally {
@@ -188,6 +195,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
   }
 
   async stop(): Promise<void> {
+    this.permissionBroker.rejectAll("Claude provider stopped while approval was pending");
     const active = [...new Set(this.active.values())];
     for (const item of active) {
       item.controller.abort("runner shutdown");
@@ -196,26 +204,37 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     }
   }
 
+  async resolveApproval(requestId: string, decision: import("../types.ts").ApprovalDecision): Promise<void> {
+    await this.permissionBroker.resolveApproval(requestId, decision);
+  }
+
   runtimeStatus(): ProviderRuntimeStatus {
     const authentication = claudeAuthenticationStatus(this.config);
+    const localAuth = this.config.authMode === "local-cli"
+      ? (this.options.authInspector ?? inspectClaudeCliAuth)(this.config)
+      : undefined;
     const executableReady = resolveClaudeSdkExecutable() !== "";
     const injectedRuntime = this.options.skipReadinessCheck === true || Boolean(this.options.queryFactory);
-    const ready = injectedRuntime || (authentication.configured && executableReady);
+    const authConfigured = localAuth ? localAuth.checked && localAuth.logged_in : authentication.configured;
+    const authUsable = localAuth ? !localAuth.checked || localAuth.logged_in : authentication.configured;
+    const ready = injectedRuntime || (authUsable && executableReady);
     return {
       ready,
       mode: "sdk",
       version: CLAUDE_AGENT_SDK_VERSION,
       active_sessions: new Set(this.active.values()).size,
       api_key_configured: this.config.authMode === "environment" && clean(this.config.env.ANTHROPIC_API_KEY) !== "",
-      auth_configured: authentication.configured,
-      auth_mode: authentication.mode,
-      auth_source: authentication.source,
+      auth_configured: authConfigured,
+      auth_mode: localAuth ? "local-cli" : authentication.mode,
+      auth_source: localAuth ? "local_cli" : authentication.source,
       executable_ready: executableReady,
       ...(authentication.platform_profile ? { platform_profile: authentication.platform_profile } : {}),
       ...(ready ? {} : {
-        reason: authentication.configured
+        reason: authUsable
           ? "Claude SDK native executable is unavailable"
-          : authentication.reason || "Claude SDK authentication is not configured"
+          : localAuth?.checked
+            ? "Claude CLI local login is unavailable; run `claude auth login` as the service user"
+            : authentication.reason || "Claude SDK authentication is not configured"
       })
     };
   }
@@ -224,7 +243,8 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     prompt: string,
     options: ClaudeSdkOptions,
     onEvent?: (event: ProviderEvent) => void,
-    resumeAlias = ""
+    resumeAlias = "",
+    policyInput?: Pick<ProviderRunInput, "cwd" | "policy">
   ): Promise<ProviderRunResult> {
     this.assertReady();
     const durableSessionID = resumeAlias || clean(options.sessionId) ||
@@ -235,10 +255,20 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     const active: ActiveQuery = {
       aliases: new Set(),
       controller: options.abortController ?? new AbortController(),
+      invocationRef: `claude-inv-${crypto.randomUUID()}`,
       state,
       timedOut: false
     };
     options.abortController = active.controller;
+    if (policyInput?.policy && policyInput.policy.nativeSummary.hostToolGate === true) {
+      options.canUseTool = this.permissionBroker.callback({
+        cwd: policyInput.cwd,
+        invocationRef: active.invocationRef,
+        onEvent,
+        policy: policyInput.policy,
+        session: () => sessionRef(active.state) ?? { provider: PROVIDER, sessionId: durableSessionID }
+      });
+    }
     this.trackAlias(active, durableSessionID);
     this.emit(providerSessionStartedEvent(this.id, durableSessionID, {
       method: resumeAlias ? "claude-sdk/session_resumed" : "claude-sdk/session_started",
@@ -291,6 +321,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
       if (timer) clearTimeout(timer);
       active.query?.close?.();
       this.untrack(active);
+      this.permissionBroker.rejectInvocation(active.invocationRef, "Claude invocation ended while approval was pending");
     }
   }
 
@@ -360,6 +391,9 @@ export class ClaudeExecutorProvider implements ExecutorProvider {
   interrupt(input: InterruptInput) { return requireMethod(this.delegate.interrupt, "interrupt").call(this.delegate, input); }
   listSessions(input: SessionListInput) { return requireMethod(this.delegate.listSessions, "sessions").call(this.delegate, input); }
   readSession(sessionId: string) { return requireMethod(this.delegate.readSession, "sessions").call(this.delegate, sessionId); }
+  resolveApproval(requestId: string, decision: import("../types.ts").ApprovalDecision) {
+    return requireMethod(this.delegate.resolveApproval, "approvals").call(this.delegate, requestId, decision);
+  }
   sendSessionMessage(input: SessionMessageInput) { return requireMethod(this.delegate.sendSessionMessage, "resume_session").call(this.delegate, input); }
   stop() { return this.delegate.stop?.() ?? Promise.resolve(); }
 
@@ -402,14 +436,15 @@ export function claudeProviderAppEvent(event: ProviderEvent): AppEvent {
 }
 
 function sdkInput(
-  input: Pick<SessionCreateInput, "approvalPolicy" | "cwd" | "model" | "reasoningEffort" | "sandbox">,
+  input: Pick<SessionCreateInput, "approvalPolicy" | "cwd" | "model" | "reasoningEffort" | "sandbox"> & Pick<ProviderRunInput, "policy">,
   config: ProviderRuntimeConfig,
   resume = ""
 ): ClaudeSdkOptions {
-  const tools = claudeTools(input.sandbox);
+  const tools = nativeStringArray(input, "tools") ?? claudeTools(input.sandbox);
   const model = clean(input.model) || clean(config.model);
   const effort = claudeEffort(input.reasoningEffort);
   const executable = resolveClaudeSdkExecutable();
+  const hostToolGate = input.policy?.nativeSummary.hostToolGate === true;
   return {
     cwd: input.cwd,
     env: managedExecutionEnvironment({
@@ -419,14 +454,29 @@ function sdkInput(
     includePartialMessages: true,
     maxTurns: DEFAULT_MAX_TURNS,
     persistSession: true,
-    permissionMode: claudePermissionMode(input.approvalPolicy),
+    permissionMode: nativePermissionMode(input) ?? claudePermissionMode(input.approvalPolicy),
+    ...(nativeBoolean(input, "allowDangerouslySkipPermissions") ? { allowDangerouslySkipPermissions: true } : {}),
     tools,
-    allowedTools: tools,
+    allowedTools: hostToolGate ? tools.filter((tool) => ["Read", "Grep", "Glob", "LS"].includes(tool)) : tools,
     ...(executable ? { pathToClaudeCodeExecutable: executable } : {}),
     ...(effort ? { effort } : {}),
     ...(model && model !== "codex-default" ? { model } : {}),
     ...(resume ? { resume } : {})
   };
+}
+
+function nativePermissionMode(input: Pick<ProviderRunInput, "policy">): ClaudeSdkOptions["permissionMode"] | undefined {
+  const value = input.policy?.nativeSummary.permissionMode;
+  return typeof value === "string" ? value as ClaudeSdkOptions["permissionMode"] : undefined;
+}
+
+function nativeStringArray(input: Pick<ProviderRunInput, "policy">, key: string): string[] | undefined {
+  const value = input.policy?.nativeSummary[key];
+  return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : undefined;
+}
+
+function nativeBoolean(input: Pick<ProviderRunInput, "policy">, key: string): boolean {
+  return input.policy?.nativeSummary[key] === true;
 }
 
 export function resolveClaudeSdkExecutable(): string {

@@ -544,6 +544,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/providers", family: "system-observability" },
   { method: "GET", path: "/api/providers/:id", family: "system-observability" },
   { method: "GET", path: "/api/providers/:id/models", family: "system-observability" },
+  { method: "POST", path: "/api/providers/:id/execution-policy/resolve", family: "capability-policy" },
   { method: "POST", path: "/api/commands", family: "run-session-drilldown" },
   { method: "GET", path: "/api/compatibility/legacy", family: "system-observability" },
   { method: "GET", path: "/api/compatibility/automations", family: "automation" },

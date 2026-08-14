@@ -8,6 +8,7 @@ import {
   serviceTierOptions,
 } from './sessionOptions';
 import { addSessionReference, hasComposerContent, removeSessionReference } from './sessionReferences';
+import { applyExecutionPolicy, executionPolicyPresets, executionPolicyValue, isolationLabel, policyFromValue, settingsExecutionPolicy } from '../../utils/executionPolicy';
 
 export default function NewSessionWorkspace({
   selectedProject,
@@ -38,6 +39,7 @@ export default function NewSessionWorkspace({
   handleProjectChange,
   sessionProjects,
   providerOptions = [],
+  providerCatalog = [],
 }) {
   const selectedProviderAvailable = providerOptions.some(option => option.id === sessionSettings.provider);
   return (
@@ -80,6 +82,7 @@ export default function NewSessionWorkspace({
               <NewSessionPermissionControl
                 settings={sessionSettings}
                 onSettingChange={handleSettingChange}
+                providerCatalog={providerCatalog}
               />
             )}
             actions={(
@@ -119,14 +122,9 @@ export default function NewSessionWorkspace({
             </select>
           </div>
 
-          <div className="bottom-tag-select">
+          <div className="bottom-tag-select" title="Provider 声明的隔离能力">
             <SlidersHorizontal size={13} />
-            <span>沙箱: {sessionSettings.sandbox === 'danger-full-access' ? '完全访问模式' : '安全沙箱'}</span>
-            <select value={sessionSettings.sandbox} onChange={(event) => handleSettingChange('sandbox', event.target.value)}>
-              <option value="workspace-write">本地安全沙箱</option>
-              <option value="danger-full-access">完全访问模式</option>
-              <option value="read-only">只读沙箱模式</option>
-            </select>
+            <span>{isolationLabel(providerCatalog, sessionSettings.provider)}</span>
           </div>
         </div>
       </div>
@@ -134,45 +132,49 @@ export default function NewSessionWorkspace({
   );
 }
 
-function NewSessionPermissionControl({ settings, onSettingChange }) {
+function NewSessionPermissionControl({ settings, onSettingChange, providerCatalog }) {
+  const policy = settingsExecutionPolicy(settings);
+  const presets = executionPolicyPresets(providerCatalog, settings.provider, policy);
+  const selected = presets.find(item => item.value === executionPolicyValue(policy)) || presets[0];
   return (
     <div className="composer-embedded-select danger">
       <ShieldAlert size={13} />
-      <span>{permissionPresetLabel(settings)}</span>
+      <span>{selected?.label || '执行策略'}</span>
       <select
-        value={`${settings.sandbox}|${settings.approvalPolicy}`}
+        value={selected?.value || ''}
         onChange={(event) => {
-          const [sandbox, approvalPolicy] = event.target.value.split('|');
-          onSettingChange('sandbox', sandbox);
-          onSettingChange('approvalPolicy', approvalPolicy);
+          const next = applyExecutionPolicy(settings, policyFromValue(event.target.value));
+          onSettingChange('executionPolicy', next.executionPolicy);
+          onSettingChange('sandbox', next.sandbox);
+          onSettingChange('approvalPolicy', next.approvalPolicy);
         }}
       >
-        <option value="danger-full-access|never">完全访问权限</option>
-        <option value="workspace-write|never">工作区写入</option>
-        <option value="workspace-write|danger-only">按需授权</option>
-        <option value="workspace-write|always">每次授权</option>
-        <option value="read-only|always">只读模式</option>
+        {presets.map(option => <option disabled={option.disabled} key={option.id} value={option.value}>{option.label}{option.disabled ? '（当前 transport 不支持）' : ''}</option>)}
       </select>
     </div>
   );
 }
 
-function permissionPresetLabel(settings) {
-  switch (`${settings.sandbox}|${settings.approvalPolicy}`) {
-    case 'danger-full-access|never': return '完全访问权限';
-    case 'workspace-write|never': return '工作区写入';
-    case 'workspace-write|danger-only': return '按需授权';
-    case 'workspace-write|always': return '每次授权';
-    case 'read-only|always': return '只读模式';
-    default: return '自定义权限';
-  }
-}
-
 function NewSessionComposerActions({ settings, models, modelsError, modelsLoading, sending, canSubmit, onModelChange, onServiceTierChange, onSubmit }) {
   const tierOptions = serviceTierOptions(effectiveModelForSettings(settings, models), settings.serviceTier);
+  const manualModel = Boolean(modelsError || models.some((model) => model?.verified === false));
   return (
     <>
-      <div className="composer-embedded-select" title={modelsError ? `模型列表暂未加载：${modelsError}` : '模型'}>
+      {manualModel ? (
+        <label className="composer-embedded-model-manual" title="模型列表未验证，可手工输入 Qoder model ID">
+          <Brain size={13} />
+          <input
+            aria-label="手动填写模型 ID"
+            list="new-session-provider-model-suggestions"
+            placeholder={`${projectProviderLabel(settings.provider)} 默认 / 手填 model ID`}
+            value={settings.model}
+            onChange={(event) => onModelChange(event.target.value)}
+          />
+          <datalist id="new-session-provider-model-suggestions">
+            {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{modelLabel(model)}</option>)}
+          </datalist>
+        </label>
+      ) : <div className="composer-embedded-select" title={modelsError ? `模型列表暂未加载：${modelsError}` : '模型'}>
         <Brain size={13} />
         <span>{modelsLoading ? '读取模型' : settings.model ? compactModelName(settings.model) : `${projectProviderLabel(settings.provider)} 默认`}</span>
         <select disabled={modelsLoading} value={settings.model} onChange={(event) => onModelChange(event.target.value)}>
@@ -186,8 +188,8 @@ function NewSessionComposerActions({ settings, models, modelsError, modelsLoadin
             <option value={settings.model}>{compactModelName(settings.model)}</option>
           ) : null}
         </select>
-      </div>
-      <div className="composer-embedded-select">
+      </div>}
+      {settings.provider !== 'qoder' ? <div className="composer-embedded-select">
         <Gauge size={13} />
         <span>{serviceTierLabel(settings, models)}</span>
         <select value={settings.serviceTier || ''} onChange={(event) => onServiceTierChange(event.target.value)}>
@@ -195,7 +197,7 @@ function NewSessionComposerActions({ settings, models, modelsError, modelsLoadin
             <option key={tier.value || 'standard'} value={tier.value}>{tier.shortLabel || tier.label}</option>
           ))}
         </select>
-      </div>
+      </div> : null}
       <button
         type="button"
         className="composer-circle-submit"

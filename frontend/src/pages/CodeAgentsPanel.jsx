@@ -9,6 +9,7 @@ const AGENT_DESCRIPTIONS = Object.freeze({
   codex: 'Codex CLI / Codex App 执行器',
   claude: 'Claude Code CLI / Claude Agent SDK 执行器',
   'pi-coding-agent': 'Pi Coding Agent RPC 执行器',
+  qoder: 'Qoder Agent SDK / qodercli 执行器',
 });
 
 export default function CodeAgentsPanel() {
@@ -108,6 +109,7 @@ function CodeAgentRow({ agent, busy, onSelectCodexBackend, onToggle, runnerSetti
         </div>
         <p>{AGENT_DESCRIPTIONS[agent.id] || agent.id}</p>
         {agent.enabled && !available && agent.readiness_reason ? <small>{agent.readiness_reason}</small> : null}
+        {agent.id === 'qoder' ? <QoderDiagnostics runtime={agent.runtime} /> : null}
         {agent.id === 'codex' ? (
           <CodexBackendSelector busy={busy || !agent.enabled} onSelect={onSelectCodexBackend} settings={runnerSettings} />
         ) : null}
@@ -121,6 +123,23 @@ function CodeAgentRow({ agent, busy, onSelectCodexBackend, onToggle, runnerSetti
         <Power size={14} /> {busy ? '处理中…' : agent.enabled ? '停用' : '启用'}
       </button>
     </article>
+  );
+}
+
+function QoderDiagnostics({ runtime }) {
+  const platform = runtime?.platform_profile || {};
+  const diagnostics = [
+    ['CLI', runtime?.executable_ready ? platform.cli_version || '已就绪' : platform.cli_version || '不可用'],
+    ['SDK', platform.sdk_ready === false ? '不可用' : platform.sdk_version || runtime?.version || '未知'],
+    ['认证', runtime?.auth_configured ? `${runtime.auth_mode || 'configured'} · ${runtime.auth_source || 'configured'}` : runtime?.auth_mode ? `${runtime.auth_mode} · 未配置` : '未配置'],
+    ['协议', platform.protocol_status ? `${platform.protocol_status}${platform.protocol_version ? ` · ${platform.protocol_version}` : ''}` : '未知'],
+  ];
+  return (
+    <dl className="code-agent-diagnostics" aria-label="Qoder runtime diagnostics">
+      {diagnostics.map(([label, value]) => (
+        <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
+      ))}
+    </dl>
   );
 }
 

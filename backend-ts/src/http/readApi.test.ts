@@ -117,7 +117,12 @@ describe("Bun projects/issues read API", () => {
         pi_managed: 1,
         model: "codex-default",
         approval_policy: "never",
-        sandbox: "workspace-write",
+        sandbox: "danger-full-access",
+        execution_policy: {
+          contract: "xw.execution-policy.v1",
+          access: "unrestricted-host",
+          approval: "unattended"
+        },
         sort_order: 1,
         loop_status: "stopped",
         provider_capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"]
@@ -234,8 +239,48 @@ describe("Bun projects/issues read API", () => {
       expect((await profiles.json() as Array<{ id: string; provider: string }>).map(({ id, provider }) => ({ id, provider }))).toEqual([
         { id: "xuanwu-provider-claude", provider: "claude" },
         { id: "xuanwu-provider-codex", provider: "codex" },
-        { id: "xuanwu-provider-pi", provider: "pi-coding-agent" }
+        { id: "xuanwu-provider-pi", provider: "pi-coding-agent" },
+        { id: "xuanwu-provider-qoder", provider: "qoder" }
       ]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("persists and reads back Qoder project provider, profile, and model without Codex defaults", async () => {
+    const database = await openFixtureDatabase();
+    const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-qoder-project-cwd-"));
+    tempRoots.push(cwd);
+    try {
+      const router = createDefaultRouter({ database });
+      const created = await router.handle(new Request(`${BASE_URL}/api/projects`, {
+        method: "POST",
+        body: JSON.stringify({
+          id: "qoder-demo",
+          cwd,
+          provider: "qoder",
+          model: "performance",
+          default_agent_profile_id: "xuanwu-provider-qoder"
+        }),
+        headers: { "content-type": "application/json" }
+      }));
+      const read = await router.handle(new Request(`${BASE_URL}/api/projects/qoder-demo`));
+
+      expect(created.status).toBe(201);
+      expect(await created.json()).toMatchObject({
+        id: "qoder-demo",
+        provider: "qoder",
+        model: "performance",
+        default_agent_profile_id: "xuanwu-provider-qoder",
+        default_agent_profile: { id: "xuanwu-provider-qoder", provider: "qoder", model: "" }
+      });
+      expect(await read.json()).toMatchObject({
+        provider: "qoder",
+        model: "performance",
+        default_agent_profile_id: "xuanwu-provider-qoder"
+      });
+      expect(JSON.stringify(await (await router.handle(new Request(`${BASE_URL}/api/agent-profiles`))).json()))
+        .not.toContain('"provider":"qoder","model":"codex-default"');
     } finally {
       database.close();
     }
@@ -352,7 +397,7 @@ describe("Bun projects/issues read API", () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
-      createAgentProfile(database, { id: "codex-pro", name: "Codex Pro", provider: "codex" });
+      createAgentProfile(database, { id: "qoder-pro", name: "Qoder Pro", provider: "qoder", model: "performance" });
       const router = createDefaultRouter({ database });
 
       const created = await router.handle(new Request(`${BASE_URL}/api/issues`, {
@@ -366,7 +411,7 @@ describe("Bun projects/issues read API", () => {
           required_skill_intents: ["xuanwu"],
           recommended_skill_intents: ["verification-before-completion"],
           priority: 4,
-          agent_profile_id: "Codex Pro!",
+          agent_profile_id: "Qoder Pro!",
           source_session_id: "codex:thread-source",
           source_turn_id: "turn-source",
           source_excerpt: "讨论摘录",
@@ -388,7 +433,7 @@ describe("Bun projects/issues read API", () => {
         description: "Issue body",
         status: "triage",
         priority: 4,
-        agent_profile_id: "codex-pro",
+        agent_profile_id: "qoder-pro",
         source_session_id: "thread-source",
         source_turn_id: "turn-source",
         source_excerpt: "讨论摘录",
@@ -498,7 +543,7 @@ describe("Bun projects/issues read API", () => {
     }
   });
 
-  test("auto-run issue create sends only the canonical title and description", async () => {
+  test("auto-run issue create sends the canonical body plus execution ownership contract", async () => {
     const database = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
     try {
@@ -523,7 +568,9 @@ describe("Bun projects/issues read API", () => {
       expect(body).not.toHaveProperty("prompt_template");
       await waitForProviderStart(provider);
       const prompt = provider.inputs[0]?.prompt ?? "";
-      expect(prompt).toBe("# 直接执行\n\n直接发给 runner");
+      expect(prompt).toContain("# 直接执行\n\n直接发给 runner");
+      expect(prompt).toContain("## Xuanwu execution context (authoritative)");
+      expect(prompt).toContain("RUNNER_OUTCOME: needs_user | <reason>");
     } finally {
       database.close();
     }

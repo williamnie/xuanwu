@@ -1,11 +1,24 @@
 import type { RunnerDatabase } from "../database.ts";
 import { issueTimestamp, normalizeIdentifier } from "./issueCreate.ts";
 import { ProjectNotFoundError } from "./projects.ts";
+import type { ExecutionPolicyRequest } from "../../providers/core/policyContracts.ts";
+import {
+  executionPolicyInput,
+  executionPolicyJSON,
+  legacyProjection,
+  parseExecutionPolicyWrite,
+  policyFromLegacyWrite,
+  readStoredExecutionPolicy
+} from "../../providers/core/policyPersistence.ts";
 
 export type AgentProfile = {
   approval_policy: string;
   created_at: string;
   default_instructions: string;
+  execution_policy?: ExecutionPolicyRequest;
+  execution_policy_json: string;
+  execution_policy_source: string;
+  execution_policy_warnings: string[];
   id: string;
   model: string;
   name: string;
@@ -18,14 +31,14 @@ export type AgentProfile = {
   updated_at: string;
 };
 
-type AgentProfileRow = Omit<Record<keyof AgentProfile, unknown>, "plugin_intents" | "skill_intents"> & {
+type AgentProfileRow = Omit<Record<keyof AgentProfile, unknown>, "execution_policy" | "execution_policy_source" | "execution_policy_warnings" | "plugin_intents" | "skill_intents"> & {
   plugin_intents_json: unknown;
   skill_intents_json: unknown;
 };
 type AgentProfileInput = Partial<Record<keyof AgentProfile, unknown>>;
 
 const AGENT_PROFILE_COLUMNS = `id, name, provider, model, reasoning_effort,
-  approval_policy, sandbox, service_tier, default_instructions, skill_intents_json,
+  approval_policy, sandbox, execution_policy_json, service_tier, default_instructions, skill_intents_json,
   plugin_intents_json, created_at, updated_at`;
 
 export function listAgentProfiles(db: RunnerDatabase): AgentProfile[] {
@@ -49,11 +62,11 @@ export function createAgentProfile(db: RunnerDatabase, input: AgentProfileInput)
   if (profile.name === "") throw new Error("agent profile name 不能为空");
   const timestamp = issueTimestamp();
   db.sqlite.run(`insert into agent_profiles
-    (id, name, provider, model, reasoning_effort, approval_policy, sandbox,
+    (id, name, provider, model, reasoning_effort, approval_policy, sandbox, execution_policy_json,
      service_tier, default_instructions, skill_intents_json, plugin_intents_json, created_at, updated_at)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [profile.id, profile.name, profile.provider, profile.model, profile.reasoning_effort,
-      profile.approval_policy, profile.sandbox, profile.service_tier, profile.default_instructions,
+      profile.approval_policy, profile.sandbox, profile.execution_policy_json, profile.service_tier, profile.default_instructions,
       profile.skill_intents, profile.plugin_intents, timestamp, timestamp]);
   return mustGetAgentProfile(db, profile.id);
 }
@@ -62,13 +75,13 @@ export function updateAgentProfile(db: RunnerDatabase, id: string, input: AgentP
   const profileID = id.trim();
   const current = getAgentProfile(db, profileID);
   if (!current) throw new ProjectNotFoundError();
-  const next = normalizeAgentProfile({ ...current, ...patchValues(input), id: profileID });
+  const next = normalizeAgentProfile(profileUpdateInput(current, input, profileID));
   if (next.name === "") throw new Error("agent profile name 不能为空");
   db.sqlite.run(`update agent_profiles set name=?, provider=?, model=?, reasoning_effort=?,
-    approval_policy=?, sandbox=?, service_tier=?, default_instructions=?, skill_intents_json=?,
+    approval_policy=?, sandbox=?, execution_policy_json=?, service_tier=?, default_instructions=?, skill_intents_json=?,
     plugin_intents_json=?, updated_at=? where id=?`,
     [next.name, next.provider, next.model, next.reasoning_effort, next.approval_policy,
-      next.sandbox, next.service_tier, next.default_instructions, next.skill_intents, next.plugin_intents,
+      next.sandbox, next.execution_policy_json, next.service_tier, next.default_instructions, next.skill_intents, next.plugin_intents,
       issueTimestamp(), profileID]);
   return mustGetAgentProfile(db, profileID);
 }
@@ -82,17 +95,52 @@ export function deleteAgentProfile(db: RunnerDatabase, id: string): void {
 
 function normalizeAgentProfile(input: AgentProfileInput): AgentProfile {
   const provider = cleanString(input.provider).toLowerCase() || "codex";
+  const rawPolicy = executionPolicyInput(input);
+  const policy = rawPolicy !== undefined
+    ? parseExecutionPolicyWrite(rawPolicy, { allowEmpty: true })
+    : (Object.hasOwn(input, "sandbox") || Object.hasOwn(input, "approval_policy"))
+      ? policyFromLegacyWrite({ sandbox: input.sandbox, approvalPolicy: input.approval_policy, scope: "profile" })
+      : undefined;
+  const projection = policy ? legacyProjection(policy) : {
+    approval_policy: cleanString(input.approval_policy),
+    sandbox: cleanString(input.sandbox)
+  };
   return {
     id: normalizeIdentifier(input.id), name: cleanString(input.name),
     provider,
     model: normalizeModel(input.model, provider), reasoning_effort: cleanString(input.reasoning_effort),
-    approval_policy: cleanString(input.approval_policy), sandbox: cleanString(input.sandbox),
+    approval_policy: projection.approval_policy, sandbox: projection.sandbox,
+    ...(policy ? { execution_policy: policy } : {}),
+    execution_policy_json: executionPolicyJSON(policy),
+    execution_policy_source: policy ? "profile" : "inherit",
+    execution_policy_warnings: [],
     service_tier: cleanString(input.service_tier),
     default_instructions: cleanString(input.default_instructions),
     skill_intents: normalizeJSONList(input.skill_intents),
     plugin_intents: normalizeJSONList(input.plugin_intents),
     created_at: "", updated_at: ""
   };
+}
+
+function profileUpdateInput(current: AgentProfile, input: AgentProfileInput, id: string): AgentProfileInput {
+  const patch = patchValues(input);
+  const merged: AgentProfileInput = { ...current, ...patch, id };
+  const hasPolicy = Object.hasOwn(input, "execution_policy") || Object.hasOwn(input, "execution_policy_json");
+  const hasLegacy = Object.hasOwn(input, "approval_policy") || Object.hasOwn(input, "sandbox");
+  if (hasPolicy) return merged;
+  if (hasLegacy) {
+    const policy = policyFromLegacyWrite({
+      approvalPolicy: Object.hasOwn(input, "approval_policy") ? input.approval_policy : current.approval_policy,
+      sandbox: Object.hasOwn(input, "sandbox") ? input.sandbox : current.sandbox,
+      scope: "profile"
+    });
+    merged.execution_policy = policy;
+    delete merged.execution_policy_json;
+    return merged;
+  }
+  delete merged.execution_policy;
+  merged.execution_policy_json = current.execution_policy_json;
+  return merged;
 }
 
 function patchValues(input: AgentProfileInput): AgentProfileInput {
@@ -119,6 +167,12 @@ function mustGetAgentProfile(db: RunnerDatabase, id: string): AgentProfile {
 
 function mapAgentProfileRow(row: AgentProfileRow): AgentProfile {
   const provider = optionalString(row.provider, "codex");
+  const storedPolicy = readStoredExecutionPolicy({
+    approvalPolicy: row.approval_policy,
+    json: row.execution_policy_json,
+    sandbox: row.sandbox,
+    scope: "profile"
+  });
   return {
     id: requiredString(row.id, "agent_profiles.id"),
     name: requiredString(row.name, "agent_profiles.name"),
@@ -127,6 +181,10 @@ function mapAgentProfileRow(row: AgentProfileRow): AgentProfile {
     reasoning_effort: optionalString(row.reasoning_effort),
     approval_policy: optionalString(row.approval_policy),
     sandbox: optionalString(row.sandbox),
+    ...(storedPolicy.policy ? { execution_policy: storedPolicy.policy } : {}),
+    execution_policy_json: optionalString(row.execution_policy_json, "{}"),
+    execution_policy_source: storedPolicy.source,
+    execution_policy_warnings: storedPolicy.warnings,
     service_tier: optionalString(row.service_tier),
     default_instructions: optionalString(row.default_instructions),
     skill_intents: optionalString(row.skill_intents_json, "[]"),

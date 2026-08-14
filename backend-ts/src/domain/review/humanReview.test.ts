@@ -18,6 +18,7 @@ import {
   createHumanReviewRequest,
   readIssueDecisionProjection,
   repairRedundantAcceptedHumanReview,
+  reopenIncorrectlyAcceptedHumanReview,
   restoreOpenHumanReviewAfterTerminalRun,
   reviewHumanIssue
 } from "./humanReview.ts";
@@ -29,6 +30,49 @@ afterEach(async () => {
 });
 
 describe("human review workflow", () => {
+  test("reopens an incorrectly accepted delivery review as an immutable corrected risk revision", async () => {
+    const db = await fixture();
+    try {
+      const issue = createIssue(db, { project_id: "demo", status: "needs_user", title: "Paid provider acceptance" });
+      const run = createIssueRun(db, issue.id);
+      db.sqlite.run("update issue_runs set status='succeeded', ended_at=? where id=?", [
+        "2026-08-13T00:00:00Z", run.id
+      ]);
+      const mistaken = createHumanReviewRequest(db, issue.id, {
+        kind: "acceptance",
+        question: "请授权真实付费测试"
+      });
+      await reviewHumanIssue(db, issue.id, {
+        action: "accept",
+        comment: "已授权，MAX_PAID_TURNS=10，MAX_CREDITS=3",
+        review_request_id: mistaken.id,
+        review_revision: mistaken.revision
+      });
+      updateIssue(db, issue.id, { status: "done" });
+
+      const corrected = reopenIncorrectlyAcceptedHumanReview(db, issue.id, {
+        kind: "risk_acceptance",
+        question: mistaken.question,
+        recovery_reason: "authorization was mistaken for delivery acceptance",
+        reopen_accepted_request_id: mistaken.id,
+        reopen_accepted_revision: mistaken.revision
+      });
+
+      expect(getIssue(db, issue.id)?.status).toBe("needs_user");
+      expect(corrected).toMatchObject({ kind: "risk_acceptance", revision: 2, status: "open" });
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+        owner: "human",
+        phase: "human_review",
+        request: { id: corrected.id, kind: "risk_acceptance", status: "open" }
+      });
+      expect(listIssueEvents(db, issue.id, {
+        types: ["issue.human_review_incorrect_acceptance_reopened.v1"]
+      })).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps needs_user PI-owned until an explicit natural-language request exists", async () => {
     const db = await fixture();
     try {

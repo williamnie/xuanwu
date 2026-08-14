@@ -26,6 +26,8 @@ async function requestJSON<T>(
 ): Promise<T> {
   const headers = new Headers();
   headers.set("x-codex-client", "xuanwu-cli");
+  if (flags.managedExecution) headers.set("x-xuanwu-managed-execution", "1");
+  if (flags.callerThreadId !== "") headers.set("x-xuanwu-caller-thread-id", flags.callerThreadId);
   if (body !== undefined) headers.set("content-type", "application/json");
   if (flags.token.trim() !== "") headers.set("authorization", `Bearer ${flags.token.trim()}`);
   const response = await fetcher(endpoint(flags.addr, path), {

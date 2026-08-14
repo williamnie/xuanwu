@@ -89,6 +89,7 @@ export default function Sessions({
   const [cursor, setCursor] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [selectedSession, setSelectedSession] = useState(null);
+  const [detailError, setDetailError] = useState('');
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -103,6 +104,7 @@ export default function Sessions({
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState('');
   const [providerRuntimeStatus, setProviderRuntimeStatus] = useState(null);
+  const [providerCatalog, setProviderCatalog] = useState([]);
   const [message, setMessage] = useState('');
   const [messageReferences, setMessageReferences] = useState([]);
   const [messageCommand, setMessageCommand] = useState(null);
@@ -249,6 +251,7 @@ export default function Sessions({
     if (isSwitching) {
       setDetailLoading(true);
       setSelectedSession(null);
+      setDetailError('');
     }
     const requestId = selectedId;
     try {
@@ -256,6 +259,7 @@ export default function Sessions({
       if (selectedIdRef.current !== requestId) return;
       const running = isSessionRunning(detail);
       setSelectedSession(detail);
+      setDetailError('');
       setSessionRunning(running);
       setSessions((prev) => syncSessionRuntimeInList(prev, detail, running));
       setApprovalQueue((current) => syncApprovalsForSession(
@@ -265,7 +269,9 @@ export default function Sessions({
       ));
     } catch (err) {
       if (selectedIdRef.current !== requestId) return;
-      toast.error(err.message || '读取 session 详情失败');
+      const message = err.message || '读取 session 详情失败';
+      setDetailError(message);
+      toast.error(message);
     } finally {
       if (selectedIdRef.current === requestId) {
         setDetailLoading(false);
@@ -275,21 +281,16 @@ export default function Sessions({
 
   const loadModels = useCallback(async (provider = 'codex', runtimeStatus = null) => {
     setModelsLoading(true);
-    if (provider !== 'codex') {
+    try {
+      const result = await systemApi.getProviderModels(provider);
+      const data = Array.isArray(result?.data?.data) ? result.data.data : result?.data;
+      setModels(Array.isArray(data) ? data : []);
+      setModelsError('');
+    } catch (err) {
       const providerStatus = (runtimeStatus?.providers || []).find(item => item.id === provider);
       const defaultModel = String(providerStatus?.default_model || '').trim();
       setModels(defaultModel ? [{ id: defaultModel, displayName: defaultModel, isDefault: true }] : []);
-      setModelsError(defaultModel ? '' : `${provider === 'claude' ? 'Claude Agent SDK' : provider} 未声明 model_list capability，使用 Provider 默认模型`);
-      setModelsLoading(false);
-      return;
-    }
-    try {
-      const result = await systemApi.getCodexModels();
-      setModels(result.data || []);
-      setModelsError('');
-    } catch (err) {
-      setModels([]);
-      setModelsError(err.message || '读取 Codex 模型列表失败');
+      setModelsError(err.message || `读取 ${provider} 模型列表失败，请手工输入 model ID`);
     } finally {
       setModelsLoading(false);
     }
@@ -341,9 +342,11 @@ export default function Sessions({
   useEffect(() => { loadModels(sessionSettings.provider, providerRuntimeStatus); }, [loadModels, providerRuntimeStatus, sessionSettings.provider]);
   useEffect(() => {
     let alive = true;
-    systemApi.getSystemStatus()
-      .then((status) => { if (alive) setProviderRuntimeStatus(status); })
-      .catch(() => { if (alive) setProviderRuntimeStatus({ providers: [] }); });
+    Promise.allSettled([systemApi.getSystemStatus(), systemApi.getProviders()]).then(([status, catalog]) => {
+      if (!alive) return;
+      setProviderRuntimeStatus(status.status === 'fulfilled' ? status.value : { providers: [] });
+      setProviderCatalog(catalog.status === 'fulfilled' && Array.isArray(catalog.value) ? catalog.value : []);
+    });
     return () => { alive = false; };
   }, []);
   useEffect(() => {
@@ -515,6 +518,7 @@ export default function Sessions({
         service_tier: settings.serviceTier,
         approval_policy: settings.approvalPolicy,
         sandbox: settings.sandbox,
+        execution_policy: settings.executionPolicy,
       }, references));
       const running = isSessionRunning(result);
       setSessionRunning(running);
@@ -534,6 +538,7 @@ export default function Sessions({
       service_tier: settings.serviceTier,
       approval_policy: settings.approvalPolicy,
       sandbox: settings.sandbox,
+      execution_policy: settings.executionPolicy,
     }, references));
   }, []);
 
@@ -759,6 +764,7 @@ export default function Sessions({
         service_tier: sessionSettings.serviceTier,
         approval_policy: sessionSettings.approvalPolicy,
         sandbox: sessionSettings.sandbox,
+        execution_policy: sessionSettings.executionPolicy,
       }, promptReferences));
       const newSessionId = sessionIDFromCreateResult(result);
       const createdSession = sessionFromCreateResult(result, selectedProject);
@@ -787,6 +793,7 @@ export default function Sessions({
     const nextSession = sessions.find((item) => item.id === id);
     ignorePropSelectionRef.current = false;
     setSelectedId(id);
+    setDetailError('');
     setActiveView('chat');
     setLiveEvents([]);
     setSessionRunning(isSessionRunning(nextSession));
@@ -798,6 +805,7 @@ export default function Sessions({
     autoSelectFirstSessionRef.current = false;
     if (!keepNewSessionRoute) navigateTo?.('sessions');
     setSelectedId('');
+    setDetailError('');
     setActiveView('new');
     setPrompt('');
     setPromptCommand(clearSessionCommandState());
@@ -829,6 +837,7 @@ export default function Sessions({
         activeView={activeView}
         chatProps={{
           detailLoading,
+          detailError,
           selectedSession,
           selectedSessionProject,
           liveEvents,
@@ -849,6 +858,7 @@ export default function Sessions({
           models,
           modelsLoading,
           modelsError,
+          providerCatalog,
           sending,
           interruptState,
           selectedId,
@@ -902,6 +912,7 @@ export default function Sessions({
           handleProjectChange,
           sessionProjects,
           providerOptions: readySessionProviders(providerRuntimeStatus),
+          providerCatalog,
         }}
       />
     </>

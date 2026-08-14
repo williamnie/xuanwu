@@ -13,7 +13,7 @@ export function mcpApprovalExpiresAt(actionType: string, createdAt: string, exis
 export function expirePendingMcpApprovals(db: RunnerDatabase, now = new Date()): number {
   const timestamp = now.toISOString();
   const rows = db.sqlite.query<{ id: string }, [string]>(`
-    select id from pi_actions
+    select id from pi_actions indexed by idx_pi_actions_pending_mcp_expiry
     where action_type='mcp.tool.call' and status='pending'
       and lease_expires_at<>'' and lease_expires_at<=?
     order by lease_expires_at asc, id asc

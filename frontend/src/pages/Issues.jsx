@@ -16,6 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import PromptEditor from '../components/editor/PromptEditor';
+import AgentProfileSelectOptions from '../components/AgentProfileSelectOptions.jsx';
 import IssueEditModal from '../components/IssueEditModal';
 import IssueCard from './IssueCard';
 import { sortIssuesByIdDesc } from '../utils/issueSort';
@@ -534,11 +535,11 @@ export default function Issues({
                   <option disabled={!inheritedProviderAvailable} value="">
                     {inheritedProviderAvailable ? '继承项目默认 Provider' : '请选择可用 Code Agent'}
                   </option>
-                  {availableProfiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {codeAgentLabel(profile.provider)} · {profile.name} · {profile.model || 'default'}
-                    </option>
-                  ))}
+                  <AgentProfileSelectOptions
+                    catalog={providerCatalog}
+                    profiles={agentProfiles}
+                    selectedProfileID={formAgentProfileId}
+                  />
                 </select>
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
                   可为单个工作项显式选择 Code Agent；未选择时沿用项目默认配置。
@@ -603,12 +604,6 @@ export default function Issues({
 
     </div>
   );
-}
-
-function codeAgentLabel(provider) {
-  if (provider === 'claude') return 'Claude Code';
-  if (provider === 'pi-coding-agent') return 'Pi';
-  return provider || 'Code Agent';
 }
 
 function issueWithPendingServiceTier(issue, pendingServiceTiers) {

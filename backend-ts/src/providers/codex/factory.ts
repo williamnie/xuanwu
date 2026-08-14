@@ -4,6 +4,7 @@ import type { ExecutorProviderManifest, ProviderCapabilities } from "../core/man
 import type { ProviderFactory, ProviderRuntimeConfig as RegistryProviderConfig, RegisteredProvider } from "../core/registry.ts";
 import { detectProviderCommand } from "../core/command.ts";
 import { createCodexExecutorProvider, type CodexAppEventSink } from "./provider.ts";
+import { CODEX_EXECUTION_POLICY_CAPABILITIES, codexExecutionPolicyAdapter } from "./executionPolicy.ts";
 
 /**
  * P7：Codex ProviderFactory——app-server 生命周期迁入 registry facet。
@@ -28,6 +29,7 @@ export function codexManifest(): ExecutorProviderManifest {
     supportLevel: "tested",
     transports: ["rpc", "stdio-json"],
     capabilities: CODEX_CAPABILITIES,
+    executionPolicy: CODEX_EXECUTION_POLICY_CAPABILITIES,
     processObservability: "lease",
     executionSettings: {
       settings: [
@@ -73,7 +75,7 @@ export function codexFactory(options: CodexFactoryOptions = {}): ProviderFactory
       const instance = createCodexExecutorProvider(config as ProviderRuntimeConfig, options.appEventSink, {
         ownershipFile: options.ownershipFile
       }) as ExecutorProvider;
-      return Object.assign(instance, { manifest }) as RegisteredProvider;
+      return Object.assign(instance, { manifest, policyAdapter: codexExecutionPolicyAdapter }) as RegisteredProvider;
     }
   };
 }

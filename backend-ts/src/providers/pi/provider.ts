@@ -1,4 +1,5 @@
 import {
+  type ApprovalDecision,
   ProviderInterruptedError,
   type ExecutorCapability,
   type ExecutorProvider,
@@ -14,6 +15,7 @@ import {
   type SessionMessageResult,
   type SessionRef
 } from "../types.ts";
+import { isAbsolute, relative, resolve } from "node:path";
 import { PiRpcTransport, type PiRpcEvent } from "./rpcTransport.ts";
 import { detectProviderCommand } from "../core/command.ts";
 import { providerSessionStartedEvent } from "../core/sessionLifecycle.ts";
@@ -38,11 +40,12 @@ export type PiExecutorProviderOptions = {
   env?: Record<string, string>;
   sessionFunctions?: PiSessionFunctions;
   timeoutMs?: number;
+  policyExtensionPath?: string;
 };
 
 export class PiExecutorProvider implements ExecutorProvider {
   readonly id = "pi-coding-agent" as const;
-  readonly capabilities: readonly ExecutorCapability[] = ["issue_execution", "sessions", "resume_session", "interrupt", "model_list"];
+  readonly capabilities: readonly ExecutorCapability[] = ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"];
   readonly interruptScope = "active" as const;
   private transport?: PiRpcTransport;
   private transportCwd = "";
@@ -50,14 +53,16 @@ export class PiExecutorProvider implements ExecutorProvider {
   private interruptRequested = false;
   private lastSessionRef = "";
   private readonly sessionPaths = new Map<string, string>();
+  private readonly pendingApprovals = new Map<string, PiPendingApproval>();
 
   constructor(private readonly options: PiExecutorProviderOptions = {}) {
     this.transport = options.transport;
   }
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
-    assertPiApprovalPolicy(input.approvalPolicy);
-    const transport = await this.beginOperation(input.cwd, "", piToolsForSandbox(input.sandbox));
+    assertPiLegacyPolicy(input);
+    const native = piNativeExecution(input, this.options.policyExtensionPath);
+    const transport = await this.beginOperation(input.cwd, "", native.tools, native.extensions);
     try {
       await transport.send({ type: "new_session" });
       await this.applyExecutionSettings(transport, input.model, input.reasoningEffort);
@@ -73,8 +78,9 @@ export class PiExecutorProvider implements ExecutorProvider {
   }
 
   async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
-    assertPiApprovalPolicy(input.approvalPolicy);
-    const transport = await this.beginOperation(input.cwd, input.session.sessionId, piToolsForSandbox(input.sandbox));
+    assertPiLegacyPolicy(input);
+    const native = piNativeExecution(input, this.options.policyExtensionPath);
+    const transport = await this.beginOperation(input.cwd, input.session.sessionId, native.tools, native.extensions);
     try {
       await this.applyExecutionSettings(transport, input.model, input.reasoningEffort);
       const outcome = await this.promptAndWait(transport, input.prompt, input.onEvent, input);
@@ -89,8 +95,9 @@ export class PiExecutorProvider implements ExecutorProvider {
   }
 
   async createSession(input: SessionCreateInput): Promise<SessionCreateResult> {
-    assertPiApprovalPolicy(input.approvalPolicy);
-    const transport = await this.beginOperation(input.cwd, "", piToolsForSandbox(input.sandbox));
+    if (!input.policy) assertPiApprovalPolicy(input.approvalPolicy);
+    const native = piNativeExecution(input, this.options.policyExtensionPath);
+    const transport = await this.beginOperation(input.cwd, "", native.tools, native.extensions);
     try {
       await transport.send({ type: "new_session" });
       await this.applyExecutionSettings(transport, input.model, input.reasoningEffort);
@@ -126,6 +133,7 @@ export class PiExecutorProvider implements ExecutorProvider {
   }
 
   async interrupt(_input: InterruptInput): Promise<void> {
+    await this.rejectPendingApprovals("Pi invocation interrupted while approval was pending");
     if (!this.transport?.running) return;
     this.interruptRequested = true;
     try {
@@ -153,8 +161,9 @@ export class PiExecutorProvider implements ExecutorProvider {
   }
 
   async sendSessionMessage(input: SessionMessageInput): Promise<SessionMessageResult> {
-    assertPiApprovalPolicy(input.approvalPolicy);
-    const transport = await this.beginOperation(input.cwd, input.sessionId, piToolsForSandbox(input.sandbox));
+    if (!input.policy) assertPiApprovalPolicy(input.approvalPolicy);
+    const native = piNativeExecution(input, this.options.policyExtensionPath);
+    const transport = await this.beginOperation(input.cwd, input.sessionId, native.tools, native.extensions);
     try {
       await this.applyExecutionSettings(transport, input.model, input.reasoningEffort);
       const outcome = await this.promptAndWait(transport, input.prompt ?? "", undefined, input);
@@ -182,7 +191,15 @@ export class PiExecutorProvider implements ExecutorProvider {
   }
 
   async stop(): Promise<void> {
+    await this.rejectPendingApprovals("Pi provider stopped while approval was pending");
     await this.transport?.stop();
+  }
+
+  async resolveApproval(requestId: string, decision: ApprovalDecision): Promise<void> {
+    const pending = this.pendingApprovals.get(requestId.trim());
+    if (!pending) throw new Error(`Pi approval request is not pending: ${requestId.trim()}`);
+    const approved = ["approve", "allow"].includes(String(decision.decision ?? "").trim().toLowerCase());
+    await this.finishApproval(pending, approved, approved ? "approve" : "deny");
   }
 
   processLeases() {
@@ -190,7 +207,7 @@ export class PiExecutorProvider implements ExecutorProvider {
     return lease ? [lease] : [];
   }
 
-  private async beginOperation(cwd = "", sessionRef = "", tools: readonly string[] = []): Promise<PiRpcTransport> {
+  private async beginOperation(cwd = "", sessionRef = "", tools: readonly string[] = [], extensions: readonly string[] = []): Promise<PiRpcTransport> {
     if (this.active) throw new Error("Pi provider is already executing another operation");
     this.active = true;
     this.interruptRequested = false;
@@ -207,7 +224,7 @@ export class PiExecutorProvider implements ExecutorProvider {
         });
         this.transportCwd = targetCwd;
       }
-      await this.transport.startForSession(sessionRef, tools);
+      await this.transport.startForSession(sessionRef, tools, extensions);
       return this.transport;
     } catch (error) {
       this.active = false;
@@ -235,7 +252,7 @@ export class PiExecutorProvider implements ExecutorProvider {
     transport: PiRpcTransport,
     prompt: string,
     sink: ProviderRunInput["onEvent"],
-    input: { cwd?: string; projectId?: string; issueId?: number; prompt?: string }
+    input: Pick<ProviderRunInput, "cwd" | "projectId" | "issueId" | "prompt" | "policy">
   ): Promise<{ invocationRef: string; sessionRef: string }> {
     if (prompt.trim() === "") throw new Error("Pi RPC prompt must not be empty");
     const state = await this.sessionState(transport);
@@ -245,7 +262,7 @@ export class PiExecutorProvider implements ExecutorProvider {
       method: "pi-coding-agent/session_started"
     }));
     const invocationRef = `pi-rpc-${crypto.randomUUID()}`;
-    const terminal = this.waitForTerminal(transport, sink, input, state.sessionRef);
+    const terminal = this.waitForTerminal(transport, sink, input, state.sessionRef, invocationRef);
     try {
       await transport.send({ id: invocationRef, type: "prompt", message: prompt });
       return { invocationRef, ...await terminal };
@@ -284,12 +301,14 @@ export class PiExecutorProvider implements ExecutorProvider {
   private waitForTerminal(
     transport: PiRpcTransport,
     sink: ProviderRunInput["onEvent"],
-    input: { cwd?: string; projectId?: string; issueId?: number; prompt?: string },
-    initialSessionRef: string
+    input: Pick<ProviderRunInput, "cwd" | "projectId" | "issueId" | "prompt" | "policy">,
+    initialSessionRef: string,
+    invocationRef: string
   ): Promise<{ sessionRef: string }> {
     return new Promise((resolve, reject) => {
       let settled = false;
       let failureReason = "";
+      let approvalBridgeFailure = "";
       const activeTools = new Map<string, PiToolObservation>();
       const inactivityMs = this.options.timeoutMs ?? 30 * 60 * 1000;
       let inactivityTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -334,6 +353,7 @@ export class PiExecutorProvider implements ExecutorProvider {
         if (!settled) {
           settled = true;
           cleanup();
+          void this.rejectPendingApprovals(error.message);
           const session = sessionForEvent();
           sink?.({
             error: error.message,
@@ -416,12 +436,21 @@ export class PiExecutorProvider implements ExecutorProvider {
               break;
             }
             rejectTerminal(
-              new Error(event.type === "exit" ? "pi rpc exited before agent settled" : String(event.message ?? "pi rpc error")),
-              event.type === "exit" ? "pi-coding-agent/process_exit" : "pi-coding-agent/error"
+              new Error(approvalBridgeFailure || (event.type === "exit" ? "pi rpc exited before agent settled" : String(event.message ?? "pi rpc error"))),
+              approvalBridgeFailure ? "pi-coding-agent/approval_bridge_unavailable" : event.type === "exit" ? "pi-coding-agent/process_exit" : "pi-coding-agent/error"
             );
             break;
           case "stderr":
+            if (input.policy?.nativeSummary.approvalBridge === true && /Failed to load extension/i.test(String(event.text ?? ""))) {
+              approvalBridgeFailure = "approval_bridge_unavailable: Pi failed to load the Xuanwu policy extension";
+              void transport.stop().catch(() => undefined);
+              rejectTerminal(new Error(approvalBridgeFailure), "pi-coding-agent/approval_bridge_unavailable");
+            }
             sink?.({ provider: this.id, type: "provider.error", text: String(event.text ?? "") });
+            break;
+          case "extension_ui_request":
+            void this.handlePolicyApprovalRequest(event, transport, sink, input, initialSessionRef, invocationRef)
+              .catch((error) => rejectTerminal(error instanceof Error ? error : new Error(String(error)), "pi-coding-agent/approval_bridge"));
             break;
           case "message_update": {
             const update = recordValue(event.assistantMessageEvent);
@@ -499,6 +528,178 @@ export class PiExecutorProvider implements ExecutorProvider {
       armInactivityTimeout();
     });
   }
+
+  private async handlePolicyApprovalRequest(
+    event: PiRpcEvent,
+    transport: PiRpcTransport,
+    sink: ProviderRunInput["onEvent"],
+    input: Pick<ProviderRunInput, "cwd" | "policy">,
+    sessionRef: string,
+    invocationRef: string
+  ): Promise<void> {
+    if (stringValue(event.method) !== "confirm" || stringValue(event.title) !== "Xuanwu execution policy") return;
+    const rawId = stringValue(event.id);
+    const call = parsePolicyToolCall(event.message);
+    if (rawId === "" || !call) {
+      if (rawId) await transport.respondExtensionUI(rawId, { confirmed: false });
+      return;
+    }
+    const id = `${invocationRef}:${rawId}`;
+    const decision = piPolicyDecision(input.policy, call, input.cwd ?? "");
+    if (decision !== "ask") {
+      await transport.respondExtensionUI(rawId, { confirmed: decision === "allow" });
+      return;
+    }
+    if (this.pendingApprovals.has(id)) {
+      await transport.respondExtensionUI(rawId, { confirmed: false });
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const pending: PiPendingApproval = {
+      call,
+      id,
+      invocationRef,
+      rawId,
+      sessionRef,
+      sink,
+      transport,
+      cleanup: () => { if (timer) clearTimeout(timer); }
+    };
+    this.pendingApprovals.set(id, pending);
+    timer = setTimeout(() => {
+      if (this.pendingApprovals.get(id) === pending) void this.finishApproval(pending, false, "timeout");
+    }, 4 * 60_000 + 50_000);
+    timer.unref?.();
+    sink?.(piApprovalEvent(pending, "approval/requested", "pending"));
+  }
+
+  private async finishApproval(pending: PiPendingApproval, approved: boolean, decision: string): Promise<void> {
+    if (this.pendingApprovals.get(pending.id) !== pending) return;
+    this.pendingApprovals.delete(pending.id);
+    pending.cleanup();
+    try {
+      await pending.transport.respondExtensionUI(pending.rawId, { confirmed: approved });
+    } finally {
+      pending.sink?.(piApprovalEvent(pending, "approval/resolved", decision));
+    }
+  }
+
+  private async rejectPendingApprovals(reason: string): Promise<void> {
+    for (const pending of [...this.pendingApprovals.values()]) {
+      await this.finishApproval(pending, false, reason).catch(() => undefined);
+    }
+  }
+}
+
+type PiPolicyToolCall = { toolCallId: string; toolName: string; input: Record<string, unknown> };
+
+type PiPendingApproval = {
+  call: PiPolicyToolCall;
+  cleanup: () => void;
+  id: string;
+  invocationRef: string;
+  rawId: string;
+  sessionRef: string;
+  sink: ProviderRunInput["onEvent"];
+  transport: PiRpcTransport;
+};
+
+function parsePolicyToolCall(value: unknown): PiPolicyToolCall | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    if (parsed.contract !== "xw.pi-policy-tool-call.v1") return undefined;
+    const toolName = stringValue(parsed.toolName).toLowerCase();
+    if (toolName === "") return undefined;
+    return {
+      toolCallId: stringValue(parsed.toolCallId),
+      toolName,
+      input: recordValue(parsed.input)
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function piPolicyDecision(
+  policy: ProviderRunInput["policy"],
+  call: PiPolicyToolCall,
+  cwd: string
+): "allow" | "ask" | "deny" {
+  if (!policy || policy.requested.access === "read-only") return "deny";
+  if (policy.requested.access === "provider-native-development" && toolWritesOutsideProject(call, cwd)) return "deny";
+  if (policy.requested.approval === "unattended") return "allow";
+  if (policy.requested.approval === "ask-every-side-effect") return "ask";
+  return piToolSensitivity(call, cwd) === "routine" ? "allow" : "ask";
+}
+
+function piToolSensitivity(call: PiPolicyToolCall, cwd: string): "routine" | "sensitive" {
+  if (["edit", "write"].includes(call.toolName)) {
+    return toolWritesOutsideProject(call, cwd) ? "sensitive" : "routine";
+  }
+  if (call.toolName !== "bash") return "sensitive";
+  const command = stringValue(call.input.command ?? call.input.cmd).trim();
+  if (/^(?:git\s+(?:status|diff|show|log)(?:\s|$)|(?:bun|npm|pnpm|yarn)\s+(?:test|run\s+(?:test|lint|build|format|check))(?:\s|$)|(?:cargo|go)\s+(?:test|check|build)(?:\s|$)|(?:pytest|python\s+-m\s+pytest|swift\s+test|xcodebuild\b))/.test(command)) {
+    return "routine";
+  }
+  return "sensitive";
+}
+
+function toolWritesOutsideProject(call: PiPolicyToolCall, cwdValue: string): boolean {
+  if (!["edit", "write"].includes(call.toolName)) return false;
+  const cwd = cwdValue.trim();
+  const path = stringValue(call.input.path ?? call.input.file_path);
+  if (!isAbsolute(cwd) || path === "") return true;
+  const target = isAbsolute(path) ? resolve(path) : resolve(cwd, path);
+  const scoped = relative(resolve(cwd), target);
+  return scoped.startsWith("..") || isAbsolute(scoped);
+}
+
+function piApprovalEvent(
+  pending: PiPendingApproval,
+  method: "approval/requested" | "approval/resolved",
+  status: string
+): ProviderEvent {
+  const session = pending.sessionRef ? { provider: "pi-coding-agent" as const, sessionId: pending.sessionRef } : undefined;
+  const payload = {
+    id: pending.id,
+    method: "pi/extension-ui-confirm",
+    params: {
+      callback_owner_ref: pending.invocationRef,
+      invocation_ref: pending.invocationRef,
+      policy_revision: "xw.resolved-execution-policy.v1",
+      tool_name: pending.call.toolName,
+      tool_use_id: pending.call.toolCallId,
+      tool_input_summary: piApprovalInputSummary(pending.call)
+    }
+  };
+  const resolved = method === "approval/resolved";
+  return {
+    payload,
+    provider: "pi-coding-agent",
+    raw: { method, payload },
+    runEvent: normalizedRunEvent({
+      kind: resolved ? "approval_resolved" : "approval_requested",
+      method,
+      outcome: resolved ? "running" : "waiting_approval",
+      provider: "pi-coding-agent",
+      session
+    }),
+    session,
+    status,
+    type: "approval"
+  };
+}
+
+function piApprovalInputSummary(call: PiPolicyToolCall): string {
+  const command = stringValue(call.input.command ?? call.input.cmd);
+  const path = stringValue(call.input.path ?? call.input.file_path);
+  const value = JSON.stringify({
+    tool: call.toolName,
+    ...(command ? { command: command.slice(0, 160) } : {}),
+    ...(path ? { path: isAbsolute(path) ? "<absolute-path>" : path.slice(0, 160) } : {})
+  });
+  return value.slice(0, 320);
 }
 
 type PiToolObservation = {
@@ -596,6 +797,25 @@ function assertPiApprovalPolicy(value: string | undefined): void {
   if (policy !== "" && policy !== "never") {
     throw new Error(`Pi Coding Agent does not support host approval policy ${JSON.stringify(policy)}`);
   }
+}
+
+function assertPiLegacyPolicy(input: Pick<ProviderRunInput, "approvalPolicy" | "policy">): void {
+  if (!input.policy) assertPiApprovalPolicy(input.approvalPolicy);
+}
+
+function piNativeExecution(
+  input: Pick<ProviderRunInput, "policy" | "sandbox">,
+  extensionPath: string | undefined
+): { tools: readonly string[]; extensions: readonly string[] } {
+  const nativeTools = input.policy?.nativeSummary.tools;
+  const tools = Array.isArray(nativeTools) && nativeTools.every((tool) => typeof tool === "string")
+    ? nativeTools
+    : piToolsForSandbox(input.sandbox);
+  const approvalBridge = input.policy?.nativeSummary.approvalBridge === true;
+  if (!approvalBridge) return { tools, extensions: [] };
+  const path = extensionPath?.trim() ?? "";
+  if (path === "") throw new Error("Pi approval bridge is unavailable: policy extension path is not configured");
+  return { tools, extensions: [path] };
 }
 
 function piToolsForSandbox(value: string | undefined): readonly string[] {

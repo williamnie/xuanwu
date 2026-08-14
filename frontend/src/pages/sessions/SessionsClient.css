@@ -287,6 +287,23 @@
   white-space: nowrap;
 }
 
+.composer-embedded-model-manual {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+}
+
+.composer-embedded-model-manual input {
+  width: 190px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 5px 7px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+}
+
 .composer-embedded-select span {
   white-space: nowrap;
 }

@@ -58,6 +58,7 @@ export class PiRpcTransport {
   private startedAt = "";
   private startupSessionRef = "";
   private startupTools: string[] = [];
+  private startupExtensions: string[] = [];
   private readonly options: Required<Pick<PiRpcTransportOptions, "command" | "timeoutMs">> & PiRpcTransportOptions;
 
   constructor(options: string | PiRpcTransportOptions = "pi") {
@@ -82,7 +83,8 @@ export class PiRpcTransport {
     if (!executable) throw new Error("pi rpc command is empty");
     const sessionArgs = this.startupSessionRef ? ["--session", this.startupSessionRef] : [];
     const toolArgs = this.startupTools.length > 0 ? ["--tools", this.startupTools.join(",")] : [];
-    this.process = spawn(executable, [...configuredArgs, ...sessionArgs, ...toolArgs, "--mode", "rpc"], {
+    const extensionArgs = this.startupExtensions.flatMap((path) => ["--extension", path]);
+    this.process = spawn(executable, [...configuredArgs, ...sessionArgs, ...toolArgs, ...extensionArgs, "--mode", "rpc"], {
       cwd: this.options.cwd?.trim() || undefined,
       env: piRpcChildEnv(globalThis.process.env, this.options.env),
       stdio: ["pipe", "pipe", "pipe"]
@@ -103,13 +105,17 @@ export class PiRpcTransport {
     });
   }
 
-  async startForSession(sessionRef = "", tools: readonly string[] = []): Promise<void> {
+  async startForSession(sessionRef = "", tools: readonly string[] = [], extensions: readonly string[] = []): Promise<void> {
     const normalized = sessionRef.trim();
     const normalizedTools = [...tools].map((tool) => tool.trim()).filter(Boolean);
-    if (this.running && normalized === this.startupSessionRef && normalizedTools.join(",") === this.startupTools.join(",")) return;
+    const normalizedExtensions = [...extensions].map((path) => path.trim()).filter(Boolean);
+    if (this.running && normalized === this.startupSessionRef &&
+        normalizedTools.join(",") === this.startupTools.join(",") &&
+        normalizedExtensions.join("\0") === this.startupExtensions.join("\0")) return;
     if (this.running) await this.stop();
     this.startupSessionRef = normalized;
     this.startupTools = normalizedTools;
+    this.startupExtensions = normalizedExtensions;
     await this.start();
   }
 
@@ -148,6 +154,18 @@ export class PiRpcTransport {
           this.pending.delete(id);
           reject(error);
         }
+      });
+    });
+  }
+
+  async respondExtensionUI(id: string, response: { cancelled?: boolean; confirmed?: boolean; value?: string }): Promise<void> {
+    const requestID = id.trim();
+    if (!this.process || this.process.exitCode !== null) throw new Error("pi rpc transport is not running");
+    if (requestID === "") throw new Error("pi extension UI response id is required");
+    await new Promise<void>((resolve, reject) => {
+      this.process!.stdin!.write(JSON.stringify({ type: "extension_ui_response", id: requestID, ...response }) + "\n", (error) => {
+        if (error) reject(error);
+        else resolve();
       });
     });
   }

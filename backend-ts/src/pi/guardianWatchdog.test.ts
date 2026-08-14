@@ -26,6 +26,25 @@ afterEach(async () => {
 });
 
 describe("PI Guardian watchdog detector", () => {
+  test("reports granular stage timings without exposing SQL payloads", async () => {
+    const db = await openFixtureDatabase();
+    const timings: Array<{ stage: string; status: string }> = [];
+    try {
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [{ component: "pi_runtime", run: () => ({ component: "pi_runtime", ok: true }) }],
+        now: NOW,
+        timingObserver: (timing) => timings.push({ stage: timing.stage, status: timing.status })
+      });
+
+      expect(timings).toEqual([
+        { stage: "approval_expiry", status: "succeeded" },
+        { stage: "suppress_unroutable_intents", status: "succeeded" },
+        { stage: "probe:pi_runtime", status: "succeeded" },
+        { stage: "write_status", status: "succeeded" }
+      ]);
+    } finally { db.close(); }
+  });
+
   test("writes UI alert before durable Feishu delivery and records its sent receipt", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianFeishuSender([{ messageId: "om_guardian_sent_1" }], () => {

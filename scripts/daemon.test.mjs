@@ -46,6 +46,10 @@ test('macOS daemon lifecycle is repeatable and uninstall preserves state', async
     const calls = await readFile(log, 'utf8');
     assert.match(calls, /launchctl bootstrap gui\/\d+ .*test\.runner\.plist/);
     assert.match(calls, /launchctl enable gui\/\d+\/test\.runner/);
+    assert.ok(
+      calls.indexOf('launchctl enable') < calls.indexOf('launchctl bootstrap'),
+      'disabled launchd labels must be enabled before bootstrap'
+    );
     assert.match(calls, /runner system doctor --addr 127\.0\.0\.1:3999 --token-file/);
     assert.equal(await readFile(join(state, 'runner.db'), 'utf8'), 'preserve-me');
     await assert.rejects(readFile(join(home, 'Library', 'LaunchAgents', 'test.runner.plist')));
@@ -80,6 +84,11 @@ test('release and source launchd installers declare background daemon policy', a
   assert.match(release, /\$SERVICE_NAME-agentic\.service/);
   assert.match(release, /\$SERVICE_NAME-web\.service/);
   assert.doesNotMatch(release, /Requires=\$SERVICE_NAME-core\.service/);
+  assert.ok(
+    release.indexOf('launchctl enable "$domain/$CORE_LABEL"') <
+      release.indexOf('launchctl bootstrap "$domain" "$core_plist"'),
+    'release installer must enable a stopped label before bootstrap'
+  );
   assert.match(await readFile(join(root, 'scripts', 'daemon.sh'), 'utf8'), /restart "\$SERVICE_NAME-core\.service" "\$SERVICE_NAME-agentic\.service" "\$SERVICE_NAME-web\.service"/);
   assert.match(source, /<string>--core-addr<\/string>/);
 });
@@ -103,6 +112,10 @@ test('release installer can repeat an atomic macOS upgrade without replacing sta
     await writeFile(join(state, 'runner.db'), 'state-survives-upgrade');
     await writeExecutable(join(fixture, 'xuanwu'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "xuanwu v1.2.3 build=test bun=test"; fi\nexit 0\n');
     await writeExecutable(join(fixture, 'xuanwu.claude-agent-sdk'), '#!/bin/sh\nexit 0\n');
+    await mkdir(join(fixture, 'xuanwu.qodercli', 'policies'), { recursive: true });
+    await writeExecutable(join(fixture, 'xuanwu.qodercli', 'qodercli.mjs'), '#!/bin/sh\necho 1.1.18\n');
+    await writeFile(join(fixture, 'xuanwu.qodercli', 'policies', 'sandbox-default.toml'), 'fixture-policy\n');
+    await writeFile(join(fixture, 'xuanwu.pi-policy-extension.ts'), 'export default function extension() {}\n');
     await writeFile(join(fixture, 'daemon.sh'), await readFile(daemon));
     await chmod(join(fixture, 'daemon.sh'), 0o755);
     assert.equal(spawnSync('tar', ['-czf', archive, '-C', fixture, '.']).status, 0);

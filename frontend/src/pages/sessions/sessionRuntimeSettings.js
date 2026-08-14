@@ -1,8 +1,10 @@
 import { defaultMessageSettings } from './sessionOptions.js';
+import { legacyExecutionPolicy } from '../../utils/executionPolicy.js';
 
 export function sessionRuntimeSettings(session = null) {
   const rawRef = parseRawRef(session?.raw_ref);
   const runtime = recordValue(session?.runtime_settings);
+  const requestedPolicy = recordValue(rawRef.requested_execution_policy);
   return compactSettings({
     model: normalizeModel(firstNonEmpty(runtime.model, session?.model, rawRef.model, rawRef.model_id)),
     reasoningEffort: firstNonEmpty(
@@ -21,6 +23,7 @@ export function sessionRuntimeSettings(session = null) {
       rawRef.approval_policy, rawRef.approvalPolicy,
     ),
     sandbox: firstNonEmpty(runtime.sandbox, session?.sandbox, rawRef.sandbox),
+    executionPolicy: requestedPolicy.contract === 'xw.execution-policy.v1' ? requestedPolicy : null,
   });
 }
 
@@ -29,10 +32,15 @@ export function messageSettingsForSession(session, project) {
 }
 
 export function messageSettingsForRuntimeKey(runtimeKey, project) {
-  return {
+  const runtimeSettings = settingsFromRuntimeKey(runtimeKey);
+  const merged = {
     ...defaultMessageSettings(project),
-    ...settingsFromRuntimeKey(runtimeKey),
+    ...runtimeSettings,
   };
+  if (!runtimeSettings.executionPolicy && (runtimeSettings.sandbox || runtimeSettings.approvalPolicy)) {
+    merged.executionPolicy = legacyExecutionPolicy(merged.sandbox, merged.approvalPolicy);
+  }
+  return merged;
 }
 
 export function sessionRuntimeSettingsKey(session) {

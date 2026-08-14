@@ -8,7 +8,13 @@ export type CommandDetection = {
 
 /** 只探测 argv[0]，不执行 shell，也不展开不可信参数。 */
 export function detectProviderCommand(command: unknown): CommandDetection {
-  const executable = firstArgument(typeof command === "string" ? command : "");
+  const configured = typeof command === "string" ? command.trim() : "";
+  // Provider SDK 配置通常是一个 executable path。先按完整路径探测，避免把
+  // `/Users/.../Application Support/...` 错拆成 `/Users/.../Application`。
+  if (configured.includes("/") && isExecutable(configured)) {
+    return { installed: true, path: configured };
+  }
+  const executable = firstArgument(configured);
   if (executable === "") return { installed: false, reason: "provider command is empty" };
   const path = executable.includes("/") ? (isExecutable(executable) ? executable : "") : (Bun.which(executable) ?? "");
   return path

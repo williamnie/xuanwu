@@ -22,6 +22,13 @@ BINARY_PATH="${XUANWU_BINARY:-$ROOT_DIR/dist/xuanwu}"
 LAUNCHD_BINARY_PATH="${XUANWU_LAUNCHD_BINARY:-$APP_SUPPORT_DIR/bin/xuanwu}"
 CLAUDE_SDK_EXECUTABLE_SOURCE="$BINARY_PATH.claude-agent-sdk"
 CLAUDE_SDK_EXECUTABLE_PATH="$LAUNCHD_BINARY_PATH.claude-agent-sdk"
+QODERCLI_RUNTIME_SOURCE="$BINARY_PATH.qodercli"
+QODERCLI_RUNTIME_PATH="$LAUNCHD_BINARY_PATH.qodercli"
+QODERCLI_EXECUTABLE_SOURCE="$QODERCLI_RUNTIME_SOURCE/qodercli.mjs"
+QODERCLI_EXECUTABLE_PATH="$QODERCLI_RUNTIME_PATH/qodercli.mjs"
+LEGACY_QODERCLI_EXECUTABLE_PATH="$LAUNCHD_BINARY_PATH.qodercli.mjs"
+PI_POLICY_EXTENSION_SOURCE="$BINARY_PATH.pi-policy-extension.ts"
+PI_POLICY_EXTENSION_PATH="$LAUNCHD_BINARY_PATH.pi-policy-extension.ts"
 PI_PACKAGE_ASSET_SOURCE="${XUANWU_PI_PACKAGE_ASSET_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@earendil-works/pi-coding-agent}"
 PI_PACKAGE_ASSET_DIR="${XUANWU_PI_PACKAGE_ASSET_DIR:-$APP_SUPPORT_DIR/pi-coding-agent}"
 RUNNER_SKILLS_SOURCE="${XUANWU_SKILLS_SOURCE:-$ROOT_DIR/skills}"
@@ -39,15 +46,17 @@ CLAUDE_API_KEY="${XUANWU_CLAUDE_API_KEY:-${ANTHROPIC_API_KEY:-}}"
 CLAUDE_API_KEY_FILE="${XUANWU_CLAUDE_API_KEY_FILE:-$STATE_DIR/claude_api_key}"
 CLAUDE_PLATFORM_CONFIG_DIR="${XUANWU_CLAUDE_PLATFORM_CONFIG_DIR:-${ANTHROPIC_CONFIG_DIR:-}}"
 CLAUDE_PLATFORM_PROFILE="${XUANWU_CLAUDE_PLATFORM_PROFILE:-${ANTHROPIC_PROFILE:-}}"
+QODER_AUTH_MODE="${XUANWU_QODER_AUTH_MODE:-local-cli}"
+QODER_CONFIG_DIR="${XUANWU_QODER_CONFIG_DIR:-}"
+QODER_CREDENTIAL_REF="${XUANWU_QODER_CREDENTIAL_REF:-}"
+QODER_MODEL="${XUANWU_QODER_MODEL:-}"
 if [ -z "$CLAUDE_MODE" ]; then
-  if [ -n "$CLAUDE_API_KEY" ] || [ -s "$CLAUDE_API_KEY_FILE" ] || [ "$CLAUDE_AUTH_MODE" = "environment" ] || [ "$CLAUDE_AUTH_MODE" = "platform-profile" ] || [ -n "$CLAUDE_PLATFORM_CONFIG_DIR" ] || [ -n "$CLAUDE_PLATFORM_PROFILE" ]; then
-    CLAUDE_MODE="sdk"
-  else
-    CLAUDE_MODE="cli-fallback"
-  fi
+  CLAUDE_MODE="sdk"
 fi
 if [ -z "$CLAUDE_AUTH_MODE" ]; then
-  if [ "$CLAUDE_MODE" = "cli-fallback" ] && [ -z "$CLAUDE_API_KEY" ]; then
+  if [ -n "$CLAUDE_PLATFORM_CONFIG_DIR" ] || [ -n "$CLAUDE_PLATFORM_PROFILE" ]; then
+    CLAUDE_AUTH_MODE="platform-profile"
+  elif [ -z "$CLAUDE_API_KEY" ] && [ ! -s "$CLAUDE_API_KEY_FILE" ]; then
     CLAUDE_AUTH_MODE="local-cli"
   else
     CLAUDE_AUTH_MODE="environment"
@@ -141,6 +150,29 @@ stage_file_atomically() {
   fi
 }
 
+stage_dir_atomically() {
+  local source="$1" target="$2"
+  local target_dir staged previous
+  target_dir="$(dirname "$target")"
+  mkdir -p "$target_dir"
+  staged="$(mktemp -d "$target_dir/.xuanwu-dir-stage.XXXXXX")"
+  previous="$target_dir/.xuanwu-dir-previous.$$"
+  rm -rf "$previous"
+  if ! cp -R "$source/." "$staged/"; then
+    rm -rf "$staged"
+    return 1
+  fi
+  if [ -e "$target" ]; then mv "$target" "$previous"; fi
+  if ! mv "$staged" "$target"; then
+    [ -e "$previous" ] && mv "$previous" "$target"
+    return 1
+  fi
+  if [ -e "$previous" ]; then
+    rm -rf "$previous"
+  fi
+  return 0
+}
+
 stage_launchd_binary() {
   # Never truncate a running Mach-O in place. macOS can mark that vnode's code
   # pages as tainted, after which launchd rejects even a valid new signature.
@@ -159,15 +191,39 @@ stage_claude_sdk_executable() {
   stage_file_atomically "$CLAUDE_SDK_EXECUTABLE_SOURCE" "$CLAUDE_SDK_EXECUTABLE_PATH" 0755
 }
 
+stage_qodercli_runtime() {
+  [ -f "$QODERCLI_EXECUTABLE_SOURCE" ] || {
+    echo "[launchd] missing exact-pinned Qoder CLI executable: $QODERCLI_EXECUTABLE_SOURCE" >&2
+    exit 1
+  }
+  [ -f "$QODERCLI_RUNTIME_SOURCE/policies/sandbox-default.toml" ] || {
+    echo "[launchd] missing Qoder CLI runtime policies: $QODERCLI_RUNTIME_SOURCE/policies/sandbox-default.toml" >&2
+    exit 1
+  }
+  stage_dir_atomically "$QODERCLI_RUNTIME_SOURCE" "$QODERCLI_RUNTIME_PATH"
+}
+
+stage_pi_policy_extension() {
+  [ -f "$PI_POLICY_EXTENSION_SOURCE" ] || {
+    echo "[launchd] missing Pi policy extension: $PI_POLICY_EXTENSION_SOURCE" >&2
+    exit 1
+  }
+  stage_file_atomically "$PI_POLICY_EXTENSION_SOURCE" "$PI_POLICY_EXTENSION_PATH" 0644
+}
+
 backup_current_runtime() {
   local rollback_dir="" source
-  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.claude-agent-sdk" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST"; do
+  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.claude-agent-sdk" "$QODERCLI_RUNTIME_PATH" "$LEGACY_QODERCLI_EXECUTABLE_PATH" "$LAUNCHD_BINARY_PATH.pi-policy-extension.ts" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST"; do
     [ -e "$source" ] || continue
     if [ -z "$rollback_dir" ]; then
       rollback_dir="$APP_SUPPORT_DIR/rollback/$(date -u '+%Y%m%dT%H%M%SZ')"
       mkdir -p "$rollback_dir"
     fi
-    cp -p "$source" "$rollback_dir/$(basename "$source")"
+    if [ -d "$source" ]; then
+      cp -R "$source" "$rollback_dir/$(basename "$source")"
+    else
+      cp -p "$source" "$rollback_dir/$(basename "$source")"
+    fi
   done
   if [ -n "$rollback_dir" ]; then
     printf '%s\n' "$rollback_dir" > "$STATE_DIR/latest-runtime-rollback"
@@ -277,13 +333,18 @@ fi
 
 case "$CLAUDE_AUTH_MODE" in
   environment) ;;
-  local-cli)
-    [ "$CLAUDE_MODE" = "cli-fallback" ] || { echo "[launchd] XUANWU_CLAUDE_AUTH_MODE=local-cli requires cli-fallback mode" >&2; exit 1; }
-    ;;
+  local-cli) ;;
   platform-profile)
     [ "$CLAUDE_MODE" = "sdk" ] || { echo "[launchd] XUANWU_CLAUDE_AUTH_MODE=platform-profile requires sdk mode" >&2; exit 1; }
     ;;
   *) echo "[launchd] XUANWU_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile" >&2; exit 1 ;;
+esac
+case "$QODER_AUTH_MODE" in
+  local-cli|pat-env) ;;
+  pat-secret-ref|service-account-secret-ref)
+    [ -n "$QODER_CREDENTIAL_REF" ] || { echo "[launchd] XUANWU_QODER_CREDENTIAL_REF is required for $QODER_AUTH_MODE" >&2; exit 1; }
+    ;;
+  *) echo "[launchd] XUANWU_QODER_AUTH_MODE must be local-cli, pat-env, pat-secret-ref, or service-account-secret-ref" >&2; exit 1 ;;
 esac
 if [ -n "$CLAUDE_PLATFORM_PROFILE" ] && [[ ! "$CLAUDE_PLATFORM_PROFILE" =~ ^[A-Za-z0-9_.-]+$ || "$CLAUDE_PLATFORM_PROFILE" = "." || "$CLAUDE_PLATFORM_PROFILE" = ".." ]]; then
   echo "[launchd] XUANWU_CLAUDE_PLATFORM_PROFILE is invalid" >&2
@@ -314,6 +375,8 @@ else
 fi
 stage_launchd_binary
 stage_claude_sdk_executable
+stage_qodercli_runtime
+stage_pi_policy_extension
 stage_pi_package_assets
 stage_web_dir
 ensure_auth_token_file
@@ -416,6 +479,16 @@ cat > "$CORE_PLIST" <<PLIST
     <string>$(xml_escape "$CLAUDE_PLATFORM_CONFIG_DIR")</string>
     <key>XUANWU_CLAUDE_PLATFORM_PROFILE</key>
     <string>$(xml_escape "$CLAUDE_PLATFORM_PROFILE")</string>
+    <key>XUANWU_QODER_CMD</key>
+    <string>$(xml_escape "$QODERCLI_EXECUTABLE_PATH")</string>
+    <key>XUANWU_QODER_AUTH_MODE</key>
+    <string>$(xml_escape "$QODER_AUTH_MODE")</string>
+    <key>XUANWU_QODER_CONFIG_DIR</key>
+    <string>$(xml_escape "$QODER_CONFIG_DIR")</string>
+    <key>XUANWU_QODER_CREDENTIAL_REF</key>
+    <string>$(xml_escape "$QODER_CREDENTIAL_REF")</string>
+    <key>XUANWU_QODER_MODEL</key>
+    <string>$(xml_escape "$QODER_MODEL")</string>
     <key>XUANWU_MANAGED_EXECUTION</key>
     <string>1</string>
     <key>XUANWU_AUTOMATION_SHADOW_W1</key>
@@ -504,16 +577,16 @@ wait_for_process_exit "$old_legacy_pid" "$LABEL"
 wait_for_process_exit "$old_web_pid" "$WEB_LABEL"
 wait_for_process_exit "$old_core_pid" "$CORE_LABEL"
 wait_for_process_exit "$old_agentic_pid" "$AGENTIC_LABEL"
-bootstrap_service "$CORE_LABEL" "$CORE_PLIST"
 launchctl enable "$DOMAIN/$CORE_LABEL" >/dev/null 2>&1 || true
+bootstrap_service "$CORE_LABEL" "$CORE_PLIST"
 launchctl kickstart -k "$DOMAIN/$CORE_LABEL"
 wait_for_health "$(service_url "$CORE_ADDR")"
-bootstrap_service "$AGENTIC_LABEL" "$AGENTIC_PLIST"
 launchctl enable "$DOMAIN/$AGENTIC_LABEL" >/dev/null 2>&1 || true
+bootstrap_service "$AGENTIC_LABEL" "$AGENTIC_PLIST"
 launchctl kickstart -k "$DOMAIN/$AGENTIC_LABEL"
 wait_for_health "$(service_url "$AGENTIC_ADDR")"
-bootstrap_service "$WEB_LABEL" "$WEB_PLIST"
 launchctl enable "$DOMAIN/$WEB_LABEL" >/dev/null 2>&1 || true
+bootstrap_service "$WEB_LABEL" "$WEB_PLIST"
 launchctl kickstart -k "$DOMAIN/$WEB_LABEL"
 wait_for_health "$(service_url "$ADDR")"
 

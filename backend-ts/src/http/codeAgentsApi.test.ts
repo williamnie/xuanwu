@@ -9,6 +9,9 @@ import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { createProject } from "../db/repositories/projects.ts";
 import { createProviderRegistry, type ProviderFactory } from "../providers/core/registry.ts";
 import { asProviderId, type ExecutorProvider } from "../providers/types.ts";
+import { qoderFactory } from "../providers/qoder/factory.ts";
+import { createFakeQoderSdkFacade } from "../providers/qoder/sdkFacade.ts";
+import type { QoderRuntimeProbe } from "../providers/qoder/runtime.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const roots: string[] = [];
@@ -92,6 +95,66 @@ describe("Code Agents API", () => {
     }
   });
 
+  test("lists Qoder as managed but not submittable when CLI or auth is missing", async () => {
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-code-agents-qoder-"));
+    roots.push(root);
+    const stateDir = join(root, "state");
+    const database = await openDatabase({ stateDir });
+    let ready = false;
+    try {
+      const config = buildConfig({ stateDir, dbPath: database.path });
+      const registry = createProviderRegistry();
+      registry.registerFactory(qoderFactory({
+        facade: createFakeQoderSdkFacade([]).facade,
+        runtimeProbe: () => qoderProbe(ready)
+      }));
+      await registry.startConfigured(config.providers);
+      const providers = registry.readyProviders();
+      const router = createDefaultRouter({ config, database, providers, providersRegistry: registry });
+
+      const initial = await request(router, BASE_URL);
+      expect(await initial.json()).toMatchObject({
+        agents: [{
+          id: "qoder",
+          state: "not_ready",
+          submittable: false,
+          readiness_reason: "Qoder CLI/auth fixture is missing",
+          runtime: {
+            auth_configured: false,
+            executable_ready: false,
+            ready: false,
+            platform_profile: {
+              cli_version: "",
+              protocol_status: "unavailable",
+              sdk_version: "1.0.20"
+            }
+          }
+        }],
+        available_ids: []
+      });
+      expect(providers.qoder).toBeUndefined();
+
+      ready = true;
+      const discovered = await request(router, `${BASE_URL}/discover`, "POST", {});
+      expect(await discovered.json()).toMatchObject({
+        agents: [{ id: "qoder", state: "ready", submittable: true }],
+        available_ids: ["qoder"]
+      });
+      expect(providers.qoder).toBeDefined();
+
+      const disabled = await request(router, `${BASE_URL}/qoder`, "PATCH", { enabled: false });
+      expect(await disabled.json()).toMatchObject({
+        agents: [{ id: "qoder", enabled: false, state: "disabled", submittable: false }],
+        available_ids: []
+      });
+      expect(JSON.parse(await readFile(join(stateDir, "runner-settings.local.json"), "utf8"))).toMatchObject({
+        providers: { qoder: { enabled: false } }
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("refuses to disable a Code Agent with an active Run", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-code-agents-active-"));
     roots.push(root);
@@ -116,7 +179,65 @@ describe("Code Agents API", () => {
       database.close();
     }
   });
+
+  test("refuses to disable Qoder with an active Run", async () => {
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-code-agents-qoder-active-"));
+    roots.push(root);
+    const stateDir = join(root, "state");
+    const database = await openDatabase({ stateDir });
+    try {
+      createProject(database, { cwd: root, id: "demo", name: "Demo", provider: "qoder" });
+      const issue = createIssue(database, { project_id: "demo", status: "in_progress", title: "Active Qoder" });
+      const run = createIssueRun(database, issue.id);
+      database.sqlite.query("update issue_runs set provider='qoder' where id=?").run(run.id);
+      const config = buildConfig({ stateDir, dbPath: database.path });
+      const registry = createProviderRegistry();
+      registry.registerFactory(qoderFactory({
+        facade: createFakeQoderSdkFacade([]).facade,
+        runtimeProbe: () => qoderProbe(true)
+      }));
+      await registry.startConfigured(config.providers);
+      const providers = registry.readyProviders();
+      const router = createDefaultRouter({ config, database, providers, providersRegistry: registry });
+
+      const response = await request(router, `${BASE_URL}/qoder`, "PATCH", { enabled: false });
+      expect(response.status).toBe(409);
+      expect(registry.describe(asProviderId("qoder")).state).toBe("ready");
+      expect(providers.qoder).toBeDefined();
+    } finally {
+      database.close();
+    }
+  });
 });
+
+function qoderProbe(ready: boolean): QoderRuntimeProbe {
+  const reason = ready ? undefined : "Qoder CLI/auth fixture is missing";
+  return {
+    installed: ready,
+    ready,
+    ...(reason ? { reason } : {}),
+    status: {
+      active_sessions: 0,
+      api_key_configured: ready,
+      auth_configured: ready,
+      auth_mode: "pat-env",
+      auth_source: ready ? "environment" : "none",
+      executable_ready: ready,
+      mode: "sdk",
+      ready,
+      ...(reason ? { reason } : {}),
+      platform_profile: {
+        cli_version: ready ? "1.1.18" : "",
+        config_dir_scope: "default",
+        protocol_status: ready ? "expected" : "unavailable",
+        protocol_version: "1.2.0",
+        sdk_ready: true,
+        sdk_version: "1.0.20"
+      },
+      version: "1.0.20"
+    }
+  };
+}
 
 function codexFactory(installed: () => boolean): ProviderFactory {
   const provider = {

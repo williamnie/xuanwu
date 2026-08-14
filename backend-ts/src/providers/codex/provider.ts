@@ -25,7 +25,11 @@ import { recoverCodexRolloutExecEvents } from "./rolloutExecRecovery.ts";
 import { publicCodexSessionDetail, publicCodexSessionSummary } from "./sessionHistory.ts";
 
 const PROVIDER_CODEX = "codex";
-const DEFAULT_DEVELOPER_INSTRUCTIONS = "Keep changes scoped to the runner issue and explicitly update the issue status when done.";
+const DEFAULT_DEVELOPER_INSTRUCTIONS = [
+  "Keep changes scoped to the runner issue.",
+  "You are executing an Issue already claimed by Xuanwu. Never use Xuanwu CLI or API lifecycle commands to create, deduplicate, enqueue, retry, cancel, delete, or change the status of the current Issue, and never stop its current Run.",
+  "Report the result with the RUNNER_OUTCOME marker required by the execution context; the Host reconciles the Run and PI alone decides semantic Issue status."
+].join(" ");
 
 type CodexIssueAdapter = {
   initialize(): Promise<CodexInitializeResult>;
@@ -84,8 +88,8 @@ export class CodexExecutorProvider implements ExecutorProvider {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
         serviceTier: input.serviceTier,
-        approvalPolicy: input.approvalPolicy,
-        sandbox: input.sandbox,
+        approvalPolicy: nativePolicyString(input, "approvalPolicy", input.approvalPolicy),
+        sandbox: nativePolicyString(input, "sandbox", input.sandbox),
         developerInstructions: this.developerInstructions,
         threadSource: "subagent"
       });
@@ -100,8 +104,8 @@ export class CodexExecutorProvider implements ExecutorProvider {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
         serviceTier: input.serviceTier,
-        approvalPolicy: input.approvalPolicy,
-        sandbox: input.sandbox
+        approvalPolicy: nativePolicyString(input, "approvalPolicy", input.approvalPolicy),
+        sandbox: nativePolicyString(input, "sandbox", input.sandbox)
       });
       lease.bind(turn.provider_session_id, turn.turn_id);
       input.onEvent?.(turnStartedEvent(turn, input, initialized));
@@ -188,8 +192,8 @@ export class CodexExecutorProvider implements ExecutorProvider {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
         serviceTier: input.serviceTier,
-        approvalPolicy: input.approvalPolicy,
-        sandbox: input.sandbox
+        approvalPolicy: nativePolicyString(input, "approvalPolicy", input.approvalPolicy),
+        sandbox: nativePolicyString(input, "sandbox", input.sandbox)
       });
       lease.bind(turn.provider_session_id, turn.turn_id);
       input.onEvent?.(turnStartedEvent(turn, input, initialized));
@@ -376,19 +380,19 @@ function threadOptions(input: SessionCreateInput, developerInstructions: string)
     model: input.model,
     reasoningEffort: input.reasoningEffort,
     serviceTier: input.serviceTier,
-    approvalPolicy: input.approvalPolicy,
-    sandbox: input.sandbox,
+    approvalPolicy: nativePolicyString(input, "approvalPolicy", input.approvalPolicy),
+    sandbox: nativePolicyString(input, "sandbox", input.sandbox),
     developerInstructions
   }) as Parameters<CodexAdapter["startThread"]>[0];
 }
 
-function turnOptions(input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "reasoningEffort" | "serviceTier" | "sandbox">) {
+function turnOptions(input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "policy" | "reasoningEffort" | "serviceTier" | "sandbox">) {
   return compactOptions({
     model: input.model,
     reasoningEffort: input.reasoningEffort,
     serviceTier: input.serviceTier,
-    approvalPolicy: input.approvalPolicy,
-    sandbox: input.sandbox
+    approvalPolicy: nativePolicyString(input, "approvalPolicy", input.approvalPolicy),
+    sandbox: nativePolicyString(input, "sandbox", input.sandbox)
   });
 }
 
@@ -399,6 +403,11 @@ function codexUserInputs(input: { images?: ProviderRunInput["images"]; prompt?: 
     if (path !== "") items.push(localImageInput(path, image.detail));
   }
   return items;
+}
+
+function nativePolicyString(input: Pick<ProviderRunInput, "policy">, key: string, fallback: string | undefined): string | undefined {
+  const value = input.policy?.nativeSummary[key];
+  return typeof value === "string" && value.trim() !== "" ? value : fallback;
 }
 
 function sameThreadEvent(event: ProviderEvent, threadID: string): boolean {

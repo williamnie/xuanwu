@@ -86,7 +86,7 @@ describe("issue-scoped PI acceptance coordinator", () => {
       const originalRun = listIssueRuns(db, issue.id)[0]!;
       await runPiAcceptanceCoordinatorOnce({
         database: db,
-        decideIssueAcceptance: async () => acceptance("needs_user")
+        decideIssueAcceptance: async () => acceptance("needs_user", "acceptance")
       });
       const request = readIssueDecisionProjection(db, issue.id).request!;
       expect(getIssue(db, issue.id)?.status).toBe("needs_user");
@@ -504,14 +504,18 @@ class LatestTurnProvider implements ExecutorProvider {
   }
 }
 
-function acceptance(decision: "accept" | "needs_user"): PiAcceptanceRuntimeResult {
+function acceptance(
+  decision: "accept" | "needs_user",
+  humanReviewKind?: "acceptance" | "decision" | "risk_acceptance"
+): PiAcceptanceRuntimeResult {
   return {
     decision: {
       confidence: "high",
       decision,
       evidence_refs: ["run:fixture"],
       rationale: decision === "accept" ? "当前 Run 的事实满足 Issue。" : "需要用户决定。",
-      unmet_requirements: []
+      unmet_requirements: [],
+      ...(humanReviewKind ? { human_review_kind: humanReviewKind } : {})
     },
     raw_text: "{}",
     valid: true

@@ -13,6 +13,13 @@ import { runIssueWithProvider } from "./providerRuntime.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
 import { normalizeCodexEvent } from "../providers/codex/events.ts";
 import type { ExecutorProvider, ProviderEvent, ProviderRunInput } from "../providers/types.ts";
+import type { SDKResultMessage, SDKSystemInitMessage } from "@qoder-ai/qoder-agent-sdk";
+import { buildConfig } from "../config/env.ts";
+import { QoderExecutorProvider } from "../providers/qoder/provider.ts";
+import { createFakeQoderSdkFacade } from "../providers/qoder/sdkFacade.ts";
+import type { QoderRuntimeProbe } from "../providers/qoder/runtime.ts";
+import { claudeManifest } from "../providers/claude/factory.ts";
+import { claudeExecutionPolicyAdapter } from "../providers/claude/executionPolicy.ts";
 
 const tempRoots: string[] = [];
 
@@ -358,14 +365,14 @@ describe("executor provider runtime seam", () => {
         provider_turn_id: "fake-turn",
         codex_thread_id: "",
         codex_turn_id: "",
-        runtime_metadata_json: "{\"run_id\":\"fake-run\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
+        runtime_metadata_json: "{\"run_id\":\"fake-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"},\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
       }]);
       expect(getAgentSession(db, "fake-execution-only:fake-session")).toMatchObject({
         provider: "fake-execution-only",
         provider_session_id: "fake-session",
         project_id: "demo",
         issue_id: issueId,
-        raw_ref: "{\"provider_turn_id\":\"fake-turn\",\"run_id\":\"fake-run\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
+        raw_ref: "{\"provider_turn_id\":\"fake-turn\",\"run_id\":\"fake-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"},\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
       });
       const issueEvents = listIssueEvents(db, issueId);
       expect(issueEvents).toMatchObject([{
@@ -382,6 +389,93 @@ describe("executor provider runtime seam", () => {
         },
         text: "fake provider log",
         type: "provider.message"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("Qoder init persists a recoverable Session before an SDK failure", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const sessionId = "qoder-early-session";
+      const { facade } = createFakeQoderSdkFacade([qoderInit(sessionId), "throw"]);
+      const provider = new QoderExecutorProvider(buildConfig().providers.qoder!, {
+        facade,
+        invocationIdFactory: () => "qoder-inv-early",
+        readiness: qoderReadyProbe(),
+        sessionIdFactory: () => sessionId
+      });
+
+      await expect(runIssueWithProvider(provider, {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd: "/tmp/project",
+        prompt: "issue prompt"
+      })).rejects.toThrow("sdk failure");
+
+      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
+        provider: "qoder",
+        provider_session_id: sessionId,
+        provider_turn_id: ""
+      });
+      expect(getAgentSession(db, `qoder:${sessionId}`)).toMatchObject({
+        issue_id: issueId,
+        provider: "qoder",
+        provider_session_id: sessionId,
+        status: "failed"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("Qoder main result persists invocation, Session and message refs through the existing runtime", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const sessionId = "qoder-terminal-session";
+      const { facade } = createFakeQoderSdkFacade([qoderInit(sessionId), qoderResult(sessionId)]);
+      const provider = new QoderExecutorProvider(buildConfig().providers.qoder!, {
+        facade,
+        invocationIdFactory: () => "qoder-inv-terminal",
+        readiness: qoderReadyProbe(),
+        sessionIdFactory: () => sessionId
+      });
+
+      const result = await runIssueWithProvider(provider, {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd: "/tmp/project",
+        prompt: "issue prompt"
+      });
+
+      expect(result).toEqual({
+        runId: "qoder-inv-terminal",
+        session: { provider: "qoder", sessionId, turnId: "qoder-result-1" }
+      });
+      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
+        provider: "qoder",
+        provider_session_id: sessionId,
+        provider_turn_id: "qoder-result-1",
+        runtime_metadata_json: "{\"run_id\":\"qoder-inv-terminal\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
+      });
+      expect(JSON.parse(getAgentSession(db, `qoder:${sessionId}`)?.raw_ref ?? "{}")).toEqual({
+        provider_turn_id: "qoder-result-1",
+        run_id: "qoder-inv-terminal",
+        resolved_settings: {
+          approval_policy: "",
+          model: "",
+          reasoning_effort: "",
+          sandbox: "",
+          service_tier: "",
+          service_tier_source: "standard"
+        }
       });
     } finally {
       db.close();
@@ -544,14 +638,14 @@ describe("executor provider runtime seam", () => {
           codex_thread_id: "",
           codex_turn_id: "",
           exit_reason: "pi_semantic_decision",
-          runtime_metadata_json: "{\"run_id\":\"claude-run\"}"
+          runtime_metadata_json: "{\"run_id\":\"claude-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
         }
       ]);
       expect(getAgentSession(db, "claude:claude-session")).toMatchObject({
         provider: "claude",
         provider_session_id: "claude-session",
         issue_id: issueId,
-        raw_ref: "{\"provider_turn_id\":\"claude-turn\",\"run_id\":\"claude-run\"}"
+        raw_ref: "{\"provider_turn_id\":\"claude-turn\",\"run_id\":\"claude-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
       });
     } finally {
       db.close();
@@ -671,6 +765,72 @@ describe("executor provider runtime seam", () => {
       db.close();
     }
   });
+
+  test("策略组合不受支持时记录配置错误且不启动 Provider Session", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "policy-error");
+      const issueId = insertIssue(db, "policy-error");
+      const provider = new UnsupportedPolicyRuntimeProvider();
+
+      await expect(runIssueWithProvider(provider, {
+        database: db,
+        issueId,
+        projectId: "policy-error",
+        cwd: "/tmp/policy-error",
+        prompt: "execute",
+        executionPolicyRequest: {
+          contract: "xw.execution-policy.v1",
+          access: "provider-native-development",
+          approval: "ask-sensitive"
+        },
+        executionPolicyResolutionSource: "explicit"
+      })).rejects.toThrow("cannot provide the required host approval");
+
+      expect(provider.runCalls).toBe(0);
+      const run = listIssueRuns(db, issueId).at(-1);
+      expect(run?.provider_session_id).toBe("");
+      expect(JSON.parse(run?.runtime_metadata_json ?? "{}")).toMatchObject({
+        configuration_error: { code: "policy_combination_unsupported" },
+        provider: "claude",
+        resolution_source: "explicit",
+        transport: "stdio-json"
+      });
+      expect(listIssueEvents(db, issueId).some((event) => event.payload.includes("execution-policy/resolve_error"))).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("成功解析时记录 Provider policy capability contract 而不是 resolved policy contract", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "policy-metadata");
+      const issueId = insertIssue(db, "policy-metadata");
+      const provider = new SupportedPolicyRuntimeProvider();
+
+      await runIssueWithProvider(provider, {
+        database: db,
+        issueId,
+        projectId: "policy-metadata",
+        cwd: "/tmp/policy-metadata",
+        prompt: "execute",
+        executionPolicyRequest: {
+          contract: "xw.execution-policy.v1",
+          access: "unrestricted-host",
+          approval: "unattended"
+        },
+        executionPolicyResolutionSource: "explicit"
+      });
+
+      expect(JSON.parse(listIssueRuns(db, issueId).at(-1)?.runtime_metadata_json ?? "{}")).toMatchObject({
+        provider_policy_capability_revision: "xw.provider-execution-policy-capabilities.v1",
+        resolved_execution_policy: { contract: "xw.resolved-execution-policy.v1" }
+      });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 function insertProject(db: RunnerDatabase, id: string): void {
@@ -711,4 +871,101 @@ class ExecutionOnlyRuntimeProvider implements ExecutorProvider {
     });
     return { runId: `p1-execution-${input.issueId}` };
   }
+}
+
+class UnsupportedPolicyRuntimeProvider implements ExecutorProvider {
+  readonly id = "claude" as const;
+  readonly capabilities = ["issue_execution"] as const;
+  readonly manifest = claudeManifest();
+  readonly policyAdapter = claudeExecutionPolicyAdapter;
+  runCalls = 0;
+
+  runtimeStatus() {
+    return { active_sessions: 0, api_key_configured: false, mode: "cli-fallback", ready: true, version: "2.1.221" };
+  }
+
+  async run(_input: ProviderRunInput) {
+    this.runCalls += 1;
+    return { runId: "must-not-run" };
+  }
+}
+
+class SupportedPolicyRuntimeProvider implements ExecutorProvider {
+  readonly id = "claude" as const;
+  readonly capabilities = ["issue_execution"] as const;
+  readonly manifest = claudeManifest();
+  readonly policyAdapter = claudeExecutionPolicyAdapter;
+
+  runtimeStatus() {
+    return { active_sessions: 0, api_key_configured: true, mode: "sdk", ready: true, version: "0.3.152" };
+  }
+
+  async run(_input: ProviderRunInput) {
+    return { runId: "policy-metadata-run" };
+  }
+}
+
+function qoderInit(sessionId: string): SDKSystemInitMessage {
+  return {
+    type: "system",
+    subtype: "init",
+    apiKeySource: "none",
+    qodercli_version: "1.1.18",
+    protocol_version: "1.2.0",
+    cwd: "/tmp/project",
+    tools: [],
+    mcp_servers: [],
+    model: "performance",
+    permissionMode: "dontAsk",
+    slash_commands: [],
+    output_style: "default",
+    skills: [],
+    plugins: [],
+    uuid: "qoder-init-1",
+    session_id: sessionId
+  };
+}
+
+function qoderResult(sessionId: string): SDKResultMessage {
+  return {
+    type: "result",
+    subtype: "success",
+    duration_ms: 12,
+    duration_api_ms: 8,
+    is_error: false,
+    num_turns: 1,
+    result: "ok",
+    stop_reason: "end_turn",
+    total_cost_usd: 0,
+    usage: {
+      cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 0 },
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+      inference_geo: "",
+      input_tokens: 1,
+      iterations: [],
+      output_tokens: 1,
+      server_tool_use: { web_fetch_requests: 0, web_search_requests: 0 },
+      service_tier: "",
+      speed: ""
+    },
+    modelUsage: {},
+    permission_denials: [],
+    uuid: "qoder-result-1",
+    session_id: sessionId
+  };
+}
+
+function qoderReadyProbe(): QoderRuntimeProbe {
+  return {
+    installed: true,
+    ready: true,
+    status: {
+      active_sessions: 0,
+      api_key_configured: true,
+      mode: "sdk",
+      ready: true,
+      version: "1.0.20"
+    }
+  };
 }

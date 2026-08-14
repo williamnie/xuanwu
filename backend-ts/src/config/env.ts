@@ -15,7 +15,7 @@ import { buildGitHubConnectorConfig, type GitHubConnectorConfig, type GitHubConn
 import { buildGitLabConnectorConfig, type GitLabConnectorConfig, type GitLabConnectorConfigInput } from "../integrations/gitlab/config.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
 import { resolveLocalSettingsSecretRefs } from "../security/secrets/configRefs.ts";
-import { createSecretService } from "../security/secrets/service.ts";
+import { createSecretService, resolveSecretLocator } from "../security/secrets/service.ts";
 import { registerSecretForRedaction } from "../security/redactionRegistry.ts";
 
 export const ENV_KEYS = {
@@ -55,6 +55,13 @@ export const ENV_KEYS = {
   piEnabled: "XUANWU_PI_ENABLED",
   piEnv: "XUANWU_PI_ENV",
   piTimeoutMs: "XUANWU_PI_TIMEOUT_MS",
+  qoderCommand: "XUANWU_QODER_CMD",
+  qoderConfigDir: "XUANWU_QODER_CONFIG_DIR",
+  qoderAuthMode: "XUANWU_QODER_AUTH_MODE",
+  qoderCredentialRef: "XUANWU_QODER_CREDENTIAL_REF",
+  qoderEnabled: "XUANWU_QODER_ENABLED",
+  qoderModel: "XUANWU_QODER_MODEL",
+  qoderTimeoutMs: "XUANWU_QODER_TIMEOUT_MS",
   feishuAllowedChatIds: "FEISHU_ALLOWED_CHAT_IDS",
   feishuAllowedUserIds: "FEISHU_ALLOWED_USER_IDS",
   feishuAppId: "FEISHU_APP_ID",
@@ -105,7 +112,7 @@ type ConfigKey = keyof typeof ENV_KEYS;
 export type ProviderRuntimeConfig = {
   apiBaseUrl?: string;
   apiPath?: string;
-  authMode?: "environment" | "local-cli" | "platform-profile";
+  authMode?: "environment" | "local-cli" | "platform-profile" | QoderAuthMode;
   command: string;
   cwd: string;
   enabled?: boolean;
@@ -115,7 +122,13 @@ export type ProviderRuntimeConfig = {
   platformConfigDir?: string;
   platformProfile?: string;
   timeoutMs: number;
+  /** Resolved only in memory; never persisted or projected by status APIs. */
+  credential?: string;
+  credentialRef?: string;
+  configDir?: string;
 };
+
+export type QoderAuthMode = "pat-env" | "pat-secret-ref" | "service-account-secret-ref" | "local-cli";
 
 export type CodexServerConfig = {
   appCommand: string;
@@ -186,7 +199,14 @@ const FLAG_KEYS: Record<string, ConfigKey> = {
   "--pi-cwd": "piCwd",
   "--pi-enabled": "piEnabled",
   "--pi-env": "piEnv",
-  "--pi-timeout-ms": "piTimeoutMs"
+  "--pi-timeout-ms": "piTimeoutMs",
+  "--qoder-cmd": "qoderCommand",
+  "--qoder-config-dir": "qoderConfigDir",
+  "--qoder-auth-mode": "qoderAuthMode",
+  "--qoder-credential-ref": "qoderCredentialRef",
+  "--qoder-enabled": "qoderEnabled",
+  "--qoder-model": "qoderModel",
+  "--qoder-timeout-ms": "qoderTimeoutMs"
 };
 
 export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): RunnerConfig {
@@ -194,14 +214,23 @@ export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): Runner
   const cliOverrides = parseCliOverrides(stripCommand(argv));
   const baseOverrides = { ...envOverrides, ...cliOverrides };
   const stateDir = buildRunnerPaths(baseOverrides).stateDir;
+  const secretService = createSecretService({ stateDir });
   const localOverrides = resolveLocalSettingsSecretRefs(
     readLocalSettingsSync(stateDir),
-    createSecretService({ stateDir }),
+    secretService,
     env
   );
   const localCodex = localOverrides.providers?.codex ?? {};
   const localClaude = localOverrides.providers?.claude ?? {};
   const localPi = localOverrides.providers?.["pi-coding-agent"] ?? {};
+  const localQoder = localOverrides.providers?.qoder ?? {};
+  const qoderAuthMode = localQoder.authMode ?? baseOverrides.qoderAuthMode;
+  const qoderCredentialRef = localQoder.credentialRef ?? baseOverrides.qoderCredentialRef;
+  const qoderCredential = localQoder.credential ?? (
+    isQoderSecretRefMode(qoderAuthMode) && qoderCredentialRef
+      ? resolveQoderCredential(secretService, qoderCredentialRef, env)
+      : undefined
+  );
   return buildConfig({
     ...baseOverrides,
     codexServerMode: localCodex.serverMode ?? baseOverrides.codexServerMode,
@@ -213,6 +242,14 @@ export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): Runner
     piCwd: localPi.cwd ?? baseOverrides.piCwd,
     piEnabled: localPi.enabled ?? baseOverrides.piEnabled,
     piTimeoutMs: localPi.timeoutMs ?? baseOverrides.piTimeoutMs,
+    qoderCommand: localQoder.command ?? baseOverrides.qoderCommand,
+    qoderConfigDir: localQoder.configDir ?? baseOverrides.qoderConfigDir,
+    qoderAuthMode,
+    qoderCredential,
+    qoderCredentialRef,
+    qoderEnabled: localQoder.enabled ?? baseOverrides.qoderEnabled,
+    qoderModel: localQoder.model ?? baseOverrides.qoderModel,
+    qoderTimeoutMs: localQoder.timeoutMs ?? baseOverrides.qoderTimeoutMs,
     runner: { maxParallelProjects: localOverrides.runner?.maxParallelProjects ?? baseOverrides.runnerMaxParallelProjects },
     integrations: {
       feishu: localOverrides.integrations?.feishu ?? {},
@@ -220,6 +257,22 @@ export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): Runner
       gitlab: localOverrides.integrations?.gitlab ?? {}
     }
   });
+}
+
+function isQoderSecretRefMode(value: string | undefined): boolean {
+  return value === "pat-secret-ref" || value === "service-account-secret-ref";
+}
+
+function resolveQoderCredential(
+  secrets: ReturnType<typeof createSecretService>,
+  ref: string,
+  env: Env
+): string {
+  try {
+    return resolveSecretLocator(secrets, ref, env);
+  } catch {
+    return "";
+  }
 }
 
 export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
@@ -237,7 +290,8 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
     providers: {
       codex: buildCodexRuntimeConfig(overrides, codexServer),
       claude: buildClaudeRuntimeConfig(overrides),
-      "pi-coding-agent": buildPiRuntimeConfig(overrides)
+      "pi-coding-agent": buildPiRuntimeConfig(overrides),
+      qoder: buildQoderRuntimeConfig(overrides)
     },
     runner: buildRunnerConcurrencyConfig(overrides.runner ?? {
       maxParallelProjects: overrides.runnerMaxParallelProjects
@@ -343,6 +397,14 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     piEnabled: cleanValue(env[ENV_KEYS.piEnabled]),
     piEnv: cleanValue(env[ENV_KEYS.piEnv]),
     piTimeoutMs: cleanValue(env[ENV_KEYS.piTimeoutMs]),
+    qoderCommand: cleanValue(env[ENV_KEYS.qoderCommand]),
+    qoderConfigDir: cleanValue(env[ENV_KEYS.qoderConfigDir]),
+    qoderAuthMode: cleanValue(env[ENV_KEYS.qoderAuthMode]),
+    qoderCredentialRef: cleanValue(env[ENV_KEYS.qoderCredentialRef]),
+    qoderEnabled: cleanValue(env[ENV_KEYS.qoderEnabled]),
+    qoderModel: cleanValue(env[ENV_KEYS.qoderModel]),
+    qoderPat: cleanValue(env.QODER_PERSONAL_ACCESS_TOKEN),
+    qoderTimeoutMs: cleanValue(env[ENV_KEYS.qoderTimeoutMs]),
     feishuAllowedChatIds: cleanValue(env[ENV_KEYS.feishuAllowedChatIds]),
     feishuAllowedUserIds: cleanValue(env[ENV_KEYS.feishuAllowedUserIds]),
     feishuAppId: cleanValue(env[ENV_KEYS.feishuAppId]),
@@ -424,10 +486,20 @@ type ProviderRuntimeOverrides = {
   piEnabled?: boolean | string;
   piEnv?: string;
   piTimeoutMs?: number | string;
+  qoderAuthMode?: string;
+  qoderCommand?: string;
+  qoderConfigDir?: string;
+  qoderCredential?: string;
+  qoderCredentialRef?: string;
+  qoderEnabled?: boolean | string;
+  qoderModel?: string;
+  qoderPat?: string;
+  qoderTimeoutMs?: number | string;
 };
 
 const DEFAULT_CLAUDE_COMMAND = "claude";
 const DEFAULT_PI_COMMAND = "pi";
+const DEFAULT_QODER_COMMAND = "qodercli";
 const DEFAULT_PROVIDER_TIMEOUT_MS = 30 * 60 * 1000;
 export const DEFAULT_MAX_PARALLEL_PROJECTS = 1;
 export const MAX_PARALLEL_PROJECTS_LIMIT = 8;
@@ -481,12 +553,7 @@ function buildClaudeRuntimeConfig(overrides: ProviderRuntimeOverrides): Provider
     cleanValue(overrides.claudePlatformProfile) ?? cleanValue(legacyEnv.ANTHROPIC_PROFILE) ?? ""
   );
   const environmentAuthConfigured = Boolean(apiKey || authToken || oauthToken);
-  const mode = normalizeClaudeProviderMode(
-    overrides.claudeMode,
-    overrides.claudeAuthMode,
-    environmentAuthConfigured,
-    Boolean(apiBaseUrl || platformConfigDir || platformProfile)
-  );
+  const mode = normalizeClaudeProviderMode(overrides.claudeMode);
   const authMode = normalizeClaudeAuthMode(overrides.claudeAuthMode, mode, environmentAuthConfigured);
   if (authMode !== "environment") {
     delete legacyEnv.ANTHROPIC_API_KEY;
@@ -538,6 +605,42 @@ export function buildPiRuntimeConfig(overrides: ProviderRuntimeOverrides): Provi
   };
 }
 
+export function buildQoderRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
+  const authMode = normalizeQoderAuthMode(overrides.qoderAuthMode);
+  const credentialRef = cleanValue(overrides.qoderCredentialRef) ?? "";
+  const credential = cleanValue(overrides.qoderCredential) ?? "";
+  const pat = cleanValue(overrides.qoderPat) ?? "";
+  if (pat) registerSecretForRedaction(pat);
+  if (credential) registerSecretForRedaction(credential);
+  return {
+    ...buildProviderRuntimeConfig({
+      command: overrides.qoderCommand,
+      cwd: undefined,
+      defaultCommand: DEFAULT_QODER_COMMAND,
+      env: "",
+      timeoutMs: overrides.qoderTimeoutMs
+    }),
+    authMode,
+    configDir: cleanValue(overrides.qoderConfigDir) ?? "",
+    credential,
+    credentialRef,
+    enabled: parseBoolean(overrides.qoderEnabled, true),
+    env: authMode === "pat-env" && pat ? { QODER_PERSONAL_ACCESS_TOKEN: pat } : {},
+    mode: "sdk",
+    model: cleanValue(overrides.qoderModel) ?? ""
+  };
+}
+
+function normalizeQoderAuthMode(value: string | undefined): QoderAuthMode {
+  const mode = cleanValue(value)?.toLowerCase() ?? "local-cli";
+  if (mode === "pat-env" || mode === "pat-secret-ref" || mode === "service-account-secret-ref" || mode === "local-cli") {
+    return mode;
+  }
+  throw new Error(
+    "XUANWU_QODER_AUTH_MODE must be pat-env, pat-secret-ref, service-account-secret-ref, or local-cli"
+  );
+}
+
 function claudeApiKeyFromEnv(env: Env): string | undefined {
   return cleanValue(env[ENV_KEYS.claudeApiKey]) ?? cleanValue(env.ANTHROPIC_API_KEY);
 }
@@ -552,19 +655,9 @@ function readSecretFile(pathValue: string | undefined): string | undefined {
   }
 }
 
-function normalizeClaudeProviderMode(
-  value: string | undefined,
-  authValue: string | undefined,
-  environmentAuthConfigured: boolean,
-  explicitSdkConfiguration: boolean
-): "sdk" | "cli-fallback" {
+function normalizeClaudeProviderMode(value: string | undefined): "sdk" | "cli-fallback" {
   const configured = cleanValue(value)?.toLowerCase();
-  const authMode = cleanValue(authValue)?.toLowerCase();
-  const mode = configured ?? (
-    authMode === "platform-profile" || authMode === "environment" || environmentAuthConfigured || explicitSdkConfiguration
-      ? "sdk"
-      : "cli-fallback"
-  );
+  const mode = configured ?? "sdk";
   if (mode === "sdk" || mode === "cli-fallback") return mode;
   throw new Error(`XUANWU_CLAUDE_MODE must be sdk or cli-fallback, received ${mode}`);
 }
@@ -575,12 +668,9 @@ function normalizeClaudeAuthMode(
   environmentAuthConfigured: boolean
 ): "environment" | "local-cli" | "platform-profile" {
   const configured = cleanValue(value)?.toLowerCase();
-  const mode = configured ?? (providerMode === "cli-fallback" && !environmentAuthConfigured ? "local-cli" : "environment");
+  const mode = configured ?? (!environmentAuthConfigured ? "local-cli" : "environment");
   if (mode !== "environment" && mode !== "local-cli" && mode !== "platform-profile") {
     throw new Error(`XUANWU_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile, received ${mode}`);
-  }
-  if (providerMode === "sdk" && mode === "local-cli") {
-    throw new Error("XUANWU_CLAUDE_AUTH_MODE=local-cli requires XUANWU_CLAUDE_MODE=cli-fallback");
   }
   if (providerMode === "cli-fallback" && mode === "platform-profile") {
     throw new Error("XUANWU_CLAUDE_AUTH_MODE=platform-profile requires XUANWU_CLAUDE_MODE=sdk");

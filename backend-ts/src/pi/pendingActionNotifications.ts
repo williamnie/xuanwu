@@ -1,8 +1,9 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
   createPiNotificationIntent,
-  listPiActions,
-  listPiNotificationIntents
+  listPendingPiActionNotifications,
+  listPiNotificationIntentStatesByKind,
+  type PendingPiActionNotification
 } from "../db/repositories/pi.ts";
 import {
   resolveImNotificationConnectorID,
@@ -12,23 +13,18 @@ import { routeNotification } from "../notifications/unifiedNotificationPipeline.
 import { redactSensitiveText } from "../util/redact.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 
-const ACTION_TYPES = new Set(["assistant.tool.call", "mcp.tool.call"]);
-
 export function queuePendingImActionNotifications(
   db: RunnerDatabase,
   options: { lookbackMs?: number; maxPerSweep?: number; now?: Date } = {}
 ): { failed: number; queued: number; scanned: number; skipped: number } {
-  const intents = new Map(listPiNotificationIntents(db, { kind: "pi_action_pending" })
+  const intents = new Map(listPiNotificationIntentStatesByKind(db, "pi_action_pending")
     .map((intent) => [intent.source_event_id, intent]));
   const summary = { failed: 0, queued: 0, scanned: 0, skipped: 0 };
   const cutoff = (options.now ?? new Date()).getTime() - (options.lookbackMs ?? 10 * 60_000);
+  const cutoffText = new Date(cutoff).toISOString();
   const limit = Math.max(1, Math.min(20, Math.trunc(options.maxPerSweep ?? 5)));
-  for (const action of listPiActions(db, { status: "pending" })) {
+  for (const action of listPendingPiActionNotifications(db, cutoffText)) {
     summary.scanned += 1;
-    if (!ACTION_TYPES.has(action.action_type) || !recent(action.created_at, cutoff)) {
-      summary.skipped += 1;
-      continue;
-    }
     const existing = intents.get(action.id);
     if ((existing && existing.state !== "failed") || summary.queued >= limit) {
       summary.skipped += 1;
@@ -82,7 +78,7 @@ export function queuePendingImActionNotifications(
 
 function recordUnroutable(
   db: RunnerDatabase,
-  action: ReturnType<typeof listPiActions>[number],
+  action: PendingPiActionNotification,
   connectorID: string
 ): void {
   createPiNotificationIntent(db, {
@@ -104,7 +100,7 @@ function recordUnroutable(
   });
 }
 
-function pendingActionText(action: ReturnType<typeof listPiActions>[number]): string {
+function pendingActionText(action: PendingPiActionNotification): string {
   const payload = object(action.payload_json);
   const detail = redactSensitiveText(JSON.stringify({
     capability: text(payload.capability_id),
@@ -118,11 +114,6 @@ function pendingActionText(action: ReturnType<typeof listPiActions>[number]): st
     detail === "{}" ? "" : `范围：${detail}`,
     "下一步：可在当前 IM 交互中批准、拒绝、要求修改或暂缓；Runner issue/后端 API 仍作为备用入口。"
   ].filter(Boolean).join("\n");
-}
-
-function recent(value: string, cutoff: number): boolean {
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) && timestamp >= cutoff;
 }
 
 function object(value: unknown): Record<string, unknown> {

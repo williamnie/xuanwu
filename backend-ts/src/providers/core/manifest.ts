@@ -1,4 +1,5 @@
 import type { ProviderId } from "../types.ts";
+import type { ProviderExecutionPolicyCapabilities } from "./policyContracts.ts";
 
 /**
  * P2：结构化能力模型（计划 §8.4）。
@@ -55,6 +56,7 @@ export type ExecutorProviderManifest = {
   transports: readonly ProviderTransport[];
   capabilities: ProviderCapabilities;
   processObservability?: ProviderProcessObservability;
+  executionPolicy?: ProviderExecutionPolicyCapabilities;
   /** P6：Provider-specific settings descriptor（renderer 用） */
   executionSettings?: ProviderSettingsDescriptor;
   /** P6：session presentation（空 Session 支持 + native action） */

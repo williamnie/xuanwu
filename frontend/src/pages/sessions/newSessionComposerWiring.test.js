@@ -40,10 +40,11 @@ test('new and existing session payloads include service tier', () => {
   assert.match(newSessionSource, /onServiceTierChange=\{\(value\) => handleSettingChange\('serviceTier', value\)\}/);
 });
 
-test('new session model field receives remote model state and remains a selector on error', () => {
+test('new session model field uses remote choices and falls back to manual input when unverified', () => {
   assert.match(sessionsSource, /modelsError,[\s\S]*modelsLoading,[\s\S]*projectId/);
-  assert.doesNotMatch(newSessionSource, /aria-label="手动填写模型 ID"/);
-  assert.match(newSessionSource, /模型列表暂未加载/);
+  assert.match(newSessionSource, /manualModel = Boolean\(modelsError \|\| models\.some/);
+  assert.match(newSessionSource, /aria-label="手动填写模型 ID"/);
+  assert.match(newSessionSource, /list="new-session-provider-model-suggestions"/);
   assert.match(newSessionSource, /select disabled=\{modelsLoading\}/);
 });
 
@@ -53,11 +54,12 @@ test('new session provider selector hides unavailable providers', () => {
   assert.doesNotMatch(newSessionSource, /（未就绪）/);
 });
 
-test('new session permission control labels every authorization preset explicitly', () => {
-  assert.match(newSessionSource, /function permissionPresetLabel/);
-  assert.match(newSessionSource, /permissionPresetLabel\(settings\)/);
-  assert.match(newSessionSource, /case 'workspace-write\|always':\s*return '每次授权'/);
-  assert.doesNotMatch(newSessionSource, /settings\.approvalPolicy === 'never' \? '完全访问权限' : '工作区写入'/);
+test('new session permission control is catalog-driven and preserves legacy projection', () => {
+  assert.match(newSessionSource, /executionPolicyPresets\(providerCatalog, settings\.provider, policy\)/);
+  assert.match(newSessionSource, /applyExecutionPolicy\(settings, policyFromValue\(event\.target\.value\)\)/);
+  assert.match(newSessionSource, /onSettingChange\('executionPolicy', next\.executionPolicy\)/);
+  assert.match(newSessionSource, /isolationLabel\(providerCatalog, sessionSettings\.provider\)/);
+  assert.doesNotMatch(newSessionSource, /function permissionPresetLabel/);
 });
 
 test('approval event parsing accepts object payloads and fallback approval ids', () => {

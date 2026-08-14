@@ -65,6 +65,18 @@ import {
 export type PiAutoManageProjectCycleInput = { maxActions?: number; projectId: string };
 export type PiAutoManageProjectCycle = (input: PiAutoManageProjectCycleInput) => Promise<unknown>;
 export type PiAutoManageCycleResult = { projects: number; skipped: number; started: number };
+export type ScheduleTiming = {
+  cycle_id: string;
+  cycle_kind: "agentic" | "guardian" | "legacy";
+  duration_ms: number;
+  operation_ms: number;
+  phase: string;
+  post_yield_ms: number;
+  queue_wait_ms: number;
+  result?: Record<string, number>;
+  started_at: string;
+  status: "failed" | "succeeded";
+};
 export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   agentCommunications: AgentCommunicationGatewayResult;
   automationCore: AutomationSchedulerResult;
@@ -108,6 +120,7 @@ export type PiAutoManageCycleInput = {
   runProjectCycle: PiAutoManageProjectCycle;
   runSupervisor?: boolean;
   runSupervisorDecision?: PiIssueSupervisorSchedulerInput["runDecision"];
+  scheduleTimingObserver?: (timing: ScheduleTiming) => void;
   watchdogNow?: Date | string;
   watchdogStaleAfterMs?: number;
 };
@@ -119,6 +132,7 @@ export type PiAutoManageSchedulerClock<Timer = unknown> = {
 
 export type PiAutoManageSchedulerInput<Timer = unknown> = PiAutoManageCycleInput & {
   clock?: PiAutoManageSchedulerClock<Timer>;
+  initialDelayMs?: number;
   intervalMs?: number;
   onError?: (error: unknown) => void;
   supervisorIntervalMs?: number;
@@ -134,7 +148,9 @@ type EnabledProjectRow = { project_id: string };
 
 const DEFAULT_INTERVAL_MS = 30_000;
 const DEFAULT_SUPERVISOR_INTERVAL_MS = 60_000;
+export const AGENTIC_INITIAL_DELAY_MS = 15_000;
 const activeProjectCycles = new Set<string>();
+let scheduleCycleSequence = 0;
 
 export function createPiAutoManageScheduler<Timer = unknown>(
   input: PiAutoManageSchedulerInput<Timer>
@@ -190,10 +206,11 @@ export async function runPiAutoManageCycle(input: PiAutoManageCycleInput): Promi
 
 export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Promise<ScheduleLayerCycleResult> {
   const cycleStartedAt = performance.now();
+  const timing = scheduleCycleTiming(input, "legacy");
   const guardian = await runGuardianControlPlaneCycle(input);
   const agentic = await runAgenticCycle(input);
   const cycleDurationMs = performance.now() - cycleStartedAt;
-  if (cycleDurationMs >= SLOW_SCHEDULE_PHASE_MS) logScheduleTiming("cycle", cycleDurationMs);
+  if (cycleDurationMs >= SLOW_SCHEDULE_PHASE_MS) logCycleTiming(timing, "cycle", cycleDurationMs);
   return { ...guardian, ...agentic };
 }
 
@@ -201,62 +218,63 @@ export async function runGuardianControlPlaneCycle(
   input: PiAutoManageCycleInput
 ): Promise<GuardianControlPlaneCycleResult> {
   const cycleStartedAt = performance.now();
+  const timing = scheduleCycleTiming(input, "guardian");
   // W3 target-only cutover: compatibility result fields stay stable for one
   // release, but legacy Cron/PI/delegation schedulers are no longer invoked.
   const cron = { executed: 0, failed: 0, scanned: 0, skipped: 0 };
   const automations = { executed: 0, failed: 0, scanned: 0, skipped: 0 };
-  const automationCore = await timedSchedulePhase("automation_core", () => runDueAutomations({
+  const automationCore = await timedSchedulePhase(timing, "automation_core", () => runDueAutomations({
     database: input.database,
     executeAutomation: input.runAutomationCore ?? createNativeAutomationExecutor(input),
     now: optionalDate(input.watchdogNow)
   }));
   const delegations = { scanned: 0, skipped: 0, started: 0 };
-  const providerTerminalSignals = await timedSchedulePhase(
+  const providerTerminalSignals = await timedSchedulePhase(timing,
     "provider_terminal_signals",
     () => signalOpenRunTerminalProviderErrors(input.database)
   );
-  const guardianDecisions = await timedSchedulePhase(
+  const guardianDecisions = await timedSchedulePhase(timing,
     "guardian_decisions",
     () => drainGuardianDecisionOrchestrator(input.database)
   );
-  const guardianActionDispatch = await timedSchedulePhase("guardian_action_dispatch", () => dispatchApprovedGuardianActions({
+  const guardianActionDispatch = await timedSchedulePhase(timing, "guardian_action_dispatch", () => dispatchApprovedGuardianActions({
     bus: input.bus,
     database: input.database,
     providers: input.providers
   }));
-  const digestFlush = await timedSchedulePhase("digest_flush", () => runDigestFlushSchedulerOnce(input.database));
-  const watchdog = await timedSchedulePhase("guardian_watchdog", () => runPiGuardianWatchdogOnce(input.database, {
+  const digestFlush = await timedSchedulePhase(timing, "digest_flush", () => runDigestFlushSchedulerOnce(input.database));
+  const watchdog = await timedSchedulePhase(timing, "guardian_watchdog", () => runPiGuardianWatchdogOnce(input.database, {
     delivery: input.guardianAlertDelivery,
     now: input.watchdogNow,
     staleAfterMs: input.watchdogStaleAfterMs
   }));
-  const missedIntentSweep = await timedSchedulePhase(
+  const missedIntentSweep = await timedSchedulePhase(timing,
     "missed_intent_sweep",
     () => runMissedIntentSweepWithFallback(input, watchdog, input.guardianAlertDelivery)
   );
-  await timedSchedulePhase("resolve_recovered_alerts", () => (
+  await timedSchedulePhase(timing, "resolve_recovered_alerts", () => (
     resolveRecoveredAlerts(input.database, watchdog.checks, cycleNowText(input.watchdogNow))
   ));
-  const operationsDailyReports = await timedSchedulePhase("operations_daily_reports", () => queueGuardianOperationsDailyReports(input.database, {
+  const operationsDailyReports = await timedSchedulePhase(timing, "operations_daily_reports", () => queueGuardianOperationsDailyReports(input.database, {
     now: optionalDate(input.watchdogNow)
   }));
-  const watchResult = await timedSchedulePhase(
+  const watchResult = await timedSchedulePhase(timing,
     "watch_automations",
     () => runWatchAutomationsOnce(input.database, { now: input.watchdogNow })
   );
   if (watchResult.queued > 0 && input.imChannels) {
-    await timedSchedulePhase("watch_im_outbox", () => dispatchSchedulerImOutbox(input));
+    await timedSchedulePhase(timing, "watch_im_outbox", () => dispatchSchedulerImOutbox(input));
   }
-  const dailyDigestNotifications = await timedSchedulePhase(
+  const dailyDigestNotifications = await timedSchedulePhase(timing,
     "daily_digest_notifications",
     () => queueDailyNotificationDigests(input.database, { now: optionalDate(input.watchdogNow) })
   );
-  const digestNotifications = await timedSchedulePhase(
+  const digestNotifications = await timedSchedulePhase(timing,
     "digest_notifications",
     () => queueReadyImDigestNotifications(input.database)
   );
   const completionWatchNotifications = { failed: 0, queued: 0, scanned: 0, skipped: 0 };
-  const issueWatchdog = await timedSchedulePhase("issue_watchdog", () => runAutoRunIssueWatchdogOnce({
+  const issueWatchdog = await timedSchedulePhase(timing, "issue_watchdog", () => runAutoRunIssueWatchdogOnce({
     bus: input.bus,
     database: input.database,
     now: input.watchdogNow,
@@ -264,7 +282,7 @@ export async function runGuardianControlPlaneCycle(
     staleAfterMs: input.watchdogStaleAfterMs
   }));
   const cycleDurationMs = performance.now() - cycleStartedAt;
-  if (cycleDurationMs >= SLOW_SCHEDULE_PHASE_MS) logScheduleTiming("guardian_cycle", cycleDurationMs);
+  if (cycleDurationMs >= SLOW_SCHEDULE_PHASE_MS) logCycleTiming(timing, "guardian_cycle", cycleDurationMs);
   return {
     automationCore,
     automations,
@@ -286,11 +304,12 @@ export async function runGuardianControlPlaneCycle(
 
 export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<AgenticCycleResult> {
   const cycleStartedAt = performance.now();
+  const timing = scheduleCycleTiming(input, "agentic");
   // Ordinary project manager cycles remain explicit. PI-owned acceptance is
   // different: an ended Run plus issue.pi_acceptance_requested.v1 is a durable
   // request for one issue-scoped semantic decision over the Provider Session.
   const acceptance = input.decideIssueAcceptance
-    ? await timedSchedulePhase("pi_acceptance", () => (
+    ? await timedSchedulePhase(timing, "pi_acceptance", () => (
       runPiAcceptanceCoordinatorOnce({
         bus: input.bus,
         database: input.database,
@@ -305,19 +324,19 @@ export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<Ag
     skipped: acceptance.skipped,
     started: acceptance.started
   };
-  await timedSchedulePhase("pending_action_notifications", () => queuePendingImActionNotifications(input.database));
-  const agentCommunications = await timedSchedulePhase("agent_communications", () => runAgentCommunicationGatewayOnce(input.database, {
+  await timedSchedulePhase(timing, "pending_action_notifications", () => queuePendingImActionNotifications(input.database));
+  const agentCommunications = await timedSchedulePhase(timing, "agent_communications", () => runAgentCommunicationGatewayOnce(input.database, {
     decide: input.agentCommunicationDecider,
     now: optionalDate(input.watchdogNow)
   }));
   if ((agentCommunications.queued > 0 || agentCommunications.fallback > 0) && input.imChannels) {
-    await timedSchedulePhase("communication_im_outbox", () => dispatchSchedulerImOutbox(input));
+    await timedSchedulePhase(timing, "communication_im_outbox", () => dispatchSchedulerImOutbox(input));
   }
   // PI decisions can take tens of seconds. Runtime wiring executes this whole
   // agentic cycle independently from the Guardian/control-plane scheduler.
   const supervisor = input.runSupervisor === false
     ? { decisions: 0, failed: 0, scanned: 0, signaled: 0, skipped: 0 }
-    : await timedSchedulePhase("supervisor", () => runPiIssueSupervisorSchedulerOnce({
+    : await timedSchedulePhase(timing, "supervisor", () => runPiIssueSupervisorSchedulerOnce({
       bus: input.bus,
       database: input.database,
       now: optionalDate(input.watchdogNow),
@@ -325,7 +344,7 @@ export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<Ag
       runDecision: input.runSupervisorDecision
     }));
   const cycleDurationMs = performance.now() - cycleStartedAt;
-  if (cycleDurationMs >= SLOW_SCHEDULE_PHASE_MS) logScheduleTiming("agentic_cycle", cycleDurationMs);
+  if (cycleDurationMs >= SLOW_SCHEDULE_PHASE_MS) logCycleTiming(timing, "agentic_cycle", cycleDurationMs);
   return {
     ...projects,
     agentCommunications,
@@ -336,26 +355,98 @@ export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<Ag
 
 const SLOW_SCHEDULE_PHASE_MS = 250;
 
-async function timedSchedulePhase<T>(phase: string, operation: () => T | Promise<T>): Promise<T> {
+type ScheduleCycleTiming = {
+  cycleID: string;
+  input: PiAutoManageCycleInput;
+  kind: ScheduleTiming["cycle_kind"];
+  startedAt: string;
+};
+
+async function timedSchedulePhase<T>(
+  cycle: ScheduleCycleTiming,
+  phase: string,
+  operation: () => T | Promise<T>
+): Promise<T> {
   // A maintenance cycle contains many synchronous SQLite projections. Yield
-  // between them so the HTTP control plane cannot be starved by the scheduler.
+  const queuedAt = performance.now();
   await Bun.sleep(0);
   const startedAt = performance.now();
+  let result: T | undefined;
+  let status: ScheduleTiming["status"] = "succeeded";
   try {
-    return await operation();
+    result = await operation();
+    return result;
+  } catch (error) {
+    status = "failed";
+    throw error;
   } finally {
-    const durationMs = performance.now() - startedAt;
-    if (durationMs >= SLOW_SCHEDULE_PHASE_MS) logScheduleTiming(phase, durationMs);
+    const operationMs = performance.now() - startedAt;
+    const postYieldStartedAt = performance.now();
     await Bun.sleep(0);
+    const finishedAt = performance.now();
+    const summary = resultSummary(result);
+    const timing: ScheduleTiming = {
+      cycle_id: cycle.cycleID,
+      cycle_kind: cycle.kind,
+      duration_ms: finishedAt - queuedAt,
+      operation_ms: operationMs,
+      phase,
+      post_yield_ms: finishedAt - postYieldStartedAt,
+      queue_wait_ms: startedAt - queuedAt,
+      ...(summary ? { result: summary } : {}),
+      started_at: cycle.startedAt,
+      status
+    };
+    cycle.input.scheduleTimingObserver?.(timing);
+    if (timing.duration_ms >= SLOW_SCHEDULE_PHASE_MS) logScheduleTiming(timing);
   }
 }
 
-function logScheduleTiming(phase: string, durationMs: number): void {
+function logScheduleTiming(timing: ScheduleTiming): void {
   console.warn(JSON.stringify({
     event: "runner.schedule_phase_slow",
-    duration_ms: Math.round(durationMs),
-    phase
+    ...roundedTiming(timing)
   }));
+}
+
+function logCycleTiming(cycle: ScheduleCycleTiming, phase: string, durationMs: number): void {
+  const timing: ScheduleTiming = {
+    cycle_id: cycle.cycleID,
+    cycle_kind: cycle.kind,
+    duration_ms: durationMs,
+    operation_ms: durationMs,
+    phase,
+    post_yield_ms: 0,
+    queue_wait_ms: 0,
+    started_at: cycle.startedAt,
+    status: "succeeded"
+  };
+  cycle.input.scheduleTimingObserver?.(timing);
+  logScheduleTiming(timing);
+}
+
+function scheduleCycleTiming(input: PiAutoManageCycleInput, kind: ScheduleTiming["cycle_kind"]): ScheduleCycleTiming {
+  const startedAt = new Date().toISOString();
+  scheduleCycleSequence += 1;
+  return { cycleID: `${kind}:${startedAt}:${scheduleCycleSequence}`, input, kind, startedAt };
+}
+
+function resultSummary(value: unknown): Record<string, number> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const summary = Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .filter(([, item]) => typeof item === "number" && Number.isFinite(item))
+    .slice(0, 16)) as Record<string, number>;
+  return Object.keys(summary).length > 0 ? summary : undefined;
+}
+
+function roundedTiming(timing: ScheduleTiming): ScheduleTiming {
+  return {
+    ...timing,
+    duration_ms: Math.round(timing.duration_ms),
+    operation_ms: Math.round(timing.operation_ms),
+    post_yield_ms: Math.round(timing.post_yield_ms),
+    queue_wait_ms: Math.round(timing.queue_wait_ms)
+  };
 }
 
 function createCycleScheduler<Timer>(
@@ -366,7 +457,7 @@ function createCycleScheduler<Timer>(
   const intervalMs = input.intervalMs ?? DEFAULT_INTERVAL_MS;
   let timer: Timer | undefined;
   let stopped = true;
-  const schedule = () => { timer = clock.setTimeout(tick, intervalMs); };
+  const schedule = (delayMs = intervalMs) => { timer = clock.setTimeout(tick, delayMs); };
   const tick = async () => {
     try {
       await (input.runWithinActivity ? input.runWithinActivity(cycle) : cycle());
@@ -380,7 +471,7 @@ function createCycleScheduler<Timer>(
     start() {
       if (!stopped) return;
       stopped = false;
-      schedule();
+      schedule(input.initialDelayMs ?? intervalMs);
     },
     stop() {
       stopped = true;

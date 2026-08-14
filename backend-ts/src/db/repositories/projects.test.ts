@@ -58,6 +58,14 @@ describe("project read repository", () => {
         auto_run: 0,
         model: "codex-default",
         approval_policy: "never",
+        execution_policy: {
+          contract: "xw.execution-policy.v1",
+          access: "provider-native-development",
+          approval: "unattended"
+        },
+        execution_policy_json: "{}",
+        execution_policy_source: "legacy",
+        execution_policy_warnings: [],
         pi_managed: 0,
         sandbox: "workspace-write",
         default_agent_profile_id: "",

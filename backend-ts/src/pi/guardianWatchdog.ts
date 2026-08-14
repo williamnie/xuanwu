@@ -30,6 +30,15 @@ export type PiGuardianWatchdogInput = {
   checks?: PiGuardianWatchdogProbe[]; limit?: number; now?: Date | string;
   delivery?: GuardianAlertDelivery;
   schedulerStaleAfterMs?: number; staleAfterMs?: number;
+  timingObserver?: (timing: PiGuardianWatchdogStageTiming) => void;
+};
+
+export type PiGuardianWatchdogStageTiming = {
+  duration_ms: number;
+  result?: Record<string, number>;
+  stage: string;
+  started_at: string;
+  status: "failed" | "succeeded";
 };
 
 export type PiGuardianWatchdogSummary = {
@@ -45,6 +54,7 @@ type PiRuntimeRow = CountRow & { reason: string };
 const DEFAULT_LIMIT = 20;
 const DEFAULT_STALE_AFTER_MS = 5 * 60_000;
 const DEFAULT_SCHEDULER_STALE_AFTER_MS = 120_000;
+const SLOW_WATCHDOG_STAGE_MS = 100;
 
 const DEFAULT_CHECKS: PiGuardianWatchdogProbe[] = [
   { component: "pi_runtime", run: piRuntimeChecks },
@@ -63,11 +73,15 @@ export async function runPiGuardianWatchdogOnce(
   const probes = input.checks ?? DEFAULT_CHECKS;
   const summary: PiGuardianWatchdogSummary = { alerts: 0, checks: [], errors: 0, scanned: 0 };
   const errors: string[] = [];
-  expirePendingMcpApprovals(db, context.now);
-  suppressUnroutableLifecycleIntents(db);
+  await timedWatchdogStage("approval_expiry", () => expirePendingMcpApprovals(db, context.now), input);
+  await timedWatchdogStage("suppress_unroutable_intents", () => suppressUnroutableLifecycleIntents(db), input);
   for (const probe of probes) {
     summary.scanned += 1;
-    const result = await runProbe(db, probe, context, input.delivery);
+    const result = await timedWatchdogStage(
+      `probe:${probe.component}`,
+      () => runProbe(db, probe, context, input.delivery),
+      input
+    );
     summary.checks.push(...result.checks);
     summary.alerts += result.alerts;
     if (result.error !== "") {
@@ -75,8 +89,53 @@ export async function runPiGuardianWatchdogOnce(
       errors.push(result.error);
     }
   }
-  writeStatus({ checks: summary.checks, context, db, errors });
+  await timedWatchdogStage("write_status", () => writeStatus({ checks: summary.checks, context, db, errors }), input);
   return summary;
+}
+
+async function timedWatchdogStage<T>(
+  stage: string,
+  operation: () => T | Promise<T>,
+  input: PiGuardianWatchdogInput
+): Promise<T> {
+  const startedAt = new Date().toISOString();
+  const started = performance.now();
+  let result: T | undefined;
+  let status: PiGuardianWatchdogStageTiming["status"] = "succeeded";
+  try {
+    result = await operation();
+    return result;
+  } catch (error) {
+    status = "failed";
+    throw error;
+  } finally {
+    const durationMs = performance.now() - started;
+    const summary = numericSummary(result);
+    const timing: PiGuardianWatchdogStageTiming = {
+      duration_ms: durationMs,
+      ...(summary ? { result: summary } : {}),
+      stage,
+      started_at: startedAt,
+      status
+    };
+    input.timingObserver?.(timing);
+    if (durationMs >= SLOW_WATCHDOG_STAGE_MS) {
+      console.warn(JSON.stringify({
+        event: "runner.guardian_watchdog_stage_slow",
+        ...timing,
+        duration_ms: Math.round(durationMs)
+      }));
+    }
+  }
+}
+
+function numericSummary(value: unknown): Record<string, number> | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return { value };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const summary = Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .filter(([, item]) => typeof item === "number" && Number.isFinite(item))
+    .slice(0, 12)) as Record<string, number>;
+  return Object.keys(summary).length > 0 ? summary : undefined;
 }
 
 async function runProbe(

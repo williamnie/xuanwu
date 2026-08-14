@@ -1207,3 +1207,18 @@
   font-size: 0.76rem;
   line-height: 1.5;
 }
+
+.session-detail-error {
+  margin: 10px 14px 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--error) 35%, var(--border-color));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--error) 8%, var(--bg-card));
+  color: var(--error);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.session-detail-error-empty {
+  margin: 24px;
+}

@@ -10,7 +10,9 @@ export type AgentSession = {
 export type AgentSessionInput = Partial<Omit<AgentSession, "created_at" | "raw_ref" | "session_key" | "updated_at">> & {
   provider: string; provider_session_id: string; raw_ref?: unknown;
 };
-export type AgentSessionFilter = { limit?: number; projectId?: string; provider?: string; role?: string };
+export type AgentSessionFilter = {
+  issueId?: number; limit?: number; projectId?: string; provider?: string; role?: string;
+};
 
 type AgentSessionRow = Record<keyof AgentSession, unknown>;
 const SESSION_COLUMNS = `session_key, provider, provider_session_id, agent_role,
@@ -38,7 +40,7 @@ export function upsertAgentSession(db: RunnerDatabase, input: AgentSessionInput)
 
 export function listAgentSessions(db: RunnerDatabase, filter: AgentSessionFilter = {}): AgentSession[] {
   const query = buildSessionListQuery(filter);
-  return db.sqlite.query<AgentSessionRow, string[]>(query.sql).all(...query.args).map(mapAgentSessionRow);
+  return db.sqlite.query<AgentSessionRow, Array<number | string>>(query.sql).all(...query.args).map(mapAgentSessionRow);
 }
 
 export function getAgentSession(db: RunnerDatabase, sessionKey: string): AgentSession | null {
@@ -75,12 +77,13 @@ function normalizeSessionInput(input: AgentSessionInput): AgentSession {
   };
 }
 
-function buildSessionListQuery(filter: AgentSessionFilter): { args: string[]; sql: string } {
+function buildSessionListQuery(filter: AgentSessionFilter): { args: Array<number | string>; sql: string } {
   const conditions: string[] = [];
-  const args: string[] = [];
+  const args: Array<number | string> = [];
   addFilter(conditions, args, "provider=?", filter.provider);
   addFilter(conditions, args, "project_id=?", filter.projectId);
   addFilter(conditions, args, "agent_role=?", normalizeAgentSessionRole(filter.role));
+  addNumberFilter(conditions, args, "issue_id=?", filter.issueId);
   const where = conditions.length > 0 ? ` where ${conditions.join(" and ")}` : "";
   const limit = normalizedLimit(filter.limit);
   return {
@@ -89,7 +92,13 @@ function buildSessionListQuery(filter: AgentSessionFilter): { args: string[]; sq
   };
 }
 
-function addFilter(conditions: string[], args: string[], condition: string, value: string | undefined): void {
+function addNumberFilter(conditions: string[], args: Array<number | string>, condition: string, value: number | undefined): void {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) return;
+  conditions.push(condition);
+  args.push(value);
+}
+
+function addFilter(conditions: string[], args: Array<number | string>, condition: string, value: string | undefined): void {
   const text = cleanString(value);
   if (text === "") return;
   conditions.push(condition);

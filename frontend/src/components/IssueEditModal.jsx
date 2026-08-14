@@ -3,7 +3,11 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Save, X } from 'lucide-react';
 import PromptEditor from './editor/PromptEditor';
+import AgentProfileSelectOptions from './AgentProfileSelectOptions.jsx';
+import { projectsApi } from '../api/projects.js';
+import { systemApi } from '../api/system.js';
 import { selectProjects, useDataStore } from '../store/dataStore';
+import { availableAgentProfiles, codeAgentAvailable, effectiveProjectProvider } from '../utils/codeAgents.js';
 import {
   canEditIssue,
   issueDraftToPatch,
@@ -22,12 +26,44 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
   const [draft, setDraft] = useState(() => issueToEditDraft(issue));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [profiles, setProfiles] = useState([]);
+  const [providerCatalog, setProviderCatalog] = useState([]);
+  const [profilesLoading, setProfilesLoading] = useState(true);
+  const selectedProject = projects.find(project => project.id === draft.project_id) || null;
+  const availableProfiles = availableAgentProfiles(profiles, providerCatalog);
+  const inheritedProviderAvailable = codeAgentAvailable(effectiveProjectProvider(selectedProject, profiles), providerCatalog);
+  const historicalSelectionPreserved = draft.agent_profile_id
+    ? draft.agent_profile_id === (issue?.agent_profile_id || '')
+    : draft.project_id === (issue?.project_id || '') && !issue?.agent_profile_id;
+  const selectionAvailable = historicalSelectionPreserved
+    || (draft.agent_profile_id
+      ? availableProfiles.some(profile => profile.id === draft.agent_profile_id)
+      : inheritedProviderAvailable);
 
   useEffect(() => {
     setDraft(issueToEditDraft(issue));
     setError('');
     setSaving(false);
   }, [issue]);
+
+  useEffect(() => {
+    let alive = true;
+    setProfilesLoading(true);
+    Promise.all([projectsApi.getAgentProfiles(), systemApi.getProviders()])
+      .then(([items, catalog]) => {
+        if (!alive) return;
+        setProfiles(Array.isArray(items) ? items : items?.items || []);
+        setProviderCatalog(Array.isArray(catalog) ? catalog : []);
+      })
+      .catch((loadError) => {
+        if (!alive) return;
+        setProfiles([]);
+        setProviderCatalog([]);
+        setError(loadError.message || 'Code Agents 加载失败');
+      })
+      .finally(() => { if (alive) setProfilesLoading(false); });
+    return () => { alive = false; };
+  }, [issue?.id]);
 
   const setField = (field, value) => {
     setDraft(current => ({ ...current, [field]: value }));
@@ -38,6 +74,10 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
     const validationError = editValidationError(issue, draft);
     if (validationError) {
       setError(validationError);
+      return;
+    }
+    if (!selectionAvailable) {
+      setError('请选择当前已启用且可用的 Code Agent');
       return;
     }
     setSaving(true);
@@ -60,6 +100,14 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
         <form onSubmit={submitEdit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {error && <EditError message={error} />}
           <ProjectField projects={projects} value={draft.project_id} onChange={(value) => setField('project_id', value)} />
+          <AgentProfileField
+            catalog={providerCatalog}
+            inheritedProviderAvailable={inheritedProviderAvailable}
+            loading={profilesLoading}
+            profiles={profiles}
+            value={draft.agent_profile_id}
+            onChange={(value) => setField('agent_profile_id', value)}
+          />
           <TitleField value={draft.title} onChange={(value) => setField('title', value)} />
           <DescriptionField value={draft.description} onChange={(value) => setField('description', value)} />
           <PriorityField value={draft.priority} onChange={(value) => setField('priority', value)} />
@@ -68,6 +116,23 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
       </div>
     </div>,
     document.body,
+  );
+}
+
+function AgentProfileField({ catalog, inheritedProviderAvailable, loading, onChange, profiles, value }) {
+  return (
+    <div className="form-group">
+      <label>Code Agent</label>
+      <select className="form-control" disabled={loading} value={value} onChange={(event) => onChange(event.target.value)}>
+        <option disabled={!inheritedProviderAvailable} value="">
+          {inheritedProviderAvailable ? '继承项目默认' : '请选择可用 Code Agent'}
+        </option>
+        <AgentProfileSelectOptions catalog={catalog} profiles={profiles} selectedProfileID={value} />
+      </select>
+      <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+        历史选择当前不可用时会保留显示；只有改选时才要求 Code Agent 已就绪。
+      </span>
+    </div>
   );
 }
 

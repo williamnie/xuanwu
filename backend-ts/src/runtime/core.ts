@@ -27,6 +27,7 @@ import { createProviderRegistry, type ProviderProcessLease, type ProviderRegistr
 import { aggregateParityReports, compareCapabilitiesParity, legacyProjectionCompareEnabled } from "../providers/core/parity.ts";
 import { reconcileStaleCodexProcessOwnership } from "../providers/codex/processLifecycle.ts";
 import {
+  AGENTIC_INITIAL_DELAY_MS,
   createPiAgenticScheduler,
   createPiGuardianScheduler,
   type PiAutoManageSchedulerInput
@@ -317,7 +318,7 @@ async function startAutoRunLoops(
     runWithinActivity: (operation) => processGroupMemory.runMaintenance(operation)
   };
   createPiGuardianScheduler(schedulerInput).start();
-  createPiAgenticScheduler(schedulerInput).start();
+  createPiAgenticScheduler({ ...schedulerInput, initialDelayMs: AGENTIC_INITIAL_DELAY_MS }).start();
 }
 
 function logProjectLoopError(error: unknown, projectId: string): void {

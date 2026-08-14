@@ -254,7 +254,7 @@ function createFixture(path: string): void {
     sqlite.run("insert into projects (id) values ('demo')");
     sqlite.run("insert into issues (id, project_id, status) values (1, 'demo', 'done')");
     sqlite.run(`insert into issue_runs (id, issue_id, attempt, status, started_at, ended_at)
-      values ('issue-1-attempt-1', 1, 1, 'done', '2024-01-01T00:00:00Z', '2025-02-01T00:00:00Z')`);
+      values ('issue-1-attempt-1', 1, 1, 'done', '2024-01-01T00:00:00Z', '2025-01-02T23:55:00.999Z')`);
     const insert = sqlite.query("insert into issue_events (issue_id, type, payload, created_at) values (1, ?, ?, ?)");
     insert.run("issue.status_changed", JSON.stringify({ status: "done" }), "2025-01-01T00:00:00Z");
     insert.run("issue.log", payload("item/agentMessage/delta", "a"), "2025-01-02T00:00:00Z");

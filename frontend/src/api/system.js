@@ -94,6 +94,11 @@ export const systemApi = {
 
   getProviderModels: (id) => request(`/api/providers/${encodeURIComponent(id)}/models`),
 
+  resolveProviderExecutionPolicy: (id, payload) => request(`/api/providers/${encodeURIComponent(id)}/execution-policy/resolve`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+
   getCapabilities: () => request('/api/capabilities'),
 
   uploadImage,

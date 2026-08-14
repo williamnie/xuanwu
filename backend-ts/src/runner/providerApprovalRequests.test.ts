@@ -136,6 +136,102 @@ describe("provider runtime approval request sync", () => {
     }
   });
 
+  test("Qoder approval events use the same durable carrier with redacted summaries", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const event: ProviderEvent = {
+        provider: "qoder",
+        type: "approval",
+        status: "pending",
+        session: { provider: "qoder", sessionId: "qoder-session" },
+        raw: { method: "approval/requested" },
+        payload: {
+          id: "qoder-session:tool-1",
+          method: "qoder/canUseTool",
+          params: { path: "<workspace>/src/app.ts", threadId: "qoder-session", tool_name: "Edit" }
+        }
+      };
+
+      syncProviderApprovalRequest({ database: db, issueId, projectId: "demo" }, event, "issue-run-qoder");
+      expect(getPiApprovalRequest(db, "qoder-session:tool-1")).toMatchObject({
+        approval_source: "qoder_provider_event",
+        provider: "qoder",
+        request_type: "file",
+        run_id: "issue-run-qoder",
+        status: "pending"
+      });
+      syncProviderApprovalRequest({ database: db, issueId, projectId: "demo" }, {
+        ...event,
+        status: "approve",
+        raw: { method: "approval/resolved" },
+        payload: { decision: "approve", id: "qoder-session:tool-1", scope: "turn" }
+      }, "issue-run-qoder");
+      expect(getPiApprovalRequest(db, "qoder-session:tool-1")).toMatchObject({
+        resolved_decision: "approve",
+        resolved_scope: "turn",
+        status: "approved"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test.each([
+    { provider: "claude" as const, id: "claude-inv:tool-1", method: "claude/canUseTool" },
+    { provider: "pi-coding-agent" as const, id: "pi-inv:ui-1", method: "pi/extension-ui-confirm" }
+  ])("$provider approval events persist callback identity and resolve through the shared carrier", async ({ provider, id, method }) => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const session = { provider, sessionId: `${provider}-session` };
+      const payload = {
+        id,
+        method,
+        params: {
+          callback_owner_ref: `${provider}-inv`,
+          invocation_ref: `${provider}-inv`,
+          policy_revision: "xw.resolved-execution-policy.v1",
+          threadId: session.sessionId,
+          tool_name: "Write",
+          tool_use_id: "tool-1"
+        }
+      };
+      syncProviderApprovalRequest({ database: db, issueId, projectId: "demo" }, {
+        payload,
+        provider,
+        raw: { method: "approval/requested", payload },
+        session,
+        status: "pending",
+        type: "approval"
+      }, `issue-run-${provider}`);
+
+      const stored = getPiApprovalRequest(db, id);
+      expect(stored).toMatchObject({ provider, provider_approval_id: id, status: "pending" });
+      expect(JSON.parse(stored?.raw_payload_json ?? "{}")).toMatchObject({
+        params: {
+          callback_owner_ref: `${provider}-inv`,
+          invocation_ref: `${provider}-inv`,
+          policy_revision: "xw.resolved-execution-policy.v1"
+        }
+      });
+
+      syncProviderApprovalRequest({ database: db, issueId, projectId: "demo" }, {
+        payload: { decision: "deny", id, scope: "turn" },
+        provider,
+        raw: { method: "approval/resolved" },
+        session,
+        status: "deny",
+        type: "approval"
+      }, `issue-run-${provider}`);
+      expect(getPiApprovalRequest(db, id)).toMatchObject({ resolved_decision: "deny", status: "rejected" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("ignores approval words in ordinary provider output", async () => {
     const db = await openFixtureDatabase();
     try {

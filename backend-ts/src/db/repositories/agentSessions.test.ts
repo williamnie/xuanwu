@@ -66,6 +66,9 @@ describe("agent session repository", () => {
         "codex:thread-1",
         "fake-execution-only:session-2"
       ]);
+      expect(listAgentSessions(db, { issueId: 159 }).map((session) => session.session_key)).toEqual([
+        "codex:thread-1"
+      ]);
       expect(listAgentSessions(db, { limit: 1, projectId: "demo" })).toHaveLength(1);
     } finally {
       db.close();

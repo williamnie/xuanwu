@@ -23,6 +23,11 @@ export const PI_ACCEPTANCE_DECISION_SCHEMA = Type.Object({
   rationale: Type.String({ minLength: 1, maxLength: 8_000 }),
   evidence_refs: Type.Array(Type.String({ minLength: 1, maxLength: 512 }), { maxItems: 32 }),
   unmet_requirements: Type.Array(Type.String({ minLength: 1, maxLength: 2_000 }), { maxItems: 32 }),
+  human_review_kind: Type.Optional(Type.Union([
+    Type.Literal("decision"),
+    Type.Literal("acceptance"),
+    Type.Literal("risk_acceptance")
+  ])),
   follow_up_prompt: Type.Optional(Type.String({ minLength: 1, maxLength: 8_000 }))
 }, { additionalProperties: false });
 
@@ -128,7 +133,7 @@ function acceptancePrompt(card: CompletionCard, language: string): string {
     "Required fields: decision, confidence, rationale, evidence_refs, unmet_requirements. follow_up_prompt is optional.",
     `decision MUST be exactly one string literal from: ${PI_ACCEPTANCE_DECISIONS.join(", ")}.`,
     "confidence MUST be exactly one string literal: low, medium, or high. Never output a number, probability, percentage, or any other confidence form.",
-    "The exact JSON shape is: {\"decision\":\"accept|continue_same_session|retry|needs_user|failed\",\"confidence\":\"low|medium|high\",\"rationale\":\"...\",\"evidence_refs\":[\"...\"],\"unmet_requirements\":[\"...\"],\"follow_up_prompt\":\"optional...\"}.",
+    "The exact JSON shape is: {\"decision\":\"accept|continue_same_session|retry|needs_user|failed\",\"confidence\":\"low|medium|high\",\"rationale\":\"...\",\"evidence_refs\":[\"...\"],\"unmet_requirements\":[\"...\"],\"human_review_kind\":\"decision|acceptance|risk_acceptance when needs_user\",\"follow_up_prompt\":\"optional...\"}.",
     "Judge whether the chronological facts satisfy the authoritative Issue goal and acceptance criteria.",
     "Commands are observations, not pre-classified proof. Read their command, exit_code, order, output excerpt, changed files, commits, final message, and warnings together.",
     "The session field is a live bounded read of the Provider Session. If latest_turn_matches_run is false, treat latest_turn_items and session.current_git as later facts that supersede a stale canonical Run card when they clearly belong to this Issue.",
@@ -141,6 +146,7 @@ function acceptancePrompt(card: CompletionCard, language: string): string {
     "Use the available read-only repository and Session tools before deciding; code review and independent checks are PI work, not separate lifecycle states.",
     "Choose retry only when the existing Provider Session cannot responsibly continue and a fresh Session is required; include an actionable follow_up_prompt.",
     "Choose needs_user only for a concrete product, scope, authorization, destructive-risk, visual, release, cost, or external-state decision that the system cannot responsibly make.",
+    "When decision=needs_user, set human_review_kind. Use decision for missing information or a bounded product/scope choice, risk_acceptance for authorization, cost, credentials, release, destructive risk, or external effects, and acceptance only when the human is explicitly being asked whether to accept the current delivery as-is and stop the missing work. Never label a request for information or permission to continue as acceptance.",
     "Choose failed only when the Issue is conclusively unrecoverable within its authorized scope. A Provider error, disconnect, missing command, or exhausted automatic-recovery counter is not by itself grounds for failed.",
     "Never create another Issue, never ask for a generic verifier, and never retry the same unchanged diagnosis.",
     "evidence_refs must reference concrete card facts such as command:<id>, git:<revision>, run:<id>, session:<turn-id>, or final_message.",

@@ -48,6 +48,14 @@ describe("pending IM action notification sweep", () => {
         project_id: "demo",
         status: "pending"
       });
+      createPiAction(db, {
+        action_type: "mcp.tool.call",
+        id: "stale-actionable-action",
+        payload_json: { output: "y".repeat(32_000) },
+        project_id: "demo",
+        status: "pending"
+      });
+      db.sqlite.run("update pi_actions set created_at='2026-08-01T00:00:00Z' where id='stale-actionable-action'");
 
       expect(queuePendingImActionNotifications(db)).toMatchObject({ failed: 0, queued: 1, scanned: 1 });
       expect(listPiNotificationIntents(db, { kind: "pi_action_pending" })).toMatchObject([{
@@ -57,6 +65,24 @@ describe("pending IM action notification sweep", () => {
         target_chat_id: "-100opaque",
         target_message_id: "message-1"
       }]);
+    } finally { db.close(); }
+  });
+
+  test("does not materialize stale or unrelated pending action payloads", async () => {
+    const db = await fixture();
+    try {
+      createPiAction(db, {
+        action_type: "run.interrupt",
+        created_at: "2026-08-01T00:00:00Z",
+        id: "stale-unrelated-action",
+        payload_json: { output: "x".repeat(32_000) },
+        project_id: "demo",
+        status: "pending"
+      });
+
+      expect(queuePendingImActionNotifications(db, {
+        now: new Date("2026-08-12T00:00:00Z")
+      })).toEqual({ failed: 0, queued: 0, scanned: 0, skipped: 0 });
     } finally { db.close(); }
   });
 });

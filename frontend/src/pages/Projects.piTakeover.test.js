@@ -23,9 +23,9 @@ test('Projects client does not expose takeover or loop toggles', () => {
   assert.doesNotMatch(apiSource, /startProjectLoop|stopProjectLoop/);
 });
 
-test('project editor explains sandbox impact on localhost and filesystem access', () => {
-  assert.match(editorSource, /执行权限范围/);
-  assert.match(editorSource, /127\.0\.0\.1 \/ localhost/);
-  assert.match(editorSource, /同时影响执行器的文件、进程和本机网络访问边界/);
-  assert.match(editorSource, /project-settings-permission-notice/);
+test('project editor explains provider policy without claiming a shared OS sandbox', () => {
+  assert.match(editorSource, /执行权限与确认/);
+  assert.match(editorSource, /隔离能力/);
+  assert.match(editorSource, /低权限仍会启动/);
+  assert.doesNotMatch(editorSource, /127\.0\.0\.1 \/ localhost/);
 });

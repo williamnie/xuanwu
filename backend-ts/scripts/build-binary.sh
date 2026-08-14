@@ -83,6 +83,47 @@ stage_claude_sdk_executable() {
   echo "[bun-build] claude sdk executable: $target"
 }
 
+stage_qodercli_runtime() {
+  local source executable target_dir staged target version
+  source="$BACKEND_TS_DIR/node_modules/@qoder-ai/qodercli/bundle"
+  executable="$source/qodercli.js"
+  [ -f "$executable" ] || {
+    echo "[bun-build] missing exact-pinned Qoder CLI bundle: $executable" >&2
+    exit 1
+  }
+  version="$(bun -e "console.log(require('$BACKEND_TS_DIR/node_modules/@qoder-ai/qodercli/package.json').version)")"
+  [ "$version" = "1.1.18" ] || {
+    echo "[bun-build] Qoder CLI version $version does not match required 1.1.18" >&2
+    exit 1
+  }
+  target="$OUTFILE.qodercli"
+  target_dir="$(dirname "$target")"
+  staged="$(mktemp -d "$target_dir/.qodercli-stage.XXXXXX")"
+  cp -R "$source/." "$staged/"
+  mv "$staged/qodercli.js" "$staged/qodercli.mjs"
+  chmod 0755 "$staged/qodercli.mjs"
+  rm -rf "$target"
+  mv -f "$staged" "$target"
+  rm -f "$OUTFILE.qodercli.mjs"
+  echo "[bun-build] qodercli runtime: $target"
+}
+
+stage_pi_policy_extension() {
+  local source target_dir staged target
+  source="$BACKEND_TS_DIR/src/providers/pi/xuanwuPolicyExtension.ts"
+  [ -f "$source" ] || {
+    echo "[bun-build] missing Pi policy extension: $source" >&2
+    exit 1
+  }
+  target="$OUTFILE.pi-policy-extension.ts"
+  target_dir="$(dirname "$target")"
+  staged="$(mktemp "$target_dir/.pi-policy-extension-stage.XXXXXX")"
+  cp -p "$source" "$staged"
+  chmod 0644 "$staged"
+  mv -f "$staged" "$target"
+  echo "[bun-build] pi policy extension: $target"
+}
+
 resolve_build_stamp() {
   local revision dirty
   revision="nogit"
@@ -113,6 +154,8 @@ echo "[bun-build] outfile: $OUTFILE"
 )
 
 stage_claude_sdk_executable
+stage_qodercli_runtime
+stage_pi_policy_extension
 sign_binary_if_possible
 printf '%s\n' "$BUILD_STAMP" > "$OUTFILE.build.stamp"
 echo "[bun-build] binary: $OUTFILE"

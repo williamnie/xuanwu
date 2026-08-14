@@ -314,6 +314,33 @@ describe("Claude Agent SDK provider", () => {
       version: "0.3.152"
     });
   });
+
+  test("uses a verified local Claude Code login for SDK readiness", () => {
+    const provider = new ClaudeSdkExecutorProvider(config({ authMode: "local-cli" }), {
+      authInspector: () => ({ auth_method: "oauth_token", checked: true, logged_in: true, provider: "firstParty" })
+    });
+    expect(provider.runtimeStatus()).toMatchObject({
+      auth_configured: true,
+      auth_mode: "local-cli",
+      auth_source: "local_cli",
+      executable_ready: true,
+      mode: "sdk",
+      ready: true
+    });
+  });
+
+  test("rejects SDK startup when the local Claude Code login is explicitly unavailable", () => {
+    const provider = new ClaudeSdkExecutorProvider(config({ authMode: "local-cli" }), {
+      authInspector: () => ({ checked: true, logged_in: false, provider: "firstParty" })
+    });
+    expect(provider.runtimeStatus()).toMatchObject({
+      auth_configured: false,
+      auth_mode: "local-cli",
+      auth_source: "local_cli",
+      ready: false,
+      reason: "Claude CLI local login is unavailable; run `claude auth login` as the service user"
+    });
+  });
 });
 
 function sdkProvider(sessionId: string, factory: () => AsyncGenerator<unknown>): ClaudeSdkExecutorProvider {

@@ -140,6 +140,8 @@ export function providerLabel(provider) {
       return 'Claude';
     case 'pi-coding-agent':
       return 'Pi Coding Agent';
+    case 'qoder':
+      return 'Qoder';
     case 'opencode':
       return 'opencode';
     case 'kimicode':

@@ -13,7 +13,8 @@
     "@anthropic-ai/sdk": "^0.93.0",
     "@earendil-works/pi-coding-agent": "^0.76.0",
     "@larksuiteoapi/node-sdk": "^1.66.1",
-    "@qoder-ai/qoder-agent-sdk": "1.0.17",
+    "@qoder-ai/qoder-agent-sdk": "1.0.20",
+    "@qoder-ai/qodercli": "1.1.18",
     "@sinclair/typebox": "^0.34.49"
   },
   "devDependencies": {

@@ -82,7 +82,7 @@ type ClaudeCliSessionFunctions = {
 
 type ClaudeCliExecutionInput = Pick<SessionCreateInput,
   "approvalPolicy" | "cwd" | "model" | "prompt" | "reasoningEffort" | "sandbox" | "serviceTier"
-> & {
+> & Pick<ProviderRunInput, "policy"> & {
   issueId?: number;
   onEvent?: (event: ProviderEvent) => void;
 };
@@ -222,8 +222,14 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
         ? { checked: false, logged_in: true }
         : (this.options.authInspector ?? inspectClaudeCliAuth)(this.config)
       : { checked: true, logged_in: environmentAuth.configured };
-    const authConfigured = authMode === "local-cli" ? auth.logged_in : environmentAuth.configured;
-    const ready = commandReady && (Boolean(this.options.processFactory) || authConfigured);
+    const authConfigured = authMode === "local-cli"
+      ? Boolean(this.options.processFactory) || (auth.checked && auth.logged_in)
+      : environmentAuth.configured;
+    // 本地 CLI 探测可能因启动超时或非 JSON 输出而暂时不可用。只有 Claude 明确返回
+    // loggedIn=false 时才阻止执行；不确定状态交给真实 CLI 调用验证，避免一次探测故障
+    // 永久把 Provider 固定为 not_ready。
+    const localAuthUsable = Boolean(this.options.processFactory) || !auth.checked || auth.logged_in;
+    const ready = commandReady && (authMode === "local-cli" ? localAuthUsable : environmentAuth.configured);
     return {
       active_sessions: new Set(this.active.values()).size,
       api_key_configured: authMode === "environment" && clean(this.config.env.ANTHROPIC_API_KEY) !== "",
@@ -304,12 +310,14 @@ export function inspectClaudeCliAuth(config: ProviderRuntimeConfig): ClaudeCliAu
       timeout: 3_000
     });
     const parsed = JSON.parse(new TextDecoder().decode(result.stdout)) as Record<string, unknown>;
-    inspection = {
-      checked: result.exitCode === 0,
-      logged_in: result.exitCode === 0 && parsed.loggedIn === true,
-      ...(safeAuthMethod(parsed.authMethod) ? { auth_method: safeAuthMethod(parsed.authMethod) } : {}),
-      ...(safeLabel(parsed.apiProvider) ? { provider: safeLabel(parsed.apiProvider) } : {})
-    };
+    if (typeof parsed.loggedIn === "boolean") {
+      inspection = {
+        checked: true,
+        logged_in: parsed.loggedIn,
+        ...(safeAuthMethod(parsed.authMethod) ? { auth_method: safeAuthMethod(parsed.authMethod) } : {}),
+        ...(safeLabel(parsed.apiProvider) ? { provider: safeLabel(parsed.apiProvider) } : {})
+      };
+    }
   } catch {
     // Authentication remains unavailable without exposing command output.
   }
@@ -319,22 +327,37 @@ export function inspectClaudeCliAuth(config: ProviderRuntimeConfig): ClaudeCliAu
 
 function claudeCommand(
   config: ProviderRuntimeConfig,
-  input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "prompt" | "sandbox">,
+  input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "prompt" | "sandbox"> & Pick<ProviderRunInput, "policy">,
   resume = "",
   sessionID = ""
 ): string[] {
   const command = splitCommand(config.command);
   const args = [
     "-p", "--verbose", "--output-format", "stream-json",
-    "--permission-mode", claudePermissionMode(input.approvalPolicy),
-    "--allowedTools", claudeAllowedTools(input.sandbox)
+    "--permission-mode", claudeNativePermissionMode(input),
+    "--allowedTools", claudeNativeAllowedTools(input)
   ];
+  if (input.policy?.nativeSummary.allowDangerouslySkipPermissions === true) {
+    args.push("--dangerously-skip-permissions");
+  }
   if (resume) args.push("--resume", resume);
   else args.push("--session-id", sessionID);
   const model = clean(input.model) || clean(config.model);
   if (model !== "" && model !== "codex-default") args.push("--model", model);
   args.push("--max-turns", DEFAULT_MAX_TURNS, clean(input.prompt));
   return [...command, ...args];
+}
+
+function claudeNativePermissionMode(input: Pick<ProviderRunInput, "policy"> & { approvalPolicy?: string }): string {
+  const native = input.policy?.nativeSummary.permissionMode;
+  return typeof native === "string" && native.trim() !== "" ? native : claudePermissionMode(input.approvalPolicy);
+}
+
+function claudeNativeAllowedTools(input: Pick<ProviderRunInput, "policy"> & { sandbox?: string }): string {
+  const native = input.policy?.nativeSummary.tools;
+  return Array.isArray(native) && native.every((item) => typeof item === "string")
+    ? native.join(",")
+    : claudeAllowedTools(input.sandbox);
 }
 
 function requiredSession(result: ProviderRunResult): SessionRef {
@@ -356,7 +379,7 @@ function normalizeLimit(value: number | undefined): number {
 
 function claudeAllowedTools(sandbox?: string): string {
   return clean(sandbox).toLowerCase() === "read-only"
-    ? "Read,Grep,Glob,LS,Bash(xuanwu issue update:*),Bash(curl:*)"
+    ? "Read,Grep,Glob,LS"
     : "Read,Grep,Glob,LS,Edit,MultiEdit,Write,Bash";
 }
 

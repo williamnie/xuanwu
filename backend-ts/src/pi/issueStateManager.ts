@@ -3,7 +3,7 @@ import { listIssueEvents, type IssueEvent } from "../db/repositories/issueEvents
 import { hasActiveExecutorWork } from "../db/repositories/issueQueue.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { listAgentSessions, type AgentSession } from "../db/repositories/agentSessions.ts";
+import { getAgentSession, listAgentSessions, type AgentSession } from "../db/repositories/agentSessions.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { issueStateSnapshot, type IssueStateSnapshot } from "./issueStateSnapshot.ts";
 export { applyIssueStateRepair } from "./issueStateRepairExecutor.ts";
@@ -61,9 +61,16 @@ export function recommendedRepairPayload(
 }
 
 function candidateIssues(db: RunnerDatabase, options: IssueStateManagerOptions): Issue[] {
-  const all = listIssues(db, { projectId: cleanString(options.projectID) });
   const ids = new Set(options.issueIDs ?? []);
-  return ids.size === 0 ? all : all.filter((issue) => ids.has(issue.id));
+  if (ids.size > 0) {
+    return [...ids].flatMap((id) => {
+      const issue = getIssue(db, id);
+      return issue && (cleanString(options.projectID) === "" || issue.project_id === cleanString(options.projectID))
+        ? [issue]
+        : [];
+    });
+  }
+  return listIssues(db, { projectId: cleanString(options.projectID) });
 }
 
 function diagnoseOne(db: RunnerDatabase, issue: Issue, options: IssueStateManagerOptions, now: Date): IssueStateDiagnostic[] {
@@ -162,9 +169,11 @@ function piDecisionAlreadyRequested(events: IssueEvent[], runID: string): boolea
 }
 
 function issueSessions(db: RunnerDatabase, issue: Issue): AgentSession[] {
-  return listAgentSessions(db, { projectId: issue.project_id }).filter((session) => session.issue_id === issue.id || (
-    issue.codex_thread_id !== "" && session.provider === "codex" && session.provider_session_id === issue.codex_thread_id
-  ));
+  const sessions = listAgentSessions(db, { issueId: issue.id });
+  const legacy = issue.codex_thread_id === "" ? null : getAgentSession(db, `codex:${issue.codex_thread_id}`);
+  if (!legacy || sessions.some((session) => session.session_key === legacy.session_key)) return sessions;
+  return [...sessions, legacy].sort((left, right) =>
+    right.updated_at.localeCompare(left.updated_at) || left.session_key.localeCompare(right.session_key));
 }
 
 function batchProgress(issues: Issue[], targets: IssueStateBatchTarget[]): IssueStateBatchProgress[] {

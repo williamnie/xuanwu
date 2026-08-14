@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -51,6 +52,7 @@ describe("Bun issue action API", () => {
       }
       expect(listEvents(database).map((event) => event.type)).toEqual([
         "issue.status_changed",
+        "issue.lifecycle_control.v1",
         "issue.status_changed"
       ]);
     } finally {
@@ -169,6 +171,45 @@ describe("Bun issue action API", () => {
     }
   });
 
+  test("cancel publishes the actor-attributed terminal status to realtime observers", async () => {
+    const database = await openFixtureDatabase();
+    const bus = new EventBus();
+    const observed: Array<{ payload?: string; type: string }> = [];
+    const detach = bus.observe((event) => observed.push(event));
+    try {
+      insertProject(database, "demo");
+      const issueId = insertIssue(database, {
+        projectId: "demo",
+        status: "in_progress",
+        title: "cancel event",
+        codexThreadId: "thread-cancel-event",
+        codexTurnId: "turn-cancel-event"
+      });
+      insertOpenRun(database, issueId);
+      const router = createDefaultRouter({ bus, database });
+
+      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}/cancel`, {
+        method: "POST",
+        body: "{}",
+        headers: { "content-type": "application/json" }
+      }));
+
+      expect(response.status).toBe(200);
+      expect(observed.filter((event) => event.type === "issue.status_changed")).toEqual([{
+        type: "issue.status_changed",
+        payload: JSON.stringify({
+          actor: { kind: "operator", source: "http", thread_id: "" },
+          status: "cancelled"
+        }),
+        issueId,
+        projectId: "demo"
+      }]);
+    } finally {
+      detach();
+      database.close();
+    }
+  });
+
   test("cancel also moves queued and terminal issues to cancelled", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -199,20 +240,111 @@ describe("Bun issue action API", () => {
       database.close();
     }
   });
+
+  test("denies a managed executor cancelling or changing the status of its own Issue", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueId = insertIssue(database, {
+        codexThreadId: "thread-self",
+        codexTurnId: "turn-self",
+        projectId: "demo",
+        status: "in_progress",
+        title: "self control"
+      });
+      insertOpenRun(database, issueId);
+      const headers = managedExecutorHeaders("thread-self");
+
+      const cancelled = await issueAction(database, issueId, "cancel", undefined, headers);
+      const patched = await issuePatch(database, issueId, { status: "triage" }, headers);
+
+      expect(cancelled.status).toBe(409);
+      expect(patched.status).toBe(409);
+      expect(await cancelled.json()).toMatchObject({ message: expect.stringContaining("cannot cancel its own Issue") });
+      expect(await patched.json()).toMatchObject({ message: expect.stringContaining("cannot status_update its own Issue") });
+      expect(getIssueStatus(database, issueId)).toBe("in_progress");
+      expect(latestRun(database, issueId)).toMatchObject({ status: "in_progress", ended_at: "" });
+      expect(listEvents(database).filter((event) => event.type === "issue.executor_lifecycle_mutation_denied.v1")).toHaveLength(2);
+      expect(database.sqlite.query<{ count: number }, [number]>(
+        "select count(*) as count from notifications where issue_id=? and event='pi.needs_user'"
+      ).get(issueId)?.count).toBe(2);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("lets a managed executor control a different fixture Issue and records the actor", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueId = insertIssue(database, {
+        codexThreadId: "thread-fixture",
+        projectId: "demo",
+        status: "triage",
+        title: "fixture control"
+      });
+
+      const response = await issueAction(
+        database,
+        issueId,
+        "enqueue",
+        undefined,
+        managedExecutorHeaders("thread-controller")
+      );
+
+      expect(response.status).toBe(200);
+      expect(getIssueStatus(database, issueId)).toBe("todo");
+      const audit = eventWithType(database, "issue.lifecycle_control.v1");
+      expect(JSON.parse(audit?.payload ?? "{}")).toMatchObject({
+        actor: {
+          kind: "managed_executor",
+          source: "xuanwu-cli",
+          thread_id: "thread-controller"
+        },
+        after_status: "todo",
+        before_status: "triage",
+        operation: "enqueue"
+      });
+    } finally {
+      database.close();
+    }
+  });
 });
 
 function issueAction(
   db: RunnerDatabase,
   id: number,
   action: "cancel" | "enqueue" | "retry",
-  provider?: ExecutorProvider
+  provider?: ExecutorProvider,
+  extraHeaders: Record<string, string> = {}
 ): Promise<Response> {
   const providers = provider ? { [provider.id]: provider } : undefined;
   return createDefaultRouter({ database: db, providers }).handle(new Request(`${BASE_URL}/api/issues/${id}/${action}`, {
     method: "POST",
     body: "{}",
-    headers: { "content-type": "application/json" }
+    headers: { "content-type": "application/json", ...extraHeaders }
   }));
+}
+
+function issuePatch(
+  db: RunnerDatabase,
+  id: number,
+  body: Record<string, unknown>,
+  extraHeaders: Record<string, string> = {}
+): Promise<Response> {
+  return createDefaultRouter({ database: db }).handle(new Request(`${BASE_URL}/api/issues/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json", ...extraHeaders }
+  }));
+}
+
+function managedExecutorHeaders(threadID: string): Record<string, string> {
+  return {
+    "x-codex-client": "xuanwu-cli",
+    "x-xuanwu-caller-thread-id": threadID,
+    "x-xuanwu-managed-execution": "1"
+  };
 }
 
 type IssueFixture = {

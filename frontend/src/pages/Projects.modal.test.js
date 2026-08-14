@@ -110,7 +110,12 @@ test('project config modal reads Provider catalog and models from generic APIs',
   assert.match(editorSource, /buildProviderModelOptions\(ui\.formProvider, ui\.codexModels, ui\.formModel, ui\.profileForm\.model\)/);
   assert.match(editorSource, /modelOptions\.map\(option =>/);
   assert.match(editorSource, /远端 model API 读取失败，已启用手填/);
-  assert.match(editorSource, /模型 API 失败，请手动填写 model ID/);
+  assert.match(editorSource, /手动填写 model ID/);
+  assert.match(editorSource, /executionPolicyPresets\(ui\.providerCatalog, ui\.formProvider/);
+  assert.match(editorSource, /isolationLabel\(ui\.providerCatalog, ui\.formProvider\)/);
+  assert.match(editorSource, /低权限仍会启动；越权操作会被拒绝/);
+  assert.match(editorSource, /resolveProviderExecutionPolicy/);
+  assert.match(editorSource, /静态建议，当前值保留为未验证手工 model ID/);
   assert.doesNotMatch(editorSource, /FALLBACK_CODEX_MODEL_OPTIONS/);
   assert.doesNotMatch(editorSource, /CODEX_MODEL_OPTIONS\.some\(option => option\.value === model\)/);
 });
@@ -121,7 +126,9 @@ test('project config modal shows provider loading and failure states instead of 
   assert.match(editorSource, /正在读取可用执行引擎…/);
   assert.match(editorSource, /正在读取已启用且可用的 Code Agent…/);
   assert.match(editorSource, /读取执行引擎失败：\$\{ui\.providerCatalogError\}/);
-  assert.match(editorSource, /disabled=\{ui\.saving \|\| ui\.providerCatalogLoading \|\| !providerReady\}/);
+  assert.match(editorSource, /!providerReady && !historicalProviderPreserved/);
+  assert.match(editorSource, /codeAgentLabel\(ui\.formProvider, ui\.providerCatalog\).*（不可用）/);
+  assert.match(editorSource, /<AgentProfileSelectOptions/);
 
   const editorCss = readFileSync(new URL('./ProjectSettingsEditor.css', import.meta.url), 'utf8');
   assert.match(editorCss, /\.project-settings-loading-hint::before\s*\{[\s\S]*?animation:\s*xuanwu-spin/);

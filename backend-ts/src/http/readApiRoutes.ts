@@ -2,7 +2,12 @@ import type { IssueActionOptions } from "../db/repositories/issueActions.ts";
 import type { ListIssueEventsOptions } from "../db/repositories/issueEvents.ts";
 import { ProjectNotFoundError } from "../db/repositories/projects.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
-import { createReadApiDomainHandlers, type ReadApiDomainHandlers } from "./readApiDomain.ts";
+import {
+  createReadApiDomainHandlers,
+  ManagedExecutorLifecycleMutationError,
+  type IssueMutationActor,
+  type ReadApiDomainHandlers
+} from "./readApiDomain.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
 import { HumanReviewConflictError } from "../domain/review/humanReview.ts";
@@ -46,22 +51,24 @@ function registerIssueCollectionRoutes(router: Router, handlers: ReadApiDomainHa
 function registerIssueItemRoutes(router: Router, handlers: ReadApiDomainHandlers, readHandlers = handlers): void {
   router.post("/api/issues/:id/enqueue", (request) => actionResponse(handlers, request, "enqueue"));
   router.post("/api/issues/:id/retry", (request) => actionResponse(handlers, request, "retry"));
-  router.post("/api/issues/:id/cancel", (request) => asyncWriteResponse(() => handlers.issues.cancel(issueID(request))));
+  router.post("/api/issues/:id/cancel", (request) => asyncWriteResponse(() => (
+    handlers.issues.cancel(issueID(request), issueMutationActor(request))
+  )));
   router.post("/api/issues/:id/human-review-response", async (request) => {
     const body = await parseObjectBody(request);
-    return asyncWriteResponse(() => handlers.issues.answerHumanReview(issueID(request), body));
+    return asyncWriteResponse(() => handlers.issues.answerHumanReview(issueID(request), body, issueMutationActor(request)));
   });
   router.post("/api/issues/:id/human-review-requests", async (request) => {
     const body = await parseObjectBody(request);
-    return writeResponse(() => handlers.issues.requestHumanReview(issueID(request), body), 201);
+    return writeResponse(() => handlers.issues.requestHumanReview(issueID(request), body, issueMutationActor(request)), 201);
   });
   router.get("/api/issues/:id", (request) => readResponse(() => readHandlers.issues.read(issueID(request))));
   router.patch("/api/issues/:id", async (request) => {
     const body = await parseObjectBody(request);
-    return asyncWriteResponse(() => handlers.issues.update(issueID(request), body));
+    return asyncWriteResponse(() => handlers.issues.update(issueID(request), body, issueMutationActor(request)));
   });
   router.delete("/api/issues/:id", (request) => writeResponse(() => {
-    handlers.issues.delete(issueID(request));
+    handlers.issues.delete(issueID(request), issueMutationActor(request));
     return null;
   }, 204));
   router.post("/api/issues/:id/comments", async (request) => {
@@ -82,7 +89,7 @@ async function actionResponse(
   const body = await parseOptionalObjectBody(request);
   const id = issueID(request);
   const options = actionOptions(body);
-  return asyncWriteResponse(async () => handlers.issues[action](id, options));
+  return asyncWriteResponse(async () => handlers.issues[action](id, options, issueMutationActor(request)));
 }
 
 function readResponse(read: () => unknown): Response {
@@ -120,6 +127,7 @@ async function asyncWriteResponse(write: () => Promise<unknown>, status = 200): 
     return json(await write(), { status });
   } catch (error) {
     if (error instanceof ProjectNotFoundError) throw new HttpError(404, error.message);
+    if (error instanceof ManagedExecutorLifecycleMutationError) throw new HttpError(409, error.message);
     if (error instanceof HumanReviewConflictError) throw new HttpError(409, error.message);
     if (error instanceof HttpError) throw error;
     if (error instanceof Error) throw new HttpError(400, error.message);
@@ -132,6 +140,7 @@ function writeResponse(write: () => unknown, status = 200): Response {
     return json(write(), { status });
   } catch (error) {
     if (error instanceof ProjectNotFoundError) throw new HttpError(404, error.message);
+    if (error instanceof ManagedExecutorLifecycleMutationError) throw new HttpError(409, error.message);
     if (error instanceof Error) throw new HttpError(400, error.message);
     throw error;
   }
@@ -208,4 +217,14 @@ function cleanParam(value: string | null): string {
 
 function stringBody(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function issueMutationActor(request: Request): IssueMutationActor {
+  const source = cleanParam(request.headers.get("x-codex-client")) || "http";
+  const managed = cleanParam(request.headers.get("x-xuanwu-managed-execution")) === "1";
+  return {
+    kind: managed ? "managed_executor" : "operator",
+    source: source.slice(0, 80),
+    threadID: cleanParam(request.headers.get("x-xuanwu-caller-thread-id")).slice(0, 160)
+  };
 }

@@ -1,3 +1,5 @@
+import { profileExecutionPolicy } from './executionPolicy.js';
+
 const DEFAULT_PROFILE_ID = '';
 const DEFAULT_PROVIDER = 'codex';
 
@@ -14,6 +16,7 @@ export function emptyAgentProfileForm() {
     default_instructions: '',
     skill_intents: '',
     plugin_intents: '',
+    execution_policy: null,
   };
 }
 
@@ -25,6 +28,7 @@ export function normalizeAgentProfileForm(profile = {}) {
     ...profile,
     provider,
     model: provider === DEFAULT_PROVIDER ? (model || 'codex-default') : (model === 'codex-default' ? '' : model),
+    execution_policy: profileExecutionPolicy(profile),
     skill_intents: normalizeIntentText(profile.skill_intents),
     plugin_intents: normalizeIntentText(profile.plugin_intents),
   };
@@ -39,6 +43,7 @@ export function agentProfilePayload(form) {
     default_instructions: normalized.default_instructions.trim(),
     skill_intents: JSON.stringify(parseIntentText(normalized.skill_intents)),
     plugin_intents: JSON.stringify(parseIntentText(normalized.plugin_intents)),
+    execution_policy: normalized.execution_policy || {},
   };
 }
 

@@ -8,6 +8,8 @@ export function SessionInfoPopover({ session, provider, sessionId, model, naviga
   const linkedIssue = session?.linked_issue || null;
   const sourceIssues = session?.source_issues || [];
   const tokens = tokenSummary(session?.token_usage);
+  const credits = creditsSummary(session?.credits);
+  const versions = versionSummary(session);
   return (
     <details className="session-info-popover">
       <summary className="session-info-trigger" title="查看会话信息" aria-label="查看会话信息">
@@ -19,6 +21,7 @@ export function SessionInfoPopover({ session, provider, sessionId, model, naviga
           <InfoRow label="ID" value={<code>{displayValue(sessionId)}</code>} />
           <InfoRow label="Provider" value={displayValue(provider)} />
           <InfoRow label="Model" value={displayValue(model, '未提供')} />
+          {versions.map((item) => <InfoRow key={item.label} label={item.label} value={item.value} />)}
         </div>
         <div className="session-info-section">
           <span className="session-info-section-title">关联 Issue</span>
@@ -63,6 +66,22 @@ export function SessionInfoPopover({ session, provider, sessionId, model, naviga
             <div className="session-info-empty">暂无 token 数据</div>
           )}
         </div>
+        {session?.provider === 'qoder' ? (
+          <div className="session-info-section">
+            <span className="session-info-section-title">Qoder Credits</span>
+            {credits ? (
+              <>
+                {credits.session && <InfoRow label="Session" value={credits.session} />}
+                {credits.lastRequest && <InfoRow label="Last request" value={credits.lastRequest} />}
+                {credits.observed && <InfoRow label="Observed requests" value={credits.observed} />}
+                <InfoRow label="Provenance" value={credits.provenance} />
+                <InfoRow label="Money" value="Unavailable（不换算 USD/CNY）" />
+              </>
+            ) : (
+              <div className="session-info-empty">暂无 Credits 数据；不推测费用</div>
+            )}
+          </div>
+        ) : null}
       </div>
     </details>
   );
@@ -135,4 +154,36 @@ function tokenSummary(usage) {
     reasoning: formatTokenNumber(total.reasoning_output_tokens),
     capturedAt: usage.captured_at || '',
   };
+}
+
+function creditsSummary(credits) {
+  if (!credits || typeof credits !== 'object') return null;
+  const session = finiteCredit(credits.session?.value);
+  const lastRequest = finiteCredit(credits.last_request?.value);
+  const observed = finiteCredit(credits.observed_requests?.value);
+  if (session === null && lastRequest === null && observed === null) return null;
+  return {
+    session: session === null ? '' : `${formatCredit(session)}（累计语义未验证）`,
+    lastRequest: lastRequest === null ? '' : formatCredit(lastRequest),
+    observed: observed === null ? '' : `${formatCredit(observed)} / ${Number(credits.observed_requests?.count || 0)} requests`,
+    provenance: credits.session?.provenance || credits.observed_requests?.provenance || credits.last_request?.provenance || 'unknown',
+  };
+}
+
+function finiteCredit(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function formatCredit(value) {
+  return `${new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 6 }).format(value)} Credits`;
+}
+
+function versionSummary(session) {
+  return [
+    { label: 'Provider version', value: session?.provider_version },
+    { label: 'SDK version', value: session?.sdk_version },
+    { label: 'CLI version', value: session?.cli_version },
+    { label: 'Protocol', value: session?.protocol_version },
+  ].filter((item) => String(item.value || '').trim());
 }

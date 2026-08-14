@@ -17,7 +17,8 @@ test('new Work makes the title optional and calls the executor choice Code Agent
   assert.match(editorDialog, /<span>\{t\('editor\.title'\)\} <small>（可选）<\/small><\/span>/);
   assert.doesNotMatch(editorDialog, /onChange=\{event => setField\('title', event\.target\.value\)\} required/);
   assert.match(editorDialog, /<span>Code Agent<\/span>/);
-  assert.match(editorDialog, /provider === 'pi-coding-agent'\) return 'Pi'/);
+  assert.match(editorDialog, /<AgentProfileSelectOptions/);
+  assert.match(editorDialog, /draft\.agent_profile_id === \(work\?\.agent_profile_id \|\| ''\)/);
 });
 
 test('Work Board cards restore drag and drop through guarded Issue actions', () => {

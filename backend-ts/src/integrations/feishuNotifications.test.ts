@@ -11,6 +11,7 @@ import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { listPiNotificationIntents } from "../db/repositories/pi.ts";
 import { createIssueRun } from "../db/repositories/issueRuns.ts";
+import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
 import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
@@ -301,6 +302,57 @@ describe("Feishu notification queue", () => {
           state: "sent"
         })
       ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("notifies the linked user when a managed executor is denied self-cancellation", async () => {
+    const db = await fixtureDatabase();
+    const bus = new EventBus();
+    try {
+      const issueID = linkedFeishuIssue(db);
+      updateIssue(db, issueID, {
+        codex_thread_id: "thread-self",
+        codex_turn_id: "turn-self",
+        status: "in_progress"
+      });
+      db.sqlite.run(
+        `insert into issue_runs
+          (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id, started_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ["issue-self-attempt-1", issueID, 1, "in_progress", "codex", "thread-self", "turn-self", "2026-01-01T00:00:00Z"]
+      );
+      const router = createDefaultRouter({ bus, database: db });
+
+      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueID}/cancel`, {
+        body: "{}",
+        headers: {
+          "content-type": "application/json",
+          "x-codex-client": "xuanwu-cli",
+          "x-xuanwu-caller-thread-id": "thread-self",
+          "x-xuanwu-managed-execution": "1"
+        },
+        method: "POST"
+      }));
+      await flushAgentCommunicationTestMessages(db);
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+      const intents = listPiNotificationIntents(db, { issueId: issueID });
+
+      expect(response.status).toBe(409);
+      expect(getIssue(db, issueID)?.status).toBe("in_progress");
+      expect(listIssueRuns(db, issueID).at(-1)).toMatchObject({ ended_at: "", status: "in_progress" });
+      expect(intents).toContainEqual(expect.objectContaining({
+        kind: "pi_needs_user",
+        requires_user: 1,
+        state: "sent",
+        target_chat_id: "oc_group"
+      }));
+      expect(outbox).toContainEqual(expect.objectContaining({
+        content: expect.stringContaining("已阻止 Issue #1 的 executor 修改自己的生命周期"),
+        issue_id: issueID,
+        target_chat_id: "oc_group"
+      }));
     } finally {
       db.close();
     }

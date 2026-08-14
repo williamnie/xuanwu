@@ -77,6 +77,9 @@ import { imOutboundDedupeMigration } from "./074_im_outbound_dedupe.ts";
 import { issueEventQueryIndexesMigration } from "./075_issue_event_query_indexes.ts";
 import { runRevisionIssueScopeInvariantMigration } from "./076_run_revision_issue_scope_invariant.ts";
 import { piActionEventConnectorTestIndexMigration } from "./077_pi_action_event_connector_test_index.ts";
+import { builtinQoderExecutorProfileMigration } from "./078_builtin_qoder_executor_profile.ts";
+import { schedulerPerformanceIndexesMigration } from "./079_scheduler_performance_indexes.ts";
+import { executionPolicyJsonMigration } from "./080_execution_policy_json.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -157,5 +160,8 @@ export const migrations = [
   imOutboundDedupeMigration,
   issueEventQueryIndexesMigration,
   runRevisionIssueScopeInvariantMigration,
-  piActionEventConnectorTestIndexMigration
+  piActionEventConnectorTestIndexMigration,
+  builtinQoderExecutorProfileMigration,
+  schedulerPerformanceIndexesMigration,
+  executionPolicyJsonMigration
 ];

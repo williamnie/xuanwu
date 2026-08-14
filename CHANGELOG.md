@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-14
+
+### Added / 新增
+
+- 增加 Qoder Code Agent 的 Session 创建、恢复、历史读取、事件转译、审批与精确中断链路，
+  并将冻结的 CLI runtime 与 policies 一并打入 release 资产。
+- 增加统一执行策略合同与持久化能力，为 Codex、Claude、Pi 和 Qoder 提供一致的 sandbox、
+  approval 与权限解析语义。
+- 增加 Code Agent 运行下钻、用量展示、Session transcript，以及 Qoder 离线回归与真实账号
+  验收记录；Qoder support level 仍保持 `preview`。
+
+### Changed / 变更
+
+- 优化调度查询、事件维护和 Provider Session 生命周期，降低热路径扫描与 Codex 进程刷新洪峰。
+- 收紧 managed executor 的 Issue 生命周期写入边界，并修复 PI 验收、通知、重试与执行结果语义。
+- 修复 Claude SDK 本地登录复用、Qoder release runtime 完整性，以及首次 release 目录升级返回码。
+
 ## [0.2.1] - 2026-08-07
 
 ### Added / 新增
@@ -48,7 +65,8 @@
 
 - 首个 GitHub Release，包含 macOS/Linux 的 arm64、amd64 预构建资产和一键安装脚本。
 
-[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/williamnie/xuanwu/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/williamnie/xuanwu/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/williamnie/xuanwu/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/williamnie/xuanwu/releases/tag/v0.1.0

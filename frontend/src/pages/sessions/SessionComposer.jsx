@@ -9,14 +9,7 @@ import {
 } from './sessionOptions';
 import SessionCommandPanel from './SessionCommandPanel';
 import './SessionComposer.css';
-
-const PERMISSION_PRESETS = [
-  { value: 'danger-full-access|never', sandbox: 'danger-full-access', approvalPolicy: 'never', label: '完全访问权限', tone: 'danger' },
-  { value: 'workspace-write|never', sandbox: 'workspace-write', approvalPolicy: 'never', label: '工作区写入', tone: 'default' },
-  { value: 'workspace-write|danger-only', sandbox: 'workspace-write', approvalPolicy: 'danger-only', label: '按需授权', tone: 'default' },
-  { value: 'workspace-write|always', sandbox: 'workspace-write', approvalPolicy: 'always', label: '每次授权', tone: 'default' },
-  { value: 'read-only|always', sandbox: 'read-only', approvalPolicy: 'always', label: '只读模式', tone: 'default' },
-];
+import { applyExecutionPolicy, executionPolicyPresets, executionPolicyValue, policyFromValue, settingsExecutionPolicy } from '../../utils/executionPolicy.js';
 
 export default function SessionComposer({
   value,
@@ -53,12 +46,13 @@ export default function SessionComposer({
   onExecuteCommand = null,
   onCancelCommand = null,
   runtimeControls = null,
+  providerCatalog = [],
   requirePrompt = false,
 }) {
   const selectedModel = models.find((model) => model.id === settings.model || model.model === settings.model);
   const defaultModel = models.find((model) => model.isDefault) || models[0] || null;
   const effectiveModel = selectedModel || defaultModel;
-  const effortOptions = visibleEffortOptions(effectiveModel, settings.reasoningEffort);
+  const effortOptions = visibleEffortOptions(effectiveModel, settings.reasoningEffort, settings.provider);
   const tierOptions = serviceTierOptions(effectiveModel, settings.serviceTier);
   const composerRuntimeControls = runtimeControls ?? (
     <RuntimeControls
@@ -70,6 +64,7 @@ export default function SessionComposer({
       effortOptions={effortOptions}
       tierOptions={tierOptions}
       effectiveModel={effectiveModel}
+      providerCatalog={providerCatalog}
     />
   );
   const hasQueuedMessages = queuedMessages.length > 0;
@@ -176,24 +171,41 @@ function queueMessagePreview(item) {
   return refs.length ? `已附加 ${refs.length} 个 references` : '';
 }
 
-function RuntimeControls({ settings, onSettingChange, models, modelsLoading, modelsError, effortOptions, tierOptions, effectiveModel }) {
+function RuntimeControls({ settings, onSettingChange, models, modelsLoading, modelsError, effortOptions, tierOptions, effectiveModel, providerCatalog }) {
+  const manualModel = Boolean(modelsError || models.some((model) => model?.verified === false));
   return (
     <>
-      <PermissionSelect settings={settings} onSettingChange={onSettingChange} />
-      <CompactSelect
-        className="model"
-        icon={<Cpu size={14} />}
-        value={settings.model}
-        displayLabel={modelDisplayLabel(settings.model, effectiveModel, models)}
-        onChange={(value) => onSettingChange('model', value)}
-        title={modelHint(modelsLoading, modelsError)}
-      >
-        <option value="">{modelPlaceholder(modelsLoading, modelsError, effectiveModel)}</option>
-        {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{compactModelName(modelLabel(model))}</option>)}
-        {settings.model && !models.some((model) => model.id === settings.model || model.model === settings.model) && (
-          <option value={settings.model}>{settings.model}</option>
-        )}
-      </CompactSelect>
+      <PermissionSelect settings={settings} onSettingChange={onSettingChange} providerCatalog={providerCatalog} />
+      {manualModel ? (
+        <label className="session-composer-model-manual" title="模型列表未验证，可手工输入 Qoder model ID">
+          <Cpu size={14} />
+          <input
+            aria-label="手动填写模型 ID"
+            list="session-provider-model-suggestions"
+            placeholder="Provider 默认 / 手填 model ID"
+            value={settings.model}
+            onChange={(event) => onSettingChange('model', event.target.value)}
+          />
+          <datalist id="session-provider-model-suggestions">
+            {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{modelLabel(model)}</option>)}
+          </datalist>
+        </label>
+      ) : (
+        <CompactSelect
+          className="model"
+          icon={<Cpu size={14} />}
+          value={settings.model}
+          displayLabel={modelDisplayLabel(settings.model, effectiveModel, models)}
+          onChange={(value) => onSettingChange('model', value)}
+          title={modelHint(modelsLoading, modelsError)}
+        >
+          <option value="">{modelPlaceholder(modelsLoading, modelsError, effectiveModel)}</option>
+          {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{compactModelName(modelLabel(model))}</option>)}
+          {settings.model && !models.some((model) => model.id === settings.model || model.model === settings.model) && (
+            <option value={settings.model}>{settings.model}</option>
+          )}
+        </CompactSelect>
+      )}
       <CompactSelect
         className="effort"
         icon={<Brain size={14} />}
@@ -206,7 +218,7 @@ function RuntimeControls({ settings, onSettingChange, models, modelsLoading, mod
           <option key={effortOptionKey(option)} value={option.value}>{option.shortLabel || option.label}</option>
         ))}
       </CompactSelect>
-      <CompactSelect
+      {settings.provider !== 'qoder' ? <CompactSelect
         className="speed"
         icon={<Gauge size={14} />}
         value={settings.serviceTier || SERVICE_TIER_STANDARD}
@@ -217,14 +229,16 @@ function RuntimeControls({ settings, onSettingChange, models, modelsLoading, mod
         {tierOptions.map((option) => (
           <option key={serviceTierOptionKey(option)} value={option.value}>{option.shortLabel || option.label}</option>
         ))}
-      </CompactSelect>
+      </CompactSelect> : null}
     </>
   );
 }
 
-function PermissionSelect({ settings, onSettingChange }) {
-  const value = permissionValue(settings);
-  const preset = PERMISSION_PRESETS.find((item) => item.value === value) || PERMISSION_PRESETS[1];
+function PermissionSelect({ settings, onSettingChange, providerCatalog }) {
+  const policy = settingsExecutionPolicy(settings);
+  const value = executionPolicyValue(policy);
+  const presets = executionPolicyPresets(providerCatalog, settings.provider, policy);
+  const preset = presets.find((item) => item.value === value) || presets[0];
   return (
     <CompactSelect
       className={`permission ${preset.tone}`}
@@ -232,14 +246,22 @@ function PermissionSelect({ settings, onSettingChange }) {
       value={preset.value}
       displayLabel={preset.label}
       onChange={(nextValue) => {
-        const next = PERMISSION_PRESETS.find((item) => item.value === nextValue);
-        if (!next) return;
+        const next = applyExecutionPolicy(settings, policyFromValue(nextValue));
+        onSettingChange('executionPolicy', next.executionPolicy);
         onSettingChange('sandbox', next.sandbox);
         onSettingChange('approvalPolicy', next.approvalPolicy);
       }}
       title="权限与授权策略"
     >
-      {PERMISSION_PRESETS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      {presets.map((option) => (
+        <option
+          disabled={option.disabled}
+          key={option.value}
+          value={option.value}
+        >
+          {option.label}{option.disabled ? '（当前 transport 不支持）' : ''}
+        </option>
+      ))}
     </CompactSelect>
   );
 }
@@ -321,9 +343,24 @@ function queueStatusLabel(status, index) {
   return `排队 ${index + 1}`;
 }
 
-function visibleEffortOptions(model, selectedValue) {
+function visibleEffortOptions(model, selectedValue, provider) {
   const supported = supportedEffortValues(model);
   const inherited = { value: '', label: '默认推理强度', shortLabel: effortShortLabel(model?.defaultReasoningEffort) || '默认' };
+  if (provider === 'qoder') {
+    if (model?.verified !== true || !supported.length) {
+      return selectedValue
+        ? [inherited, { value: selectedValue, label: `${selectedValue}（未验证）`, shortLabel: selectedValue }]
+        : [inherited];
+    }
+    const qoderOptions = supported.map((value) => {
+      const known = REASONING_EFFORT_OPTIONS.find((option) => option.value === value);
+      return known || { value, label: value, shortLabel: value };
+    });
+    if (selectedValue && !supported.includes(selectedValue)) {
+      qoderOptions.push({ value: selectedValue, label: `${selectedValue}（当前模型不支持）`, shortLabel: selectedValue });
+    }
+    return [inherited, ...qoderOptions];
+  }
   if (!supported.length) return [inherited, ...REASONING_EFFORT_OPTIONS.filter((option) => option.value)];
   return [inherited, ...REASONING_EFFORT_OPTIONS.filter((option) => supported.includes(option.value) || option.value === selectedValue)];
 }
@@ -375,10 +412,4 @@ function compactModelName(value) {
 
 function effortShortLabel(value) {
   return REASONING_EFFORT_OPTIONS.find((option) => option.value === value)?.shortLabel || '';
-}
-
-function permissionValue(settings) {
-  const sandbox = settings.sandbox || 'workspace-write';
-  const approvalPolicy = settings.approvalPolicy || 'never';
-  return `${sandbox}|${approvalPolicy}`;
 }

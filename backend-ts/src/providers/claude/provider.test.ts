@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
@@ -9,11 +9,68 @@ import { getIssue, listIssueRuns } from "../../db/repositories/issues.ts";
 import { cancelIssueWithInterrupt } from "../../runner/interrupt.ts";
 import { runProjectLoopOnce } from "../../runner/projectLoop.ts";
 import { runIssueWithProvider } from "../../runner/providerRuntime.ts";
-import { ClaudeExecutorProvider, type ClaudeProcessFactory } from "./provider.ts";
+import { ClaudeExecutorProvider, ClaudeSdkExecutorProvider, type ClaudeProcessFactory } from "./provider.ts";
+import { inspectClaudeCliAuth } from "./cliProvider.ts";
+import type { Options as ClaudeSdkOptions } from "@anthropic-ai/claude-agent-sdk";
+import { CLAUDE_EXECUTION_POLICY_CAPABILITIES, claudeExecutionPolicyAdapter } from "./executionPolicy.ts";
+import { resolveExecutionPolicy } from "../core/policyResolution.ts";
 
 const tempRoots: string[] = [];
 
 describe("Claude Code provider", () => {
+  test("SDK full unattended uses explicit bypass and ask modes install a host callback", async () => {
+    for (const request of [
+      { access: "unrestricted-host", approval: "unattended" },
+      { access: "unrestricted-host", approval: "ask-every-side-effect" }
+    ] as const) {
+      let captured: ClaudeSdkOptions | undefined;
+      const provider = new ClaudeSdkExecutorProvider(runtimeConfig({ mode: "sdk" }), {
+        queryFactory: ({ options }) => {
+          captured = options;
+          return (async function* () {})();
+        }
+      });
+      await provider.run({ ...runInput(), policy: claudePolicy(request) }).catch(() => undefined);
+      if (request.approval === "unattended") {
+        expect(captured).toMatchObject({ allowDangerouslySkipPermissions: true, permissionMode: "bypassPermissions" });
+      } else {
+        expect(captured?.permissionMode).toBe("default");
+        expect(typeof captured?.canUseTool).toBe("function");
+        expect(captured?.allowedTools).toEqual(["Read", "Grep", "Glob"]);
+      }
+    }
+  });
+
+  test("SDK local login keeps unattended native development inside the host tool gate", async () => {
+    let captured: ClaudeSdkOptions | undefined;
+    const provider = new ClaudeSdkExecutorProvider(runtimeConfig({ authMode: "local-cli", mode: "sdk" }), {
+      authInspector: () => ({ auth_method: "oauth_token", checked: true, logged_in: true, provider: "firstParty" }),
+      queryFactory: ({ options }) => {
+        captured = options;
+        return (async function* () {})();
+      }
+    });
+
+    await provider.run({
+      ...runInput(),
+      policy: claudePolicy({ access: "provider-native-development", approval: "unattended" })
+    }).catch(() => undefined);
+
+    expect(provider.runtimeStatus()).toMatchObject({
+      auth_mode: "local-cli",
+      auth_source: "local_cli",
+      mode: "sdk",
+      ready: true
+    });
+    expect(captured).toMatchObject({
+      allowedTools: ["Read", "Grep", "Glob"],
+      permissionMode: "default",
+      tools: ["Read", "Grep", "Glob", "Edit", "Write", "Bash"]
+    });
+    expect(captured?.allowDangerouslySkipPermissions).toBeUndefined();
+    expect(typeof captured?.canUseTool).toBe("function");
+  });
+
   test("keeps CLI fallback explicit and reports its real command readiness", () => {
     const injected = new ClaudeExecutorProvider(runtimeConfig({ mode: "cli-fallback" }), {
       processFactory: scriptedProcessFactory({}).factory
@@ -23,6 +80,51 @@ describe("Claude Code provider", () => {
     expect(injected.capabilities).toEqual(["issue_execution", "sessions", "resume_session", "interrupt"]);
     expect(injected.runtimeStatus()).toMatchObject({ mode: "cli-fallback", ready: true });
     expect(missing.runtimeStatus()).toMatchObject({ mode: "cli-fallback", ready: false });
+  });
+
+  test("only blocks local CLI execution when the auth probe explicitly reports logged out", () => {
+    const inconclusive = new ClaudeExecutorProvider(runtimeConfig({ command: process.execPath, mode: "cli-fallback" }), {
+      authInspector: () => ({ checked: false, logged_in: false })
+    });
+    const loggedOut = new ClaudeExecutorProvider(runtimeConfig({ command: process.execPath, mode: "cli-fallback" }), {
+      authInspector: () => ({ checked: true, logged_in: false })
+    });
+
+    expect(inconclusive.runtimeStatus()).toMatchObject({
+      auth_configured: false,
+      auth_source: "local_cli",
+      ready: true
+    });
+    expect(inconclusive.runtimeStatus().reason).toBeUndefined();
+    expect(loggedOut.runtimeStatus()).toMatchObject({
+      auth_configured: false,
+      auth_source: "local_cli",
+      ready: false,
+      reason: "Claude CLI local login is unavailable; run `claude auth login` as the service user"
+    });
+  });
+
+  test("treats a parsed logged-out response as authoritative even when the CLI exits non-zero", async () => {
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-claude-auth-probe-"));
+    tempRoots.push(root);
+    const loggedOutCommand = join(root, "claude-logged-out");
+    const invalidCommand = join(root, "claude-invalid-status");
+    await writeFile(
+      loggedOutCommand,
+      "#!/bin/sh\nprintf '%s\\n' '{\"loggedIn\":false,\"authMethod\":\"none\",\"apiProvider\":\"firstParty\"}'\nexit 1\n",
+      { mode: 0o700 }
+    );
+    await writeFile(invalidCommand, "#!/bin/sh\nprintf '%s\\n' 'status unavailable'\nexit 1\n", { mode: 0o700 });
+
+    expect(inspectClaudeCliAuth(runtimeConfig({ command: loggedOutCommand }))).toMatchObject({
+      checked: true,
+      logged_in: false,
+      provider: "firstParty"
+    });
+    expect(inspectClaudeCliAuth(runtimeConfig({ command: invalidCommand }))).toEqual({
+      checked: false,
+      logged_in: false
+    });
   });
 
   test("creates, discovers, reads, and resumes local Claude Code sessions", async () => {
@@ -158,7 +260,17 @@ describe("Claude Code provider", () => {
         codex_turn_id: "",
         status: "succeeded",
         ended_at: expect.any(String),
-        runtime_metadata_json: `{"run_id":"cli:claude:${issueId}"}`
+        runtime_metadata_json: JSON.stringify({
+          run_id: `cli:claude:${issueId}`,
+          resolved_settings: {
+            approval_policy: "never",
+            model: "",
+            reasoning_effort: "",
+            sandbox: "workspace-write",
+            service_tier: "",
+            service_tier_source: "standard"
+          }
+        })
       }]);
       const payloads = listIssueEvents(db, issueId).map((event) => event.payload).join("\n");
       expect(payloads).toContain("hello from claude");
@@ -191,7 +303,9 @@ describe("Claude Code provider", () => {
 
     await provider.run({ ...runInput(), sandbox: "read-only" });
 
-    expect(factory.calls[0].command).toContain("Read,Grep,Glob,LS,Bash(xuanwu issue update:*),Bash(curl:*)");
+    expect(factory.calls[0].command).toContain("Read,Grep,Glob,LS");
+    expect(factory.calls[0].command.join(" ")).not.toContain("xuanwu issue update");
+    expect(factory.calls[0].command.join(" ")).not.toContain("Bash(curl:*)");
   });
 
   test("times out and kills the Claude child process", async () => {
@@ -321,6 +435,21 @@ function runtimeConfig(overrides: Partial<ProviderRuntimeConfig> = {}): Provider
 
 function runInput() {
   return { issueId: 183, projectId: "demo", cwd: "/tmp", prompt: "issue prompt" };
+}
+
+function claudePolicy(request: {
+  access: "provider-native-development" | "unrestricted-host";
+  approval: "ask-every-side-effect" | "unattended";
+}) {
+  return resolveExecutionPolicy({ contract: "xw.execution-policy.v1", ...request }, {
+    cwd: "/tmp",
+    invocationRef: "claude-test",
+    projectId: "demo",
+    providerId: "claude",
+    providerVersion: "0.3.152",
+    source: "local-user",
+    transport: "sdk"
+  }, CLAUDE_EXECUTION_POLICY_CAPABILITIES, claudeExecutionPolicyAdapter);
 }
 
 async function rejectedError(promise: Promise<unknown>): Promise<Error> {

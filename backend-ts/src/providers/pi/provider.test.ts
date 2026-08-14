@@ -4,6 +4,10 @@ import { PiRpcTransport, piRpcChildEnv, type PiRpcCommand, type PiRpcEvent } fro
 import { PiExecutorProvider } from "./provider.ts";
 import { piFactory, piManifest } from "./factory.ts";
 import { createProviderRegistry } from "../core/registry.ts";
+import { PI_EXECUTION_POLICY_CAPABILITIES, piExecutionPolicyAdapter } from "./executionPolicy.ts";
+import { resolveExecutionPolicy } from "../core/policyResolution.ts";
+import type { ExecutionPolicyRequest } from "../core/policyContracts.ts";
+import xuanwuPolicyExtension from "./xuanwuPolicyExtension.ts";
 
 /** Fake transport：不回显子进程，直接注入 response/event 流。 */
 class FakePiTransport extends PiRpcTransport {
@@ -11,6 +15,8 @@ class FakePiTransport extends PiRpcTransport {
   readonly emitted: PiRpcEvent[] = [];
   readonly sessionRefs: string[] = [];
   readonly toolSets: string[][] = [];
+  readonly extensionSets: string[][] = [];
+  readonly extensionResponses: Array<{ id: string; response: { cancelled?: boolean; confirmed?: boolean; value?: string } }> = [];
   hangAbort = false;
   started = false;
 
@@ -22,9 +28,10 @@ class FakePiTransport extends PiRpcTransport {
     this.started = true;
   }
 
-  override async startForSession(sessionRef = "", tools: readonly string[] = []): Promise<void> {
+  override async startForSession(sessionRef = "", tools: readonly string[] = [], extensions: readonly string[] = []): Promise<void> {
     this.sessionRefs.push(sessionRef);
     this.toolSets.push([...tools]);
+    this.extensionSets.push([...extensions]);
     this.started = true;
   }
 
@@ -42,6 +49,10 @@ class FakePiTransport extends PiRpcTransport {
     if (command.type === "get_state") return { sessionId: "pi-session-1", thinkingLevel: "medium", isStreaming: false, isCompacting: false, steeringMode: "all", followUpMode: "all", autoCompactionEnabled: true, messageCount: 1, pendingMessageCount: 0 };
     if (command.type === "get_available_models") return [{ id: "glm-5.2", display_name: "GLM 5.2" }];
     return {};
+  }
+
+  override async respondExtensionUI(id: string, response: { cancelled?: boolean; confirmed?: boolean; value?: string }): Promise<void> {
+    this.extensionResponses.push({ id, response });
   }
 
   pushEvent(event: PiRpcEvent): void {
@@ -69,6 +80,15 @@ describe("P10: Pi RPC transport 协议", () => {
       PATH: "/usr/bin",
       PI_PACKAGE_DIR: "/custom/pi"
     });
+  });
+
+  test("Extension maps confirm timeout, cancellation, and errors to a blocked tool call", async () => {
+    let handler: ((event: Record<string, unknown>, context: Record<string, any>) => Promise<unknown>) | undefined;
+    xuanwuPolicyExtension({ on: (_event, value) => { handler = value; } });
+    const event = { toolName: "bash", toolCallId: "tool-1", input: { command: "rm -rf build" } };
+    await expect(handler!(event, { ui: { confirm: async () => false } })).resolves.toMatchObject({ block: true });
+    await expect(handler!(event, { ui: { confirm: async () => { throw new Error("timeout"); } } })).resolves.toMatchObject({ block: true });
+    await expect(handler!(event, { ui: { confirm: async () => true } })).resolves.toBeUndefined();
   });
 });
 
@@ -383,6 +403,86 @@ describe("P10: Pi executor（fake transport）", () => {
     })).rejects.toThrow("cannot enforce sandbox policy");
   });
 
+  test("approval extension bridges request and explicit host decision", async () => {
+    const transport = new FakePiTransport();
+    const provider = new PiExecutorProvider({ policyExtensionPath: "/tmp/xuanwu-pi-policy.ts", transport });
+    const events: ProviderEvent[] = [];
+    const runPromise = provider.run({
+      cwd: "/tmp",
+      issueId: 12,
+      projectId: "p",
+      prompt: "edit",
+      policy: piPolicy({ access: "unrestricted-host", approval: "ask-every-side-effect" }),
+      onEvent: (event) => events.push(event)
+    });
+    await Bun.sleep(0);
+    transport.pushEvent({
+      type: "extension_ui_request",
+      id: "pi-ui-1",
+      method: "confirm",
+      title: "Xuanwu execution policy",
+      message: JSON.stringify({
+        contract: "xw.pi-policy-tool-call.v1",
+        toolCallId: "tool-approval-1",
+        toolName: "write",
+        input: { path: "README.md" }
+      })
+    });
+    await waitFor(() => events.some((event) => event.raw?.method === "approval/requested"));
+    const requested = events.find((event) => event.raw?.method === "approval/requested");
+    const requestId = String((requested?.payload as { id?: string })?.id ?? "");
+    await provider.resolveApproval(requestId, { decision: "approve" });
+    transport.pushEvent({ type: "agent_settled" });
+
+    await expect(runPromise).resolves.toMatchObject({ session: { sessionId: "pi-session-1" } });
+    expect(transport.extensionSets).toEqual([["/tmp/xuanwu-pi-policy.ts"]]);
+    expect(transport.extensionResponses).toContainEqual({ id: "pi-ui-1", response: { confirmed: true } });
+    expect(events).toContainEqual(expect.objectContaining({ raw: { method: "approval/resolved", payload: expect.any(Object) }, status: "approve" }));
+  });
+
+  test("unattended and read-only policy invocations do not load the approval extension", async () => {
+    for (const request of [
+      { access: "unrestricted-host", approval: "unattended" },
+      { access: "read-only", approval: "ask-every-side-effect" }
+    ] as const) {
+      const transport = new FakePiTransport();
+      const provider = new PiExecutorProvider({ policyExtensionPath: "/tmp/xuanwu-pi-policy.ts", transport });
+      const runPromise = provider.run({
+        cwd: "/tmp",
+        issueId: 14,
+        projectId: "p",
+        prompt: "policy",
+        policy: piPolicy(request)
+      });
+      setTimeout(() => transport.pushEvent({ type: "agent_settled" }), 5);
+      await runPromise;
+      expect(transport.extensionSets).toEqual([[]]);
+    }
+  });
+
+  test("approval bridge load failure is terminal", async () => {
+    const transport = new FakePiTransport();
+    const provider = new PiExecutorProvider({ policyExtensionPath: "/tmp/missing.ts", transport });
+    const events: ProviderEvent[] = [];
+    const runPromise = provider.run({
+      cwd: "/tmp",
+      issueId: 13,
+      projectId: "p",
+      prompt: "edit",
+      policy: piPolicy({ access: "unrestricted-host", approval: "ask-sensitive" }),
+      onEvent: (event) => events.push(event)
+    });
+    await Bun.sleep(0);
+    transport.pushEvent({ type: "stderr", text: "Failed to load extension /tmp/missing.ts" });
+
+    await expect(runPromise).rejects.toThrow("approval_bridge_unavailable");
+    expect(transport.running).toBe(false);
+    expect(events).toContainEqual(expect.objectContaining({
+      raw: { method: "pi-coding-agent/approval_bridge_unavailable" },
+      status: "failed"
+    }));
+  });
+
   test("listModels 解析 get_available_models", async () => {
     const transport = new FakePiTransport();
     const provider = new PiExecutorProvider({ transport });
@@ -417,3 +517,23 @@ describe("P10: Pi factory 与 manifest", () => {
     expect(registry.describe(asProviderId("pi-coding-agent")).state).toBe("ready");
   });
 });
+
+function piPolicy(input: Omit<ExecutionPolicyRequest, "contract">) {
+  return resolveExecutionPolicy({ contract: "xw.execution-policy.v1", ...input }, {
+    cwd: "/tmp",
+    invocationRef: "pi-invocation",
+    projectId: "p",
+    providerId: "pi-coding-agent",
+    providerVersion: "0.83.0",
+    source: "local-user",
+    transport: "rpc"
+  }, PI_EXECUTION_POLICY_CAPABILITIES, piExecutionPolicyAdapter);
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await Bun.sleep(1);
+  }
+  throw new Error("fixture condition was not reached");
+}

@@ -26,6 +26,7 @@ test('issue edit draft keeps editable fields only', () => {
     priority: 2,
     status: 'triage',
   }), {
+    agent_profile_id: '',
     project_id: 'runner',
     title: '修正文案',
     description: '  旧内容  ',
@@ -35,11 +36,13 @@ test('issue edit draft keeps editable fields only', () => {
 
 test('issue edit patch trims text and normalizes priority', () => {
   assert.deepEqual(issueDraftToPatch({
+    agent_profile_id: '  qoder-review  ',
     project_id: '  runner  ',
     title: '  新标题  ',
     description: '  新内容  ',
     priority: 'bad',
   }), {
+    agent_profile_id: 'qoder-review',
     project_id: 'runner',
     title: '新标题',
     description: '新内容',
