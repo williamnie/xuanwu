@@ -59,7 +59,7 @@
   margin-top: 8px;
   padding: 8px 10px;
   border-left: 3px solid var(--warning);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--warning) 10%, transparent);
   color: var(--text-muted);
   font-size: 0.75rem;
@@ -70,7 +70,7 @@
 .project-profile-overrides {
   background: color-mix(in srgb, var(--bg-secondary) 38%, var(--bg-card));
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   padding: 0;
 }
@@ -206,7 +206,7 @@
 .project-settings-error {
   background: var(--error-bg);
   border: 1px solid color-mix(in srgb, var(--error) 20%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--error);
   font-size: 0.85rem;
   padding: 10px 14px;

@@ -270,7 +270,7 @@
 [data-theme="dark"] .pi-chat-composer .prompt-editor-shell.composer {
   background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
   border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 14px 40px rgba(18, 28, 25, .09), 0 1px 0 rgba(255, 255, 255, .55) inset;
 }
 .pi-chat-composer .prompt-editor-shell.composer.focused,
@@ -312,7 +312,7 @@
 
 .pi-chat-composer .prompt-composer-add {
   border: 1px solid transparent;
-  border-radius: 7px !important;
+  border-radius: var(--radius-md) !important;
   height: 30px;
   width: 30px;
 }
@@ -322,7 +322,7 @@
 [data-theme="dark"] .pi-chat-composer .session-composer-circle.stop {
   animation: none;
   border: 1px solid color-mix(in srgb, var(--text-primary) 14%, transparent);
-  border-radius: 9px !important;
+  border-radius: var(--radius-md) !important;
   box-shadow: none;
   height: 34px;
   width: 34px;

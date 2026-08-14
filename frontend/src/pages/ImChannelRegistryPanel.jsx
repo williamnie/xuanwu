@@ -20,7 +20,7 @@ export default function ImChannelRegistryPanel() {
       {state.loading && <span>正在读取 IM channel…</span>}
       {state.error && <span style={{ color: 'var(--error)' }}>{state.error}</span>}
       {!state.loading && !state.error && state.channels.map(channel => (
-        <div key={channel.id} style={{ border: '1px solid var(--border-light)', borderRadius: '12px', display: 'grid', gap: '6px', padding: '12px' }}>
+        <div key={channel.id} style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', display: 'grid', gap: '6px', padding: '12px' }}>
           <strong>{channel.display_name || channel.id}</strong>
           <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
             receiver: {channel.receiver?.state || 'unknown'} · health: {channel.health?.state || 'unknown'}

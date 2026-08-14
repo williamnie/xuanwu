@@ -465,7 +465,7 @@ function ProviderCredentialFields({ state }) {
 function CodexOAuthPanel({ state }) {
   const status = state.oauthStatus;
   return (
-    <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 12px', background: 'rgba(255,255,255,0.03)', display: 'grid', gap: '8px' }}>
+    <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '10px 12px', background: 'rgba(255,255,255,0.03)', display: 'grid', gap: '8px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
           <strong style={{ color: 'var(--text-primary)', fontSize: '0.84rem' }}>Codex OAuth</strong>
@@ -515,7 +515,7 @@ function OAuthStatusLine({ status }) {
 function PromptSummaryDebug({ state }) {
   const summary = state.promptSummary?.runtime_prompt_summary;
   return (
-    <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 12px', background: 'rgba(255,255,255,0.03)' }}>
+    <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '10px 12px', background: 'rgba(255,255,255,0.03)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
           <strong style={{ color: 'var(--text-primary)', fontSize: '0.84rem' }}>当前生效 Prompt 摘要</strong>
@@ -574,7 +574,7 @@ function ProviderSummary({ providers }) {
   return (
     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
       {providers.map((provider) => (
-        <span key={provider.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 8px', border: '1px solid var(--border-color)', borderRadius: '999px', color: 'var(--text-muted)', fontSize: '0.76rem' }}>
+        <span key={provider.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 8px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xs)', color: 'var(--text-muted)', fontSize: '0.76rem' }}>
           <KeyRound size={12} color={provider.api_key_configured ? 'var(--success)' : 'var(--text-muted)'} />
           {provider.id} · {provider.api} · {provider.models?.join(', ') || 'no models'}
         </span>

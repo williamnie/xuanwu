@@ -130,7 +130,7 @@ function IssueMcpRequirementsPanel({ summary }) {
       <McpCapabilityGroup label="Recommended" items={summary.recommended} />
       <McpCapabilityGroup label="Project allowlist" items={summary.projectAllowed} />
       {summary.diagnostics.length > 0 && (
-        <div style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', padding: '8px 10px', borderRadius: '8px', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', padding: '8px 10px', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {summary.diagnostics.map((item, index) => (
             <span key={`${item.scope}-${item.capability_id}-${index}`}>
               <AlertTriangle size={13} /> {item.scope}: {item.capability_id} 未注册
@@ -148,7 +148,7 @@ function McpCapabilityGroup({ label, items }) {
       <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase' }}>{label}</span>
       {items.length > 0 ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {items.map(item => <code key={item} style={{ fontSize: '0.72rem', background: 'rgba(0,0,0,0.08)', padding: '3px 6px', borderRadius: '6px' }}>{item}</code>)}
+          {items.map(item => <code key={item} style={{ fontSize: '0.72rem', background: 'rgba(0,0,0,0.08)', padding: '3px 6px', borderRadius: 'var(--radius-sm)' }}>{item}</code>)}
         </div>
       ) : (
         <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>未声明</span>

@@ -13,14 +13,14 @@ export default function CodexUsageBreakdown({ projects = [] }) {
 
   if (!projects.length) {
     return (
-      <div style={{ border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '14px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+      <div style={{ border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)', padding: '14px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
         暂无可关联的 project/session/issue metadata，后端会把无法关联的数据归入 unknown。
       </div>
     );
   }
   const max = Math.max(1, ...projects.map(project => project.usage?.total_tokens || 0));
   return (
-    <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: expanded ? '12px' : 0 }}>
+    <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: expanded ? '12px' : 0 }}>
       <BreakdownHeader expanded={expanded} projectCount={projects.length} onToggle={() => setExpanded(value => !value)} />
       {expanded ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -76,7 +76,7 @@ function ProjectUsageRow({ project, max }) {
         <strong style={{ textAlign: 'right' }}>{formatTokens(total)}</strong>
         <span style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{formatPercent(project.percent)}</span>
       </div>
-      <div style={{ height: '7px', borderRadius: '999px', background: 'var(--border-color)', overflow: 'hidden', marginTop: '8px' }}>
+      <div style={{ height: '7px', borderRadius: 'var(--radius-xs)', background: 'var(--border-color)', overflow: 'hidden', marginTop: '8px' }}>
         <div style={{ width: `${Math.max(2, (total / max) * 100)}%`, height: '100%', background: project.unknown ? 'var(--warning)' : 'var(--primary-gradient)' }} />
       </div>
       <UsageDrilldown sessions={sessions} issues={issues} />
@@ -108,7 +108,7 @@ function UsageDrilldown({ sessions, issues }) {
 
 function DrilldownList({ title, items, renderItem }) {
   return (
-    <div style={{ background: 'var(--bg-primary)', borderRadius: '7px', padding: '10px', minWidth: 0 }}>
+    <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', padding: '10px', minWidth: 0 }}>
       <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 700, marginBottom: '6px' }}>{title}</div>
       {items.length === 0 ? (
         <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>无可关联 metadata</div>

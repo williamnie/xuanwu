@@ -205,7 +205,7 @@
 .settings-stage-header > span {
   align-items: center;
   background: var(--brand-ink);
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   color: white;
   display: inline-flex;
   font-family: var(--font-mono);
@@ -422,7 +422,7 @@
   align-items: center;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   color: var(--text-muted);
   display: inline-flex;
   flex: 0 0 auto;
@@ -443,7 +443,7 @@
 .remote-token-reveal {
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   padding: 14px;
 }
 
@@ -473,7 +473,7 @@
 
 .remote-token-reveal > code {
   background: var(--brand-ink);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: #f8fafc;
   font-size: 0.82rem;
   overflow-wrap: anywhere;
@@ -527,7 +527,7 @@
 .settings-inline-error {
   background: var(--error-glow);
   border: 1px solid color-mix(in srgb, var(--error) 35%, var(--border-color));
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   color: var(--error);
   font-size: 0.82rem;
   padding: 10px 12px;
@@ -549,7 +549,7 @@
 
 .settings-permission-table {
   border: 1px solid var(--border-color);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -581,7 +581,7 @@
   align-items: flex-start;
   background: var(--warning-bg);
   border: 1px solid color-mix(in srgb, var(--warning) 32%, var(--border-color));
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   color: var(--warning);
   display: flex;
   font-size: 0.8rem;
@@ -596,7 +596,7 @@
 .settings-authority-note {
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   padding: 12px;
 }
 
@@ -609,7 +609,7 @@
 
 .settings-empty-state {
   border: 1px dashed var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   color: var(--text-muted);
   font-size: 0.82rem;
   padding: 12px;
@@ -629,7 +629,7 @@
 .settings-channel-picker,
 .settings-notify-options {
   border: 1px solid var(--border-light);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   display: grid;
   gap: 9px;
   padding: 12px;
@@ -676,7 +676,7 @@
 .settings-preference-row {
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 10px 12px;
 }
 
@@ -721,7 +721,7 @@
 .settings-restart-confirm {
   background: var(--bg-card);
   border: 1px solid color-mix(in srgb, var(--error) 35%, var(--border-color));
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   display: grid;
   gap: 12px;

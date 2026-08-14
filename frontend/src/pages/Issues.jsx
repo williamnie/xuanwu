@@ -491,13 +491,13 @@ export default function Issues({
             <form onSubmit={handleCreateIssue} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
               {formError && (
-                <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 12px', borderRadius: '4px', fontSize: '0.78rem' }}>
+                <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 12px', borderRadius: 'var(--radius-xs)', fontSize: '0.78rem' }}>
                   {formError}
                 </div>
               )}
 
               {projects.length === 0 ? (
-                <div style={{ color: 'var(--warning)', background: 'var(--warning-bg)', padding: '10px 14px', borderRadius: '6px', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '4px', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
+                <div style={{ color: 'var(--warning)', background: 'var(--warning-bg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '4px', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
                   <strong style={{ fontWeight: 600 }}>暂无项目可关联</strong>
                   <span>请先前往「Projects」项目管理页面新增监控项目，然后再在此创建任务。</span>
                 </div>
@@ -518,7 +518,7 @@ export default function Issues({
               )}
 
               {sourceMetadata?.source_session_id && (
-                <div style={{ color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '10px 14px', borderRadius: '6px', fontSize: '0.78rem', border: '1px solid var(--border-color)' }}>
+                <div style={{ color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: '0.78rem', border: '1px solid var(--border-color)' }}>
                   来源 Session：<code>{sourceMetadata.source_session_id}</code>
                   {sourceMetadata.source_turn_id && <> · Turn：<code>{sourceMetadata.source_turn_id}</code></>}
                 </div>

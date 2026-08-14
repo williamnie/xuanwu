@@ -11,7 +11,7 @@
   height: 76px;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: #f8fafc;
   box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
 }
@@ -45,7 +45,7 @@
   width: 21px;
   height: 21px;
   border: 1px solid rgba(15, 23, 42, 0.1);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   background: rgba(255, 255, 255, 0.92);
   color: #334155;
   display: inline-grid;

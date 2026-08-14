@@ -70,7 +70,7 @@ function ProviderCard({ provider }) {
   const ok = provider.status === 'available';
   const statusColor = ok ? 'var(--success)' : 'var(--text-muted)';
   return (
-    <div style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '14px', background: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+    <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '14px', background: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
         <div style={{ fontWeight: 800 }}>{provider.label || provider.id}</div>
         <span style={{ color: statusColor, fontSize: '0.78rem', fontWeight: 700 }}>

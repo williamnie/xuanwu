@@ -29,7 +29,7 @@ export default function ProjectHoldNotice({ hold, onResume, resuming }) {
       border: '1px solid rgba(245, 158, 11, 0.32)',
       background: 'var(--warning-bg)',
       color: 'var(--warning)',
-      borderRadius: '8px',
+      borderRadius: 'var(--radius-md)',
       padding: '10px',
       fontSize: '0.72rem',
       lineHeight: 1.45,

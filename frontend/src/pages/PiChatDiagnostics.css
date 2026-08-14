@@ -15,7 +15,7 @@
   align-items: center;
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   display: inline-flex;
   flex-direction: row;
   gap: 7px;
@@ -24,7 +24,7 @@
 
 .pi-chat-status-dot {
   background: var(--text-muted);
-  border-radius: 999px;
+  border-radius: 50%;
   height: 7px;
   width: 7px;
 }
@@ -65,7 +65,7 @@
   align-items: center;
   background: transparent;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   cursor: pointer;
   display: inline-flex;

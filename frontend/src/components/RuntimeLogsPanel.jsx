@@ -54,7 +54,7 @@ function ImportantLogLines({ title, lines, empty, tone }) {
 
 function LogLine({ line, tone }) {
   return (
-    <div style={{ borderLeft: `3px solid ${tone}`, padding: '8px 10px', background: 'var(--bg-card)', borderRadius: '10px' }}>
+    <div style={{ borderLeft: `3px solid ${tone}`, padding: '8px 10px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)' }}>
       <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: '4px' }}>
         {line.source || 'runtime'} · {line.time || 'time unknown'} · {line.level || 'info'}
       </div>
@@ -89,7 +89,7 @@ function LogPathList({ logs }) {
 
 const panelStyle = {
   border: '1px solid var(--border-light)',
-  borderRadius: '14px',
+  borderRadius: 'var(--radius-lg)',
   padding: '12px',
   background: 'var(--bg-secondary)',
   display: 'flex',

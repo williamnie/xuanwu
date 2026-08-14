@@ -204,7 +204,7 @@ function IssuesSidebarFilters({
 
       <button className="btn-new-issue-sidebar" onClick={() => handleOpenNewIssue('todo')}>
         <span>+ New issue</span>
-        <span style={{ fontSize: '0.65rem', border: '1px solid rgba(16,185,129,0.3)', padding: '1px 4px', borderRadius: '3px', background: 'rgba(16,185,129,0.06)' }}>c</span>
+        <span style={{ fontSize: '0.65rem', border: '1px solid rgba(16,185,129,0.3)', padding: '1px 4px', borderRadius: 'var(--radius-xs)', background: 'rgba(16,185,129,0.06)' }}>c</span>
       </button>
 
       <div style={{ padding: '12px 12px 4px 12px' }}>

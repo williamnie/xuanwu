@@ -96,7 +96,7 @@ function FirstUseLauncher({ settings }) {
   const installCommand = 'curl -fsSL https://raw.githubusercontent.com/williamnie/xuanwu/main/scripts/install-release.sh | bash';
   const projectCommand = 'xuanwu project create --id my-project --cwd /path/to/project --auto-run';
   return (
-    <div style={{ border: '1px solid var(--border-light)', borderRadius: '16px', padding: '14px', background: 'var(--bg-secondary)', display: 'grid', gap: '12px' }}>
+    <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-xl)', padding: '14px', background: 'var(--bg-secondary)', display: 'grid', gap: '12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800 }}>
         <Rocket size={17} color="var(--primary)" /> 首次使用启动器
       </div>
@@ -112,7 +112,7 @@ function FirstUseLauncher({ settings }) {
 
 function LauncherStep({ title, body, code }) {
   return (
-    <div style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', display: 'grid', gap: '8px' }}>
+    <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px', display: 'grid', gap: '8px' }}>
       <div style={{ fontWeight: 800 }}>{title}</div>
       <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: 1.5 }}>{body}</div>
       <code style={{ fontSize: '0.72rem', wordBreak: 'break-word', color: 'var(--text-secondary)' }}>{code}</code>
@@ -200,7 +200,7 @@ function AppStatus({ selected, status }) {
   if (!status) return null;
   const ok = status.installed && (!selected || status.native_host_configured);
   return (
-    <div style={{ border: `1px solid ${ok ? 'var(--success)' : 'var(--warning)'}`, borderRadius: '14px', padding: '10px', background: ok ? 'var(--success-glow)' : 'var(--warning-bg)', fontSize: '0.8rem', lineHeight: 1.6 }}>
+    <div style={{ border: `1px solid ${ok ? 'var(--success)' : 'var(--warning)'}`, borderRadius: 'var(--radius-lg)', padding: '10px', background: ok ? 'var(--success-glow)' : 'var(--warning-bg)', fontSize: '0.8rem', lineHeight: 1.6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800 }}>
         {ok ? <CheckCircle2 size={15} color="var(--success)" /> : <AlertTriangle size={15} color="var(--warning)" />}
         Codex App 检测：{status.installed ? '已安装' : '未找到'} / {status.running ? '正在运行' : '未检测到运行态'}
@@ -218,7 +218,7 @@ function AppStatus({ selected, status }) {
 function CommandStatus({ status, title }) {
   if (!status) return null;
   return (
-    <div style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '10px', background: 'var(--bg-secondary)', fontSize: '0.8rem', lineHeight: 1.6 }}>
+    <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '10px', background: 'var(--bg-secondary)', fontSize: '0.8rem', lineHeight: 1.6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800 }}>
         <span className={`status-dot ${status.available ? 'active' : 'idle'}`} style={{ width: '7px', height: '7px' }}></span>
         {title}：{status.available ? 'available' : 'missing'}

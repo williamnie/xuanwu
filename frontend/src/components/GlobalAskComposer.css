@@ -19,7 +19,7 @@
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--bg-card) 98%, var(--brand-mint)), var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--border-color) 78%, var(--primary));
-  border-radius: 18px;
+  border-radius: var(--radius-xl);
   box-shadow: 0 18px 54px rgba(8, 45, 40, 0.16), 0 2px 10px rgba(8, 45, 40, 0.07);
   max-width: 880px;
   overflow: hidden;
@@ -51,7 +51,7 @@
 .global-ask-composer-mark {
   align-items: center;
   background: var(--brand-ink);
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   color: var(--brand-shell);
   display: inline-flex;
   flex: 0 0 auto;
@@ -88,7 +88,7 @@
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   display: inline-flex;
   height: 28px;
@@ -105,7 +105,7 @@
   align-items: center;
   background: color-mix(in srgb, var(--bg-card) 96%, var(--brand-mint));
   border: 1px solid color-mix(in srgb, var(--border-color) 78%, var(--primary));
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 10px 30px rgba(8, 45, 40, 0.14), 0 2px 8px rgba(8, 45, 40, 0.06);
   color: var(--text-primary);
   display: flex;
@@ -166,7 +166,7 @@
 [data-theme="dark"] .global-ask-composer-card .prompt-editor-shell.composer {
   background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
   border: 1px solid transparent;
-  border-radius: 13px;
+  border-radius: var(--radius-lg);
   box-shadow: none;
 }
 
@@ -197,7 +197,7 @@
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   color: var(--text-muted);
   display: inline-flex;
   font-size: 0.72rem;
@@ -234,7 +234,7 @@
   }
 
   .global-ask-composer-card {
-    border-radius: 15px;
+    border-radius: var(--radius-xl);
   }
 
   .global-ask-composer-card .session-composer {

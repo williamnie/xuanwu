@@ -48,7 +48,7 @@
 
   background: var(--bg-card);
   border: 1px solid color-mix(in srgb, var(--border-color) 82%, var(--text-muted) 18%);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   box-shadow: 0 24px 72px rgba(15, 24, 21, 0.2), 0 2px 8px rgba(15, 24, 21, 0.08);
   display: flex;
   flex-direction: column;
@@ -97,7 +97,7 @@
   align-items: center;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   cursor: pointer;
   display: inline-flex;
@@ -189,7 +189,7 @@
 .project-card-icon {
   align-items: center;
   background: var(--primary-glow);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--primary);
   display: flex;
   flex: 0 0 auto;
@@ -244,7 +244,7 @@
 
 .project-card-stats {
   background: rgba(0, 0, 0, 0.035);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   display: grid;
   gap: 3px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -313,7 +313,7 @@
 }
 
 .project-card-icon-btn {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   flex: 0 0 auto;
   width: var(--project-card-control-height);
 }
@@ -345,7 +345,7 @@
 .project-delete-modal {
   background: var(--bg-card);
   border: 1px solid color-mix(in srgb, var(--error) 22%, var(--border-color));
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   box-shadow: 0 24px 72px rgba(15, 24, 21, 0.2), 0 2px 8px rgba(15, 24, 21, 0.08);
   max-width: 480px;
   overflow: hidden;
@@ -364,7 +364,7 @@
   align-items: center;
   background: color-mix(in srgb, var(--error) 10%, var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--error) 18%, var(--border-color));
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   color: var(--error);
   display: flex;
   height: 40px;
@@ -399,7 +399,7 @@
 .project-delete-modal-project {
   background: color-mix(in srgb, var(--bg-secondary) 62%, var(--bg-card));
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   gap: 5px;

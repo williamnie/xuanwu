@@ -1,13 +1,13 @@
 .prompt-editor-shell {
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-card);
   overflow: hidden;
 }
 
 .prompt-editor-shell.composer {
   border-color: #dde3ea;
-  border-radius: 22px;
+  border-radius: var(--radius-xl);
   background: #fff;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
@@ -33,7 +33,7 @@
 
 .prompt-tool {
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   min-width: 30px;
@@ -123,7 +123,7 @@
   width: 28px;
   height: 28px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: #9aa3af;
   display: inline-grid;
@@ -163,7 +163,7 @@
 .markdown-preview pre {
   background: rgba(15, 23, 42, 0.92);
   color: #e2e8f0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 10px 12px;
   overflow-x: auto;
 }
@@ -178,7 +178,7 @@
 .markdown-preview :not(pre) > code {
   background: rgba(148, 163, 184, 0.16);
   color: var(--text-primary);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 1px 4px;
 }
 
@@ -187,7 +187,7 @@
   display: block;
   max-width: 100%;
   max-height: 360px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
   margin: 10px 0;
   object-fit: contain;

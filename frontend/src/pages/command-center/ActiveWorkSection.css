@@ -93,7 +93,7 @@
   gap: 6px;
   text-transform: uppercase;
 }
-.active-work-phase i { background: currentColor; border-radius: 999px; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 13%, transparent); height: 6px; width: 6px; }
+.active-work-phase i { background: currentColor; border-radius: 50%; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 13%, transparent); height: 6px; width: 6px; }
 .active-work-phase.queued, .active-work-phase.unknown { color: var(--text-muted); }
 .active-work-phase.recovering, .active-work-phase.waiting { color: var(--warning); }
 .active-work-phase.verifying, .active-work-phase.succeeded { color: var(--primary); }

@@ -63,7 +63,7 @@ function pillStyle() {
   return {
     background: 'var(--bg-secondary)',
     border: '1px solid var(--border-light)',
-    borderRadius: '999px',
+    borderRadius: 'var(--radius-xs)',
     color: 'var(--text-muted)',
     fontSize: '0.76rem',
     fontWeight: 800,

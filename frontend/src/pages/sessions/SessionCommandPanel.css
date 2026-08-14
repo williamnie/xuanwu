@@ -4,7 +4,7 @@
   justify-content: space-between;
   padding: 12px;
   border: 1px solid rgba(59, 130, 246, 0.24);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(15, 23, 42, 0.03));
   color: var(--text-primary);
 }
@@ -42,7 +42,7 @@
 .session-command-chip {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
 }
 
 .session-command-icon {
@@ -79,7 +79,7 @@
 
 .session-command-actions button {
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   padding: 7px 11px;
   font-size: 0.76rem;
   cursor: pointer;
@@ -116,7 +116,7 @@
   align-items: flex-start;
   gap: 2px;
   padding: 8px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: rgba(16, 185, 129, 0.11);
   color: var(--text-secondary);
   font-size: 0.78rem;

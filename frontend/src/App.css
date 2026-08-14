@@ -26,7 +26,7 @@
   background: color-mix(in srgb, var(--warning) 10%, var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--warning) 36%, var(--border-color));
   border-left: 4px solid var(--warning);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
   display: flex;
   gap: 12px;
@@ -55,7 +55,7 @@
   align-items: center;
   background: rgba(255, 255, 255, 0.64);
   border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   color: var(--warning);
   display: inline-flex;
   flex: 0 0 auto;
@@ -118,7 +118,7 @@
 .guardian-alert-severity {
   background: var(--warning-bg);
   border: 1px solid color-mix(in srgb, var(--warning) 24%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   color: var(--warning);
   font-size: 0.66rem;
   font-weight: 800;
@@ -137,7 +137,7 @@
   align-items: center;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   color: var(--text-secondary);
   cursor: pointer;
   display: inline-flex;
@@ -162,7 +162,7 @@
 .guardian-alert-inline-error {
   background: var(--error-bg);
   border: 1px solid color-mix(in srgb, var(--error) 24%, transparent);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   color: var(--error);
   font-size: 0.78rem;
   margin: 0;

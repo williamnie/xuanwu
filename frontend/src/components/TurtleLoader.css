@@ -29,7 +29,7 @@
 
 .turtle-loader-track::after {
   background: linear-gradient(90deg, var(--primary), var(--brand-mint));
-  border-radius: 999px;
+  border-radius: 50%;
   bottom: 5px;
   box-shadow: 18px 0 0 color-mix(in srgb, var(--primary) 58%, transparent), 36px 0 0 color-mix(in srgb, var(--primary) 24%, transparent);
   content: '';

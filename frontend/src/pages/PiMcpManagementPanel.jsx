@@ -70,7 +70,7 @@ function PanelHeader({ embedded, loading, onRefresh, onScan, scanning }) {
 
 function Notice({ error }) {
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px' }}>
+    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px' }}>
       <strong><ShieldCheck size={15} /> 安全边界</strong>
       <div style={{ color: error ? 'var(--error)' : 'var(--text-muted)', fontSize: '0.8rem', marginTop: '6px' }}>
         {error || '扫描只读取 allowlisted 配置文件；stdio 可 introspect，HTTP/SSE 暂只保存配置和 diagnostics，不会假装可调用。'}
@@ -281,5 +281,5 @@ function envPlaceholders(value) {
 
 const sectionTitleStyle = { fontSize: '0.95rem', fontWeight: 800, margin: 0 };
 const mutedStyle = { color: 'var(--text-muted)', fontSize: '0.78rem', wordBreak: 'break-word' };
-const miniCardStyle = { background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '4px', padding: '10px' };
-const rowCardStyle = { alignItems: 'center', border: '1px solid var(--border-light)', borderRadius: '14px', display: 'flex', gap: '12px', justifyContent: 'space-between', padding: '12px', flexWrap: 'wrap' };
+const miniCardStyle = { background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', gap: '4px', padding: '10px' };
+const rowCardStyle = { alignItems: 'center', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', display: 'flex', gap: '12px', justifyContent: 'space-between', padding: '12px', flexWrap: 'wrap' };

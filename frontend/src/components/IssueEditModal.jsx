@@ -217,7 +217,7 @@ function PriorityField({ value, onChange }) {
 
 function EditError({ message }) {
   return (
-    <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 12px', borderRadius: '6px', fontSize: '0.78rem' }}>
+    <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.78rem' }}>
       {message}
     </div>
   );

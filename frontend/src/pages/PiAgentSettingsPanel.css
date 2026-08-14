@@ -41,7 +41,7 @@
   align-items: center;
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   color: var(--text-muted);
   display: flex;
   gap: 10px;
@@ -84,7 +84,7 @@
   background:
     linear-gradient(145deg, color-mix(in srgb, var(--bg-card) 96%, var(--primary) 4%), var(--bg-card));
   border: 1px solid var(--border-color);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   color: var(--text-primary);
   cursor: pointer;
   display: flex;
@@ -128,7 +128,7 @@
 .provider-preset-mark {
   align-items: center;
   background: color-mix(in srgb, var(--brand-ink) 90%, var(--primary) 10%);
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
   color: white;
   display: inline-flex;
   font-size: 0.92rem;
@@ -147,7 +147,7 @@
 .provider-default-model,
 .provider-connection-chip {
   align-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   display: inline-flex;
   font-size: 0.7rem;
   font-weight: 780;
@@ -195,7 +195,7 @@
 .provider-recommended-config {
   background: color-mix(in srgb, var(--bg-card) 94%, var(--primary) 6%);
   border: 1px solid color-mix(in srgb, var(--border-color) 76%, var(--primary) 24%);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   display: grid;
   gap: 14px;
   padding: 16px;
@@ -250,7 +250,7 @@
 }
 
 .provider-test-result {
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-size: 0.78rem;
   gap: 7px;
   padding: 9px 11px;
@@ -270,7 +270,7 @@
 .provider-custom-notice {
   align-items: flex-start;
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   color: var(--text-secondary);
   gap: 10px;
   padding: 11px 12px;
@@ -382,7 +382,7 @@
 .persona-conflict-notice {
   background: color-mix(in srgb, var(--warning) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border-color));
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   display: grid;
   font-size: 0.78rem;

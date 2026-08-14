@@ -193,7 +193,7 @@
 }
 
 .work-column-header > span:last-child { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.68rem; }
-.work-column-marker { background: var(--text-muted); border-radius: 999px; height: 7px; width: 7px; }
+.work-column-marker { background: var(--text-muted); border-radius: 50%; height: 7px; width: 7px; }
 .work-column[data-tone='amber'] .work-column-marker { background: var(--warning); }
 .work-column[data-tone='blue'] .work-column-marker { background: var(--info); }
 .work-column[data-tone='violet'] .work-column-marker { background: #8b78d1; }
@@ -234,7 +234,7 @@
 .work-attention-badge,
 .work-dialog-contract span {
   border: 1px solid var(--border-light);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 0.58rem;
@@ -260,7 +260,7 @@
   align-self: center;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   color: var(--text-muted);
   cursor: pointer;
   flex: 0 0 auto;
@@ -311,12 +311,12 @@
 .work-dialog form { display: flex; flex-direction: column; gap: 15px; padding-top: 18px; }
 .work-dialog-grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
 .work-dialog-contract { display: flex; flex-wrap: wrap; gap: 6px; }
-.work-dialog-field .prompt-editor-shell.composer { border-radius: 14px; }
+.work-dialog-field .prompt-editor-shell.composer { border-radius: var(--radius-lg); }
 .work-dialog footer { justify-content: flex-end; margin-top: 4px; }
 .work-dialog-error { background: var(--error-bg); border: 1px solid color-mix(in srgb, var(--error) 28%, var(--border-color)); border-radius: var(--radius-sm); color: var(--error); font-size: 0.75rem; padding: 9px 11px; }
 
 .work-evidence-overlay { align-items: center; display: flex; justify-content: center; padding: 24px; }
-.work-evidence-dialog { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: var(--shadow-xl); display: flex; flex-direction: column; gap: 14px; max-height: min(820px, calc(100vh - 48px)); max-width: 860px; overflow: auto; padding: 18px; width: min(860px, calc(100vw - 48px)); }
+.work-evidence-dialog { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: var(--shadow-xl); display: flex; flex-direction: column; gap: 14px; max-height: min(820px, calc(100vh - 48px)); max-width: 860px; overflow: auto; padding: 18px; width: min(860px, calc(100vw - 48px)); }
 .work-evidence-dialog > header { align-items: flex-start; display: flex; gap: 18px; justify-content: space-between; }
 .work-evidence-dialog > header span { color: var(--success); font-size: 0.64rem; font-weight: 750; letter-spacing: 0.08em; }
 .work-evidence-dialog > header h2 { font-size: 1.05rem; margin: 4px 0; }

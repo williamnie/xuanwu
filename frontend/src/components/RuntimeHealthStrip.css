@@ -31,7 +31,7 @@
 .runtime-health-alert-icon {
   align-items: center;
   background: var(--warning-glow);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   color: var(--warning);
   display: inline-flex;
   flex: 0 0 auto;

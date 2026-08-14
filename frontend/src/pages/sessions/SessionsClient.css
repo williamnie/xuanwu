@@ -73,7 +73,7 @@
   padding: 8px 12px;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #4b5563;
   font-size: 0.85rem;
   font-weight: 500;
@@ -146,7 +146,7 @@
 
 .sidebar-scroll-area::-webkit-scrollbar-thumb {
   background-color: rgba(0, 0, 0, 0.08);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 [data-theme="dark"] .sidebar-scroll-area::-webkit-scrollbar-thumb {
@@ -169,7 +169,7 @@
   padding: 8px 10px;
   background-color: rgba(0, 0, 0, 0.02);
   border: 1px solid rgba(0, 0, 0, 0.03);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #374151;
   font-size: 0.82rem;
   cursor: pointer;
@@ -226,7 +226,7 @@
   border: none;
   cursor: pointer;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   color: #9ca3af;
   display: flex;
   align-items: center;
@@ -277,7 +277,7 @@
   padding: 6px 12px;
   background-color: rgba(0, 0, 0, 0.03);
   border: 1px solid rgba(0, 0, 0, 0.02);
-  border-radius: 99px;
+  border-radius: var(--radius-xs);
   color: var(--text-secondary);
   font-size: 0.82rem;
   font-weight: 500;
@@ -297,7 +297,7 @@
 .composer-embedded-model-manual input {
   width: 190px;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 5px 7px;
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -351,7 +351,7 @@
 .composer-embedded-model-manual input {
   background: #fff7ed;
   border: 1px solid #fdba74;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: #9a3412;
   font-size: 0.78rem;
   height: 30px;
@@ -420,7 +420,7 @@
   padding: 6px 14px;
   background-color: #f3f3f5;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: #4b5563;
   font-size: 0.8rem;
   font-weight: 500;
@@ -577,7 +577,7 @@
   background: linear-gradient(90deg, var(--border-color) 25%, rgba(128, 128, 128, 0.15) 37%, var(--border-color) 63%);
   background-size: 400% 100%;
   animation: skeleton-loading-shimmer 1.4s ease infinite;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   vertical-align: middle;
 }
 
@@ -601,7 +601,7 @@
 .in-sessions-page .sidebar-shortcut-item,
 .in-sessions-page .session-item-row,
 .in-sessions-page .pinned-session-row {
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
 }
 
 .active-session-shell {
@@ -661,7 +661,7 @@
 }
 
 .client-chat-area .chat-bubble-container.user .chat-bubble-body {
-  border-radius: 18px !important;
+  border-radius: var(--radius-xl) !important;
   padding: 12px 18px !important;
   box-shadow: none !important;
   border: 1px solid rgba(0, 0, 0, 0.03) !important;
@@ -669,7 +669,7 @@
 }
 
 [data-theme="dark"] .client-chat-area .chat-bubble-container.user .chat-bubble-body {
-  border-radius: 16px !important;
+  border-radius: var(--radius-xl) !important;
 }
 
 .client-chat-area .tools-collapsible-wrapper,
@@ -682,7 +682,7 @@
 .client-chat-area .diff-file-card,
 .client-chat-area .generic-tool-card,
 .client-chat-area .terminal-window {
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   box-shadow: none;
 }
 
@@ -708,7 +708,7 @@
 .client-chat-area .tools-indicator-icon {
   background: rgba(255, 255, 255, 0.62);
   border: 1px solid rgba(53, 50, 44, 0.055);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   color: rgba(53, 50, 44, 0.62);
   height: 22px;
   width: 22px;
@@ -789,7 +789,7 @@
 
 .new-session-bottom-tags .bottom-tag-select,
 .composer-embedded-select {
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
 }
 
 /* Xuanwu unified workspace: keep Sessions aligned with the Issue workbench. */

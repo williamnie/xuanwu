@@ -136,7 +136,7 @@ function ConnectorCard({ connector, onConfigure, onRevoke, onTest, state }) {
 function ConnectorConfigureGuide({ connector }) {
   const guide = configureGuide(connector);
   return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: '12px', display: 'grid', fontSize: '0.78rem', gap: '7px', lineHeight: 1.5, padding: '10px' }}>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', display: 'grid', fontSize: '0.78rem', gap: '7px', lineHeight: 1.5, padding: '10px' }}>
       <strong>{guide.title}</strong>
       <span style={{ color: 'var(--text-muted)' }}>{guide.body}</span>
       {guide.refs && <code style={{ overflowWrap: 'anywhere' }}>{guide.refs}</code>}
@@ -251,7 +251,7 @@ function connectorCardStyle() {
   return {
     background: 'var(--bg-secondary)',
     border: '1px solid var(--border-light)',
-    borderRadius: '14px',
+    borderRadius: 'var(--radius-lg)',
     display: 'grid',
     gap: '10px',
     padding: '14px'
@@ -262,7 +262,7 @@ function summaryBadgeStyle(status) {
   return {
     background: status === 'configured' ? 'var(--success-glow)' : 'var(--bg-secondary)',
     border: '1px solid var(--border-light)',
-    borderRadius: '999px',
+    borderRadius: 'var(--radius-xs)',
     color: statusColor(status),
     fontSize: '0.76rem',
     fontWeight: 800,

@@ -21,12 +21,12 @@ export default function IssueDetailDecision({ evidence, decision, onAccept, onRe
           : piState.detail}
       </p>
       {humanOwned && (
-        <div className="issue-error-text" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '8px', padding: '10px', fontSize: '0.82rem', fontWeight: 700 }}>
+        <div className="issue-error-text" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: 'var(--radius-md)', padding: '10px', fontSize: '0.82rem', fontWeight: 700 }}>
           你正在审批：{request.question}
         </div>
       )}
       {evidence && (
-        <div className="issue-error-text" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '8px', padding: '10px', fontSize: '0.78rem' }}>
+        <div className="issue-error-text" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: 'var(--radius-md)', padding: '10px', fontSize: '0.78rem' }}>
           {evidence}
         </div>
       )}

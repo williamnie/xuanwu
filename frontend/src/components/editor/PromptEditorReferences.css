@@ -25,7 +25,7 @@
   max-width: 100%;
   gap: 5px;
   border: 1px solid rgba(59, 130, 246, 0.22);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   padding: 4px 7px;
   background: #eff6ff;
   color: #1d4ed8;
@@ -64,7 +64,7 @@
   width: 16px;
   height: 16px;
   place-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   color: currentColor;
   cursor: pointer;
   font-size: 0.86rem;

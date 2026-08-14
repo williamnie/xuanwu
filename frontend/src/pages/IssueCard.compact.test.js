@@ -25,7 +25,7 @@ test('issue cards render runtime data as compact metadata pills', () => {
   assert.match(ruleFor('.kanban-card'), /padding:\s*11px 12px/);
   assert.match(ruleFor('.kanban-card'), /gap:\s*8px/);
   assert.match(ruleFor('.kanban-card-runtime-meta'), /flex-wrap:\s*wrap/);
-  assert.match(ruleFor('.kanban-card-runtime-pill'), /border-radius:\s*999px/);
+  assert.match(ruleFor('.kanban-card-runtime-pill'), /border-radius:\s*var\(--radius-xs\)/);
   assert.match(ruleFor('.kanban-card-runtime-pill'), /padding:\s*2px 6px/);
 });
 

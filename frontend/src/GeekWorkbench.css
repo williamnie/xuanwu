@@ -4,7 +4,7 @@
   color-scheme: light;
   --font-sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
   --font-display: var(--font-sans);
-  --font-mono: 'SFMono-Regular', 'Cascadia Code', 'JetBrains Mono', ui-monospace, monospace;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'SFMono-Regular', 'Cascadia Code', 'Menlo', monospace;
 
   --bg-primary: #f3efe5;
   --bg-sidebar: #f7f3e9;
@@ -80,7 +80,7 @@
   --sessions-message-max-width: 900px;
   --sessions-composer-max-width: 900px;
   --sessions-page-gutter: clamp(18px, 6vw, 88px);
-  --sessions-composer-radius: 14px;
+  --sessions-composer-radius: 10px;
 }
 
 [data-theme="dark"] {
@@ -161,7 +161,7 @@ body::before {
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   font-weight: 600;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.022em;
   text-wrap: balance;
 }
 code, pre, kbd, .mono { font-family: var(--font-mono); }
@@ -220,7 +220,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-weight: 600;
   letter-spacing: -0.018em;
 }
-.page-intro h1 { font-size: clamp(1.7rem, 2.5vw, 2.35rem); }
+.page-intro h1 { font-size: clamp(1.5rem, 2.2vw, 2rem); }
 .page-intro p { line-height: 1.55; }
 .page-intro-status { background: var(--surface-overlay); border-color: var(--border-color); border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 

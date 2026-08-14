@@ -12,7 +12,7 @@
   gap: 4px;
   min-width: 0;
   height: 28px;
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   padding: 0 7px;
   color: #64748b;
   cursor: pointer;
@@ -91,7 +91,7 @@
 .session-composer-model-manual input {
   width: 164px;
   border: 1px solid #d8dee8;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 5px 7px;
   background: #fff;
   color: #111827;
@@ -109,7 +109,7 @@
 .session-composer-circle {
   width: 32px;
   height: 32px;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background: #141820;
   color: #fff;
   border: 0;
@@ -138,14 +138,14 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid #d8dee8;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 2px;
   background: #f8fafc;
 }
 
 .session-composer-mode-switch button {
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 5px 9px;
   background: transparent;
   color: #64748b;
@@ -184,7 +184,7 @@
   justify-content: space-between;
   gap: 10px;
   border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 7px 9px;
   background: rgba(248, 250, 252, 0.86);
 }
@@ -228,7 +228,7 @@
 
 .session-message-queue-actions button {
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   padding: 4px 8px;
   background: rgba(226, 232, 240, 0.9);
   color: #475569;
@@ -248,7 +248,7 @@
   gap: 7px;
   margin-bottom: 10px;
   border: 1px solid rgba(59, 130, 246, 0.24);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 8px 10px;
   background: rgba(239, 246, 255, 0.92);
   color: #1d4ed8;
@@ -466,7 +466,7 @@
 .client-chat-composer-section .session-composer-select,
 .pi-chat-composer .session-composer-select,
 .new-session-composer-wrapper .composer-embedded-select {
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
 }
 
 .client-chat-composer-section .session-composer-circle,

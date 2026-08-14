@@ -212,7 +212,7 @@ function RuntimeStatusBody({ status, loading }) {
       <SecurityWarnings warnings={status.security?.warnings || []} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
         {rows.map(([label, value, ok]) => (
-          <div key={label} style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', background: 'var(--bg-secondary)' }}>
+          <div key={label} style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px', background: 'var(--bg-secondary)' }}>
             <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '6px' }}>{label}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, wordBreak: 'break-word' }}>
               <span className={`status-dot ${ok ? 'active' : 'idle'}`} style={{ width: '7px', height: '7px' }}></span>
@@ -247,7 +247,7 @@ function ProcessGroupMemoryStatus({ memory }) {
   const measuredGroup = memory.budget?.measured_group_bytes;
   const measuredMain = memory.budget?.measured_main_bytes;
   return (
-    <div style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', background: 'var(--bg-secondary)' }}>
+    <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px', background: 'var(--bg-secondary)' }}>
       <div style={{ display: 'flex', gap: '12px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <strong>Runner process-group memory</strong>
         <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
@@ -317,7 +317,7 @@ function SecurityWarnings({ warnings }) {
     return null;
   }
   return (
-    <div style={{ border: '1px solid var(--warning)', borderRadius: '14px', padding: '12px', background: 'var(--warning-bg)' }}>
+    <div style={{ border: '1px solid var(--warning)', borderRadius: 'var(--radius-lg)', padding: '12px', background: 'var(--warning-bg)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
         <AlertTriangle size={16} color="var(--warning)" />
         安全诊断告警
@@ -335,7 +335,7 @@ function VersionSummaryCard({ summary }) {
   const tone = summary.ok ? 'var(--success)' : 'var(--warning)';
   const background = summary.ok ? 'var(--success-glow)' : 'var(--warning-bg)';
   return (
-    <div style={{ border: `1px solid ${tone}`, borderRadius: '14px', padding: '12px', background }}>
+    <div style={{ border: `1px solid ${tone}`, borderRadius: 'var(--radius-lg)', padding: '12px', background }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
         {!summary.ok && <AlertTriangle size={16} color="var(--warning)" />}
         版本摘要

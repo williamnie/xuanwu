@@ -62,7 +62,7 @@
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   display: inline-flex;
   justify-content: center;
@@ -89,7 +89,7 @@
   align-items: flex-start;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   display: flex;
   flex-direction: column;
@@ -194,7 +194,7 @@
 .run-context-status {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   color: var(--text-muted);
   font-size: 0.65rem;
   font-weight: 700;
@@ -221,7 +221,7 @@
   align-items: center;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   display: inline-flex;
   font-size: 0.69rem;
@@ -237,7 +237,7 @@
   align-items: center;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   display: flex;
   gap: 10px;
   grid-column: 1 / -1;
@@ -251,7 +251,7 @@
 .run-control-confirm textarea {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   flex: 1;
   font: inherit;
@@ -336,7 +336,7 @@
   align-items: center;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   display: inline-flex;
   flex-shrink: 0;
@@ -385,7 +385,7 @@
   align-items: center;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   display: grid;
   flex: 0 0 auto;
@@ -494,7 +494,7 @@
 .run-resource-panel {
   background: color-mix(in srgb, var(--bg-card) 94%, transparent);
   border: 1px solid var(--border-color);
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
 }
 
 .run-progress-timeline { padding: 14px 15px 8px; }
@@ -622,7 +622,7 @@
   align-items: center;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   display: inline-flex;
   font-size: 0.66rem;
@@ -664,7 +664,7 @@
 .run-advanced-contract span {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   display: flex;
   flex-direction: column;
@@ -683,7 +683,7 @@
 .run-raw-object pre {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-size: 0.62rem;
   line-height: 1.5;

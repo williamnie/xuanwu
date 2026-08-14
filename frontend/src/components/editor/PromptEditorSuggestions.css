@@ -14,7 +14,7 @@
   max-height: 245px;
   overflow: auto;
   border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   padding: 6px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.16);
@@ -25,7 +25,7 @@
   gap: 2px;
   width: 100%;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 8px 10px;
   background: transparent;
   color: #0f172a;

@@ -19,7 +19,7 @@ test('queued messages stay compact directly above composer input', () => {
   const textRule = ruleFor('.session-message-queue-text');
 
   assert.match(panelRule, /margin-bottom:\s*6px/);
-  assert.match(itemRule, /border-radius:\s*12px/);
+  assert.match(itemRule, /border-radius:\s*var\(--radius-lg\)/);
   assert.match(itemRule, /padding:\s*7px\s+9px/);
   assert.match(textRule, /text-overflow:\s*ellipsis/);
   assert.match(textRule, /white-space:\s*nowrap/);

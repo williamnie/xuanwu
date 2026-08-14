@@ -13,6 +13,7 @@
 }
 .dashboard-page > .grid-cols-3 > .glass-card > div:last-child > div:first-child {
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   letter-spacing: -0.055em;
 }
 .codex-usage-panel {
@@ -62,7 +63,12 @@
 }
 .kanban-card:hover { border-color: var(--border-color-hover); box-shadow: var(--shadow-md); transform: translateY(-2px); }
 .kanban-card-title { font-size: 0.84rem; font-weight: 600; }
-.kanban-card-footer, [data-theme="dark"] .kanban-card-footer { border-top-color: var(--border-light); }
+.kanban-card-footer, [data-theme="dark"] .kanban-card-footer {
+  border-top-color: var(--border-light);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.01em;
+}
 .kanban-card-runtime-pill, [data-theme="dark"] .kanban-card-runtime-pill { background: var(--bg-secondary); border-color: var(--border-light); border-radius: var(--radius-xs); }
 .kanban-card-action-btn, .kanban-card-more-trigger { border-radius: var(--radius-xs); }
 .issue-detail-grid { gap: 14px; }
@@ -100,7 +106,7 @@
   box-shadow: none;
 }
 .proposal-action-row { border-radius: var(--radius-md); }
-.settings-title-row h1 { font-size: clamp(1.8rem, 3vw, 2.45rem); }
+.settings-title-row h1 { font-size: clamp(1.55rem, 2.6vw, 2.1rem); }
 .settings-eyebrow, .activity-eyebrow, .eyebrow {
   font-family: var(--font-sans);
   font-weight: 600;

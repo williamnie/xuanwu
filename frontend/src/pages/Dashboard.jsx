@@ -116,7 +116,7 @@ export default function Dashboard({
       {/* 统计指标网格 */}
       <div className="grid-cols-3">
         <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <div style={{ padding: '12px', borderRadius: '12px', background: 'var(--primary-glow)', color: 'var(--primary)' }}>
+          <div style={{ padding: '12px', borderRadius: 'var(--radius-lg)', background: 'var(--primary-glow)', color: 'var(--primary)' }}>
             <Folder size={24} />
           </div>
           <div>
@@ -126,7 +126,7 @@ export default function Dashboard({
         </div>
 
         <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <div style={{ padding: '12px', borderRadius: '12px', background: 'var(--warning-glow)', color: 'var(--warning)' }}>
+          <div style={{ padding: '12px', borderRadius: 'var(--radius-lg)', background: 'var(--warning-glow)', color: 'var(--warning)' }}>
             <ListTodo size={24} />
           </div>
           <div>
@@ -136,7 +136,7 @@ export default function Dashboard({
         </div>
 
         <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <div style={{ padding: '12px', borderRadius: '12px', background: 'var(--success-glow)', color: 'var(--success)' }}>
+          <div style={{ padding: '12px', borderRadius: 'var(--radius-lg)', background: 'var(--success-glow)', color: 'var(--success)' }}>
             <CheckCircle2 size={24} />
           </div>
           <div>

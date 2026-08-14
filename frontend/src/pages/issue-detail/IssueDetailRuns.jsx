@@ -50,7 +50,7 @@ function IssueRunCard({ issue, project, profiles, run, isLatest, navigateTo, onC
   const sessionId = run.provider_session_id || run.codex_thread_id || issue?.codex_thread_id || '';
   const turnId = run.provider_turn_id || run.codex_turn_id || issue?.codex_turn_id || '';
   return (
-    <article style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 }}>
+    <article style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
         <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>
           Attempt #{run.attempt}{isLatest ? ' · latest' : ''}
@@ -73,7 +73,7 @@ function IssueRunCard({ issue, project, profiles, run, isLatest, navigateTo, onC
       <RunField label="结束" value={running ? '运行中' : formatDateTime(run.ended_at)} />
       {run.exit_reason && <RunField label="退出原因" value={run.exit_reason} />}
       {error && (
-        <div style={{ color: 'var(--error)', background: 'var(--error-bg)', borderRadius: '8px', padding: '8px', fontSize: '0.75rem', overflowWrap: 'anywhere' }}>
+        <div style={{ color: 'var(--error)', background: 'var(--error-bg)', borderRadius: 'var(--radius-md)', padding: '8px', fontSize: '0.75rem', overflowWrap: 'anywhere' }}>
           {error}
         </div>
       )}

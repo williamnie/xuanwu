@@ -19,7 +19,7 @@
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   font-size: 0.88rem;
   font-weight: 500;
@@ -71,7 +71,7 @@
   cursor: pointer;
   padding: 4px;
   margin-right: -4px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;

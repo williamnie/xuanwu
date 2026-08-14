@@ -20,7 +20,7 @@
 .recent-delivery-topline { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
 .recent-delivery-project { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.06em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .recent-delivery-status { align-items: center; color: var(--text-muted); display: inline-flex; flex-shrink: 0; font-family: var(--font-mono); font-size: 0.65rem; font-weight: 750; gap: 6px; text-transform: uppercase; }
-.recent-delivery-status i { background: currentColor; border-radius: 999px; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 13%, transparent); height: 6px; width: 6px; }
+.recent-delivery-status i { background: currentColor; border-radius: 50%; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 13%, transparent); height: 6px; width: 6px; }
 .recent-delivery-status[data-tone='green'] { color: var(--success); }
 .recent-delivery-status[data-tone='blue'] { color: var(--info); }
 .recent-delivery-status[data-tone='amber'] { color: var(--warning); }

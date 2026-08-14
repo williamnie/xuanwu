@@ -71,7 +71,7 @@ function PanelHeader({ enabled, status }) {
 function StatusPill({ enabled, status }) {
   const text = enabled ? 'configured' : status || 'disabled';
   return (
-    <span style={{ alignItems: 'center', border: '1px solid var(--border-light)', borderRadius: '999px', display: 'inline-flex', fontSize: '0.76rem', gap: '6px', padding: '6px 10px' }}>
+    <span style={{ alignItems: 'center', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-xs)', display: 'inline-flex', fontSize: '0.76rem', gap: '6px', padding: '6px 10px' }}>
       <span className={`status-dot ${enabled ? 'active' : 'idle'}`} style={{ height: '7px', width: '7px' }} />
       {text}
     </span>
@@ -103,7 +103,7 @@ function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit
 function ReceiveModeHint({ callbackPath, receiveMode, settingsFile }) {
   const isCallback = receiveMode === 'callback';
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px' }}>
+    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px' }}>
       <div style={{ alignItems: 'center', display: 'flex', gap: '8px', fontWeight: 700 }}>
         <KeyRound size={15} color="var(--primary)" /> 飞书事件接收：{isCallback ? 'HTTP 回调' : '长连接'}
       </div>

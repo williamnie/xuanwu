@@ -21,7 +21,7 @@ test('composer reference chips render above the editor without a context inspect
   assert.match(promptEditorJsx, /<div className="prompt-editor-composer-stack">[\s\S]*<PromptEditorReferences[\s\S]*\{editorShell\}/);
   assert.match(stackRule, /display:\s*grid/);
   assert.match(areaRule, /display:\s*flex/);
-  assert.match(chipRule, /border-radius:\s*999px/);
+  assert.match(chipRule, /border-radius:\s*var\(--radius-xs\)/);
   assert.match(labelRule, /text-overflow:\s*ellipsis/);
   assert.doesNotMatch(referencesCss, /prompt-context-inspector/);
   assert.doesNotMatch(promptEditorJsx, /prompt-context-inspector/);

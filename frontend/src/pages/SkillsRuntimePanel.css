@@ -46,7 +46,7 @@
 .skills-run-row {
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
 }
 
 .skills-runtime-list {
@@ -59,7 +59,7 @@
 .skills-runtime-list button {
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
   cursor: pointer;
   display: grid;
@@ -98,7 +98,7 @@
 .skills-enabled,
 .skills-chip-block em {
   border: 1px solid var(--border-light);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   color: var(--text-secondary);
   display: inline-flex;
   font-size: 0.72rem;
@@ -137,7 +137,7 @@
 .skills-run-controls {
   background: color-mix(in srgb, var(--primary) 5%, var(--bg-secondary));
   border: 1px solid var(--border-light);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   padding: 12px;
 }
 
@@ -153,7 +153,7 @@
 .skills-run-controls input {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   min-height: 34px;
   padding: 0 10px;
@@ -172,7 +172,7 @@
 
 .skills-schema pre {
   background: var(--bg-card);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   color: var(--text-secondary);
   font-size: 0.78rem;
   margin: 10px 0 0;
@@ -197,7 +197,7 @@
 
 .skills-runtime-empty {
   border: 1px dashed var(--border-color);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   color: var(--text-muted);
   padding: 18px;
 }

@@ -260,7 +260,7 @@
 
 .issue-summary-flag {
   border: 1px solid var(--border-color);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   font-family: var(--font-mono);
   font-size: 0.65rem;
   font-style: normal;
@@ -384,7 +384,7 @@
 .issue-detail-tab em {
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   font-family: var(--font-mono);
   font-size: 0.62rem;
   font-style: normal;

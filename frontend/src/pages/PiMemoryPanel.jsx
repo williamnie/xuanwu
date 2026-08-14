@@ -100,7 +100,7 @@ function MemorySummary({ activeCount, disabledCount, recent }) {
 
 function SummaryPill({ label, value }) {
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px' }}>
+    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '10px' }}>
       <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700 }}>{label}</div>
       <strong style={{ color: 'var(--text-primary)', fontSize: '0.98rem' }}>{value}</strong>
     </div>
@@ -110,7 +110,7 @@ function SummaryPill({ label, value }) {
 function MemoryCreateForm({ state }) {
   const draft = state.newDraft;
   return (
-    <div style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', background: 'var(--bg-secondary)' }}>
+    <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px', background: 'var(--bg-secondary)' }}>
       <h3 style={{ fontSize: '0.94rem', marginBottom: '8px' }}>手动补充可复用记忆</h3>
       <textarea
         className="form-control"
@@ -148,7 +148,7 @@ function MemoryCard({ item, state }) {
   const draft = state.drafts[item.id] || draftFromItem(item);
   const disabled = Number(item.disabled) === 1;
   return (
-    <article style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', background: 'var(--bg-secondary)' }}>
+    <article style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px', background: 'var(--bg-secondary)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
         <strong>{item.memory_type || 'user'} / {item.kind}</strong>
         <span style={{ color: disabled ? 'var(--text-muted)' : 'var(--success)', fontSize: '0.78rem', fontWeight: 700 }}>
