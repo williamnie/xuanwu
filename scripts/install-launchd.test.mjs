@@ -111,10 +111,20 @@ test('launchd deployment defaults to split Web/Core/Agentic roles from one artif
   assert.match(source, /<string>--core-addr<\/string>/);
   assert.equal((source.match(/<string>--db<\/string>/g) || []).length, 2);
   assert.equal((source.match(/<key>PI_PACKAGE_DIR<\/key>/g) || []).length, 2);
-  assert.match(source, /wait_for_health "\$\(service_url "\$CORE_ADDR"\)"/);
-  assert.match(source, /wait_for_health "\$\(service_url "\$AGENTIC_ADDR"\)"/);
-  assert.match(source, /wait_for_health "\$\(service_url "\$ADDR"\)"/);
+  assert.match(source, /wait_for_health "Core" "\$\(service_url "\$CORE_ADDR"\)" "\$CORE_HEALTH_TIMEOUT_SECONDS"/);
+  assert.match(source, /wait_for_health "Agentic Worker" "\$\(service_url "\$AGENTIC_ADDR"\)" "\$HEALTH_TIMEOUT_SECONDS"/);
+  assert.match(source, /wait_for_health "Web" "\$\(service_url "\$ADDR"\)" "\$HEALTH_TIMEOUT_SECONDS"/);
   assert.match(source, /curl --connect-timeout 1 --max-time 2 -fsS/);
+});
+
+test('launchd deployment gives Core a configurable cold-start window and reports actionable timeouts', () => {
+  assert.match(source, /HEALTH_TIMEOUT_SECONDS="\$\{XUANWU_HEALTH_TIMEOUT_SECONDS:-60\}"/);
+  assert.match(source, /CORE_HEALTH_TIMEOUT_SECONDS="\$\{XUANWU_CORE_HEALTH_TIMEOUT_SECONDS:-180\}"/);
+  assert.match(source, /validate_positive_integer "XUANWU_HEALTH_TIMEOUT_SECONDS" "\$HEALTH_TIMEOUT_SECONDS"/);
+  assert.match(source, /validate_positive_integer "XUANWU_CORE_HEALTH_TIMEOUT_SECONDS" "\$CORE_HEALTH_TIMEOUT_SECONDS"/);
+  assert.match(source, /waiting up to \$\{timeout_seconds\}s for \$role health/);
+  assert.match(source, /\$role health check timed out after \$\{timeout_seconds\}s/);
+  assert.match(source, /inspect logs: \$log_hint/);
 });
 
 test('launchd deployment preserves rollback inputs before atomic replacement', () => {

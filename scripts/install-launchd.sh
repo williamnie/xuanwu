@@ -64,6 +64,8 @@ if [ -z "$CLAUDE_AUTH_MODE" ]; then
 fi
 AUTOMATION_SHADOW_W1="${XUANWU_AUTOMATION_SHADOW_W1:-0}"
 SKIP_RUNTIME_BACKUP="${XUANWU_SKIP_RUNTIME_BACKUP:-0}"
+HEALTH_TIMEOUT_SECONDS="${XUANWU_HEALTH_TIMEOUT_SECONDS:-60}"
+CORE_HEALTH_TIMEOUT_SECONDS="${XUANWU_CORE_HEALTH_TIMEOUT_SECONDS:-180}"
 PATH_VALUE="${XUANWU_PATH:-$PATH}"
 LEGACY_PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 WEB_PLIST="$HOME/Library/LaunchAgents/$WEB_LABEL.plist"
@@ -265,12 +267,25 @@ stage_pi_package_assets() {
 }
 
 wait_for_health() {
-  local url="$1"
-  for _ in {1..120}; do
+  local role="$1" url="$2" timeout_seconds="$3" log_hint="$4"
+  local attempt attempts
+  attempts=$((timeout_seconds * 2))
+  echo "[launchd] waiting up to ${timeout_seconds}s for $role health: $url/health"
+  for ((attempt = 1; attempt <= attempts; attempt += 1)); do
     curl --connect-timeout 1 --max-time 2 -fsS "$url/health" >/dev/null 2>&1 && return 0
     sleep 0.5
   done
+  echo "[launchd] $role health check timed out after ${timeout_seconds}s: $url/health" >&2
+  echo "[launchd] inspect logs: $log_hint" >&2
   return 1
+}
+
+validate_positive_integer() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+    echo "[launchd] $name must be a positive integer" >&2
+    exit 1
+  fi
 }
 
 launchd_service_pid() {
@@ -360,6 +375,8 @@ if [[ "$SKIP_RUNTIME_BACKUP" != "0" && "$SKIP_RUNTIME_BACKUP" != "1" ]]; then
   echo "[launchd] XUANWU_SKIP_RUNTIME_BACKUP must be 0 or 1" >&2
   exit 1
 fi
+validate_positive_integer "XUANWU_HEALTH_TIMEOUT_SECONDS" "$HEALTH_TIMEOUT_SECONDS"
+validate_positive_integer "XUANWU_CORE_HEALTH_TIMEOUT_SECONDS" "$CORE_HEALTH_TIMEOUT_SECONDS"
 
 APP_VERSION="$("$ROOT_DIR/scripts/resolve-version.sh")"
 echo "[launchd] version: $APP_VERSION"
@@ -580,15 +597,18 @@ wait_for_process_exit "$old_agentic_pid" "$AGENTIC_LABEL"
 launchctl enable "$DOMAIN/$CORE_LABEL" >/dev/null 2>&1 || true
 bootstrap_service "$CORE_LABEL" "$CORE_PLIST"
 launchctl kickstart -k "$DOMAIN/$CORE_LABEL"
-wait_for_health "$(service_url "$CORE_ADDR")"
+wait_for_health "Core" "$(service_url "$CORE_ADDR")" "$CORE_HEALTH_TIMEOUT_SECONDS" \
+  "$LOG_DIR/launchd.out.log $LOG_DIR/launchd.err.log"
 launchctl enable "$DOMAIN/$AGENTIC_LABEL" >/dev/null 2>&1 || true
 bootstrap_service "$AGENTIC_LABEL" "$AGENTIC_PLIST"
 launchctl kickstart -k "$DOMAIN/$AGENTIC_LABEL"
-wait_for_health "$(service_url "$AGENTIC_ADDR")"
+wait_for_health "Agentic Worker" "$(service_url "$AGENTIC_ADDR")" "$HEALTH_TIMEOUT_SECONDS" \
+  "$LOG_DIR/launchd.agentic.out.log $LOG_DIR/launchd.agentic.err.log"
 launchctl enable "$DOMAIN/$WEB_LABEL" >/dev/null 2>&1 || true
 bootstrap_service "$WEB_LABEL" "$WEB_PLIST"
 launchctl kickstart -k "$DOMAIN/$WEB_LABEL"
-wait_for_health "$(service_url "$ADDR")"
+wait_for_health "Web" "$(service_url "$ADDR")" "$HEALTH_TIMEOUT_SECONDS" \
+  "$LOG_DIR/launchd.web.out.log $LOG_DIR/launchd.web.err.log"
 
 "$ROOT_DIR/scripts/status-launchd.sh"
 echo "[launchd] installed plists: $WEB_PLIST $CORE_PLIST $AGENTIC_PLIST"
