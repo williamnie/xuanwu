@@ -1075,15 +1075,16 @@ textarea:focus-visible {
   align-items: center;
   background: transparent;
   border: 0;
+  bottom: 0;
   color: var(--text-muted);
   cursor: pointer;
   display: flex;
   height: 36px;
   justify-content: center;
+  margin-block: auto;
   position: absolute;
   right: 3px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 0;
   width: 36px;
 }
 
