@@ -5,6 +5,7 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  padding: 0;
 }
 
 .pi-chat-shell {
@@ -18,9 +19,9 @@
 .pi-chat-main.glass-card,
 [data-theme="dark"] .pi-chat-main.glass-card {
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .pi-chat-main {
@@ -30,12 +31,4 @@
   min-height: 0;
   overflow: hidden;
   position: relative;
-}
-
-@media (max-width: 960px) {
-  .pi-chat-page { padding-top: 14px; }
-}
-
-@media (max-width: 760px) {
-  .pi-chat-page { padding-top: 0; }
 }
