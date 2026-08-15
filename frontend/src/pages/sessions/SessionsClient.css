@@ -273,63 +273,43 @@
 .composer-embedded-select {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background-color: rgba(0, 0, 0, 0.03);
-  border: 1px solid rgba(0, 0, 0, 0.02);
+  gap: 5px;
+  height: 26px;
+  padding: 0 7px;
+  background: var(--control-bg);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-xs);
   color: var(--text-secondary);
-  font-size: 0.82rem;
-  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   cursor: pointer;
   position: relative;
-  transition: all 0.2s;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
   white-space: nowrap;
-}
-
-.composer-embedded-model-manual {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--text-secondary);
-}
-
-.composer-embedded-model-manual input {
-  width: 190px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 5px 7px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 0.75rem;
 }
 
 .composer-embedded-select span {
   white-space: nowrap;
 }
 
-[data-theme="dark"] .composer-embedded-select {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.01);
-}
-
 .composer-embedded-select:hover {
-  background-color: rgba(0, 0, 0, 0.06);
+  background: var(--nav-hover);
+  border-color: var(--border-color-hover);
   color: var(--text-primary);
 }
 
-[data-theme="dark"] .composer-embedded-select:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-}
-
 .composer-embedded-select.danger {
-  color: #ef4444;
-  background-color: rgba(239, 68, 68, 0.05);
-  border-color: rgba(239, 68, 68, 0.1);
+  background: var(--error-bg);
+  border-color: color-mix(in srgb, var(--error) 30%, transparent);
+  color: var(--error);
 }
 
 .composer-embedded-select.danger:hover {
-  background-color: rgba(239, 68, 68, 0.08);
+  background: var(--error-bg);
+  border-color: color-mix(in srgb, var(--error) 46%, transparent);
+  color: var(--error);
 }
 
 .composer-embedded-select select {
@@ -345,62 +325,47 @@
 .composer-embedded-model-manual {
   align-items: center;
   display: flex;
-  gap: 6px;
+  gap: 5px;
+  color: var(--text-secondary);
 }
 
+/* 模型列表未验证时的手填输入：warning 语义 */
 .composer-embedded-model-manual input {
-  background: #fff7ed;
-  border: 1px solid #fdba74;
-  border-radius: var(--radius-md);
-  color: #9a3412;
-  font-size: 0.78rem;
-  height: 30px;
+  background: var(--warning-bg);
+  border: 1px solid color-mix(in srgb, var(--warning) 34%, transparent);
+  border-radius: var(--radius-xs);
+  color: var(--warning);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  height: 26px;
   max-width: 150px;
   outline: none;
   padding: 0 8px;
 }
 
-[data-theme="dark"] .composer-embedded-model-manual input {
-  background: rgba(154, 52, 18, 0.22);
-  border-color: rgba(251, 146, 60, 0.5);
-  color: #fed7aa;
-}
-
 /* 圆圈发送/创建按钮 */
 .composer-circle-submit {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background-color: #2f2c26;
-  color: white;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--button-primary-bg);
+  border-radius: var(--radius-sm);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-fg);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: none;
-}
-
-[data-theme="dark"] .composer-circle-submit {
-  background-color: #f0eee7;
-  color: #1d1d1b;
+  transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
 }
 
 .composer-circle-submit:hover:not(:disabled) {
-  transform: scale(1.05);
+  background: var(--button-primary-hover);
+  border-color: var(--button-primary-hover);
 }
 
 .composer-circle-submit:disabled {
-  background-color: #e5e7eb;
-  color: #9ca3af;
+  opacity: 0.38;
   cursor: not-allowed;
-  transform: none;
-}
-
-[data-theme="dark"] .composer-circle-submit:disabled {
-  background-color: #374151;
-  color: #4b5563;
 }
 
 /* 输入框正下方的圆角配置标签 */
@@ -885,9 +850,7 @@
 }
 
 .new-session-bottom-tags .bottom-tag-select,
-.composer-embedded-select,
-[data-theme="dark"] .new-session-bottom-tags .bottom-tag-select,
-[data-theme="dark"] .composer-embedded-select {
+[data-theme="dark"] .new-session-bottom-tags .bottom-tag-select {
   background: var(--bg-card);
   border-color: var(--border-light);
 }

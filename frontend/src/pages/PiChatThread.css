@@ -265,28 +265,11 @@
   border-top: 0;
   padding: 24px clamp(18px, 5vw, 72px) 20px;
 }
-.pi-chat-composer .session-composer { background: transparent; border-top: 0; margin: 0 auto; max-width: 880px; padding: 0; }
-.pi-chat-composer .prompt-editor-shell.composer,
-[data-theme="dark"] .pi-chat-composer .prompt-editor-shell.composer {
-  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 14px 40px rgba(18, 28, 25, .09), 0 1px 0 rgba(255, 255, 255, .55) inset;
-}
-.pi-chat-composer .prompt-editor-shell.composer.focused,
-[data-theme="dark"] .pi-chat-composer .prompt-editor-shell.composer.focused {
-  border-color: color-mix(in srgb, var(--primary) 42%, var(--border-color));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 8%, transparent), 0 18px 46px rgba(18, 28, 25, .12);
-}
+.pi-chat-composer .session-composer { background: transparent; border-top: 0; box-shadow: none; margin: 0 auto; max-width: 880px; padding: 0; }
 .pi-chat-composer .prompt-editor-content.composer {
   font-size: .91rem;
   min-height: 72px !important;
   padding: 17px 20px 8px;
-}
-.pi-chat-composer .prompt-composer-footer {
-  border-top: 1px solid color-mix(in srgb, var(--border-light) 62%, transparent);
-  margin: 0 12px;
-  padding: 9px 1px 10px;
 }
 .pi-chat-runtime-controls { align-items: center; display: inline-flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .pi-chat-runtime-pill {
@@ -309,36 +292,6 @@
 }
 .pi-chat-runtime-pill:first-child { background: var(--primary-glow); color: var(--primary); }
 .pi-chat-runtime-pill.muted { color: var(--text-muted); }
-
-.pi-chat-composer .prompt-composer-add {
-  border: 1px solid transparent;
-  border-radius: var(--radius-md) !important;
-  height: 30px;
-  width: 30px;
-}
-.pi-chat-composer .session-composer-circle,
-.pi-chat-composer .session-composer-circle.stop,
-[data-theme="dark"] .pi-chat-composer .session-composer-circle,
-[data-theme="dark"] .pi-chat-composer .session-composer-circle.stop {
-  animation: none;
-  border: 1px solid color-mix(in srgb, var(--text-primary) 14%, transparent);
-  border-radius: var(--radius-md) !important;
-  box-shadow: none;
-  height: 34px;
-  width: 34px;
-}
-.pi-chat-composer .session-composer-circle.stop,
-[data-theme="dark"] .pi-chat-composer .session-composer-circle.stop {
-  background: color-mix(in srgb, var(--error) 9%, var(--surface-raised));
-  border-color: color-mix(in srgb, var(--error) 26%, var(--border-color));
-  color: var(--error);
-}
-.pi-chat-composer .session-composer-circle.stop:hover:not(:disabled),
-[data-theme="dark"] .pi-chat-composer .session-composer-circle.stop:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--error) 15%, var(--surface-raised));
-  border-color: color-mix(in srgb, var(--error) 46%, var(--border-color));
-  color: var(--error);
-}
 
 @keyframes pi-chat-running-signal {
   0%, 100% { opacity: .46; transform: scale(.82); }

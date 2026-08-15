@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SessionComposer 样式样例 · 待审批</title>
+<style>
+  /* ===== 设计 token：与 frontend/src/GeekWorkbench.css 保持一致 ===== */
+  :root {
+    color-scheme: light;
+    --font-sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', 'SFMono-Regular', 'Cascadia Code', 'Menlo', monospace;
+    --bg-primary: #f3efe5;
+    --bg-card: #fffdf8;
+    --bg-terminal: #0a1110;
+    --surface-raised: #fffefa;
+    --control-bg: rgba(255, 255, 255, 0.7);
+    --canvas-gradient: radial-gradient(circle at 88% -8%, rgba(72, 169, 199, 0.1), transparent 28%), radial-gradient(circle at 30% 110%, rgba(165, 215, 55, 0.11), transparent 32%), var(--bg-primary);
+    --grid-dot: rgba(42, 61, 55, 0.17);
+    --border-color: rgba(45, 61, 55, 0.16);
+    --border-light: rgba(45, 61, 55, 0.09);
+    --border-color-hover: rgba(91, 126, 17, 0.54);
+    --text-primary: #1d2824;
+    --text-secondary: #4d5d57;
+    --text-muted: #7b8984;
+    --primary: #5b820a;
+    --primary-glow: rgba(107, 148, 19, 0.12);
+    --nav-hover: rgba(42, 61, 55, 0.045);
+    --success: #258663;
+    --success-bg: rgba(37, 134, 99, 0.07);
+    --success-glow: rgba(37, 134, 99, 0.15);
+    --info: #087da5;
+    --info-bg: rgba(8, 125, 165, 0.07);
+    --info-glow: rgba(8, 125, 165, 0.15);
+    --warning: #b96d00;
+    --warning-bg: rgba(185, 109, 0, 0.07);
+    --warning-glow: rgba(185, 109, 0, 0.15);
+    --error: #c74742;
+    --error-bg: rgba(199, 71, 66, 0.07);
+    --error-glow: rgba(199, 71, 66, 0.15);
+    --shadow-sm: 0 1px 2px rgba(28, 39, 35, 0.035), 0 10px 30px rgba(28, 39, 35, 0.045);
+    --shadow-md: 0 18px 48px rgba(28, 39, 35, 0.1);
+    --radius-xs: 2px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --button-primary-bg: #0a0d0c;
+    --button-primary-hover: #1f2422;
+    --button-primary-fg: #ffffff;
+    --sessions-composer-radius: 8px;
+  }
+  [data-theme="dark"] {
+    color-scheme: dark;
+    --bg-primary: #070a0a;
+    --bg-card: #0d1313;
+    --bg-terminal: #050808;
+    --surface-raised: #111817;
+    --control-bg: rgba(0, 0, 0, 0.24);
+    --canvas-gradient: radial-gradient(circle at 88% -8%, rgba(80, 200, 255, 0.08), transparent 28%), radial-gradient(circle at 30% 110%, rgba(186, 255, 63, 0.055), transparent 32%), var(--bg-primary);
+    --grid-dot: rgba(189, 220, 209, 0.18);
+    --border-color: rgba(218, 239, 231, 0.14);
+    --border-light: rgba(218, 239, 231, 0.075);
+    --border-color-hover: rgba(190, 255, 74, 0.52);
+    --text-primary: #eef7f2;
+    --text-secondary: #b5c5bf;
+    --text-muted: #71827c;
+    --primary: #baff3f;
+    --primary-glow: rgba(186, 255, 63, 0.12);
+    --nav-hover: rgba(255, 255, 255, 0.035);
+    --success: #56d4a6;
+    --success-bg: rgba(86, 212, 166, 0.08);
+    --success-glow: rgba(86, 212, 166, 0.16);
+    --info: #58c9f4;
+    --info-bg: rgba(88, 201, 244, 0.08);
+    --info-glow: rgba(88, 201, 244, 0.17);
+    --warning: #ffc55d;
+    --warning-bg: rgba(255, 197, 93, 0.08);
+    --warning-glow: rgba(255, 197, 93, 0.16);
+    --error: #ff7d77;
+    --error-bg: rgba(255, 125, 119, 0.09);
+    --error-glow: rgba(255, 125, 119, 0.16);
+    --shadow-sm: none;
+    --shadow-md: 0 18px 48px rgba(0, 0, 0, 0.3);
+    --button-primary-bg: #baff3f;
+    --button-primary-hover: #caff67;
+    --button-primary-fg: #090d09;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--canvas-gradient);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    letter-spacing: -0.005em;
+    min-height: 100vh;
+  }
+  body::before {
+    background-image: radial-gradient(var(--grid-dot) 0.7px, transparent 0.7px);
+    background-size: 22px 22px;
+    content: '';
+    inset: 0;
+    mask-image: linear-gradient(90deg, transparent, black 18%, black 82%, transparent);
+    opacity: 0.16;
+    pointer-events: none;
+    position: fixed;
+    z-index: -1;
+  }
+  .mono { font-family: var(--font-mono); }
+
+  /* ===== 样例页骨架（非交付内容）===== */
+  .sample-header {
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    gap: 18px;
+    justify-content: space-between;
+    margin: 0 auto;
+    max-width: 980px;
+    padding: 22px 24px 16px;
+  }
+  .sample-header h1 { font-size: 1.15rem; font-weight: 650; letter-spacing: -0.015em; }
+  .sample-header p { color: var(--text-muted); font-size: 0.8rem; margin-top: 4px; }
+  .theme-toggle {
+    background: var(--button-primary-bg);
+    border: 1px solid var(--button-primary-bg);
+    color: var(--button-primary-fg);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    padding: 9px 14px;
+    text-transform: uppercase;
+  }
+  .state-block { margin: 26px auto 0; max-width: 980px; padding: 0 24px; }
+  .state-block:last-of-type { padding-bottom: 60px; }
+  .state-title {
+    align-items: baseline;
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .state-title .idx {
+    color: var(--primary);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+  }
+  .state-title h2 { font-size: 0.92rem; font-weight: 650; }
+  .state-title .note { color: var(--text-muted); font-size: 0.74rem; }
+  .canvas {
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 26px 22px;
+  }
+  .composer-wrap { margin: 0 auto; max-width: 760px; }
+
+  /* ======================================================================
+     以下为新设计：映射真实文件
+       - pages/sessions/SessionComposer.css
+       - components/editor/PromptEditor.css (.composer 变体)
+       - components/editor/PromptEditorReferences.css
+     ====================================================================== */
+
+  /* --- 外壳：.prompt-editor-shell.composer --- */
+  .prompt-editor-shell.composer {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--sessions-composer-radius);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: border-color 140ms ease, box-shadow 140ms ease;
+  }
+  .prompt-editor-shell.composer.focused {
+    border-color: color-mix(in srgb, var(--primary) 55%, var(--border-color));
+    box-shadow: 0 0 0 1px var(--primary-glow), var(--shadow-md);
+  }
+
+  /* --- 输入区：.prompt-editor-content.composer --- */
+  .prompt-editor-content.composer {
+    color: var(--text-primary);
+    font-size: 0.92rem;
+    line-height: 1.6;
+    min-height: 84px;
+    padding: 14px 16px 6px;
+  }
+  .prompt-editor-content.composer .placeholder { color: var(--text-muted); }
+
+  /* --- 底栏：.prompt-composer-footer --- */
+  .prompt-composer-footer {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    padding: 6px 10px 10px;
+  }
+  .prompt-composer-left {
+    align-items: center;
+    display: inline-flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+  }
+  .prompt-composer-actions { align-items: center; display: inline-flex; flex: 0 0 auto; gap: 8px; }
+
+  /* --- 添加图片按钮：.prompt-composer-add --- */
+  .prompt-composer-add {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-xs);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: inline-flex;
+    height: 26px;
+    justify-content: center;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    width: 26px;
+  }
+  .prompt-composer-add:hover:not(:disabled) {
+    background: var(--nav-hover);
+    border-color: var(--border-light);
+    color: var(--text-primary);
+  }
+
+  /* --- 紧凑型下拉：.session-composer-select --- */
+  .session-composer-select {
+    align-items: center;
+    background: var(--control-bg);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    gap: 5px;
+    height: 26px;
+    min-width: 0;
+    padding: 0 7px;
+    position: relative;
+    transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+  }
+  .session-composer-select svg { flex: 0 0 auto; }
+  .session-composer-select-value {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 24px;
+    max-width: 150px;
+    overflow: hidden;
+    pointer-events: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .session-composer-chevron { opacity: 0.55; pointer-events: none; }
+  .session-composer-select:hover,
+  .session-composer-select:focus-within {
+    background: var(--nav-hover);
+    border-color: var(--border-color-hover);
+    color: var(--text-primary);
+  }
+  /* model 选择器靠右对齐（真实样式中 margin-left:auto） */
+  .session-composer-select.model { color: var(--text-primary); margin-left: auto; }
+  .session-composer-select.model .session-composer-select-value { font-weight: 700; }
+  /* 权限选择器：危险预设用 error token */
+  .session-composer-select.permission.danger {
+    background: var(--error-bg);
+    border-color: color-mix(in srgb, var(--error) 30%, transparent);
+    color: var(--error);
+  }
+
+  /* --- 发送 / 停止按钮：.session-composer-circle --- */
+  .session-composer-circle {
+    align-items: center;
+    background: var(--button-primary-bg);
+    border: 1px solid var(--button-primary-bg);
+    border-radius: var(--radius-sm);
+    color: var(--button-primary-fg);
+    cursor: pointer;
+    display: inline-flex;
+    height: 30px;
+    justify-content: center;
+    transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
+    width: 30px;
+  }
+  .session-composer-circle:hover:not(:disabled) {
+    background: var(--button-primary-hover);
+    border-color: var(--button-primary-hover);
+  }
+  .session-composer-circle:disabled { cursor: not-allowed; opacity: 0.38; }
+  .session-composer-circle.stop {
+    animation: composer-stop-pulse 1.5s ease-in-out infinite;
+    background: var(--error);
+    border-color: var(--error);
+    color: #fff;
+  }
+  [data-theme="dark"] .session-composer-circle.stop { color: #25070b; }
+  .session-composer-circle.stop:hover:not(:disabled) { filter: brightness(1.08); }
+  @keyframes composer-stop-pulse {
+    0%, 100% { box-shadow: 0 0 0 2px var(--error-glow); }
+    50% { box-shadow: 0 0 0 5px var(--error-bg); }
+  }
+
+  /* --- 运行中发送行为：.session-composer-mode-switch --- */
+  .session-composer-mode-switch {
+    align-items: center;
+    background: var(--control-bg);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xs);
+    display: inline-flex;
+    padding: 2px;
+  }
+  .session-composer-mode-switch button {
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-xs);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 4px 9px;
+  }
+  .session-composer-mode-switch button.active {
+    background: color-mix(in srgb, var(--primary) 14%, transparent);
+    color: var(--primary);
+  }
+
+  /* --- 排队消息面板：.session-message-queue-* --- */
+  .session-message-queue-panel { display: grid; gap: 6px; margin-bottom: 8px; }
+  .session-message-queue-list { display: grid; gap: 6px; list-style: none; }
+  .session-message-queue-item {
+    align-items: flex-start;
+    background: var(--control-bg);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    padding: 7px 9px;
+  }
+  .session-message-queue-item.failed {
+    background: var(--error-bg);
+    border-color: color-mix(in srgb, var(--error) 26%, transparent);
+  }
+  .session-message-queue-main { display: grid; gap: 3px; min-width: 0; }
+  .session-message-queue-badge {
+    color: var(--info);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .session-message-queue-item.failed .session-message-queue-badge { color: var(--error); }
+  .session-message-queue-text {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .session-message-queue-error { color: var(--error); font-size: 0.74rem; }
+  .session-message-queue-actions { display: inline-flex; flex: 0 0 auto; gap: 6px; }
+  .session-message-queue-actions button {
+    background: transparent;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 3px 8px;
+  }
+  .session-message-queue-actions button:hover {
+    border-color: var(--border-color-hover);
+    color: var(--text-primary);
+  }
+
+  /* --- 中断状态条：.session-interrupt-status --- */
+  .session-interrupt-status {
+    align-items: center;
+    background: var(--info-bg);
+    border: 1px solid color-mix(in srgb, var(--info) 24%, transparent);
+    border-radius: var(--radius-sm);
+    color: var(--info);
+    display: inline-flex;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    gap: 7px;
+    letter-spacing: 0.03em;
+    margin-bottom: 8px;
+    padding: 6px 10px;
+  }
+  .session-interrupt-status.success {
+    background: var(--success-bg);
+    border-color: color-mix(in srgb, var(--success) 26%, transparent);
+    color: var(--success);
+  }
+  .animate-spin { animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* --- 引用 chips：.prompt-reference-* --- */
+  .prompt-editor-composer-stack { display: grid; gap: 6px; }
+  .prompt-reference-area { align-items: center; display: flex; gap: 6px; padding: 0 2px; }
+  .prompt-reference-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+  .prompt-reference-chip {
+    align-items: center;
+    background: var(--info-bg);
+    border: 1px solid color-mix(in srgb, var(--info) 22%, transparent);
+    border-radius: var(--radius-xs);
+    color: var(--info);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.72rem;
+    font-weight: 650;
+    gap: 5px;
+    max-width: 100%;
+    padding: 3px 7px;
+  }
+  .prompt-reference-chip.warning {
+    background: var(--warning-bg);
+    border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+    color: var(--warning);
+  }
+  .prompt-reference-type {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    opacity: 0.75;
+    text-transform: uppercase;
+  }
+  .prompt-reference-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prompt-reference-remove { cursor: pointer; display: inline-grid; line-height: 1; opacity: 0.7; place-items: center; }
+  .prompt-reference-remove:hover { opacity: 1; }
+
+  /* ===== 现状复刻（仅供对比，非交付）===== */
+  .old .prompt-editor-shell.composer {
+    background: #fff;
+    border: 1px solid #dde3ea;
+    border-radius: 22px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  }
+  .old .prompt-editor-content.composer { color: #111827; font-size: 0.88rem; }
+  .old .prompt-editor-content.composer .placeholder { color: #b7bec9; }
+  .old .session-composer-select {
+    background: transparent;
+    border: 0;
+    border-radius: 2px;
+    color: #64748b;
+    height: 28px;
+  }
+  .old .session-composer-select:hover { background: #f3f4f6; color: #111827; }
+  .old .session-composer-select-value { font-family: var(--font-sans); font-size: 0.78rem; font-weight: 650; }
+  .old .session-composer-select.permission { background: #f4f5f7; color: #334155; }
+  .old .session-composer-select.model { color: #111827; }
+  .old .session-composer-circle {
+    background: #141820;
+    border: 0;
+    border-radius: 12px;
+    color: #fff;
+    height: 32px;
+    width: 32px;
+  }
+  .old .prompt-composer-add { border-radius: 2px; color: #9aa3af; height: 28px; width: 28px; }
+  .old .prompt-composer-add:hover { background: #f3f4f6; color: #4b5563; }
+  [data-theme="dark"] .old .prompt-editor-shell.composer { background: #111827; border-color: rgba(255,255,255,0.14); }
+  [data-theme="dark"] .old .prompt-editor-content.composer { color: #f8fafc; }
+  [data-theme="dark"] .old .session-composer-circle { background: #f8fafc; color: #020617; }
+</style>
+</head>
+<body>
+
+<header class="sample-header">
+  <div>
+    <h1>SessionComposer 重设计样例</h1>
+    <p>问玄武聊天页 / Runs · Provider Chat / 新建会话 共用组件 · 极客简洁风 · 全部改用主题 token</p>
+  </div>
+  <button class="theme-toggle" id="themeToggle">THEME: LIGHT</button>
+</header>
+
+<!-- 00 现状对比 -->
+<section class="state-block">
+  <div class="state-title">
+    <span class="idx">00</span>
+    <h2>现状（简化复刻，供对比）</h2>
+    <span class="note">硬编码蓝灰色板、大圆角，与极客主题脱节</span>
+  </div>
+  <div class="canvas old">
+    <div class="composer-wrap">
+      <form class="session-composer">
+        <div class="prompt-editor-composer-stack">
+          <div class="prompt-editor-shell composer">
+            <div class="prompt-editor-content composer">
+              <p class="placeholder">给当前 Provider session 发送消息...</p>
+            </div>
+            <div class="prompt-composer-footer">
+              <div class="prompt-composer-left">
+                <button type="button" class="prompt-composer-add" title="添加图片">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                </button>
+                <span class="session-composer-select permission">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                  <span class="session-composer-select-value">仅对话</span>
+                  <svg class="session-composer-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+                <span class="session-composer-select model">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+                  <span class="session-composer-select-value">5.2 codex</span>
+                  <svg class="session-composer-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+                <span class="session-composer-select effort">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg>
+                  <span class="session-composer-select-value">高</span>
+                  <svg class="session-composer-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+                <span class="session-composer-select speed">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
+                  <span class="session-composer-select-value">标准</span>
+                  <svg class="session-composer-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+              </div>
+              <div class="prompt-composer-actions">
+                <button type="button" class="session-composer-circle" title="发送">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- 01 新设计 · 默认占位 -->
+<section class="state-block">
+  <div class="state-title">
+    <span class="idx">01</span>
+    <h2>新设计 · 默认 / 占位</h2>
+    <span class="note">token 化色彩、锐利几何、mono 控件标签</span>
+  </div>
+  <div class="canvas">
+    <div class="composer-wrap">
+      <form class="session-composer">
+        <div class="prompt-editor-composer-stack">
+          <div class="prompt-editor-shell composer">
+            <div class="prompt-editor-content composer">
+              <p class="placeholder">给当前 Provider session 发送消息...</p>
+            </div>
+            <div class="prompt-composer-footer">
+              <div class="prompt-composer-left">
+                <button type="button" class="prompt-composer-add" title="添加图片">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                </button>
+                <span class="session-composer-select permission">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                  <span class="session-composer-select-value">仅对话</span>
+                  <svg class="session-composer-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+                <span class="session-composer-select model">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+                  <span class="session-composer-select-value">5.2 codex</span>
+                  <svg class="session-composer-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+                <span class="session-composer-select effort">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg>
+                  <span class="session-composer-select-value">HIGH</span>
+                  <svg class="session-composer-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+                <span class="session-composer-select speed">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
+                  <span class="session-composer-select-value">STD</span>
+                  <svg class="session-composer-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+              </div>
+              <div class="prompt-composer-actions">
+                <button type="button" class="session-composer-circle" title="发送">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- 02 聚焦 + 引用 chips + 危险权限 -->
+<section class="state-block">
+  <div class="state-title">
+    <span class="idx">02</span>
+    <h2>新设计 · 聚焦 + 引用 + 危险权限</h2>
+    <span class="note">聚焦描边用 primary，chips / danger 全部走语义 token</span>
+  </div>
+  <div class="canvas">
+    <div class="composer-wrap">
+      <form class="session-composer">
+        <div class="prompt-editor-composer-stack">
+          <div class="prompt-reference-area">
+            <div class="prompt-reference-chips">
+              <span class="prompt-reference-chip">
+                <span class="prompt-reference-type">ISSUE</span>
+                <span class="prompt-reference-label">#786 会话中断后队列未恢复</span>
+                <span class="prompt-reference-remove" title="移除">×</span>
+              </span>
+              <span class="prompt-reference-chip warning">
+                <span class="prompt-reference-type">FILE</span>
+                <span class="prompt-reference-label">SessionComposer.css（已过期）</span>
+                <span class="prompt-reference-remove" title="移除">×</span>
+              </span>
+            </div>
+          </div>
+          <div class="prompt-editor-shell composer focused">
+            <div class="prompt-editor-content composer">
+              <p>帮我把这个 issue 的根因定位一下，先看队列恢复的数据流，不要改代码。</p>
+            </div>
+            <div class="prompt-composer-footer">
+              <div class="prompt-composer-left">
+                <button type="button" class="prompt-composer-add" title="添加图片">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                </button>
+                <span class="session-composer-select permission danger">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                  <span class="session-composer-select-value">完全放权</span>
+                  <svg class="session-composer-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+                <span class="session-composer-select model">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+                  <span class="session-composer-select-value">opus 4.7</span>
+                  <svg class="session-composer-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+                <span class="session-composer-select effort">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg>
+                  <span class="session-composer-select-value">MAX</span>
+                  <svg class="session-composer-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+              </div>
+              <div class="prompt-composer-actions">
+                <button type="button" class="session-composer-circle" title="发送">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- 03 运行中：排队面板 + 中断条 + 模式开关 + 停止 -->
+<section class="state-block">
+  <div class="state-title">
+    <span class="idx">03</span>
+    <h2>新设计 · 运行中（排队 / 引导 / 停止）</h2>
+    <span class="note">队列徽标 mono 大写，停止按钮用 error token + 柔和脉冲</span>
+  </div>
+  <div class="canvas">
+    <div class="composer-wrap">
+      <form class="session-composer">
+        <div class="session-message-queue-panel">
+          <ol class="session-message-queue-list" aria-label="排队消息">
+            <li class="session-message-queue-item sending">
+              <div class="session-message-queue-main">
+                <span class="session-message-queue-badge">SENDING</span>
+                <span class="session-message-queue-text">先跑一遍 frontend 的 composer 相关测试</span>
+              </div>
+              <div class="session-message-queue-actions">
+                <button type="button">取消</button>
+              </div>
+            </li>
+            <li class="session-message-queue-item failed">
+              <div class="session-message-queue-main">
+                <span class="session-message-queue-badge">RETRY</span>
+                <span class="session-message-queue-text">把结果汇总成结论发给我</span>
+                <span class="session-message-queue-error">会话忙，已进入队列失败态</span>
+              </div>
+              <div class="session-message-queue-actions">
+                <button type="button">重试</button>
+                <button type="button">取消</button>
+              </div>
+            </li>
+          </ol>
+        </div>
+        <div class="session-interrupt-status" role="status">
+          <svg class="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+          <span>正在中断当前运行…</span>
+        </div>
+        <div class="prompt-editor-composer-stack">
+          <div class="prompt-editor-shell composer">
+            <div class="prompt-editor-content composer">
+              <p>中断之后直接把队列里的下一条发出去。</p>
+            </div>
+            <div class="prompt-composer-footer">
+              <div class="prompt-composer-left">
+                <button type="button" class="prompt-composer-add" title="添加图片">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                </button>
+                <span class="session-composer-select permission">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                  <span class="session-composer-select-value">仅对话</span>
+                  <svg class="session-composer-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+                <span class="session-composer-select model">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+                  <span class="session-composer-select-value">5.2 codex</span>
+                  <svg class="session-composer-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+              </div>
+              <div class="prompt-composer-actions">
+                <div class="session-composer-mode-switch" role="group" aria-label="运行中发送行为">
+                  <button type="button">排队</button>
+                  <button type="button" class="active">引导</button>
+                </div>
+                <button type="button" class="session-composer-circle stop" title="停止">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer class="state-block" style="padding-bottom:60px">
+  <div class="state-title"><span class="idx">MAP</span><h2>落地映射</h2></div>
+  <div class="canvas mono" style="font-size:0.74rem;line-height:1.9;color:var(--text-secondary)">
+    01–03 外壳/底栏/控件 → frontend/src/pages/sessions/SessionComposer.css<br/>
+    外壳 + 输入区 + 底栏 → frontend/src/components/editor/PromptEditor.css（.composer 变体）<br/>
+    引用 chips → frontend/src/components/editor/PromptEditorReferences.css<br/>
+    三处使用方（pi-chat / client-chat / new-session）现有覆盖将被 token 化合并精简
+  </div>
+</footer>
+
+<script>
+  const toggle = document.getElementById('themeToggle');
+  toggle.addEventListener('click', () => {
+    const root = document.documentElement;
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    toggle.textContent = 'THEME: ' + next.toUpperCase();
+  });
+</script>
+</body>
+</html>

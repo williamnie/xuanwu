@@ -188,11 +188,6 @@
   padding: 4px 8px 7px 9px;
 }
 
-.global-ask-composer-card .session-composer-circle {
-  background: var(--brand-ink);
-  color: var(--brand-shell);
-}
-
 .global-composer-context-control {
   align-items: center;
   background: transparent;
