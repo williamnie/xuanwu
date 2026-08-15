@@ -61,7 +61,10 @@ export function usePiAgentSettingsState() {
   const loadPromptSummary = () => loadPiPromptSummary(setPromptSummary, setPromptSummaryLoading);
   const updateField = (key, value) => {
     if (key === 'instructions' || key.startsWith('persona')) setPromptSummary(null);
-    if (CONNECTION_FIELDS.has(key)) clearFirstDeliveryConnectionTest();
+    if (CONNECTION_FIELDS.has(key)) {
+      clearFirstDeliveryConnectionTest();
+      if (key !== 'modelId') setModelDiscovery({ busy: false, providerId: '', result: null });
+    }
     if (key === 'modelProvider') setConnectionTest({ busy: false, providerId: '', result: null });
     setForm((current) => ({
       ...current,
@@ -84,9 +87,36 @@ export function usePiAgentSettingsState() {
       modelProvider: preset.id
     };
     setForm(next);
-    void discoverPiModels(next, setModelDiscovery);
   };
-  const handleConnectionSave = () => savePiConnectionSettings({ form, setForm, setProviders, setSaving });
+  const selectApiProtocol = (api) => {
+    clearFirstDeliveryConnectionTest();
+    setConnectionTest({ busy: false, providerId: '', result: null });
+    setModelDiscovery({ busy: false, providerId: '', result: null });
+    setForm(connectionFormForApi(api, form, providers, providerCatalog.presets));
+  };
+  const startNewApiConnection = () => {
+    const api = form.api === 'openai-codex-responses' ? 'openai-responses' : form.api;
+    clearFirstDeliveryConnectionTest();
+    setConnectionTest({ busy: false, providerId: '', result: null });
+    setModelDiscovery({ busy: false, providerId: '', result: null });
+    setForm((current) => ({
+      ...current,
+      api,
+      apiKey: '',
+      baseUrl: defaultBaseURL(api),
+      modelId: '',
+      modelProvider: availableProviderID(api, providers),
+      userAgent: ''
+    }));
+  };
+  const selectApiMode = () => selectApiProtocol(form.api === 'openai-codex-responses' ? 'openai-responses' : form.api);
+  const selectOAuthMode = () => {
+    const preset = providerCatalog.presets.find((item) => item.auth === 'oauth');
+    if (!preset) return message.error('当前版本没有可用的 Supervisor OAuth 登录');
+    selectProviderPreset(preset);
+  };
+  const discoverModels = () => discoverPiModels(form, setModelDiscovery);
+  const handleConnectionApply = () => savePiConnectionAndSupervisor({ form, setForm, setPersonaConflictDraft, setPromptSummary, setProviders, setSaving });
   const handleAgentSave = () => savePiSupervisorSettings({ form, providers, setForm, setPersonaConflictDraft, setPromptSummary, setProviders, setSaving });
   const restorePersonaConflictDraft = () => {
     if (!personaConflictDraft) return;
@@ -106,7 +136,55 @@ export function usePiAgentSettingsState() {
   }, []);
 
   return { connectionTest, form, loading, modelDiscovery, modelOptions, modelSelectAvailable, oauthBusy, oauthStatus, personaConflictDraft, promptSummary, promptSummaryLoading, providerCatalog, providers, saving, selectedPreset, selectedProvider,
-    copyPiCodexOAuthUrl, dismissPersonaConflictDraft, handleAgentSave, handleConnectionSave, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, restorePersonaConflictDraft, selectModelProvider, selectProviderPreset, startPiCodexOAuthLogin, testConnection, updateField };
+    copyPiCodexOAuthUrl, dismissPersonaConflictDraft, discoverModels, handleAgentSave, handleConnectionApply, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, restorePersonaConflictDraft, selectApiMode, selectApiProtocol, selectModelProvider, selectOAuthMode, selectProviderPreset, startNewApiConnection, startPiCodexOAuthLogin, testConnection, updateField };
+}
+
+function connectionFormForApi(api, form, providers, presets) {
+  const currentSaved = providers.some((provider) => provider.id === form.modelProvider);
+  const currentUnsaved = form.api !== 'openai-codex-responses' && !currentSaved;
+  const providerID = currentUnsaved ? availableProviderID(api, providers) : providerIDForApi(api);
+  const configured = currentUnsaved
+    ? undefined
+    : providers.find((provider) => provider.id === providerID)
+      || providers.find((provider) => provider.api === api && provider.id !== 'openai-codex');
+  const preset = presets.find((item) => item.auth !== 'oauth' && item.api === api)
+    || presets.find((item) => item.id === providerID);
+  const nextProviderID = currentUnsaved ? providerID : configured?.id || preset?.id || providerID;
+  const sameConnection = form.modelProvider === nextProviderID;
+  return {
+    ...form,
+    api,
+    apiKey: '',
+    baseUrl: sameConnection
+      ? form.baseUrl
+      : configured?.base_url || preset?.base_url || defaultBaseURL(api),
+    modelId: sameConnection
+      ? form.modelId
+      : configured?.models?.[0] || preset?.recommended_model || '',
+    modelProvider: nextProviderID,
+    userAgent: configured?.user_agent || ''
+  };
+}
+
+function availableProviderID(api, providers) {
+  const base = providerIDForApi(api);
+  const used = new Set(providers.map((provider) => provider.id));
+  if (!used.has(base)) return base;
+  let index = 2;
+  while (used.has(`${base}-${index}`)) index += 1;
+  return `${base}-${index}`;
+}
+
+function providerIDForApi(api) {
+  if (api === 'anthropic') return 'anthropic';
+  if (api === 'google') return 'google';
+  return 'openai';
+}
+
+function defaultBaseURL(api) {
+  if (api === 'anthropic') return 'https://api.anthropic.com/v1';
+  if (api === 'google') return 'https://generativelanguage.googleapis.com/v1beta';
+  return 'https://api.openai.com/v1';
 }
 
 function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery) {
@@ -150,13 +228,13 @@ async function testPiConnection(form, setConnectionTest, setModelDiscovery) {
     recordFirstDeliveryConnectionTest(result);
     setConnectionTest({ busy: false, providerId, result });
     setModelDiscovery({ busy: false, providerId, result });
-    if (result.ok) message.success(result.message || 'Provider 连接成功');
-    else message.error(result.message || 'Provider 连接失败');
+    if (result.ok) message.success(result.message || '模型连接成功');
+    else message.error(result.message || '模型连接失败');
   } catch (err) {
     clearFirstDeliveryConnectionTest();
-    setConnectionTest({ busy: false, providerId, result: { error: 'request_failed', message: err.message || 'Provider 连接失败', ok: false, status: 'failed' } });
+    setConnectionTest({ busy: false, providerId, result: { error: 'request_failed', message: err.message || '模型连接失败', ok: false, status: 'failed' } });
     setModelDiscovery({ busy: false, providerId, result: { error: 'request_failed', message: err.message || '读取远端模型列表失败', models: [], ok: false, status: 'failed' } });
-    message.error(err.message || 'Provider 连接失败');
+    message.error(err.message || '模型连接失败');
   }
 }
 
@@ -237,16 +315,29 @@ async function loadPiPromptSummary(setPromptSummary, setPromptSummaryLoading) {
   }
 }
 
-async function savePiConnectionSettings({ form, setForm, setProviders, setSaving }) {
+async function savePiConnectionAndSupervisor({ form, setForm, setPersonaConflictDraft, setPromptSummary, setProviders, setSaving }) {
   if (!isValidForm(form)) return;
   setSaving(true);
+  let connectionSaved = false;
   try {
     const providerID = form.modelProvider.trim();
     await assistantApi.updatePiProviderSettings(providerID, providerPayload(form));
-    message.success('Provider 连接设置已保存');
-    await refreshProviderAfterSave(providerID, setProviders, setForm);
+    connectionSaved = true;
+    await saveSupervisor(supervisorPayload(form));
+    setPersonaConflictDraft(null);
+    setPromptSummary(null);
+    message.success('模型连接已保存并设为 Supervisor 默认模型');
+    await refreshAfterSave(setProviders, setForm);
   } catch (err) {
-    message.error(err.message || '保存 Provider 连接设置失败');
+    if (err?.status === 409) {
+      setPersonaConflictDraft(personaDraft(form));
+      await refreshAfterSave(setProviders, setForm);
+      message.error('连接已保存，但 Chat Persona revision 已变化；已保留本地草稿，请处理冲突后再保存运行偏好');
+      return;
+    }
+    message.error(connectionSaved
+      ? '连接参数已保存，但设置 Supervisor 默认模型失败，请重试'
+      : err.message || '保存模型连接失败');
   } finally {
     setSaving(false);
   }
@@ -304,31 +395,15 @@ async function refreshAfterSave(setProviders, setForm) {
   setForm({ ...formFromState(supervisor, nextProviders), apiKey: '' });
 }
 
-async function refreshProviderAfterSave(providerID, setProviders, setForm) {
-  const providerSettings = await assistantApi.getPiProviderSettings();
-  const nextProviders = providerSettings?.providers || [];
-  const provider = nextProviders.find(item => item.id === providerID);
-  setProviders(nextProviders);
-  setForm(current => ({
-    ...current,
-    api: provider?.api || current.api,
-    apiKey: '',
-    baseUrl: provider?.base_url || current.baseUrl,
-    modelId: provider?.models?.[0] || current.modelId,
-    modelProvider: providerID,
-    userAgent: provider?.user_agent || current.userAgent,
-  }));
-}
-
 function isValidForm(form) {
   if (form.modelProvider.trim() && form.modelId.trim() && form.api.trim()) return true;
-  message.error('provider、model、API 类型不能为空');
+  message.error('API 协议和模型不能为空');
   return false;
 }
 
 function isValidAgentForm(form) {
   if (form.modelProvider.trim() && form.modelId.trim()) return true;
-  message.error('provider 和 model 不能为空');
+  message.error('请先在上方选择默认模型');
   return false;
 }
 

@@ -83,8 +83,8 @@ test('Settings primary IA owns the complete project list and editor flow', () =>
   assert.match(sectionsSource, /FeishuSettingsPanel/);
   assert.match(sectionsSource, /PiMcpManagementPanel/);
   assert.match(piAgentSource, /SupervisorSettingsForm/);
-  assert.match(piAgentSource, /<ProviderCredentialFields state=\{state\} \/>/);
-  assert.match(piAgentSource, /<ApiTypeField form=\{state\.form\} updateField=\{state\.updateField\} \/>/);
+  assert.match(piAgentSource, /<ApiConnectionFlow state=\{state\} \/>/);
+  assert.match(piAgentSource, /<ApiTypeField state=\{state\} \/>/);
   assert.match(piAgentSource, /<ProviderSummary providers=\{state\.providers\} \/>/);
   assert.equal(existsSync(placeholderPath), false);
   assert.doesNotMatch(sectionsSource, /SettingsPlaceholderPanel|placeholder/i);
@@ -96,16 +96,17 @@ test('Settings primary IA owns the complete project list and editor flow', () =>
 
 test('Supervisor Settings keeps provider, behavior and MCP on one page with separate authorities', () => {
   assert.match(sectionsSource, /function SupervisorSettingsTab/);
-  assert.match(sectionsSource, /<PiAgentSettingsPanel \/>/);
+  assert.match(sectionsSource, /<PiAgentSettingsPanel onOpenCodeAgents=/);
   assert.match(sectionsSource, /<PiMcpManagementPanel embedded \/>/);
   assert.match(sectionsSource, /工具与 MCP/);
-  assert.match(piAgentSource, /模型与 Provider/);
-  assert.match(piAgentSource, /Supervisor 行为/);
-  assert.match(piAgentSource, /handleConnectionSave/);
+  assert.match(piAgentSource, /Supervisor 模型连接/);
+  assert.match(piAgentSource, /身份与运行偏好/);
+  assert.match(piAgentSource, /handleConnectionApply/);
   assert.match(piAgentSource, /handleAgentSave/);
   assert.match(piAgentSource, /<SupervisorBehaviorSettings state=\{state\} \/>/);
-  assert.match(piAgentSource, /<AdvancedProviderGrid state=\{state\} \/>/);
-  assert.match(piAgentSource, /<ProviderCredentialFields/);
+  assert.match(piAgentSource, /<ConnectionModeTabs oauthMode=\{oauthMode\} state=\{state\} \/>/);
+  assert.match(piAgentSource, /<ModelSelection state=\{state\} \/>/);
+  assert.doesNotMatch(piAgentSource, /AdvancedProviderGrid|ProviderCredentialFields|Provider ID|User-Agent/);
   assert.doesNotMatch(sectionsSource, /ApiTypeField|ProviderCredentialFields/);
   assert.match(piAgentSource, /<ProviderSummary/);
 });

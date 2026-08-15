@@ -29,7 +29,7 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navi
   return (
     <>
       {activeTab === 'general' && <GeneralSettingsTab />}
-      {activeTab === 'supervisor' && <SupervisorSettingsTab />}
+      {activeTab === 'supervisor' && <SupervisorSettingsTab navigateTo={navigateTo} />}
       {activeTab === 'code-agents' && <CodeAgentsPanel />}
       {activeTab === 'integrations' && <IntegrationsSettingsTab />}
       {activeTab === 'permissions' && <PermissionsSettingsTab navigateTo={navigateTo} />}
@@ -38,10 +38,10 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navi
   );
 }
 
-function SupervisorSettingsTab() {
+function SupervisorSettingsTab({ navigateTo }) {
   return (
     <div className="settings-supervisor-page">
-      <PiAgentSettingsPanel />
+      <PiAgentSettingsPanel onOpenCodeAgents={() => navigateTo('settings', null, '', '', { settingsSection: 'code-agents' })} />
       <section className="glass-card settings-configuration-stage settings-supervisor-tools">
         <SettingsStageHeader
           description="发现并启用 Supervisor 可以调用的工具，分别控制 server、capability 与写入审批。"

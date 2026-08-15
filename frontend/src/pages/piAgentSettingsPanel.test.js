@@ -36,7 +36,7 @@ test('Xuanwu Supervisor Settings exposes revisioned presentation-only Chat Perso
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
 });
 
-test('Xuanwu Supervisor Settings exposes OpenAI Codex OAuth and user agent controls', () => {
+test('Xuanwu Supervisor Settings exposes OpenAI Codex OAuth as an optional shortcut', () => {
   assert.match(panelSource, /Codex OAuth/);
   assert.match(panelSource, /复制登录地址/);
   assert.match(panelSource, /state\.oauthStatus\?\.auth_url/);
@@ -44,7 +44,8 @@ test('Xuanwu Supervisor Settings exposes OpenAI Codex OAuth and user agent contr
   assert.match(panelSource, /startPiCodexOAuthLogin/);
   assert.match(stateSource, /copyPiCodexOAuthUrl/);
   assert.doesNotMatch(stateSource, /openOAuthUrl\\(result\\.auth_url\\)/);
-  assert.match(panelSource, /User-Agent/);
+  assert.match(panelSource, /OAuth 只替代 API 地址和 Key/);
+  assert.doesNotMatch(panelSource, /User-Agent|Provider ID/);
   assert.match(stateSource, /getPiCodexOAuthStatus/);
   assert.match(stateSource, /startPiCodexOAuthLogin/);
   assert.match(stateSource, /logoutPiCodexOAuth/);
@@ -53,23 +54,26 @@ test('Xuanwu Supervisor Settings exposes OpenAI Codex OAuth and user agent contr
   assert.match(assistantSource, /\/api\/pi\/oauth\/openai-codex\/login/);
 });
 
-test('Supervisor page uses recommended provider cards, connection state, and discovered models', () => {
+test('Supervisor page uses one flat API-first connection console with discovered models', () => {
   assert.match(panelSource, /import '\.\/PiAgentSettingsPanel\.css'/);
-  assert.match(panelStylesSource, /\.provider-preset-grid/);
-  assert.match(panelStylesSource, /\.provider-preset-card\.selected/);
-  assert.match(panelStylesSource, /\.provider-recommended-config/);
-  assert.match(panelStylesSource, /\.provider-advanced-disclosure/);
-  assert.match(panelSource, /title="模型与 Provider"/);
+  assert.match(panelStylesSource, /\.provider-console \{/);
+  assert.match(panelStylesSource, /\.provider-mode-tabs/);
+  assert.match(panelStylesSource, /border-radius: 0;/);
+  assert.doesNotMatch(panelStylesSource, /\.provider-preset-card/);
+  assert.match(panelSource, /title="Supervisor 模型连接"/);
   assert.match(panelSource, /<ProviderConnectionSettings state=\{state\} \/>/);
-  assert.match(panelSource, /ProviderPresetCards/);
-  assert.match(panelSource, /provider-connection-chip/);
-  assert.match(panelSource, /测试连接并发现模型/);
-  assert.match(panelSource, /state\.handleConnectionSave/);
+  assert.match(panelSource, /API 连接/);
+  assert.match(panelSource, /OAuth 快捷登录/);
+  assert.match(panelSource, /API 协议/);
+  assert.match(panelSource, /API 地址/);
+  assert.match(panelSource, /API Key/);
+  assert.match(panelSource, /获取模型/);
+  assert.match(panelSource, /测试连接/);
+  assert.match(panelSource, /保存并设为默认/);
+  assert.match(panelSource, /state\.handleConnectionApply/);
   assert.match(panelSource, /state\.modelOptions\.map/);
-  assert.match(panelSource, /自定义 \/ 高级 Provider/);
-  assert.match(panelSource, /仅在接入自定义网关、代理或兼容 API 时使用/);
-  assert.match(panelSource, /<AdvancedProviderDisclosure state=\{state\} \/>/);
-  assert.doesNotMatch(panelSource, /Connections/);
+  assert.match(panelSource, /手动输入模型 ID/);
+  assert.doesNotMatch(panelSource, /AdvancedProviderDisclosure|ProviderPresetCards|自定义 Provider|Provider ID|User-Agent/);
   assert.match(stateSource, /getPiProviderCatalog/);
   assert.match(stateSource, /testPiProviderConnection/);
   assert.match(stateSource, /getPiProviderModels/);
@@ -77,20 +81,22 @@ test('Supervisor page uses recommended provider cards, connection state, and dis
   assert.match(assistantSource, /\/api\/pi\/provider-settings\/catalog/);
   assert.match(assistantSource, /\/api\/pi\/provider-settings\/\$\{encodeURIComponent\(id\)\}\/test-connection/);
   assert.match(assistantSource, /\/api\/pi\/provider-settings\/\$\{encodeURIComponent\(id\)\}\/models/);
-  assert.match(panelSource, /远端模型列表不可用，已启用手填/);
+  assert.match(panelSource, /远端模型列表不可用，可手动填写模型 ID/);
   assert.match(panelSource, /disabled=\{!state\.modelSelectAvailable/);
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
-  const connectionSaveStart = stateSource.indexOf('async function savePiConnectionSettings');
+  const connectionSaveStart = stateSource.indexOf('async function savePiConnectionAndSupervisor');
   const agentSaveStart = stateSource.indexOf('async function savePiSupervisorSettings');
   const connectionSaveSource = stateSource.slice(connectionSaveStart, agentSaveStart);
   assert.match(connectionSaveSource, /updatePiProviderSettings/);
-  assert.doesNotMatch(connectionSaveSource, /saveAgent\(/);
+  assert.match(connectionSaveSource, /saveSupervisor\(supervisorPayload\(form\)\)/);
 });
 
-test('Supervisor behavior registers a newly discovered model without rewriting provider credentials', () => {
-  assert.match(panelSource, /title="Supervisor 行为"/);
+test('Supervisor behavior applies the model selected above without duplicating model controls or rewriting credentials', () => {
+  assert.match(panelSource, /title="身份与运行偏好"/);
   assert.match(panelSource, /<SupervisorBehaviorSettings state=\{state\} \/>/);
-  assert.match(panelSource, /模型连接、Supervisor 行为与工具授权/);
+  assert.match(panelSource, /配置玄武使用的模型连接、运行偏好与工具授权/);
+  assert.match(panelSource, /当前默认模型/);
+  assert.doesNotMatch(panelSource, /label="Model Provider"|label="Model ID"/);
   assert.match(panelSource, /state\.handleAgentSave/);
   assert.match(stateSource, /savePiSupervisorSettings/);
   const agentSaveStart = stateSource.indexOf('async function savePiSupervisorSettings');
@@ -100,7 +106,7 @@ test('Supervisor behavior registers a newly discovered model without rewriting p
   assert.match(agentSaveSource, /saveSupervisor\(supervisorPayload\(form\)\)/);
   assert.match(stateSource, /configured\?\.models\?\.includes\(modelID\)/);
   assert.match(stateSource, /updatePiProviderSettings\(providerID, providerPayload\(form\)\)/);
-  assert.match(panelSource, /不会改写凭据/);
+  assert.match(panelSource, /不会改写上方连接凭据/);
 });
 
 test('recommended defaults remain stable and API keys stay write-only in local state', () => {
@@ -108,13 +114,14 @@ test('recommended defaults remain stable and API keys stay write-only in local s
   assert.match(stateSource, /modelProvider: 'openai'/);
   assert.match(stateSource, /apiKey: ''/);
   assert.match(stateSource, /configured\?\.models\?\.\[0\] \|\| preset\.recommended_model/);
-  assert.match(panelSource, /type="password"/);
+  assert.match(panelSource, /type=\{visible \? 'text' : 'password'\}/);
   assert.match(panelSource, /留空保留/);
   assert.doesNotMatch(panelSource, /state\.selectedProvider\.api_key/);
 });
 
-test('Supervisor settings no longer expose multi-agent creation controls', () => {
-  assert.match(panelSource, /自定义 \/ 高级 Provider/);
+test('Supervisor settings no longer expose multi-agent or internal provider controls', () => {
+  assert.match(panelSource, /连接到一个模型 API/);
+  assert.doesNotMatch(panelSource, /Provider ID|User-Agent|高级设置/);
   assert.doesNotMatch(panelSource, /PI Assistant/);
   assert.doesNotMatch(panelSource, /Runner Brain/);
   assert.match(panelSource, /Xuanwu Supervisor/);
@@ -124,6 +131,15 @@ test('Supervisor settings no longer expose multi-agent creation controls', () =>
   assert.doesNotMatch(assistantSource, /createPiAgent:/);
   assert.match(stateSource, /assistantApi\.updatePiSupervisor\(payload\)/);
   assert.doesNotMatch(stateSource, /DEFAULT_PI_AGENT_ID|getPiAgents|updatePiAgent/);
+});
+
+test('Supervisor settings distinguishes model credentials from Codex and Claude Code login state', () => {
+  assert.match(panelSource, /本页只配置 Supervisor 自己使用的模型连接/);
+  assert.match(panelSource, /Codex \/ Claude Code 作为执行器时使用本机登录态/);
+  assert.match(panelSource, /查看 Code Agents/);
+  assert.match(panelSource, /目前 Supervisor 快捷登录支持 Codex \/ ChatGPT/);
+  assert.match(panelSource, /Claude Code 的本机登录仍在 Code Agents 中管理/);
+  assert.match(panelSource, /Base URL \/ API Path/);
 });
 
 test('Supervisor settings relies on migrated canonical data instead of UI compatibility projections', () => {
