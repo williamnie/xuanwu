@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, ExternalLink, FileCode, Loader2, Settings } from 'lucide-react';
+import { ChevronDown, ExternalLink, FileCode, Loader2, SlidersHorizontal } from 'lucide-react';
 import MarkdownPreview from '../../components/editor/MarkdownPreview';
 import { message as toast } from '../../store/toastStore';
 import SessionCommandReplay from './SessionCommandReplay.js';
@@ -243,6 +243,10 @@ export default function SessionTranscript({ session, project, liveEvents, optimi
               key={turn.id || index}
               turn={turn}
               turnIndex={index}
+              provider={providerId}
+              model={model}
+              project={project}
+              session={session}
             />
           ))}
           {localUserMessages.map((message) => (
@@ -279,54 +283,46 @@ function RuntimeStatusPill({ running, pendingApproval }) {
   );
 }
 
-function TurnItem({ turn, turnIndex }) {
+function TurnItem({ turn, turnIndex, provider, model, project, session }) {
   const elements = [];
-  let currentTools = [];
-  let toolGroupIndex = 0;
+  let providerItems = [];
+  let providerBlockIndex = 0;
   let itemIndex = 0;
+
+  const flushProviderItems = () => {
+    if (providerItems.length === 0) return;
+    elements.push(
+      <ProviderExecutionBlock
+        key={`${turn.id || turnIndex}-provider-${providerBlockIndex}`}
+        items={providerItems}
+        model={model}
+        project={project}
+        provider={provider}
+        timestamp={turnTimestamp(turn, session, 'agent')}
+      />,
+    );
+    providerItems = [];
+    providerBlockIndex += 1;
+  };
 
   for (const item of (turn.items || [])) {
     const itemKey = item.id || `${turnIndex}-${itemIndex}`;
     itemIndex += 1;
-    if (item.type === 'userMessage' || item.type === 'agentMessage') {
-      if (currentTools.length > 0) {
-        elements.push(
-          <ToolsCollapsible
-            key={`${currentTools[0].item?.id || 'tools'}-${toolGroupIndex}-collapsible`}
-            tools={currentTools}
-          />,
-        );
-        currentTools = [];
-        toolGroupIndex += 1;
-      }
-      if (item.type === 'userMessage') {
-        elements.push(
-          <UserMessageBubble
-            key={itemKey}
-            item={item}
-          />,
-        );
-      } else {
-        elements.push(
-          <AgentMessageBubble
-            key={itemKey}
-            item={item}
-          />,
-        );
-      }
-    } else if (isRenderableToolItem(item)) {
-      currentTools.push({ item });
+    if (item.type === 'userMessage') {
+      flushProviderItems();
+      elements.push(
+        <UserMessageBubble
+          key={itemKey}
+          item={item}
+          timestamp={turnTimestamp(turn, session, 'user')}
+        />,
+      );
+    } else if (item.type === 'agentMessage' || isRenderableToolItem(item)) {
+      providerItems.push(item);
     }
   }
 
-  if (currentTools.length > 0) {
-    elements.push(
-      <ToolsCollapsible
-        key={`${currentTools[0].item?.id || 'tools'}-${toolGroupIndex}-collapsible`}
-        tools={currentTools}
-      />,
-    );
-  }
+  flushProviderItems();
 
   return (
     <div className="turn-container animate-fade-in">
@@ -335,25 +331,54 @@ function TurnItem({ turn, turnIndex }) {
   );
 }
 
+function ProviderExecutionBlock({ items, model, project, provider, timestamp }) {
+  const content = [];
+  let currentTools = [];
+  let toolGroupIndex = 0;
+
+  const flushTools = () => {
+    if (currentTools.length === 0) return;
+    content.push(
+      <ToolsCollapsible
+        key={`${currentTools[0]?.id || 'tools'}-${toolGroupIndex}-collapsible`}
+        tools={currentTools}
+      />,
+    );
+    currentTools = [];
+    toolGroupIndex += 1;
+  };
+
+  items.forEach((item, index) => {
+    if (item.type === 'agentMessage') {
+      flushTools();
+      content.push(<AgentMessageBubble key={item.id || `agent-${index}`} item={item} />);
+    } else {
+      currentTools.push(item);
+    }
+  });
+  flushTools();
+
+  return (
+    <div className="session-provider-message">
+      <MessageHeader
+        avatar={providerAvatar(provider)}
+        role={providerIdentity(provider, model)}
+        timestamp={timestamp}
+      />
+      <div className="session-provider-message-body" data-project={project?.name || ''}>
+        {content}
+      </div>
+    </div>
+  );
+}
+
 function ToolsCollapsible({ tools, isLive }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const normalizedTools = tools.map((tool) => (tool?.item ? tool.item : tool));
-
-  const commandCount = normalizedTools.filter((item) => item.type === 'commandExecution').length;
-  const fileCount = normalizedTools.filter((item) => item.type === 'fileChange').length;
-
-  let summary = '执行了辅助工具';
-  if (commandCount > 0 && fileCount > 0) {
-    summary = `运行了 ${commandCount} 个终端命令，修改了 ${fileCount} 个文件`;
-  } else if (commandCount > 0) {
-    summary = `运行了 ${commandCount} 个终端命令`;
-  } else if (fileCount > 0) {
-    summary = `修改了 ${fileCount} 个文件`;
-  }
-
-  if (isLive) {
-    summary = '正在执行工具以解决问题...';
-  }
+  const latestTool = normalizedTools.at(-1);
+  const summary = isLive
+    ? `正在执行工具 · ${toolSummaryLabel(latestTool)}`
+    : `${normalizedTools.length} 个工具调用 · 最近 ${toolSummaryLabel(latestTool)}`;
 
   return (
     <div className="tools-collapsible-wrapper">
@@ -363,12 +388,12 @@ function ToolsCollapsible({ tools, isLive }) {
       >
         <span className="tools-trigger-left">
           <span className="tools-indicator-icon">
-            <Settings size={13} className={isLive ? 'spin-animation' : ''} />
+            <SlidersHorizontal size={13} className={isLive ? 'spin-animation' : ''} />
           </span>
           <span className="tools-trigger-text">{summary}</span>
         </span>
         <span className="tools-trigger-chevron">
-          {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <ChevronDown size={14} />
         </span>
       </button>
 
@@ -481,11 +506,12 @@ function ToolDetailItem({ tool }) {
   );
 }
 
-function UserMessageBubble({ item }) {
+function UserMessageBubble({ item, timestamp }) {
   const text = textFromUserContent(item.content);
   return (
-    <div className="chat-bubble-container user">
+    <div className="chat-bubble-container user session-user-message">
       <div className="chat-bubble-content">
+        <MessageHeader avatar="IN" role="任务输入" timestamp={timestamp} />
         <div className="chat-bubble-body">
           <MarkdownText text={text} />
         </div>
@@ -498,6 +524,7 @@ function OptimisticUserMessageBubble({ message }) {
   return (
     <UserMessageBubble
       item={{ type: 'userMessage', content: [{ type: 'input_text', text: message.prompt }] }}
+      timestamp={formatTranscriptTime(message.createdAt)}
     />
   );
 }
@@ -505,14 +532,8 @@ function OptimisticUserMessageBubble({ message }) {
 function AgentMessageBubble({ item }) {
   const text = item.text || '';
   return (
-    <div className="chat-bubble-container agent animate-fade-in">
-      <div className="chat-bubble-avatar agent-logo">A</div>
-      <div className="chat-bubble-content">
-        <div className="chat-bubble-sender">Agent</div>
-        <div className="chat-bubble-body">
-          <MarkdownText text={text} />
-        </div>
-      </div>
+    <div className="session-agent-copy animate-fade-in">
+      <MarkdownText text={text} />
     </div>
   );
 }
@@ -525,7 +546,12 @@ function LiveTurnItem({ liveEvents, persistedTurns, provider }) {
   const showActivityBanner = shouldShowLiveActivityBanner(parsed);
 
   return (
-    <div className="turn-container active-live">
+    <div className="turn-container active-live session-provider-message">
+      <MessageHeader
+        avatar={providerAvatar(provider)}
+        role={providerIdentity(provider, '')}
+        timestamp={formatTranscriptTime(liveEvents.at(-1)?.created_at || liveEvents.at(-1)?.occurred_at)}
+      />
       {showActivityBanner && (
         <LiveActivityBanner activity={activity} approvalPending={approvalPending} errorText={errorText} provider={provider} />
       )}
@@ -544,27 +570,16 @@ function LiveTurnItem({ liveEvents, persistedTurns, provider }) {
       )}
 
       {showThinking && (
-        <div className="chat-bubble-container agent streaming">
-          <div className="chat-bubble-avatar agent-logo live-pulse">A</div>
-          <div className="chat-bubble-content">
-            <div className="chat-bubble-sender">Agent</div>
-            <div className="chat-bubble-body thinking-placeholder">
-              <span>正在思考中</span>
-              <span className="typing-dots"><i></i><i></i><i></i></span>
-            </div>
-          </div>
+        <div className="session-agent-copy thinking-placeholder">
+          <span>正在思考中</span>
+          <span className="typing-dots"><i></i><i></i><i></i></span>
         </div>
       )}
 
       {agentMessageText && (
-        <div className="chat-bubble-container agent streaming">
-          <div className="chat-bubble-avatar agent-logo live-pulse">A</div>
-          <div className="chat-bubble-content">
-            <div className="chat-bubble-sender">Agent <span className="streaming-badge">Streaming...</span></div>
-            <div className="chat-bubble-body">
-              <MarkdownText text={agentMessageText} />
-            </div>
-          </div>
+        <div className="session-agent-copy streaming">
+          <span className="streaming-badge">Streaming...</span>
+          <MarkdownText text={agentMessageText} />
         </div>
       )}
 
@@ -573,6 +588,67 @@ function LiveTurnItem({ liveEvents, persistedTurns, provider }) {
       )}
     </div>
   );
+}
+
+function MessageHeader({ avatar, role, timestamp }) {
+  return (
+    <div className="session-message-head">
+      <span className="session-message-avatar">{avatar}</span>
+      <span className="session-message-role">{role}</span>
+      {timestamp ? <time className="session-message-time">{timestamp}</time> : null}
+    </div>
+  );
+}
+
+function providerAvatar(provider) {
+  const value = String(provider || '').toLowerCase();
+  if (value.includes('codex')) return 'CX';
+  if (value.includes('qoder')) return 'QD';
+  if (value.includes('claude')) return 'CL';
+  if (value.includes('pi')) return 'PI';
+  return value.slice(0, 2).toUpperCase() || 'AI';
+}
+
+function providerIdentity(provider, model) {
+  const providerText = String(provider || 'agent').toLowerCase();
+  const modelText = String(model || '').trim();
+  return modelText ? `${providerText} · ${modelText}` : providerText;
+}
+
+function formatTranscriptTime(value) {
+  if (!value) return '';
+  const numeric = typeof value === 'number' ? value : Number(value);
+  const date = Number.isFinite(numeric)
+    ? new Date(numeric < 1_000_000_000_000 ? numeric * 1000 : numeric)
+    : new Date(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  return new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
+function turnTimestamp(turn, session, role) {
+  const turnValue = role === 'user'
+    ? turn?.created_at || turn?.createdAt || turn?.started_at || turn?.startedAt
+    : turn?.completed_at || turn?.completedAt || turn?.updated_at || turn?.updatedAt;
+  const sessionValue = role === 'user'
+    ? session?.createdAt || session?.created_at
+    : session?.updatedAt || session?.updated_at;
+  return formatTranscriptTime(turnValue || sessionValue);
+}
+
+function toolSummaryLabel(tool) {
+  if (!tool) return 'Tool';
+  if (tool.type === 'commandExecution') return tool.command || 'Terminal';
+  if (tool.type === 'fileChange') {
+    const file = filesFromFileChangeTool(tool).at(-1);
+    return file?.path ? `Edit ${file.path}` : 'Edit files';
+  }
+  const display = toolDisplayForItem(tool);
+  return display?.title || tool.type || 'Tool';
 }
 
 function LiveActivityBanner({ activity, approvalPending, errorText, provider }) {

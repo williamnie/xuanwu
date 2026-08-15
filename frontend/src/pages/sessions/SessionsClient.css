@@ -577,9 +577,14 @@
 
 .client-chat-area .session-transcript {
   background: transparent;
-  padding: 44px var(--sessions-page-gutter) 24px;
+  padding: 22px clamp(16px, 4vw, 56px) 28px;
   width: 100%;
   scrollbar-gutter: stable;
+}
+
+.client-chat-area .session-transcript-content {
+  gap: 22px;
+  max-width: 920px;
 }
 
 .client-chat-area .chat-bubble-container.agent .chat-bubble-avatar,
@@ -703,6 +708,274 @@
 [data-theme="dark"] .client-chat-area .generic-tool-title {
   background: rgba(255, 255, 255, 0.055);
   border-bottom-color: rgba(255, 255, 255, 0.075);
+}
+
+/* Provider transcript fidelity: mirrors docs/ui-mockups/chat/run-provider-chat.html. */
+.client-chat-area .turn-container {
+  gap: 22px;
+}
+
+.client-chat-area .session-message-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+.client-chat-area .session-message-avatar {
+  align-items: center;
+  background: var(--button-primary-bg);
+  border: 1px solid var(--button-primary-bg);
+  color: var(--button-primary-fg);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 800;
+  height: 26px;
+  justify-content: center;
+  width: 26px;
+}
+
+.client-chat-area .session-message-role {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-chat-area .session-message-time {
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  margin-left: auto;
+}
+
+.client-chat-area .chat-bubble-container.user.session-user-message {
+  align-self: flex-end;
+  background: var(--message-user);
+  border: 1px solid var(--message-user-border);
+  border-radius: 0;
+  display: block;
+  margin: 0;
+  max-width: min(780px, 88%);
+  padding: 11px 14px 13px;
+  width: auto;
+}
+
+.client-chat-area .session-user-message .chat-bubble-content {
+  align-items: stretch;
+  display: block;
+}
+
+.client-chat-area .session-user-message .session-message-avatar {
+  background: var(--info-bg);
+  border-color: var(--info-glow);
+  color: var(--info);
+}
+
+.client-chat-area .chat-bubble-container.user.session-user-message .chat-bubble-body {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--text-primary) !important;
+  padding: 0 !important;
+}
+
+.client-chat-area .session-provider-message {
+  align-self: flex-start;
+  border: 0;
+  max-width: min(820px, 96%);
+  padding: 0;
+  width: min(820px, 96%);
+}
+
+.client-chat-area .session-provider-message-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.client-chat-area .session-agent-copy {
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  line-height: 1.7;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.client-chat-area .session-agent-copy .session-markdown {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.client-chat-area .tools-collapsible-wrapper {
+  gap: 10px;
+  margin: 10px 0 2px;
+  width: 100%;
+}
+
+.client-chat-area .tools-trigger-left {
+  min-width: 0;
+}
+
+.client-chat-area .tools-trigger-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-chat-area .tools-trigger-btn {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  gap: 8px;
+  letter-spacing: 0.03em;
+  padding: 8px 12px;
+  width: 100%;
+}
+
+.client-chat-area .tools-trigger-btn:hover,
+.client-chat-area .tools-trigger-btn.open {
+  background: var(--surface-raised);
+  border-color: var(--border-color-hover);
+  color: var(--text-primary);
+}
+
+.client-chat-area .tools-indicator-icon {
+  background: var(--primary-glow);
+  border: 0;
+  border-radius: var(--radius-xs);
+  color: var(--primary);
+  height: 20px;
+  width: 20px;
+}
+
+.client-chat-area .tools-trigger-chevron {
+  flex: 0 0 auto;
+  margin-left: auto;
+  transition: transform 120ms ease;
+}
+
+.client-chat-area .tools-trigger-btn:not(.open) .tools-trigger-chevron {
+  transform: rotate(-90deg);
+}
+
+.client-chat-area .tools-details-content {
+  border-left: 0;
+  gap: 10px;
+  margin-left: 0;
+  padding: 0;
+}
+
+.client-chat-area .terminal-window {
+  background: var(--bg-terminal);
+  border: 1px solid rgba(193, 235, 222, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  max-width: none;
+}
+
+.client-chat-area .terminal-header {
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  height: auto;
+  min-height: 34px;
+  padding: 8px 12px;
+}
+
+.client-chat-area .terminal-dots {
+  gap: 5px;
+}
+
+.client-chat-area .terminal-dots .dot {
+  height: 8px;
+  width: 8px;
+}
+
+.client-chat-area .terminal-title {
+  color: rgba(233, 245, 239, 0.42);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  left: auto;
+  letter-spacing: 0.08em;
+  margin-left: 8px;
+  position: static;
+  text-transform: uppercase;
+  transform: none;
+}
+
+.client-chat-area .terminal-body {
+  color: #a9d6c3;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  line-height: 1.65;
+  padding: 12px 14px;
+}
+
+.client-chat-area .terminal-prompt {
+  color: #baff3f;
+}
+
+.client-chat-area .terminal-command-text {
+  color: #a9d6c3;
+  font-weight: 500;
+}
+
+.client-chat-area .terminal-output {
+  color: rgba(233, 245, 239, 0.58);
+  font-family: var(--font-mono);
+  margin: 6px 0 0;
+  max-height: 300px;
+  padding: 0;
+}
+
+.client-chat-area .diff-file-card,
+.client-chat-area .generic-tool-card {
+  border-radius: var(--radius-md);
+  max-width: none;
+}
+
+.client-chat-area .generic-tool-title,
+.client-chat-area .generic-tool-body {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+}
+
+.client-chat-area .live-activity-banner,
+.client-chat-area .live-reasoning-card {
+  margin-left: 0;
+}
+
+@media (max-width: 760px) {
+  .client-chat-area .session-transcript {
+    padding: 18px 12px 24px;
+  }
+
+  .client-chat-area .chat-bubble-container.user.session-user-message,
+  .client-chat-area .session-provider-message {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .client-chat-area .session-message-role {
+    white-space: normal;
+  }
 }
 
 .client-chat-composer-section {
