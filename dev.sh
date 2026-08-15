@@ -29,6 +29,13 @@ require_cmd() {
   fi
 }
 
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
 backend_api_target() {
   local host port url_host
   host="${1%:*}"
@@ -63,7 +70,10 @@ fi
 
 mkdir -p "$STATE_DIR" "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")"
 
-if [ -z "${XUANWU_AUTH_TOKEN:-}" ] && [ ! -s "$AUTH_TOKEN_FILE" ]; then
+DEV_AUTH_TOKEN="$(trim_whitespace "${XUANWU_AUTH_TOKEN:-}")"
+AUTH_TOKEN_SOURCE="XUANWU_AUTH_TOKEN"
+
+if [ -z "$DEV_AUTH_TOKEN" ] && [ ! -s "$AUTH_TOKEN_FILE" ]; then
   umask 077
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -base64 32 > "$AUTH_TOKEN_FILE"
@@ -75,11 +85,16 @@ if [ -z "${XUANWU_AUTH_TOKEN:-}" ] && [ ! -s "$AUTH_TOKEN_FILE" ]; then
     exit 1
   fi
   chmod 600 "$AUTH_TOKEN_FILE"
-  if [ -t 1 ]; then
-    echo "[dev] remote access token (shown once): $(tr -d '\n' < "$AUTH_TOKEN_FILE")"
-  else
-    echo "[dev] remote access token generated; value hidden because output is not an interactive terminal"
-  fi
+fi
+
+if [ -z "$DEV_AUTH_TOKEN" ]; then
+  DEV_AUTH_TOKEN="$(trim_whitespace "$(< "$AUTH_TOKEN_FILE")")"
+  AUTH_TOKEN_SOURCE="$AUTH_TOKEN_FILE"
+fi
+
+if [ -z "$DEV_AUTH_TOKEN" ]; then
+  echo "[dev] remote access token is empty: $AUTH_TOKEN_SOURCE" >&2
+  exit 1
 fi
 
 trap cleanup EXIT INT TERM
@@ -90,7 +105,8 @@ echo "[dev] api proxy $FRONTEND_API_TARGET"
 echo "[dev] runner  $BACKEND_API_ADDR"
 echo "[dev] state    $STATE_DIR"
 echo "[dev] database $DB_PATH"
-echo "[dev] token    $AUTH_TOKEN_FILE"
+echo "[dev] token source $AUTH_TOKEN_SOURCE"
+echo "[dev] token    $DEV_AUTH_TOKEN"
 echo "[dev] press Ctrl+C to stop both services"
 echo
 
