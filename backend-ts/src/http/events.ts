@@ -21,7 +21,7 @@ function eventStreamResponse(context: EventRoutesContext): Response {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const write = streamWriter(controller, () => closed);
-      write(comment("connected"));
+      write(`retry: 1000\n\n${comment("connected")}`);
       heartbeat = setInterval(() => write(comment("heartbeat")), heartbeatMs);
       while (!closed) {
         const event = await subscription.next();
@@ -38,8 +38,9 @@ function eventStreamResponse(context: EventRoutesContext): Response {
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive"
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no"
     }
   });
 }

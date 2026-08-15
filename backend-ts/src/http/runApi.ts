@@ -42,6 +42,7 @@ import type { Router } from "./router.ts";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
+const RUN_LIST_SLOW_THRESHOLD_MS = 250;
 const RUN_HTTP_POLICY_REF = "xuanwu-run-http-authenticated-control-v1";
 
 export const RUN_READ_AUTHORITY = "issue_runs";
@@ -51,7 +52,7 @@ type PageInput = { page: number; page_size: number };
 type RunAction = "interrupt" | "resume" | "retry";
 
 export function registerRunRoutes(router: Router, context: ReadApiContext): void {
-  router.get("/api/runs", (request) => runResponse(() => listResponse(context, request)));
+  router.get("/api/runs", (request) => runResponse(() => listResponse(context, request), request));
   router.get("/api/runs/:id", (request) => runResponse(() => detailResponse(context, request)));
   router.post("/api/runs/:id/actions/:action", async (request) => runResponse(async () => {
     const run = requireRun(context, runID(request));
@@ -61,6 +62,31 @@ export function registerRunRoutes(router: Router, context: ReadApiContext): void
     if (action === "resume") return resumeRun(context, run, body);
     return retryRun(context, run, body);
   }));
+}
+
+export function slowRunListLogEntry(
+  request: Request,
+  durationMs: number,
+  status: number
+): Record<string, unknown> | undefined {
+  if (durationMs < RUN_LIST_SLOW_THRESHOLD_MS) return undefined;
+  const params = new URL(request.url).searchParams;
+  return {
+    duration_ms: Math.round(durationMs),
+    event: "runner.run_list_slow",
+    page: safePositiveInteger(params.get("page"), 1),
+    page_size: safePositiveInteger(params.get("page_size"), DEFAULT_PAGE_SIZE),
+    project_filter: Boolean(optionalString(params.get("project_id"))),
+    provider_filter_count: params.getAll("provider").filter(Boolean).length,
+    status,
+    status_filter_count: params.getAll("status").filter(Boolean).length,
+    work_filter: Boolean(optionalString(params.get("work_id")))
+  };
+}
+
+function safePositiveInteger(value: string | null, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function listResponse(context: ReadApiContext, request: Request): Record<string, unknown> {
@@ -522,13 +548,20 @@ function sanitizedError(error: unknown): Error {
   return new Error(redactSensitiveText(message));
 }
 
-async function runResponse(write: () => unknown | Promise<unknown>): Promise<Response> {
+async function runResponse(write: () => unknown | Promise<unknown>, slowListRequest?: Request): Promise<Response> {
+  const startedAt = performance.now();
+  let response: Response;
   try {
     const output = await write();
-    return output instanceof Response ? output : json(output);
+    response = output instanceof Response ? output : json(output);
   } catch (error) {
-    return runErrorResponse(error);
+    response = runErrorResponse(error);
   }
+  if (slowListRequest) {
+    const entry = slowRunListLogEntry(slowListRequest, performance.now() - startedAt, response.status);
+    if (entry) console.warn(JSON.stringify(entry));
+  }
+  return response;
 }
 
 class RunHttpError extends Error {

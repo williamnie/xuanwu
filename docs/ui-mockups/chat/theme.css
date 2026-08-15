@@ -1,0 +1,207 @@
+/* ============================================================
+   Xuanwu Chat UI Mockups — 主题令牌
+   与 frontend/src/GeekWorkbench.css 保持一致：
+   简洁风 = 浅色米白底 + 墨绿主色；极客风 = 深色黑底 + 荧光绿主色
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+  --font-sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
+  --font-display: var(--font-sans);
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'SFMono-Regular', 'Cascadia Code', 'Menlo', monospace;
+
+  --bg-primary: #f3efe5;
+  --bg-sidebar: #f7f3e9;
+  --bg-card: #fffdf8;
+  --bg-card-hover: #f8f4eb;
+  --bg-secondary: #f0ebe1;
+  --bg-terminal: #0a1110;
+  --surface-raised: #fffefa;
+  --surface-overlay: rgba(255, 253, 248, 0.94);
+  --surface-tint: rgba(101, 137, 24, 0.075);
+  --control-bg: rgba(255, 255, 255, 0.7);
+  --panel-gradient: linear-gradient(145deg, rgba(255, 254, 250, 0.98), rgba(248, 244, 235, 0.98));
+  --sidebar-gradient: radial-gradient(circle at 10% 0%, rgba(177, 229, 67, 0.16), transparent 28%), linear-gradient(180deg, #faf7ee, #eee8dc);
+  --canvas-gradient: radial-gradient(circle at 88% -8%, rgba(72, 169, 199, 0.1), transparent 28%), radial-gradient(circle at 30% 110%, rgba(165, 215, 55, 0.11), transparent 32%), var(--bg-primary);
+  --grid-dot: rgba(42, 61, 55, 0.17);
+
+  --border-color: rgba(45, 61, 55, 0.16);
+  --border-light: rgba(45, 61, 55, 0.09);
+  --border-color-hover: rgba(91, 126, 17, 0.54);
+  --text-primary: #1d2824;
+  --text-secondary: #4d5d57;
+  --text-muted: #7b8984;
+  --brand-ink: #17302a;
+  --primary: #5b820a;
+  --primary-strong: #b7f43d;
+  --primary-ink: #11170e;
+  --primary-glow: rgba(107, 148, 19, 0.12);
+  --primary-gradient: linear-gradient(135deg, #c1fa4b, #a8e72f);
+  --nav-hover: rgba(42, 61, 55, 0.045);
+  --nav-active: linear-gradient(90deg, rgba(111, 153, 22, 0.13), rgba(111, 153, 22, 0.035));
+  --message-user: rgba(0, 126, 168, 0.075);
+  --message-user-border: rgba(0, 126, 168, 0.2);
+
+  --success: #258663;
+  --success-glow: rgba(37, 134, 99, 0.15);
+  --success-bg: rgba(37, 134, 99, 0.07);
+  --info: #087da5;
+  --info-glow: rgba(8, 125, 165, 0.15);
+  --info-bg: rgba(8, 125, 165, 0.07);
+  --warning: #b96d00;
+  --warning-glow: rgba(185, 109, 0, 0.15);
+  --warning-bg: rgba(185, 109, 0, 0.07);
+  --error: #c74742;
+  --error-glow: rgba(199, 71, 66, 0.15);
+  --error-bg: rgba(199, 71, 66, 0.07);
+
+  --shadow-sm: 0 1px 2px rgba(28, 39, 35, 0.035), 0 10px 30px rgba(28, 39, 35, 0.045);
+  --shadow-md: 0 18px 48px rgba(28, 39, 35, 0.1);
+  --shadow-lg: 0 28px 72px rgba(28, 39, 35, 0.16);
+  --shadow-glow: 0 12px 34px rgba(101, 139, 20, 0.12);
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --button-radius: 0px;
+  --button-height: 40px;
+  --button-primary-bg: #0a0d0c;
+  --button-primary-hover: #1f2422;
+  --button-primary-fg: #ffffff;
+  --button-secondary-bg: #fffdf8;
+  --button-secondary-hover: #f5f1e8;
+  --button-border: #cfd5d1;
+
+  --sidebar-width: 248px;
+  --thread-max-width: 880px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-primary: #070a0a;
+  --bg-sidebar: #090d0d;
+  --bg-card: #0d1313;
+  --bg-card-hover: #141c1b;
+  --bg-secondary: #0a1010;
+  --bg-terminal: #050b0b;
+  --surface-raised: #111817;
+  --surface-overlay: rgba(12, 18, 18, 0.94);
+  --surface-tint: rgba(186, 255, 63, 0.07);
+  --control-bg: rgba(0, 0, 0, 0.24);
+  --panel-gradient: linear-gradient(145deg, rgba(16, 23, 23, 0.98), rgba(9, 13, 13, 0.98));
+  --sidebar-gradient: radial-gradient(circle at 10% 0%, rgba(186, 255, 63, 0.09), transparent 29%), linear-gradient(180deg, #0c1110, #070a0a);
+  --canvas-gradient: radial-gradient(circle at 88% -8%, rgba(80, 200, 255, 0.08), transparent 28%), radial-gradient(circle at 30% 110%, rgba(186, 255, 63, 0.055), transparent 32%), var(--bg-primary);
+  --grid-dot: rgba(189, 220, 209, 0.18);
+
+  --border-color: rgba(218, 239, 231, 0.14);
+  --border-light: rgba(218, 239, 231, 0.075);
+  --border-color-hover: rgba(190, 255, 74, 0.52);
+  --text-primary: #eef7f2;
+  --text-secondary: #b5c5bf;
+  --text-muted: #71827c;
+  --brand-ink: #eff8f3;
+  --primary: #baff3f;
+  --primary-strong: #baff3f;
+  --primary-ink: #090d09;
+  --primary-glow: rgba(186, 255, 63, 0.12);
+  --primary-gradient: linear-gradient(135deg, #c2ff4d, #98dd28);
+  --nav-hover: rgba(255, 255, 255, 0.035);
+  --nav-active: linear-gradient(90deg, rgba(186, 255, 63, 0.13), rgba(186, 255, 63, 0.035));
+  --message-user: rgba(80, 200, 255, 0.075);
+  --message-user-border: rgba(80, 200, 255, 0.2);
+
+  --success: #56d4a6;
+  --success-glow: rgba(86, 212, 166, 0.16);
+  --success-bg: rgba(86, 212, 166, 0.08);
+  --info: #58c9f4;
+  --info-glow: rgba(88, 201, 244, 0.17);
+  --info-bg: rgba(88, 201, 244, 0.08);
+  --warning: #ffc55d;
+  --warning-glow: rgba(255, 197, 93, 0.16);
+  --warning-bg: rgba(255, 197, 93, 0.08);
+  --error: #ff7d77;
+  --error-glow: rgba(255, 125, 119, 0.16);
+  --error-bg: rgba(255, 125, 119, 0.09);
+
+  --shadow-sm: none;
+  --shadow-md: 0 18px 48px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.46);
+  --shadow-glow: 0 0 34px rgba(186, 255, 63, 0.08);
+
+  --button-primary-bg: #baff3f;
+  --button-primary-hover: #caff67;
+  --button-primary-fg: #090d09;
+  --button-secondary-bg: #0d1313;
+  --button-secondary-hover: #141c1b;
+  --button-border: rgba(218, 239, 231, 0.24);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--canvas-gradient);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+body::before {
+  background-image: radial-gradient(var(--grid-dot) 0.7px, transparent 0.7px);
+  background-size: 22px 22px;
+  content: '';
+  inset: 0;
+  mask-image: linear-gradient(90deg, transparent, black 18%, black 82%, transparent);
+  opacity: 0.14;
+  pointer-events: none;
+  position: fixed;
+  z-index: 0;
+}
+
+code, pre, kbd, .mono { font-family: var(--font-mono); }
+button, input, textarea, select { font-family: inherit; font: inherit; }
+button { cursor: pointer; }
+a { color: var(--info); text-decoration: none; }
+
+::selection { background: color-mix(in srgb, var(--primary-strong) 42%, transparent); color: var(--text-primary); }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 45%, transparent); border-radius: 999px; }
+
+@keyframes mock-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes mock-spin { to { transform: rotate(360deg); } }
+@keyframes mock-pulse {
+  0%, 100% { opacity: .45; transform: scale(.82); }
+  50% { opacity: 1; transform: scale(1); }
+}
+.animate-fade-in { animation: mock-fade-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* ---------- 主题切换（原型专用） ---------- */
+.theme-toggle {
+  align-items: center;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  display: inline-flex;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  gap: 7px;
+  letter-spacing: 0.08em;
+  min-height: 30px;
+  padding: 0 10px;
+  position: fixed;
+  right: 16px;
+  top: 14px;
+  z-index: 200;
+}
+.theme-toggle:hover { border-color: var(--border-color-hover); color: var(--primary); }
+.theme-toggle .dot { background: var(--primary); height: 7px; width: 7px; }

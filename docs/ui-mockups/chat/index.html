@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Xuanwu · 对话页 UI 原型</title>
+<link rel="stylesheet" href="theme.css" />
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .idx-page { align-items: center; display: flex; height: 100vh; justify-content: center; padding: 40px; position: relative; z-index: 1; }
+  .idx-panel { max-width: 860px; width: 100%; }
+  .idx-head { border-bottom: 1px solid var(--border-color); margin-bottom: 26px; padding-bottom: 20px; }
+  .idx-head h1 { font-size: clamp(1.5rem, 2.4vw, 2rem); font-weight: 650; letter-spacing: -0.02em; margin-top: 8px; }
+  .idx-head p { color: var(--text-muted); font-size: 0.84rem; line-height: 1.6; margin-top: 6px; }
+  .idx-grid { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .idx-card {
+    background: var(--panel-gradient);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px;
+    transition: border-color 140ms ease, transform 140ms ease;
+  }
+  .idx-card:hover { border-color: var(--border-color-hover); transform: translateY(-2px); }
+  .idx-card .no { color: var(--primary); font-family: var(--font-mono); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.12em; }
+  .idx-card h2 { font-size: 1rem; font-weight: 650; letter-spacing: -0.015em; }
+  .idx-card p { color: var(--text-muted); font-size: 0.76rem; line-height: 1.6; }
+  .idx-card .go { color: var(--primary); font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em; margin-top: auto; }
+  .idx-note { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.04em; margin-top: 22px; }
+  @media (max-width: 760px) { .idx-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()"><span class="dot"></span><span id="theme-label">极客 DARK</span></button>
+<div class="idx-page animate-fade-in">
+  <div class="idx-panel">
+    <div class="idx-head">
+      <span class="kicker">XUANWU · UI MOCKUPS</span>
+      <h1>对话页面优化原型</h1>
+      <p>三处 agent 对话界面的改版稿，沿用系统现有的「简洁 / 极客」双主题令牌：方形几何、等宽字体微标签、荧光绿强调色。点击右上角可切换明暗预览。</p>
+    </div>
+    <div class="idx-grid">
+      <a class="idx-card" href="xuanwu-chat.html">
+        <span class="no">01 / SUPERVISOR</span>
+        <h2>玄武对话页</h2>
+        <p>侧边会话列表 + 主对话区：状态摘要、能力条、消息流、工具调用卡片与底部输入器。</p>
+        <span class="go">OPEN →</span>
+      </a>
+      <a class="idx-card" href="run-provider-chat.html">
+        <span class="no">02 / RUN DETAIL</span>
+        <h2>Runs · Provider Chat</h2>
+        <p>Run 详情内嵌的 provider 会话观测：Attempt 切换、执行事实条、只读 transcript 与终端回放。</p>
+        <span class="go">OPEN →</span>
+      </a>
+      <a class="idx-card" href="new-provider-chat.html">
+        <span class="no">03 / COMPOSE</span>
+        <h2>新建 Provider Chat</h2>
+        <p>居中引导式新建会话：大输入器、执行策略 / 模型 / 档位内嵌控件与底部配置标签。</p>
+        <span class="go">OPEN →</span>
+      </a>
+    </div>
+    <p class="idx-note">// 原型仅表达布局与视觉，不含交互逻辑；确认后再落为 React 组件改动。</p>
+  </div>
+</div>
+<script>
+  function applyTheme(t) {
+    document.documentElement.dataset.theme = t;
+    document.getElementById('theme-label').textContent = t === 'dark' ? '简洁 LIGHT' : '极客 DARK';
+  }
+  function toggleTheme() {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('mock-theme', next);
+    applyTheme(next);
+  }
+  applyTheme(localStorage.getItem('mock-theme') || 'light');
+</script>
+</body>
+</html>

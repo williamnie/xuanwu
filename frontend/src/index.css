@@ -362,6 +362,10 @@ textarea:focus-visible {
   color: var(--error);
 }
 
+.api-status.reconnecting {
+  color: var(--warning);
+}
+
 .api-status-dot {
   background: currentColor;
   border-radius: 50%;

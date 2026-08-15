@@ -2,6 +2,7 @@ import { eventsApi } from './api/events.js';
 import { lazy, Suspense, useCallback, useEffect } from 'react';
 import { useImmer } from 'use-immer';
 import { systemApi } from './api/system.js';
+import { createBackendConnectionMonitor } from './api/backendConnectionMonitor.js';
 import { getAuthToken } from './api/authToken';
 import { compatibilityApi } from './api/compatibility.js';
 import {
@@ -15,7 +16,7 @@ import TurtleLoader from './components/TurtleLoader';
 import {
   selectLoading,
   selectRefreshData,
-  selectSetBackendOnline,
+  selectSetBackendConnectionState,
   useDataStore,
 } from './store/dataStore';
 import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
@@ -106,7 +107,7 @@ export default function App() {
 
   const loading = useDataStore(selectLoading);
   const refreshData = useDataStore(selectRefreshData);
-  const setBackendOnline = useDataStore(selectSetBackendOnline);
+  const setBackendConnectionState = useDataStore(selectSetBackendConnectionState);
 
   const {
     currentPage,
@@ -365,17 +366,24 @@ export default function App() {
   // 订阅 SSE 实时变更，触发数据刷新
   useEffect(() => {
     if (!authReady) return undefined;
+    const monitor = createBackendConnectionMonitor({
+      onStateChange: setBackendConnectionState,
+      probe: signal => systemApi.getCoreHealth({ signal }),
+    });
     const unsubscribe = eventsApi.subscribeToEvents(
       (event) => {
         if (ACTIVE_RECONCILE_EVENT_TYPES.has(event.type)) {
           refreshVisibleData();
         }
       },
-      () => setBackendOnline(false),
-      () => setBackendOnline(true)
+      () => monitor.onError(),
+      () => monitor.onOpen()
     );
-    return () => unsubscribe();
-  }, [authReady, refreshVisibleData, setBackendOnline]);
+    return () => {
+      monitor.stop();
+      unsubscribe();
+    };
+  }, [authReady, refreshVisibleData, setBackendConnectionState]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');

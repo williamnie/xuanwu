@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>02 · Runs 详情 Provider Chat — Xuanwu</title>
+<link rel="stylesheet" href="theme.css" />
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .run-page { display: flex; flex-direction: column; height: 100vh; overflow-y: auto; padding: 22px clamp(16px, 4vw, 44px) 34px; position: relative; z-index: 1; }
+  .run-wrap { display: flex; flex-direction: column; gap: 14px; margin: 0 auto; max-width: 1180px; width: 100%; }
+
+  /* ---------- Run 头部 ---------- */
+  .run-head { align-items: flex-end; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; padding-bottom: 14px; }
+  .run-head h1 { font-size: 1.35rem; font-weight: 650; letter-spacing: -0.02em; margin-top: 6px; }
+  .run-head h1 code { color: var(--primary); font-size: 0.9em; }
+  .run-head-sub { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.04em; margin-top: 4px; }
+
+  /* ---------- Section Tabs ---------- */
+  .section-tabs { background: var(--button-secondary-bg); border: 1px solid var(--button-border); border-radius: var(--radius-md); display: flex; gap: 3px; padding: 4px; width: fit-content; }
+  .section-tabs button {
+    align-items: center; background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm);
+    color: var(--text-secondary); display: inline-flex; font-size: 0.72rem; font-weight: 600; gap: 6px;
+    letter-spacing: 0.03em; min-height: 30px; padding: 0 12px; text-transform: uppercase;
+  }
+  .section-tabs button:hover { color: var(--text-primary); }
+  .section-tabs button.active { background: var(--button-primary-bg); border-color: var(--button-primary-bg); color: var(--button-primary-fg); }
+
+  /* ---------- Attempt Tabs ---------- */
+  .attempt-tabs { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+  .attempt-tabs-label { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.6rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+  .attempt-tab {
+    align-items: center; background: var(--surface-overlay); border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+    color: var(--text-secondary); display: inline-flex; gap: 8px; min-height: 34px; padding: 0 12px;
+  }
+  .attempt-tab i { border-radius: 50%; height: 7px; width: 7px; }
+  .attempt-tab[data-status="failed"] i { background: var(--error); }
+  .attempt-tab[data-status="running"] i { animation: mock-pulse 1.4s ease-in-out infinite; background: var(--info); box-shadow: 0 0 0 3px var(--info-glow); }
+  .attempt-tab strong { font-size: 0.74rem; font-weight: 650; }
+  .attempt-tab small { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.03em; }
+  .attempt-tab.active { border-color: color-mix(in srgb, var(--primary) 45%, var(--border-color)); box-shadow: inset 0 -2px 0 var(--primary); color: var(--text-primary); }
+
+  /* ---------- Provider 会话面板 ---------- */
+  .provider-panel { background: var(--panel-gradient); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .provider-panel-head { align-items: center; border-bottom: 1px solid var(--border-color); display: flex; gap: 10px; justify-content: space-between; padding: 13px 16px; }
+  .provider-panel-title { align-items: center; display: flex; gap: 8px; }
+  .provider-panel-title .tool-icon { align-items: center; background: var(--primary-glow); border-radius: var(--radius-xs); color: var(--primary); display: inline-flex; height: 24px; justify-content: center; width: 24px; }
+  .provider-panel-title strong { font-size: 0.88rem; font-weight: 650; letter-spacing: -0.01em; }
+  .provider-panel-title span { color: var(--text-muted); font-size: 0.68rem; }
+
+  .fact-strip {
+    background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
+    border-bottom: 1px solid var(--border-light);
+    display: flex; flex-wrap: wrap; gap: 0;
+  }
+  .fact { border-right: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 3px; padding: 10px 18px; }
+  .fact:last-child { border-right: 0; }
+  .fact small { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.56rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+  .fact strong { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 700; letter-spacing: -0.01em; }
+  .fact strong.ok { color: var(--info); }
+  .fact strong.warn { color: var(--warning); }
+
+  .observe-notice {
+    align-items: center; background: var(--info-bg); border-bottom: 1px solid var(--info-glow); color: var(--info);
+    display: flex; font-size: 0.68rem; font-weight: 600; gap: 7px; padding: 7px 16px;
+  }
+  .observe-notice a { font-weight: 700; text-decoration: underline; }
+
+  /* ---------- Transcript ---------- */
+  .transcript { display: flex; flex: 1; min-height: 0; overflow-y: auto; padding: 22px clamp(16px, 4vw, 56px) 28px; }
+  .transcript-content { display: flex; flex-direction: column; gap: 22px; margin: 0 auto; width: min(920px, 100%); }
+  .runtime-head { align-items: center; border-bottom: 1px dashed var(--border-color); display: flex; gap: 10px; padding-bottom: 10px; }
+  .runtime-head code { color: var(--text-secondary); font-size: 0.66rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .runtime-head .status-pill { margin-left: auto; }
+
+  .tools-collapse {
+    align-items: center; background: var(--surface-raised); border: 1px solid var(--border-color); border-radius: var(--radius-md);
+    color: var(--text-secondary); display: flex; font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+    gap: 8px; letter-spacing: 0.03em; padding: 8px 12px; width: 100%;
+  }
+  .tools-collapse:hover { border-color: var(--border-color-hover); color: var(--text-primary); }
+  .tools-collapse .tool-icon { align-items: center; background: var(--primary-glow); border-radius: var(--radius-xs); color: var(--primary); display: inline-flex; height: 20px; justify-content: center; width: 20px; }
+  .tools-collapse .chev { margin-left: auto; color: var(--text-muted); }
+
+  .live-banner {
+    align-items: center; align-self: flex-start; background: var(--primary-glow); border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+    color: var(--primary); display: inline-flex; font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+    gap: 8px; letter-spacing: 0.06em; padding: 6px 10px; text-transform: uppercase;
+  }
+  .live-banner i { animation: mock-pulse 1.3s ease-in-out infinite; background: currentColor; border-radius: 50%; height: 6px; width: 6px; }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()"><span class="dot"></span><span id="theme-label">极客 DARK</span></button>
+
+<div class="run-page animate-fade-in">
+  <div class="run-wrap">
+    <!-- ============ Run 头部 ============ -->
+    <header class="run-head">
+      <div>
+        <span class="kicker">Run Detail · ISS-214</span>
+        <h1>Run <code>#905</code> — 修复 approval 事件未推送</h1>
+        <p class="run-head-sub">started 14:32:41 · trigger SUPERVISOR · project codex-issue-runner</p>
+      </div>
+      <span class="status-pill running"><span class="dot"></span>Running</span>
+    </header>
+
+    <!-- ============ Section Tabs ============ -->
+    <nav class="section-tabs" aria-label="Run detail sections">
+      <button class="active"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>Provider</button>
+      <button><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Summary</button>
+      <button><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>Logs</button>
+      <button><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Evidence</button>
+      <button><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>Advanced</button>
+    </nav>
+
+    <!-- ============ Attempt Tabs ============ -->
+    <div class="attempt-tabs" role="tablist">
+      <span class="attempt-tabs-label">Attempts</span>
+      <button class="attempt-tab" data-status="failed"><i></i><strong>Attempt 1</strong><small>fix · failed</small></button>
+      <button class="attempt-tab active" data-status="running"><i></i><strong>Attempt 2</strong><small>fix · running</small></button>
+    </div>
+
+    <!-- ============ Provider 会话观测面板 ============ -->
+    <section class="provider-panel">
+      <header class="provider-panel-head">
+        <div class="provider-panel-title">
+          <span class="tool-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg></span>
+          <strong>codex session</strong>
+          <span>当前 Attempt 的实际执行记录</span>
+        </div>
+        <button class="btn-ghost btn">在 Sessions 中打开 →</button>
+      </header>
+
+      <div class="fact-strip">
+        <div class="fact"><small>Provider</small><strong>codex</strong></div>
+        <div class="fact"><small>Status</small><strong class="ok">running</strong></div>
+        <div class="fact"><small>Tokens</small><strong>182.4k</strong></div>
+        <div class="fact"><small>Cost</small><strong>$1.83</strong></div>
+        <div class="fact"><small>Phase</small><strong class="warn">editing</strong></div>
+      </div>
+
+      <div class="observe-notice">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        观测模式 · transcript 只读，如需干预请<a href="#">打开交互会话</a>
+      </div>
+
+      <div class="transcript">
+        <div class="transcript-content">
+          <div class="runtime-head">
+            <span class="kicker">Provider Transcript</span>
+            <code>session_ref: codex://thread/01JYXK9M4R</code>
+            <span class="status-pill running"><span class="dot"></span>Live</span>
+          </div>
+
+          <!-- 任务输入 -->
+          <div class="msg user">
+            <div class="msg-head"><span class="msg-avatar">IN</span><span class="msg-role">任务输入</span><span class="msg-time">14:32:41</span></div>
+            <div class="msg-body">实现修复：approval 请求入队后向事件总线广播 <code>approval:pending</code>，并补充回归测试。</div>
+          </div>
+
+          <!-- 助手执行 -->
+          <div class="msg assistant">
+            <div class="msg-head"><span class="msg-avatar">CX</span><span class="msg-role">codex · gpt-5.2</span><span class="msg-time">14:32:46</span></div>
+            <div class="msg-body">
+              <p>收到。先定位 dispatch 路径与现有测试覆盖，然后实施最小改动。</p>
+              <button class="tools-collapse">
+                <span class="tool-icon"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" x2="20" y1="21" y2="21"/><line x1="4" x2="20" y1="3" y2="3"/><line x1="10" x2="4" y1="8" y2="8"/><line x1="16" x2="20" y1="8" y2="8"/><line x1="14" x2="20" y1="14" y2="14"/><line x1="6" x2="4" y1="14" y2="14"/><line x1="6" x2="10" y1="8" y2="8"/><line x1="14" x2="14" y1="16" y2="12"/><line x1="8" x2="8" y1="10" y2="6"/></svg></span>
+                3 个工具调用 · 最近 Edit backend-ts/src/approval/dispatch.ts
+                <span class="chev"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+              </button>
+              <div class="code-block">
+                <div class="code-block-head"><span class="dots"><i></i><i></i><i></i></span>ZSH — codex-issue-runner</div>
+                <pre><span class="prompt">macbook %</span> npm test -- approval
+<span class="dim">Test Suites: 1 passed, 1 total</span>
+<span class="dim">Tests:       6 passed, 6 total</span>
+<span class="prompt">macbook %</span> git diff --stat
+<span class="add"> backend-ts/src/approval/dispatch.ts    | +4 -1</span>
+<span class="add"> backend-ts/test/approval.event.test.ts | +28</span></pre>
+              </div>
+              <p>回归通过。正在整理 evidence 并准备收尾汇报…</p>
+            </div>
+          </div>
+
+          <div class="live-banner"><i></i>Streaming · turn 2 · 01:12</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+  function applyTheme(t){document.documentElement.dataset.theme=t;document.getElementById('theme-label').textContent=t==='dark'?'简洁 LIGHT':'极客 DARK';}
+  function toggleTheme(){const n=document.documentElement.dataset.theme==='dark'?'light':'dark';localStorage.setItem('mock-theme',n);applyTheme(n);}
+  applyTheme(localStorage.getItem('mock-theme')||'light');
+</script>
+</body>
+</html>

@@ -554,6 +554,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "DELETE", path: "/api/cron-tasks/:id", family: "automation" },
   { method: "PATCH", path: "/api/cron-tasks/:id", family: "automation" },
   { method: "GET", path: "/api/events", family: "system-observability" },
+  { method: "GET", path: "/api/health", family: "system-observability" },
   { method: "GET", path: "/api/external-events", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/external-events/:id", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/external-events/:id/create-issue", family: "integration-intake-delivery" },

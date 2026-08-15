@@ -45,9 +45,13 @@ export default function NewSessionWorkspace({
   return (
     <div className="new-session-container animate-fade-in">
       <div className="new-session-center-card">
-        <h1 className="new-session-title">
-          我们应该在 {selectedProject?.name || '当前工作区'} 中构建什么？
-        </h1>
+        <header className="new-session-head">
+          <span className="new-session-kicker">New Provider Session</span>
+          <h1 className="new-session-title">
+            我们应该在 <em>{selectedProject?.name || '当前工作区'}</em> 中构建什么？
+          </h1>
+          <p className="new-session-subtitle">描述目标，玄武会创建 provider 会话并跟踪整个执行过程。</p>
+        </header>
 
         <div className="new-session-composer-wrapper">
           <SessionCommandPanel
@@ -127,10 +131,26 @@ export default function NewSessionWorkspace({
             <span>{isolationLabel(providerCatalog, sessionSettings.provider)}</span>
           </div>
         </div>
+
+        <p className="new-session-starters-label">// 快捷开始</p>
+        <div className="new-session-starters">
+          {NEW_SESSION_STARTERS.map((starter) => (
+            <button key={starter.title} onClick={() => setPrompt(starter.prompt)} type="button">
+              <span>{starter.title}</span>
+              <small>{starter.detail}</small>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
+
+const NEW_SESSION_STARTERS = [
+  { title: '修复一个 Issue', detail: '@ 引用 issue 编号，创建修复 run 并跟踪执行。', prompt: '修复 Issue #' },
+  { title: '复盘最近的 Run', detail: '分析最近一次失败 run 的根因与 evidence。', prompt: '复盘最近一次失败的 run，给出根因分析与修复建议' },
+  { title: '自由编码任务', detail: '直接描述需求，由 provider 在当前项目落地。', prompt: '我想实现：' },
+];
 
 function NewSessionPermissionControl({ settings, onSettingChange, providerCatalog }) {
   const policy = settingsExecutionPolicy(settings);

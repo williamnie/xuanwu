@@ -37,8 +37,8 @@
   flex-direction: row !important;
   gap: 8px !important;
 }
-.pi-chat-status-dot { background: var(--success); height: 7px; width: 7px; }
-.pi-chat-status-summary[data-tone="running"] .pi-chat-status-dot { background: var(--info); }
+.pi-chat-status-dot { background: var(--success); border-radius: 50%; height: 7px; width: 7px; }
+.pi-chat-status-summary[data-tone="running"] .pi-chat-status-dot { animation: pi-chat-running-signal 1.5s ease-in-out infinite; background: var(--info); }
 .pi-chat-status-summary[data-tone="error"] .pi-chat-status-dot { background: var(--error); }
 .pi-chat-status-summary[data-tone="idle"] .pi-chat-status-dot { background: var(--text-muted); }
 .pi-chat-status-copy { display: flex; flex-direction: column; gap: 1px; }
@@ -86,6 +86,7 @@
   align-items: center;
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
+  border-radius: var(--radius-xs);
   color: var(--text-secondary);
   cursor: pointer;
   display: inline-flex;
@@ -151,6 +152,7 @@
 .pi-chat-starters button {
   background: var(--surface-raised);
   border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   cursor: pointer;
   display: flex;
@@ -158,6 +160,7 @@
   gap: 5px;
   padding: 13px;
   text-align: left;
+  transition: background-color 140ms ease, border-color 140ms ease;
 }
 .pi-chat-starters button:hover { border-color: var(--border-color-hover); background: var(--primary-glow); }
 .pi-chat-starters span { font-size: .76rem; font-weight: 700; }

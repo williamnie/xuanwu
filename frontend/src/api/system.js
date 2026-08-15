@@ -24,6 +24,8 @@ async function getCompactSystemStatus({ force = false } = {}) {
 export const systemApi = {
   validateAuthToken: () => getCompactSystemStatus(),
 
+  getCoreHealth: ({ signal } = {}) => request('/api/health', { signal }),
+
   clearAuthToken,
 
   getAuthTokenStatus: () => request('/api/auth/token'),

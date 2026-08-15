@@ -53,6 +53,10 @@ function buildConnectionPatch(current, online) {
   if (current.loading) {
     patch.loading = false;
   }
+  const connectionState = online ? 'online' : 'offline';
+  if (current.backendConnectionState !== connectionState) {
+    patch.backendConnectionState = connectionState;
+  }
   return patch;
 }
 
@@ -63,10 +67,25 @@ export const useDataStore = create((set, get) => ({
   guardianAlerts: [],
   loading: true,
   backendOnline: false,
+  backendConnectionState: 'offline',
 
   setBackendOnline: (online) => {
-    if (get().backendOnline === online) return;
-    set({ backendOnline: online });
+    const backendConnectionState = online ? 'online' : 'offline';
+    const current = get();
+    if (current.backendOnline === online && current.backendConnectionState === backendConnectionState) return;
+    set({ backendConnectionState, backendOnline: online });
+  },
+
+  setBackendConnectionState: (backendConnectionState) => {
+    if (!['online', 'reconnecting', 'offline'].includes(backendConnectionState)) return;
+    const current = get();
+    const backendOnline = backendConnectionState === 'online'
+      ? true
+      : backendConnectionState === 'offline'
+        ? false
+        : current.backendOnline;
+    if (current.backendConnectionState === backendConnectionState && current.backendOnline === backendOnline) return;
+    set({ backendConnectionState, backendOnline });
   },
 
   setProjects: (projects) => {
@@ -112,6 +131,9 @@ export const useDataStore = create((set, get) => ({
       if (current.backendOnline) {
         patch.backendOnline = false;
       }
+      if (current.backendConnectionState !== 'offline') {
+        patch.backendConnectionState = 'offline';
+      }
       if (current.loading) {
         patch.loading = false;
       }
@@ -129,9 +151,11 @@ export const selectIssues = (state) => state.issues;
 export const selectAutomations = (state) => state.automations;
 export const selectGuardianAlerts = (state) => state.guardianAlerts;
 export const selectBackendOnline = (state) => state.backendOnline;
+export const selectBackendConnectionState = (state) => state.backendConnectionState;
 export const selectLoading = (state) => state.loading;
 export const selectRefreshData = (state) => state.refreshData;
 export const selectRefreshAllData = (state) => state.refreshAllData;
 export const selectSetBackendOnline = (state) => state.setBackendOnline;
+export const selectSetBackendConnectionState = (state) => state.setBackendConnectionState;
 export const selectSetGuardianAlerts = (state) => state.setGuardianAlerts;
 export const selectSetProjects = (state) => state.setProjects;

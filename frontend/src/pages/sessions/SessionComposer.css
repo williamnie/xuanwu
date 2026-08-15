@@ -370,7 +370,8 @@
 .new-session-composer-wrapper .prompt-editor-content.composer {
   font-size: 1rem;
   line-height: 1.5;
-  padding: 16px 20px 8px;
+  min-height: 110px;
+  padding: 18px 20px 8px;
 }
 
 .client-chat-composer-section .prompt-composer-footer,

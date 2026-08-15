@@ -15,6 +15,7 @@ export const PROCESS_GROUP_MEMORY_SAMPLE_INTERVAL_MS = 1_000;
 export const PROCESS_GROUP_MEMORY_FRESHNESS_MS = 5_000;
 export const PROCESS_GROUP_MEMORY_AGENTIC_IDLE_GRACE_MS = 90_000;
 export const PROCESS_GROUP_MEMORY_MAINTENANCE_IDLE_GRACE_MS = 5_000;
+export const PROCESS_GROUP_MEMORY_RECLAIM_MIN_INTERVAL_MS = 5 * 60_000;
 export const PROCESS_GROUP_MEMORY_METRIC_DEFINITIONS = {
   footprint_bytes: "macOS footprint (phys_footprint) from non-suspending proc_pid_rusage, summed per observed PID",
   process_rss_bytes: "process.memoryUsage().rss for the runner main process only",
@@ -61,6 +62,7 @@ type ProcessGroupMemoryOptions = {
   onRecovery?: (recovery: ProcessMemoryBudgetRecovery) => void;
   providerRuntime?: () => RuntimeOwnership;
   reclaimMemory?: () => void;
+  reclaimMinIntervalMs?: number;
   runnerPid?: number;
   sampleIntervalMs?: number;
 };
@@ -92,11 +94,13 @@ export class ProcessGroupMemoryObserver {
   private healthyNotified = false;
   private idleReclaimPending = false;
   private idleBaselineBytes?: number;
+  private lastReclaimedAt?: number;
   private lastRunObservedAt?: number;
   private maintenanceInFlight = 0;
   private maintenanceLastActivityAt = "";
   private lastProcesses = new Map<string, ObservedProcess & { last_seen_at: string; peak_rss_bytes: number }>();
   private recentExited: Array<Record<string, unknown>> = [];
+  private reclaimStatus: "completed" | "disabled" | "failed" | "never" | "throttled" = "never";
   private sampleValue?: Record<string, unknown>;
   private timer?: ReturnType<typeof setInterval>;
 
@@ -132,7 +136,7 @@ export class ProcessGroupMemoryObserver {
     const phase = this.phase(rows, activity.active);
     if (phase === "run") this.idleReclaimPending = true;
     if (phase === "idle" && this.idleReclaimPending) {
-      this.reclaimIdleMemory();
+      this.reclaimIdleMemory(now);
       this.idleReclaimPending = false;
     }
     const memory = this.memoryUsage();
@@ -186,6 +190,7 @@ export class ProcessGroupMemoryObserver {
         physical_memory_probe: this.options.footprint === false ? "disabled" : this.footprintAttempted ? "ready" : "pending",
         source: budget.measurement_source
       },
+      memory_reclaim: this.memoryReclaimSnapshot(now),
       metric_definitions: PROCESS_GROUP_MEMORY_METRIC_DEFINITIONS
     };
     this.maybeAlert(phase, budget, rows);
@@ -295,20 +300,42 @@ export class ProcessGroupMemoryObserver {
     return rows.some((row) => row.role === "usage-index") ? "usage" : "idle";
   }
 
-  private reclaimIdleMemory(): void {
+  private reclaimIdleMemory(now: Date): void {
+    if (!this.options.reclaimMemory) {
+      this.reclaimStatus = "disabled";
+      return;
+    }
+    const minIntervalMs = this.options.reclaimMinIntervalMs ?? PROCESS_GROUP_MEMORY_RECLAIM_MIN_INTERVAL_MS;
+    if (this.lastReclaimedAt !== undefined && now.getTime() - this.lastReclaimedAt < minIntervalMs) {
+      this.reclaimStatus = "throttled";
+      return;
+    }
     try {
-      this.options.reclaimMemory?.();
-      if (this.options.reclaimMemory) {
-        this.footprintGeneration += 1;
-        this.footprint = undefined;
-        this.footprintAttempted = false;
-      }
+      this.options.reclaimMemory();
+      this.lastReclaimedAt = now.getTime();
+      this.reclaimStatus = "completed";
+      this.footprintGeneration += 1;
+      this.footprint = undefined;
+      this.footprintAttempted = false;
     } catch (error) {
+      this.reclaimStatus = "failed";
       console.error(JSON.stringify({
         event: "runner.process_group_memory_reclaim_failed",
         error: redactSensitiveText(error instanceof Error ? error.message : String(error))
       }));
     }
+  }
+
+  private memoryReclaimSnapshot(now: Date): Record<string, unknown> {
+    const minIntervalMs = this.options.reclaimMinIntervalMs ?? PROCESS_GROUP_MEMORY_RECLAIM_MIN_INTERVAL_MS;
+    return {
+      last_reclaimed_at: this.lastReclaimedAt === undefined ? "" : new Date(this.lastReclaimedAt).toISOString(),
+      min_interval_ms: minIntervalMs,
+      next_eligible_at: this.lastReclaimedAt === undefined
+        ? now.toISOString()
+        : new Date(this.lastReclaimedAt + minIntervalMs).toISOString(),
+      status: this.options.reclaimMemory ? this.reclaimStatus : "disabled"
+    };
   }
 
   private budgetStatus(

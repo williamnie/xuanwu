@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>03 · 新建 Provider Chat — Xuanwu</title>
+<link rel="stylesheet" href="theme.css" />
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .new-session { align-items: center; display: flex; flex-direction: column; height: 100vh; justify-content: center; overflow-y: auto; padding: 48px 24px; position: relative; z-index: 1; }
+  .new-session-inner { display: flex; flex-direction: column; gap: 22px; max-width: 760px; width: 100%; }
+
+  .new-session-head { text-align: center; }
+  .new-session-head .kicker { display: inline-block; margin-bottom: 10px; }
+  .new-session-head h1 { font-size: clamp(1.45rem, 3vw, 2rem); font-weight: 650; letter-spacing: -0.025em; line-height: 1.3; }
+  .new-session-head h1 em { color: var(--primary); font-style: normal; }
+  .new-session-head p { color: var(--text-muted); font-size: 0.8rem; margin-top: 10px; }
+
+  .new-session .composer-shell { box-shadow: var(--shadow-md); }
+  .new-session .composer-input { font-size: 0.95rem; min-height: 110px; padding: 20px 22px 10px; }
+
+  .cfg-tags { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+
+  .starters { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 6px; }
+  .starters button {
+    background: var(--surface-raised); border: 1px solid var(--border-color); border-radius: var(--radius-md);
+    color: var(--text-primary); cursor: pointer; display: flex; flex-direction: column; gap: 5px; padding: 13px; text-align: left;
+  }
+  .starters button:hover { background: var(--primary-glow); border-color: var(--border-color-hover); }
+  .starters span { font-size: 0.76rem; font-weight: 700; }
+  .starters small { color: var(--text-muted); font-size: 0.64rem; line-height: 1.5; }
+  .starters-label { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.12em; margin-top: 8px; text-align: center; text-transform: uppercase; }
+
+  @media (max-width: 680px) { .starters { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()"><span class="dot"></span><span id="theme-label">极客 DARK</span></button>
+
+<div class="new-session animate-fade-in">
+  <div class="new-session-inner">
+    <!-- ============ 引导标题 ============ -->
+    <header class="new-session-head">
+      <span class="kicker">New Provider Session</span>
+      <h1>我们应该在 <em>codex-issue-runner</em> 中构建什么？</h1>
+      <p>描述目标，玄武会创建 provider 会话并跟踪整个执行过程。</p>
+    </header>
+
+    <!-- ============ 一体化输入器 ============ -->
+    <div class="composer-shell">
+      <textarea class="composer-input" placeholder="尽管问，支持 @ 引用 issue / run / 文件…"></textarea>
+      <div class="composer-footer">
+        <div class="composer-left">
+          <button class="embedded-select danger" title="执行策略">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+            谨慎模式 · 需审批
+          </button>
+        </div>
+        <div class="composer-actions">
+          <button class="embedded-select" title="模型">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/></svg>
+            codex 默认
+          </button>
+          <button class="embedded-select" title="服务档位">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
+            标准
+          </button>
+          <button class="composer-submit" title="发送并新建会话">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 底部配置标签 ============ -->
+    <div class="cfg-tags">
+      <button class="cfg-tag">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+        项目 <strong>codex-issue-runner</strong>
+      </button>
+      <button class="cfg-tag">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" x2="20" y1="21" y2="21"/><line x1="4" x2="20" y1="3" y2="3"/><line x1="10" x2="4" y1="8" y2="8"/><line x1="16" x2="20" y1="8" y2="8"/><line x1="14" x2="20" y1="14" y2="14"/><line x1="6" x2="4" y1="14" y2="14"/><line x1="6" x2="10" y1="8" y2="8"/><line x1="14" x2="14" y1="16" y2="12"/><line x1="8" x2="8" y1="10" y2="6"/></svg>
+        Provider <strong>Codex</strong>
+      </button>
+      <span class="cfg-tag" title="Provider 声明的隔离能力">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        工作区写隔离
+      </span>
+    </div>
+
+    <!-- ============ 快捷开始 ============ -->
+    <p class="starters-label">// 快捷开始</p>
+    <div class="starters">
+      <button><span>修复一个 Issue</span><small>@ 引用 issue 编号，创建修复 run 并跟踪执行。</small></button>
+      <button><span>复盘最近的 Run</span><small>分析最近一次失败 run 的根因与 evidence。</small></button>
+      <button><span>自由编码任务</span><small>直接描述需求，由 provider 在当前项目落地。</small></button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function applyTheme(t){document.documentElement.dataset.theme=t;document.getElementById('theme-label').textContent=t==='dark'?'简洁 LIGHT':'极客 DARK';}
+  function toggleTheme(){const n=document.documentElement.dataset.theme==='dark'?'light':'dark';localStorage.setItem('mock-theme',n);applyTheme(n);}
+  applyTheme(localStorage.getItem('mock-theme')||'light');
+</script>
+</body>
+</html>

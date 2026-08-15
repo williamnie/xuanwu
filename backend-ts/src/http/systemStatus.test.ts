@@ -39,6 +39,20 @@ describe("Bun system status endpoints", () => {
     expect(await response.json()).toEqual({ status: "ok" });
   });
 
+  test("exposes an authenticated Core health route for the Web reconnect probe", async () => {
+    const router = createDefaultRouter();
+    const handle = createRequestHandler(router, "status-secret");
+
+    const denied = await handle(new Request(`${BASE_URL}/api/health`));
+    const allowed = await handle(new Request(`${BASE_URL}/api/health`, {
+      headers: { authorization: "Bearer status-secret" }
+    }));
+
+    expect(denied.status).toBe(401);
+    expect(allowed.status).toBe(200);
+    expect(await allowed.json()).toEqual({ role: "core", status: "ok" });
+  });
+
   test("returns a compact authenticated Web-shell status without heavy projections", async () => {
     const { config, database } = await openFixtureRuntime({ claudeMode: "sdk" });
     try {

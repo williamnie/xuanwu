@@ -13,6 +13,7 @@ import type {
   ProviderRunResult,
   SessionMessageInput
 } from "../providers/types.ts";
+import { slowRunListLogEntry } from "./runApi.ts";
 import { createDefaultRouter, createRequestHandler } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -27,6 +28,28 @@ afterEach(async () => {
 });
 
 describe("Run HTTP API", () => {
+  test("builds a bounded slow-list diagnostic without exposing filter values", () => {
+    const request = new Request(
+      `${BASE_URL}/api/runs?project_id=private-project&work_id=secret-work&provider=codex&status=failed&page=2&page_size=30`
+    );
+
+    expect(slowRunListLogEntry(request, 120, 200)).toBeUndefined();
+    const entry = slowRunListLogEntry(request, 1250.44, 200);
+    expect(entry).toEqual({
+      duration_ms: 1250,
+      event: "runner.run_list_slow",
+      page: 2,
+      page_size: 30,
+      project_filter: true,
+      provider_filter_count: 1,
+      status: 200,
+      status_filter_count: 1,
+      work_filter: true
+    });
+    expect(JSON.stringify(entry)).not.toContain("private-project");
+    expect(JSON.stringify(entry)).not.toContain("secret-work");
+  });
+
   test("exposes a Pi Run session reference and provider-neutral transcript drill-down", async () => {
     const db = await openFixtureDatabase();
     const provider = new PiRunDetailProvider();

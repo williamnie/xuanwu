@@ -28,7 +28,8 @@ test('collapsed sidebar navigation keeps accessible names when labels are visual
 });
 
 test('sidebar API indicator only shows the connection state', () => {
-  assert.match(source, /backendOnline \? 'ONLINE' : 'OFFLINE'/);
+  assert.match(source, /connectionState === 'reconnecting' \? 'RECONNECTING'/);
+  assert.match(css, /\.api-status\.reconnecting\s*\{[^}]*color:\s*var\(--warning\)/);
   assert.doesNotMatch(source, /LOCAL API/);
 });
 

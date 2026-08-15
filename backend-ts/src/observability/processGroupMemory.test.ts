@@ -8,6 +8,7 @@ import {
   PROCESS_GROUP_MEMORY_BUDGETS,
   PROCESS_GROUP_MEMORY_CONTRACT,
   PROCESS_GROUP_MEMORY_MAINTENANCE_IDLE_GRACE_MS,
+  PROCESS_GROUP_MEMORY_RECLAIM_MIN_INTERVAL_MS,
   ProcessGroupMemoryObserver,
   resolveRecoveredProcessGroupMemoryAlerts,
   type ProcessMemoryBudgetAlert,
@@ -117,6 +118,43 @@ describe("runner process-group memory observer", () => {
       budget: { measured_main_bytes: 180 * MIB, status: "within_budget" },
       phase: "idle"
     });
+  });
+
+  test("throttles repeated forced reclaims across short active-to-idle cycles", () => {
+    let nowMs = Date.parse("2026-07-27T03:00:00.000Z");
+    let activeRuns = 1;
+    let reclaims = 0;
+    const observer = new ProcessGroupMemoryObserver({
+      activeRuns: () => activeRuns,
+      footprint: false,
+      inspect: () => [fixtureRows(180, 0)[0]!],
+      memoryUsage: () => memoryUsage(180),
+      now: () => new Date(nowMs),
+      reclaimMemory: () => { reclaims += 1; },
+      runnerPid: 50
+    });
+
+    observer.sample();
+    activeRuns = 0;
+    let snapshot = observer.sample() as Snapshot;
+    expect(reclaims).toBe(1);
+    expect(snapshot.memory_reclaim).toMatchObject({ status: "completed" });
+
+    activeRuns = 1;
+    observer.sample();
+    activeRuns = 0;
+    nowMs += PROCESS_GROUP_MEMORY_RECLAIM_MIN_INTERVAL_MS - 1;
+    snapshot = observer.sample() as Snapshot;
+    expect(reclaims).toBe(1);
+    expect(snapshot.memory_reclaim).toMatchObject({ status: "throttled" });
+
+    activeRuns = 1;
+    observer.sample();
+    activeRuns = 0;
+    nowMs += 1;
+    snapshot = observer.sample() as Snapshot;
+    expect(reclaims).toBe(2);
+    expect(snapshot.memory_reclaim).toMatchObject({ status: "completed" });
   });
 
   test("reclaims after a short Core maintenance cooldown even when no issue or Agentic RPC is active", async () => {
@@ -671,6 +709,7 @@ type Snapshot = {
   budget: Record<string, unknown>;
   main: Record<string, unknown>;
   measurement: Record<string, unknown>;
+  memory_reclaim: Record<string, unknown>;
   recently_exited: Array<Record<string, unknown>>;
   roles: Array<Record<string, unknown>>;
   top_by_rss: Array<Record<string, unknown>>;

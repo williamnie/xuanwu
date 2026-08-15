@@ -79,6 +79,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   const router = createRouter();
   const bus = runtime.bus ?? new EventBus();
   router.get("/health", () => json({ status: "ok" }));
+  router.get("/api/health", () => json({ role: "core", status: "ok" }));
   if (runtime.authTokenManager) registerAuthTokenRoutes(router, { manager: runtime.authTokenManager });
   if (runtime.agenticClient) {
     router.get("/api/system/agentic-health", async () => {

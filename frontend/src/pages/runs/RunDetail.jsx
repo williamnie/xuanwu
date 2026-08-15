@@ -126,11 +126,11 @@ function ProviderSessionDrillDown({ attempt, navigateTo, run, sessionRef }) {
         <span>当前 Attempt 的实际执行记录</span>
       </header>
       <div className="run-provider-attempt-facts">
-        <span>Provider <strong>{attempt?.provider_ref?.provider || 'unknown'}</strong></span>
-        <span>Status <strong>{attempt?.status || 'unknown'}</strong></span>
-        <span>Tokens <strong>{cost.total}</strong></span>
-        <span>Cost <strong>{cost.money}</strong></span>
-        {attempt?.terminal?.reason ? <span>Terminal <strong>{attempt.terminal.reason}</strong></span> : null}
+        <div className="run-provider-fact"><small>Provider</small><strong>{attempt?.provider_ref?.provider || 'unknown'}</strong></div>
+        <div className="run-provider-fact"><small>Status</small><strong data-status={attempt?.status || 'unknown'}>{attempt?.status || 'unknown'}</strong></div>
+        <div className="run-provider-fact"><small>Tokens</small><strong>{cost.total}</strong></div>
+        <div className="run-provider-fact"><small>Cost</small><strong>{cost.money}</strong></div>
+        {attempt?.terminal?.reason ? <div className="run-provider-fact"><small>Terminal</small><strong>{attempt.terminal.reason}</strong></div> : null}
       </div>
       <ProviderTranscriptBoundary key={sessionRef} sessionRef={sessionRef}>
         <Sessions

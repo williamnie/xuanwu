@@ -13,7 +13,7 @@ import BrandMark from './BrandMark';
 import { useDynamicFavicon } from './brandFavicon.js';
 import { useRunnerBrandState } from './useRunnerBrandState.js';
 import {
-  selectBackendOnline,
+  selectBackendConnectionState,
   selectAutomations,
   selectIssues,
   selectProjects,
@@ -152,12 +152,13 @@ function NavIconLabel({ Icon, label }) {
 }
 
 function ApiStatus() {
-  const backendOnline = useDataStore(selectBackendOnline);
+  const connectionState = useDataStore(selectBackendConnectionState);
+  const label = connectionState === 'reconnecting' ? 'RECONNECTING' : connectionState.toUpperCase();
 
   return (
-    <span className={`api-status ${backendOnline ? '' : 'offline'}`}>
+    <span className={`api-status ${connectionState}`}>
       <span className="api-status-dot" />
-      {backendOnline ? 'ONLINE' : 'OFFLINE'}
+      {label}
     </span>
   );
 }

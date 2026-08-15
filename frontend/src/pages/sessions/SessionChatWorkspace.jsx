@@ -1,3 +1,4 @@
+import { Eye } from 'lucide-react';
 import TurtleLoader from '../../components/TurtleLoader';
 import EvidencePanel from '../../components/EvidencePanel';
 import ApprovalDialog from './ApprovalDialog';
@@ -86,7 +87,7 @@ export default function SessionChatWorkspace({
         {showEvidence && selectedId ? <EvidencePanel compact sessionRef={selectedId} title="Run Evidence" /> : null}
 
         {observationNotice ? (
-          <div className="session-read-only-notice">{observationNotice}</div>
+          <div className="session-read-only-notice"><Eye size={13} />{observationNotice}</div>
         ) : null}
         <div className="client-chat-composer-section">
             <ApprovalDialog

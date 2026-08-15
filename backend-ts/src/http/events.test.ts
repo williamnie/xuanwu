@@ -34,12 +34,14 @@ describe("Bun SSE events endpoint", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/event-stream");
+    expect(response.headers.get("cache-control")).toBe("no-cache, no-transform");
+    expect(response.headers.get("x-accel-buffering")).toBe("no");
     expect(bus.subscriberCount()).toBe(1);
 
     const reader = response.body?.getReader();
     expect(reader).toBeDefined();
     const first = await reader!.read();
-    expect(new TextDecoder().decode(first.value)).toContain(": connected");
+    expect(new TextDecoder().decode(first.value)).toContain("retry: 1000\n\n: connected");
 
     const second = await reader!.read();
     expect(new TextDecoder().decode(second.value)).toContain(": heartbeat");
