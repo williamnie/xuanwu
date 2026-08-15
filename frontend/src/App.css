@@ -21,6 +21,10 @@
   left: calc(var(--sidebar-width) + 12px);
 }
 
+.ask-xuanwu-page .main-content {
+  padding-left: 0;
+}
+
 .guardian-alert-banner {
   align-items: flex-start;
   background: color-mix(in srgb, var(--warning) 10%, var(--bg-card));
