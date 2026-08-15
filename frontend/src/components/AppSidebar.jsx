@@ -106,7 +106,7 @@ export default function AppSidebar({
         />
       )}
 
-      {currentPage === 'runs' && (
+      {(currentPage === 'runs' || currentPage === 'ask-xuanwu') && (
         <div id="sessions-app-sidebar-slot" className="sessions-app-sidebar-slot" />
       )}
 

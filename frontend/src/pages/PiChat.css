@@ -8,16 +8,14 @@
 }
 
 .pi-chat-shell {
-  display: grid;
+  display: flex;
   flex: 1;
-  gap: 12px;
-  grid-template-columns: minmax(272px, 298px) minmax(0, 1fr);
+  flex-direction: column;
   min-height: 0;
+  min-width: 0;
 }
 
-.pi-chat-sidebar.glass-card,
 .pi-chat-main.glass-card,
-[data-theme="dark"] .pi-chat-sidebar.glass-card,
 [data-theme="dark"] .pi-chat-main.glass-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -25,14 +23,9 @@
   box-shadow: var(--shadow-sm);
 }
 
-.pi-chat-sidebar {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
 .pi-chat-main {
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
@@ -41,15 +34,8 @@
 
 @media (max-width: 960px) {
   .pi-chat-page { padding-top: 14px; }
-  .pi-chat-shell {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(520px, 1fr);
-  }
 }
 
 @media (max-width: 760px) {
   .pi-chat-page { padding-top: 0; }
-  .pi-chat-shell { gap: 8px; }
-  .pi-chat-sidebar.glass-card { max-height: 40vh; min-height: 220px; }
-  .pi-chat-main.glass-card { min-height: 58vh; }
 }

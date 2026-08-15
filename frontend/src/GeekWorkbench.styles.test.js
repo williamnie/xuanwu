@@ -46,8 +46,8 @@ test('buttons use the flat E2B-inspired control language', () => {
 });
 
 test('page refinements keep chat layouts bounded on narrow screens', () => {
-  assert.match(piChatCss, /\.pi-chat-shell\s*\{[\s\S]*grid-template-columns:\s*minmax\(272px, 298px\)\s+minmax\(0, 1fr\)/);
-  assert.match(piChatCss, /@media \(max-width:\s*960px\)[\s\S]*\.pi-chat-shell\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(piChatCss, /\.pi-chat-shell\s*\{[\s\S]*flex-direction:\s*column/);
+  assert.match(piChatCss, /\.pi-chat-main\s*\{[\s\S]*flex:\s*1/);
 });
 
 test('low-frequency global panels use the same visual system without owning Sessions page styles', () => {

@@ -16,7 +16,8 @@ import {
   Sparkles,
   UserRound,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { PRODUCT_TERMS } from '../brand';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import TurtleLoader from '../components/TurtleLoader';
@@ -52,29 +53,48 @@ export default function PiChat({ navigateTo, initialConversationId = '', onConve
 function PiChatLayout({ navigateTo, state }) {
   return (
     <div className="pi-chat-page animate-fade-in">
+      <PiChatSidebar navigateTo={navigateTo} state={state} />
       <section className="pi-chat-shell">
-        <PiChatSidebar navigateTo={navigateTo} state={state} />
         <PiChatMain navigateTo={navigateTo} state={state} />
       </section>
     </div>
   );
 }
 
+const PI_CHAT_APP_SIDEBAR_SLOT_ID = 'sessions-app-sidebar-slot';
+
 function PiChatSidebar({ navigateTo, state }) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
+  const [portalTarget, setPortalTarget] = useState(null);
   const conversations = filterConversations(visiblePiConversations(state.conversations), query, t);
-  return (
-    <aside className="pi-chat-sidebar glass-card">
+
+  useEffect(() => {
+    setPortalTarget(document.getElementById(PI_CHAT_APP_SIDEBAR_SLOT_ID));
+  }, []);
+
+  if (!portalTarget) return null;
+
+  return createPortal((
+    <div className="sessions-app-sidebar-panel pi-chat-app-sidebar-panel">
+      <div className="sidebar-shortcut-items">
+        <button
+          className="sidebar-shortcut-item pi-chat-new-button"
+          disabled={state.sending}
+          onClick={state.handleCreateConversation}
+          type="button"
+        >
+          <span className="sidebar-shortcut-item-icon"><MessageSquarePlus size={16} /></span>
+          <span>{t('chat.new')}</span>
+        </button>
+      </div>
+
       <PiChatSidebarHeader
         loading={state.loading}
         navigateTo={navigateTo}
         onRefresh={state.loadPiState}
       />
       <AgentStatus agent={state.supervisor} />
-      <button className="btn btn-primary" onClick={state.handleCreateConversation} disabled={state.sending}>
-        <MessageSquarePlus size={15} /> {t('chat.new')}
-      </button>
       <label className="pi-chat-conversation-search">
         <Search size={14} aria-hidden="true" />
         <input
@@ -85,34 +105,32 @@ function PiChatSidebar({ navigateTo, state }) {
           value={query}
         />
       </label>
-      <ConversationList
-        conversations={conversations}
-        emptyLabel={query ? t('chat.noSearchResults') : t('chat.emptyList')}
-        selectedId={state.selectedConversationId}
-        unreadIds={state.unreadConversationIds}
-        onSelect={state.handleConversationChange}
-      />
-    </aside>
-  );
+      <div className="sidebar-scroll-area pi-chat-sidebar-scroll">
+        <ConversationList
+          conversations={conversations}
+          emptyLabel={query ? t('chat.noSearchResults') : t('chat.emptyList')}
+          selectedId={state.selectedConversationId}
+          unreadIds={state.unreadConversationIds}
+          onSelect={state.handleConversationChange}
+        />
+      </div>
+    </div>
+  ), portalTarget);
 }
 
 function PiChatSidebarHeader({ loading, navigateTo, onRefresh }) {
   const { t } = useI18n();
   return (
-    <div className="pi-chat-sidebar-header">
-      <div className="pi-chat-sidebar-brand">
-        <span className="pi-chat-sidebar-icon"><Bot size={16} /></span>
-        <div>
-          <strong>{t('nav.askXuanwu')}</strong>
-          <span>{t('chat.chat')}</span>
-        </div>
+    <div className="pi-chat-sidebar-heading">
+      <div>
+        <span className="sidebar-section-title">{t('chat.chats')}</span>
       </div>
-      <div className="pi-chat-sidebar-actions">
-        <button className="pi-chat-icon-button" onClick={onRefresh} disabled={loading} title={t('chat.refresh')}>
-          <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
+      <div className="pi-chat-sidebar-heading-actions">
+        <button aria-label={t('chat.refresh')} className="pi-chat-sidebar-icon-btn" onClick={onRefresh} disabled={loading} title={t('chat.refresh')} type="button">
+          <RefreshCw size={13} className={loading ? 'spin-animation' : ''} />
         </button>
-        <button className="pi-chat-icon-button" onClick={() => openSupervisorSettings(navigateTo)} title={t('chat.openSupervisorSettings')}>
-          <Settings2 size={15} />
+        <button aria-label={t('chat.openSupervisorSettings')} className="pi-chat-sidebar-icon-btn" onClick={() => openSupervisorSettings(navigateTo)} title={t('chat.openSupervisorSettings')} type="button">
+          <Settings2 size={13} />
         </button>
       </div>
     </div>
@@ -218,7 +236,6 @@ function ConversationList({ conversations, emptyLabel, onSelect, selectedId, unr
   const { language, t } = useI18n();
   return (
     <div className="pi-chat-conversation-list">
-      <div className="pi-chat-sidebar-title">{t('chat.chats')}</div>
       {conversations.length === 0 ? (
         <div className="pi-chat-empty-mini">{emptyLabel}</div>
       ) : (
