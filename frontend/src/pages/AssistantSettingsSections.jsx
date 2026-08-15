@@ -107,26 +107,23 @@ function LanguageAndVersionCard() {
   };
 
   return (
-    <section className="glass-card settings-language-card">
-      <div className="settings-language-copy">
-        <div className="settings-entry-eyebrow"><Languages size={14} /> i18n</div>
-        <h2>{t('settings.languageTitle')}</h2>
-        <p>{t('settings.languageDescription')}</p>
+    <section className="settings-language-bar" title={t('settings.languageDescription')}>
+      <div className="settings-language-label">
+        <Languages aria-hidden="true" size={15} />
+        <strong>{t('settings.languageTitle')}</strong>
         {saving ? <span>{t('settings.languageSaving')}</span> : null}
       </div>
-      <div className="settings-language-controls">
-        <div className="settings-language-options" role="radiogroup" aria-label={t('settings.languageTitle')}>
-          <button aria-checked={language === 'zh-CN'} className={language === 'zh-CN' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('zh-CN')} role="radio" type="button">
-            <strong>{t('settings.chinese')}</strong><span>zh-CN</span>
-          </button>
-          <button aria-checked={language === 'en-US'} className={language === 'en-US' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('en-US')} role="radio" type="button">
-            <strong>{t('settings.english')}</strong><span>en-US</span>
-          </button>
-        </div>
-        <div className="settings-version-card">
-          <span>{t('settings.version')}</span>
-          <strong>{APP_VERSION}</strong>
-        </div>
+      <div className="settings-language-options" role="radiogroup" aria-label={t('settings.languageTitle')}>
+        <button aria-checked={language === 'zh-CN'} className={language === 'zh-CN' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('zh-CN')} role="radio" type="button">
+          {t('settings.chinese')}
+        </button>
+        <button aria-checked={language === 'en-US'} className={language === 'en-US' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('en-US')} role="radio" type="button">
+          {t('settings.english')}
+        </button>
+      </div>
+      <div className="settings-version-inline">
+        <span>{t('settings.version')}</span>
+        <strong>{APP_VERSION}</strong>
       </div>
     </section>
   );

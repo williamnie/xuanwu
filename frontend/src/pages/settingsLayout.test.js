@@ -65,9 +65,12 @@ test('Settings primary IA owns the complete project list and editor flow', () =>
   assert.match(projectsSource, /handleDelete/);
   assert.match(projectsSource, /<ProjectSettingsEditor/);
   assert.match(projectSettingsEditorSource, /projectsApi\.updateProject\(projectID, payload\)/);
-  assert.match(sectionsSource, /LanguageAndVersionCard|settings-language-card/);
-  assert.match(sectionsSource, /settings-version-card/);
+  assert.match(sectionsSource, /LanguageAndVersionCard|settings-language-bar/);
+  assert.match(sectionsSource, /settings-version-inline/);
   assert.match(sectionsSource, /APP_VERSION/);
+  assert.doesNotMatch(sectionsSource, /glass-card settings-language/);
+  assert.match(stylesSource, /\.settings-language-bar \{[\s\S]*?min-height: 44px;/);
+  assert.match(stylesSource, /\.settings-page \.glass-card \{\s*border-radius: var\(--radius-xs\);/);
   assert.doesNotMatch(sidebarSource, /sidebar-language-row|APP_VERSION|sidebar-version/);
   assert.match(settingsNavigationSource, /Permissions/);
   assert.match(settingsNavigationSource, /Notifications/);
