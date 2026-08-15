@@ -561,7 +561,7 @@ function normalizeReference(reference) {
 }
 
 function transcriptMessage(role, text, meta = null) {
-  return { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, meta, role, text };
+  return { created_at: new Date().toISOString(), id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, meta, role, text };
 }
 
 export function shortId(value) {

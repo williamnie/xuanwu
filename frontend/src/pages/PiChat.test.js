@@ -103,15 +103,22 @@ test('PI Assistant composer supports @project activation without runtime diagnos
   assert.match(pageSource, /buildPiChatProjectSuggestions\(state\.projects\)/);
   assert.match(pageSource, /onAttachReference=\{state\.attachReference\}/);
   assert.match(pageSource, /showReferenceChips=\{false\}/);
-  assert.match(pageSource, /runtimeControls=\{<PiChatComposerMeta project=\{composerProject\(state\)\} \/>\}/);
+  assert.match(pageSource, /runtimeControls=\{<PiChatComposerMeta project=\{composerProject\(state\)\} supervisor=\{state\.supervisor\} \/>\}/);
   assert.match(pageSource, /if \(hasProjectReference\) return state\.selectedProject;\s*if \(!state\.prompt\.trim\(\)\) return null/);
   assert.match(composerMetaSource, /<RuntimePill icon=\{<FolderGit2/);
-  assert.match(composerMetaSource, /if \(!project\) return null/);
+  assert.match(composerMetaSource, /π · PI 直连/);
   assert.doesNotMatch(composerMetaSource, /chat\.context\.selectProject'\)/);
   assert.match(pageSource, /placeholder=\{t\('chat\.placeholder'\)\}/);
-  assert.doesNotMatch(composerMetaSource, /agentModelLabel|thinkingLabel|advanced/);
+  assert.match(composerMetaSource, /supervisorModelLabel\(supervisor\)/);
+  assert.match(composerMetaSource, /thinkingLabel\(supervisor\.thinking_level\)/);
   assert.doesNotMatch(pageSource, /state\.messageSettings/);
   assert.doesNotMatch(pageSource, /state\.updateMessageSetting/);
+});
+
+test('Chat restores the designed message metadata and Supervisor header', () => {
+  assert.match(pageSource, /className="pi-chat-bubble-time"/);
+  assert.match(pageSource, /formatMessageTime\(item\.created_at, language\)/);
+  assert.match(pageSource, /PRODUCT_TERMS\.productLatin\} · Supervisor/);
 });
 
 test('PI Assistant composer exposes an active stop control while sending', () => {

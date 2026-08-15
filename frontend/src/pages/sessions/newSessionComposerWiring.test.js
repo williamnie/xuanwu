@@ -40,12 +40,17 @@ test('new and existing session payloads include service tier', () => {
   assert.match(newSessionSource, /onServiceTierChange=\{\(value\) => handleSettingChange\('serviceTier', value\)\}/);
 });
 
-test('new session model field uses remote choices and falls back to manual input when unverified', () => {
+test('new session model field only exposes the selected Code Agent model choices', () => {
   assert.match(sessionsSource, /modelsError,[\s\S]*modelsLoading,[\s\S]*projectId/);
-  assert.match(newSessionSource, /manualModel = Boolean\(modelsError \|\| models\.some/);
-  assert.match(newSessionSource, /aria-label="手动填写模型 ID"/);
-  assert.match(newSessionSource, /list="new-session-provider-model-suggestions"/);
-  assert.match(newSessionSource, /select disabled=\{modelsLoading\}/);
+  assert.match(newSessionSource, /availableProviderModels\(models\)/);
+  assert.match(newSessionSource, /availableProviderModelValue\(settings\.model, modelOptions\)/);
+  assert.match(newSessionSource, /<select aria-label="模型" disabled=\{modelsLoading\}/);
+  assert.doesNotMatch(newSessionSource, /手动填写模型 ID|<datalist/);
+  assert.match(sessionsSource, /model:\s*availableProviderModelValue\(sessionSettings\.model, models\)/);
+  assert.match(sessionsSource, /modelRequestRef\.current !== requestId/);
+  assert.match(sessionsSource, /setModels\(\[\]\)/);
+  assert.match(sessionsSource, /PROVIDER_MODELS_TIMEOUT_MS/);
+  assert.match(sessionsSource, /getProviderModels\(provider, \{ signal: controller\.signal \}\)/);
 });
 
 test('new session provider selector hides unavailable providers', () => {

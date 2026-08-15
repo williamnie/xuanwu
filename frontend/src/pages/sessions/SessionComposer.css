@@ -85,25 +85,6 @@
   font-weight: 700;
 }
 
-.session-composer-model-manual {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-left: auto;
-  color: var(--text-secondary);
-}
-
-.session-composer-model-manual input {
-  width: 164px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-xs);
-  padding: 5px 7px;
-  background: var(--control-bg);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-}
-
 /* 发送 / 停止按钮 */
 .session-composer-circle {
   width: 30px;
@@ -331,10 +312,6 @@
   }
 
   .session-composer-select.model {
-    margin-left: 0;
-  }
-
-  .session-composer-model-manual {
     margin-left: 0;
   }
 

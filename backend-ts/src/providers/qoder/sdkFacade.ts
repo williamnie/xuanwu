@@ -111,9 +111,12 @@ export type QoderSdkFacadeOptions = {
   queryFactory?: (input: { prompt: string; options: Options }) => Query;
   /** Offline control-query seam; production starts a prompt-free SDK query. */
   discoveryQueryFactory?: (input: { options: Options }) => Promise<Query> | Query;
+  modelDiscoveryTimeoutMs?: number;
   modelCacheTtlMs?: number;
   now?: () => number;
 };
+
+const DEFAULT_QODER_MODEL_DISCOVERY_TIMEOUT_MS = 12_000;
 
 const QODER_HOST_ENV_KEYS = [
   "HOME",
@@ -327,6 +330,8 @@ class RealQoderSdkFacade implements QoderSdkFacade {
   async listModels(): Promise<ModelInfo[]> {
     const now = this.options.now?.() ?? Date.now();
     if (this.modelCache && now < this.modelCache.expiresAt) return structuredClone(this.modelCache.models);
+    const timeoutMs = Math.max(1, this.options.modelDiscoveryTimeoutMs ?? DEFAULT_QODER_MODEL_DISCOVERY_TIMEOUT_MS);
+    const deadline = Date.now() + timeoutMs;
     const queryOptions: Options = {
       ...buildQoderQueryOptions({
         approvalPolicy: "never",
@@ -338,11 +343,14 @@ class RealQoderSdkFacade implements QoderSdkFacade {
     };
     let query: Query | undefined;
     try {
-      query = this.options.discoveryQueryFactory
-        ? await this.options.discoveryQueryFactory({ options: queryOptions })
-        : await this.productionDiscoveryQuery(queryOptions);
-      await query.initializationResult();
-      const models = await query.getAvailableModels({ fetchStrategy: "live" });
+      query = await qoderModelDiscoveryStep(
+        this.options.discoveryQueryFactory
+          ? Promise.resolve(this.options.discoveryQueryFactory({ options: queryOptions }))
+          : this.productionDiscoveryQuery(queryOptions),
+        deadline
+      );
+      await qoderModelDiscoveryStep(query.initializationResult(), deadline);
+      const models = await qoderModelDiscoveryStep(query.getAvailableModels({ fetchStrategy: "live" }), deadline);
       if (!Array.isArray(models) || models.length === 0) throw new Error("Qoder model discovery returned no models");
       const normalized = models.filter(validModelInfo).map((model) => structuredClone(model));
       if (normalized.length === 0) throw new Error("Qoder model discovery returned malformed models");
@@ -404,6 +412,23 @@ class RealQoderSdkFacade implements QoderSdkFacade {
     const sdk = await import("@qoder-ai/qoder-agent-sdk");
     return sdk.query({ prompt: emptyPrompt(), options });
   }
+}
+
+function qoderModelDiscoveryStep<T>(operation: Promise<T>, deadline: number): Promise<T> {
+  const remainingMs = Math.max(1, deadline - Date.now());
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Qoder model discovery timed out")), remainingMs);
+    operation.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 function assertObservedPermissionMode(

@@ -56,12 +56,13 @@ test('session composer exposes a speed control backed by service tier', () => {
   assert.match(source, /serviceTierOptions\(effectiveModel, settings\.serviceTier\)/);
 });
 
-test('session model falls back to marked manual input when model discovery is unavailable', () => {
-  assert.match(source, /aria-label="手动填写模型 ID"/);
+test('session model remains a provider-scoped selector when discovery is unverified', () => {
+  assert.match(source, /availableProviderModels\(models\)/);
+  assert.match(source, /availableProviderModelValue\(settings\.model, modelOptions\)/);
   assert.match(source, /title=\{modelHint\(modelsLoading, modelsError\)\}/);
-  assert.match(source, /models\.map\(\(model\) => <option/);
-  assert.match(css, /\.session-composer-model-manual input/);
-  assert.match(source, /model\?\.verified === false/);
+  assert.match(source, /modelOptions\.map\(\(model\) => <option/);
+  assert.doesNotMatch(source, /手动填写模型 ID|<input|<datalist/);
+  assert.doesNotMatch(css, /session-composer-model-manual/);
   assert.match(source, /provider === 'qoder'/);
   assert.match(source, /当前模型不支持/);
 });

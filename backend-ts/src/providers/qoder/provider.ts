@@ -200,7 +200,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
         model: id,
         source: "static_suggestion",
         verified: false,
-        warning: "账号模型发现失败；此项仅为 Qoder 静态建议，可手工输入其他 model ID",
+        warning: "账号模型发现失败；请从 Qoder 静态建议中选择",
         discovery_error: redactModelError(error)
       }));
     }

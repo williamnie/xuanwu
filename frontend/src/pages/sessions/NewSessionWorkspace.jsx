@@ -3,6 +3,8 @@ import PromptEditor from '../../components/editor/PromptEditor';
 import SessionCommandPanel from './SessionCommandPanel';
 import { clearSessionCommandState, createSessionCommandState } from './sessionCommands';
 import {
+  availableProviderModels,
+  availableProviderModelValue,
   modelLabel,
   providerLabel as projectProviderLabel,
   serviceTierOptions,
@@ -176,39 +178,23 @@ function NewSessionPermissionControl({ settings, onSettingChange, providerCatalo
 }
 
 function NewSessionComposerActions({ settings, models, modelsError, modelsLoading, sending, canSubmit, onModelChange, onServiceTierChange, onSubmit }) {
-  const tierOptions = serviceTierOptions(effectiveModelForSettings(settings, models), settings.serviceTier);
-  const manualModel = Boolean(modelsError || models.some((model) => model?.verified === false));
+  const modelOptions = availableProviderModels(models);
+  const selectedModel = availableProviderModelValue(settings.model, modelOptions);
+  const tierOptions = serviceTierOptions(effectiveModelForSettings({ ...settings, model: selectedModel }, modelOptions), settings.serviceTier);
   return (
     <>
-      {manualModel ? (
-        <label className="composer-embedded-model-manual" title="模型列表未验证，可手工输入 Qoder model ID">
-          <Brain size={13} />
-          <input
-            aria-label="手动填写模型 ID"
-            list="new-session-provider-model-suggestions"
-            placeholder={`${projectProviderLabel(settings.provider)} 默认 / 手填 model ID`}
-            value={settings.model}
-            onChange={(event) => onModelChange(event.target.value)}
-          />
-          <datalist id="new-session-provider-model-suggestions">
-            {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{modelLabel(model)}</option>)}
-          </datalist>
-        </label>
-      ) : <div className="composer-embedded-select" title={modelsError ? `模型列表暂未加载：${modelsError}` : '模型'}>
+      <div className="composer-embedded-select" title={modelsError ? `模型列表暂未加载：${modelsError}` : '模型'}>
         <Brain size={13} />
-        <span>{modelsLoading ? '读取模型' : settings.model ? compactModelName(settings.model) : `${projectProviderLabel(settings.provider)} 默认`}</span>
-        <select disabled={modelsLoading} value={settings.model} onChange={(event) => onModelChange(event.target.value)}>
+        <span>{modelsLoading ? '读取模型' : selectedModel ? compactModelName(selectedModel) : `${projectProviderLabel(settings.provider)} 默认`}</span>
+        <select aria-label="模型" disabled={modelsLoading} value={selectedModel} onChange={(event) => onModelChange(event.target.value)}>
           <option value="">{projectProviderLabel(settings.provider)} 默认</option>
-          {models.map((model) => (
+          {modelOptions.map((model) => (
             <option key={model.id || model.model} value={model.id || model.model}>
               {compactModelName(modelLabel(model))}
             </option>
           ))}
-          {settings.model && !models.some((model) => model.id === settings.model || model.model === settings.model) ? (
-            <option value={settings.model}>{compactModelName(settings.model)}</option>
-          ) : null}
         </select>
-      </div>}
+      </div>
       {settings.provider !== 'qoder' ? <div className="composer-embedded-select">
         <Gauge size={13} />
         <span>{serviceTierLabel(settings, models)}</span>

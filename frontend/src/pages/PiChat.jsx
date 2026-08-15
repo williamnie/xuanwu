@@ -176,7 +176,7 @@ function ChatHeader({ state }) {
       title={t('chat.copyConversationDebugHint')}
     >
       <div className="pi-chat-title-group">
-        <span>{t('chat.chat')}</span>
+        <span>{PRODUCT_TERMS.productLatin} · Supervisor</span>
         <strong>{title}</strong>
       </div>
       <div className="pi-chat-header-actions">
@@ -265,6 +265,7 @@ function ConversationList({ conversations, emptyLabel, onSelect, selectedId, unr
               </span>
               <span className="pi-chat-conversation-meta">
                 <span>{formatConversationDate(conversation.last_activity_at || conversation.updated_at || conversation.created_at, language)}</span>
+                <span aria-hidden="true">·</span>
                 <span>{conversation.project_id ? `@${conversation.project_id}` : t('chat.global')}</span>
               </span>
             </button>
@@ -354,7 +355,7 @@ function ChatComposer({ state }) {
         showReferenceChips={false}
         onAttachReference={state.attachReference}
         onRemoveReference={state.removeReference}
-        runtimeControls={<PiChatComposerMeta project={composerProject(state)} />}
+        runtimeControls={<PiChatComposerMeta project={composerProject(state)} supervisor={state.supervisor} />}
         onStop={state.handleStop}
       />
     </div>
@@ -460,7 +461,7 @@ function openSupervisorSettings(navigateTo) {
 }
 
 function ChatBubble({ conversation, item }) {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const displayText = item.role === 'error' ? t('chat.turnIncomplete') : item.text;
   const assistant = item.role === 'assistant';
   const error = item.role === 'error';
@@ -475,6 +476,7 @@ function ChatBubble({ conversation, item }) {
           {assistant ? <Bot size={15} /> : error ? <AlertTriangle size={15} /> : <UserRound size={15} />}
         </span>
         <span className="pi-chat-bubble-role">{assistant ? PRODUCT_TERMS.productLatin : error ? t('chat.incomplete') : t('chat.you')}</span>
+        {item.created_at && <time className="pi-chat-bubble-time" dateTime={item.created_at}>{formatMessageTime(item.created_at, language)}</time>}
       </header>
       <div className="pi-chat-bubble-content">
         <PiChatMessageContent text={displayText} />
@@ -544,6 +546,16 @@ function formatConversationDate(value, language) {
     return new Intl.DateTimeFormat(language || 'zh-CN', { hour: '2-digit', minute: '2-digit' }).format(date);
   }
   return new Intl.DateTimeFormat(language || 'zh-CN', { month: 'numeric', day: 'numeric' }).format(date);
+}
+
+function formatMessageTime(value, language) {
+  const date = new Date(value || '');
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat(language || 'zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date);
 }
 
 function conversationRuntimePresentation(conversation, unread, t) {

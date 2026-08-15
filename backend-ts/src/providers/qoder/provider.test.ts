@@ -329,6 +329,7 @@ describe("Qoder Q5 models and usage", () => {
     const models = await provider(fake.facade).listModels() as Array<Record<string, unknown>>;
     expect(models.map((model) => model.id)).toEqual(["auto", "ultimate", "performance", "efficient", "lite"]);
     expect(models.every((model) => model.verified === false && model.source === "static_suggestion")).toBe(true);
+    expect(models.every((model) => model.warning === "账号模型发现失败；请从 Qoder 静态建议中选择")).toBe(true);
     expect(JSON.stringify(models)).not.toContain("fixture-secret");
     expect(JSON.stringify(models)).not.toMatch(/gpt-|codex-default/);
   });

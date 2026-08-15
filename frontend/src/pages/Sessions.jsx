@@ -23,7 +23,7 @@ import {
 } from './sessions/sessionMessageQueue';
 import { PROJECT_REQUIRED_MESSAGE, canCreateSession, readySessionProviders, resolveLastSessionProject } from './sessions/newSessionGuards';
 import { buildRunnerCommandRequest, clearSessionCommandState, validateSessionCommand } from './sessions/sessionCommands';
-import { defaultMessageSettings, defaultSessionSettings, sessionSettingsForProject, sessionSettingsForProvider } from './sessions/sessionOptions';
+import { availableProviderModelValue, defaultMessageSettings, defaultSessionSettings, sessionSettingsForProject, sessionSettingsForProvider } from './sessions/sessionOptions';
 import { orderedProjectsAfterMove } from './sessions/projectOrder';
 import { messageSettingsForRuntimeKey } from './sessions/sessionRuntimeSettings';
 import { hasComposerContent, sessionPayloadWithReferences } from './sessions/sessionReferences';
@@ -72,6 +72,7 @@ const SESSION_DETAIL_REFRESH_DELAY_MS = 250;
 const SESSION_DETAIL_RECONCILE_INTERVAL_MS = 30_000;
 const SESSION_LIST_RECONCILE_INTERVAL_MS = 30_000;
 const SESSION_LIST_REFRESH_DELAY_MS = 800;
+const PROVIDER_MODELS_TIMEOUT_MS = 15_000;
 
 export default function Sessions({
   autoSelectFirstSession = true,
@@ -134,6 +135,7 @@ export default function Sessions({
   const messageQueueRef = useRef(messageQueue);
   const activeQueuedSendsRef = useRef(new Set());
   const providerSelectionTouchedRef = useRef(false);
+  const modelRequestRef = useRef(0);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -280,19 +282,34 @@ export default function Sessions({
   }, [selectedId]);
 
   const loadModels = useCallback(async (provider = 'codex', runtimeStatus = null) => {
+    const requestId = modelRequestRef.current + 1;
+    modelRequestRef.current = requestId;
+    if (!provider) {
+      setModels([]);
+      setModelsError('');
+      setModelsLoading(false);
+      return;
+    }
     setModelsLoading(true);
+    setModels([]);
+    setModelsError('');
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), PROVIDER_MODELS_TIMEOUT_MS);
     try {
-      const result = await systemApi.getProviderModels(provider);
+      const result = await systemApi.getProviderModels(provider, { signal: controller.signal });
       const data = Array.isArray(result?.data?.data) ? result.data.data : result?.data;
+      if (modelRequestRef.current !== requestId) return;
       setModels(Array.isArray(data) ? data : []);
       setModelsError('');
     } catch (err) {
+      if (modelRequestRef.current !== requestId) return;
       const providerStatus = (runtimeStatus?.providers || []).find(item => item.id === provider);
       const defaultModel = String(providerStatus?.default_model || '').trim();
       setModels(defaultModel ? [{ id: defaultModel, displayName: defaultModel, isDefault: true }] : []);
-      setModelsError(err.message || `读取 ${provider} 模型列表失败，请手工输入 model ID`);
+      setModelsError(err.name === 'AbortError' ? `读取 ${provider} 模型列表超时` : err.message || `读取 ${provider} 模型列表失败`);
     } finally {
-      setModelsLoading(false);
+      window.clearTimeout(timeout);
+      if (modelRequestRef.current === requestId) setModelsLoading(false);
     }
   }, []);
 
@@ -513,7 +530,7 @@ export default function Sessions({
     const optimisticMessage = addOptimisticUserMessage(sessionId, promptText);
     try {
       const result = await runsApi.sendSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
-        model: settings.model,
+        model: availableProviderModelValue(settings.model, models),
         reasoning_effort: settings.reasoningEffort,
         service_tier: settings.serviceTier,
         approval_policy: settings.approvalPolicy,
@@ -529,18 +546,18 @@ export default function Sessions({
       removeOptimisticUserMessage(optimisticMessage?.id);
       throw err;
     }
-  }, [addOptimisticUserMessage, loadSelected, removeOptimisticUserMessage]);
+  }, [addOptimisticUserMessage, loadSelected, models, removeOptimisticUserMessage]);
 
   const steerSessionMessage = useCallback(async (sessionId, promptText, settings, references = []) => {
     await runsApi.steerSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
-      model: settings.model,
+      model: availableProviderModelValue(settings.model, models),
       reasoning_effort: settings.reasoningEffort,
       service_tier: settings.serviceTier,
       approval_policy: settings.approvalPolicy,
       sandbox: settings.sandbox,
       execution_policy: settings.executionPolicy,
     }, references));
-  }, []);
+  }, [models]);
 
   const sendQueuedMessage = useCallback(async (sessionId) => {
     const queued = nextPendingQueuedSessionMessage(messageQueueRef.current, sessionId);
@@ -759,7 +776,7 @@ export default function Sessions({
         project_id: projectId,
         provider: sessionSettings.provider,
         cwd,
-        model: sessionSettings.model,
+        model: availableProviderModelValue(sessionSettings.model, models),
         reasoning_effort: sessionSettings.reasoningEffort,
         service_tier: sessionSettings.serviceTier,
         approval_policy: sessionSettings.approvalPolicy,

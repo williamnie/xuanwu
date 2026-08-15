@@ -3,6 +3,8 @@ import PromptEditor from '../../components/editor/PromptEditor';
 import {
   REASONING_EFFORT_OPTIONS,
   SERVICE_TIER_STANDARD,
+  availableProviderModels,
+  availableProviderModelValue,
   modelLabel,
   serviceTierOptions,
   supportedEffortValues,
@@ -49,8 +51,10 @@ export default function SessionComposer({
   providerCatalog = [],
   requirePrompt = false,
 }) {
-  const selectedModel = models.find((model) => model.id === settings.model || model.model === settings.model);
-  const defaultModel = models.find((model) => model.isDefault) || models[0] || null;
+  const selectableModels = availableProviderModels(models);
+  const selectedModelValue = availableProviderModelValue(settings.model, selectableModels);
+  const selectedModel = selectableModels.find((model) => model.id === selectedModelValue || model.model === selectedModelValue);
+  const defaultModel = selectableModels.find((model) => model.isDefault) || selectableModels[0] || null;
   const effectiveModel = selectedModel || defaultModel;
   const effortOptions = visibleEffortOptions(effectiveModel, settings.reasoningEffort, settings.provider);
   const tierOptions = serviceTierOptions(effectiveModel, settings.serviceTier);
@@ -58,7 +62,7 @@ export default function SessionComposer({
     <RuntimeControls
       settings={settings}
       onSettingChange={onSettingChange}
-      models={models}
+      models={selectableModels}
       modelsLoading={modelsLoading}
       modelsError={modelsError}
       effortOptions={effortOptions}
@@ -172,40 +176,22 @@ function queueMessagePreview(item) {
 }
 
 function RuntimeControls({ settings, onSettingChange, models, modelsLoading, modelsError, effortOptions, tierOptions, effectiveModel, providerCatalog }) {
-  const manualModel = Boolean(modelsError || models.some((model) => model?.verified === false));
+  const modelOptions = availableProviderModels(models);
+  const selectedModel = availableProviderModelValue(settings.model, modelOptions);
   return (
     <>
       <PermissionSelect settings={settings} onSettingChange={onSettingChange} providerCatalog={providerCatalog} />
-      {manualModel ? (
-        <label className="session-composer-model-manual" title="模型列表未验证，可手工输入 Qoder model ID">
-          <Cpu size={14} />
-          <input
-            aria-label="手动填写模型 ID"
-            list="session-provider-model-suggestions"
-            placeholder="Provider 默认 / 手填 model ID"
-            value={settings.model}
-            onChange={(event) => onSettingChange('model', event.target.value)}
-          />
-          <datalist id="session-provider-model-suggestions">
-            {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{modelLabel(model)}</option>)}
-          </datalist>
-        </label>
-      ) : (
-        <CompactSelect
-          className="model"
-          icon={<Cpu size={14} />}
-          value={settings.model}
-          displayLabel={modelDisplayLabel(settings.model, effectiveModel, models)}
-          onChange={(value) => onSettingChange('model', value)}
-          title={modelHint(modelsLoading, modelsError)}
-        >
-          <option value="">{modelPlaceholder(modelsLoading, modelsError, effectiveModel)}</option>
-          {models.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{compactModelName(modelLabel(model))}</option>)}
-          {settings.model && !models.some((model) => model.id === settings.model || model.model === settings.model) && (
-            <option value={settings.model}>{settings.model}</option>
-          )}
-        </CompactSelect>
-      )}
+      <CompactSelect
+        className="model"
+        icon={<Cpu size={14} />}
+        value={selectedModel}
+        displayLabel={modelDisplayLabel(selectedModel, effectiveModel, modelOptions)}
+        onChange={(value) => onSettingChange('model', value)}
+        title={modelHint(modelsLoading, modelsError)}
+      >
+        <option value="">{modelPlaceholder(modelsLoading, modelsError, effectiveModel)}</option>
+        {modelOptions.map((model) => <option key={model.id || model.model} value={model.id || model.model}>{compactModelName(modelLabel(model))}</option>)}
+      </CompactSelect>
       <CompactSelect
         className="effort"
         icon={<Brain size={14} />}

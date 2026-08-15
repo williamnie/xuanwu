@@ -322,27 +322,6 @@
   cursor: pointer;
 }
 
-.composer-embedded-model-manual {
-  align-items: center;
-  display: flex;
-  gap: 5px;
-  color: var(--text-secondary);
-}
-
-/* 模型列表未验证时的手填输入：warning 语义 */
-.composer-embedded-model-manual input {
-  background: var(--warning-bg);
-  border: 1px solid color-mix(in srgb, var(--warning) 34%, transparent);
-  border-radius: var(--radius-xs);
-  color: var(--warning);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  height: 26px;
-  max-width: 150px;
-  outline: none;
-  padding: 0 8px;
-}
-
 /* 圆圈发送/创建按钮 */
 .composer-circle-submit {
   width: 32px;

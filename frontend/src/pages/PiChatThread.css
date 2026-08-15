@@ -208,6 +208,13 @@
   color: var(--info);
 }
 .pi-chat-bubble-role { color: var(--text-muted); font-size: .68rem; font-weight: 700; }
+.pi-chat-bubble-time {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: .59rem;
+  letter-spacing: .03em;
+  margin-left: auto;
+}
 .pi-chat-bubble-content > * + * { margin-top: 12px; }
 .pi-chat-markdown { color: var(--text-primary); font-size: .88rem; line-height: 1.68; max-width: 100%; overflow-wrap: anywhere; }
 .pi-chat-markdown :where(ol, ul) { display: flex; flex-direction: column; gap: .24rem; }

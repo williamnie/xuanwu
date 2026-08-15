@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { providerLabel, providerOptionsFromCatalog, sessionSettingsForProject, sessionSettingsForProvider } from './sessionOptions.js';
+import {
+  availableProviderModels,
+  availableProviderModelValue,
+  providerLabel,
+  providerOptionsFromCatalog,
+  sessionSettingsForProject,
+  sessionSettingsForProvider,
+} from './sessionOptions.js';
 
 test('provider catalog drives selector labels and readiness', () => {
   const catalog = [
@@ -39,4 +46,19 @@ test('an explicitly selected provider survives a later project selection', () =>
   assert.equal(settings.provider, 'claude');
   assert.equal(settings.model, '');
   assert.equal(settings.serviceTier, '');
+});
+
+test('model choices only retain models advertised by the selected Code Agent', () => {
+  const models = [
+    { id: 'gpt-5.6', displayName: 'GPT-5.6' },
+    { model: 'gpt-5.5' },
+    { id: 'hidden-preview', hidden: true },
+    { id: 'gpt-5.6', displayName: 'duplicate' },
+    { id: '' },
+  ];
+
+  assert.deepEqual(availableProviderModels(models).map((model) => model.id || model.model), ['gpt-5.6', 'gpt-5.5']);
+  assert.equal(availableProviderModelValue('gpt-5.6', models), 'gpt-5.6');
+  assert.equal(availableProviderModelValue('custom-model', models), '');
+  assert.equal(availableProviderModelValue('', models), '');
 });

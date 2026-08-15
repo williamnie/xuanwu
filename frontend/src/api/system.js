@@ -94,7 +94,7 @@ export const systemApi = {
     body: JSON.stringify({ enabled }),
   }),
 
-  getProviderModels: (id) => request(`/api/providers/${encodeURIComponent(id)}/models`),
+  getProviderModels: (id, options = {}) => request(`/api/providers/${encodeURIComponent(id)}/models`, options),
 
   resolveProviderExecutionPolicy: (id, payload) => request(`/api/providers/${encodeURIComponent(id)}/execution-policy/resolve`, {
     method: 'POST',

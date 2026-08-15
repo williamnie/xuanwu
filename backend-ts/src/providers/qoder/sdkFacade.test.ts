@@ -89,6 +89,20 @@ describe("Qoder Q2 real facade with offline fake streams", () => {
     expect(interrupts).toBe(2);
   });
 
+  test("model discovery has a bounded deadline and interrupts a stalled control query", async () => {
+    let interrupts = 0;
+    const facade = createQoderSdkFacade(config(1_000), {
+      modelDiscoveryTimeoutMs: 8,
+      discoveryQueryFactory: () => ({
+        initializationResult: () => new Promise(() => {}),
+        interrupt: async () => { interrupts += 1; },
+      } as unknown as Query),
+    });
+
+    await expect(facade.listModels()).rejects.toThrow("Qoder model discovery timed out");
+    expect(interrupts).toBe(1);
+  });
+
   test("projects result, model, assistant-request, and session Credits with explicit provenance", async () => {
     const facade = createQoderSdkFacade(config(1_000), {
       queryFactory: ({ options }) => {

@@ -129,6 +129,24 @@ export function modelLabel(model) {
   return model?.displayName || model?.id || model?.model || 'Unknown model';
 }
 
+export function availableProviderModels(models = []) {
+  const seen = new Set();
+  return (Array.isArray(models) ? models : []).filter((model) => {
+    const id = String(model?.id || model?.model || '').trim();
+    if (!id || model?.hidden === true || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+export function availableProviderModelValue(value, models = []) {
+  const selected = String(value || '').trim();
+  if (!selected) return '';
+  return availableProviderModels(models).some((model) => (model.id || model.model) === selected)
+    ? selected
+    : '';
+}
+
 export function supportedEffortValues(model) {
   const efforts = model?.supportedReasoningEfforts || [];
   return efforts.map((item) => item.reasoningEffort).filter(Boolean);
