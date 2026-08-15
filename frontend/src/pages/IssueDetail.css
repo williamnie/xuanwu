@@ -601,3 +601,48 @@
   .issue-log-actions { justify-content: flex-start; }
   .issue-detail-terminal { min-height: 340px; }
 }
+.issue-detail-loading {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 60vh;
+  justify-content: center;
+}
+
+.issue-detail-loading__spinner {
+  animation: spin 1s linear infinite;
+  border: 3px solid var(--border-color);
+  border-radius: 50%;
+  border-top-color: var(--primary);
+  height: 40px;
+  width: 40px;
+}
+
+.issue-detail-loading__text,
+.issue-detail-load-error__copy {
+  color: var(--text-secondary);
+}
+
+.issue-detail-load-error {
+  border-left: 4px solid var(--error);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+}
+
+.issue-detail-load-error__heading {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.issue-detail-load-error__title {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.issue-detail-load-error__back {
+  align-self: flex-start;
+}

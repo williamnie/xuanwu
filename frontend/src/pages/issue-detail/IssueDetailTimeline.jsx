@@ -26,6 +26,7 @@ import {
 } from './issueDetailEventAdapters';
 import { formatDateTime, providerLabel, summarize } from './issueDetailFormatters';
 import { LOG_PAGE_SIZE } from './issueDetailConstants';
+import './IssueDetailTimeline.css';
 
 const COMMENT_AUTHOR_LABELS = {
   user: 'User',
@@ -290,7 +291,7 @@ function TerminalLines({ events }) {
   const mergedEvents = mergeIssueLogEvents(events);
   if (mergedEvents.length === 0) {
     return (
-      <div style={{ color: '#565f89', textAlign: 'center', padding: '40px 0', fontStyle: 'italic' }}>
+      <div className="issue-terminal-empty">
         [ 等待事件输出 / 当前暂无控制台日志 ]
       </div>
     );
@@ -331,22 +332,22 @@ function TerminalLines({ events }) {
       const text = event._textMerged || agent.text || event.text || '';
 
       if (agent.type === 'agent.message.delta') {
-        return <div key={event.id || idx} className="terminal-line output" style={{ color: '#9ece6a' }}>{text}</div>;
+        return <div key={event.id || idx} className="terminal-line output issue-terminal-agent-output">{text}</div>;
       }
       if (agent.type === 'agent.command.output_delta') {
         return <div key={event.id || idx} className="terminal-line output">{text}</div>;
       }
       if (agent.type === 'agent.command.started' || agent.type === 'agent.command.completed' || method.includes('command')) {
-        return <div key={event.id || idx} className="terminal-line info" style={{ fontWeight: 600 }}>$ {commandLineText({ ...agent, text })}</div>;
+        return <div key={event.id || idx} className="terminal-line info issue-terminal-command">$ {commandLineText({ ...agent, text })}</div>;
       }
       if (agent.type === 'agent.file.patch') {
         const patchLines = text.split('\n');
         return (
           <div key={event.id || idx} className="diff-container">
-            <div style={{ padding: '4px 8px', background: 'rgba(255,255,255,0.05)', fontSize: '0.75rem', color: '#7aa2f7', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <div className="issue-terminal-patch-header">
               📂 文件修改补丁 Patch
             </div>
-            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            <div className="issue-terminal-patch-body">
               {patchLines.map((line, lineIndex) => {
                 let lineClass = 'diff-line';
                 if (line.startsWith('+')) lineClass += ' added';
@@ -361,7 +362,7 @@ function TerminalLines({ events }) {
     }
 
     return (
-      <div key={event.id || idx} className="terminal-line" style={{ opacity: 0.8 }}>
+      <div key={event.id || idx} className="terminal-line issue-terminal-raw-event">
         [{timestamp}] {JSON.stringify(event)}
       </div>
     );

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Bot, CheckCircle2, KeyRound } from 'lucide-react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
+import './FeishuSettingsPanel.css';
 
 const DEFAULT_FORM = {
   allowed_chat_ids: '',
@@ -17,18 +18,12 @@ const DEFAULT_FORM = {
   verification_token: '',
 };
 
-const fieldGridStyle = {
-  display: 'grid',
-  gap: '12px',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-};
-
 export default function FeishuSettingsPanel() {
   const state = useFeishuSettings();
   return (
-    <section className="glass-card" id="feishu-connection-settings" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <section className="glass-card feishu-settings" id="feishu-connection-settings">
       <PanelHeader status={state.remote?.status} enabled={state.remote?.enabled} />
-      {state.error && <div style={{ color: 'var(--error)', fontSize: '0.82rem' }}>{state.error}</div>}
+      {state.error && <div className="feishu-settings__error">{state.error}</div>}
       <SettingsForm {...state} />
     </section>
   );
@@ -54,12 +49,12 @@ function useFeishuSettings() {
 
 function PanelHeader({ enabled, status }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'flex-start' }}>
+    <div className="feishu-settings__header">
       <div>
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <h2 className="feishu-settings__heading">
           <Bot size={18} color="var(--primary)" /> 飞书 Bot
         </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
+        <p className="feishu-settings__description">
           默认使用飞书长连接模式，本机 runner 主动连飞书；无需公网域名或内网穿透。
         </p>
       </div>
@@ -71,8 +66,8 @@ function PanelHeader({ enabled, status }) {
 function StatusPill({ enabled, status }) {
   const text = enabled ? 'configured' : status || 'disabled';
   return (
-    <span style={{ alignItems: 'center', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-xs)', display: 'inline-flex', fontSize: '0.76rem', gap: '6px', padding: '6px 10px' }}>
-      <span className={`status-dot ${enabled ? 'active' : 'idle'}`} style={{ height: '7px', width: '7px' }} />
+    <span className="feishu-settings__status">
+      <span className={`status-dot feishu-settings__status-dot ${enabled ? 'active' : 'idle'}`} />
       {text}
     </span>
   );
@@ -81,10 +76,10 @@ function StatusPill({ enabled, status }) {
 function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit }) {
   if (loading) return <PanelLoader label="玄武正在读取飞书配置…" />;
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+    <form className="feishu-settings__form" onSubmit={handleSubmit}>
       <ReceiveModeHint callbackPath={remote?.callback_path} receiveMode={form.receive_mode} settingsFile={remote?.settings_file} />
       <ReceiveModeField value={form.receive_mode} onChange={(value) => updateField('receive_mode', value)} />
-      <div style={fieldGridStyle}>
+      <div className="feishu-settings__field-grid">
         <TextField label="App ID" value={form.app_id} onChange={(value) => updateField('app_id', value)} placeholder="cli_xxx" />
         <SecretField configured={remote?.app_secret_configured} label="App Secret" value={form.app_secret} onChange={(value) => updateField('app_secret', value)} />
         <SecretField configured={remote?.verification_token_configured} label="Verification Token" optional value={form.verification_token} onChange={(value) => updateField('verification_token', value)} />
@@ -103,11 +98,11 @@ function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit
 function ReceiveModeHint({ callbackPath, receiveMode, settingsFile }) {
   const isCallback = receiveMode === 'callback';
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px' }}>
-      <div style={{ alignItems: 'center', display: 'flex', gap: '8px', fontWeight: 700 }}>
+    <div className="feishu-settings__hint">
+      <div className="feishu-settings__hint-title">
         <KeyRound size={15} color="var(--primary)" /> 飞书事件接收：{isCallback ? 'HTTP 回调' : '长连接'}
       </div>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '6px', wordBreak: 'break-all' }}>
+      <div className="feishu-settings__hint-copy">
         {isCallback ? <>Request URL 填：<code>{callbackPath || '/api/integrations/feishu/events'}</code>；</> : '本机主动连接飞书开放平台，无需公网域名；'}
         本地配置文件：<code>{settingsFile || 'runner-settings.local.json'}</code>
       </div>
@@ -117,7 +112,7 @@ function ReceiveModeHint({ callbackPath, receiveMode, settingsFile }) {
 
 function ReceiveModeField({ onChange, value }) {
   return (
-    <label className="form-group" style={{ marginBottom: 0 }}>
+    <label className="form-group feishu-settings__field">
       <span>Receive Mode</span>
       <select className="form-control" value={value || 'websocket'} onChange={(event) => onChange(event.target.value)}>
         <option value="websocket">长连接 WebSocket（推荐，无需公网域名）</option>
@@ -129,7 +124,7 @@ function ReceiveModeField({ onChange, value }) {
 
 function TextField({ label, value, onChange, placeholder }) {
   return (
-    <label className="form-group" style={{ marginBottom: 0 }}>
+    <label className="form-group feishu-settings__field">
       <span>{label}</span>
       <input className="form-control" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
     </label>
@@ -138,8 +133,8 @@ function TextField({ label, value, onChange, placeholder }) {
 
 function SecretField({ configured, label, onChange, optional = false, value }) {
   return (
-    <label className="form-group" style={{ marginBottom: 0 }}>
-      <span>{label} {optional && <small style={{ color: 'var(--text-muted)' }}>(可选)</small>}</span>
+    <label className="form-group feishu-settings__field">
+      <span>{label} {optional && <small className="feishu-settings__optional">(可选)</small>}</span>
       <input className="form-control" type="password" value={value} onChange={(event) => onChange(event.target.value)} placeholder={configured ? '已配置，留空不覆盖' : '未配置'} />
     </label>
   );
@@ -147,7 +142,7 @@ function SecretField({ configured, label, onChange, optional = false, value }) {
 
 function TextAreaField({ label, onChange, placeholder, value }) {
   return (
-    <label className="form-group" style={{ marginBottom: 0 }}>
+    <label className="form-group feishu-settings__field">
       <span>{label}</span>
       <textarea className="form-control" rows={2} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
     </label>
@@ -157,8 +152,8 @@ function TextAreaField({ label, onChange, placeholder, value }) {
 function Footer({ remote, saving }) {
   const missing = remote?.missing_required || [];
   return (
-    <div style={{ alignItems: 'center', display: 'flex', gap: '12px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-      <div style={{ color: missing.length ? 'var(--warning)' : 'var(--text-muted)', fontSize: '0.78rem' }}>
+    <div className="feishu-settings__footer">
+      <div className={`feishu-settings__footer-status${missing.length ? ' is-warning' : ''}`}>
         {missing.length ? `缺少：${missing.join(', ')}` : <><CheckCircle2 size={14} /> 飞书必填凭据已配置</>}
       </div>
       <button className="btn btn-primary" disabled={saving}>{saving ? '保存中...' : '保存飞书 Bot'}</button>

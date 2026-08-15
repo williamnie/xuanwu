@@ -1,0 +1,161 @@
+.connector-diagnostics,
+.connector-diagnostics__body,
+.connector-diagnostics__card,
+.connector-diagnostics__meta {
+  display: grid;
+}
+
+.connector-diagnostics {
+  gap: 16px;
+}
+
+.connector-diagnostics__error {
+  color: var(--error);
+  font-size: 0.86rem;
+}
+
+.connector-diagnostics__header,
+.connector-diagnostics__heading,
+.connector-diagnostics__card-header,
+.connector-diagnostics__summary,
+.connector-diagnostics__actions,
+.connector-diagnostics__meta-value {
+  align-items: center;
+  display: flex;
+}
+
+.connector-diagnostics__header,
+.connector-diagnostics__card-header {
+  justify-content: space-between;
+}
+
+.connector-diagnostics__header {
+  gap: 16px;
+}
+
+.connector-diagnostics__heading {
+  font-size: 1.1rem;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.connector-diagnostics__description {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-top: 4px;
+}
+
+.connector-diagnostics__empty {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.connector-diagnostics__body,
+.connector-diagnostics__grid {
+  gap: 12px;
+}
+
+.connector-diagnostics__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.connector-diagnostics__summary,
+.connector-diagnostics__actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.connector-diagnostics__badge {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.connector-diagnostics__badge.is-configured {
+  background: var(--success-glow);
+}
+
+.connector-diagnostics__badge.is-configured,
+.connector-diagnostics__status.is-configured {
+  color: var(--success);
+}
+
+.connector-diagnostics__badge.is-error,
+.connector-diagnostics__badge.is-misconfigured,
+.connector-diagnostics__status.is-error,
+.connector-diagnostics__status.is-misconfigured {
+  color: var(--warning);
+}
+
+.connector-diagnostics__card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  gap: 10px;
+  padding: 14px;
+}
+
+.connector-diagnostics__card-header {
+  gap: 10px;
+}
+
+.connector-diagnostics__card-title,
+.connector-diagnostics__status {
+  font-weight: 800;
+}
+
+.connector-diagnostics__card-subtitle {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  margin-top: 2px;
+}
+
+.connector-diagnostics__status {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.connector-diagnostics__guide {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  display: grid;
+  font-size: 0.78rem;
+  gap: 7px;
+  line-height: 1.5;
+  padding: 10px;
+}
+
+.connector-diagnostics__muted,
+.connector-diagnostics__meta-label {
+  color: var(--text-muted);
+}
+
+.connector-diagnostics__refs {
+  overflow-wrap: anywhere;
+}
+
+.connector-diagnostics__meta {
+  gap: 4px;
+}
+
+.connector-diagnostics__meta-label {
+  font-size: 0.72rem;
+}
+
+.connector-diagnostics__meta-value {
+  font-size: 0.84rem;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.connector-diagnostics__dot {
+  flex: 0 0 auto;
+  height: 7px;
+  width: 7px;
+}

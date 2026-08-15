@@ -1,0 +1,31 @@
+.issue-terminal-empty {
+  color: #565f89;
+  font-style: italic;
+  padding: 40px 0;
+  text-align: center;
+}
+
+.issue-terminal-agent-output {
+  color: #9ece6a;
+}
+
+.issue-terminal-command {
+  font-weight: 600;
+}
+
+.issue-terminal-patch-header {
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #7aa2f7;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+}
+
+.issue-terminal-patch-body {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.issue-terminal-raw-event {
+  opacity: 0.8;
+}

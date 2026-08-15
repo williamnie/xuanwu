@@ -1,0 +1,117 @@
+.issues-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  height: 100%;
+}
+
+.issues-page__count {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.issues-page__header-actions,
+.issues-page__modal-header,
+.issues-page__modal-title,
+.issues-page__form-actions {
+  align-items: center;
+  display: flex;
+}
+
+.issues-page__header-actions,
+.issues-page__form-actions {
+  gap: 10px;
+}
+
+.issues-page__new-button {
+  font-size: 0.78rem;
+  padding: 6px 12px;
+}
+
+.kanban-column-dot.is-triage { background: #fbbf24; }
+.kanban-column-dot.is-todo { background: #64748b; }
+.kanban-column-dot.is-in_progress { background: #3b82f6; }
+.kanban-column-dot.is-failed { background: #ef4444; }
+.kanban-column-dot.is-done { background: #10b981; }
+.kanban-column-dot.is-cancelled { background: #ef4444; }
+
+.issues-page__create-modal {
+  max-width: 760px;
+  padding: 24px;
+}
+
+.issues-page__modal-header {
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.issues-page__modal-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.issues-page__modal-close {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.issues-page__create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.issues-page__form-error {
+  background: var(--error-bg);
+  border-radius: var(--radius-xs);
+  color: var(--error);
+  font-size: 0.78rem;
+  padding: 8px 12px;
+}
+
+.issues-page__project-warning {
+  background: var(--warning-bg);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8rem;
+  gap: 4px;
+  padding: 10px 14px;
+}
+
+.issues-page__project-warning strong {
+  font-weight: 600;
+}
+
+.issues-page__source-meta {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  padding: 10px 14px;
+}
+
+.issues-page__field-help {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.issues-page__form-actions {
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.issues-page__cancel-button {
+  padding: 6px 12px;
+}
+
+.issues-page__submit-button {
+  padding: 6px 16px;
+}

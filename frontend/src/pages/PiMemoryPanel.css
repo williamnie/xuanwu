@@ -1,0 +1,124 @@
+.pi-memory-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pi-memory-panel__header,
+.pi-memory-panel__card-header,
+.pi-memory-panel__controls,
+.pi-memory-panel__small-field {
+  align-items: center;
+  display: flex;
+}
+
+.pi-memory-panel__header,
+.pi-memory-panel__card-header {
+  justify-content: space-between;
+}
+
+.pi-memory-panel__header {
+  gap: 12px;
+}
+
+.pi-memory-panel__heading {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.pi-memory-panel__description {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin-top: 4px;
+}
+
+.pi-memory-panel__error {
+  color: var(--error);
+  font-size: 0.86rem;
+}
+
+.pi-memory-panel__summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.pi-memory-panel__summary-copy {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  grid-column: 1 / -1;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.pi-memory-panel__summary-pill,
+.pi-memory-panel__card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 10px;
+}
+
+.pi-memory-panel__summary-label {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.pi-memory-panel__summary-value {
+  color: var(--text-primary);
+  font-size: 0.98rem;
+}
+
+.pi-memory-panel__card {
+  padding: 12px;
+}
+
+.pi-memory-panel__form-title {
+  font-size: 0.94rem;
+  margin-bottom: 8px;
+}
+
+.pi-memory-panel__controls {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pi-memory-panel__empty {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.pi-memory-panel__list {
+  display: grid;
+  gap: 10px;
+}
+
+.pi-memory-panel__card-header {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pi-memory-panel__state {
+  color: var(--success);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.pi-memory-panel__state.is-disabled,
+.pi-memory-panel__meta,
+.pi-memory-panel__small-field {
+  color: var(--text-muted);
+}
+
+.pi-memory-panel__small-field {
+  font-size: 0.78rem;
+  gap: 6px;
+}
+
+.pi-memory-panel__small-control {
+  width: 170px;
+}

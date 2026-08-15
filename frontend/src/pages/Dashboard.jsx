@@ -22,6 +22,7 @@ import {
   Terminal, 
   AlertTriangle
 } from 'lucide-react';
+import './Dashboard.css';
 
 export default function Dashboard({
   navigateTo,
@@ -79,7 +80,7 @@ export default function Dashboard({
   const doneIssues = issues.filter(i => i.status === 'done');
 
   return (
-    <div className="dashboard-page animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+    <div className="dashboard-page animate-fade-in">
       
       {/* 头部标题区域 */}
       <div className="page-intro">
@@ -98,7 +99,7 @@ export default function Dashboard({
       {/* 错误警报 */}
       {!backendOnline && (
         <div className="glass-card dashboard-alert dashboard-alert-error">
-          <AlertTriangle color="var(--error)" size={24} style={{ flexShrink: 0 }} />
+          <AlertTriangle className="dashboard-alert-icon" color="var(--error)" size={24} />
           <div>
             <h4>连接后端 API 失败</h4>
             <p>无法连接到 Runner 后端服务。请确认当前 API 入口已启动且 /api/* 接口可用。</p>
@@ -176,36 +177,36 @@ export default function Dashboard({
                 <div className="dashboard-events-empty">[等待事件接收...]</div>
               ) : (
                 events.map(event => {
-                  let badgeColor = '#7aa2f7'; // default blue
+                  let badgeTone = 'default';
                   let text;
 
                   switch (event.type) {
                     case 'issue.created':
-                      badgeColor = '#bb9af7';
+                      badgeTone = 'created';
                       text = `新建任务 Issue #${event.issueId}`;
                       break;
                     case 'issue.status_changed':
-                      badgeColor = event.status === 'done' ? 'var(--success)' : event.status === 'failed' ? 'var(--error)' : 'var(--warning)';
+                      badgeTone = event.status === 'done' ? 'success' : event.status === 'failed' ? 'error' : 'warning';
                       text = `Issue #${event.issueId} 状态变更 -> ${event.status}`;
                       break;
                     case 'issue.log':
-                      badgeColor = '#cfc9c2';
+                      badgeTone = 'log';
                       text = `Issue #${event.issueId} 日志输出: ${event.text ? event.text.slice(0, 40) + '...' : ''}`;
                       break;
                     case 'issue.error':
-                      badgeColor = 'var(--error)';
+                      badgeTone = 'error';
                       text = `Issue #${event.issueId} 执行失败: ${event.error}`;
                       break;
                     case 'runner.started':
-                      badgeColor = 'var(--success)';
+                      badgeTone = 'success';
                       text = `项目 Loop [${event.projectId}] 已启动`;
                       break;
                     case 'runner.stopped':
-                      badgeColor = 'var(--triage)';
+                      badgeTone = 'triage';
                       text = `项目 Loop [${event.projectId}] 已停止`;
                       break;
                     case 'approval.required':
-                      badgeColor = 'var(--warning)';
+                      badgeTone = 'warning';
                       text = `Issue #${event.issueId} 触发人工审批请求 [ID: ${event.approvalId}]`;
                       break;
                     default:
@@ -215,7 +216,7 @@ export default function Dashboard({
                   return (
                     <div key={event.viewId} className="dashboard-event-row">
                       <span className="dashboard-event-text">
-                        <span style={{ color: badgeColor }}>•</span>
+                        <span className={`dashboard-event-dot is-${badgeTone}`}>•</span>
                         <span>{text}</span>
                       </span>
                       <span className="dashboard-event-time">{event.timestamp}</span>

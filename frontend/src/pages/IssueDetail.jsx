@@ -65,22 +65,22 @@ export default function IssueDetail({ issueId, navigateTo }) {
 
   if (loading && !issue) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '16px' }}>
-        <div style={{ width: '40px', height: '40px', border: '3px solid var(--border-color)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-        <p style={{ color: 'var(--text-secondary)' }}>载入任务详情中...</p>
+      <div className="issue-detail-loading">
+        <div className="issue-detail-loading__spinner" />
+        <p className="issue-detail-loading__text">载入任务详情中...</p>
       </div>
     );
   }
 
   if (error || !issue) {
     return (
-      <div className="glass-card" style={{ borderLeft: '4px solid var(--error)', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+      <div className="glass-card issue-detail-load-error">
+        <div className="issue-detail-load-error__heading">
           <XCircle color="var(--error)" size={24} />
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 600 }}>任务加载失败</h3>
+          <h3 className="issue-detail-load-error__title">任务加载失败</h3>
         </div>
-        <p style={{ color: 'var(--text-secondary)' }}>{error || '找不到请求的 Issue 任务数据。'}</p>
-        <button className="btn btn-secondary" style={{ alignSelf: 'flex-start' }} onClick={() => navigateTo('issues')}>
+        <p className="issue-detail-load-error__copy">{error || '找不到请求的 Issue 任务数据。'}</p>
+        <button className="btn btn-secondary issue-detail-load-error__back" onClick={() => navigateTo('issues')}>
           <ArrowLeft size={16} /> 返回任务队列
         </button>
       </div>

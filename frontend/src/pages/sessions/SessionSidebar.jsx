@@ -4,6 +4,7 @@ import { MessageSquarePlus, Pin } from 'lucide-react';
 import TurtleLoader from '../../components/TurtleLoader';
 import VirtualSessionList from './VirtualSessionList';
 import { providerLabel } from './sessionPageRuntime';
+import './SessionSidebar.css';
 
 const SESSION_APP_SIDEBAR_SLOT_ID = 'sessions-app-sidebar-slot';
 const PINNED_SESSIONS_STORAGE_KEY = 'codex-pinned-sessions';
@@ -79,7 +80,7 @@ export default function SessionSidebar({
                     title="取消置顶"
                     type="button"
                   >
-                    <Pin size={11} fill="currentColor" style={{ transform: 'rotate(45deg)', color: 'var(--primary)' }} />
+                    <Pin className="pinned-session-icon" size={11} fill="currentColor" />
                   </button>
                 </div>
               </button>

@@ -177,43 +177,36 @@ export default function Projects() {
 
       <div className="settings-project-panel-body">
         {!backendOnline && (
-          <div className="glass-card" style={{ borderLeft: '4px solid var(--error)', display: 'flex', gap: '16px', alignItems: 'center', padding: '16px 24px', background: 'var(--error-bg)' }}>
-            <AlertCircle color="var(--error)" size={24} style={{ flexShrink: 0 }} />
+          <div className="glass-card projects-notice is-error">
+            <AlertCircle className="projects-notice-icon" color="var(--error)" size={24} />
             <div>
-              <h4 style={{ color: 'var(--error)', fontWeight: 600 }}>API 连接错误</h4>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>加载数据失败，请检查当前 Runner 后端服务连接。</p>
+              <h4 className="projects-notice-title">API 连接错误</h4>
+              <p className="projects-notice-copy">加载数据失败，请检查当前 Runner 后端服务连接。</p>
             </div>
           </div>
         )}
 
         {syncResult && (
-          <div className="glass-card" style={{
-            borderLeft: `4px solid ${syncResult.error ? 'var(--error)' : 'var(--success)'}`,
-            display: 'flex',
-            gap: '16px',
-            alignItems: 'flex-start',
-            padding: '16px 24px',
-            background: syncResult.error ? 'var(--error-bg)' : 'rgba(16,185,129,0.08)'
-          }}>
+          <div className={`glass-card projects-notice ${syncResult.error ? 'is-error' : 'is-success'}`}>
             {syncResult.error ? (
-              <AlertCircle color="var(--error)" size={22} style={{ flexShrink: 0 }} />
+              <AlertCircle className="projects-notice-icon" color="var(--error)" size={22} />
             ) : (
-              <CheckCircle2 color="var(--success)" size={22} style={{ flexShrink: 0 }} />
+              <CheckCircle2 className="projects-notice-icon" color="var(--success)" size={22} />
             )}
-            <div style={{ flex: 1 }}>
-              <h4 style={{ color: syncResult.error ? 'var(--error)' : 'var(--success)', fontWeight: 600 }}>
+            <div className="projects-notice-body">
+              <h4 className="projects-notice-title">
                 {syncResult.error ? '同步失败' : 'Codex 项目同步完成'}
               </h4>
               {syncResult.error ? (
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{syncResult.error}</p>
+                <p className="projects-notice-copy">{syncResult.error}</p>
               ) : (
                 <>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  <p className="projects-notice-copy">
                     新增 {syncResult.summary?.created || 0} 个，已存在 {syncResult.summary?.existing || 0} 个，
                     跳过 {syncResult.summary?.skipped || 0} 个。来源：{syncResult.source}
                   </p>
                   {(syncResult.skipped || []).length > 0 && (
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+                    <p className="projects-notice-detail">
                       跳过示例：{syncResult.skipped.slice(0, 3).map(item => `${item.cwd} (${item.reason})`).join('；')}
                     </p>
                   )}
@@ -225,13 +218,13 @@ export default function Projects() {
 
         {/* 项目网格卡片 */}
         {projects.length === 0 ? (
-          <div className="glass-card" style={{ textAlign: 'center', padding: '80px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-            <Folder size={48} color="var(--text-muted)" style={{ opacity: 0.5 }} />
+          <div className="glass-card projects-empty">
+            <Folder className="projects-empty-icon" size={48} color="var(--text-muted)" />
             <div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '8px' }}>暂无监控项目</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', maxWidth: '400px' }}>添加本地项目路径，或从已有 Codex 项目中同步。</p>
+              <h3 className="projects-empty-title">暂无监控项目</h3>
+              <p className="projects-empty-copy">添加本地项目路径，或从已有 Codex 项目中同步。</p>
             </div>
-            <button className="btn btn-primary" style={{ marginTop: '8px' }} onClick={handleOpenCreateModal}>
+            <button className="btn btn-primary projects-empty-primary" onClick={handleOpenCreateModal}>
               添加项目
             </button>
             <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing}>

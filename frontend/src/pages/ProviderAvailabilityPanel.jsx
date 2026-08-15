@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { KeyRound, RefreshCw } from 'lucide-react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { providerAuthenticationText, providerRuntimeText } from './providerAvailabilityModel.js';
+import './ProviderAvailabilityPanel.css';
 
 export default function ProviderAvailabilityPanel() {
   const [status, setStatus] = useState(null);
@@ -13,9 +14,9 @@ export default function ProviderAvailabilityPanel() {
 
   const providers = status?.providers || [];
   return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <section className="glass-card provider-availability">
       <PanelHeader loading={loading} onRefresh={() => loadStatus(setStatus, setError, setLoading)} />
-      {error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{error}</div>}
+      {error && <div className="provider-availability__error">{error}</div>}
       {!error && <ProviderBody loading={loading} status={status} providers={providers} />}
     </section>
   );
@@ -31,12 +32,12 @@ function loadStatus(setStatus, setError, setLoading) {
 
 function PanelHeader({ loading, onRefresh }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+    <div className="provider-availability__header">
       <div>
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <h2 className="provider-availability__heading">
           <KeyRound size={18} color="var(--primary)" /> Provider Settings
         </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
+        <p className="provider-availability__description">
           显示运行模式和安全认证摘要；不会返回 token、API key 或 credential 文件内容。
         </p>
       </div>
@@ -53,14 +54,14 @@ function ProviderBody({ loading, status, providers }) {
     return <PanelLoader label="正在确认 Provider 状态…" />;
   }
   if (providers.length === 0) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>暂无 provider 状态</div>;
+    return <div className="provider-availability__empty">暂无 provider 状态</div>;
   }
   return <ProviderGrid providers={providers} />;
 }
 
 function ProviderGrid({ providers }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+    <div className="provider-availability__grid">
       {providers.map(provider => <ProviderCard key={provider.id} provider={provider} />)}
     </div>
   );
@@ -68,19 +69,18 @@ function ProviderGrid({ providers }) {
 
 function ProviderCard({ provider }) {
   const ok = provider.status === 'available';
-  const statusColor = ok ? 'var(--success)' : 'var(--text-muted)';
   return (
-    <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '14px', background: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
-        <div style={{ fontWeight: 800 }}>{provider.label || provider.id}</div>
-        <span style={{ color: statusColor, fontSize: '0.78rem', fontWeight: 700 }}>
+    <div className="provider-availability__card">
+      <div className="provider-availability__card-header">
+        <div className="provider-availability__card-title">{provider.label || provider.id}</div>
+        <span className={`provider-availability__status${ok ? ' is-available' : ''}`}>
           {providerStatusLabel(provider)}
         </span>
       </div>
       <ProviderMeta label="Runtime" value={providerRuntimeText(provider)} ok={provider.ready ?? provider.cli?.available} />
       <ProviderMeta label="Auth" value={providerAuthenticationText(provider)} ok={provider.auth_configured ?? provider.secrets?.api_key?.configured} />
       {provider.id !== 'claude' && <ProviderMeta label="CLI" value={providerCLIText(provider)} ok={provider.cli?.available} />}
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.5 }}>
+      <div className="provider-availability__capabilities">
         {provider.enabled ? `已启用：${providerCapabilityText(provider)}` : '仅展示配置状态，暂不启用执行'}
       </div>
     </div>
@@ -95,10 +95,10 @@ function providerCapabilityText(provider) {
 
 function ProviderMeta({ label, value, ok }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{label}</span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.84rem', wordBreak: 'break-word' }}>
-        <span className={`status-dot ${ok ? 'active' : 'idle'}`} style={{ width: '7px', height: '7px', flex: '0 0 auto' }}></span>
+    <div className="provider-availability__meta">
+      <span className="provider-availability__meta-label">{label}</span>
+      <span className="provider-availability__meta-value">
+        <span className={`status-dot provider-availability__dot ${ok ? 'active' : 'idle'}`}></span>
         {value}
       </span>
     </div>

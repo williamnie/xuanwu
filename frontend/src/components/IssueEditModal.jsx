@@ -14,6 +14,7 @@ import {
   issueToEditDraft,
   validateIssueDraft,
 } from '../utils/issueEdit';
+import './IssueEditModal.css';
 
 const PRIORITY_OPTIONS = [
   { value: '0', label: '普通优先级' },
@@ -95,9 +96,9 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
 
   return createPortal(
     <div className="modal-overlay">
-      <div className="glass-card modal-content" style={{ maxWidth: '780px', padding: '24px', maxHeight: 'calc(100vh - 48px)', overflowY: 'auto' }}>
+      <div className="glass-card modal-content issue-edit-modal">
         <ModalHeader issue={issue} onClose={onClose} />
-        <form onSubmit={submitEdit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <form className="issue-edit-modal__form" onSubmit={submitEdit}>
           {error && <EditError message={error} />}
           <ProjectField projects={projects} value={draft.project_id} onChange={(value) => setField('project_id', value)} />
           <AgentProfileField
@@ -129,7 +130,7 @@ function AgentProfileField({ catalog, inheritedProviderAvailable, loading, onCha
         </option>
         <AgentProfileSelectOptions catalog={catalog} profiles={profiles} selectedProfileID={value} />
       </select>
-      <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+      <span className="issue-edit-modal__help">
         历史选择当前不可用时会保留显示；只有改选时才要求 Code Agent 已就绪。
       </span>
     </div>
@@ -158,14 +159,14 @@ function editValidationError(issue, draft) {
 
 function ModalHeader({ issue, onClose }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+    <div className="issue-edit-modal__header">
       <div>
-        <h3 style={{ fontSize: '1.12rem', fontWeight: 700 }}>编辑 Triage Issue #{issue.id}</h3>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '4px' }}>
+        <h3 className="issue-edit-modal__title">编辑 Triage Issue #{issue.id}</h3>
+        <p className="issue-edit-modal__description">
           修改会直接保存到运行前的 Issue 内容；进入 Todo / In Progress 后不再开放编辑。
         </p>
       </div>
-      <button type="button" style={{ background: 'transparent', color: 'var(--text-muted)', border: 'none', cursor: 'pointer' }} onClick={onClose}>
+      <button className="issue-edit-modal__close" type="button" onClick={onClose}>
         <X size={18} />
       </button>
     </div>
@@ -217,7 +218,7 @@ function PriorityField({ value, onChange }) {
 
 function EditError({ message }) {
   return (
-    <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.78rem' }}>
+    <div className="issue-edit-modal__error">
       {message}
     </div>
   );
@@ -225,11 +226,11 @@ function EditError({ message }) {
 
 function ModalActions({ saving, onClose }) {
   return (
-    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
-      <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={onClose} disabled={saving}>
+    <div className="issue-edit-modal__actions">
+      <button type="button" className="btn btn-secondary issue-edit-modal__cancel" onClick={onClose} disabled={saving}>
         取消
       </button>
-      <button type="submit" className="btn btn-primary" style={{ padding: '6px 16px' }} disabled={saving}>
+      <button type="submit" className="btn btn-primary issue-edit-modal__submit" disabled={saving}>
         <Save size={14} /> {saving ? '保存中...' : '保存修改'}
       </button>
     </div>

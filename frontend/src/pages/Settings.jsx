@@ -58,17 +58,17 @@ function RuntimeStatusPanel() {
   };
 
   return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+    <section className="glass-card runtime-status">
+      <div className="runtime-status__header">
         <div>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 className="runtime-status__heading">
             <ServerCog size={18} color="var(--primary)" /> Runtime Status
           </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
+          <p className="runtime-status__description">
             只读状态检查，不启动新的 Codex 深度探针。
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div className="runtime-status__actions">
           <button className="btn btn-secondary" onClick={handleCopyDoctor} disabled={doctorLoading}>
             <Copy size={15} />
             复制诊断摘要
@@ -83,7 +83,7 @@ function RuntimeStatusPanel() {
           </button>
         </div>
       </div>
-      {error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{error}</div>}
+      {error && <div className="runtime-status__error">{error}</div>}
       {!error && <RuntimeStatusBody status={status} loading={loading} />}
       <RuntimeLogsPanel logs={logs} loading={logsLoading} error={logsError} onCopy={handleCopyLogs} />
     </section>
@@ -192,7 +192,7 @@ function RuntimeStatusBody({ status, loading }) {
     return <PanelLoader label="正在确认 Runtime 状态…" />;
   }
   if (!status) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>暂无状态数据</div>;
+    return <div className="runtime-status__empty">暂无状态数据</div>;
   }
   const rows = [
     ['API', status.service?.alive ? 'alive' : 'down', status.service?.alive],
@@ -207,15 +207,15 @@ function RuntimeStatusBody({ status, loading }) {
     ['Process-group memory', processGroupMemorySummary(status.process_group_memory), memoryBudgetOk(status.process_group_memory)],
   ];
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div className="runtime-status__body">
       <VersionSummaryCard summary={buildVersionSummary(APP_VERSION, status)} />
       <SecurityWarnings warnings={status.security?.warnings || []} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+      <div className="runtime-status__grid">
         {rows.map(([label, value, ok]) => (
-          <div key={label} style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px', background: 'var(--bg-secondary)' }}>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '6px' }}>{label}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, wordBreak: 'break-word' }}>
-              <span className={`status-dot ${ok ? 'active' : 'idle'}`} style={{ width: '7px', height: '7px' }}></span>
+          <div className="runtime-status__card" key={label}>
+            <div className="runtime-status__card-label">{label}</div>
+            <div className="runtime-status__card-value">
+              <span className={`status-dot runtime-status__dot ${ok ? 'active' : 'idle'}`}></span>
               {value}
             </div>
           </div>
@@ -247,35 +247,35 @@ function ProcessGroupMemoryStatus({ memory }) {
   const measuredGroup = memory.budget?.measured_group_bytes;
   const measuredMain = memory.budget?.measured_main_bytes;
   return (
-    <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px', background: 'var(--bg-secondary)' }}>
-      <div style={{ display: 'flex', gap: '12px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+    <div className="runtime-status__card">
+      <div className="runtime-status__split-row">
         <strong>Runner process-group memory</strong>
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+        <span className="runtime-status__meta">
           sampled {formatMemorySampleTime(memory.sampled_at)} · {memory.freshness?.status || 'unknown'} · no auto-restart
         </span>
       </div>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '8px' }}>
+      <div className="runtime-status__meta runtime-status__meta--spaced">
         Budget measurement {measurementSource} · group {formatMiB(measuredGroup)} · main {formatMiB(measuredMain)} · probe {memory.measurement?.physical_memory_probe || 'unknown'}
       </div>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '6px' }}>
+      <div className="runtime-status__meta runtime-status__meta--compact">
         Activity {memory.activity?.status || 'unknown'} · issue runs {memory.activity?.issue_runs || 0} · Agentic in-flight {memory.activity?.agentic_in_flight || 0} · idle grace {formatDurationMs(memory.activity?.idle_grace_ms)}
       </div>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '6px' }}>
+      <div className="runtime-status__meta runtime-status__meta--compact">
         Physical footprint {formatMiB(memory.aggregate?.footprint_bytes)} · RSS {formatMiB(memory.aggregate?.rss_bytes)} · RSS P95 {formatMiB(memory.aggregate?.rss_p95_bytes)} · main heap {formatMiB(memory.main?.heap_used_bytes)} · external {formatMiB(memory.main?.external_bytes)} · array buffers {formatMiB(memory.main?.array_buffers_bytes)}
       </div>
-      <div style={{ display: 'grid', gap: '8px', marginTop: '10px' }}>
+      <div className="runtime-status__role-list">
         {roles.map(role => (
-          <div key={role.role} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '0.82rem' }}>
+          <div className="runtime-status__split-row runtime-status__role" key={role.role}>
             <span>{role.role} · {role.process_count || 0} PID</span>
             <strong>{formatMiB(role.rss_bytes)}</strong>
           </div>
         ))}
       </div>
       {top.length > 0 && (
-        <div style={{ display: 'grid', gap: '6px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border-light)' }}>
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Top PID by macOS ps RSS</span>
+        <div className="runtime-status__process-list">
+          <span className="runtime-status__card-label">Top PID by macOS ps RSS</span>
           {top.map(process => (
-            <div key={`${process.pid}-${process.started_at}`} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '0.78rem' }}>
+            <div className="runtime-status__split-row runtime-status__process" key={`${process.pid}-${process.started_at}`}>
               <span>PID {process.pid} · {process.role} · {process.owner}</span>
               <strong>{formatMiB(process.rss_bytes)}</strong>
             </div>
@@ -317,12 +317,12 @@ function SecurityWarnings({ warnings }) {
     return null;
   }
   return (
-    <div style={{ border: '1px solid var(--warning)', borderRadius: 'var(--radius-lg)', padding: '12px', background: 'var(--warning-bg)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+    <div className="runtime-status__warning-card">
+      <div className="runtime-status__title-row">
         <AlertTriangle size={16} color="var(--warning)" />
         安全诊断告警
       </div>
-      <ul style={{ margin: '8px 0 0 18px', color: 'var(--warning)', fontSize: '0.82rem' }}>
+      <ul className="runtime-status__warning-list">
         {warnings.map(warning => (
           <li key={warning.code}>{warning.message || warning.code}</li>
         ))}
@@ -332,21 +332,19 @@ function SecurityWarnings({ warnings }) {
 }
 
 function VersionSummaryCard({ summary }) {
-  const tone = summary.ok ? 'var(--success)' : 'var(--warning)';
-  const background = summary.ok ? 'var(--success-glow)' : 'var(--warning-bg)';
   return (
-    <div style={{ border: `1px solid ${tone}`, borderRadius: 'var(--radius-lg)', padding: '12px', background }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+    <div className={`runtime-status__version ${summary.ok ? 'is-success' : 'is-warning'}`}>
+      <div className="runtime-status__title-row">
         {!summary.ok && <AlertTriangle size={16} color="var(--warning)" />}
         版本摘要
       </div>
-      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginTop: '8px', fontSize: '0.86rem' }}>
+      <div className="runtime-status__version-summary">
         <span>Frontend: <strong>{summary.frontendVersion}</strong></span>
         <span>Backend: <strong>{summary.backendVersion}</strong></span>
         <span>Build stamp: <strong>{summary.distStampStatus}</strong></span>
       </div>
       {summary.buildStamp && (
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '6px', wordBreak: 'break-all' }}>
+        <div className="runtime-status__build-stamp">
           Runtime stamp: {summary.buildStamp}
         </div>
       )}
@@ -357,10 +355,10 @@ function VersionSummaryCard({ summary }) {
 
 function VersionWarnings({ warnings }) {
   if (warnings.length === 0) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '6px' }}>前后端版本与 build stamp 未发现明显 mismatch。</div>;
+    return <div className="runtime-status__version-ok">前后端版本与 build stamp 未发现明显 mismatch。</div>;
   }
   return (
-    <ul style={{ margin: '8px 0 0 18px', color: 'var(--warning)', fontSize: '0.8rem' }}>
+    <ul className="runtime-status__version-warnings">
       {warnings.map(warning => <li key={warning}>{warning}</li>)}
     </ul>
   );

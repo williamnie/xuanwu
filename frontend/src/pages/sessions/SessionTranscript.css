@@ -1,0 +1,17 @@
+.session-transcript-empty-diff {
+  padding: 12px 14px;
+}
+
+.session-transcript-empty-diff__text {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.session-transcript-empty-diff__placeholder {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-style: italic;
+}

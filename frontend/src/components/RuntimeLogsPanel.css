@@ -1,0 +1,120 @@
+.runtime-logs-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.runtime-logs-panel__header,
+.runtime-logs-panel__title,
+.runtime-logs-panel__path {
+  display: flex;
+}
+
+.runtime-logs-panel__header {
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.runtime-logs-panel__title {
+  align-items: center;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.runtime-logs-panel__summary,
+.runtime-logs-panel__section-title,
+.runtime-logs-panel__line-meta,
+.runtime-logs-panel__empty,
+.runtime-logs-panel__section-empty {
+  color: var(--text-muted);
+}
+
+.runtime-logs-panel__summary,
+.runtime-logs-panel__section-title {
+  font-size: 0.78rem;
+}
+
+.runtime-logs-panel__summary {
+  margin-top: 4px;
+}
+
+.runtime-logs-panel__empty,
+.runtime-logs-panel__error {
+  font-size: 0.86rem;
+}
+
+.runtime-logs-panel__error {
+  color: var(--error);
+}
+
+.runtime-logs-panel__body,
+.runtime-logs-panel__lines {
+  display: flex;
+  flex-direction: column;
+}
+
+.runtime-logs-panel__body {
+  gap: 12px;
+}
+
+.runtime-logs-panel__section-title {
+  margin-bottom: 6px;
+}
+
+.runtime-logs-panel__section-empty {
+  font-size: 0.82rem;
+}
+
+.runtime-logs-panel__lines {
+  gap: 6px;
+}
+
+.runtime-logs-panel__line {
+  background: var(--bg-card);
+  border-left: 3px solid var(--error);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+}
+
+.runtime-logs-panel__line.is-warning {
+  border-left-color: var(--warning);
+}
+
+.runtime-logs-panel__line-meta {
+  font-size: 0.72rem;
+  margin-bottom: 4px;
+}
+
+.runtime-logs-panel__line-text {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.runtime-logs-panel__path {
+  align-items: flex-start;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  gap: 8px;
+}
+
+.runtime-logs-panel__path.is-unavailable {
+  color: var(--warning);
+}
+
+.runtime-logs-panel__path-dot {
+  flex: 0 0 auto;
+  height: 7px;
+  margin-top: 5px;
+  width: 7px;
+}
+
+.runtime-logs-panel__path-copy {
+  overflow-wrap: anywhere;
+}

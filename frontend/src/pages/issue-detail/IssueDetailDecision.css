@@ -1,0 +1,41 @@
+.issue-detail-decision,
+.issue-detail-decision__actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.issue-detail-decision {
+  border-left: 4px solid #8b5cf6;
+  gap: 12px;
+}
+
+.issue-detail-decision__heading {
+  align-items: center;
+  display: flex;
+  font-size: 1.05rem;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.issue-detail-decision__description {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.issue-detail-decision__evidence {
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: var(--radius-md);
+  font-size: 0.78rem;
+  padding: 10px;
+}
+
+.issue-detail-decision__evidence.is-question {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.issue-detail-decision__actions {
+  gap: 8px;
+}

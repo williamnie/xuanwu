@@ -12,25 +12,20 @@ export default function ToastContainer() {
     <div className="codex-toast-container">
       {toasts.map((toast) => {
         let Icon;
-        let iconColor;
-        
+
         switch (toast.type) {
           case 'success':
             Icon = CheckCircle2;
-            iconColor = '#10b981';
             break;
           case 'error':
             Icon = AlertCircle;
-            iconColor = '#ef4444';
             break;
           case 'warning':
             Icon = AlertTriangle;
-            iconColor = '#f59e0b';
             break;
           case 'info':
           default:
             Icon = Info;
-            iconColor = '#3b82f6';
             break;
         }
 
@@ -40,7 +35,7 @@ export default function ToastContainer() {
             className={`codex-toast-item ${toast.type}`}
             onClick={() => removeToast(toast.id)}
           >
-            <span className="codex-toast-icon" style={{ color: iconColor }}>
+            <span className={`codex-toast-icon is-${toast.type || 'info'}`}>
               <Icon size={16} strokeWidth={2.4} />
             </span>
             <span className="codex-toast-content">{toast.content}</span>

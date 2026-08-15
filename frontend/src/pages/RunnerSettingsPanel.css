@@ -1,0 +1,171 @@
+.runner-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.runner-settings__error {
+  color: var(--error);
+  font-size: 0.86rem;
+}
+
+.runner-settings__header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.runner-settings__heading,
+.runner-settings__strong-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.runner-settings__heading {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.runner-settings__description {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-top: 4px;
+}
+
+.runner-settings__launcher {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.runner-settings__strong,
+.runner-settings__strong-row {
+  font-weight: 800;
+}
+
+.runner-settings__launcher-grid,
+.runner-settings__server-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.runner-settings__launcher-step {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.runner-settings__muted-copy {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.runner-settings__command {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.runner-settings__form {
+  display: grid;
+  gap: 14px;
+}
+
+.runner-settings__field {
+  display: grid;
+  gap: 6px;
+}
+
+.runner-settings__label {
+  font-weight: 700;
+}
+
+.runner-settings__help {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.runner-settings__selector {
+  display: grid;
+  gap: 10px;
+}
+
+.runner-settings__server-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.runner-settings__server-option {
+  background: var(--bg-secondary);
+  border-color: var(--border-light);
+  height: auto;
+  justify-content: flex-start;
+  padding: 12px;
+}
+
+.runner-settings__server-option.is-active {
+  background: var(--primary-glow);
+  border-color: var(--primary);
+}
+
+.runner-settings__server-option-copy {
+  display: grid;
+  gap: 5px;
+  text-align: left;
+}
+
+.runner-settings__option-description,
+.runner-settings__field-label {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.runner-settings__option-description {
+  line-height: 1.45;
+}
+
+.runner-settings__field-label {
+  font-weight: 700;
+}
+
+.runner-settings__status {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  padding: 10px;
+}
+
+.runner-settings__status.is-success {
+  background: var(--success-glow);
+  border-color: var(--success);
+}
+
+.runner-settings__status.is-warning {
+  background: var(--warning-bg);
+  border-color: var(--warning);
+}
+
+.runner-settings__status-detail {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.runner-settings__warning {
+  color: var(--warning);
+}
+
+.runner-settings__status-dot {
+  height: 7px;
+  width: 7px;
+}

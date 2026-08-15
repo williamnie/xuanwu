@@ -22,6 +22,7 @@ import {
 } from '../utils/serviceTier';
 import { issueSpeedToggleCopy } from '../utils/issueSpeedToggle';
 import IssueCardMoreActions from './IssueCardMoreActions';
+import './IssueCard.css';
 
 export default function IssueCard({
   issue,
@@ -206,16 +207,16 @@ function IssueCardFooter({ issue, project, getRelativeTime }) {
   return (
     <div className="kanban-card-footer">
       <span className="kanban-card-project">
-        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#f97316', display: 'inline-block' }}></span>
+        <span className="kanban-card-project-dot"></span>
         {project ? project.name : issue.project_id}
       </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-          <Clock size={11} style={{ opacity: 0.6 }} />
+      <div className="kanban-card-footer-meta">
+        <span className="kanban-card-footer-time">
+          <Clock className="kanban-card-footer-icon" size={11} />
           {getRelativeTime(issue.updated_at)}
         </span>
         <span className="kanban-card-loops" title="Codex 执行回合数">
-          <Link2 size={11} style={{ transform: 'rotate(-45deg)', opacity: 0.6 }} />
+          <Link2 className="kanban-card-footer-link" size={11} />
           {issue.attempt_count || 1}
         </span>
       </div>

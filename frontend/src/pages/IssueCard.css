@@ -1,0 +1,30 @@
+.kanban-card-project-dot {
+  background: #f97316;
+  border-radius: 50%;
+  display: inline-block;
+  height: 6px;
+  width: 6px;
+}
+
+.kanban-card-footer-meta,
+.kanban-card-footer-time {
+  align-items: center;
+  display: flex;
+}
+
+.kanban-card-footer-meta {
+  gap: 8px;
+}
+
+.kanban-card-footer-time {
+  gap: 2px;
+}
+
+.kanban-card-footer-icon {
+  opacity: 0.6;
+}
+
+.kanban-card-footer-link {
+  opacity: 0.6;
+  transform: rotate(-45deg);
+}

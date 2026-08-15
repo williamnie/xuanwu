@@ -1,0 +1,17 @@
+.dashboard-page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.dashboard-alert-icon {
+  flex-shrink: 0;
+}
+
+.dashboard-event-dot { color: #7aa2f7; }
+.dashboard-event-dot.is-created { color: #bb9af7; }
+.dashboard-event-dot.is-log { color: #cfc9c2; }
+.dashboard-event-dot.is-success { color: var(--success); }
+.dashboard-event-dot.is-error { color: var(--error); }
+.dashboard-event-dot.is-warning { color: var(--warning); }
+.dashboard-event-dot.is-triage { color: var(--triage); }

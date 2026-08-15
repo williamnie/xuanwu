@@ -1,0 +1,4 @@
+.pinned-session-icon {
+  color: var(--primary);
+  transform: rotate(45deg);
+}

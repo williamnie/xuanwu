@@ -1,0 +1,43 @@
+.im-channel-registry,
+.im-channel-registry__channel {
+  display: grid;
+}
+
+.im-channel-registry {
+  gap: 12px;
+}
+
+.im-channel-registry__heading {
+  align-items: center;
+  display: flex;
+  font-size: 1.1rem;
+  gap: 8px;
+}
+
+.im-channel-registry__description,
+.im-channel-registry__meta {
+  color: var(--text-muted);
+}
+
+.im-channel-registry__description {
+  font-size: 0.82rem;
+}
+
+.im-channel-registry__error {
+  color: var(--error);
+}
+
+.im-channel-registry__channel {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  gap: 6px;
+  padding: 12px;
+}
+
+.im-channel-registry__meta {
+  font-size: 0.78rem;
+}
+
+.im-channel-registry__meta--wrap {
+  overflow-wrap: anywhere;
+}

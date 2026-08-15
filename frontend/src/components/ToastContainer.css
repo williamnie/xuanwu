@@ -117,3 +117,7 @@
     transform: translateY(0) scale(1);
   }
 }
+.codex-toast-icon.is-success { color: #10b981; }
+.codex-toast-icon.is-error { color: #ef4444; }
+.codex-toast-icon.is-warning { color: #f59e0b; }
+.codex-toast-icon.is-info { color: #3b82f6; }

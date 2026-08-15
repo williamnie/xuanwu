@@ -1,0 +1,72 @@
+.issue-mcp-requirements,
+.issue-mcp-requirements__group,
+.issue-mcp-requirements__diagnostics {
+  display: flex;
+  flex-direction: column;
+}
+
+.issue-mcp-requirements {
+  gap: 12px;
+}
+
+.issue-mcp-requirements__header,
+.issue-mcp-requirements__capabilities {
+  align-items: center;
+  display: flex;
+}
+
+.issue-mcp-requirements__header {
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.issue-mcp-requirements__heading {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.issue-mcp-requirements__description,
+.issue-mcp-requirements__label,
+.issue-mcp-requirements__empty {
+  color: var(--text-muted);
+}
+
+.issue-mcp-requirements__description {
+  font-size: 0.76rem;
+  margin: 0;
+}
+
+.issue-mcp-requirements__diagnostics {
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--warning);
+  font-size: 0.78rem;
+  gap: 4px;
+  padding: 8px 10px;
+}
+
+.issue-mcp-requirements__group {
+  gap: 6px;
+}
+
+.issue-mcp-requirements__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.issue-mcp-requirements__capabilities {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.issue-mcp-requirements__capability {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  padding: 3px 6px;
+}
+
+.issue-mcp-requirements__empty {
+  font-size: 0.78rem;
+}

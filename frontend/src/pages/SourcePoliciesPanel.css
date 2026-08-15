@@ -1,0 +1,64 @@
+.source-policies,
+.source-policies__profiles {
+  display: grid;
+}
+
+.source-policies {
+  gap: 16px;
+}
+
+.source-policies__error {
+  color: var(--error);
+  font-size: 0.86rem;
+}
+
+.source-policies__profiles {
+  gap: 12px;
+}
+
+.source-policies__profiles-title {
+  font-size: 0.88rem;
+}
+
+.source-policies__pills,
+.source-policies__header,
+.source-policies__heading {
+  align-items: center;
+  display: flex;
+}
+
+.source-policies__pills {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.source-policies__pill {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.source-policies__note,
+.source-policies__description {
+  color: var(--text-muted);
+}
+
+.source-policies__header {
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.source-policies__heading {
+  font-size: 1.1rem;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.source-policies__description {
+  font-size: 0.82rem;
+  margin-top: 4px;
+}

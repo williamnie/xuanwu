@@ -22,6 +22,7 @@ import IssueCard from './IssueCard';
 import { sortIssuesByIdDesc } from '../utils/issueSort';
 import { serviceTierPayload } from '../utils/serviceTier';
 import { availableAgentProfiles, codeAgentAvailable, effectiveProjectProvider } from '../utils/codeAgents.js';
+import './Issues.css';
 
 export default function Issues({
   filterProject,
@@ -328,42 +329,36 @@ export default function Issues({
     {
       id: 'triage',
       title: 'Triage',
-      dotColor: '#fbbf24', // 黄色
       emptyText: 'no agent-filed issues waiting',
       issues: triageIssues
     },
     {
       id: 'todo',
       title: 'Todo',
-      dotColor: '#64748b', // 灰色
       emptyText: 'nothing queued',
       issues: todoIssues
     },
     {
       id: 'in_progress',
       title: 'In Progress',
-      dotColor: '#3b82f6', // 蓝色
       emptyText: 'nothing in flight',
       issues: inProgressIssues
     },
     {
       id: 'failed',
       title: 'Failed',
-      dotColor: '#ef4444', // 红色
       emptyText: 'nothing failed',
       issues: failedIssues
     },
     {
       id: 'done',
       title: 'Done',
-      dotColor: '#10b981', // 绿色
       emptyText: 'nothing completed',
       issues: doneIssues
     },
     {
       id: 'cancelled',
       title: 'Cancelled',
-      dotColor: '#ef4444', // 红色
       emptyText: 'nothing cancelled',
       issues: cancelledIssues
     }
@@ -388,18 +383,17 @@ export default function Issues({
 
   const visibleColumns = getVisibleColumns();
   return (
-    <div className="issues-page animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>
+    <div className="issues-page animate-fade-in">
 
       {/* 头部控制栏 (对齐截图) */}
       <div className="view-header">
         <h1 className="view-title">
-          Issues <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 500 }}>— {projectIssues.length}</span>
+          Issues <span className="issues-page__count">— {projectIssues.length}</span>
         </h1>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div className="issues-page__header-actions">
           <button
-            className="btn btn-primary"
-            style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+            className="btn btn-primary issues-page__new-button"
             onClick={() => handleOpenNewIssue('todo')}
           >
             <Plus size={14} /> New issue
@@ -422,7 +416,7 @@ export default function Issues({
             {/* 列头部 */}
             <div className="kanban-column-header">
               <div className="kanban-column-title">
-                <span className="kanban-column-dot" style={{ background: col.dotColor }}></span>
+                <span className={`kanban-column-dot is-${col.id}`}></span>
                 <span>{col.title}</span>
                 <span className="kanban-column-count">{col.issues.length}</span>
               </div>
@@ -474,31 +468,31 @@ export default function Issues({
       {/* 新建 Issue 高级模态框 (完美融合) */}
       {isNewIssueOpen && (
         <div className="modal-overlay">
-          <div className="glass-card modal-content" style={{ maxWidth: '760px', padding: '24px' }}>
+          <div className="glass-card modal-content issues-page__create-modal">
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="issues-page__modal-header">
+              <h3 className="issues-page__modal-title">
                 <Sparkles size={16} color="var(--primary)" /> 创建新 Issue ({prefilledStatus.toUpperCase()})
               </h3>
               <button
-                style={{ background: 'transparent', color: 'var(--text-muted)', border: 'none', cursor: 'pointer' }}
+                className="issues-page__modal-close"
                 onClick={() => setIsNewIssueOpen(false)}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateIssue} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form className="issues-page__create-form" onSubmit={handleCreateIssue}>
 
               {formError && (
-                <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 12px', borderRadius: 'var(--radius-xs)', fontSize: '0.78rem' }}>
+                <div className="issues-page__form-error">
                   {formError}
                 </div>
               )}
 
               {projects.length === 0 ? (
-                <div style={{ color: 'var(--warning)', background: 'var(--warning-bg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '4px', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
-                  <strong style={{ fontWeight: 600 }}>暂无项目可关联</strong>
+                <div className="issues-page__project-warning">
+                  <strong>暂无项目可关联</strong>
                   <span>请先前往「Projects」项目管理页面新增监控项目，然后再在此创建任务。</span>
                 </div>
               ) : (
@@ -518,7 +512,7 @@ export default function Issues({
               )}
 
               {sourceMetadata?.source_session_id && (
-                <div style={{ color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: '0.78rem', border: '1px solid var(--border-color)' }}>
+                <div className="issues-page__source-meta">
                   来源 Session：<code>{sourceMetadata.source_session_id}</code>
                   {sourceMetadata.source_turn_id && <> · Turn：<code>{sourceMetadata.source_turn_id}</code></>}
                 </div>
@@ -541,7 +535,7 @@ export default function Issues({
                     selectedProfileID={formAgentProfileId}
                   />
                 </select>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                <span className="issues-page__field-help">
                   可为单个工作项显式选择 Code Agent；未选择时沿用项目默认配置。
                 </span>
               </div>
@@ -570,11 +564,11 @@ export default function Issues({
                 </select>
               </div>
 
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
-                <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={() => setIsNewIssueOpen(false)}>
+              <div className="issues-page__form-actions">
+                <button type="button" className="btn btn-secondary issues-page__cancel-button" onClick={() => setIsNewIssueOpen(false)}>
                   取消
                 </button>
-                <button type="submit" className="btn btn-primary" style={{ padding: '6px 16px' }} disabled={submitting || projects.length === 0}>
+                <button type="submit" className="btn btn-primary issues-page__submit-button" disabled={submitting || projects.length === 0}>
                   {submitting ? '创建中...' : '提交创建'}
                 </button>
               </div>

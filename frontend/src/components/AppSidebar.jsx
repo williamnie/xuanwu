@@ -25,6 +25,7 @@ import {
 } from '../pages/assistantModules';
 import { WORK_BOARD_ENABLED } from '../pages/workBoardModel.js';
 import { useI18n } from '../i18n/context.js';
+import './AppSidebar.css';
 
 const NAV_ICONS = {
   'command-center': LayoutDashboard,
@@ -172,7 +173,7 @@ function AutomationCountBadge({ active }) {
   const label = activeCount > 0 ? activeCount : automations.length;
 
   return (
-    <span className="nav-badge" style={{ background: active ? 'var(--primary-glow)' : undefined, color: active ? 'var(--primary)' : undefined }}>
+    <span className={`nav-badge${active ? ' is-active' : ''}`}>
       {label}
     </span>
   );
@@ -204,11 +205,11 @@ function IssuesSidebarFilters({
 
       <button className="btn-new-issue-sidebar" onClick={() => handleOpenNewIssue('todo')}>
         <span>+ New issue</span>
-        <span style={{ fontSize: '0.65rem', border: '1px solid rgba(16,185,129,0.3)', padding: '1px 4px', borderRadius: 'var(--radius-xs)', background: 'rgba(16,185,129,0.06)' }}>c</span>
+        <span className="sidebar-new-issue-shortcut">c</span>
       </button>
 
-      <div style={{ padding: '12px 12px 4px 12px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+      <div className="sidebar-loop-progress">
+        <div className="sidebar-loop-progress__label">
           <span>LOOP AUTO</span>
           <span>{activeLoops} / {totalProjects}</span>
         </div>
@@ -218,29 +219,29 @@ function IssuesSidebarFilters({
       </div>
 
       <div className="sidebar-section-title">Focus</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+      <div className="sidebar-focus-list">
         <button className={`sub-filter-item ${focusFilter === 'all' ? 'active' : ''}`} onClick={() => setFocusFilter('all')}>
           <span>All columns</span>
           <span>{allCount}</span>
         </button>
 
         <button className={`sub-filter-item ${focusFilter === 'triage' ? 'active' : ''}`} onClick={() => setFocusFilter('triage')}>
-          <span><span className="sub-filter-dot" style={{ background: '#f59e0b' }}></span>Just Triage</span>
+          <span><span className="sub-filter-dot is-triage"></span>Just Triage</span>
           <span>{triageCount}</span>
         </button>
 
         <button className={`sub-filter-item ${focusFilter === 'active' ? 'active' : ''}`} onClick={() => setFocusFilter('active')}>
-          <span><span className="sub-filter-dot" style={{ background: '#3b82f6' }}></span>Active only</span>
+          <span><span className="sub-filter-dot is-active"></span>Active only</span>
           <span>{activeCount}</span>
         </button>
 
         <button className={`sub-filter-item ${focusFilter === 'failed' ? 'active' : ''}`} onClick={() => setFocusFilter('failed')}>
-          <span><span className="sub-filter-dot" style={{ background: '#ef4444' }}></span>Failed</span>
+          <span><span className="sub-filter-dot is-failed"></span>Failed</span>
           <span>{failedCount}</span>
         </button>
 
         <button className={`sub-filter-item ${focusFilter === 'archive' ? 'active' : ''}`} onClick={() => setFocusFilter('archive')}>
-          <span><span className="sub-filter-dot" style={{ background: '#10b981' }}></span>Archive</span>
+          <span><span className="sub-filter-dot is-archive"></span>Archive</span>
           <span>{archiveCount}</span>
         </button>
       </div>
@@ -256,7 +257,7 @@ function IssuesSidebarFilters({
           const count = issues.filter(i => i.project_id === proj.id).length;
           return (
             <button key={proj.id} className={`sub-filter-item ${filterProject === proj.id ? 'active' : ''}`} onClick={() => setFilterProject(proj.id)}>
-              <span><span className="sub-filter-dot" style={{ background: 'var(--primary)' }}></span>{proj.name}</span>
+              <span><span className="sub-filter-dot is-project"></span>{proj.name}</span>
               <span>{count}</span>
             </button>
           );

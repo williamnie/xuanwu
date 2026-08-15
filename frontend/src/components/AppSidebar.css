@@ -1,0 +1,36 @@
+.nav-badge.is-active {
+  background: var(--primary-glow);
+  color: var(--primary);
+}
+
+.sidebar-new-issue-shortcut {
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--radius-xs);
+  font-size: 0.65rem;
+  padding: 1px 4px;
+}
+
+.sidebar-loop-progress {
+  padding: 12px 12px 4px;
+}
+
+.sidebar-loop-progress__label {
+  color: var(--text-muted);
+  display: flex;
+  font-size: 0.7rem;
+  font-weight: 600;
+  justify-content: space-between;
+}
+
+.sidebar-focus-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sub-filter-dot.is-triage { background: #f59e0b; }
+.sub-filter-dot.is-active { background: #3b82f6; }
+.sub-filter-dot.is-failed { background: #ef4444; }
+.sub-filter-dot.is-archive { background: #10b981; }
+.sub-filter-dot.is-project { background: var(--primary); }

@@ -5,32 +5,33 @@ import {
   UserCheck,
   XCircle,
 } from 'lucide-react';
+import './IssueDetailDecision.css';
 
 export default function IssueDetailDecision({ evidence, decision, onAccept, onReject, onRequestChanges }) {
   const request = decision?.request;
   const humanOwned = decision?.owner === 'human' && request?.status === 'open';
   const piState = piDecisionCopy(decision);
   return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderLeft: '4px solid #8b5cf6' }}>
-      <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <section className="glass-card issue-detail-decision">
+      <h3 className="issue-detail-decision__heading">
         <UserCheck size={18} color="#8b5cf6" /> {humanOwned ? '需要你审批' : piState.title}
       </h3>
-      <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+      <p className="issue-detail-decision__description">
         {humanOwned
           ? 'PI 无法自主决定下面的产品、范围或风险取舍，请明确审批；技术验证仍由 PI 负责。'
           : piState.detail}
       </p>
       {humanOwned && (
-        <div className="issue-error-text" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: 'var(--radius-md)', padding: '10px', fontSize: '0.82rem', fontWeight: 700 }}>
+        <div className="issue-error-text issue-detail-decision__evidence is-question">
           你正在审批：{request.question}
         </div>
       )}
       {evidence && (
-        <div className="issue-error-text" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: 'var(--radius-md)', padding: '10px', fontSize: '0.78rem' }}>
+        <div className="issue-error-text issue-detail-decision__evidence">
           {evidence}
         </div>
       )}
-      {humanOwned && <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {humanOwned && <div className="issue-detail-decision__actions">
         <button className="btn btn-secondary btn-success" onClick={onAccept}>
           <CheckCircle size={14} /> 同意，交给 PI 继续判断
         </button>

@@ -17,6 +17,7 @@ import { useSmartAutoScroll } from './smartAutoScroll';
 import { textFromUserContent } from './sourceIssue';
 import { CreateSessionIssueButton, SessionInfoPopover } from './SessionInfoPanel';
 import './SessionCommandReplay.css';
+import './SessionTranscript.css';
 
 async function copyTextToClipboard(text) {
   if (window.navigator?.clipboard?.writeText) {
@@ -424,11 +425,11 @@ function ToolDetailItem({ tool }) {
               <span className="diff-file-icon"><FileCode size={14} /></span>
               <span className="diff-file-path">文件改动详情</span>
             </div>
-            <div className="diff-file-body" style={{ padding: '12px 14px' }}>
+            <div className="diff-file-body session-transcript-empty-diff">
               {diffText ? (
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>{diffText}</pre>
+                <pre className="session-transcript-empty-diff__text">{diffText}</pre>
               ) : (
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontStyle: 'italic' }}>无具体的代码差异（可能是新增空白文件、修改文件属性或未完成保存）</span>
+                <span className="session-transcript-empty-diff__placeholder">无具体的代码差异（可能是新增空白文件、修改文件属性或未完成保存）</span>
               )}
             </div>
           </div>

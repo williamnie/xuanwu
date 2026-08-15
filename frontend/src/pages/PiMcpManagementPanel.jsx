@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { PlugZap, RefreshCw, ShieldCheck } from 'lucide-react';
 import { message } from '../store/toastStore';
 import { mcpServerLifecycleStates } from '../utils/mcpLifecycle.js';
+import './PiMcpManagementPanel.css';
 
 const emptyForm = { args: '', command: '', envKeys: '', name: '' };
 const redactedText = '[redacted]';
@@ -12,7 +13,7 @@ export default function PiMcpManagementPanel({ embedded = false }) {
   const detected = state.servers.filter((server) => server.source !== 'manual');
   const manual = state.servers.filter((server) => server.source === 'manual');
   return (
-    <section className={embedded ? 'pi-mcp-management-panel' : 'glass-card'} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <section className={`${embedded ? 'pi-mcp-management-panel' : 'glass-card'} pi-mcp-panel`}>
       <PanelHeader embedded={embedded} loading={state.loading} onRefresh={state.loadAll} onScan={state.scan} scanning={state.scanning} />
       <Notice error={state.error} />
       <Sources sources={state.sources} />
@@ -51,16 +52,16 @@ function useMcpManagementState() {
 function PanelHeader({ embedded, loading, onRefresh, onScan, scanning }) {
   const Heading = embedded ? 'h3' : 'h2';
   return (
-    <div style={{ alignItems: 'flex-start', display: 'flex', gap: '12px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+    <div className="pi-mcp-panel__header">
       <div>
-        <Heading style={{ alignItems: 'center', display: 'flex', fontSize: '1.1rem', fontWeight: 700, gap: '8px' }}>
+        <Heading className="pi-mcp-panel__heading">
           <PlugZap size={18} color="var(--primary)" /> MCP discovery & access
         </Heading>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
+        <p className="pi-mcp-panel__description">
           发现不等于启用；Supervisor 只会使用你显式启用的 server 和 capability，secret/env/header 始终显示为 {redactedText}。
         </p>
       </div>
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      <div className="pi-mcp-panel__actions">
         <button className="btn btn-secondary" disabled={loading || scanning} onClick={onRefresh} type="button"><RefreshCw size={14} /> Refresh</button>
         <button className="btn btn-primary" disabled={scanning} onClick={onScan} type="button">{scanning ? 'Scanning...' : 'Scan local MCP configs'}</button>
       </div>
@@ -70,9 +71,9 @@ function PanelHeader({ embedded, loading, onRefresh, onScan, scanning }) {
 
 function Notice({ error }) {
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px' }}>
+    <div className="pi-mcp-panel__notice">
       <strong><ShieldCheck size={15} /> 安全边界</strong>
-      <div style={{ color: error ? 'var(--error)' : 'var(--text-muted)', fontSize: '0.8rem', marginTop: '6px' }}>
+      <div className={`pi-mcp-panel__notice-copy${error ? ' is-error' : ''}`}>
         {error || '扫描只读取 allowlisted 配置文件；stdio 可 introspect，HTTP/SSE 暂只保存配置和 diagnostics，不会假装可调用。'}
       </div>
     </div>
@@ -82,7 +83,7 @@ function Notice({ error }) {
 function Sources({ sources }) {
   if (!sources.length) return null;
   return (
-    <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+    <div className="pi-mcp-panel__source-grid">
       {sources.map((source) => <SourceCard key={source.id} source={source} />)}
     </div>
   );
@@ -91,18 +92,18 @@ function Sources({ sources }) {
 function SourceCard({ source }) {
   const visible = (source.paths || []).filter((path) => path.exists).length;
   return (
-    <div style={miniCardStyle}>
+    <div className="pi-mcp-panel__mini-card">
       <strong>{source.id}</strong>
-      <span style={mutedStyle}>{visible ? `${visible} 个本机来源可见` : '未发现本机配置文件'}</span>
+      <span className="pi-mcp-panel__muted">{visible ? `${visible} 个本机来源可见` : '未发现本机配置文件'}</span>
     </div>
   );
 }
 
 function ServerGroup({ servers, showForget = false, state, title }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      <h3 style={sectionTitleStyle}>{title}</h3>
-      {servers.length === 0 ? <div style={mutedStyle}>暂无记录。</div> : servers.map((server) => <ServerCard key={server.id} server={server} showForget={showForget} state={state} />)}
+    <div className="pi-mcp-panel__section">
+      <h3 className="pi-mcp-panel__section-title">{title}</h3>
+      {servers.length === 0 ? <div className="pi-mcp-panel__muted">暂无记录。</div> : servers.map((server) => <ServerCard key={server.id} server={server} showForget={showForget} state={state} />)}
     </div>
   );
 }
@@ -110,15 +111,15 @@ function ServerGroup({ servers, showForget = false, state, title }) {
 function ServerCard({ server, showForget, state }) {
   const lifecycle = mcpServerLifecycleStates(server);
   return (
-    <div style={rowCardStyle}>
-      <div style={{ minWidth: 0 }}>
+    <div className="pi-mcp-panel__row-card">
+      <div className="pi-mcp-panel__row-main">
         <strong>{server.name || server.id}</strong>
-        <div style={mutedStyle}>{server.source} · {server.transport_type} · lifecycle {lifecycle.join(' / ')} · readiness {server.readiness || 'not_introspected'}</div>
-        <div style={mutedStyle}>{approvalModeDescription(server.approval_mode)}</div>
+        <div className="pi-mcp-panel__muted">{server.source} · {server.transport_type} · lifecycle {lifecycle.join(' / ')} · readiness {server.readiness || 'not_introspected'}</div>
+        <div className="pi-mcp-panel__muted">{approvalModeDescription(server.approval_mode)}</div>
         <Diagnostics diagnostics={server.diagnostics} />
       </div>
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-        <label style={{ ...mutedStyle, alignItems: 'center', display: 'flex', gap: '6px' }}>
+      <div className="pi-mcp-panel__actions">
+        <label className="pi-mcp-panel__approval-field">
           写入审批
           <select aria-label={`${server.name || server.id} 写入审批模式`} className="form-control" onChange={(event) => state.setApprovalMode(server, event.target.value)} value={server.approval_mode || 'dangerous_only'}>
             <option value="dangerous_only">仅高危操作询问（推荐）</option>
@@ -137,9 +138,9 @@ function ServerCard({ server, showForget, state }) {
 function ManualServerForm({ form, saving, setForm, submit }) {
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   return (
-    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      <h3 style={sectionTitleStyle}>Manual MCP servers</h3>
-      <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+    <form className="pi-mcp-panel__section" onSubmit={submit}>
+      <h3 className="pi-mcp-panel__section-title">Manual MCP servers</h3>
+      <div className="pi-mcp-panel__form-grid">
         <TextField label="Name" onChange={(value) => update('name', value)} placeholder="Fixture MCP" value={form.name} />
         <TextField label="stdio command" onChange={(value) => update('command', value)} placeholder="node /path/server.js" value={form.command} />
         <TextField label="args" onChange={(value) => update('args', value)} placeholder="--flag value" value={form.args} />
@@ -153,8 +154,8 @@ function ManualServerForm({ form, saving, setForm, submit }) {
 function Capabilities({ capabilities, onToggle }) {
   const groups = useMemo(() => groupCapabilities(capabilities), [capabilities]);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      <h3 style={sectionTitleStyle}>Capabilities</h3>
+    <div className="pi-mcp-panel__section">
+      <h3 className="pi-mcp-panel__section-title">Capabilities</h3>
       {Object.entries(groups).map(([label, items]) => <CapabilityGroup key={label} items={items} label={label} onToggle={onToggle} />)}
     </div>
   );
@@ -162,15 +163,15 @@ function Capabilities({ capabilities, onToggle }) {
 
 function CapabilityGroup({ items, label, onToggle }) {
   if (!items.length) return null;
-  return <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}><strong>{label}</strong>{items.map((capability) => <CapabilityRow capability={capability} key={capability.id} onToggle={onToggle} />)}</div>;
+  return <div className="pi-mcp-panel__capability-group"><strong>{label}</strong>{items.map((capability) => <CapabilityRow capability={capability} key={capability.id} onToggle={onToggle} />)}</div>;
 }
 
 function CapabilityRow({ capability, onToggle }) {
   return (
-    <div style={rowCardStyle}>
+    <div className="pi-mcp-panel__row-card">
       <div>
         <strong>{capability.name}</strong>
-        <div style={mutedStyle}>{capability.kind} · {capability.permission} · risk {capability.risk_level} · {capability.requires_confirmation ? '需要即时审批' : '按已选权限自动执行'} · {capability.enabled ? 'enabled' : 'disabled'}</div>
+        <div className="pi-mcp-panel__muted">{capability.kind} · {capability.permission} · risk {capability.risk_level} · {capability.requires_confirmation ? '需要即时审批' : '按已选权限自动执行'} · {capability.enabled ? 'enabled' : 'disabled'}</div>
       </div>
       <button className="btn btn-secondary" onClick={() => onToggle(capability)} type="button">{capability.enabled ? 'Disable' : 'Enable this capability'}</button>
     </div>
@@ -179,11 +180,11 @@ function CapabilityRow({ capability, onToggle }) {
 
 function ApprovalGrants({ grants, onRevoke }) {
   if (!grants.length) return null;
-  return <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-    <h3 style={sectionTitleStyle}>项目持续授权</h3>
-    <div style={mutedStyle}>仅来自人工选择“当前项目始终允许”；工具定义、权限或传输配置变化后自动失效。</div>
-    {grants.map((grant) => <div key={grant.id} style={rowCardStyle}>
-      <div><strong>{grant.capability_id}</strong><div style={mutedStyle}>项目 {grant.project_id} · {grant.granted_by}</div></div>
+  return <div className="pi-mcp-panel__capability-group">
+    <h3 className="pi-mcp-panel__section-title">项目持续授权</h3>
+    <div className="pi-mcp-panel__muted">仅来自人工选择“当前项目始终允许”；工具定义、权限或传输配置变化后自动失效。</div>
+    {grants.map((grant) => <div className="pi-mcp-panel__row-card" key={grant.id}>
+      <div><strong>{grant.capability_id}</strong><div className="pi-mcp-panel__muted">项目 {grant.project_id} · {grant.granted_by}</div></div>
       <button className="btn btn-secondary" onClick={() => onRevoke(grant)} type="button">撤销持续授权</button>
     </div>)}
   </div>;
@@ -197,11 +198,11 @@ function approvalModeDescription(mode) {
 
 function Diagnostics({ diagnostics = [] }) {
   if (!diagnostics.length) return null;
-  return <div style={{ ...mutedStyle, color: 'var(--warning)' }}>{diagnostics.map((item) => item.message || item.code).join(' · ')}</div>;
+  return <div className="pi-mcp-panel__muted pi-mcp-panel__diagnostics">{diagnostics.map((item) => item.message || item.code).join(' · ')}</div>;
 }
 
 function TextField({ label, onChange, placeholder, value }) {
-  return <label className="form-group" style={{ marginBottom: 0 }}><span>{label}</span><input className="form-control" onChange={(event) => onChange(event.target.value)} placeholder={placeholder} value={value} /></label>;
+  return <label className="form-group pi-mcp-panel__field"><span>{label}</span><input className="form-control" onChange={(event) => onChange(event.target.value)} placeholder={placeholder} value={value} /></label>;
 }
 
 async function loadMcpState(setters) {
@@ -278,8 +279,3 @@ function envPlaceholders(value) {
     return index > 0 ? [part.slice(0, index).trim(), part.slice(index + 1).trim()] : [part, ''];
   }).filter(([key]) => key));
 }
-
-const sectionTitleStyle = { fontSize: '0.95rem', fontWeight: 800, margin: 0 };
-const mutedStyle = { color: 'var(--text-muted)', fontSize: '0.78rem', wordBreak: 'break-word' };
-const miniCardStyle = { background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', gap: '4px', padding: '10px' };
-const rowCardStyle = { alignItems: 'center', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', display: 'flex', gap: '12px', justifyContent: 'space-between', padding: '12px', flexWrap: 'wrap' };

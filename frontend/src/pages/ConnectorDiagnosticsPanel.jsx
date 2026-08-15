@@ -4,6 +4,7 @@ import { Cable, RefreshCw, Settings2, ShieldX, TestTube2 } from 'lucide-react';
 import { message } from '../store/toastStore';
 import { PanelLoader } from '../components/TurtleLoader';
 import { configureGuide } from './settingsProductModels.js';
+import './ConnectorDiagnosticsPanel.css';
 
 const CONNECTOR_STATUSES = ['configured', 'disabled', 'misconfigured', 'error'];
 
@@ -14,9 +15,9 @@ export default function ConnectorDiagnosticsPanel() {
 
   const connectors = state.data?.connectors || [];
   return (
-    <section className="glass-card" style={{ display: 'grid', gap: '16px' }}>
+    <section className="glass-card connector-diagnostics">
       <PanelHeader loading={state.loading} onRefresh={() => loadConnectors(setState)} />
-      {state.error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{state.error}</div>}
+      {state.error && <div className="connector-diagnostics__error">{state.error}</div>}
       {!state.error && <ConnectorBody connectors={connectors} loading={state.loading} notice={state.notice}
         onConfigure={(connector) => setState(previous => ({ ...previous, configure: previous.configure === connector.id ? '' : connector.id }))}
         onRevoke={(connector, ref) => revokeConnectorSecret(connector, ref, state, setState)}
@@ -40,12 +41,12 @@ function loadConnectors(setState) {
 
 function PanelHeader({ loading, onRefresh }) {
   return (
-    <div style={{ alignItems: 'center', display: 'flex', gap: '16px', justifyContent: 'space-between' }}>
+    <div className="connector-diagnostics__header">
       <div>
-        <h2 style={{ alignItems: 'center', display: 'flex', fontSize: '1.1rem', fontWeight: 700, gap: '8px' }}>
+        <h2 className="connector-diagnostics__heading">
           <Cable size={18} color="var(--primary)" /> Integration health
         </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
+        <p className="connector-diagnostics__description">
           查看 Feishu、Git、Tracker、Webhook 与本地 connector 的配置健康；测试和撤销均使用现有受审计 API。
         </p>
       </div>
@@ -62,15 +63,15 @@ function ConnectorBody({ connectors, loading, notice, onConfigure, onRevoke, onT
     return <PanelLoader label="正在检查 Connector…" />;
   }
   if (notice) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>{notice}</div>;
+    return <div className="connector-diagnostics__empty">{notice}</div>;
   }
   if (connectors.length === 0) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>暂无 connector manifest。</div>;
+    return <div className="connector-diagnostics__empty">暂无 connector manifest。</div>;
   }
   return (
-    <div style={{ display: 'grid', gap: '12px' }}>
+    <div className="connector-diagnostics__body">
       <ConnectorSummary connectors={connectors} />
-      <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+      <div className="connector-diagnostics__grid">
         {connectors.map(connector => <ConnectorCard connector={connector} key={`${connector.kind || 'connector'}:${connector.id}`}
           onConfigure={onConfigure} onRevoke={onRevoke} onTest={onTest} state={state} />)}
       </div>
@@ -81,9 +82,9 @@ function ConnectorBody({ connectors, loading, notice, onConfigure, onRevoke, onT
 function ConnectorSummary({ connectors }) {
   const counts = statusCounts(connectors);
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+    <div className="connector-diagnostics__summary">
       {CONNECTOR_STATUSES.map(status => (
-        <span key={status} style={summaryBadgeStyle(status)}>
+        <span className={`connector-diagnostics__badge is-${status}`} key={status}>
           {status}: {counts[status] || 0}
         </span>
       ))}
@@ -98,15 +99,15 @@ function ConnectorCard({ connector, onConfigure, onRevoke, onTest, state }) {
   const testing = state.busy === `test:${connector.id}`;
   const revoking = state.busy === `revoke:${connector.id}`;
   return (
-    <div style={connectorCardStyle()}>
-      <div style={{ alignItems: 'center', display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
+    <div className="connector-diagnostics__card">
+      <div className="connector-diagnostics__card-header">
         <div>
-          <div style={{ fontWeight: 800 }}>{connector.label || connector.id}</div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginTop: '2px' }}>
+          <div className="connector-diagnostics__card-title">{connector.label || connector.id}</div>
+          <div className="connector-diagnostics__card-subtitle">
             {connector.kind || 'connector'} · {connector.settings_mode || 'settings'}
           </div>
         </div>
-        <span style={{ color: statusColor(status), fontSize: '0.78rem', fontWeight: 800 }}>{status}</span>
+        <span className={`connector-diagnostics__status is-${status}`}>{status}</span>
       </div>
       <ConnectorMeta label="Health" ok={status === 'configured'} value={healthText(connector)} />
       <ConnectorMeta label="Missing" ok={(connector.missing_required || []).length === 0} value={missingText(connector)} />
@@ -116,7 +117,7 @@ function ConnectorCard({ connector, onConfigure, onRevoke, onTest, state }) {
       <ConnectorMeta label="退避" ok={!connector.health?.backoff?.blocked} value={backoffText(connector)} />
       <ConnectorEnv env={connector.env || []} />
       <SecretRefs refs={connector.secret_refs || []} />
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+      <div className="connector-diagnostics__actions">
         <button className="btn btn-secondary" onClick={() => onConfigure(connector)} type="button"><Settings2 size={14} />配置</button>
         {connector.test_connection?.supported && <button className="btn btn-secondary" disabled={testing || connector.health?.backoff?.blocked}
           onClick={() => onTest(connector)} type="button"><TestTube2 size={14} />{testing ? '测试中…' : '测试连接'}</button>}
@@ -136,10 +137,10 @@ function ConnectorCard({ connector, onConfigure, onRevoke, onTest, state }) {
 function ConnectorConfigureGuide({ connector }) {
   const guide = configureGuide(connector);
   return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', display: 'grid', fontSize: '0.78rem', gap: '7px', lineHeight: 1.5, padding: '10px' }}>
+    <div className="connector-diagnostics__guide">
       <strong>{guide.title}</strong>
-      <span style={{ color: 'var(--text-muted)' }}>{guide.body}</span>
-      {guide.refs && <code style={{ overflowWrap: 'anywhere' }}>{guide.refs}</code>}
+      <span className="connector-diagnostics__muted">{guide.body}</span>
+      {guide.refs && <code className="connector-diagnostics__refs">{guide.refs}</code>}
       {connector.id === 'feishu' && <button className="btn btn-secondary" onClick={() => document.getElementById('feishu-connection-settings')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} type="button">前往飞书配置</button>}
     </div>
   );
@@ -153,10 +154,10 @@ function SecretRefs({ refs }) {
 
 function ConnectorMeta({ label, ok, value }) {
   return (
-    <div style={{ display: 'grid', gap: '4px' }}>
-      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{label}</span>
-      <span style={{ alignItems: 'center', display: 'flex', fontSize: '0.84rem', gap: '8px', wordBreak: 'break-word' }}>
-        <span className={`status-dot ${ok ? 'active' : 'idle'}`} style={{ flex: '0 0 auto', height: '7px', width: '7px' }} />
+    <div className="connector-diagnostics__meta">
+      <span className="connector-diagnostics__meta-label">{label}</span>
+      <span className="connector-diagnostics__meta-value">
+        <span className={`status-dot connector-diagnostics__dot ${ok ? 'active' : 'idle'}`} />
         {value}
       </span>
     </div>
@@ -239,33 +240,4 @@ async function revokeConnectorSecret(connector, ref, state, setState) {
 function missingText(connector) {
   const missing = connector.missing_required || [];
   return missing.length > 0 ? missing.join(', ') : '无';
-}
-
-function statusColor(status) {
-  if (status === 'configured') return 'var(--success)';
-  if (status === 'error' || status === 'misconfigured') return 'var(--warning)';
-  return 'var(--text-muted)';
-}
-
-function connectorCardStyle() {
-  return {
-    background: 'var(--bg-secondary)',
-    border: '1px solid var(--border-light)',
-    borderRadius: 'var(--radius-lg)',
-    display: 'grid',
-    gap: '10px',
-    padding: '14px'
-  };
-}
-
-function summaryBadgeStyle(status) {
-  return {
-    background: status === 'configured' ? 'var(--success-glow)' : 'var(--bg-secondary)',
-    border: '1px solid var(--border-light)',
-    borderRadius: 'var(--radius-xs)',
-    color: statusColor(status),
-    fontSize: '0.76rem',
-    fontWeight: 800,
-    padding: '6px 10px'
-  };
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Check, Loader2, Pin, Plus, Save, Trash2, XCircle } from 'lucide-react';
 import { piMemoryApi } from '../api/piMemoryClient';
 import { message } from '../store/toastStore';
+import './PiMemoryPanel.css';
 
 export default function PiMemoryPanel() {
   const state = usePiMemoryPanel();
@@ -9,11 +10,11 @@ export default function PiMemoryPanel() {
   const disabledCount = state.items.length - activeCount;
   const recent = state.items[0];
   return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
+    <section className="glass-card pi-memory-panel">
+      <div className="pi-memory-panel__header">
         <div>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Supervisor Memory</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px', lineHeight: 1.55 }}>
+          <h2 className="pi-memory-panel__heading">Supervisor Memory</h2>
+          <p className="pi-memory-panel__description">
             PI 自动记住可复用的偏好、决策、工作方法、Bug 根因、修复方式和验证经验；相同 memory_key 会更新而不是重复追加。
             当前 Work / Run / Issue 状态永远以实时查询为准，不保存为记忆。
           </p>
@@ -24,7 +25,7 @@ export default function PiMemoryPanel() {
       </div>
       <MemorySummary activeCount={activeCount} disabledCount={disabledCount} recent={recent} />
       <MemoryCreateForm state={state} />
-      {state.error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{state.error}</div>}
+      {state.error && <div className="pi-memory-panel__error">{state.error}</div>}
       <MemoryList state={state} />
     </section>
   );
@@ -86,11 +87,11 @@ function usePiMemoryPanel() {
 
 function MemorySummary({ activeCount, disabledCount, recent }) {
   return (
-    <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+    <div className="pi-memory-panel__summary">
       <SummaryPill label="Active memory" value={`${activeCount} 条`} />
       <SummaryPill label="Disabled memory" value={`${disabledCount} 条`} />
       <SummaryPill label="最近更新" value={recent ? `${recent.kind} · ${recent.last_seen_at || recent.updated_at}` : '暂无'} />
-      <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', gridColumn: '1 / -1', lineHeight: 1.55, margin: 0 }}>
+      <p className="pi-memory-panel__summary-copy">
         记忆自动生效，不需要逐条人工审核。只有稳定、可复用并可追溯的经验才允许写入；低置信度推断、状态快照、数量统计、队列状态和临时承诺会被拒绝。
         你仍可随时编辑、禁用或忘记任何记忆。
       </p>
@@ -100,9 +101,9 @@ function MemorySummary({ activeCount, disabledCount, recent }) {
 
 function SummaryPill({ label, value }) {
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '10px' }}>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700 }}>{label}</div>
-      <strong style={{ color: 'var(--text-primary)', fontSize: '0.98rem' }}>{value}</strong>
+    <div className="pi-memory-panel__summary-pill">
+      <div className="pi-memory-panel__summary-label">{label}</div>
+      <strong className="pi-memory-panel__summary-value">{value}</strong>
     </div>
   );
 }
@@ -110,8 +111,8 @@ function SummaryPill({ label, value }) {
 function MemoryCreateForm({ state }) {
   const draft = state.newDraft;
   return (
-    <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px', background: 'var(--bg-secondary)' }}>
-      <h3 style={{ fontSize: '0.94rem', marginBottom: '8px' }}>手动补充可复用记忆</h3>
+    <div className="pi-memory-panel__card">
+      <h3 className="pi-memory-panel__form-title">手动补充可复用记忆</h3>
       <textarea
         className="form-control"
         placeholder="例如：某类故障的根因、修复方式和复验方法"
@@ -119,7 +120,7 @@ function MemoryCreateForm({ state }) {
         value={draft.content}
         onChange={(event) => state.updateNewDraft('content', event.target.value)}
       />
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+      <div className="pi-memory-panel__controls">
         <SmallInput label="memory_key" value={draft.memory_key} onChange={(value) => state.updateNewDraft('memory_key', value)} />
         <SmallSelect label="kind" value={draft.kind} values={MEMORY_KINDS} onChange={(value) => state.updateNewDraft('kind', value)} />
         <SmallSelect label="memory_type" value={draft.memory_type} values={MEMORY_TYPES} onChange={(value) => state.updateNewDraft('memory_type', value)} />
@@ -139,24 +140,24 @@ function MemoryCreateForm({ state }) {
 
 function MemoryList({ state }) {
   if (!state.loading && state.items.length === 0) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>暂无可复用记忆。</div>;
+    return <div className="pi-memory-panel__empty">暂无可复用记忆。</div>;
   }
-  return <div style={{ display: 'grid', gap: '10px' }}>{state.items.map((item) => <MemoryCard key={item.id} item={item} state={state} />)}</div>;
+  return <div className="pi-memory-panel__list">{state.items.map((item) => <MemoryCard key={item.id} item={item} state={state} />)}</div>;
 }
 
 function MemoryCard({ item, state }) {
   const draft = state.drafts[item.id] || draftFromItem(item);
   const disabled = Number(item.disabled) === 1;
   return (
-    <article style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px', background: 'var(--bg-secondary)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+    <article className="pi-memory-panel__card">
+      <div className="pi-memory-panel__card-header">
         <strong>{item.memory_type || 'user'} / {item.kind}</strong>
-        <span style={{ color: disabled ? 'var(--text-muted)' : 'var(--success)', fontSize: '0.78rem', fontWeight: 700 }}>
+        <span className={`pi-memory-panel__state${disabled ? ' is-disabled' : ''}`}>
           {disabled ? 'disabled' : 'active'} · {Number(item.pinned) === 1 ? 'pinned' : 'unpinned'} · {item.layer || 'long_term'} · {item.scope}:{item.scope_id || 'runner'} · seen {item.occurrence_count || 1}
         </span>
       </div>
       <textarea className="form-control" value={draft.content} onChange={(event) => state.updateDraft(item.id, 'content', event.target.value)} rows={3} />
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+      <div className="pi-memory-panel__controls">
         <SmallInput label="memory_key" value={draft.memory_key} onChange={(value) => state.updateDraft(item.id, 'memory_key', value)} />
         <SmallSelect label="kind" value={draft.kind} values={MEMORY_KINDS} onChange={(value) => state.updateDraft(item.id, 'kind', value)} />
         <SmallSelect label="memory_type" value={draft.memory_type} values={MEMORY_TYPES} onChange={(value) => state.updateDraft(item.id, 'memory_type', value)} />
@@ -171,7 +172,7 @@ function MemoryCard({ item, state }) {
           : <button className="btn btn-secondary" onClick={() => state.action(item, 'disable')} disabled={Boolean(state.busy)}><XCircle size={14} />禁用</button>}
         <button className="btn btn-secondary" onClick={() => state.action(item, 'forget')} disabled={Boolean(state.busy)}><Trash2 size={14} />忘记</button>
       </div>
-      <small style={{ color: 'var(--text-muted)' }}>
+      <small className="pi-memory-panel__meta">
         source={item.source_type || '-'}:{item.source_id || '-'} · evidence={citationText(item)} · last_seen={item.last_seen_at || item.updated_at}
       </small>
     </article>
@@ -179,14 +180,14 @@ function MemoryCard({ item, state }) {
 }
 
 function SmallInput({ label, onChange, value }) {
-  return <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.78rem' }}>{label}<input className="form-control" style={{ width: '170px' }} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return <label className="pi-memory-panel__small-field">{label}<input className="form-control pi-memory-panel__small-control" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function SmallSelect({ label, onChange, value, values }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+    <label className="pi-memory-panel__small-field">
       {label}
-      <select className="form-control" style={{ width: '170px' }} value={value} onChange={(event) => onChange(event.target.value)}>
+      <select className="form-control pi-memory-panel__small-control" value={value} onChange={(event) => onChange(event.target.value)}>
         {values.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
       </select>
     </label>

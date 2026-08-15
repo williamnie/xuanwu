@@ -1,0 +1,100 @@
+.issue-detail-runs,
+.issue-detail-runs__list,
+.issue-detail-runs__card,
+.issue-detail-runs__field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.issue-detail-runs {
+  gap: 14px;
+}
+
+.issue-detail-runs__heading,
+.issue-detail-runs__card-header,
+.issue-detail-runs__actions {
+  align-items: center;
+  display: flex;
+}
+
+.issue-detail-runs__heading {
+  font-size: 1.1rem;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.issue-detail-runs__description,
+.issue-detail-runs__empty,
+.issue-detail-runs__field-label {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.issue-detail-runs__description {
+  font-size: 0.75rem;
+}
+
+.issue-detail-runs__empty,
+.issue-detail-runs__attempt {
+  font-size: 0.85rem;
+}
+
+.issue-detail-runs__list {
+  gap: 10px;
+}
+
+.issue-detail-runs__card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  gap: 8px;
+  padding: 10px;
+}
+
+.issue-detail-runs__card-header {
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.issue-detail-runs__attempt {
+  font-weight: 700;
+}
+
+.issue-detail-runs__status {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+}
+
+.issue-detail-runs__error {
+  background: var(--error-bg);
+  border-radius: var(--radius-md);
+  color: var(--error);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+  padding: 8px;
+}
+
+.issue-detail-runs__actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.issue-detail-runs__field {
+  gap: 3px;
+}
+
+.issue-detail-runs__field-label,
+.issue-detail-runs__field-value.is-mono {
+  font-size: 0.72rem;
+}
+
+.issue-detail-runs__field-value {
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issue-detail-runs__field-value.is-mono {
+  font-family: var(--font-mono);
+}

@@ -1,0 +1,71 @@
+.issue-edit-modal {
+  max-height: calc(100vh - 48px);
+  max-width: 780px;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.issue-edit-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.issue-edit-modal__help,
+.issue-edit-modal__description {
+  color: var(--text-muted);
+}
+
+.issue-edit-modal__help {
+  font-size: 0.75rem;
+}
+
+.issue-edit-modal__header,
+.issue-edit-modal__actions {
+  align-items: center;
+  display: flex;
+}
+
+.issue-edit-modal__header {
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.issue-edit-modal__title {
+  font-size: 1.12rem;
+  font-weight: 700;
+}
+
+.issue-edit-modal__description {
+  font-size: 0.78rem;
+  margin-top: 4px;
+}
+
+.issue-edit-modal__close {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.issue-edit-modal__error {
+  background: var(--error-bg);
+  border-radius: var(--radius-sm);
+  color: var(--error);
+  font-size: 0.78rem;
+  padding: 8px 12px;
+}
+
+.issue-edit-modal__actions {
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.issue-edit-modal__cancel {
+  padding: 6px 12px;
+}
+
+.issue-edit-modal__submit {
+  padding: 6px 16px;
+}

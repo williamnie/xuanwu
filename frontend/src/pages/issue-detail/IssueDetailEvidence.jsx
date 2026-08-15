@@ -3,6 +3,7 @@ import IssueSupervisorPanel from '../IssueSupervisorPanel';
 import { serviceTierLabel, serviceTierOptions } from '../../utils/serviceTier';
 import { hasMcpRequirements, mcpRequirementStatus } from '../../utils/mcpRequirements';
 import { formatDateTime, issuePriorityLabel } from './issueDetailFormatters';
+import './IssueDetailEvidence.css';
 
 export default function IssueDetailEvidence({
   issue,
@@ -116,21 +117,21 @@ function MetadataRow({ label, value, mono = false }) {
 function IssueMcpRequirementsPanel({ summary }) {
   const active = hasMcpRequirements(summary);
   return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
-        <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>MCP requirements</h3>
+    <section className="glass-card issue-mcp-requirements">
+      <div className="issue-mcp-requirements__header">
+        <h3 className="issue-mcp-requirements__heading">MCP requirements</h3>
         <span className={`triage-readiness-badge ${summary.diagnostics.length ? 'refined' : active ? 'ready' : 'raw'}`}>
           {mcpRequirementStatus(summary)}
         </span>
       </div>
-      <p style={{ color: 'var(--text-muted)', fontSize: '0.76rem', margin: 0 }}>
+      <p className="issue-mcp-requirements__description">
         这里只显示 issue/project/delegation 的 MCP capability 需求；不会直接执行 MCP。
       </p>
       <McpCapabilityGroup label="Required" items={summary.required} />
       <McpCapabilityGroup label="Recommended" items={summary.recommended} />
       <McpCapabilityGroup label="Project allowlist" items={summary.projectAllowed} />
       {summary.diagnostics.length > 0 && (
-        <div style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', padding: '8px 10px', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div className="issue-mcp-requirements__diagnostics">
           {summary.diagnostics.map((item, index) => (
             <span key={`${item.scope}-${item.capability_id}-${index}`}>
               <AlertTriangle size={13} /> {item.scope}: {item.capability_id} 未注册
@@ -144,14 +145,14 @@ function IssueMcpRequirementsPanel({ summary }) {
 
 function McpCapabilityGroup({ label, items }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase' }}>{label}</span>
+    <div className="issue-mcp-requirements__group">
+      <span className="issue-mcp-requirements__label">{label}</span>
       {items.length > 0 ? (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {items.map(item => <code key={item} style={{ fontSize: '0.72rem', background: 'rgba(0,0,0,0.08)', padding: '3px 6px', borderRadius: 'var(--radius-sm)' }}>{item}</code>)}
+        <div className="issue-mcp-requirements__capabilities">
+          {items.map(item => <code className="issue-mcp-requirements__capability" key={item}>{item}</code>)}
         </div>
       ) : (
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>未声明</span>
+        <span className="issue-mcp-requirements__empty">未声明</span>
       )}
     </div>
   );

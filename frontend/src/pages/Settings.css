@@ -259,6 +259,185 @@
   padding: 22px;
 }
 
+.runtime-status {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.runtime-status__header,
+.runtime-status__split-row,
+.runtime-status__title-row,
+.runtime-status__card-value {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.runtime-status__header,
+.runtime-status__split-row {
+  justify-content: space-between;
+}
+
+.runtime-status__header {
+  gap: 16px;
+}
+
+.runtime-status__heading {
+  align-items: center;
+  display: flex;
+  font-size: 1.1rem;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.runtime-status__description {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-top: 4px;
+}
+
+.runtime-status__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.runtime-status__error {
+  color: var(--error);
+  font-size: 0.86rem;
+}
+
+.runtime-status__empty {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.runtime-status__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.runtime-status__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.runtime-status__card,
+.runtime-status__warning-card,
+.runtime-status__version {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+}
+
+.runtime-status__card-label {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-bottom: 6px;
+}
+
+.runtime-status__card-value,
+.runtime-status__title-row {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.runtime-status__dot {
+  height: 7px;
+  width: 7px;
+}
+
+.runtime-status__split-row {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.runtime-status__meta {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.runtime-status__meta--spaced {
+  margin-top: 8px;
+}
+
+.runtime-status__meta--compact {
+  margin-top: 6px;
+}
+
+.runtime-status__role-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.runtime-status__role {
+  font-size: 0.82rem;
+}
+
+.runtime-status__process-list {
+  border-top: 1px solid var(--border-light);
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
+.runtime-status__process {
+  font-size: 0.78rem;
+}
+
+.runtime-status__warning-card,
+.runtime-status__version.is-warning {
+  background: var(--warning-bg);
+  border-color: var(--warning);
+}
+
+.runtime-status__warning-list,
+.runtime-status__version-warnings {
+  color: var(--warning);
+  margin: 8px 0 0 18px;
+}
+
+.runtime-status__warning-list {
+  font-size: 0.82rem;
+}
+
+.runtime-status__version.is-success {
+  background: var(--success-glow);
+  border-color: var(--success);
+}
+
+.runtime-status__version-summary {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.runtime-status__build-stamp {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+
+.runtime-status__version-ok {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-top: 6px;
+}
+
+.runtime-status__version-warnings {
+  font-size: 0.8rem;
+}
+
 .settings-language-bar {
   align-items: center;
   background: var(--bg-card);

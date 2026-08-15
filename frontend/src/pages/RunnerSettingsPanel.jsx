@@ -2,6 +2,7 @@ import { systemApi } from '../api/system.js';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Gauge, Monitor, RefreshCw, Rocket, Save, Terminal } from 'lucide-react';
 import { message } from '../store/toastStore';
+import './RunnerSettingsPanel.css';
 
 const DEFAULT_SETTINGS = {
   codex_app_command: '/Applications/Codex.app/Contents/Resources/codex app-server --listen stdio://',
@@ -20,9 +21,9 @@ const DEFAULT_SETTINGS = {
 export default function RunnerSettingsPanel() {
   const state = useRunnerSettings();
   return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <section className="glass-card runner-settings">
       <PanelHeader loading={state.loading} onRefresh={state.loadSettings} />
-      {state.error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{state.error}</div>}
+      {state.error && <div className="runner-settings__error">{state.error}</div>}
       <FirstUseLauncher settings={state.settings} />
       <SettingsForm {...state} />
     </section>
@@ -75,12 +76,12 @@ function useRunnerSettings() {
 
 function PanelHeader({ loading, onRefresh }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+    <div className="runner-settings__header">
       <div>
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <h2 className="runner-settings__heading">
           <Gauge size={18} color="var(--primary)" /> Runner Execution
         </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
+        <p className="runner-settings__description">
           显式选择 Runner 接入 Codex CLI 还是 Codex App；选择后只影响新的 issue/session。
         </p>
       </div>
@@ -96,11 +97,11 @@ function FirstUseLauncher({ settings }) {
   const installCommand = 'curl -fsSL https://raw.githubusercontent.com/williamnie/xuanwu/main/scripts/install-release.sh | bash';
   const projectCommand = 'xuanwu project create --id my-project --cwd /path/to/project --auto-run';
   return (
-    <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-xl)', padding: '14px', background: 'var(--bg-secondary)', display: 'grid', gap: '12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800 }}>
+    <div className="runner-settings__launcher">
+      <div className="runner-settings__strong-row">
         <Rocket size={17} color="var(--primary)" /> 首次使用启动器
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px' }}>
+      <div className="runner-settings__launcher-grid">
         <LauncherStep title="1. 安装后台服务" body="Release 安装脚本会下载二进制并注册 launchd/systemd。" code={installCommand} />
         <LauncherStep title="2. 准备 Codex" body="确认 codex CLI 可用，或安装/打开 Codex App 并完成登录。" code="codex login && codex app" />
         <LauncherStep title="3. 选择 server" body={`当前使用 ${settings.codex_server_mode === 'app' ? 'Codex App' : 'Codex CLI'}，保存后不自动 fallback。`} code={settings.codex_effective_command} />
@@ -112,10 +113,10 @@ function FirstUseLauncher({ settings }) {
 
 function LauncherStep({ title, body, code }) {
   return (
-    <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '12px', display: 'grid', gap: '8px' }}>
-      <div style={{ fontWeight: 800 }}>{title}</div>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: 1.5 }}>{body}</div>
-      <code style={{ fontSize: '0.72rem', wordBreak: 'break-word', color: 'var(--text-secondary)' }}>{code}</code>
+    <div className="runner-settings__launcher-step">
+      <div className="runner-settings__strong">{title}</div>
+      <div className="runner-settings__muted-copy">{body}</div>
+      <code className="runner-settings__command">{code}</code>
     </div>
   );
 }
@@ -124,10 +125,10 @@ function SettingsForm({ draft, handleSubmit, loading, saving, setDraft, settings
   const max = settings.max_parallel_projects_limit || DEFAULT_SETTINGS.max_parallel_projects_limit;
   const min = settings.min_parallel_projects || DEFAULT_SETTINGS.min_parallel_projects;
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '14px' }}>
+    <form className="runner-settings__form" onSubmit={handleSubmit}>
       <CodexServerSelector draft={draft} disabled={loading || saving} setDraft={setDraft} settings={settings} />
-      <label style={{ display: 'grid', gap: '6px' }}>
-        <span style={{ fontWeight: 700 }}>全局项目并发数</span>
+      <label className="runner-settings__field">
+        <span className="runner-settings__label">全局项目并发数</span>
         <input
           className="form-control"
           type="number"
@@ -139,7 +140,7 @@ function SettingsForm({ draft, handleSubmit, loading, saving, setDraft, settings
           onChange={(event) => updateDraft(setDraft, { maxParallelProjects: event.target.value })}
         />
       </label>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: 1.6 }}>
+      <div className="runner-settings__help">
         可填 {min}-{max}。Runner 会按项目工作区串行 claim issue，不同项目在该上限内并行启动。
         {settings.settings_file && <div>配置文件：<code>{settings.settings_file}</code></div>}
       </div>
@@ -155,9 +156,9 @@ function SettingsForm({ draft, handleSubmit, loading, saving, setDraft, settings
 
 function CodexServerSelector({ draft, disabled, setDraft, settings }) {
   return (
-    <div style={{ display: 'grid', gap: '10px' }}>
-      <span style={{ fontWeight: 700 }}>Codex server 接入方式</span>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
+    <div className="runner-settings__selector">
+      <span className="runner-settings__label">Codex server 接入方式</span>
+      <div className="runner-settings__server-grid">
         <ServerOption id="cli" icon={<Terminal size={16} />} draft={draft} disabled={disabled} setDraft={setDraft} title="Codex CLI" description="独立拉起 CLI app-server，适合稳定后台自动执行。" />
         <ServerOption id="app" icon={<Monitor size={16} />} draft={draft} disabled={disabled} setDraft={setDraft} title="Codex App" description="使用 Codex App bundled server 环境，适合需要 App/Chrome 集成的任务。" />
       </div>
@@ -173,15 +174,14 @@ function ServerOption({ description, disabled, draft, icon, id, setDraft, title 
   const active = draft.codexServerMode === id;
   return (
     <button
-      className="btn btn-secondary"
+      className={`btn btn-secondary runner-settings__server-option${active ? ' is-active' : ''}`}
       type="button"
       disabled={disabled}
       onClick={() => updateDraft(setDraft, { codexServerMode: id })}
-      style={{ justifyContent: 'flex-start', borderColor: active ? 'var(--primary)' : 'var(--border-light)', background: active ? 'var(--primary-glow)' : 'var(--bg-secondary)', height: 'auto', padding: '12px' }}
     >
-      <span style={{ display: 'grid', gap: '5px', textAlign: 'left' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800 }}>{icon}{title}</span>
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.76rem', lineHeight: 1.45 }}>{description}</span>
+      <span className="runner-settings__server-option-copy">
+        <span className="runner-settings__strong-row">{icon}{title}</span>
+        <span className="runner-settings__option-description">{description}</span>
       </span>
     </button>
   );
@@ -189,8 +189,8 @@ function ServerOption({ description, disabled, draft, icon, id, setDraft, title 
 
 function CommandInput({ disabled, label, onChange, value }) {
   return (
-    <label style={{ display: 'grid', gap: '6px' }}>
-      <span style={{ color: 'var(--text-muted)', fontSize: '0.76rem', fontWeight: 700 }}>{label}</span>
+    <label className="runner-settings__field">
+      <span className="runner-settings__field-label">{label}</span>
       <input className="form-control" disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
@@ -200,16 +200,16 @@ function AppStatus({ selected, status }) {
   if (!status) return null;
   const ok = status.installed && (!selected || status.native_host_configured);
   return (
-    <div style={{ border: `1px solid ${ok ? 'var(--success)' : 'var(--warning)'}`, borderRadius: 'var(--radius-lg)', padding: '10px', background: ok ? 'var(--success-glow)' : 'var(--warning-bg)', fontSize: '0.8rem', lineHeight: 1.6 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800 }}>
+    <div className={`runner-settings__status ${ok ? 'is-success' : 'is-warning'}`}>
+      <div className="runner-settings__strong-row">
         {ok ? <CheckCircle2 size={15} color="var(--success)" /> : <AlertTriangle size={15} color="var(--warning)" />}
         Codex App 检测：{status.installed ? '已安装' : '未找到'} / {status.running ? '正在运行' : '未检测到运行态'}
       </div>
-      <div style={{ color: 'var(--text-muted)', wordBreak: 'break-word' }}>
+      <div className="runner-settings__status-detail">
         App command: <code>{status.command || '未检测到'}</code>
       </div>
       {selected && !status.running && (
-        <div style={{ color: 'var(--warning)' }}>已选择 App 时不会自动 fallback；如果你关闭 Codex App 或 App 集成不可用，新任务会按当前配置失败。</div>
+        <div className="runner-settings__warning">已选择 App 时不会自动 fallback；如果你关闭 Codex App 或 App 集成不可用，新任务会按当前配置失败。</div>
       )}
     </div>
   );
@@ -218,12 +218,12 @@ function AppStatus({ selected, status }) {
 function CommandStatus({ status, title }) {
   if (!status) return null;
   return (
-    <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '10px', background: 'var(--bg-secondary)', fontSize: '0.8rem', lineHeight: 1.6 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800 }}>
-        <span className={`status-dot ${status.available ? 'active' : 'idle'}`} style={{ width: '7px', height: '7px' }}></span>
+    <div className="runner-settings__status">
+      <div className="runner-settings__strong-row">
+        <span className={`status-dot runner-settings__status-dot ${status.available ? 'active' : 'idle'}`}></span>
         {title}：{status.available ? 'available' : 'missing'}
       </div>
-      <div style={{ color: 'var(--text-muted)', wordBreak: 'break-word' }}>
+      <div className="runner-settings__status-detail">
         {status.path || status.error || status.command}
         {status.version && <span> · {status.version}</span>}
       </div>

@@ -1,17 +1,18 @@
 import { Copy, FileText } from 'lucide-react';
 import { runtimeLogStats } from '../utils/runtimeLogs';
+import './RuntimeLogsPanel.css';
 
 export default function RuntimeLogsPanel({ logs, loading, error, onCopy }) {
   const stats = runtimeLogStats(logs);
   return (
-    <div style={panelStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
+    <div className="runtime-logs-panel">
+      <div className="runtime-logs-panel__header">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+          <div className="runtime-logs-panel__title">
             <FileText size={16} color="var(--primary)" />
             Runtime Logs
           </div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '4px' }}>
+          <div className="runtime-logs-panel__summary">
             最近 {logs?.line_limit || 120} 行摘要 · errors {stats.errors} · warnings {stats.warnings} · missing {stats.missing}
           </div>
         </div>
@@ -20,8 +21,8 @@ export default function RuntimeLogsPanel({ logs, loading, error, onCopy }) {
           复制日志摘要
         </button>
       </div>
-      {loading && !logs && <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>正在读取 runtime logs...</div>}
-      {error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{error}</div>}
+      {loading && !logs && <div className="runtime-logs-panel__empty">正在读取 runtime logs...</div>}
+      {error && <div className="runtime-logs-panel__error">{error}</div>}
       {!error && logs && <RuntimeLogsBody logs={logs} />}
     </div>
   );
@@ -29,9 +30,9 @@ export default function RuntimeLogsPanel({ logs, loading, error, onCopy }) {
 
 function RuntimeLogsBody({ logs }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <ImportantLogLines title="最近错误" lines={logs.recent_errors || []} empty="最近日志中未发现 error/panic/failed。" tone="var(--error)" />
-      <ImportantLogLines title="最近 warning" lines={logs.recent_warnings || []} empty="最近日志中未发现 warning。" tone="var(--warning)" />
+    <div className="runtime-logs-panel__body">
+      <ImportantLogLines title="最近错误" lines={logs.recent_errors || []} empty="最近日志中未发现 error/panic/failed。" tone="error" />
+      <ImportantLogLines title="最近 warning" lines={logs.recent_warnings || []} empty="最近日志中未发现 warning。" tone="warning" />
       <LogPathList logs={logs.logs || []} />
     </div>
   );
@@ -40,11 +41,11 @@ function RuntimeLogsBody({ logs }) {
 function ImportantLogLines({ title, lines, empty, tone }) {
   return (
     <div>
-      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '6px' }}>{title}</div>
+      <div className="runtime-logs-panel__section-title">{title}</div>
       {lines.length === 0 ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>{empty}</div>
+        <div className="runtime-logs-panel__section-empty">{empty}</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div className="runtime-logs-panel__lines">
           {lines.slice(0, 5).map((line, index) => <LogLine key={`${line.source}-${line.time}-${index}`} line={line} tone={tone} />)}
         </div>
       )}
@@ -54,11 +55,11 @@ function ImportantLogLines({ title, lines, empty, tone }) {
 
 function LogLine({ line, tone }) {
   return (
-    <div style={{ borderLeft: `3px solid ${tone}`, padding: '8px 10px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)' }}>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: '4px' }}>
+    <div className={`runtime-logs-panel__line is-${tone}`}>
+      <div className="runtime-logs-panel__line-meta">
         {line.source || 'runtime'} · {line.time || 'time unknown'} · {line.level || 'info'}
       </div>
-      <code style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: '0.78rem', color: 'var(--text-primary)' }}>
+      <code className="runtime-logs-panel__line-text">
         {line.text}
       </code>
     </div>
@@ -67,16 +68,16 @@ function LogLine({ line, tone }) {
 
 function LogPathList({ logs }) {
   if (logs.length === 0) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>未配置 runtime 日志路径。</div>;
+    return <div className="runtime-logs-panel__section-empty">未配置 runtime 日志路径。</div>;
   }
   return (
     <div>
-      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '6px' }}>日志路径</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div className="runtime-logs-panel__section-title">日志路径</div>
+      <div className="runtime-logs-panel__lines">
         {logs.map(log => (
-          <div key={`${log.source}-${log.path}`} style={logPathStyle(log.available)}>
-            <span className={`status-dot ${log.available ? 'active' : 'idle'}`} style={{ width: '7px', height: '7px', marginTop: '5px', flex: '0 0 auto' }}></span>
-            <span style={{ overflowWrap: 'anywhere' }}>
+          <div className={`runtime-logs-panel__path${log.available ? '' : ' is-unavailable'}`} key={`${log.source}-${log.path}`}>
+            <span className={`status-dot runtime-logs-panel__path-dot ${log.available ? 'active' : 'idle'}`}></span>
+            <span className="runtime-logs-panel__path-copy">
               <strong>{log.source || 'runtime'}:</strong> {log.path || 'unknown'}
               {!log.available && <span> · {log.error || '不可用'}</span>}
             </span>
@@ -85,24 +86,4 @@ function LogPathList({ logs }) {
       </div>
     </div>
   );
-}
-
-const panelStyle = {
-  border: '1px solid var(--border-light)',
-  borderRadius: 'var(--radius-lg)',
-  padding: '12px',
-  background: 'var(--bg-secondary)',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '12px',
-};
-
-function logPathStyle(available) {
-  return {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: '8px',
-    fontSize: '0.8rem',
-    color: available ? 'var(--text-secondary)' : 'var(--warning)',
-  };
 }

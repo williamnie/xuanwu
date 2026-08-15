@@ -1786,3 +1786,6 @@ input:checked + .slider:before {
   justify-content: flex-end;
   gap: 10px;
 }
+.auth-token-form-group {
+  margin-bottom: 0;
+}

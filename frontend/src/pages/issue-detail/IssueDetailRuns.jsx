@@ -7,24 +7,25 @@ import {
   runSelectionReasonLabel,
 } from '../../utils/agentProfiles';
 import { formatDateTime, providerLabel, summarize } from './issueDetailFormatters';
+import './IssueDetailRuns.css';
 
 export default function IssueDetailRuns({ issue, project, profiles, runs, currentStatus, navigateTo, onCopy }) {
   const latestRunId = latestRunFromRuns(runs)?.id || '';
   return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px', minWidth: 0 }}>
-      <h3 style={{ fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <section className="glass-card issue-detail-runs">
+      <h3 className="issue-detail-runs__heading">
         <History size={18} color="var(--primary)" /> Runs 历史
       </h3>
-      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+      <p className="issue-detail-runs__description">
         当前状态是 <strong>{currentStatus}</strong>；下方按 attempt 展示每一轮独立执行记录。
       </p>
 
       {runs.length === 0 ? (
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
+        <p className="issue-detail-runs__empty">
           暂无 run 记录，issue 进入 runner claim 后会生成第一条。
         </p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
+        <div className="issue-detail-runs__list">
           {runs.map(run => (
             <IssueRunCard
               key={run.id}
@@ -50,12 +51,12 @@ function IssueRunCard({ issue, project, profiles, run, isLatest, navigateTo, onC
   const sessionId = run.provider_session_id || run.codex_thread_id || issue?.codex_thread_id || '';
   const turnId = run.provider_turn_id || run.codex_turn_id || issue?.codex_turn_id || '';
   return (
-    <article style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
-        <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>
+    <article className="issue-detail-runs__card">
+      <div className="issue-detail-runs__card-header">
+        <span className="issue-detail-runs__attempt">
           Attempt #{run.attempt}{isLatest ? ' · latest' : ''}
         </span>
-        <span className={`status-badge ${run.status}`} style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+        <span className={`status-badge issue-detail-runs__status ${run.status}`}>
           {running && <span className="status-dot running" />}
           {run.status}
         </span>
@@ -73,11 +74,11 @@ function IssueRunCard({ issue, project, profiles, run, isLatest, navigateTo, onC
       <RunField label="结束" value={running ? '运行中' : formatDateTime(run.ended_at)} />
       {run.exit_reason && <RunField label="退出原因" value={run.exit_reason} />}
       {error && (
-        <div style={{ color: 'var(--error)', background: 'var(--error-bg)', borderRadius: 'var(--radius-md)', padding: '8px', fontSize: '0.75rem', overflowWrap: 'anywhere' }}>
+        <div className="issue-detail-runs__error">
           {error}
         </div>
       )}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      <div className="issue-detail-runs__actions">
         {sessionRef && (
           <button type="button" className="kanban-card-action-btn" onClick={() => navigateTo?.('sessions', null, sessionRef)}>
             <ExternalLink size={12} /> 打开 Session
@@ -117,9 +118,9 @@ function runCopyText(run, sessionRef, sessionId, turnId) {
 
 function RunField({ label, value, mono = false }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
-      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{label}</span>
-      <span style={{ fontFamily: mono ? 'var(--font-mono)' : undefined, fontSize: mono ? '0.72rem' : '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+    <div className="issue-detail-runs__field">
+      <span className="issue-detail-runs__field-label">{label}</span>
+      <span className={`issue-detail-runs__field-value${mono ? ' is-mono' : ''}`}>
         {value}
       </span>
     </div>

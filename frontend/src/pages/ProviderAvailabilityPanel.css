@@ -1,0 +1,107 @@
+.provider-availability {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.provider-availability__error {
+  color: var(--error);
+  font-size: 0.86rem;
+}
+
+.provider-availability__header,
+.provider-availability__heading,
+.provider-availability__card-header,
+.provider-availability__meta-value {
+  align-items: center;
+  display: flex;
+}
+
+.provider-availability__header,
+.provider-availability__card-header {
+  justify-content: space-between;
+}
+
+.provider-availability__header {
+  gap: 16px;
+}
+
+.provider-availability__heading {
+  font-size: 1.1rem;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.provider-availability__description {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-top: 4px;
+}
+
+.provider-availability__empty {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.provider-availability__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.provider-availability__card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+.provider-availability__card-header {
+  gap: 10px;
+}
+
+.provider-availability__card-title {
+  font-weight: 800;
+}
+
+.provider-availability__status {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.provider-availability__status.is-available {
+  color: var(--success);
+}
+
+.provider-availability__capabilities {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.provider-availability__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.provider-availability__meta-label {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.provider-availability__meta-value {
+  font-size: 0.84rem;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.provider-availability__dot {
+  flex: 0 0 auto;
+  height: 7px;
+  width: 7px;
+}
