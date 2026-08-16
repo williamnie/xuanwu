@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Xuanwu Design System — 组件总览</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  body { font-family: var(--font-display); background: var(--bg-primary); color: var(--text-primary); margin: 0; }
+  .page { margin: 0 auto; max-width: 960px; padding: 32px 24px 64px; }
+  header.top { align-items: center; display: flex; justify-content: space-between; margin-bottom: 8px; }
+  header.top h1 { font-size: 1.3rem; font-weight: 650; letter-spacing: -0.02em; margin: 0; }
+  header.top p { color: var(--text-muted); font-size: 0.75rem; margin: 4px 0 0; }
+  .theme-toggle { display: flex; gap: 8px; }
+  section.block { border-top: 1px solid var(--border-color); margin-top: 28px; padding-top: 18px; }
+  section.block > h2 { font-size: 0.85rem; font-weight: 700; margin: 0 0 4px; }
+  section.block > p { color: var(--text-muted); font-size: 0.72rem; margin: 0 0 14px; }
+  .row { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+  .swatches { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .swatch { border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; }
+  .swatch i { display: block; height: 34px; }
+  .swatch span { display: block; font-family: var(--font-mono); font-size: 0.58rem; padding: 6px 8px; }
+  .demo-thread { display: flex; flex-direction: column; gap: 18px; max-width: 720px; }
+  .demo-note { border-left: 2px solid var(--primary); color: var(--text-muted); font-size: 0.7rem; margin-top: 40px; padding: 8px 12px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div>
+      <span class="ds-mono-label" style="color: var(--primary); letter-spacing: 0.2em;">XUANWU DESIGN SYSTEM</span>
+      <h1>组件总览</h1>
+      <p>几何/排版两主题一致，仅配色切换 · <a href="./chat.html">完整页面示例 →</a></p>
+    </div>
+    <div class="theme-toggle">
+      <button class="ds-btn ds-btn--sm" onclick="setTheme('')">简洁 LIGHT</button>
+      <button class="ds-btn ds-btn--sm" onclick="setTheme('dark')">极客 DARK</button>
+    </div>
+  </header>
+
+  <section class="block ds-enter">
+    <h2>01 · 色彩令牌（全部经 CSS 变量切换主题）</h2>
+    <p>硬编码 hex 一律禁止，组件只引用变量。</p>
+    <div class="swatches">
+      <div class="swatch"><i style="background:var(--bg-primary);border-bottom:1px solid var(--border-light)"></i><span>--bg-primary</span></div>
+      <div class="swatch"><i style="background:var(--bg-secondary)"></i><span>--bg-secondary</span></div>
+      <div class="swatch"><i style="background:var(--surface-raised)"></i><span>--surface-raised</span></div>
+      <div class="swatch"><i style="background:var(--primary)"></i><span>--primary</span></div>
+      <div class="swatch"><i style="background:var(--primary-glow)"></i><span>--primary-glow</span></div>
+      <div class="swatch"><i style="background:var(--button-primary-bg)"></i><span>--btn-primary-bg</span></div>
+      <div class="swatch"><i style="background:var(--success)"></i><span>--success</span></div>
+      <div class="swatch"><i style="background:var(--warning)"></i><span>--warning</span></div>
+      <div class="swatch"><i style="background:var(--error)"></i><span>--error</span></div>
+      <div class="swatch"><i style="background:var(--info)"></i><span>--info</span></div>
+    </div>
+  </section>
+
+  <section class="block ds-enter">
+    <h2>02 · 按钮（一律直角 32px 高）</h2>
+    <p>浅主题主按钮为黑底白字，深主题为荧光绿底黑字；不加阴影、不加渐变。</p>
+    <div class="row">
+      <button class="ds-btn ds-btn--primary">发送</button>
+      <button class="ds-btn">取消</button>
+      <button class="ds-btn ds-btn--danger">删除会话</button>
+      <button class="ds-btn ds-btn--sm">重试</button>
+      <button class="ds-btn ds-btn--primary"><span class="ds-spinner" style="border-top-color: currentColor"></span>提交中</button>
+      <button class="ds-btn" disabled>已禁用</button>
+      <button class="ds-btn ds-btn--new">+ New Chat</button>
+      <button class="ds-icon-btn" title="复制"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+      <button class="ds-icon-btn" title="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    </div>
+  </section>
+
+  <section class="block ds-enter">
+    <h2>03 · 状态 Pill（dot 是全系统唯一圆形元素之一）</h2>
+    <p>mono 大写 + 同色 8% 底 + 1px 边；running 态仅小圆点脉冲。</p>
+    <div class="row">
+      <span class="ds-status-pill" data-tone="running">running</span>
+      <span class="ds-status-pill" data-tone="ok">succeeded</span>
+      <span class="ds-status-pill" data-tone="error">failed</span>
+      <span class="ds-status-pill" data-tone="idle">idle</span>
+    </div>
+  </section>
+
+  <section class="block ds-enter">
+    <h2>04 · Tabs（通栏细线 + active 实底）</h2>
+    <p>1px 细线分割，不做漂浮大胶囊。</p>
+    <div class="ds-tabs" style="border:1px solid var(--border-color)">
+      <button aria-current="page">会话</button>
+      <button>摘要</button>
+      <button>日志</button>
+      <button>证据</button>
+    </div>
+  </section>
+
+  <section class="block ds-enter">
+    <h2>05 · 侧边栏列表项</h2>
+    <p>active = 主色浅底渐变 + 左侧 2px 色条。</p>
+    <div style="max-width: 280px; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 6px; background: var(--bg-secondary); display: flex; flex-direction: column; gap: 4px;">
+      <button class="ds-nav-item active"><span class="t">优化登录页性能</span><span class="m">demo-project · 10:42</span></button>
+      <button class="ds-nav-item"><span class="t">重构 evidence panel</span><span class="m">demo-project · 昨天</span></button>
+      <button class="ds-nav-item"><span class="t">未命名会话</span><span class="m">-- · 03/12</span></button>
+    </div>
+  </section>
+
+  <section class="block ds-enter">
+    <h2>06 · 数据事实条（Fact Strip）</h2>
+    <p>纵向 标签/值，1px 竖线分隔，不包卡片。</p>
+    <div class="ds-facts" style="border:1px solid var(--border-color)">
+      <div class="ds-fact"><small>Provider</small><strong>codex</strong></div>
+      <div class="ds-fact"><small>Status</small><strong data-tone="running">running</strong></div>
+      <div class="ds-fact"><small>Tokens</small><strong>61.8k</strong></div>
+      <div class="ds-fact"><small>Cost</small><strong>$0.421</strong></div>
+      <div class="ds-fact"><small>Terminal</small><strong data-tone="warn">interrupted</strong></div>
+    </div>
+  </section>
+
+  <section class="block ds-enter">
+    <h2>07 · 面板（细线分割 + 图标芯片）</h2>
+    <div class="ds-panel" style="max-width: 560px;">
+      <div class="ds-panel-head">
+        <div style="display:flex;align-items:center;gap:9px;">
+          <span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
+          <strong>pi · issue-13</strong>
+        </div>
+        <span class="ds-mono-label">当前 ATTEMPT 的实际执行记录</span>
+      </div>
+      <div class="ds-panel-body" style="color: var(--text-secondary); font-size: 0.8rem;">
+        内容区只用细线与头部/事实区隔开，不加额外底色块。
+      </div>
+    </div>
+  </section>
+
+  <section class="block ds-enter">
+    <h2>08 · 对话消息（助手无气泡，用户浅底气泡）</h2>
+    <div class="demo-thread">
+      <div>
+        <div class="ds-msg-head">
+          <span class="ds-avatar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg></span>
+          <span class="ds-role" style="color:var(--primary)">XUANWU</span>
+        </div>
+        <div style="font-size:0.92rem; line-height:1.7; margin-left: 34px;">已定位根因：<code style="font-family:var(--font-mono); background:var(--bg-secondary); padding:1px 5px; border-radius:var(--radius-xs);">useChat.ts:83</code> 的 event handler 未 cleanup。准备实施最小修复。</div>
+      </div>
+      <div style="display:flex; justify-content:flex-end;">
+        <div class="ds-bubble ds-bubble--user">
+          <div class="ds-msg-head"><span class="ds-role" style="color:var(--text-muted)">你</span></div>
+          <div style="font-size:0.88rem;">好，顺带补一个回归测试。</div>
+        </div>
+      </div>
+      <div>
+        <div class="ds-msg-head">
+          <span class="ds-avatar" style="background:var(--error-bg); color:var(--error);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
+          <span class="ds-role" style="color:var(--error)">已中断</span>
+        </div>
+        <div class="ds-bubble ds-bubble--error" style="max-width:100%; margin-left:34px;">
+          <div style="font-size:0.88rem;">本轮输出未完成：会话被中断。可基于已有上下文重试。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block ds-enter">
+    <h2>09 · 终端输出（浅色主题下也保持深底）</h2>
+    <div class="ds-terminal" style="max-width: 640px;">
+      <div class="ds-terminal-head">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        RUN #1024 · ATTEMPT 1 · codex — bash
+      </div>
+      <pre class="ds-terminal-body"><span class="dim">$ </span>bun test src/runner
+<span class="ok">✓</span> runner dispatches provider attempt <span class="dim">(12ms)</span>
+<span class="ok">✓</span> evidence artifacts uploaded <span class="dim">(8ms)</span>
+<span class="err">✗</span> git worktree cleanup on interrupt
+  <span class="err">AssertionError: expected leak list to be empty</span>
+<span class="dim">1 fail · 2 pass · 21ms</span></pre>
+    </div>
+  </section>
+
+  <section class="block ds-enter">
+    <h2>10 · 表单</h2>
+    <div style="display:flex; flex-direction:column; gap:16px; max-width:420px;">
+      <div>
+        <label class="ds-mono-label ds-field-label">PROJECT NAME</label>
+        <input class="ds-input" placeholder="例如 checkout-service">
+      </div>
+      <div>
+        <label class="ds-mono-label ds-field-label">RUNNER URL</label>
+        <input class="ds-input" value="ws://127.0.0.1:47190" style="font-family:var(--font-mono); font-size:0.8rem;">
+      </div>
+      <div class="row">
+        <span class="ds-chip-select">项目: demo-project<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span>
+        <span class="ds-chip-select">Provider: codex<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span>
+        <span class="ds-chip-select" style="color:var(--error);">策略: danger-full-access<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="block ds-enter">
+    <h2>11 · 对话输入器（全系统仅此处与气泡允许 10px 圆角）</h2>
+    <div class="ds-composer" style="max-width: 720px;">
+      <textarea placeholder="尽管问 — @ 引用 issue / run（只读模式仅展示）</textarea>
+      <div class="ds-composer-foot">
+        <span class="ds-status-pill" data-tone="running">已连接 · gpt-5</span>
+        <span class="spacer"></span>
+        <span class="ds-mono-label">ENTER 发送 · SHIFT+ENTER 换行</span>
+        <button class="ds-send" title="发送"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg></button>
+      </div>
+    </div>
+  </section>
+
+  <div class="demo-note">
+    规范正文见 <code style="font-family:var(--font-mono)">docs/design-system/spec.md</code>；本页仅演示组件观感，交互逻辑不复制。
+  </div>
+</div>
+<script>
+  function setTheme(t) {
+    if (t) document.documentElement.dataset.theme = t;
+    else delete document.documentElement.dataset.theme;
+    localStorage.setItem('ds-theme', t);
+  }
+  const saved = localStorage.getItem('ds-theme');
+  if (saved) document.documentElement.dataset.theme = saved;
+</script>
+</body>
+</html>

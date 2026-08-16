@@ -1,0 +1,124 @@
+/* ============================================================
+   XUANWU DESIGN SYSTEM — TOKENS
+   唯一令牌来源。浅色「简洁」为默认，[data-theme="dark"] 为「极客」。
+   所有组件只能引用这里的变量；新增视觉值必须先在此登记令牌。
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* 字体 */
+  --font-display: 'Inter', -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* 背景 / 表面 */
+  --bg-primary: #f3efe5;
+  --bg-secondary: #ece6d8;
+  --bg-card: rgba(255, 253, 247, 0.88);
+  --bg-card-hover: rgba(214, 207, 187, 0.5);
+  --surface-raised: #faf7ee;
+  --surface-overlay: #fffdf7;
+  --control-bg: #fffdf7;
+  --nav-hover: rgba(91, 130, 10, 0.07);
+  --nav-active: linear-gradient(90deg, rgba(91, 130, 10, 0.14), rgba(91, 130, 10, 0.07));
+
+  /* 文字 */
+  --text-primary: #171a18;
+  --text-secondary: #454c46;
+  --text-muted: #79807a;
+  --text-faint: #9aa099;
+
+  /* 强调（唯一品牌色） */
+  --primary: #5b820a;
+  --primary-hover: #6e9a10;
+  --primary-glow: rgba(91, 130, 10, 0.1);
+
+  /* 功能色 */
+  --success: #15803d;
+  --success-bg: rgba(21, 128, 61, 0.08);
+  --warning: #b45309;
+  --warning-bg: rgba(180, 83, 9, 0.08);
+  --error: #b91c1c;
+  --error-bg: rgba(185, 28, 28, 0.07);
+  --info: #0369a1;
+  --info-bg: rgba(3, 105, 161, 0.08);
+  --info-glow: rgba(3, 105, 161, 0.25);
+
+  /* 主按钮（浅主题下为近黑底，是页面唯一重色块） */
+  --button-primary-bg: #0a0d0c;
+  --button-primary-fg: #f2f5f0;
+  --button-height: 32px;
+
+  /* 边框（细线分割是本体系的核心手段） */
+  --border-color: #d9d2c0;
+  --border-light: #e5dfcd;
+  --border-color-hover: #a9a189;
+
+  /* 圆角（五档之外禁止） */
+  --button-radius: 0px;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px; /* 仅对话气泡与 composer */
+
+  /* 阴影（只允许这两档） */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 32px -18px rgba(46, 54, 36, 0.25);
+
+  /* 版式 */
+  --content-max-width: 900px;
+  --sessions-message-max-width: 1120px;
+  --composer-max-width: 780px;
+  --page-gutter: clamp(18px, 3vw, 42px);
+
+  /* 终端固定使用深色表面，但仍通过令牌表达 */
+  --terminal-bg: #0d1210;
+  --terminal-border: rgba(255, 255, 255, 0.08);
+  --terminal-text: #c6d0c9;
+  --terminal-muted: #5b665f;
+  --terminal-success: #4ade80;
+  --terminal-error: #f87171;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-primary: #070a0a;
+  --bg-secondary: #0c100f;
+  --bg-card: rgba(19, 24, 22, 0.9);
+  --bg-card-hover: rgba(37, 45, 41, 0.75);
+  --surface-raised: #101514;
+  --surface-overlay: #131816;
+  --control-bg: #131816;
+  --nav-hover: rgba(186, 255, 63, 0.06);
+  --nav-active: linear-gradient(90deg, rgba(186, 255, 63, 0.14), rgba(186, 255, 63, 0.06));
+
+  --text-primary: #e2e7e4;
+  --text-secondary: #a4aca6;
+  --text-muted: #646b66;
+  --text-faint: #464c48;
+
+  --primary: #baff3f;
+  --primary-hover: #cdff70;
+  --primary-glow: rgba(186, 255, 63, 0.12);
+
+  --success: #4ade80;
+  --success-bg: rgba(74, 222, 128, 0.12);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.1);
+  --error: #f87171;
+  --error-bg: rgba(248, 113, 113, 0.12);
+  --info: #38bdf8;
+  --info-bg: rgba(56, 189, 248, 0.12);
+  --info-glow: rgba(56, 189, 248, 0.3);
+
+  --button-primary-bg: #baff3f;
+  --button-primary-fg: #0a0d0c;
+
+  --border-color: #222826;
+  --border-light: #181d1b;
+  --border-color-hover: #3a423e;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 12px 32px -18px rgba(0, 0, 0, 0.6);
+}

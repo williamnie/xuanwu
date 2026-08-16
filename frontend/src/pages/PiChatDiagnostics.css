@@ -15,7 +15,7 @@
   align-items: center;
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   display: inline-flex;
   flex-direction: row;
   gap: 7px;
@@ -35,7 +35,7 @@
 
 .pi-chat-status-summary[data-tone="running"] .pi-chat-status-dot {
   background: var(--primary);
-  box-shadow: 0 0 0 4px var(--primary-glow);
+  box-shadow: 0 0 0 3px var(--primary-glow);
 }
 
 .pi-chat-status-summary[data-tone="error"] .pi-chat-status-dot {

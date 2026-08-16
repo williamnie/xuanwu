@@ -87,7 +87,7 @@
 .work-inline-confirm > div { display: flex; flex-direction: column; gap: 3px; }
 .work-inline-confirm span { color: var(--text-secondary); font-size: .65rem; }
 .work-inline-confirm button, .work-review-dialog button { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: .68rem; font-weight: 750; padding: 7px 9px; }
-.work-review-dialog { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); display: flex; flex-direction: column; gap: 12px; max-width: 560px; padding: 22px; width: calc(100vw - 34px); }
+.work-review-dialog { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 12px; max-width: 560px; padding: 22px; width: calc(100vw - 34px); }
 .work-review-dialog > span { color: var(--primary); font-family: var(--font-mono); font-size: .58rem; font-weight: 800; letter-spacing: .11em; }
 .work-review-dialog h2, .work-review-dialog p { margin: 0; }
 .work-review-dialog p { color: var(--text-secondary); font-size: .72rem; }

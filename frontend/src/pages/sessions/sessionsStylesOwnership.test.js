@@ -6,6 +6,7 @@ const sessionsCss = readFileSync(new URL('./Sessions.css', import.meta.url), 'ut
 const clientCss = readFileSync(new URL('./SessionsClient.css', import.meta.url), 'utf8');
 const composerCss = readFileSync(new URL('./SessionComposer.css', import.meta.url), 'utf8');
 const foundationCss = readFileSync(new URL('../../GeekWorkbench.css', import.meta.url), 'utf8');
+const designTokensCss = readFileSync(new URL('../../../../docs/design-system/tokens.css', import.meta.url), 'utf8');
 const globalCss = [
   readFileSync(new URL('../../index.css', import.meta.url), 'utf8'),
   readFileSync(new URL('../../GeekWorkbenchPages.css', import.meta.url), 'utf8'),
@@ -24,8 +25,15 @@ function ruleCount(css, selector) {
 
 test('Sessions design tokens have one global source of truth and local consumers', () => {
   for (const token of [
-    '--sessions-transcript-max-width',
     '--sessions-message-max-width',
+    '--composer-max-width',
+    '--page-gutter',
+  ]) {
+    assert.equal((designTokensCss.match(new RegExp(`${token}:`, 'g')) || []).length, 1, token);
+  }
+
+  for (const token of [
+    '--sessions-transcript-max-width',
     '--sessions-composer-max-width',
     '--sessions-page-gutter',
     '--sessions-composer-radius',

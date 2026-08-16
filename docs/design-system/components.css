@@ -1,0 +1,314 @@
+/* ============================================================
+   XUANWU DESIGN SYSTEM — COMPONENTS
+   标准组件参考实现。只依赖 tokens.css 的变量，双主题自动成立。
+   类名以 ds- 前缀避免与业务代码冲突；迁入业务代码时可去掉前缀。
+   ============================================================ */
+
+/* ---------- 基础 ---------- */
+.ds-body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.ds-mono-label {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ---------- 按钮：一律直角 ---------- */
+.ds-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--button-radius); /* 0px */
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  gap: 6px;
+  height: 32px;
+  letter-spacing: 0.01em;
+  padding: 0 14px;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.ds-btn:hover {
+  background: var(--nav-hover);
+  border-color: var(--border-color-hover);
+  color: var(--text-primary);
+}
+.ds-btn:disabled { cursor: not-allowed; opacity: 0.45; }
+
+.ds-btn--primary {
+  background: var(--button-primary-bg);
+  border-color: var(--button-primary-bg);
+  color: var(--button-primary-fg);
+}
+.ds-btn--primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: var(--button-primary-fg);
+}
+.ds-btn--danger { border-color: color-mix(in srgb, var(--error) 45%, transparent); color: var(--error); }
+.ds-btn--danger:hover { background: var(--error-bg); border-color: var(--error); color: var(--error); }
+.ds-btn--sm { font-size: 0.7rem; height: 28px; padding: 0 10px; }
+
+/* 全系统唯一允许渐变的按钮：列表顶部「新建」入口 */
+.ds-btn--new {
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  border: 0;
+  color: var(--button-primary-bg);
+  font-weight: 700;
+}
+
+.ds-icon-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  transition: background-color 140ms ease, color 140ms ease;
+  width: 28px;
+}
+.ds-icon-btn:hover { background: var(--nav-hover); color: var(--text-primary); }
+.ds-icon-btn svg { height: 14px; width: 14px; }
+
+/* 加载态转圈（可放在按钮内或独立使用） */
+.ds-spinner {
+  animation: ds-spin 1s linear infinite;
+  border: 2px solid var(--border-color);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+}
+@keyframes ds-spin { to { transform: rotate(360deg); } }
+
+/* ---------- 状态 Pill / Dot ---------- */
+.ds-status-pill {
+  align-items: center;
+  border: 1px solid;
+  border-radius: var(--radius-xs);
+  display: inline-flex;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 700;
+  gap: 5px;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  text-transform: uppercase;
+}
+.ds-status-pill::before { border-radius: 50%; content: ''; height: 6px; width: 6px; }
+.ds-status-pill[data-tone='running'] { background: var(--info-bg); border-color: var(--info-glow); color: var(--info); }
+.ds-status-pill[data-tone='running']::before { animation: ds-pulse 1.4s ease-in-out infinite; background: var(--info); }
+.ds-status-pill[data-tone='ok'] { background: var(--success-bg); border-color: color-mix(in srgb, var(--success) 35%, transparent); color: var(--success); }
+.ds-status-pill[data-tone='ok']::before { background: var(--success); }
+.ds-status-pill[data-tone='error'] { background: var(--error-bg); border-color: color-mix(in srgb, var(--error) 35%, transparent); color: var(--error); }
+.ds-status-pill[data-tone='error']::before { background: var(--error); }
+.ds-status-pill[data-tone='idle'] { background: transparent; border-color: var(--border-color); color: var(--text-muted); }
+.ds-status-pill[data-tone='idle']::before { background: var(--text-faint); }
+
+@keyframes ds-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+/* ---------- Tabs（通栏细线条，active 实底） ---------- */
+.ds-tabs {
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  padding: 8px 18px;
+  scrollbar-width: none;
+}
+.ds-tabs::-webkit-scrollbar { display: none; }
+.ds-tabs button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.045em;
+  padding: 6px 11px;
+  text-transform: uppercase;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.ds-tabs button:hover { background: var(--nav-hover); color: var(--text-primary); }
+.ds-tabs button[aria-current='page'] { background: var(--button-primary-bg); color: var(--button-primary-fg); }
+
+/* ---------- 侧边栏列表项 ---------- */
+.ds-nav-item {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: block;
+  padding: 9px 10px;
+  text-align: left;
+  transition: background-color 140ms ease, border-color 140ms ease;
+  width: 100%;
+}
+.ds-nav-item:hover { background: var(--nav-hover); color: var(--text-primary); }
+.ds-nav-item.active {
+  background: var(--nav-active);
+  border-color: color-mix(in srgb, var(--primary) 20%, transparent);
+  box-shadow: inset 2px 0 0 var(--primary);
+  color: var(--text-primary);
+}
+.ds-nav-item .t { display: block; font-size: 0.78rem; font-weight: 600; }
+.ds-nav-item .m { color: var(--text-muted); display: block; font-family: var(--font-mono); font-size: 0.58rem; margin-top: 3px; }
+
+/* ---------- 数据事实条 ---------- */
+.ds-facts {
+  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  flex-wrap: wrap;
+}
+.ds-fact { border-right: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 3px; padding: 9px 18px; }
+.ds-fact:last-child { border-right: 0; }
+.ds-fact small {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.ds-fact strong { color: var(--text-primary); font-family: var(--font-mono); font-size: 0.78rem; font-weight: 700; }
+.ds-fact strong[data-tone='running'] { color: var(--info); }
+.ds-fact strong[data-tone='ok'] { color: var(--success); }
+.ds-fact strong[data-tone='error'] { color: var(--error); }
+.ds-fact strong[data-tone='warn'] { color: var(--warning); }
+
+/* ---------- 面板 / 卡片（细线分割，不做色块） ---------- */
+.ds-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); }
+.ds-panel-head {
+  align-items: center;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  gap: 9px;
+  justify-content: space-between;
+  padding: 11px 16px;
+}
+.ds-panel-head .ic {
+  align-items: center;
+  background: var(--primary-glow);
+  border-radius: var(--radius-xs);
+  color: var(--primary);
+  display: inline-flex;
+  height: 25px;
+  justify-content: center;
+  width: 25px;
+}
+.ds-panel-head strong { font-size: 0.84rem; font-weight: 650; }
+.ds-panel-body { padding: 14px 16px; }
+
+/* ---------- 消息气泡（lg 圆角是气泡专属） ---------- */
+.ds-bubble { border-radius: var(--radius-lg); max-width: 80%; padding: 14px 16px; }
+.ds-bubble--user { align-self: flex-end; background: var(--primary-glow); border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent); }
+.ds-bubble--error { background: var(--error-bg); border: 1px solid color-mix(in srgb, var(--error) 30%, transparent); border-left: 3px solid var(--error); }
+.ds-msg-head { align-items: center; display: flex; gap: 8px; margin-bottom: 6px; }
+.ds-avatar {
+  align-items: center; background: var(--primary-glow); color: var(--primary);
+  display: inline-flex; height: 26px; justify-content: center; width: 26px; /* 方形头像 */
+}
+.ds-role { font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+
+/* ---------- 终端输出 ---------- */
+.ds-terminal { background: var(--terminal-bg); border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden; }
+.ds-terminal-head {
+  align-items: center; border-bottom: 1px solid var(--terminal-border); color: var(--terminal-muted);
+  display: flex; font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
+  gap: 8px; letter-spacing: 0.1em; padding: 7px 12px; text-transform: uppercase;
+}
+.ds-terminal-body {
+  color: var(--terminal-text); font-family: var(--font-mono); font-size: 0.72rem;
+  line-height: 1.7; margin: 0; overflow-x: auto; padding: 12px 14px;
+}
+.ds-terminal-body .ok { color: var(--terminal-success); }
+.ds-terminal-body .err { color: var(--terminal-error); }
+.ds-terminal-body .dim { color: var(--terminal-muted); }
+
+/* ---------- 表单 ---------- */
+.ds-input, .ds-textarea {
+  background: var(--control-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  outline: none;
+  padding: 8px 10px;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+  width: 100%;
+}
+.ds-input:focus, .ds-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+.ds-input::placeholder, .ds-textarea::placeholder { color: var(--text-faint); }
+.ds-field-label { display: block; margin-bottom: 6px; } /* 搭配 .ds-mono-label 使用 */
+
+/* 内嵌型小选择器（composer footer / 配置标签） */
+.ds-chip-select {
+  align-items: center; background: var(--control-bg); border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs); color: var(--text-secondary); cursor: pointer;
+  display: inline-flex; font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600;
+  gap: 6px; letter-spacing: 0.02em; padding: 5px 10px; position: relative;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.ds-chip-select:hover { background: var(--nav-hover); border-color: var(--border-color-hover); color: var(--text-primary); }
+.ds-chip-select svg { color: var(--text-muted); height: 13px; width: 13px; }
+.ds-chip-select select { cursor: pointer; height: 100%; left: 0; opacity: 0; position: absolute; top: 0; width: 100%; }
+
+/* ---------- 对话输入器（允许 radius-lg + 玻璃） ---------- */
+.ds-composer { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); }
+.ds-composer:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+.ds-composer textarea {
+  background: transparent; border: 0; color: var(--text-primary); font-family: var(--font-display);
+  font-size: 0.95rem; line-height: 1.6; min-height: 96px; outline: none; padding: 18px 20px 8px;
+  resize: none; width: 100%;
+}
+.ds-composer-foot { align-items: center; display: flex; gap: 8px; padding: 8px 14px 12px 16px; }
+.ds-composer-foot .spacer { flex: 1; }
+.ds-send {
+  align-items: center; background: var(--button-primary-bg); border: 0; border-radius: 50%; /* 提交钮是全系统唯一圆形 */
+  color: var(--button-primary-fg); cursor: pointer; display: inline-flex; height: 34px;
+  justify-content: center; transition: background-color 140ms ease; width: 34px;
+}
+.ds-send:hover:not(:disabled) { background: var(--primary-hover); }
+.ds-send:disabled { background: var(--bg-card-hover); color: var(--text-muted); cursor: not-allowed; }
+
+/* ---------- 进入动效（首屏一次，220ms） ---------- */
+@keyframes ds-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.ds-enter { animation: ds-fade-up 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* ---------- 焦点可见性 ---------- */
+:where(.ds-btn, .ds-icon-btn, .ds-tabs button, .ds-nav-item, .ds-chip-select, .ds-input, .ds-textarea):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+@media (max-width: 760px) {
+  .ds-tabs { padding-inline: 12px; }
+  .ds-fact { flex: 1 1 50%; padding-inline: 12px; }
+  .ds-bubble { max-width: 92%; }
+  .ds-composer textarea { padding-inline: 14px; }
+  .ds-composer-foot { flex-wrap: wrap; padding-inline: 12px; }
+}
