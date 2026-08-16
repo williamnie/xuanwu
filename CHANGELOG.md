@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-08-16
+
+### Added / 新增
+
+- Work 与 Runs 列表增加五秒静默刷新，在不打断筛选、分页和操作状态的前提下同步最新运行态。
+- 将玄武 Supervisor 对话整合进应用侧栏，并补充稳定的后端连接探测、重连状态和 SSE 重试提示。
+- 增加 Run 列表慢请求观测与进程组内存回收状态，便于定位运行时性能和资源压力。
+
+### Changed / 变更
+
+- 统一工作台、仪表盘、设置页、会话输入区与 Provider 对话流的视觉和交互，恢复完整消息时间线，
+  默认折叠内部执行过程。
+- 模型选择仅接受当前 Provider catalog 中可用的模型，并为 Qoder 模型发现增加有界超时和安全回退。
+- 延长 Core 冷启动健康检查窗口，细化部署失败诊断；本地开发启动时展示实际生效的访问 Token。
+
 ## [0.2.2] - 2026-08-14
 
 ### Added / 新增
@@ -65,7 +80,8 @@
 
 - 首个 GitHub Release，包含 macOS/Linux 的 arm64、amd64 预构建资产和一键安装脚本。
 
-[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/williamnie/xuanwu/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/williamnie/xuanwu/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/williamnie/xuanwu/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/williamnie/xuanwu/compare/v0.1.0...v0.2.0

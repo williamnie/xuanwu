@@ -67,6 +67,12 @@ xuanwu-update upgrade \
 
 ## 4. Migration notes
 
+### v0.2.3
+
+- migration：none。本版本没有新增、删除或修改数据库 schema，也不执行数据维护。
+- 最低可回滚 binary：`v0.2.2`；本版本持久化合同与 `v0.2.2` 兼容。
+- operator action：升级前仍应按常规流程生成并验证 `runner.db` 备份；没有额外配置迁移或默认值切换。
+
 ### 2026-08-03 development redeploy：`067_compact_event_summary_created_at`
 
 - 新增 additive migration `067_compact_event_summary_created_at`：为 compact event summary 增加自身 `event_created_at` 并从 `issue_events.created_at` 回填，不删除或改写 authority 数据。
