@@ -8,6 +8,7 @@ import { buildSessionResumeCommand, markdownFilenameForSession, sessionToMarkdow
 import { providerLabel } from './sessionPageRuntime';
 import {
   isRenderableToolItem,
+  isInspectableToolItem,
   parseLiveSessionEvents,
   shouldRenderLiveTurn,
   shouldShowLiveActivityBanner,
@@ -332,31 +333,9 @@ function TurnItem({ turn, turnIndex, provider, model, project, session }) {
 }
 
 function ProviderExecutionBlock({ items, model, project, provider, timestamp }) {
-  const content = [];
-  let currentTools = [];
-  let toolGroupIndex = 0;
-
-  const flushTools = () => {
-    if (currentTools.length === 0) return;
-    content.push(
-      <ToolsCollapsible
-        key={`${currentTools[0]?.id || 'tools'}-${toolGroupIndex}-collapsible`}
-        tools={currentTools}
-      />,
-    );
-    currentTools = [];
-    toolGroupIndex += 1;
-  };
-
-  items.forEach((item, index) => {
-    if (item.type === 'agentMessage') {
-      flushTools();
-      content.push(<AgentMessageBubble key={item.id || `agent-${index}`} item={item} />);
-    } else {
-      currentTools.push(item);
-    }
-  });
-  flushTools();
+  const finalMessageIndex = items.findLastIndex((item) => item.type === 'agentMessage' && String(item.text || '').trim());
+  const finalMessage = finalMessageIndex >= 0 ? items[finalMessageIndex] : null;
+  const processItems = items.filter((_, index) => index !== finalMessageIndex);
 
   return (
     <div className="session-provider-message">
@@ -366,25 +345,36 @@ function ProviderExecutionBlock({ items, model, project, provider, timestamp }) 
         timestamp={timestamp}
       />
       <div className="session-provider-message-body" data-project={project?.name || ''}>
-        {content}
+        {processItems.length > 0 && <ToolsCollapsible tools={processItems} />}
+        {finalMessage && <AgentMessageBubble item={finalMessage} />}
       </div>
     </div>
   );
 }
 
 function ToolsCollapsible({ tools, isLive }) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(Boolean(isLive));
   const normalizedTools = tools.map((tool) => (tool?.item ? tool.item : tool));
-  const latestTool = normalizedTools.at(-1);
+  const detailItems = normalizedTools.filter((item) => (
+    item?.type === 'agentMessage' || isInspectableToolItem(item)
+  ));
+  const actionCount = normalizedTools.filter((item) => item?.type !== 'agentMessage').length;
+  const progressCount = normalizedTools.length - actionCount;
+  const latestTool = normalizedTools.filter((item) => item?.type !== 'agentMessage').at(-1);
+  const canExpand = detailItems.length > 0;
   const summary = isLive
     ? `正在执行工具 · ${toolSummaryLabel(latestTool)}`
-    : `${normalizedTools.length} 个工具调用 · 最近 ${toolSummaryLabel(latestTool)}`;
+    : actionCount > 0
+      ? `执行过程 · ${actionCount} 个动作`
+      : `执行过程 · ${progressCount} 条进展`;
 
   return (
     <div className="tools-collapsible-wrapper">
       <button
-        className={`tools-trigger-btn ${isOpen ? 'open' : ''} ${isLive ? 'live' : ''}`}
-        onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={canExpand ? isOpen : undefined}
+        className={`tools-trigger-btn ${isOpen ? 'open' : ''} ${isLive ? 'live' : ''} ${canExpand ? '' : 'static'}`}
+        disabled={!canExpand}
+        onClick={() => canExpand && setIsOpen(!isOpen)}
       >
         <span className="tools-trigger-left">
           <span className="tools-indicator-icon">
@@ -392,18 +382,21 @@ function ToolsCollapsible({ tools, isLive }) {
           </span>
           <span className="tools-trigger-text">{summary}</span>
         </span>
-        <span className="tools-trigger-chevron">
-          <ChevronDown size={14} />
-        </span>
+        {canExpand && (
+          <span className="tools-trigger-chevron">
+            <ChevronDown size={14} />
+          </span>
+        )}
       </button>
 
-      {isOpen && (
+      {isOpen && canExpand && (
         <div className="tools-details-content animate-slide-down">
-          {normalizedTools.map((item, idx) => (
-            <ToolDetailItem
-              key={item.id || idx}
-              tool={item}
-            />
+          {detailItems.map((item, idx) => item.type === 'agentMessage' ? (
+            <div className="session-process-note" key={item.id || idx}>
+              <MarkdownText text={item.text || ''} />
+            </div>
+          ) : (
+            <ToolDetailItem key={item.id || idx} tool={item} />
           ))}
         </div>
       )}
@@ -642,6 +635,7 @@ function turnTimestamp(turn, session, role) {
 
 function toolSummaryLabel(tool) {
   if (!tool) return 'Tool';
+  if (/^mcpTool(?:Call|Result)$/i.test(String(tool.type || ''))) return '后台动作';
   if (tool.type === 'commandExecution') return tool.command || 'Terminal';
   if (tool.type === 'fileChange') {
     const file = filesFromFileChangeTool(tool).at(-1);

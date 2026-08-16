@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   isRenderableToolItem,
+  isInspectableToolItem,
   parseLiveSessionEvents,
   shouldRenderLiveTurn,
   shouldShowLiveActivityBanner,
@@ -53,6 +54,26 @@ test('normalized subagent, permission, and provider-native fallback items remain
   });
   assert.equal(toolDisplayForItem({ type: 'permission', text: 'Bash denied' }).title, 'Permission');
   assert.equal(toolDisplayForItem({ type: 'qoderNative', text: '{"future":true}' }).title, 'Provider event');
+});
+
+test('opaque MCP provider events stay counted but are not exposed as detail cards', () => {
+  const item = {
+    type: 'mcpToolCall',
+    input: { server: 'chrome', tool: 'playwright', arguments: { selector: 'button' } },
+  };
+
+  assert.equal(isRenderableToolItem(item), true);
+  assert.equal(isInspectableToolItem(item), false);
+  assert.doesNotMatch(toolDisplayForItem(item).body, /\[object Object\]/);
+  assert.match(toolDisplayForItem(item).body, /"server": "chrome"/);
+});
+
+test('generic object payloads are formatted as JSON instead of object coercion text', () => {
+  const display = toolDisplayForItem({ type: 'futureTool', input: { path: '/tmp/demo' } });
+
+  assert.equal(display.title, 'futureTool');
+  assert.match(display.body, /"path": "\/tmp\/demo"/);
+  assert.doesNotMatch(display.body, /\[object Object\]/);
 });
 
 test('live stream parser keeps generic completed items from SSE payload', () => {

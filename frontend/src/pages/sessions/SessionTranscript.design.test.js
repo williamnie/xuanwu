@@ -14,9 +14,9 @@ test('persisted turns render task input cards before provider execution blocks',
   assert.match(transcriptSource, /role=\{providerIdentity\(provider, model\)\}/);
 });
 
-test('provider tool groups expose count and latest action and start expanded', () => {
-  assert.match(transcriptSource, /useState\(true\)/);
-  assert.match(transcriptSource, /\$\{normalizedTools\.length\} 个工具调用 · 最近/);
+test('provider execution history is concise and starts collapsed', () => {
+  assert.match(transcriptSource, /useState\(Boolean\(isLive\)\)/);
+  assert.match(transcriptSource, /执行过程 · \$\{actionCount\} 个动作/);
   assert.match(transcriptSource, /toolSummaryLabel\(latestTool\)/);
   assert.match(transcriptSource, /<SlidersHorizontal/);
 });
@@ -56,7 +56,7 @@ test('Qoder Run transcript renders the design order with real provider identity'
 
   const inputIndex = markup.indexOf('任务输入');
   const providerIndex = markup.indexOf('qoder · lite');
-  const toolIndex = markup.indexOf('1 个工具调用 · 最近 Reasoning');
+  const toolIndex = markup.indexOf('执行过程 · 1 个动作');
   const answerIndex = markup.indexOf('我是 Qoder，一个 AI 编程助手。');
 
   assert.ok(inputIndex >= 0);
@@ -66,4 +66,37 @@ test('Qoder Run transcript renders the design order with real provider identity'
   assert.match(markup, /session-message-avatar">IN</);
   assert.match(markup, /session-message-avatar">QD</);
   assert.match(markup, /<time class="session-message-time">\d{2}:\d{2}:\d{2}<\/time>/);
+});
+
+test('persisted provider history folds progress and opaque MCP events while keeping only the final reply visible', () => {
+  const markup = renderToStaticMarkup(React.createElement(SessionTranscript, {
+    session: {
+      id: 'codex:session-2',
+      provider: 'codex',
+      provider_session_id: 'session-2',
+      model: 'gpt-5.6-sol',
+      turns: [{
+        id: 'turn-1',
+        items: [
+          { id: 'user-1', type: 'userMessage', content: [{ type: 'input_text', text: '修复页面' }] },
+          { id: 'progress-1', type: 'agentMessage', text: '我先检查当前实现。' },
+          { id: 'mcp-1', type: 'mcpToolCall', input: { server: 'chrome', tool: 'playwright' } },
+          { id: 'mcp-2', type: 'mcpToolCall', input: { server: 'chrome', tool: 'screenshot' } },
+          { id: 'final-1', type: 'agentMessage', text: '页面已经修复并完成验证。' },
+        ],
+      }],
+    },
+    project: { name: 'codex-issue-runner' },
+    liveEvents: [],
+    optimisticUserMessages: [],
+    running: false,
+    sending: false,
+    pendingApproval: null,
+    navigateTo() {},
+  }));
+
+  assert.match(markup, /执行过程 · 2 个动作/);
+  assert.match(markup, /页面已经修复并完成验证。/);
+  assert.doesNotMatch(markup, /我先检查当前实现。/);
+  assert.doesNotMatch(markup, /mcpToolCall|\[object Object\]/);
 });

@@ -856,6 +856,12 @@
   color: var(--text-primary);
 }
 
+.client-chat-area .tools-trigger-btn.static,
+.client-chat-area .tools-trigger-btn:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
 .client-chat-area .tools-indicator-icon {
   background: var(--primary-glow);
   border: 0;
@@ -880,6 +886,19 @@
   gap: 10px;
   margin-left: 0;
   padding: 0;
+}
+
+.client-chat-area .session-process-note {
+  border-left: 2px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  padding: 2px 0 2px 12px;
+}
+
+.client-chat-area .session-process-note .session-markdown {
+  font-size: inherit;
+  line-height: inherit;
 }
 
 .client-chat-area .terminal-window {

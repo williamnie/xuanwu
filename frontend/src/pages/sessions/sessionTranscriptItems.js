@@ -7,6 +7,11 @@ export function isRenderableToolItem(item) {
   return Boolean(toolDisplayForItem(item));
 }
 
+export function isInspectableToolItem(item) {
+  if (!item || isMessageItem(item) || isInternalProviderItem(item)) return false;
+  return isRenderableToolItem(item);
+}
+
 export function toolDisplayForItem(item) {
   if (!item) return null;
   if (item.type === 'reasoning') {
@@ -59,9 +64,20 @@ function toolOutputDisplay(item) {
 }
 
 function genericDisplay(item) {
-  const body = firstNonEmpty(item.text, item.output, item.input, item.arguments, item.delta, detailJSON(item));
+  const body = firstNonEmpty(
+    formatMaybeJSON(item.text),
+    formatMaybeJSON(item.output),
+    formatMaybeJSON(item.input),
+    formatMaybeJSON(item.arguments),
+    formatMaybeJSON(item.delta),
+    detailJSON(item),
+  );
   if (!body) return null;
   return { kind: 'generic', title: toolTypeLabel(item.type), body };
+}
+
+function isInternalProviderItem(item) {
+  return /^mcpTool(?:Call|Result)$/i.test(String(item?.type || ''));
 }
 
 function isMessageItem(item) {
