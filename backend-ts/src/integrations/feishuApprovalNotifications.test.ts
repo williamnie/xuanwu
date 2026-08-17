@@ -28,6 +28,42 @@ afterEach(async () => {
 });
 
 describe("Feishu approval notification queue", () => {
+  test("routes a Codex approval request to the linked Telegram conversation without Feishu config", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issueID = linkedTelegramIssue(db);
+      upsertAgentSession(db, {
+        issue_id: issueID,
+        project_id: "demo",
+        provider: "codex",
+        provider_session_id: "thread-telegram-approval"
+      });
+
+      const queued = queueFeishuApprovalNotification(
+        db,
+        approvalEvent("approval-telegram-1", "thread-telegram-approval", "git status"),
+        { requireConfigured: true }
+      );
+      await flushAgentCommunicationTestMessages(db);
+      const outbox = listSyncOutbox(db, { source: "telegram" });
+
+      expect(queued).toMatchObject({ queued: true, reason: "queued" });
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]).toMatchObject({
+        approval_action_id: "approval-telegram-1",
+        target_chat_id: "-100456",
+        target_message_id: "88",
+        target_thread_id: "12"
+      });
+      expect(getPiApprovalRequest(db, "approval-telegram-1")).toMatchObject({
+        delivery_channel: "telegram",
+        delivery_state: "delivered"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("queues one Feishu notification when a linked issue session requests authorization", async () => {
     const db = await fixtureDatabase();
     try {
@@ -282,6 +318,32 @@ function linkedFeishuIssue(db: RunnerDatabase): number {
     project_id: "demo",
     relationship: "created_issue",
     source: "feishu"
+  });
+  return issue.id;
+}
+
+function linkedTelegramIssue(db: RunnerDatabase): number {
+  const issue = createIssue(db, { project_id: "demo", title: "Telegram task", status: "in_progress" });
+  const event = createExternalEvent(db, {
+    content: "需要授权",
+    dedupe_key: "telegram:update:88",
+    external_id: "88",
+    normalized_message: {
+      conversation: { id: "-100456", kind: "group" },
+      message_id: "88",
+      thread: { id: "12" }
+    },
+    provider: "telegram",
+    source: "telegram"
+  });
+  createExternalLink(db, {
+    conversation_id: "telegram-approval-conversation",
+    external_event_id: event.id,
+    external_type: "telegram_message",
+    issue_id: issue.id,
+    project_id: "demo",
+    relationship: "origin",
+    source: "telegram"
   });
   return issue.id;
 }

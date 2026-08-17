@@ -91,6 +91,21 @@ export const TABLE_DISPOSITIONS = [
     live_rows: 0, delete_preconditions: []
   },
   {
+    name: "connector_cursors", disposition: "keep", target: "Connector receive cursor",
+    source_of_truth: "connector_cursors", retention: "R1_OPERATIONAL", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "connector_delivery_parts", disposition: "keep", target: "Provider-neutral split delivery receipt",
+    source_of_truth: "connector_delivery_parts", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "connector_update_audits", disposition: "keep", target: "Connector update processing audit",
+    source_of_truth: "connector_update_audits", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
     name: "context_bundles", disposition: "merge", target: "Evidence input projection",
     source_of_truth: "context_bundles; source events remain authoritative", retention: "R0_DERIVED", runtime_origin: "source_schema",
     live_rows: 0, delete_preconditions: []
@@ -568,6 +583,10 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/integrations/feishu/settings", family: "integration-intake-delivery" },
   { method: "PUT", path: "/api/integrations/feishu/settings", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/integrations/im/channels", family: "integration-intake-delivery" },
+  { method: "GET", path: "/api/integrations/telegram/settings", family: "integration-intake-delivery" },
+  { method: "POST", path: "/api/integrations/telegram/discover-source", family: "integration-intake-delivery" },
+  { method: "POST", path: "/api/integrations/telegram/test-connection", family: "integration-intake-delivery" },
+  { method: "PUT", path: "/api/integrations/telegram/settings", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/issues", family: "work-ledger" },
   { method: "POST", path: "/api/issues", family: "work-ledger" },
   { method: "DELETE", path: "/api/issues/:id", family: "work-ledger" },
@@ -764,7 +783,7 @@ export const PAGE_SURFACES = [
   {
     id: "capability-policy", disposition: "keep", target: "Capability registry and deterministic permission policy",
     page_ids: ["settings", "pi-connectors", "pi-skills", "pi-policies"],
-    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/CodeAgentsPanel.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/ImChannelRegistryPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RemoteAccessTokenPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx"]
+    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/CodeAgentsPanel.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/ImChannelRegistryPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RemoteAccessTokenPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx", "frontend/src/pages/TelegramSettingsPanel.jsx"]
   },
   {
     id: "evidence-handoff", disposition: "merge", target: "Evidence/Handoff read models and audited action requests",
@@ -823,7 +842,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "guardian-attention", disposition: "merge", target: "Attention detection, routing and delivery", source_of_truth: "Guardian authorities projected into Attention",
-    source_files: ["backend-ts/src/pi/attentionRouter.ts", "backend-ts/src/pi/digestFlushScheduler.ts", "backend-ts/src/pi/digestFormatter.ts", "backend-ts/src/pi/digestNotifications.ts", "backend-ts/src/pi/failurePatterns.ts", "backend-ts/src/pi/guardianActionLease.ts", "backend-ts/src/pi/guardianAlertDelivery.ts", "backend-ts/src/pi/guardianAlertPresentation.ts", "backend-ts/src/pi/guardianAlertRetryPolicy.ts", "backend-ts/src/pi/guardianDecisionActionCandidates.ts", "backend-ts/src/pi/guardianDecisionActions.ts", "backend-ts/src/pi/guardianDecisionMerge.ts", "backend-ts/src/pi/guardianDecisionOrchestrator.ts", "backend-ts/src/pi/guardianDecisionRateLimit.ts", "backend-ts/src/pi/guardianEventIngest.ts", "backend-ts/src/pi/guardianFailureClassifier.ts", "backend-ts/src/pi/guardianMissedDigestFallback.ts", "backend-ts/src/pi/guardianMissedIntentDigest.ts", "backend-ts/src/pi/guardianMissedIntentSweep.ts", "backend-ts/src/pi/guardianSignals.ts", "backend-ts/src/pi/guardianWatchdog.ts", "backend-ts/src/pi/guardianWatchdogAlerts.ts", "backend-ts/src/pi/guardianWatchdogMaintenance.ts", "backend-ts/src/pi/imReplyOutboxDispatcher.ts", "backend-ts/src/pi/notificationCoordinator.ts", "backend-ts/src/pi/notificationPreferenceResolver.ts", "backend-ts/src/pi/notificationPreferenceService.ts", "backend-ts/src/pi/notificationPreferenceTools.ts", "backend-ts/src/pi/pendingActionNotifications.ts"]
+    source_files: ["backend-ts/src/pi/attentionRouter.ts", "backend-ts/src/pi/digestFlushScheduler.ts", "backend-ts/src/pi/digestFormatter.ts", "backend-ts/src/pi/digestNotifications.ts", "backend-ts/src/pi/failurePatterns.ts", "backend-ts/src/pi/guardianActionLease.ts", "backend-ts/src/pi/guardianAlertDelivery.ts", "backend-ts/src/pi/guardianAlertPresentation.ts", "backend-ts/src/pi/guardianAlertRetryPolicy.ts", "backend-ts/src/pi/guardianAlertText.ts", "backend-ts/src/pi/guardianDecisionActionCandidates.ts", "backend-ts/src/pi/guardianDecisionActions.ts", "backend-ts/src/pi/guardianDecisionMerge.ts", "backend-ts/src/pi/guardianDecisionOrchestrator.ts", "backend-ts/src/pi/guardianDecisionRateLimit.ts", "backend-ts/src/pi/guardianEventIngest.ts", "backend-ts/src/pi/guardianFailureClassifier.ts", "backend-ts/src/pi/guardianMissedDigestFallback.ts", "backend-ts/src/pi/guardianMissedIntentDigest.ts", "backend-ts/src/pi/guardianMissedIntentSweep.ts", "backend-ts/src/pi/guardianSignals.ts", "backend-ts/src/pi/guardianWatchdog.ts", "backend-ts/src/pi/guardianWatchdogAlerts.ts", "backend-ts/src/pi/guardianWatchdogMaintenance.ts", "backend-ts/src/pi/imReplyOutboxDispatcher.ts", "backend-ts/src/pi/notificationCoordinator.ts", "backend-ts/src/pi/notificationPreferenceResolver.ts", "backend-ts/src/pi/notificationPreferenceService.ts", "backend-ts/src/pi/notificationPreferenceTools.ts", "backend-ts/src/pi/pendingActionNotifications.ts"]
   },
   {
     id: "intake-context", disposition: "merge", target: "Attention intake and Evidence context", source_of_truth: "external events, context bundles and intake audit",

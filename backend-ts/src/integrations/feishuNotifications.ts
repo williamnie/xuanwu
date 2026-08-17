@@ -39,6 +39,10 @@ import {
   feishuTargetForIssue
 } from "./feishuNotificationTargets.ts";
 import {
+  resolveImNotificationConnectorID,
+  resolveImNotificationTarget
+} from "./imNotificationTargets.ts";
+import {
   queueFeishuIssueStatusNotification,
   type QueueResult
 } from "./feishuLifecycleNotifications.ts";
@@ -46,6 +50,14 @@ import {
 const APPROVAL_NOTIFY_TYPE = "feishu_approval_notification";
 const PI_ACTION_NOTIFY_TYPE = "feishu_pi_action_pending_notification";
 const PI_NEEDS_USER_NOTIFY_TYPE = "feishu_pi_needs_user_notification";
+
+type NotificationTarget = {
+  connectorID: string;
+  chatID: string;
+  eventID: number;
+  messageID: string;
+  threadID: string;
+};
 
 export {
   getPiApprovalRequest,
@@ -125,6 +137,7 @@ function dispatchIfQueued(input: {
   if (input.connector) {
     void dispatchImOutbox({
       database: input.database,
+      source: input.connector.manifest.id,
       resolveConnector: (source) => {
         if (source !== input.connector!.manifest.id) throw new Error(`im channel module is not registered: ${source}`);
         return input.connector!;
@@ -151,7 +164,11 @@ export function queueFeishuPiNeedsUserNotification(
   const fallback = feishuTargetForConversation(db, safeText(event.conversationId));
   const projectID = issue?.project_id ?? safeText(event.projectId);
   const projectFallback = feishuFallbackTargetForProject(options.config, projectID);
-  const finalTarget = target ?? fallback ?? projectFallback;
+  const finalTarget = providerTarget("feishu", target ?? fallback ?? projectFallback) ?? resolveGenericTarget(db, {
+    conversationID: safeText(event.conversationId),
+    issueID,
+    projectID
+  });
   if (!finalTarget) return { queued: false, reason: "missing_feishu_target" };
   const result = routeNotification(db, {
     content: formatPiNeedsUserNotification({
@@ -175,7 +192,7 @@ export function queueFeishuPiNeedsUserNotification(
     },
     projectID,
     requiresUser: true,
-    routes: [feishuRoute(finalTarget)],
+    routes: [notificationRoute(finalTarget)],
     severity: "needs_user",
     sourceEventID: notifyID,
     sourceEventType: event.type,
@@ -199,7 +216,11 @@ export function queueFeishuPiActionPendingNotification(
   const issueID = issue?.id ?? event.issueId ?? 0;
   const projectID = issue?.project_id ?? safeText(event.projectId);
   const projectFallback = feishuFallbackTargetForProject(options.config, projectID);
-  const finalTarget = target ?? fallback ?? projectFallback;
+  const finalTarget = providerTarget("feishu", target ?? fallback ?? projectFallback) ?? resolveGenericTarget(db, {
+    conversationID: safeText(event.conversationId),
+    issueID,
+    projectID
+  });
   if (!finalTarget) {
     recordUnroutablePiActionNotification(db, {
       actionID,
@@ -231,7 +252,7 @@ export function queueFeishuPiActionPendingNotification(
     },
     projectID,
     requiresUser: true,
-    routes: [feishuRoute(finalTarget)],
+    routes: [notificationRoute(finalTarget)],
     severity: "actionable",
     sourceEventID: actionID,
     sourceEventType: event.type,
@@ -343,10 +364,18 @@ export function queueFeishuApprovalNotification(
   const issue = issueForApproval(db, event);
   if (!issue) return { queued: false, reason: "missing_issue" };
   upsertPiApprovalRequest(db, approvalRecordInput(event, issue, parsed, approvalID));
-  if (options.requireConfigured && !feishuConfigured(options.config)) {
+  const target = providerTarget("feishu", feishuTargetForIssue(db, issue.id) ?? feishuFallbackTargetForProject(options.config, issue.project_id)) ??
+    resolveGenericTarget(db, {
+      conversationID: safeText(event.conversationId),
+      issueID: issue.id,
+      projectID: issue.project_id
+    });
+  if (options.requireConfigured && !target && !feishuConfigured(options.config)) {
     return { queued: false, reason: "feishu_not_configured" };
   }
-  const target = feishuTargetForIssue(db, issue.id) ?? feishuFallbackTargetForProject(options.config, issue.project_id);
+  if (options.requireConfigured && target?.connectorID === "feishu" && !feishuConfigured(options.config)) {
+    return { queued: false, reason: "feishu_not_configured" };
+  }
   if (!target) return { queued: false, reason: "missing_feishu_link" };
   const result = routeNotification(db, {
     approvalActionID: approvalID,
@@ -361,13 +390,7 @@ export function queueFeishuApprovalNotification(
     payload: { approval_id: approvalID, issue_id: issue.id, provider: safeText(event.provider) || "codex" },
     projectID: issue.project_id,
     requiresUser: true,
-    routes: [{
-      channel: "feishu",
-      chatID: target.chatID,
-      eventID: target.eventID,
-      messageID: target.messageID,
-      threadID: target.threadID
-    }],
+    routes: [notificationRoute(target)],
     severity: "actionable",
     sourceEventID: approvalID,
     sourceEventType: "approval/requested",
@@ -375,7 +398,7 @@ export function queueFeishuApprovalNotification(
   })[0];
   if (!result?.queued) return { queued: false, reason: result?.reason || "duplicate" };
   if (result.reason === "agent_pending") return { queued: true, reason: "queued" };
-  markPiApprovalDelivered(db, approvalID, { channel: "feishu" });
+  markPiApprovalDelivered(db, approvalID, { channel: target.connectorID });
   return { queued: true, reason: "queued" };
 }
 
@@ -386,7 +409,11 @@ export function queueFeishuHandoffNotification(db: RunnerDatabase, event: AppEve
   if (handoffID === "" || issueID <= 0) return { queued: false, reason: "missing_handoff_target" };
   const issue = getIssue(db, issueID);
   if (!issue) return { queued: false, reason: "missing_issue" };
-  const target = feishuTargetForIssue(db, issueID);
+  const target = providerTarget("feishu", feishuTargetForIssue(db, issueID)) ?? resolveGenericTarget(db, {
+    conversationID: safeText(event.conversationId),
+    issueID,
+    projectID: issue.project_id
+  });
   if (!target) return { queued: false, reason: "missing_feishu_link" };
   const status = safeText(payload.status) || safeText(event.status) || "ready";
   const revision = positiveID(payload.revision);
@@ -405,13 +432,7 @@ export function queueFeishuHandoffNotification(db: RunnerDatabase, event: AppEve
     notificationType: "feishu_handoff_notification",
     payload,
     projectID: issue.project_id,
-    routes: [{
-      channel: "feishu",
-      chatID: target.chatID,
-      eventID: target.eventID,
-      messageID: target.messageID,
-      threadID: target.threadID
-    }],
+    routes: [notificationRoute(target)],
     severity: "info",
     sourceEventID: handoffID,
     sourceEventType: "handoff.notification",
@@ -422,14 +443,33 @@ export function queueFeishuHandoffNotification(db: RunnerDatabase, event: AppEve
     : { queued: false, reason: result?.reason || "duplicate" };
 }
 
-function feishuRoute(target: {
-  chatID: string;
-  eventID: number;
-  messageID: string;
-  threadID: string;
-}) {
+function providerTarget(
+  connectorID: string,
+  target: { chatID: string; eventID: number; messageID: string; threadID: string } | null | undefined
+): NotificationTarget | null {
+  return target ? { connectorID, ...target } : null;
+}
+
+function resolveGenericTarget(db: RunnerDatabase, input: {
+  conversationID?: string;
+  issueID?: number;
+  projectID?: string;
+}): NotificationTarget | null {
+  const connectorID = resolveImNotificationConnectorID(db, input);
+  if (connectorID === "") return null;
+  const target = resolveImNotificationTarget(db, { connectorID, ...input });
+  return target ? {
+    chatID: target.conversation_id,
+    connectorID: target.connector_id,
+    eventID: target.external_event_id,
+    messageID: target.reply_to_message_id ?? "",
+    threadID: target.thread_id ?? ""
+  } : null;
+}
+
+function notificationRoute(target: NotificationTarget) {
   return {
-    channel: "feishu",
+    channel: target.connectorID,
     chatID: target.chatID,
     eventID: target.eventID,
     messageID: target.messageID,

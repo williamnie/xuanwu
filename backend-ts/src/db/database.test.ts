@@ -15,6 +15,7 @@ import { runMigrations } from "./migrations.ts";
 import { migrations } from "./schema/index.ts";
 import { imInteractionBindingConstraintsMigration } from "./schema/072_im_interaction_binding_constraints.ts";
 import { imInteractionResolutionLeaseMigration } from "./schema/073_im_interaction_resolution_lease.ts";
+import { telegramChannelRuntimeMigration } from "./schema/081_telegram_channel_runtime.ts";
 
 const tempRoots: string[] = [];
 
@@ -96,6 +97,9 @@ describe("Bun SQLite database connection", () => {
         "automation_runs",
         "automation_trigger_configs",
         "automation_watches",
+        "connector_cursors",
+        "connector_delivery_parts",
+        "connector_update_audits",
         "context_bundles",
         "cron_task_schedules",
         "cron_tasks",
@@ -307,7 +311,8 @@ describe("Bun SQLite database connection", () => {
         { id: "077_pi_action_event_connector_test_index" },
         { id: "078_builtin_qoder_executor_profile" },
         { id: "079_scheduler_performance_indexes" },
-        { id: "080_execution_policy_json" }
+        { id: "080_execution_policy_json" },
+        { id: "081_telegram_channel_runtime" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
@@ -951,10 +956,45 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 81 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 82 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
+    }
+  });
+
+  test("adds Telegram runtime tables without mutating historical Feishu rows and reruns idempotently", () => {
+    const sqlite = new Database(":memory:");
+    try {
+      runMigrations(sqlite, migrationsBefore("081_telegram_channel_runtime"));
+      sqlite.run(`insert into feishu_conversation_state
+        (scope_key, active_conversation_id, active_project_id, active_project_source, epoch, started_at, updated_at)
+        values ('chat:legacy', 'conversation-legacy', '', '', 0, '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z')`);
+      sqlite.run(`insert into sync_outbox
+        (source, reply_draft_id, external_event_id, issue_id, target_chat_id, target_thread_id,
+         target_message_id, content, status, risk, created_by, approval_action_id, created_at, updated_at,
+         feishu_message_id, provider_request_ref)
+        values ('feishu', 0, 0, 0, 'oc_legacy', '', '', 'legacy', 'sent', 'low', 'pi', '',
+          '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z', 'om_legacy', 'om_legacy')`);
+
+      runMigrations(sqlite, [telegramChannelRuntimeMigration]);
+      runMigrations(sqlite, [telegramChannelRuntimeMigration]);
+
+      expect(sqlite.query("select scope_key, active_conversation_id from feishu_conversation_state").get()).toEqual({
+        active_conversation_id: "conversation-legacy",
+        scope_key: "chat:legacy"
+      });
+      expect(sqlite.query("select source, feishu_message_id, provider_request_ref from sync_outbox").get()).toEqual({
+        feishu_message_id: "om_legacy",
+        provider_request_ref: "om_legacy",
+        source: "feishu"
+      });
+      expect(sqlite.query("select count(*) as count from schema_migrations where id='081_telegram_channel_runtime'").get())
+        .toEqual({ count: 1 });
+      expect(sqlite.query<{ name: string }, []>("select name from sqlite_master where type='table'").all().map((row) => row.name))
+        .toEqual(expect.arrayContaining(["connector_cursors", "connector_delivery_parts", "connector_update_audits"]));
+    } finally {
+      sqlite.close();
     }
   });
 
@@ -975,7 +1015,7 @@ describe("Bun SQLite database connection", () => {
 
     const upgraded = await openDatabase({ stateDir });
     try {
-      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 81 });
+      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 82 });
       expect(tableNames(upgraded)).toEqual(expect.arrayContaining([
         "im_conversation_state",
         "im_interaction_bindings",

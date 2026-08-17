@@ -78,6 +78,30 @@ describe("Agent-first notification communication", () => {
     }
   });
 
+  test("does not let the Agent suppress an explicit completion watch delivery", async () => {
+    const db = await fixture();
+    try {
+      const issue = createIssue(db, { project_id: "demo", status: "done", title: "Explicit completion watch" });
+      stage(db, issue.id, "automation_watch_terminal", "你订阅的工作已经完成。", "event-watch");
+
+      const result = await runAgentCommunicationGatewayOnce(db, {
+        decide: async () => ({ decision: "suppress", message: "", rationale: "routine watch completion" })
+      });
+
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+      expect(result).toMatchObject({ fallback: 0, queued: 1, suppressed: 0 });
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]?.content).toBe("你订阅的工作已经完成。");
+      expect(listPiNotificationIntents(db, { issueId: issue.id })[0]).toMatchObject({
+        error: "",
+        state: "sent",
+        sent_outbox_id: outbox[0]?.id
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("uses one rate-limited fallback when the Agent is unavailable", async () => {
     const db = await fixture();
     try {

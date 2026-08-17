@@ -8,10 +8,13 @@ describe("server entrypoint wiring", () => {
 
     expect(source).toContain("runPiConversationPrompt({ bus, database, providers }");
   });
-  test("uses a stable Feishu chat/thread conversation id instead of per-message ids", () => {
+  test("shares stable IM chat/thread conversation ids across Feishu and Telegram", () => {
     const source = readFileSync(join(import.meta.dir, "runtime", "core.ts"), "utf8");
 
-    expect(source).toContain("runSupervisorConversation: async ({ channelContext, conversationId, prompt, targetIssueId, targetProjectId, targetProjectSource, title })");
+    expect(source).toContain("const runSupervisorConversation = async ({ channelContext, conversationId, prompt, targetIssueId, targetProjectId, targetProjectSource, title }");
+    expect(source).toContain("createFeishuChannelModule({");
+    expect(source).toContain("createTelegramChannelModule({");
+    expect(source.match(/runSupervisorConversation\n/g)).toHaveLength(2);
     expect(source).toContain("conversationId,");
     expect(source).toContain("targetProjectSource,");
     expect(source).toContain("channelContext,");

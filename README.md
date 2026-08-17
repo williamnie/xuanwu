@@ -94,7 +94,7 @@ engineering work.
 | Stage | Focus | What it unlocks |
 | --- | --- | --- |
 | Available | Tested Codex execution plus persistent Work/Run supervision, recovery, Attention, Evidence, and Handoff | Run long-lived engineering work across projects from one control plane |
-| Next | Telegram integration | Create and inspect Work, receive Attention and delivery updates, and approve gated actions remotely |
+| Available | Telegram IM | The adapter, long polling, strict source allowlists, conversations, notifications, project selection, and inline actions passed real-bot acceptance and are deployed locally |
 | Planned | More coding-agent providers: Kimi Code, Pi, zcode, and OpenCode | Choose the right agent for each project without changing the Work/Run lifecycle |
 | Later | More IM channels and richer provider routing | Operate Xuanwu from more places and route work by capability, availability, and policy |
 

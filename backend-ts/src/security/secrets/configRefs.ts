@@ -21,7 +21,8 @@ export function resolveLocalSettingsSecretRefs(
       ...integrations,
       ...(integrations.feishu ? { feishu: resolveFeishu(integrations.feishu, secrets, env) } : {}),
       ...(integrations.github ? { github: resolveRemoteGit(integrations.github, secrets, env) } : {}),
-      ...(integrations.gitlab ? { gitlab: resolveRemoteGit(integrations.gitlab, secrets, env) } : {})
+      ...(integrations.gitlab ? { gitlab: resolveRemoteGit(integrations.gitlab, secrets, env) } : {}),
+      ...(integrations.telegram ? { telegram: resolveTelegram(integrations.telegram, secrets, env) } : {})
     } } : {}),
     ...(qoder ? {
       providers: {
@@ -30,6 +31,20 @@ export function resolveLocalSettingsSecretRefs(
       }
     } : {})
   };
+}
+
+function resolveTelegram(
+  value: Record<string, unknown>,
+  secrets: SecretService,
+  env: Record<string, string | undefined>
+): Record<string, unknown> {
+  const ref = stringValue(value.botTokenRef);
+  if (ref === "") return value;
+  try {
+    return { ...value, botToken: resolveSecretLocator(secrets, ref, env) };
+  } catch {
+    return { ...value, botToken: "" };
+  }
 }
 
 function resolveQoder(

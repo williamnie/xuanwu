@@ -28,6 +28,7 @@ export type RunnerLocalSettings = {
     feishu?: Record<string, unknown>;
     github?: Record<string, unknown>;
     gitlab?: Record<string, unknown>;
+    telegram?: Record<string, unknown>;
   };
   providers?: {
     codex?: {
@@ -88,10 +89,12 @@ function normalizeLocalSettings(value: unknown): RunnerLocalSettings {
   const feishu = recordValue(integrations.feishu);
   const github = recordValue(integrations.github);
   const gitlab = recordValue(integrations.gitlab);
+  const telegram = recordValue(integrations.telegram);
   const normalizedIntegrations = {
     ...(Object.keys(feishu).length === 0 ? {} : { feishu }),
     ...(Object.keys(github).length === 0 ? {} : { github }),
-    ...(Object.keys(gitlab).length === 0 ? {} : { gitlab })
+    ...(Object.keys(gitlab).length === 0 ? {} : { gitlab }),
+    ...(Object.keys(telegram).length === 0 ? {} : { telegram })
   };
   return {
     ...(Object.keys(normalizedIntegrations).length === 0 ? {} : { integrations: normalizedIntegrations }),

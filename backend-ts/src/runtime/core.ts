@@ -10,6 +10,9 @@ import { createAuthTokenManager } from "../http/auth.ts";
 import { startServer } from "../http/server.ts";
 import { primeProviderStatus } from "../http/systemStatus.ts";
 import { createFeishuChannelModule, createBuiltinImChannelRegistry } from "../integrations/feishuChannelModule.ts";
+import { createTelegramChannelModule } from "../integrations/telegramChannelModule.ts";
+import { createImGuardianAlertDelivery } from "../integrations/imGuardianAlerts.ts";
+import { feishuConnectorStatus } from "../integrations/feishu.ts";
 import { createImReceiverRuntime, type ImReceiverRuntime } from "../integrations/imChannelContracts.ts";
 import {
   ProcessGroupMemoryObserver,
@@ -125,28 +128,45 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   );
   coldStartTrace("providers_initialized");
   setProjectLoopMaxParallelProjects(config.runner.maxParallelProjects);
+  const runSupervisorConversation = async ({ channelContext, conversationId, prompt, targetIssueId, targetProjectId, targetProjectSource, title }: {
+    channelContext: string; conversationId: string; prompt: string; targetIssueId?: number; targetProjectId: string; targetProjectSource?: string; title: string;
+  }) => {
+    const { runPiConversationPrompt } = await import("../http/piConversationApi.ts");
+    const result = await runPiConversationPrompt({ bus, database, providers }, {
+      channelContext,
+      clearProjectId: true,
+      conversationId,
+      projectId: "",
+      prompt,
+      targetProjectId,
+      targetProjectSource,
+      targetIssueId,
+      title
+    });
+    return { conversationId: result.conversation_id, targetProjectId, text: result.text };
+  };
   const feishuModule = createFeishuChannelModule({
     bus,
     config: () => config.integrations.feishu,
     database,
     providers,
-    runSupervisorConversation: async ({ channelContext, conversationId, prompt, targetIssueId, targetProjectId, targetProjectSource, title }) => {
-      const { runPiConversationPrompt } = await import("../http/piConversationApi.ts");
-      const result = await runPiConversationPrompt({ bus, database, providers }, {
-        channelContext,
-        clearProjectId: true,
-        conversationId,
-        projectId: "",
-        prompt,
-        targetProjectId,
-        targetProjectSource,
-        targetIssueId,
-        title
-      });
-      return { conversationId: result.conversation_id, targetProjectId, text: result.text };
-    }
+    runSupervisorConversation
   });
-  const imChannels = createBuiltinImChannelRegistry({ feishu: feishuModule.module });
+  const telegramModule = createTelegramChannelModule({
+    bus,
+    config: () => config.integrations.telegram,
+    database,
+    providers,
+    runSupervisorConversation
+  });
+  const imChannels = createBuiltinImChannelRegistry({ feishu: feishuModule.module, telegram: telegramModule.module });
+  const guardianAlertDelivery = createImGuardianAlertDelivery({
+    database,
+    fallback: feishuModule.guardianAlertDelivery,
+    feishuConfigured: () => feishuConnectorStatus(config.integrations.feishu).enabled === true,
+    imChannels,
+    telegramConfig: () => config.integrations.telegram
+  });
   const imReceiverRuntime = createImReceiverRuntime(imChannels);
   coldStartTrace("connectors_initialized");
   await primeRuntimeObservability(readDatabase).catch((error) => {
@@ -166,6 +186,7 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     feishuReceiverStatus: () => feishuModule.receiverStatus(),
     imChannels,
     onFeishuConfigChanged: (next) => feishuModule.onConfigChanged?.(next),
+    onTelegramConfigChanged: (next) => telegramModule.onConfigChanged?.(next),
     processGroupMemory,
     projectionWorker,
     providers,
@@ -188,7 +209,7 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     agenticClient,
     processGroupMemory,
     imChannels,
-    feishuModule.guardianAlertDelivery
+    guardianAlertDelivery
   );
   coldStartTrace("scheduler_watchdog_initialized");
 

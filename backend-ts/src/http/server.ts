@@ -15,6 +15,7 @@ import { json, jsonError } from "./errors.ts";
 import { registerExternalEventRoutes } from "./externalEventsApi.ts";
 import { registerFeishuEventRoutes } from "./feishuEventsApi.ts";
 import { registerFeishuSettingsRoutes } from "./feishuSettingsApi.ts";
+import { registerTelegramSettingsRoutes } from "./telegramSettingsApi.ts";
 import { registerImReplyOutboxRoutes } from "./imReplyOutboxApi.ts";
 import { registerWebhookEventRoutes } from "./webhookEventsApi.ts";
 import { registerGitEventRoutes } from "./gitEventsApi.ts";
@@ -41,6 +42,7 @@ import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 import type { ImChannelRegistry } from "../integrations/imChannelContracts.ts";
 import { registerImChannelRoutes } from "./imChannelsApi.ts";
+import type { TelegramConnectorConfig } from "../integrations/telegramTypes.ts";
 
 type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
 type DefaultRouterOptions = {
@@ -56,6 +58,7 @@ type DefaultRouterOptions = {
   interruptTimeoutMs?: number;
   imChannels?: ImChannelRegistry;
   onFeishuConfigChanged?: (config: FeishuConnectorConfig) => Promise<void> | void;
+  onTelegramConfigChanged?: (config: TelegramConnectorConfig) => Promise<void> | void;
   feishuAgentBridge?: ReturnType<typeof createFeishuAgentBridge>;
   feishuIntakeModel?: LlmIntakeModel;
   feishuIntakePolicy?: EventRouterSourcePolicy;
@@ -135,6 +138,11 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       config: runtime.config,
       database: runtime.database,
       onConfigChanged: runtime.onFeishuConfigChanged
+    });
+    registerTelegramSettingsRoutes(router, {
+      config: runtime.config,
+      database: runtime.database,
+      onConfigChanged: runtime.onTelegramConfigChanged
     });
     registerRunnerSettingsRoutes(router, {
       bus,

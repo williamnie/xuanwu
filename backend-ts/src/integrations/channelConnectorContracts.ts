@@ -86,6 +86,8 @@ export type OutboundEnvelope = {
 };
 
 export type ConnectorDeliveryReceipt = {
+  /** All provider message ids when one canonical delivery is split into parts. */
+  provider_message_refs?: string[];
   provider_request_ref: string;
   rate_limit?: ConnectorRateLimit;
   replayed: boolean;

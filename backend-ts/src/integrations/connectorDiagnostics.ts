@@ -12,6 +12,9 @@ import {
   type ConnectorManifest
 } from "./channelConnectorContracts.ts";
 import { feishuChannelConnectorManifest } from "./feishuChannelConnector.ts";
+import { telegramChannelConnectorManifest } from "./telegramChannelConnector.ts";
+import { createTelegramBotClient, TelegramClientError } from "./telegramClient.ts";
+import { telegramConnectorStatus } from "./telegramConfig.ts";
 import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { FeishuReceiverStatus } from "./feishuReceiver.ts";
@@ -99,6 +102,7 @@ export async function probeConnectorConnection(input: {
       : success(checkedAt);
   }
   if (id === "feishu") return probeFeishu(input, checkedAt);
+  if (id === "telegram") return probeTelegram(input, checkedAt);
   if (id === "github-events" || id === "github-issues") {
     const config = input.config.integrations.github;
     if (config.token === "") return failure(checkedAt, "not_configured", "GitHub credential is not configured", "unconfigured");
@@ -147,6 +151,7 @@ export function connectorTestHistory(
 function staticDefinitions(context: ConnectorDiagnosticsContext, secrets: SecretService): StaticConnectorDefinition[] {
   const local = readLocalSettingsSync(context.config.stateDir).integrations ?? {};
   const feishuStatus = feishuConnectorStatus(context.config.integrations.feishu) as { missing_required?: unknown; status?: unknown };
+  const telegramStatus = telegramConnectorStatus(context.config.integrations.telegram);
   const githubStatus = githubConnectorStatus(context.config.integrations.github);
   const gitlabStatus = gitlabConnectorStatus(context.config.integrations.gitlab);
   const githubSecret = secretEntry("token", context.config.integrations.github.token_ref, context.config.integrations.github.token !== "", true, secrets);
@@ -157,6 +162,13 @@ function staticDefinitions(context: ConnectorDiagnosticsContext, secrets: Secret
     secretEntry("encrypt_key", text(local.feishu?.encryptKeyRef), context.config.integrations.feishu.encryptKey !== "", false, secrets)
   ];
   const webhookConfigured = clean(context.webhookSigningSecret) !== "";
+  const telegramSecret = secretEntry(
+    "bot_token",
+    text(local.telegram?.botTokenRef),
+    context.config.integrations.telegram.botToken !== "",
+    true,
+    secrets
+  );
   return [
     {
       configured: feishuStatus.status === "configured",
@@ -165,6 +177,15 @@ function staticDefinitions(context: ConnectorDiagnosticsContext, secrets: Secret
       secret_refs: feishuRefs,
       source: "feishu",
       source_of_truth: "Feishu runtime config and external_events",
+      test_supported: true
+    },
+    {
+      configured: telegramStatus.status === "configured",
+      manifest: telegramChannelConnectorManifest(typeof telegramSecret.ref === "string" ? [telegramSecret.ref] : []),
+      missing_required: telegramStatus.missing_required,
+      secret_refs: [telegramSecret],
+      source: "telegram",
+      source_of_truth: "Telegram long-poll cursor, external_events and sync_outbox",
       test_supported: true
     },
     {
@@ -386,6 +407,37 @@ async function probeFeishu(
       return false;
     }
   });
+}
+
+async function probeTelegram(
+  input: Parameters<typeof probeConnectorConnection>[0],
+  checkedAt: string
+): Promise<ConnectorProbeResult> {
+  const config = input.config.integrations.telegram;
+  if (config.botToken === "") return failure(checkedAt, "not_configured", "Telegram bot token is not configured", "unconfigured");
+  try {
+    await createTelegramBotClient({ config, fetch: input.fetch }).getMe();
+    return success(checkedAt);
+  } catch (error) {
+    if (!(error instanceof TelegramClientError)) {
+      return failure(checkedAt, "network_unreachable", "Connector endpoint is unreachable", "disconnected");
+    }
+    if (error.kind === "rate_limited") {
+      const seconds = error.retryAfterSeconds ?? 60;
+      const now = input.now?.() ?? new Date();
+      return {
+        ...failure(checkedAt, "rate_limited", "Connector rate limit was reached", "rate_limited", error.status),
+        rate_limit: { retry_after_seconds: seconds, reset_at: new Date(now.getTime() + seconds * 1000).toISOString() }
+      };
+    }
+    if (error.kind === "auth") {
+      return failure(checkedAt, "credential_expired", "Connector credential was rejected", "degraded", error.status);
+    }
+    if (error.kind === "transient") {
+      return failure(checkedAt, "network_unreachable", "Connector endpoint is unreachable", "disconnected", error.status);
+    }
+    return failure(checkedAt, "provider_error", "Connector test failed", "failed", error.status);
+  }
 }
 
 async function probeHttp(

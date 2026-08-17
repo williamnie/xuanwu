@@ -122,16 +122,18 @@ function NotificationForm({ state }) {
 }
 
 function NotificationChannels({ connectors }) {
-  const feishu = connectors.find(connector => connector.id === 'feishu');
-  const feishuReady = feishu?.status === 'configured';
+  const channels = ['feishu', 'telegram'].map(id => connectors.find(connector => connector.id === id) || { id, status: 'disabled' });
   return (
     <div className="settings-channel-picker">
       <span>通知渠道</span>
       <label><CheckCircle2 size={15} color="var(--success)" /> Runner UI <small>本地通知始终可用</small></label>
-      <label>
-        <span className={`status-dot ${feishuReady ? 'active' : 'idle'}`} />
-        Feishu <small>{feishuReady ? '已连接' : '未配置或异常；请在设置 → Integrations 配置'}</small>
-      </label>
+      {channels.map(channel => {
+        const ready = channel.status === 'configured';
+        return <label key={channel.id}>
+          <span className={`status-dot ${ready ? 'active' : 'idle'}`} />
+          {channel.id === 'feishu' ? 'Feishu' : 'Telegram'} <small>{ready ? '已连接' : '未配置或异常；请在设置 → Integrations 配置'}</small>
+        </label>;
+      })}
     </div>
   );
 }

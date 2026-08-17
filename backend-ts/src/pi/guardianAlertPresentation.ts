@@ -53,14 +53,14 @@ const ALERT_COPY: Record<string, AlertCopy> = {
     description: "部分通知意图超过处理时限，消息可能延迟，但不会丢失业务状态。",
     piAction: "PI 会继续调度通知并在队列恢复后自动归档该告警。",
     title: "通知协调器出现积压",
-    userAction: "若持续超过 30 分钟，请检查通知目标和飞书连接。"
+    userAction: "若持续超过 30 分钟，请检查通知目标和 IM 连接。"
   },
   digest_flush_stalled: {
     component: "日报与摘要调度器",
     description: "摘要发送超过预期时间，日报或阶段摘要可能延迟。",
     piAction: "PI 会重试摘要生成和发送，恢复后自动补发并归档。",
     title: "摘要发送延迟",
-    userAction: "若持续超过 30 分钟，请检查摘要目标和飞书连接。"
+    userAction: "若持续超过 30 分钟，请检查摘要目标和 IM 连接。"
   },
   guardian_inbox_stalled: {
     component: "Guardian 事件收件箱",
@@ -97,7 +97,7 @@ const ALERT_COPY: Record<string, AlertCopy> = {
     description: "通知已经进入发送队列，但尚未取得外部平台的发送回执。",
     piAction: "PI 会保留幂等键并自动重试，恢复后只发送一次。",
     title: "通知发送暂时延迟",
-    userAction: "若持续超过 30 分钟，请检查飞书连接、通知目标和网络状态。"
+    userAction: "若持续超过 30 分钟，请检查 IM 连接、通知目标和网络状态。"
   },
   pi_runtime_down: {
     component: "项目 PI Runtime",

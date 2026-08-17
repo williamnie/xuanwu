@@ -206,11 +206,13 @@ function supervisorConversationRunner(options: FeishuChannelModuleOptions): Feis
  */
 export function createBuiltinImChannelRegistry(options: {
   feishu?: ImChannelModule;
+  telegram?: ImChannelModule;
   require?: ImChannelRegistryOptions["require"];
 }) {
   const registry = createImChannelRegistry({
     require: options.require ?? ["message.receive", "message.reply"]
   });
   if (options.feishu) registry.register(options.feishu);
+  if (options.telegram) registry.register(options.telegram);
   return registry;
 }

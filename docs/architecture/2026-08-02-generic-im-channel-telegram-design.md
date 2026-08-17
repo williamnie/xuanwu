@@ -1,6 +1,6 @@
 # 通用 IM Channel 底座与 Telegram 接入设计
 
-> 状态：Accepted；Issue #864 已完成阶段 A 的离线实现，等待真实 Feishu 验收；Telegram 仍属于后续阶段 B
+> 状态：Accepted；阶段 A 与 Telegram 阶段 B 已完成；真实 Telegram Bot smoke 与本机部署已通过，正式发布及回滚演练仍待执行
 >
 > 日期：2026-08-02
 >
@@ -15,6 +15,8 @@
 > [Feishu Connector 迁移](./xuanwu/0077-feishu-channel-connector-migration.md)
 
 > 实施边界（2026-08-10）：生产发送入口已收敛到 registry 驱动的 `draft -> sync_outbox -> dispatchImOutbox -> ChannelConnector.deliver`；即时回复、reaction、Guardian 提醒也先落同一 durable outbox，Feishu adapter 只负责把 canonical interaction/Markdown 渲染为卡片。入站先归一化为 `ImInboundMessageV1`，再由通用 inbox writer 写 `external_events`。新卡片只携带 opaque token、action index 与 revision，actor/scope/action/expiry 在服务端 binding 中 fail closed；旧 Feishu approval、PI action、project selection callback 会先收编成兼容 binding，再进入同一 interaction service。迁移 070–074 均为 additive，073 为 resolver 增加可恢复 lease，074 只约束 canonical IM dedupe key；均未对 live DB 执行。真实 Feishu callback/发送和旧 binary rollback 仍是发布门禁。
+
+> Telegram 实施对账（2026-08-16）：阶段 B 已加入 SecretService 配置与旧明文迁移、Bot API client、单 consumer long polling、webhook/409 冲突门禁、durable cursor/update/edited-message audit、严格 Chat+User allowlist、消息 normalizer、conversation bridge、topic/reply/reaction、按 Chat 的 429 暂停、确定性分段回执、inline keyboard/callback binding 与稳定单次确认、项目选择、provider-neutral approval/PI action/project resolver、callback 结果 durable outbox、registry/outbox/diagnostics/settings UI 与离线 fake HTTP 测试。真实 Bot smoke 与本机 live 部署已通过；脱敏验收结果和复验步骤见 [Telegram IM connector 本地接入与 smoke](../telegram-im-local-smoke.md)。
 
 ## 1. 结论摘要
 

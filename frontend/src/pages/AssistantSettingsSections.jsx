@@ -13,6 +13,7 @@ import PiMcpManagementPanel from './PiMcpManagementPanel';
 import CodeAgentsPanel from './CodeAgentsPanel';
 import ConnectorDiagnosticsPanel from './ConnectorDiagnosticsPanel';
 import FeishuSettingsPanel from './FeishuSettingsPanel';
+import TelegramSettingsPanel from './TelegramSettingsPanel';
 import ImChannelRegistryPanel from './ImChannelRegistryPanel';
 import { RestartAction } from './SettingsChrome';
 import { Languages } from 'lucide-react';
@@ -65,6 +66,7 @@ function IntegrationsSettingsTab() {
       <ConnectorDiagnosticsPanel />
       <ImChannelRegistryPanel />
       <FeishuSettingsPanel />
+      <TelegramSettingsPanel />
     </div>
   );
 }

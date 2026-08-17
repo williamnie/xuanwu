@@ -83,6 +83,10 @@ describe("Bun backend config", () => {
           receiveMode: "websocket",
           verificationToken: ""
         },
+        telegram: {
+          allowedChatIds: [], allowedUserIds: [], botToken: "", botTokenRef: "", defaultChatId: "",
+          enabled: false, getMeCacheTtlSeconds: 300, pollTimeoutSeconds: 25, projectMappings: [], receiveMode: "long_polling"
+        },
         github: {
           api_base_url: "https://api.github.com",
           display_name: "GitHub",
@@ -485,6 +489,10 @@ describe("Bun backend config", () => {
           receiveMode: "callback",
           verificationToken: "verify-secret-value"
         },
+        telegram: {
+          allowedChatIds: [], allowedUserIds: [], botToken: "", botTokenRef: "", defaultChatId: "",
+          enabled: false, getMeCacheTtlSeconds: 300, pollTimeoutSeconds: 25, projectMappings: [], receiveMode: "long_polling"
+        },
         github: {
           api_base_url: "https://github.example/api/v3",
           display_name: "GitHub",
@@ -610,6 +618,10 @@ describe("Bun backend config", () => {
           projectMappings: [],
           receiveMode: "websocket",
           verificationToken: ""
+        },
+        telegram: {
+          allowedChatIds: [], allowedUserIds: [], botToken: "", botTokenRef: "", defaultChatId: "",
+          enabled: false, getMeCacheTtlSeconds: 300, pollTimeoutSeconds: 25, projectMappings: [], receiveMode: "long_polling"
         },
         github: {
           api_base_url: "https://api.github.com",

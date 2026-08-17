@@ -57,16 +57,29 @@ export function parseImNewConversationCommand(prompt: string): { isNewCommand: b
 }
 
 function imScope(message: ImInboundMessageV1) {
-  const connector = sanitize(message.connector_id);
   const thread = cleanString(message.thread?.id) || cleanString(message.thread?.root_message_id);
-  if (thread) return scoped(`${connector}-thread`, thread, true);
-  if (cleanString(message.conversation.id)) return scoped(`${connector}-chat`, message.conversation.id, true);
-  return scoped(`${connector}-message`, message.message_id, false);
+  const conversation = cleanString(message.conversation.id);
+  const baseConversationId = imConversationScopeKey({
+    connectorId: message.connector_id,
+    conversationId: conversation,
+    messageId: message.message_id,
+    threadId: thread
+  });
+  return { baseConversationId, persist: thread !== "" || conversation !== "", scopeKey: baseConversationId };
 }
 
-function scoped(prefix: string, id: string, persist: boolean) {
-  const baseConversationId = `${prefix}-${sanitize(id)}`;
-  return { baseConversationId, persist, scopeKey: baseConversationId };
+export function imConversationScopeKey(input: {
+  connectorId: string;
+  conversationId?: string;
+  messageId?: string;
+  threadId?: string;
+}): string {
+  const connector = sanitize(input.connectorId);
+  const thread = cleanString(input.threadId);
+  if (thread) return `${connector}-thread-${sanitize(thread)}`;
+  const conversation = cleanString(input.conversationId);
+  if (conversation) return `${connector}-chat-${sanitize(conversation)}`;
+  return `${connector}-message-${sanitize(cleanString(input.messageId))}`;
 }
 
 function routeView(

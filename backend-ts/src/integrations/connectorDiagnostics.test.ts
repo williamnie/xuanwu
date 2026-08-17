@@ -63,6 +63,23 @@ describe("connector diagnostics", () => {
     expect(JSON.stringify(result)).not.toContain("feishu-fixture-secret");
   });
 
+  test("probes Telegram through its redacting client without exposing Token URLs or response bodies", async () => {
+    const token = "123:telegram-diagnostic-secret";
+    const config = buildConfig({
+      integrations: { telegram: { allowedChatIds: ["1"], allowedUserIds: ["2"], botToken: token, enabled: true } }
+    });
+    const result = await probeConnectorConnection({
+      config,
+      connectorID: "telegram",
+      fetch: async () => Response.json({ description: `${token} provider body`, error_code: 401, ok: false }, { status: 401 }),
+      now: () => NOW
+    });
+
+    expect(result).toMatchObject({ ok: false, state: "degraded", error: { code: "credential_expired" }, http_status: 401 });
+    expect(JSON.stringify(result)).not.toContain(token);
+    expect(JSON.stringify(result)).not.toContain("provider body");
+  });
+
   test("derives bounded backoff from audited test results and emits a redacted bundle", async () => {
     const fixture = await databaseFixture();
     try {

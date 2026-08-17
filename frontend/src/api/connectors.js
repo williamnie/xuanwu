@@ -24,6 +24,23 @@ export const connectorsApi = {
     body: JSON.stringify(settings),
   }),
 
+  getTelegramSettings: () => request('/api/integrations/telegram/settings'),
+
+  updateTelegramSettings: (settings) => request('/api/integrations/telegram/settings', {
+    method: 'PUT',
+    body: JSON.stringify(settings),
+  }),
+
+  testTelegramConnection: () => request('/api/integrations/telegram/test-connection', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
+  discoverTelegramSource: (botToken = '') => request('/api/integrations/telegram/discover-source', {
+    method: 'POST',
+    body: JSON.stringify(botToken ? { bot_token: botToken } : {}),
+  }),
+
   getPiMcpCapabilities: () => request('/api/pi/mcp/capabilities'),
 
   getPiMcpDiscoverySources: () => request('/api/pi/mcp/discovery/sources'),

@@ -104,6 +104,7 @@ async function dispatchOne(
     const receipt = await connector.deliver(envelope);
     const canonical = imDeliveryReceipt({
       connector_id: outbox.source,
+      provider_message_refs: receipt.provider_message_refs,
       provider_request_ref: receipt.provider_request_ref,
       target: receipt.target
     });

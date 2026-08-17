@@ -26,6 +26,10 @@ import {
   feishuTargetForIssue,
   feishuTargetForProject
 } from "./feishuNotificationTargets.ts";
+import {
+  resolveImNotificationConnectorID,
+  resolveImNotificationTarget
+} from "./imNotificationTargets.ts";
 
 export type QueueResult = { queued: boolean; reason: string };
 export type DigestQueueResult = { failed: number; queued: number; scanned: number; skipped: number };
@@ -33,6 +37,14 @@ export type DigestQueueResult = { failed: number; queued: number; scanned: numbe
 const ISSUE_STATUS_NOTIFY_TYPE = "feishu_issue_status_notification";
 const DIGEST_NOTIFY_TYPE = "feishu_run_group_digest_notification";
 const DEFAULT_DIGEST_LIMIT = 20;
+
+type LifecycleTarget = {
+  connectorID: string;
+  chatID: string;
+  eventID: number;
+  messageID: string;
+  threadID: string;
+};
 
 export function queueFeishuIssueStatusNotification(
   db: RunnerDatabase,
@@ -59,11 +71,14 @@ export function queueFeishuIssueStatusNotification(
     issue,
     runGroupID
   });
-  const linkedTarget = linkedLifecycleTarget(db, issue.id, conversationID, event.run_group_id);
+  const linkedTarget = linkedLifecycleTarget(db, issue.id, conversationID, event.run_group_id) ??
+    genericLifecycleTarget(db, issue.id, issue.project_id, conversationID) ??
+    latestLifecycleIntentTarget(db, issue.id) ??
+    providerTarget("feishu", feishuTargetForProject(db, issue.project_id));
   if (!linkedTarget && issueCompletionAutomationOwnsTargetForIssue(db, issue.id)) {
     return { queued: false, reason: "issue_completion_watch_owns_target" };
   }
-  const target = linkedTarget ?? fallbackLifecycleTarget(issue, options.config);
+  const target = linkedTarget ?? providerTarget("feishu", fallbackLifecycleTarget(issue, options.config));
   const intentResult = createLifecycleIntent(db, issue, event, target, options.now);
   if (intentResult.decision === "suppress") {
     return { queued: false, reason: "run_group_lifecycle_suppressed" };
@@ -104,7 +119,7 @@ function createLifecycleIntent(
   db: RunnerDatabase,
   issue: Issue,
   event: ReturnType<typeof ingestIssueLifecycleEvent>,
-  target: ReturnType<typeof feishuTargetForIssue>,
+  target: LifecycleTarget | null,
   now?: Date
 ): LifecycleIntentResult {
   return coordinateIssueLifecycleNotification(db, {
@@ -112,7 +127,7 @@ function createLifecycleIntent(
     issue,
     now,
     target: target ? {
-      connectorID: "feishu",
+      connectorID: target.connectorID,
       chatID: target.chatID,
       messageID: target.messageID,
       threadID: target.threadID
@@ -125,13 +140,12 @@ function linkedLifecycleTarget(
   issueID: number,
   conversationID: string | undefined,
   runGroupID: string
-) {
-  return feishuTargetForIssue(db, issueID) ??
+): LifecycleTarget | null {
+  const target = feishuTargetForIssue(db, issueID) ??
     feishuTargetForConversation(db, conversationID ?? "") ??
     feishuTargetForConversation(db, getPiRunGroup(db, runGroupID)?.origin_conversation_id ?? "") ??
-    feishuTargetForConversation(db, legacyEnqueueConversationID(db, issueID)) ??
-    latestLifecycleIntentTarget(db, issueID) ??
-    feishuTargetForProject(db, getIssue(db, issueID)?.project_id ?? "");
+    feishuTargetForConversation(db, legacyEnqueueConversationID(db, issueID));
+  return providerTarget("feishu", target);
 }
 
 function fallbackLifecycleTarget(issue: Issue, config: FeishuConnectorConfig | undefined) {
@@ -167,6 +181,7 @@ function latestLifecycleIntentTarget(db: RunnerDatabase, issueID: number) {
     .at(-1);
   if (!intent) return null;
   return {
+    connectorID: intent.target_channel || "feishu",
     chatID: intent.target_chat_id,
     eventID: 0,
     messageID: intent.target_message_id,
@@ -191,20 +206,22 @@ function latestRunGroupIDForIssue(db: RunnerDatabase, issueID: number): string {
 
 function issueLinkConversationID(db: RunnerDatabase, issueID: number): string {
   return listExternalLinksByIssue(db, issueID)
-    .filter((link) => link.source === "feishu")
     .map((link) => cleanString(link.conversation_id))
     .find(Boolean) ?? "";
 }
 
 function sourceSessionConversationID(value: string): string {
   const text = cleanString(value);
-  return text.startsWith("feishu:") ? cleanString(text.slice("feishu:".length)) : "";
+  const separator = text.indexOf(":");
+  return separator > 0 && ["feishu", "telegram"].includes(text.slice(0, separator))
+    ? cleanString(text.slice(separator + 1))
+    : "";
 }
 
 function queueLifecycleIntent(
   db: RunnerDatabase,
   issue: Issue,
-  target: NonNullable<ReturnType<typeof feishuTargetForIssue>>,
+  target: LifecycleTarget,
   intentResult: LifecycleIntentResult
 ): QueueResult {
   const notifyID = issueNotificationID(issue);
@@ -215,7 +232,7 @@ function queueLifecycleIntent(
     notificationID: notifyID,
     notificationType: ISSUE_STATUS_NOTIFY_TYPE,
     route: {
-      channel: "feishu",
+      channel: target.connectorID,
       chatID: target.chatID,
       eventID: target.eventID,
       messageID: target.messageID,
@@ -223,6 +240,31 @@ function queueLifecycleIntent(
     }
   });
   return { queued: queued.queued, reason: queued.queued ? "queued" : queued.reason };
+}
+
+function providerTarget(
+  connectorID: string,
+  target: { chatID: string; eventID: number; messageID: string; threadID: string } | null | undefined
+): LifecycleTarget | null {
+  return target ? { connectorID, ...target } : null;
+}
+
+function genericLifecycleTarget(
+  db: RunnerDatabase,
+  issueID: number,
+  projectID: string,
+  conversationID: string
+): LifecycleTarget | null {
+  const connectorID = resolveImNotificationConnectorID(db, { conversationID, issueID, projectID });
+  if (connectorID === "") return null;
+  const target = resolveImNotificationTarget(db, { connectorID, conversationID, issueID, projectID });
+  return target ? {
+    connectorID: target.connector_id,
+    chatID: target.conversation_id,
+    eventID: target.external_event_id,
+    messageID: target.reply_to_message_id ?? "",
+    threadID: target.thread_id ?? ""
+  } : null;
 }
 
 function safelyQueueDigestIntent(

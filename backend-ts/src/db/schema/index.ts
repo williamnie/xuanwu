@@ -80,6 +80,7 @@ import { piActionEventConnectorTestIndexMigration } from "./077_pi_action_event_
 import { builtinQoderExecutorProfileMigration } from "./078_builtin_qoder_executor_profile.ts";
 import { schedulerPerformanceIndexesMigration } from "./079_scheduler_performance_indexes.ts";
 import { executionPolicyJsonMigration } from "./080_execution_policy_json.ts";
+import { telegramChannelRuntimeMigration } from "./081_telegram_channel_runtime.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -163,5 +164,6 @@ export const migrations = [
   piActionEventConnectorTestIndexMigration,
   builtinQoderExecutorProfileMigration,
   schedulerPerformanceIndexesMigration,
-  executionPolicyJsonMigration
+  executionPolicyJsonMigration,
+  telegramChannelRuntimeMigration
 ];

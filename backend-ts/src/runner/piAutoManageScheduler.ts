@@ -258,13 +258,10 @@ export async function runGuardianControlPlaneCycle(
   const operationsDailyReports = await timedSchedulePhase(timing, "operations_daily_reports", () => queueGuardianOperationsDailyReports(input.database, {
     now: optionalDate(input.watchdogNow)
   }));
-  const watchResult = await timedSchedulePhase(timing,
+  await timedSchedulePhase(timing,
     "watch_automations",
     () => runWatchAutomationsOnce(input.database, { now: input.watchdogNow })
   );
-  if (watchResult.queued > 0 && input.imChannels) {
-    await timedSchedulePhase(timing, "watch_im_outbox", () => dispatchSchedulerImOutbox(input));
-  }
   const dailyDigestNotifications = await timedSchedulePhase(timing,
     "daily_digest_notifications",
     () => queueDailyNotificationDigests(input.database, { now: optionalDate(input.watchdogNow) })
@@ -273,6 +270,9 @@ export async function runGuardianControlPlaneCycle(
     "digest_notifications",
     () => queueReadyImDigestNotifications(input.database)
   );
+  if (input.imChannels) {
+    await timedSchedulePhase(timing, "notification_im_outbox", () => dispatchSchedulerImOutbox(input));
+  }
   const completionWatchNotifications = { failed: 0, queued: 0, scanned: 0, skipped: 0 };
   const issueWatchdog = await timedSchedulePhase(timing, "issue_watchdog", () => runAutoRunIssueWatchdogOnce({
     bus: input.bus,
@@ -329,7 +329,7 @@ export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<Ag
     decide: input.agentCommunicationDecider,
     now: optionalDate(input.watchdogNow)
   }));
-  if ((agentCommunications.queued > 0 || agentCommunications.fallback > 0) && input.imChannels) {
+  if (input.imChannels) {
     await timedSchedulePhase(timing, "communication_im_outbox", () => dispatchSchedulerImOutbox(input));
   }
   // PI decisions can take tens of seconds. Runtime wiring executes this whole

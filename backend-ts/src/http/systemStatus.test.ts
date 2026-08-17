@@ -228,7 +228,7 @@ describe("Bun system status endpoints", () => {
         }
       }]);
       expect(body.connector_health.map((connector) => connector.id)).toEqual([
-        "feishu", "webhook", "github-events", "gitlab-events", "github-issues", "gitlab-issues", "linear-issues"
+        "feishu", "telegram", "webhook", "github-events", "gitlab-events", "github-issues", "gitlab-issues", "linear-issues"
       ]);
       expect(body.connector_health[0]).toMatchObject({
         health: { state: "unconfigured" },

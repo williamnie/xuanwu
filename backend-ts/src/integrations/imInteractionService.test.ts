@@ -117,6 +117,41 @@ describe("generic im interaction service", () => {
     }
   });
 
+  test("consumes a deterministic 4xx resolver rejection instead of retrying the provider update forever", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const binding = createImInteractionBinding(db, {
+        ...bindingSecurity,
+        actionKind: "pi_action",
+        actionRef: "pi_actions:act-invalid-scope",
+        connectorId: "feishu",
+        expiresAt: "2027-01-01T00:00:00.000Z",
+        scopeKey: "feishu-chat-oc_1"
+      });
+      let calls = 0;
+      const service = createImInteractionService({
+        database: db,
+        resolvers: {
+          piAction: async () => {
+            calls += 1;
+            const error = new Error("Persistent approval requires an installed MCP capability") as Error & { status: number };
+            error.status = 409;
+            throw error;
+          }
+        }
+      });
+
+      expect(await service.handle(callback(binding.interaction_id))).toMatchObject({
+        reason: "consumed",
+        resolution: { ok: false, status: "Persistent approval requires an installed MCP capability" }
+      });
+      expect((await service.handle(callback(binding.interaction_id))).reason).toBe("already_consumed");
+      expect(calls).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
   test("fails closed on forged tokens, connector mismatch, scope mismatch and expiry", async () => {
     const db = await openFixtureDatabase();
     try {

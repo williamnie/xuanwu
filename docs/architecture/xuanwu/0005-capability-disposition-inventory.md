@@ -21,11 +21,11 @@
 
 统计：
 
-- 87 张表：keep=55、merge=22、migrate=8、delete=2（85 张 current source + 2 张 captured live-only legacy）
-- 245 条用户 API route（以 `API_ROUTE_DISPOSITIONS` 的 family 映射为准）
-- 34 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
+- 93 张表：keep=61、merge=22、migrate=8、delete=2（91 张 current source + 2 张 captured live-only legacy）
+- 257 条用户 API route（以 `API_ROUTE_DISPOSITIONS` 的 family 映射为准）
+- 36 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
 - 15 个后台调度/启动单元：keep=4、merge=8、migrate=3、delete=0
-- 145 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
+- 153 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
 
 ## 2. live reference 证据
 
@@ -62,6 +62,9 @@ sqlite3 -readonly "$LIVE_DB" "select name from sqlite_master where type='table' 
 | `assistant_tool_providers` | **keep** | Capability registry | assistant_tool_providers | `R2_DURABLE` | 0 |
 | `assistant_tools` | **keep** | Capability registry | assistant_tools | `R2_DURABLE` | 0 |
 | `attention_inbox_items` | **keep** | Attention primary carrier | attention_inbox_items | `R3_AUDIT` | 0 |
+| `connector_cursors` | **keep** | Connector receive cursor | connector_cursors | `R1_OPERATIONAL` | 0 |
+| `connector_delivery_parts` | **keep** | Provider-neutral split delivery receipt | connector_delivery_parts | `R3_AUDIT` | 0 |
+| `connector_update_audits` | **keep** | Connector update processing audit | connector_update_audits | `R3_AUDIT` | 0 |
 | `context_bundles` | **merge** | Evidence input projection | context_bundles; source events remain authoritative | `R0_DERIVED` | 0 |
 | `cron_task_schedules` | **migrate** | Automation.trigger and cursor | cron_task_schedules until Automation parity | `R2_DURABLE` | 0 |
 | `cron_tasks` | **migrate** | Automation definition | cron_tasks until Automation parity | `R3_AUDIT` | 3 |
@@ -327,6 +330,10 @@ POST /api/im-reply-drafts/:id/reject
 POST /api/integrations/feishu/events
 GET /api/integrations/feishu/settings
 PUT /api/integrations/feishu/settings
+GET /api/integrations/telegram/settings
+POST /api/integrations/telegram/discover-source
+POST /api/integrations/telegram/test-connection
+PUT /api/integrations/telegram/settings
 GET /api/session-images
 GET /api/sync-outbox
 POST /api/sync-outbox/dispatch
@@ -425,7 +432,7 @@ GET /api/issues/:id/runs
 | `assistant-runtime` | `pi-chat`, `pi-overview`, `pi-memory` | **keep** | Operator conversation and supporting memory/config | `PiAgentSettingsPanel.jsx`, `PiChat.jsx`, `PiChatComposerMeta.jsx`, `PiMemoryPanel.jsx` |
 | `attention` | `pi-inbox`, `attention-inbox` | **merge** | Attention projections with deterministic resolution gates | —（已合并到 Command Center） |
 | `automation` | `cron`, `pi-automations` | **migrate** | `automation_definitions/runs/events` API with legacy carrier compatibility | `Automations.jsx` |
-| `capability-policy` | `settings`, `pi-connectors`, `pi-skills`, `pi-policies` | **keep** | Capability registry and deterministic permission policy | `AssistantSettingsSections.jsx`, `CodeAgentsPanel.jsx`, `ConnectorDiagnosticsPanel.jsx`, `FeishuSettingsPanel.jsx`, `NotificationSettingsPanel.jsx`, `PermissionsSettingsPanel.jsx`, `PiMcpManagementPanel.jsx`, `ProviderAvailabilityPanel.jsx`, `RemoteAccessTokenPanel.jsx`, `RunnerSettingsPanel.jsx`, `Settings.jsx`, `SettingsChrome.jsx`, `SkillsRuntimePanel.jsx`, `SourcePoliciesPanel.jsx` |
+| `capability-policy` | `settings`, `pi-connectors`, `pi-skills`, `pi-policies` | **keep** | Capability registry and deterministic permission policy | `AssistantSettingsSections.jsx`, `CodeAgentsPanel.jsx`, `ConnectorDiagnosticsPanel.jsx`, `FeishuSettingsPanel.jsx`, `NotificationSettingsPanel.jsx`, `PermissionsSettingsPanel.jsx`, `PiMcpManagementPanel.jsx`, `ProviderAvailabilityPanel.jsx`, `RemoteAccessTokenPanel.jsx`, `RunnerSettingsPanel.jsx`, `Settings.jsx`, `SettingsChrome.jsx`, `SkillsRuntimePanel.jsx`, `SourcePoliciesPanel.jsx`, `TelegramSettingsPanel.jsx` |
 | `evidence-handoff` | `handoffs`, `pi-activity`, `pi-approvals` | **merge** | Evidence/Handoff read models and audited action requests | `ActivityTimelinePanel.jsx`, `Handoffs.jsx` |
 | `project-scope` | `projects` | **keep** | Project/local control-plane scope | `ProjectHoldNotice.jsx`, `ProjectSettingsEditor.jsx`, `Projects.jsx` |
 | `run-session-drilldown` | `runs`, `sessions` | **merge** | Run with provider Session drill-down | `Runs.jsx`, `Sessions.jsx` |
@@ -458,21 +465,21 @@ GET /api/issues/:id/runs
 
 ## 8. PI 模块清单
 
-`backend-ts/src/pi` 的 145 个非 `*.test.ts` 模块全部在下面 family 中逐项列出；测试保证没有漏项或重复归属。
+`backend-ts/src/pi` 的 153 个非 `*.test.ts` 模块全部在下面 family 中逐项列出；测试保证没有漏项或重复归属。
 
 | family | 文件数 | 结论 | 目标 | source of truth |
 | --- | ---: | --- | --- | --- |
 | `action-permission-gate` | 17 | **keep** | Deterministic permission and external-effect gate | Action Proposal/Approval plus pi_action_events |
-| `automation` | 11 | **migrate** | `automation_definitions/runs/events` execution pipeline | legacy pi_automations, heartbeats, and watches until W2/G4 |
+| `automation` | 8 | **keep** | `automation_definitions/runs/events` and automation watches execution pipeline | Automation definition/run/event and Watch/intent/outbox authorities |
 | `capability-connectors` | 29 | **keep** | Capability and connector runtime | registered provider/tool manifests and audited calls |
-| `guardian-attention` | 25 | **merge** | Attention detection, routing and delivery | Guardian authorities projected into Attention |
-| `intake-context` | 8 | **merge** | Attention intake and Evidence context | external events, context bundles and intake audit |
+| `guardian-attention` | 30 | **merge** | Attention detection, routing and delivery | Guardian authorities projected into Attention |
+| `intake-context` | 9 | **merge** | Attention intake and Evidence context | external events, context bundles and intake audit |
 | `memory` | 4 | **keep** | Supporting knowledge store | pi_memory_items |
-| `policy-role` | 2 | **keep** | Deterministic policy and role selection | project policy plus static role contracts |
-| `reporting` | 8 | **merge** | Evidence/Handoff reporting projections | underlying immutable facts remain authoritative |
-| `test-support` | 2 | **keep** | Focused deterministic fixtures | test-only import graph |
-| `verification-evidence` | 7 | **keep** | Evidence production and verification policy | verification facts and Git/runtime inputs |
-| `work-run-orchestration` | 37 | **merge** | Work/Run orchestration and recovery | issues and issue_runs authorities |
+| `policy-role` | 4 | **keep** | Deterministic policy and role selection | project policy plus static role contracts |
+| `reporting` | 9 | **merge** | Evidence/Handoff reporting projections | underlying immutable facts remain authoritative |
+| `test-support` | 3 | **keep** | Focused deterministic fixtures | test-only import graph |
+| `pi-acceptance` | 6 | **keep** | PI Session-context acceptance | Provider Session, workspace, commands, Git facts, and PI decision |
+| `work-run-orchestration` | 34 | **merge** | Work/Run orchestration and recovery | issues and issue_runs authorities |
 
 <details><summary><code>action-permission-gate</code> 的逐项 modules</summary>
 
@@ -501,14 +508,13 @@ backend-ts/src/pi/stalePendingActions.ts
 <details><summary><code>automation</code> 的逐项 modules</summary>
 
 ```text
-backend-ts/src/pi/automationRunner.ts
 backend-ts/src/pi/heartbeatActionExecution.ts
 backend-ts/src/pi/heartbeatOrchestrator.ts
 backend-ts/src/pi/heartbeatOrchestratorSupport.ts
 backend-ts/src/pi/heartbeatSignals.ts
 backend-ts/src/pi/heartbeatTypes.ts
+backend-ts/src/pi/issueCompletionAutomation.ts
 backend-ts/src/pi/issueCompletionWatchActions.ts
-backend-ts/src/pi/issueCompletionWatchEvaluator.ts
 backend-ts/src/pi/manualTrigger.ts
 ```
 
@@ -556,9 +562,13 @@ backend-ts/src/pi/toolRegistrySnapshot.ts
 backend-ts/src/pi/attentionRouter.ts
 backend-ts/src/pi/digestFlushScheduler.ts
 backend-ts/src/pi/digestFormatter.ts
+backend-ts/src/pi/digestNotifications.ts
 backend-ts/src/pi/failurePatterns.ts
 backend-ts/src/pi/guardianActionLease.ts
+backend-ts/src/pi/guardianAlertDelivery.ts
+backend-ts/src/pi/guardianAlertPresentation.ts
 backend-ts/src/pi/guardianAlertRetryPolicy.ts
+backend-ts/src/pi/guardianAlertText.ts
 backend-ts/src/pi/guardianDecisionActionCandidates.ts
 backend-ts/src/pi/guardianDecisionActions.ts
 backend-ts/src/pi/guardianDecisionMerge.ts
@@ -578,6 +588,7 @@ backend-ts/src/pi/notificationCoordinator.ts
 backend-ts/src/pi/notificationPreferenceResolver.ts
 backend-ts/src/pi/notificationPreferenceService.ts
 backend-ts/src/pi/notificationPreferenceTools.ts
+backend-ts/src/pi/pendingActionNotifications.ts
 ```
 
 </details>
@@ -593,6 +604,7 @@ backend-ts/src/pi/intakeSkillInput.ts
 backend-ts/src/pi/intakeSourcePolicy.ts
 backend-ts/src/pi/llmIntake.ts
 backend-ts/src/pi/manualSourcePull.ts
+backend-ts/src/pi/runtimeContextEnvelope.ts
 ```
 
 </details>
@@ -611,8 +623,10 @@ backend-ts/src/pi/memoryTools.ts
 <details><summary><code>policy-role</code> 的逐项 modules</summary>
 
 ```text
+backend-ts/src/pi/personaPrompt.ts
 backend-ts/src/pi/policyTypes.ts
 backend-ts/src/pi/roleProfileSelector.ts
+backend-ts/src/pi/runtimePromptProfile.ts
 ```
 
 </details>
@@ -620,6 +634,7 @@ backend-ts/src/pi/roleProfileSelector.ts
 <details><summary><code>reporting</code> 的逐项 modules</summary>
 
 ```text
+backend-ts/src/pi/guardianOperationsDailyReport.ts
 backend-ts/src/pi/nightRunSummary.ts
 backend-ts/src/pi/reportHealth.ts
 backend-ts/src/pi/reportIssueSummary.ts
@@ -637,19 +652,20 @@ backend-ts/src/pi/runGroupService.ts
 ```text
 backend-ts/src/pi/issueSupervisorDecisionTestSupport.ts
 backend-ts/src/pi/issueSupervisorRecoveryFixtures.ts
+backend-ts/src/pi/personaABFixtures.ts
 ```
 
 </details>
 
-<details><summary><code>verification-evidence</code> 的逐项 modules</summary>
+<details><summary><code>pi-acceptance</code> 的逐项 modules</summary>
 
 ```text
+backend-ts/src/pi/internalReadAuthorization.ts
+backend-ts/src/pi/issueAcceptance.ts
 backend-ts/src/pi/meaningfulProgress.ts
 backend-ts/src/pi/projectFindings.ts
 backend-ts/src/pi/projectSnapshot.ts
 backend-ts/src/pi/repoContextPack.ts
-backend-ts/src/pi/verificationEvidence.ts
-backend-ts/src/pi/verificationPolicy.ts
 ```
 
 </details>
@@ -660,12 +676,11 @@ backend-ts/src/pi/verificationPolicy.ts
 backend-ts/src/pi/agentOrchestration.ts
 backend-ts/src/pi/agentOrchestrationActions.ts
 backend-ts/src/pi/agentOrchestrationPayloads.ts
-backend-ts/src/pi/failedRetryPolicy.ts
+backend-ts/src/pi/issueBatchProposal.ts
 backend-ts/src/pi/issueProposalContext.ts
 backend-ts/src/pi/issueStateManager.ts
 backend-ts/src/pi/issueStateRepairExecutor.ts
 backend-ts/src/pi/issueStateSnapshot.ts
-backend-ts/src/pi/issueStateVerification.ts
 backend-ts/src/pi/issueSupervisorActions.ts
 backend-ts/src/pi/issueSupervisorContext.ts
 backend-ts/src/pi/issueSupervisorContextSupport.ts
@@ -685,6 +700,7 @@ backend-ts/src/pi/runnerActions.ts
 backend-ts/src/pi/runnerBatchTriageScope.ts
 backend-ts/src/pi/runnerIssueScheduleActions.ts
 backend-ts/src/pi/runnerIssueStateActions.ts
+backend-ts/src/pi/runnerIssueStatusActions.ts
 backend-ts/src/pi/runnerNextTriageActions.ts
 backend-ts/src/pi/sessionObserver.ts
 backend-ts/src/pi/supervisorCommitments.ts
@@ -750,4 +766,4 @@ bunx tsc --ignoreConfig --noEmit --target ES2022 --module ESNext \
   src/xuanwu/capabilityDispositionInventory.test.ts
 ```
 
-测试会验证：85 张 current source table + 2 张 captured live-only table = 87；245 条唯一用户 API route 全覆盖；34 个 JSX 页面组件与 151 个 PI 模块恰好归属一次；12 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。
+测试会验证：91 张 current source table + 2 张 captured live-only table = 93；257 条唯一用户 API route 全覆盖；36 个 JSX 页面组件与 153 个 PI 模块恰好归属一次；12 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。

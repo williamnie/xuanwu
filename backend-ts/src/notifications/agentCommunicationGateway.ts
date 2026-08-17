@@ -240,6 +240,13 @@ function validateDecision(
   decision: AgentCommunicationDecision,
   intents: PiNotificationIntent[]
 ): AgentCommunicationDecision {
+  if (decision.decision === "suppress" && intents.some(isExplicitSubscriptionDelivery)) {
+    return {
+      decision: "send",
+      message: explicitSubscriptionMessage(intents),
+      rationale: "explicit subscription delivery cannot be suppressed"
+    };
+  }
   if (intents.some((intent) => intent.requires_user === 1) && decision.decision !== "send") {
     throw new Error("Agent suppressed an actionable communication");
   }
@@ -247,6 +254,18 @@ function validateDecision(
     throw new Error("Agent returned an empty user message");
   }
   return decision;
+}
+
+function isExplicitSubscriptionDelivery(intent: PiNotificationIntent): boolean {
+  return intent.kind === "automation_watch_terminal" || intent.kind === "issue_completion_watch_satisfied";
+}
+
+function explicitSubscriptionMessage(intents: PiNotificationIntent[]): string {
+  const messages = [...new Set(intents
+    .filter(isExplicitSubscriptionDelivery)
+    .map((intent) => communicationEnvelope(intent).contentSeed)
+    .filter(Boolean))];
+  return messages.join("\n\n") || "你订阅的观察已结束，请查看结果。";
 }
 
 function queueAgentMessage(db: RunnerDatabase, intents: PiNotificationIntent[], content: string) {

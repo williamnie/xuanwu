@@ -32,6 +32,29 @@ afterEach(async () => {
 });
 
 describe("Feishu lifecycle notifications", () => {
+  test("routes an issue lifecycle notification back to its Telegram topic", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issueID = linkedTelegramIssue(db);
+      updateIssue(db, issueID, { status: "done", error: "" });
+
+      const result = queueFeishuIssueStatusNotification(db, issueID);
+      await flushAgentCommunicationTestMessages(db);
+      const outbox = listSyncOutbox(db, { source: "telegram" });
+
+      expect(result).toMatchObject({ queued: true, reason: "queued" });
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]).toMatchObject({
+        target_chat_id: "-100123",
+        target_message_id: "77",
+        target_thread_id: "9"
+      });
+      expect(outbox[0]?.content).toContain("已完成");
+    } finally {
+      db.close();
+    }
+  });
+
   test("queues one start notification across todo and in-progress status replays", async () => {
     const db = await fixtureDatabase();
     try {
@@ -313,6 +336,47 @@ function linkedFeishuIssue(db: RunnerDatabase, input: { conversationID?: string 
     project_id: "demo",
     relationship: "created_issue",
     source: "feishu"
+  });
+  return issue.id;
+}
+
+function linkedTelegramIssue(db: RunnerDatabase): number {
+  const issue = createIssue(db, { project_id: "demo", title: "Telegram task", status: "triage" });
+  const feishuProjectEvent = createExternalEvent(db, {
+    content: "project fallback",
+    dedupe_key: "feishu:project-fallback",
+    external_id: "om_project_fallback",
+    normalized_message: { chat_id: "oc_project_fallback", message_id: "om_project_fallback" },
+    source: "feishu"
+  });
+  createExternalLink(db, {
+    conversation_id: "oc_project_fallback",
+    external_event_id: feishuProjectEvent.id,
+    external_type: "feishu_message",
+    project_id: "demo",
+    relationship: "notification",
+    source: "feishu"
+  });
+  const event = createExternalEvent(db, {
+    content: "处理 Telegram 任务",
+    dedupe_key: "telegram:update:77",
+    external_id: "77",
+    normalized_message: {
+      conversation: { id: "-100123", kind: "group" },
+      message_id: "77",
+      thread: { id: "9" }
+    },
+    provider: "telegram",
+    source: "telegram"
+  });
+  createExternalLink(db, {
+    conversation_id: "telegram-conversation",
+    external_event_id: event.id,
+    external_type: "telegram_message",
+    issue_id: issue.id,
+    project_id: "demo",
+    relationship: "created_issue",
+    source: "telegram"
   });
   return issue.id;
 }

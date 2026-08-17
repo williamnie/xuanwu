@@ -166,6 +166,10 @@ function clearRuntimeSecret(config: RunnerConfig | undefined, connectorID: strin
     if (name === "encrypt_key") config.integrations.feishu.encryptKey = "";
     return;
   }
+  if (connectorID === "telegram") {
+    if (name === "bot_token") config.integrations.telegram.botToken = "";
+    return;
+  }
   if (connectorID.startsWith("github-")) config.integrations.github.token = "";
   if (connectorID.startsWith("gitlab-")) config.integrations.gitlab.token = "";
 }

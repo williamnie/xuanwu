@@ -125,14 +125,25 @@ export async function handleImInteraction(
         : {})
     };
   }
-  const resolution = await resolver({
-    action,
-    actor: callback.actor,
-    binding: claimed.binding,
-    callback,
-    database: options.database,
-    now
-  });
+  let resolution: ImInteractionResolveResult;
+  try {
+    resolution = await resolver({
+      action,
+      actor: callback.actor,
+      binding: claimed.binding,
+      callback,
+      database: options.database,
+      now
+    });
+  } catch (error) {
+    // A deterministic 4xx business rejection (invalid action/state/scope) is
+    // terminal for this callback. Persist it as the one stable resolution so
+    // it cannot pin the durable update cursor in an infinite retry loop.
+    // Unclassified failures still keep the lease/retry path for crash and
+    // transient recovery.
+    if (!isPermanentResolverError(error)) throw error;
+    resolution = { ok: false, status: safeInteractionError(error) };
+  }
   const completed = completeImInteractionBinding(options.database, {
     interactionId,
     leaseId: claimed.leaseId,
@@ -169,6 +180,12 @@ function mapClaimFailure(status: string): ImInteractionHandleResult["reason"] {
 export function safeInteractionError(error: unknown): string {
   return redactSensitiveText(error instanceof Error ? error.message : String(error))
     .replace(/(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g, "[redacted-path]");
+}
+
+function isPermanentResolverError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const status = Number((error as { status?: unknown }).status);
+  return Number.isInteger(status) && status >= 400 && status < 500;
 }
 
 function cleanString(value: unknown): string {

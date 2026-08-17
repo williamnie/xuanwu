@@ -142,6 +142,7 @@ function ConnectorConfigureGuide({ connector }) {
       <span className="connector-diagnostics__muted">{guide.body}</span>
       {guide.refs && <code className="connector-diagnostics__refs">{guide.refs}</code>}
       {connector.id === 'feishu' && <button className="btn btn-secondary" onClick={() => document.getElementById('feishu-connection-settings')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} type="button">前往飞书配置</button>}
+      {connector.id === 'telegram' && <button className="btn btn-secondary" onClick={() => document.getElementById('telegram-connection-settings')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} type="button">前往 Telegram 配置</button>}
     </div>
   );
 }

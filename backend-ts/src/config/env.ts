@@ -11,6 +11,8 @@ import {
 } from "./codexServer.ts";
 import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuConfigInput, FeishuConnectorConfig, FeishuConnectorOverrides } from "../integrations/feishu.ts";
+import { buildTelegramConnectorConfig } from "../integrations/telegramConfig.ts";
+import type { TelegramConfigInput, TelegramConnectorConfig, TelegramConnectorOverrides } from "../integrations/telegramTypes.ts";
 import { buildGitHubConnectorConfig, type GitHubConnectorConfig, type GitHubConnectorConfigInput } from "../integrations/github/config.ts";
 import { buildGitLabConnectorConfig, type GitLabConnectorConfig, type GitLabConnectorConfigInput } from "../integrations/gitlab/config.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
@@ -72,6 +74,15 @@ export const ENV_KEYS = {
   feishuProjectMappings: "FEISHU_PROJECT_MAPPINGS",
   feishuReceiveMode: "FEISHU_RECEIVE_MODE",
   feishuVerificationToken: "FEISHU_VERIFICATION_TOKEN",
+  telegramAllowedChatIds: "TELEGRAM_ALLOWED_CHAT_IDS",
+  telegramAllowedUserIds: "TELEGRAM_ALLOWED_USER_IDS",
+  telegramBotToken: "TELEGRAM_BOT_TOKEN",
+  telegramBotTokenRef: "TELEGRAM_BOT_TOKEN_REF",
+  telegramDefaultChatId: "TELEGRAM_DEFAULT_CHAT_ID",
+  telegramEnabled: "TELEGRAM_ENABLED",
+  telegramGetMeCacheTtlSeconds: "TELEGRAM_GET_ME_CACHE_TTL_SECONDS",
+  telegramPollTimeoutSeconds: "TELEGRAM_POLL_TIMEOUT_SECONDS",
+  telegramProjectMappings: "TELEGRAM_PROJECT_MAPPINGS",
   githubApiUrl: "GITHUB_API_URL",
   githubGraphqlUrl: "GITHUB_GRAPHQL_URL",
   githubServerUrl: "GITHUB_SERVER_URL",
@@ -87,7 +98,7 @@ type Env = Record<string, string | undefined>;
 type ConfigOverrides =
   Omit<Partial<RunnerConfig>, "cliConnectors" | "integrations" | "runner"> &
   ProviderRuntimeOverrides &
-  FeishuConnectorOverrides & {
+  FeishuConnectorOverrides & TelegramConnectorOverrides & {
   cliConnectorDirs?: string | string[];
   cliConnectors?: { manifestDirs?: string | string[] };
   githubApiUrl?: string;
@@ -101,6 +112,7 @@ type ConfigOverrides =
   gitlabTokenRef?: string;
   integrations?: {
     feishu?: FeishuConfigInput;
+    telegram?: TelegramConfigInput;
     github?: GitHubConnectorConfigInput;
     gitlab?: GitLabConnectorConfigInput;
   };
@@ -160,6 +172,7 @@ export type RunnerConfig = {
   runner: RunnerConcurrencyConfig;
   integrations: {
     feishu: FeishuConnectorConfig;
+    telegram: TelegramConnectorConfig;
     github: GitHubConnectorConfig;
     gitlab: GitLabConnectorConfig;
   };
@@ -253,6 +266,7 @@ export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): Runner
     runner: { maxParallelProjects: localOverrides.runner?.maxParallelProjects ?? baseOverrides.runnerMaxParallelProjects },
     integrations: {
       feishu: localOverrides.integrations?.feishu ?? {},
+      telegram: localOverrides.integrations?.telegram ?? {},
       github: localOverrides.integrations?.github ?? {},
       gitlab: localOverrides.integrations?.gitlab ?? {}
     }
@@ -298,9 +312,25 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
     }),
     integrations: {
       feishu: buildFeishuConnectorConfig(effectiveFeishuInput(overrides)),
+      telegram: buildTelegramConnectorConfig(effectiveTelegramInput(overrides)),
       github: buildGitHubConnectorConfig(effectiveGitHubInput(overrides)),
       gitlab: buildGitLabConnectorConfig(effectiveGitLabInput(overrides))
     }
+  };
+}
+
+function effectiveTelegramInput(overrides: ConfigOverrides): TelegramConfigInput {
+  const local = overrides.integrations?.telegram ?? {};
+  return {
+    telegramAllowedChatIds: local.telegramAllowedChatIds ?? local.allowedChatIds ?? overrides.telegramAllowedChatIds,
+    telegramAllowedUserIds: local.telegramAllowedUserIds ?? local.allowedUserIds ?? overrides.telegramAllowedUserIds,
+    telegramBotToken: local.telegramBotToken ?? local.botToken ?? overrides.telegramBotToken,
+    telegramBotTokenRef: local.telegramBotTokenRef ?? local.botTokenRef ?? overrides.telegramBotTokenRef,
+    telegramDefaultChatId: local.telegramDefaultChatId ?? local.defaultChatId ?? overrides.telegramDefaultChatId,
+    telegramEnabled: local.telegramEnabled ?? local.enabled ?? overrides.telegramEnabled,
+    telegramGetMeCacheTtlSeconds: local.telegramGetMeCacheTtlSeconds ?? local.getMeCacheTtlSeconds ?? overrides.telegramGetMeCacheTtlSeconds,
+    telegramPollTimeoutSeconds: local.telegramPollTimeoutSeconds ?? local.pollTimeoutSeconds ?? overrides.telegramPollTimeoutSeconds,
+    telegramProjectMappings: local.telegramProjectMappings ?? local.projectMappings ?? overrides.telegramProjectMappings
   };
 }
 
@@ -415,6 +445,15 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     feishuProjectMappings: cleanValue(env[ENV_KEYS.feishuProjectMappings]),
     feishuReceiveMode: cleanValue(env[ENV_KEYS.feishuReceiveMode]),
     feishuVerificationToken: cleanValue(env[ENV_KEYS.feishuVerificationToken]),
+    telegramAllowedChatIds: cleanValue(env[ENV_KEYS.telegramAllowedChatIds]),
+    telegramAllowedUserIds: cleanValue(env[ENV_KEYS.telegramAllowedUserIds]),
+    telegramBotToken: cleanValue(env[ENV_KEYS.telegramBotToken]),
+    telegramBotTokenRef: cleanValue(env[ENV_KEYS.telegramBotTokenRef]),
+    telegramDefaultChatId: cleanValue(env[ENV_KEYS.telegramDefaultChatId]),
+    telegramEnabled: cleanValue(env[ENV_KEYS.telegramEnabled]),
+    telegramGetMeCacheTtlSeconds: cleanValue(env[ENV_KEYS.telegramGetMeCacheTtlSeconds]),
+    telegramPollTimeoutSeconds: cleanValue(env[ENV_KEYS.telegramPollTimeoutSeconds]),
+    telegramProjectMappings: cleanValue(env[ENV_KEYS.telegramProjectMappings]),
     githubApiUrl: cleanValue(env[ENV_KEYS.githubApiUrl]),
     githubGraphqlUrl: cleanValue(env[ENV_KEYS.githubGraphqlUrl]),
     githubServerUrl: cleanValue(env[ENV_KEYS.githubServerUrl]),
