@@ -4,6 +4,7 @@ import type { AgenticWorkerClient } from "../agentic/protocol.ts";
 import { coldStartTrace } from "../benchmarks/coldStart.ts";
 import { loadConfig } from "../config/env.ts";
 import { openDatabase } from "../db/database.ts";
+import { reconcileReservedImContextBindings } from "../db/repositories/imContextLifecycle.ts";
 import { EventBus } from "../events/bus.ts";
 import { BackgroundProjectionWorker } from "../events/projectionWorker.ts";
 import { createAuthTokenManager } from "../http/auth.ts";
@@ -11,6 +12,7 @@ import { startServer } from "../http/server.ts";
 import { primeProviderStatus } from "../http/systemStatus.ts";
 import { createFeishuChannelModule, createBuiltinImChannelRegistry } from "../integrations/feishuChannelModule.ts";
 import { createTelegramChannelModule } from "../integrations/telegramChannelModule.ts";
+import type { ImConversationPromptProjection } from "../integrations/imConversationContext.ts";
 import { createImGuardianAlertDelivery } from "../integrations/imGuardianAlerts.ts";
 import { feishuConnectorStatus } from "../integrations/feishu.ts";
 import { createImReceiverRuntime, type ImReceiverRuntime } from "../integrations/imChannelContracts.ts";
@@ -47,6 +49,10 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   if (role === "core") assertInternalCoreAddress(config.addr);
   coldStartTrace("config_loaded");
   const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
+  const reconciledContextBindings = reconcileReservedImContextBindings(database);
+  if (reconciledContextBindings > 0) {
+    console.info(JSON.stringify({ event: "im.context_bindings_reconciled", rows: reconciledContextBindings }));
+  }
   const readDatabase = await openDatabase({ readonlyImportPath: database.path });
   const authTokenManager = await createAuthTokenManager(config);
   const agenticClient = role === "core"
@@ -128,12 +134,13 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   );
   coldStartTrace("providers_initialized");
   setProjectLoopMaxParallelProjects(config.runner.maxParallelProjects);
-  const runSupervisorConversation = async ({ channelContext, conversationId, prompt, targetIssueId, targetProjectId, targetProjectSource, title }: {
-    channelContext: string; conversationId: string; prompt: string; targetIssueId?: number; targetProjectId: string; targetProjectSource?: string; title: string;
+  const runSupervisorConversation = async ({ channelContext, channelContextProjection, conversationId, prompt, targetIssueId, targetProjectId, targetProjectSource, title }: {
+    channelContext: string; channelContextProjection?: ImConversationPromptProjection; conversationId: string; prompt: string; targetIssueId?: number; targetProjectId: string; targetProjectSource?: string; title: string;
   }) => {
     const { runPiConversationPrompt } = await import("../http/piConversationApi.ts");
     const result = await runPiConversationPrompt({ bus, database, providers }, {
       channelContext,
+      channelContextProjection,
       clearProjectId: true,
       conversationId,
       projectId: "",

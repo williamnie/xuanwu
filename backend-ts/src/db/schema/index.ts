@@ -81,6 +81,7 @@ import { builtinQoderExecutorProfileMigration } from "./078_builtin_qoder_execut
 import { schedulerPerformanceIndexesMigration } from "./079_scheduler_performance_indexes.ts";
 import { executionPolicyJsonMigration } from "./080_execution_policy_json.ts";
 import { telegramChannelRuntimeMigration } from "./081_telegram_channel_runtime.ts";
+import { imContextLifecycleMigration } from "./082_im_context_lifecycle.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -165,5 +166,6 @@ export const migrations = [
   builtinQoderExecutorProfileMigration,
   schedulerPerformanceIndexesMigration,
   executionPolicyJsonMigration,
-  telegramChannelRuntimeMigration
+  telegramChannelRuntimeMigration,
+  imContextLifecycleMigration
 ];

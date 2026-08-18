@@ -7,6 +7,7 @@ import { RUNNER_BUILTIN_PROVIDER_ID } from "./builtinToolRegistry.ts";
 import { createReadOnlyRuntimeTools } from "./readOnlyRuntimeTools.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 import type { PiChatToolMode, PiRuntimePromptProfile } from "./runtimePromptProfile.ts";
+import { createPiCapabilityTools, PI_CAPABILITY_TOOL_NAMES } from "./capabilityTools.ts";
 
 type ToolContext = NonNullable<Parameters<typeof createPiProjectTools>[2]>;
 type ToolSource = "registry";
@@ -111,11 +112,16 @@ function registryToolKit(
     providers: snapshot.providers,
     tools: snapshot.tools
   });
-  const allCustomTools = [...customTools, ...readOnlyTools.tools];
+  const baseCustomTools = [...customTools, ...readOnlyTools.tools];
+  const allCustomTools = [
+    ...baseCustomTools,
+    ...createPiCapabilityTools(db, { conversationID: context.conversationID }, snapshot, baseCustomTools)
+  ];
   const customByName = new Map(allCustomTools.map((tool) => [tool.name, tool]));
   const executable = executableToolNames([
     ...registryTools.map((tool) => tool.name),
-    ...readOnlyTools.tools.map((tool) => tool.name)
+    ...readOnlyTools.tools.map((tool) => tool.name),
+    ...PI_CAPABILITY_TOOL_NAMES
   ], customByName);
   if (executable.names.size === 0) throw new Error("builtin tool provider returned no executable tools");
   const availableTools = [
@@ -126,8 +132,11 @@ function registryToolKit(
     ...availableTools,
     ...allCustomTools.map((tool) => tool.name)
   ]));
-  const tools = availableTools.filter((name) => selectedNames.has(name));
   const filteredCustomTools = allCustomTools.filter((tool) => executable.names.has(tool.name) && selectedNames.has(tool.name));
+  const tools = [...new Set([
+    ...availableTools.filter((name) => selectedNames.has(name)),
+    ...filteredCustomTools.map((tool) => tool.name)
+  ])];
   return {
     audit: auditSnapshot("registry", tools, filteredCustomTools, [provider.id, ...readOnlyTools.providerIDs], executable.skipped),
     customTools: filteredCustomTools,
@@ -155,10 +164,21 @@ const MANAGER_CYCLE_TOOLS = new Set([
 ]);
 const REVIEW_CHAT_TOOLS = new Set([
   "project_status", "project_list", "issue_list", "issue_status_summary", "issue_execution_status", "issue_read",
+  "project_create", "workspace_make_directory", "workspace_write_file", "manual_context_intake",
   "session_list", "session_read_summary", "repo_search", "repo_read_excerpt", "repo_tree",
   "work_list", "work_read", "run_list", "run_read", "evidence_list", "evidence_read",
   "handoff_list", "handoff_read", "memory_search", "memory_remember", "skill_list", "skill_read",
   "read", "grep", "find", "ls", "url_fetch"
+]);
+const BOOTSTRAP_CHAT_TOOLS = new Set([
+  "project_status", "project_list", "issue_list", "issue_status_summary", "issue_execution_status", "issue_read",
+  "project_create", "workspace_make_directory", "workspace_write_file", "manual_context_intake",
+  "issue_create_proposal", "issue_create_batch_proposal", "issue_enqueue_proposal", "issue_schedule_enqueue", "issue_status_update",
+  "session_list", "session_read_summary", "work_list", "work_read", "memory_search",
+  "repo_search", "repo_read_excerpt", "repo_tree",
+  "memory_remember",
+  "read", "grep", "find", "ls", "url_fetch",
+  ...PI_CAPABILITY_TOOL_NAMES
 ]);
 
 export function piRuntimeToolNamesForProfile(
@@ -170,7 +190,7 @@ export function piRuntimeToolNamesForProfile(
 
 function selectedToolNames(selection: PiRuntimeToolSelection, available: Set<string>): Set<string> {
   const allowlist = selection.promptProfile === "chat"
-    ? selection.chatToolMode === "review" ? REVIEW_CHAT_TOOLS : available
+    ? selection.chatToolMode === "review" ? REVIEW_CHAT_TOOLS : BOOTSTRAP_CHAT_TOOLS
     : selection.promptProfile === "acceptance" ? ACCEPTANCE_TOOLS
       : selection.promptProfile === "recovery" ? RECOVERY_TOOLS
         : selection.promptProfile === "manager_cycle" ? MANAGER_CYCLE_TOOLS

@@ -7,7 +7,6 @@ import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earen
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listPiActionEvents, listPiActions, type PiActionEvent } from "../db/repositories/pi.ts";
 import { URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";
-import { PI_ALLOWED_TOOLS } from "./piProjectTools.ts";
 import { createPiRuntimeSession } from "./piRuntime.ts";
 
 const tempRoots: string[] = [];
@@ -63,9 +62,11 @@ describe("PI project tools", () => {
       ]);
       const { probes, runtime } = await runToolProbeSession(db, projectCwd);
 
-      expect(runtime.session.getActiveToolNames().sort()).toEqual(
-        [...new Set([...PI_ALLOWED_TOOLS, URL_FETCH_TOOL_NAME])].sort()
-      );
+      expect(runtime.session.getActiveToolNames()).toEqual(expect.arrayContaining([
+        "capability_search", "capability_invoke", "project_status", "repo_tree", "repo_search",
+        "repo_read_excerpt", "issue_enqueue_proposal", "issue_schedule_enqueue", URL_FETCH_TOOL_NAME
+      ]));
+      expect(runtime.session.getActiveToolNames()).not.toEqual(expect.arrayContaining(["write", "edit", "bash"]));
       expect(runtime.session.getAllTools().map((tool) => tool.name).sort()).toEqual(runtime.session.getActiveToolNames().sort());
       expect(probes.get("project_status")?.isError).toBe(false);
       expect(probes.get("project_status")?.text).toContain('"total_issues": 2');

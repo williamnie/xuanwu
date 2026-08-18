@@ -11,7 +11,7 @@ describe("server entrypoint wiring", () => {
   test("shares stable IM chat/thread conversation ids across Feishu and Telegram", () => {
     const source = readFileSync(join(import.meta.dir, "runtime", "core.ts"), "utf8");
 
-    expect(source).toContain("const runSupervisorConversation = async ({ channelContext, conversationId, prompt, targetIssueId, targetProjectId, targetProjectSource, title }");
+    expect(source).toContain("const runSupervisorConversation = async ({ channelContext, channelContextProjection, conversationId, prompt, targetIssueId, targetProjectId, targetProjectSource, title }");
     expect(source).toContain("createFeishuChannelModule({");
     expect(source).toContain("createTelegramChannelModule({");
     expect(source.match(/runSupervisorConversation\n/g)).toHaveLength(2);

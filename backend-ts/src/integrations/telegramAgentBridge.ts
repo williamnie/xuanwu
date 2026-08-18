@@ -9,7 +9,7 @@ import { redactSensitiveText } from "../util/redact.ts";
 import type { ChannelConnector } from "./channelConnectorContracts.ts";
 import { resolveImActionTarget } from "./imActionTarget.ts";
 import { createImConversationCoordinator } from "./imConversationCoordinator.ts";
-import { buildImConversationPromptContext } from "./imConversationContext.ts";
+import { buildImConversationPromptProjection, type ImConversationPromptProjection } from "./imConversationContext.ts";
 import { routeImConversation, type ImConversationRoute } from "./imConversationRouting.ts";
 import { deliverImOutboundNow } from "./imOutboundDelivery.ts";
 import { resolveImProjectContextFromDatabase, type ImProjectContextResult } from "./imProjectContext.ts";
@@ -20,6 +20,7 @@ import type { TelegramConnectorConfig } from "./telegramTypes.ts";
 
 export type TelegramSupervisorConversation = (input: {
   channelContext: string;
+  channelContextProjection?: ImConversationPromptProjection;
   conversationId: string;
   prompt: string;
   targetIssueId?: number;
@@ -115,15 +116,18 @@ async function runConversation(
       text: route.prompt || input.normalized.prompt
     });
     const targetProjectId = target.projectID || resolvedProject;
-    const result = await options.runSupervisorConversation({
-      channelContext: buildImConversationPromptContext(options.database, {
+    const projection = buildImConversationPromptProjection(options.database, {
         conversation: {
           connectorId: "telegram",
           conversationId: input.normalized.message.conversation.id,
           currentMessageId: input.normalized.message.message_id,
+          piConversationId: route.conversationId,
           threadId: input.normalized.message.thread?.id ?? ""
         }
-      }),
+      });
+    const result = await options.runSupervisorConversation({
+      channelContext: projection.prompt,
+      channelContextProjection: projection,
       conversationId: route.conversationId,
       prompt: route.prompt || input.normalized.prompt || "[Telegram attachment message]",
       targetIssueId: target.issueID || undefined,
@@ -327,15 +331,18 @@ async function resolveProjectSelection(options: Options, input: {
   await sendStandaloneText(options, selection.chat_id, `已选择 ${input.projectId}，我会用它处理刚才这句。`, `${input.callbackId}:selected`, input.threadId);
   if (!options.runSupervisorConversation) return { ok: true, status: "project_selection_saved" };
   try {
-    const reply = await options.runSupervisorConversation({
-      channelContext: buildImConversationPromptContext(options.database, {
+    const projection = buildImConversationPromptProjection(options.database, {
         conversation: {
           connectorId: "telegram",
           conversationId: selection.chat_id,
           currentMessageId: selection.source_message_id,
+          piConversationId: selection.conversation_id,
           threadId: input.threadId
         }
-      }),
+      });
+    const reply = await options.runSupervisorConversation({
+      channelContext: projection.prompt,
+      channelContextProjection: projection,
       conversationId: selection.conversation_id,
       prompt: selection.original_prompt,
       targetProjectId: input.projectId,

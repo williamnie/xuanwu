@@ -201,6 +201,21 @@ export const TABLE_DISPOSITIONS = [
     live_rows: 0, delete_preconditions: []
   },
   {
+    name: "im_context_cursors", disposition: "keep", target: "Committed IM context projection cursors",
+    source_of_truth: "im_context_cursors", retention: "R1_OPERATIONAL", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "im_context_event_bindings", disposition: "keep", target: "IM event to PI Turn presentation binding",
+    source_of_truth: "im_context_event_bindings", retention: "R1_OPERATIONAL", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "im_context_rollovers", disposition: "keep", target: "PI Session rollover lineage and bounded capsule",
+    source_of_truth: "im_context_rollovers + im_conversation_state active pointer", retention: "R4_SENSITIVE", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
     name: "im_interaction_bindings", disposition: "keep", target: "Opaque IM interaction authorization binding",
     source_of_truth: "im_interaction_bindings", retention: "R3_AUDIT", runtime_origin: "source_schema",
     live_rows: 0, delete_preconditions: []
@@ -838,7 +853,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "capability-connectors", disposition: "keep", target: "Capability and connector runtime", source_of_truth: "registered provider/tool manifests and audited calls",
-    source_files: ["backend-ts/src/pi/browserConnectorHealth.ts", "backend-ts/src/pi/browserToolCall.ts", "backend-ts/src/pi/browserToolProvider.ts", "backend-ts/src/pi/builtinToolRegistry.ts", "backend-ts/src/pi/cliConnectorHealth.ts", "backend-ts/src/pi/cliConnectorManifest.ts", "backend-ts/src/pi/cliConnectorProvider.ts", "backend-ts/src/pi/cliConnectorToolCall.ts", "backend-ts/src/pi/cliRawEventSync.ts", "backend-ts/src/pi/cliToolRunner.ts", "backend-ts/src/pi/cliToolRunnerSupport.ts", "backend-ts/src/pi/httpToolCall.ts", "backend-ts/src/pi/httpToolProvider.ts", "backend-ts/src/pi/localWorkspaceTools.ts", "backend-ts/src/pi/mcpActionTools.ts", "backend-ts/src/pi/mcpApprovalExpiry.ts", "backend-ts/src/pi/mcpResourceRead.ts", "backend-ts/src/pi/mcpToolCall.ts", "backend-ts/src/pi/mcpToolDefinitions.ts", "backend-ts/src/pi/mcpToolProvider.ts", "backend-ts/src/pi/mcpTransport.ts", "backend-ts/src/pi/piRuntimeTools.ts", "backend-ts/src/pi/readOnlyRuntimeTools.ts", "backend-ts/src/pi/readOnlyToolInvocation.ts", "backend-ts/src/pi/repoReadActionTools.ts", "backend-ts/src/pi/repoReadActions.ts", "backend-ts/src/pi/toolCallAudit.ts", "backend-ts/src/pi/toolProviderEnvelope.ts", "backend-ts/src/pi/toolRegistrySnapshot.ts"]
+    source_files: ["backend-ts/src/pi/browserConnectorHealth.ts", "backend-ts/src/pi/browserToolCall.ts", "backend-ts/src/pi/browserToolProvider.ts", "backend-ts/src/pi/builtinToolRegistry.ts", "backend-ts/src/pi/capabilityTools.ts", "backend-ts/src/pi/cliConnectorHealth.ts", "backend-ts/src/pi/cliConnectorManifest.ts", "backend-ts/src/pi/cliConnectorProvider.ts", "backend-ts/src/pi/cliConnectorToolCall.ts", "backend-ts/src/pi/cliRawEventSync.ts", "backend-ts/src/pi/cliToolRunner.ts", "backend-ts/src/pi/cliToolRunnerSupport.ts", "backend-ts/src/pi/httpToolCall.ts", "backend-ts/src/pi/httpToolProvider.ts", "backend-ts/src/pi/localWorkspaceTools.ts", "backend-ts/src/pi/mcpActionTools.ts", "backend-ts/src/pi/mcpApprovalExpiry.ts", "backend-ts/src/pi/mcpResourceRead.ts", "backend-ts/src/pi/mcpToolCall.ts", "backend-ts/src/pi/mcpToolDefinitions.ts", "backend-ts/src/pi/mcpToolProvider.ts", "backend-ts/src/pi/mcpTransport.ts", "backend-ts/src/pi/piRuntimeTools.ts", "backend-ts/src/pi/readOnlyRuntimeTools.ts", "backend-ts/src/pi/readOnlyToolInvocation.ts", "backend-ts/src/pi/repoReadActionTools.ts", "backend-ts/src/pi/repoReadActions.ts", "backend-ts/src/pi/toolCallAudit.ts", "backend-ts/src/pi/toolProviderEnvelope.ts", "backend-ts/src/pi/toolRegistrySnapshot.ts"]
   },
   {
     id: "guardian-attention", disposition: "merge", target: "Attention detection, routing and delivery", source_of_truth: "Guardian authorities projected into Attention",

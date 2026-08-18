@@ -1,4 +1,5 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import { readFile, stat } from "node:fs/promises";
 import { PI_MANAGER_ROLE } from "../agents/roles.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -6,15 +7,28 @@ import { ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
+  failImContextProjectionReservation,
+  markImContextProjectionPresented,
+  reserveImContextProjection,
+  type ImContextProjectionReservation
+} from "../db/repositories/imContextLifecycle.ts";
+import {
+  createPiActionEvent,
   createPiConversation,
   getPiAgent,
   getPiConversation,
   getPiSupervisor,
+  listPiActionEvents,
   listPiConversations,
   updatePiConversation,
   type PiAgent,
   type PiConversation
 } from "../db/repositories/pi.ts";
+import { getImConversationState } from "../db/repositories/imConversationState.ts";
+import {
+  activateImContextRollover,
+  prepareImContextRollover
+} from "../db/repositories/imContextLifecycle.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
 import { startProjectLoop } from "../runner/projectLoopManager.ts";
@@ -39,6 +53,10 @@ import {
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { Router } from "./router.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
+import {
+  renderImConversationPrompt,
+  type ImConversationPromptProjection
+} from "../integrations/imConversationContext.ts";
 
 type PiConversationContext = {
   auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
@@ -52,6 +70,8 @@ type PiConversationContext = {
 };
 export type PiConversationPromptInput = {
   channelContext?: string;
+  channelContextProjection?: ImConversationPromptProjection;
+  continuationContext?: string;
   clearProjectId?: boolean;
   conversationId?: string;
   intent?: string;
@@ -75,6 +95,7 @@ type ActivePiRun = {
 const activePiRuns = new Map<string, ActivePiRun>();
 
 type PiConversationTurn = {
+  contextReservation?: ImContextProjectionReservation;
   conversation: PiConversation;
   prompt: string;
   runtime: PiRuntimeSession;
@@ -190,7 +211,7 @@ async function sendPiConversationMessage(
   context: PiConversationContext,
   id: string,
   body: Record<string, unknown>,
-  trusted: { channelContext?: string; targetIssueId?: number } = {}
+  trusted: { channelContext?: string; channelContextProjection?: ImConversationPromptProjection; continuationContext?: string; targetIssueId?: number } = {}
 ): Promise<PiConversationTurnResult> {
   const turn = await preparePiConversationTurn(context, id, body, trusted);
   return executePiConversationTurn(context, turn);
@@ -200,7 +221,7 @@ async function preparePiConversationTurn(
   context: PiConversationContext,
   id: string,
   body: Record<string, unknown>,
-  trusted: { channelContext?: string; targetIssueId?: number } = {}
+  trusted: { channelContext?: string; channelContextProjection?: ImConversationPromptProjection; continuationContext?: string; targetIssueId?: number } = {}
 ): Promise<PiConversationTurn> {
   const prompt = cleanString(body.prompt || body.message || body.content);
   if (prompt === "") throw new HttpError(400, "prompt is required");
@@ -214,6 +235,33 @@ async function preparePiConversationTurn(
   const source = review ? reviewConversationSource(titledConversation) : runnerChatSource(titledConversation);
   const resolvedSource = source ?? (review ? "runner_review" : "runner_chat");
   const turnID = crypto.randomUUID();
+  let contextReservation: ImContextProjectionReservation | undefined;
+  let channelContext = cleanString(trusted.channelContext);
+  const projection = trusted.channelContextProjection;
+  if (projection && projection.piConversationID === titledConversation.id && projection.events.length > 0) {
+    try {
+      contextReservation = reserveImContextProjection(context.database, {
+        connectorID: projection.connectorID,
+        conversationID: titledConversation.id,
+        events: projection.events.map((event) => ({
+          direction: event.direction,
+          included: event.included,
+          messageRef: event.messageRef,
+          projectionHash: event.projectionHash,
+          sourceRowID: event.sourceRowID
+        })),
+        scopeKey: projection.scopeKey,
+        turnID
+      });
+      const accepted = new Set(contextReservation.accepted.map((item) => `${item.direction}:${item.sourceRowID}`));
+      channelContext = renderImConversationPrompt(projection.events.filter((event) =>
+        accepted.has(`${event.direction}:${event.sourceRowID}`)));
+    } catch (error) {
+      console.warn("[pi-context] projection reservation unavailable:", redactSensitiveText(error instanceof Error ? error.message : String(error)));
+      channelContext = "";
+    }
+  }
+  channelContext = [cleanString(trusted.continuationContext), channelContext].filter(Boolean).join("\n");
   if (targetProjectId !== "") optionalConversationProject(context.database, targetProjectId);
   const supervisorContext = resolveSupervisorContext(context.database, {
     conversationID: titledConversation.id,
@@ -233,20 +281,27 @@ async function preparePiConversationTurn(
     projectID: supervisorContext.target.project_id,
     workIDs: supervisorContext.target.work_ids
   });
-  const runtime = await openConversationRuntime(
-    context,
-    titledConversation,
-    supervisorContext,
-    intent,
-    prompt,
-    turnID,
-    resolvedSource,
-    cleanString(trusted.channelContext)
-  );
+  let runtime: PiRuntimeSession;
+  try {
+    runtime = await openConversationRuntime(
+      context,
+      titledConversation,
+      supervisorContext,
+      intent,
+      prompt,
+      turnID,
+      resolvedSource,
+      channelContext
+    );
+  } catch (error) {
+    if (contextReservation) failImContextProjectionReservation(context.database, contextReservation, "runtime_open_failed");
+    throw error;
+  }
   let activeConversation: PiConversation;
   try {
     activeConversation = touchPiConversation(context.database, titledConversation);
   } catch (error) {
+    if (contextReservation) failImContextProjectionReservation(context.database, contextReservation, "conversation_touch_failed");
     runtime.dispose();
     throw error;
   }
@@ -258,7 +313,7 @@ async function preparePiConversationTurn(
     turnID,
     updatedAt: startedAt
   });
-  return { conversation: activeConversation, prompt, runtime, turnID };
+  return { contextReservation, conversation: activeConversation, prompt, runtime, turnID };
 }
 
 async function executePiConversationTurn(
@@ -268,8 +323,18 @@ async function executePiConversationTurn(
 ): Promise<PiConversationTurnResult> {
   const { conversation, prompt, runtime } = turn;
   let unsubscribe = () => {};
+  let contextPresented = false;
   try {
     unsubscribe = runtime.session.subscribe((event) => {
+      if (!contextPresented && event.type === "agent_start" && turn.contextReservation) {
+        try {
+          markImContextProjectionPresented(context.database, turn.contextReservation);
+          contextPresented = true;
+        } catch (error) {
+          console.warn("[pi-context] failed to present projection binding:",
+            redactSensitiveText(error instanceof Error ? error.message : String(error)));
+        }
+      }
       const streamEvent = piTurnSessionEvent(event);
       recordActivePiTurnEvent(conversation.id, streamEvent);
       publishPiSessionEvent(context.bus, conversation, event, turn.turnID);
@@ -278,10 +343,18 @@ async function executePiConversationTurn(
     await runtime.session.prompt(prompt, {
       expandPromptTemplates: false,
       images: piConversationPromptImages(context.database, prompt),
+      preflightResult: (success) => {
+        if (!success && turn.contextReservation && !contextPresented) {
+          failImContextProjectionReservation(context.database, turn.contextReservation, "prompt_preflight_rejected");
+        }
+      },
       source: "rpc"
     });
     return piConversationTurnResult(turn);
   } finally {
+    if (turn.contextReservation && !contextPresented) {
+      failImContextProjectionReservation(context.database, turn.contextReservation, "turn_not_presented");
+    }
     try {
       const latestConversation = getPiConversation(context.database, conversation.id) ?? conversation;
       persistPiSessionIndex(context.database, touchPiConversation(context.database, latestConversation));
@@ -426,6 +499,20 @@ export async function runPiConversationPrompt(
   context: PiConversationContext,
   input: PiConversationPromptInput
 ) {
+  let effective = await resolveImContextRollover(context, input);
+  try {
+    return await dispatchPiConversationPrompt(context, effective);
+  } catch (error) {
+    if (!effective.channelContextProjection || !isContextOverflow(error)) throw error;
+    effective = await resolveImContextRollover(context, effective, "provider_context_overflow");
+    return await dispatchPiConversationPrompt(context, effective);
+  }
+}
+
+async function dispatchPiConversationPrompt(
+  context: PiConversationContext,
+  input: PiConversationPromptInput
+) {
   const id = cleanString(input.conversationId) || crypto.randomUUID();
   const projectID = cleanString(input.projectId);
   const existing = getPiConversation(context.database, id);
@@ -448,8 +535,173 @@ export async function runPiConversationPrompt(
     target_project_source: input.targetProjectSource || (projectID === "" ? undefined : "request_project")
   }, {
     channelContext: input.channelContext,
+    channelContextProjection: input.channelContextProjection,
+    continuationContext: input.continuationContext,
     targetIssueId: input.targetIssueId
   });
+}
+
+async function resolveImContextRollover(
+  context: PiConversationContext,
+  input: PiConversationPromptInput,
+  forcedTrigger = ""
+): Promise<PiConversationPromptInput> {
+  const projection = input.channelContextProjection;
+  const parentID = cleanString(input.conversationId);
+  if (!projection || parentID === "") return input;
+  const parent = getPiConversation(context.database, parentID);
+  if (!parent) return input;
+  const state = getImConversationState(context.database, projection.connectorID, projection.scopeKey);
+  if (!state) return input;
+  if (state.active_conversation_id !== parentID) {
+    return {
+      ...input,
+      conversationId: state.active_conversation_id,
+      channelContextProjection: { ...projection, piConversationID: state.active_conversation_id }
+    };
+  }
+  const trigger = forcedTrigger || await imContextRolloverTrigger(context.database, parent);
+  const observed = (context.database.sqlite.query<{ count: number }, [string]>(`
+    select count(*) as count from pi_action_events
+    where conversation_id=? and event_type='im_context_policy_observed'
+  `).get(parentID)?.count ?? 0) > 0;
+  if (!observed && forcedTrigger === "") {
+    createPiActionEvent(context.database, {
+      action_id: `im-context-policy:${parentID}:${crypto.randomUUID()}`,
+      actor: "im_context_coordinator",
+      conversation_id: parentID,
+      decision: "observed",
+      event_type: "im_context_policy_observed",
+      payload_json: JSON.stringify({ observe_only: true, trigger: trigger || "none" }),
+      project_id: parent.project_id,
+      reason: "first existing epoch observation before rollover policy"
+    });
+    return input;
+  }
+  if (trigger === "") return input;
+  const capsule = {
+    created_at: new Date().toISOString(),
+    parent_conversation_id: parent.id,
+    parent_session_ref: parent.pi_session_id,
+    project_refs: parent.project_id ? [parent.project_id] : [],
+    schema_version: "xw.pi-continuation-capsule.v1",
+    summary_unavailable: true,
+    trigger
+  };
+  const rollover = prepareImContextRollover(context.database, {
+    baseConversationID: state.base_conversation_id,
+    capsule,
+    connectorID: projection.connectorID,
+    parentConversationID: parent.id,
+    parentEpoch: state.epoch,
+    scopeKey: projection.scopeKey,
+    trigger
+  });
+  if (!getPiConversation(context.database, rollover.child_conversation_id)) {
+    try {
+      await createConversationWithRuntime(context, {
+        id: rollover.child_conversation_id,
+        project_id: parent.project_id,
+        title: parent.title
+      });
+    } catch (error) {
+      if (!getPiConversation(context.database, rollover.child_conversation_id)) throw error;
+    }
+  }
+  const activated = activateImContextRollover(context.database, rollover.id);
+  if (!activated.activated) {
+    const winner = getImConversationState(context.database, projection.connectorID, projection.scopeKey);
+    if (!winner || winner.active_conversation_id === parent.id) {
+      throw new Error("IM context rollover compare-and-set failed without an active child");
+    }
+    return {
+      ...input,
+      conversationId: winner.active_conversation_id,
+      channelContextProjection: { ...projection, piConversationID: winner.active_conversation_id }
+    };
+  }
+  createPiActionEvent(context.database, {
+    action_id: `im-context-rollover:${activated.rollover.id}`,
+    actor: "im_context_coordinator",
+    conversation_id: activated.rollover.child_conversation_id,
+    decision: "activated",
+    event_type: "im_context_rollover_activated",
+    payload_json: JSON.stringify({
+      child_conversation_id: activated.rollover.child_conversation_id,
+      parent_conversation_id: parent.id,
+      rollover_id: activated.rollover.id,
+      trigger
+    }),
+    project_id: parent.project_id,
+    reason: "activated bounded PI Session rollover"
+  });
+  return {
+    ...input,
+    channelContextProjection: {
+      ...projection,
+      piConversationID: activated.rollover.child_conversation_id
+    },
+    continuationContext: [
+      "PI Session continuation capsule (bounded references; current state must be refreshed through tools):",
+      JSON.stringify(capsule)
+    ].join("\n"),
+    conversationId: activated.rollover.child_conversation_id,
+    title: parent.title
+  };
+}
+
+async function imContextRolloverTrigger(db: RunnerDatabase, conversation: PiConversation): Promise<string> {
+  const latestBudget = jsonRecord(db.sqlite.query<{ payload_json: string }, [string]>(`
+    select payload_json from pi_action_events
+    where conversation_id=? and event_type='runtime_context_budget_observed'
+      and json_valid(payload_json) and json_extract(payload_json, '$.phase')='preflight'
+    order by id desc limit 1
+  `).get(conversation.id)?.payload_json ?? "{}");
+  const percent = numberValue(recordValue(latestBudget?.context).projected_input_percent);
+  if (percent >= 60) return "projected_context_threshold";
+  const metrics = await piSessionFileMetrics(resolvePiConversationSessionFile(conversation.session_file));
+  if (metrics.compactions >= 2) return "compaction_count";
+  if (metrics.userTurns >= 50) return "user_turn_count";
+  if (metrics.bytes >= 1_000_000) return "session_file_size";
+  return "";
+}
+
+async function piSessionFileMetrics(path: string): Promise<{ bytes: number; compactions: number; userTurns: number }> {
+  if (path === "") return { bytes: 0, compactions: 0, userTurns: 0 };
+  try {
+    const metadata = await stat(path);
+    if (metadata.size >= 1_000_000) return { bytes: metadata.size, compactions: 0, userTurns: 0 };
+    const text = await readFile(path, "utf8");
+    let compactions = 0;
+    let userTurns = 0;
+    for (const line of text.split("\n")) {
+      if (line.trim() === "") continue;
+      const entry = jsonRecord(line);
+      if (entry.type === "compaction") compactions += 1;
+      if (entry.type === "message" && recordValue(entry.message).role === "user") userTurns += 1;
+    }
+    return { bytes: metadata.size, compactions, userTurns };
+  } catch {
+    return { bytes: 0, compactions: 0, userTurns: 0 };
+  }
+}
+
+function isContextOverflow(error: unknown): boolean {
+  return /context.{0,40}(overflow|window|length)|too many tokens/i.test(
+    error instanceof Error ? error.message : String(error)
+  );
+}
+
+function jsonRecord(value: string): Record<string, unknown> {
+  try { return recordValue(JSON.parse(value)); } catch { return {}; }
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 async function resetConversationProjectRuntime(

@@ -3,7 +3,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { createPiProjectTools, PI_ALLOWED_TOOLS } from "../http/piProjectTools.ts";
 import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "./httpToolProvider.ts";
 import { createPiRuntimeToolKit } from "./piRuntimeTools.ts";
 
@@ -22,12 +21,17 @@ describe("PI runtime tool registry adapter", () => {
     try {
       const kit = createPiRuntimeToolKit(db);
       expect(kit.source).toBe("registry");
-      expect(kit.tools).toEqual(expect.arrayContaining([...PI_ALLOWED_TOOLS, URL_FETCH_TOOL_NAME]));
+      expect(kit.tools).toEqual(expect.arrayContaining([
+        "capability_invoke", "capability_search", "context_status", "issue_read",
+        "project_status", "session_read_summary", URL_FETCH_TOOL_NAME
+      ]));
+      expect(kit.tools).not.toContain("issue_delete");
       const customToolNames = kit.customTools.map((tool) => tool.name).sort();
       expect(customToolNames).toEqual(expect.arrayContaining([
-        ...createPiProjectTools(db).map((tool) => tool.name),
+        "capability_invoke", "capability_search", "context_status", "issue_read", "project_status",
         URL_FETCH_TOOL_NAME
       ]));
+      expect(customToolNames).not.toContain("issue_delete");
       expect(kit.audit.source).toBe("registry");
       expect(kit.audit.tool_names).toEqual(expect.arrayContaining([
         "read",
@@ -35,14 +39,13 @@ describe("PI runtime tool registry adapter", () => {
         "issue_create_proposal",
         "issue_enqueue_proposal",
         "memory_search",
-        "work_list",
-        "run_control",
-        "issue_acceptance_request"
+        "session_read_summary",
+        "work_list"
       ]));
       expect(kit.audit.custom_tool_names).toContain(URL_FETCH_TOOL_NAME);
       expect(kit.audit.provider_ids).toEqual(expect.arrayContaining(["runner-builtin", HTTP_READONLY_PROVIDER_ID]));
       expect(kit.readOnlyToolNames).toEqual(expect.arrayContaining([
-        "read", "issue_list", "memory_search", "work_list", "run_read", URL_FETCH_TOOL_NAME
+        "read", "issue_list", "memory_search", "session_read_summary", "work_list", URL_FETCH_TOOL_NAME
       ]));
       for (const name of [
         "issue_create_proposal", "manual_context_intake", "memory_remember",
@@ -50,6 +53,16 @@ describe("PI runtime tool registry adapter", () => {
       ]) {
         expect(kit.readOnlyToolNames).not.toContain(name);
       }
+      const search = kit.customTools.find((tool) => tool.name === "capability_search")!;
+      const invoke = kit.customTools.find((tool) => tool.name === "capability_invoke")!;
+      const searched = await search.execute("search-1", { query: "project_list" }, undefined, undefined, {} as never);
+      const match = (searched.details as any).matches[0];
+      expect(match).toMatchObject({ permission: "read", tool_id: "runner-builtin:project_list" });
+      expect(match.schema_hash).toMatch(/^[a-f0-9]{64}$/);
+      const invoked = await invoke.execute("invoke-1", {
+        arguments: {}, schema_hash: match.schema_hash, tool_id: match.tool_id
+      }, undefined, undefined, {} as never);
+      expect((invoked.details as any).status).not.toBe("failed");
     } finally {
       db.close();
     }
@@ -72,7 +85,8 @@ describe("PI runtime tool registry adapter", () => {
       const manager = createPiRuntimeToolKit(db, undefined, {}, { promptProfile: "manager_cycle" });
       const notification = createPiRuntimeToolKit(db, undefined, {}, { promptProfile: "notification" });
 
-      expect(review.audit.counts.custom_tools).toBeLessThan(full.audit.counts.custom_tools);
+      expect(full.audit.tool_names).toEqual(expect.arrayContaining(["capability_search", "capability_invoke"]));
+      expect(review.audit.tool_names).not.toContain("capability_search");
       expect(review.audit.tool_names).toContain("repo_read_excerpt");
       expect(review.audit.tool_names).not.toContain("issue_delete");
       expect(acceptance.audit.tool_names).toEqual(expect.arrayContaining(["issue_read", "repo_read_excerpt", "grep"]));

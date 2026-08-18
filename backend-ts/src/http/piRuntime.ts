@@ -12,6 +12,7 @@ import { PI_SAFE_ACTION_TYPES } from "../pi/actionGate.ts";
 import type { EventBus } from "../events/bus.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot, type SmokeRuntime } from "../spikes/piSmokeSupport.ts";
 import { installPiSdkToolAudit } from "./piSdkToolAudit.ts";
+import { installPiContextBudgetObservation } from "./piContextBudgetObservation.ts";
 import { createPiRuntimeResourceLoader } from "./piRuntimeResources.ts";
 import { buildPiRuntimeSystemPrompt } from "./piRuntimePrompt.ts";
 import {
@@ -159,8 +160,9 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   await installPiProviderSecretOverride(modelRuntime, paths.modelsPath, dirname(db.path), input.agent.model_provider);
   const settingsManager = sdk.pi.SettingsManager.create(context.cwd, paths.agentDir);
   const model = resolvePiModel({ find: (provider, modelID) => modelRuntime.getModel(provider, modelID) }, input.agent);
+  const compactionSettings = piRuntimeCompactionSettings(model);
   settingsManager.applyOverrides({
-    compaction: piRuntimeCompactionSettings(model),
+    compaction: compactionSettings,
     ...(input.retry ? { retry: input.retry } : {})
   });
   const sessionManager = input.sessionFile
@@ -238,8 +240,24 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
       readOnlyToolNames: runtimeTools.readOnlyToolNames,
       source: input.source
     });
+    const cleanupContextBudgetObservation = installPiContextBudgetObservation(db, {
+      ...input,
+      projectID: toolProject?.id ?? input.project?.id
+    }, {
+      baseSystemPrompt: systemPrompt,
+      compactionReserveTokens: compactionSettings.reserveTokens,
+      resourceSnapshot: resourceLoader.snapshot(),
+      runtimeContextEnvelope,
+      session
+    });
     if (input.agent.name !== "") session.setSessionName(input.agent.name);
-    return { session, dispose: () => disposePiRuntimeSession(session, cleanupRuntimeProvider, cleanupSdkAudit) };
+    return {
+      session,
+      dispose: () => disposePiRuntimeSession(session, cleanupRuntimeProvider, () => {
+        cleanupContextBudgetObservation();
+        cleanupSdkAudit();
+      })
+    };
   } catch (error) {
     cleanupRuntimeProvider();
     throw error;

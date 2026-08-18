@@ -6,17 +6,22 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAutomationTrigger, listAutomations } from "../db/repositories/automations.ts";
+import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listIssues } from "../db/repositories/issues.ts";
-import { createPiDelegation, createPiMemoryItem, getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems, updatePiPersona } from "../db/repositories/pi.ts";
+import { createPiActionEvent, createPiDelegation, createPiMemoryItem, getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems, updatePiPersona } from "../db/repositories/pi.ts";
+import { adoptImConversationState, getImConversationState } from "../db/repositories/imConversationState.ts";
 import { EventBus } from "../events/bus.ts";
+import { buildImConversationPromptProjection } from "../integrations/imConversationContext.ts";
 import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";
 import {
   createPiRuntimeSession,
   PI_RUNNER_CHAT_ACTIONS,
   PI_RUNNER_CHAT_MUTATION_ACTIONS
 } from "./piRuntime.ts";
+import { PI_CONTEXT_BUDGET_OBSERVATION_EVENT } from "./piContextBudgetObservation.ts";
 import { finalPiConversationSseData } from "./piConversationSse.testSupport.ts";
+import { runPiConversationPrompt } from "./piConversationApi.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -332,6 +337,254 @@ describe("Bun PI runtime v1 smoke", () => {
       expect(payload.custom_tool_names).toContain(URL_FETCH_TOOL_NAME);
       expect(payload.counts.sdk_tools).toBeGreaterThan(0);
       expect(payload.counts.custom_tools).toBeGreaterThan(0);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("observes context budgets for Feishu, Telegram, and Runner Chat without changing runtime behavior", async () => {
+    const database = await openFixtureDatabase();
+    const fixtures = [
+      {
+        channelContext: "FEISHU_CONTEXT_SECRET_SENTINEL",
+        conversationID: "feishu-chat-budget-fixture",
+        source: "feishu_runner_chat",
+        surface: "feishu"
+      },
+      {
+        channelContext: "TELEGRAM_CONTEXT_SECRET_SENTINEL",
+        conversationID: "telegram-chat-budget-fixture",
+        source: "runner_chat",
+        surface: "telegram"
+      },
+      {
+        channelContext: "",
+        conversationID: "runner-chat-budget-fixture",
+        source: "runner_chat",
+        surface: "runner_chat"
+      }
+    ] as const;
+    try {
+      writeFauxModelsConfig(database);
+      for (const fixture of fixtures) {
+        const userPrompt = `budget prompt ${fixture.surface} PRIVATE_PROMPT_SENTINEL`;
+        const runtime = await createPiRuntimeSession(database, {
+          agent: agentRecord(),
+          channelContext: fixture.channelContext,
+          conversationID: fixture.conversationID,
+          promptProfile: "chat",
+          project: projectRecord("demo"),
+          source: fixture.source,
+          sourceTurn: { id: `turn-${fixture.surface}`, source: fixture.source, userPrompt }
+        });
+        const activeToolCount = runtime.session.getActiveToolNames().length;
+        if (fixture.channelContext !== "") {
+          expect(runtime.session.systemPrompt).toContain(fixture.channelContext);
+        }
+        await runtime.session.prompt(userPrompt, { expandPromptTemplates: false, source: "rpc" });
+        runtime.dispose();
+
+        const budgetEvents = listPiActionEvents(database, { conversationId: fixture.conversationID })
+          .filter((event) => event.event_type === PI_CONTEXT_BUDGET_OBSERVATION_EVENT);
+        const preflight = budgetEvents
+          .map((event) => JSON.parse(event.payload_json) as Record<string, any>)
+          .find((payload) => payload.phase === "preflight");
+        const postflight = budgetEvents
+          .map((event) => JSON.parse(event.payload_json) as Record<string, any>)
+          .find((payload) => payload.phase === "postflight");
+
+        expect(preflight).toMatchObject({
+          behavior: {
+            observe_only: true,
+            projector_changed: false,
+            session_changed: false,
+            tool_surface_changed: false
+          },
+          measurement: {
+            confidence: "estimated",
+            method: "sdk_messages_plus_serialized_utf8_div_4"
+          },
+          observe_only: true,
+          observer: { assembly_duration_ms: expect.any(Number) },
+          phase: "preflight",
+          profile: "chat",
+          schema_version: "xw.pi-context-budget-observation.v1",
+          surface: fixture.surface
+        });
+        expect(preflight?.breakdown.effective_system_prompt.estimated_tokens).toBeGreaterThan(0);
+        expect(preflight?.breakdown.tool_definitions.estimated_tokens).toBeGreaterThan(0);
+        expect(preflight?.breakdown.current_user_prompt.estimated_tokens).toBeGreaterThan(0);
+        expect(preflight?.context.projected_input_tokens).toBeGreaterThan(
+          preflight?.breakdown.effective_system_prompt.estimated_tokens
+        );
+        expect(preflight?.counts.active_tools).toBe(activeToolCount);
+        expect(activeToolCount).toBeGreaterThan(0);
+        expect(activeToolCount).toBeLessThan(40);
+        expect(preflight?.hashes.effective_system_prompt_sha256).toMatch(/^[a-f0-9]{64}$/);
+        expect(preflight?.hashes.tool_definitions_sha256).toMatch(/^[a-f0-9]{64}$/);
+        if (fixture.channelContext === "") {
+          expect(preflight?.subsets.channel_context.estimated_tokens).toBe(0);
+        } else {
+          expect(preflight?.subsets.channel_context.estimated_tokens).toBeGreaterThan(0);
+        }
+        expect(postflight).toMatchObject({
+          observe_only: true,
+          phase: "postflight",
+          profile: "chat",
+          provider_call_index: 1,
+          schema_version: "xw.pi-context-budget-observation.v1",
+          surface: fixture.surface
+        });
+        expect(postflight?.observed_usage.input_context_tokens).toBeGreaterThan(0);
+        expect(JSON.stringify(budgetEvents)).not.toContain("PRIVATE_PROMPT_SENTINEL");
+        expect(JSON.stringify(budgetEvents)).not.toContain("CONTEXT_SECRET_SENTINEL");
+      }
+    } finally {
+      database.close();
+    }
+  });
+
+  test("rolls an over-budget IM conversation to one CAS child with a deterministic minimal capsule", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertFauxAgent(database);
+      writeFauxModelsConfig(database);
+      const router = createDefaultRouter({ database });
+      expect((await post(router, "/api/pi/conversations", { id: "feishu-chat-rollover" })).status).toBe(201);
+      adoptImConversationState(database, {
+        activeConversationId: "feishu-chat-rollover",
+        baseConversationId: "feishu-chat-rollover",
+        connectorId: "feishu",
+        scopeKey: "feishu-chat-rollover"
+      });
+      createPiActionEvent(database, {
+        action_id: "budget-high-rollover",
+        actor: "test",
+        conversation_id: "feishu-chat-rollover",
+        event_type: PI_CONTEXT_BUDGET_OBSERVATION_EVENT,
+        payload_json: JSON.stringify({
+          context: { projected_input_percent: 65 }, phase: "preflight", surface: "feishu"
+        }),
+        reason: "fixture over budget"
+      });
+      const latestBudget = listPiActionEvents(database, {
+        conversationId: "feishu-chat-rollover",
+        eventType: PI_CONTEXT_BUDGET_OBSERVATION_EVENT
+      }).at(-1);
+      expect(JSON.parse(latestBudget?.payload_json ?? "{}")).toMatchObject({
+        context: { projected_input_percent: 65 }, phase: "preflight"
+      });
+      const promptInput = {
+        channelContext: "legacy projection",
+        channelContextProjection: {
+          connectorID: "feishu",
+          conversationID: "oc_rollover",
+          events: [],
+          omittedCount: 0,
+          piConversationID: "feishu-chat-rollover",
+          prompt: "",
+          scopeKey: "feishu-chat-rollover",
+          truncated: false
+        },
+        conversationId: "feishu-chat-rollover",
+        prompt: "继续刚才那件事",
+        targetProjectId: "",
+        title: "Rollover fixture"
+      };
+      const observed = await runPiConversationPrompt({ database }, promptInput);
+      expect(observed.conversation_id).toBe("feishu-chat-rollover");
+      createPiActionEvent(database, {
+        action_id: "budget-high-rollover-after-observation",
+        actor: "test",
+        conversation_id: "feishu-chat-rollover",
+        event_type: PI_CONTEXT_BUDGET_OBSERVATION_EVENT,
+        payload_json: JSON.stringify({
+          context: { projected_input_percent: 65 }, phase: "preflight", surface: "feishu"
+        }),
+        reason: "fixture remains over budget"
+      });
+      const result = await runPiConversationPrompt({ database }, promptInput);
+
+      expect(result).toMatchObject({
+        conversation_id: "feishu-chat-rollover-n1",
+        status: "completed",
+        text: "pi-smoke-response-ok"
+      });
+      expect(getImConversationState(database, "feishu", "feishu-chat-rollover")).toMatchObject({
+        active_conversation_id: "feishu-chat-rollover-n1",
+        epoch: 1
+      });
+      const rollover = database.sqlite.query<Record<string, unknown>, []>(
+        "select status, capsule_json, parent_conversation_id, child_conversation_id from im_context_rollovers"
+      ).get();
+      expect(rollover).toMatchObject({
+        child_conversation_id: "feishu-chat-rollover-n1",
+        parent_conversation_id: "feishu-chat-rollover",
+        status: "activated"
+      });
+      expect(JSON.parse(String(rollover?.capsule_json))).toMatchObject({
+        parent_conversation_id: "feishu-chat-rollover",
+        summary_unavailable: true,
+        trigger: "projected_context_threshold"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("commits an IM event binding and cursor from the SDK agent_start signal", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertFauxAgent(database);
+      writeFauxModelsConfig(database);
+      const router = createDefaultRouter({ database });
+      expect((await post(router, "/api/pi/conversations", { id: "feishu-chat-binding" })).status).toBe(201);
+      adoptImConversationState(database, {
+        activeConversationId: "feishu-chat-binding",
+        baseConversationId: "feishu-chat-binding",
+        connectorId: "feishu",
+        scopeKey: "feishu-chat-oc_binding"
+      });
+      const event = createExternalEvent(database, {
+        content: "需要被展示一次的历史消息",
+        dedupe_key: "feishu:binding:previous",
+        external_id: "om_previous_binding",
+        normalized_message: { chat_id: "oc_binding", message_id: "om_previous_binding" },
+        occurred_at: "2026-08-18T00:00:00.000Z",
+        source: "feishu"
+      });
+      const projection = buildImConversationPromptProjection(database, {
+        conversation: {
+          connectorId: "feishu",
+          conversationId: "oc_binding",
+          currentMessageId: "om_current_binding",
+          piConversationId: "feishu-chat-binding",
+          threadId: ""
+        }
+      });
+      expect(projection.prompt).toContain("需要被展示一次的历史消息");
+
+      const result = await runPiConversationPrompt({ database }, {
+        channelContext: projection.prompt,
+        channelContextProjection: projection,
+        conversationId: "feishu-chat-binding",
+        prompt: "继续",
+        targetProjectId: "",
+        title: "Binding fixture"
+      });
+      expect(result.status).toBe("completed");
+      expect(database.sqlite.query<{ status: string }, [number]>(
+        "select status from im_context_event_bindings where source_row_id=?"
+      ).get(event.id)?.status).toBe("presented");
+      expect(database.sqlite.query<{ inbound_event_id: number }, []>(
+        "select inbound_event_id from im_context_cursors"
+      ).get()?.inbound_event_id).toBe(event.id);
+      expect(buildImConversationPromptProjection(database, {
+        conversation: {
+          connectorId: "feishu", conversationId: "oc_binding", currentMessageId: "om_next_binding",
+          piConversationId: "feishu-chat-binding", threadId: ""
+        }
+      }).prompt).not.toContain("需要被展示一次的历史消息");
     } finally {
       database.close();
     }

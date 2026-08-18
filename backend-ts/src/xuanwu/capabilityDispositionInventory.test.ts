@@ -21,8 +21,8 @@ const ADR_PATH = "docs/architecture/xuanwu/0005-capability-disposition-inventory
 
 describe("Xuanwu capability disposition inventory", () => {
   test("covers every current source table and the two live-only legacy tables", () => {
-    expect(TABLE_DISPOSITIONS).toHaveLength(93);
-    expect(unique(TABLE_DISPOSITIONS.map((item) => item.name))).toHaveLength(93);
+    expect(TABLE_DISPOSITIONS).toHaveLength(96);
+    expect(unique(TABLE_DISPOSITIONS.map((item) => item.name))).toHaveLength(96);
     expect(Object.keys(RETENTION_LEVELS).sort()).toEqual([
       "R0_DERIVED",
       "R1_OPERATIONAL",
@@ -102,7 +102,7 @@ describe("Xuanwu capability disposition inventory", () => {
     );
     const inventoriedPi: string[] = PI_MODULE_FAMILIES.flatMap((family) => [...family.source_files]).sort();
     expect(inventoriedPi).toEqual(piFiles);
-    expect(inventoriedPi).toHaveLength(153);
+    expect(inventoriedPi).toHaveLength(154);
     expect(unique(inventoriedPi)).toHaveLength(inventoriedPi.length);
   });
 

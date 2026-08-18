@@ -7,8 +7,12 @@ import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { approveImReplyDraft, createImReplyDraft } from "../db/repositories/imReplyOutbox.ts";
 import { markSyncOutboxSent } from "../db/repositories/imReplyOutboxDispatch.ts";
+import { markImContextProjectionPresented, reserveImContextProjection } from "../db/repositories/imContextLifecycle.ts";
 import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
-import { buildFeishuConversationPromptContext } from "./feishuConversationContext.ts";
+import {
+  buildFeishuConversationPromptContext,
+  buildFeishuConversationPromptProjection
+} from "./feishuConversationContext.ts";
 
 const tempRoots: string[] = [];
 
@@ -70,6 +74,42 @@ describe("Feishu bounded conversation projection", () => {
       const context = buildFeishuConversationPromptContext(db, { event: current });
       expect(context).toContain(`如何重试${issue.id}呢`);
       expect(context).not.toContain("active_reply_target");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("binds a projected event to agent start and excludes it after the committed cursor", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      saveInbound(db, "om_previous", "只应投影一次", "2026-07-21T03:59:00.000Z");
+      const current = eventFixture({ text: "继续" });
+      const first = buildFeishuConversationPromptProjection(db, {
+        conversationId: "feishu-chat-oc_group",
+        event: current
+      });
+      expect(first.prompt).toContain("只应投影一次");
+      const reservation = reserveImContextProjection(db, {
+        connectorID: first.connectorID,
+        conversationID: first.piConversationID,
+        events: first.events.map((event) => ({
+          direction: event.direction,
+          included: event.included,
+          messageRef: event.messageRef,
+          projectionHash: event.projectionHash,
+          sourceRowID: event.sourceRowID
+        })),
+        scopeKey: first.scopeKey,
+        turnID: "turn-presented"
+      });
+      markImContextProjectionPresented(db, reservation);
+
+      const second = buildFeishuConversationPromptProjection(db, {
+        conversationId: "feishu-chat-oc_group",
+        event: current
+      });
+      expect(second.prompt).not.toContain("只应投影一次");
+      expect(second.events).toEqual([]);
     } finally {
       db.close();
     }

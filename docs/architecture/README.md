@@ -26,6 +26,7 @@
 | Supervisor、Workflow、Skill 与产品导航 | [0044–0059](#supervisor-workflow-skill) |
 | Automation、Attention 与 Approval | [0060–0063](#automation-attention-approval) |
 | Channel、Connector、安全、可靠性与退出迁移 | [0064 及以后](#connector-security-reliability-retirement) |
+| IM 上下文预算、工具按需加载与 PI Session 自动换代 | [0092](xuanwu/0092-im-context-budget-and-session-rollover.md) |
 | 发布、升级、回滚与操作命令 | 根 [`README.md`](../../README.md)、[`docs/runbooks/`](../runbooks/) |
 | 迁移 DAG 与门禁 | [`xuanwu-migration/README.md`](xuanwu-migration/README.md)、[`plan.json`](xuanwu-migration/plan.json) |
 
@@ -142,6 +143,7 @@
 - [ADR-XW-0083：legacy/compat 引用审计与通知单写路径收敛](xuanwu/0083-legacy-compat-notification-cleanup.md)
 - [ADR-XW-0084：Issue event 写预算与有界 artifact](xuanwu/0084-issue-event-write-budgets.md)
 - [ADR-XW-0086：Project 注册即自动接管](xuanwu/0086-project-enrollment-automatic-takeover.md)
+- [ADR-XW-0092：IM 上下文预算、增量投影与 PI Session 换代（Accepted v7，Phase 0–3 已本地实现、未部署）](xuanwu/0092-im-context-budget-and-session-rollover.md)
 
 ## 3. 历史归档与 superseded 映射
 

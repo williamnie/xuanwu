@@ -20,7 +20,8 @@ import {
   createFeishuAgentBridge,
   type FeishuConversationRunner
 } from "./feishuAgentBridge.ts";
-import { buildFeishuConversationPromptContext } from "./feishuConversationContext.ts";
+import { buildFeishuConversationPromptProjection } from "./feishuConversationContext.ts";
+import type { ImConversationPromptProjection } from "./imConversationContext.ts";
 import { sendDirectFeishuGuardianAlert } from "./feishuGuardianAlerts.ts";
 import { attachFeishuNotificationObservers } from "./feishuNotifications.ts";
 import {
@@ -49,6 +50,7 @@ export type FeishuChannelModuleOptions = {
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   runSupervisorConversation?: (input: {
     channelContext: string;
+    channelContextProjection?: ImConversationPromptProjection;
     conversationId: string;
     prompt: string;
     targetIssueId?: number;
@@ -181,8 +183,10 @@ function supervisorConversationRunner(options: FeishuChannelModuleOptions): Feis
   if (!options.runSupervisorConversation) return undefined;
   return async ({ conversationId, event, prompt, targetIssueId, targetProjectId, targetProjectSource }) => {
     const targetProject = targetProjectId ?? "";
+    const projection = buildFeishuConversationPromptProjection(options.database, { conversationId, event });
     const result = await options.runSupervisorConversation!({
-      channelContext: buildFeishuConversationPromptContext(options.database, { event }),
+      channelContext: projection.prompt,
+      channelContextProjection: projection,
       conversationId,
       prompt,
       targetIssueId,
