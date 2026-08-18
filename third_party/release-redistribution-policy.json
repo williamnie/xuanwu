@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "components": [
+    {
+      "package": "@anthropic-ai/claude-agent-sdk",
+      "payload": "compiled SDK code and target-specific xuanwu.claude-agent-sdk native executable",
+      "redistribution_status": "requires-legal-review",
+      "evidence": [
+        "backend-ts/node_modules/@anthropic-ai/claude-agent-sdk/LICENSE.md",
+        "https://code.claude.com/docs/en/legal-and-compliance"
+      ],
+      "reason": "The packaged notice reserves all rights and points to Anthropic terms; the reviewed terms do not expressly grant third-party binary redistribution rights."
+    },
+    {
+      "package": "@qoder-ai/qoder-agent-sdk",
+      "payload": "SDK code compiled into the Xuanwu backend binary",
+      "redistribution_status": "requires-legal-review",
+      "evidence": [
+        "backend-ts/node_modules/@qoder-ai/qoder-agent-sdk/LICENSE",
+        "https://qoder.com/product-service"
+      ],
+      "reason": "The package delegates licensing to Qoder Product Service Terms, which grant access and use rights but do not expressly grant redistribution rights for the SDK."
+    },
+    {
+      "package": "@qoder-ai/qodercli",
+      "payload": "xuanwu.qodercli runtime bundle, policies, skills, protocol and vendor assets",
+      "redistribution_status": "confirmed-by-package-license",
+      "evidence": [
+        "backend-ts/node_modules/@qoder-ai/qodercli/LICENSE"
+      ],
+      "reason": "The npm package includes the Apache License 2.0 text. Service use remains subject to applicable Qoder terms."
+    },
+    {
+      "package": "@earendil-works/pi-coding-agent",
+      "payload": "compiled Pi code plus package metadata, themes, assets, HTML exporter, docs and examples",
+      "redistribution_status": "confirmed-by-package-license",
+      "evidence": [
+        "third_party/licenses/pi-mono-MIT.txt",
+        "https://github.com/earendil-works/pi/blob/main/LICENSE"
+      ],
+      "reason": "The package declares MIT and the upstream monorepo license expressly permits distribution with the copyright and permission notice."
+    }
+  ]
+}

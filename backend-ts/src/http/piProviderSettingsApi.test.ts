@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm, mkdtemp } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { getModel } from "@earendil-works/pi-ai";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { getModel } from "@earendil-works/pi-ai/compat";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -159,10 +159,13 @@ describe("Bun PI provider settings API", () => {
       const raw = JSON.parse(await readFile(modelsPath(database), "utf8"));
       expect(raw.providers["openai-codex"].baseUrl).toBeUndefined();
 
-      const authStorage = AuthStorage.create(join(dirname(database.path), "pi-runtime", "agent", "auth.json"));
-      const registry = ModelRegistry.create(authStorage, modelsPath(database));
-      expect(registry.getError()).toBeUndefined();
-      expect(registry.find("openai-codex", "gpt-5.6-luna")).toMatchObject({
+      const runtime = await ModelRuntime.create({
+        authPath: join(dirname(database.path), "pi-runtime", "agent", "auth.json"),
+        modelsPath: modelsPath(database),
+        refreshOnCreate: false
+      });
+      expect(runtime.getError()).toBeUndefined();
+      expect(runtime.getModel("openai-codex", "gpt-5.6-luna")).toMatchObject({
         id: "gpt-5.6-luna",
         provider: "openai-codex"
       });

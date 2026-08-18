@@ -6,6 +6,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
 import { json } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { updatePiCredential } from "./piCredentialFile.ts";
 
 export type PiOAuthLoginCallbacks = {
   onAuth: (info: OAuthAuthInfo) => void;
@@ -68,8 +69,7 @@ async function defaultOpenAICodexLogin(callbacks: PiOAuthLoginCallbacks): Promis
 }
 
 async function storeCredentials(db: RunnerDatabase, credentials: OAuthCredentials, state: LoginState): Promise<void> {
-  const { AuthStorage } = await import("@earendil-works/pi-coding-agent");
-  AuthStorage.create(piAuthPath(db)).set(OPENAI_CODEX_PROVIDER, { type: "oauth", ...credentials });
+  await updatePiCredential(piAuthPath(db), OPENAI_CODEX_PROVIDER, { type: "oauth", ...credentials });
   state.status = "authenticated";
   recordOAuthAudit(db, "provider_oauth_configured", "succeeded");
 }
@@ -81,31 +81,32 @@ function markLoginFailed(db: RunnerDatabase, state: LoginState, error: unknown):
 }
 
 async function logoutOpenAICodex(db: RunnerDatabase) {
-  const { AuthStorage } = await import("@earendil-works/pi-coding-agent");
-  AuthStorage.create(piAuthPath(db)).remove(OPENAI_CODEX_PROVIDER);
+  await updatePiCredential(piAuthPath(db), OPENAI_CODEX_PROVIDER, undefined);
   loginStates.delete(piAuthPath(db));
   recordOAuthAudit(db, "provider_oauth_logged_out", "succeeded");
   return await oauthStatus(db);
 }
 
 export async function isPiOpenAICodexOAuthConfigured(db: RunnerDatabase): Promise<boolean> {
-  const { AuthStorage } = await import("@earendil-works/pi-coding-agent");
-  return AuthStorage.create(piAuthPath(db)).getAuthStatus(OPENAI_CODEX_PROVIDER).configured;
+  return await hasStoredPiCredential(piAuthPath(db));
 }
 
 async function oauthStatus(db: RunnerDatabase) {
-  const { AuthStorage } = await import("@earendil-works/pi-coding-agent");
   const authPath = piAuthPath(db);
-  const authStorage = AuthStorage.create(authPath);
-  const piStatus = authStorage.getAuthStatus(OPENAI_CODEX_PROVIDER);
+  const configured = await hasStoredPiCredential(authPath);
   const state = loginStates.get(authPath);
   const base = {
     provider: OPENAI_CODEX_PROVIDER,
-    pi_oauth: { configured: piStatus.configured, source: piStatus.source ?? "none", status: state?.status ?? "idle" },
+    pi_oauth: { configured, source: configured ? "stored" : "none", status: state?.status ?? "idle" },
     codex_login: codexLoginStatus()
   };
   if (!state) return base;
   return { ...base, auth_url: state.authUrl ?? "", instructions: state.instructions ?? "", status: state.status };
+}
+
+async function hasStoredPiCredential(authPath: string): Promise<boolean> {
+  const { readStoredCredential } = await import("@earendil-works/pi-coding-agent");
+  return readStoredCredential(OPENAI_CODEX_PROVIDER, authPath) !== undefined;
 }
 
 async function loginResponse(db: RunnerDatabase, state: LoginState) {

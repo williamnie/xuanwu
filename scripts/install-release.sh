@@ -275,8 +275,8 @@ download_binary() {
   [ "$binary_version" = "$RESOLVED_VERSION" ] \
     || fail "binary version $binary_version does not match release metadata $RESOLVED_VERSION"
   qoder_version="$("$tmp/xuanwu.qodercli/qodercli.mjs" --version | awk 'NR == 1 { print $1 }')"
-  [ "$qoder_version" = "1.1.18" ] \
-    || fail "Qoder CLI version $qoder_version does not match required 1.1.18"
+  [ "$qoder_version" = "1.1.23" ] \
+    || fail "Qoder CLI version $qoder_version does not match required 1.1.23"
   mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$LOG_DIR" "$(dirname "$AUTH_TOKEN_FILE")"
   sdk_staged="$INSTALL_DIR/.xuanwu.claude-agent-sdk.stage.$$"
   install -m 0755 "$tmp/xuanwu.claude-agent-sdk" "$sdk_staged"

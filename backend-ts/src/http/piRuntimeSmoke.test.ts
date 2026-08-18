@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAutomationTrigger, listAutomations } from "../db/repositories/automations.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";

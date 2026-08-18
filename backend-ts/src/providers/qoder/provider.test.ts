@@ -28,8 +28,8 @@ const readyProbe: QoderRuntimeProbe = {
     executable_ready: true,
     mode: "sdk",
     ready: true,
-    version: "1.0.20",
-    platform_profile: { cli_version: "1.1.18", protocol_version: "1.2.0", sdk_version: "1.0.20" }
+    version: "1.0.23",
+    platform_profile: { cli_version: "1.1.23", protocol_version: "1.2.0", sdk_version: "1.0.23" }
   }
 };
 
@@ -38,7 +38,7 @@ function init(sessionId = "qoder-session-9"): SDKSystemInitMessage {
     type: "system",
     subtype: "init",
     apiKeySource: "none",
-    qodercli_version: "1.1.18",
+    qodercli_version: "1.1.23",
     protocol_version: "1.2.0",
     cwd: "/fixture/project",
     tools: [],
@@ -419,8 +419,8 @@ describe("Qoder Q3 Sessions", () => {
     expect(detail).toMatchObject({
       session_contract: "xw.provider-session.v1",
       id: "qoder:qoder-session-9",
-      provider_version: "1.0.20",
-      cli_version: "1.1.18",
+      provider_version: "1.0.23",
+      cli_version: "1.1.23",
       turns: [{ items: [{ type: "userMessage" }] }]
     });
     expect(calls[0]).toEqual({ dir: "/fixture/project", limit: 100, offset: 40 });

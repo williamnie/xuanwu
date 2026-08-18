@@ -210,7 +210,7 @@ async function createRelease(temp, name, version, options = {}) {
   await writeExecutable(join(fixture, 'xuanwu.claude-agent-sdk'), '#!/bin/sh\nexit 0\n');
   if (options.includeQoder !== false) {
     await mkdir(join(fixture, 'xuanwu.qodercli', 'policies'), { recursive: true });
-    await writeExecutable(join(fixture, 'xuanwu.qodercli', 'qodercli.mjs'), `#!/bin/sh\n# release-${name}\necho 1.1.18\n`);
+    await writeExecutable(join(fixture, 'xuanwu.qodercli', 'qodercli.mjs'), `#!/bin/sh\n# release-${name}\necho 1.1.23\n`);
     await writeFile(join(fixture, 'xuanwu.qodercli', 'policies', 'sandbox-default.toml'), 'fixture-policy\n');
   }
   await writeFile(join(fixture, 'xuanwu.pi-policy-extension.ts'), `// release-${name}\nexport default function extension() {}\n`);

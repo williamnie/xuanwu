@@ -910,7 +910,7 @@ function qoderInit(sessionId: string): SDKSystemInitMessage {
     type: "system",
     subtype: "init",
     apiKeySource: "none",
-    qodercli_version: "1.1.18",
+    qodercli_version: "1.1.23",
     protocol_version: "1.2.0",
     cwd: "/tmp/project",
     tools: [],
@@ -965,7 +965,7 @@ function qoderReadyProbe(): QoderRuntimeProbe {
       api_key_configured: true,
       mode: "sdk",
       ready: true,
-      version: "1.0.20"
+      version: "1.0.23"
     }
   };
 }

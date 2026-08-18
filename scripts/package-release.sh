@@ -101,7 +101,7 @@ stage_qodercli_runtime() {
   [ -f "$source/qodercli.js" ] || fail "missing exact-pinned Qoder CLI bundle: $source/qodercli.js"
   [ -f "$source/policies/sandbox-default.toml" ] || fail "missing Qoder CLI runtime policies"
   version="$(node -p "require('$package_dir/package.json').version")"
-  [ "$version" = "1.1.18" ] || fail "Qoder CLI version $version does not match required 1.1.18"
+  [ "$version" = "1.1.23" ] || fail "Qoder CLI version $version does not match required 1.1.23"
   target="$pkg_dir/xuanwu.qodercli"
   mkdir -p "$target"
   cp -R "$source/." "$target/"
@@ -228,7 +228,11 @@ package_target() {
   stage_pi_policy_extension "$pkg_dir"
   stage_claude_sdk_executable "$target" "$pkg_dir"
   stage_qodercli_runtime "$pkg_dir"
+  run_step "release compliance artifacts" node "$ROOT_DIR/scripts/generate-release-compliance.mjs" --output "$pkg_dir/compliance"
+  run_step "release compliance contents" node "$ROOT_DIR/scripts/verify-release-compliance.mjs" "$pkg_dir/compliance"
+  run_step "release redistribution gate" node "$ROOT_DIR/scripts/verify-release-compliance.mjs" "$pkg_dir/compliance" --require-release-ready
   (cd "$pkg_dir" && LC_ALL=C tar -czf "$OUT_DIR/$asset.tar.gz" .)
+  run_step "archived compliance contents" node "$ROOT_DIR/scripts/verify-release-archive-compliance.mjs" "$OUT_DIR/$asset.tar.gz"
 }
 
 write_checksums() {

@@ -27,7 +27,7 @@ describe("Qoder Q3 session history adapter", () => {
     const messages = fixtureMessages();
     const summary = publicQoderSessionSummary(info);
     const detail = publicQoderSessionDetail(info.sessionId, info, messages, {
-      extensions: { provider_version: "1.0.20", sdk_version: "1.0.20" }
+      extensions: { provider_version: "1.0.23", sdk_version: "1.0.23" }
     });
 
     expect(() => assertProviderSessionView("qoder", summary)).not.toThrow();
@@ -36,8 +36,8 @@ describe("Qoder Q3 session history adapter", () => {
       session_contract: "xw.provider-session.v1",
       id: "qoder:qoder-session-1",
       model: "performance",
-      provider_version: "1.0.20",
-      sdk_version: "1.0.20",
+      provider_version: "1.0.23",
+      sdk_version: "1.0.23",
       token_usage: {
         total_token_usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 }
       }

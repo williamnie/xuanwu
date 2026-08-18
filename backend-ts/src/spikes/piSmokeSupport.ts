@@ -46,7 +46,7 @@ export type PromptResult = {
 };
 
 export type SmokeRuntime = {
-  ai: typeof import("@earendil-works/pi-ai");
+  ai: typeof import("@earendil-works/pi-ai/compat");
   pi: typeof import("@earendil-works/pi-coding-agent");
 };
 
@@ -63,7 +63,7 @@ export async function loadSmokeRuntime(repoRoot: string): Promise<SmokeRuntime> 
   ensurePiPackageDir(repoRoot);
   const [pi, ai] = await Promise.all([
     import("@earendil-works/pi-coding-agent"),
-    import("@earendil-works/pi-ai")
+    import("@earendil-works/pi-ai/compat")
   ]);
   return { ai, pi };
 }

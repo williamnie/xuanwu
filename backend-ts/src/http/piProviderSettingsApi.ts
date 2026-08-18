@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { getModel, getModels, getProviders, type KnownProvider, type Model } from "@earendil-works/pi-ai";
+import { getModel, getModels, getProviders, type KnownProvider, type Model } from "@earendil-works/pi-ai/compat";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";

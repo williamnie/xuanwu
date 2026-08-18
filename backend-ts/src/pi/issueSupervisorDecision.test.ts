@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
 import { listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { runPiSupervisorDecision } from "./issueSupervisorDecision.ts";
 import type { IssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";

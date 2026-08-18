@@ -118,7 +118,7 @@ describe("Xuanwu secret lifecycle", () => {
     expect(() => service.resolve("secret://missing/key")).toThrow("secret is not configured");
   });
 
-  test("materializes only the selected PI provider secret as an in-memory runtime override", () => {
+  test("materializes only the selected PI provider secret as an in-memory runtime override", async () => {
     const root = fixtureRoot();
     const service = new SecretService(new FileSecretStore(root));
     const metadata = service.put("pi/provider/openai/api-key", "runtime-only-key", "operator", "setup");
@@ -128,7 +128,7 @@ describe("Xuanwu secret lifecycle", () => {
     writeFileSync(modelsPath, JSON.stringify({ providers: { openai: { apiKeyRef: metadata.ref } } }));
     const overrides: Record<string, string> = {};
 
-    installPiProviderSecretOverride({
+    await installPiProviderSecretOverride({
       setRuntimeApiKey(provider, apiKey) { overrides[provider] = apiKey; }
     }, modelsPath, root, "openai");
 

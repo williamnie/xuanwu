@@ -158,7 +158,7 @@ function resolved(input: Omit<ExecutionPolicyRequest, "contract">): ResolvedExec
     invocationRef: "inv-1",
     projectId: "project-1",
     providerId: "qoder",
-    providerVersion: "1.0.20",
+    providerVersion: "1.0.23",
     source: "local-user",
     transport: "sdk"
   }, QODER_EXECUTION_POLICY_CAPABILITIES, qoderExecutionPolicyAdapter);

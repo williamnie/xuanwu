@@ -122,7 +122,8 @@ class ControlledPiResourceLoader implements ResourceLoader {
     return [
       ...this.active.getAppendSystemPrompt(),
       resourcePromptSummary(this.snapshot()),
-      this.promptParts.final
+      this.promptParts.final,
+      this.promptParts.final ? `Current date: ${new Date().toISOString().slice(0, 10)}` : ""
     ].filter(Boolean);
   }
 

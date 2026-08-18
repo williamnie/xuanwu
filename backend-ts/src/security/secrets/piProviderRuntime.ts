@@ -1,15 +1,15 @@
 import { readFileSync } from "node:fs";
 import { createSecretService } from "./service.ts";
 
-export function installPiProviderSecretOverride(
-  authStorage: { setRuntimeApiKey(provider: string, apiKey: string): void },
+export async function installPiProviderSecretOverride(
+  modelRuntime: { setRuntimeApiKey(provider: string, apiKey: string): void | Promise<void> },
   modelsPath: string,
   stateDir: string,
   provider: string
 ): void {
   const ref = providerSecretRef(modelsPath, provider);
   if (ref === "") return;
-  authStorage.setRuntimeApiKey(provider, createSecretService({ stateDir }).resolve(ref));
+  await modelRuntime.setRuntimeApiKey(provider, createSecretService({ stateDir }).resolve(ref));
 }
 
 function providerSecretRef(path: string, provider: string): string {

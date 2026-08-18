@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listPiActionEvents, listPiActions, type PiActionEvent } from "../db/repositories/pi.ts";
 import { URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";

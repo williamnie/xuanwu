@@ -31,7 +31,7 @@ live Runner 数据。因此在本手册全部通过并归档证据前：
   `provider Run event fixture conformance > normalizes Claude fixtures...`：默认随机 Session ID 与 fixture 中
   硬编码的 `claude-session` 不一致；相关 Claude 文件相对 Qoder 分支基线无 diff，单测可稳定复现，Q6 不修改；
 - backend 全量 `tsc --noEmit` 仍有 `142` 条既有诊断；本次 Q6 fixture 与 Qoder 路径命中 `0`；
-- 签名 host binary、相邻 exact-pinned `xuanwu.qodercli/qodercli.mjs` (`1.1.18`) 及完整 runtime assets、release/install/daemon tests
+- 签名 host binary、相邻 exact-pinned `xuanwu.qodercli/qodercli.mjs` (`1.1.23`) 及完整 runtime assets、release/install/daemon tests
   `22 pass / 0 fail`、package host smoke、缺失 Qoder asset fail-closed、upgrade/rollback 回归均通过；
 - release tests 首次受 `XUANWU_MANAGED_EXECUTION=1` 保护门禁拦截，第二次受继承的 Claude
   platform-profile 环境拦截；清除这些任务外环境后上述 `22/22` 通过。这是隔离环境边界，不是产品回归；
@@ -68,7 +68,7 @@ git -C "$QODER_ACCEPTANCE_REPO" add README.md
 git -C "$QODER_ACCEPTANCE_REPO" commit -m 'test: initialize isolated qoder fixture'
 ```
 
-停止并记录 `BLOCKED` 的条件：版本不是冻结的 SDK `1.0.20` / CLI `1.1.18` / protocol `1.2.0`；
+停止并记录 `BLOCKED` 的条件：版本不是冻结的 SDK `1.0.23` / CLI `1.1.23` / protocol `1.2.0`；
 release 缺少相邻 `xuanwu.qodercli/` runtime directory 或其中任一必需 asset；provider 不 ready；仓库或 state dir 不在上述隔离根目录；出现未知
 付费、凭据暴露、跨仓库写入、Session ID 漂移、interrupt 串线、孤儿进程或无法回滚。
 
@@ -93,7 +93,7 @@ XUANWU_QODER_CONFIG_DIR="$QODER_ACCEPTANCE_QODER_CONFIG" \
 
 "$QODER_ACCEPTANCE_INSTALL_DIR/xuanwu" --version
 "$QODER_ACCEPTANCE_INSTALL_DIR/xuanwu.qodercli/qodercli.mjs" --version
-test "$("$QODER_ACCEPTANCE_INSTALL_DIR/xuanwu.qodercli/qodercli.mjs" --version | awk 'NR==1 {print $1}')" = '1.1.18'
+test "$("$QODER_ACCEPTANCE_INSTALL_DIR/xuanwu.qodercli/qodercli.mjs" --version | awk 'NR==1 {print $1}')" = '1.1.23'
 test -s "$QODER_ACCEPTANCE_INSTALL_DIR/xuanwu.qodercli/policies/sandbox-default.toml"
 ```
 
@@ -105,7 +105,7 @@ Qoder Desktop。
 如需独立安装可交互的官方 CLI，使用冻结版本；这是 Q7 的显式全局安装动作，Q6 不执行：
 
 ```bash
-npm install -g @qoder-ai/qodercli@1.1.18
+npm install -g @qoder-ai/qodercli@1.1.23
 QODER_CONFIG_DIR="$QODER_ACCEPTANCE_QODER_CONFIG" qodercli --version
 QODER_CONFIG_DIR="$QODER_ACCEPTANCE_QODER_CONFIG" qodercli
 ```
@@ -320,7 +320,7 @@ rg -n 'Bearer |access[_-]?token|personal[_-]?access[_-]?token|service[_-]?accoun
 演练。按 [release-upgrade-rollback.md](release-upgrade-rollback.md) 使用带 actor/reason/audit/backup ref 的
 `xuanwu-update upgrade --apply` 和 `xuanwu-update rollback --apply`。每一步核对：
 
-- binary/build stamp、SDK `1.0.20`、CLI `1.1.18`、protocol `1.2.0`；
+- binary/build stamp、SDK `1.0.23`、CLI `1.1.23`、protocol `1.2.0`；
 - `xuanwu.qodercli/qodercli.mjs` 始终存在且 executable，`policies/`、worker、proto 与 sandbox profiles 随目录整体升级和回滚；缺失 asset 的安装必须 fail closed；
 - Qoder config dir、secret ref、Project/Profile/Issue、Session history 和 usage readback 保持一致；
 - rollback 不恢复凭据副本、不覆盖 `runner.db`，且 release-owned Qoder asset 与 binary 同版本恢复。

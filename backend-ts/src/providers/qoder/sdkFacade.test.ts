@@ -11,7 +11,7 @@ function init(sessionId: string, permissionMode: SDKSystemInitMessage["permissio
     type: "system",
     subtype: "init",
     apiKeySource: "none",
-    qodercli_version: "1.1.18",
+    qodercli_version: "1.1.23",
     protocol_version: "1.2.0",
     cwd: "/fixture/project",
     tools: [],
@@ -365,7 +365,7 @@ function resolvedPolicy(input: Omit<ExecutionPolicyRequest, "contract">) {
     invocationRef: "inv-policy",
     projectId: "project-policy",
     providerId: "qoder",
-    providerVersion: "1.0.20",
+    providerVersion: "1.0.23",
     source: "local-user",
     transport: "sdk"
   }, QODER_EXECUTION_POLICY_CAPABILITIES, qoderExecutionPolicyAdapter);

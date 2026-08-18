@@ -10,7 +10,7 @@ import { join } from "node:path";
 
 /**
  * P11：Qoder ProviderFactory（G11 gate 已通过）。
- * SDK 1.0.20 / CLI 1.1.18；capability 只声明实际实现。
+ * SDK 1.0.23 / CLI 1.1.23；capability 只声明实际实现。
  */
 
 const QODER_CAPABILITIES: ProviderCapabilities = {

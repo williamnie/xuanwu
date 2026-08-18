@@ -928,7 +928,7 @@ class QoderSessionsProvider implements ExecutorProvider {
       mode: "sdk",
       ready: this.ready,
       ...(this.ready ? {} : { reason: "configuration required" }),
-      version: "1.0.20"
+      version: "1.0.23"
     };
   }
 
@@ -966,7 +966,7 @@ class PolicySessionsProvider implements ExecutorProvider {
   readonly messagePolicies: Array<NonNullable<ProviderRunInput["policy"]>> = [];
 
   runtimeStatus() {
-    return { active_sessions: 0, api_key_configured: true, mode: "sdk", ready: true, version: "1.0.20" };
+    return { active_sessions: 0, api_key_configured: true, mode: "sdk", ready: true, version: "1.0.23" };
   }
 
   async run(_input: ProviderRunInput) { return { runId: "unused" }; }

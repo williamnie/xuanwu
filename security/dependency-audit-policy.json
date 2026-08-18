@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "backend_allowed_advisories": [
+    {
+      "package": "sharp",
+      "advisory": "GHSA-f88m-g3jw-g9cj",
+      "severity": "high",
+      "required_path": "@qoder-ai/qodercli > sharp",
+      "reason": "Qoder SDK 1.0.23 requires companion CLI 1.1.23; that CLI declares sharp ^0.34.5, while the advisory is fixed only in sharp 0.35.0. No compatible Qoder release is currently available."
+    }
+  ]
+}

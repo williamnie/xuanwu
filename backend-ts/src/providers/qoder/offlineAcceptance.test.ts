@@ -420,7 +420,7 @@ function qoderInit(sessionId: string): SDKSystemInitMessage {
     permissionMode: "dontAsk",
     plugins: [],
     protocol_version: "1.2.0",
-    qodercli_version: "1.1.18",
+    qodercli_version: "1.1.23",
     session_id: sessionId,
     skills: [],
     slash_commands: [],
@@ -479,14 +479,14 @@ function readyProbe(): QoderRuntimeProbe {
       executable_ready: true,
       mode: "sdk",
       platform_profile: {
-        cli_version: "1.1.18",
+        cli_version: "1.1.23",
         protocol_status: "expected",
         protocol_version: "1.2.0",
         sdk_ready: true,
-        sdk_version: "1.0.20"
+        sdk_version: "1.0.23"
       },
       ready: true,
-      version: "1.0.20"
+      version: "1.0.23"
     }
   };
 }

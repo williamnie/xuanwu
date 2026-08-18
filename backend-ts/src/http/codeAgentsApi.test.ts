@@ -126,7 +126,7 @@ describe("Code Agents API", () => {
             platform_profile: {
               cli_version: "",
               protocol_status: "unavailable",
-              sdk_version: "1.0.20"
+              sdk_version: "1.0.23"
             }
           }
         }],
@@ -227,14 +227,14 @@ function qoderProbe(ready: boolean): QoderRuntimeProbe {
       ready,
       ...(reason ? { reason } : {}),
       platform_profile: {
-        cli_version: ready ? "1.1.18" : "",
+        cli_version: ready ? "1.1.23" : "",
         config_dir_scope: "default",
         protocol_status: ready ? "expected" : "unavailable",
         protocol_version: "1.2.0",
         sdk_ready: true,
-        sdk_version: "1.0.20"
+        sdk_version: "1.0.23"
       },
-      version: "1.0.20"
+      version: "1.0.23"
     }
   };
 }

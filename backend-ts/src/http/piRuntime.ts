@@ -1,6 +1,6 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { getModel, getProviders, type KnownProvider, type Model } from "@earendil-works/pi-ai";
+import { getModel, getProviders, type KnownProvider, type Model } from "@earendil-works/pi-ai/compat";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { RunnerConfig } from "../config/env.ts";
@@ -150,11 +150,15 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   await mkdir(dirname(paths.authPath), { recursive: true });
   await mkdir(context.sessionDir, { recursive: true });
 
-  const authStorage = sdk.pi.AuthStorage.create(paths.authPath);
-  installPiProviderSecretOverride(authStorage, paths.modelsPath, dirname(db.path), input.agent.model_provider);
-  const modelRegistry = sdk.pi.ModelRegistry.create(authStorage, paths.modelsPath);
+  const modelRuntime = await sdk.pi.ModelRuntime.create({
+    authPath: paths.authPath,
+    modelsPath: paths.modelsPath,
+    refreshOnCreate: false
+  });
+  const cleanupRuntimeProvider = ensureRuntimeProvider(sdk, modelRuntime, input.agent);
+  await installPiProviderSecretOverride(modelRuntime, paths.modelsPath, dirname(db.path), input.agent.model_provider);
   const settingsManager = sdk.pi.SettingsManager.create(context.cwd, paths.agentDir);
-  const model = resolvePiModel(modelRegistry, input.agent);
+  const model = resolvePiModel({ find: (provider, modelID) => modelRuntime.getModel(provider, modelID) }, input.agent);
   settingsManager.applyOverrides({
     compaction: piRuntimeCompactionSettings(model),
     ...(input.retry ? { retry: input.retry } : {})
@@ -162,7 +166,6 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   const sessionManager = input.sessionFile
     ? sdk.pi.SessionManager.open(input.sessionFile, context.sessionDir, context.cwd)
     : sdk.pi.SessionManager.create(context.cwd, context.sessionDir, { id: input.conversationID });
-  const cleanupRuntimeProvider = ensureRuntimeProvider(sdk, input.agent);
   const toolContext = {
     auditSystemRestart: input.auditSystemRestart,
     authorization: input.authorization,
@@ -215,9 +218,8 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     const { session } = await sdk.pi.createAgentSession({
       cwd: context.cwd,
       agentDir: paths.agentDir,
-      authStorage,
       model,
-      modelRegistry,
+      modelRuntime,
       resourceLoader,
       sessionManager,
       settingsManager,
@@ -309,10 +311,13 @@ function runtimeContext(db: RunnerDatabase, project: Project | undefined) {
   };
 }
 
-function ensureRuntimeProvider(sdk: SmokeRuntime, agent: PiAgent): RuntimeCleanup {
+function ensureRuntimeProvider(
+  sdk: SmokeRuntime,
+  _modelRuntime: InstanceType<SmokeRuntime["pi"]["ModelRuntime"]>,
+  agent: PiAgent
+): RuntimeCleanup {
   if (!isLocalSmokeFauxAgent(agent)) return noopRuntimeCleanup;
   if (sdk.ai.getApiProvider(PI_SMOKE_FAUX_API)) return noopRuntimeCleanup;
-
   const provider = sdk.ai.registerFauxProvider({
     api: PI_SMOKE_FAUX_API,
     provider: PI_SMOKE_FAUX_PROVIDER,

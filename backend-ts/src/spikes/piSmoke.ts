@@ -27,7 +27,7 @@ type SmokeOptions = {
 };
 
 type SmokeConfig = ReturnType<typeof buildConfig>;
-type SmokeSdk = ReturnType<typeof createSmokeSdk>;
+type SmokeSdk = Awaited<ReturnType<typeof createSmokeSdk>>;
 
 type BuildSummaryArgs = {
   config: SmokeConfig;
@@ -167,25 +167,26 @@ function summarizeText(text: string): string {
     : text;
 }
 
-function createSmokeSdk(config: SmokeConfig, runtime: SmokeRuntime) {
-  const authStorage = runtime.pi.AuthStorage.create(config.authPath);
+async function createSmokeSdk(config: SmokeConfig, runtime: SmokeRuntime) {
   const settingsManager = runtime.pi.SettingsManager.inMemory({ sessionDir: config.sessionDir });
   const sessionManager = runtime.pi.SessionManager.create(config.cwd, config.sessionDir);
-  authStorage.setFallbackResolver((provider) => {
-    return provider === SMOKE_PROVIDER ? SMOKE_RUNTIME_KEY_LABEL : undefined;
+  const modelRuntime = await runtime.pi.ModelRuntime.create({
+    authPath: config.authPath,
+    modelsPath: null,
+    refreshOnCreate: false
   });
-
-  const modelRegistry = runtime.pi.ModelRegistry.inMemory(authStorage);
-  const fauxProvider = runtime.ai.registerFauxProvider({
+  const fauxProvider = runtime.ai.fauxProvider({
     api: SMOKE_API,
     provider: SMOKE_PROVIDER,
     tokensPerSecond: SMOKE_TOKENS_PER_SECOND
   });
+  modelRuntime.registerNativeProvider(fauxProvider.provider);
+  await modelRuntime.setRuntimeApiKey(SMOKE_PROVIDER, SMOKE_RUNTIME_KEY_LABEL);
   fauxProvider.setResponses(config.toolsReadonly
     ? [buildReadOnlyToolCallResponse(), runtime.ai.fauxAssistantMessage(SMOKE_RESPONSE)]
     : [runtime.ai.fauxAssistantMessage(SMOKE_RESPONSE)]);
 
-  return { authStorage, settingsManager, sessionManager, modelRegistry, fauxProvider };
+  return { modelRuntime, settingsManager, sessionManager, fauxProvider };
 }
 
 async function createSmokeSession(
@@ -196,8 +197,7 @@ async function createSmokeSession(
   const { session } = await runtime.pi.createAgentSession({
     cwd: config.cwd,
     agentDir: config.piAgentDir,
-    authStorage: sdk.authStorage,
-    modelRegistry: sdk.modelRegistry,
+    modelRuntime: sdk.modelRuntime,
     model: sdk.fauxProvider.getModel(),
     thinkingLevel: "off",
     resourceLoader: createSmokeResourceLoader(runtime),
@@ -225,7 +225,7 @@ function buildSummary({ config, sdk, session, prompt, runtime }: BuildSummaryArg
     typebox: ConfigSchema.type,
     piSdkVersion: runtime.pi.VERSION,
     sdkObjects: {
-      authStorage: sdk.authStorage.constructor.name,
+      modelRuntime: sdk.modelRuntime.constructor.name,
       settingsManager: sdk.settingsManager.constructor.name,
       sessionManager: sdk.sessionManager.constructor.name
     },
@@ -279,7 +279,7 @@ async function main(): Promise<void> {
   if (config.createDirs) ensureRuntimeDirs(config);
 
   const runtime = await loadSmokeRuntime(REPO_ROOT);
-  const sdk = createSmokeSdk(config, runtime);
+  const sdk = await createSmokeSdk(config, runtime);
   const session = await createSmokeSession(config, sdk, runtime);
 
   try {
@@ -289,7 +289,7 @@ async function main(): Promise<void> {
     if (!summary.ok) process.exitCode = 1;
   } finally {
     session.dispose();
-    sdk.fauxProvider.unregister();
+    sdk.modelRuntime.unregisterProvider(sdk.fauxProvider.provider.id);
   }
 }
 

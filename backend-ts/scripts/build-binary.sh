@@ -92,8 +92,8 @@ stage_qodercli_runtime() {
     exit 1
   }
   version="$(bun -e "console.log(require('$BACKEND_TS_DIR/node_modules/@qoder-ai/qodercli/package.json').version)")"
-  [ "$version" = "1.1.18" ] || {
-    echo "[bun-build] Qoder CLI version $version does not match required 1.1.18" >&2
+  [ "$version" = "1.1.23" ] || {
+    echo "[bun-build] Qoder CLI version $version does not match required 1.1.23" >&2
     exit 1
   }
   target="$OUTFILE.qodercli"
