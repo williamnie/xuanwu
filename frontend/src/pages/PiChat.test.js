@@ -63,6 +63,14 @@ test('PI Assistant page reuses the SessionComposer instead of a plain textarea',
   assert.doesNotMatch(pageSource, /<Send/);
 });
 
+test('Ask Xuanwu composer does not add a background band behind the input', () => {
+  const composerRule = ruleFor('.pi-chat-composer');
+
+  assert.match(composerRule, /background:\s*transparent/);
+  assert.match(composerRule, /border-top:\s*0/);
+  assert.doesNotMatch(composerRule, /backdrop-filter/);
+});
+
 test('PI Assistant chat reuses the session smart auto-scroll behavior', () => {
   assert.match(pageSource, /import \{ useSmartAutoScroll \} from '\.\/sessions\/smartAutoScroll'/);
   assert.match(pageSource, /useSmartAutoScroll\(\{[\s\S]*resetKey:\s*state\.selectedConversationId[\s\S]*watchKey:\s*autoScrollWatchKey[\s\S]*\}\)/);

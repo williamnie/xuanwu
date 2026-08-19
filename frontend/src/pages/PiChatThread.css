@@ -271,9 +271,8 @@
 .pi-chat-scroll-bottom-button { align-items: center; background: var(--surface-overlay); border: 1px solid var(--border-color); bottom: 14px; color: var(--text-secondary); cursor: pointer; display: inline-flex; font-size: .68rem; gap: 5px; padding: 7px 10px; position: absolute; right: 28px; z-index: 2; }
 
 .pi-chat-composer {
-  background: color-mix(in srgb, var(--bg-primary) 86%, transparent);
-  backdrop-filter: saturate(140%) blur(12px);
-  border-top: 1px solid var(--border-light);
+  background: transparent;
+  border-top: 0;
   padding: 24px clamp(18px, 5vw, 72px) 20px;
 }
 .pi-chat-composer .session-composer { background: transparent; border-top: 0; box-shadow: none; margin: 0 auto; max-width: var(--composer-max-width); padding: 0; }

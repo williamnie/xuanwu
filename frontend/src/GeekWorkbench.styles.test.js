@@ -56,7 +56,8 @@ test('page refinements keep chat layouts bounded on narrow screens', () => {
   assert.match(piChatCss, /\.pi-chat-shell\s*\{[\s\S]*flex-direction:\s*column/);
   assert.match(piChatCss, /\.pi-chat-main\s*\{[\s\S]*flex:\s*1/);
   assert.match(piChatThreadCss, /\.pi-chat-composer \.session-composer\s*\{[^}]*max-width:\s*var\(--composer-max-width\)/);
-  assert.match(piChatThreadCss, /\.pi-chat-composer\s*\{[^}]*backdrop-filter:\s*saturate\(140%\) blur\(12px\)/);
+  assert.match(piChatThreadCss, /\.pi-chat-composer\s*\{[^}]*background:\s*transparent/);
+  assert.doesNotMatch(piChatThreadCss, /\.pi-chat-composer\s*\{[^}]*backdrop-filter/);
   assert.doesNotMatch(piChatSidebarCss, /\.pi-chat-new-button[^}]*box-shadow:\s*0\s+[1-9]/);
   assert.doesNotMatch(piChatSidebarCss, /\.pi-chat-new-button:hover[^}]*transform:\s*translateY/);
 });
