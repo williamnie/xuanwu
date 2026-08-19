@@ -59,12 +59,35 @@ function beginLogin(context: PiOAuthContext, state: LoginState): Promise<OAuthAu
 }
 
 async function defaultOpenAICodexLogin(callbacks: PiOAuthLoginCallbacks): Promise<OAuthCredentials> {
-  const { loginOpenAICodex } = await import("@earendil-works/pi-ai/oauth");
-  return await loginOpenAICodex({
-    onAuth: callbacks.onAuth,
-    onPrompt: callbacks.onPrompt,
-    onProgress: callbacks.onProgress,
-    originator: "pi-agent"
+  const [{ registerBunOAuthFlows }, { openaiCodexProvider }] = await Promise.all([
+    import("@earendil-works/pi-ai/bun-oauth"),
+    import("@earendil-works/pi-ai/providers/openai-codex")
+  ]);
+  registerBunOAuthFlows();
+  const oauth = openaiCodexProvider().auth.oauth;
+  if (!oauth) throw new Error("OpenAI Codex OAuth provider is unavailable");
+  return await oauth.login({
+    signal: new AbortController().signal,
+    notify: (event) => {
+      if (event.type === "auth_url") callbacks.onAuth({ url: event.url, instructions: event.instructions });
+      if (event.type === "progress") callbacks.onProgress?.(event.message);
+    },
+    prompt: async (prompt) => {
+      if (prompt.type === "select") return "browser";
+      if (prompt.type === "manual_code") return await waitForPromptCancellation(prompt.signal);
+      return await callbacks.onPrompt({ message: prompt.message, placeholder: prompt.placeholder });
+    }
+  });
+}
+
+function waitForPromptCancellation(signal: AbortSignal | undefined): Promise<string> {
+  return new Promise((_, reject) => {
+    if (!signal) return;
+    if (signal.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
   });
 }
 

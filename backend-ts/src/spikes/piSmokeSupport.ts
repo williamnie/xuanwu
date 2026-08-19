@@ -61,10 +61,12 @@ export function resolveDefaultRepoRoot(fallbackCwd = ""): string {
 
 export async function loadSmokeRuntime(repoRoot: string): Promise<SmokeRuntime> {
   ensurePiPackageDir(repoRoot);
-  const [pi, ai] = await Promise.all([
+  const [pi, ai, { registerBunOAuthFlows }] = await Promise.all([
     import("@earendil-works/pi-coding-agent"),
-    import("@earendil-works/pi-ai/compat")
+    import("@earendil-works/pi-ai/compat"),
+    import("@earendil-works/pi-ai/bun-oauth")
   ]);
+  registerBunOAuthFlows();
   return { ai, pi };
 }
 
