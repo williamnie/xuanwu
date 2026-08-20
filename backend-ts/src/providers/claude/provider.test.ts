@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
+import { createIssueRun } from "../../db/repositories/issueRuns.ts";
 import { listIssueEvents } from "../../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns } from "../../db/repositories/issues.ts";
 import { cancelIssueWithInterrupt } from "../../runner/interrupt.ts";
@@ -226,6 +227,7 @@ describe("Claude Code provider", () => {
       tempRoots.push(cwd);
       insertProject(db, "demo", cwd);
       const issueId = insertIssue(db, "demo");
+      const issueRunId = createIssueRun(db, issueId).id;
       const provider = new ClaudeExecutorProvider(runtimeConfig({ model: "sonnet" }), {
         processFactory: factory.factory,
         sessionIdFactory: () => "sess-1"
@@ -234,6 +236,7 @@ describe("Claude Code provider", () => {
       const result = await runIssueWithProvider(provider, {
         database: db,
         issueId,
+        issueRunId,
         projectId: "demo",
         cwd,
         prompt: "issue prompt",
@@ -347,9 +350,11 @@ describe("Claude Code provider", () => {
       tempRoots.push(cwd);
       insertProject(db, "demo", cwd);
       const issueId = insertIssue(db, "demo");
+      const issueRunId = createIssueRun(db, issueId).id;
       const running = runIssueWithProvider(provider, {
         database: db,
         issueId,
+        issueRunId,
         projectId: "demo",
         cwd,
         prompt: "issue prompt"

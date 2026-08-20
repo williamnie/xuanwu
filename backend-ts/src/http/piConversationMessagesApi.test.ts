@@ -402,6 +402,7 @@ describe("Bun PI conversation message API", () => {
       expect(issues).toMatchObject([
         { project_id: "demo", status: "in_progress", title: "Feishu task" }
       ]);
+      await until(() => provider.calls.length > 0);
       expect(provider.calls).toMatchObject([{ issueId: issues[0]?.id, projectId: "demo" }]);
     } finally {
       faux.unregister();
@@ -456,6 +457,7 @@ describe("Bun PI conversation message API", () => {
       expect(listIssues(database, { projectId: "movo-mobile" })).toMatchObject([
         { id: 501, project_id: "movo-mobile", status: "in_progress" }
       ]);
+      await until(() => provider.calls.length > 0);
       expect(provider.calls).toMatchObject([{ issueId: 501, projectId: "movo-mobile" }]);
     } finally {
       faux.unregister();

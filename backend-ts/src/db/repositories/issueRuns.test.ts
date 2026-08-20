@@ -9,7 +9,8 @@ import {
   ISSUE_RUN_GIT_WORKSPACE_BASELINE_CONTRACT,
   ISSUE_RUN_GIT_WORKSPACE_BASELINE_EVENT
 } from "../../domain/evidence/runGitWorkspaceBaseline.ts";
-import { createIssueRun, ensureOpenIssueRun, updateIssueRuntime, updateOpenIssueRunRuntime } from "./issueRuns.ts";
+import { prepareReservedIssueRun } from "../../domain/run/runPreparation.ts";
+import { createIssueRun, ensureOpenIssueRun, insertIssueRunRecord, updateIssueRuntime, updateOpenIssueRunRuntime } from "./issueRuns.ts";
 
 const tempRoots: string[] = [];
 
@@ -47,7 +48,10 @@ describe("issue run repository", () => {
       db.sqlite.run("update projects set cwd=? where id='demo'", [repository]);
       const issueId = insertIssue(db, "demo");
 
-      const run = createIssueRun(db, issueId);
+      const prepared = await prepareReservedIssueRun(db, insertIssueRunRecord(db, issueId));
+      expect(prepared.status).toBe("ready");
+      if (prepared.status !== "ready") throw new Error("Run preparation failed");
+      const run = prepared.run;
       const baseline = db.sqlite.query<{ payload: string }, [number, string]>(`
         select payload from issue_events where issue_id=? and type=? order by id desc limit 1
       `).get(issueId, ISSUE_RUN_GIT_WORKSPACE_BASELINE_EVENT);

@@ -57,6 +57,7 @@ const MAX_STDERR_LINES = 50;
 const MAX_LINE_BYTES = 10 * 1024 * 1024;
 export const CODEX_APP_SERVER_RPC_TIMEOUT_MS = 90_000;
 export const CODEX_APP_SERVER_IDLE_TTL_MS = 15_000;
+export const CODEX_PROCESS_ACTIVE_REFRESH_MS = 5_000;
 const CODEX_PROCESS_STRUCTURE_EVENTS = new Set([
   "error",
   "item/completed",
@@ -76,6 +77,7 @@ export class CodexStdioJsonRpcTransport {
   private readonly leases = new Map<number, { owner: string; sessionID: string; turnID: string }>();
   private readonly processLifecycle: CodexProcessGroupLifecycle;
   private idleTimer?: ReturnType<typeof setTimeout>;
+  private processActivityTimer?: ReturnType<typeof setTimeout>;
   private nextLeaseID = 0;
   private stopping?: Promise<void>;
   private stopped = false;
@@ -84,7 +86,14 @@ export class CodexStdioJsonRpcTransport {
     this.approvals = new CodexApprovalBroker({ onEvent: (event) => this.options.onEvent?.(event) });
     this.processLifecycle = options.processLifecycle ?? new CodexProcessGroupLifecycle(
       options.ownershipFile ?? "",
-      splitCommand(config.command)
+      splitCommand(config.command),
+      {
+        onDiagnostic: ({ reason, reason_code }) => this.emitDiagnostic(
+          "process/scan_failed",
+          `process inspection failed (${reason_code}) during ${reason}`,
+          reason_code
+        )
+      }
     );
   }
 
@@ -101,6 +110,7 @@ export class CodexStdioJsonRpcTransport {
     this.process = spawned;
     try {
       await this.processLifecycle.register(spawned);
+      this.scheduleProcessActivityRefresh();
     } catch (error) {
       this.process = undefined;
       spawned.kill("SIGTERM");
@@ -125,6 +135,7 @@ export class CodexStdioJsonRpcTransport {
   private async stopCurrent(): Promise<void> {
     this.stopped = true;
     this.cancelIdleStop();
+    this.cancelProcessActivityRefresh();
     const current = this.process;
     this.process = undefined;
     if (!current) return;
@@ -198,12 +209,8 @@ export class CodexStdioJsonRpcTransport {
       clearPendingTimeout(pending);
       throw error;
     }
-    try {
-      return await response;
-    } finally {
-      void this.processLifecycle.refresh(this.process as CodexJsonRpcProcess).catch(() => {});
-      this.scheduleIdleStop();
-    }
+    try { return await response; }
+    finally { this.scheduleIdleStop(); }
   }
 
   stderrLines(): string[] {
@@ -277,7 +284,14 @@ export class CodexStdioJsonRpcTransport {
   private deliverEvent(method: string, params: unknown): void {
     const event = normalizeCodexEvent({ method, params });
     if (CODEX_PROCESS_STRUCTURE_EVENTS.has(method)) {
-      void this.processLifecycle.refresh(this.process).catch(() => {});
+      void this.processLifecycle.refresh(this.process, {
+        mode: "coalesced",
+        reason: "structural_event"
+      }).catch((error) => this.emitDiagnostic(
+        "process/scan_failed",
+        "process topology refresh failed",
+        asError(error).message
+      ));
     }
     if (event.runEvent?.terminal && event.session?.sessionId) {
       this.releaseSession(event.session.sessionId, event.session.turnId);
@@ -311,6 +325,7 @@ export class CodexStdioJsonRpcTransport {
       this.processGeneration += 1;
       this.leases.clear();
       this.cancelIdleStop();
+      this.cancelProcessActivityRefresh();
       this.trackExitCleanup(process);
       if (!this.stopped) this.failPending(new Error(`codex app-server exited before response (code ${code})`));
     }, (error) => {
@@ -319,6 +334,7 @@ export class CodexStdioJsonRpcTransport {
       this.processGeneration += 1;
       this.leases.clear();
       this.cancelIdleStop();
+      this.cancelProcessActivityRefresh();
       this.trackExitCleanup(process);
       this.failPending(asError(error));
     });
@@ -387,6 +403,30 @@ export class CodexStdioJsonRpcTransport {
   private cancelIdleStop(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = undefined;
+  }
+
+  private scheduleProcessActivityRefresh(): void {
+    this.cancelProcessActivityRefresh();
+    if (!this.process || this.stopped) return;
+    this.processActivityTimer = setTimeout(() => {
+      this.processActivityTimer = undefined;
+      const process = this.process;
+      if (!process || this.stopped) return;
+      void this.processLifecycle.refresh(process, {
+        mode: "coalesced",
+        reason: "active_fallback"
+      }).catch((error) => this.emitDiagnostic(
+        "process/scan_failed",
+        "active process topology refresh failed",
+        asError(error).message
+      )).finally(() => this.scheduleProcessActivityRefresh());
+    }, CODEX_PROCESS_ACTIVE_REFRESH_MS);
+    this.processActivityTimer.unref?.();
+  }
+
+  private cancelProcessActivityRefresh(): void {
+    if (this.processActivityTimer) clearTimeout(this.processActivityTimer);
+    this.processActivityTimer = undefined;
   }
 
   private idleTtlMs(): number {

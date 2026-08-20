@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   selectBackendOnline,
   selectAutomations,
-  selectIssues,
   selectProjects,
+  selectWorkSummary,
   useDataStore,
 } from '../store/dataStore';
 import { resolveRunnerBrandState } from './brandState.js';
@@ -12,18 +12,18 @@ const BRAND_CLOCK_INTERVAL_MS = 60_000;
 
 export function useRunnerBrandState() {
   const backendOnline = useDataStore(selectBackendOnline);
-  const issues = useDataStore(selectIssues);
+  const workSummary = useDataStore(selectWorkSummary);
   const projects = useDataStore(selectProjects);
   const automations = useDataStore(selectAutomations);
   const now = useBrandClock();
 
   return useMemo(() => resolveRunnerBrandState({
     backendOnline,
-    issues,
+    workSummary,
     projects,
     automations,
     now,
-  }), [automations, backendOnline, issues, now, projects]);
+  }), [automations, backendOnline, now, projects, workSummary]);
 }
 
 function useBrandClock() {

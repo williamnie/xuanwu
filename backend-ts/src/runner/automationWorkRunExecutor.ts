@@ -5,7 +5,8 @@ import {
   type AutomationExecutionLink
 } from "../db/repositories/automationExecutionLinks.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
-import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
+import { insertIssueRunRecord, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
+import { prepareReservedIssueRun } from "../domain/run/runPreparation.ts";
 import { makeDomainID, type RunID } from "../xuanwu/coreDomainContracts.ts";
 import { createIssueBackedWork, getIssueAsWork } from "../domain/work/issueAdapter.ts";
 import type { WorkLedgerEntry } from "../domain/work/contracts.ts";
@@ -60,7 +61,7 @@ export function createAutomationWorkRunExecutor(options: AutomationWorkRunExecut
     if (!existingLink && preparation.outcome === "skipped") {
       return { detail: preparation.detail, outcome: "skipped" };
     }
-    const link = existingLink ?? ensureLink(
+    const link = existingLink ? await ensureCurrentAutomationRun(database, existingLink, now) : await ensureLink(
       database,
       automation.id,
       automation.name,
@@ -97,7 +98,37 @@ export function createAutomationWorkRunExecutor(options: AutomationWorkRunExecut
   };
 }
 
-function ensureLink(
+async function ensureCurrentAutomationRun(
+  database: Parameters<AutomationExecutor>[0]["database"],
+  link: AutomationExecutionLink,
+  now: Date
+): Promise<AutomationExecutionLink> {
+  const storageID = issueRunStorageID(link.run_id);
+  const open = database.sqlite.query<{ id: string }, [string]>(
+    "select id from issue_runs where id=? and ended_at=''"
+  ).get(storageID);
+  if (open) return link;
+  const reservation = database.transaction(() => {
+    const issue = database.sqlite.query<{ status: string }, [number]>(
+      "select status from issues where id=?"
+    ).get(link.issue_id);
+    if (issue?.status !== "in_progress") throw new Error("automation retry target Issue must remain in_progress");
+    const conflicting = database.sqlite.query<{ id: string }, [number]>(
+      "select id from issue_runs where issue_id=? and ended_at='' limit 1"
+    ).get(link.issue_id);
+    if (conflicting) throw new Error("automation retry target has a conflicting open Run");
+    return insertIssueRunRecord(database, link.issue_id, { provider: "automation", startedAt: now.toISOString() });
+  }).immediate();
+  const preparation = await prepareReservedIssueRun(database, reservation);
+  if (preparation.status !== "ready") throw new Error("automation retry Run preparation claim was invalidated");
+  return {
+    ...link,
+    run_id: makeDomainID("run", "issue_runs", preparation.run.id),
+    updated_at: now.toISOString()
+  };
+}
+
+async function ensureLink(
   database: Parameters<AutomationExecutor>[0]["database"],
   automationID: string,
   automationName: string,
@@ -106,7 +137,7 @@ function ensureLink(
   projectID: string,
   now: Date,
   targetIssueID?: number
-): AutomationExecutionLink {
+): Promise<AutomationExecutionLink> {
   const existing = getAutomationExecutionLink(database, automationRunID);
   if (existing) return existing;
   const timestamp = now.toISOString();
@@ -134,7 +165,20 @@ function ensureLink(
   }).work;
   if (!work) throw new Error(`automation target issue ${targetIssueID} is unavailable`);
   const issueID = Number(work.id.slice("xw:work:issues:".length));
-  const issueRun = createIssueRun(database, issueID);
+  const reservation = database.transaction(() => {
+    const target = database.sqlite.query<{ status: string }, [number]>(
+      "select status from issues where id=?"
+    ).get(issueID);
+    if (target?.status !== "in_progress") throw new Error("automation target Issue must be in_progress");
+    const open = database.sqlite.query<{ id: string }, [number]>(
+      "select id from issue_runs where issue_id=? and ended_at='' limit 1"
+    ).get(issueID);
+    if (open) throw new Error("automation target Issue already has an open Run");
+    return insertIssueRunRecord(database, issueID, { provider: "automation", startedAt: timestamp });
+  }).immediate();
+  const preparation = await prepareReservedIssueRun(database, reservation);
+  if (preparation.status !== "ready") throw new Error("automation Run preparation claim was invalidated");
+  const issueRun = preparation.run;
   const runID = makeDomainID("run", "issue_runs", issueRun.id);
   updateIssueRuntime(database, issueID, {
     issue_run_id: issueRun.id,

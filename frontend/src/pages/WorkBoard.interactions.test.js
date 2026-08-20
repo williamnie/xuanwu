@@ -40,22 +40,31 @@ test('Work Board keeps the viewport fixed and scrolls each lane independently', 
 });
 
 test('Work Board opens from one grouped snapshot and loads only the scrolled lane', () => {
-  assert.match(board, /workApi\.getWorkBoard\(\{\}, \{ signal: controller\.signal \}\)/);
+  assert.match(board, /workApi\.getWorkBoard\(\{ statuses: OPERATIONAL_STATUSES \}, \{ signal: controller\.signal \}\)/);
   assert.match(board, /statuses: \[status\]/);
-  assert.match(board, /page: lane\.page \+ 1/);
+  assert.match(board, /cursor: lane\.nextCursor/);
+  assert.match(board, /page: lane\.nextCursor \? 1 : lane\.page \+ 1/);
   assert.match(board, /onScroll=\{event => onReachEnd\(event, status\)\}/);
   assert.match(board, /laneScrollArmed/);
   assert.match(board, /t\('board\.loadMoreStatus', \{ status: t\(`status\.\$\{status\}`\) \}\)/);
   assert.doesNotMatch(board, /getAllWorks|getAllWorkRelations/);
+  assert.match(board, /HISTORY_STATUSES\.includes\(status\)/);
+  assert.match(board, /normalizeLanePage\([^\n]+, response\?\.page_size \|\| 20, 'not_loaded'\)/);
+  assert.match(board, /IntersectionObserver/);
+  assert.match(board, /loadState === 'not_loaded'[\s\S]*滚动到此列后加载历史工作项/);
+  assert.match(board, /loadState === 'error'[\s\S]*历史工作项加载失败，重试/);
 });
 
 test('Work Board silently refreshes every five seconds without overlapping requests', () => {
   assert.match(board, /WORK_REFRESH_INTERVAL_MS\s*=\s*5_000/);
   assert.match(board, /if \(boardRequest\.current\)[\s\S]*await boardRequest\.current\.catch/);
   assert.match(board, /await loadBoard\(\{ silent: true \}\)/);
-  assert.match(board, /silent \? mergeRefreshedWorks\(current, snapshot\.items\) : snapshot\.items/);
-  assert.match(board, /silent \? mergeRefreshedLanePages\(current, snapshot\.lanePages\) : snapshot\.lanePages/);
+  assert.match(board, /setWorks\(current => mergeOperationalSnapshot\(current, snapshot\.items\)\)/);
+  assert.match(board, /HISTORY_STATUSES\.includes\(work\.status\)/);
+  assert.match(board, /setLanePages\(current => mergeRefreshedLanePages\(current, snapshot\.lanePages\)\)/);
   assert.match(board, /window\.clearTimeout\(timer\)/);
+  assert.match(board, /BOARD_RECONCILE_EVENT_TYPES/);
+  assert.match(board, /window\.setTimeout\([\s\S]*loadBoard\(\{ silent: true \}\)[\s\S]*500/);
 });
 
 test('Work Board avoids learned intrinsic card heights that move the lane scrollbar', () => {

@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { RunnerDatabase } from "../../db/database.ts";
 import { upsertAgentSession } from "../../db/repositories/agentSessions.ts";
 import { recordIssueEvent, listIssueEvents } from "../../db/repositories/issueEvents.ts";
-import { createIssueRun, updateIssueRuntime } from "../../db/repositories/issueRuns.ts";
+import { insertIssueRunRecord, updateIssueRuntime } from "../../db/repositories/issueRuns.ts";
+import { prepareReservedIssueRun } from "../run/runPreparation.ts";
 import { getIssue, listIssueRuns, type Issue } from "../../db/repositories/issues.ts";
 import { getProject, ProjectNotFoundError } from "../../db/repositories/projects.ts";
 import { updateIssue } from "../../db/repositories/issueUpdate.ts";
@@ -436,10 +437,10 @@ async function resumeRevisionInSameSession(
       source: "human_review_request_changes"
     });
     updateIssue(db, issue.id, { error: "", status: "in_progress" });
-    const run = createIssueRun(db, issue.id);
+    const run = insertIssueRunRecord(db, issue.id, { provider: providerID });
     recordIssueEvent(db, issue.id, HUMAN_REVIEW_EVENT_TYPES.revisionRequested, {
       feedback,
-      new_run_id: run.id,
+      new_run_id: run.run_id,
       provider: providerID,
       provider_session_id: previousRun.provider_session_id,
       request_id: request.id,
@@ -449,7 +450,10 @@ async function resumeRevisionInSameSession(
     });
     return run;
   });
-  const run = prepare.immediate();
+  const reservation = prepare.immediate();
+  const preparation = await prepareReservedIssueRun(db, reservation);
+  if (preparation.status !== "ready") throw new Error("Run preparation claim was invalidated before Session resume");
+  const run = preparation.run;
   try {
     const result = await provider.sendSessionMessage({
       cwd: project.cwd,

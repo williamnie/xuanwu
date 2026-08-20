@@ -174,6 +174,7 @@ run_preflight_checks() {
     [ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no)" ]; then
     fail "release checkout has tracked changes after dependency installation"
   fi
+  run_step "repository hygiene" node "$ROOT_DIR/scripts/repository-hygiene-audit.mjs"
   run_step "backend-ts tests" bash -lc "cd '$ROOT_DIR/backend-ts' && bun test --timeout 60000"
   run_step "frontend lint" npm --prefix "$ROOT_DIR/frontend" run lint
   APP_VERSION="$(resolve_app_version)"

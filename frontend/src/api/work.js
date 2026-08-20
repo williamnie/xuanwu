@@ -8,7 +8,7 @@ function appendMany(params, key, values) {
   items.forEach(value => params.append(key, value));
 }
 
-function workListParams({ order = 'desc', page = 1, pageSize = WORK_PAGE_SIZE, projectId = '', query = '', sort = 'updated_at', statuses = [], types = [] } = {}) {
+function workListParams({ cursor = '', order = 'desc', page = 1, pageSize = WORK_PAGE_SIZE, projectId = '', query = '', sort = 'updated_at', statuses = [], types = [] } = {}) {
   const params = new URLSearchParams({
     order,
     page: String(page),
@@ -17,6 +17,7 @@ function workListParams({ order = 'desc', page = 1, pageSize = WORK_PAGE_SIZE, p
   });
   if (projectId) params.set('project_id', projectId);
   if (query) params.set('q', query);
+  if (cursor) params.set('cursor', cursor);
   appendMany(params, 'status', statuses);
   appendMany(params, 'type', types);
   return params;
@@ -28,13 +29,21 @@ function workTimelineParams({ cursor = '', limit = 50 } = {}) {
   return params;
 }
 
-function workBoardParams({ order = 'desc', pageSize = 20, projectId = '', sort = 'updated_at' } = {}) {
+function workBoardParams({ order = 'desc', pageSize = 20, projectId = '', sort = 'updated_at', statuses = [] } = {}) {
   const params = new URLSearchParams({
     order,
     page_size: String(pageSize),
     sort,
   });
   if (projectId) params.set('project_id', projectId);
+  appendMany(params, 'status', statuses);
+  return params;
+}
+
+function workSummaryParams({ includeProjects, projectId = '' } = {}) {
+  const params = new URLSearchParams();
+  if (projectId) params.set('project_id', projectId);
+  if (typeof includeProjects === 'boolean') params.set('include_projects', String(includeProjects));
   return params;
 }
 
@@ -44,27 +53,12 @@ function issueIdFromWorkId(id) {
   return Number(match[1]);
 }
 
-async function allPages(fetchPage) {
-  const first = await fetchPage(1);
-  const totalPages = Number(first?.total_pages) || 0;
-  if (totalPages <= 1) return first;
-  const rest = await Promise.all(
-    Array.from({ length: totalPages - 1 }, (_, index) => fetchPage(index + 2)),
-  );
-  return {
-    ...first,
-    items: [first, ...rest].flatMap(page => page?.items || []),
-  };
-}
-
 export const workApi = {
   getWorks: (filters = {}, options = {}) => request(`/api/works?${workListParams(filters)}`, options),
 
   getWorkBoard: (filters = {}, options = {}) => request(`/api/works/board?${workBoardParams(filters)}`, options),
 
-  getAllWorks: (filters = {}) => allPages(page => (
-    request(`/api/works?${workListParams({ ...filters, page, pageSize: WORK_PAGE_SIZE })}`)
-  )),
+  getWorkSummary: (filters = {}, options = {}) => request(`/api/works/summary?${workSummaryParams(filters)}`, options),
 
   getWork: (id) => request(`/api/works/${encodeURIComponent(id)}`),
 

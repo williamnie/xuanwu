@@ -48,10 +48,23 @@ test('release compliance generates reviewable SBOM and fails closed on unconfirm
 
 test('release packaging generates, gates, and validates archived compliance evidence', async () => {
   const script = await readFile(join(root, 'scripts', 'package-release.sh'), 'utf8');
+  assert.match(script, /run_step "repository hygiene" node "\$ROOT_DIR\/scripts\/repository-hygiene-audit\.mjs"/);
   assert.match(script, /generate-release-compliance\.mjs/);
   assert.match(script, /verify-release-compliance\.mjs/);
   assert.match(script, /--require-release-ready/);
   assert.match(script, /verify-release-archive-compliance\.mjs/);
+});
+
+test('CI, package, and Release all invoke the canonical repository hygiene authority', async () => {
+  const [ci, release, packaging] = await Promise.all([
+    readFile(join(root, '.github', 'workflows', 'ci.yml'), 'utf8'),
+    readFile(join(root, '.github', 'workflows', 'release.yml'), 'utf8'),
+    readFile(join(root, 'scripts', 'package-release.sh'), 'utf8'),
+  ]);
+  const command = 'node scripts/repository-hygiene-audit.mjs';
+  assert.ok(ci.includes(command));
+  assert.ok(release.includes(command));
+  assert.ok(packaging.includes('node "$ROOT_DIR/scripts/repository-hygiene-audit.mjs"'));
 });
 
 test('pull request and main CI is read-only, frozen, and runs every required gate', async () => {

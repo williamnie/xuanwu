@@ -5,7 +5,7 @@ import {
   RUNTIME_EVIDENCE_CORRELATION_CONTRACT,
   type RuntimeEvidenceCorrelation
 } from "../db/repositories/issueEvents.ts";
-import { ensureOpenIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
+import { mustGetCurrentOpenIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { issueTimestamp } from "../db/repositories/issueCreate.ts";
 import { projectNormalizedRunEvent } from "../db/repositories/runAttemptEvents.ts";
@@ -52,6 +52,7 @@ export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   executionPolicyProviderVersion?: string;
   executionPolicyTransport?: ProviderTransport;
   executionSource?: ProviderPolicyContext["source"];
+  issueRunId?: string;
 };
 export type RunnerIssueRecoveryInput = RunnerIssueExecutionInput & { session: SessionRef };
 
@@ -72,14 +73,16 @@ export async function runIssueWithProvider(
     throw new Error('executor provider missing capability "issue_execution"');
   }
   const providerID = provider.id;
-  const activeRun = input.database ? ensureOpenIssueRun(input.database, input.issueId) : undefined;
+  const activeRun = input.database
+    ? mustGetCurrentOpenIssueRun(input.database, input.issueId, cleanString(input.issueRunId))
+    : undefined;
   input.onRunStart?.({
     provider: providerID,
     issueId: input.issueId,
     projectId: input.projectId,
     metadata: { cwd: input.cwd }
   });
-  const activeRunID = activeRun?.id ?? openIssueRunID(input.database, input.issueId);
+  const activeRunID = activeRun?.id ?? "";
   const resolvedInput = await resolveRuntimePolicyOrPersist(
     provider,
     input,
@@ -129,8 +132,10 @@ export async function recoverIssueWithProvider(
     throw new Error('executor provider missing capability "resume_session"');
   }
   const providerID = provider.id;
-  const activeRun = input.database ? ensureOpenIssueRun(input.database, input.issueId) : undefined;
-  const activeRunID = activeRun?.id ?? openIssueRunID(input.database, input.issueId);
+  const activeRun = input.database
+    ? mustGetCurrentOpenIssueRun(input.database, input.issueId, cleanString(input.issueRunId))
+    : undefined;
+  const activeRunID = activeRun?.id ?? "";
   const resolvedInput = await resolveRuntimePolicyOrPersist(
     provider,
     input,

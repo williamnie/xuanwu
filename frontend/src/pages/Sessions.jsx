@@ -660,7 +660,7 @@ export default function Sessions({
       setResult: setPromptCommandResult,
       setError: setPromptCommandError,
       afterSuccess: async () => {
-        await refreshData(['issues']);
+        await refreshData(['workSummary']);
         setPrompt('');
         setPromptReferences([]);
       },
@@ -674,7 +674,7 @@ export default function Sessions({
       setResult: setMessageCommandResult,
       setError: setMessageCommandError,
       afterSuccess: async () => {
-        await refreshData(['issues']);
+        await refreshData(['workSummary']);
         setMessage('');
         setMessageReferences([]);
       },

@@ -22,6 +22,7 @@ export function normalizeBrandState(state) {
 export function resolveRunnerBrandState({
   backendOnline = true,
   issues = [],
+  workSummary,
   projects = [],
   automations = [],
   now = new Date(),
@@ -29,9 +30,15 @@ export function resolveRunnerBrandState({
   if (!backendOnline) return BRAND_STATES.offline;
 
   const activeIssues = safeItems(issues).filter(isActiveIssue);
-  if (activeIssues.some(isGuardingIssue)) return BRAND_STATES.guarding;
-  if (activeIssues.length > 1) return BRAND_STATES.speed;
-  if (activeIssues.length > 0) return BRAND_STATES.running;
+  const activeCount = workSummary?.counts
+    ? Number(workSummary.counts.in_progress) || 0
+    : activeIssues.length;
+  const guarding = workSummary?.activity
+    ? Number(workSummary.activity.guarding) > 0
+    : activeIssues.some(isGuardingIssue);
+  if (guarding) return BRAND_STATES.guarding;
+  if (activeCount > 1) return BRAND_STATES.speed;
+  if (activeCount > 0) return BRAND_STATES.running;
 
   if (isNightTime(now)) return BRAND_STATES.sleeping;
   if (safeItems(projects).some(isMonitoringProject)) return BRAND_STATES.monitor;

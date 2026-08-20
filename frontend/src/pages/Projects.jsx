@@ -5,9 +5,9 @@ import './Projects.css';
 import { message } from '../store/toastStore';
 import {
   selectBackendOnline,
-  selectIssues,
   selectProjects,
   selectRefreshData,
+  selectWorkSummary,
   useDataStore,
 } from '../store/dataStore';
 import { 
@@ -32,7 +32,7 @@ function compactPath(cwd = '') {
 
 export default function Projects() {
   const projects = useDataStore(selectProjects);
-  const issues = useDataStore(selectIssues);
+  const workSummary = useDataStore(selectWorkSummary);
   const backendOnline = useDataStore(selectBackendOnline);
   const refreshData = useDataStore(selectRefreshData);
   const [ui, updateUi] = useImmer({
@@ -57,7 +57,7 @@ export default function Projects() {
   const selectedProject = projects.find(project => project.id === selectedProjectId) || null;
   const deleteProject = projects.find(project => project.id === deleteProjectId) || null;
   const deleteProjectIssueCount = deleteProject
-    ? issues.filter(issue => issue.project_id === deleteProject.id).length
+    ? workSummary.project_counts?.find(item => item.project_id === deleteProject.id)?.counts?.total || 0
     : 0;
 
   const closeModal = () => {
@@ -77,7 +77,7 @@ export default function Projects() {
       updateUi(draft => {
         draft.syncResult = result;
       });
-      await refreshData(['projects', 'issues']);
+      await refreshData(['projects', 'workSummary']);
     } catch (err) {
       updateUi(draft => {
         draft.syncResult = { error: err.message || '同步 Codex 项目失败' };
@@ -129,7 +129,7 @@ export default function Projects() {
         draft.deleteProjectId = '';
       });
       message.success(`项目 ${projectToDelete.name} 已删除`);
-      await refreshData(['projects', 'issues']);
+      await refreshData(['projects', 'workSummary']);
     } catch (err) {
       message.error(err.message || '删除失败');
     } finally {
@@ -152,7 +152,7 @@ export default function Projects() {
       updateUi(draft => {
         draft.resumingHoldProjectId = '';
       });
-      refreshData(['projects', 'issues']);
+      refreshData(['projects', 'workSummary']);
     }
   };
 
@@ -235,11 +235,11 @@ export default function Projects() {
         ) : (
           <div className="grid-cols-3 projects-grid">
             {projects.map(proj => {
-              const projIssues = issues.filter(i => i.project_id === proj.id);
-              const doneCount = projIssues.filter(i => i.status === 'done').length;
-              const failedCount = projIssues.filter(i => i.status === 'failed').length;
-              const activeCount = projIssues.filter(i => i.status === 'in_progress').length;
-              const todoCount = projIssues.filter(i => i.status === 'todo').length;
+              const counts = workSummary.project_counts?.find(item => item.project_id === proj.id)?.counts || {};
+              const doneCount = counts.done || 0;
+              const failedCount = counts.failed || 0;
+              const activeCount = counts.in_progress || 0;
+              const todoCount = counts.todo || 0;
 
               const isHeld = Boolean(proj.hold);
               const isLoopActive = !isHeld && (proj.loop_status === 'running' || proj.auto_run === 1);
@@ -353,7 +353,7 @@ export default function Projects() {
               onCancel={closeModal}
               onSaved={async () => {
                 closeModal();
-                await refreshData(['projects', 'issues']);
+                await refreshData(['projects', 'workSummary']);
               }}
               project={selectedProject}
             />

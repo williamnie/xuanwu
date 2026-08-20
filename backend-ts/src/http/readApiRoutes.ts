@@ -1,5 +1,6 @@
 import type { IssueActionOptions } from "../db/repositories/issueActions.ts";
 import type { ListIssueEventsOptions } from "../db/repositories/issueEvents.ts";
+import type { IssueFilter } from "../db/repositories/issues.ts";
 import { ProjectNotFoundError } from "../db/repositories/projects.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import {
@@ -146,13 +147,24 @@ function writeResponse(write: () => unknown, status = 200): Response {
   }
 }
 
-function issueFilter(request: Request): { projectId: string; sourceSessionId: string; status: string } {
+function issueFilter(request: Request): IssueFilter {
   const params = new URL(request.url).searchParams;
   return {
+    limit: optionalPositiveIntegerParam(params, "limit", 100),
+    offset: optionalNonNegativeIntegerParam(params, "offset"),
     projectId: cleanParam(params.get("projectId")),
     sourceSessionId: cleanParam(params.get("sourceSessionId") || params.get("source_session_id")),
     status: cleanParam(params.get("status"))
   };
+}
+
+function optionalNonNegativeIntegerParam(params: URLSearchParams, key: string): number | undefined {
+  const raw = cleanParam(params.get(key));
+  if (raw === "") return undefined;
+  if (!/^[0-9]+$/.test(raw)) throw new HttpError(400, `${key} 必须是非负整数`);
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 0) throw new HttpError(400, `${key} 必须是非负整数`);
+  return value;
 }
 
 function issueEventFilter(request: Request): ListIssueEventsOptions {

@@ -125,6 +125,86 @@ describe("Work HTTP API", () => {
     }
   });
 
+  test("returns bounded summary aggregates, selected board lanes, and strict updated-at cursors", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "alpha");
+      insertProject(db, "beta");
+      const first = createIssue(db, { project_id: "alpha", status: "in_progress", title: "Guardian gate" });
+      const second = createIssue(db, { project_id: "alpha", status: "done", title: "Done" });
+      const pending = createIssue(db, { project_id: "beta", status: "needs_user", title: "Verify" });
+      const unknown = createIssue(db, { project_id: "beta", status: "triage", title: "Unknown" });
+      db.sqlite.run("update issues set status='future_status' where id=?", [unknown.id]);
+      db.sqlite.run("update issues set status='pending_verification' where id=?", [pending.id]);
+      db.sqlite.run("update issues set updated_at='2026-08-19T00:00:00.000Z' where id in (?, ?)", [first.id, second.id]);
+      const router = createDefaultRouter({ database: db });
+
+      const summary = await router.handle(new Request(`${BASE_URL}/api/works/summary`));
+      const summaryBody = await body(summary);
+      const projectSummary = await router.handle(new Request(`${BASE_URL}/api/works/summary?project_id=alpha`));
+      const projectSummaryBody = await body(projectSummary);
+      const board = await router.handle(new Request(`${BASE_URL}/api/works/board?status=triage&status=todo`));
+      const boardBody = await body(board);
+      const cursorFilters = "sort=updated_at&order=desc&page_size=1&status=done&status=in_progress";
+      const pageOne = await router.handle(new Request(`${BASE_URL}/api/works?${cursorFilters}`));
+      const pageOneBody = await body(pageOne);
+      const cursor = String(pageOneBody.next_cursor);
+      const pageTwo = await router.handle(new Request(`${BASE_URL}/api/works?${cursorFilters}&cursor=${cursor}`));
+      const pageTwoBody = await body(pageTwo);
+      const mismatched = await router.handle(new Request(
+        `${BASE_URL}/api/works?sort=updated_at&order=desc&page_size=1&status=done&cursor=${cursor}`
+      ));
+
+      expect(summary.status).toBe(200);
+      expect(summaryBody).toMatchObject({
+        activity: { guarding: 1 },
+        contract: "xuanwu.work-summary.v1",
+        counts: {
+          done: 1,
+          history: 1,
+          in_progress: 1,
+          needs_user: 1,
+          operational: 2,
+          total: 4,
+          unknown_status_count: 1
+        },
+        project_count: 2,
+        project_counts: expect.arrayContaining([
+          expect.objectContaining({ project_id: "alpha", counts: expect.objectContaining({ total: 2 }) }),
+          expect.objectContaining({ project_id: "beta", counts: expect.objectContaining({ total: 2 }) })
+        ])
+      });
+      expect(projectSummary.status).toBe(200);
+      expect(projectSummaryBody).toMatchObject({ project_count: 1, scope: { project_id: "alpha" } });
+      expect(projectSummaryBody).not.toHaveProperty("project_counts");
+      expect(Object.keys(boardBody.lanes).sort()).toEqual(["todo", "triage"]);
+      expect(pageOneBody.items).toHaveLength(1);
+      expect(pageTwoBody.items).toHaveLength(1);
+      expect(pageTwoBody.items[0].id).not.toBe(pageOneBody.items[0].id);
+      expect(pageTwoBody.total).toBe(pageOneBody.total);
+      expect(mismatched.status).toBe(400);
+      expect(await body(mismatched)).toMatchObject({ code: "invalid_cursor" });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("fails closed at the Project summary capacity without truncating global counts", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      for (let index = 0; index < 129; index += 1) insertProject(db, `project-${index}`);
+      const router = createDefaultRouter({ database: db });
+
+      const capped = await router.handle(new Request(`${BASE_URL}/api/works/summary`));
+      const globalOnly = await router.handle(new Request(`${BASE_URL}/api/works/summary?include_projects=false`));
+
+      expect(capped.status).toBe(409);
+      expect(await body(capped)).toMatchObject({ code: "project_summary_capacity_exceeded" });
+      expect(globalOnly.status).toBe(200);
+      expect(await body(globalOnly)).toMatchObject({ project_count: 129 });
+    } finally { db.close(); }
+  });
+
   test("creates, updates, enqueues and cancels through the Issue adapter with idempotent audit", async () => {
     const db = await openFixtureDatabase();
     try {

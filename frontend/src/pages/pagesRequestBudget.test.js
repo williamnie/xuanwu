@@ -44,7 +44,15 @@ test('selected issue detail does not reconcile the global issue list', () => {
 
 test('project writes avoid refreshAllData fan-out', () => {
   assert.doesNotMatch(projectsSource, /refreshAllData/);
-  assert.match(projectsSource, /refreshData\(\['projects', 'issues'\]\)/);
+  assert.match(projectsSource, /refreshData\(\['projects', 'workSummary'\]\)/);
+});
+
+test('production read paths have no all-pages Work helper or global Issue store slice', () => {
+  const workApiSource = readFileSync(new URL('../api/work.js', import.meta.url), 'utf8');
+  const dataStoreSource = readFileSync(new URL('../store/dataStore.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(workApiSource, /getAllWorks|function allPages/);
+  assert.doesNotMatch(dataStoreSource, /workApi\.getIssues\(\)/);
+  assert.doesNotMatch(dataStoreSource, /\bissues:\s*\[\]/);
 });
 
 test('Runs coalesces lifecycle refreshes, aborts stale reads, and loads detail only after selection', () => {

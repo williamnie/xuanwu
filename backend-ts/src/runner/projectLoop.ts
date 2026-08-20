@@ -1,5 +1,5 @@
 import {
-  claimNextIssue,
+  reserveNextIssue,
   peekNextReadyIssue,
   peekNextTodoIssue
 } from "../db/repositories/issueQueue.ts";
@@ -25,6 +25,7 @@ import {
   type ProviderRunResult
 } from "../providers/types.ts";
 import { reconcileProviderOutcome } from "./providerOutcome.ts";
+import { prepareReservedIssueRun } from "../domain/run/runPreparation.ts";
 
 export type ProjectLoopInput = {
   bus?: Pick<EventBus, "publish">;
@@ -55,13 +56,16 @@ export async function runProjectLoopOnce(input: ProjectLoopInput): Promise<Proje
     recordProjectLoopDecision(input.database, decision);
     return { claimed: false };
   }
-  const issue = claimNextIssue(input.database, project.id, (candidate) => (
+  const claim = reserveNextIssue(input.database, project.id, (candidate) => (
     issueProviderAvailable(input.database, project, candidate, input.providers, input.now)
   ), input.now);
-  if (!issue) return { claimed: false };
+  if (!claim) return { claimed: false };
+  const prepared = await prepareReservedIssueRun(input.database, claim.reservation);
+  if (prepared.status !== "ready") return { claimed: false };
+  const issue = claim.issue;
   recordProjectLoopDecision(input.database, { ...decision, issue });
   publishIssueStatus(input, issue);
-  const run = await runClaimedIssue(input, project, issue);
+  const run = await runClaimedIssue(input, project, issue, claim.reservation.run_id);
   return { claimed: true, issue, run };
 }
 
@@ -97,9 +101,10 @@ export function projectLoopDecision(input: ProjectLoopInput, forceOnce: boolean)
 async function runClaimedIssue(
   input: ProjectLoopInput,
   project: Project,
-  issue: Issue
+  issue: Issue,
+  issueRunID: string
 ): Promise<ProviderRunResult> {
-  const claimedRunID = openIssueRunID(input.database, issue.id);
+  const claimedRunID = issueRunID;
   const selection = resolveExecutorSelection(input.database, project, issue);
   const provider = selectedProvider(project, selection, input.providers);
   const prompt = buildIssuePrompt(project, issue, input.database);
@@ -112,6 +117,7 @@ async function runClaimedIssue(
       capabilitySummary: provider.capabilities.join(","),
       database: input.database,
       issueId: issue.id,
+      issueRunId: claimedRunID,
       projectId: project.id,
       cwd: project.cwd,
       images: issuePromptImages(input.database, prompt),

@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { readWorkSummary } from "../db/repositories/workSummary.ts";
 import {
   countStoredHandoffs,
   listStoredHandoffs,
@@ -258,7 +259,8 @@ function systemHealthSection(db: RunnerDatabase, input: SectionInput): CommandCe
   const runCounts = countRunsByStatus(db);
   const projection = eventProjectionStatusForRead(db);
   const totalRuns = Object.values(runCounts).reduce((total, count) => total + count, 0);
-  const degraded = projection.status !== "ready";
+  const unknownWorkStatuses = readWorkSummary(db, { includeProjects: false }).counts.unknown_status_count;
+  const degraded = projection.status !== "ready" || unknownWorkStatuses > 0;
   return {
     counts: {
       ...runCounts,
@@ -272,6 +274,11 @@ function systemHealthSection(db: RunnerDatabase, input: SectionInput): CommandCe
     },
     summary: {
       database: { status: "ready" },
+      warnings: unknownWorkStatuses > 0 ? [{
+        code: "work_status_unknown",
+        count: unknownWorkStatuses,
+        source: "issues.status"
+      }] : [],
       event_projection: {
         lag_rows: projection.lag_rows,
         last_event_id: projection.last_event_id,

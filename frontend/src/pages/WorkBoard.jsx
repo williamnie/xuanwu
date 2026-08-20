@@ -12,8 +12,9 @@ import {
   X,
 } from 'lucide-react';
 import { workApi } from '../api/work.js';
+import { eventsApi } from '../api/events.js';
 import EvidencePanel from '../components/EvidencePanel.jsx';
-import { selectProjects, useDataStore } from '../store/dataStore';
+import { selectProjects, selectWorkSummary, useDataStore } from '../store/dataStore';
 import { message } from '../store/toastStore.js';
 import WorkDetail from './WorkDetail.jsx';
 import WorkEditorDialog from './work/WorkEditorDialog.jsx';
@@ -49,10 +50,14 @@ const EMPTY_FILTERS = {
 };
 
 const WORK_REFRESH_INTERVAL_MS = 5_000;
+const OPERATIONAL_STATUSES = ['triage', 'todo', 'in_progress', 'needs_user', 'failed'];
+const HISTORY_STATUSES = ['done', 'cancelled'];
+const BOARD_RECONCILE_EVENT_TYPES = new Set(['issue.created', 'issue.deleted', 'issue.status_changed', 'issue.updated']);
 
 export default function WorkBoard({ navigateTo, onPageContextChange, selectedHandoffId = '', selectedWorkId = '' }) {
   const { t } = useI18n();
   const projects = useDataStore(selectProjects);
+  const workSummary = useDataStore(selectWorkSummary);
   const [works, setWorks] = useState([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [dialog, setDialog] = useState(null);
@@ -67,6 +72,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
   const [movingWorkId, setMovingWorkId] = useState('');
   const boardRequest = useRef(null);
   const boardController = useRef(null);
+  const workSummaryRef = useRef(workSummary);
   const loadMoreController = useRef(null);
   const loadingMoreStatusRef = useRef('');
   const laneScrollArmed = useRef(new Map(WORK_BOARD_STATUSES.map(status => [status, true])));
@@ -89,13 +95,13 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
 
     const controller = new AbortController();
     boardController.current = controller;
-    const pending = workApi.getWorkBoard({}, { signal: controller.signal });
+    const pending = workApi.getWorkBoard({ statuses: OPERATIONAL_STATUSES }, { signal: controller.signal });
     boardRequest.current = pending;
     try {
       const boardResponse = await pending;
-      const snapshot = normalizeBoardSnapshot(boardResponse);
-      setWorks(current => silent ? mergeRefreshedWorks(current, snapshot.items) : snapshot.items);
-      setLanePages(current => silent ? mergeRefreshedLanePages(current, snapshot.lanePages) : snapshot.lanePages);
+      const snapshot = normalizeBoardSnapshot(boardResponse, workSummaryRef.current);
+      setWorks(current => mergeOperationalSnapshot(current, snapshot.items));
+      setLanePages(current => mergeRefreshedLanePages(current, snapshot.lanePages));
       setTotalWorks(snapshot.total);
       setError('');
     } catch (loadError) {
@@ -109,6 +115,19 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
   }, [selectedWorkId, t]);
 
   useEffect(() => {
+    workSummaryRef.current = workSummary;
+    setTotalWorks(workSummary.counts?.total || 0);
+    setLanePages(current => ({
+      ...current,
+      ...Object.fromEntries(HISTORY_STATUSES.map(status => [status, {
+        ...normalizeLanePage({ total: workSummary.counts?.[status] || 0 }, 20, 'not_loaded'),
+        ...current[status],
+        total: workSummary.counts?.[status] || 0,
+      }]))
+    }));
+  }, [workSummary]);
+
+  useEffect(() => {
     if (selectedWorkId) {
       setLoading(false);
       return undefined;
@@ -119,6 +138,22 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
       boardController.current = null;
       boardRequest.current = null;
       controller?.abort();
+    };
+  }, [loadBoard, selectedWorkId]);
+
+  useEffect(() => {
+    if (selectedWorkId) return undefined;
+    let timer = 0;
+    const unsubscribe = eventsApi.subscribeToEvents(event => {
+      if (timer || !BOARD_RECONCILE_EVENT_TYPES.has(event.type)) return;
+      timer = window.setTimeout(() => {
+        timer = 0;
+        void loadBoard({ silent: true });
+      }, 500);
+    });
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribe();
     };
   }, [loadBoard, selectedWorkId]);
 
@@ -145,7 +180,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
     const lane = lanePages[status];
     if (
       selectedWorkId || loading || loadingMoreStatusRef.current ||
-      !lane || lane.page >= lane.totalPages
+      !lane || !lane.hasMore
     ) return;
     const controller = new AbortController();
     loadMoreController.current = controller;
@@ -153,12 +188,13 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
     setLoadingMoreStatus(status);
     try {
       const response = await workApi.getWorks({
-        page: lane.page + 1,
+        cursor: lane.nextCursor,
+        page: lane.nextCursor ? 1 : lane.page + 1,
         pageSize: lane.pageSize,
         statuses: [status],
       }, { signal: controller.signal });
       setWorks(current => mergeWorks(current, response?.items || []));
-      const nextLane = normalizeLanePage(response, lane.pageSize);
+      const nextLane = normalizeLanePage(response, lane.pageSize, 'loaded');
       setLanePages(current => ({ ...current, [status]: nextLane }));
       setTotalWorks(current => current - lane.total + nextLane.total);
     } catch (loadError) {
@@ -171,6 +207,33 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
       }
     }
   }, [lanePages, loading, selectedWorkId, t]);
+
+  const loadHistory = useCallback(async (status) => {
+    if (!HISTORY_STATUSES.includes(status) || ['loading', 'loaded'].includes(lanePages[status]?.loadState)) return;
+    setLanePages(current => ({
+      ...current,
+      [status]: { ...current[status], loadState: 'loading' },
+    }));
+    try {
+      const response = await workApi.getWorks({ pageSize: 20, statuses: [status] });
+      setWorks(current => mergeWorks(current, response?.items || []));
+      setLanePages(current => ({
+        ...current,
+        [status]: normalizeLanePage(response, 20, 'loaded'),
+      }));
+    } catch (loadError) {
+      setLanePages(current => ({
+        ...current,
+        [status]: { ...current[status], loadState: 'error' },
+      }));
+      message.error(loadError.message || t('board.loadFailed'));
+    }
+  }, [lanePages, t]);
+
+  useEffect(() => {
+    if (!filters.query.trim()) return;
+    HISTORY_STATUSES.forEach(status => void loadHistory(status));
+  }, [filters.query, loadHistory]);
 
   const handleColumnScroll = useCallback((event, status) => {
     const target = event.currentTarget;
@@ -288,7 +351,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
         onQueryChange={query => setFilters({ ...EMPTY_FILTERS, query })}
         onRefresh={refresh}
         query={filters.query}
-        total={totalWorks}
+        total={workSummary.counts?.total ?? totalWorks}
       />
 
       {error ? (
@@ -313,12 +376,14 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
                   key={status}
                   dropState={workColumnDropState(draggingWork, draggedOverStatus, status)}
                   draggingWorkId={draggingWork?.id || ''}
-                  hasMore={Boolean(lane && lane.page < lane.totalPages)}
+                  hasMore={Boolean(lane?.hasMore)}
                   loadingMore={loadingMoreStatus === status}
+                  loadState={lane?.loadState || 'loaded'}
                   navigateTo={navigateTo}
                   onEdit={work => setDialog({ mode: 'edit', work })}
                   onEvidence={setEvidenceWork}
                   onLoadMore={loadMore}
+                  onVisible={loadHistory}
                   onReachEnd={handleColumnScroll}
                   onDragEnd={resetDragState}
                   onDragLeave={handleDragLeave}
@@ -327,6 +392,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
                   onDrop={handleDrop}
                   projectNames={projectNames}
                   status={status}
+                  total={lane?.total || 0}
                   movingWorkId={movingWorkId}
                   works={groupedWorks.get(status) || []}
                 />
@@ -395,6 +461,7 @@ function WorkColumn({
   draggingWorkId,
   hasMore,
   loadingMore,
+  loadState,
   movingWorkId,
   navigateTo,
   onDragEnd,
@@ -405,15 +472,27 @@ function WorkColumn({
   onEdit,
   onEvidence,
   onLoadMore,
+  onVisible,
   onReachEnd,
   projectNames,
   status,
+  total,
   works,
 }) {
   const { t } = useI18n();
   const meta = STATUS_META[status] || { label: status, tone: 'slate' };
+  const columnRef = useRef(null);
+  useEffect(() => {
+    if (!HISTORY_STATUSES.includes(status) || !columnRef.current || typeof IntersectionObserver === 'undefined') return undefined;
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) onVisible(status);
+    }, { rootMargin: '120px' });
+    observer.observe(columnRef.current);
+    return () => observer.disconnect();
+  }, [onVisible, status]);
   return (
     <section
+      ref={columnRef}
       className={`work-column ${dropState ? `is-drag-over is-drop-${dropState}` : ''}`.trim()}
       data-tone={meta.tone}
       onDragLeave={event => onDragLeave(event, status)}
@@ -423,7 +502,7 @@ function WorkColumn({
       <header className="work-column-header">
         <span className="work-column-marker" />
         <h2>{t(`status.${status}`)}</h2>
-        <span>{works.length}</span>
+        <span>{total}</span>
       </header>
       <div className="work-column-stack" onScroll={event => onReachEnd(event, status)}>
         {works.length > 0 ? works.map(work => (
@@ -439,9 +518,7 @@ function WorkColumn({
             projectName={projectNames.get(work.owner?.project_id) || work.owner?.project_id || 'Unscoped'}
             work={work}
           />
-        )) : (
-          <div className="work-column-empty">{t('board.emptyLane')}</div>
-        )}
+        )) : <WorkColumnEmpty loadState={loadState} onRetry={() => onVisible(status)} />}
         {hasMore ? (
           <button
             className="work-column-load-more"
@@ -457,42 +534,68 @@ function WorkColumn({
   );
 }
 
+function WorkColumnEmpty({ loadState, onRetry }) {
+  if (loadState === 'not_loaded') {
+    return <div className="work-column-empty">滚动到此列后加载历史工作项</div>;
+  }
+  if (loadState === 'loading') {
+    return <div className="work-column-empty">正在加载历史工作项…</div>;
+  }
+  if (loadState === 'error') {
+    return (
+      <button className="work-column-load-more" onClick={onRetry} type="button">
+        历史工作项加载失败，重试
+      </button>
+    );
+  }
+  return <div className="work-column-empty">此列暂无工作项</div>;
+}
+
 function mergeWorks(current, incoming) {
   const merged = new Map(current.map(work => [work.id, work]));
   incoming.forEach(work => merged.set(work.id, work));
   return [...merged.values()];
 }
 
-function mergeRefreshedWorks(current, refreshed) {
+function mergeOperationalSnapshot(current, refreshed) {
   const refreshedIds = new Set(refreshed.map(work => work.id));
-  return [...refreshed, ...current.filter(work => !refreshedIds.has(work.id))];
+  return [
+    ...refreshed,
+    ...current.filter(work => HISTORY_STATUSES.includes(work.status) && !refreshedIds.has(work.id)),
+  ];
 }
 
 function mergeRefreshedLanePages(current, refreshed) {
   return Object.fromEntries(WORK_BOARD_STATUSES.map(status => [
     status,
-    {
+    HISTORY_STATUSES.includes(status) ? current[status] || refreshed[status] : {
       ...refreshed[status],
       page: Math.max(Number(current[status]?.page || 1), Number(refreshed[status]?.page || 1)),
     },
   ]));
 }
 
-function normalizeBoardSnapshot(response) {
+function normalizeBoardSnapshot(response, summary) {
   const lanePages = {};
   const items = [];
   let total = 0;
   WORK_BOARD_STATUSES.forEach((status) => {
     const lane = response?.lanes?.[status] || {};
-    lanePages[status] = normalizeLanePage(lane, response?.page_size || 20);
+    const history = HISTORY_STATUSES.includes(status);
+    lanePages[status] = history
+      ? normalizeLanePage({ total: summary?.counts?.[status] || 0 }, response?.page_size || 20, 'not_loaded')
+      : normalizeLanePage(lane, response?.page_size || 20, 'loaded');
     items.push(...(lane?.items || []));
     total += lanePages[status].total;
   });
   return { items: mergeWorks([], items), lanePages, total };
 }
 
-function normalizeLanePage(response, fallbackPageSize) {
+function normalizeLanePage(response, fallbackPageSize, loadState = 'loaded') {
   return {
+    hasMore: Boolean(response?.has_more ?? (Number(response?.page || 1) < Number(response?.total_pages || 0))),
+    loadState,
+    nextCursor: String(response?.next_cursor || ''),
     page: Number(response?.page || 1),
     pageSize: Number(response?.page_size || fallbackPageSize || 20),
     total: Number(response?.total || 0),

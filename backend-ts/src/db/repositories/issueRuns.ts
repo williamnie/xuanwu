@@ -1,6 +1,9 @@
 import type { RunnerDatabase } from "../database.ts";
 import { pendingRunCreation, recordRunMaterialized } from "../../domain/run/service.ts";
-import { recordIssueRunGitWorkspaceBaseline } from "../../domain/evidence/runGitWorkspaceBaseline.ts";
+import {
+  recordCapturedIssueRunGitWorkspaceBaseline,
+  type CapturedGitWorkspaceBaseline
+} from "../../domain/evidence/runGitWorkspaceBaseline.ts";
 import { issueTimestamp } from "./issueCreate.ts";
 import { listIssueRuns, type IssueRun } from "./issues.ts";
 
@@ -17,59 +20,118 @@ export type IssueRunRuntimeInput = {
 
 type RuntimeTarget = { args: Array<number | string>; sql: string };
 
+export type ReservedIssueRun = {
+  attempt: number;
+  issue_id: number;
+  project_cwd: string;
+  project_id: string;
+  run_id: string;
+  started_at: string;
+};
+export type RunPreparationResult =
+  | { baseline_recorded: boolean; status: "ready"; run: IssueRun }
+  | { status: "claim_invalidated"; run: IssueRun | null };
+
 export function createIssueRun(db: RunnerDatabase, issueID: number): IssueRun {
+  const reservation = insertIssueRunRecord(db, issueID);
+  return mustFindIssueRun(db, issueID, reservation.run_id);
+}
+
+export function insertIssueRunRecord(
+  db: RunnerDatabase,
+  issueID: number,
+  input: { provider?: string; startedAt?: string } = {}
+): ReservedIssueRun {
   const attempt = nextAttempt(db, issueID);
   const requested = pendingRunCreation(db, issueID, attempt);
   const id = `issue-${issueID}-attempt-${attempt}`;
-  const projectCwd = issueProjectCwd(db, issueID);
-  const gitBaseRevision = currentIssueProjectRevision(db, issueID);
-  const startedAt = issueTimestamp();
+  const project = issueProject(db, issueID);
+  const startedAt = input.startedAt ?? issueTimestamp();
   db.sqlite.run(`insert into issue_runs (
     id, issue_id, attempt, status, provider, git_base_revision, started_at
   ) values (?, ?, ?, ?, ?, ?, ?)`, [
-    id, issueID, attempt, "in_progress", "codex", gitBaseRevision, startedAt
+    id, issueID, attempt, "in_progress", cleanString(input.provider) || "codex", "", startedAt
   ]);
-  if (projectCwd !== "" && gitBaseRevision !== "") {
-    try {
-      recordIssueRunGitWorkspaceBaseline(db, issueID, {
-        base_revision: gitBaseRevision,
-        captured_at: startedAt,
-        repository_path: projectCwd,
-        run_id: id
-      });
-    } catch {
-      // Run creation must remain available when Git observation is unavailable.
-      // Completion will fail closed or report attribution uncertainty.
-    }
-  }
   if (requested) recordRunMaterialized(db, requested, id);
+  return {
+    attempt,
+    issue_id: issueID,
+    project_cwd: project.cwd,
+    project_id: project.id,
+    run_id: id,
+    started_at: startedAt
+  };
+}
+
+export function finalizeIssueRunPreparation(
+  db: RunnerDatabase,
+  reservation: ReservedIssueRun,
+  baseline: CapturedGitWorkspaceBaseline | null
+): RunPreparationResult {
+  const finalize = db.transaction((): RunPreparationResult => {
+    const current = currentReservedRun(db, reservation);
+    if (!current) return { status: "claim_invalidated", run: null };
+    if (!baseline) return { baseline_recorded: false, status: "ready", run: current };
+    const update = db.sqlite.run(`update issue_runs set git_base_revision=?
+      where id=? and issue_id=? and attempt=? and ended_at='' and git_base_revision=''
+        and exists (
+          select 1 from issues i join projects p on p.id=i.project_id
+          where i.id=? and i.status='in_progress' and p.id=? and trim(p.cwd)=?
+            and issue_runs.id=(select id from issue_runs current
+              where current.issue_id=i.id and current.ended_at='' order by current.attempt desc limit 1)
+        )`, [
+      baseline.base_revision, reservation.run_id, reservation.issue_id, reservation.attempt,
+      reservation.issue_id, reservation.project_id, reservation.project_cwd
+    ]);
+    if (update.changes !== 1) return { status: "claim_invalidated", run: null };
+    recordCapturedIssueRunGitWorkspaceBaseline(db, reservation.issue_id, reservation.run_id, baseline);
+    return {
+      baseline_recorded: true,
+      status: "ready",
+      run: mustFindIssueRun(db, reservation.issue_id, reservation.run_id)
+    };
+  });
+  return finalize.immediate();
+}
+
+export function mustGetCurrentOpenIssueRun(db: RunnerDatabase, issueID: number, runID: string): IssueRun {
+  const id = cleanString(runID);
+  if (!id) throw new Error("issueRunId is required");
+  const row = db.sqlite.query<{ id: string }, [number, string]>(`
+    select ir.id from issue_runs ir join issues i on i.id=ir.issue_id
+    where ir.issue_id=? and ir.id=? and ir.ended_at='' and i.status='in_progress'
+      and ir.id=(select id from issue_runs where issue_id=i.id and ended_at='' order by attempt desc limit 1)
+  `).get(issueID, id);
+  if (!row) throw new Error("issueRunId is not the canonical current open Run");
   return mustFindIssueRun(db, issueID, id);
 }
 
-function currentIssueProjectRevision(db: RunnerDatabase, issueID: number): string {
-  const cwd = issueProjectCwd(db, issueID);
-  if (cwd === "") return "";
-  try {
-    const result = Bun.spawnSync({
-      cmd: ["git", "rev-parse", "--verify", "HEAD^{commit}"],
-      cwd,
-      stderr: "ignore",
-      stdout: "pipe"
-    });
-    if (result.exitCode !== 0) return "";
-    const revision = result.stdout.toString().trim().toLowerCase();
-    return /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(revision) ? revision : "";
-  } catch {
-    return "";
-  }
+function currentReservedRun(db: RunnerDatabase, reservation: ReservedIssueRun): IssueRun | null {
+  const row = db.sqlite.query<{ id: string }, [string, number, number, string, string]>(`
+    select ir.id from issue_runs ir
+    join issues i on i.id=ir.issue_id
+    join projects p on p.id=i.project_id
+    where ir.id=? and ir.issue_id=? and ir.attempt=? and ir.ended_at=''
+      and i.status='in_progress' and p.id=? and trim(p.cwd)=?
+      and ir.id=(select id from issue_runs where issue_id=i.id and ended_at='' order by attempt desc limit 1)
+  `).get(
+    reservation.run_id,
+    reservation.issue_id,
+    reservation.attempt,
+    reservation.project_id,
+    reservation.project_cwd
+  );
+  return row ? mustFindIssueRun(db, reservation.issue_id, reservation.run_id) : null;
 }
 
-function issueProjectCwd(db: RunnerDatabase, issueID: number): string {
-  return db.sqlite.query<{ cwd: string }, [number]>(`
-    select projects.cwd from issues
+function issueProject(db: RunnerDatabase, issueID: number): { cwd: string; id: string } {
+  const project = db.sqlite.query<{ cwd: string; id: string }, [number]>(`
+    select projects.cwd, projects.id from issues
     join projects on projects.id=issues.project_id
     where issues.id=?
-  `).get(issueID)?.cwd.trim() ?? "";
+  `).get(issueID);
+  if (!project) throw new Error("issue project missing during Run reservation");
+  return { cwd: project.cwd.trim(), id: project.id.trim() };
 }
 
 export function ensureOpenIssueRun(db: RunnerDatabase, issueID: number): IssueRun {

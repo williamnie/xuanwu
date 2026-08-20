@@ -3,11 +3,38 @@ import { workApi } from '../api/work.js';
 import { nativeAutomationsApi } from '../api/nativeAutomations.js';
 import { create } from 'zustand';
 import { clearAuthToken } from '../api/authToken';
+import { boundedSummaryFetcher } from './summaryRefreshCoordinator.js';
 import {
   sameGuardianAlerts,
-  sameIssues,
   sameProjects,
 } from '../utils/stateGuards';
+
+export const EMPTY_WORK_COUNTS = Object.freeze({
+  cancelled: 0,
+  done: 0,
+  failed: 0,
+  history: 0,
+  in_progress: 0,
+  needs_user: 0,
+  operational: 0,
+  todo: 0,
+  total: 0,
+  triage: 0,
+  unknown_status_count: 0,
+});
+
+export function emptyWorkSummary() {
+  return {
+    activity: { guarding: 0 },
+    contract: 'xuanwu.work-summary.v1',
+    counts: { ...EMPTY_WORK_COUNTS },
+    project_count: 0,
+    project_counts: [],
+    scope: { project_id: '' },
+  };
+}
+
+const fetchWorkSummary = boundedSummaryFetcher(() => workApi.getWorkSummary());
 
 const DATA_SLICE_CONFIG = {
   projects: {
@@ -15,10 +42,10 @@ const DATA_SLICE_CONFIG = {
     same: sameProjects,
     fallback: [],
   },
-  issues: {
-    fetch: () => workApi.getIssues(),
-    same: sameIssues,
-    fallback: [],
+  workSummary: {
+    fetch: fetchWorkSummary,
+    same: (left, right) => JSON.stringify(left) === JSON.stringify(right),
+    fallback: emptyWorkSummary(),
   },
   automations: {
     fetch: async () => (await nativeAutomationsApi.list()).automations || [],
@@ -62,7 +89,7 @@ function buildConnectionPatch(current, online) {
 
 export const useDataStore = create((set, get) => ({
   projects: [],
-  issues: [],
+  workSummary: emptyWorkSummary(),
   automations: [],
   guardianAlerts: [],
   loading: true,
@@ -147,7 +174,7 @@ export const useDataStore = create((set, get) => ({
 }));
 
 export const selectProjects = (state) => state.projects;
-export const selectIssues = (state) => state.issues;
+export const selectWorkSummary = (state) => state.workSummary;
 export const selectAutomations = (state) => state.automations;
 export const selectGuardianAlerts = (state) => state.guardianAlerts;
 export const selectBackendOnline = (state) => state.backendOnline;

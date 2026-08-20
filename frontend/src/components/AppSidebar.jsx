@@ -15,8 +15,8 @@ import { useRunnerBrandState } from './useRunnerBrandState.js';
 import {
   selectBackendConnectionState,
   selectAutomations,
-  selectIssues,
   selectProjects,
+  selectWorkSummary,
   useDataStore,
 } from '../store/dataStore';
 import {
@@ -188,20 +188,22 @@ function IssuesSidebarFilters({
   setFocusFilter,
 }) {
   const projects = useDataStore(selectProjects);
-  const issues = useDataStore(selectIssues);
-  const filteredIssuesList = issues.filter(i => !filterProject || i.project_id === filterProject);
-  const triageCount = filteredIssuesList.filter(i => i.status === 'triage').length;
-  const activeCount = filteredIssuesList.filter(i => i.status === 'todo' || i.status === 'in_progress').length;
-  const failedCount = filteredIssuesList.filter(i => i.status === 'failed').length;
-  const archiveCount = filteredIssuesList.filter(i => i.status === 'done' || i.status === 'cancelled').length;
-  const allCount = filteredIssuesList.length;
+  const workSummary = useDataStore(selectWorkSummary);
+  const selectedCounts = filterProject
+    ? workSummary.project_counts?.find(item => item.project_id === filterProject)?.counts || EMPTY_COUNTS
+    : workSummary.counts || EMPTY_COUNTS;
+  const triageCount = selectedCounts.triage;
+  const activeCount = selectedCounts.todo + selectedCounts.in_progress;
+  const failedCount = selectedCounts.failed;
+  const archiveCount = selectedCounts.history;
+  const allCount = selectedCounts.total;
   const activeLoops = projects.filter(p => p.loop_status === 'running' || p.auto_run === 1).length;
   const totalProjects = projects.length;
 
   return (
     <>
       <div className="sidebar-section-title">
-        <span>— Issues • {issues.length}</span>
+        <span>— Issues • {workSummary.counts?.total || 0}</span>
       </div>
 
       <button className="btn-new-issue-sidebar" onClick={() => handleOpenNewIssue('todo')}>
@@ -251,11 +253,11 @@ function IssuesSidebarFilters({
       <div className="sidebar-project-list">
         <button className={`sub-filter-item ${filterProject === '' ? 'active' : ''}`} onClick={() => setFilterProject('')}>
           <span>All projects</span>
-          <span>{issues.length}</span>
+          <span>{workSummary.counts?.total || 0}</span>
         </button>
 
         {projects.map(proj => {
-          const count = issues.filter(i => i.project_id === proj.id).length;
+          const count = workSummary.project_counts?.find(item => item.project_id === proj.id)?.counts?.total || 0;
           return (
             <button key={proj.id} className={`sub-filter-item ${filterProject === proj.id ? 'active' : ''}`} onClick={() => setFilterProject(proj.id)}>
               <span><span className="sub-filter-dot is-project"></span>{proj.name}</span>
@@ -267,3 +269,12 @@ function IssuesSidebarFilters({
     </>
   );
 }
+
+const EMPTY_COUNTS = Object.freeze({
+  failed: 0,
+  history: 0,
+  in_progress: 0,
+  todo: 0,
+  total: 0,
+  triage: 0,
+});

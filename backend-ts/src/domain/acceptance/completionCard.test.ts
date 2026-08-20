@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { openDatabase } from "../../db/database.ts";
 import { createIssue } from "../../db/repositories/issueCreate.ts";
 import { recordIssueLogEvent, RUNTIME_EVIDENCE_CORRELATION_CONTRACT } from "../../db/repositories/issueEvents.ts";
-import { createIssueRun, updateIssueRuntime } from "../../db/repositories/issueRuns.ts";
+import { createIssueRun, insertIssueRunRecord, updateIssueRuntime } from "../../db/repositories/issueRuns.ts";
+import { prepareReservedIssueRun } from "../run/runPreparation.ts";
 import { makeRunAttemptID } from "../run/contracts.ts";
 import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
 import {
@@ -39,7 +40,9 @@ describe("completion card", () => {
         [root, "2026-07-31T05:00:00Z", "2026-07-31T05:00:00Z"]
       );
       const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Node contract" });
-      const run = createIssueRun(db, issue.id);
+      const prepared = await prepareReservedIssueRun(db, insertIssueRunRecord(db, issue.id));
+      if (prepared.status !== "ready") throw new Error("Run preparation failed");
+      const run = prepared.run;
       updateIssueRuntime(db, issue.id, {
         issue_run_id: run.id,
         provider: "codex",

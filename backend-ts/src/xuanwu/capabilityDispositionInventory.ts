@@ -555,6 +555,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/works/:id", family: "work-ledger" },
   { method: "GET", path: "/api/works/:id/timeline", family: "work-ledger" },
   { method: "GET", path: "/api/works/board", family: "work-ledger" },
+  { method: "GET", path: "/api/works/summary", family: "work-ledger" },
   { method: "PATCH", path: "/api/works/:id", family: "work-ledger" },
   { method: "POST", path: "/api/works", family: "work-ledger" },
   { method: "POST", path: "/api/works/:id/actions/:action", family: "work-ledger" },

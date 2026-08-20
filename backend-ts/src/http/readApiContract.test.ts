@@ -180,6 +180,7 @@ describe("read API route contracts", () => {
         "GET /api/works/:id",
         "GET /api/works/:id/timeline",
         "GET /api/works/board",
+        "GET /api/works/summary",
         "PATCH /api/works/:id",
         "POST /api/works",
         "POST /api/works/:id/actions/:action",

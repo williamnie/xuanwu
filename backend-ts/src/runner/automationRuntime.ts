@@ -66,7 +66,7 @@ export function createNativeWorkflowRegistry(database: RunnerDatabase): Workflow
 export function createNativeWorkflowDispatcher(
   options: NativeAutomationRuntimeOptions
 ): AutomationWorkflowDispatcher {
-  return async ({ automation, automation_run_id, context, work, workflow }) => {
+  return async ({ automation, automation_run_id, context, run_id, work, workflow }) => {
     if (automation.mode === "observe") {
       return { detail: `observe mode recorded ${workflow.manifest_ref} without execution`, outcome: "skipped" };
     }
@@ -96,6 +96,7 @@ export function createNativeWorkflowDispatcher(
       cwd: project.cwd,
       database: options.database,
       issueId: issueID,
+      issueRunId: String(run_id).replace(/^xw:run:issue_runs:/, ''),
       model: selection.model,
       projectId: project.id,
       prompt: workflowPrompt(automation, automation_run_id, workflow, context),

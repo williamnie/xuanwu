@@ -3,28 +3,22 @@ import test from 'node:test';
 
 import { workApi } from './work.js';
 
-test('Work client exhausts every page for a large board', async () => {
+test('Work client exposes bounded cursor pages and summary reads without an all-pages helper', async () => {
   const previousFetch = globalThis.fetch;
-  const requestedPages = [];
+  const requestedUrls = [];
   globalThis.fetch = async (url) => {
-    const parsed = new URL(url, 'http://runner.local');
-    const page = Number(parsed.searchParams.get('page'));
-    requestedPages.push(page);
-    const start = (page - 1) * 50;
-    const count = page < 5 ? 50 : 5;
-    return jsonResponse({
-      items: Array.from({ length: count }, (_, index) => ({ id: `xw:work:issues:${start + index + 1}` })),
-      page,
-      page_size: 50,
-      total: 205,
-      total_pages: 5,
-    });
+    requestedUrls.push(String(url));
+    return jsonResponse({ items: [], page: 1, page_size: 20, total: 0, total_pages: 0 });
   };
 
   try {
-    const response = await workApi.getAllWorks({ projectId: 'demo' });
-    assert.equal(response.items.length, 205);
-    assert.deepEqual(requestedPages.sort((a, b) => a - b), [1, 2, 3, 4, 5]);
+    await workApi.getWorks({ cursor: 'cursor-1', pageSize: 20, projectId: 'demo' });
+    await workApi.getWorkSummary({ includeProjects: false });
+    assert.deepEqual(requestedUrls, [
+      '/api/works?order=desc&page=1&page_size=20&sort=updated_at&project_id=demo&cursor=cursor-1',
+      '/api/works/summary?include_projects=false',
+    ]);
+    assert.equal('getAllWorks' in workApi, false);
   } finally {
     globalThis.fetch = previousFetch;
   }
@@ -39,8 +33,8 @@ test('Work board client reads every lane through one bounded snapshot request', 
   };
 
   try {
-    await workApi.getWorkBoard({ pageSize: 20, projectId: 'demo' });
-    assert.equal(requestedUrl, '/api/works/board?order=desc&page_size=20&sort=updated_at&project_id=demo');
+    await workApi.getWorkBoard({ pageSize: 20, projectId: 'demo', statuses: ['triage', 'todo'] });
+    assert.equal(requestedUrl, '/api/works/board?order=desc&page_size=20&sort=updated_at&project_id=demo&status=triage&status=todo');
   } finally {
     globalThis.fetch = previousFetch;
   }

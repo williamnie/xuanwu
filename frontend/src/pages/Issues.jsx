@@ -1,10 +1,9 @@
 import { workApi } from '../api/work.js';
 import { projectsApi } from '../api/projects.js';
 import { systemApi } from '../api/system.js';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { message } from '../store/toastStore';
 import {
-  selectIssues,
   selectProjects,
   selectRefreshData,
   useDataStore,
@@ -35,8 +34,8 @@ export default function Issues({
   navigateTo,
 }) {
   const projects = useDataStore(selectProjects);
-  const issues = useDataStore(selectIssues);
   const refreshData = useDataStore(selectRefreshData);
+  const [issues, setIssues] = useState([]);
 
   // 新建 Issue 的局部表单状态
   const [formDescription, setFormDescription] = useState('');
@@ -65,6 +64,16 @@ export default function Issues({
   const [deletingIssueId, setDeletingIssueId] = useState(null);
   const [pendingServiceTiers, setPendingServiceTiers] = useState({});
 
+  const reloadIssues = useCallback(async () => {
+    const items = await workApi.getIssues(filterProject);
+    setIssues(Array.isArray(items) ? items : []);
+    await refreshData(['workSummary']);
+  }, [filterProject, refreshData]);
+
+  useEffect(() => {
+    reloadIssues().catch(error => message.error(error.message || 'Issue 列表加载失败'));
+  }, [reloadIssues]);
+
   const stopCardAction = (event) => {
     event.stopPropagation();
   };
@@ -77,7 +86,7 @@ export default function Issues({
     try {
       await workApi.retryIssue(issueId, serviceTierPayload(issue?.service_tier));
       message.success(`Issue #${issueId} 已重新加入队列`);
-      refreshData(['issues']);
+      reloadIssues();
     } catch (err) {
       message.error(`重新执行失败: ${err.message || '网络异常'}`);
     } finally {
@@ -90,7 +99,7 @@ export default function Issues({
     setPendingServiceTiers(prev => ({ ...prev, [issueId]: serviceTier }));
     try {
       await workApi.updateIssue(issueId, serviceTierPayload(serviceTier));
-      await refreshData(['issues']);
+      await reloadIssues();
     } catch (err) {
       message.error(`更新执行速度失败: ${err.message || '网络异常'}`);
     } finally {
@@ -121,7 +130,7 @@ export default function Issues({
 
   const handleIssueSaved = async () => {
     setIssueToEdit(null);
-    await refreshData(['issues']);
+    await reloadIssues();
     message.success('Issue 已保存');
   };
 
@@ -132,7 +141,7 @@ export default function Issues({
       await workApi.deleteIssue(issueToDelete.id);
       message.success(`Issue #${issueToDelete.id} 已删除`);
       setIssueToDelete(null);
-      refreshData(['issues']);
+      reloadIssues();
     } catch (err) {
       message.error(`删除失败: ${err.message || '网络异常'}`);
     } finally {
@@ -191,7 +200,7 @@ export default function Issues({
       await moveIssueAfterDrop(issueId, currentStatus, targetStatus);
 
       // 成功后重新加载数据，保证即时同步
-      refreshData(['issues']);
+      reloadIssues();
     } catch (err) {
       console.error('更新 Issue 状态失败:', err);
       message.error(`更改状态失败: ${err.message || '网络异常'}`);
@@ -303,7 +312,7 @@ export default function Issues({
       await workApi.createIssue(payload);
       setIsNewIssueOpen(false);
       setFormDescription('');
-      refreshData(['issues']);
+      reloadIssues();
     } catch (err) {
       setFormError(err.message || '新建 Issue 失败');
     } finally {

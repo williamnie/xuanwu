@@ -1,6 +1,6 @@
 import type { RunnerDatabase } from "../database.ts";
 import { issueTimestamp } from "./issueCreate.ts";
-import { createIssueRun } from "./issueRuns.ts";
+import { insertIssueRunRecord, type ReservedIssueRun } from "./issueRuns.ts";
 import { getIssue, type Issue } from "./issues.ts";
 import { readProjectIssueDependencies } from "../../domain/work/issueDependency.ts";
 
@@ -10,6 +10,7 @@ type ClaimedIssueRow = { id: number };
 type CountRow = { count: number };
 type ProjectCwdRow = { cwd: string };
 export type IssueClaimFilter = (issue: Issue) => boolean;
+export type ReservedIssueClaim = { issue: Issue; reservation: ReservedIssueRun };
 
 export function claimNextIssue(
   db: RunnerDatabase,
@@ -17,11 +18,22 @@ export function claimNextIssue(
   filter: IssueClaimFilter = () => true,
   at: Date | string = new Date()
 ): Issue | null {
+  return reserveNextIssue(db, projectID, filter, at)?.issue ?? null;
+}
+
+export function reserveNextIssue(
+  db: RunnerDatabase,
+  projectID: string,
+  filter: IssueClaimFilter = () => true,
+  at: Date | string = new Date()
+): ReservedIssueClaim | null {
   const cleanProjectID = projectID.trim();
   if (cleanProjectID === "") throw new Error("project id is required");
-  const claim = db.transaction((id: string) => claimNextIssueID(db, id, filter, at));
-  const issueID = claim.immediate(cleanProjectID);
-  return issueID > 0 ? getIssue(db, issueID) : null;
+  const claim = db.transaction((id: string) => reserveNextIssueRecord(db, id, filter, at));
+  const reservation = claim.immediate(cleanProjectID);
+  if (!reservation) return null;
+  const issue = getIssue(db, reservation.issue_id);
+  return issue ? { issue, reservation } : null;
 }
 
 export function hasActiveExecutorWork(db: RunnerDatabase): boolean {
@@ -106,22 +118,23 @@ export function peekNextTodoIssue(db: RunnerDatabase, projectID: string): Issue 
   return row ? getIssue(db, row.id) : null;
 }
 
-function claimNextIssueID(
+function reserveNextIssueRecord(
   db: RunnerDatabase,
   projectID: string,
   filter: IssueClaimFilter,
   at: Date | string
-): number {
-  if (hasActiveExecutorWorkForProject(db, projectID, at)) return 0;
+): ReservedIssueRun | null {
+  if (hasActiveExecutorWorkForProject(db, projectID, at)) return null;
   const row = nextIssueRow(db, projectID, filter);
-  if (!row) return 0;
+  if (!row) return null;
   const timestamp = issueTimestamp();
-  db.sqlite.run(`update issues set status=?, attempt_count=attempt_count+1,
+  const update = db.sqlite.run(`update issues set status=?, attempt_count=attempt_count+1,
     auto_retry_next_at='', auto_retry_reason='', error='', updated_at=?
     where id=? and status=?`, [STATUS_IN_PROGRESS, timestamp, row.id, STATUS_TODO]);
-  createIssueRun(db, row.id);
+  if (update.changes !== 1) return null;
+  const reservation = insertIssueRunRecord(db, row.id, { startedAt: timestamp });
   recordClaimEvent(db, row.id, timestamp);
-  return row.id;
+  return reservation;
 }
 
 export function projectExecutionLockKey(db: RunnerDatabase, projectID: string): string {

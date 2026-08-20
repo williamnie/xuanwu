@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
-import { createIssueRun } from "../db/repositories/issueRuns.ts";
+import { insertIssueRunRecord } from "../db/repositories/issueRuns.ts";
+import { prepareReservedIssueRun } from "../domain/run/runPreparation.ts";
 import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import {
@@ -140,18 +141,22 @@ async function continueSameSession(
   }
   const project = getProject(db, issue.project_id);
   if (!project) throw new Error(`Project ${issue.project_id} not found`);
-  const newRun = db.transaction(() => {
-    const created = createIssueRun(db, issue.id);
+  const reservation = db.transaction(() => {
+    assertCurrentCard(db, card);
+    const created = insertIssueRunRecord(db, issue.id);
     recordIssueEvent(db, issue.id, PI_ACCEPTANCE_APPLIED_EVENT, {
       action: decision.decision,
       card_fingerprint: card.fingerprint,
       decision,
-      new_run_id: created.id,
+      new_run_id: created.run_id,
       resumed_from_run_id: previousRun.id,
       status: "in_progress"
     });
     return created;
   }).immediate();
+  const preparation = await prepareReservedIssueRun(db, reservation);
+  if (preparation.status !== "ready") throw new Error("Run preparation claim was invalidated before provider recovery");
+  const newRun = preparation.run;
   const selection = resolveExecutorSelection(db, project, issue);
   const serviceTier = issue.service_tier.trim() || project.default_service_tier.trim();
   try {
@@ -166,6 +171,7 @@ async function continueSameSession(
       cwd: project.cwd,
       database: db,
       issueId: issue.id,
+      issueRunId: newRun.id,
       model: selection.model,
       projectId: project.id,
       prompt: continuationPrompt(issue, decision, card.human_review),
@@ -244,18 +250,22 @@ async function retryInNewSession(
       rationale: `Provider ${providerID} 当前无法创建新的执行 Session。${decision.rationale}`
     });
   }
-  const run = db.transaction(() => {
-    const created = createIssueRun(db, issue.id);
+  const reservation = db.transaction(() => {
+    assertCurrentCard(db, card);
+    const created = insertIssueRunRecord(db, issue.id);
     recordIssueEvent(db, issue.id, PI_ACCEPTANCE_APPLIED_EVENT, {
       action: "retry",
       card_fingerprint: card.fingerprint,
       decision,
-      new_run_id: created.id,
+      new_run_id: created.run_id,
       retried_from_run_id: card.run.id,
       status: "in_progress"
     });
     return created;
   }).immediate();
+  const preparation = await prepareReservedIssueRun(db, reservation);
+  if (preparation.status !== "ready") throw new Error("Run preparation claim was invalidated before provider retry");
+  const run = preparation.run;
   const selection = resolveExecutorSelection(db, project, issue);
   const serviceTier = issue.service_tier.trim() || project.default_service_tier.trim();
   try {
@@ -270,6 +280,7 @@ async function retryInNewSession(
       cwd: project.cwd,
       database: db,
       issueId: issue.id,
+      issueRunId: run.id,
       model: selection.model,
       projectId: project.id,
       prompt: retryPrompt(issue, decision),

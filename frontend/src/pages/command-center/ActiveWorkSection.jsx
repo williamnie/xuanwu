@@ -41,7 +41,10 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
   const requestRef = useRef(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
-    if (requestRef.current) return requestRef.current.promise;
+    if (requestRef.current) {
+      try { await requestRef.current.promise; } catch { /* owning request handles its result */ }
+      return;
+    }
     if (!silent) setLoading(true);
     const controller = new AbortController();
     const promise = commandCenterApi.getSummary(

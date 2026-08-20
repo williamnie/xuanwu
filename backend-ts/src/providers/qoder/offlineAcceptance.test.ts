@@ -14,6 +14,7 @@ import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { getAgentProfile } from "../../db/repositories/agentProfiles.ts";
 import { getAgentSession } from "../../db/repositories/agentSessions.ts";
 import { listIssueEvents } from "../../db/repositories/issueEvents.ts";
+import { createIssueRun } from "../../db/repositories/issueRuns.ts";
 import { getIssue, listIssueRuns } from "../../db/repositories/issues.ts";
 import { updateIssue } from "../../db/repositories/issueUpdate.ts";
 import { createDefaultRouter } from "../../http/server.ts";
@@ -229,6 +230,7 @@ describe("Qoder Q6 offline acceptance", () => {
         ["failure", "Qoder failure", "in_progress", "2026-08-12T00:00:00Z", "2026-08-12T00:00:00Z"]
       );
       const issueId = Number(database.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id);
+      const issueRunId = createIssueRun(database, issueId).id;
       const sessionId = "qoder-failed-session";
       const fake = createFakeQoderSdkFacade([
         qoderInit(sessionId),
@@ -249,6 +251,7 @@ describe("Qoder Q6 offline acceptance", () => {
         cwd: root,
         database,
         issueId,
+        issueRunId,
         projectId: "failure",
         prompt: "fail safely"
       })).rejects.toThrow();

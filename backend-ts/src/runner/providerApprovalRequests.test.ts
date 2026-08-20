@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getPiApprovalRequest, listPiApprovalRequests } from "../db/repositories/pi/approvalRequests.ts";
 import { listPiGuardianDecisions } from "../db/repositories/pi/guardianDecisions.ts";
+import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import type { ExecutorProvider, ProviderEvent, ProviderRunInput, SessionRef } from "../providers/types.ts";
 import { syncProviderApprovalRequest } from "./providerApprovalRequests.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
@@ -75,10 +76,12 @@ describe("provider runtime approval request sync", () => {
     try {
       insertProject(db, "demo");
       const issueId = insertIssue(db, "demo");
+      const issueRunId = createIssueRun(db, issueId).id;
 
       await runIssueWithProvider(new ApprovalEventProvider(), {
         database: db,
         issueId,
+        issueRunId,
         projectId: "demo",
         cwd: "/tmp/project",
         prompt: "issue prompt"
@@ -116,10 +119,12 @@ describe("provider runtime approval request sync", () => {
     try {
       insertProject(db, "demo");
       const issueId = insertIssue(db, "demo");
+      const issueRunId = createIssueRun(db, issueId).id;
 
       await runIssueWithProvider(new ApprovalEventProvider({ resolve: true }), {
         database: db,
         issueId,
+        issueRunId,
         projectId: "demo",
         cwd: "/tmp/project",
         prompt: "issue prompt"
@@ -141,6 +146,7 @@ describe("provider runtime approval request sync", () => {
     try {
       insertProject(db, "demo");
       const issueId = insertIssue(db, "demo");
+      const issueRunId = createIssueRun(db, issueId).id;
       const event: ProviderEvent = {
         provider: "qoder",
         type: "approval",
@@ -237,10 +243,12 @@ describe("provider runtime approval request sync", () => {
     try {
       insertProject(db, "demo");
       const issueId = insertIssue(db, "demo");
+      const issueRunId = createIssueRun(db, issueId).id;
 
       await runIssueWithProvider(new TextOnlyProvider(), {
         database: db,
         issueId,
+        issueRunId,
         projectId: "demo",
         cwd: "/tmp/project",
         prompt: "issue prompt"
@@ -257,10 +265,12 @@ describe("provider runtime approval request sync", () => {
     try {
       insertProject(db, "demo");
       const issueId = insertIssue(db, "demo");
+      const issueRunId = createIssueRun(db, issueId).id;
 
       await runIssueWithProvider(new FastApprovalAuditProvider(), {
         database: db,
         issueId,
+        issueRunId,
         projectId: "demo",
         cwd: "/tmp/project",
         prompt: "issue prompt"

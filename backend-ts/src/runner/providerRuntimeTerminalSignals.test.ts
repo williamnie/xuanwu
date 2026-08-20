@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listPiActions, listPiGuardianEvents, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
+import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { runGuardianDecisionOrchestratorOnce } from "../pi/guardianDecisionOrchestrator.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
@@ -22,10 +23,12 @@ describe("provider runtime terminal PI signals", () => {
     const db = await openFixtureDatabase();
     try {
       seedIssue(db, 527);
+      const issueRunId = createIssueRun(db, 527).id;
 
       await runIssueWithProvider(new RuntimeErrorProvider(), {
         database: db,
         issueId: 527,
+        issueRunId,
         projectId: "demo",
         cwd: "/tmp/project",
         prompt: "issue prompt"

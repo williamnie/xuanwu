@@ -43,27 +43,28 @@ const GlobalAskComposer = lazy(() => import('./components/GlobalAskComposer'));
 const Automations = lazy(() => import('./pages/Automations'));
 const Settings = lazy(() => import('./pages/Settings'));
 
-const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
+const WORK_SUMMARY_RECONCILE_EVENT_TYPES = new Set([
   'issue.created',
+  'issue.deleted',
   'issue.status_changed',
-  'issue.error',
-  'issue.runtime_updated',
+  'issue.updated',
+]);
+
+const PROJECT_RECONCILE_EVENT_TYPES = new Set([
   'runner.started',
   'runner.stopped',
   'runner.hold',
   'runner.hold_active',
   'runner.hold_check.failed',
   'runner.hold_cleared',
-  'cron_task.ran',
-  'cron_task.error',
 ]);
 
 const PAGE_DATA_SLICES = {
   automations: ['projects'],
-  'command-center': ['projects', 'issues'],
-  issues: ['issues'],
-  settings: ['projects', 'issues'],
-  work: ['projects'],
+  'command-center': ['projects', 'workSummary'],
+  issues: ['projects', 'workSummary'],
+  settings: ['projects', 'workSummary'],
+  work: ['projects', 'workSummary'],
   handoffs: ['projects'],
 };
 
@@ -340,6 +341,11 @@ export default function App() {
     refreshData(getReconcileSlices(currentPage, selectedIssueId));
   }, [currentPage, refreshData, selectedIssueId]);
 
+  const refreshVisibleWorkSummary = useCallback(() => {
+    const slices = getReconcileSlices(currentPage, selectedIssueId);
+    if (slices.includes('workSummary')) refreshData(['workSummary']);
+  }, [currentPage, refreshData, selectedIssueId]);
+
   useEffect(() => {
     if (!authReady) return undefined;
     refreshVisibleData();
@@ -372,8 +378,10 @@ export default function App() {
     });
     const unsubscribe = eventsApi.subscribeToEvents(
       (event) => {
-        if (ACTIVE_RECONCILE_EVENT_TYPES.has(event.type)) {
-          refreshVisibleData();
+        if (WORK_SUMMARY_RECONCILE_EVENT_TYPES.has(event.type)) {
+          refreshVisibleWorkSummary();
+        } else if (PROJECT_RECONCILE_EVENT_TYPES.has(event.type)) {
+          refreshData(['projects']);
         }
       },
       () => monitor.onError(),
@@ -383,7 +391,7 @@ export default function App() {
       monitor.stop();
       unsubscribe();
     };
-  }, [authReady, refreshVisibleData, setBackendConnectionState]);
+  }, [authReady, refreshData, refreshVisibleWorkSummary, setBackendConnectionState]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');

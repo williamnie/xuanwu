@@ -67,7 +67,7 @@ export default function useIssueDetailActions({
       updateDetailState(draft => {
         draft.issue = updated;
       });
-      refreshData(['issues']);
+      refreshData(['workSummary']);
     } catch (err) {
       message.error('更新执行速度失败: ' + err.message);
     }
@@ -80,7 +80,7 @@ export default function useIssueDetailActions({
         draft.issue = updated;
       });
       message.success(issueLogMode === 'debug' ? '下次运行将记录完整调试日志' : '已恢复精简日志模式');
-      refreshData(['issues']);
+      refreshData(['workSummary']);
     } catch (err) {
       message.error('更新日志模式失败: ' + err.message);
     }
@@ -105,7 +105,7 @@ export default function useIssueDetailActions({
     try {
       await workApi.deleteIssue(issueId);
       message.success(`Issue #${issueId} 已删除`);
-      refreshData(['issues']);
+      refreshData(['workSummary']);
       navigateTo('issues');
     } catch (err) {
       message.error('删除任务失败: ' + err.message);
@@ -136,7 +136,7 @@ export default function useIssueDetailActions({
       setHumanReviewAction('');
       setHumanReviewDraft('');
       loadIssueData();
-      refreshData(['issues']);
+      refreshData(['workSummary']);
     } catch (err) {
       message.error('提交人工回答失败: ' + err.message);
     } finally {
@@ -174,7 +174,7 @@ export default function useIssueDetailActions({
       draft.issue = updatedIssue;
     });
     setIsEditModalOpen(false);
-    refreshData(['issues']);
+    refreshData(['workSummary']);
   }, [refreshData, updateDetailState]);
 
   const handleCopyText = useCallback(async (text) => {

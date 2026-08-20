@@ -5,9 +5,59 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const backendGraphRootArgument = process.argv.indexOf('--backend-graph-root');
+const backendGraphRoot = backendGraphRootArgument >= 0 ? process.argv[backendGraphRootArgument + 1] : '';
+if (backendGraphRootArgument >= 0 && !backendGraphRoot) throw new Error('--backend-graph-root requires a path');
+const root = backendGraphRoot
+  ? resolve(backendGraphRoot)
+  : resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
 const checks = [];
+
+const backendProductionRoots = backendGraphRoot ? [
+  {
+    path: 'backend-ts/src/main.ts',
+    owner: 'fixture-runtime',
+    purpose: 'fixture service entrypoint',
+    invocation: 'bun run backend-ts/src/main.ts',
+    test: 'backend-ts/src/main.test.ts',
+  },
+] : [
+  {
+    path: 'backend-ts/src/main.ts',
+    owner: 'runtime',
+    purpose: 'service entrypoint',
+    invocation: 'xuanwu serve',
+    test: 'backend-ts/src/mainWiring.test.ts',
+  },
+  {
+    path: 'backend-ts/src/providers/pi/xuanwuPolicyExtension.ts',
+    owner: 'release-package',
+    purpose: 'Pi policy extension staged beside packaged binary',
+    invocation: 'scripts/package-release.sh:stage_pi_policy_extension',
+    test: 'backend-ts/src/providers/pi/provider.test.ts',
+  },
+  {
+    path: 'backend-ts/src/spikes/piSmoke.ts',
+    owner: 'provider-smoke',
+    purpose: 'standalone Pi provider smoke executable',
+    invocation: 'bun run backend-ts/src/spikes/piSmoke.ts',
+    test: 'backend-ts/src/spikes/piSmokeSupport.test.ts',
+  },
+  {
+    path: 'backend-ts/src/usage/benchmark.ts',
+    owner: 'usage-observability',
+    purpose: 'standalone provider usage benchmark executable',
+    invocation: 'bun run backend-ts/src/usage/benchmark.ts',
+    test: 'backend-ts/src/usage/providers.test.ts',
+  },
+];
+
+if (backendGraphRoot) {
+  check('backend source reference graph has zero unclassified orphans', unreachableBackendFiles());
+  printReportAndExit();
+  process.exit(process.exitCode ?? 1);
+}
 
 const retiredPaths = [
   'frontend/src/api/client.js',
@@ -69,12 +119,16 @@ for (const entry of ['/output/', '/dist/', '/build/', 'frontend/dist/', '/data/'
 checks.push({ check: 'gitignore covers repository runtime outputs', findings: failures.filter((item) => item.startsWith('.gitignore ')).length });
 
 const report = { ok: failures.length === 0, checks, failures };
-if (process.argv.includes('--json')) console.log(JSON.stringify(report, null, 2));
-else {
-  for (const item of checks) console.log(`[${item.findings === 0 ? 'ok' : 'fail'}] ${item.check}`);
-  for (const failure of failures) console.error(`  - ${failure}`);
+printReportAndExit(report);
+
+function printReportAndExit(value = { ok: failures.length === 0, checks, failures }) {
+  if (process.argv.includes('--json')) console.log(JSON.stringify(value, null, 2));
+  else {
+    for (const item of value.checks) console.log(`[${item.findings === 0 ? 'ok' : 'fail'}] ${item.check}`);
+    for (const failure of value.failures) console.error(`  - ${failure}`);
+  }
+  process.exitCode = value.ok ? 0 : 1;
 }
-process.exitCode = report.ok ? 0 : 1;
 
 function check(name, findings) {
   checks.push({ check: name, findings: findings.length });
@@ -105,10 +159,10 @@ function unreachableBackendFiles() {
   const backendFiles = sourceFiles(['backend-ts/src'], extensions);
   const scriptFiles = sourceFiles(['scripts'], extensions);
   const candidates = new Set([...backendFiles, ...scriptFiles].map((path) => resolve(path)));
+  const rootMetadataFailures = invalidBackendRootMetadata();
+  check('backend production root metadata is complete', rootMetadataFailures);
   const pending = [
-    resolve(root, 'backend-ts/src/main.ts'),
-    resolve(root, 'backend-ts/src/spikes/piSmoke.ts'),
-    resolve(root, 'backend-ts/src/usage/benchmark.ts'),
+    ...backendProductionRoots.map((entry) => resolve(root, entry.path)),
     ...backendFiles.filter(isTestFile),
     ...scriptFiles,
   ];
@@ -126,6 +180,21 @@ function unreachableBackendFiles() {
     .filter((path) => !isTestFile(path) && !seen.has(resolve(path)))
     .map(repoPath)
     .sort();
+}
+
+function invalidBackendRootMetadata() {
+  const required = ['path', 'owner', 'purpose', 'invocation', 'test'];
+  const findings = [];
+  for (const entry of backendProductionRoots) {
+    for (const field of required) {
+      if (typeof entry[field] !== 'string' || entry[field].trim() === '') {
+        findings.push(`${entry.path || '<missing path>'}: missing ${field}`);
+      }
+    }
+    if (entry.path && !existsSync(join(root, entry.path))) findings.push(`${entry.path}: root does not exist`);
+    if (entry.test && !existsSync(join(root, entry.test))) findings.push(`${entry.path}: test does not exist: ${entry.test}`);
+  }
+  return findings;
 }
 
 function importSpecifiers(source) {

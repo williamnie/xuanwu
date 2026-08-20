@@ -10,9 +10,9 @@ import RecentDeliveriesSection from './command-center/RecentDeliveriesSection.js
 import FirstDeliveryGuide from './command-center/FirstDeliveryGuide.jsx';
 import {
   selectBackendOnline,
-  selectIssues,
   selectProjects,
   selectRefreshData,
+  selectWorkSummary,
   useDataStore,
 } from '../store/dataStore';
 import { 
@@ -28,7 +28,7 @@ export default function Dashboard({
   navigateTo,
 }) {
   const projects = useDataStore(selectProjects);
-  const issues = useDataStore(selectIssues);
+  const workSummary = useDataStore(selectWorkSummary);
   const backendOnline = useDataStore(selectBackendOnline);
   const refreshData = useDataStore(selectRefreshData);
   const [events, updateEvents] = useImmer([]);
@@ -75,9 +75,7 @@ export default function Dashboard({
 
   // 统计计算
   const activeLoopsCount = projects.filter(p => p.loop_status === 'running' || p.auto_run === 1).length; // 简化展示
-  const inProgressIssues = issues.filter(i => i.status === 'in_progress');
-  const todoIssues = issues.filter(i => i.status === 'todo');
-  const doneIssues = issues.filter(i => i.status === 'done');
+  const counts = workSummary.counts;
 
   return (
     <div className="dashboard-page animate-fade-in">
@@ -104,13 +102,13 @@ export default function Dashboard({
             <h4>连接后端 API 失败</h4>
             <p>无法连接到 Runner 后端服务。请确认当前 API 入口已启动且 /api/* 接口可用。</p>
           </div>
-          <button className="btn btn-secondary" onClick={() => refreshData(['projects', 'issues'])}>
+          <button className="btn btn-secondary" onClick={() => refreshData(['projects', 'workSummary'])}>
             重试连接
           </button>
         </div>
       )}
 
-      {issues.length === 0 ? <FirstDeliveryGuide navigateTo={navigateTo} projects={projects} /> : null}
+      {counts.total === 0 ? <FirstDeliveryGuide navigateTo={navigateTo} projects={projects} /> : null}
 
       <RuntimeHealthStrip backendOnline={backendOnline} navigateTo={navigateTo} />
 
@@ -131,7 +129,7 @@ export default function Dashboard({
             <ListTodo size={24} />
           </div>
           <div>
-            <div className="dashboard-stat-value">{todoIssues.length + inProgressIssues.length}</div>
+            <div className="dashboard-stat-value">{counts.todo + counts.in_progress}</div>
             <div className="dashboard-stat-label">队列中 (待处理/运行中)</div>
           </div>
         </div>
@@ -141,7 +139,7 @@ export default function Dashboard({
             <CheckCircle2 size={24} />
           </div>
           <div>
-            <div className="dashboard-stat-value">{doneIssues.length}</div>
+            <div className="dashboard-stat-value">{counts.done}</div>
             <div className="dashboard-stat-label">已自动修复 Issue</div>
           </div>
         </div>

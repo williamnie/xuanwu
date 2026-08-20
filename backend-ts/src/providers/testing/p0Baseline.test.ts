@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
+import { createIssueRun } from "../../db/repositories/issueRuns.ts";
 import { runIssueWithProvider } from "../../runner/providerRuntime.ts";
 import { EXECUTOR_PROVIDER_IDS, type ExecutorProvider, type ProviderRunInput, type ProviderRunResult } from "../types.ts";
 import { CONFORMANCE_FIXTURES, ExecutionOnlyProvider, ResumableSessionProvider } from "./conformanceFixtures.ts";
@@ -24,9 +25,11 @@ describe("P0 baseline: execution-only provider 形态", () => {
     try {
       insertProject(db, "p0-project");
       const issueId = insertIssue(db, "p0-project");
+      const issueRunId = createIssueRun(db, issueId).id;
       const provider = new ExecutionOnlyProvider();
       const result = await runIssueWithProvider(provider, {
         issueId,
+        issueRunId,
         projectId: "p0-project",
         cwd: "/tmp/p0",
         prompt: "run",

@@ -9,7 +9,7 @@ import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
-import { runIssueWithProvider } from "./providerRuntime.ts";
+import { runIssueWithProvider as runIssueWithProviderRuntime } from "./providerRuntime.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
 import { normalizeCodexEvent } from "../providers/codex/events.ts";
 import type { ExecutorProvider, ProviderEvent, ProviderRunInput } from "../providers/types.ts";
@@ -22,6 +22,16 @@ import { claudeManifest } from "../providers/claude/factory.ts";
 import { claudeExecutionPolicyAdapter } from "../providers/claude/executionPolicy.ts";
 
 const tempRoots: string[] = [];
+
+function runIssueWithProvider(
+  provider: Parameters<typeof runIssueWithProviderRuntime>[0],
+  input: Parameters<typeof runIssueWithProviderRuntime>[1]
+) {
+  if (!input.database || input.issueRunId) return runIssueWithProviderRuntime(provider, input);
+  const current = listIssueRuns(input.database, input.issueId).filter((run) => run.ended_at === "").at(-1)
+    ?? createIssueRun(input.database, input.issueId);
+  return runIssueWithProviderRuntime(provider, { ...input, issueRunId: current.id });
+}
 
 class FakeExecutionProvider implements ExecutorProvider {
   readonly id = "fake-execution-only" as const;

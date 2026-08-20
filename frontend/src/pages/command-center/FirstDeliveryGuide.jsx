@@ -113,7 +113,7 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
         provider,
         sandbox: 'workspace-write',
       });
-      await refreshData(['projects', 'issues']);
+      await refreshData(['projects', 'workSummary']);
       setSelectedProjectID(id);
       message.success('项目已添加，并开启 Auto Run');
       await load();
@@ -139,7 +139,7 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
       if (!existing) await workApi.createWork(sampleWorkPayload(project.id));
       await projectsApi.startProjectLoop(project.id);
       message.success(existing ? '已恢复现有示例 Work 并启动 Loop' : '只读示例 Work 已创建并启动');
-      await refreshData(['projects', 'issues']);
+      await refreshData(['projects', 'workSummary']);
       await load();
     } catch (createError) {
       setCreationNeedsRefresh(true);

@@ -5,19 +5,22 @@ import { recordIssueEvent } from "../../db/repositories/issueEvents.ts";
 export const ISSUE_RUN_GIT_WORKSPACE_BASELINE_EVENT = "issue.run_git_workspace_baseline.v1";
 export const ISSUE_RUN_GIT_WORKSPACE_BASELINE_CONTRACT = "xw.issue-run-git-workspace-baseline.v1";
 
-type WorkspaceEntry = {
+export type WorkspaceEntry = {
   content_oid: string;
   path: string;
   status: string;
 };
 
-type WorkspaceBaseline = {
+export type CapturedGitWorkspaceBaseline = {
   base_revision: string;
   captured_at: string;
-  contract: typeof ISSUE_RUN_GIT_WORKSPACE_BASELINE_CONTRACT;
   entries: WorkspaceEntry[];
-  run_id: string;
   snapshot_sha256: string;
+};
+
+type WorkspaceBaseline = CapturedGitWorkspaceBaseline & {
+  contract: typeof ISSUE_RUN_GIT_WORKSPACE_BASELINE_CONTRACT;
+  run_id: string;
 };
 
 export type IssueRunGitDeliveryScope = {
@@ -37,6 +40,32 @@ export function recordIssueRunGitWorkspaceBaseline(
   }
 ): WorkspaceBaseline {
   const baseline = workspaceBaseline(input);
+  recordIssueEvent(db, issueID, ISSUE_RUN_GIT_WORKSPACE_BASELINE_EVENT, baseline);
+  return baseline;
+}
+
+export function recordCapturedIssueRunGitWorkspaceBaseline(
+  db: RunnerDatabase,
+  issueID: number,
+  runID: string,
+  input: CapturedGitWorkspaceBaseline
+): WorkspaceBaseline {
+  const entries = input.entries.map((entry) => ({
+    content_oid: requiredText(entry.content_oid, "workspace content oid"),
+    path: normalizedPath(entry.path),
+    status: workspaceStatus(entry.status)
+  })).sort(compareWorkspaceEntry);
+  const snapshotSha256 = createHash("sha256").update(`${JSON.stringify(entries)}\n`).digest("hex");
+  if (snapshotSha256 !== input.snapshot_sha256) throw new Error("workspace snapshot fingerprint is invalid");
+  const baseline = {
+    base_revision: input.base_revision.trim().toLowerCase(),
+    captured_at: canonicalTimestamp(input.captured_at),
+    contract: ISSUE_RUN_GIT_WORKSPACE_BASELINE_CONTRACT,
+    entries,
+    run_id: requiredText(runID, "Run id"),
+    snapshot_sha256: snapshotSha256
+  };
+  if (!gitObjectID(baseline.base_revision)) throw new Error("Run Git base revision must be a full object id");
   recordIssueEvent(db, issueID, ISSUE_RUN_GIT_WORKSPACE_BASELINE_EVENT, baseline);
   return baseline;
 }

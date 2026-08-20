@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getProject, ProjectNotFoundError } from "../db/repositories/projects.ts";
 import { getAgentProfile } from "../db/repositories/agentProfiles.ts";
@@ -30,12 +31,18 @@ import {
 } from "../domain/readiness/contracts.ts";
 import { startProjectLoop } from "../runner/projectLoopManager.ts";
 import { json } from "./errors.ts";
+import {
+  readWorkSummary,
+  WORK_SUMMARY_CONTRACT,
+  WorkSummaryCapacityError
+} from "../db/repositories/workSummary.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
 
 const WORK_HTTP_POLICY_REF = "xuanwu-work-http-authenticated-write-v1";
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
+const MAX_CURSOR_BYTES = 2_048;
 
 export const WORK_WRITE_AUTHORITY = "issues-via-work-adapter";
 
@@ -46,6 +53,7 @@ type PageInput = {
 
 export function registerWorkRoutes(router: Router, context: ReadApiContext): void {
   const readDatabase = context.readDatabase ?? context.database;
+  router.get("/api/works/summary", (request) => workResponse(() => summaryResponse(readDatabase, request)));
   router.get("/api/works", (request) => workResponse(() => listResponse(readDatabase, request)));
   router.get("/api/works/board", (request) => workResponse(() => boardResponse(readDatabase, request)));
   router.get("/api/works/:id", (request) => workResponse(() => detailResponse(readDatabase, request)));
@@ -183,8 +191,10 @@ function boardResponse(db: RunnerDatabase, request: Request): Record<string, unk
     "sort"
   );
   const order = enumParam(params.get("order"), ["asc", "desc"] as const, "desc", "order");
+  const requestedStatuses = enumParams(params, "status", WORK_STATUSES);
+  const statuses = requestedStatuses.length > 0 ? requestedStatuses : [...WORK_STATUSES];
   const page = { page: 1, page_size: pageSize };
-  const lanes = Object.fromEntries(WORK_STATUSES.map((status) => {
+  const lanes = Object.fromEntries(statuses.map((status) => {
     const filter = {
       limit: pageSize,
       offset: 0,
@@ -204,6 +214,29 @@ function boardResponse(db: RunnerDatabase, request: Request): Record<string, unk
   };
 }
 
+function summaryResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
+  const params = new URL(request.url).searchParams;
+  const projectID = optionalString(params.get("project_id"));
+  if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
+  const requestedIncludeProjects = booleanParam(params.get("include_projects"), "include_projects", !projectID);
+  if (projectID && requestedIncludeProjects) {
+    throw workError(400, "invalid_request", "include_projects=true is invalid with project_id");
+  }
+  try {
+    return {
+      contract: WORK_SUMMARY_CONTRACT,
+      generated_at: new Date().toISOString(),
+      read_authority: WORK_WRITE_AUTHORITY,
+      ...readWorkSummary(db, { includeProjects: requestedIncludeProjects, projectId: projectID })
+    };
+  } catch (error) {
+    if (error instanceof WorkSummaryCapacityError) {
+      throw workError(409, "project_summary_capacity_exceeded", error.message);
+    }
+    throw error;
+  }
+}
+
 function listResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
   const params = new URL(request.url).searchParams;
   const projectID = optionalString(params.get("project_id"));
@@ -218,21 +251,45 @@ function listResponse(db: RunnerDatabase, request: Request): Record<string, unkn
     "sort"
   );
   const order = enumParam(params.get("order"), ["asc", "desc"] as const, "desc", "order");
+  const cursorText = optionalString(params.get("cursor"));
+  if (cursorText && (sort !== "updated_at" || order !== "desc")) {
+    throw workError(400, "cursor_sort_unsupported", "cursor only supports updated_at desc");
+  }
   const page = pageInput(params);
+  const fingerprint = workFilterFingerprint({ projectID, query, statuses, types });
+  const cursor = cursorText ? decodeWorkCursor(cursorText, fingerprint) : undefined;
   const typeMatches = types.length === 0 || types.includes("engineering_task");
   const filter = {
-    limit: page.page_size,
-    offset: (page.page - 1) * page.page_size,
+    cursorIssueId: cursor?.issue_id,
+    cursorUpdatedAt: cursor?.updated_at,
+    limit: cursor ? page.page_size + 1 : page.page_size,
+    offset: cursor ? 0 : (page.page - 1) * page.page_size,
     projectId: projectID,
     query,
     sort,
     sortOrder: order,
     statuses
   };
-  const total = typeMatches ? countIssueBackedWorks(db, filter) : 0;
-  const items = typeMatches ? listIssueBackedWorks(db, filter) : [];
+  const total = typeMatches ? countIssueBackedWorks(db, {
+    ...filter,
+    cursorIssueId: undefined,
+    cursorUpdatedAt: undefined,
+    limit: undefined,
+    offset: undefined
+  }) : 0;
+  const loaded = typeMatches ? listIssueBackedWorks(db, filter) : [];
+  const items = cursor ? loaded.slice(0, page.page_size) : loaded;
+  const hasMore = cursor ? loaded.length > page.page_size : page.page * page.page_size < total;
+  const last = items.at(-1);
   return pagedItemsResponse(items, total, page, {
     filters: { project_id: projectID, q: query, status: statuses, type: types },
+    has_more: hasMore,
+    next_cursor: hasMore && last ? encodeWorkCursor({
+      filter_fingerprint: fingerprint,
+      issue_id: workIDToIssueID(last.id),
+      updated_at: last.updated_at,
+      version: 1
+    }) : "",
     sort: { field: sort, order }
   });
 }
@@ -441,6 +498,63 @@ function pageInput(params: URLSearchParams): PageInput {
     page: positiveIntegerParam(params.get("page"), "page", 1),
     page_size: positiveIntegerParam(params.get("page_size"), "page_size", DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
   };
+}
+
+type WorkCursorV1 = {
+  filter_fingerprint: string;
+  issue_id: number;
+  updated_at: string;
+  version: 1;
+};
+
+function workFilterFingerprint(input: {
+  projectID: string;
+  query: string;
+  statuses: string[];
+  types: string[];
+}): string {
+  return createHash("sha256").update(JSON.stringify({
+    project_id: input.projectID,
+    q: input.query,
+    status: [...input.statuses].sort(),
+    type: [...input.types].sort()
+  })).digest("hex");
+}
+
+function encodeWorkCursor(cursor: WorkCursorV1): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodeWorkCursor(value: string, fingerprint: string): WorkCursorV1 {
+  if (value.length > MAX_CURSOR_BYTES || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw workError(400, "invalid_cursor", "cursor is invalid");
+  }
+  try {
+    const decoded = Buffer.from(value, "base64url").toString("utf8");
+    if (Buffer.from(decoded, "utf8").toString("base64url") !== value) throw new Error("non-canonical cursor");
+    const cursor = JSON.parse(decoded) as Record<string, unknown>;
+    const keys = Object.keys(cursor).sort();
+    if (JSON.stringify(keys) !== JSON.stringify(["filter_fingerprint", "issue_id", "updated_at", "version"])) {
+      throw new Error("cursor keys are invalid");
+    }
+    if (cursor.version !== 1 || typeof cursor.filter_fingerprint !== "string" || cursor.filter_fingerprint !== fingerprint) {
+      throw new Error("cursor scope is invalid");
+    }
+    if (!Number.isSafeInteger(cursor.issue_id) || Number(cursor.issue_id) <= 0) throw new Error("cursor issue id is invalid");
+    if (typeof cursor.updated_at !== "string" || cursor.updated_at.length === 0 || cursor.updated_at.length > 64
+      || !Number.isFinite(Date.parse(cursor.updated_at))) throw new Error("cursor timestamp is invalid");
+    return cursor as unknown as WorkCursorV1;
+  } catch {
+    throw workError(400, "invalid_cursor", "cursor is invalid or does not match the current filters");
+  }
+}
+
+function booleanParam(value: string | null, field: string, fallback: boolean): boolean {
+  const raw = optionalString(value).toLowerCase();
+  if (raw === "") return fallback;
+  if (raw === "true" || raw === "1") return true;
+  if (raw === "false" || raw === "0") return false;
+  throw workError(400, "invalid_request", `${field} must be true or false`);
 }
 
 function positiveIntegerParam(value: string | null, field: string, fallback: number, maximum?: number): number {

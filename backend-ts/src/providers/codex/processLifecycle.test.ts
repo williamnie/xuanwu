@@ -98,6 +98,7 @@ describe("Codex process group lifecycle", () => {
         return rows;
       },
       now: () => new Date(++clock * 1_000),
+      minScanIntervalMs: 0,
       runnerPid: 50
     });
     await lifecycle.register(process);
@@ -130,6 +131,7 @@ describe("Codex process group lifecycle", () => {
         }
         return rows;
       },
+      minScanIntervalMs: 0,
       runnerPid: 50
     });
     await lifecycle.register(process);
@@ -169,6 +171,78 @@ describe("Codex process group lifecycle", () => {
     expect(JSON.parse(await readFile(file, "utf8"))).toMatchObject({ root_pid: 300 });
     expect(oldKills).toBe(1);
     expect(signals).toEqual([]);
+  });
+
+  test("does not rewrite ownership when only RSS changes", async () => {
+    const file = await ownershipFile();
+    let rows = processRows();
+    const process = { pid: 100, exited: Promise.resolve(0), kill: () => {} };
+    const lifecycle = new CodexProcessGroupLifecycle(file, ["codex", "app-server"], {
+      inspect: async () => ({ ok: true as const, rows }),
+      minScanIntervalMs: 0,
+      runnerPid: 50
+    });
+    await lifecycle.register(process);
+    const persisted = await readFile(file, "utf8");
+    rows = rows.map((row) => ({ ...row, rss_bytes: row.rss_bytes + 1_024 }));
+
+    await lifecycle.refresh(process, { mode: "coalesced", reason: "rss_only" });
+
+    expect(await readFile(file, "utf8")).toBe(persisted);
+    expect(lifecycle.snapshot()?.processes[0]?.rss_bytes).toBe(17_408);
+    expect(lifecycle.metrics()).toMatchObject({
+      ownership_persisted_total: 1,
+      scan_executed_total: 2,
+      scan_unchanged_total: 1
+    });
+  });
+
+  test("throttles a sequential burst to one trailing scan", async () => {
+    const file = await ownershipFile();
+    let inspections = 0;
+    const process = { pid: 100, exited: Promise.resolve(0), kill: () => {} };
+    const lifecycle = new CodexProcessGroupLifecycle(file, ["codex", "app-server"], {
+      inspect: () => { inspections += 1; return processRows(); },
+      minScanIntervalMs: 10,
+      runnerPid: 50
+    });
+    await lifecycle.register(process);
+
+    for (let index = 0; index < 100; index += 1) void lifecycle.refresh(process, {
+      mode: "coalesced",
+      reason: "structural_event"
+    });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(inspections).toBe(2);
+    expect(lifecycle.metrics().scan_throttled_total).toBeGreaterThan(0);
+  });
+
+  test("falls back to the controlled root handle when a force scan fails", async () => {
+    const file = await ownershipFile();
+    const kills: string[] = [];
+    const diagnostics: string[] = [];
+    let fail = false;
+    let exit!: (code: number) => void;
+    const process = {
+      pid: 100,
+      exited: new Promise<number>((resolve) => { exit = resolve; }),
+      kill: (signal = "SIGTERM") => { kills.push(String(signal)); exit(0); }
+    };
+    const lifecycle = new CodexProcessGroupLifecycle(file, ["codex", "app-server"], {
+      inspect: () => fail ? { ok: false as const, reason_code: "exit_nonzero" as const } : processRows(),
+      onDiagnostic: ({ reason_code }) => diagnostics.push(reason_code),
+      runnerPid: 50,
+      stopGraceMs: 1
+    });
+    await lifecycle.register(process);
+    fail = true;
+
+    await lifecycle.stop(process);
+
+    expect(kills).toEqual(["SIGTERM"]);
+    expect(diagnostics).toEqual(["exit_nonzero"]);
+    await expect(readFile(file, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
 

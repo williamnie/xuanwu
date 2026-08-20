@@ -1,6 +1,8 @@
 import type { RunnerDatabase } from "../database.ts";
 
 export type IssueFilter = {
+  cursorIssueId?: number;
+  cursorUpdatedAt?: string;
   limit?: number;
   offset?: number;
   projectId?: string;
@@ -189,6 +191,15 @@ function buildIssueWhere(filter: IssueFilter): { args: Array<number | string>; w
     args.push(query);
   }
   addFilter(conditions, args, "source_session_id = ?", sourceSessionId);
+  if (filter.cursorUpdatedAt !== undefined || filter.cursorIssueId !== undefined) {
+    const cursorUpdatedAt = cleanOptionalString(filter.cursorUpdatedAt);
+    const cursorIssueID = filter.cursorIssueId;
+    if (!cursorUpdatedAt || !Number.isSafeInteger(cursorIssueID) || Number(cursorIssueID) <= 0) {
+      throw new Error("issue list cursor is invalid");
+    }
+    conditions.push("(updated_at < ? or (updated_at = ? and id < ?))");
+    args.push(cursorUpdatedAt, cursorUpdatedAt, Number(cursorIssueID));
+  }
   return {
     args,
     where: conditions.length > 0 ? ` where ${conditions.join(" and ")}` : ""
@@ -203,10 +214,10 @@ function addFilter(conditions: string[], args: Array<number | string>, condition
 
 function issueOrder(filter: IssueFilter): string {
   const direction = filter.sortOrder === "asc" ? "asc" : "desc";
-  if (filter.sort === "created_at") return ` order by created_at ${direction}, id asc`;
-  if (filter.sort === "updated_at") return ` order by updated_at ${direction}, id asc`;
-  if (filter.sort === "title") return ` order by title collate nocase ${direction}, id asc`;
-  if (filter.sort === "status") return ` order by status ${direction}, id asc`;
+  if (filter.sort === "created_at") return ` order by created_at ${direction}, id ${direction}`;
+  if (filter.sort === "updated_at") return ` order by updated_at ${direction}, id ${direction}`;
+  if (filter.sort === "title") return ` order by title collate nocase ${direction}, id ${direction}`;
+  if (filter.sort === "status") return ` order by status ${direction}, id ${direction}`;
   return " order by priority desc, created_at asc";
 }
 

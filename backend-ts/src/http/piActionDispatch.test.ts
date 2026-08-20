@@ -57,6 +57,7 @@ describe("PI action dispatcher supervisor actions", () => {
       expect(getIssue(db, 411)).toMatchObject({ status: "todo" });
       await dispatchPiAction({ database: db, providers: { codex: provider } }, autoAction);
 
+      await waitUntil(() => provider.inputs.length > 0);
       expect(provider.inputs[0]).toMatchObject({ issueId: 410, projectId: "auto-demo" });
       expect(getIssue(db, 410)).toMatchObject({ status: "in_progress" });
       await waitUntil(() => !isProjectLoopActive("auto-demo"));
