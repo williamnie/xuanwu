@@ -143,7 +143,7 @@
 - [ADR-XW-0083：legacy/compat 引用审计与通知单写路径收敛](xuanwu/0083-legacy-compat-notification-cleanup.md)
 - [ADR-XW-0084：Issue event 写预算与有界 artifact](xuanwu/0084-issue-event-write-budgets.md)
 - [ADR-XW-0086：Project 注册即自动接管](xuanwu/0086-project-enrollment-automatic-takeover.md)
-- [ADR-XW-0092：IM 上下文预算、增量投影与 PI Session 换代（Accepted v7，Phase 0–3 已本地实现、未部署）](xuanwu/0092-im-context-budget-and-session-rollover.md)
+- [ADR-XW-0092：IM 上下文预算、增量投影与 PI Session 换代（Accepted v8，Phase 0–3 已部署并完成 live acceptance）](xuanwu/0092-im-context-budget-and-session-rollover.md)
 
 ## 3. 历史归档与 superseded 映射
 

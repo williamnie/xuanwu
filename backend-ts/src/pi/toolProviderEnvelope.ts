@@ -8,6 +8,23 @@ export type ToolResultStatus = (typeof TOOL_RESULT_STATUSES)[number];
 export type ToolJsonSchema = Record<string, unknown>;
 export type ToolEnvelopeMetadata = Record<string, unknown>;
 
+export const PI_RUNTIME_TOOL_PROFILES = [
+  "chat",
+  "review",
+  "acceptance",
+  "recovery",
+  "manager_cycle"
+] as const;
+
+export type PiRuntimeToolProfile = (typeof PI_RUNTIME_TOOL_PROFILES)[number];
+
+export type PiRuntimeToolPolicy = {
+  aliases: string[];
+  family: string;
+  profiles: PiRuntimeToolProfile[];
+  risk_level: "low" | "medium" | "high";
+};
+
 export type ToolAuditMetadata = {
   redact: string[];
   actor?: string;
@@ -40,6 +57,21 @@ export type AssistantTool = {
   audit: ToolAuditMetadata;
   metadata?: ToolEnvelopeMetadata;
 };
+
+export function assistantToolRuntimePolicy(tool: Pick<AssistantTool, "metadata" | "permission">): PiRuntimeToolPolicy {
+  const metadata = isRecord(tool.metadata?.xuanwu_runtime) ? tool.metadata.xuanwu_runtime : {};
+  const profiles = Array.isArray(metadata.profiles)
+    ? metadata.profiles.filter((value): value is PiRuntimeToolProfile => (
+      typeof value === "string" && (PI_RUNTIME_TOOL_PROFILES as readonly string[]).includes(value)
+    ))
+    : [];
+  return {
+    aliases: stringList(metadata.aliases),
+    family: cleanString(metadata.family) || "uncategorized",
+    profiles: [...new Set(profiles)],
+    risk_level: riskLevel(metadata.risk_level, tool.permission)
+  };
+}
 
 export type ToolInvocation = {
   id: string;
@@ -113,6 +145,9 @@ export function validateAssistantTool(tool: unknown): ToolEnvelopeValidationIssu
   if (!isToolPermission(tool.permission)) issues.push({ path: "permission", message: "permission must be read, write, or dangerous" });
   if (tool.timeout_ms !== undefined) requirePositiveInteger(issues, tool.timeout_ms, "timeout_ms");
   issues.push(...validateAuditMetadata(tool.audit, "audit"));
+  if (isRecord(tool.metadata) && tool.metadata.xuanwu_runtime !== undefined) {
+    issues.push(...validateRuntimeToolPolicy(tool.metadata.xuanwu_runtime));
+  }
   return issues;
 }
 
@@ -147,6 +182,25 @@ function validateAuditMetadata(value: unknown, path: string): ToolEnvelopeValida
   return [];
 }
 
+function validateRuntimeToolPolicy(value: unknown): ToolEnvelopeValidationIssue[] {
+  const path = "metadata.xuanwu_runtime";
+  if (!isRecord(value)) return [{ path, message: "runtime tool policy must be an object" }];
+  const issues: ToolEnvelopeValidationIssue[] = [];
+  requireNonEmptyString(issues, value.family, `${path}.family`);
+  if (!Array.isArray(value.aliases) || value.aliases.some((alias) => typeof alias !== "string" || alias.trim() === "")) {
+    issues.push({ path: `${path}.aliases`, message: "aliases must be an array of non-empty strings" });
+  }
+  if (!Array.isArray(value.profiles) || value.profiles.some((profile) => (
+    typeof profile !== "string" || !(PI_RUNTIME_TOOL_PROFILES as readonly string[]).includes(profile)
+  ))) {
+    issues.push({ path: `${path}.profiles`, message: "profiles must contain only supported runtime profiles" });
+  }
+  if (value.risk_level !== "low" && value.risk_level !== "medium" && value.risk_level !== "high") {
+    issues.push({ path: `${path}.risk_level`, message: "risk_level must be low, medium, or high" });
+  }
+  return issues;
+}
+
 function validateResultError(value: unknown, path: string): ToolEnvelopeValidationIssue[] {
   if (!isRecord(value)) return [{ path, message: "error must be an object" }];
   const issues: ToolEnvelopeValidationIssue[] = [];
@@ -169,4 +223,20 @@ function requireNonNegativeInteger(issues: ToolEnvelopeValidationIssue[], value:
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(cleanString).filter(Boolean))];
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function riskLevel(value: unknown, permission: ToolPermission): PiRuntimeToolPolicy["risk_level"] {
+  if (value === "low" || value === "medium" || value === "high") return value;
+  if (permission === "read") return "low";
+  if (permission === "dangerous") return "high";
+  return "medium";
 }

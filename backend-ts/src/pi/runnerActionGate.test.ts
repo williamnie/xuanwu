@@ -294,7 +294,7 @@ describe("PI runner action gate", () => {
       }).createIssueCompletionWatch({
         issue_ids: [issueID],
         source_event_id: "event-1",
-        target_channel: "feishu",
+        target_channel: "feishu_runner_chat",
         target_chat_id: "oc_group"
       }) as {
         result?: { watch_id?: string };
@@ -317,6 +317,21 @@ describe("PI runner action gate", () => {
         items: [expect.objectContaining({ issue_id: issueID })]
       });
 
+      const trustedTarget = createPiRunnerActions(fixture.db, {
+        notificationTarget: { connectorID: "telegram", conversationID: "tg_trusted" },
+        source: "telegram_runner_chat"
+      }).createIssueCompletionWatch({
+        issue_ids: [issueID],
+        source_event_id: "event-2",
+        target_channel: "feishu_runner_chat",
+        target_chat_id: "oc_untrusted"
+      }) as { result?: { watch_id?: string }; status: string };
+      expect(getPiIssueCompletionWatch(fixture.db, trustedTarget.result?.watch_id ?? "")).toMatchObject({
+        status: "active",
+        target_channel: "telegram",
+        target_chat_id: "tg_trusted"
+      });
+
       const readOnly = createPiRunnerActions(fixture.db, {
         authorization: {
           allowed_actions: ["issue.enqueue"],
@@ -327,7 +342,13 @@ describe("PI runner action gate", () => {
         project: fixture.project
       }).listIssueCompletionWatches({ project_id: fixture.project.id }) as { status?: string; items?: unknown[] };
 
-      expect(readOnly).toMatchObject({ count: 1, items: [expect.objectContaining({ watch_id: watchID })] });
+      expect(readOnly).toMatchObject({
+        count: 2,
+        items: expect.arrayContaining([
+          expect.objectContaining({ watch_id: watchID }),
+          expect.objectContaining({ target_channel: "telegram" })
+        ])
+      });
       expect(readOnly.status).toBeUndefined();
 
       const cancelled = createPiRunnerActions(fixture.db, {

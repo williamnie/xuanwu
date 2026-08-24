@@ -60,6 +60,7 @@ const optionalString = Type.Optional(Type.String());
 const requiredText = Type.String({ minLength: 1, pattern: "\\S" });
 const positiveID = Type.Integer({ minimum: 1 });
 const positiveNumber = Type.Integer({ minimum: 1 });
+const issueQueryScope = Type.Optional(Type.Union([Type.Literal("global"), Type.Literal("project")]));
 const skillIntentList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
 const mcpCapabilityList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
 const textList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
@@ -241,12 +242,12 @@ function workflowParams() {
 
 function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
   return [
-    actionTool("issue_list", "Issue List", "List runner issues through the action layer.",
-      Type.Object({ limit: Type.Optional(positiveNumber), project_id: optionalString, status: optionalString }, objectOptions),
+    actionTool("issue_list", "Issue List", "List runner issues through the action layer. Use scope=global for runner-wide questions and scope=project with project_id for one Project.",
+      Type.Object({ limit: Type.Optional(positiveNumber), project_id: optionalString, scope: issueQueryScope, status: optionalString }, objectOptions),
       actions.listIssues),
     actionTool("issue_status_summary", "Issue Status Summary",
-      "Return compact issue counts by status. Use this for questions like how many issues are unfinished.",
-      Type.Object({ project_id: optionalString, status: optionalString }, objectOptions), actions.issueStatusSummary),
+      "Return compact issue counts by status. For unqualified questions like how many issues are unfinished, use scope=global. Use scope=project with project_id only when the current user turn explicitly names that Project.",
+      Type.Object({ project_id: optionalString, scope: issueQueryScope, status: optionalString }, objectOptions), actions.issueStatusSummary),
     actionTool("issue_execution_status", "Issue Execution Status",
       "Return compact Run and PI acceptance status for one issue without raw logs. Check completion.retry_recommended before proposing retry.",
       Type.Object({ id: positiveID }, objectOptions), actions.issueExecutionStatus),

@@ -6,7 +6,12 @@ import { redactSensitiveText } from "../util/redact.ts";
 export const DEFAULT_ISSUE_LIST_LIMIT = 50;
 export const MAX_ISSUE_LIST_LIMIT = 50;
 
-type IssueScope = { projectId?: string; status?: string };
+type IssueScope = {
+  projectId?: string;
+  scope?: "global" | "project";
+  scopeSource?: string;
+  status?: string;
+};
 type IssueListInput = IssueScope & { limit?: number };
 type IssueStatusInput = IssueScope;
 type IssueSummary = {
@@ -20,7 +25,11 @@ type IssueSummary = {
   updated_at: string;
 };
 
-const TERMINAL_STATUSES = new Set(["done", "cancelled"]);
+// A failed issue is terminal for notification watches, but it is still
+// operationally unfinished: a user decision or retry is required before the
+// work can be considered completed. Keep these two projections distinct.
+const ISSUE_TERMINAL_STATUSES = new Set(["done", "failed", "cancelled"]);
+const ISSUE_COMPLETED_STATUSES = new Set(["done", "cancelled"]);
 const RECENT_EVENT_LIMIT = 5;
 const PREVIEW_CHARS = 320;
 const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
@@ -33,6 +42,7 @@ export function createCompactIssueList(db: RunnerDatabase, input: IssueListInput
     included_fields: ["id", "project_id", "title", "status", "priority", "service_tier", "comment_count", "updated_at"],
     items: issues.slice(0, limit).map(issueSummary),
     limit,
+    scope: issueScope(input),
     source: "issue_list",
     status_counts: countStatuses(issues),
     total: issues.length,
@@ -47,12 +57,23 @@ export function createIssueStatusSummary(db: RunnerDatabase, input: IssueStatusI
   return {
     matching_total: matching.length,
     project_id: cleanString(input.projectId),
+    scope: issueScope(input),
     source: "issue_status_summary",
     status_counts: countStatuses(scoped),
     status_filter: status,
     total: scoped.length,
+    terminal_status_counts: countStatuses(scoped.filter((issue) => ISSUE_TERMINAL_STATUSES.has(issue.status))),
     unfinished_status_counts: countStatuses(scoped.filter(isUnfinishedIssue)),
     unfinished_total: scoped.filter(isUnfinishedIssue).length
+  };
+}
+
+function issueScope(input: IssueScope) {
+  const projectID = cleanString(input.projectId);
+  return {
+    kind: input.scope === "project" || projectID !== "" ? "project" : "global",
+    project_id: projectID,
+    source: cleanString(input.scopeSource) || "tool_input"
   };
 }
 
@@ -173,7 +194,7 @@ function countStatuses(items: Array<{ status: string }>): Record<string, number>
 }
 
 function isUnfinishedIssue(issue: Issue): boolean {
-  return !TERMINAL_STATUSES.has(issue.status);
+  return !ISSUE_COMPLETED_STATUSES.has(issue.status);
 }
 
 function issueListLimit(value: unknown): number {

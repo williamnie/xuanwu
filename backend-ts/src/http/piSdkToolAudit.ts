@@ -6,7 +6,8 @@ import type { EventBus } from "../events/bus.ts";
 import { gatePiActionEnvelope, type PiGatePolicy } from "../pi/actionGate.ts";
 import { normalizePiActionEnvelope } from "../pi/actionEnvelope.ts";
 import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
-import { recordToolCallAuditEvent, type ToolCallAuditContext } from "../pi/toolCallAudit.ts";
+import { recordToolCallAuditEvent } from "../pi/toolCallAudit.ts";
+import type { PiRuntimeToolAuditTarget } from "../pi/piRuntimeTools.ts";
 
 type SdkAuditContext = {
   authorization?: PiGatePolicy;
@@ -18,6 +19,7 @@ type SdkAuditContext = {
   projectID?: string;
   readOnlyToolNames?: string[];
   source?: string;
+  toolAuditTargets?: Record<string, PiRuntimeToolAuditTarget>;
 };
 
 const READ_ONLY_TOOL_NAMES = new Set(["read", "grep", "find", "ls"]);
@@ -96,7 +98,7 @@ function startToolAudit(active: Map<string, ActiveToolAudit>, hook: BeforeToolCa
 
 function finishToolAudit(
   db: RunnerDatabase,
-  context: ToolCallAuditContext,
+  context: SdkAuditContext,
   active: Map<string, ActiveToolAudit>,
   toolCallID: string,
   outcome: { error?: { message: string; type: string }; output?: unknown; status: "denied" | "failed" | "succeeded" }
@@ -104,12 +106,15 @@ function finishToolAudit(
   const audit = active.get(toolCallID);
   if (!audit) return;
   active.delete(toolCallID);
+  const target = context.toolAuditTargets?.[audit.toolName];
   try {
     recordToolCallAuditEvent(db, context, {
       args: audit.args,
       durationMs: Date.now() - audit.startedAt,
       error: outcome.error,
       output: outcome.output,
+      permission: target?.permission === "unknown" ? undefined : target?.permission,
+      providerID: target?.providerID,
       status: outcome.status,
       toolCallID,
       toolName: audit.toolName

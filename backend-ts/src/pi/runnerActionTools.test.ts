@@ -50,9 +50,11 @@ describe("PI runner action tools", () => {
     const watchCancel = toolByName(tools, "issue_completion_watch_cancel");
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([...PI_RUNNER_ACTION_TOOL_NAMES].sort());
-    expect(validateArgs(issueList, { limit: 3, status: "todo" })).toEqual({ limit: 3, status: "todo" });
+    expect(validateArgs(issueList, { limit: 3, scope: "global", status: "todo" }))
+      .toEqual({ limit: 3, scope: "global", status: "todo" });
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
-    expect(validateArgs(issueStatus, { status: "todo" })).toEqual({ status: "todo" });
+    expect(validateArgs(issueStatus, { project_id: "demo", scope: "project", status: "todo" }))
+      .toEqual({ project_id: "demo", scope: "project", status: "todo" });
     expect(validateArgs(issueExecution, { id: 1 })).toEqual({ id: 1 });
     expect(validateArgs(issueCancel, { issue_ids: [812, 813, 814], rationale: "不再做" }))
       .toEqual({ issue_ids: [812, 813, 814], rationale: "不再做" });
@@ -561,6 +563,48 @@ describe("PI runner action tools", () => {
       const limited = actions.listIssues({ limit: 1 }) as { items: unknown[]; limit: number; truncated: boolean };
       expect(limited).toMatchObject({ limit: 1, truncated: true });
       expect(limited.items).toHaveLength(1);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("uses an explicit global or project scope for issue counts", async () => {
+    const fixture = await openFixture();
+    try {
+      fixture.db.sqlite.run(
+        `insert into projects (id, name, cwd, sort_order, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?)`,
+        ["other", "Other", "/tmp/other", 2, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+      );
+      insertIssue(fixture.db, { projectID: fixture.project.id, status: "todo", title: "Demo todo" });
+      insertIssue(fixture.db, { projectID: fixture.project.id, status: "done", title: "Demo done" });
+      insertIssue(fixture.db, { projectID: "other", status: "triage", title: "Other triage" });
+      insertIssue(fixture.db, { projectID: "other", status: "failed", title: "Other failed" });
+      const actions = createPiRunnerActions(fixture.db, {
+        issueQueryDefaultScope: "global",
+        project: fixture.project
+      });
+
+      expect(actions.issueStatusSummary({})).toMatchObject({
+        scope: { kind: "global", project_id: "", source: "runtime_default" },
+        status_counts: { done: 1, failed: 1, todo: 1, triage: 1 },
+        terminal_status_counts: { done: 1, failed: 1 },
+        total: 4,
+        unfinished_status_counts: { failed: 1, todo: 1, triage: 1 },
+        unfinished_total: 3
+      });
+      expect(actions.issueStatusSummary({ project_id: "demo", scope: "project" })).toMatchObject({
+        scope: { kind: "project", project_id: "demo", source: "explicit_scope" },
+        status_counts: { done: 1, todo: 1 },
+        total: 2,
+        unfinished_total: 1
+      });
+      expect(actions.listIssues({ scope: "global", status: "triage" })).toMatchObject({
+        scope: { kind: "global", project_id: "", source: "explicit_scope" },
+        total: 1
+      });
+      expect(() => actions.issueStatusSummary({ project_id: "demo", scope: "global" }))
+        .toThrow("project_id must be empty when scope is global");
     } finally {
       await fixture.close();
     }

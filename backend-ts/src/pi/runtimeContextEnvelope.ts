@@ -30,11 +30,7 @@ export function buildPiRuntimeContextEnvelope(db: RunnerDatabase, input: Runtime
       source_turn_id: cleanString(input.sourceTurn?.id)
     },
     target: {
-      binding: input.issueID
-        ? "explicit_issue"
-        : project?.id
-          ? "explicit_project"
-          : "conversation_only",
+      binding: runtimeTargetBinding(input, Boolean(project?.id)),
       issue_id: positiveInteger(input.issueID),
       project_id: cleanString(project?.id)
     },
@@ -60,6 +56,15 @@ export function buildPiRuntimeContextEnvelope(db: RunnerDatabase, input: Runtime
       "the explicit issue target for this invocation must never be replaced by unrelated conversation history"
     ]
   };
+}
+
+function runtimeTargetBinding(input: RuntimeSessionInput, hasProject: boolean): string {
+  const binding = input.supervisorContext?.provenance.target_binding;
+  const hasIssue = positiveInteger(input.issueID) > 0 || (input.supervisorContext?.target.issue_ids.length ?? 0) > 0;
+  if (binding === "one_shot") return hasIssue ? "one_shot_issue" : "one_shot_project";
+  if (binding === "conversation") return hasIssue ? "conversation_issue" : "conversation_project";
+  if (binding === "explicit" || positiveInteger(input.issueID) > 0) return hasIssue ? "explicit_issue" : "explicit_project";
+  return hasProject ? "runtime_project" : "conversation_only";
 }
 
 export function piRuntimeContextEnvelopePrompt(envelope: PiRuntimeContextEnvelope): string {

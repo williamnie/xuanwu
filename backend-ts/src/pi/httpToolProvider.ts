@@ -22,7 +22,17 @@ export function listHttpAssistantTools(): AssistantTool[] {
     audit: { category: "http", redact: [], retention: "standard", tags: ["http", "source-context"] },
     description: "Fetch a URL with GET or HEAD and return bounded text evidence plus hash metadata.",
     input_schema: urlFetchInputSchema(),
-    metadata: { connector: "http", read_only: true },
+    metadata: {
+      connector: "http",
+      read_only: true,
+      risk_level: "low",
+      xuanwu_runtime: {
+        aliases: ["fetch url", "read web page", "读取网页"],
+        family: "web.read",
+        profiles: ["chat", "review"],
+        risk_level: "low"
+      }
+    },
     name: URL_FETCH_TOOL_NAME,
     output_schema: urlFetchOutputSchema(),
     permission: "read",

@@ -118,6 +118,13 @@ export type PiRunnerActionContext = PiActionContext & {
   config?: RunnerConfig;
   env?: Record<string, string | undefined>;
   issueID?: number;
+  issueQueryDefaultScope?: "global" | "project";
+  notificationTarget?: {
+    connectorID: string;
+    conversationID: string;
+    replyToMessageID?: string;
+    threadID?: string;
+  };
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
@@ -133,7 +140,8 @@ export type PiRunnerSourceTurn = {
   userPrompt?: string;
 };
 
-type IssueListInput = { limit?: number; project_id?: string; status?: string };
+type IssueQueryScope = "global" | "project";
+type IssueListInput = { limit?: number; project_id?: string; scope?: IssueQueryScope; status?: string };
 type IssueReadInput = { id: number };
 type IssueExecutionStatusInput = { id: number };
 type IssueAcceptanceRequestInput = { issue_id: number; rationale?: string };
@@ -169,7 +177,7 @@ type SkillListInput = {};
 type SkillReadInput = { id: string };
 type SkillRecommendInput = { description?: string; project_id?: string; title?: string };
 type SkillIntentAuditInput = { issue_id: number; issue_run_id?: string; used_skill_intents?: string[] };
-type IssueStatusSummaryInput = { project_id?: string; status?: string };
+type IssueStatusSummaryInput = { project_id?: string; scope?: IssueQueryScope; status?: string };
 type ProjectStatusInput = { project_id?: string };
 type SessionListInput = { project_id?: string; provider?: string; role?: string };
 type SessionReadSummaryInput = { session_key: string };
@@ -439,10 +447,17 @@ function createCompletionWatch(
   context: PiRunnerActionContext,
   input: IssueCompletionWatchCreateInput
 ) {
+  const trustedTarget = context.notificationTarget;
   const enrichedInput = {
     ...input,
     origin_conversation_id: cleanString(input.origin_conversation_id) || cleanString(context.conversationID),
-    source_event_id: cleanString(input.source_event_id) || cleanString(context.sourceTurn?.id)
+    source_event_id: cleanString(input.source_event_id) || cleanString(context.sourceTurn?.id),
+    target_channel: canonicalNotificationConnector(
+      trustedTarget?.connectorID || input.target_channel || context.source
+    ),
+    target_chat_id: cleanString(trustedTarget?.conversationID) || cleanString(input.target_chat_id),
+    target_message_id: cleanString(trustedTarget?.replyToMessageID) || cleanString(input.target_message_id),
+    target_thread_id: cleanString(trustedTarget?.threadID) || cleanString(input.target_thread_id)
   };
   const projectID = watchProjectID(db, enrichedInput);
   const actionContext = scopedRunnerChatActionContext(context, "issue_completion_watch.create", { projectID });
@@ -452,6 +467,14 @@ function createCompletionWatch(
     projectID,
     rationale: enrichedInput.note
   }, () => createIssueCompletionWatchAction(db, { ...enrichedInput, project_id: projectID }));
+}
+
+function canonicalNotificationConnector(value: unknown): string {
+  const connector = cleanString(value).toLowerCase();
+  if (connector === "feishu_runner_chat") return "feishu";
+  if (connector === "telegram_runner_chat") return "telegram";
+  if (connector.endsWith("_runner_chat")) return connector.slice(0, -"_runner_chat".length);
+  return connector;
 }
 
 function safeListCompletionWatches(
@@ -539,11 +562,19 @@ function safeListIssues(db: RunnerDatabase, context: PiRunnerActionContext, inpu
   const filter = normalizeIssueFilter(input, context);
   return executeSafePiAction(db, context, {
     actionType: "issue.list",
-    payload: cleanObjectPayload({ limit: input.limit, project_id: filter.projectId, status: filter.status }),
+    payload: cleanObjectPayload({
+      limit: input.limit,
+      project_id: filter.projectId,
+      scope: filter.scope,
+      scope_source: filter.scopeSource,
+      status: filter.status
+    }),
     projectID: filter.projectId,
     execute: () => createCompactIssueList(db, {
       limit: input.limit,
       projectId: filter.projectId,
+      scope: filter.scope,
+      scopeSource: filter.scopeSource,
       status: filter.status
     })
   });
@@ -553,10 +584,17 @@ function safeIssueStatusSummary(db: RunnerDatabase, context: PiRunnerActionConte
   const filter = normalizeIssueFilter(input, context);
   return executeSafePiAction(db, context, {
     actionType: "issue.status_summary",
-    payload: cleanObject({ project_id: filter.projectId, status: filter.status }),
+    payload: cleanObject({
+      project_id: filter.projectId,
+      scope: filter.scope,
+      scope_source: filter.scopeSource,
+      status: filter.status
+    }),
     projectID: filter.projectId,
     execute: () => createIssueStatusSummary(db, {
       projectId: filter.projectId,
+      scope: filter.scope,
+      scopeSource: filter.scopeSource,
       status: filter.status
     })
   });
@@ -765,8 +803,26 @@ function safeSkillIntentAudit(db: RunnerDatabase, context: PiRunnerActionContext
 }
 
 function normalizeIssueFilter(input: IssueListInput, context: PiRunnerActionContext) {
+  const explicitProjectID = cleanString(input.project_id);
+  const requestedScope = cleanString(input.scope);
+  if (requestedScope !== "" && requestedScope !== "global" && requestedScope !== "project") {
+    throw new Error("scope must be global or project");
+  }
+  if (requestedScope === "global" && explicitProjectID !== "") {
+    throw new Error("project_id must be empty when scope is global");
+  }
+  const defaultScope = context.issueQueryDefaultScope ?? (context.project?.id ? "project" : "global");
+  const scope: IssueQueryScope = requestedScope === "global" || requestedScope === "project"
+    ? requestedScope
+    : explicitProjectID !== "" ? "project" : defaultScope;
+  const projectId = scope === "project" ? explicitProjectID || (context.project?.id ?? "") : "";
+  if (scope === "project" && projectId === "") throw new ProjectNotFoundError();
   return {
-    projectId: cleanString(input.project_id) || (context.project?.id ?? ""),
+    projectId,
+    scope,
+    scopeSource: requestedScope !== ""
+      ? "explicit_scope"
+      : explicitProjectID !== "" ? "explicit_project_id" : "runtime_default",
     status: cleanString(input.status),
     sourceSessionId: ""
   };

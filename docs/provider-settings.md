@@ -44,7 +44,13 @@ XUANWU_CLAUDE_MODEL
 XUANWU_CLAUDE_TIMEOUT_MS
 XUANWU_PI_ENABLED
 XUANWU_PI_CMD
+XUANWU_PI_CHAT_TOOL_SURFACE
 ```
+
+`XUANWU_PI_CHAT_TOOL_SURFACE` 默认是 `bootstrap_v2`：普通 PI 对话只预装高频工具，
+长尾工具通过 `capability_search` / `capability_invoke` 按需调用。紧急回滚时可设为
+`legacy_full` 恢复完整 chat 工具面并重新运行 installer / `./redeploy.sh`；该回滚不改变
+review profile、Action Gate、permission 或审计边界。
 
 `Connections → Code Agents` 会自动重新探测已注册执行器，并把启用状态写入
 `${XUANWU_STATE_DIR}/runner-settings.local.json`。只有 `enabled && ready` 的 Code Agent

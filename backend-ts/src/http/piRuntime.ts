@@ -49,6 +49,12 @@ export type RuntimeSessionInput = {
   env?: Record<string, string | undefined>;
   heartbeatID?: string;
   issueID?: number;
+  notificationTarget?: {
+    connectorID: string;
+    conversationID: string;
+    replyToMessageID?: string;
+    threadID?: string;
+  };
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
   promptProfile: PiRuntimePromptProfile;
@@ -179,6 +185,8 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     env: input.env,
     heartbeatID: input.heartbeatID,
     issueID: input.issueID,
+    issueQueryDefaultScope: defaultIssueQueryScope(input),
+    notificationTarget: input.notificationTarget,
     onIssueEnqueued: input.onIssueEnqueued,
     providers: input.providers,
     restartDelayMs: input.restartDelayMs,
@@ -238,7 +246,8 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
       issueID: input.issueID,
       projectID: toolProject?.id ?? input.project?.id,
       readOnlyToolNames: runtimeTools.readOnlyToolNames,
-      source: input.source
+      source: input.source,
+      toolAuditTargets: runtimeTools.auditTargets
     });
     const cleanupContextBudgetObservation = installPiContextBudgetObservation(db, {
       ...input,
@@ -262,6 +271,12 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     cleanupRuntimeProvider();
     throw error;
   }
+}
+
+function defaultIssueQueryScope(input: RuntimeSessionInput): "global" | "project" {
+  if (input.promptProfile !== "chat" || input.chatToolMode === "review") return "project";
+  const binding = input.supervisorContext?.provenance.target_binding;
+  return binding === "explicit" || binding === "one_shot" ? "project" : "global";
 }
 
 export function piRuntimeCompactionSettings(model: { contextWindow: number } | undefined): {

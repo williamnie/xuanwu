@@ -44,7 +44,7 @@ export function scopedRunnerChatActionContext<T extends PiActionContext>(
 
 export function isRunnerChatSource(source: unknown): boolean {
   const value = cleanString(source);
-  return value === "feishu_runner_chat" || value === "runner_chat";
+  return value === "feishu_runner_chat" || value === "telegram_runner_chat" || value === "runner_chat";
 }
 
 function cleanString(value: unknown): string {

@@ -3,7 +3,6 @@ import { listBrowserAssistantTools } from "../pi/browserToolProvider.ts";
 import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
 import { listHttpAssistantTools } from "../pi/httpToolProvider.ts";
 import { supervisorReportSummary } from "../pi/reportSupervisorSummary.ts";
-import { SUPERVISOR_CONTROL_TOOL_NAMES } from "../pi/supervisorControlContracts.ts";
 import { implementWorkflowRegistryContributions } from "../workflows/implement.ts";
 import { investigateWorkflowRegistryContributions } from "../workflows/investigate.ts";
 import { createWorkflowRegistry } from "../workflows/registry.ts";
@@ -63,10 +62,10 @@ export type SupervisorWorkflowEvalReport = {
 };
 
 const CONTROL_TOOL_NAMES = new Set<string>([
-  ...SUPERVISOR_CONTROL_TOOL_NAMES,
-  "evidence_list",
-  "handoff_read"
-]);
+  ...listBuiltinAssistantTools(),
+  ...listHttpAssistantTools(),
+  ...listBrowserAssistantTools()
+].map((tool) => tool.name));
 
 export function runSupervisorWorkflowEvaluation(suite: SupervisorWorkflowEvalSuite): SupervisorWorkflowEvalReport {
   const registry = workflowRegistry();

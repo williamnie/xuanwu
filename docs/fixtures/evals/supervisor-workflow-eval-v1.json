@@ -45,8 +45,7 @@
         "max_total_tokens": 600,
         "selected_tools": [
           "work_read",
-          "run_read",
-          "evidence_list"
+          "run_read"
         ]
       },
       "id": "workflow-investigate",
@@ -59,8 +58,7 @@
         "fixture-baseline": {
           "selected_tools": [
             "work_read",
-            "run_read",
-            "evidence_list"
+            "run_read"
           ],
           "token_usage": {
             "estimated_cost_usd": 0.0036,
@@ -72,8 +70,7 @@
         "fixture-candidate": {
           "selected_tools": [
             "work_read",
-            "run_read",
-            "evidence_list"
+            "run_read"
           ],
           "token_usage": {
             "estimated_cost_usd": 0.00306,
@@ -99,8 +96,7 @@
         "max_total_tokens": 600,
         "selected_tools": [
           "work_read",
-          "work_update",
-          "evidence_list"
+          "work_update"
         ]
       },
       "id": "workflow-implement",
@@ -113,8 +109,7 @@
         "fixture-baseline": {
           "selected_tools": [
             "work_read",
-            "work_update",
-            "evidence_list"
+            "work_update"
           ],
           "token_usage": {
             "estimated_cost_usd": 0.0042,
@@ -126,8 +121,7 @@
         "fixture-candidate": {
           "selected_tools": [
             "work_read",
-            "work_update",
-            "evidence_list"
+            "work_update"
           ],
           "token_usage": {
             "estimated_cost_usd": 0.00357,
@@ -153,8 +147,7 @@
         "max_total_tokens": 600,
         "selected_tools": [
           "work_read",
-          "evidence_list",
-          "handoff_read"
+          "run_read"
         ]
       },
       "id": "workflow-release",
@@ -167,8 +160,7 @@
         "fixture-baseline": {
           "selected_tools": [
             "work_read",
-            "evidence_list",
-            "handoff_read"
+            "run_read"
           ],
           "token_usage": {
             "estimated_cost_usd": 0.005,
@@ -180,8 +172,7 @@
         "fixture-candidate": {
           "selected_tools": [
             "work_read",
-            "evidence_list",
-            "handoff_read"
+            "run_read"
           ],
           "token_usage": {
             "estimated_cost_usd": 0.00425,

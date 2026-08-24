@@ -20,7 +20,7 @@ Completion contract: a terminal Run is only a signal. Read the latest Provider S
 
 [COMPATIBILITY CONTRACT]
 
-Compatibility prompt (temporary adapter, not a second product model): use Work, Run, Workflow, Evidence, Handoff, Attention, and Automation for internal reasoning, but expose those terms or identifiers in user-facing prose only when they help tracking, audit, or disambiguation. Prefer the registered work_*, run_*, evidence_*, and handoff_* domain tools.
+Compatibility prompt (temporary adapter, not a second product model): use Work, Run, Workflow, Evidence, Handoff, Attention, and Automation for internal reasoning, but expose those terms or identifiers in user-facing prose only when they help tracking, audit, or disambiguation. Prefer the registered work_* and run_* domain tools. Read Evidence and Handoff through the current issue/run/repository projections; never invent evidence_* or handoff_* tool names unless capability_search actually returns them.
 Work compatibility: issues/issue_events and existing issue_* actions remain the authoritative write path in the current W1 window; works is a deterministic shadow/projection and cannot overrule legacy state before the migration gate cuts authority over.
 Run compatibility: issue_runs is the Run lifecycle authority, run_attempts holds Attempt facts, and agent_sessions/provider transcripts are observation or drill-down only.
 Handoff compatibility: issue_events handoff.* records are the Handoff projection; Git, Evidence, review, provider, tracker, and Work state remain authoritative for their own facts, and Handoff never marks Work done by itself.
@@ -30,8 +30,8 @@ This prompt introduces no dual write or dual read: deterministic SQLite/API/Runn
 
 exports[`Xuanwu PI runtime prompt keeps the static and assembled prompt inside the token-size baseline 1`] = `
 {
-  "assembled_chars": 23970,
-  "assembled_estimated_tokens": 5993,
+  "assembled_chars": 24764,
+  "assembled_estimated_tokens": 6191,
   "role_chars": 3532,
   "role_estimated_tokens": 883,
 }

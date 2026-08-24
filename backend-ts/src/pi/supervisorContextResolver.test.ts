@@ -115,7 +115,7 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
     }
   });
 
-  test("uses one-shot source targets and keeps the same IM conversation context available to PI", async () => {
+  test("uses one-shot IM targets for one turn without persisting Project context", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo", "Demo");
@@ -137,7 +137,11 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
       expect(selected).toMatchObject({
         status: "resolved",
         target: { project_id: "demo" },
-        provenance: { context_inheritance_allowed: true, source: "feishu_runner_chat" }
+        provenance: {
+          context_inheritance_allowed: false,
+          source: "feishu_runner_chat",
+          target_binding: "one_shot"
+        }
       });
       expect(selected.candidates[0]?.sources).toContainEqual({
         kind: "one_shot_target",
@@ -145,10 +149,10 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
         score: 96
       });
       expect(later).toMatchObject({
-        reason: "highest deterministic context score",
-        status: "resolved",
-        target: { project_id: "demo" },
-        provenance: { context_inheritance_allowed: true }
+        reason: "no deterministic project or Work context",
+        status: "missing",
+        target: { project_id: "" },
+        provenance: { context_inheritance_allowed: false, target_binding: "none" }
       });
     } finally {
       db.close();
@@ -180,7 +184,7 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
         }
       });
       expect(resolution.candidates[0]?.sources).toContainEqual({
-        kind: "work_reference",
+        kind: "one_shot_work",
         ref: `xw:work:issues:${issue.id}:latest_actionable_notification`,
         score: 100
       });
@@ -189,7 +193,7 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
     }
   });
 
-  test("uses the latest stable-conversation action as explainable Work history across transports", async () => {
+  test("keeps local history continuity but never carries it into IM transports", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo", "Demo");
@@ -229,13 +233,14 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
         score: 55
       }]);
       expect(crossChannel).toMatchObject({
-        reason: "highest deterministic context score",
-        status: "resolved",
+        reason: "no deterministic project or Work context",
+        status: "missing",
         target: {
           issue_ids: [],
-          project_id: "demo",
+          project_id: "",
           work_ids: []
-        }
+        },
+        provenance: { context_inheritance_allowed: false, target_binding: "none" }
       });
     } finally {
       db.close();

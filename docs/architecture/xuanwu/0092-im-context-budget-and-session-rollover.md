@@ -1,16 +1,16 @@
 # ADR-XW-0092：IM 上下文预算、增量投影与 PI Session 换代
 
-- 状态：Accepted v7（Phase 0–3 已本地实现并验证、未部署；Phase 4 仍为数据驱动 backlog）
+- 状态：Accepted v8（Phase 0–3 已部署并完成 live acceptance；Phase 4 仍为数据驱动 backlog）
 - 日期：2026-08-18
 - 适用范围：Feishu、Telegram 及后续接入统一 `ImChannelModule` 的面向人对话通道
 - 相关 canonical 合同：ADR-XW-0045、0047、0063、0064、0069、0072、0073、0075、0077、0078、0085
 - 独立 review：`0092-im-context-budget-and-session-rollover-design-review.md`
 - 当前实现入口：`imConversationRouting.ts`、`imConversationContext.ts`、`piConversationApi.ts`、`piRuntime.ts`、`piRuntimeTools.ts`
-- 本文性质：优化设计与实施门禁；不修改现有代码、schema、运行态或部署
+- 本文性质：优化设计、实施门禁与 live acceptance 记录；本轮修复不新增 schema
 
-## 0. v6 批准与收口记录
+## 0. v8 批准与收口记录
 
-v2–v4 逐项修复状态空洞、枚举、时延、校准和重启恢复问题；v5 删除收益不足的机制并收口正文；v6 批准 Phase 0 并补齐实施门禁；v7 记录 Phase 0–3 已完成本地实现与全量验证，尚未部署，Phase 4 继续保持数据驱动 backlog。
+v2–v4 逐项修复状态空洞、枚举、时延、校准和重启恢复问题；v5 删除收益不足的机制并收口正文；v6 批准 Phase 0 并补齐实施门禁；v7 记录 Phase 0–3 已完成本地实现与全量验证；v8 修复 bootstrap tools 上线后暴露的 registry、capability discovery、通知目标、IM 作用域和审计缺口，并记录部署及真实 PI 对话验收。Phase 4 继续保持数据驱动 backlog。
 
 保留四段核心闭环：
 
@@ -468,9 +468,9 @@ Phase 4 必须另写设计与收益证据，不得在 Phase 0–3 顺手恢复 v
 5. 非 LLM destructive approval；
 6. retained artifact 可恢复旧版本。
 
-## 17. v7 本地交付记录
+## 17. v7 本地交付记录（历史）
 
-Phase 0–3 已按本文精简闭环完成本地实现并通过完整验证，尚未部署；Phase 4 未授权实现，仍须由真实观测数据证明必要性：
+在 v7 阶段，Phase 0–3 已按本文精简闭环完成本地实现并通过完整验证，但当时尚未部署；当前部署与 live acceptance 结论以第 18 节的 v8 记录为准。Phase 4 未授权实现，仍须由真实观测数据证明必要性：
 
 ```text
 完整预算可见
@@ -492,3 +492,26 @@ V5 每个机制只防止一类坏事：
 | observe-first 灰度 | 存量长会话第一条消息突然阻塞或丢上下文 |
 
 Estimator 校准、同步 compaction 控制和 richer capsule 不属于 v1 必需闭环，保持删除/推迟。
+
+## 18. v8 corrective remediation 与 live acceptance
+
+2026-08-24 针对 Feishu Session `feishu-chat-oc_0013125cb6000e045fd9c7796e2367d6-n1` 的错误回复完成修复。根因不是缩减工具面本身，而是 Phase 2 实现没有完整兑现本文合同：chat/profile 仍维护第二份硬编码工具表，`capability_search` 只做脆弱的字面匹配且不返回风险/必填参数，通知工具未进入 eager surface，IM Project 还能从旧对话继承，数量查询没有显式 global/project scope，回滚 flag 也没有真正恢复完整工具面。
+
+v8 修复合同：
+
+- `assistant_tools.metadata_json.xuanwu_runtime` 成为 profile、family、aliases、risk 的单一工具面来源；注册时校验 metadata，eval fixture 逐项对照 canonical registry schema；
+- chat eager surface 包含 completion watch 与 notification preference；长尾 search 使用规范化、别名和排序，返回 provider、permission、risk、schema hash、必填参数及有界参数摘要；invoke 审计记录实际目标 tool；
+- `XUANWU_PI_CHAT_TOOL_SURFACE=bootstrap_v2|legacy_full` 由 launchd/systemd installer 持久化，`legacy_full` 真正恢复全部 registry tools；
+- `issue_status_summary` / `issue_list` 显式支持 `scope=global|project`，IM 未限定数量默认 global，当前消息明确 Project 才使用 project；`failed` 对通知是终态、对“未完成”仍算未完成；
+- Feishu/Telegram 不再继承历史 Project；one-shot target 与 provenance 只作用于当前消息；
+- completion request 必须先读 `issue_execution_status`：已终态立即回复且不建 watch，未完成才建 watch；可信 IM projection 覆盖模型提供的通知目标，runtime source alias 归一化为 canonical connector id。
+
+验证与部署证据：
+
+- backend focused 83/83，最终 backend full 2191/2191，部署/发布/仓库卫生脚本 27/27；Bun binary、前端 build、codesign 与两次带 DB quick-check 快照的 redeploy 均成功；
+- live stamp `20260824T031631Z-b18333c8253f-dirty`，Web/Core/Agentic 和 Core→Agentic RPC 全部健康；
+- live registry audit 为 `surface_mode=bootstrap_v2`、37 个 SDK tools（33 个 custom）、0 skipped；tool call audit 保存实际 provider/permission；
+- 真实 PI 对话中，终态 #898 先读状态后直接报告且不建 watch；未完成 #875 先读状态再创建 canonical `feishu` watch，随后取消成功；`system_restart` 通过 capability search 返回 high/dangerous、必填 `reason` 且未执行；
+- 同一 Feishu Session 先问 `movo-web` 得到 project scope 0/43，再问未限定数量得到 global scope 10；原始历史 Session 用原句复测时同样对 #898 立即回复，并把未限定数量回答为全局 10。
+
+一次探索性“复测”措辞被 PI 理解为新执行请求并创建 #899；该 Run、Issue 和 watch 已立即取消，保留 cancelled 审计记录而未做破坏性删除。随后使用原始用户措辞的复测通过。这不改变 v8 的通知与作用域验收结论。

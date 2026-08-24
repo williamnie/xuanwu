@@ -8,7 +8,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listContextBundles } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { listIssues } from "../db/repositories/issues.ts";
-import { getPiConversation, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
+import { getPiConversation, getPiIssueCompletionWatch, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { EventBus } from "../events/bus.ts";
 import { runPiConversationPrompt } from "./piConversationApi.ts";
@@ -613,6 +613,106 @@ describe("Bun PI conversation message API", () => {
         action_type: "issue.status_summary",
         project_id: "demo",
         status: "completed"
+      });
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("Feishu generic counts do not inherit the Project from the previous turn", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-feishu-scope-api", provider: "pi-feishu-scope" });
+    try {
+      faux.setResponses([
+        fauxAssistantMessage([fauxToolCall("issue_status_summary", {}, { id: "project-count" })], { stopReason: "toolUse" }),
+        fauxAssistantMessage("demo 有 1 个未完成 issue。"),
+        fauxAssistantMessage([fauxToolCall("issue_status_summary", {}, { id: "global-count" })], { stopReason: "toolUse" }),
+        fauxAssistantMessage("全局有 2 个未完成 issue。")
+      ]);
+      insertProject(database, "demo");
+      insertProject(database, "other");
+      insertIssue(database, { id: 710, projectID: "demo", title: "Demo issue" });
+      insertIssue(database, { id: 711, projectID: "other", title: "Other issue" });
+      insertFauxAgent(database, "pi-feishu-scope");
+      writeFauxModelsConfig(database, "pi-feishu-scope");
+
+      await runPiConversationPrompt({ database }, {
+        conversationId: "feishu-count-scope",
+        prompt: "demo 还有多少 issue 没做",
+        targetProjectId: "demo",
+        title: "Feishu"
+      });
+      const second = await runPiConversationPrompt({ database }, {
+        conversationId: "feishu-count-scope",
+        prompt: "还有多少 issue 没做",
+        title: "Feishu"
+      });
+
+      const actions = listPiActions(database).filter((action) => action.action_type === "issue.status_summary");
+      const globalAction = actions.find((action) => JSON.parse(action.payload_json).scope === "global");
+      const projectAction = actions.find((action) => JSON.parse(action.payload_json).scope === "project");
+      expect(second.text).toBe("全局有 2 个未完成 issue。");
+      expect(actions).toHaveLength(2);
+      expect(globalAction).toMatchObject({ project_id: "", status: "completed" });
+      expect(projectAction).toMatchObject({ project_id: "demo", status: "completed" });
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("derives Telegram runner-chat authority from connector projection instead of conversation id", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-telegram-source-api", provider: "pi-telegram-source" });
+    try {
+      faux.setResponses([
+        fauxAssistantMessage([fauxToolCall("issue_execution_status", { id: 720 }, { id: "telegram-status" })], { stopReason: "toolUse" }),
+        fauxAssistantMessage([fauxToolCall("issue_completion_watch_create", {
+          issue_ids: [720],
+          project_id: "demo",
+          target_channel: "feishu_runner_chat",
+          target_chat_id: "oc_untrusted"
+        }, { id: "telegram-watch" })], { stopReason: "toolUse" }),
+        fauxAssistantMessage("Telegram source confirmed.")
+      ]);
+      insertProject(database, "demo");
+      insertIssue(database, { id: 720, projectID: "demo", title: "Telegram watch" });
+      insertFauxAgent(database, "pi-telegram-source");
+      writeFauxModelsConfig(database, "pi-telegram-source");
+
+      await runPiConversationPrompt({ database }, {
+        channelContextProjection: {
+          connectorID: "telegram",
+          conversationID: "tg-chat-1",
+          events: [],
+          omittedCount: 0,
+          piConversationID: "generic-im-conversation",
+          prompt: "",
+          scopeKey: "telegram:chat:tg-chat-1",
+          truncated: false
+        },
+        conversationId: "generic-im-conversation",
+        prompt: "#720 有结果了告诉我",
+        title: "Telegram"
+      });
+
+      const event = listPiActionEvents(database, {
+        conversationId: "generic-im-conversation",
+        eventType: "supervisor_context_resolved"
+      })[0];
+      const watchAction = listPiActions(database).find((action) => action.action_type === "issue_completion_watch.create");
+      expect(watchAction).toMatchObject({ status: "completed" });
+      const watchID = (JSON.parse(watchAction?.result_json || "{}") as { watch_id?: string }).watch_id ?? "";
+      expect(JSON.parse(event?.payload_json || "{}")).toMatchObject({
+        provenance: {
+          context_inheritance_allowed: false,
+          source: "telegram_runner_chat"
+        }
+      });
+      expect(getPiIssueCompletionWatch(database, watchID)).toMatchObject({
+        target_channel: "telegram",
+        target_chat_id: "tg-chat-1"
       });
     } finally {
       faux.unregister();

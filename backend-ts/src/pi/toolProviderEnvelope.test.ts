@@ -41,12 +41,44 @@ describe("Tool Provider envelope", () => {
       output_schema: { type: "object" },
       permission: "read",
       provider_id: provider.id,
+      metadata: {
+        xuanwu_runtime: {
+          aliases: ["read issue"],
+          family: "issue",
+          profiles: ["chat", "review"],
+          risk_level: "low"
+        }
+      },
       timeout_ms: 3000
     } satisfies AssistantTool;
 
     expect(validateToolProvider(provider)).toEqual([]);
     expect(validateAssistantTool(tool)).toEqual([]);
     expect(assistantToolKey(tool)).toBe("runner-builtin:issue_read");
+  });
+
+  test("rejects malformed runtime surface metadata before it can hide tools", () => {
+    expect(validateAssistantTool({
+      audit: { redact: [] },
+      description: "Broken metadata fixture.",
+      input_schema: { type: "object" },
+      metadata: {
+        xuanwu_runtime: {
+          aliases: [""],
+          family: "",
+          profiles: ["chat", "missing-profile"],
+          risk_level: "critical"
+        }
+      },
+      name: "broken_tool",
+      permission: "read",
+      provider_id: "runner-builtin"
+    })).toEqual([
+      { path: "metadata.xuanwu_runtime.family", message: "must be a non-empty string" },
+      { path: "metadata.xuanwu_runtime.aliases", message: "aliases must be an array of non-empty strings" },
+      { path: "metadata.xuanwu_runtime.profiles", message: "profiles must contain only supported runtime profiles" },
+      { path: "metadata.xuanwu_runtime.risk_level", message: "risk_level must be low, medium, or high" }
+    ]);
   });
 
   test("reports basic envelope validation errors", () => {

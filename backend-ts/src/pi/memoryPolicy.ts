@@ -113,7 +113,7 @@ function managerSource(source: string | undefined): boolean {
 }
 
 function normalChatSource(source: string | undefined): boolean {
-  return ["feishu_runner_chat", "runner_chat"].includes(clean(source));
+  return ["feishu_runner_chat", "telegram_runner_chat", "runner_chat"].includes(clean(source));
 }
 
 function clean(value: unknown): string {

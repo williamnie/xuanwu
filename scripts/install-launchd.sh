@@ -50,6 +50,7 @@ QODER_AUTH_MODE="${XUANWU_QODER_AUTH_MODE:-local-cli}"
 QODER_CONFIG_DIR="${XUANWU_QODER_CONFIG_DIR:-}"
 QODER_CREDENTIAL_REF="${XUANWU_QODER_CREDENTIAL_REF:-}"
 QODER_MODEL="${XUANWU_QODER_MODEL:-}"
+PI_CHAT_TOOL_SURFACE="${XUANWU_PI_CHAT_TOOL_SURFACE:-bootstrap_v2}"
 if [ -z "$CLAUDE_MODE" ]; then
   CLAUDE_MODE="sdk"
 fi
@@ -370,6 +371,10 @@ if [[ "$AUTOMATION_SHADOW_W1" != "0" && "$AUTOMATION_SHADOW_W1" != "1" ]]; then
   echo "[launchd] XUANWU_AUTOMATION_SHADOW_W1 must be 0 or 1" >&2
   exit 1
 fi
+if [[ "$PI_CHAT_TOOL_SURFACE" != "bootstrap_v2" && "$PI_CHAT_TOOL_SURFACE" != "legacy_full" ]]; then
+  echo "[launchd] XUANWU_PI_CHAT_TOOL_SURFACE must be bootstrap_v2 or legacy_full" >&2
+  exit 1
+fi
 
 if [[ "$SKIP_RUNTIME_BACKUP" != "0" && "$SKIP_RUNTIME_BACKUP" != "1" ]]; then
   echo "[launchd] XUANWU_SKIP_RUNTIME_BACKUP must be 0 or 1" >&2
@@ -506,6 +511,8 @@ cat > "$CORE_PLIST" <<PLIST
     <string>$(xml_escape "$QODER_CREDENTIAL_REF")</string>
     <key>XUANWU_QODER_MODEL</key>
     <string>$(xml_escape "$QODER_MODEL")</string>
+    <key>XUANWU_PI_CHAT_TOOL_SURFACE</key>
+    <string>$(xml_escape "$PI_CHAT_TOOL_SURFACE")</string>
     <key>XUANWU_MANAGED_EXECUTION</key>
     <string>1</string>
     <key>XUANWU_AUTOMATION_SHADOW_W1</key>

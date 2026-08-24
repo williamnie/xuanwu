@@ -57,6 +57,7 @@ import {
   renderImConversationPrompt,
   type ImConversationPromptProjection
 } from "../integrations/imConversationContext.ts";
+import { resolvePiChatToolMode } from "../pi/runtimePromptProfile.ts";
 
 type PiConversationContext = {
   auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
@@ -232,7 +233,9 @@ async function preparePiConversationTurn(
   if (activePiRuns.has(conversation.id)) throw new HttpError(409, "PI conversation is already running");
   const titledConversation = ensureConversationTitle(context.database, conversation, prompt);
   const review = isReviewConversationIntent(intent);
-  const source = review ? reviewConversationSource(titledConversation) : runnerChatSource(titledConversation);
+  const source = review
+    ? reviewConversationSource(titledConversation)
+    : imRunnerChatSource(trusted.channelContextProjection?.connectorID) ?? runnerChatSource(titledConversation);
   const resolvedSource = source ?? (review ? "runner_review" : "runner_chat");
   const turnID = crypto.randomUUID();
   let contextReservation: ImContextProjectionReservation | undefined;
@@ -291,7 +294,11 @@ async function preparePiConversationTurn(
       prompt,
       turnID,
       resolvedSource,
-      channelContext
+      channelContext,
+      projection ? {
+        connectorID: projection.connectorID,
+        conversationID: projection.conversationID
+      } : undefined
     );
   } catch (error) {
     if (contextReservation) failImContextProjectionReservation(context.database, contextReservation, "runtime_open_failed");
@@ -862,7 +869,13 @@ async function openConversationRuntime(
   userPrompt = "",
   turnID = "",
   source?: string,
-  channelContext = ""
+  channelContext = "",
+  notificationTarget?: {
+    connectorID: string;
+    conversationID: string;
+    replyToMessageID?: string;
+    threadID?: string;
+  }
 ) {
   const { createPiRuntimeSession, PI_RUNNER_CHAT_ACTIONS } = await import("./piRuntime.ts");
   const project = conversation.project_id === "" || (
@@ -884,7 +897,7 @@ async function openConversationRuntime(
     bus: context.bus,
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs,
     channelContext,
-    chatToolMode: review ? "review" : "full",
+    chatToolMode: resolvePiChatToolMode(review),
     conversationID: conversation.id,
     config: context.config,
     onIssueEnqueued: (projectID) => startProjectLoop({
@@ -892,6 +905,7 @@ async function openConversationRuntime(
       database: context.database,
       providers: context.providers
     }, projectID, { forceOnce: true }),
+    notificationTarget,
     project,
     promptProfile: "chat",
     providers: context.providers,
@@ -949,6 +963,7 @@ function unboundRunnerChatAuthorization() {
     authorizedActions: runnerChatAuthorizedActions(actions),
     mode: "delegated" as const,
     scopes: [
+      { runner_resource: "issues" },
       { runner_resource: "projects" },
       { runner_resource: "runner_settings" },
       { runner_resource: "service_lifecycle" },
@@ -963,6 +978,13 @@ function runnerChatAuthorizedActions(actions: readonly string[]) {
 
 function runnerChatSource(conversation: PiConversation): string | undefined {
   return conversation.id.startsWith("feishu-") ? "feishu_runner_chat" : "runner_chat";
+}
+
+function imRunnerChatSource(connectorID: unknown): string | undefined {
+  const connector = cleanString(connectorID).toLowerCase();
+  if (connector === "feishu") return "feishu_runner_chat";
+  if (connector === "telegram") return "telegram_runner_chat";
+  return undefined;
 }
 
 function optionalConversationProject(db: RunnerDatabase, id: string): Project | undefined {

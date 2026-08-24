@@ -181,7 +181,8 @@ describe("Xuanwu PI runtime prompt", () => {
       expect(prompt).toContain("issue_runs is the Run lifecycle authority");
       expect(prompt).toContain("issue_events handoff.* records are the Handoff projection");
       expect(prompt).toContain("This prompt introduces no dual write or dual read");
-      expect(prompt).toContain("Prefer the registered work_*, run_*, evidence_*, and handoff_* domain tools");
+      expect(prompt).toContain("Prefer the registered work_* and run_* domain tools");
+      expect(prompt).toContain("never invent evidence_* or handoff_* tool names unless capability_search actually returns them");
       expect(prompt).toContain("issue_create_proposal");
       expect(prompt).toContain("issue_enqueue_proposal");
       expect(prompt).toContain("issue_schedule_enqueue");
@@ -230,6 +231,17 @@ describe("Xuanwu PI runtime prompt", () => {
       expect(prompt).toContain("Direct local workspace workflow:");
       expect(prompt).toContain("keeps this conversation and its full history attached");
       expect(prompt).toContain("Use Work/Run and the selected executor provider only for application source code");
+    });
+  });
+
+  test("keeps capability discovery, notification freshness, and IM query scope explicit", async () => {
+    await withRuntimePrompt("tool-routing", (prompt) => {
+      expect(prompt).toContain("Retry the exact name once before reporting unavailable");
+      expect(prompt).toContain("Unqualified runner-wide counts require issue_status_summary scope='global'");
+      expect(prompt).toContain("call issue_execution_status per target first");
+      expect(prompt).toContain("target_channel uses canonical connector ids");
+      expect(prompt).toContain("Terminal means report now and create no watch");
+      expect(prompt).toContain("later generic questions and runner-wide counts must not inherit it");
     });
   });
 
@@ -287,7 +299,7 @@ describe("Xuanwu PI runtime prompt", () => {
 
       expect(benchmark).toMatchSnapshot();
       expect(benchmark.role_estimated_tokens).toBeLessThanOrEqual(1_000);
-      expect(benchmark.assembled_estimated_tokens).toBeLessThanOrEqual(6_000);
+      expect(benchmark.assembled_estimated_tokens).toBeLessThanOrEqual(6_200);
     });
   });
 });

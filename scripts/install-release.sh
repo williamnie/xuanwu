@@ -49,6 +49,7 @@ QODER_AUTH_MODE="${XUANWU_QODER_AUTH_MODE:-local-cli}"
 QODER_CONFIG_DIR="${XUANWU_QODER_CONFIG_DIR:-}"
 QODER_CREDENTIAL_REF="${XUANWU_QODER_CREDENTIAL_REF:-}"
 QODER_MODEL="${XUANWU_QODER_MODEL:-}"
+PI_CHAT_TOOL_SURFACE="${XUANWU_PI_CHAT_TOOL_SURFACE:-bootstrap_v2}"
 if [ -z "$CLAUDE_MODE" ]; then
   CLAUDE_MODE="sdk"
 fi
@@ -91,6 +92,7 @@ Useful environment variables:
   XUANWU_QODER_AUTH_MODE=local-cli|pat-env|pat-secret-ref|service-account-secret-ref
   XUANWU_QODER_CONFIG_DIR=...     Qoder CLI config directory
   XUANWU_QODER_CREDENTIAL_REF=secret://...|env://... Qoder credential locator
+  XUANWU_PI_CHAT_TOOL_SURFACE=bootstrap_v2|legacy_full PI chat tool-surface rollback selector
   XUANWU_AUTH_TOKEN=...          Custom bearer token for remote access
   XUANWU_AUTH_TOKEN_FILE=...     Generated token file path
   XUANWU_VERIFY_ATTESTATION=auto|require|skip
@@ -116,6 +118,10 @@ case "$QODER_AUTH_MODE" in
     [ -n "$QODER_CREDENTIAL_REF" ] || fail "XUANWU_QODER_CREDENTIAL_REF is required for $QODER_AUTH_MODE"
     ;;
   *) fail "XUANWU_QODER_AUTH_MODE must be local-cli, pat-env, pat-secret-ref, or service-account-secret-ref" ;;
+esac
+case "$PI_CHAT_TOOL_SURFACE" in
+  bootstrap_v2|legacy_full) ;;
+  *) fail "XUANWU_PI_CHAT_TOOL_SURFACE must be bootstrap_v2 or legacy_full" ;;
 esac
 if [ -n "$CLAUDE_PLATFORM_PROFILE" ] && [[ ! "$CLAUDE_PLATFORM_PROFILE" =~ ^[A-Za-z0-9_.-]+$ || "$CLAUDE_PLATFORM_PROFILE" = "." || "$CLAUDE_PLATFORM_PROFILE" = ".." ]]; then
   fail "XUANWU_CLAUDE_PLATFORM_PROFILE is invalid"
@@ -438,6 +444,8 @@ PLIST
     <string>$(xml_escape "$QODER_CREDENTIAL_REF")</string>
     <key>XUANWU_QODER_MODEL</key>
     <string>$(xml_escape "$QODER_MODEL")</string>
+    <key>XUANWU_PI_CHAT_TOOL_SURFACE</key>
+    <string>$(xml_escape "$PI_CHAT_TOOL_SURFACE")</string>
     <key>XUANWU_MANAGED_EXECUTION</key>
     <string>1</string>
   </dict>
@@ -626,6 +634,7 @@ Environment="XUANWU_QODER_AUTH_MODE=$QODER_AUTH_MODE"
 Environment="XUANWU_QODER_CONFIG_DIR=$QODER_CONFIG_DIR"
 Environment="XUANWU_QODER_CREDENTIAL_REF=$QODER_CREDENTIAL_REF"
 Environment="XUANWU_QODER_MODEL=$QODER_MODEL"
+Environment="XUANWU_PI_CHAT_TOOL_SURFACE=$PI_CHAT_TOOL_SURFACE"
 Environment=XUANWU_MANAGED_EXECUTION=1
 ExecStart=$BIN_PATH serve --role core --addr $CORE_ADDR --agentic-addr $AGENTIC_ADDR --state-dir $STATE_DIR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
 Restart=always

@@ -34,6 +34,16 @@ test('launchd deployment persists the explicit W1 automation shadow selector', (
   assert.match(source, /<string>\$\(xml_escape "\$AUTOMATION_SHADOW_W1"\)<\/string>/);
 });
 
+test('deployment persists the PI chat tool-surface rollback selector', () => {
+  for (const script of [source, releaseSource]) {
+    assert.match(script, /PI_CHAT_TOOL_SURFACE="\$\{XUANWU_PI_CHAT_TOOL_SURFACE:-bootstrap_v2\}"/);
+    assert.match(script, /XUANWU_PI_CHAT_TOOL_SURFACE must be bootstrap_v2 or legacy_full/);
+    assert.match(script, /XUANWU_PI_CHAT_TOOL_SURFACE/);
+  }
+  assert.match(source, /<string>\$\(xml_escape "\$PI_CHAT_TOOL_SURFACE"\)<\/string>/);
+  assert.match(releaseSource, /Environment="XUANWU_PI_CHAT_TOOL_SURFACE=\$PI_CHAT_TOOL_SURFACE"/);
+});
+
 test('deployment creates a mode-0600 remote access token and only reveals a fresh value on an interactive terminal', () => {
   for (const script of [source, releaseSource]) {
     assert.match(script, /ensure_auth_token_file\(\)/);

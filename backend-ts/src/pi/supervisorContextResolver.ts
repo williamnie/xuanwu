@@ -9,6 +9,7 @@ import type { WorkLedgerEntry } from "../domain/work/contracts.ts";
 
 export const SUPERVISOR_CONTEXT_CANDIDATE_SOURCES = [
   "work_reference",
+  "one_shot_work",
   "one_shot_target",
   "explicit_project",
   "current_page",
@@ -17,6 +18,7 @@ export const SUPERVISOR_CONTEXT_CANDIDATE_SOURCES = [
 
 const DIRECT_SOURCE_KINDS = new Set<SupervisorContextCandidateSourceKind>([
   "work_reference",
+  "one_shot_work",
   "one_shot_target",
   "explicit_project"
 ]);
@@ -53,7 +55,13 @@ export const SUPERVISOR_CONTEXT_RESOLUTION_SCHEMA = Type.Object({
     context_inheritance_allowed: Type.Boolean(),
     conversation_id: Type.String(),
     resolver: Type.Literal("deterministic_supervisor_context"),
-    source: Type.String({ minLength: 1 })
+    source: Type.String({ minLength: 1 }),
+    target_binding: Type.Union([
+      Type.Literal("explicit"),
+      Type.Literal("one_shot"),
+      Type.Literal("conversation"),
+      Type.Literal("none")
+    ])
   }, objectOptions),
   reason: Type.String({ minLength: 1 }),
   schema_version: Type.Literal("xw.supervisor-context-resolution.v1"),
@@ -142,7 +150,8 @@ export function resolveSupervisorContext(
       context_inheritance_allowed: contextInheritanceAllowed,
       conversation_id: cleanString(input.conversationID),
       resolver: "deterministic_supervisor_context",
-      source
+      source,
+      target_binding: targetBinding(ranked, resolved.target.project_id)
     },
     reason: resolved.reason,
     schema_version: "xw.supervisor-context-resolution.v1",
@@ -167,7 +176,7 @@ function addOneShotWork(
   const work = getIssueAsWork(db, issueID);
   if (!work) return;
   addProjectCandidate(candidates, projects, work.owner.project_id, {
-    kind: "work_reference",
+    kind: "one_shot_work",
     ref: `${work.id}:${cleanString(source) || "one_shot"}`,
     score: 100
   }, work);
@@ -405,7 +414,23 @@ function normalizeForMatch(value: unknown): string {
 }
 
 function allowsConversationInheritance(source: string): boolean {
-  return source === "runner_chat" || source === "runner_review" || source === "feishu_runner_chat";
+  return source === "runner_chat" || source === "runner_review";
+}
+
+function targetBinding(
+  candidates: Candidate[],
+  projectID: string
+): SupervisorContextResolution["provenance"]["target_binding"] {
+  if (projectID === "") return "none";
+  const candidate = candidates.find((item) => item.project_id === projectID);
+  if (!candidate) return "none";
+  if (candidate.sources.some((source) => source.kind === "work_reference" || source.kind === "explicit_project")) {
+    return "explicit";
+  }
+  if (candidate.sources.some((source) => source.kind === "one_shot_work" || source.kind === "one_shot_target")) {
+    return "one_shot";
+  }
+  return "conversation";
 }
 
 function cleanString(value: unknown): string {

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { Value } from "typebox/value";
+import { listBuiltinAssistantTools } from "./builtinToolRegistry.ts";
 import { PI_PERSONA_AB_CASES } from "./personaABFixtures.ts";
 
 const CONTROL_TERMS = /\b(?:Work|Run|Evidence|Handoff)\b|\b(?:project|issue|run)_id\b/g;
@@ -23,6 +25,21 @@ describe("PI Persona fixed A/B contract set", () => {
       expect(item.baseline.mutationIntent, item.id).toBe(item.candidate.mutationIntent);
       expect(item.baseline.gateOutcome, item.id).toBe(item.candidate.gateOutcome);
     }
+  });
+
+  test("keeps every fixture tool call referentially valid against the canonical registry schema", () => {
+    const registry = new Map(listBuiltinAssistantTools().map((tool) => [tool.name, tool]));
+    const violations: string[] = [];
+    for (const item of PI_PERSONA_AB_CASES) {
+      for (const call of item.candidate.toolCalls) {
+        const tool = registry.get(call.name);
+        if (!tool) violations.push(`${item.id}: missing ${call.name}`);
+        else if (!Value.Check(tool.input_schema as never, call.arguments)) {
+          violations.push(`${item.id}: invalid ${call.name}`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
   });
 
   test("meets facts, claims, language, terminology, and internal JSON schema gates", () => {
