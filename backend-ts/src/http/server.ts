@@ -175,6 +175,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       interruptTimeoutMs: runtime.interruptTimeoutMs,
       piOpenAICodexOAuthLogin: runtime.piOpenAICodexOAuthLogin,
       providers: runtime.providers,
+      providersRegistry: runtime.providersRegistry,
       restartDelayMs: runtime.restartDelayMs,
       restartProcess: runtime.restartProcess,
       supervisorManaged: runtime.supervisorManaged,

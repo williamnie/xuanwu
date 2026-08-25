@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listPiActionEvents } from "../db/repositories/pi.ts";
+import { getProject } from "../db/repositories/projects.ts";
 import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "./httpToolProvider.ts";
 import { createPiRuntimeToolKit } from "./piRuntimeTools.ts";
 
@@ -26,7 +27,7 @@ describe("PI runtime tool registry adapter", () => {
       });
       expect(kit.source).toBe("registry");
       expect(kit.tools).toEqual(expect.arrayContaining([
-        "capability_invoke", "capability_search", "context_status", "issue_read",
+        "agent_catalog_list", "capability_invoke", "capability_search", "context_status", "issue_read",
         "issue_completion_watch_create", "issue_completion_watch_list", "issue_completion_watch_cancel",
         "notification_preference_read", "notification_preference_update",
         "project_status", "session_read_summary", URL_FETCH_TOOL_NAME
@@ -55,7 +56,7 @@ describe("PI runtime tool registry adapter", () => {
       expect(kit.auditTargets.issue_status_summary).toEqual({ permission: "read", providerID: "runner-builtin" });
       expect(kit.auditTargets.issue_completion_watch_create).toEqual({ permission: "write", providerID: "runner-builtin" });
       expect(kit.readOnlyToolNames).toEqual(expect.arrayContaining([
-        "read", "issue_list", "memory_search", "session_read_summary", "work_list", URL_FETCH_TOOL_NAME
+        "agent_catalog_list", "read", "issue_list", "memory_search", "session_read_summary", "work_list", URL_FETCH_TOOL_NAME
       ]));
       for (const name of [
         "issue_create_proposal", "manual_context_intake", "memory_remember",
@@ -109,6 +110,53 @@ describe("PI runtime tool registry adapter", () => {
     db.close();
 
     expect(() => createPiRuntimeToolKit(db)).toThrow();
+  });
+
+  test("marks a business-denied capability target as a tool error with the real gate reason", async () => {
+    const db = await openFixture();
+    try {
+      db.sqlite.run(
+        `insert into projects (id, name, cwd, sort_order, created_at, updated_at)
+         values ('demo', 'Demo', '/tmp/demo', 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`
+      );
+      db.sqlite.run(
+        `insert into issues (project_id, title, description, status, priority, created_at, updated_at)
+         values ('demo', 'Denied candidate', '', 'triage', 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`
+      );
+      const project = getProject(db, "demo");
+      if (!project) throw new Error("missing project");
+      const kit = createPiRuntimeToolKit(db, project, {
+        authorization: {
+          allowedActions: ["issue.enqueue"],
+          authorizedActions: [{ action_type: "issue.read" }],
+          mode: "delegated",
+          scope: { project_id: "demo" }
+        },
+        conversationID: "conv-capability-denied",
+        source: "runner_chat"
+      });
+      const search = kit.customTools.find((tool) => tool.name === "capability_search")!;
+      const invoke = kit.customTools.find((tool) => tool.name === "capability_invoke")!;
+      const searched = await search.execute("search-denied", {
+        query: "issue_enqueue_batch_triage"
+      }, undefined, undefined, {} as never);
+      const match = (searched.details as any).matches[0];
+
+      await expect(invoke.execute("invoke-denied", {
+        arguments: { issue_ids: [1], project_id: "demo", user_phrase: "#1" },
+        schema_hash: match.schema_hash,
+        tool_id: match.tool_id
+      }, undefined, undefined, {} as never)).rejects.toThrow(/delegated action is not covered by authorization envelope/);
+
+      const audits = listPiActionEvents(db, { conversationId: "conv-capability-denied" })
+        .filter((event) => event.event_type === "tool_call_audit")
+        .map((event) => JSON.parse(event.payload_json) as Record<string, unknown>)
+        .filter((event) => event.tool === "issue_enqueue_batch_triage");
+      expect(audits).toHaveLength(1);
+      expect(audits[0]).toMatchObject({ status: "failed" });
+    } finally {
+      db.close();
+    }
   });
 
   test("loads only the tool family required by each explicit runtime profile", async () => {

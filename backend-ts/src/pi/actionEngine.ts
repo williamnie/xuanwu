@@ -286,6 +286,7 @@ function actionResultFromRecord(action: PiAction) {
   return {
     ...actionResult(action.id, action),
     decision: action.gate_decision,
+    gate_reason: action.gate_reason,
     guardian_decision_id: action.guardian_decision_id,
     idempotency_key: action.idempotency_key,
     ...completedResult(action)

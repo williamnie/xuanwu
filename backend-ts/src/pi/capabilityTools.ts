@@ -89,12 +89,19 @@ export function createPiCapabilityTools(
           recordTargetAudit(db, context, target, targetToolCallID, params.arguments, started, result.details, failed
             ? { message: toolResultText(result), type: "tool_error" }
             : undefined);
+          if (failed) {
+            throw new CapabilityTargetResultError(
+              `capability ${target.name} did not complete: ${bounded(toolResultText(result), 2_000)}`
+            );
+          }
           return result;
         } catch (error) {
-          recordTargetAudit(db, context, target, targetToolCallID, params.arguments, started, undefined, {
-            message: error instanceof Error ? error.message : String(error),
-            type: error instanceof Error && error.name ? error.name : "tool_error"
-          });
+          if (!(error instanceof CapabilityTargetResultError)) {
+            recordTargetAudit(db, context, target, targetToolCallID, params.arguments, started, undefined, {
+              message: error instanceof Error ? error.message : String(error),
+              type: error instanceof Error && error.name ? error.name : "tool_error"
+            });
+          }
           throw error;
         }
       }
@@ -255,6 +262,10 @@ function toolResultText(result: AgentToolResult<unknown>): string {
 function toolResultFailed(result: AgentToolResult<unknown>): boolean {
   const details = record(result.details);
   return details.status === "failed" || details.status === "denied" || typeof details.error === "string";
+}
+
+class CapabilityTargetResultError extends Error {
+  override name = "CapabilityTargetResultError";
 }
 
 function toolID(tool: Pick<AssistantTool, "name" | "provider_id">): string {

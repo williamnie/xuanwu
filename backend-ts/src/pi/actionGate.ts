@@ -51,6 +51,8 @@ export type PiGatePolicy = {
   allowedSkillIntents?: string[];
   allowed_skill_intents?: string[];
   authorizedActions?: PiAuthorizedAction[];
+  askOnMissingAuthorization?: boolean;
+  ask_on_missing_authorization?: boolean;
   expiresAt?: string;
   expires_at?: string;
   enforceAuthorizedReadScope?: boolean;
@@ -82,6 +84,7 @@ export type PiAuthorizationScope = {
 };
 
 export const PI_SAFE_ACTION_TYPES = [
+  "agent.catalog_list",
   "agent.profile_recommend",
   "human_review.request",
   "issue.comment", "issue.execution_status", "issue.list", "issue.read", "issue.retry_after", "issue.state_diagnose",
@@ -99,6 +102,7 @@ export const PI_SAFE_ACTION_TYPES = [
   ...SUPERVISOR_CONTROL_READ_ACTION_TYPES
 ];
 export const PI_READ_ONLY_ACTION_TYPES = [
+  "agent.catalog_list",
   "agent.profile_recommend",
   "issue.execution_status", "issue.list", "issue.read", "issue.state_diagnose", "issue.status_summary",
   "issue_completion_watch.list",
@@ -191,6 +195,12 @@ export function decidePiAuthorization(
       return { decision: "deny", reason: "delegated skill intent is not covered by authorization allowlist" };
     }
     if (!delegatedActionCovered(envelope, policy)) {
+      if (policy.askOnMissingAuthorization === true || policy.ask_on_missing_authorization === true) {
+        return {
+          decision: "ask",
+          reason: "action is allowed by policy but requires explicit user approval for this target"
+        };
+      }
       return { decision: "deny", reason: "delegated action is not covered by authorization envelope" };
     }
     if (riskGate === "high") return { decision: "ask", reason: "high-risk action requires user confirmation" };

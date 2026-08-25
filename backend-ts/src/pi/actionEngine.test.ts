@@ -110,6 +110,16 @@ describe("PI action engine risk classifier", () => {
       decision: "execute",
       reason: expect.stringContaining("authorization envelope")
     });
+    expect(gatePiActionEnvelope(confirmEnvelope, {
+      allowedActions: ["issue.enqueue"],
+      askOnMissingAuthorization: true,
+      authorizedActions: [{ action_type: "issue.read" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "ask",
+      reason: expect.stringContaining("explicit user approval")
+    });
     expect(gatePiActionEnvelope({
       ...confirmEnvelope,
       action_type: "run.interrupt",

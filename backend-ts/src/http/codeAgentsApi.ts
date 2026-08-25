@@ -1,14 +1,15 @@
 import type { RunnerConfig } from "../config/env.ts";
 import { localSettingsPath, updateLocalSettingsFile, type RunnerLocalSettings } from "../config/localSettings.ts";
 import type { RunnerDatabase } from "../db/database.ts";
-import { catalogEntryFromRegistry } from "../providers/core/catalog.ts";
+import {
+  managedCodeAgentCatalog,
+  MANAGED_CODE_AGENT_IDS,
+  type ManagedCodeAgentID
+} from "../providers/core/codeAgentDirectory.ts";
 import type { ProviderRegistry } from "../providers/core/registry.ts";
 import { asProviderId, type ExecutorProvider, type ExecutorProviderId } from "../providers/types.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
-
-const MANAGED_CODE_AGENT_IDS = ["codex", "claude", "pi-coding-agent", "qoder"] as const;
-type ManagedCodeAgentID = typeof MANAGED_CODE_AGENT_IDS[number];
 
 type CodeAgentsContext = {
   config: RunnerConfig;
@@ -43,9 +44,7 @@ export function registerCodeAgentsRoutes(router: Router, context: CodeAgentsCont
 }
 
 function codeAgentsResponse(context: CodeAgentsContext): Record<string, unknown> {
-  const agents = context.providersRegistry.list()
-    .filter((entry) => MANAGED_CODE_AGENT_IDS.includes(String(entry.id) as ManagedCodeAgentID))
-    .map(catalogEntryFromRegistry);
+  const agents = managedCodeAgentCatalog(context.providersRegistry);
   return {
     agents,
     available_ids: agents.filter((agent) => agent.enabled && agent.submittable).map((agent) => agent.id),

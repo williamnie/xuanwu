@@ -72,6 +72,9 @@ function matchIssueScope(envelope: PiActionEnvelope, issueIDs: number[], project
 }
 
 function matchRunnerResourceScope(envelope: PiActionEnvelope, resource: string): PiAuthorizationScopeMatch {
+  if (resource === "agent_catalog") return envelope.action_type === "agent.catalog_list"
+    ? matched("scope matched agent catalog")
+    : denied(`agent catalog scope does not match action ${envelope.action_type}`);
   if (resource === "issues") return runnerIssueAction(envelope.action_type)
     ? matched("scope matched runner issues")
     : denied(`runner issues scope does not match action ${envelope.action_type}`);

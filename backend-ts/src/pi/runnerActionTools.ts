@@ -5,6 +5,7 @@ import type { PiRunnerActionLayer } from "./runnerActions.ts";
 import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense.ts";
 
 export const PI_RUNNER_ACTION_TOOL_NAMES = [
+  "agent_catalog_list",
   "agent_profile_recommend",
   "executor_profile_assign_proposal",
   "executor_issue_create_proposal",
@@ -175,6 +176,9 @@ function repoActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
 
 function agentOrchestrationTools(actions: PiRunnerActionLayer): ToolDefinition[] {
   return [
+    actionTool("agent_catalog_list", "Agent Catalog List",
+      "List the Code Agent runtimes currently known to Xuanwu and the durable Agent Profiles available for routing. This is read-only and does not refresh or change provider state.",
+      Type.Object({}, objectOptions), actions.listAgentCatalog),
     actionTool("agent_profile_recommend", "Agent Profile Recommend",
       "Recommend executor provider/profile/skill intent strategy for an issue or project.",
       Type.Object({

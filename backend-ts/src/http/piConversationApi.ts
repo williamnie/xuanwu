@@ -51,6 +51,8 @@ import {
   reviewConversationSource
 } from "./piConversationReview.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import type { ProviderRegistry } from "../providers/core/registry.ts";
+import { managedCodeAgentCatalog } from "../providers/core/codeAgentDirectory.ts";
 import type { Router } from "./router.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 import {
@@ -65,6 +67,7 @@ type PiConversationContext = {
   config?: RunnerConfig;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  providersRegistry?: ProviderRegistry;
   restartDelayMs?: number;
   restartProcess?: () => void;
   supervisorManaged?: boolean;
@@ -898,6 +901,7 @@ async function openConversationRuntime(
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs,
     channelContext,
     chatToolMode: resolvePiChatToolMode(review),
+    codeAgentCatalog: context.providersRegistry ? managedCodeAgentCatalog(context.providersRegistry) : [],
     conversationID: conversation.id,
     config: context.config,
     onIssueEnqueued: (projectID) => startProjectLoop({
@@ -927,7 +931,7 @@ function conversationAuthorization(
 ) {
   if (review) return reviewConversationAuthorization();
   if (project) return runnerChatAuthorization(project, runnerChatActions);
-  return unboundRunnerChatAuthorization();
+  return unboundRunnerChatAuthorization(runnerChatActions);
 }
 
 function runnerChatAuthorization(
@@ -941,6 +945,7 @@ function runnerChatAuthorization(
     authorizedActions: runnerChatAuthorizedActions(actions),
     mode: "delegated" as const,
     scopes: [
+      { runner_resource: "agent_catalog" },
       { runner_resource: "issues" },
       { runner_resource: "runner_settings" },
       { runner_resource: "service_lifecycle" },
@@ -949,8 +954,8 @@ function runnerChatAuthorization(
   };
 }
 
-function unboundRunnerChatAuthorization() {
-  const actions = [
+function unboundRunnerChatAuthorization(runnerChatActions: readonly string[]) {
+  const directlyAuthorizedActions = [
     ...PI_READ_ONLY_ACTION_TYPES,
     "project.create",
     "runner.settings_update",
@@ -959,10 +964,12 @@ function unboundRunnerChatAuthorization() {
     "workspace.write_file"
   ];
   return {
-    allowedActions: actions,
-    authorizedActions: runnerChatAuthorizedActions(actions),
+    allowedActions: [...runnerChatActions],
+    askOnMissingAuthorization: true,
+    authorizedActions: runnerChatAuthorizedActions(directlyAuthorizedActions),
     mode: "delegated" as const,
     scopes: [
+      { runner_resource: "agent_catalog" },
       { runner_resource: "issues" },
       { runner_resource: "projects" },
       { runner_resource: "runner_settings" },

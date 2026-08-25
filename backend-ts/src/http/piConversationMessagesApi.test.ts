@@ -519,6 +519,53 @@ describe("Bun PI conversation message API", () => {
     }
   });
 
+  test("Feishu unbound follow-up asks for approval when PI resolves a mutation target from conversation semantics", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-feishu-semantic-target-api", provider: "pi-feishu-semantic-target" });
+    const provider = new FakeExecutorProvider();
+    try {
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("issue_enqueue_proposal", {
+            issue_id: 387,
+            rationale: "resolved from the conversation history"
+          }, { id: "issue-enqueue-387" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage("已向你发起 #387 的执行确认，批准后才会开始。")
+      ]);
+      insertProject(database, "demo");
+      insertIssue(database, { id: 387, projectID: "demo", title: "Semantic target" });
+      insertFauxAgent(database, "pi-feishu-semantic-target");
+      writeFauxModelsConfig(database, "pi-feishu-semantic-target");
+      await request(createDefaultRouter({ database }), "/api/pi/conversations", {
+        id: "feishu-semantic-target",
+        title: "Feishu"
+      });
+
+      const message = await request(createDefaultRouter({ database, providers: { codex: provider } }),
+        "/api/pi/conversations/feishu-semantic-target/messages", { prompt: "我已经改好了，开始吧" });
+      const result = await finalPiConversationSseData(message);
+      const action = listPiActions(database).find((item) => item.action_type === "issue.enqueue");
+
+      expect(result).toMatchObject({
+        conversation_id: "feishu-semantic-target",
+        text: "已向你发起 #387 的执行确认，批准后才会开始。"
+      });
+      expect(action).toMatchObject({
+        gate_decision: "ask",
+        gate_reason: "action is allowed by policy but requires explicit user approval for this target",
+        issue_id: 387,
+        project_id: "demo",
+        status: "pending"
+      });
+      expect(listIssues(database, { projectId: "demo" }).find((issue) => issue.id === 387)?.status).toBe("triage");
+      expect(provider.calls).toEqual([]);
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
   test("Feishu short retry reaches PI with its trusted Issue context and no intent router", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-feishu-retry-context-api", provider: "pi-feishu-retry-context" });

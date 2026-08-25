@@ -58,6 +58,14 @@ describe("PI authorization scope matcher", () => {
 
   test("keeps Runner settings and service lifecycle in explicit global scopes", () => {
     expect(matchPiAuthorizationScope(
+      { ...BASE, action_type: "agent.catalog_list", project_id: "" },
+      { runner_resource: "agent_catalog" }
+    )).toEqual({ matched: true, reason: "scope matched agent catalog" });
+    expect(matchPiAuthorizationScope(
+      { ...BASE, action_type: "issue.list" },
+      { runner_resource: "agent_catalog" }
+    )).toEqual({ matched: false, reason: "agent catalog scope does not match action issue.list" });
+    expect(matchPiAuthorizationScope(
       { ...BASE, action_type: "runner.settings_update", project_id: "" },
       { runner_resource: "runner_settings" }
     )).toEqual({ matched: true, reason: "scope matched runner settings" });

@@ -3,7 +3,9 @@ import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { listIssues, type Issue } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
+import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
 import type { Project } from "../db/repositories/projects.ts";
+import type { ProviderCatalogEntry } from "../providers/core/catalog.ts";
 import { createPendingPiAction, executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
 import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
 import {
@@ -24,9 +26,11 @@ export type PiAgentOrchestrationActionLayer = {
   createReviewWorkflow(input: AgentWorkflowInput): unknown;
   escalateNeedsUser(input: NeedsUserEscalationInput): unknown;
   recommendExecutorProfile(input: AgentRecommendationInput): unknown;
+  listAgentCatalog(input: object): unknown;
 };
 
 type OrchestrationContext = PiActionContext & {
+  codeAgentCatalog?: readonly ProviderCatalogEntry[];
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
 };
@@ -41,8 +45,58 @@ export function createPiAgentOrchestrationActions(
     createReportWorkflow: (input) => createAgentWorkflowAction(db, context, { ...input, role: "reporter" }),
     createReviewWorkflow: (input) => createAgentWorkflowAction(db, context, { ...input, role: "reviewer" }),
     escalateNeedsUser: (input) => escalateNeedsUser(db, context, input),
+    listAgentCatalog: () => safeListAgentCatalog(db, context),
     recommendExecutorProfile: (input) => safeRecommendExecutorProfile(db, context, input)
   };
+}
+
+function safeListAgentCatalog(db: RunnerDatabase, context: OrchestrationContext) {
+  return executeSafePiAction(db, context, {
+    actionType: "agent.catalog_list",
+    payload: {},
+    execute: () => agentCatalogSnapshot(db, context)
+  });
+}
+
+function agentCatalogSnapshot(db: RunnerDatabase, context: OrchestrationContext) {
+  const codeAgents = (context.codeAgentCatalog ?? []).map((agent) => ({
+    capabilities: agent.capabilities,
+    enabled: agent.enabled,
+    id: agent.id,
+    label: agent.label,
+    readiness_reason: agent.readiness_reason ?? "",
+    session_actions: agent.session_actions,
+    state: agent.state,
+    submittable: agent.submittable,
+    support_level: agent.supportLevel
+  }));
+  const available = new Set(codeAgents.filter((agent) => agent.enabled && agent.submittable).map((agent) => agent.id));
+  const catalogKnown = codeAgents.length > 0;
+  return {
+    agent_profiles: listAgentProfiles(db).map((profile) => ({
+      id: profile.id,
+      model: profile.model,
+      name: profile.name,
+      provider: profile.provider,
+      ...(catalogKnown ? { provider_available: available.has(profile.provider) } : {}),
+      reasoning_effort: profile.reasoning_effort,
+      service_tier: profile.service_tier,
+      skill_intents: parseStringList(profile.skill_intents)
+    })),
+    available_code_agent_ids: [...available],
+    code_agents: codeAgents,
+    source: "agent_catalog_list",
+    status: "completed"
+  };
+}
+
+function parseStringList(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
 }
 
 function assignExecutorProfileProposal(

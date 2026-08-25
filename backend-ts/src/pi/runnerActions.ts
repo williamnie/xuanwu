@@ -50,6 +50,7 @@ import {
 } from "./manualTrigger.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import type { ProviderCatalogEntry } from "../providers/core/catalog.ts";
 import { requestIssuePiAcceptance } from "../runner/piAcceptanceRequest.ts";
 import { materializeIssueBatch, normalizeIssueBatchPayload } from "./issueBatchProposal.ts";
 import { readIssueDependency } from "../domain/work/issueDependency.ts";
@@ -128,6 +129,7 @@ export type PiRunnerActionContext = PiActionContext & {
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  codeAgentCatalog?: readonly ProviderCatalogEntry[];
   restartDelayMs?: number;
   restartProcess?: () => void;
   sourceTurn?: PiRunnerSourceTurn;

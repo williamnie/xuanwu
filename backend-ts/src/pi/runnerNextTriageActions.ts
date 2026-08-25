@@ -109,7 +109,7 @@ function enqueueBatchCandidates(
       runGroupID,
       issue.id,
       cleanString(objectPayload(actionResult).status),
-      cleanString(objectPayload(actionResult).error)
+      actionFailureReason(actionResult)
     );
     collectBatchResult(result, issue, actionResult);
   }
@@ -135,8 +135,18 @@ function collectBatchResult(result: BatchBuckets, issue: Issue, actionResult: un
   const record = objectPayload(actionResult);
   const status = cleanString(record.status);
   if (status === "completed") result.enqueued.push(compactIssue(issue, getResultIssue(record.result)));
-  else if (status === "pending") result.pending.push(compactIssue(issue));
-  else result.failed.push({ ...compactIssue(issue), reason: cleanString(record.error) || status || "not_enqueued" });
+  else if (status === "pending") {
+    result.pending.push({
+      ...compactIssue(issue),
+      reason: actionFailureReason(record) || "explicit user approval is required"
+    });
+  } else {
+    result.failed.push({
+      ...compactIssue(issue),
+      reason: actionFailureReason(record) || status || "not_enqueued",
+      status: status || "failed"
+    });
+  }
 }
 
 function compactEnqueuedIssue(issue: Issue): Record<string, number | string> {
@@ -197,10 +207,12 @@ type BatchBuckets = { enqueued: unknown[]; failed: unknown[]; pending: unknown[]
 type SkipReason = { count: number; reason: string };
 
 function skipReasons(result: BatchBuckets): SkipReason[] {
-  return [
-    skipReason("approval_required", result.pending.length),
-    skipReason("enqueue_failed", result.failed.length)
-  ].filter((item) => item.count > 0);
+  const reasons = new Map<string, number>();
+  for (const item of [...result.pending, ...result.failed]) {
+    const reason = cleanString(objectPayload(item).reason) || "not_enqueued";
+    reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+  }
+  return [...reasons.entries()].map(([reason, count]) => skipReason(reason, count));
 }
 
 function skipReason(reason: string, count: number): SkipReason {
@@ -208,9 +220,19 @@ function skipReason(reason: string, count: number): SkipReason {
 }
 
 function batchStatus(result: BatchBuckets): string {
-  if (result.enqueued.length > 0) return "completed";
+  if (result.enqueued.length > 0) {
+    return result.pending.length > 0 || result.failed.length > 0 ? "partial" : "completed";
+  }
   if (result.pending.length > 0) return "pending";
-  return "skipped";
+  const failedStatuses = result.failed.map((item) => cleanString(objectPayload(item).status));
+  return failedStatuses.length > 0 && failedStatuses.every((status) => status === "denied")
+    ? "denied"
+    : "failed";
+}
+
+function actionFailureReason(value: unknown): string {
+  const record = objectPayload(value);
+  return cleanString(record.error) || cleanString(record.gate_reason);
 }
 
 function enqueueActionContext(context: NextTriageContext, issue: Issue): NextTriageContext {

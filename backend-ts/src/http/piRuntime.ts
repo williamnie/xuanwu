@@ -22,6 +22,7 @@ import {
 } from "../pi/piRuntimeTools.ts";
 import type { SupervisorContextResolution } from "../pi/supervisorContextResolver.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import type { ProviderCatalogEntry } from "../providers/core/catalog.ts";
 import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "../pi/supervisorControlContracts.ts";
 import { installPiProviderSecretOverride } from "../security/secrets/piProviderRuntime.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
@@ -42,6 +43,7 @@ export type RuntimeSessionInput = {
   bus?: EventBus;
   channelContext?: string;
   chatToolMode?: PiChatToolMode;
+  codeAgentCatalog?: readonly ProviderCatalogEntry[];
   cliConnectorDirs?: string[];
   conversationID: string;
   config?: RunnerConfig;
@@ -179,6 +181,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     authorization: input.authorization,
     bus: input.bus,
     cliConnectorDirs: input.cliConnectorDirs,
+    codeAgentCatalog: input.codeAgentCatalog,
     conversationID: input.conversationID,
     config: input.config,
     delegationID: input.delegationID,

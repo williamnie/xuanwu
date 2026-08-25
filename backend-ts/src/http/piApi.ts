@@ -4,6 +4,7 @@ import type { RunnerConfig } from "../config/env.ts";
 import { DEFAULT_PI_AGENT_ID, ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import type { ProviderRegistry } from "../providers/core/registry.ts";
 import {
   deleteProjectPiSettings,
   getPiPersona,
@@ -54,6 +55,7 @@ type PiApiContext = {
   database: RunnerDatabase;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  providersRegistry?: ProviderRegistry;
   restartDelayMs?: number;
   restartProcess?: () => void;
   supervisorManaged?: boolean;

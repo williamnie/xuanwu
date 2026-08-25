@@ -1099,7 +1099,7 @@ describe("PI runner action tools", () => {
         enqueued_count: 0,
         pending_count: 6,
         skipped: [
-          { count: 6, reason: "approval_required" }
+          { count: 6, reason: "risk requires user confirmation" }
         ],
         status: "pending"
       });
@@ -1362,6 +1362,54 @@ describe("PI runner action tools", () => {
       await fixture.close();
     }
   });
+
+  test("lists the current Code Agents and durable Agent Profiles through one read-only tool", async () => {
+    const fixture = await openFixture();
+    try {
+      insertAgentProfile(fixture.db, {
+        id: "codex-general",
+        name: "Codex General",
+        skillIntents: "[\"xuanwu\"]"
+      });
+      const actions = createPiRunnerActions(fixture.db, {
+        codeAgentCatalog: [{
+          capabilities: { issueExecution: true },
+          enabled: true,
+          id: "codex",
+          label: "Codex",
+          legacy_capabilities: [],
+          native_actions: [],
+          session_actions: ["create", "resume"],
+          settings: { settings: [] },
+          state: "ready",
+          submittable: true,
+          supportLevel: "tested"
+        }],
+        project: fixture.project
+      });
+
+      const response = actions.listAgentCatalog({}) as {
+        agent_profiles?: Array<Record<string, unknown>>;
+        available_code_agent_ids?: string[];
+        code_agents?: Array<Record<string, unknown>>;
+        status: string;
+      };
+
+      expect(response).toMatchObject({
+        agent_profiles: expect.arrayContaining([expect.objectContaining({
+            id: "codex-general",
+            provider: "codex",
+            provider_available: true,
+            skill_intents: ["xuanwu"]
+          })]),
+        available_code_agent_ids: ["codex"],
+        code_agents: [expect.objectContaining({ id: "codex", state: "ready", submittable: true })],
+        status: "completed"
+      });
+    } finally {
+      await fixture.close();
+    }
+  });
 });
 function projectIDs(result: unknown): string[] {
   return (result as { items: Project[] }).items.map((project) => project.id);
@@ -1398,6 +1446,7 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     enqueueIssueProposal: record("enqueueIssueProposal"),
     cancelIssueCompletionWatch: record("cancelIssueCompletionWatch"),
     listIssues: record("listIssues"),
+    listAgentCatalog: record("listAgentCatalog"),
     listIssueCompletionWatches: record("listIssueCompletionWatches"),
     listMcpRegistry: record("listMcpRegistry"),
     listMcpResources: record("listMcpResources"),

@@ -20,6 +20,7 @@ export const RUNNER_BUILTIN_PROVIDER_ID = "runner-builtin";
 const PRIMITIVE_READ_TOOL_NAMES = ["read", "grep", "find", "ls"] as const;
 const READ_TOOL_NAMES = new Set<string>([
   ...PRIMITIVE_READ_TOOL_NAMES,
+  "agent_catalog_list",
   "issue_list",
   "issue_status_summary",
   "issue_execution_status",
@@ -55,6 +56,7 @@ const DANGEROUS_TOOL_NAMES = new Set<string>([
 const SUPERVISOR_CONTROL_TOOLS = new Set<string>(SUPERVISOR_CONTROL_TOOL_NAMES);
 const LOCAL_WORKSPACE_TOOLS = new Set<string>(PI_LOCAL_WORKSPACE_TOOL_NAMES);
 const CHAT_BOOTSTRAP_TOOLS = new Set([
+  "agent_catalog_list",
   "project_status", "project_list", "issue_list", "issue_status_summary", "issue_execution_status", "issue_read",
   "project_create", "workspace_make_directory", "workspace_write_file", "manual_context_intake",
   "issue_create_proposal", "issue_create_batch_proposal", "issue_enqueue_proposal", "issue_schedule_enqueue", "issue_status_update",
@@ -82,6 +84,13 @@ const MANAGER_CYCLE_TOOLS = new Set([
   "memory_search", "memory_remember", "review_workflow_request", "report_workflow_request"
 ]);
 const TOOL_ALIASES: Record<string, string[]> = {
+  agent_catalog_list: [
+    "list code agents and agent profiles",
+    "available code agents",
+    "有哪些 code agent",
+    "可用的 code agent",
+    "代理列表"
+  ],
   issue_completion_watch_cancel: ["cancel completion notification", "取消完成提醒", "取消结果通知"],
   issue_completion_watch_create: [
     "issue completion watch notification",
