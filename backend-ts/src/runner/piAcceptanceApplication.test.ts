@@ -251,6 +251,73 @@ describe("PI acceptance decision application", () => {
     }
   });
 
+  test("pauses same-session continuation and notifies the user after three no-progress Runs", async () => {
+    const db = await fixture();
+    const provider = new ContinuingProvider();
+    const published: Array<{ type: string }> = [];
+    try {
+      const issue = completedIssue(db, "No-progress loop", "session-loop", "turn-1");
+      const runtime = {
+        bus: { publish: (event: { type: string }) => published.push(event) },
+        database: db,
+        providers: { codex: provider }
+      };
+
+      for (let index = 0; index < 2; index += 1) {
+        const card = await buildIssueCompletionCard(db, issue.id);
+        const updated = await applyPiAcceptanceDecision(
+          runtime,
+          card,
+          decision("continue_same_session", "继续完成实现。", undefined, false)
+        );
+        expect(updated.status).toBe("in_progress");
+      }
+      const thirdCard = await buildIssueCompletionCard(db, issue.id);
+      const updated = await applyPiAcceptanceDecision(
+        runtime,
+        thirdCard,
+        decision("continue_same_session", "继续完成实现。", undefined, false)
+      );
+
+      expect(updated.status).toBe("needs_user");
+      expect(provider.inputs).toHaveLength(2);
+      expect(listIssueRuns(db, issue.id)).toHaveLength(3);
+      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+        owner: "human",
+        phase: "human_review",
+        request: { kind: "decision" }
+      });
+      expect(published).toContainEqual(expect.objectContaining({ type: "pi.needs_user" }));
+      expect(continuationStreaks(db, issue.id)).toEqual([1, 2, 3]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("resets the no-progress streak when PI observes meaningful progress", async () => {
+    const db = await fixture();
+    const provider = new ContinuingProvider();
+    try {
+      const issue = completedIssue(db, "Progressing loop", "session-progress", "turn-1");
+      const runtime = { database: db, providers: { codex: provider } };
+      for (const madeProgress of [false, true, false]) {
+        const card = await buildIssueCompletionCard(db, issue.id);
+        const updated = await applyPiAcceptanceDecision(
+          runtime,
+          card,
+          decision("continue_same_session", "继续完成实现。", undefined, madeProgress)
+        );
+        expect(updated.status).toBe("in_progress");
+      }
+
+      expect(provider.inputs).toHaveLength(3);
+      expect(listIssueRuns(db, issue.id)).toHaveLength(4);
+      expect(continuationStreaks(db, issue.id)).toEqual([1, 0, 1]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("does not race past an open human review request", async () => {
     const db = await fixture();
     try {
@@ -455,15 +522,27 @@ function selectProviderDefaultProfile(db: RunnerDatabase, issueID: number, provi
   db.sqlite.run("update issues set agent_profile_id=? where id=?", [`provider-default-${issueID}`, issueID]);
 }
 
+function continuationStreaks(db: RunnerDatabase, issueID: number): number[] {
+  return db.sqlite.query<{ payload: string }, [number]>(
+    "select payload from issue_events where issue_id=? and type='issue.pi_continuation_progress.v1' order by id"
+  ).all(issueID).map((row) => Number((JSON.parse(row.payload) as Record<string, unknown>).no_progress_streak));
+}
+
 function decision(
   value: PiAcceptanceDecision["decision"],
   followUp?: string,
-  humanReviewKind?: PiAcceptanceDecision["human_review_kind"]
+  humanReviewKind?: PiAcceptanceDecision["human_review_kind"],
+  madeProgress = true
 ): PiAcceptanceDecision {
   return {
     confidence: "high",
     decision: value,
     evidence_refs: ["run:fixture"],
+    progress: {
+      evidence_refs: ["run:fixture"],
+      made_progress: madeProgress,
+      summary: madeProgress ? "当前 Run 有实质进展。" : "当前 Run 没有实质进展。"
+    },
     rationale: value === "accept" ? "当前事实满足 Issue。" : "需要在原 Session 补充明确工作。",
     unmet_requirements: value === "accept" ? [] : ["缺少一项明确验证"],
     ...(humanReviewKind ? { human_review_kind: humanReviewKind } : {}),

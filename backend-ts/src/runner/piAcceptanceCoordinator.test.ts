@@ -378,6 +378,7 @@ describe("issue-scoped PI acceptance coordinator", () => {
               decision: "continue_same_session",
               evidence_refs: ["run:fixture"],
               follow_up_prompt: "补一项真实验证。",
+              progress: { made_progress: true, evidence_refs: ["run:fixture"], summary: "已完成部分实现。" },
               rationale: "还缺少一项验证。",
               unmet_requirements: ["真实验证"]
             },
@@ -513,6 +514,7 @@ function acceptance(
       confidence: "high",
       decision,
       evidence_refs: ["run:fixture"],
+      progress: { made_progress: true, evidence_refs: ["run:fixture"], summary: "当前 Run 有实质进展。" },
       rationale: decision === "accept" ? "当前 Run 的事实满足 Issue。" : "需要用户决定。",
       unmet_requirements: [],
       ...(humanReviewKind ? { human_review_kind: humanReviewKind } : {})

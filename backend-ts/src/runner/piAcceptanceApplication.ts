@@ -24,8 +24,10 @@ import { reconcileProviderOutcome } from "./providerOutcome.ts";
 
 export const PI_ACCEPTANCE_DECISION_EVENT = "issue.pi_acceptance_decision.v1";
 export const PI_ACCEPTANCE_APPLIED_EVENT = "issue.pi_acceptance_applied.v1";
+export const PI_CONTINUATION_PROGRESS_EVENT = "issue.pi_continuation_progress.v1";
 export const PI_HUMAN_ACCEPTANCE_HONORED_EVENT = "issue.pi_human_acceptance_honored.v1";
 export const MAX_AUTOMATIC_FRESH_SESSION_RETRIES = 2;
+export const MAX_CONSECUTIVE_NO_PROGRESS_CONTINUATIONS = 3;
 
 export type PiAcceptanceApplicationRuntime = {
   bus?: Pick<EventBus, "publish">;
@@ -48,7 +50,59 @@ export async function applyPiAcceptanceDecision(
   if (effectiveDecision.decision === "needs_user") return requestUser(runtime, card, effectiveDecision);
   if (effectiveDecision.decision === "failed") return failIssue(runtime, card, effectiveDecision);
   if (effectiveDecision.decision === "retry") return retryInNewSession(runtime, card, effectiveDecision);
+  const continuation = recordContinuationProgress(runtime.database, card, effectiveDecision);
+  if (continuation.noProgressStreak >= MAX_CONSECUTIVE_NO_PROGRESS_CONTINUATIONS) {
+    return requestUser(runtime, card, {
+      ...effectiveDecision,
+      decision: "needs_user",
+      human_review_kind: "decision",
+      rationale: `连续 ${continuation.noProgressStreak} 个 Run 没有实质进展，Runner 已暂停自动 continue，避免原地循环和持续消耗资源。${effectiveDecision.rationale}`,
+      unmet_requirements: [
+        ...effectiveDecision.unmet_requirements,
+        "需要人工检查当前 Provider Session，并决定继续、调整提示词、切换模型或终止。"
+      ]
+    });
+  }
   return continueSameSession(runtime, card, effectiveDecision);
+}
+
+type ContinuationProgress = {
+  noProgressStreak: number;
+};
+
+function recordContinuationProgress(
+  db: RunnerDatabase,
+  card: CompletionCard,
+  decision: PiAcceptanceDecision
+): ContinuationProgress {
+  const events = listIssueEvents(db, card.issue.id, {
+    limit: 500,
+    types: [PI_CONTINUATION_PROGRESS_EVENT]
+  });
+  const existing = events.map((event) => ({ event, payload: objectValue(parseJson(event.payload)) }))
+    .find(({ payload }) => cleanString(payload.card_fingerprint) === card.fingerprint);
+  if (existing) return { noProgressStreak: nonNegativeInteger(existing.payload.no_progress_streak) };
+
+  const previous = events.at(-1);
+  const previousPayload = objectValue(parseJson(previous?.payload ?? ""));
+  const sameSession = cleanString(previousPayload.provider_session_id) !== ""
+    && cleanString(previousPayload.provider_session_id) === card.run.provider_session_id;
+  const humanIntervened = card.human_review !== null
+    && Date.parse(card.human_review.answered_at) > Date.parse(previous?.created_at ?? "");
+  const priorStreak = sameSession && !humanIntervened
+    ? nonNegativeInteger(previousPayload.no_progress_streak)
+    : 0;
+  const noProgressStreak = decision.progress.made_progress ? 0 : priorStreak + 1;
+  recordIssueEvent(db, card.issue.id, PI_CONTINUATION_PROGRESS_EVENT, {
+    card_fingerprint: card.fingerprint,
+    evidence_refs: decision.progress.evidence_refs,
+    made_progress: decision.progress.made_progress,
+    no_progress_streak: noProgressStreak,
+    progress_summary: decision.progress.summary,
+    provider_session_id: card.run.provider_session_id,
+    run_id: card.run.id
+  });
+  return { noProgressStreak };
 }
 
 function honorAcceptedDeliveryReview(
@@ -83,6 +137,7 @@ function honorAcceptedDeliveryReview(
     confidence: decision.confidence,
     decision: "accept",
     evidence_refs: [...new Set([...decision.evidence_refs, `human-review:${review.request_id}`])],
+    progress: decision.progress,
     rationale: `用户已明确接受当前交付及该验收请求列出的取舍；不得因同一缺口重复请求确认、继续执行或启动新的执行 Session。${decision.rationale}`,
     unmet_requirements: []
   };
@@ -471,6 +526,10 @@ function objectValue(value: unknown): Record<string, unknown> {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function nonNegativeInteger(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
 
 function safeError(error: unknown): string {

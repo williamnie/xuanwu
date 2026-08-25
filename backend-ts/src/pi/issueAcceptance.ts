@@ -23,6 +23,11 @@ export const PI_ACCEPTANCE_DECISION_SCHEMA = Type.Object({
   rationale: Type.String({ minLength: 1, maxLength: 8_000 }),
   evidence_refs: Type.Array(Type.String({ minLength: 1, maxLength: 512 }), { maxItems: 32 }),
   unmet_requirements: Type.Array(Type.String({ minLength: 1, maxLength: 2_000 }), { maxItems: 32 }),
+  progress: Type.Object({
+    made_progress: Type.Boolean(),
+    evidence_refs: Type.Array(Type.String({ minLength: 1, maxLength: 512 }), { maxItems: 32 }),
+    summary: Type.String({ minLength: 1, maxLength: 2_000 })
+  }, { additionalProperties: false }),
   human_review_kind: Type.Optional(Type.Union([
     Type.Literal("decision"),
     Type.Literal("acceptance"),
@@ -128,13 +133,14 @@ function acceptancePrompt(card: CompletionCard, language: string): string {
     "This is a semantic acceptance decision, not a shell-command classifier and not a project manager meeting.",
     "Return exactly one JSON object. No markdown, code fences, or prose outside JSON.",
     language === "zh-CN"
-      ? "rationale、unmet_requirements、follow_up_prompt 使用简体中文；schema key 和 decision 枚举保持英文。"
+      ? "rationale、unmet_requirements、progress.summary、follow_up_prompt 使用简体中文；schema key 和 decision 枚举保持英文。"
       : "Use English for natural-language fields; keep schema keys and decision enums unchanged.",
-    "Required fields: decision, confidence, rationale, evidence_refs, unmet_requirements. follow_up_prompt is optional.",
+    "Required fields: decision, confidence, rationale, evidence_refs, unmet_requirements, progress. follow_up_prompt is optional.",
     `decision MUST be exactly one string literal from: ${PI_ACCEPTANCE_DECISIONS.join(", ")}.`,
     "confidence MUST be exactly one string literal: low, medium, or high. Never output a number, probability, percentage, or any other confidence form.",
-    "The exact JSON shape is: {\"decision\":\"accept|continue_same_session|retry|needs_user|failed\",\"confidence\":\"low|medium|high\",\"rationale\":\"...\",\"evidence_refs\":[\"...\"],\"unmet_requirements\":[\"...\"],\"human_review_kind\":\"decision|acceptance|risk_acceptance when needs_user\",\"follow_up_prompt\":\"optional...\"}.",
+    "The exact JSON shape is: {\"decision\":\"accept|continue_same_session|retry|needs_user|failed\",\"confidence\":\"low|medium|high\",\"rationale\":\"...\",\"evidence_refs\":[\"...\"],\"unmet_requirements\":[\"...\"],\"progress\":{\"made_progress\":true|false,\"evidence_refs\":[\"...\"],\"summary\":\"...\"},\"human_review_kind\":\"decision|acceptance|risk_acceptance when needs_user\",\"follow_up_prompt\":\"optional...\"}.",
     "Judge whether the chronological facts satisfy the authoritative Issue goal and acceptance criteria.",
+    "Judge progress for this Run separately from completion. Set progress.made_progress=true only when this Run produced a concrete new implementation, decision, verified fact, or validation result that materially reduced the remaining work. Repeated planning, repeated inspection, an empty assistant turn, or read-only commands that do not establish a new relevant fact are not progress. Cite only current Run/card facts in progress.evidence_refs.",
     "Commands are observations, not pre-classified proof. Read their command, exit_code, order, output excerpt, changed files, commits, final message, and warnings together.",
     "The session field is a live bounded read of the Provider Session. If latest_turn_matches_run is false, treat latest_turn_items and session.current_git as later facts that supersede a stale canonical Run card when they clearly belong to this Issue.",
     "When human_review is present, human_review.request is the exact request snapshot and its explicit response is authoritative for that stated product, scope, risk, cost, or external-verification choice. Judge the current workspace together with origin_completion and intervening_runs. If action=accept and request.kind=acceptance, do not choose needs_user for the same criterion or any paraphrase of it; choose accept unless the facts require a concrete technical continuation or failure. An intentionally interrupted mistaken retry is not by itself an implementation failure and must not cause another retry or Provider Session.",
