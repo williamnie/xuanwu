@@ -5,6 +5,7 @@ import test from 'node:test';
 const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
 const workbenchCss = readFileSync(new URL('../GeekWorkbench.css', import.meta.url), 'utf8');
 const source = readFileSync(new URL('./AppSidebar.jsx', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
 
 function ruleFor(selector, stylesheet = css) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -44,7 +45,20 @@ test('sidebar footer keeps settings and theme as compact horizontal icons', () =
   assert.match(actionRule, /width:\s*34px/);
   assert.doesNotMatch(source, /sidebar-language-row|sidebar-version/);
   assert.match(source, /function FooterIcon/);
-  assert.match(css, /@media \(max-width: 768px\) \{[\s\S]*?\.sidebar \{ width: 84px;/);
-  assert.match(css, /\.sidebar-footer-actions \.nav-item \{ flex-basis: 32px;/);
   assert.match(workbenchActionRule, /border-color:\s*transparent/);
+});
+
+test('mobile navigation uses an accessible off-canvas drawer instead of an unlabeled icon rail', () => {
+  assert.match(css, /@media \(max-width: 760px\)/);
+  assert.match(css, /max-width:\s*320px/);
+  assert.match(css, /transform:\s*translateX\(-100%\)/);
+  assert.match(css, /width:\s*88vw/);
+  assert.match(css, /\.app-container\.mobile-sidebar-open \.sidebar\s*\{[^}]*transform:\s*translateX\(0\)/);
+  assert.doesNotMatch(css, /\.sidebar \{ width: 84px/);
+  assert.match(appSource, /useState\(false\)/);
+  assert.match(appSource, /aria-controls="app-sidebar"/);
+  assert.match(appSource, /event\.key === 'Escape'/);
+  assert.match(appSource, /document\.body\.style\.overflow = 'hidden'/);
+  assert.match(source, /aria-modal=\{isMobileViewport && mobileSidebarOpen/);
+  assert.match(source, /inert=\{isMobileViewport && !mobileSidebarOpen/);
 });

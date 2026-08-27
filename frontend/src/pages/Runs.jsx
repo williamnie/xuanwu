@@ -34,7 +34,7 @@ const RUN_REFRESH_EVENT_TYPES = new Set([
   'run.lifecycle.run_materialized.v1',
 ]);
 
-export default function Runs({ navigateTo, onPageContextChange, selectedRunId = '', selectedSessionId = '' }) {
+export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextChange, selectedRunId = '', selectedSessionId = '' }) {
   const [runs, setRuns] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
@@ -206,7 +206,10 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
           loading={loading}
           loadingMore={loadingMore}
           onLoadMore={loadMore}
-          onNewProviderSession={openNewProviderSession}
+          onNewProviderSession={() => {
+            openNewProviderSession();
+            onMobileSidebarAction?.();
+          }}
           onRefresh={() => loadFirstPage()}
           onSelectRun={selectRun}
           runs={runs}

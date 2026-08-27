@@ -458,10 +458,13 @@
   padding-left: 0 !important;
 }
 
-@media (max-width: 960px) {
+@media (min-width: 761px) and (max-width: 960px) {
   .sessions-app-sidebar-slot {
     display: none;
   }
+}
+
+@media (max-width: 960px) {
 
   .sessions-client-container {
     flex-direction: column;
@@ -479,6 +482,17 @@
 
   .client-chat-composer-section {
     padding: 12px;
+  }
+}
+
+@media (max-width: 760px) {
+  .in-sessions-page.runs-page.sidebar-collapsed.mobile-sidebar-open .sidebar {
+    display: flex !important;
+  }
+
+  .in-sessions-page.runs-page .main-content {
+    height: calc(100dvh - var(--mobile-app-header-height)) !important;
+    max-height: calc(100dvh - var(--mobile-app-header-height)) !important;
   }
 }
 

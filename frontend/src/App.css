@@ -178,6 +178,10 @@
 }
 
 @media (max-width: 760px) {
+  .in-sessions-page:not(.sidebar-collapsed) .guardian-alert-stack {
+    left: 12px;
+  }
+
   .guardian-alert-banner {
     flex-direction: column;
   }

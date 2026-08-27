@@ -8,6 +8,7 @@ import {
   Settings,
   Sun,
   LayoutDashboard,
+  X,
 } from 'lucide-react';
 import BrandMark from './BrandMark';
 import { useDynamicFavicon } from './brandFavicon.js';
@@ -56,6 +57,10 @@ export default function AppSidebar({
   theme,
   toggleTheme,
   toggleSidebar,
+  isMobileViewport,
+  mobileSidebarOpen,
+  onMobileClose,
+  sidebarRef,
 }) {
   const { t } = useI18n();
   const brandState = useRunnerBrandState();
@@ -64,21 +69,34 @@ export default function AppSidebar({
   const primaryNavItems = navItems.filter(item => item.placement === 'primary');
   const footerNavItems = navItems.filter(item => item.placement === 'footer');
   const navLabel = (item) => t(NAV_TRANSLATION_KEYS[item.page] || item.label);
+  const closeMobileDrawer = () => {
+    if (isMobileViewport) onMobileClose?.();
+  };
   useDynamicFavicon(brandState);
 
   return (
-    <aside className="sidebar">
+    <aside
+      aria-label={t('sidebar.navigation')}
+      aria-modal={isMobileViewport && mobileSidebarOpen ? true : undefined}
+      className="sidebar"
+      id="app-sidebar"
+      inert={isMobileViewport && !mobileSidebarOpen ? true : undefined}
+      ref={sidebarRef}
+      role={isMobileViewport ? 'dialog' : undefined}
+    >
       <div className="sidebar-brand-row">
         <div className="sidebar-brand-main">
           <BrandMark className="sidebar-brand" state={brandState} />
           <ApiStatus />
         </div>
         <button
+          aria-label={isMobileViewport ? t('sidebar.close') : t('sidebar.collapse')}
           className="sidebar-collapse-btn"
-          onClick={toggleSidebar}
-          title={t('sidebar.collapse')}
+          onClick={isMobileViewport ? onMobileClose : toggleSidebar}
+          title={isMobileViewport ? t('sidebar.close') : t('sidebar.collapse')}
+          type="button"
         >
-          <ChevronLeft size={16} />
+          {isMobileViewport ? <X size={16} /> : <ChevronLeft size={16} />}
         </button>
       </div>
 
@@ -89,7 +107,10 @@ export default function AppSidebar({
             aria-label={navLabel(item)}
             className={`nav-item ${activeNavPage === item.page ? 'active' : ''}`}
             key={item.page}
-            onClick={() => navigateTo(item.page)}
+            onClick={() => {
+              navigateTo(item.page);
+              closeMobileDrawer();
+            }}
           >
             <NavIconLabel Icon={NAV_ICONS[item.icon]} label={navLabel(item)} />
             <ProductNavBadge active={activeNavPage === item.page} page={item.page} />
@@ -104,6 +125,7 @@ export default function AppSidebar({
           handleOpenNewIssue={handleOpenNewIssue}
           setFilterProject={setFilterProject}
           setFocusFilter={setFocusFilter}
+          onMobileAction={closeMobileDrawer}
         />
       )}
 
@@ -118,7 +140,10 @@ export default function AppSidebar({
               aria-label={navLabel(item)}
               className={`nav-item nav-item-secondary ${activeNavPage === item.page ? 'active' : ''}`}
               key={item.page}
-              onClick={() => navigateTo(item.page)}
+              onClick={() => {
+                navigateTo(item.page);
+                closeMobileDrawer();
+              }}
               type="button"
             >
               <FooterIcon Icon={NAV_ICONS[item.icon]} />
@@ -186,6 +211,7 @@ function IssuesSidebarFilters({
   handleOpenNewIssue,
   setFilterProject,
   setFocusFilter,
+  onMobileAction,
 }) {
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
@@ -206,7 +232,7 @@ function IssuesSidebarFilters({
         <span>— Issues • {workSummary.counts?.total || 0}</span>
       </div>
 
-      <button className="btn-new-issue-sidebar" onClick={() => handleOpenNewIssue('todo')}>
+      <button className="btn-new-issue-sidebar" onClick={() => { handleOpenNewIssue('todo'); onMobileAction?.(); }}>
         <span>+ New issue</span>
         <span className="sidebar-new-issue-shortcut">c</span>
       </button>
@@ -223,27 +249,27 @@ function IssuesSidebarFilters({
 
       <div className="sidebar-section-title">Focus</div>
       <div className="sidebar-focus-list">
-        <button className={`sub-filter-item ${focusFilter === 'all' ? 'active' : ''}`} onClick={() => setFocusFilter('all')}>
+        <button className={`sub-filter-item ${focusFilter === 'all' ? 'active' : ''}`} onClick={() => { setFocusFilter('all'); onMobileAction?.(); }}>
           <span>All columns</span>
           <span>{allCount}</span>
         </button>
 
-        <button className={`sub-filter-item ${focusFilter === 'triage' ? 'active' : ''}`} onClick={() => setFocusFilter('triage')}>
+        <button className={`sub-filter-item ${focusFilter === 'triage' ? 'active' : ''}`} onClick={() => { setFocusFilter('triage'); onMobileAction?.(); }}>
           <span><span className="sub-filter-dot is-triage"></span>Just Triage</span>
           <span>{triageCount}</span>
         </button>
 
-        <button className={`sub-filter-item ${focusFilter === 'active' ? 'active' : ''}`} onClick={() => setFocusFilter('active')}>
+        <button className={`sub-filter-item ${focusFilter === 'active' ? 'active' : ''}`} onClick={() => { setFocusFilter('active'); onMobileAction?.(); }}>
           <span><span className="sub-filter-dot is-active"></span>Active only</span>
           <span>{activeCount}</span>
         </button>
 
-        <button className={`sub-filter-item ${focusFilter === 'failed' ? 'active' : ''}`} onClick={() => setFocusFilter('failed')}>
+        <button className={`sub-filter-item ${focusFilter === 'failed' ? 'active' : ''}`} onClick={() => { setFocusFilter('failed'); onMobileAction?.(); }}>
           <span><span className="sub-filter-dot is-failed"></span>Failed</span>
           <span>{failedCount}</span>
         </button>
 
-        <button className={`sub-filter-item ${focusFilter === 'archive' ? 'active' : ''}`} onClick={() => setFocusFilter('archive')}>
+        <button className={`sub-filter-item ${focusFilter === 'archive' ? 'active' : ''}`} onClick={() => { setFocusFilter('archive'); onMobileAction?.(); }}>
           <span><span className="sub-filter-dot is-archive"></span>Archive</span>
           <span>{archiveCount}</span>
         </button>
@@ -251,7 +277,7 @@ function IssuesSidebarFilters({
 
       <div className="sidebar-section-title">Project</div>
       <div className="sidebar-project-list">
-        <button className={`sub-filter-item ${filterProject === '' ? 'active' : ''}`} onClick={() => setFilterProject('')}>
+        <button className={`sub-filter-item ${filterProject === '' ? 'active' : ''}`} onClick={() => { setFilterProject(''); onMobileAction?.(); }}>
           <span>All projects</span>
           <span>{workSummary.counts?.total || 0}</span>
         </button>
@@ -259,7 +285,7 @@ function IssuesSidebarFilters({
         {projects.map(proj => {
           const count = workSummary.project_counts?.find(item => item.project_id === proj.id)?.counts?.total || 0;
           return (
-            <button key={proj.id} className={`sub-filter-item ${filterProject === proj.id ? 'active' : ''}`} onClick={() => setFilterProject(proj.id)}>
+            <button key={proj.id} className={`sub-filter-item ${filterProject === proj.id ? 'active' : ''}`} onClick={() => { setFilterProject(proj.id); onMobileAction?.(); }}>
               <span><span className="sub-filter-dot is-project"></span>{proj.name}</span>
               <span>{count}</span>
             </button>

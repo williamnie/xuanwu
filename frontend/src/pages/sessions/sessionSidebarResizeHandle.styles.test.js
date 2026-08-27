@@ -6,6 +6,7 @@ const css = readFileSync(new URL('./SessionsClient.css', import.meta.url), 'utf8
 const appSidebar = readFileSync(new URL('../../components/AppSidebar.jsx', import.meta.url), 'utf8');
 const sessionsPage = readFileSync(new URL('../Sessions.jsx', import.meta.url), 'utf8');
 const sessionSidebar = readFileSync(new URL('./SessionSidebar.jsx', import.meta.url), 'utf8');
+const piChatSidebarCss = readFileSync(new URL('../PiChatSidebar.css', import.meta.url), 'utf8');
 
 function ruleFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -34,4 +35,11 @@ test('sessions no longer renders an inner resizable sidebar divider', () => {
   assert.doesNotMatch(sessionSidebar, /sessions-sidebar-resize-handle/);
   assert.doesNotMatch(css, /sessions-sidebar-resize-handle/);
   assert.doesNotMatch(css, /resizing-session-sidebar/);
+});
+
+test('mobile drawer keeps session and conversation lists reachable', () => {
+  assert.match(css, /@media \(min-width: 761px\) and \(max-width: 960px\) \{[\s\S]*?\.sessions-app-sidebar-slot\s*\{[\s\S]*?display:\s*none/);
+  assert.match(piChatSidebarCss, /@media \(min-width: 761px\) and \(max-width: 980px\) \{[\s\S]*?\.sessions-app-sidebar-slot\s*\{[\s\S]*?display:\s*none/);
+  assert.doesNotMatch(css, /@media \(max-width: 960px\) \{\s*\.sessions-app-sidebar-slot\s*\{\s*display:\s*none/);
+  assert.doesNotMatch(piChatSidebarCss, /@media \(max-width: 980px\) \{\s*\.sessions-app-sidebar-slot\s*\{\s*display:\s*none/);
 });

@@ -1,5 +1,5 @@
 import { eventsApi } from './api/events.js';
-import { lazy, Suspense, useCallback, useEffect } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useImmer } from 'use-immer';
 import { systemApi } from './api/system.js';
 import { createBackendConnectionMonitor } from './api/backendConnectionMonitor.js';
@@ -8,6 +8,7 @@ import { compatibilityApi } from './api/compatibility.js';
 import {
   assistantModuleForPage,
   isAssistantModulePage,
+  productNavPageForRoute,
   resolveProductPage,
 } from './pages/assistantModules';
 import AppSidebar from './components/AppSidebar';
@@ -68,6 +69,15 @@ const PAGE_DATA_SLICES = {
   handoffs: ['projects'],
 };
 
+const MOBILE_PAGE_TITLE_KEYS = {
+  'ask-xuanwu': 'nav.askXuanwu',
+  automations: 'nav.automations',
+  'command-center': 'nav.commandCenter',
+  runs: 'nav.runs',
+  settings: 'nav.settings',
+  work: 'nav.work',
+};
+
 function getReconcileSlices(currentPage, selectedIssueId) {
   // IssueDetail 自己读取单条 issue；不要在详情页额外轮询整张 issues 列表。
   if (currentPage === 'issues' && selectedIssueId) return [];
@@ -85,6 +95,10 @@ function PageLoadingFallback() {
 
 export default function App() {
   const { refreshLanguage, t } = useI18n();
+  const [isMobileViewport, setIsMobileViewport] = useState(() => globalThis.matchMedia?.('(max-width: 760px)').matches || false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const mobileMenuButtonRef = useRef(null);
+  const sidebarRef = useRef(null);
   const initialRoute = appRouteFromHash(globalThis.location?.hash, { workBoardEnabled: WORK_BOARD_ENABLED });
   const [appState, updateAppState] = useImmer(() => ({
     // 路由与过滤状态
@@ -207,6 +221,15 @@ export default function App() {
     });
   }, [updateAppState]);
 
+  const closeMobileSidebar = useCallback(() => {
+    setMobileSidebarOpen(false);
+    globalThis.requestAnimationFrame?.(() => mobileMenuButtonRef.current?.focus());
+  }, []);
+
+  const openMobileSidebar = useCallback(() => {
+    setMobileSidebarOpen(true);
+  }, []);
+
   const toggleSidebar = useCallback(() => {
     updateAppState(draft => {
       const nextCollapsed = !draft.sidebarCollapsed;
@@ -269,6 +292,7 @@ export default function App() {
       draft.selectedHandoffId = targetHandoffId;
       draft.pageContext = null;
     });
+    setMobileSidebarOpen(false);
     writeBrowserRoute(targetRoute);
   }, [selectedPiConversationId, updateAppState, writeBrowserRoute]);
 
@@ -309,6 +333,7 @@ export default function App() {
       currentPage: 'ask-xuanwu',
       selectedPiConversationId: targetConversationId,
     }, { replace: true });
+    setMobileSidebarOpen(false);
   }, [updateAppState, writeBrowserRoute]);
 
   useEffect(() => {
@@ -328,6 +353,7 @@ export default function App() {
         draft.selectedWorkId = route.selectedWorkId;
         draft.pageContext = null;
       });
+      setMobileSidebarOpen(false);
     };
     globalThis.addEventListener('hashchange', syncBrowserRoute);
     globalThis.addEventListener('popstate', syncBrowserRoute);
@@ -336,6 +362,53 @@ export default function App() {
       globalThis.removeEventListener('popstate', syncBrowserRoute);
     };
   }, [updateAppState]);
+
+  useEffect(() => {
+    if (!globalThis.matchMedia) return undefined;
+    const mediaQuery = globalThis.matchMedia('(max-width: 760px)');
+    const syncMobileViewport = (event) => {
+      setIsMobileViewport(event.matches);
+      if (!event.matches) setMobileSidebarOpen(false);
+    };
+    setIsMobileViewport(mediaQuery.matches);
+    mediaQuery.addEventListener('change', syncMobileViewport);
+    return () => mediaQuery.removeEventListener('change', syncMobileViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileViewport || !mobileSidebarOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const focusableSelector = 'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusFrame = globalThis.requestAnimationFrame?.(() => {
+      sidebarRef.current?.querySelector(focusableSelector)?.focus();
+    });
+    const handleDrawerKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMobileSidebar();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(sidebarRef.current?.querySelectorAll(focusableSelector) || []);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleDrawerKeyDown);
+    return () => {
+      if (focusFrame) globalThis.cancelAnimationFrame?.(focusFrame);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleDrawerKeyDown);
+    };
+  }, [closeMobileSidebar, isMobileViewport, mobileSidebarOpen]);
 
   const refreshVisibleData = useCallback(() => {
     refreshData(getReconcileSlices(currentPage, selectedIssueId));
@@ -410,6 +483,8 @@ export default function App() {
   };
 
   const assistantModule = assistantModuleForPage(currentPage);
+  const mobileNavPage = productNavPageForRoute(currentPage);
+  const mobilePageTitle = t(MOBILE_PAGE_TITLE_KEYS[mobileNavPage] || 'nav.commandCenter');
 
 
   if (!authReady) {
@@ -422,8 +497,30 @@ export default function App() {
   }
 
   return (
-    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'runs' || currentPage === 'ask-xuanwu' ? 'in-sessions-page' : ''} ${currentPage === 'runs' ? 'runs-page' : ''} ${currentPage === 'ask-xuanwu' ? 'ask-xuanwu-page' : ''}`}>
+    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileSidebarOpen ? 'mobile-sidebar-open' : ''} ${currentPage === 'runs' || currentPage === 'ask-xuanwu' ? 'in-sessions-page' : ''} ${currentPage === 'runs' ? 'runs-page' : ''} ${currentPage === 'ask-xuanwu' ? 'ask-xuanwu-page' : ''}`}>
       <ToastContainer />
+      <header className="mobile-app-header" inert={mobileSidebarOpen ? true : undefined}>
+        <button
+          aria-controls="app-sidebar"
+          aria-expanded={mobileSidebarOpen}
+          aria-label={t('sidebar.expand')}
+          className="mobile-sidebar-menu-btn"
+          onClick={openMobileSidebar}
+          ref={mobileMenuButtonRef}
+          type="button"
+        >
+          <Menu aria-hidden="true" size={18} />
+        </button>
+        <span className="mobile-app-header-title">{mobilePageTitle}</span>
+        <span aria-hidden="true" className="mobile-app-header-spacer" />
+      </header>
+      {mobileSidebarOpen ? (
+        <div
+          aria-hidden="true"
+          className="mobile-sidebar-backdrop"
+          onClick={closeMobileSidebar}
+        />
+      ) : null}
       {sidebarCollapsed && (
         <button
           className="sidebar-expand-btn animate-fade-in"
@@ -445,10 +542,14 @@ export default function App() {
         theme={theme}
         toggleTheme={toggleTheme}
         toggleSidebar={toggleSidebar}
+        isMobileViewport={isMobileViewport}
+        mobileSidebarOpen={mobileSidebarOpen}
+        onMobileClose={closeMobileSidebar}
+        sidebarRef={sidebarRef}
       />
 
       {/* 右侧主工作区 */}
-      <main className="main-content">
+      <main className="main-content" inert={isMobileViewport && mobileSidebarOpen ? true : undefined}>
         <GuardianAlertBanner />
         {loading ? (
           <div className="app-loading-stage">
@@ -483,6 +584,7 @@ export default function App() {
             ) : currentPage === 'runs' ? (
               <Runs
                 navigateTo={navigateTo}
+                onMobileSidebarAction={isMobileViewport ? closeMobileSidebar : undefined}
                 onPageContextChange={setPageContext}
                 selectedRunId={selectedRunId}
                 selectedSessionId={selectedSessionId}

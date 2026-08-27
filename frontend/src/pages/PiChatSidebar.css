@@ -57,7 +57,7 @@
   padding-right: 4px;
 }
 
-@media (max-width: 980px) {
+@media (min-width: 761px) and (max-width: 980px) {
   .sessions-app-sidebar-slot {
     display: none;
   }
