@@ -9,8 +9,7 @@ focused code contributions are welcome.
 2. For a bug, include the Xuanwu version, operating system, provider, reproduction steps,
    expected behavior, and redacted logs or screenshots.
 3. Open an issue before a large feature, public contract change, database migration, or broad
-   refactor. The maintainers may ask for a contributor agreement before accepting non-trivial
-   code because Xuanwu uses source-available and separate commercial licensing.
+   refactor.
 4. Do not report security vulnerabilities in a public issue; follow [SECURITY.md](SECURITY.md).
 
 Never include API keys, bearer tokens, cookies, private repository contents, personal paths,
@@ -67,6 +66,7 @@ Explain the problem, scope, compatibility impact, verification commands and resu
 remaining live acceptance. Link the relevant issue or ADR. Keep unrelated cleanup out of the
 same pull request.
 
-By contributing, you agree that your contribution may be distributed under the repository's
-current public license. Any additional commercial or relicensing rights require separate
-written terms; do not assume they are granted by a pull request alone.
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion
+in Xuanwu is licensed under the [Apache License 2.0](LICENSE), without additional terms or
+conditions, as described in Section 5 of the license. Mark material that is not intended as a
+contribution clearly in writing.

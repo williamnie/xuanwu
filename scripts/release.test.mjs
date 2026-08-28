@@ -177,7 +177,7 @@ test('release package keeps Bun runtime assets beside the executable and smokes 
   assert.match(script, /"\$ROOT_DIR\/README\.zh-CN\.md" "\$pkg_dir\/README\.zh-CN\.md"/);
   assert.match(script, /"\$ROOT_DIR\/LICENSE" "\$pkg_dir\/LICENSE"/);
   assert.match(script, /"\$ROOT_DIR\/NOTICE" "\$pkg_dir\/NOTICE"/);
-  assert.match(script, /"\$ROOT_DIR\/COMMERCIAL-LICENSE\.md" "\$pkg_dir\/COMMERCIAL-LICENSE\.md"/);
+  assert.doesNotMatch(script, /COMMERCIAL-LICENSE\.md/);
   assert.doesNotMatch(script, /"\$pkg_dir\/pi-coding-agent\/package\.json"/);
 });
 

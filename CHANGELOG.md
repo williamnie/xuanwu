@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Changed / 变更
+
+- 项目许可证由 PolyForm Noncommercial 1.0.0 调整为 Apache License 2.0，允许在遵守许可证
+  条款的前提下使用、修改、分发及商业使用。
+
 ## [0.2.3] - 2026-08-16
 
 ### Added / 新增

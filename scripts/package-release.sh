@@ -217,7 +217,6 @@ package_target() {
   cp "$ROOT_DIR/CHANGELOG.md" "$pkg_dir/CHANGELOG.md"
   cp "$ROOT_DIR/LICENSE" "$pkg_dir/LICENSE"
   cp "$ROOT_DIR/NOTICE" "$pkg_dir/NOTICE"
-  cp "$ROOT_DIR/COMMERCIAL-LICENSE.md" "$pkg_dir/COMMERCIAL-LICENSE.md"
   cp "$ROOT_DIR/scripts/install-release.sh" "$pkg_dir/install-release.sh"
   cp "$ROOT_DIR/scripts/update-release.sh" "$pkg_dir/update-release.sh"
   cp "$ROOT_DIR/scripts/daemon.sh" "$pkg_dir/daemon.sh"

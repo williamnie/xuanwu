@@ -16,13 +16,13 @@ and brings you back only when human judgment is needed.
 
 [![Release](https://img.shields.io/github/v/release/williamnie/xuanwu?display_name=tag)](https://github.com/williamnie/xuanwu/releases/latest)
 [![Release workflow](https://github.com/williamnie/xuanwu/actions/workflows/release.yml/badge.svg)](https://github.com/williamnie/xuanwu/actions/workflows/release.yml)
-[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-6f42c1)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-0b7285)](#install-a-release)
 </div>
 
 > [!IMPORTANT]
-> Xuanwu is **source-available**, not OSI-approved open-source software. The public
-> license permits noncommercial use; commercial use requires a separate license.
+> Xuanwu is open-source software distributed under the Apache License 2.0. Commercial use,
+> modification, and redistribution are permitted subject to the license terms.
 > See [License](#license).
 
 ## What happens while you are away
@@ -257,11 +257,7 @@ Please report vulnerabilities privately as described in [SECURITY.md](SECURITY.m
 
 ## License
 
-Xuanwu is distributed under the [PolyForm Noncommercial License 1.0.0](LICENSE) for personal,
-research, educational, and other noncommercial use. Commercial use, deployment, embedding,
-resale, hosted access, or paid support requires separate written terms; see
-[Commercial licensing](COMMERCIAL-LICENSE.md).
-
-Because the public license restricts commercial use, please describe this project as
-**source-available**, not open source. Redistributions must retain both [LICENSE](LICENSE) and
-[NOTICE](NOTICE).
+Xuanwu is open-source software distributed under the [Apache License 2.0](LICENSE). You may use,
+modify, and distribute it, including for commercial purposes, subject to the license terms.
+Redistributions must retain the required license and attribution notices, including
+[LICENSE](LICENSE) and [NOTICE](NOTICE) where applicable.

@@ -15,13 +15,13 @@
 
 [![Release](https://img.shields.io/github/v/release/williamnie/xuanwu?display_name=tag)](https://github.com/williamnie/xuanwu/releases/latest)
 [![Release workflow](https://github.com/williamnie/xuanwu/actions/workflows/release.yml/badge.svg)](https://github.com/williamnie/xuanwu/actions/workflows/release.yml)
-[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-6f42c1)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-0b7285)](#安装-release)
 </div>
 
 > [!IMPORTANT]
-> 玄武是**源码可用（source-available）**软件，不是 OSI 认可的开源软件。公开许可证
-> 允许非商业使用；商业使用需要单独授权，详见[许可证](#许可证)。
+> 玄武是采用 Apache License 2.0 的开源软件。遵守许可证条款即可进行商业使用、修改和分发，
+> 详见[许可证](#许可证)。
 
 ## 当你离开电脑以后
 
@@ -238,9 +238,6 @@ Fixture 通过不代表真实 Provider 账号、外部 Connector、浏览器会�
 
 ## 许可证
 
-玄武采用 [PolyForm Noncommercial License 1.0.0](LICENSE)，允许个人、研究、教育及其他
-非商业用途。商业使用、商业部署、嵌入、转售、托管访问或付费支持需要单独书面授权，详见
-[商业许可说明](COMMERCIAL-LICENSE.md)。
-
-由于公开许可证限制商业使用，请将本项目称为**源码可用（source-available）**，而不是开源软件。
-分发本项目或衍生版本时必须保留 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
+玄武是采用 [Apache License 2.0](LICENSE) 的开源软件。遵守许可证条款即可进行使用、修改和
+分发，包括商业用途。分发本项目或衍生版本时，必须按许可证要求保留相关许可与署名声明，
+包括适用时的 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
