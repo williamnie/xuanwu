@@ -41,17 +41,9 @@ terminal:
 
 The control loop stays explicit:
 
-```mermaid
-flowchart LR
-  G["Goal or Automation"] --> S["Xuanwu Supervisor"]
-  S --> W["Tracked Work"]
-  W --> R["Coding Agent Run"]
-  R --> F["Session and workspace facts"]
-  F --> D{"Supervisor decision"}
-  D -->|continue or recover| R
-  D -->|reviewable result| H["Handoff"]
-  D -->|human judgment needed| A["Attention"]
-```
+<p align="center">
+  <img src="docs/assets/xuanwu-control-plane.png" alt="Xuanwu control plane route map from Web UI, CLI, and IM channels through Runner Core and the Xuanwu Supervisor to Codex, Claude, Pi, Qoder, and authoritative state." />
+</p>
 
 ## Trust without babysitting
 
@@ -79,12 +71,16 @@ watch every turn.
 
 ## Provider support
 
-Support labels describe real acceptance status, not merely the presence of adapter code.
+Current releases register four coding-agent providers. The provider catalog only makes an enabled,
+ready provider available for new Work; support labels describe real acceptance status, not merely
+the presence of adapter code.
 
 | Provider | Status | Notes |
 | --- | --- | --- |
 | Codex | **Tested** | Default full-featured provider; real execution, session, recovery, interrupt, and delivery paths have been exercised. |
 | Claude / Claude Code | **Preview — not live-tested** | Reuses local Claude Code login, settings, and sessions, with explicit SDK authentication also available. Automated coverage exists, but the real-account end-to-end path has not completed live acceptance. |
+| Pi Coding Agent | **Preview** | RPC-based execution with session read/resume, interrupt, model discovery, and in-session model switching. The release includes the Xuanwu policy extension, but the provider remains preview while broader live use is evaluated. |
+| Qoder | **Preview** | SDK execution with a pinned CLI runtime, session create/list/read/resume, interrupt, approvals, and model discovery. Real-account acceptance exists, but the integration and redistribution boundary remain preview. |
 
 ## Roadmap
 
@@ -95,7 +91,8 @@ engineering work.
 | --- | --- | --- |
 | Available | Tested Codex execution plus persistent Work/Run supervision, recovery, Attention, Evidence, and Handoff | Run long-lived engineering work across projects from one control plane |
 | Available | Telegram IM | The adapter, long polling, strict source allowlists, conversations, notifications, project selection, and inline actions passed real-bot acceptance and are deployed locally |
-| Planned | More coding-agent providers: Kimi Code, Pi, zcode, and OpenCode | Choose the right agent for each project without changing the Work/Run lifecycle |
+| Preview | Claude, Pi Coding Agent, and Qoder execution providers | Evaluate multiple coding agents through the same Work/Run lifecycle while their live acceptance continues |
+| Planned | More coding-agent providers, including Kimi Code, zcode, and OpenCode | Choose from a broader agent ecosystem without changing the Work/Run lifecycle |
 | Later | More IM channels and richer provider routing | Operate Xuanwu from more places and route work by capability, availability, and policy |
 
 Roadmap items describe direction, not release commitments. A capability is marked available only

@@ -36,17 +36,9 @@ Coding Agent 会写代码，玄武负责在人离开终端以后继续推进工�
 
 整个控制循环保持明确：
 
-```mermaid
-flowchart LR
-  G["目标或自动化"] --> S["Xuanwu Supervisor"]
-  S --> W["可追踪 Work"]
-  W --> R["Coding Agent Run"]
-  R --> F["Session 与 workspace 事实"]
-  F --> D{"Supervisor 决策"}
-  D -->|继续或恢复| R
-  D -->|可审查结果| H["Handoff"]
-  D -->|需要人类判断| A["Attention"]
-```
+<p align="center">
+  <img src="docs/assets/xuanwu-control-plane.png" alt="玄武控制面线路图：Web UI、CLI 和 IM Channel 经 Runner Core 与 Xuanwu Supervisor 调度 Codex、Claude、Pi、Qoder，并回到权威状态。" />
+</p>
 
 ## 不用盯着，也能信任结果
 
@@ -70,12 +62,15 @@ Agent 说“完成”不等于完成。Supervisor 会检查真实 Session 与 wo
 
 ## Provider 支持状态
 
-这里的状态表示真实验收程度，不以“仓库里已经有 adapter 代码”冒充可用。
+当前 Release 注册了四个 Coding Agent Provider。只有已经启用且运行时就绪的 Provider 才会在
+catalog 中允许提交新 Work；这里的状态表示真实验收程度，不以“仓库里已经有 adapter 代码”冒充可用。
 
 | Provider | 状态 | 说明 |
 | --- | --- | --- |
 | Codex | **已测试** | 默认完整 Provider；真实执行、Session、恢复、中断和交付链路已经过测试。 |
 | Claude / Claude Code | **预览，尚未真实测试** | 可复用本机 Claude Code 登录、配置与 Session，也支持显式 SDK 认证；已有自动化测试覆盖，但真实账号端到端链路尚未完成 live acceptance。 |
+| Pi Coding Agent | **预览** | 通过 RPC 执行，支持 Session 读取/恢复、中断、模型发现及 Session 内模型切换；Release 已包含 Xuanwu policy extension，但在更广泛的真实使用评估完成前保持预览。 |
+| Qoder | **预览** | 通过 SDK 执行并包含固定版本的 CLI runtime，支持 Session 创建/列表/读取/恢复、中断、审批和模型发现；已有真实账号验收，但集成与再分发边界仍保持预览。 |
 
 ## 路线图
 
@@ -84,8 +79,9 @@ Agent 说“完成”不等于完成。Supervisor 会检查真实 Session 与 wo
 | 阶段 | 重点 | 带来的能力 |
 | --- | --- | --- |
 | 已支持 | 经过测试的 Codex 执行，以及持久化 Work/Run、监督恢复、Attention、Evidence 与 Handoff | 从一个控制面跨项目运行长期工程任务 |
-| 下一步 | Telegram 接入 | 远程创建和查询 Work、接收异常与交付通知、审批受控动作 |
-| 随后 | 接入 Kimi Code、Pi、zcode、OpenCode 等 Coding Agent Provider | 在不改变 Work/Run 生命周期的情况下为项目选择不同 Agent |
+| 已支持 | Telegram IM | Adapter、long polling、严格来源 allowlist、Conversation、通知、项目选择和 inline action 已通过真实 Bot 验收并部署到本地运行态 |
+| 预览 | Claude、Pi Coding Agent 与 Qoder 执行 Provider | 在继续完成真实验收的同时，通过同一套 Work/Run 生命周期评估不同 Coding Agent |
+| 计划 | 继续接入 Kimi Code、zcode、OpenCode 等 Coding Agent Provider | 在不改变 Work/Run 生命周期的情况下接入更广泛的 Agent 生态 |
 | 后续 | 更多 IM Channel 与更完整的 Provider 路由 | 按能力、健康状态和策略调度 Agent，并从更多入口管理工程工作 |
 
 路线图表达产品方向，不代表具体版本或交付日期。只有真实执行、恢复和交付链路通过所需的
