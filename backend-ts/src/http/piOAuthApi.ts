@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import type { OAuthAuthInfo, OAuthCredentials, OAuthPrompt } from "@earendil-works/pi-ai";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
-import { json } from "./errors.ts";
+import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { updatePiCredential } from "./piCredentialFile.ts";
 
@@ -13,11 +13,33 @@ export type PiOAuthLoginCallbacks = {
   onProgress?: (message: string) => void;
   onPrompt: (prompt: OAuthPrompt) => Promise<string>;
 };
-export type PiOpenAICodexOAuthLogin = (callbacks: PiOAuthLoginCallbacks) => Promise<OAuthCredentials>;
-type PiOAuthContext = { database: RunnerDatabase; piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin };
-type LoginState = { authUrl?: string; error?: string; instructions?: string; startedAt: string; status: "pending" | "authenticated" | "error" };
+export type PiOpenAICodexOAuthLogin = (
+  callbacks: PiOAuthLoginCallbacks,
+  signal?: AbortSignal
+) => Promise<OAuthCredentials>;
+export type PiOpenAICodexModelDiscovery = (database: RunnerDatabase, signal?: AbortSignal) => Promise<string[]>;
+type PiOAuthContext = {
+  database: RunnerDatabase;
+  piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
+  piOAuthLoginTimeoutMs?: number;
+};
+type LoginAbortReason = "logout" | "restarted" | "timeout";
+type LoginState = {
+  abortController: AbortController;
+  abortReason?: LoginAbortReason;
+  authUrl?: string;
+  completion?: Promise<void>;
+  error?: string;
+  instructions?: string;
+  message?: string;
+  startedAt: string;
+  status: "pending" | "authenticated" | "error";
+  timeout?: ReturnType<typeof setTimeout>;
+};
 
 const OPENAI_CODEX_PROVIDER = "openai-codex";
+const RUNNER_OAUTH_ORIGINATOR = "pi-agent";
+const DEFAULT_OAUTH_LOGIN_TIMEOUT_MS = 10 * 60_000;
 const loginStates = new Map<string, LoginState>();
 
 export function registerPiOAuthRoutes(router: Router, context: PiOAuthContext): void {
@@ -29,12 +51,14 @@ export function registerPiOAuthRoutes(router: Router, context: PiOAuthContext): 
 async function startOpenAICodexLogin(context: PiOAuthContext) {
   const authPath = piAuthPath(context.database);
   const existing = loginStates.get(authPath);
-  if (existing?.status === "pending" && existing.authUrl) return await loginResponse(context.database, existing);
-  const state = pendingState();
+  if (existing?.status === "pending") await cancelPendingLogin(existing, "restarted");
+  const state = pendingState(context.piOAuthLoginTimeoutMs ?? DEFAULT_OAUTH_LOGIN_TIMEOUT_MS);
   loginStates.set(authPath, state);
-  const authInfo = await beginLogin(context, state);
-  state.authUrl = authInfo.url;
-  state.instructions = authInfo.instructions;
+  try {
+    await beginLogin(context, state);
+  } catch {
+    throw new HttpError(502, state.message || "Codex OAuth 登录初始化失败，请重试");
+  }
   recordOAuthAudit(context.database, "provider_oauth_login_started", "pending");
   return await loginResponse(context.database, state);
 }
@@ -46,28 +70,40 @@ function beginLogin(context: PiOAuthContext, state: LoginState): Promise<OAuthAu
     resolveAuth = resolve;
     rejectAuth = reject;
   });
-  const login = context.piOpenAICodexOAuthLogin ?? defaultOpenAICodexLogin;
-  void login({
-    onAuth: (info) => { resolveAuth(info); },
+  const injectedLogin = context.piOpenAICodexOAuthLogin;
+  const login = injectedLogin ?? ((callbacks: PiOAuthLoginCallbacks, signal?: AbortSignal) => (
+    defaultOpenAICodexLogin(context.database, callbacks, signal)
+  ));
+  state.completion = login({
+    onAuth: (info) => {
+      const normalized = withRunnerOAuthOriginator(info);
+      state.authUrl = normalized.url;
+      state.instructions = normalized.instructions;
+      resolveAuth(normalized);
+    },
     onPrompt: async () => { throw new Error("Manual OAuth code paste is not supported from Runner Settings yet."); }
-  }).then((credentials) => storeCredentials(context.database, credentials, state))
+  }, state.abortController.signal).then((credentials) => completeLogin(
+    context.database,
+    credentials,
+    state,
+    injectedLogin !== undefined
+  ))
     .catch((error) => {
       markLoginFailed(context.database, state, error);
       rejectAuth(error);
-    });
+    })
+    .finally(() => clearLoginTimeout(state));
   return authInfo;
 }
 
-async function defaultOpenAICodexLogin(callbacks: PiOAuthLoginCallbacks): Promise<OAuthCredentials> {
-  const [{ registerBunOAuthFlows }, { openaiCodexProvider }] = await Promise.all([
-    import("@earendil-works/pi-ai/bun-oauth"),
-    import("@earendil-works/pi-ai/providers/openai-codex")
-  ]);
-  registerBunOAuthFlows();
-  const oauth = openaiCodexProvider().auth.oauth;
-  if (!oauth) throw new Error("OpenAI Codex OAuth provider is unavailable");
-  return await oauth.login({
-    signal: new AbortController().signal,
+async function defaultOpenAICodexLogin(
+  db: RunnerDatabase,
+  callbacks: PiOAuthLoginCallbacks,
+  signal?: AbortSignal
+): Promise<OAuthCredentials> {
+  const runtime = await createPiModelRuntime(db, signal);
+  const credential = await runtime.login(OPENAI_CODEX_PROVIDER, "oauth", {
+    signal,
     notify: (event) => {
       if (event.type === "auth_url") callbacks.onAuth({ url: event.url, instructions: event.instructions });
       if (event.type === "progress") callbacks.onProgress?.(event.message);
@@ -78,6 +114,8 @@ async function defaultOpenAICodexLogin(callbacks: PiOAuthLoginCallbacks): Promis
       return await callbacks.onPrompt({ message: prompt.message, placeholder: prompt.placeholder });
     }
   });
+  if (credential.type !== "oauth") throw new Error("OpenAI Codex OAuth returned a non-OAuth credential");
+  return credential;
 }
 
 function waitForPromptCancellation(signal: AbortSignal | undefined): Promise<string> {
@@ -91,22 +129,50 @@ function waitForPromptCancellation(signal: AbortSignal | undefined): Promise<str
   });
 }
 
-async function storeCredentials(db: RunnerDatabase, credentials: OAuthCredentials, state: LoginState): Promise<void> {
-  await updatePiCredential(piAuthPath(db), OPENAI_CODEX_PROVIDER, { type: "oauth", ...credentials });
+async function completeLogin(
+  db: RunnerDatabase,
+  credentials: OAuthCredentials,
+  state: LoginState,
+  persistInjectedCredential: boolean
+): Promise<void> {
+  if (state.abortController.signal.aborted || loginStates.get(piAuthPath(db)) !== state) return;
+  if (persistInjectedCredential) {
+    await updatePiCredential(piAuthPath(db), OPENAI_CODEX_PROVIDER, { type: "oauth", ...credentials });
+  }
   state.status = "authenticated";
+  state.authUrl = undefined;
+  state.instructions = undefined;
+  state.error = undefined;
+  state.message = "Codex OAuth 登录成功";
   recordOAuthAudit(db, "provider_oauth_configured", "succeeded");
 }
 
 function markLoginFailed(db: RunnerDatabase, state: LoginState, error: unknown): void {
+  if (state.status === "authenticated") return;
   state.status = "error";
-  state.error = error instanceof Error ? error.message : String(error);
-  recordOAuthAudit(db, "provider_oauth_failed", "failed", "oauth_login_failed");
+  const failure = publicLoginFailure(state, error);
+  state.error = failure.code;
+  state.message = failure.message;
+  recordOAuthAudit(
+    db,
+    state.abortReason === "restarted" || state.abortReason === "logout"
+      ? "provider_oauth_cancelled"
+      : "provider_oauth_failed",
+    state.abortReason === "restarted" || state.abortReason === "logout" ? "cancelled" : "failed",
+    failure.code
+  );
 }
 
 export async function removePiOpenAICodexOAuthCredential(db: RunnerDatabase): Promise<boolean> {
+  const authPath = piAuthPath(db);
+  const state = loginStates.get(authPath);
+  if (state?.status === "pending") await cancelPendingLogin(state, "logout");
+  loginStates.delete(authPath);
   const configured = await hasStoredPiCredential(piAuthPath(db));
-  await updatePiCredential(piAuthPath(db), OPENAI_CODEX_PROVIDER, undefined);
-  loginStates.delete(piAuthPath(db));
+  if (configured) {
+    const runtime = await createPiModelRuntime(db);
+    await runtime.logout(OPENAI_CODEX_PROVIDER);
+  }
   if (configured) recordOAuthAudit(db, "provider_oauth_logged_out", "succeeded");
   return configured;
 }
@@ -120,6 +186,24 @@ export async function isPiOpenAICodexOAuthConfigured(db: RunnerDatabase): Promis
   return await hasStoredPiCredential(piAuthPath(db));
 }
 
+export async function discoverPiOpenAICodexModels(
+  db: RunnerDatabase,
+  signal?: AbortSignal
+): Promise<string[]> {
+  const runtime = await createPiModelRuntime(db, signal);
+  const result = await runtime.refresh({
+    allowNetwork: true,
+    force: true,
+    providers: [OPENAI_CODEX_PROVIDER],
+    signal
+  });
+  if (result.aborted) throw signal?.reason ?? new Error("Codex model discovery was aborted");
+  const refreshError = result.errors.get(OPENAI_CODEX_PROVIDER);
+  if (refreshError) throw refreshError;
+  const models = await runtime.getAvailable(OPENAI_CODEX_PROVIDER, { signal });
+  return [...new Set(models.map((model) => model.id).filter(Boolean))];
+}
+
 async function oauthStatus(db: RunnerDatabase) {
   const authPath = piAuthPath(db);
   const configured = await hasStoredPiCredential(authPath);
@@ -130,7 +214,15 @@ async function oauthStatus(db: RunnerDatabase) {
     codex_login: codexLoginStatus()
   };
   if (!state) return base;
-  return { ...base, auth_url: state.authUrl ?? "", instructions: state.instructions ?? "", status: state.status };
+  return {
+    ...base,
+    auth_url: state.authUrl ?? "",
+    error: state.error ?? "",
+    instructions: state.instructions ?? "",
+    message: state.message ?? "",
+    started_at: state.startedAt,
+    status: state.status
+  };
 }
 
 async function hasStoredPiCredential(authPath: string): Promise<boolean> {
@@ -139,7 +231,12 @@ async function hasStoredPiCredential(authPath: string): Promise<boolean> {
 }
 
 async function loginResponse(db: RunnerDatabase, state: LoginState) {
-  return { ...await oauthStatus(db), auth_url: state.authUrl ?? "", instructions: state.instructions ?? "", status: "pending" };
+  return {
+    ...await oauthStatus(db),
+    auth_url: state.authUrl ?? "",
+    instructions: state.instructions ?? "",
+    status: state.status
+  };
 }
 
 function codexLoginStatus() {
@@ -162,12 +259,76 @@ function hasCodexCredential(raw: Record<string, unknown>): boolean {
   return cleanString(tokens.access_token) !== "" || cleanString(raw.OPENAI_API_KEY) !== "";
 }
 
-function pendingState(): LoginState {
-  return { startedAt: new Date().toISOString(), status: "pending" };
+function pendingState(timeoutMs: number): LoginState {
+  const state: LoginState = {
+    abortController: new AbortController(),
+    startedAt: new Date().toISOString(),
+    status: "pending"
+  };
+  state.timeout = setTimeout(() => {
+    if (state.status !== "pending") return;
+    state.abortReason = "timeout";
+    state.abortController.abort(new Error("oauth_login_timeout"));
+  }, Math.max(1, timeoutMs));
+  return state;
 }
 
 function piAuthPath(db: RunnerDatabase): string {
   return join(dirname(db.path), "pi-runtime", "agent", "auth.json");
+}
+
+function piModelsPath(db: RunnerDatabase): string {
+  return join(dirname(db.path), "pi-runtime", "agent", "models.json");
+}
+
+async function createPiModelRuntime(db: RunnerDatabase, signal?: AbortSignal) {
+  const [{ registerBunOAuthFlows }, { ModelRuntime }] = await Promise.all([
+    import("@earendil-works/pi-ai/bun-oauth"),
+    import("@earendil-works/pi-coding-agent")
+  ]);
+  registerBunOAuthFlows();
+  return await ModelRuntime.create({
+    authPath: piAuthPath(db),
+    modelsPath: piModelsPath(db),
+    refreshOnCreate: false,
+    signal
+  });
+}
+
+async function cancelPendingLogin(state: LoginState, reason: Exclude<LoginAbortReason, "timeout">): Promise<void> {
+  if (state.status !== "pending") return;
+  state.abortReason = reason;
+  state.abortController.abort(new Error(`oauth_login_${reason}`));
+  await state.completion;
+}
+
+function clearLoginTimeout(state: LoginState): void {
+  if (state.timeout) clearTimeout(state.timeout);
+  state.timeout = undefined;
+}
+
+function publicLoginFailure(state: LoginState, _error: unknown): { code: string; message: string } {
+  if (state.abortReason === "timeout") {
+    return { code: "oauth_login_timeout", message: "Codex OAuth 登录已超时，请重新生成登录地址" };
+  }
+  if (state.abortReason === "restarted") {
+    return { code: "oauth_login_restarted", message: "已生成新的 Codex OAuth 登录地址" };
+  }
+  if (state.abortReason === "logout") {
+    return { code: "oauth_login_cancelled", message: "Codex OAuth 登录已取消" };
+  }
+  return { code: "oauth_login_failed", message: "Codex OAuth 登录失败，请重新生成登录地址" };
+}
+
+function withRunnerOAuthOriginator(info: OAuthAuthInfo): OAuthAuthInfo {
+  try {
+    const url = new URL(info.url);
+    if (url.origin !== "https://auth.openai.com" || url.pathname !== "/oauth/authorize") return info;
+    url.searchParams.set("originator", RUNNER_OAUTH_ORIGINATOR);
+    return { ...info, url: url.toString() };
+  } catch {
+    return info;
+  }
 }
 
 function codexHome(): string {

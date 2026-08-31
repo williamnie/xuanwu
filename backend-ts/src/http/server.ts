@@ -22,7 +22,7 @@ import { registerGitEventRoutes } from "./gitEventsApi.ts";
 import { registerTrackerEventRoutes } from "./trackerEventsApi.ts";
 import type { FeishuMessageSender } from "../integrations/feishuOutboxDispatcherCompat.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
-import type { PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
+import type { PiOpenAICodexModelDiscovery, PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
 import type { EventRouterSourcePolicy } from "../pi/eventRouter.ts";
 import type { LlmIntakeModel } from "../pi/llmIntake.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
@@ -63,7 +63,9 @@ type DefaultRouterOptions = {
   feishuIntakeModel?: LlmIntakeModel;
   feishuIntakePolicy?: EventRouterSourcePolicy;
   feishuSender?: FeishuMessageSender;
+  piOpenAICodexModelDiscovery?: PiOpenAICodexModelDiscovery;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
+  piOAuthLoginTimeoutMs?: number;
   processGroupMemory?: { snapshot(): Record<string, unknown> };
   projectionWorker?: { snapshot(): Record<string, unknown> };
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
@@ -173,7 +175,9 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       database: runtime.database,
       readDatabase: runtime.readDatabase,
       interruptTimeoutMs: runtime.interruptTimeoutMs,
+      piOpenAICodexModelDiscovery: runtime.piOpenAICodexModelDiscovery,
       piOpenAICodexOAuthLogin: runtime.piOpenAICodexOAuthLogin,
+      piOAuthLoginTimeoutMs: runtime.piOAuthLoginTimeoutMs,
       providers: runtime.providers,
       providersRegistry: runtime.providersRegistry,
       restartDelayMs: runtime.restartDelayMs,

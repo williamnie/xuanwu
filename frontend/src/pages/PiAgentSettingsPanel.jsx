@@ -143,7 +143,7 @@ function SavedConnectionPicker({ state }) {
         <div aria-labelledby="provider-delete-confirm-title" className="provider-delete-confirm" role="alertdialog">
           <div>
             <strong id="provider-delete-confirm-title">删除 {connectionDisplayName(provider)}？</strong>
-            <span>{provider.id === 'openai-codex' ? '将同时移除 PI OAuth 授权凭据。' : '将同时撤销为此连接保存的 API Key。'}</span>
+            <span>{provider.id === 'openai-codex' ? '将同时移除 Supervisor OAuth 授权凭据。' : '将同时撤销为此连接保存的 API Key。'}</span>
           </div>
           <div>
             <button className="btn btn-secondary" disabled={deleting} onClick={() => setConfirmingDelete(false)} type="button">取消</button>
@@ -474,9 +474,18 @@ function OAuthButtons({ state }) {
 }
 
 function OAuthStatusLine({ status }) {
+  const lifecycle = status?.status || status?.pi_oauth?.status || 'idle';
+  const configured = Boolean(status?.pi_oauth?.configured);
+  const label = configured
+    ? lifecycle === 'error' ? '已连接，重新授权失败' : '已连接'
+    : lifecycle === 'pending' ? '等待授权'
+      : lifecycle === 'error' ? '授权失败'
+        : '未连接';
+  const detail = status?.message || (lifecycle === 'pending' ? '等待浏览器完成授权；再次登录会生成新的授权地址。' : '');
   return (
     <div className="supervisor-oauth-status">
-      <span><i className={status?.pi_oauth?.configured ? 'ready' : ''} />Supervisor OAuth：{status?.pi_oauth?.configured ? '已连接' : '未连接'}</span>
+      <span><i className={configured ? 'ready' : lifecycle} />Supervisor OAuth：{label}</span>
+      {detail ? <span className={lifecycle === 'error' ? 'oauth-error' : ''}>{detail}</span> : null}
       {status?.auth_url ? <code>{status.auth_url}</code> : null}
     </div>
   );

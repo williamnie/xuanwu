@@ -4,7 +4,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { ProviderRegistry } from "../providers/core/registry.ts";
-import type { PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
+import type { PiOpenAICodexModelDiscovery, PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 
 export type ReadApiContext = {
@@ -16,7 +16,9 @@ export type ReadApiContext = {
   database: RunnerDatabase;
   readDatabase?: RunnerDatabase;
   interruptTimeoutMs?: number;
+  piOpenAICodexModelDiscovery?: PiOpenAICodexModelDiscovery;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
+  piOAuthLoginTimeoutMs?: number;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   providersRegistry?: ProviderRegistry;
   restartDelayMs?: number;

@@ -457,12 +457,17 @@ describe("Bun PI provider settings API", () => {
     try {
       const router = createDefaultRouter({
         database,
+        piOpenAICodexModelDiscovery: async (activeDatabase) => {
+          const raw = JSON.parse(await readFile(authPath(activeDatabase), "utf8"));
+          expect(raw["openai-codex"]?.access).toBe("oauth-access-secret");
+          return ["gpt-5.6", "gpt-5.5"];
+        },
         providers: {
           codex: {
             id: "codex",
             capabilities: [],
             async listModels() {
-              return { data: [{ id: "gpt-5.6", name: "GPT-5.6" }, { id: "gpt-5.5", name: "GPT-5.5" }] };
+              throw new Error("executor model discovery must not validate PI OAuth");
             },
             async run() {
               throw new Error("not used");
@@ -478,9 +483,9 @@ describe("Bun PI provider settings API", () => {
         provider_id: "openai-codex"
       });
 
-      const authPath = join(dirname(database.path), "pi-runtime", "agent", "auth.json");
-      await mkdir(dirname(authPath), { recursive: true });
-      await Bun.write(authPath, JSON.stringify({
+      const oauthAuthPath = join(dirname(database.path), "pi-runtime", "agent", "auth.json");
+      await mkdir(dirname(oauthAuthPath), { recursive: true });
+      await Bun.write(oauthAuthPath, JSON.stringify({
         "openai-codex": { type: "oauth", access: "oauth-access-secret", refresh: "oauth-refresh-secret", expires: Date.now() + 60_000 }
       }));
       const configured = await post(router, "/api/pi/provider-settings/openai-codex/test-connection", {});

@@ -28,7 +28,11 @@ import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
 import { registerPiMaintenanceRoutes } from "./piMaintenanceApi.ts";
 import { registerPiMcpDiscoveryRoutes } from "./piMcpDiscoveryApi.ts";
 import { registerPiMcpRegistryRoutes } from "./piMcpRegistryApi.ts";
-import { registerPiOAuthRoutes, type PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
+import {
+  registerPiOAuthRoutes,
+  type PiOpenAICodexModelDiscovery,
+  type PiOpenAICodexOAuthLogin
+} from "./piOAuthApi.ts";
 import { registerPiProjectPolicyRoutes } from "./piProjectPolicyApi.ts";
 import { registerPiProviderSettingsRoutes } from "./piProviderSettingsApi.ts";
 import { registerPiProjectControlRoutes } from "./piProjectControlApi.ts";
@@ -53,7 +57,9 @@ type PiApiContext = {
   codexSessionsDir?: string;
   config?: RunnerConfig;
   database: RunnerDatabase;
+  piOpenAICodexModelDiscovery?: PiOpenAICodexModelDiscovery;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
+  piOAuthLoginTimeoutMs?: number;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   providersRegistry?: ProviderRegistry;
   restartDelayMs?: number;

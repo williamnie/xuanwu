@@ -42,6 +42,9 @@ test('Xuanwu Supervisor Settings exposes OpenAI Codex OAuth as an optional short
   assert.match(panelSource, /state\.oauthStatus\?\.auth_url/);
   assert.match(panelSource, /openai-codex-responses/);
   assert.match(panelSource, /startPiCodexOAuthLogin/);
+  assert.match(panelSource, /等待浏览器完成授权；再次登录会生成新的授权地址/);
+  assert.match(panelSource, /已连接，重新授权失败/);
+  assert.match(panelSource, /status\?\.message/);
   assert.match(stateSource, /copyPiCodexOAuthUrl/);
   assert.doesNotMatch(stateSource, /openOAuthUrl\\(result\\.auth_url\\)/);
   assert.match(panelSource, /OAuth 只替代 API 地址和 Key/);
@@ -99,7 +102,7 @@ test('saved Supervisor connections can be deleted with in-app confirmation and a
   assert.match(panelSource, /className="provider-delete-confirm"/);
   assert.match(panelSource, /role="alertdialog"/);
   assert.match(panelSource, /provider\.in_use \? '默认连接' : '删除连接'/);
-  assert.match(panelSource, /将同时移除 PI OAuth 授权凭据/);
+  assert.match(panelSource, /将同时移除 Supervisor OAuth 授权凭据/);
   assert.match(panelSource, /将同时撤销为此连接保存的 API Key/);
   assert.match(panelStylesSource, /\.provider-delete-confirm-button\s*\{[\s\S]*?background:\s*var\(--error\)/);
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);

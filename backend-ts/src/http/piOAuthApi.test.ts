@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import type { OAuthCredentials } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -95,6 +96,94 @@ describe("Bun PI OAuth API", () => {
     }
   });
 
+  test("restarts a pending login with a fresh OAuth transaction and cancels the old listener", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      let attempt = 0;
+      let cancelled = 0;
+      let finishLogin: ((value: OAuthCredentials) => void) | undefined;
+      const router = createDefaultRouter({
+        database,
+        piOpenAICodexOAuthLogin: async (callbacks, signal) => {
+          attempt += 1;
+          const currentAttempt = attempt;
+          callbacks.onAuth({
+            url: `https://auth.openai.com/oauth/authorize?state=state-${currentAttempt}&originator=pi`,
+            instructions: "sign in"
+          });
+          return await new Promise<OAuthCredentials>((resolve, reject) => {
+            if (currentAttempt === 2) finishLogin = resolve;
+            const onAbort = () => {
+              cancelled += 1;
+              reject(signal?.reason ?? new Error("aborted"));
+            };
+            if (signal?.aborted) onAbort();
+            else signal?.addEventListener("abort", onAbort, { once: true });
+          });
+        }
+      });
+
+      const first = await router.handle(new Request(`${BASE_URL}/api/pi/oauth/openai-codex/login`, { method: "POST" }));
+      const firstBody = await first.json() as { auth_url: string; started_at: string };
+      expect(new URL(firstBody.auth_url).searchParams.get("originator")).toBe("pi-agent");
+      expect(firstBody.started_at).toBeString();
+
+      const second = await router.handle(new Request(`${BASE_URL}/api/pi/oauth/openai-codex/login`, { method: "POST" }));
+      const secondBody = await second.json() as { auth_url: string; started_at: string };
+      expect(attempt).toBe(2);
+      expect(cancelled).toBe(1);
+      expect(secondBody.auth_url).not.toBe(firstBody.auth_url);
+      expect(new URL(secondBody.auth_url).searchParams.get("state")).toBe("state-2");
+      expect(new URL(secondBody.auth_url).searchParams.get("originator")).toBe("pi-agent");
+
+      finishLogin?.({ access: "fresh-access", refresh: "fresh-refresh", expires: 123456, accountId: "acct-fresh" });
+      await waitForStoredAuthValue(database, "fresh-access");
+      const audit = database.sqlite.query<{ event_type: string; error: string }, []>(
+        "select event_type, error from pi_action_events where event_type like 'provider_oauth_%' order by id"
+      ).all();
+      expect(audit).toEqual(expect.arrayContaining([
+        expect.objectContaining({ event_type: "provider_oauth_cancelled", error: "oauth_login_restarted" }),
+        expect.objectContaining({ event_type: "provider_oauth_configured", error: "" })
+      ]));
+    } finally {
+      database.close();
+    }
+  });
+
+  test("times out a browser login and exposes a safe retryable status", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({
+        database,
+        piOAuthLoginTimeoutMs: 10,
+        piOpenAICodexOAuthLogin: async (callbacks, signal) => {
+          callbacks.onAuth({ url: "https://auth.openai.com/oauth/authorize?state=timeout", instructions: "sign in" });
+          return await new Promise<OAuthCredentials>((_, reject) => {
+            const onAbort = () => reject(signal?.reason ?? new Error("aborted"));
+            if (signal?.aborted) onAbort();
+            else signal?.addEventListener("abort", onAbort, { once: true });
+          });
+        }
+      });
+
+      const response = await router.handle(new Request(`${BASE_URL}/api/pi/oauth/openai-codex/login`, { method: "POST" }));
+      expect(await response.json()).toMatchObject({ status: "pending" });
+      const status = await waitForOAuthStatus(router, "error");
+      expect(status).toMatchObject({
+        error: "oauth_login_timeout",
+        message: "Codex OAuth 登录已超时，请重新生成登录地址",
+        pi_oauth: { configured: false, status: "error" },
+        status: "error"
+      });
+      const audit = database.sqlite.query<{ error: string; event_type: string }, []>(
+        "select event_type, error from pi_action_events where event_type='provider_oauth_failed' order by id desc limit 1"
+      ).get();
+      expect(audit).toEqual({ error: "oauth_login_timeout", event_type: "provider_oauth_failed" });
+    } finally {
+      database.close();
+    }
+  });
+
   test("logs out PI OpenAI Codex OAuth without touching Codex CLI auth", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -136,14 +225,28 @@ async function writeJson(path: string, value: Record<string, unknown>): Promise<
 }
 
 async function waitForStoredAuth(database: RunnerDatabase): Promise<void> {
+  await waitForStoredAuthValue(database, "new-access");
+}
+
+async function waitForStoredAuthValue(database: RunnerDatabase, access: string): Promise<void> {
   for (let i = 0; i < 20; i += 1) {
     try {
       const raw = JSON.parse(await readFile(piAuthPath(database), "utf8"));
-      if (raw["openai-codex"]?.access === "new-access") return;
+      if (raw["openai-codex"]?.access === access) return;
     } catch {
       // keep polling
     }
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
   throw new Error("timed out waiting for oauth credentials");
+}
+
+async function waitForOAuthStatus(router: ReturnType<typeof createDefaultRouter>, status: string) {
+  for (let i = 0; i < 40; i += 1) {
+    const response = await router.handle(new Request(`${BASE_URL}/api/pi/oauth/openai-codex/status`));
+    const body = await response.json() as Record<string, unknown>;
+    if (body.status === status) return body;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error(`timed out waiting for OAuth status ${status}`);
 }

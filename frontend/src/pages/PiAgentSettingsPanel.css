@@ -629,6 +629,18 @@
   background: var(--success);
 }
 
+.supervisor-oauth-status i.pending {
+  background: var(--info);
+}
+
+.supervisor-oauth-status i.error {
+  background: var(--error);
+}
+
+.supervisor-oauth-status .oauth-error {
+  color: var(--error);
+}
+
 .supervisor-oauth-status code {
   color: var(--text-muted);
   flex-basis: 100%;

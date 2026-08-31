@@ -4,16 +4,20 @@ import { getModel, getModels, getProviders, type KnownProvider, type Model } fro
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent, getPiSupervisor } from "../db/repositories/pi.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
-import { isPiOpenAICodexOAuthConfigured, removePiOpenAICodexOAuthCredential } from "./piOAuthApi.ts";
+import {
+  discoverPiOpenAICodexModels,
+  isPiOpenAICodexOAuthConfigured,
+  removePiOpenAICodexOAuthCredential,
+  type PiOpenAICodexModelDiscovery
+} from "./piOAuthApi.ts";
 import type { Router } from "./router.ts";
 import { registerSecretForRedaction } from "../security/redactionRegistry.ts";
 import { SecretStoreError } from "../security/secrets/contracts.ts";
 import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
-import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 
 type PiProviderSettingsContext = {
   database: RunnerDatabase;
-  providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  piOpenAICodexModelDiscovery?: PiOpenAICodexModelDiscovery;
   secrets?: SecretService;
 };
 type ModelsConfig = { providers: Record<string, ProviderConfig> };
@@ -247,10 +251,9 @@ async function oauthModelDiscoveryResult(context: PiProviderSettingsContext, id:
     status: "failed"
   });
   if (!configured) return failure("oauth_not_configured", "请先完成 Codex OAuth 登录");
-  const provider = context.providers?.codex;
-  if (!provider?.listModels) return failure("model_api_unavailable", "Codex model API 暂不可用");
   try {
-    const models = modelIDsFromPayload(await provider.listModels());
+    const discover = context.piOpenAICodexModelDiscovery ?? discoverPiOpenAICodexModels;
+    const models = modelIDsFromPayload(await discover(context.database));
     if (models.length === 0) return failure("model_list_empty", "Codex model API 未返回可用模型");
     return {
       auth: "oauth",
