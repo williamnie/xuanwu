@@ -60,6 +60,7 @@ describe("Bun Issues page write smoke", () => {
       expect(cancelled).toMatchObject({ id, status: "cancelled" });
       expect(events.map((event) => event.type)).toEqual([
         "issue.created",
+        "issue.planning_metadata_updated.v1",
         "issue.comment",
         "issue.status_changed",
         "issue.lifecycle_control.v1",

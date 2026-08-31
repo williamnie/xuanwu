@@ -112,7 +112,7 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
   router.patch("/api/works/:id", async (request) => workResponse(async () => {
     const work = requireWork(context.database, workID(request));
     const body = await objectBody(request);
-    assertKeys(body, ["agent_profile_id", "audit", "expected_revision", "goal", "title"]);
+    assertKeys(body, ["agent_profile_id", "audit", "depends_on_issue_ids", "expected_revision", "goal", "title"]);
     const requestedAgentProfileID = Object.hasOwn(body, "agent_profile_id") ? optionalString(body.agent_profile_id) : undefined;
     if (work.status === "in_progress" && requestedAgentProfileID !== undefined && requestedAgentProfileID !== (work.agent_profile_id ?? "")) {
       throw workError(409, "running_work_profile_locked", "running Work agent_profile_id cannot be changed");
@@ -124,6 +124,9 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
     }
     const patch = {
       ...(requestedAgentProfileID !== undefined ? { agent_profile_id: requestedAgentProfileID } : {}),
+      ...(Object.hasOwn(body, "depends_on_issue_ids")
+        ? { depends_on_issue_ids: positiveIssueIDArray(body.depends_on_issue_ids) ?? [] }
+        : {}),
       ...(Object.hasOwn(body, "goal") ? { goal: requiredString(body.goal, "goal") } : {}),
       ...(Object.hasOwn(body, "title") && optionalString(body.title) ? { title: optionalString(body.title) } : {})
     };
@@ -637,7 +640,12 @@ function positiveIssueIDArray(value: unknown): number[] | undefined {
   )) {
     throw workError(400, "invalid_request", "depends_on_issue_ids must be a positive integer array");
   }
-  return [...new Set(value as number[])].sort((left, right) => left - right);
+  const ids = [...value as number[]];
+  const duplicate = ids.find((id, index) => ids.indexOf(id) !== index);
+  if (duplicate !== undefined) {
+    throw workError(400, "invalid_request", `depends_on_issue_ids cannot repeat Issue #${duplicate}`);
+  }
+  return ids.sort((left, right) => left - right);
 }
 
 function assertKeys(body: Record<string, unknown>, allowed: string[]): void {

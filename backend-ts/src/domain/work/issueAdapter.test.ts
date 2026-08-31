@@ -245,7 +245,7 @@ describe("Issue-backed Work compatibility adapter", () => {
     }
   });
 
-  test("isolates a rejected shadow transition while legacy remains authoritative", async () => {
+  test("rejects planning metadata writes after the Issue reaches a terminal state", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, PROJECT_ID);
@@ -270,14 +270,19 @@ describe("Issue-backed Work compatibility adapter", () => {
       });
 
       expect(result).toMatchObject({
-        applied: true,
-        shadow: { mismatches: ["status"], mode: "best_effort", status: "mismatch" },
-        work: { status: "done", title: "Legacy still wins" }
+        applied: false,
+        shadow: { mode: "disabled", status: "disabled" },
+        violations: ["title、description 和 depends_on_issue_ids 只能在未开始的 triage 或 todo Issue 上更新"],
+        work: { status: "done", title: "Shadow fixture" }
       });
-      expect(getIssue(db, issue.id)).toMatchObject({ status: "done", title: "Legacy still wins" });
-      expect(getWork(db, initial.id)).toMatchObject({ status: "failed", title: "Legacy still wins" });
-      expect(listWorkEvents(db, initial.id)).toContainEqual(expect.objectContaining({ outcome: "rejected" }));
-      expect(shadowMismatches(db, issue.id)).toMatchObject([{ event_id: "shadow-conflict", mismatches: ["status"] }]);
+      expect(getIssue(db, issue.id)).toMatchObject({ status: "done", title: "Shadow fixture" });
+      expect(getWork(db, initial.id)).toMatchObject({ status: "failed", title: "Shadow fixture" });
+      expect(adapterAudits(db, issue.id)).toContainEqual(expect.objectContaining({
+        event_id: "shadow-conflict",
+        operation: "update",
+        outcome: "rejected"
+      }));
+      expect(shadowMismatches(db, issue.id)).toEqual([]);
     } finally {
       db.close();
     }

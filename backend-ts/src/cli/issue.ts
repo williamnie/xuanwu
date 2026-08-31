@@ -25,6 +25,11 @@ const UPDATE_FLAGS = [
   { name: "status" },
   { name: "error" },
   { name: "agent-profile" },
+  { name: "title" },
+  { name: "body" },
+  { name: "body-file" },
+  { name: "depends-on" },
+  { boolean: true, name: "clear-dependencies" },
   { name: "required-skill" },
   { name: "recommended-skill" }
 ] as const;
@@ -68,15 +73,18 @@ async function getIssue(args: string[], env: EnvReader, fetcher: Fetcher): Promi
 
 async function updateIssue(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
   const { common, values } = parseCommandArgs(args, [...UPDATE_FLAGS], env);
-  const payload = updatePayload(
-    values.status ?? "",
-    values.error ?? "",
-    values["agent-profile"],
-    values["required-skill"] ?? "",
-    values["recommended-skill"] ?? ""
-  );
+  if (values.body !== undefined && values["body-file"] !== undefined) {
+    throw new Error("--body and --body-file are mutually exclusive");
+  }
+  if (values["depends-on"] !== undefined && values["clear-dependencies"] === "true") {
+    throw new Error("--depends-on and --clear-dependencies are mutually exclusive");
+  }
+  const description = values.body !== undefined || values["body-file"] !== undefined
+    ? await issueBody(values.body ?? "", values["body-file"] ?? "")
+    : undefined;
+  const payload = updatePayload(values, description);
   if (Object.keys(payload).length === 0) {
-    throw new Error("--status, --error, --agent-profile, --required-skill or --recommended-skill is required");
+    throw new Error("at least one issue update field is required");
   }
   const issue = await patchJSON<IssueDTO>(fetcher, common, `/api/issues/${issueID(values.id)}`, payload);
   return formatIssue(issue, common.json);
@@ -148,25 +156,41 @@ function createPayload(values: Record<string, string>, env: EnvReader, body: str
   };
 }
 
-function updatePayload(
-  status: string,
-  error: string,
-  agentProfile: string | undefined,
-  requiredSkill = "",
-  recommendedSkill = ""
-): Record<string, unknown> {
+function updatePayload(values: Record<string, string>, description: string | undefined): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
-  const cleanStatus = status.trim();
-  const cleanError = error.trim();
+  const cleanStatus = (values.status ?? "").trim();
+  const cleanError = (values.error ?? "").trim();
   if (cleanStatus !== "") {
     payload.status = cleanStatus;
     if (cleanStatus !== "failed") payload.error = "";
   }
   if (cleanError !== "") payload.error = cleanError;
-  if (agentProfile !== undefined) payload.agent_profile_id = agentProfile;
-  if (requiredSkill.trim() !== "") payload.required_skill_intents = intentList(requiredSkill);
-  if (recommendedSkill.trim() !== "") payload.recommended_skill_intents = intentList(recommendedSkill);
+  if (values["agent-profile"] !== undefined) payload.agent_profile_id = values["agent-profile"];
+  if (values.title !== undefined) payload.title = values.title;
+  if (description !== undefined) payload.description = description;
+  if (values["depends-on"] !== undefined) payload.depends_on_issue_ids = dependencyList(values["depends-on"]);
+  if (values["clear-dependencies"] === "true") payload.depends_on_issue_ids = [];
+  if ((values["required-skill"] ?? "").trim() !== "") {
+    payload.required_skill_intents = intentList(values["required-skill"]);
+  }
+  if ((values["recommended-skill"] ?? "").trim() !== "") {
+    payload.recommended_skill_intents = intentList(values["recommended-skill"]);
+  }
   return payload;
+}
+
+function dependencyList(value: string): number[] {
+  const tokens = value.split(",").map((item) => item.trim()).filter(Boolean);
+  if (tokens.length === 0) throw new Error("--depends-on requires one or more positive Issue ids");
+  const ids = tokens.map((item) => {
+    if (!/^[1-9]\d*$/.test(item)) throw new Error("--depends-on must be a comma-separated list of positive Issue ids");
+    const id = Number(item);
+    if (!Number.isSafeInteger(id)) throw new Error("--depends-on must contain safe positive Issue ids");
+    return id;
+  });
+  const duplicate = ids.find((id, index) => ids.indexOf(id) !== index);
+  if (duplicate !== undefined) throw new Error(`--depends-on cannot repeat Issue #${duplicate}`);
+  return ids;
 }
 
 async function issueBody(body: string, bodyFile: string): Promise<string> {

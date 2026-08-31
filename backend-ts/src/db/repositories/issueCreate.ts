@@ -3,7 +3,10 @@ import { getIssue, type Issue } from "./issues.ts";
 import { ProjectNotFoundError } from "./projects.ts";
 import { normalizeMcpCapabilityList } from "../../mcp/policy.ts";
 import { normalizeSkillIntentList } from "../../skills/intents.ts";
-import { normalizeIssueDependencyDeclaration } from "../../domain/work/issueDependencyDeclaration.ts";
+import {
+  assertIssueDependencyDeclarationMatches,
+  normalizeIssueDependencyDeclaration
+} from "../../domain/work/issueDependencyDeclaration.ts";
 
 export type CreateIssueInput = Partial<Record<keyof NormalizedIssueWrite, unknown>> & {
   depends_on_issue_ids?: unknown;
@@ -116,6 +119,7 @@ function normalizeIssueForWrite(input: CreateIssueInput): NormalizedIssueWrite {
   const description = cleanString(input.description);
   const title = cleanString(input.title) || deriveIssueTitle(description);
   const dependency = normalizeIssueDependencyDeclaration(input.depends_on_issue_ids, description);
+  assertIssueDependencyDeclarationMatches(description, dependency.issue_ids);
   return {
     project_id: cleanString(input.project_id),
     title,
@@ -138,7 +142,7 @@ function normalizeIssueForWrite(input: CreateIssueInput): NormalizedIssueWrite {
   };
 }
 
-function ensureIssueWorkShadow(db: RunnerDatabase, issueID: number): void {
+export function ensureIssueWorkShadow(db: RunnerDatabase, issueID: number): void {
   db.sqlite.run(`
     insert or ignore into works (
       id, project_id, type, title, goal, status, acceptance_json, provenance_json,

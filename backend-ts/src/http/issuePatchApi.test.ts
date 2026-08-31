@@ -40,6 +40,13 @@ describe("Bun issue patch API", () => {
       expect(listEvents(database)).toEqual([
         { type: "issue.status_changed", payload: "{\"status\":\"todo\"}" },
         {
+          type: "issue.planning_metadata_updated.v1",
+          payload: JSON.stringify({
+            contract: "unstarted-issue-planning-update-v1",
+            fields: ["title", "description"]
+          })
+        },
+        {
           type: "issue.lifecycle_control.v1",
           payload: JSON.stringify({
             actor: { kind: "operator", source: "http", thread_id: "" },
@@ -219,6 +226,86 @@ describe("Bun issue patch API", () => {
       expect(await response.json()).toEqual({
         message: "存在结构化依赖关系的 Issue 不能更换所属项目"
       });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("preserves title on a body-only patch and atomically replaces then clears dependencies", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const upstream = createIssue(database, { project_id: "demo", status: "todo", title: "upstream" });
+      const issueId = insertIssue(database, "demo");
+      const description = `Updated body\n\n## Dependencies\n\n- Issue #${upstream.id}`;
+
+      const updated = await patchIssue(database, issueId, {
+        depends_on_issue_ids: [upstream.id],
+        description
+      });
+      const replay = await patchIssue(database, issueId, {
+        depends_on_issue_ids: [upstream.id],
+        description
+      });
+      const cleared = await patchIssue(database, issueId, {
+        depends_on_issue_ids: [],
+        description: "Updated body without dependencies"
+      });
+
+      expect(updated.status).toBe(200);
+      expect(await updated.json()).toMatchObject({ description, title: "Patch API" });
+      expect(replay.status).toBe(200);
+      expect(await replay.json()).toMatchObject({ description, title: "Patch API" });
+      expect(cleared.status).toBe(200);
+      expect(await cleared.json()).toMatchObject({
+        description: "Updated body without dependencies",
+        title: "Patch API"
+      });
+      expect(database.sqlite.query<{ dependency_issue_ids_json: string }, [number]>(
+        "select dependency_issue_ids_json from issues where id=?"
+      ).get(issueId)).toEqual({ dependency_issue_ids_json: "[]" });
+      expect(database.sqlite.query<{ count: number }, [string]>(`
+        select count(*) as count from work_relations where kind='depends_on' and source_work_id=?
+      `).get(`xw:work:issues:${issueId}`)).toEqual({ count: 0 });
+      expect(listEvents(database).filter((event) => event.type === "issue.planning_metadata_updated.v1")).toHaveLength(2);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("fails closed for Run history, cycles and inconsistent body declarations without partial writes", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const first = createIssue(database, { project_id: "demo", status: "triage", title: "first" });
+      const second = createIssue(database, {
+        depends_on_issue_ids: [first.id], project_id: "demo", status: "triage", title: "second"
+      });
+      const ran = createIssue(database, { project_id: "demo", status: "todo", title: "ran" });
+      insertOpenRun(database, ran.id);
+
+      const cycle = await patchIssue(database, first.id, {
+        depends_on_issue_ids: [second.id], title: "must not persist"
+      });
+      const mismatch = await patchIssue(database, second.id, { description: "## Dependencies\n\nNone" });
+      const runHistory = await patchIssue(database, ran.id, { title: "must not persist" });
+
+      expect(cycle.status).toBe(400);
+      expect(await cycle.json()).toEqual({
+        message: `depends_on_issue_ids 会形成依赖环：Issue #${first.id} -> Issue #${second.id}`
+      });
+      expect(mismatch.status).toBe(400);
+      expect(await mismatch.json()).toEqual({
+        message: "正文依赖章节必须与 depends_on_issue_ids 完全一致；请同时更新正文和结构化依赖"
+      });
+      expect(runHistory.status).toBe(400);
+      expect(await runHistory.json()).toEqual({
+        message: "Issue 已存在 Run 历史，禁止更新 title、description 或 depends_on_issue_ids"
+      });
+      expect(database.sqlite.query<{ title: string }, [number]>("select title from issues where id=?").get(first.id))
+        .toEqual({ title: "first" });
+      expect(database.sqlite.query<{ title: string }, [number]>("select title from issues where id=?").get(ran.id))
+        .toEqual({ title: "ran" });
     } finally {
       database.close();
     }

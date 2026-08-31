@@ -2,7 +2,7 @@ import type { RunnerDatabase } from "../database.ts";
 import { getIssue, type Issue } from "./issues.ts";
 import {
   cleanString,
-  deriveIssueTitle,
+  ensureIssueWorkShadow,
   integerInput,
   issueTimestamp,
   normalizeIdentifier,
@@ -13,8 +13,15 @@ import { normalizeMcpCapabilityList } from "../../mcp/policy.ts";
 import { normalizeSkillIntentList } from "../../skills/intents.ts";
 import { getProject, ProjectNotFoundError } from "./projects.ts";
 import { syncPiRunGroupsForIssueStatus } from "./pi/runGroups.ts";
+import {
+  assertIssueDependencyDeclarationMatches,
+  normalizeIssueDependencyDeclaration,
+  parseIssueDependencyDeclaration
+} from "../../domain/work/issueDependencyDeclaration.ts";
 
-export type UpdateIssueInput = Partial<Record<keyof NormalizedIssuePatch, unknown>>;
+export type UpdateIssueInput = Partial<Record<keyof NormalizedIssuePatch, unknown>> & {
+  depends_on_issue_ids?: unknown;
+};
 
 type NormalizedIssuePatch = {
   id: number;
@@ -64,42 +71,237 @@ const PATCH_FIELDS = [
 ] as const satisfies ReadonlyArray<keyof NormalizedIssuePatch>;
 
 export function updateIssue(db: RunnerDatabase, id: number, input: UpdateIssueInput): Issue {
-  const current = getIssue(db, id);
-  if (!current) throw new ProjectNotFoundError();
-  const patch = normalizeIssuePatch(input);
-  const next = { ...issueToPatchShape(current), ...patch };
-  if (Object.hasOwn(patch, "description") && !Object.hasOwn(patch, "title")) {
-    next.title = deriveIssueTitle(next.description);
-  }
-  validateIssuePatch(db, current, patch, next);
-  const timestamp = issueTimestamp();
-  const write = db.transaction((record: NormalizedIssuePatch) => {
+  const write = db.transaction(() => {
+    const current = getIssue(db, id);
+    if (!current) throw new ProjectNotFoundError();
+    const patch = normalizeIssuePatch(input);
+    const next = { ...issueToPatchShape(current), ...patch };
+    validateIssuePatch(db, current, patch, next);
+    const dependencyRequested = Object.hasOwn(input, "depends_on_issue_ids");
+    const dependencyState = readIssueDependencyState(db, current.id);
+    const dependencyIssueIDs = dependencyRequested
+      ? normalizeIssueDependencyDeclaration(input.depends_on_issue_ids, next.description).issue_ids
+      : dependencyState.issue_ids;
+    if (Object.hasOwn(patch, "description") || dependencyRequested) {
+      assertIssueDependencyDeclarationMatches(next.description, dependencyIssueIDs);
+    }
+    if (Object.hasOwn(patch, "description") && !dependencyRequested
+      && parseIssueDependencyDeclaration(next.description).present
+      && !sameIssueDependencies(dependencyState, dependencyIssueIDs)) {
+      throw new Error("现有结构化依赖快照与硬依赖边不一致；请同时提供 depends_on_issue_ids 以原子修复");
+    }
+    const dependencyNeedsSync = dependencyRequested && !sameIssueDependencies(dependencyState, dependencyIssueIDs);
+    const changedFields = PATCH_FIELDS.filter((field) => (
+      Object.hasOwn(patch, field) && next[field] !== issueToPatchShape(current)[field]
+    ));
+    const planningFields = changedFields.filter((field) => field === "title" || field === "description");
+    const planningRequested = Object.hasOwn(patch, "title")
+      || Object.hasOwn(patch, "description")
+      || dependencyRequested;
+    if (planningFields.length > 0 || dependencyNeedsSync) {
+      assertUnstartedPlanningUpdate(db, current);
+    }
+    if (dependencyRequested) validateIssueDependencies(db, current.id, next.project_id, dependencyIssueIDs);
+    if (planningRequested && changedFields.length === 0 && !dependencyNeedsSync) return current;
+    const timestamp = issueTimestamp();
     db.sqlite.run(`update issues set project_id=?, title=?, description=?, status=?, priority=?,
       required_skill_intents_json=?, recommended_skill_intents_json=?,
       required_mcp_capabilities_json=?, recommended_mcp_capabilities_json=?,
       agent_profile_id=?, service_tier=?, source_session_id=?, source_turn_id=?, source_excerpt=?,
       codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?, auto_retry_reason=?,
-      error=?, issue_log_mode=?, updated_at=? where id=?`,
-      [record.project_id, record.title, record.description, record.status, record.priority,
-        record.required_skill_intents, record.recommended_skill_intents,
-        record.required_mcp_capabilities, record.recommended_mcp_capabilities,
-        record.agent_profile_id, record.service_tier, record.source_session_id, record.source_turn_id,
-        record.source_excerpt, record.codex_thread_id, record.codex_turn_id,
-        record.auto_retry_next_at, record.auto_retry_reason, record.error, record.issue_log_mode,
+      error=?, issue_log_mode=?,
+      dependency_issue_ids_json=case when ? then ? else dependency_issue_ids_json end,
+      dependency_declaration_error=case when ? then '' else dependency_declaration_error end,
+      updated_at=? where id=?`,
+      [next.project_id, next.title, next.description, next.status, next.priority,
+        next.required_skill_intents, next.recommended_skill_intents,
+        next.required_mcp_capabilities, next.recommended_mcp_capabilities,
+        next.agent_profile_id, next.service_tier, next.source_session_id, next.source_turn_id,
+        next.source_excerpt, next.codex_thread_id, next.codex_turn_id,
+        next.auto_retry_next_at, next.auto_retry_reason, next.error, next.issue_log_mode,
+        dependencyNeedsSync ? 1 : 0, JSON.stringify(dependencyIssueIDs), dependencyNeedsSync ? 1 : 0,
         timestamp, current.id]);
+    if (dependencyNeedsSync) syncIssueDependencies(db, next.project_id, current.id, dependencyIssueIDs, timestamp);
     if (Object.hasOwn(patch, "status")) {
-      if (current.status !== record.status) {
-        if (record.status !== "in_progress") closeOpenIssueRun(db, record, timestamp);
+      if (current.status !== next.status) {
+        if (next.status !== "in_progress") closeOpenIssueRun(db, next, timestamp);
         db.sqlite.run(
           `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
-          [current.id, "issue.status_changed", JSON.stringify({ status: record.status }), timestamp]
+          [current.id, "issue.status_changed", JSON.stringify({ status: next.status }), timestamp]
         );
       }
-      syncPiRunGroupItems(db, record, timestamp);
+      syncPiRunGroupItems(db, next, timestamp);
     }
+    const metadataFields = [
+      ...planningFields,
+      ...(dependencyNeedsSync ? ["depends_on_issue_ids"] : [])
+    ];
+    if (metadataFields.length > 0) {
+      db.sqlite.run(
+        `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
+        [current.id, "issue.planning_metadata_updated.v1", JSON.stringify({
+          contract: "unstarted-issue-planning-update-v1",
+          fields: metadataFields,
+          ...(dependencyNeedsSync ? { depends_on_issue_ids: dependencyIssueIDs } : {})
+        }), timestamp]
+      );
+    }
+    return mustGetIssue(db, current.id);
   });
-  write(next);
-  return mustGetIssue(db, current.id);
+  return write.immediate();
+}
+
+type IssueDependencyState = {
+  declaration_error: string;
+  issue_ids: number[];
+  raw_json: string;
+  relation_targets: string[];
+};
+
+function readIssueDependencyState(db: RunnerDatabase, issueID: number): IssueDependencyState {
+  const row = db.sqlite.query<{
+    dependency_declaration_error: string;
+    dependency_issue_ids_json: string;
+  }, [number]>(`
+    select dependency_issue_ids_json, dependency_declaration_error from issues where id=?
+  `).get(issueID);
+  if (!row) throw new ProjectNotFoundError();
+  const sourceWorkID = issueWorkID(issueID);
+  const relationTargets = db.sqlite.query<{ target_work_id: string }, [string]>(`
+    select target_work_id from work_relations
+    where kind='depends_on' and source_work_id=? order by target_work_id
+  `).all(sourceWorkID).map((relation) => relation.target_work_id);
+  return {
+    declaration_error: row.dependency_declaration_error,
+    issue_ids: dependencyIDsFromJSON(row.dependency_issue_ids_json),
+    raw_json: row.dependency_issue_ids_json,
+    relation_targets: relationTargets
+  };
+}
+
+function sameIssueDependencies(state: IssueDependencyState, issueIDs: number[]): boolean {
+  const expectedTargets = issueIDs.map(issueWorkID).sort();
+  return state.declaration_error === ""
+    && state.raw_json === JSON.stringify(issueIDs)
+    && JSON.stringify(state.relation_targets) === JSON.stringify(expectedTargets);
+}
+
+function assertUnstartedPlanningUpdate(db: RunnerDatabase, issue: Issue): void {
+  if (issue.status !== "triage" && issue.status !== "todo") {
+    throw new Error("title、description 和 depends_on_issue_ids 只能在未开始的 triage 或 todo Issue 上更新");
+  }
+  const runCount = db.sqlite.query<{ count: number }, [number]>(
+    "select count(*) as count from issue_runs where issue_id=?"
+  ).get(issue.id)?.count ?? 0;
+  if (issue.attempt_count > 0 || runCount > 0) {
+    throw new Error("Issue 已存在 Run 历史，禁止更新 title、description 或 depends_on_issue_ids");
+  }
+}
+
+function validateIssueDependencies(
+  db: RunnerDatabase,
+  issueID: number,
+  projectID: string,
+  dependencyIssueIDs: number[]
+): void {
+  for (const dependencyID of dependencyIssueIDs) {
+    if (dependencyID === issueID) throw new Error(`Issue #${issueID} 不能依赖自身`);
+    const dependency = getIssue(db, dependencyID);
+    if (!dependency) throw new Error(`依赖 Issue #${dependencyID} 不存在`);
+    if (dependency.project_id !== projectID) {
+      throw new Error(`依赖 Issue #${dependencyID} 不属于项目 ${projectID}`);
+    }
+  }
+  const sourceWorkID = issueWorkID(issueID);
+  const adjacency = projectDependencyAdjacency(db, projectID);
+  adjacency.set(sourceWorkID, dependencyIssueIDs.map(issueWorkID));
+  for (const dependencyID of dependencyIssueIDs) {
+    if (canReach(adjacency, issueWorkID(dependencyID), sourceWorkID)) {
+      throw new Error(`depends_on_issue_ids 会形成依赖环：Issue #${issueID} -> Issue #${dependencyID}`);
+    }
+  }
+}
+
+function projectDependencyAdjacency(db: RunnerDatabase, projectID: string): Map<string, string[]> {
+  const adjacency = new Map<string, Set<string>>();
+  const issues = db.sqlite.query<{ dependency_issue_ids_json: string; id: number }, [string]>(`
+    select id, dependency_issue_ids_json from issues where project_id=?
+  `).all(projectID);
+  for (const issue of issues) {
+    adjacency.set(issueWorkID(issue.id), new Set(dependencyIDsFromJSON(issue.dependency_issue_ids_json).map(issueWorkID)));
+  }
+  const relations = db.sqlite.query<{ source_work_id: string; target_work_id: string }, [string]>(`
+    select source_work_id, target_work_id from work_relations
+    where project_id=? and kind='depends_on'
+  `).all(projectID);
+  for (const relation of relations) {
+    const targets = adjacency.get(relation.source_work_id) ?? new Set<string>();
+    targets.add(relation.target_work_id);
+    adjacency.set(relation.source_work_id, targets);
+  }
+  return new Map([...adjacency].map(([source, targets]) => [source, [...targets]]));
+}
+
+function canReach(adjacency: Map<string, string[]>, start: string, target: string): boolean {
+  const pending = [start];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    if (current === target) return true;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    pending.push(...(adjacency.get(current) ?? []));
+  }
+  return false;
+}
+
+function syncIssueDependencies(
+  db: RunnerDatabase,
+  projectID: string,
+  issueID: number,
+  dependencyIssueIDs: number[],
+  timestamp: string
+): void {
+  ensureIssueWorkShadow(db, issueID);
+  for (const dependencyID of dependencyIssueIDs) ensureIssueWorkShadow(db, dependencyID);
+  db.sqlite.run("delete from work_relations where kind='depends_on' and source_work_id=?", [issueWorkID(issueID)]);
+  for (const dependencyID of dependencyIssueIDs) {
+    const relationID = `issue-dependency:${issueID}:${dependencyID}`;
+    db.sqlite.run(`
+      insert into work_relations (
+        relation_id, project_id, kind, source_work_id, target_work_id, actor_json,
+        reason, correlation_id, audit_event_ref, occurred_at, created_at, updated_at
+      ) values (?, ?, 'depends_on', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      relationID,
+      projectID,
+      issueWorkID(issueID),
+      issueWorkID(dependencyID),
+      '{"id":"issue-update","kind":"runner"}',
+      "Replace dependencies for an unstarted Issue",
+      relationID,
+      `issue-planning-update:${issueID}:${dependencyID}`,
+      timestamp,
+      timestamp,
+      timestamp
+    ]);
+  }
+}
+
+function dependencyIDsFromJSON(value: string): number[] {
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return [...new Set(parsed.filter((item): item is number => (
+      typeof item === "number" && Number.isSafeInteger(item) && item > 0
+    )))].sort((left, right) => left - right);
+  } catch {
+    return [];
+  }
+}
+
+function issueWorkID(issueID: number): string {
+  return `xw:work:issues:${issueID}`;
 }
 
 function syncPiRunGroupItems(db: RunnerDatabase, issue: NormalizedIssuePatch, timestamp: string): void {

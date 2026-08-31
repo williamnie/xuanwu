@@ -31,7 +31,9 @@ const SHADOW_POLICY_REF = "xuanwu-work-shadow-v1";
 export type IssueWorkShadowMode = "disabled" | "best_effort";
 export type IssueWorkAction = "cancel" | "enqueue" | "retry";
 
-export type IssueWorkPatch = Partial<Pick<WorkLedgerEntry, "agent_profile_id" | "goal" | "title">>;
+export type IssueWorkPatch = Partial<Pick<WorkLedgerEntry, "agent_profile_id" | "goal" | "title">> & {
+  depends_on_issue_ids?: number[];
+};
 
 export type IssueWorkCreateCommand = {
   agent_profile_id?: string;
@@ -522,9 +524,15 @@ function applyLegacyIssueAction(db: RunnerDatabase, issueID: number, action: Iss
   return cancelIssue(db, issueID, reason);
 }
 
-function issuePatch(patch: IssueWorkPatch): { agent_profile_id?: string; description?: string; title?: string } {
+function issuePatch(patch: IssueWorkPatch): {
+  agent_profile_id?: string;
+  depends_on_issue_ids?: number[];
+  description?: string;
+  title?: string;
+} {
   return {
     ...(patch.agent_profile_id !== undefined ? { agent_profile_id: patch.agent_profile_id } : {}),
+    ...(patch.depends_on_issue_ids !== undefined ? { depends_on_issue_ids: patch.depends_on_issue_ids } : {}),
     ...(patch.goal !== undefined ? { description: patch.goal } : {}),
     ...(patch.title !== undefined ? { title: patch.title } : {})
   };
@@ -534,7 +542,7 @@ function patchViolations(patch: IssueWorkPatch): string[] {
   const keys = Object.keys(patch);
   const violations: string[] = [];
   const unsupported = keys.filter((key) => (
-    key !== "agent_profile_id" && key !== "goal" && key !== "title"
+    key !== "agent_profile_id" && key !== "depends_on_issue_ids" && key !== "goal" && key !== "title"
   ));
   if (unsupported.length > 0) violations.push(`unsupported Issue-backed Work fields: ${unsupported.join(", ")}`);
   if (keys.length === 0) violations.push("Issue-backed Work patch is empty");

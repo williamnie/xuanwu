@@ -73,6 +73,54 @@ describe("Bun issue CLI", () => {
     expect(stderr).toBe("");
   });
 
+  test("updates unstarted planning metadata and distinguishes dependency clear from omission", async () => {
+    const bodyFile = await tempIssueFile("Updated body\n\n## Dependencies\n\n- Issue #3\n- Issue #5");
+    const payloads: Record<string, unknown>[] = [];
+    const fetcher = fetchStub(async (request) => {
+      payloads.push(await request.json() as Record<string, unknown>);
+      return jsonResponse(issueBody({ id: 7, status: "triage", title: "Updated title" }));
+    });
+
+    const updated = await run([
+      "issue", "update", "--id", "7", "--title", "Updated title", "--body-file", bodyFile,
+      "--depends-on", "5,3", "--json"
+    ], { fetcher });
+    const cleared = await run([
+      "issue", "update", "--id", "7", "--clear-dependencies", "--json"
+    ], { fetcher });
+
+    expect(updated).toMatchObject({ code: 0, stderr: "" });
+    expect(cleared).toMatchObject({ code: 0, stderr: "" });
+    expect(payloads).toEqual([
+      {
+        depends_on_issue_ids: [5, 3],
+        description: "Updated body\n\n## Dependencies\n\n- Issue #3\n- Issue #5",
+        title: "Updated title"
+      },
+      { depends_on_issue_ids: [] }
+    ]);
+  });
+
+  test("rejects ambiguous body and dependency update flags", async () => {
+    const bodyFile = await tempIssueFile("body");
+    const bothBodies = await run([
+      "issue", "update", "--id", "7", "--body", "inline", "--body-file", bodyFile
+    ]);
+    const bothDependencies = await run([
+      "issue", "update", "--id", "7", "--depends-on", "3", "--clear-dependencies"
+    ]);
+    const duplicate = await run([
+      "issue", "update", "--id", "7", "--depends-on", "3,3"
+    ]);
+
+    expect(bothBodies).toMatchObject({ code: 1, stdout: "" });
+    expect(bothBodies.stderr).toContain("mutually exclusive");
+    expect(bothDependencies).toMatchObject({ code: 1, stdout: "" });
+    expect(bothDependencies.stderr).toContain("mutually exclusive");
+    expect(duplicate).toMatchObject({ code: 1, stdout: "" });
+    expect(duplicate.stderr).toContain("cannot repeat Issue #3");
+  });
+
   test("keeps failed error, reads logs, and posts verification review", async () => {
     const fetcher = fetchStub(async (request) => {
       const path = new URL(request.url).pathname;

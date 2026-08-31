@@ -17,13 +17,31 @@ export function normalizeIssueDependencyDeclaration(
     if (!Array.isArray(explicit)) {
       throw new Error("depends_on_issue_ids 必须是正整数数组");
     }
+    const issueIDs = positiveIssueIDs(explicit);
+    const duplicate = issueIDs.find((id, index) => issueIDs.indexOf(id) !== index);
+    if (duplicate !== undefined) {
+      throw new Error(`depends_on_issue_ids 不能重复包含 Issue #${duplicate}`);
+    }
     return {
       error: "",
-      issue_ids: uniquePositiveIssueIDs(explicit),
+      issue_ids: issueIDs.sort((left, right) => left - right),
       present: true
     };
   }
   return parseIssueDependencyDeclaration(description);
+}
+
+export function assertIssueDependencyDeclarationMatches(
+  description: string,
+  dependencyIssueIDs: number[]
+): void {
+  const declaration = parseIssueDependencyDeclaration(description);
+  if (!declaration.present) return;
+  if (declaration.error !== "") throw new Error(declaration.error);
+  const expected = [...dependencyIssueIDs].sort((left, right) => left - right);
+  if (JSON.stringify(declaration.issue_ids) !== JSON.stringify(expected)) {
+    throw new Error("正文依赖章节必须与 depends_on_issue_ids 完全一致；请同时更新正文和结构化依赖");
+  }
 }
 
 export function parseIssueDependencyDeclaration(description: string): IssueDependencyDeclaration {
@@ -51,11 +69,14 @@ export function parseIssueDependencyDeclaration(description: string): IssueDepen
 }
 
 function uniquePositiveIssueIDs(values: unknown[]): number[] {
-  const ids = values.map((value) => {
+  return [...new Set(positiveIssueIDs(values))].sort((left, right) => left - right);
+}
+
+function positiveIssueIDs(values: unknown[]): number[] {
+  return values.map((value) => {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
       throw new Error("depends_on_issue_ids 必须只包含正整数");
     }
     return value;
   });
-  return [...new Set(ids)].sort((left, right) => left - right);
 }
