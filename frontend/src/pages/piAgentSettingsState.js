@@ -28,6 +28,7 @@ const CONNECTION_FIELDS = new Set(['api', 'apiKey', 'baseUrl', 'modelId', 'model
 
 export function usePiAgentSettingsState() {
   const [connectionTest, setConnectionTest] = useState({ busy: false, providerId: '', result: null });
+  const [deletingProviderId, setDeletingProviderId] = useState('');
   const [modelDiscovery, setModelDiscovery] = useState({ busy: false, providerId: '', result: null });
   const [providers, setProviders] = useState([]);
   const [providerCatalog, setProviderCatalog] = useState({ presets: [] });
@@ -116,6 +117,16 @@ export function usePiAgentSettingsState() {
     selectProviderPreset(preset);
   };
   const discoverModels = () => discoverPiModels(form, setModelDiscovery);
+  const deleteProviderConnection = (providerId) => deletePiProviderConnection({
+    providerId,
+    setConnectionTest,
+    setDeletingProviderId,
+    setForm,
+    setModelDiscovery,
+    setOauthBusy,
+    setOauthStatus,
+    setProviders
+  });
   const handleConnectionApply = () => savePiConnectionAndSupervisor({ form, setForm, setPersonaConflictDraft, setPromptSummary, setProviders, setSaving });
   const handleAgentSave = () => savePiSupervisorSettings({ form, providers, setForm, setPersonaConflictDraft, setPromptSummary, setProviders, setSaving });
   const restorePersonaConflictDraft = () => {
@@ -135,8 +146,8 @@ export function usePiAgentSettingsState() {
     loadSettings();
   }, []);
 
-  return { connectionTest, form, loading, modelDiscovery, modelOptions, modelSelectAvailable, oauthBusy, oauthStatus, personaConflictDraft, promptSummary, promptSummaryLoading, providerCatalog, providers, saving, selectedPreset, selectedProvider,
-    copyPiCodexOAuthUrl, dismissPersonaConflictDraft, discoverModels, handleAgentSave, handleConnectionApply, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, restorePersonaConflictDraft, selectApiMode, selectApiProtocol, selectModelProvider, selectOAuthMode, selectProviderPreset, startNewApiConnection, startPiCodexOAuthLogin, testConnection, updateField };
+  return { connectionTest, deletingProviderId, form, loading, modelDiscovery, modelOptions, modelSelectAvailable, oauthBusy, oauthStatus, personaConflictDraft, promptSummary, promptSummaryLoading, providerCatalog, providers, saving, selectedPreset, selectedProvider,
+    copyPiCodexOAuthUrl, deleteProviderConnection, dismissPersonaConflictDraft, discoverModels, handleAgentSave, handleConnectionApply, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, restorePersonaConflictDraft, selectApiMode, selectApiProtocol, selectModelProvider, selectOAuthMode, selectProviderPreset, startNewApiConnection, startPiCodexOAuthLogin, testConnection, updateField };
 }
 
 function connectionFormForApi(api, form, providers, presets) {
@@ -235,6 +246,36 @@ async function testPiConnection(form, setConnectionTest, setModelDiscovery) {
     setConnectionTest({ busy: false, providerId, result: { error: 'request_failed', message: err.message || '模型连接失败', ok: false, status: 'failed' } });
     setModelDiscovery({ busy: false, providerId, result: { error: 'request_failed', message: err.message || '读取远端模型列表失败', models: [], ok: false, status: 'failed' } });
     message.error(err.message || '模型连接失败');
+  }
+}
+
+async function deletePiProviderConnection({
+  providerId,
+  setConnectionTest,
+  setDeletingProviderId,
+  setForm,
+  setModelDiscovery,
+  setOauthBusy,
+  setOauthStatus,
+  setProviders
+}) {
+  if (!providerId) return false;
+  setDeletingProviderId(providerId);
+  try {
+    await assistantApi.deletePiProviderSettings(providerId);
+    clearFirstDeliveryConnectionTest();
+    setConnectionTest({ busy: false, providerId: '', result: null });
+    setModelDiscovery({ busy: false, providerId: '', result: null });
+    const refreshes = [refreshAfterSave(setProviders, setForm)];
+    if (providerId === 'openai-codex') refreshes.push(loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy));
+    await Promise.all(refreshes);
+    message.success('模型连接已删除');
+    return true;
+  } catch (err) {
+    message.error(err.message || '删除模型连接失败');
+    return false;
+  } finally {
+    setDeletingProviderId('');
   }
 }
 

@@ -181,13 +181,19 @@
   min-height: 46px;
 }
 
-.provider-connection-toolbar > label {
+.provider-connection-picker {
   align-items: center;
   display: flex;
   gap: 8px;
 }
 
-.provider-connection-toolbar > label > span {
+.provider-connection-picker > label {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.provider-connection-picker > label > span {
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 0.61rem;
@@ -199,6 +205,55 @@
   height: 31px;
   min-width: 230px;
   width: auto;
+}
+
+.provider-delete-trigger {
+  color: var(--error);
+  white-space: nowrap;
+}
+
+.provider-delete-trigger:not(:disabled) {
+  border-color: color-mix(in srgb, var(--error) 38%, var(--border-color));
+}
+
+.provider-delete-confirm {
+  align-items: center;
+  background: color-mix(in srgb, var(--error) 5%, transparent);
+  border-bottom: 1px solid var(--border-color);
+  border-left: 2px solid var(--error);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 9px 10px;
+}
+
+.provider-delete-confirm > div {
+  display: flex;
+  gap: 7px;
+}
+
+.provider-delete-confirm > div:first-child {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.provider-delete-confirm strong {
+  color: var(--text-primary);
+  font-size: 0.72rem;
+}
+
+.provider-delete-confirm span {
+  color: var(--text-muted);
+  font-size: 0.62rem;
+}
+
+.provider-delete-confirm-button {
+  background: var(--error);
+  color: var(--button-primary-fg);
+}
+
+.provider-delete-confirm-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error) 86%, var(--text-primary));
 }
 
 .provider-mode-tabs {
@@ -865,9 +920,25 @@
     padding: 9px 0;
   }
 
-  .provider-connection-toolbar > label,
+  .provider-connection-picker,
+  .provider-connection-picker > label,
   .provider-connection-toolbar .form-control {
     width: 100%;
+  }
+
+  .provider-connection-picker {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .provider-delete-confirm {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .provider-delete-confirm > div:last-child {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .provider-mode-tabs button {

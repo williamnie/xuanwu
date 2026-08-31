@@ -103,10 +103,16 @@ function markLoginFailed(db: RunnerDatabase, state: LoginState, error: unknown):
   recordOAuthAudit(db, "provider_oauth_failed", "failed", "oauth_login_failed");
 }
 
-async function logoutOpenAICodex(db: RunnerDatabase) {
+export async function removePiOpenAICodexOAuthCredential(db: RunnerDatabase): Promise<boolean> {
+  const configured = await hasStoredPiCredential(piAuthPath(db));
   await updatePiCredential(piAuthPath(db), OPENAI_CODEX_PROVIDER, undefined);
   loginStates.delete(piAuthPath(db));
-  recordOAuthAudit(db, "provider_oauth_logged_out", "succeeded");
+  if (configured) recordOAuthAudit(db, "provider_oauth_logged_out", "succeeded");
+  return configured;
+}
+
+async function logoutOpenAICodex(db: RunnerDatabase) {
+  await removePiOpenAICodexOAuthCredential(db);
   return await oauthStatus(db);
 }
 

@@ -2,9 +2,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getModel, getModels, getProviders, type KnownProvider, type Model } from "@earendil-works/pi-ai/compat";
 import type { RunnerDatabase } from "../db/database.ts";
-import { createPiActionEvent } from "../db/repositories/pi.ts";
+import { createPiActionEvent, getPiSupervisor } from "../db/repositories/pi.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
-import { isPiOpenAICodexOAuthConfigured } from "./piOAuthApi.ts";
+import { isPiOpenAICodexOAuthConfigured, removePiOpenAICodexOAuthCredential } from "./piOAuthApi.ts";
 import type { Router } from "./router.ts";
 import { registerSecretForRedaction } from "../security/redactionRegistry.ts";
 import { SecretStoreError } from "../security/secrets/contracts.ts";
@@ -48,6 +48,7 @@ type PublicProviderSettings = {
   api_key_configured: boolean;
   base_url: string;
   id: string;
+  in_use: boolean;
   models: string[];
   user_agent: string;
 };
@@ -117,6 +118,9 @@ export function registerPiProviderSettingsRoutes(
   router.put("/api/pi/provider-settings/:id", async (request) => {
     return json(await upsertProviderSettings(activeContext, providerID(request), await parseObjectBody(request)));
   });
+  router.delete("/api/pi/provider-settings/:id", async (request) => {
+    return json(await deleteProviderSettings(activeContext, providerID(request)));
+  });
   router.post("/api/pi/provider-settings/:id/models", async (request) => {
     return json(await discoverProviderModels(activeContext, providerID(request), await parseObjectBody(request)));
   });
@@ -127,7 +131,8 @@ export function registerPiProviderSettingsRoutes(
 
 async function listProviderSettings(context: PiProviderSettingsContext) {
   const config = await readModelsConfig(modelsPath(context.database));
-  return { providers: Object.entries(config.providers).map((entry) => publicProviderSettings(entry, context.secrets)) };
+  const activeProviderID = getPiSupervisor(context.database)?.model_provider ?? "";
+  return { providers: Object.entries(config.providers).map((entry) => publicProviderSettings(entry, context.secrets, activeProviderID)) };
 }
 
 async function upsertProviderSettings(
@@ -146,9 +151,48 @@ async function upsertProviderSettings(
   const next = normalizeProviderConfig(id, body, current, keyRef, submittedKey !== "");
   config.providers[id] = next;
   await writeModelsConfig(path, config);
-  const publicSettings = publicProviderSettings([id, next], context.secrets);
+  const publicSettings = publicProviderSettings(
+    [id, next],
+    context.secrets,
+    getPiSupervisor(context.database)?.model_provider ?? ""
+  );
   recordProviderSettingsAudit(context.database, id, body, publicSettings);
   return publicSettings;
+}
+
+async function deleteProviderSettings(context: PiProviderSettingsContext, id: string) {
+  const supervisor = getPiSupervisor(context.database);
+  if (supervisor?.model_provider === id) {
+    throw new HttpError(409, "当前 Supervisor 正在使用此连接，请先切换并保存其他连接");
+  }
+  const path = modelsPath(context.database);
+  const config = await readModelsConfig(path);
+  const current = config.providers[id];
+  const configured = current !== undefined;
+  if (configured) {
+    delete config.providers[id];
+    await writeModelsConfig(path, config);
+  }
+  const secretRef = cleanString(current?.apiKeyRef) || `secret://${providerSecretName(id).split("/").map(encodeURIComponent).join("/")}`;
+  const secret = context.secrets!.describe(secretRef);
+  const credentialRevoked = secret?.status === "active";
+  if (credentialRevoked) {
+    context.secrets!.revoke(secretRef, "user", `deleted provider connection ${id}`);
+  }
+  const oauthDisconnected = id === "openai-codex"
+    ? await removePiOpenAICodexOAuthCredential(context.database)
+    : false;
+  recordProviderSettingsDeletedAudit(context.database, id, {
+    configured,
+    credentialRevoked,
+    oauthDisconnected
+  });
+  return {
+    credential_revoked: credentialRevoked,
+    deleted: configured || credentialRevoked || oauthDisconnected,
+    oauth_disconnected: oauthDisconnected,
+    provider_id: id
+  };
 }
 
 function providerCatalog() {
@@ -349,16 +393,16 @@ function normalizeModelsConfig(value: unknown): ModelsConfig {
   const normalized: ModelsConfig = { providers: {} };
   for (const [id, provider] of Object.entries(providers)) {
     if (!isObject(provider)) continue;
-    normalized.providers[id] = {
+    normalized.providers[id] = stripUndefined({
       ...provider,
       api: cleanString(provider.api),
-      apiKey: cleanString(provider.apiKey),
-      apiKeyRef: cleanString(provider.apiKeyRef),
+      apiKey: cleanString(provider.apiKey) || undefined,
+      apiKeyRef: cleanString(provider.apiKeyRef) || undefined,
       baseUrl: cleanString(provider.baseUrl) || undefined,
       headers: isStringRecord(provider.headers) ? provider.headers : undefined,
       models: normalizeModels(provider.models, id),
       modelOverrides: normalizeModelOverrides(provider.modelOverrides)
-    };
+    });
   }
   return normalized;
 }
@@ -477,12 +521,17 @@ function modelIDsFromText(value: string): string[] {
   return value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
 }
 
-function publicProviderSettings([id, provider]: [string, ProviderConfig], secrets?: SecretService): PublicProviderSettings {
+function publicProviderSettings(
+  [id, provider]: [string, ProviderConfig],
+  secrets?: SecretService,
+  activeProviderID = ""
+): PublicProviderSettings {
   return {
     id,
     api: provider.api ?? "",
     api_key_configured: providerCredentialConfigured(provider, secrets),
     base_url: provider.baseUrl ?? "",
+    in_use: activeProviderID === id,
     models: publicModelIDs(provider),
     user_agent: userAgentFromHeaders(provider.headers)
   };
@@ -578,6 +627,26 @@ function recordProviderSettingsAudit(
     }),
     reason: `updated provider settings for ${providerID}`,
     result_json: JSON.stringify({ credential_configured: settings.api_key_configured, status: "succeeded" })
+  });
+}
+
+function recordProviderSettingsDeletedAudit(
+  database: RunnerDatabase,
+  providerID: string,
+  result: { configured: boolean; credentialRevoked: boolean; oauthDisconnected: boolean }
+): void {
+  createPiActionEvent(database, {
+    action_id: `provider-settings-delete:${providerID}:${crypto.randomUUID()}`,
+    actor: "user",
+    event_type: "provider_settings_deleted",
+    payload_json: JSON.stringify({ provider_id: providerID, source: "settings_http" }),
+    reason: `deleted provider settings for ${providerID}`,
+    result_json: JSON.stringify({
+      credential_status: result.credentialRevoked ? "revoked" : "unchanged",
+      oauth_disconnected: result.oauthDisconnected,
+      provider_configured: result.configured,
+      status: "succeeded"
+    })
   });
 }
 

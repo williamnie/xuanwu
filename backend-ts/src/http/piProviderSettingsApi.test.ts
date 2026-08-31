@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { getModel } from "@earendil-works/pi-ai/compat";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { updatePiSupervisor } from "../db/repositories/pi.ts";
+import { createDatabaseSecretService } from "../security/secrets/service.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -75,6 +77,7 @@ describe("Bun PI provider settings API", () => {
         api: "openai-responses",
         api_key_configured: true,
         base_url: "https://api.openai.example/v1",
+        in_use: true,
         models: ["gpt-5.4", "gpt-5.5"]
       });
       expect(JSON.stringify(savedBody)).not.toContain("secret-key");
@@ -115,6 +118,111 @@ describe("Bun PI provider settings API", () => {
         models: [],
         modelOverrides: { "gpt-5.5": {} }
       });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("omits empty credentials from sibling providers so one update cannot invalidate the model registry", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      await writeSeedModels(database, {
+        providers: {
+          "openai-codex": {
+            api: "openai-codex-responses",
+            apiKey: "",
+            apiKeyRef: "",
+            models: [{ id: "gpt-5.6-luna" }]
+          }
+        }
+      });
+      const router = createDefaultRouter({ database });
+      const saved = await request(router, "/api/pi/provider-settings/openai", {
+        api: "openai-responses",
+        api_key: "secret-key",
+        base_url: "https://proxy.example/v1",
+        models: ["deepseek-v4-flash-0731"]
+      });
+
+      expect(saved.status).toBe(200);
+      const raw = JSON.parse(await readFile(modelsPath(database), "utf8"));
+      expect(raw.providers["openai-codex"].apiKey).toBeUndefined();
+      expect(raw.providers["openai-codex"].apiKeyRef).toBeUndefined();
+      const runtime = await ModelRuntime.create({
+        authPath: authPath(database),
+        modelsPath: modelsPath(database),
+        refreshOnCreate: false
+      });
+      expect(runtime.getError()).toBeUndefined();
+      expect(runtime.getModel("openai", "deepseek-v4-flash-0731")).toMatchObject({
+        api: "openai-responses",
+        baseUrl: "https://proxy.example/v1",
+        id: "deepseek-v4-flash-0731",
+        provider: "openai"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("deletes an inactive API-key connection and revokes its stored secret", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      await request(router, "/api/pi/provider-settings/acme", {
+        api: "openai-responses",
+        api_key: "secret-key",
+        base_url: "https://proxy.example/v1",
+        models: ["deepseek-v4-flash-0731"]
+      });
+
+      const deleted = await deleteRequest(router, "/api/pi/provider-settings/acme");
+      expect(deleted.status).toBe(200);
+      expect(await deleted.json()).toEqual({
+        credential_revoked: true,
+        deleted: true,
+        oauth_disconnected: false,
+        provider_id: "acme"
+      });
+      const raw = JSON.parse(await readFile(modelsPath(database), "utf8"));
+      expect(raw.providers.acme).toBeUndefined();
+      expect(createDatabaseSecretService(database).describe("secret://pi/provider/acme/api-key")?.status).toBe("revoked");
+      const audit = database.sqlite.query<{ event_type: string; result_json: string }, []>(
+        "select event_type, result_json from pi_action_events where event_type='provider_settings_deleted' order by id desc limit 1"
+      ).get();
+      expect(audit?.event_type).toBe("provider_settings_deleted");
+      expect(JSON.parse(audit?.result_json ?? "{}")).toMatchObject({ credential_status: "revoked", status: "succeeded" });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("protects the active connection and removes PI OAuth when its inactive provider is deleted", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      await writeSeedModels(database, {
+        providers: {
+          "openai-codex": { api: "openai-codex-responses", models: [{ id: "gpt-5.6-luna" }] }
+        }
+      });
+      await writeSeedAuth(database, {
+        "openai-codex": { type: "oauth", access: "oauth-access", refresh: "oauth-refresh", expires: Date.now() + 60_000 }
+      });
+      const router = createDefaultRouter({ database });
+
+      updatePiSupervisor(database, { model_provider: "openai-codex", model_id: "gpt-5.6-luna" });
+      const blocked = await deleteRequest(router, "/api/pi/provider-settings/openai-codex");
+      expect(blocked.status).toBe(409);
+      expect(await blocked.json()).toEqual({ message: "当前 Supervisor 正在使用此连接，请先切换并保存其他连接" });
+
+      updatePiSupervisor(database, { model_provider: "openai", model_id: "gpt-5.4" });
+      const deleted = await deleteRequest(router, "/api/pi/provider-settings/openai-codex");
+      expect(deleted.status).toBe(200);
+      expect(await deleted.json()).toMatchObject({ deleted: true, oauth_disconnected: true, provider_id: "openai-codex" });
+      const models = JSON.parse(await readFile(modelsPath(database), "utf8"));
+      const auth = JSON.parse(await readFile(authPath(database), "utf8"));
+      expect(models.providers["openai-codex"]).toBeUndefined();
+      expect(auth["openai-codex"]).toBeUndefined();
     } finally {
       database.close();
     }
@@ -407,11 +515,26 @@ function post(router: ReturnType<typeof createDefaultRouter>, path: string, body
   }));
 }
 
+function deleteRequest(router: ReturnType<typeof createDefaultRouter>, path: string) {
+  return router.handle(new Request(`${BASE_URL}${path}`, { method: "DELETE" }));
+}
+
 function modelsPath(database: RunnerDatabase): string {
   return join(dirname(database.path), "pi-runtime", "agent", "models.json");
 }
 
+function authPath(database: RunnerDatabase): string {
+  return join(dirname(database.path), "pi-runtime", "agent", "auth.json");
+}
+
 async function writeSeedModels(database: RunnerDatabase, value: Record<string, unknown>): Promise<void> {
   const path = modelsPath(database);
+  await mkdir(dirname(path), { recursive: true });
+  await Bun.write(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function writeSeedAuth(database: RunnerDatabase, value: Record<string, unknown>): Promise<void> {
+  const path = authPath(database);
+  await mkdir(dirname(path), { recursive: true });
   await Bun.write(path, `${JSON.stringify(value, null, 2)}\n`);
 }

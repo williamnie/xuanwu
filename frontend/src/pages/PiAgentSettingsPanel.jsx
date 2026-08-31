@@ -1,4 +1,4 @@
-import { ArrowRight, Bot, CheckCircle2, CircleDashed, Eye, KeyRound, Loader2, PlugZap, RefreshCw, Save, Sparkles, XCircle } from 'lucide-react';
+import { ArrowRight, Bot, CheckCircle2, CircleDashed, Eye, KeyRound, Loader2, PlugZap, RefreshCw, Save, Sparkles, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { usePiAgentSettingsState } from './piAgentSettingsState';
@@ -92,7 +92,7 @@ function ProviderConnectionSettings({ state }) {
   return (
     <div className="provider-console">
       <div className="provider-console-main">
-        <SavedConnectionPicker state={state} />
+        <SavedConnectionPicker key={state.selectedProvider?.id || 'new-connection'} state={state} />
         <ConnectionModeTabs oauthMode={oauthMode} state={state} />
         {oauthMode ? <OAuthConnectionFlow state={state} /> : <ApiConnectionFlow state={state} />}
         <ModelSelection state={state} />
@@ -106,21 +106,60 @@ function ProviderConnectionSettings({ state }) {
 }
 
 function SavedConnectionPicker({ state }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const provider = state.selectedProvider;
+  const deleting = state.deletingProviderId === provider?.id;
   return (
-    <div className="provider-connection-toolbar">
-      <span className="provider-console-label">CONNECTION</span>
-      <label>
-        <span>已有连接</span>
-        <select
-          aria-label="已有连接"
-          className="form-control"
-          onChange={(event) => event.target.value ? state.selectModelProvider(event.target.value) : state.startNewApiConnection()}
-          value={state.selectedProvider?.id || ''}
-        >
-          <option value="">＋ 新建连接</option>
-          {state.providers.map((provider) => <option key={provider.id} value={provider.id}>{connectionDisplayName(provider)}</option>)}
-        </select>
-      </label>
+    <div className="provider-connection-picker-block">
+      <div className="provider-connection-toolbar">
+        <span className="provider-console-label">CONNECTION</span>
+        <div className="provider-connection-picker">
+          <label>
+            <span>已有连接</span>
+            <select
+              aria-label="已有连接"
+              className="form-control"
+              onChange={(event) => event.target.value ? state.selectModelProvider(event.target.value) : state.startNewApiConnection()}
+              value={provider?.id || ''}
+            >
+              <option value="">＋ 新建连接</option>
+              {state.providers.map((item) => <option key={item.id} value={item.id}>{connectionDisplayName(item)}</option>)}
+            </select>
+          </label>
+          {provider ? (
+            <button
+              className="btn btn-secondary provider-delete-trigger"
+              disabled={provider.in_use || deleting}
+              onClick={() => setConfirmingDelete(true)}
+              title={provider.in_use ? '当前默认连接不能删除，请先切换并保存其他连接' : '删除此模型连接'}
+              type="button"
+            >
+              <Trash2 size={13} /> {provider.in_use ? '默认连接' : '删除连接'}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {confirmingDelete && provider ? (
+        <div aria-labelledby="provider-delete-confirm-title" className="provider-delete-confirm" role="alertdialog">
+          <div>
+            <strong id="provider-delete-confirm-title">删除 {connectionDisplayName(provider)}？</strong>
+            <span>{provider.id === 'openai-codex' ? '将同时移除 PI OAuth 授权凭据。' : '将同时撤销为此连接保存的 API Key。'}</span>
+          </div>
+          <div>
+            <button className="btn btn-secondary" disabled={deleting} onClick={() => setConfirmingDelete(false)} type="button">取消</button>
+            <button
+              className="btn provider-delete-confirm-button"
+              disabled={deleting}
+              onClick={async () => {
+                if (await state.deleteProviderConnection(provider.id)) setConfirmingDelete(false);
+              }}
+              type="button"
+            >
+              <Trash2 size={13} /> {deleting ? '正在删除…' : '确认删除'}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

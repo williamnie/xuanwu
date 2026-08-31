@@ -89,6 +89,10 @@ export const assistantApi = {
     body: JSON.stringify(settings),
   }),
 
+  deletePiProviderSettings: (id) => request(`/api/pi/provider-settings/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  }),
+
   getPiProviderModels: (id, settings) => request(`/api/pi/provider-settings/${encodeURIComponent(id)}/models`, {
     method: 'POST',
     body: JSON.stringify(settings),

@@ -91,6 +91,20 @@ test('Supervisor page uses one flat API-first connection console with discovered
   assert.match(connectionSaveSource, /saveSupervisor\(supervisorPayload\(form\)\)/);
 });
 
+test('saved Supervisor connections can be deleted with in-app confirmation and active-connection protection', () => {
+  assert.match(assistantSource, /deletePiProviderSettings:/);
+  assert.match(assistantSource, /method: 'DELETE'/);
+  assert.match(stateSource, /deletePiProviderConnection/);
+  assert.match(stateSource, /assistantApi\.deletePiProviderSettings\(providerId\)/);
+  assert.match(panelSource, /className="provider-delete-confirm"/);
+  assert.match(panelSource, /role="alertdialog"/);
+  assert.match(panelSource, /provider\.in_use \? '默认连接' : '删除连接'/);
+  assert.match(panelSource, /将同时移除 PI OAuth 授权凭据/);
+  assert.match(panelSource, /将同时撤销为此连接保存的 API Key/);
+  assert.match(panelStylesSource, /\.provider-delete-confirm-button\s*\{[\s\S]*?background:\s*var\(--error\)/);
+  assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
+});
+
 test('Supervisor behavior applies the model selected above without duplicating model controls or rewriting credentials', () => {
   assert.match(panelSource, /title="身份与运行偏好"/);
   assert.match(panelSource, /<SupervisorBehaviorSettings state=\{state\} \/>/);
