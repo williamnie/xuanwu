@@ -11,7 +11,8 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.234",
     "@anthropic-ai/sdk": "^0.93.0",
-    "@earendil-works/pi-coding-agent": "^0.84.2",
+    "@earendil-works/pi-ai": "^0.84.4",
+    "@earendil-works/pi-coding-agent": "^0.84.4",
     "@larksuiteoapi/node-sdk": "^1.73.0",
     "@qoder-ai/qoder-agent-sdk": "1.0.23",
     "@qoder-ai/qodercli": "1.1.23",
