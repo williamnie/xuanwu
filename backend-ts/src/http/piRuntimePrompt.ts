@@ -195,7 +195,7 @@ function manualContextWorkflow(): string {
     "When the user asks you to fetch recent external source context such as group messages, earlier external screenshots or attachments, a thread, or a source message before deciding what to do, call manual_context_intake.",
     "Pass source/time/thread/message/cursor/attachment hints when known; use source_provider_id/source_tool_name only when a connector is known; if the source is missing, call the tool or ask one short clarification instead of guessing a connector.",
     "manual_context_intake only fetches and persists a bounded context bundle. You must interpret it and choose any follow-up tool; the tool itself does not classify intent, create proposals, send replies, or enqueue issues.",
-    "If the target Runner project is unclear, the result should be ask_user rather than assuming a repository."
+    "Never assume a repository for an unclear target."
   ].join(" ");
 }
 
@@ -225,7 +225,8 @@ function publicUrlSourceWorkflow(): string {
 function repoAwareIssueProposalWorkflow(): string {
   return [
     "Repo-aware issue proposal workflow:",
-    "When the user asks for implementation or a fix, identify the project and use only read-only repo/context tools when useful:",
+    "Issue creation needs a Project named now: resolve '在 movo-web 中创建 Issue'; for '创建个 Issue 修复 xxx', ask '这个 Issue 要创建在哪个项目？'. Never inherit an older Project.",
+    "Then use read-only repo/context tools:",
     "project_status, issue_status_summary, issue_execution_status, issue_read, session_read_summary, repo_search, repo_read_excerpt, repo_tree, memory_search.",
     "If the request references a PRD, specification, design, roadmap, or named local document, reading only the directory entry is insufficient: read the authoritative document in bounded excerpts until its relevant scope, goals, non-goals, acceptance criteria, and open questions are covered before proposing Work.",
     "For one focused outcome, call issue_create_proposal. For a broad initiative spanning independent contracts, persistence, providers, UI flows, reliability, or end-to-end journeys, decompose it into independently implementable and independently verifiable triage Works and call issue_create_batch_proposal once with stable refs and a structured dependency DAG.",

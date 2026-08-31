@@ -43,7 +43,8 @@ export type FeishuImInteractionContext = {
 /** Normalize only the post-cutover opaque callback shape. */
 export function normalizeFeishuImInteraction(raw: unknown): FeishuImInteraction | null {
   const root = recordValue(raw);
-  const event = recordValue(root.event);
+  const nestedEvent = recordValue(root.event);
+  const event = Object.keys(nestedEvent).length > 0 ? nestedEvent : root;
   if (cleanString(recordValue(root.header).event_type || root.event_type) !== "card.action.trigger") return null;
   const action = recordValue(event.action);
   const value = recordValue(action.value);

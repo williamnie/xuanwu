@@ -186,6 +186,7 @@ describe("Bun PI conversation message API", () => {
         fauxAssistantMessage([
           fauxToolCall("issue_create_proposal", {
             description: "PI chose a concrete issue after reading the conversation",
+            project_id: "demo",
             title: "PI-created issue"
           }, { id: "ambiguous-create" })
         ], { stopReason: "toolUse" }),
@@ -200,7 +201,7 @@ describe("Bun PI conversation message API", () => {
       });
 
       const message = await request(router, "/api/pi/conversations/conv-intent-route/messages", {
-        prompt: "处理一下"
+        prompt: "在 demo 项目中处理一下"
       });
       const result = await finalPiConversationSseData(message);
       const routeEvents = listPiActionEvents(database, {
@@ -229,10 +230,43 @@ describe("Bun PI conversation message API", () => {
         target: { project_id: "demo", work_ids: [] },
         candidates: [expect.objectContaining({
           project_id: "demo",
-          sources: [expect.objectContaining({ kind: "current_page" })]
+          sources: expect.arrayContaining([
+            expect.objectContaining({ kind: "explicit_project" }),
+            expect.objectContaining({ kind: "current_page" })
+          ])
         })]
       });
       expect(contextEvents[0]?.payload_json).not.toContain("处理一下");
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("asks for the destination Project before creating an unscoped Issue", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-create-project-clarification-api", provider: "pi-create-project-clarification" });
+    try {
+      faux.setResponses([
+        fauxAssistantMessage("这个 Issue 要创建在哪个项目？")
+      ]);
+      insertProject(database, "demo");
+      insertProject(database, "movo-web");
+      insertFauxAgent(database, "pi-create-project-clarification");
+      writeFauxModelsConfig(database, "pi-create-project-clarification");
+      const router = createDefaultRouter({ database });
+      await request(router, "/api/pi/conversations", {
+        id: "conv-create-project-clarification"
+      });
+
+      const message = await request(router, "/api/pi/conversations/conv-create-project-clarification/messages", {
+        prompt: "创建个 Issue 修复登录 bug"
+      });
+      const result = await finalPiConversationSseData(message);
+
+      expect(result).toMatchObject({ text: "这个 Issue 要创建在哪个项目？" });
+      expect(listPiActions(database).some((action) => action.action_type === "issue.create")).toBe(false);
+      expect(listIssues(database)).toEqual([]);
     } finally {
       faux.unregister();
       database.close();
@@ -370,6 +404,7 @@ describe("Bun PI conversation message API", () => {
         fauxAssistantMessage([
           fauxToolCall("issue_create_proposal", {
             description: "修复登录 bug",
+            project_id: "demo",
             title: "Feishu task"
           }, { id: "issue-create" }),
           fauxToolCall("issue_enqueue_proposal", {
@@ -519,7 +554,7 @@ describe("Bun PI conversation message API", () => {
     }
   });
 
-  test("Feishu unbound follow-up asks for approval when PI resolves a mutation target from conversation semantics", async () => {
+  test("Feishu global follow-up directly enqueues an Issue resolved from conversation semantics", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-feishu-semantic-target-api", provider: "pi-feishu-semantic-target" });
     const provider = new FakeExecutorProvider();
@@ -531,7 +566,7 @@ describe("Bun PI conversation message API", () => {
             rationale: "resolved from the conversation history"
           }, { id: "issue-enqueue-387" })
         ], { stopReason: "toolUse" }),
-        fauxAssistantMessage("已向你发起 #387 的执行确认，批准后才会开始。")
+        fauxAssistantMessage("已开始执行 #387。")
       ]);
       insertProject(database, "demo");
       insertIssue(database, { id: 387, projectID: "demo", title: "Semantic target" });
@@ -549,17 +584,18 @@ describe("Bun PI conversation message API", () => {
 
       expect(result).toMatchObject({
         conversation_id: "feishu-semantic-target",
-        text: "已向你发起 #387 的执行确认，批准后才会开始。"
+        text: "已开始执行 #387。"
       });
       expect(action).toMatchObject({
-        gate_decision: "ask",
-        gate_reason: "action is allowed by policy but requires explicit user approval for this target",
+        gate_decision: "execute",
+        gate_reason: expect.stringContaining("scope matched runner issues"),
         issue_id: 387,
         project_id: "demo",
-        status: "pending"
+        status: "completed"
       });
-      expect(listIssues(database, { projectId: "demo" }).find((issue) => issue.id === 387)?.status).toBe("triage");
-      expect(provider.calls).toEqual([]);
+      await until(() => provider.calls.length > 0);
+      expect(listIssues(database, { projectId: "demo" }).find((issue) => issue.id === 387)?.status).toBe("in_progress");
+      expect(provider.calls).toMatchObject([{ issueId: 387, projectId: "demo" }]);
     } finally {
       faux.unregister();
       database.close();

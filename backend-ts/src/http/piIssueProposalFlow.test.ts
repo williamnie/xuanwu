@@ -34,6 +34,7 @@ describe("Bun PI issue proposal/comment flow", () => {
       const actions = createPiRunnerActions(database, { project });
       const createAction = actions.createIssueProposal({
         description: "新增 proposal body\n\n## 验收标准\n- 用户可验收\n\n## 验证方式\n- bun test",
+        project_id: project.id,
         title: "PI proposal"
       }) as { action_id: string };
       const comment = actions.commentIssue({ issue_id: issueID, body: "Looks actionable." });

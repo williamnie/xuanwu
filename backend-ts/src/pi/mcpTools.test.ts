@@ -303,11 +303,13 @@ describe("PI MCP registry and envelope tools", () => {
 
       const created = actions.createIssueProposal({
         description: "Need runbook context",
+        project_id: project.id,
         recommended_mcp_capabilities: ["docs:resource:runbook"],
         title: "Use MCP runbook"
       }) as { status: string };
       const denied = actions.createIssueProposal({
         description: "Needs secret MCP context",
+        project_id: project.id,
         recommended_mcp_capabilities: ["docs:resource:secret"],
         title: "Denied MCP"
       }) as { decision: string; status: string };

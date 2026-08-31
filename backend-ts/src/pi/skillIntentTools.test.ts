@@ -75,11 +75,13 @@ describe("PI skill intent tools", () => {
 
       const denied = actions.createIssueProposal({
         description: "Needs browser skill",
+        project_id: project.id,
         recommended_skill_intents: ["browser:control-in-app-browser"],
         title: "Denied skill"
       }) as { decision: string; status: string };
       const allowed = actions.createIssueProposal({
         description: "Needs runner skill",
+        project_id: project.id,
         required_skill_intents: ["xuanwu"],
         title: "Allowed skill"
       }) as { decision: string; status: string };

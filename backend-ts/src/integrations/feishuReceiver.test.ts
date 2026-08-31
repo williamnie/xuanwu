@@ -8,6 +8,7 @@ import { listExternalEvents } from "../db/repositories/externalEvents.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { createImInteractionBinding } from "../db/repositories/imInteractionBindings.ts";
 import { createPiAction, getPiAction } from "../db/repositories/pi.ts";
 import { createFeishuPendingProjectSelection } from "../db/repositories/feishuProjectSelection.ts";
 import { EventBus } from "../events/bus.ts";
@@ -239,6 +240,53 @@ describe("Feishu WebSocket receiver", () => {
     expect(listIssueEvents(database, issue.id).map((event) => event.type)).toContain("issue.comment");
     database.close();
   });
+
+  test("resolves flattened opaque PI action callbacks from the long-connection SDK", async () => {
+    const { database, factory, messages } = await receiverFixture();
+    insertProject(database);
+    const issue = createIssue(database, { project_id: "demo", status: "triage", title: "Opaque PI action target" });
+    createPiAction(database, {
+      action_type: "issue.comment",
+      gate_decision: "ask",
+      id: "pi-action-ws-opaque",
+      issue_id: issue.id,
+      payload_json: JSON.stringify({ body: "Approved from flattened callback", issue_id: issue.id }),
+      project_id: "demo",
+      requires_confirmation: 1,
+      risk_level: "medium",
+      status: "pending"
+    });
+    const binding = createImInteractionBinding(database, {
+      actionKind: "pi_action",
+      actionRef: "pi_actions:pi-action-ws-opaque",
+      actions: [{ action_id: "approve", value: "approve" }],
+      actor: { id: "ou_user_1", openId: "ou_open_1" },
+      connectorId: "feishu",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      scopeKey: "oc_group"
+    });
+    const manager = createFeishuReceiverManager({ database, wsFactory: factory });
+    const config = buildFeishuConnectorConfig({
+      FEISHU_ALLOWED_CHAT_IDS: "oc_group",
+      FEISHU_ALLOWED_USER_IDS: "ou_user_1",
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+
+    await manager.restart(config);
+    const response = await messages.emit(opaqueInteractionEvent(binding.interaction_id, "approve"));
+
+    expect(response).toMatchObject({
+      reason: "consumed",
+      resolution: { ok: true, status: "completed" }
+    });
+    expect(getPiAction(database, "pi-action-ws-opaque")).toMatchObject({
+      approved_by: "feishu:ou_user_1",
+      status: "completed"
+    });
+    expect(listIssueEvents(database, issue.id).map((event) => event.type)).toContain("issue.comment");
+    database.close();
+  });
 });
 
 async function receiverFixture(): Promise<{
@@ -346,6 +394,32 @@ function piActionCardEvent(actionID: string, decision: string): Record<string, u
     header: {
       event_id: "evt_pi_action_ws_1",
       event_type: "card.action.trigger"
+    },
+    schema: "2.0"
+  };
+}
+
+function opaqueInteractionEvent(interactionID: string, actionID: string): Record<string, unknown> {
+  return {
+    action: {
+      value: {
+        action: "xuanwu_im_interaction",
+        action_id: actionID,
+        interaction_id: interactionID,
+        revision: 1
+      }
+    },
+    context: {
+      open_chat_id: "oc_group",
+      open_message_id: "om_pi_action_ws_opaque"
+    },
+    event_id: "evt_pi_action_ws_opaque",
+    event_type: "card.action.trigger",
+    operator: {
+      operator_id: {
+        open_id: "ou_open_1",
+        user_id: "ou_user_1"
+      }
     },
     schema: "2.0"
   };

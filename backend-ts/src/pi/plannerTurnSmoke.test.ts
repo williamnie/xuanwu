@@ -44,7 +44,7 @@ describe("PI read-only planner turn smoke", () => {
         pi_agent_id: "pi-faux"
       });
       const message = await post(fixture.router, "/api/pi/conversations/conv-planner-smoke/messages", {
-        prompt: "帮我实现折叠面板功能"
+        prompt: "在 demo 项目中帮我实现折叠面板功能"
       });
       const body = await finalPiConversationSseData(message);
 
@@ -203,6 +203,7 @@ function issueProposalPayload() {
   return {
     title: "实现折叠面板功能",
     description: "用户向 PI 说：帮我实现折叠面板功能",
+    project_id: "demo",
     context_pack: {
       intent: "实现现有 AccordionPanel 的折叠/展开交互",
       project: { id: "demo" },

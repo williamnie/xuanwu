@@ -141,6 +141,122 @@ describe("PI runner action gate", () => {
     }
   });
 
+  test("global Runner Chat authorizes an explicit Issue without a project scope", async () => {
+    const fixture = await openFixture();
+    const kicked: string[] = [];
+    try {
+      const issueID = insertIssue(fixture.db, {
+        projectID: fixture.project.id,
+        status: "triage",
+        title: "Start from unbound chat"
+      });
+      const actions = createPiRunnerActions(fixture.db, {
+        authorization: {
+          allowedActions: ["issue.read", "issue.enqueue"],
+          askOnMissingAuthorization: true,
+          authorizedActions: [{ action_type: "issue.read" }],
+          mode: "delegated",
+          scopes: [{ runner_resource: "issues" }]
+        },
+        onIssueEnqueued: (projectID: string) => kicked.push(projectID),
+        source: "feishu_runner_chat"
+      });
+
+      const result = actions.enqueueIssueProposal({
+        issue_id: issueID,
+        rationale: "用户明确要求开始这个 Issue"
+      }) as { action_id: string; decision: string; status: string };
+
+      expect(result).toMatchObject({ decision: "execute", status: "completed" });
+      expect(getPiAction(fixture.db, result.action_id)).toMatchObject({
+        action_type: "issue.enqueue",
+        gate_decision: "execute",
+        gate_reason: expect.stringContaining("scope matched runner issues"),
+        issue_id: issueID,
+        project_id: fixture.project.id,
+        status: "completed"
+      });
+      expect(getIssue(fixture.db, issueID)).toMatchObject({ status: "todo" });
+      expect(kicked).toEqual([fixture.project.id]);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("global Runner Chat authorizes an explicit Issue batch without a project scope", async () => {
+    const fixture = await openFixture();
+    try {
+      const issueIDs = ["First", "Second"].map((title) => insertIssue(fixture.db, {
+        projectID: fixture.project.id,
+        status: "triage",
+        title
+      }));
+      const actions = createPiRunnerActions(fixture.db, {
+        authorization: {
+          allowedActions: ["issue.read", "issue.cancel"],
+          askOnMissingAuthorization: true,
+          authorizedActions: [{ action_type: "issue.read" }],
+          mode: "delegated",
+          scopes: [{ runner_resource: "issues" }]
+        },
+        source: "feishu_runner_chat"
+      });
+
+      const result = await actions.cancelIssues({
+        issue_ids: issueIDs,
+        rationale: "用户明确取消这些 Issue"
+      }) as { action_id: string; decision: string; status: string };
+
+      expect(result).toMatchObject({ decision: "execute", status: "completed" });
+      expect(getPiAction(fixture.db, result.action_id)).toMatchObject({
+        action_type: "issue.cancel",
+        gate_decision: "execute",
+        gate_reason: expect.stringContaining("scope matched runner issues"),
+        status: "completed"
+      });
+      expect(issueIDs.map((id) => getIssue(fixture.db, id)?.status)).toEqual(["cancelled", "cancelled"]);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("unbound Runner Chat still asks before an explicit high-risk mutation", async () => {
+    const fixture = await openFixture();
+    try {
+      const issueID = insertIssue(fixture.db, {
+        projectID: fixture.project.id,
+        status: "triage",
+        title: "Do not delete without approval"
+      });
+      const actions = createPiRunnerActions(fixture.db, {
+        authorization: {
+          allowedActions: ["issue.read", "issue.delete"],
+          askOnMissingAuthorization: true,
+          authorizedActions: [{ action_type: "issue.read" }],
+          mode: "delegated",
+          scopes: [{ runner_resource: "issues" }]
+        },
+        source: "feishu_runner_chat"
+      });
+
+      const result = actions.deleteIssues({
+        issue_ids: [issueID],
+        reason: "用户明确要求删除"
+      }) as { action_id: string; decision: string; status: string };
+
+      expect(result).toMatchObject({ decision: "ask", status: "pending" });
+      expect(getPiAction(fixture.db, result.action_id)).toMatchObject({
+        action_type: "issue.delete",
+        gate_decision: "ask",
+        risk_level: "high",
+        status: "pending"
+      });
+      expect(getIssue(fixture.db, issueID)).not.toBeNull();
+    } finally {
+      await fixture.close();
+    }
+  });
+
   test("Runner Chat directly cancels an explicit batch of triage issues", async () => {
     const fixture = await openFixture();
     const kicked: string[] = [];

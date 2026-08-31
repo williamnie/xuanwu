@@ -178,6 +178,7 @@ describe("Bun PI runtime v1 smoke", () => {
           fauxToolCall("project_list", {}, { id: "project-list" }),
           fauxToolCall("issue_create_proposal", {
             description: "Follow-up body",
+            project_id: "demo",
             title: "Follow-up issue"
           }, { id: "issue-proposal" }),
           fauxToolCall("issue_schedule_enqueue", {
@@ -204,7 +205,7 @@ describe("Bun PI runtime v1 smoke", () => {
         project_id: "demo"
       });
       const message = await post(router, "/api/pi/conversations/conv-smoke/messages", {
-        prompt: "Create one action and remember the explicit reusable preference"
+        prompt: "Create one action in demo and remember the explicit reusable preference"
       });
 
       expect(created.status).toBe(201);

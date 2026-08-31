@@ -275,11 +275,11 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
         review_revision: positiveID
       }, objectOptions), actions.respondToHumanReview),
     actionTool("issue_create_proposal", "Issue Create Proposal",
-      "Create a high-risk pending proposal for a new issue; does not create the issue directly.",
+      "Create a new issue in the project explicitly resolved from the current user turn. If the current turn does not identify a project, ask one short clarification instead of calling this tool or inheriting an earlier project.",
       Type.Object({
         description: requiredText,
         depends_on_issue_ids: Type.Optional(Type.Array(positiveID)),
-        project_id: optionalString,
+        project_id: requiredText,
         rationale: optionalString,
         title: optionalString,
         context_pack: repoContextPack,
@@ -295,7 +295,7 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
         recommended_mcp_capabilities: mcpCapabilityList
       }, objectOptions), actions.createIssueProposal),
     actionTool("issue_create_batch_proposal", "Issue Create Batch Proposal",
-      "Create one audited proposal containing 2-40 detailed triage issues with a validated dependency DAG. Use stable local refs in depends_on_refs; this tool never enqueues the created issues.",
+      "Create one audited proposal containing 2-40 detailed triage issues in the project explicitly resolved from the current user turn. If the current turn does not identify a project, ask one short clarification instead of calling this tool or inheriting an earlier project. Use stable local refs in depends_on_refs; this tool never enqueues the created issues.",
       Type.Object({
         items: Type.Array(Type.Object({
           acceptance_criteria: Type.Array(requiredText, { minItems: 1 }),
@@ -314,7 +314,7 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
           title: Type.String({ minLength: 1, maxLength: 50, pattern: "\\S" }),
           validation: Type.Array(requiredText, { minItems: 1 })
         }, objectOptions), { minItems: 2, maxItems: 40 }),
-        project_id: optionalString,
+        project_id: requiredText,
         rationale: optionalString
       }, objectOptions), actions.createIssueBatchProposal),
     actionTool("issue_cancel", "Issue Cancel",

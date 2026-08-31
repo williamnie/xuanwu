@@ -157,6 +157,7 @@ describe("PI runner action tools", () => {
       description: "Need repo context",
       evidence: [{ source_kind: "message", summary: "IM request" }],
       open_questions: ["默认展开吗？"],
+      project_id: "demo",
       title: "Repo-aware issue"
     })).toMatchObject({
       context_pack: {
@@ -167,6 +168,10 @@ describe("PI runner action tools", () => {
       evidence: [{ source_kind: "message", summary: "IM request" }],
       open_questions: ["默认展开吗？"]
     });
+    expect(() => validateArgs(issueCreate, {
+      description: "Missing current-turn project",
+      title: "Must ask first"
+    })).toThrow(/project_id/);
     expect(validateArgs(issueBatchCreate, {
       project_id: "demo",
       items: [
@@ -208,7 +213,8 @@ describe("PI runner action tools", () => {
       status: "todo"
     }, undefined, undefined, {} as never);
     await issueBatchCreate.execute("tool-batch-create", {
-      items: [detailedBatchItem("foundation", "建立工程基线"), detailedBatchItem("ui", "实现前端流程")]
+      items: [detailedBatchItem("foundation", "建立工程基线"), detailedBatchItem("ui", "实现前端流程")],
+      project_id: "demo"
     }, undefined, undefined, {} as never);
     await issueStatus.execute("tool-status", { status: "todo" }, undefined, undefined, {} as never);
     await issueExecution.execute("tool-execution", { id: 7 }, undefined, undefined, {} as never);
@@ -268,7 +274,8 @@ describe("PI runner action tools", () => {
       ["cancelIssues", { issue_ids: [812, 813, 814], rationale: "不再做" }],
       ["updateIssueStatuses", { issue_ids: [812, 813, 814], reason: "用户要求重新排队", status: "todo" }],
       ["createIssueBatchProposal", {
-        items: [detailedBatchItem("foundation", "建立工程基线"), detailedBatchItem("ui", "实现前端流程")]
+        items: [detailedBatchItem("foundation", "建立工程基线"), detailedBatchItem("ui", "实现前端流程")],
+        project_id: "demo"
       }],
       ["issueStatusSummary", { status: "todo" }],
       ["issueExecutionStatus", { id: 7 }],
@@ -315,6 +322,7 @@ describe("PI runner action tools", () => {
 
       const createIssue = await runTool(tools, "issue_create_proposal", {
         description: "New scoped issue",
+        project_id: fixture.project.id,
         title: "New issue"
       });
       const enqueue = await runTool(tools, "issue_enqueue_proposal", { issue_id: issueID, rationale: "ready" });
@@ -875,8 +883,14 @@ describe("PI runner action tools", () => {
         project: fixture.project
       });
 
+      expect(() => actions.createIssueProposal({
+        description: "Do not inherit the conversation project",
+        title: "Missing explicit project"
+      } as never)).toThrow("创建 Issue 前必须先向用户确认本轮目标项目");
+
       const result = actions.createIssueProposal({
         description: "Create and then ask when to run",
+        project_id: fixture.project.id,
         title: "Chat-created issue"
       }) as { result?: { id?: number }; status: string };
 
@@ -1197,6 +1211,7 @@ describe("PI runner action tools", () => {
         },
         description: "用户要求实现折叠面板\nAPI_KEY=must-not-leak",
         evidence: [{ source_kind: "message", summary: "Feishu request" }],
+        project_id: fixture.project.id,
         title: "Repo-aware issue"
       }) as { result?: { id?: number }; status: string };
       const action = listPiActions(fixture.db).find((item) => item.action_type === "issue.create");
@@ -1240,6 +1255,7 @@ describe("PI runner action tools", () => {
           "未确认问题": ["供应商 endpoint 待用户配置。"]
         },
         description: "实现任务后端",
+        project_id: fixture.project.id,
         title: "实现任务后端"
       }) as { result?: { id?: number } };
       const issue = getIssue(fixture.db, result.result?.id ?? 0);
@@ -1255,6 +1271,7 @@ describe("PI runner action tools", () => {
       expect(() => actions.createIssueProposal({
         context_pack: { unexpected_section: ["must not disappear"] } as never,
         description: "invalid",
+        project_id: fixture.project.id,
         title: "invalid"
       })).toThrow(/unsupported fields: unexpected_section/);
     } finally {
@@ -1305,6 +1322,7 @@ describe("PI runner action tools", () => {
 
       const beforeActionCount = listPiActions(fixture.db).length;
       expect(() => actions.createIssueBatchProposal({
+        project_id: fixture.project.id,
         items: [
           { ...detailedBatchItem("a", "A"), depends_on_refs: ["b"] },
           { ...detailedBatchItem("b", "B"), depends_on_refs: ["a"] }

@@ -161,7 +161,7 @@ type IssueProposalInput = { issue_id: number; rationale?: string };
 type IssueCreateProposalInput = IssueProposalContextFields & {
   description: string;
   depends_on_issue_ids?: number[];
-  project_id?: string;
+  project_id: string;
   rationale?: string;
   title?: string;
   recommended_skill_intents?: string[];
@@ -170,8 +170,8 @@ type IssueCreateProposalInput = IssueProposalContextFields & {
   required_mcp_capabilities?: string[];
 };
 type IssueCreateBatchProposalInput = {
-  items: Array<IssueCreateProposalInput & { ref: string; depends_on_refs?: string[] }>;
-  project_id?: string;
+  items: Array<Omit<IssueCreateProposalInput, "project_id"> & { ref: string; depends_on_refs?: string[] }>;
+  project_id: string;
   rationale?: string;
 };
 type ProjectListInput = {};
@@ -291,7 +291,10 @@ function cancelIssues(
   const prepared = prepareIssueStatusUpdate(db, statusInput);
   const projectID = prepared.projectID;
   const actionType = "issue.cancel";
-  const actionContext = scopedRunnerChatActionContext(context, actionType, { projectID });
+  const actionContext = scopedRunnerChatActionContext(context, actionType, {
+    issueIDs: prepared.issues.map((issue) => issue.id),
+    projectID
+  });
   return createPendingPiAction(db, actionContext, {
     actionType,
     payload: { issue_ids: prepared.issues.map((issue) => issue.id), reason, status: "cancelled" },
@@ -307,7 +310,10 @@ function updateIssueStatuses(
 ) {
   const prepared = prepareIssueStatusUpdate(db, input);
   const actionType = "issue.status_update";
-  const actionContext = scopedRunnerChatActionContext(context, actionType, { projectID: prepared.projectID });
+  const actionContext = scopedRunnerChatActionContext(context, actionType, {
+    issueIDs: prepared.issues.map((issue) => issue.id),
+    projectID: prepared.projectID
+  });
   return createPendingPiAction(db, actionContext, {
     actionType,
     payload: cleanObjectPayload(input),
@@ -362,6 +368,7 @@ function deleteIssuesProposal(
   const actionType = "issue.delete";
   const actionContext = scopedRunnerChatActionContext(context, actionType, {
     issueID: issues.length === 1 ? issues[0]?.id : undefined,
+    issueIDs: issues.map((issue) => issue.id),
     projectID
   });
   return createPendingPiAction(db, actionContext, {
@@ -462,7 +469,10 @@ function createCompletionWatch(
     target_thread_id: cleanString(trustedTarget?.threadID) || cleanString(input.target_thread_id)
   };
   const projectID = watchProjectID(db, enrichedInput);
-  const actionContext = scopedRunnerChatActionContext(context, "issue_completion_watch.create", { projectID });
+  const actionContext = scopedRunnerChatActionContext(context, "issue_completion_watch.create", {
+    issueIDs: enrichedInput.issue_ids,
+    projectID
+  });
   return createPendingPiAction(db, actionContext, {
     actionType: "issue_completion_watch.create",
     payload: cleanObjectPayload({ ...enrichedInput, project_id: projectID }),
@@ -683,7 +693,7 @@ function issueCreateProposal(
   input: IssueCreateProposalInput,
   context: PiRunnerActionContext
 ): ProposalInput {
-  const projectID = scopedProjectID(input.project_id, context);
+  const projectID = requiredCreateProjectID(input.project_id);
   const description = renderIssueCreateProposalDescription(input, { project: context.project, projectID });
   return {
     actionType: "issue.create",
@@ -709,7 +719,7 @@ function issueCreateBatchProposal(
   input: IssueCreateBatchProposalInput,
   context: PiRunnerActionContext
 ): ProposalInput {
-  const projectID = scopedProjectID(input.project_id, context);
+  const projectID = requiredCreateProjectID(input.project_id);
   const payload = normalizeIssueBatchPayload({
     project_id: projectID,
     status: "triage",
@@ -838,9 +848,9 @@ function normalizeSessionFilter(input: SessionListInput, context: PiRunnerAction
   };
 }
 
-function scopedProjectID(id: unknown, context: PiRunnerActionContext): string {
-  const projectID = cleanString(id) || (context.project?.id ?? "");
-  if (projectID === "") throw new ProjectNotFoundError();
+function requiredCreateProjectID(id: unknown): string {
+  const projectID = cleanString(id);
+  if (projectID === "") throw new Error("创建 Issue 前必须先向用户确认本轮目标项目");
   return projectID;
 }
 

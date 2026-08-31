@@ -249,6 +249,7 @@ describe("Bun PI actions API", () => {
           },
           description: "Need implementation\nTOKEN=must-not-leak",
           open_questions: ["默认展开吗？"],
+          project_id: project.id,
           title: "Repo context issue"
         }) as { action_id: string };
       const router = createDefaultRouter({ database });
