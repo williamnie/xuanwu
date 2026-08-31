@@ -67,6 +67,16 @@ xuanwu-update upgrade \
 
 ## 4. Migration notes
 
+### v0.2.4
+
+- migration：新增 additive migration `081_telegram_channel_runtime` 与
+  `082_im_context_lifecycle`，只增加 Telegram/通用 IM cursor、delivery audit、context binding、
+  rollover 表和索引，不删除或改写既有 authority 数据。
+- 最低可回滚 binary：`v0.2.3`。旧 binary 会忽略新增表；回滚不会删除已记录的 cursor、binding、
+  delivery receipt 或 rollover lineage，但 Telegram 与新 IM context lifecycle 能力在旧版本中不可用。
+- operator action：升级前生成并验证 `runner.db` 备份；升级后检查 migration `081`、`082` 已完成。
+  Telegram 默认不会因升级自动启用，只有显式配置 connector 与凭据后才开始接收消息。
+
 ### v0.2.3
 
 - migration：none。本版本没有新增、删除或修改数据库 schema，也不执行数据维护。

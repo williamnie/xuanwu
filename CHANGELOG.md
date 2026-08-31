@@ -4,8 +4,21 @@
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-08-31
+
+### Added / 新增
+
+- 增加 Telegram IM 连接器、设置面板、长轮询接收、分段投递、审批交互与通知链路。
+- 增加 Provider-neutral IM 上下文预算、投影游标与 Session rollover 生命周期，避免长会话
+  无界增长并保留可审计的上下文谱系。
+- 增加 Work 热路径 claim、Git workspace baseline、运行归属与生命周期治理，并补充移动端
+  导航抽屉和响应式工作台体验。
+
 ### Changed / 变更
 
+- 收紧 PI 工具分层、对话范围与授权询问语义，限制连续无进展续跑，并补齐 Code Agent
+  目录发现与 Codex OAuth release 加载。
+- 加固 release 第三方许可、依赖安全、仓库卫生与 provenance 门禁。
 - 项目许可证由 PolyForm Noncommercial 1.0.0 调整为 Apache License 2.0，允许在遵守许可证
   条款的前提下使用、修改、分发及商业使用。
 
@@ -85,7 +98,8 @@
 
 - 首个 GitHub Release，包含 macOS/Linux 的 arm64、amd64 预构建资产和一键安装脚本。
 
-[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/williamnie/xuanwu/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/williamnie/xuanwu/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/williamnie/xuanwu/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/williamnie/xuanwu/compare/v0.2.0...v0.2.1
