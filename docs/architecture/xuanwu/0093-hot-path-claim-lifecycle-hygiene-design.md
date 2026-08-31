@@ -827,7 +827,7 @@ const backendProductionRoots = [
 
 ### 8.4 Gate contract tests
 
-扩展 `scripts/release-compliance.test.mjs`，断言以下三个文件都包含精确 hygiene command：
+扩展 `scripts/release-workflow.test.mjs`，断言以下三个文件都包含精确 hygiene command：
 
 - `.github/workflows/ci.yml`；
 - `.github/workflows/release.yml`；
@@ -987,7 +987,7 @@ v1 设计可以复用：
 
 - 修改 `scripts/package-release.sh`；
 - 修改 `.github/workflows/release.yml`；
-- 扩展 `scripts/release-compliance.test.mjs`；
+- 扩展 `scripts/release-workflow.test.mjs`；
 - 将 runtime/packaging/executable production roots 改为带 owner/purpose/invocation/test 的显式 metadata；
 - 加 orphan fixture test。
 

@@ -55,11 +55,6 @@ jobs:
       - name: Audit repository hygiene
         run: node scripts/repository-hygiene-audit.mjs
 
-      - name: Generate and verify release compliance evidence
-        run: |
-          node scripts/generate-release-compliance.mjs --output dist/compliance-ci
-          node scripts/verify-release-compliance.mjs dist/compliance-ci
-
       - name: Audit dependencies
         run: node scripts/dependency-security-audit.mjs
 
