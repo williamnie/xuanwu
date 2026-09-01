@@ -77,6 +77,9 @@ describe("Run HTTP API", () => {
       const sessionResponse = await router.handle(new Request(
         `${BASE_URL}/api/sessions/${encodeURIComponent(sessionRef)}`
       ));
+      const turnsResponse = await router.handle(new Request(
+        `${BASE_URL}/api/sessions/${encodeURIComponent(sessionRef)}/turns?items_view=summary&limit=20`
+      ));
 
       expect(runResponse.status).toBe(200);
       expect(runBody.run).toMatchObject({
@@ -95,7 +98,11 @@ describe("Run HTTP API", () => {
       expect(await sessionResponse.json()).toMatchObject({
         id: "pi-coding-agent:pi-session-1",
         provider: "pi-coding-agent",
-        turns: [{ items: [
+        turns: []
+      });
+      expect(turnsResponse.status).toBe(200);
+      expect(await turnsResponse.json()).toMatchObject({
+        data: [{ items: [
           { type: "userMessage" },
           { type: "reasoning" },
           { type: "agentMessage" },

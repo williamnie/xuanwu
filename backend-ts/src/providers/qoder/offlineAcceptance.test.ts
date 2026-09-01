@@ -164,7 +164,15 @@ describe("Qoder Q6 offline acceptance", () => {
         id: "qoder:qoder-q6-session-1",
         provider: "qoder",
         session_contract: "xw.provider-session.v1",
-        turns: [{ items: [{ type: "userMessage" }, { type: "agentMessage" }] }]
+        turns: []
+      });
+      const sessionTurns = await request(
+        router,
+        `/api/sessions/${encodeURIComponent(observationRef)}/turns?items_view=summary&limit=20`
+      );
+      expect(sessionTurns.status).toBe(200);
+      expect(await sessionTurns.json()).toMatchObject({
+        data: [{ items: [{ type: "userMessage" }, { type: "agentMessage" }] }]
       });
 
       for (const prompt of ["resume round one", "resume round two"]) {

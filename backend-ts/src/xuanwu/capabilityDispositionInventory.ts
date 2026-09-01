@@ -765,6 +765,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/sessions", family: "run-session-drilldown" },
   { method: "POST", path: "/api/sessions", family: "run-session-drilldown" },
   { method: "GET", path: "/api/sessions/:id", family: "run-session-drilldown" },
+  { method: "GET", path: "/api/sessions/:id/turns", family: "run-session-drilldown" },
   { method: "POST", path: "/api/sessions/:id/interrupt", family: "run-session-drilldown" },
   { method: "POST", path: "/api/sessions/:id/messages", family: "run-session-drilldown" },
   { method: "GET", path: "/api/sessions/preferences", family: "run-session-drilldown" },

@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-09-01
+
+### Fixed / 修复
+
+- Run 详情默认展示 Summary，只有显式打开 Provider 时才读取当前 Session；移除嵌入视图的
+  全局 Session 列表、偏好读取和周期性全量 transcript 刷新。
+- Codex Session 详情拆分为轻量 metadata 与原生 `thread/turns/list` 摘要分页，将典型详情
+  载荷从约 1.43 MB 降至约 11 KB，并保留服务重启后的权威运行态。
+- 增加脱敏慢 SQL trace，记录查询指纹、耗时、返回行数、连接角色和调用位置，不记录绑定值。
+
 ## [0.2.8] - 2026-09-01
 
 ### Fixed / 修复
@@ -130,7 +140,8 @@
 
 - 首个 GitHub Release，包含 macOS/Linux 的 arm64、amd64 预构建资产和一键安装脚本。
 
-[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/williamnie/xuanwu/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/williamnie/xuanwu/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/williamnie/xuanwu/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/williamnie/xuanwu/compare/v0.2.5...v0.2.6
