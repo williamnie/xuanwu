@@ -5,8 +5,10 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { getPiAction, getPiIssueCompletionWatch, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
+import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
 import { createPiRunnerActions } from "./runnerActions.ts";
 
 describe("PI runner action gate", () => {
@@ -178,6 +180,60 @@ describe("PI runner action gate", () => {
       });
       expect(getIssue(fixture.db, issueID)).toMatchObject({ status: "todo" });
       expect(kicked).toEqual([fixture.project.id]);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("all IM Runner Chat sources authorize an exact human-review Issue without a conversation Project", async () => {
+    const fixture = await openFixture();
+    try {
+      for (const source of ["runner_chat", "feishu_runner_chat", "telegram_runner_chat", "matrix_runner_chat"]) {
+        const issueID = insertIssue(fixture.db, {
+          projectID: fixture.project.id,
+          status: "needs_user",
+          title: `Human review from ${source}`
+        });
+        const run = createIssueRun(fixture.db, issueID);
+        fixture.db.sqlite.run("update issue_runs set status='succeeded', ended_at=? where id=?", [
+          "2026-08-01T00:00:00Z", run.id
+        ]);
+        const request = createHumanReviewRequest(fixture.db, issueID, {
+          question: "是否接受当前交付并推迟外部验收？"
+        });
+        const actions = createPiRunnerActions(fixture.db, {
+          authorization: {
+            allowedActions: ["human_review.respond"],
+            askOnMissingAuthorization: true,
+            authorizedActions: [],
+            mode: "delegated",
+            scopes: [
+              { runner_resource: "agent_catalog" },
+              { runner_resource: "issues" }
+            ]
+          },
+          project: undefined,
+          source
+        });
+
+        const result = await actions.respondToHumanReview({
+          action: "accept",
+          comment: "接受当前交付，外部验收后续补充。",
+          issue_id: issueID,
+          review_request_id: request.id,
+          review_revision: request.revision
+        }) as { action_id: string; decision: string; status: string };
+
+        expect(result).toMatchObject({ decision: "execute", status: "completed" });
+        expect(getPiAction(fixture.db, result.action_id)).toMatchObject({
+          action_type: "human_review.respond",
+          gate_decision: "execute",
+          gate_reason: expect.stringContaining(`scope matched issue ${issueID}`),
+          issue_id: issueID,
+          project_id: fixture.project.id,
+          status: "completed"
+        });
+      }
     } finally {
       await fixture.close();
     }

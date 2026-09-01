@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { interpretAcceptanceResponse, parseAcceptanceDecision } from "./issueAcceptance.ts";
+import { fauxAssistantMessage, fauxThinking } from "@earendil-works/pi-ai/compat";
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import {
+  interpretAcceptanceResponse,
+  interpretAcceptanceSession,
+  parseAcceptanceDecision
+} from "./issueAcceptance.ts";
 
 describe("PI issue acceptance decision", () => {
   test("accepts only the explicit five-way JSON schema", () => {
@@ -62,6 +68,28 @@ describe("PI issue acceptance decision", () => {
       error: "PI acceptance returned invalid JSON or schema",
       raw_text: "not json",
       valid: false
+    });
+  });
+
+  test("accepts a schema-valid acceptance decision returned only as model thinking", () => {
+    const decision = {
+      confidence: "high",
+      decision: "accept",
+      evidence_refs: ["run:fixture"],
+      progress: { made_progress: true, evidence_refs: ["run:fixture"], summary: "已完成实现。" },
+      rationale: "证据充分。",
+      unmet_requirements: []
+    };
+    const message = fauxAssistantMessage(fauxThinking(JSON.stringify(decision)), { stopReason: "stop" });
+    const session = {
+      getLastAssistantText: () => undefined,
+      state: { errorMessage: "", messages: [message] }
+    } as Pick<AgentSession, "getLastAssistantText" | "state">;
+
+    expect(interpretAcceptanceSession(session)).toEqual({
+      decision,
+      raw_text: JSON.stringify(decision),
+      valid: true
     });
   });
 });

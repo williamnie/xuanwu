@@ -989,9 +989,7 @@ function runnerChatSource(conversation: PiConversation): string | undefined {
 
 function imRunnerChatSource(connectorID: unknown): string | undefined {
   const connector = cleanString(connectorID).toLowerCase();
-  if (connector === "feishu") return "feishu_runner_chat";
-  if (connector === "telegram") return "telegram_runner_chat";
-  return undefined;
+  return connector === "" ? undefined : `${connector}_runner_chat`;
 }
 
 function optionalConversationProject(db: RunnerDatabase, id: string): Project | undefined {

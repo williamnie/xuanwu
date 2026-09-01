@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { fauxAssistantMessage, fauxThinking } from "@earendil-works/pi-ai/compat";
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +9,10 @@ import { listExternalLinksByExternal } from "../db/repositories/externalLinks.ts
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { listPiNotificationIntents } from "../db/repositories/pi.ts";
-import { runAgentCommunicationGatewayOnce } from "./agentCommunicationGateway.ts";
+import {
+  parseAgentCommunicationSessionDecision,
+  runAgentCommunicationGatewayOnce
+} from "./agentCommunicationGateway.ts";
 import { routeNotification } from "./unifiedNotificationPipeline.ts";
 
 const roots: string[] = [];
@@ -17,6 +22,24 @@ afterEach(async () => {
 });
 
 describe("Agent-first notification communication", () => {
+  test("accepts schema-valid notification JSON returned only as model thinking", () => {
+    const message = fauxAssistantMessage(fauxThinking(JSON.stringify({
+      decision: "send",
+      message: "需要你决定是否继续。",
+      rationale: "requires_user"
+    })), { stopReason: "stop" });
+    const session = {
+      getLastAssistantText: () => undefined,
+      state: { errorMessage: "", messages: [message] }
+    } as Pick<AgentSession, "getLastAssistantText" | "state">;
+
+    expect(parseAgentCommunicationSessionDecision(session)).toEqual({
+      decision: "send",
+      message: "需要你决定是否继续。",
+      rationale: "requires_user"
+    });
+  });
+
   test("batches related intents and writes only the Agent message to outbox", async () => {
     const db = await fixture();
     try {
@@ -125,6 +148,29 @@ describe("Agent-first notification communication", () => {
       expect(outbox).toHaveLength(1);
       expect(outbox[0]?.content).toContain("Stone 当前不可用");
       expect(outbox[0]?.content).toContain("暂停这批自动状态通知");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("reports invalid structured output without claiming Stone is unavailable", async () => {
+    const db = await fixture();
+    try {
+      const issue = createIssue(db, { project_id: "demo", status: "needs_user", title: "Invalid Agent output" });
+      stage(db, issue.id, "pi_needs_user", "needs a decision", "event-invalid-output", true);
+
+      const result = await runAgentCommunicationGatewayOnce(db, {
+        decide: async () => { throw new Error("Agent returned invalid communication JSON"); },
+        now: new Date("2026-07-19T13:00:00.000Z")
+      });
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+
+      expect(result).toMatchObject({ failed: 1, fallback: 1 });
+      expect(outbox[0]?.content).toContain("结果格式不兼容");
+      expect(outbox[0]?.content).toContain("普通聊天不受影响");
+      expect(outbox[0]?.content).not.toContain("Stone 当前不可用");
+      expect(listPiNotificationIntents(db, { issueId: issue.id })[0]?.error)
+        .toContain("agent_output_invalid:");
     } finally {
       db.close();
     }

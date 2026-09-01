@@ -15,6 +15,11 @@ import {
 } from "./issueSupervisorDecisionFailure.ts";
 import type { IssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
 import { appLanguage, type AppLanguage } from "../i18n/language.ts";
+import { redactSensitiveText } from "../util/redact.ts";
+import {
+  parseStructuredAssistantOutput,
+  structuredAssistantProviderError
+} from "./structuredAssistantOutput.ts";
 
 export type PiSupervisorDecisionRuntimeInput = {
   agent: PiAgent;
@@ -68,8 +73,15 @@ export async function runPiSupervisorDecision(
   runtime.session.setActiveToolsByName(SUPERVISOR_TOOL_NAMES);
   try {
     await promptSupervisorWithTimeout(runtime.session, decisionPrompt(input.context, input.now ?? new Date(), language));
-    const raw = runtime.session.getLastAssistantText() ?? "";
-    const parsed = parseDecision(raw, input.context, input.now ?? new Date());
+    const output = parseStructuredAssistantOutput(runtime.session, (raw) => {
+      const candidate = parseDecision(raw, input.context, input.now ?? new Date());
+      return candidate.valid ? candidate.decision : null;
+    });
+    const raw = output.raw;
+    const providerError = structuredAssistantProviderError(runtime.session);
+    const parsed = providerError === ""
+      ? parseDecision(raw, input.context, input.now ?? new Date())
+      : decisionFailure(`PI supervisor provider failed: ${redactSensitiveText(providerError)}`);
     if (!parsed.valid) {
       const fallback = fallbackDecision(input.context, parsed.error, language);
       recordDecisionFailure(input.database, input.context, raw, parsed, fallback);

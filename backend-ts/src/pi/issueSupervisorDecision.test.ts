@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
+import { fauxAssistantMessage, fauxThinking, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
 import { listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { runPiSupervisorDecision } from "./issueSupervisorDecision.ts";
 import type { IssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
@@ -379,6 +379,40 @@ describe("PI supervisor decision runtime", () => {
         fallback_decision: "noop",
         valid: false
       });
+    } finally {
+      faux.unregister();
+      fixture.db.close();
+    }
+  });
+
+  test("accepts a schema-valid supervisor decision returned only as model thinking", async () => {
+    const fixture = await openDecisionFixture("supervisor-decision-thinking-");
+    const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
+    try {
+      const decision = {
+        confidence: "high",
+        decision: "wait",
+        evidence_refs: ["provider_error"],
+        expected_outcome: "provider retry window is respected",
+        fallback_if_no_progress: "retry_issue",
+        rationale: "HTTP 429 includes a future retry-after timestamp",
+        risk_level: "low",
+        wait_until: "2026-06-10T08:10:00Z"
+      };
+      faux.setResponses([
+        fauxAssistantMessage(fauxThinking(JSON.stringify(decision)), { stopReason: "stop" })
+      ]);
+
+      const result = await runPiSupervisorDecision({
+        agent: fixture.agent,
+        context: rateLimitContext(),
+        database: fixture.db,
+        now: NOW,
+        project: fixture.project
+      });
+
+      expect(result).toMatchObject({ valid: true, decision: { decision: "wait" } });
+      expect(result.raw_text).toBe(JSON.stringify(decision));
     } finally {
       faux.unregister();
       fixture.db.close();

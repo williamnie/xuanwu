@@ -13,6 +13,11 @@ import {
 } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { createPiRuntimeSession } from "../http/piRuntime.ts";
+import {
+  parseStructuredAssistantOutput,
+  structuredAssistantProviderError,
+  type StructuredOutputSession
+} from "../pi/structuredAssistantOutput.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { queueNotificationOutbox } from "./notificationOutbox.ts";
 
@@ -49,13 +54,19 @@ type CommunicationEnvelope = {
   target: { chatID: string; eventID: number; messageID: string; threadID: string };
 };
 
+type AgentCommunicationFailure = {
+  code: "agent_output_invalid" | "agent_unavailable";
+  message: string;
+};
+
 const DEFAULT_LIMIT = 50;
 const FALLBACK_BUCKET_MS = 30 * 60 * 1000;
 
 /**
  * All normal user-visible notification intents stop here before outbox write.
  * The configured project Agent decides whether humans need a message and owns
- * the final wording. The deterministic fallback is reserved for Agent outage.
+ * the final wording. The deterministic fallback is reserved for runtime
+ * outages or schema-invalid model output after compatibility parsing.
  */
 export async function runAgentCommunicationGatewayOnce(
   db: RunnerDatabase,
@@ -105,14 +116,15 @@ async function processGroup(
     result.queued += 1;
   } catch (error) {
     result.failed += active.length;
-    const reason = `agent_unavailable:${safeError(error)}`;
+    const failure = classifyAgentCommunicationFailure(error);
+    const reason = `${failure.code}:${failure.message}`;
     for (const intent of active) markSuppressed(db, intent, reason);
     markCoveredIntents(db, active, 0, now, reason);
     try {
-      if (queueAgentUnavailableFallback(db, active, now)) result.fallback += 1;
+      if (queueAgentFailureFallback(db, active, now, failure.code)) result.fallback += 1;
     } catch {
       // Fallback delivery must never fail the scheduler that recorded the
-      // original Agent outage. The suppressed intent retains the error.
+      // original communication failure. The suppressed intent retains it.
     }
   }
 }
@@ -174,7 +186,7 @@ export async function decideAgentCommunicationWithRuntime(
       expandPromptTemplates: false,
       source: "rpc"
     });
-    return parseDecision(runtime.session.getLastAssistantText() ?? "");
+    return parseAgentCommunicationSessionDecision(runtime.session);
   } finally {
     runtime.dispose();
   }
@@ -215,7 +227,17 @@ function agentIntentView(intent: PiNotificationIntent): Record<string, unknown> 
   };
 }
 
-function parseDecision(raw: string): AgentCommunicationDecision {
+export function parseAgentCommunicationSessionDecision(
+  session: StructuredOutputSession
+): AgentCommunicationDecision {
+  const providerError = structuredAssistantProviderError(session);
+  if (providerError !== "") throw new Error(`Agent provider failed: ${providerError}`);
+  const output = parseStructuredAssistantOutput(session, tryParseDecision);
+  if (output.value) return output.value;
+  throw new Error("Agent returned invalid communication JSON");
+}
+
+function tryParseDecision(raw: string): AgentCommunicationDecision | null {
   const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
@@ -224,11 +246,11 @@ function parseDecision(raw: string): AgentCommunicationDecision {
   try {
     value = JSON.parse(candidate);
   } catch {
-    throw new Error("Agent returned invalid communication JSON");
+    return null;
   }
   const record = objectValue(value);
   const decision = cleanString(record.decision);
-  if (decision !== "send" && decision !== "suppress") throw new Error("Agent returned invalid communication decision");
+  if (decision !== "send" && decision !== "suppress") return null;
   return {
     decision,
     message: redactSensitiveText(cleanString(record.message)).slice(0, 8_000),
@@ -284,10 +306,11 @@ function queueAgentMessage(db: RunnerDatabase, intents: PiNotificationIntent[], 
   });
 }
 
-function queueAgentUnavailableFallback(
+function queueAgentFailureFallback(
   db: RunnerDatabase,
   intents: PiNotificationIntent[],
-  now: Date
+  now: Date,
+  failureCode: AgentCommunicationFailure["code"]
 ): boolean {
   const first = intents[0];
   if (!first) return false;
@@ -296,21 +319,38 @@ function queueAgentUnavailableFallback(
   const bucket = Math.floor(now.getTime() / FALLBACK_BUCKET_MS);
   const issue = singleIssueID(intents);
   const subject = issue > 0 ? `issue #${issue}` : "这批事项";
-  const queued = queueNotificationOutbox(db, {
-    channel: envelope.channel,
-    content: [
+  const content = failureCode === "agent_output_invalid"
+    ? [
+      `Stone 已响应，但这次自动状态通知的结果格式不兼容，暂时无法判断 ${subject} 是否需要你处理。`,
+      "我已暂停这批自动状态通知，避免继续刷屏；普通聊天不受影响。",
+      "后续消息会继续交给 Stone 判断。"
+    ]
+    : [
       `Stone 当前不可用，暂时无法判断 ${subject} 是否需要你处理。`,
       "我已暂停这批自动状态通知，避免继续刷屏。",
       "请检查 Agent/provider 运行状态；恢复后，后续消息会重新交给 Stone 判断。"
-    ].join("\n"),
+    ];
+  const queued = queueNotificationOutbox(db, {
+    channel: envelope.channel,
+    content: content.join("\n"),
     createdBy: "notification_agent_fallback",
     issueID: issue,
-    notificationID: `agent-unavailable:${fallbackIdentity(first)}:${bucket}`,
+    notificationID: `agent-communication-fallback:${fallbackIdentity(first)}:${bucket}`,
     notificationType: "agent_communication_fallback",
     projectID: first.project_id,
     target: envelope.target
   });
   return queued.queued;
+}
+
+function classifyAgentCommunicationFailure(error: unknown): AgentCommunicationFailure {
+  const message = safeError(error);
+  return {
+    code: /invalid communication|suppressed an actionable communication|empty user message/i.test(message)
+      ? "agent_output_invalid"
+      : "agent_unavailable",
+    message
+  };
 }
 
 function communicationGroups(intents: PiNotificationIntent[]): PiNotificationIntent[][] {

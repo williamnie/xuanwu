@@ -38,6 +38,7 @@ export function scopedRunnerChatActionContext<T extends PiActionContext>(
   if (context.authorization) {
     if (context.authorization.askOnMissingAuthorization !== true &&
       context.authorization.ask_on_missing_authorization !== true) return context;
+    const targetScope = authorizationScope(project, issueID, issueIDs);
     return {
       ...context,
       authorization: {
@@ -45,6 +46,10 @@ export function scopedRunnerChatActionContext<T extends PiActionContext>(
         authorizedActions: [
           ...(context.authorization.authorizedActions ?? []),
           targetAuthorization
+        ],
+        scopes: [
+          ...authorizationScopes(context.authorization.scopes ?? context.authorization.scope),
+          targetScope
         ]
       }
     };
@@ -55,18 +60,14 @@ export function scopedRunnerChatActionContext<T extends PiActionContext>(
         allowedActions: [actionType],
         authorizedActions: [targetAuthorization],
         mode: "delegated",
-        scope: issueID > 0
-          ? { issue_id: issueID }
-          : issueIDs.length > 0
-            ? { runner_resource: "issues" }
-            : { project_id: project }
+        scope: authorizationScope(project, issueID, issueIDs)
       }
   };
 }
 
 export function isRunnerChatSource(source: unknown): boolean {
   const value = cleanString(source);
-  return value === "feishu_runner_chat" || value === "telegram_runner_chat" || value === "runner_chat";
+  return value === "runner_chat" || value.endsWith("_runner_chat");
 }
 
 function cleanString(value: unknown): string {
@@ -77,6 +78,21 @@ function authorizedAction(actionType: string, projectID: string, issueID: number
   if (issueID > 0) return { action_type: actionType, issue_id: issueID };
   if (issueIDs.length > 0) return { action_type: actionType, payload: { issue_ids: issueIDs } };
   return { action_type: actionType, project_id: projectID };
+}
+
+function authorizationScope(projectID: string, issueID: number, issueIDs: number[]) {
+  if (issueID > 0) return { issue_id: issueID };
+  if (issueIDs.length > 0) return { runner_resource: "issues" };
+  return { project_id: projectID };
+}
+
+function authorizationScopes(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) return value.filter(isRecord);
+  return isRecord(value) ? [value] : [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function positiveIssueID(value: unknown): number {

@@ -1,4 +1,3 @@
-import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -8,6 +7,11 @@ import type { CompletionCard } from "../domain/acceptance/completionCard.ts";
 import { appLanguage } from "../i18n/language.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { piInternalReadAuthorization } from "./internalReadAuthorization.ts";
+import {
+  parseStructuredAssistantOutput,
+  structuredAssistantProviderError,
+  type StructuredOutputSession
+} from "./structuredAssistantOutput.ts";
 
 export const PI_ACCEPTANCE_DECISIONS = [
   "accept",
@@ -87,11 +91,18 @@ export async function runPiIssueAcceptance(input: {
   runtime.session.setActiveToolsByName(ACCEPTANCE_TOOL_NAMES);
   try {
     await promptWithTimeout(runtime.session, acceptancePrompt(input.card, appLanguage(input.database)));
-    const raw = runtime.session.getLastAssistantText() ?? "";
-    return interpretAcceptanceResponse(raw, piSessionError(runtime.session));
+    return interpretAcceptanceSession(runtime.session);
   } finally {
     runtime.dispose();
   }
+}
+
+export function interpretAcceptanceSession(session: StructuredOutputSession): PiAcceptanceRuntimeResult {
+  const output = parseStructuredAssistantOutput(session, parseAcceptanceDecision);
+  const providerError = structuredAssistantProviderError(session);
+  if (providerError !== "") return interpretAcceptanceResponse(output.raw, providerError);
+  if (output.value) return { decision: output.value, raw_text: output.raw, valid: true };
+  return interpretAcceptanceResponse(output.raw);
 }
 
 export function interpretAcceptanceResponse(
@@ -191,15 +202,4 @@ function extractJson(raw: string): string {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   return start >= 0 && end > start ? text.slice(start, end + 1) : text;
-}
-
-function piSessionError(session: AgentSession): string {
-  const stateError = session.state.errorMessage?.trim();
-  if (stateError) return stateError;
-  for (const message of session.state.messages.slice().reverse()) {
-    if (message.role !== "assistant") continue;
-    const error = message.errorMessage?.trim();
-    if (error) return error;
-  }
-  return "";
 }
