@@ -54,6 +54,7 @@ export function registerReleaseUpdateRoutes(router: Router, input: ReleaseUpdate
 export class ReleaseUpdateController {
   private readonly context: Required<Pick<ReleaseUpdateContext, "jobID" | "now">> & ReleaseUpdateContext;
   private cachedCheck: ReleaseUpdateCheck | null = null;
+  private checkedAt = "";
   private checkExpiresAt = 0;
   private checkPromise: Promise<ReleaseUpdateCheck> | null = null;
 
@@ -72,6 +73,7 @@ export class ReleaseUpdateController {
     if (!supported) {
       return {
         check_error: "当前不是支持 UI 升级的 Release 安装",
+        checked_at: this.checkedAt,
         current: bunBuildInfo().version,
         job,
         latest: "",
@@ -82,10 +84,11 @@ export class ReleaseUpdateController {
     }
     try {
       const check = await this.check(refresh);
-      return { ...check, check_error: "", job, release_install: true, supported: true };
+      return { ...check, check_error: "", checked_at: this.checkedAt, job, release_install: true, supported: true };
     } catch (error) {
       return {
         check_error: safeError(error),
+        checked_at: this.checkedAt,
         current: bunBuildInfo().version,
         job,
         latest: "",
@@ -149,6 +152,7 @@ export class ReleaseUpdateController {
     try {
       const result = validateReleaseUpdateCheck(await pending);
       this.cachedCheck = result;
+      this.checkedAt = this.context.now().toISOString();
       this.checkExpiresAt = now + CHECK_TTL_MS;
       return result;
     } finally {

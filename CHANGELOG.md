@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-09-01
+
+### Changed / 变更
+
+- 升级状态 API 增加最近一次成功检查时间，便于区分新鲜 Release 结果与离线期间保留的状态。
+- 保持 `xuanwu.storage-compat.v1`，不新增数据库迁移或配置切换，可从 `v0.2.4` 直接安全升级。
+
 ## [0.2.4] - 2026-08-31
 
 ### Added / 新增
@@ -100,7 +107,8 @@
 
 - 首个 GitHub Release，包含 macOS/Linux 的 arm64、amd64 预构建资产和一键安装脚本。
 
-[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/williamnie/xuanwu/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/williamnie/xuanwu/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/williamnie/xuanwu/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/williamnie/xuanwu/compare/v0.2.1...v0.2.2

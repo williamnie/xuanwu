@@ -26,7 +26,13 @@ describe("release update API", () => {
     });
 
     const status = await jsonBody(await router.handle(new Request("http://runner/api/system/update")));
-    expect(status).toMatchObject({ current: "v1.0.0", latest: "v1.1.0", supported: true, update_available: true });
+    expect(status).toMatchObject({
+      checked_at: "2026-09-01T02:03:04.000Z",
+      current: "v1.0.0",
+      latest: "v1.1.0",
+      supported: true,
+      update_available: true
+    });
 
     const response = await router.handle(new Request("http://runner/api/system/update", {
       body: JSON.stringify({ confirm: "upgrade", version: "v1.1.0" }),
