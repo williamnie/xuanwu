@@ -11,7 +11,8 @@
 .recent-deliveries-freshness { align-items: center; border: 1px solid currentColor; display: inline-flex; font-size: 0.68rem; gap: 5px; min-height: 28px; padding: 0 8px; }
 .recent-deliveries-freshness.stale { background: var(--warning-bg); color: var(--warning); }
 
-.recent-deliveries-list { display: flex; flex-direction: column; gap: 10px; }
+.recent-deliveries-list { display: flex; flex-direction: column; gap: 10px; max-height: min(68vh, 640px); min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; scrollbar-gutter: stable; }
+.recent-deliveries-list:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .recent-delivery-card { background: var(--panel-gradient); border: 1px solid var(--border-color); border-left: 3px solid var(--text-muted); border-radius: var(--radius-xs); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 15px 16px 12px; }
 .recent-delivery-card.green { border-left-color: var(--success); }
 .recent-delivery-card.blue { border-left-color: var(--info); }

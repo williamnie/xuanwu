@@ -40,6 +40,7 @@ export type PendingPiActionNotification = Pick<PiAction,
   "action_type" | "conversation_id" | "created_at" | "id" | "issue_id" |
   "payload_json" | "project_id" | "status">;
 export type PiActionFilter = { conversationId?: string; issueId?: number; projectId?: string; status?: string };
+export type RecentAttentionPiActionFilter = { limit: number; updatedAfter: string };
 export type PiActionEventFilter = {
   actionId?: string;
   conversationId?: string;
@@ -99,6 +100,21 @@ export function listPiActions(db: RunnerDatabase, filter: PiActionFilter = {}): 
     ["issue_id=?", filter.issueId],
     ["status=?", filter.status]
   ], "created_at asc, id asc"));
+}
+
+export function listRecentAttentionPiActions(
+  db: RunnerDatabase,
+  filter: RecentAttentionPiActionFilter
+): PiAction[] {
+  const limit = Math.min(Math.max(Math.trunc(filter.limit), 1), 25);
+  const updatedAfter = requiredString(filter.updatedAfter, "pi_actions.updated_after");
+  return db.sqlite.query<Record<string, unknown>, [string, number]>(`
+    select ${COLUMNS} from ${TABLE} indexed by idx_pi_actions_attention_recent
+    where status in ('candidate', 'pending', 'approved', 'changes_requested', 'snoozed')
+      and updated_at>=?
+    order by updated_at desc, id desc
+    limit ?
+  `).all(updatedAfter, limit).map(mapPiAction);
 }
 
 export function listPendingPiActionNotifications(

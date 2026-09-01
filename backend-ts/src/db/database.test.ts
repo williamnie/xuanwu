@@ -316,13 +316,15 @@ describe("Bun SQLite database connection", () => {
         { id: "079_scheduler_performance_indexes" },
         { id: "080_execution_policy_json" },
         { id: "081_telegram_channel_runtime" },
-        { id: "082_im_context_lifecycle" }
+        { id: "082_im_context_lifecycle" },
+        { id: "083_attention_action_recent_index" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_type_id");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_run_event_v1_id_desc");
       expect(indexNames(connection, "pi_actions")).toEqual(expect.arrayContaining([
+        "idx_pi_actions_attention_recent",
         "idx_pi_actions_pending_notification",
         "idx_pi_actions_pending_mcp_expiry"
       ]));
@@ -960,7 +962,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 83 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 84 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
@@ -1019,7 +1021,7 @@ describe("Bun SQLite database connection", () => {
 
     const upgraded = await openDatabase({ stateDir });
     try {
-      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 83 });
+      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 84 });
       expect(tableNames(upgraded)).toEqual(expect.arrayContaining([
         "im_conversation_state",
         "im_interaction_bindings",

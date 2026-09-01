@@ -351,6 +351,51 @@ describe("Command Center aggregate API", () => {
     }
   });
 
+  test("bounds PI Action Attention to active records updated within seven days", async () => {
+    const db = await fixtureDatabase();
+    try {
+      createPiAction(db, {
+        action_type: "issue.retry",
+        gate_decision: "ask",
+        id: "recent-active-action",
+        rationale: "recent approval",
+        status: "pending"
+      });
+      createPiAction(db, {
+        action_type: "issue.retry",
+        gate_decision: "ask",
+        id: "old-active-action",
+        rationale: "expired approval",
+        status: "pending"
+      });
+      createPiAction(db, {
+        action_type: "issue.retry",
+        gate_decision: "ask",
+        id: "recent-completed-action",
+        rationale: "completed approval",
+        status: "completed"
+      });
+      db.sqlite.run("update pi_actions set updated_at=? where id=?", [SOURCE_TIME, "recent-active-action"]);
+      db.sqlite.run("update pi_actions set updated_at=? where id=?", ["2026-07-09T08:00:00.000Z", "old-active-action"]);
+      db.sqlite.run("update pi_actions set updated_at=? where id=?", [SOURCE_TIME, "recent-completed-action"]);
+      const router = createRouter();
+      registerCommandCenterRoutes(router, { database: db }, { now: () => new Date(NOW) });
+
+      const response = await router.handle(new Request(
+        `${BASE_URL}/api/command-center/summary?sections=attention&limit=10`
+      ));
+      const section = ((await response.json()) as Record<string, any>).sections.attention;
+      const serialized = JSON.stringify(section.items);
+
+      expect(response.status).toBe(200);
+      expect(serialized).toContain("recent-active-action");
+      expect(serialized).not.toContain("old-active-action");
+      expect(serialized).not.toContain("recent-completed-action");
+    } finally {
+      db.close();
+    }
+  });
+
   test("uses one Command Center decision seam for internal Actions and source-linked Proposals", async () => {
     const db = await fixtureDatabase();
     try {

@@ -155,7 +155,7 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
           <button onClick={() => navigateTo?.('work')} type="button">打开 Work Board</button>
         </div>
       ) : (
-        <div className="recent-deliveries-list">
+        <div aria-label="最近交付列表" className="recent-deliveries-list" role="region" tabIndex={0}>
           {items.map(item => {
             const view = recentDeliveryView(item);
             return (

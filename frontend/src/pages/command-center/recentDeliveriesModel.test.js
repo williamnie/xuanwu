@@ -10,6 +10,7 @@ import {
 
 const HANDOFF_ID = 'xw:handoff:derived:697%40abc123';
 const WORK_ID = 'xw:work:issues:697';
+const styles = readFileSync(new URL('./RecentDeliveriesSection.css', import.meta.url), 'utf8');
 
 test('Recent Deliveries presents every Handoff mode with its authoritative refs', () => {
   const modes = [
@@ -91,6 +92,17 @@ test('Dashboard trusts the aggregate Handoff status without per-card hydration o
   assert.match(page, /navigateTo\?\.\(route\.page, route\.workId \|\| item\.work_id, '', route\.handoffId\)/);
   assert.doesNotMatch(page, /createHandoff|updateHandoff|controlWork|controlRun/);
   assert.match(dashboard, /<RecentDeliveriesSection navigateTo=\{navigateTo\} projects=\{projects\} \/>/);
+});
+
+test('Recent Deliveries keeps expanded cards inside a keyboard-scrollable region', () => {
+  const page = readFileSync(new URL('./RecentDeliveriesSection.jsx', import.meta.url), 'utf8');
+  const listRule = styles.match(/\.recent-deliveries-list\s*\{([^}]*)\}/)?.[1] || '';
+  assert.match(page, /aria-label="最近交付列表"/);
+  assert.match(page, /role="region"/);
+  assert.match(page, /tabIndex=\{0\}/);
+  assert.match(listRule, /max-height:\s*min\(68vh, 640px\)/);
+  assert.match(listRule, /overflow-y:\s*auto/);
+  assert.match(listRule, /overscroll-behavior:\s*contain/);
 });
 
 function item(overrides = {}) {

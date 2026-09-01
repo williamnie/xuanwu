@@ -4,7 +4,7 @@ import {
 } from "../../db/repositories/intakeRuns.ts";
 import {
   listActionProposals,
-  listPiActions,
+  listRecentAttentionPiActions,
   listPiApprovalRequests,
   listPiGuardianAlerts
 } from "../../db/repositories/pi.ts";
@@ -33,10 +33,17 @@ type AttentionCommandEvent = {
   snoozed_until?: string;
 };
 
+type PersistedAttentionOptions = { actionLimit?: number; now?: Date };
+const ATTENTION_ACTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_ATTENTION_ACTION_LIMIT = 25;
+
 // The command log only overlays user acknowledgement/snooze intent. It deliberately
 // does not copy or mutate legacy business rows, so their existing authorities remain intact.
-export function listPersistedAttention(db: RunnerDatabase): AttentionRecord[] {
-  return consolidateAttentionCandidates(attentionCandidates(db)).map((record) => replayCommands(db, record));
+export function listPersistedAttention(
+  db: RunnerDatabase,
+  options: PersistedAttentionOptions = {}
+): AttentionRecord[] {
+  return consolidateAttentionCandidates(attentionCandidates(db, options)).map((record) => replayCommands(db, record));
 }
 
 export function getPersistedAttention(db: RunnerDatabase, id: string): AttentionRecord | null {
@@ -65,7 +72,7 @@ export function persistAttentionCommand(
   return result;
 }
 
-function attentionCandidates(db: RunnerDatabase) {
+function attentionCandidates(db: RunnerDatabase, options: PersistedAttentionOptions) {
   const proposalRefs = proposalRefsByInboxID(db);
   const inbox = listAttentionInboxItems(db).map((item) => {
     const candidate = attentionFromInboxItem(item);
@@ -76,8 +83,11 @@ function attentionCandidates(db: RunnerDatabase) {
   });
   const guardian = listPiGuardianAlerts(db).map(attentionFromGuardianAlert);
   const approvals = listPiApprovalRequests(db).map(attentionFromApprovalRequest);
-  const actions = listPiActions(db)
-    .filter((action) => ["candidate", "pending", "approved", "changes_requested", "snoozed"].includes(action.status))
+  const now = options.now ?? new Date();
+  const actions = listRecentAttentionPiActions(db, {
+    limit: options.actionLimit ?? DEFAULT_ATTENTION_ACTION_LIMIT,
+    updatedAfter: new Date(now.getTime() - ATTENTION_ACTION_WINDOW_MS).toISOString()
+  })
     .map((action) => attentionFromPiAction(action, proposalRefsFromAction(action)));
   return [...inbox, ...guardian, ...approvals, ...actions];
 }

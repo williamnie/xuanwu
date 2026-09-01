@@ -172,7 +172,7 @@ export function commandCenterSectionReaders(db: RunnerDatabase): CommandCenterSe
 }
 
 function attentionSection(db: RunnerDatabase, input: SectionInput): CommandCenterSectionPayload {
-  const projected = listPersistedAttention(db)
+  const projected = listPersistedAttention(db, { actionLimit: input.limit, now: input.now })
     .filter((item) => attentionIsVisible(item, input.now));
   const piHandling = projected.filter((item) => attentionHandling(db, item, input.now) === "pi_handling");
   const userItems = projected.filter((item) => attentionHandling(db, item, input.now) === "user_action_required");

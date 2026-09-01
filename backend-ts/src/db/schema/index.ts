@@ -82,6 +82,7 @@ import { schedulerPerformanceIndexesMigration } from "./079_scheduler_performanc
 import { executionPolicyJsonMigration } from "./080_execution_policy_json.ts";
 import { telegramChannelRuntimeMigration } from "./081_telegram_channel_runtime.ts";
 import { imContextLifecycleMigration } from "./082_im_context_lifecycle.ts";
+import { attentionActionRecentIndexMigration } from "./083_attention_action_recent_index.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -167,5 +168,6 @@ export const migrations = [
   schedulerPerformanceIndexesMigration,
   executionPolicyJsonMigration,
   telegramChannelRuntimeMigration,
-  imContextLifecycleMigration
+  imContextLifecycleMigration,
+  attentionActionRecentIndexMigration
 ];
