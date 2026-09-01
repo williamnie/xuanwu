@@ -66,6 +66,7 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     assert.equal(unsignedAuto.status, 0, `${unsignedAuto.stdout}\n${unsignedAuto.stderr}`);
     assert.match(unsignedAuto.stdout, /SHA-256 verified but signed GitHub provenance is unavailable/);
     const corePlist = await readFile(join(home, 'Library', 'LaunchAgents', 'com.xiaobei.xuanwu.core.plist'), 'utf8');
+    assert.match(corePlist, new RegExp(`<key>XUANWU_INSTALL_DIR</key>\\s*<string>${escapeRegExp(install)}</string>`));
     assert.match(corePlist, /<key>XUANWU_CLAUDE_AUTH_MODE<\/key>\s*<string>platform-profile<\/string>/);
     assert.match(corePlist, /<key>XUANWU_CLAUDE_PLATFORM_PROFILE<\/key>\s*<string>runner<\/string>/);
     await writeFile(join(state, 'runner.db'), 'authority-survives-release-changes');
@@ -309,6 +310,10 @@ function runVersion(binary, env) {
   const result = spawnSync(binary, ['--version'], { env, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   return result.stdout;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 async function sha256(path) {

@@ -458,6 +458,8 @@ PLIST
     <string>1</string>
     <key>XUANWU_REPO</key>
     <string>$(xml_escape "$REPO")</string>
+    <key>XUANWU_INSTALL_DIR</key>
+    <string>$(xml_escape "$INSTALL_DIR")</string>
     <key>XUANWU_UPDATER_PATH</key>
     <string>$(xml_escape "$UPDATER_PATH")</string>
     <key>XUANWU_LAUNCHD_LABEL</key>
@@ -723,6 +725,7 @@ Environment="XUANWU_QODER_MODEL=$QODER_MODEL"
 Environment="XUANWU_PI_CHAT_TOOL_SURFACE=$PI_CHAT_TOOL_SURFACE"
 Environment=XUANWU_RELEASE_INSTALL=1
 Environment="XUANWU_REPO=$REPO"
+Environment="XUANWU_INSTALL_DIR=$INSTALL_DIR"
 Environment="XUANWU_UPDATER_PATH=$UPDATER_PATH"
 Environment="XUANWU_SERVICE_NAME=$SERVICE_NAME"
 Environment=XUANWU_MANAGED_EXECUTION=1

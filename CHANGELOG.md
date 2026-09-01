@@ -8,6 +8,8 @@
 
 ### Changed / 变更
 
+- 修复自定义 `XUANWU_INSTALL_DIR` 的 Release 安装在 Core 更新检查中误读其他全局 binary，
+  导致当前版本判断和升级任务基线不一致的问题。
 - 升级状态 API 增加最近一次成功检查时间，便于区分新鲜 Release 结果与离线期间保留的状态。
 - 保持 `xuanwu.storage-compat.v1`，不新增数据库迁移或配置切换，可从 `v0.2.4` 直接安全升级。
 
