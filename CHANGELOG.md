@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-09-01
+
+### Fixed / 修复
+
+- 更新检查以正在运行的 Core build version 作为当前版本权威，避免旧 installer 服务模板或
+  自定义安装目录让检查器误读另一份全局 binary；同时补齐 SemVer prerelease 比较。
+
 ## [0.2.5] - 2026-09-01
 
 ### Changed / 变更
@@ -109,7 +116,8 @@
 
 - 首个 GitHub Release，包含 macOS/Linux 的 arm64、amd64 预构建资产和一键安装脚本。
 
-[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/williamnie/xuanwu/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/williamnie/xuanwu/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/williamnie/xuanwu/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/williamnie/xuanwu/compare/v0.2.2...v0.2.3
