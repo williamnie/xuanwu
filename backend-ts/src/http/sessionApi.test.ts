@@ -277,6 +277,38 @@ describe("Bun Sessions API compatibility", () => {
     }
   });
 
+  test("read session detail preserves indexed Codex activity when the fresh process reports notLoaded", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new SessionsProvider();
+    provider.readSessionResult = {
+      ...sessionSummary("thread-running-not-loaded"),
+      status: { type: "notLoaded" },
+      turns: []
+    };
+    try {
+      upsertAgentSession(database, {
+        provider: "codex",
+        provider_session_id: "thread-running-not-loaded",
+        status: "running"
+      });
+
+      const response = await createDefaultRouter({
+        database,
+        providers: { codex: provider }
+      }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-running-not-loaded`));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        id: "codex:thread-running-not-loaded",
+        status: "running",
+        isRunning: true
+      });
+      expect(getAgentSession(database, "codex:thread-running-not-loaded")).toMatchObject({ status: "running" });
+    } finally {
+      database.close();
+    }
+  });
+
   test("list sessions reconciles stale running Codex session indexes", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionsProvider();

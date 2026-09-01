@@ -97,8 +97,10 @@ async function listSessions(context: SessionApiContext, request: Request) {
         const item = qualifiedProviderSession(provider.id, raw);
         const key = String(item.id);
         const existing = merged.get(key);
-        const preserveIndexedActivity = provider.id !== "codex" && indexedActivityWins(existing, item);
-        const preserveIndexedStatus = provider.id !== "codex" && existing?.status;
+        const preserveIndexedActivity = provider.id === "codex"
+          ? codexProcessNotLoaded(item.status) && indexedActivityWins(existing, item)
+          : indexedActivityWins(existing, item);
+        const preserveIndexedStatus = preserveIndexedActivity || (provider.id !== "codex" && existing?.status);
         merged.set(key, {
           ...(existing ?? {}),
           ...item,
@@ -167,7 +169,10 @@ async function readSession(context: SessionApiContext, rawSessionID: string, inc
   const qualified = qualifiedProviderSession(ref.provider, result);
   const indexed = publicAgentSessionOrNull(getAgentSession(context.database, ref.key));
   const merged = { ...(indexed ?? {}), ...qualified };
-  const activityAware = ref.provider === "qoder" && indexedActivityWins(indexed, qualified)
+  const preserveIndexedActivity = ref.provider === "qoder"
+    ? indexedActivityWins(indexed, qualified)
+    : ref.provider === "codex" && codexProcessNotLoaded(qualified.status) && indexedActivityWins(indexed, qualified);
+  const activityAware = preserveIndexedActivity
     ? { ...merged, status: indexed?.status, isRunning: true }
     : merged;
   const detail = reconcileProviderSessionMetadata(
@@ -586,6 +591,13 @@ function indexedActivityWins(
 function activeSessionStatus(value: unknown): boolean {
   const normalized = stringValue(value).toLowerCase().replaceAll("_", "-");
   return ["active", "busy", "in-progress", "inprogress", "running", "streaming"].includes(normalized);
+}
+
+function codexProcessNotLoaded(value: unknown): boolean {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return stringValue((value as Record<string, unknown>).type).toLowerCase() === "notloaded";
+  }
+  return stringValue(value).toLowerCase().replaceAll("_", "") === "notloaded";
 }
 
 function cleanParam(value: string | null): string {
