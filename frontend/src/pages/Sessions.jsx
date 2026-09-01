@@ -367,6 +367,7 @@ export default function Sessions({
     else setLoading(false);
   }, [loadFirstPage, showSidebar]);
   useEffect(() => {
+    if (!showSidebar) return undefined;
     let alive = true;
     runsApi.getSessionPreferences()
       .then((prefs) => {
@@ -374,7 +375,7 @@ export default function Sessions({
       })
       .catch(() => {});
     return () => { alive = false; };
-  }, []);
+  }, [showSidebar]);
 
   useEffect(() => {
     if (projectId || !lastProjectId) return;

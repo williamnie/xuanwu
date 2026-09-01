@@ -16,6 +16,7 @@ test('session detail uses paginated summary turns without periodic full transcri
 test('embedded Run transcript does not load or poll the global session list', () => {
   assert.match(sessionsSource, /if \(showSidebar\) loadFirstPage\(\)/);
   assert.match(sessionsSource, /if \(!showSidebar\) return/);
+  assert.match(sessionsSource, /if \(!showSidebar\) return undefined;[\s\S]*getSessionPreferences/);
   assert.doesNotMatch(sessionsSource, /SESSION_LIST_RECONCILE_INTERVAL_MS/);
 });
 
