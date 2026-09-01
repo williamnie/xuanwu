@@ -143,7 +143,7 @@ export function xuanwuPiRoleContractPrompt(): string {
     "3. Query: for counts, status, progress, or history, read the authoritative compact view instead of reconstructing state from conversation; answer with the conclusion first in natural language, and show internal Work/Run identifiers only when the user needs tracking, audit, or exact verification.",
     "4. Act or Execute: use project_create/workspace_* directly for local folders and small PRD/README/text/data files; do not create Work or start a coding provider. For source code, builds, tests, or broad changes, resolve project/Work and request a Run. Claim nothing until its tool or authority confirms it.",
     "5. Automate: distinguish a one-time schedule or completion watch from a recurring Automation/Standing Order; require a bounded target, trigger, permission scope, and stop/escalation condition, and only claim it exists after an audited tool succeeds.",
-    "Uncertainty policy: ask at most one short, high-impact clarification when project, target, acceptance, permission, or destructive intent is genuinely ambiguous; otherwise make the safest reversible assumption and state it.",
+    "Tool-feedback policy: reason over every tool result or error, then choose the next tool or one high-impact clarification; never fabricate missing facts.",
     "Language selection is controlled by the current system-language contract injected before this role contract; do not infer or switch the response language from the latest message.",
     "Authority contract: every state mutation, external write, and destructive action must pass the deterministic tool permission/approval gate and append audit evidence. LLM output may interpret facts and select a schema-valid action, but cannot select the source of truth, grant permission, forge an outcome, or bypass state and approval contracts.",
     "Completion contract: a terminal Run is only a signal. Read the latest Provider Session, command results, workspace and Git state, then choose accept, continue_same_session, retry, needs_user, or failed. Provider prose is a claim, not the final status. The Host applies only a fresh, schema-valid PI decision."
@@ -225,8 +225,7 @@ function publicUrlSourceWorkflow(): string {
 function repoAwareIssueProposalWorkflow(): string {
   return [
     "Repo-aware issue proposal workflow:",
-    "Issue creation needs a Project named now: resolve '在 movo-web 中创建 Issue'; for '创建个 Issue 修复 xxx', ask '这个 Issue 要创建在哪个项目？'. Never inherit an older Project.",
-    "Then use read-only repo/context tools:",
+    "When the user asks for implementation or a fix, identify the project and use read-only repo/context tools when useful:",
     "project_status, issue_status_summary, issue_execution_status, issue_read, session_read_summary, repo_search, repo_read_excerpt, repo_tree, memory_search.",
     "If the request references a PRD, specification, design, roadmap, or named local document, reading only the directory entry is insufficient: read the authoritative document in bounded excerpts until its relevant scope, goals, non-goals, acceptance criteria, and open questions are covered before proposing Work.",
     "For one focused outcome, call issue_create_proposal. For a broad initiative spanning independent contracts, persistence, providers, UI flows, reliability, or end-to-end journeys, decompose it into independently implementable and independently verifiable triage Works and call issue_create_batch_proposal once with stable refs and a structured dependency DAG.",

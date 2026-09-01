@@ -184,8 +184,8 @@ describe("Xuanwu PI runtime prompt", () => {
       expect(prompt).toContain("Prefer the registered work_* and run_* domain tools");
       expect(prompt).toContain("never invent evidence_* or handoff_* tool names unless capability_search actually returns them");
       expect(prompt).toContain("issue_create_proposal");
-      expect(prompt).toContain("这个 Issue 要创建在哪个项目？");
-      expect(prompt).toContain("Never inherit an older Project");
+      expect(prompt).toContain("Tool-feedback policy");
+      expect(prompt).toContain("reason over every tool result or error");
       expect(prompt).toContain("issue_enqueue_proposal");
       expect(prompt).toContain("issue_schedule_enqueue");
       expect(prompt).toContain("issue_enqueue_next_triage");

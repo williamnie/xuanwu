@@ -161,7 +161,7 @@ type IssueProposalInput = { issue_id: number; rationale?: string };
 type IssueCreateProposalInput = IssueProposalContextFields & {
   description: string;
   depends_on_issue_ids?: number[];
-  project_id: string;
+  project_id?: string;
   rationale?: string;
   title?: string;
   recommended_skill_intents?: string[];
@@ -171,7 +171,7 @@ type IssueCreateProposalInput = IssueProposalContextFields & {
 };
 type IssueCreateBatchProposalInput = {
   items: Array<Omit<IssueCreateProposalInput, "project_id"> & { ref: string; depends_on_refs?: string[] }>;
-  project_id: string;
+  project_id?: string;
   rationale?: string;
 };
 type ProjectListInput = {};
@@ -850,7 +850,9 @@ function normalizeSessionFilter(input: SessionListInput, context: PiRunnerAction
 
 function requiredCreateProjectID(id: unknown): string {
   const projectID = cleanString(id);
-  if (projectID === "") throw new Error("创建 Issue 前必须先向用户确认本轮目标项目");
+  if (projectID === "") {
+    throw new Error("issue_create_project_required: 创建 Issue 需要 project_id，但当前工具输入未提供目标 Project 信息");
+  }
   return projectID;
 }
 

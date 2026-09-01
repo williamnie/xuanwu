@@ -243,11 +243,17 @@ describe("Bun PI conversation message API", () => {
     }
   });
 
-  test("asks for the destination Project before creating an unscoped Issue", async () => {
+  test("uses the tool-feedback loop to ask for Project after Issue creation reports missing context", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-create-project-clarification-api", provider: "pi-create-project-clarification" });
     try {
       faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("issue_create_proposal", {
+            description: "修复登录 bug",
+            title: "修复登录 bug"
+          }, { id: "create-without-project" })
+        ], { stopReason: "toolUse" }),
         fauxAssistantMessage("这个 Issue 要创建在哪个项目？")
       ]);
       insertProject(database, "demo");
@@ -263,8 +269,21 @@ describe("Bun PI conversation message API", () => {
         prompt: "创建个 Issue 修复登录 bug"
       });
       const result = await finalPiConversationSseData(message);
+      const toolAudit = listPiActionEvents(database, {
+        conversationId: "conv-create-project-clarification",
+        eventType: "tool_call_audit"
+      }).map((event) => JSON.parse(event.payload_json) as Record<string, any>)
+        .find((event) => event.tool === "issue_create_proposal");
 
       expect(result).toMatchObject({ text: "这个 Issue 要创建在哪个项目？" });
+      expect(toolAudit).toMatchObject({
+        error: {
+          message: expect.stringContaining("issue_create_project_required"),
+          type: "tool_error"
+        },
+        status: "failed",
+        tool: "issue_create_proposal"
+      });
       expect(listPiActions(database).some((action) => action.action_type === "issue.create")).toBe(false);
       expect(listIssues(database)).toEqual([]);
     } finally {

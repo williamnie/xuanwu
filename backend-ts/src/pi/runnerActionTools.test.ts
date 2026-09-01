@@ -168,10 +168,13 @@ describe("PI runner action tools", () => {
       evidence: [{ source_kind: "message", summary: "IM request" }],
       open_questions: ["默认展开吗？"]
     });
-    expect(() => validateArgs(issueCreate, {
+    expect(validateArgs(issueCreate, {
       description: "Missing current-turn project",
       title: "Must ask first"
-    })).toThrow(/project_id/);
+    })).toEqual({
+      description: "Missing current-turn project",
+      title: "Must ask first"
+    });
     expect(validateArgs(issueBatchCreate, {
       project_id: "demo",
       items: [
@@ -886,7 +889,7 @@ describe("PI runner action tools", () => {
       expect(() => actions.createIssueProposal({
         description: "Do not inherit the conversation project",
         title: "Missing explicit project"
-      } as never)).toThrow("创建 Issue 前必须先向用户确认本轮目标项目");
+      })).toThrow("issue_create_project_required: 创建 Issue 需要 project_id，但当前工具输入未提供目标 Project 信息");
 
       const result = actions.createIssueProposal({
         description: "Create and then ask when to run",
