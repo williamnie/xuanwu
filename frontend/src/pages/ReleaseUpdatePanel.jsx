@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Download, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { systemApi } from '../api/system.js';
 import { message } from '../store/toastStore.js';
+import { isActiveReleaseJob, releaseStatus } from './releaseUpdateModel.js';
 import './ReleaseUpdatePanel.css';
 
-const ACTIVE_STATES = new Set(['pending', 'running']);
 const POLL_INTERVAL_MS = 2_000;
 
 export default function ReleaseUpdatePanel() {
@@ -12,7 +12,7 @@ export default function ReleaseUpdatePanel() {
   if (!state.data && state.loading) return <ReleaseUpdateLoading />;
   const data = state.data || {};
   const job = data.job || null;
-  const active = ACTIVE_STATES.has(job?.state);
+  const active = isActiveReleaseJob(job);
   return (
     <section className="settings-release-update" aria-label="玄武升级">
       <ReleaseUpdateHeader loading={state.loading} onRefresh={() => state.load(true)} />
@@ -45,11 +45,12 @@ function useReleaseUpdate() {
     }
   }, []);
   useEffect(() => { load(); }, [load]);
+  const activeJob = isActiveReleaseJob(data?.job);
   useEffect(() => {
-    if (!ACTIVE_STATES.has(data?.job?.state)) return undefined;
+    if (!activeJob) return undefined;
     const timer = setInterval(() => { void load(false, true); }, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [data?.job?.state, load]);
+  }, [activeJob, load]);
   const start = useCallback(async () => {
     const version = data?.latest;
     if (!version || submitting) return;
@@ -85,6 +86,7 @@ function ReleaseUpdateHeader({ loading, onRefresh }) {
 }
 
 function ReleaseUpdateBody({ active, data, job, state }) {
+  const status = releaseStatus(data, job);
   if (!data.supported) {
     return <p className="settings-release-update__note">源码开发环境不执行自身升级；请使用 Release 安装版中的独立 updater。</p>;
   }
@@ -96,7 +98,7 @@ function ReleaseUpdateBody({ active, data, job, state }) {
       </div>
     );
   }
-  if (job?.state === 'failed') {
+  if (status === 'failed') {
     return (
       <div className="settings-release-update__result is-error">
         <AlertTriangle aria-hidden="true" size={15} />
@@ -104,7 +106,7 @@ function ReleaseUpdateBody({ active, data, job, state }) {
       </div>
     );
   }
-  if (job?.state === 'succeeded') {
+  if (status === 'succeeded') {
     return (
       <div className="settings-release-update__result is-success">
         <CheckCircle2 aria-hidden="true" size={15} />
@@ -146,17 +148,10 @@ function ReleaseUpdateLoading() {
   return <section className="settings-release-update settings-release-update__loading"><Loader2 aria-hidden="true" className="spin-animation" size={15} />正在读取 Release 状态…</section>;
 }
 
-function releaseStatus(data, job) {
-  if (ACTIVE_STATES.has(job?.state)) return job.state;
-  if (job?.state === 'failed' || job?.state === 'succeeded') return job.state;
-  if (!data.supported) return 'unsupported';
-  return data.update_available ? 'available' : 'current';
-}
-
 function releaseTone(data, job) {
   const status = releaseStatus(data, job);
   if (status === 'failed') return 'is-error';
   if (status === 'succeeded' || status === 'current') return 'is-success';
-  if (status === 'available' || ACTIVE_STATES.has(status)) return 'is-warning';
+  if (status === 'available' || status === 'pending' || status === 'running') return 'is-warning';
   return '';
 }

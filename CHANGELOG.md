@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-09-01
+
+### Fixed / 修复
+
+- 回滚后只有当当前版本仍等于升级job目标版本时才展示“升级完成”，避免旧成功job遮盖新的
+  可升级状态。
+
 ## [0.2.6] - 2026-09-01
 
 ### Fixed / 修复
@@ -116,7 +123,8 @@
 
 - 首个 GitHub Release，包含 macOS/Linux 的 arm64、amd64 预构建资产和一键安装脚本。
 
-[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/williamnie/xuanwu/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/williamnie/xuanwu/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/williamnie/xuanwu/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/williamnie/xuanwu/compare/v0.2.3...v0.2.4
