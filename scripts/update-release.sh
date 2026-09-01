@@ -403,6 +403,21 @@ metadata_version_from_value() {
     || fail "release update job contains an invalid version"
 }
 
+mark_latest_job_rolled_back() {
+  local from_version="$1" to_version="$2" job_id job_dir state target
+  [ -f "$JOBS_DIR/latest" ] || return 0
+  job_id="$(sed -n '1p' "$JOBS_DIR/latest")"
+  valid_job_id "$job_id" || return 0
+  job_dir="$JOBS_DIR/$job_id"
+  [ -d "$job_dir" ] || return 0
+  state="$(sed -n '1p' "$job_dir/state" 2>/dev/null || true)"
+  target="$(sed -n '1p' "$job_dir/target_version" 2>/dev/null || true)"
+  [ "$state" = "succeeded" ] && [ "$target" = "$from_version" ] || return 0
+  write_job_field "$job_dir" state rolled_back
+  write_job_field "$job_dir" rolled_back_to "$to_version"
+  write_job_field "$job_dir" updated_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+}
+
 rollback_release() {
   local from to target rollforward
   require_mutation_gate
@@ -418,6 +433,9 @@ rollback_release() {
     fail "could not create roll-forward snapshot"
   fi
   if restore_snapshot "$target"; then
+    if ! mark_latest_job_rolled_back "$from" "$to"; then
+      log "warning: rollback succeeded but release update job reconciliation failed"
+    fi
     audit rollback applied "$from" "$to" "$target"
     prune_snapshots
     log "rolled back $from -> $to"

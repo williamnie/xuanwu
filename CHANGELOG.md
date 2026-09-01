@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-09-01
+
+### Fixed / 修复
+
+- Release rollback 成功后将对应最新升级job标记为 `rolled_back` 并记录目标版本，避免恢复到
+  旧前端后仍把已回滚的成功job展示为“升级完成”。
+
 ## [0.2.7] - 2026-09-01
 
 ### Fixed / 修复
@@ -123,7 +130,8 @@
 
 - 首个 GitHub Release，包含 macOS/Linux 的 arm64、amd64 预构建资产和一键安装脚本。
 
-[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.7...HEAD
+[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/williamnie/xuanwu/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/williamnie/xuanwu/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/williamnie/xuanwu/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/williamnie/xuanwu/compare/v0.2.4...v0.2.5

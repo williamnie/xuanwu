@@ -199,6 +199,17 @@ test('independent updater performs backup rehearsal before applying a queued rel
     assert.match((await readFile(join(job, 'backup_ref'), 'utf8')).trim(), /state-backups\/xuanwu-backup-/);
     assert.match(runVersion(join(install, 'xuanwu'), env), /v1\.1\.0/);
     assert.equal(await readFile(join(state, 'runner.db'), 'utf8'), 'authority-survives-queued-upgrade');
+
+    const rollback = spawnSync('bash', [updater, 'rollback',
+      '--snapshot', 'latest', '--apply', '--actor', 'release-test', '--actor-kind', 'user',
+      '--audit-ref', 'test:queued-rollback', '--reason', 'queued upgrade rollback rehearsal',
+      '--backup-ref', (await readFile(join(job, 'backup_ref'), 'utf8')).trim(), '--confirm-data-compatible'
+    ], { env: { ...env, FIXTURE_RELEASE_DIR: releaseV2 }, encoding: 'utf8' });
+    assert.equal(rollback.status, 0, `${rollback.stdout}\n${rollback.stderr}`);
+    assert.equal((await readFile(join(job, 'state'), 'utf8')).trim(), 'rolled_back');
+    assert.equal((await readFile(join(job, 'rolled_back_to'), 'utf8')).trim(), 'v1.0.0');
+    assert.match(runVersion(join(install, 'xuanwu'), env), /v1\.0\.0/);
+    assert.equal(await readFile(join(state, 'runner.db'), 'utf8'), 'authority-survives-queued-upgrade');
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
