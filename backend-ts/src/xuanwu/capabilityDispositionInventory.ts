@@ -775,6 +775,8 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/system/logs", family: "system-observability" },
   { method: "POST", path: "/api/system/restart", family: "system-observability" },
   { method: "GET", path: "/api/system/status", family: "system-observability" },
+  { method: "GET", path: "/api/system/update", family: "system-observability" },
+  { method: "POST", path: "/api/system/update", family: "system-observability" },
   { method: "GET", path: "/api/uploads/:id/content", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/uploads/images", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/usage/codex", family: "system-observability" },
@@ -820,7 +822,7 @@ export const PAGE_SURFACES = [
   {
     id: "system-observability", disposition: "keep", target: "Local runtime observability/control",
     page_ids: ["dashboard"],
-    source_files: ["frontend/src/pages/Dashboard.jsx"]
+    source_files: ["frontend/src/pages/Dashboard.jsx", "frontend/src/pages/ReleaseUpdatePanel.jsx"]
   },
   {
     id: "work-ledger", disposition: "keep", target: "Work ledger compatibility API",
@@ -847,7 +849,7 @@ export const SCHEDULER_DISPOSITIONS = [
 export const PI_MODULE_FAMILIES = [
   {
     id: "action-permission-gate", disposition: "keep", target: "Deterministic permission and external-effect gate", source_of_truth: "Action Proposal/Approval plus pi_action_events",
-    source_files: ["backend-ts/src/pi/actionAudit.ts", "backend-ts/src/pi/actionEngine.ts", "backend-ts/src/pi/actionEnvelope.ts", "backend-ts/src/pi/actionGate.ts", "backend-ts/src/pi/actionGateRecovery.ts", "backend-ts/src/pi/actionRecordMetadata.ts", "backend-ts/src/pi/approvalFastAudit.ts", "backend-ts/src/pi/approvalFastPolicy.ts", "backend-ts/src/pi/approvalGrantScope.ts", "backend-ts/src/pi/approvalPolicyCache.ts", "backend-ts/src/pi/approvalRequestParser.ts", "backend-ts/src/pi/approvalSafetyPolicy.ts", "backend-ts/src/pi/authorizationScope.ts", "backend-ts/src/pi/nonIssueProposalActions.ts", "backend-ts/src/pi/runnerChatAuthorization.ts", "backend-ts/src/pi/sourcePermissionPolicy.ts", "backend-ts/src/pi/stalePendingActions.ts"]
+    source_files: ["backend-ts/src/pi/actionAudit.ts", "backend-ts/src/pi/actionContracts.ts", "backend-ts/src/pi/actionEngine.ts", "backend-ts/src/pi/actionEnvelope.ts", "backend-ts/src/pi/actionFreshness.ts", "backend-ts/src/pi/actionGate.ts", "backend-ts/src/pi/actionGateDiagnostic.ts", "backend-ts/src/pi/actionGateRecovery.ts", "backend-ts/src/pi/actionRecordMetadata.ts", "backend-ts/src/pi/approvalFastAudit.ts", "backend-ts/src/pi/approvalFastPolicy.ts", "backend-ts/src/pi/approvalGrantScope.ts", "backend-ts/src/pi/approvalPolicyCache.ts", "backend-ts/src/pi/approvalRequestParser.ts", "backend-ts/src/pi/approvalSafetyPolicy.ts", "backend-ts/src/pi/authorizationScope.ts", "backend-ts/src/pi/nonIssueProposalActions.ts", "backend-ts/src/pi/runnerChatAuthorization.ts", "backend-ts/src/pi/sourcePermissionPolicy.ts", "backend-ts/src/pi/stalePendingActions.ts"]
   },
   {
     id: "automation", disposition: "keep", target: "automation_definitions/runs/events and automation_watches execution pipeline", source_of_truth: "Automation definition/run/event and Watch/intent/outbox authorities",
@@ -887,7 +889,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "work-run-orchestration", disposition: "merge", target: "Work/Run orchestration and recovery", source_of_truth: "issues and issue_runs authorities",
-    source_files: ["backend-ts/src/pi/agentOrchestration.ts", "backend-ts/src/pi/agentOrchestrationActions.ts", "backend-ts/src/pi/agentOrchestrationPayloads.ts", "backend-ts/src/pi/issueBatchProposal.ts", "backend-ts/src/pi/issueProposalContext.ts", "backend-ts/src/pi/issueStateManager.ts", "backend-ts/src/pi/issueStateRepairExecutor.ts", "backend-ts/src/pi/issueStateSnapshot.ts", "backend-ts/src/pi/issueSupervisorActions.ts", "backend-ts/src/pi/issueSupervisorContext.ts", "backend-ts/src/pi/issueSupervisorContextSupport.ts", "backend-ts/src/pi/issueSupervisorDecision.ts", "backend-ts/src/pi/issueSupervisorDecisionFailure.ts", "backend-ts/src/pi/issueSupervisorRecovery.ts", "backend-ts/src/pi/issueSupervisorRecoveryAttemptRecorder.ts", "backend-ts/src/pi/issueSupervisorSignalCollector.ts", "backend-ts/src/pi/issueToolViews.ts", "backend-ts/src/pi/providerErrorParser.ts", "backend-ts/src/pi/providerErrorParserSupport.ts", "backend-ts/src/pi/providerOutageDiagnosis.ts", "backend-ts/src/pi/recoveryBudget.ts", "backend-ts/src/pi/recoveryDiagnosis.ts", "backend-ts/src/pi/runnerActionTools.ts", "backend-ts/src/pi/runnerActions.ts", "backend-ts/src/pi/runnerBatchTriageScope.ts", "backend-ts/src/pi/runnerIssueScheduleActions.ts", "backend-ts/src/pi/runnerIssueStateActions.ts", "backend-ts/src/pi/runnerIssueStatusActions.ts", "backend-ts/src/pi/runnerNextTriageActions.ts", "backend-ts/src/pi/sessionObserver.ts", "backend-ts/src/pi/supervisorCommitments.ts", "backend-ts/src/pi/supervisorContextResolver.ts", "backend-ts/src/pi/supervisorControlContracts.ts", "backend-ts/src/pi/supervisorControlTools.ts"]
+    source_files: ["backend-ts/src/pi/agentOrchestration.ts", "backend-ts/src/pi/agentOrchestrationActions.ts", "backend-ts/src/pi/agentOrchestrationPayloads.ts", "backend-ts/src/pi/issueBatchProposal.ts", "backend-ts/src/pi/issueProposalContext.ts", "backend-ts/src/pi/issueStateManager.ts", "backend-ts/src/pi/issueStateRepairExecutor.ts", "backend-ts/src/pi/issueStateSnapshot.ts", "backend-ts/src/pi/issueSupervisorActions.ts", "backend-ts/src/pi/issueSupervisorContext.ts", "backend-ts/src/pi/issueSupervisorContextSupport.ts", "backend-ts/src/pi/issueSupervisorDecision.ts", "backend-ts/src/pi/issueSupervisorDecisionFailure.ts", "backend-ts/src/pi/issueSupervisorRecovery.ts", "backend-ts/src/pi/issueSupervisorRecoveryAttemptRecorder.ts", "backend-ts/src/pi/issueSupervisorSignalCollector.ts", "backend-ts/src/pi/issueToolViews.ts", "backend-ts/src/pi/providerErrorParser.ts", "backend-ts/src/pi/providerErrorParserSupport.ts", "backend-ts/src/pi/providerOutageDiagnosis.ts", "backend-ts/src/pi/recoveryBudget.ts", "backend-ts/src/pi/recoveryDiagnosis.ts", "backend-ts/src/pi/runnerActionTools.ts", "backend-ts/src/pi/runnerActions.ts", "backend-ts/src/pi/runnerBatchTriageScope.ts", "backend-ts/src/pi/runnerIssueScheduleActions.ts", "backend-ts/src/pi/runnerIssueStateActions.ts", "backend-ts/src/pi/runnerIssueStatusActions.ts", "backend-ts/src/pi/runnerNextTriageActions.ts", "backend-ts/src/pi/sessionObserver.ts", "backend-ts/src/pi/structuredAssistantOutput.ts", "backend-ts/src/pi/supervisorCommitments.ts", "backend-ts/src/pi/supervisorContextResolver.ts", "backend-ts/src/pi/supervisorControlContracts.ts", "backend-ts/src/pi/supervisorControlTools.ts"]
   },
 ] as const;
 

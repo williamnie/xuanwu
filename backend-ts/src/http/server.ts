@@ -43,6 +43,8 @@ import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 import type { ImChannelRegistry } from "../integrations/imChannelContracts.ts";
 import { registerImChannelRoutes } from "./imChannelsApi.ts";
 import type { TelegramConnectorConfig } from "../integrations/telegramTypes.ts";
+import { registerReleaseUpdateRoutes } from "./releaseUpdateApi.ts";
+import type { ReleaseUpdateMonitor } from "../release/releaseUpdateMonitor.ts";
 
 type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
 type DefaultRouterOptions = {
@@ -73,6 +75,7 @@ type DefaultRouterOptions = {
   providersRegistry?: ProviderRegistry;
   restartDelayMs?: number;
   restartProcess?: () => void;
+  releaseUpdateMonitor?: ReleaseUpdateMonitor;
   role?: "all" | "core";
   supervisorManaged?: boolean;
   testBlockMs?: number;
@@ -101,6 +104,10 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     restartDelayMs: runtime.restartDelayMs,
     restartProcess: runtime.restartProcess,
     supervisorManaged: runtime.supervisorManaged
+  });
+  if (runtime.config) registerReleaseUpdateRoutes(router, {
+    checkUpdate: runtime.releaseUpdateMonitor?.checkNow,
+    stateDir: runtime.config.stateDir
   });
   registerProvidersCatalogRoute(router, { database: runtime.database, providersRegistry: runtime.providersRegistry });
   if (runtime.imChannels) {

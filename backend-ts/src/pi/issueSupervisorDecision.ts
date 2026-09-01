@@ -81,7 +81,7 @@ export async function runPiSupervisorDecision(
     const providerError = structuredAssistantProviderError(runtime.session);
     const parsed = providerError === ""
       ? parseDecision(raw, input.context, input.now ?? new Date())
-      : decisionFailure(`PI supervisor provider failed: ${redactSensitiveText(providerError)}`);
+      : decisionFailure(`Supervisor provider failed: ${redactSensitiveText(providerError)}`);
     if (!parsed.valid) {
       const fallback = fallbackDecision(input.context, parsed.error, language);
       recordDecisionFailure(input.database, input.context, raw, parsed, fallback);

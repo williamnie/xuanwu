@@ -147,6 +147,62 @@ test('release manifest enforces tag format, changelog, and target metadata', asy
   }
 });
 
+test('independent updater performs backup rehearsal before applying a queued release', async () => {
+  const temp = await mkdtemp(join(tmpdir(), 'xuanwu-ui-upgrade-'));
+  try {
+    const home = join(temp, 'home');
+    const fakeBin = join(temp, 'fake-bin');
+    const install = join(temp, 'install');
+    const state = join(temp, 'state');
+    const releaseV1 = await createRelease(temp, 'queued-v1', 'v1.0.0');
+    const releaseV2 = await createRelease(temp, 'queued-v2', 'v1.1.0');
+    await mkdir(join(home, 'Library', 'LaunchAgents'), { recursive: true });
+    await mkdir(fakeBin, { recursive: true });
+    await writeExecutable(join(fakeBin, 'uname'), '#!/bin/sh\ncase "$1" in -s) echo Darwin ;; -m) echo arm64 ;; *) echo Darwin ;; esac\n');
+    await writeExecutable(join(fakeBin, 'curl'), '#!/bin/sh\nout=""; url=""; previous=""\nfor arg in "$@"; do if [ "$previous" = "-o" ]; then out="$arg"; fi; case "$arg" in http*) url="$arg" ;; esac; previous="$arg"; done\nif [ -n "$out" ]; then cp "$FIXTURE_RELEASE_DIR/${url##*/}" "$out"; fi\n');
+    await writeExecutable(join(fakeBin, 'gh'), '#!/bin/sh\nexit 0\n');
+    await writeExecutable(join(fakeBin, 'codex'), '#!/bin/sh\nexit 0\n');
+    await writeExecutable(join(fakeBin, 'plutil'), '#!/bin/sh\nexit 0\n');
+    await writeExecutable(join(fakeBin, 'launchctl'), '#!/bin/sh\nexit 0\n');
+    const env = {
+      ...process.env,
+      HOME: home,
+      PATH: `${fakeBin}:${process.env.PATH}`,
+      XUANWU_ADDR: '127.0.0.1:3999',
+      XUANWU_INSTALL_DIR: install,
+      XUANWU_STATE_DIR: state,
+      XUANWU_VERIFY_ATTESTATION: 'skip',
+      FIXTURE_RELEASE_DIR: releaseV1,
+    };
+    const fresh = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], { env, encoding: 'utf8' });
+    assert.equal(fresh.status, 0, `${fresh.stdout}\n${fresh.stderr}`);
+    await writeFile(join(state, 'runner.db'), 'authority-survives-queued-upgrade');
+
+    const jobs = join(state, 'release-update-jobs');
+    const job = join(jobs, 'job-queued');
+    await mkdir(job, { recursive: true });
+    await Promise.all([
+      writeFile(join(job, 'from_version'), 'v1.0.0\n'),
+      writeFile(join(job, 'target_version'), 'v1.1.0\n'),
+      writeFile(join(job, 'state'), 'pending\n'),
+      writeFile(join(job, 'created_at'), '2026-09-01T00:00:00Z\n'),
+      writeFile(join(jobs, 'pending'), 'job-queued\n'),
+      writeFile(join(jobs, 'latest'), 'job-queued\n'),
+    ]);
+    const updater = join(install, 'xuanwu-update');
+    const result = spawnSync('bash', [updater, 'apply-pending'], {
+      env: { ...env, FIXTURE_RELEASE_DIR: releaseV2 }, encoding: 'utf8'
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}\n${await readFile(join(job, 'worker.log'), 'utf8').catch(() => '')}`);
+    assert.equal((await readFile(join(job, 'state'), 'utf8')).trim(), 'succeeded');
+    assert.match((await readFile(join(job, 'backup_ref'), 'utf8')).trim(), /state-backups\/xuanwu-backup-/);
+    assert.match(runVersion(join(install, 'xuanwu'), env), /v1\.1\.0/);
+    assert.equal(await readFile(join(state, 'runner.db'), 'utf8'), 'authority-survives-queued-upgrade');
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
 test('release package keeps Bun runtime assets beside the executable and smokes the host binary', async () => {
   const [script, workflow, runbook] = await Promise.all([
     readFile(join(root, 'scripts', 'package-release.sh'), 'utf8'),
@@ -190,8 +246,12 @@ test('release rollback snapshots split and compatibility service registrations',
   assert.match(installer, /disable --now "\$SERVICE_NAME\.service"/);
   assert.match(updater, /\$LABEL\.web\.plist/);
   assert.match(updater, /\$LABEL\.core\.plist/);
+  assert.match(updater, /\$LABEL\.updater\.plist/);
   assert.match(updater, /\$SERVICE_NAME-web\.service/);
   assert.match(updater, /\$SERVICE_NAME-core\.service/);
+  assert.match(updater, /\$SERVICE_NAME-updater\.service/);
+  assert.match(installer, /Xuanwu Release Updater/);
+  assert.match(installer, /ExecStart=\$UPDATER_PATH apply-pending/);
   assert.match(updater, /snapshot\/bin\/xuanwu\.claude-agent-sdk/);
   assert.match(updater, /restore_file "\$snapshot\/bin\/xuanwu\.claude-agent-sdk" "\$CLAUDE_SDK_EXECUTABLE_PATH"/);
   assert.match(updater, /snapshot\/bin\/xuanwu\.qodercli/);
@@ -206,7 +266,21 @@ async function createRelease(temp, name, version, options = {}) {
   const fixture = join(temp, `fixture-${name}`);
   await mkdir(release, { recursive: true });
   await mkdir(join(fixture, 'web'), { recursive: true });
-  await writeExecutable(join(fixture, 'xuanwu'), `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "xuanwu ${version} build=test bun=test"; fi\nexit 0\n`);
+  await writeExecutable(join(fixture, 'xuanwu'), `#!/bin/sh
+if [ "$1" = "--version" ]; then echo "xuanwu ${version} build=test bun=test"; exit 0; fi
+if [ "$1" = "backup" ]; then
+  action="$2"; shift 2; output=""; target=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in --output) shift; output="$1" ;; --target-state-dir) shift; target="$1" ;; esac
+    shift
+  done
+  if [ "$action" = "export" ]; then mkdir -p "$output"; printf '{}\n' > "$output/manifest.json"; fi
+  if [ "$action" = "import" ]; then mkdir -p "$target"; fi
+  printf '{"verified":true}\n'
+  exit 0
+fi
+exit 0
+`);
   await writeExecutable(join(fixture, 'xuanwu.claude-agent-sdk'), '#!/bin/sh\nexit 0\n');
   if (options.includeQoder !== false) {
     await mkdir(join(fixture, 'xuanwu.qodercli', 'policies'), { recursive: true });

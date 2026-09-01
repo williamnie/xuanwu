@@ -8,6 +8,7 @@ LABEL="${XUANWU_LAUNCHD_LABEL:-com.xiaobei.xuanwu}"
 WEB_LABEL="${LABEL}.web"
 CORE_LABEL="${LABEL}.core"
 AGENTIC_LABEL="${LABEL}.agentic"
+UPDATER_LABEL="${LABEL}.updater"
 ADDR="${XUANWU_ADDR:-0.0.0.0:3008}"
 INSTALL_DIR="${XUANWU_INSTALL_DIR:-$HOME/.local/bin}"
 STATE_DIR="${XUANWU_STATE_DIR:-$HOME/.local/state/xuanwu}"
@@ -19,10 +20,12 @@ PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 WEB_PLIST="$HOME/Library/LaunchAgents/$WEB_LABEL.plist"
 CORE_PLIST="$HOME/Library/LaunchAgents/$CORE_LABEL.plist"
 AGENTIC_PLIST="$HOME/Library/LaunchAgents/$AGENTIC_LABEL.plist"
+UPDATER_PLIST="$HOME/Library/LaunchAgents/$UPDATER_LABEL.plist"
 UNIT_FILE="$HOME/.config/systemd/user/$SERVICE_NAME.service"
 WEB_UNIT_FILE="$HOME/.config/systemd/user/$SERVICE_NAME-web.service"
 CORE_UNIT_FILE="$HOME/.config/systemd/user/$SERVICE_NAME-core.service"
 AGENTIC_UNIT_FILE="$HOME/.config/systemd/user/$SERVICE_NAME-agentic.service"
+UPDATER_UNIT_FILE="$HOME/.config/systemd/user/$SERVICE_NAME-updater.service"
 AUDIT_LOG="$LOG_DIR/daemon-lifecycle.log"
 
 usage() {
@@ -139,8 +142,15 @@ restart_service() {
 uninstall_service() {
   stop_service
   case "$(uname -s)" in
-    Darwin) rm -f "$PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST" ;;
-    Linux) rm -f "$UNIT_FILE" "$WEB_UNIT_FILE" "$CORE_UNIT_FILE" "$AGENTIC_UNIT_FILE"; systemctl --user daemon-reload ;;
+    Darwin)
+      launchctl bootout "$DOMAIN/$UPDATER_LABEL" >/dev/null 2>&1 || true
+      rm -f "$PLIST" "$WEB_PLIST" "$CORE_PLIST" "$AGENTIC_PLIST" "$UPDATER_PLIST"
+      ;;
+    Linux)
+      systemctl --user stop "$SERVICE_NAME-updater.service" >/dev/null 2>&1 || true
+      rm -f "$UNIT_FILE" "$WEB_UNIT_FILE" "$CORE_UNIT_FILE" "$AGENTIC_UNIT_FILE" "$UPDATER_UNIT_FILE"
+      systemctl --user daemon-reload
+      ;;
   esac
 }
 

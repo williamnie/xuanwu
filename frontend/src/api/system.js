@@ -68,6 +68,13 @@ export const systemApi = {
 
   getRuntimeLogs: (lines = 120) => request(`/api/system/logs?lines=${encodeURIComponent(lines)}`),
 
+  getReleaseUpdate: ({ refresh = false } = {}) => request(`/api/system/update${refresh ? '?refresh=1' : ''}`),
+
+  startReleaseUpdate: (version) => request('/api/system/update', {
+    method: 'POST',
+    body: JSON.stringify({ confirm: 'upgrade', version }),
+  }),
+
   executeCommand: (payload) => request('/api/commands', {
     method: 'POST',
     body: JSON.stringify(payload),

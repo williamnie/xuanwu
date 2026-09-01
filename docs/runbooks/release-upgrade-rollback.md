@@ -49,6 +49,22 @@ xuanwu-daemon doctor
 xuanwu-update check --json
 ```
 
+Release 安装版也可以在“设置 → 项目 → 安全升级”中发起升级。该入口不会让 Core
+直接替换自身：Core 只写入权限为 `0600` 的升级任务，再触发独立的
+`com.xiaobei.xuanwu.updater` launchd job 或 `xuanwu-updater.service` systemd user unit。
+updater 会先把备份写到默认的 `${XUANWU_STATE_DIR}-backups`（可用
+`XUANWU_BACKUP_DIR` 覆盖），完成 checksum、SQLite `quick_check` 和隔离 import
+恢复演练后，才调用固定目标版本的 installer。升级期间页面可以短暂断开；Core 恢复后
+`GET /api/system/update` 会继续返回同一 job 的 `pending/running/succeeded/failed` 状态。
+源码开发运行时不会注册或触发自身升级。
+
+Release 安装版 Core 会在启动约 30 秒后执行首次检查，之后每 6 小时检查一次；网页认证完成后
+也会立即读取同一检查结果。发现新版本时，网页显示可直接启动安全升级的全局对话框，并向已配置
+且能解析唯一默认目标的 Feishu、Telegram 通道分别投递一次。IM 幂等键按
+`release_update:<version>` 与 channel 隔离，同一版本的重复检查不会重复发送；投递继续使用
+既有 `sync_outbox`、connector allowlist、receipt 与重试机制。网页“稍后提醒”只暂缓当前浏览器
+6 小时，不会关闭服务端 IM 通知。
+
 无人值守调度可以周期性执行 `check`；只有结果中的 `update_available=true` 才进入独立的受控 `upgrade` step。升级必须提供已验证备份引用、非 LLM actor、原因与 audit ref：
 
 ```bash

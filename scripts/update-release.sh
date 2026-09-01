@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "${XUANWU_MANAGED_EXECUTION:-}" = "1" ] ||
-  { [ -n "${PI_PACKAGE_DIR:-}" ] && [ -n "${XUANWU_CODEX_SERVER_MODE:-}" ]; }; then
+if { [ "${XUANWU_MANAGED_EXECUTION:-}" = "1" ] ||
+  { [ -n "${PI_PACKAGE_DIR:-}" ] && [ -n "${XUANWU_CODEX_SERVER_MODE:-}" ]; }; } &&
+  [ "${1:-}" != "check" ] && [ "${1:-}" != "help" ] &&
+  [ "${1:-}" != "-h" ] && [ "${1:-}" != "--help" ]; then
   echo "[deploy-guard] denied: live deployment cannot run from a Runner-managed provider process." >&2
   exit 78
 fi
@@ -11,10 +13,12 @@ REPO="${XUANWU_REPO:-williamnie/xuanwu}"
 INSTALL_DIR="${XUANWU_INSTALL_DIR:-$HOME/.local/bin}"
 STATE_DIR="${XUANWU_STATE_DIR:-$HOME/.local/state/xuanwu}"
 LOG_DIR="${XUANWU_LOG_DIR:-$STATE_DIR/logs}"
+BACKUP_DIR="${XUANWU_BACKUP_DIR:-$STATE_DIR-backups}"
 ADDR="${XUANWU_ADDR:-0.0.0.0:3008}"
 LABEL="${XUANWU_LAUNCHD_LABEL:-com.xiaobei.xuanwu}"
 SERVICE_NAME="${XUANWU_SERVICE_NAME:-xuanwu}"
 BIN_PATH="${XUANWU_BINARY:-$INSTALL_DIR/xuanwu}"
+DB_PATH="${XUANWU_DB:-$STATE_DIR/runner.db}"
 CLAUDE_SDK_EXECUTABLE_PATH="$BIN_PATH.claude-agent-sdk"
 QODERCLI_RUNTIME_PATH="$BIN_PATH.qodercli"
 QODERCLI_EXECUTABLE_PATH="$QODERCLI_RUNTIME_PATH/qodercli.mjs"
@@ -26,11 +30,14 @@ UPDATER_PATH="$INSTALL_DIR/xuanwu-update"
 RELEASES_DIR="$STATE_DIR/releases"
 AUDIT_LOG="$LOG_DIR/release-upgrade.log"
 RELEASE_RETENTION="${XUANWU_RELEASE_RETENTION:-3}"
+JOBS_DIR="$STATE_DIR/release-update-jobs"
+TARGET_VERSION=""
 
 usage() {
   cat <<'HELP'
 Usage:
   xuanwu-update check [--json]
+  xuanwu-update apply-pending
   xuanwu-update upgrade --apply --actor <id> --actor-kind user|system \
     --audit-ref <ref> --reason <text> --backup-ref <ref> --confirm-backup-tested
   xuanwu-update rollback --snapshot <path|latest> --apply --actor <id> \
@@ -64,6 +71,14 @@ latest_metadata() {
   local destination="$1"
   curl -fsSL --retry 3 -o "$destination" \
     "https://github.com/$REPO/releases/latest/download/release.json"
+}
+
+version_metadata() {
+  local version="$1" destination="$2"
+  printf '%s' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$' \
+    || fail "requested release version is invalid"
+  curl -fsSL --retry 3 -o "$destination" \
+    "https://github.com/$REPO/releases/download/$version/release.json"
 }
 
 metadata_version() {
@@ -164,9 +179,13 @@ snapshot_release() {
   copy_file_if_present "$HOME/Library/LaunchAgents/$LABEL.plist" "$snapshot/service/$LABEL.plist"
   copy_file_if_present "$HOME/Library/LaunchAgents/$LABEL.web.plist" "$snapshot/service/$LABEL.web.plist"
   copy_file_if_present "$HOME/Library/LaunchAgents/$LABEL.core.plist" "$snapshot/service/$LABEL.core.plist"
+  copy_file_if_present "$HOME/Library/LaunchAgents/$LABEL.agentic.plist" "$snapshot/service/$LABEL.agentic.plist"
+  copy_file_if_present "$HOME/Library/LaunchAgents/$LABEL.updater.plist" "$snapshot/service/$LABEL.updater.plist"
   copy_file_if_present "$HOME/.config/systemd/user/$SERVICE_NAME.service" "$snapshot/service/$SERVICE_NAME.service"
   copy_file_if_present "$HOME/.config/systemd/user/$SERVICE_NAME-web.service" "$snapshot/service/$SERVICE_NAME-web.service"
   copy_file_if_present "$HOME/.config/systemd/user/$SERVICE_NAME-core.service" "$snapshot/service/$SERVICE_NAME-core.service"
+  copy_file_if_present "$HOME/.config/systemd/user/$SERVICE_NAME-agentic.service" "$snapshot/service/$SERVICE_NAME-agentic.service"
+  copy_file_if_present "$HOME/.config/systemd/user/$SERVICE_NAME-updater.service" "$snapshot/service/$SERVICE_NAME-updater.service"
   printf '1\n' > "$snapshot/service/version"
   printf '%s\n' "$version" > "$snapshot/version"
   printf '%s' "$snapshot"
@@ -216,12 +235,12 @@ restore_service_registration() {
   local snapshot="$1" name source target
   [ -f "$snapshot/service/version" ] || return 0
   mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.config/systemd/user"
-  for name in "$LABEL.plist" "$LABEL.web.plist" "$LABEL.core.plist"; do
+  for name in "$LABEL.plist" "$LABEL.web.plist" "$LABEL.core.plist" "$LABEL.agentic.plist" "$LABEL.updater.plist"; do
     source="$snapshot/service/$name"
     target="$HOME/Library/LaunchAgents/$name"
     restore_file "$source" "$target" 0644
   done
-  for name in "$SERVICE_NAME.service" "$SERVICE_NAME-web.service" "$SERVICE_NAME-core.service"; do
+  for name in "$SERVICE_NAME.service" "$SERVICE_NAME-web.service" "$SERVICE_NAME-core.service" "$SERVICE_NAME-agentic.service" "$SERVICE_NAME-updater.service"; do
     source="$snapshot/service/$name"
     target="$HOME/.config/systemd/user/$name"
     restore_file "$source" "$target" 0644
@@ -263,8 +282,15 @@ upgrade_release() {
   [ "$CONFIRM_BACKUP_TESTED" = true ] || fail "upgrade requires --confirm-backup-tested"
   [ -x "$INSTALLER_PATH" ] || fail "release installer not found: $INSTALLER_PATH"
   temp="$(mktemp)"
-  latest_metadata "$temp"
+  if [ -n "$TARGET_VERSION" ]; then
+    version_metadata "$TARGET_VERSION" "$temp"
+  else
+    latest_metadata "$temp"
+  fi
   to="$(metadata_version "$temp")"
+  if [ -n "$TARGET_VERSION" ] && [ "$to" != "$TARGET_VERSION" ]; then
+    fail "requested release metadata mismatch: requested=$TARGET_VERSION metadata=$to"
+  fi
   from="$(current_version)"
   if ! is_newer_version "$from" "$to"; then log "no newer release: current=$from latest=$to"; return 0; fi
   audit upgrade requested "$from" "$to" "pending"
@@ -285,6 +311,96 @@ upgrade_release() {
   restore_snapshot "$snapshot" || true
   audit upgrade failed "$from" "$to" "$snapshot"
   fail "upgrade failed; previous release restoration was attempted from $snapshot"
+}
+
+job_field() {
+  local job_dir="$1" name="$2"
+  [ -f "$job_dir/$name" ] || fail "release update job is missing field: $name"
+  sed -n '1p' "$job_dir/$name"
+}
+
+write_job_field() {
+  local job_dir="$1" name="$2" value="$3" staged
+  staged="$job_dir/.$name.$$"
+  printf '%s\n' "$value" > "$staged"
+  chmod 600 "$staged"
+  mv -f "$staged" "$job_dir/$name"
+}
+
+valid_job_id() {
+  printf '%s' "$1" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9-]{0,79}$'
+}
+
+pending_worker_exit() {
+  local status="$1" state
+  if [ -n "${ACTIVE_JOB_DIR:-}" ] && [ -d "$ACTIVE_JOB_DIR" ]; then
+    state="$(sed -n '1p' "$ACTIVE_JOB_DIR/state" 2>/dev/null || true)"
+    if [ "$state" = "running" ] || [ "$state" = "pending" ]; then
+      write_job_field "$ACTIVE_JOB_DIR" state failed
+      write_job_field "$ACTIVE_JOB_DIR" error_code "updater_exit_$status"
+      write_job_field "$ACTIVE_JOB_DIR" updated_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    fi
+  fi
+  rm -f "$JOBS_DIR/active" 2>/dev/null || true
+  rmdir "$JOBS_DIR/worker.lock" 2>/dev/null || true
+}
+
+apply_pending_upgrade() {
+  local job_id job_dir expected_from target backup_dir rehearsal_dir audit_ref
+  umask 077
+  mkdir -p "$JOBS_DIR"
+  chmod 700 "$JOBS_DIR" 2>/dev/null || true
+  mkdir "$JOBS_DIR/worker.lock" 2>/dev/null || fail "another release update worker is active"
+  trap 'pending_worker_exit $?' EXIT
+  [ -f "$JOBS_DIR/pending" ] || fail "no pending release update job"
+  job_id="$(sed -n '1p' "$JOBS_DIR/pending")"
+  valid_job_id "$job_id" || fail "pending release update job id is invalid"
+  job_dir="$JOBS_DIR/$job_id"
+  [ -d "$job_dir" ] || fail "pending release update job directory is missing"
+  ACTIVE_JOB_DIR="$job_dir"
+  mv -f "$JOBS_DIR/pending" "$JOBS_DIR/active"
+  write_job_field "$job_dir" state running
+  write_job_field "$job_dir" updated_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+  expected_from="$(job_field "$job_dir" from_version)"
+  target="$(job_field "$job_dir" target_version)"
+  metadata_version_from_value "$expected_from" >/dev/null
+  metadata_version_from_value "$target" >/dev/null
+  [ "$(current_version)" = "$expected_from" ] \
+    || fail "installed version changed after the update was requested"
+
+  backup_dir="$BACKUP_DIR/xuanwu-backup-$(date -u '+%Y%m%dT%H%M%SZ')-$job_id"
+  rehearsal_dir="$JOBS_DIR/$job_id/restore-rehearsal"
+  audit_ref="release-update:$job_id"
+  mkdir -p "$BACKUP_DIR"
+  chmod 700 "$BACKUP_DIR" 2>/dev/null || true
+  "$BIN_PATH" backup export --state-dir "$STATE_DIR" --db "$DB_PATH" \
+    --output "$backup_dir" --retain 3 --actor runner-ui --actor-kind user \
+    --audit-ref "$audit_ref" --reason "pre-upgrade backup" --json >> "$job_dir/worker.log" 2>&1
+  "$BIN_PATH" backup verify --input "$backup_dir" --json >> "$job_dir/worker.log" 2>&1
+  "$BIN_PATH" backup import --input "$backup_dir" --target-state-dir "$rehearsal_dir" --apply \
+    --actor runner-ui --actor-kind user --audit-ref "$audit_ref" \
+    --reason "pre-upgrade restore rehearsal" --json >> "$job_dir/worker.log" 2>&1
+  rm -rf "$rehearsal_dir"
+  write_job_field "$job_dir" backup_ref "$backup_dir"
+
+  ACTOR="runner-ui"
+  ACTOR_KIND="user"
+  AUDIT_REF="$audit_ref"
+  REASON="user approved release update from Runner UI"
+  BACKUP_REF="$backup_dir"
+  APPLY=true
+  CONFIRM_BACKUP_TESTED=true
+  TARGET_VERSION="$target"
+  upgrade_release >> "$job_dir/worker.log" 2>&1
+  [ "$(current_version)" = "$target" ] || fail "post-upgrade version verification failed"
+  write_job_field "$job_dir" state succeeded
+  write_job_field "$job_dir" updated_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+}
+
+metadata_version_from_value() {
+  printf '%s' "$1" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$' \
+    || fail "release update job contains an invalid version"
 }
 
 rollback_release() {
@@ -347,6 +463,7 @@ done
 
 case "$COMMAND" in
   check) check_update "$JSON" ;;
+  apply-pending) apply_pending_upgrade ;;
   upgrade) upgrade_release ;;
   rollback) rollback_release ;;
   help|-h|--help) usage ;;

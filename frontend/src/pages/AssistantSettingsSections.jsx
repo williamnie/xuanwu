@@ -4,6 +4,7 @@ import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
 import PermissionsSettingsPanel from './PermissionsSettingsPanel';
 import NotificationSettingsPanel from './NotificationSettingsPanel';
 import RunnerSettingsPanel from './RunnerSettingsPanel';
+import ReleaseUpdatePanel from './ReleaseUpdatePanel';
 import SkillsRuntimePanel from './SkillsRuntimePanel';
 import SourcePoliciesPanel from './SourcePoliciesPanel';
 import Projects from './Projects';
@@ -87,6 +88,7 @@ function GeneralSettingsTab() {
   return (
     <>
       <LanguageAndVersionCard />
+      <ReleaseUpdatePanel />
       <Projects />
     </>
   );

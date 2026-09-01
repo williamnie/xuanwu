@@ -17,10 +17,12 @@ LABEL="${XUANWU_LAUNCHD_LABEL:-com.xiaobei.xuanwu}"
 WEB_LABEL="${LABEL}.web"
 CORE_LABEL="${LABEL}.core"
 AGENTIC_LABEL="${LABEL}.agentic"
+UPDATER_LABEL="${LABEL}.updater"
 SERVICE_NAME="${XUANWU_SERVICE_NAME:-xuanwu}"
 INSTALL_DIR="${XUANWU_INSTALL_DIR:-$HOME/.local/bin}"
 STATE_DIR="${XUANWU_STATE_DIR:-$HOME/.local/state/xuanwu}"
 LOG_DIR="${XUANWU_LOG_DIR:-$STATE_DIR/logs}"
+BACKUP_DIR="${XUANWU_BACKUP_DIR:-$STATE_DIR-backups}"
 DB_PATH="${XUANWU_DB:-${XUANWU_DEPLOY_DB:-$STATE_DIR/runner.db}}"
 AUTH_TOKEN_FILE="${XUANWU_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 AUTH_TOKEN="${XUANWU_AUTH_TOKEN:-}"
@@ -248,7 +250,7 @@ resolve_codex_cmd() {
 }
 
 download_binary() {
-  local os="$1" arch="$2" asset url tmp archive checksums metadata staged sdk_staged qoder_staged qoder_previous pi_policy_staged binary_version qoder_version
+  local os="$1" arch="$2" asset url tmp archive checksums metadata staged sdk_staged qoder_staged qoder_previous pi_policy_staged daemon_staged installer_staged updater_staged binary_version qoder_version
   asset="xuanwu_${os}_${arch}.tar.gz"
   url="$(release_asset_url "$asset")"
   tmp="$(mktemp -d)"
@@ -304,13 +306,19 @@ download_binary() {
   install -m 0755 "$tmp/xuanwu" "$staged"
   mv -f "$staged" "$BIN_PATH"
   if [ -f "$tmp/daemon.sh" ]; then
-    install -m 0755 "$tmp/daemon.sh" "$DAEMON_PATH"
+    daemon_staged="$INSTALL_DIR/.xuanwu-daemon.stage.$$"
+    install -m 0755 "$tmp/daemon.sh" "$daemon_staged"
+    mv -f "$daemon_staged" "$DAEMON_PATH"
   fi
   if [ -f "$tmp/install-release.sh" ]; then
-    install -m 0755 "$tmp/install-release.sh" "$INSTALLER_PATH"
+    installer_staged="$INSTALL_DIR/.xuanwu-install.stage.$$"
+    install -m 0755 "$tmp/install-release.sh" "$installer_staged"
+    mv -f "$installer_staged" "$INSTALLER_PATH"
   fi
   if [ -f "$tmp/update-release.sh" ]; then
-    install -m 0755 "$tmp/update-release.sh" "$UPDATER_PATH"
+    updater_staged="$INSTALL_DIR/.xuanwu-update.stage.$$"
+    install -m 0755 "$tmp/update-release.sh" "$updater_staged"
+    mv -f "$updater_staged" "$UPDATER_PATH"
   fi
   if [ -d "$tmp/web" ]; then
     rm -rf "$STATE_DIR/web"
@@ -340,7 +348,7 @@ wait_until_ready() {
 }
 
 write_macos_plists() {
-  local web_plist="$1" core_plist="$2" agentic_plist="$3" codex_cmd="$4"
+  local web_plist="$1" core_plist="$2" agentic_plist="$3" updater_plist="$4" codex_cmd="$5"
   cat > "$web_plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -446,6 +454,16 @@ PLIST
     <string>$(xml_escape "$QODER_MODEL")</string>
     <key>XUANWU_PI_CHAT_TOOL_SURFACE</key>
     <string>$(xml_escape "$PI_CHAT_TOOL_SURFACE")</string>
+    <key>XUANWU_RELEASE_INSTALL</key>
+    <string>1</string>
+    <key>XUANWU_REPO</key>
+    <string>$(xml_escape "$REPO")</string>
+    <key>XUANWU_UPDATER_PATH</key>
+    <string>$(xml_escape "$UPDATER_PATH")</string>
+    <key>XUANWU_LAUNCHD_LABEL</key>
+    <string>$(xml_escape "$LABEL")</string>
+    <key>XUANWU_SERVICE_NAME</key>
+    <string>$(xml_escape "$SERVICE_NAME")</string>
     <key>XUANWU_MANAGED_EXECUTION</key>
     <string>1</string>
   </dict>
@@ -509,6 +527,64 @@ PLIST
 </dict>
 </plist>
 PLIST
+
+  cat > "$updater_plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$(xml_escape "$UPDATER_LABEL")</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$(xml_escape "$UPDATER_PATH")</string>
+    <string>apply-pending</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>$(xml_escape "$HOME")</string>
+    <key>PATH</key><string>$(xml_escape "$PATH_VALUE")</string>
+    <key>XUANWU_REPO</key><string>$(xml_escape "$REPO")</string>
+    <key>XUANWU_VERIFY_ATTESTATION</key><string>$(xml_escape "$VERIFY_ATTESTATION")</string>
+    <key>XUANWU_ADDR</key><string>$(xml_escape "$ADDR")</string>
+    <key>XUANWU_CORE_ADDR</key><string>$(xml_escape "$CORE_ADDR")</string>
+    <key>XUANWU_AGENTIC_ADDR</key><string>$(xml_escape "$AGENTIC_ADDR")</string>
+    <key>XUANWU_LAUNCHD_LABEL</key><string>$(xml_escape "$LABEL")</string>
+    <key>XUANWU_SERVICE_NAME</key><string>$(xml_escape "$SERVICE_NAME")</string>
+    <key>XUANWU_INSTALL_DIR</key><string>$(xml_escape "$INSTALL_DIR")</string>
+    <key>XUANWU_STATE_DIR</key><string>$(xml_escape "$STATE_DIR")</string>
+    <key>XUANWU_LOG_DIR</key><string>$(xml_escape "$LOG_DIR")</string>
+    <key>XUANWU_BACKUP_DIR</key><string>$(xml_escape "$BACKUP_DIR")</string>
+    <key>XUANWU_DB</key><string>$(xml_escape "$DB_PATH")</string>
+    <key>XUANWU_AUTH_TOKEN_FILE</key><string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
+    <key>XUANWU_PATH</key><string>$(xml_escape "$PATH_VALUE")</string>
+    <key>XUANWU_CODEX_CMD</key><string>$(xml_escape "$codex_cmd")</string>
+    <key>XUANWU_CODEX_SERVER_MODE</key><string>$(xml_escape "$CODEX_SERVER_MODE")</string>
+    <key>XUANWU_CODEX_APP_CMD</key><string>$(xml_escape "$CODEX_APP_CMD")</string>
+    <key>XUANWU_CLAUDE_MODE</key><string>$(xml_escape "$CLAUDE_MODE")</string>
+    <key>XUANWU_CLAUDE_AUTH_MODE</key><string>$(xml_escape "$CLAUDE_AUTH_MODE")</string>
+    <key>XUANWU_CLAUDE_API_BASE_URL</key><string>$(xml_escape "$CLAUDE_API_BASE_URL")</string>
+    <key>XUANWU_CLAUDE_API_PATH</key><string>$(xml_escape "$CLAUDE_API_PATH")</string>
+    <key>XUANWU_CLAUDE_API_KEY_FILE</key><string>$(xml_escape "$CLAUDE_API_KEY_FILE")</string>
+    <key>XUANWU_CLAUDE_PLATFORM_CONFIG_DIR</key><string>$(xml_escape "$CLAUDE_PLATFORM_CONFIG_DIR")</string>
+    <key>XUANWU_CLAUDE_PLATFORM_PROFILE</key><string>$(xml_escape "$CLAUDE_PLATFORM_PROFILE")</string>
+    <key>XUANWU_QODER_AUTH_MODE</key><string>$(xml_escape "$QODER_AUTH_MODE")</string>
+    <key>XUANWU_QODER_CONFIG_DIR</key><string>$(xml_escape "$QODER_CONFIG_DIR")</string>
+    <key>XUANWU_QODER_CREDENTIAL_REF</key><string>$(xml_escape "$QODER_CREDENTIAL_REF")</string>
+    <key>XUANWU_QODER_MODEL</key><string>$(xml_escape "$QODER_MODEL")</string>
+    <key>XUANWU_PI_CHAT_TOOL_SURFACE</key><string>$(xml_escape "$PI_CHAT_TOOL_SURFACE")</string>
+    <key>XUANWU_RELEASE_INSTALL</key><string>1</string>
+    <key>XUANWU_UPDATER_PATH</key><string>$(xml_escape "$UPDATER_PATH")</string>
+    <key>XUANWU_UPDATER_ACTIVE</key><string>1</string>
+  </dict>
+  <key>RunAtLoad</key><false/>
+  <key>KeepAlive</key><false/>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>$(xml_escape "$LOG_DIR/launchd.updater.out.log")</string>
+  <key>StandardErrorPath</key><string>$(xml_escape "$LOG_DIR/launchd.updater.err.log")</string>
+</dict>
+</plist>
+PLIST
 }
 
 auth_token_file_systemd_args() {
@@ -564,18 +640,27 @@ write_claude_api_key_file() {
 }
 
 install_macos_launchd() {
-  local codex_cmd web_plist core_plist agentic_plist legacy_plist domain web_url core_url agentic_url
+  local codex_cmd web_plist core_plist agentic_plist updater_plist legacy_plist domain web_url core_url agentic_url
   codex_cmd="$(resolve_codex_cmd)"
   web_plist="$HOME/Library/LaunchAgents/$WEB_LABEL.plist"
   core_plist="$HOME/Library/LaunchAgents/$CORE_LABEL.plist"
   agentic_plist="$HOME/Library/LaunchAgents/$AGENTIC_LABEL.plist"
+  updater_plist="$HOME/Library/LaunchAgents/$UPDATER_LABEL.plist"
   legacy_plist="$HOME/Library/LaunchAgents/$LABEL.plist"
   domain="gui/$(id -u)"
   mkdir -p "$HOME/Library/LaunchAgents"
-  write_macos_plists "$web_plist" "$core_plist" "$agentic_plist" "$codex_cmd"
+  write_macos_plists "$web_plist" "$core_plist" "$agentic_plist" "$updater_plist" "$codex_cmd"
   plutil -lint "$web_plist" >/dev/null
   plutil -lint "$core_plist" >/dev/null
   plutil -lint "$agentic_plist" >/dev/null
+  plutil -lint "$updater_plist" >/dev/null
+  launchctl enable "$domain/$UPDATER_LABEL" >/dev/null 2>&1 || true
+  if [ "${XUANWU_UPDATER_ACTIVE:-}" != "1" ]; then
+    launchctl bootout "$domain/$UPDATER_LABEL" >/dev/null 2>&1 || true
+    launchctl bootstrap "$domain" "$updater_plist"
+  elif ! launchctl print "$domain/$UPDATER_LABEL" >/dev/null 2>&1; then
+    launchctl bootstrap "$domain" "$updater_plist"
+  fi
   launchctl bootout "$domain/$LABEL" >/dev/null 2>&1 || launchctl bootout "$domain" "$legacy_plist" >/dev/null 2>&1 || true
   launchctl bootout "$domain/$WEB_LABEL" >/dev/null 2>&1 || true
   launchctl bootout "$domain/$CORE_LABEL" >/dev/null 2>&1 || true
@@ -595,11 +680,11 @@ install_macos_launchd() {
   launchctl kickstart -k "$domain/$WEB_LABEL"
   web_url="$(service_url "$ADDR")"
   wait_until_ready "$web_url" || fail "Web did not become ready at $web_url"
-  log "launchd services installed: $web_plist $core_plist $agentic_plist"
+  log "launchd services installed: $web_plist $core_plist $agentic_plist $updater_plist"
 }
 
 install_linux_systemd() {
-  local codex_cmd unit_dir web_unit core_unit agentic_unit web_url core_url agentic_url
+  local codex_cmd unit_dir web_unit core_unit agentic_unit updater_unit web_url core_url agentic_url
   require_cmd systemctl
   require_cmd loginctl
   loginctl enable-linger "$USER" || fail "failed to enable user linger; systemd user service would stop after logout"
@@ -608,6 +693,7 @@ install_linux_systemd() {
   web_unit="$unit_dir/$SERVICE_NAME-web.service"
   core_unit="$unit_dir/$SERVICE_NAME-core.service"
   agentic_unit="$unit_dir/$SERVICE_NAME-agentic.service"
+  updater_unit="$unit_dir/$SERVICE_NAME-updater.service"
   mkdir -p "$unit_dir"
   cat > "$core_unit" <<UNIT
 [Unit]
@@ -635,6 +721,10 @@ Environment="XUANWU_QODER_CONFIG_DIR=$QODER_CONFIG_DIR"
 Environment="XUANWU_QODER_CREDENTIAL_REF=$QODER_CREDENTIAL_REF"
 Environment="XUANWU_QODER_MODEL=$QODER_MODEL"
 Environment="XUANWU_PI_CHAT_TOOL_SURFACE=$PI_CHAT_TOOL_SURFACE"
+Environment=XUANWU_RELEASE_INSTALL=1
+Environment="XUANWU_REPO=$REPO"
+Environment="XUANWU_UPDATER_PATH=$UPDATER_PATH"
+Environment="XUANWU_SERVICE_NAME=$SERVICE_NAME"
 Environment=XUANWU_MANAGED_EXECUTION=1
 ExecStart=$BIN_PATH serve --role core --addr $CORE_ADDR --agentic-addr $AGENTIC_ADDR --state-dir $STATE_DIR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
 Restart=always
@@ -644,6 +734,50 @@ TimeoutStopSec=30
 
 [Install]
 WantedBy=default.target
+UNIT
+  cat > "$updater_unit" <<UNIT
+[Unit]
+Description=Xuanwu Release Updater
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=$STATE_DIR
+Environment=HOME=$HOME
+Environment="PATH=$PATH_VALUE"
+Environment="XUANWU_REPO=$REPO"
+Environment="XUANWU_VERIFY_ATTESTATION=$VERIFY_ATTESTATION"
+Environment="XUANWU_ADDR=$ADDR"
+Environment="XUANWU_CORE_ADDR=$CORE_ADDR"
+Environment="XUANWU_AGENTIC_ADDR=$AGENTIC_ADDR"
+Environment="XUANWU_SERVICE_NAME=$SERVICE_NAME"
+Environment="XUANWU_INSTALL_DIR=$INSTALL_DIR"
+Environment="XUANWU_STATE_DIR=$STATE_DIR"
+Environment="XUANWU_LOG_DIR=$LOG_DIR"
+Environment="XUANWU_BACKUP_DIR=$BACKUP_DIR"
+Environment="XUANWU_DB=$DB_PATH"
+Environment="XUANWU_AUTH_TOKEN_FILE=$AUTH_TOKEN_FILE"
+Environment="XUANWU_PATH=$PATH_VALUE"
+Environment="XUANWU_CODEX_CMD=$codex_cmd"
+Environment="XUANWU_CODEX_SERVER_MODE=$CODEX_SERVER_MODE"
+Environment="XUANWU_CODEX_APP_CMD=$CODEX_APP_CMD"
+Environment="XUANWU_CLAUDE_MODE=$CLAUDE_MODE"
+Environment="XUANWU_CLAUDE_AUTH_MODE=$CLAUDE_AUTH_MODE"
+Environment="XUANWU_CLAUDE_API_BASE_URL=$CLAUDE_API_BASE_URL"
+Environment="XUANWU_CLAUDE_API_PATH=$CLAUDE_API_PATH"
+Environment="XUANWU_CLAUDE_API_KEY_FILE=$CLAUDE_API_KEY_FILE"
+Environment="XUANWU_CLAUDE_PLATFORM_CONFIG_DIR=$CLAUDE_PLATFORM_CONFIG_DIR"
+Environment="XUANWU_CLAUDE_PLATFORM_PROFILE=$CLAUDE_PLATFORM_PROFILE"
+Environment="XUANWU_QODER_AUTH_MODE=$QODER_AUTH_MODE"
+Environment="XUANWU_QODER_CONFIG_DIR=$QODER_CONFIG_DIR"
+Environment="XUANWU_QODER_CREDENTIAL_REF=$QODER_CREDENTIAL_REF"
+Environment="XUANWU_QODER_MODEL=$QODER_MODEL"
+Environment="XUANWU_PI_CHAT_TOOL_SURFACE=$PI_CHAT_TOOL_SURFACE"
+Environment=XUANWU_RELEASE_INSTALL=1
+Environment="XUANWU_UPDATER_PATH=$UPDATER_PATH"
+Environment=XUANWU_UPDATER_ACTIVE=1
+ExecStart=$UPDATER_PATH apply-pending
+TimeoutStartSec=1800
 UNIT
   cat > "$agentic_unit" <<UNIT
 [Unit]
@@ -695,7 +829,7 @@ UNIT
   wait_until_ready "$core_url" || fail "Core did not become ready at $core_url"
   wait_until_ready "$agentic_url" || fail "Agentic Worker did not become ready at $agentic_url"
   wait_until_ready "$web_url" || fail "Web did not become ready at $web_url"
-  log "systemd user services installed: $web_unit $core_unit $agentic_unit"
+  log "systemd user services installed: $web_unit $core_unit $agentic_unit $updater_unit"
 }
 
 main() {

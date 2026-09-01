@@ -13,6 +13,7 @@ import {
 } from './pages/assistantModules';
 import AppSidebar from './components/AppSidebar';
 import GuardianAlertBanner from './components/GuardianAlertBanner';
+import ReleaseUpdateDialog from './components/ReleaseUpdateDialog';
 import TurtleLoader from './components/TurtleLoader';
 import {
   selectLoading,
@@ -499,6 +500,7 @@ export default function App() {
   return (
     <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileSidebarOpen ? 'mobile-sidebar-open' : ''} ${currentPage === 'runs' || currentPage === 'ask-xuanwu' ? 'in-sessions-page' : ''} ${currentPage === 'runs' ? 'runs-page' : ''} ${currentPage === 'ask-xuanwu' ? 'ask-xuanwu-page' : ''}`}>
       <ToastContainer />
+      <ReleaseUpdateDialog onOpenSettings={() => navigateTo('settings', null, '', '', { settingsSection: 'general' })} />
       <header className="mobile-app-header" inert={mobileSidebarOpen ? true : undefined}>
         <button
           aria-controls="app-sidebar"

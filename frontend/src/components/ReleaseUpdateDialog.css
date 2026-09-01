@@ -1,0 +1,120 @@
+.release-update-dialog__backdrop {
+  align-items: center;
+  background: color-mix(in srgb, var(--bg-primary) 62%, transparent);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 1200;
+}
+
+.release-update-dialog {
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 32px -18px color-mix(in srgb, var(--text-primary) 24%, transparent);
+  display: grid;
+  gap: 12px;
+  max-width: 460px;
+  padding: 20px;
+  position: relative;
+  width: 100%;
+}
+
+.release-update-dialog__close {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  display: flex;
+  height: 28px;
+  justify-content: center;
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: 28px;
+}
+
+.release-update-dialog__close:hover {
+  background: var(--nav-hover);
+  border-color: var(--border-color-hover);
+}
+
+.release-update-dialog__icon {
+  align-items: center;
+  background: var(--primary-glow);
+  border-radius: var(--radius-sm);
+  color: var(--primary);
+  display: flex;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.release-update-dialog__eyebrow,
+.release-update-dialog__facts span,
+.release-update-dialog__facts strong {
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.release-update-dialog__eyebrow,
+.release-update-dialog__facts span {
+  color: var(--text-muted);
+}
+
+.release-update-dialog h2 {
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+.release-update-dialog p {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.release-update-dialog__facts {
+  border-bottom: 1px solid var(--border-light);
+  border-top: 1px solid var(--border-light);
+  display: grid;
+  gap: 6px 12px;
+  grid-template-columns: 1fr auto;
+  padding: 10px 0;
+}
+
+.release-update-dialog__facts strong {
+  color: var(--success);
+}
+
+.release-update-dialog__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 760px) {
+  .release-update-dialog__backdrop {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .release-update-dialog {
+    max-width: none;
+    padding: 16px;
+  }
+
+  .release-update-dialog__actions {
+    flex-direction: column;
+  }
+
+  .release-update-dialog__actions .btn {
+    width: 100%;
+  }
+}

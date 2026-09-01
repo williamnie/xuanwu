@@ -42,6 +42,7 @@ import { recoverInProgressIssues } from "../runner/recovery.ts";
 import { reconcileStaleAgentSessions } from "../runner/staleSessionReconciler.ts";
 import { assertInternalCoreAddress } from "../serverRole.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { createReleaseUpdateMonitor, type ReleaseUpdateMonitor } from "../release/releaseUpdateMonitor.ts";
 
 export async function startCoreRuntime(args: string[], role: "all" | "core"): Promise<void> {
   const loadedConfig = loadConfig(args);
@@ -167,6 +168,12 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     runSupervisorConversation
   });
   const imChannels = createBuiltinImChannelRegistry({ feishu: feishuModule.module, telegram: telegramModule.module });
+  const releaseUpdateMonitor = createReleaseUpdateMonitor({
+    database,
+    feishuConfig: () => config.integrations.feishu,
+    imChannels,
+    telegramConfig: () => config.integrations.telegram
+  });
   const guardianAlertDelivery = createImGuardianAlertDelivery({
     database,
     fallback: feishuModule.guardianAlertDelivery,
@@ -198,14 +205,16 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     projectionWorker,
     providers,
     providersRegistry,
+    releaseUpdateMonitor,
     role
   });
-  installTerminationHandlers(providersRegistry, database, readDatabase, server, processGroupMemory, projectionWorker, imReceiverRuntime);
+  installTerminationHandlers(providersRegistry, database, readDatabase, server, processGroupMemory, projectionWorker, imReceiverRuntime, releaseUpdateMonitor);
   coldStartTrace("http_routes_registered");
   void imReceiverRuntime.start().catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", component: "im-receiver-runtime", error: safeError(error) }));
   });
   projectionWorker.start();
+  releaseUpdateMonitor.start();
   void startAutoRunLoops(
     database,
     providers,
@@ -285,7 +294,8 @@ function installTerminationHandlers(
   server: { stop(closeActiveConnections?: boolean): void },
   processGroupMemory: ProcessGroupMemoryObserver,
   projectionWorker: BackgroundProjectionWorker,
-  imReceiverRuntime: ImReceiverRuntime
+  imReceiverRuntime: ImReceiverRuntime,
+  releaseUpdateMonitor: ReleaseUpdateMonitor
 ): void {
   let stopping = false;
   const stop = async (signal: string) => {
@@ -294,6 +304,7 @@ function installTerminationHandlers(
     console.info(JSON.stringify({ event: "runner.shutdown_started", role: "core", signal }));
     processGroupMemory.stop();
     projectionWorker.stop();
+    releaseUpdateMonitor.stop();
     await imReceiverRuntime.stop();
     server.stop(true);
     await providersRegistry.stopAll();

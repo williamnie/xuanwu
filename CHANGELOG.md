@@ -8,6 +8,8 @@
 
 ### Added / 新增
 
+- 增加 Release 后台检查、网页全局升级提醒、Feishu/Telegram 幂等通知，以及带备份、
+  隔离恢复演练和失败回滚的一键安全升级。
 - 增加 Telegram IM 连接器、设置面板、长轮询接收、分段投递、审批交互与通知链路。
 - 增加 Provider-neutral IM 上下文预算、投影游标与 Session rollover 生命周期，避免长会话
   无界增长并保留可审计的上下文谱系。
