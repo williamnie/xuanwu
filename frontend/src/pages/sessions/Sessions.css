@@ -534,6 +534,27 @@
   width: 100%;
 }
 
+.session-load-earlier-button {
+  align-self: center;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--button-radius);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  padding: 6px 10px;
+}
+
+.session-load-earlier-button:hover:not(:disabled) {
+  background: var(--nav-hover);
+  border-color: var(--border-color-hover);
+}
+
+.session-load-earlier-button:disabled {
+  color: var(--text-muted);
+  cursor: wait;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

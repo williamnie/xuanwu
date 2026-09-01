@@ -41,7 +41,17 @@ export const runsApi = {
     body: JSON.stringify(session),
   }),
 
-  getSession: (id) => request(`/api/sessions/${id}`),
+  getSession: (id, options = {}) => request(`/api/sessions/${encodeURIComponent(id)}`, options),
+
+  getSessionTurns: (id, { cursor = '', itemsView = 'summary', limit = 20, sortDirection = 'desc' } = {}, options = {}) => {
+    const params = new URLSearchParams({
+      items_view: itemsView,
+      limit: String(limit),
+      sort_direction: sortDirection,
+    });
+    if (cursor) params.set('cursor', cursor);
+    return request(`/api/sessions/${encodeURIComponent(id)}/turns?${params.toString()}`, options);
+  },
 
   sendSessionMessage: (id, message) => request(`/api/sessions/${id}/messages`, {
     method: 'POST',

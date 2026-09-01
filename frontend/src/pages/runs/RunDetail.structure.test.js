@@ -23,6 +23,8 @@ test('Run Detail puts Provider first and hides a single Attempt selector', () =>
   assert.match(detailSource, />Cost</);
   assert.match(detailSource, /Advanced raw events/);
   assert.match(detailSource, /<EvidencePanel runId=\{run\.id\}/);
+  assert.match(detailSource, /useState\('summary'\)/);
+  assert.match(detailSource, /setActiveSection\('summary'\)/);
 });
 
 test('provider observation is an embedded primary tab without duplicate Evidence', () => {
@@ -33,6 +35,8 @@ test('provider observation is an embedded primary tab without duplicate Evidence
   assert.doesNotMatch(detailSource, /interruptSession\(/);
   assert.doesNotMatch(detailSource, /sendSessionMessage\(/);
   assert.doesNotMatch(runsPageSource, /> Provider session/);
+  assert.match(apiSource, /\/api\/sessions\/\$\{encodeURIComponent\(id\)\}\/turns/);
+  assert.match(apiSource, /items_view: itemsView/);
 });
 
 test('embedded provider transcript exposes read failures and provider-neutral version/usage extensions', () => {

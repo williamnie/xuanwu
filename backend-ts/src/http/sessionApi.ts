@@ -10,7 +10,8 @@ import {
   type ExecutorProvider,
   type ExecutorProviderId,
   type SessionCreateInput,
-  type SessionMessageInput
+  type SessionMessageInput,
+  type SessionTurnsListInput
 } from "../providers/types.ts";
 import { correctedRuntimeRawRef, executionPolicyFromAgentSession, runtimeRawRef, runtimeSettingsFromAgentSession, withSessionRuntimeSettings } from "./sessionRuntimeSettings.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
@@ -41,7 +42,16 @@ export function registerSessionRoutes(router: Router, context: SessionApiContext
     return asyncResponse(() => createSession(context, body), 201);
   });
   router.get("/api/sessions/preferences", () => json({ last_project_id: lastSessionProject(context.database) }));
-  router.get("/api/sessions/:id", (request) => asyncResponse(() => readSession(context, sessionID(request))));
+  router.get("/api/sessions/:id", (request) => asyncResponse(() => readSession(
+    context,
+    sessionID(request),
+    includeTurns(request)
+  )));
+  router.get("/api/sessions/:id/turns", (request) => asyncResponse(() => listSessionTurns(
+    context,
+    sessionID(request),
+    sessionTurnsInput(request)
+  )));
   router.post("/api/sessions/:id/messages", async (request) => {
     const body = await parseObjectBody(request);
     return asyncResponse(() => sessionMessage(context, sessionID(request), body), 201);
@@ -122,7 +132,7 @@ async function createSession(context: SessionApiContext, body: Record<string, un
   return { ...result, id: `${provider.id}:${result.provider_session_id}`, provider: provider.id, status, isRunning: status === "running" };
 }
 
-async function readSession(context: SessionApiContext, rawSessionID: string) {
+async function readSession(context: SessionApiContext, rawSessionID: string, includeTurns = false) {
   const ref = parseSessionRef(rawSessionID);
   const registeredProvider = isExecutorProviderId(ref.provider) ? context.providers?.[ref.provider] : undefined;
   if (!registeredProvider) {
@@ -145,13 +155,14 @@ async function readSession(context: SessionApiContext, rawSessionID: string) {
   const provider = capableProvider(context, ref.provider, "sessions", "readSession");
   let result: Record<string, unknown>;
   try {
-    result = await provider.readSession!(ref.sessionId);
+    result = await provider.readSession!(ref.sessionId, { includeTurns });
     validateDeclaredSessionView(provider, result, true, ref.sessionId);
   } catch (error) {
     const fallback = ref.provider === "codex" ? pendingCodexSessionFallback(context.database, ref.sessionId, error) : null;
     if (!fallback) throw error;
     result = fallback;
   }
+  if (!includeTurns) result = { ...result, turns: [] };
   if (ref.provider === "codex") reconcileCodexSessionIndex(context.database, ref.sessionId, result);
   const qualified = qualifiedProviderSession(ref.provider, result);
   const indexed = publicAgentSessionOrNull(getAgentSession(context.database, ref.key));
@@ -171,6 +182,29 @@ async function readSession(context: SessionApiContext, rawSessionID: string) {
     detail,
     ref.provider
   );
+}
+
+async function listSessionTurns(
+  context: SessionApiContext,
+  rawSessionID: string,
+  input: SessionTurnsListInput
+) {
+  const ref = parseSessionRef(rawSessionID);
+  const provider = capableProvider(context, ref.provider, "sessions", "readSession");
+  if (typeof provider.listSessionTurns === "function") {
+    return provider.listSessionTurns(ref.sessionId, input);
+  }
+  const detail = await provider.readSession!(ref.sessionId, { includeTurns: true });
+  const turns = Array.isArray(detail.turns) ? detail.turns.filter(isRecord) : [];
+  const ordered = input.sortDirection === "asc" ? turns : [...turns].reverse();
+  const offset = positiveCursor(input.cursor);
+  const limit = input.limit ?? 20;
+  const data = ordered.slice(offset, offset + limit);
+  const nextOffset = offset + data.length;
+  return {
+    data,
+    ...(nextOffset < ordered.length ? { nextCursor: String(nextOffset) } : {})
+  };
 }
 
 async function sessionMessage(context: SessionApiContext, rawSessionID: string, body: Record<string, unknown>) {
@@ -229,6 +263,34 @@ function validateDeclaredSessionView(
 function sessionListInput(request: Request): { cursor: string; limit: number } {
   const params = new URL(request.url).searchParams;
   return { cursor: cleanParam(params.get("cursor")), limit: sessionLimit(params.get("limit")) };
+}
+
+function sessionTurnsInput(request: Request): SessionTurnsListInput {
+  const params = new URL(request.url).searchParams;
+  const itemsView = cleanParam(params.get("items_view"));
+  const sortDirection = cleanParam(params.get("sort_direction"));
+  return {
+    cursor: cleanParam(params.get("cursor")),
+    limit: sessionTurnLimit(params.get("limit")),
+    itemsView: ["full", "notLoaded", "summary"].includes(itemsView)
+      ? itemsView as SessionTurnsListInput["itemsView"]
+      : "summary",
+    sortDirection: sortDirection === "asc" ? "asc" : "desc"
+  };
+}
+
+function includeTurns(request: Request): boolean {
+  return ["1", "true"].includes(cleanParam(new URL(request.url).searchParams.get("include_turns")).toLowerCase());
+}
+
+function sessionTurnLimit(value: string | null): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, 50) : 20;
+}
+
+function positiveCursor(value: string | undefined): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 function sessionCreateInput(
@@ -503,6 +565,10 @@ function stringBody(body: Record<string, unknown>, key: string): string {
 
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function firstNonEmpty(...values: string[]): string {

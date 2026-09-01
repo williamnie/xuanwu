@@ -54,6 +54,18 @@ export type ThreadListResult = {
   data: ThreadSummary[];
   nextCursor?: string;
 };
+export type ThreadReadInput = { includeTurns?: boolean };
+export type ThreadTurnsListInput = {
+  cursor?: string;
+  itemsView?: "full" | "notLoaded" | "summary";
+  limit?: number;
+  sortDirection?: "asc" | "desc";
+};
+export type ThreadTurnsListResult = {
+  backwardsCursor?: string;
+  data: Array<Record<string, unknown>>;
+  nextCursor?: string;
+};
 export type ThreadSummary = Record<string, unknown> & {
   ephemeral: boolean;
   id: string;
@@ -94,6 +106,15 @@ export function normalizeThreadListResult(value: unknown): ThreadListResult {
   };
 }
 
+export function normalizeThreadTurnsListResult(value: unknown): ThreadTurnsListResult {
+  const raw = recordValue(value);
+  return {
+    data: arrayField(raw, ["data", "turns"], value).map(recordValue),
+    nextCursor: stringField(raw, "nextCursor") || stringField(raw, "next_cursor") || undefined,
+    backwardsCursor: stringField(raw, "backwardsCursor") || stringField(raw, "backwards_cursor") || undefined
+  };
+}
+
 export function normalizeThreadResult(value: unknown): ThreadSummary {
   const raw = recordValue(value);
   return normalizeThread(raw.thread ?? raw.data ?? value);
@@ -127,6 +148,15 @@ export function threadListParams(input: ThreadListInput): Record<string, unknown
   if (input.limit && input.limit > 0) params.limit = input.limit;
   const cursor = input.cursor?.trim();
   if (cursor) params.cursor = cursor;
+  return params;
+}
+
+export function threadTurnsListParams(threadID: string, input: ThreadTurnsListInput): Record<string, unknown> {
+  const params: Record<string, unknown> = { threadId: threadID.trim() };
+  if (input.limit && input.limit > 0) params.limit = input.limit;
+  if (input.cursor?.trim()) params.cursor = input.cursor.trim();
+  if (input.itemsView) params.itemsView = input.itemsView;
+  if (input.sortDirection) params.sortDirection = input.sortDirection;
   return params;
 }
 

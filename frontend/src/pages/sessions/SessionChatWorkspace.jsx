@@ -10,10 +10,13 @@ import { clearSessionCommandState, createSessionCommandState } from './sessionCo
 export default function SessionChatWorkspace({
   detailLoading,
   detailError,
+  hasOlderTurns,
+  loadOlderTurns,
   selectedSession,
   selectedSessionProject,
   liveEvents,
   sessionRunning,
+  turnsLoading,
   optimisticUserMessages,
   pendingApproval,
   observationNotice,
@@ -69,10 +72,13 @@ export default function SessionChatWorkspace({
               session={selectedSession}
               project={selectedSessionProject}
               liveEvents={liveEvents}
+              hasOlderTurns={hasOlderTurns}
+              loadOlderTurns={loadOlderTurns}
               running={sessionRunning}
               sending={sending}
               optimisticUserMessages={optimisticUserMessages}
               pendingApproval={pendingApproval}
+              turnsLoading={turnsLoading}
               navigateTo={navigateTo}
             />
           </>

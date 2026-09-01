@@ -101,6 +101,19 @@ export function providerSessionKey(provider = DEFAULT_SESSION_PROVIDER, sessionI
   return `${normalizedProvider}:${normalizedSessionId}`;
 }
 
+export function chronologicalTurns(value) {
+  return Array.isArray(value) ? [...value].reverse() : [];
+}
+
+export function mergeTurnPages(older, current) {
+  const merged = new Map();
+  for (const turn of [...older, ...current]) {
+    const key = String(turn?.id || `turn-${merged.size}`);
+    merged.set(key, turn);
+  }
+  return [...merged.values()];
+}
+
 export function eventSessionKey(event) {
   return providerSessionKey(event?.provider || DEFAULT_SESSION_PROVIDER, event?.threadId || '');
 }

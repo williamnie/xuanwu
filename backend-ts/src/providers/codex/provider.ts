@@ -34,7 +34,8 @@ const DEFAULT_DEVELOPER_INSTRUCTIONS = [
 type CodexIssueAdapter = {
   initialize(): Promise<CodexInitializeResult>;
   listThreads(input?: Parameters<CodexAdapter["listThreads"]>[0]): Promise<Awaited<ReturnType<CodexAdapter["listThreads"]>>>;
-  readThread(threadID: string): Promise<ThreadSummary>;
+  listThreadTurns(threadID: string, input?: Parameters<CodexAdapter["listThreadTurns"]>[1]): Promise<Awaited<ReturnType<CodexAdapter["listThreadTurns"]>>>;
+  readThread(threadID: string, input?: Parameters<CodexAdapter["readThread"]>[1]): Promise<ThreadSummary>;
   resumeThread(threadID: string): Promise<ThreadSummary>;
   setThreadName(threadID: string, name: string): Promise<{ ok: true; provider_session_id: string }>;
   startThread(input: Parameters<CodexAdapter["startThread"]>[0]): Promise<Awaited<ReturnType<CodexAdapter["startThread"]>>>;
@@ -123,9 +124,16 @@ export class CodexExecutorProvider implements ExecutorProvider {
     return { ...result, data: result.data.map(publicCodexSessionSummary) };
   }
 
-  async readSession(sessionId: string) {
+  async readSession(sessionId: string, input: { includeTurns?: boolean } = {}) {
     await this.adapter.initialize();
-    return publicCodexSessionDetail(await this.adapter.readThread(sessionId.trim()));
+    return publicCodexSessionDetail(await this.adapter.readThread(sessionId.trim(), {
+      includeTurns: input.includeTurns !== false
+    }));
+  }
+
+  async listSessionTurns(sessionId: string, input: Parameters<CodexAdapter["listThreadTurns"]>[1] = {}) {
+    await this.adapter.initialize();
+    return this.adapter.listThreadTurns(sessionId.trim(), input);
   }
 
   async createSession(input: SessionCreateInput): Promise<SessionCreateResult> {

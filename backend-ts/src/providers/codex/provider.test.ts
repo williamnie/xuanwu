@@ -18,9 +18,14 @@ class FakeCodexIssueAdapter {
     return { protocolVersion: "fixture", capabilities: {} };
   }
 
-  async readThread(threadID: string): Promise<ThreadSummary> {
-    this.calls.push({ method: "thread/read", params: { threadID } });
+  async readThread(threadID: string, input: { includeTurns?: boolean } = {}): Promise<ThreadSummary> {
+    this.calls.push({ method: "thread/read", params: { threadID, ...input } });
     return this.readThreadResult ?? this.threadSummary(threadID);
+  }
+
+  async listThreadTurns(threadID: string, input: Record<string, unknown> = {}) {
+    this.calls.push({ method: "thread/turns/list", params: { threadID, ...input } });
+    return { data: [], nextCursor: undefined };
   }
 
   async resumeThread(threadID: string): Promise<ThreadSummary> {
@@ -298,7 +303,7 @@ describe("Codex executor provider", () => {
     });
     expect(adapter.calls).toEqual([
       { method: "initialize" },
-      { method: "thread/read", params: { threadID: "thread-1" } }
+      { method: "thread/read", params: { threadID: "thread-1", includeTurns: true } }
     ]);
   });
 

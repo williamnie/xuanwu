@@ -42,6 +42,7 @@ import SessionSidebar from './sessions/SessionSidebar';
 import SessionWorkspace from './sessions/SessionWorkspace';
 import useSessionPageSelectors from './sessions/useSessionPageSelectors';
 import {
+  chronologicalTurns,
   eventSessionKey,
   eventSessionKeyFromPayload,
   isAgentEvent,
@@ -49,6 +50,7 @@ import {
   isSessionRunning,
   isSessionStartEvent,
   mergeRefreshedSessions,
+  mergeTurnPages,
   mergeSessions,
   normalizePendingApprovals,
   parseApprovalPayload,
@@ -69,9 +71,8 @@ import './sessions/SessionsClient.css';
 
 const PAGE_SIZE = 50;
 const SESSION_DETAIL_REFRESH_DELAY_MS = 250;
-const SESSION_DETAIL_RECONCILE_INTERVAL_MS = 30_000;
-const SESSION_LIST_RECONCILE_INTERVAL_MS = 30_000;
 const SESSION_LIST_REFRESH_DELAY_MS = 800;
+const SESSION_TURN_PAGE_SIZE = 20;
 const PROVIDER_MODELS_TIMEOUT_MS = 15_000;
 
 export default function Sessions({
@@ -90,8 +91,10 @@ export default function Sessions({
   const [cursor, setCursor] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [selectedSession, setSelectedSession] = useState(null);
+  const [turnCursor, setTurnCursor] = useState('');
+  const [turnsLoading, setTurnsLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(showSidebar);
   const [detailLoading, setDetailLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [projectId, setProjectId] = useState('');
@@ -136,6 +139,8 @@ export default function Sessions({
   const activeQueuedSendsRef = useRef(new Set());
   const providerSelectionTouchedRef = useRef(false);
   const modelRequestRef = useRef(0);
+  const detailRequestRef = useRef(null);
+  const turnsRequestRef = useRef(null);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -248,19 +253,31 @@ export default function Sessions({
     }
   }, [cursor, loadingMore]);
 
-  const loadSelected = useCallback(async (isSwitching = false) => {
+  const loadSelected = useCallback(async (isSwitching = false, { refreshTranscript = false } = {}) => {
     if (!selectedId) return;
+    if (detailRequestRef.current?.requestId === selectedId) return detailRequestRef.current.promise;
     if (isSwitching) {
       setDetailLoading(true);
       setSelectedSession(null);
+      setTurnCursor('');
       setDetailError('');
     }
     const requestId = selectedId;
-    try {
-      const detail = await runsApi.getSession(requestId);
+    const promise = (async () => {
+      const [detail, turnPage] = await Promise.all([
+        runsApi.getSession(requestId),
+        refreshTranscript
+          ? runsApi.getSessionTurns(requestId, { limit: SESSION_TURN_PAGE_SIZE })
+          : Promise.resolve(null),
+      ]);
       if (selectedIdRef.current !== requestId) return;
       const running = isSessionRunning(detail);
-      setSelectedSession(detail);
+      const pageTurns = turnPage ? chronologicalTurns(turnPage.data) : null;
+      setSelectedSession((current) => ({
+        ...detail,
+        turns: pageTurns ?? (current?.id === requestId ? current.turns || [] : []),
+      }));
+      if (turnPage) setTurnCursor(turnPage.nextCursor || '');
       setDetailError('');
       setSessionRunning(running);
       setSessions((prev) => syncSessionRuntimeInList(prev, detail, running));
@@ -269,17 +286,47 @@ export default function Sessions({
         requestId,
         normalizePendingApprovals(detail.pending_approvals),
       ));
+    })();
+    detailRequestRef.current = { promise, requestId };
+    try {
+      await promise;
     } catch (err) {
       if (selectedIdRef.current !== requestId) return;
       const message = err.message || '读取 session 详情失败';
       setDetailError(message);
       toast.error(message);
     } finally {
+      if (detailRequestRef.current?.promise === promise) detailRequestRef.current = null;
       if (selectedIdRef.current === requestId) {
         setDetailLoading(false);
       }
     }
   }, [selectedId]);
+
+  const loadOlderTurns = useCallback(async () => {
+    if (!selectedId || !turnCursor || turnsRequestRef.current) return;
+    const requestId = selectedId;
+    setTurnsLoading(true);
+    const promise = runsApi.getSessionTurns(requestId, {
+      cursor: turnCursor,
+      limit: SESSION_TURN_PAGE_SIZE,
+    });
+    turnsRequestRef.current = promise;
+    try {
+      const page = await promise;
+      if (selectedIdRef.current !== requestId) return;
+      const older = chronologicalTurns(page.data);
+      setSelectedSession((current) => current?.id === requestId
+        ? { ...current, turns: mergeTurnPages(older, current.turns || []) }
+        : current);
+      setTurnCursor(page.nextCursor || '');
+    } catch (err) {
+      if (selectedIdRef.current === requestId) toast.error(err.message || '读取更早记录失败');
+    } finally {
+      if (turnsRequestRef.current === promise) turnsRequestRef.current = null;
+      if (selectedIdRef.current === requestId) setTurnsLoading(false);
+    }
+  }, [selectedId, turnCursor]);
 
   const loadModels = useCallback(async (provider = 'codex', runtimeStatus = null) => {
     const requestId = modelRequestRef.current + 1;
@@ -315,7 +362,10 @@ export default function Sessions({
 
 
 
-  useEffect(() => { loadFirstPage(); }, [loadFirstPage]);
+  useEffect(() => {
+    if (showSidebar) loadFirstPage();
+    else setLoading(false);
+  }, [loadFirstPage, showSidebar]);
   useEffect(() => {
     let alive = true;
     runsApi.getSessionPreferences()
@@ -338,23 +388,8 @@ export default function Sessions({
   useEffect(() => {
     const isSwitching = lastSelectedIdRef.current !== selectedId;
     lastSelectedIdRef.current = selectedId;
-    loadSelected(isSwitching);
+    loadSelected(isSwitching, { refreshTranscript: true });
   }, [selectedId, loadSelected]);
-
-  useEffect(() => {
-    if (!selectedId) return undefined;
-    const interval = window.setInterval(() => loadSelected(false), SESSION_DETAIL_RECONCILE_INTERVAL_MS);
-    return () => window.clearInterval(interval);
-  }, [loadSelected, selectedId]);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => loadFirstPage({
-      silent: true,
-      preserveLoaded: true,
-      reportErrors: false,
-    }), SESSION_LIST_RECONCILE_INTERVAL_MS);
-    return () => window.clearInterval(interval);
-  }, [loadFirstPage]);
 
   useEffect(() => { loadModels(sessionSettings.provider, providerRuntimeStatus); }, [loadModels, providerRuntimeStatus, sessionSettings.provider]);
   useEffect(() => {
@@ -371,19 +406,23 @@ export default function Sessions({
   }, [selectedId, selectedSessionProject, selectedSessionRuntimeKey]);
 
   const scheduleListRefresh = useCallback(() => {
+    if (!showSidebar) return;
     window.clearTimeout(listRefreshTimer.current);
     listRefreshTimer.current = window.setTimeout(() => loadFirstPage({
       silent: true,
       preserveLoaded: true,
       reportErrors: false,
     }), SESSION_LIST_REFRESH_DELAY_MS);
-  }, [loadFirstPage]);
+  }, [loadFirstPage, showSidebar]);
 
   const scheduleSelectedRefresh = useCallback((provider, threadId) => {
     const eventKey = providerSessionKey(provider, threadId);
     if (!threadId || eventKey !== selectedId) return;
     window.clearTimeout(detailRefreshTimer.current);
-    detailRefreshTimer.current = window.setTimeout(loadSelected, SESSION_DETAIL_REFRESH_DELAY_MS);
+    detailRefreshTimer.current = window.setTimeout(
+      () => loadSelected(false, { refreshTranscript: true }),
+      SESSION_DETAIL_REFRESH_DELAY_MS,
+    );
   }, [loadSelected, selectedId]);
 
   const refreshSelectedApprovals = useCallback(() => {
@@ -432,10 +471,10 @@ export default function Sessions({
     if (isSessionStopEvent(event)) {
       const stoppedSessionId = eventKey;
       setSessionRunning(false);
-      loadSelected().then(() => {
+      loadSelected(false, { refreshTranscript: true }).then(() => {
         if (selectedIdRef.current === stoppedSessionId) setLiveEvents([]);
       });
-      loadFirstPage();
+      if (showSidebar) loadFirstPage();
     }
   }, undefined, refreshSelectedApprovals), [
     loadFirstPage,
@@ -446,6 +485,7 @@ export default function Sessions({
     selectedId,
     applyInterruptNotice,
     projects,
+    showSidebar,
   ]);
 
   useEffect(() => () => {
@@ -855,7 +895,10 @@ export default function Sessions({
         chatProps={{
           detailLoading,
           detailError,
+          hasOlderTurns: Boolean(turnCursor),
+          loadOlderTurns,
           selectedSession,
+          turnsLoading,
           selectedSessionProject,
           liveEvents,
           sessionRunning,

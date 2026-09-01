@@ -6,21 +6,17 @@ const sessionsSource = readFileSync(new URL('./Sessions.jsx', import.meta.url), 
 const transcriptSource = readFileSync(new URL('./sessions/SessionTranscript.jsx', import.meta.url), 'utf8');
 const chatWorkspaceSource = readFileSync(new URL('./sessions/SessionChatWorkspace.jsx', import.meta.url), 'utf8');
 
-test('session detail keeps a low-frequency reconcile timer while selected', () => {
-  assert.match(sessionsSource, /SESSION_DETAIL_RECONCILE_INTERVAL_MS\s*=\s*30_000/);
-  assert.match(
-    sessionsSource,
-    /setInterval\(\(\)\s*=>\s*loadSelected\(false\),\s*SESSION_DETAIL_RECONCILE_INTERVAL_MS\)/,
-  );
-  assert.match(sessionsSource, /window\.clearInterval\(interval\)/);
+test('session detail uses paginated summary turns without periodic full transcript replay', () => {
+  assert.match(sessionsSource, /runsApi\.getSessionTurns\(requestId/);
+  assert.match(sessionsSource, /SESSION_TURN_PAGE_SIZE\s*=\s*20/);
+  assert.doesNotMatch(sessionsSource, /SESSION_DETAIL_RECONCILE_INTERVAL_MS/);
+  assert.doesNotMatch(sessionsSource, /setInterval\([^)]*loadSelected/);
 });
 
-test('session list keeps a low-frequency reconcile timer while page stays open', () => {
-  assert.match(sessionsSource, /SESSION_LIST_RECONCILE_INTERVAL_MS\s*=\s*30_000/);
-  assert.match(
-    sessionsSource,
-    /setInterval\(\(\)\s*=>\s*loadFirstPage\(\{\s*silent:\s*true,\s*preserveLoaded:\s*true,\s*reportErrors:\s*false,?\s*\}\),\s*SESSION_LIST_RECONCILE_INTERVAL_MS\)/,
-  );
+test('embedded Run transcript does not load or poll the global session list', () => {
+  assert.match(sessionsSource, /if \(showSidebar\) loadFirstPage\(\)/);
+  assert.match(sessionsSource, /if \(!showSidebar\) return/);
+  assert.doesNotMatch(sessionsSource, /SESSION_LIST_RECONCILE_INTERVAL_MS/);
 });
 
 test('live thinking state avoids duplicate thinking labels', () => {

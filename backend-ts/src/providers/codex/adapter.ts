@@ -3,11 +3,13 @@ import { codexProviderApprovalDecision } from "./approvalBroker.ts";
 import {
   CodexThreadLifecycleError,
   normalizeThreadListResult,
+  normalizeThreadTurnsListResult,
   normalizeThreadResult,
   normalizeThreadStartResult,
   normalizeTurnStartResult,
   threadIDParams,
   threadListParams,
+  threadTurnsListParams,
   threadStartParams,
   turnInterruptParams,
   turnStartParams
@@ -16,9 +18,12 @@ import type {
   CodexUserInput,
   ThreadListInput,
   ThreadListResult,
+  ThreadReadInput,
   ThreadStartInput,
   ThreadStartResult,
   ThreadSummary,
+  ThreadTurnsListInput,
+  ThreadTurnsListResult,
   TurnInterruptResult,
   TurnStartOptions,
   TurnStartResult
@@ -29,9 +34,12 @@ export type {
   ThreadLifecycleErrorDetail,
   ThreadListInput,
   ThreadListResult,
+  ThreadReadInput,
   ThreadStartInput,
   ThreadStartResult,
   ThreadSummary,
+  ThreadTurnsListInput,
+  ThreadTurnsListResult,
   TurnInterruptResult,
   TurnStartOptions,
   TurnStartResult
@@ -116,9 +124,17 @@ export class CodexAdapter {
     return normalizeThreadListResult(result);
   }
 
-  async readThread(threadID: string): Promise<ThreadSummary> {
-    const result = await this.lifecycleRequest("thread/read", { ...threadIDParams(threadID), includeTurns: true });
+  async readThread(threadID: string, input: ThreadReadInput = {}): Promise<ThreadSummary> {
+    const result = await this.lifecycleRequest("thread/read", {
+      ...threadIDParams(threadID),
+      includeTurns: input.includeTurns !== false
+    });
     return normalizeThreadResult(result);
+  }
+
+  async listThreadTurns(threadID: string, input: ThreadTurnsListInput = {}): Promise<ThreadTurnsListResult> {
+    const result = await this.lifecycleRequest("thread/turns/list", threadTurnsListParams(threadID, input));
+    return normalizeThreadTurnsListResult(result);
   }
 
   async resumeThread(threadID: string): Promise<ThreadSummary> {

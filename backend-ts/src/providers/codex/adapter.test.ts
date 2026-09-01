@@ -203,6 +203,35 @@ describe("Codex adapter RPC methods", () => {
     ]);
   });
 
+  test("reads lightweight thread metadata and paginates summarized turns", async () => {
+    const rpc = new FakeRpc({
+      "thread/read": { thread: { id: "thread-1", turns: [] } },
+      "thread/turns/list": {
+        data: [{ id: "turn-2", items: [{ type: "agentMessage", text: "summary" }] }],
+        nextCursor: "older"
+      }
+    });
+    const adapter = new CodexAdapter(rpc);
+
+    await adapter.readThread("thread-1", { includeTurns: false });
+    const turns = await adapter.listThreadTurns("thread-1", {
+      itemsView: "summary",
+      limit: 20,
+      sortDirection: "desc"
+    });
+
+    expect(turns).toMatchObject({ data: [{ id: "turn-2" }], nextCursor: "older" });
+    expect(rpc.calls).toEqual([
+      { method: "thread/read", params: { threadId: "thread-1", includeTurns: false } },
+      { method: "thread/turns/list", params: {
+        threadId: "thread-1",
+        itemsView: "summary",
+        limit: 20,
+        sortDirection: "desc"
+      } }
+    ]);
+  });
+
   test("starts turns with issue prompt input and normalized runtime options", async () => {
     const rpc = new FakeRpc({
       "turn/start": { turn: { id: "turn-1" } }

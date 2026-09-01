@@ -178,6 +178,18 @@ export type SessionListResult = {
   data: Array<Record<string, unknown>>;
   nextCursor?: string;
 };
+export type SessionReadInput = { includeTurns?: boolean };
+export type SessionTurnsListInput = {
+  cursor?: string;
+  itemsView?: "full" | "notLoaded" | "summary";
+  limit?: number;
+  sortDirection?: "asc" | "desc";
+};
+export type SessionTurnsListResult = {
+  backwardsCursor?: string;
+  data: Array<Record<string, unknown>>;
+  nextCursor?: string;
+};
 export type SessionCreateInput = {
   approvalPolicy?: string;
   cwd: string;
@@ -242,7 +254,8 @@ export interface ExecutorProvider {
   events?(): AsyncIterable<ProviderEvent>;
   interrupt?(input: InterruptInput): Promise<void>;
   listSessions?(input: SessionListInput): Promise<SessionListResult>;
-  readSession?(sessionId: string): Promise<Record<string, unknown>>;
+  listSessionTurns?(sessionId: string, input: SessionTurnsListInput): Promise<SessionTurnsListResult>;
+  readSession?(sessionId: string, input?: SessionReadInput): Promise<Record<string, unknown>>;
   sendSessionMessage?(input: SessionMessageInput): Promise<SessionMessageResult>;
   listModels?(): Promise<unknown>;
   resolveApproval?(requestId: string, decision: ApprovalDecision): Promise<void>;

@@ -48,6 +48,7 @@ describe("Bun Sessions API compatibility", () => {
       }));
       const list = await router.handle(new Request(`${BASE_URL}/api/sessions?limit=20`));
       const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/codex:thread-new`));
+      const turns = await router.handle(new Request(`${BASE_URL}/api/sessions/codex:thread-new/turns?limit=20`));
       const message = await router.handle(jsonRequest("/api/sessions/codex:thread-new/messages", {
         prompt: "follow up",
         model: "codex-default",
@@ -69,7 +70,9 @@ describe("Bun Sessions API compatibility", () => {
       expect(list.status).toBe(200);
       expect(await list.json()).toMatchObject({ data: [{ id: "codex:thread-new", provider_session_id: "thread-new" }] });
       expect(detail.status).toBe(200);
-      expect(await detail.json()).toMatchObject({ id: "codex:thread-new", provider_session_id: "thread-new" });
+      expect(await detail.json()).toMatchObject({ id: "codex:thread-new", provider_session_id: "thread-new", turns: [] });
+      expect(turns.status).toBe(200);
+      expect(await turns.json()).toMatchObject({ data: [{ id: "turn-new" }], nextCursor: "older" });
       expect(message.status).toBe(201);
       expect(await message.json()).toEqual({
         isRunning: true,
@@ -84,7 +87,8 @@ describe("Bun Sessions API compatibility", () => {
       expect(provider.calls).toEqual([
         ["createSession", { cwd: "/tmp/demo", prompt: "hello session", reasoningEffort: "high", serviceTier: "priority" }],
         ["listSessions", { limit: 20 }],
-        ["readSession", { sessionId: "thread-new" }],
+        ["readSession", { includeTurns: false, sessionId: "thread-new" }],
+        ["listSessionTurns", { itemsView: "summary", limit: 20, sessionId: "thread-new", sortDirection: "desc" }],
         ["sendSessionMessage", { sessionId: "thread-new", prompt: "follow up", serviceTier: "priority" }]
       ]);
     } finally {
@@ -196,7 +200,7 @@ describe("Bun Sessions API compatibility", () => {
         isRunning: true
       });
       expect(provider.calls).toEqual([
-        ["readSession", { sessionId: "thread-empty" }]
+        ["readSession", { includeTurns: false, sessionId: "thread-empty" }]
       ]);
     } finally {
       database.close();
@@ -550,8 +554,8 @@ describe("Bun Sessions API compatibility", () => {
       expect(claude.calls).toEqual([
         ["createSession", { cwd: "/tmp/claude-demo", prompt: "hello Claude" }],
         ["listSessions", { limit: 20 }],
-        ["readSession", { sessionId: "claude-existing" }],
-        ["readSession", { sessionId: "claude-new" }],
+        ["readSession", { includeTurns: false, sessionId: "claude-existing" }],
+        ["readSession", { includeTurns: false, sessionId: "claude-new" }],
         ["sendSessionMessage", { cwd: "/tmp/claude-demo", sessionId: "claude-new", prompt: "continue" }]
       ]);
     } finally {
@@ -674,7 +678,7 @@ describe("Bun Sessions API compatibility", () => {
         .handle(new Request(`${BASE_URL}/api/sessions/thread-legacy`));
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ id: "codex:thread-legacy", provider: "codex" });
-      expect(codex.calls).toEqual([["readSession", { sessionId: "thread-legacy" }]]);
+      expect(codex.calls).toEqual([["readSession", { includeTurns: false, sessionId: "thread-legacy" }]]);
       expect(claude.calls).toEqual([]);
     } finally {
       database.close();
@@ -804,10 +808,15 @@ class SessionsProvider implements ExecutorProvider {
     return { data: [sessionSummary("thread-new")], nextCursor: "" };
   }
 
-  async readSession(sessionId: string) {
-    this.calls.push(["readSession", { sessionId }]);
+  async readSession(sessionId: string, input: { includeTurns?: boolean } = {}) {
+    this.calls.push(["readSession", { includeTurns: input.includeTurns, sessionId }]);
     if (this.readSessionError) throw this.readSessionError;
     return this.readSessionResult ?? sessionSummary(sessionId);
+  }
+
+  async listSessionTurns(sessionId: string, input: Record<string, unknown>) {
+    this.calls.push(["listSessionTurns", compact({ sessionId, ...input })]);
+    return { data: [{ id: "turn-new", items: [{ type: "agentMessage", text: "summary" }] }], nextCursor: "older" };
   }
 
   async createSession(input: Record<string, unknown>) {
@@ -877,8 +886,8 @@ class ClaudeSessionsProvider implements ExecutorProvider {
     };
   }
 
-  async readSession(sessionId: string) {
-    this.calls.push(["readSession", { sessionId }]);
+  async readSession(sessionId: string, input: { includeTurns?: boolean } = {}) {
+    this.calls.push(["readSession", { includeTurns: input.includeTurns, sessionId }]);
     return { id: `claude:${sessionId}`, provider: "claude", provider_session_id: sessionId, turns: [] };
   }
 

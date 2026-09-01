@@ -6,6 +6,7 @@ import { ensureDefaultPiAgent } from "./defaultPiAgent.ts";
 import { ensureDefaultPiPersona } from "./defaultPiPersona.ts";
 import { runMigrations } from "./migrations.ts";
 import { ISSUE_EVENT_QUERY_INDEX_NAMES } from "./schema/075_issue_event_query_indexes.ts";
+import { sqlSlowTraceThreshold, traceSlowSQLiteQueries } from "./slowQueryTrace.ts";
 
 type OpenDatabaseOptions = {
   dbPath?: string;
@@ -57,13 +58,18 @@ export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<R
       configureWalConnection(sqlite);
     }
 
+    const connectionRole = target.readonly ? "reader" : "writer";
+    const tracedSqlite = traceSlowSQLiteQueries(sqlite, {
+      connectionRole,
+      slowThresholdMs: sqlSlowTraceThreshold()
+    });
     return {
-      connectionRole: target.readonly ? "reader" : "writer",
+      connectionRole,
       path: target.path,
       readonly: target.readonly,
-      sqlite,
+      sqlite: tracedSqlite,
       close: () => sqlite.close(),
-      transaction: (inside) => sqlite.transaction(inside)
+      transaction: (inside) => tracedSqlite.transaction(inside)
     };
   } catch (error) {
     sqlite.close();

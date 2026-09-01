@@ -37,7 +37,7 @@ const DETAIL_SECTIONS = [
 ];
 
 export default function RunDetail({ navigateTo, run }) {
-  const [activeSection, setActiveSection] = useState('provider');
+  const [activeSection, setActiveSection] = useState('summary');
   const [selectedAttemptId, setSelectedAttemptId] = useState(() => run?.attempts?.at(-1)?.id || '');
   const attempts = useMemo(() => Array.isArray(run?.attempts) ? run.attempts : [], [run]);
   const latestAttemptId = attempts.at(-1)?.id || '';
@@ -50,7 +50,7 @@ export default function RunDetail({ navigateTo, run }) {
   const providerSessionRef = runAttemptProviderSessionRef(selectedAttempt, run);
 
   useEffect(() => {
-    setActiveSection(latestProviderSessionRef ? 'provider' : 'summary');
+    setActiveSection('summary');
     setSelectedAttemptId(latestAttemptId);
   }, [latestAttemptId, latestProviderSessionRef, run?.id]);
 

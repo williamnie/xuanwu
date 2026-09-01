@@ -126,7 +126,19 @@ function filesFromFileChangeTool(tool) {
   return parseDiff(tool.text || '');
 }
 
-export default function SessionTranscript({ session, project, liveEvents, optimisticUserMessages, running, sending, pendingApproval, navigateTo }) {
+export default function SessionTranscript({
+  session,
+  project,
+  liveEvents,
+  optimisticUserMessages,
+  running,
+  sending,
+  pendingApproval,
+  navigateTo,
+  hasOlderTurns = false,
+  loadOlderTurns,
+  turnsLoading = false,
+}) {
   const turns = useMemo(() => session?.turns || [], [session?.turns]);
   const localUserMessages = useMemo(
     () => optimisticUserMessages.filter((message) => message.sessionId === session?.id),
@@ -239,6 +251,16 @@ export default function SessionTranscript({ session, project, liveEvents, optimi
       <SessionCommandReplay history={session?.command_history || []} navigateTo={navigateTo} />
       <div className="session-transcript" ref={scrollRef} onScroll={handleScroll}>
         <div className="session-transcript-content" ref={contentRef}>
+          {hasOlderTurns ? (
+            <button
+              className="session-load-earlier-button"
+              disabled={turnsLoading}
+              onClick={loadOlderTurns}
+              type="button"
+            >
+              {turnsLoading ? '正在加载…' : '加载更早记录'}
+            </button>
+          ) : null}
           {turns.map((turn, index) => (
             <TurnItem
               key={turn.id || index}
