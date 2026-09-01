@@ -10,7 +10,9 @@ import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { createPiAction, getPiIssueCompletionWatch, listIssueSupervisorEvents } from "../db/repositories/pi.ts";
+import { getIssueAsWork } from "../domain/work/issueAdapter.ts";
 import { createHumanReviewRequest, readIssueDecisionProjection } from "../domain/review/humanReview.ts";
+import { resolvePiNotificationPreference } from "../pi/notificationPreferenceResolver.ts";
 import { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";
@@ -288,6 +290,109 @@ describe("PI action dispatcher supervisor actions", () => {
       });
       expect(listIssueRuns(db, 305).at(-1)).toMatchObject({ provider_turn_id: "turn-followup" });
       expect(listIssueEvents(db, 305).map((event) => event.type)).toContain("issue.supervisor_resume_followup");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("run.interrupt dispatches an approved revision-bound control action", async () => {
+    const db = await fixtureDb();
+    const provider = new SupervisorProvider();
+    try {
+      insertProject(db, "demo");
+      insertIssueRunSession(db, {
+        issueID: 306,
+        projectID: "demo",
+        sessionID: "thread-306",
+        turnID: "turn-306"
+      });
+      const action = createPiAction(db, {
+        action_type: "run.interrupt",
+        approved_by: "test:user",
+        id: "run-interrupt-action",
+        issue_id: 306,
+        payload_json: JSON.stringify({
+          action: "interrupt",
+          expected_attempt_revision: 0,
+          expected_revision: 0,
+          reason: "stop current run",
+          run_id: "xw:run:issue_runs:issue-306-attempt-1"
+        }),
+        project_id: "demo",
+        status: "approved"
+      });
+
+      await expect(dispatchPiAction({ database: db, providers: { codex: provider } }, action))
+        .resolves.toMatchObject({ mutation: { action: "interrupt" } });
+      expect(provider.calls).toContainEqual(expect.objectContaining({
+        sessionId: "thread-306",
+        turnId: "turn-306"
+      }));
+      expect(db.sqlite.query<{ status: string }, []>(
+        "select status from run_attempts where issue_run_id='issue-306-attempt-1' order by sequence desc limit 1"
+      ).get()).toEqual({ status: "interrupted" });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("work.cancel dispatches an approved revision-bound control action", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo");
+      insertIssue(db, { issueID: 307, projectID: "demo", status: "triage" });
+      const workID = "xw:work:issues:307" as const;
+      const work = getIssueAsWork(db, 307);
+      if (!work) throw new Error("missing Work projection");
+      const action = createPiAction(db, {
+        action_type: "work.cancel",
+        approved_by: "test:user",
+        id: "work-cancel-action",
+        issue_id: 307,
+        payload_json: JSON.stringify({
+          action: "cancel",
+          expected_revision: work.revision,
+          reason: "cancel current Work",
+          work_id: workID
+        }),
+        project_id: "demo",
+        status: "approved"
+      });
+
+      await expect(dispatchPiAction({ database: db }, action))
+        .resolves.toMatchObject({ mutation: { applied: true }, work: { status: "cancelled" } });
+      expect(getIssue(db, 307)).toMatchObject({ status: "cancelled" });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("notification preference approval dispatches the persisted structured choice", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo");
+      const action = createPiAction(db, {
+        action_type: "notification.preference.update",
+        approved_by: "test:user",
+        conversation_id: "conv-notification",
+        id: "notification-preference-action",
+        payload_json: JSON.stringify({
+          mode: "quiet",
+          project_id: "demo",
+          scope: "project",
+          temporary: false
+        }),
+        project_id: "demo",
+        status: "approved"
+      });
+
+      await expect(dispatchPiAction({ database: db }, action)).resolves.toMatchObject({
+        preference: { mode: "quiet", project_id: "demo", scope: "project" }
+      });
+      expect(resolvePiNotificationPreference(db, { projectID: "demo" })).toMatchObject({
+        effective: { mode: "quiet" },
+        source: "project"
+      });
     } finally {
       db.close();
     }

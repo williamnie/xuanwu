@@ -7,6 +7,7 @@ import {
   SUPERVISOR_CONTROL_READ_ACTION_TYPES
 } from "./supervisorControlContracts.ts";
 import { assessDataEgress, isExternalEgressAction } from "../security/promptInjectionDefense.ts";
+import { piActionContract } from "./actionContracts.ts";
 
 export type PiRiskGate = "safe" | "confirm" | "high";
 export type PiRiskLevel = "low" | "medium" | "high";
@@ -149,6 +150,8 @@ export function classifyPiActionRisk(actionType: string, override: Partial<PiRis
 }
 
 function baseRisk(actionType: string): PiRiskClassification {
+  const contract = piActionContract(actionType);
+  if (contract) return risk(contract.risk, contract.risk === "safe" ? "low" : contract.risk === "confirm" ? "medium" : "high");
   if (SAFE_ACTIONS.has(actionType)) return risk("safe", "low");
   if (CONFIRM_ACTIONS.has(actionType)) return risk("confirm", "medium");
   if (HIGH_RISK_ACTIONS.has(actionType)) return risk("high", "high");
@@ -189,10 +192,16 @@ export function decidePiAuthorization(
     return { decision: "execute", reason: withScopeReason("trusted read-only action is allowed by gate", scopeDecision.reason) };
   }
   const mode = policy.mode ?? "attended";
-  if (mode === "manual") return { decision: "ask", reason: "manual mode requires user approval" };
+  const contract = piActionContract(envelope.action_type);
+  if (mode === "manual") return contract?.resolution === "inline_current_turn"
+    ? { decision: "deny", reason: "action requires exact current-turn authorization" }
+    : { decision: "ask", reason: "manual mode requires user approval" };
   if (mode === "delegated" || mode === "autonomous") {
     if (!authorizedSkillIntents(envelope, policy.allowedSkillIntents ?? policy.allowed_skill_intents)) {
       return { decision: "deny", reason: "delegated skill intent is not covered by authorization allowlist" };
+    }
+    if (contract?.resolution === "inline_current_turn" && !exactAuthorizedActionCovered(envelope, policy)) {
+      return { decision: "deny", reason: "action requires exact current-turn authorization" };
     }
     if (!delegatedActionCovered(envelope, policy)) {
       if (policy.askOnMissingAuthorization === true || policy.ask_on_missing_authorization === true) {
@@ -301,6 +310,11 @@ function delegatedActionCovered(envelope: PiActionEnvelope, policy: PiGatePolicy
   const authorized = policy.authorizedActions ?? [];
   if (authorized.length > 0) return authorizedByEnvelope(envelope, authorized);
   return actionList(policy.allowed_actions ?? policy.allowedActions).length > 0;
+}
+
+function exactAuthorizedActionCovered(envelope: PiActionEnvelope, policy: PiGatePolicy): boolean {
+  const authorized = policy.authorizedActions ?? [];
+  return authorized.length > 0 && authorizedByEnvelope(envelope, authorized);
 }
 
 function stringList(value: unknown): string[] {

@@ -35,6 +35,12 @@ import {
 } from "./issueProposalContext.ts";
 import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
 import {
+  humanReviewExpectedState,
+  issueBatchExpectedState,
+  issueEnqueueExpectedState,
+  sessionExpectedState
+} from "./actionFreshness.ts";
+import {
   cancelIssueCompletionWatchAction,
   createIssueCompletionWatchAction,
   listIssueCompletionWatchesAction,
@@ -242,11 +248,15 @@ export function createPiRunnerActions(
     createSessionSteerProposal: (input) => createPendingPiAction(db, context, sessionSteerProposal(db, input)),
     auditSkillIntents: (input) => safeSkillIntentAudit(db, context, input),
     enqueueIssueProposal: (input) => {
+      const issue = mustGetIssue(db, input.issue_id);
       const proposal = {
         actionType: "issue.enqueue",
         issueID: input.issue_id,
-        payload: { issue_id: input.issue_id },
-        projectID: issueProjectID(db, input.issue_id, context),
+        payload: {
+          issue_id: input.issue_id,
+          expected_state: issueEnqueueExpectedState(issue)
+        },
+        projectID: issue.project_id || (context.project?.id ?? ""),
         rationale: input.rationale
       };
       const actionContext = actionContextForProposal(context, proposal);
@@ -297,7 +307,12 @@ function cancelIssues(
   });
   return createPendingPiAction(db, actionContext, {
     actionType,
-    payload: { issue_ids: prepared.issues.map((issue) => issue.id), reason, status: "cancelled" },
+    payload: {
+      expected_state: issueBatchExpectedState(prepared.issues),
+      issue_ids: prepared.issues.map((issue) => issue.id),
+      reason,
+      status: "cancelled"
+    },
     projectID,
     rationale: input.rationale
   }, () => executeIssueStatusUpdate(db, statusInput, issueStatusRuntime(context)));
@@ -316,7 +331,10 @@ function updateIssueStatuses(
   });
   return createPendingPiAction(db, actionContext, {
     actionType,
-    payload: cleanObjectPayload(input),
+    payload: {
+      ...cleanObjectPayload(input),
+      expected_state: issueBatchExpectedState(prepared.issues)
+    },
     projectID: prepared.projectID,
     rationale: input.reason
   }, () => executeIssueStatusUpdate(db, input, issueStatusRuntime(context)));
@@ -333,7 +351,11 @@ function respondToHumanReview(
     issueID: issue.id,
     projectID: issue.project_id
   });
-  const payload = cleanObjectPayload(input);
+  const currentReview = readIssueDecisionProjection(db, issue.id).request;
+  const payload = {
+    ...cleanObjectPayload(input),
+    expected_state: humanReviewExpectedState(issue, currentReview)
+  };
   return createPendingPiAction(db, actionContext, {
     actionType,
     issueID: issue.id,
@@ -374,7 +396,11 @@ function deleteIssuesProposal(
   return createPendingPiAction(db, actionContext, {
     actionType,
     issueID: issues.length === 1 ? issues[0]?.id : undefined,
-    payload: { issue_ids: issues.map((issue) => issue.id), reason: input.reason },
+    payload: {
+      expected_state: issueBatchExpectedState(issues),
+      issue_ids: issues.map((issue) => issue.id),
+      reason: input.reason
+    },
     projectID,
     rationale: input.reason
   }, () => deleteIssues(db, issues.map((issue) => issue.id)));
@@ -743,6 +769,7 @@ function sessionSteerProposal(db: RunnerDatabase, input: SessionSteerProposalInp
   return {
     actionType: "session.steer",
     payload: {
+      expected_state: sessionExpectedState(session),
       prompt: input.prompt,
       progress_context: progress.summary,
       provider: session.provider,

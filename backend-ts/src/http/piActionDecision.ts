@@ -16,6 +16,7 @@ import { readMcpCapability, readMcpServer } from "../mcp/registry.ts";
 import { mcpCapabilityFingerprint } from "../mcp/approvalPolicy.ts";
 import { getPiMcpCapability } from "../db/repositories/piMcpCapabilities.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
+import { evaluatePiActionFreshness } from "../pi/actionFreshness.ts";
 
 export type PiActionDecisionContext = {
   auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
@@ -60,6 +61,7 @@ async function approveAction(context: PiActionDecisionContext, id: string, actor
   if (isTerminal(action) || action.status === "executing") return action;
   assertApprovableGate(action);
   assertCurrentMcpCapability(context.database, action);
+  assertFreshPiAction(context, action, "approval");
   const approved = action.status === "approved" ? action : approvePendingAction(context, action, actorID);
   return await executeApprovedPiAction(context, approved.id);
 }
@@ -171,6 +173,7 @@ export async function executeApprovedPiAction(context: PiActionDecisionContext, 
     throw new HttpError(400, "PI action must be approved before execute");
   }
   assertExecutableGate(action);
+  assertFreshPiAction(context, action, "dispatch");
   const executing = writeExecutingAction(context, action);
   try {
     return completeAction(context, executing, await dispatchPiAction(context, executing));
@@ -179,6 +182,39 @@ export async function executeApprovedPiAction(context: PiActionDecisionContext, 
     recordPiActionAuditEvent(context.database, failed, "execution_error", { actor: "executor", error: safeError(error) });
     return failed;
   }
+}
+
+function assertFreshPiAction(
+  context: PiActionDecisionContext,
+  action: PiAction,
+  phase: "approval" | "dispatch"
+): void {
+  const freshness = approvalLeaseExpired(action)
+    ? { fresh: false as const, reason: "approval_expired" }
+    : evaluatePiActionFreshness(context.database, action);
+  if (freshness.fresh) return;
+  const reason = `${phase}:${freshness.reason}`;
+  const rejected = writeAction(
+    context,
+    action,
+    "rejected",
+    { action_id: action.id, reason, status: "rejected" },
+    "pi.action_rejected",
+    { decided_by: "system:action_revalidation" }
+  );
+  recordPiActionAuditEvent(context.database, rejected, "approval_stale", {
+    actor: rejected.decided_by,
+    decision: "reject",
+    reason,
+    payload: freshness.supersededBy ? { superseded_by: freshness.supersededBy } : {}
+  });
+  throw new HttpError(409, `PI action is stale: ${freshness.reason}`);
+}
+
+function approvalLeaseExpired(action: PiAction): boolean {
+  if (action.lease_expires_at === "") return false;
+  const expiresAt = Date.parse(action.lease_expires_at);
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
 }
 
 function completeAction(context: PiActionDecisionContext, action: PiAction, result: unknown): PiAction {
@@ -232,7 +268,7 @@ function requireAction(db: RunnerDatabase, id: string): PiAction {
 
 function requireCurrentApprovableAction(db: RunnerDatabase, id: string): PiAction {
   const action = requireAction(db, id);
-  if (action.action_type !== "mcp.tool.call" || action.lease_expires_at === "") return action;
+  if (action.lease_expires_at === "") return action;
   const expiresAt = Date.parse(action.lease_expires_at);
   if (!Number.isFinite(expiresAt) || expiresAt > Date.now()) return action;
   if (action.status === "pending") {
@@ -244,10 +280,10 @@ function requireCurrentApprovableAction(db: RunnerDatabase, id: string): PiActio
     recordPiActionAuditEvent(db, expired, "approval_expired", {
       actor: "system:approval_ttl",
       decision: "reject",
-      reason: "MCP approval window expired"
+      reason: "PI action approval window expired"
     });
   }
-  throw new HttpError(409, "MCP approval request expired");
+  throw new HttpError(409, "PI action approval request expired");
 }
 
 function parsePayload(value: string): Record<string, unknown> {

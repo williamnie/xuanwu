@@ -806,13 +806,20 @@ describe("PI runner action tools", () => {
         action_type: "issue.enqueue",
         conversation_id: "conv-1",
         issue_id: issueID,
-        payload_json: JSON.stringify({ issue_id: issueID }),
         project_id: fixture.project.id,
         rationale: "ready to run",
         requires_confirmation: 1,
         result_json: expect.stringContaining("pending"),
         risk_level: "medium",
         status: "pending"
+      });
+      expect(JSON.parse(stored?.payload_json ?? "{}")).toMatchObject({
+        expected_state: {
+          issue_id: issueID,
+          project_id: fixture.project.id,
+          status: "triage"
+        },
+        issue_id: issueID
       });
       expect(action).toMatchObject({
         action_type: "issue.enqueue",

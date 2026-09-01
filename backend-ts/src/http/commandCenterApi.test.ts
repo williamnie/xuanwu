@@ -354,6 +354,9 @@ describe("Command Center aggregate API", () => {
   test("uses one Command Center decision seam for internal Actions and source-linked Proposals", async () => {
     const db = await fixtureDatabase();
     try {
+      db.sqlite.run(`insert into issues
+        (id,project_id,title,status,created_at,updated_at)
+        values (738,'demo','Issue 738','triage',?,?)`, [SOURCE_TIME, SOURCE_TIME]);
       createPiAction(db, {
         action_type: "issue.enqueue",
         gate_decision: "ask",
@@ -386,7 +389,20 @@ describe("Command Center aggregate API", () => {
 
       const detail = await router.handle(new Request(`${BASE_URL}/api/command-center/attention/${encodeURIComponent(internal.id)}`));
       expect(await detail.json()).toMatchObject({
-        decisions: [{ kind: "pi_action", ref: "pi_action:internal-action-pending", status: "pending" }]
+        decisions: [{
+          gate: {
+            authorization_source: "deterministic_policy",
+            blocked_layer: "action_gate",
+            can_approve: true,
+            decision: "ask",
+            freshness: "current",
+            reason_code: "risk_confirmation_required",
+            scope: { issue_ids: [738], project_id: "demo" }
+          },
+          kind: "pi_action",
+          ref: "pi_action:internal-action-pending",
+          status: "pending"
+        }]
       });
       const rejectedAction = await router.handle(jsonRequest(
         `/api/command-center/attention/${encodeURIComponent(internal.id)}/actions/reject`,

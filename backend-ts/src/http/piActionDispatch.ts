@@ -50,6 +50,10 @@ import {
   type SystemRestartAuditEvent
 } from "./systemRestartApi.ts";
 import { reviewHumanIssue } from "../domain/review/humanReview.ts";
+import { writePiNotificationPreference } from "../pi/notificationPreferenceService.ts";
+import { registerRunRoutes } from "./runApi.ts";
+import { registerWorkRoutes } from "./workApi.ts";
+import { createRouter } from "./router.ts";
 
 export type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -68,6 +72,37 @@ export type PiActionDispatchContext = {
   startProjectLoop?: ProjectLoopStarter;
   supervisorManaged?: boolean;
 };
+
+export const PI_ACTION_DISPATCH_TYPES = new Set([
+  "agent.workflow_request",
+  "human_review.respond",
+  "issue.acceptance_request",
+  "issue.cancel",
+  "issue.create",
+  "issue.delete",
+  "issue.enqueue",
+  "issue.schedule_enqueue",
+  "issue.state_repair",
+  "issue.status_update",
+  "issue_completion_watch.cancel",
+  "issue_completion_watch.create",
+  "notification.preference.update",
+  "runner.settings_update",
+  "run.interrupt",
+  "run.resume",
+  "run.retry",
+  "session.steer",
+  "system.restart",
+  "work.cancel",
+  "work.create",
+  "work.enqueue",
+  "work.retry",
+  "work.update"
+]);
+
+export function hasPiActionDispatcher(actionType: string): boolean {
+  return PI_ACTION_DISPATCH_TYPES.has(actionType);
+}
 
 export async function dispatchPiAction(
   context: PiActionDispatchContext,
@@ -91,6 +126,14 @@ export async function dispatchPiAction(
       return deleteIssues(context.database, positiveIDList(payload.issue_ids));
     case "issue.status_update":
       return await updateIssueStatusesAndStartAutoRun(context, action, issueStatusUpdateInput(payload));
+    case "notification.preference.update":
+      return writePiNotificationPreference(context.database, {
+        ...payload,
+        conversation_id: cleanString(payload.conversation_id) || action.conversation_id,
+        policy_kind: "user_preference",
+        project_id: cleanString(payload.project_id) || action.project_id,
+        run_group_id: cleanString(payload.run_group_id)
+      });
     case "human_review.respond":
       return await reviewHumanIssue(
         context.database,
@@ -155,6 +198,16 @@ export async function dispatchPiAction(
       return await dispatchSupervisorPiAction(context, action, payload);
     case "session.steer":
       return await steerSession(context, payload);
+    case "run.interrupt":
+    case "run.resume":
+    case "run.retry":
+      return await dispatchRunControlAction(context, action, payload);
+    case "work.create":
+    case "work.update":
+    case "work.enqueue":
+    case "work.retry":
+    case "work.cancel":
+      return await dispatchWorkControlAction(context, action, payload);
     case "mcp.tool.call":
       return callMcpTool({
         auditContext: {
@@ -192,6 +245,104 @@ export async function dispatchPiAction(
     default:
       throw new Error(`unsupported PI action type: ${action.action_type}`);
   }
+}
+
+async function dispatchWorkControlAction(
+  context: PiActionDispatchContext,
+  action: PiAction,
+  payload: Record<string, unknown>
+): Promise<unknown> {
+  const operation = action.action_type.slice("work.".length);
+  const router = createRouter();
+  registerWorkRoutes(router, { database: context.database, providers: context.providers });
+  const audit = controlAudit(action, payload);
+  let path = "/api/works";
+  let method: "PATCH" | "POST" = "POST";
+  let body: Record<string, unknown>;
+  if (operation === "create") {
+    body = {
+      audit,
+      ...(Array.isArray(payload.depends_on_issue_ids) ? { depends_on_issue_ids: payload.depends_on_issue_ids } : {}),
+      goal: payload.goal,
+      project_id: payload.project_id || action.project_id,
+      status: payload.status || "triage",
+      title: payload.title,
+      type: "engineering_task"
+    };
+  } else {
+    const workID = requiredPayloadText(payload, "work_id");
+    path = `/api/works/${encodeURIComponent(workID)}`;
+    if (operation === "update") {
+      method = "PATCH";
+      body = {
+        audit,
+        expected_revision: payload.expected_revision,
+        ...(payload.goal === undefined ? {} : { goal: payload.goal }),
+        ...(payload.title === undefined ? {} : { title: payload.title })
+      };
+    } else {
+      path += `/actions/${operation}`;
+      body = { audit, expected_revision: payload.expected_revision };
+    }
+  }
+  return await callControlRoute(router, path, method, body, "Work control");
+}
+
+async function dispatchRunControlAction(
+  context: PiActionDispatchContext,
+  action: PiAction,
+  payload: Record<string, unknown>
+): Promise<unknown> {
+  const runID = requiredPayloadText(payload, "run_id");
+  const operation = action.action_type.slice("run.".length);
+  const router = createRouter();
+  registerRunRoutes(router, { database: context.database, providers: context.providers });
+  return await callControlRoute(
+    router,
+    `/api/runs/${encodeURIComponent(runID)}/actions/${operation}`,
+    "POST",
+    {
+      audit: controlAudit(action, payload),
+      ...(payload.expected_attempt_revision === undefined
+        ? {}
+        : { expected_attempt_revision: payload.expected_attempt_revision }),
+      expected_revision: payload.expected_revision,
+      ...(cleanString(payload.prompt) === "" ? {} : { prompt: cleanString(payload.prompt) })
+    },
+    "Run control"
+  );
+}
+
+function controlAudit(action: PiAction, payload: Record<string, unknown>): Record<string, unknown> {
+  return {
+    actor: { id: action.approved_by || action.decided_by || "user", kind: "user" },
+    correlation_id: action.conversation_id || action.id,
+    event_id: `pi-action-control:${action.id}`,
+    occurred_at: new Date().toISOString(),
+    reason: cleanString(payload.reason) || action.rationale || `approved ${action.action_type}`
+  };
+}
+
+async function callControlRoute(
+  router: ReturnType<typeof createRouter>,
+  path: string,
+  method: "PATCH" | "POST",
+  body: Record<string, unknown>,
+  label: string
+): Promise<unknown> {
+  const response = await router.handle(new Request(`http://pi-action.internal${path}`, {
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+    method
+  }));
+  const result = await response.json().catch(() => ({ message: `${label} returned non-JSON` }));
+  if (!response.ok) {
+    const message = result && typeof result === "object" && !Array.isArray(result)
+      ? cleanString((result as Record<string, unknown>).message)
+      : "";
+    throw new Error(message || `${label} failed with HTTP ${response.status}`);
+  }
+  return result;
 }
 
 async function updateIssueStatusesAndStartAutoRun(

@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent, getPiAction, updatePiAction } from "../db/repositories/pi.ts";
+import { evaluatePiActionFreshness } from "./actionFreshness.ts";
 
 type PendingActionRow = {
   action_type: string;
@@ -9,6 +10,7 @@ type PendingActionRow = {
   id: string;
   issue_id: number;
   issue_status: string | null;
+  lease_expires_at: string;
   payload_json: string;
   project_id: string;
   run_status: string | null;
@@ -46,25 +48,8 @@ const AUDIT_EVENT_TYPE = "maintenance_stale_cleanup";
 const STALE_STATUS = "rejected";
 const SUPERVISOR_SOURCES = new Set(["pi_supervisor", "pi_supervisor_decision", "needs_user.escalate"]);
 const SUPERVISOR_ACTIONS = new Set(["needs_user.escalate"]);
-const EXCLUDED_ACTIONS = new Set(["issue.enqueue"]);
 const TERMINAL_ISSUE_STATUSES = new Set(["cancelled", "done", "failed", "needs_user"]);
 const TERMINAL_RUN_STATUSES = new Set(["cancelled", "completed", "done", "failed"]);
-const EXECUTABLE_ACTIONS = new Set([
-  "agent.executor_assign",
-  "agent.workflow_request",
-  "human_review.respond",
-  "issue.comment",
-  "issue.acceptance_request",
-  "issue.create",
-  "issue.retry",
-  "issue.retry_after",
-  "issue.schedule_enqueue",
-  "issue.state_repair",
-  "issue.supervisor_decision",
-  "needs_user.escalate",
-  "session.resume_followup",
-  "session.steer"
-]);
 
 export function dryRunStalePendingActions(db: RunnerDatabase, now = new Date()): StalePendingActionCleanupResult {
   const actions = findStalePendingActions(db, now);
@@ -85,13 +70,13 @@ export function applyStalePendingActions(
 }
 
 function findStalePendingActions(db: RunnerDatabase, now: Date): StalePendingAction[] {
-  return pendingRows(db).flatMap((row) => staleSummary(row, now));
+  return pendingRows(db).flatMap((row) => staleSummary(db, row, now));
 }
 
 function pendingRows(db: RunnerDatabase): PendingActionRow[] {
   return db.sqlite.query<PendingActionRow, []>(`
     select a.id, a.project_id, a.issue_id, a.action_type, a.source, a.payload_json,
-      a.snoozed_until, a.created_at, i.status as issue_status,
+      a.snoozed_until, a.lease_expires_at, a.created_at, i.status as issue_status,
       (
         select ir.status from issue_runs ir
         where ir.issue_id=a.issue_id order by ir.attempt desc limit 1
@@ -103,8 +88,8 @@ function pendingRows(db: RunnerDatabase): PendingActionRow[] {
   `).all();
 }
 
-function staleSummary(row: PendingActionRow, now: Date): StalePendingAction[] {
-  const reason = staleReason(row, now);
+function staleSummary(db: RunnerDatabase, row: PendingActionRow, now: Date): StalePendingAction[] {
+  const reason = staleReason(db, row, now);
   return reason === "" ? [] : [{
     action_id: row.id,
     action_type: row.action_type,
@@ -117,11 +102,15 @@ function staleSummary(row: PendingActionRow, now: Date): StalePendingAction[] {
   }];
 }
 
-function staleReason(row: PendingActionRow, now: Date): string {
-  if (!isSupervisorAction(row) || EXCLUDED_ACTIONS.has(row.action_type)) return "";
+function staleReason(db: RunnerDatabase, row: PendingActionRow, now: Date): string {
+  if (isExpired(row, now)) return "approval_expired";
+  const action = getPiAction(db, row.id);
+  if (!action) return "target_action_missing";
+  const freshness = evaluatePiActionFreshness(db, action);
+  if (!freshness.fresh) return freshness.reason;
+  if (!isSupervisorAction(row)) return "";
   if (TERMINAL_ISSUE_STATUSES.has(row.issue_status ?? "")) return `terminal_issue:${row.issue_status}`;
   if (TERMINAL_RUN_STATUSES.has(row.run_status ?? "")) return `terminal_run:${row.run_status}`;
-  if (isExpired(row, now) && !EXECUTABLE_ACTIONS.has(row.action_type)) return "expired_without_resolver";
   return "";
 }
 
@@ -139,6 +128,7 @@ function isExpired(row: PendingActionRow, now: Date): boolean {
 function expiryValues(row: PendingActionRow): string[] {
   const payload = parsePayload(row.payload_json);
   return [
+    row.lease_expires_at,
     row.snoozed_until,
     stringField(payload, "expires_at"),
     stringField(payload, "expiresAt"),

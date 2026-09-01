@@ -4,7 +4,7 @@ import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import type { GuardianAlertDelivery } from "./guardianAlertDelivery.ts";
 import { ROUTABLE_INTENT_SQL, suppressUnroutableLifecycleIntents } from "./guardianWatchdogMaintenance.ts";
 import { writeGuardianWatchdogAlerts, type WatchdogAlertWriteResult } from "./guardianWatchdogAlerts.ts";
-import { expirePendingMcpApprovals } from "./mcpApprovalExpiry.ts";
+import { expirePendingPiActionApprovals } from "./mcpApprovalExpiry.ts";
 
 export type PiGuardianWatchdogComponent =
   "approval" | "coordinator" | "digest" | "inbox" | "outbox" | "pi_runtime" | "scheduler";
@@ -73,7 +73,7 @@ export async function runPiGuardianWatchdogOnce(
   const probes = input.checks ?? DEFAULT_CHECKS;
   const summary: PiGuardianWatchdogSummary = { alerts: 0, checks: [], errors: 0, scanned: 0 };
   const errors: string[] = [];
-  await timedWatchdogStage("approval_expiry", () => expirePendingMcpApprovals(db, context.now), input);
+  await timedWatchdogStage("approval_expiry", () => expirePendingPiActionApprovals(db, context.now), input);
   await timedWatchdogStage("suppress_unroutable_intents", () => suppressUnroutableLifecycleIntents(db), input);
   for (const probe of probes) {
     summary.scanned += 1;

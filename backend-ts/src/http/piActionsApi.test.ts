@@ -96,6 +96,78 @@ describe("Bun PI actions API", () => {
     }
   });
 
+  test("rejects a pending enqueue when the Issue changed after the request", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const project = mustGetProject(database, "demo");
+      const issueID = insertIssue(database, project.id);
+      const action = createPiRunnerActions(database, { project })
+        .enqueueIssueProposal({ issue_id: issueID, rationale: "ready" }) as { action_id: string };
+      const stored = getPiAction(database, action.action_id);
+      expect(JSON.parse(stored?.expected_state_json ?? "{}")).toMatchObject({
+        issue_id: issueID,
+        project_id: project.id,
+        status: "triage",
+        updated_at: "2026-01-01T00:00:00Z"
+      });
+      database.sqlite.run("update issues set status='done', updated_at=? where id=?", [
+        "2026-01-02T00:00:00Z", issueID
+      ]);
+
+      const response = await postAction(createDefaultRouter({ database }), action.action_id, "approve");
+
+      expect(response.status).toBe(409);
+      expect(getPiAction(database, action.action_id)).toMatchObject({
+        decided_by: "system:action_revalidation",
+        status: "rejected"
+      });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "done" });
+      expect(database.sqlite.query<{ reason: string }, [string]>(
+        "select reason from pi_action_events where action_id=? and event_type='approval_stale'"
+      ).get(action.action_id)?.reason).toContain("target_state_changed:triage->done");
+    } finally {
+      database.close();
+    }
+  });
+
+  test("rejects an older pending enqueue after a newer retry completed", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const project = mustGetProject(database, "demo");
+      const issueID = insertIssue(database, project.id);
+      const old = createPiRunnerActions(database, { project })
+        .enqueueIssueProposal({ issue_id: issueID, rationale: "first request" }) as { action_id: string };
+      database.sqlite.run("update pi_actions set created_at=? where id=?", [
+        "2026-01-01T00:00:01Z", old.action_id
+      ]);
+      const retry = createPiRunnerActions(database, {
+        authorization: {
+          allowedActions: ["issue.enqueue"],
+          askOnMissingAuthorization: true,
+          authorizedActions: [],
+          mode: "delegated",
+          scopes: [{ runner_resource: "issues" }]
+        },
+        project,
+        source: "runner_chat"
+      }).enqueueIssueProposal({ issue_id: issueID, rationale: "retry" }) as { action_id: string; status: string };
+
+      const response = await postAction(createDefaultRouter({ database }), old.action_id, "approve");
+
+      expect(retry.status).toBe("completed");
+      expect(response.status).toBe(409);
+      expect(getPiAction(database, old.action_id)).toMatchObject({ status: "rejected" });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "todo" });
+      expect(database.sqlite.query<{ reason: string }, [string]>(
+        "select reason from pi_action_events where action_id=? and event_type='approval_stale'"
+      ).get(old.action_id)?.reason).toContain(`superseded_by:${retry.action_id}`);
+    } finally {
+      database.close();
+    }
+  });
+
   test("approve issue.enqueue action kicks auto-run project loop through HTTP API", async () => {
     const database = await openFixtureDatabase();
     const provider = new KickObserverProvider();
@@ -164,7 +236,7 @@ describe("Bun PI actions API", () => {
     }
   });
 
-  test("execute runs approved actions and records failed results", async () => {
+  test("execute rejects approved actions whose target no longer exists", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
@@ -187,9 +259,48 @@ describe("Bun PI actions API", () => {
       expect(completed.status).toBe(200);
       expect(await completed.json()).toMatchObject({ id: action.action_id, status: "completed" });
       expect(getIssue(database, issueID)).toMatchObject({ status: "todo" });
-      expect(failed.status).toBe(200);
-      expect(await failed.json()).toMatchObject({ id: "bad-action", status: "failed" });
-      expect(getPiAction(database, "bad-action")?.result_json).toContain("资源不存在");
+      expect(failed.status).toBe(409);
+      expect(getPiAction(database, "bad-action")).toMatchObject({
+        decided_by: "system:action_revalidation",
+        status: "rejected"
+      });
+      expect(getPiAction(database, "bad-action")?.result_json).toContain("target_issue_missing");
+    } finally {
+      database.close();
+    }
+  });
+
+  test("execute rejects an approved action after its approval lease expires", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueID = insertIssue(database, "demo");
+      createPiAction(database, {
+        action_type: "issue.enqueue",
+        expected_state_json: JSON.stringify({
+          issue_id: issueID,
+          project_id: "demo",
+          status: "triage",
+          updated_at: "2026-01-01T00:00:00Z"
+        }),
+        gate_decision: "ask",
+        id: "expired-approved-action",
+        issue_id: issueID,
+        lease_expires_at: "2026-01-02T00:00:00Z",
+        payload_json: JSON.stringify({ issue_id: issueID }),
+        project_id: "demo",
+        status: "approved"
+      });
+
+      const response = await postAction(createDefaultRouter({ database }), "expired-approved-action", "execute");
+
+      expect(response.status).toBe(409);
+      expect(getPiAction(database, "expired-approved-action")).toMatchObject({
+        decided_by: "system:action_revalidation",
+        status: "rejected"
+      });
+      expect(getPiAction(database, "expired-approved-action")?.result_json).toContain("dispatch:approval_expired");
+      expect(getIssue(database, issueID)).toMatchObject({ status: "triage" });
     } finally {
       database.close();
     }

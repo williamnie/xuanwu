@@ -226,27 +226,76 @@ function ApprovalDetail({ approval, onClose, onResolve, submitting }) {
   const attention = approval.detail?.attention;
   const decisions = approval.detail?.decisions || [];
   return <section className="approval-detail" aria-live="polite">
-    <header><div><span><ShieldCheck size={14} /> Decision detail</span><h3>{attention?.summary || '审批请求'}</h3></div><button aria-label="关闭 Approval 详情" onClick={onClose} type="button"><X size={16} /></button></header>
+    <header><div><span><ShieldCheck size={14} /> Approval detail</span><h3>{attention?.summary || '审批请求'}</h3></div><button aria-label="关闭审批详情" onClick={onClose} type="button"><X size={16} /></button></header>
     {approval.loading ? <div className="approval-detail-state"><RefreshCw className="is-spinning" size={19} />正在读取审批事实…</div> : approval.error ? <div className="approval-detail-state error"><AlertTriangle size={19} />{approval.error}</div> : <>
-      {decisions.map(target => <div className="approval-decision-target" key={target.ref}>
-        <div className="approval-detail-grid">
-          <ApprovalFact label="Decision" value={target.ref} /><ApprovalFact label="Risk" value={target.risk} />
-          <ApprovalFact label="Kind" value={target.kind} /><ApprovalFact label="Status" value={target.status} />
-        </div>
-        <p>{target.summary}</p>
-        {target.actions?.length ? <div className="proposal-actions-list">{target.actions.map(action => <div className="proposal-action-row" key={action.id}><strong>{action.type}</strong><small>{action.risk} · {action.status}</small><span>{action.summary}</span></div>)}</div> : null}
-        {target.status === 'pending' || target.status === 'proposed' || target.status === 'delivered' || target.status === 'resolve_failed' ? <footer>
-          <span>旧 API 只翻译到此确定性 command；每个外部写仍经同一 Action Gate。</span>
-          <button disabled={Boolean(submitting)} onClick={() => onResolve('reject', target)} type="button"><ShieldX size={14} />拒绝</button>
-          {target.kind === 'pi_action' && target.action_type === 'mcp.tool.call' && target.project_id ? <button disabled={Boolean(submitting)} onClick={() => onResolve('approve_always', target)} type="button"><ShieldCheck size={14} />当前项目始终允许</button> : null}
-          <button className="approve" disabled={Boolean(submitting)} onClick={() => onResolve('approve', target)} type="button"><ShieldCheck size={14} />批准一次</button>
-        </footer> : null}
-      </div>)}
+      {decisions.map(target => {
+        const gate = target.gate || {};
+        const actionable = target.status === 'pending' || target.status === 'proposed' || target.status === 'delivered' || target.status === 'resolve_failed';
+        const canApprove = gate.can_approve !== false;
+        return <div className="approval-decision-target" key={target.ref}>
+          <div className="approval-detail-grid">
+            <ApprovalFact label="Decision" value={target.ref} /><ApprovalFact label="Risk" value={target.risk} />
+            <ApprovalFact label="Kind" value={target.kind} /><ApprovalFact label="Status" value={target.status} />
+            <ApprovalFact label="Gate layer" value={gateLayerLabel(gate.blocked_layer)} />
+            <ApprovalFact label="Reason code" value={gate.reason_code} />
+            <ApprovalFact label="Scope" value={formatGateScope(gate.scope)} />
+            <ApprovalFact label="Authorization" value={authorizationSourceLabel(gate.authorization_source)} />
+            <ApprovalFact label="Freshness" value={gateFreshnessLabel(gate.freshness)} />
+            <ApprovalFact label="Expires" value={formatGateExpiry(gate.expires_at)} />
+          </div>
+          <p>{gate.reason || target.summary}</p>
+          <p>{gate.user_action || '核对当前状态和审计记录后再决定。'}</p>
+          {target.actions?.length ? <div className="proposal-actions-list">{target.actions.map(action => <div className="proposal-action-row" key={action.id}><strong>{action.type}</strong><small>{action.risk} · {action.status}</small><span>{action.summary}</span></div>)}</div> : null}
+          {actionable ? <footer>
+            <span>{gate.user_action || 'Provider 执行权限、Action Gate、MCP 策略与完成门禁分别裁决，不会互相提升权限。'}</span>
+            <button disabled={Boolean(submitting)} onClick={() => onResolve('reject', target)} type="button"><ShieldX size={14} />拒绝</button>
+            {target.kind === 'pi_action' && target.action_type === 'mcp.tool.call' && target.project_id ? <button disabled={Boolean(submitting) || !canApprove} onClick={() => onResolve('approve_always', target)} type="button"><ShieldCheck size={14} />当前项目始终允许</button> : null}
+            <button className="approve" disabled={Boolean(submitting) || !canApprove} onClick={() => onResolve('approve', target)} type="button"><ShieldCheck size={14} />批准一次</button>
+          </footer> : null}
+        </div>;
+      })}
     </>}
   </section>;
 }
 
 function ApprovalFact({ label, value }) { return <div><small>{label}</small><strong>{value || '—'}</strong></div>; }
+
+function gateLayerLabel(layer) {
+  return ({
+    action_gate: 'Action Gate · 业务动作',
+    completion_gate: 'Completion Gate · 完成验收',
+    mcp_policy: 'MCP Policy · 外部能力',
+    provider_execution_policy: 'Provider Policy · Agent 工具权限',
+    source_policy: 'Source Policy · 来源动作',
+  })[layer] || layer || '未声明';
+}
+
+function authorizationSourceLabel(source) {
+  return ({
+    current_runner_chat_turn: '当前对话明确授权',
+    deterministic_policy: '确定性策略',
+    human_approval: '人工审批',
+    provider_callback: 'Provider 回调',
+    source_policy: '来源策略',
+    supervisor_policy: 'Supervisor 策略',
+  })[source] || source || '未声明';
+}
+
+function gateFreshnessLabel(freshness) {
+  return ({ current: '当前有效', expired: '已过期', stale: '目标已变化', terminal: '已结束' })[freshness] || freshness || '未知';
+}
+
+function formatGateScope(scope) {
+  const entries = Object.entries(scope || {});
+  return entries.length > 0
+    ? entries.map(([key, value]) => `${key}=${Array.isArray(value) ? value.join(',') : value}`).join(' · ')
+    : 'Runner 全局';
+}
+
+function formatGateExpiry(value) {
+  const timestamp = Date.parse(value || '');
+  return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : '无独立期限';
+}
 
 function State({ error = '', filtered = false, loading = false, onRetry }) {
   if (error) return <div className="attention-state error" role="alert"><AlertTriangle size={18} /><span>{error}</span><button onClick={onRetry} type="button">重试</button></div>;

@@ -43,6 +43,7 @@ import {
   guardianOperationsSnapshot,
   latestGuardianOperationsReport
 } from "../pi/guardianOperationsDailyReport.ts";
+import { piActionGateDiagnostic } from "../pi/actionGateDiagnostic.ts";
 
 export const COMMAND_CENTER_SUMMARY_CONTRACT = "xw.command-center.summary.v1" as const;
 
@@ -680,6 +681,18 @@ function attentionDecisionDetails(db: RunnerDatabase, attention: AttentionRecord
     if (source.authority === "pi_approval_requests") {
       const approval = getPiApprovalRequest(db, source.local_id);
       if (approval) details.push({
+        gate: {
+          authorization_source: "provider_callback",
+          blocked_layer: "provider_execution_policy",
+          can_approve: ["pending", "delivered", "resolve_failed"].includes(approval.status),
+          decision: "ask",
+          expires_at: "",
+          freshness: ["pending", "delivered", "resolve_failed"].includes(approval.status) ? "current" : "terminal",
+          reason: approval.summary || approval.request_summary || "Provider 工具调用需要确认",
+          reason_code: "provider_tool_approval_required",
+          scope: compactRecord({ project_id: approval.project_id, run_id: approval.run_id || approval.session_id }),
+          user_action: "核对 Provider 工具调用及目标后，批准当前调用或拒绝。"
+        },
         kind: "provider_approval",
         ref: `approval:${approval.approval_id}`,
         request_type: approval.request_type,
@@ -699,6 +712,7 @@ function attentionDecisionDetails(db: RunnerDatabase, attention: AttentionRecord
         action_type: action.action_type,
         capability_id: cleanText(payload.capability_id),
         expires_at: action.lease_expires_at,
+        gate: piActionGateDiagnostic(db, action),
         gate_decision: action.gate_decision,
         gate_reason: action.gate_reason,
         kind: "pi_action",
@@ -723,6 +737,18 @@ function attentionDecisionDetails(db: RunnerDatabase, attention: AttentionRecord
         summary: action.summary,
         type: action.type
       })),
+      gate: {
+        authorization_source: "source_policy",
+        blocked_layer: "source_policy",
+        can_approve: proposal.status === "proposed",
+        decision: "ask",
+        expires_at: "",
+        freshness: proposal.status === "proposed" ? "current" : "terminal",
+        reason: proposal.summary,
+        reason_code: "source_proposal_approval_required",
+        scope: {},
+        user_action: "核对来源事实和每个动作后，批准或拒绝整份 Proposal。"
+      },
       kind: "proposal",
       ref,
       risk: proposal.actions.some((action) => action.risk === "high") ? "high" :
@@ -732,6 +758,10 @@ function attentionDecisionDetails(db: RunnerDatabase, attention: AttentionRecord
     });
   }
   return details;
+}
+
+function compactRecord(value: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== ""));
 }
 
 function attentionCommandInput(action: "acknowledge" | "snooze", value: unknown): AttentionCommand {

@@ -1,27 +1,7 @@
 import type { PiActionContext } from "./actionEngine.ts";
-import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "./supervisorControlContracts.ts";
+import { runnerChatMutationActionTypes } from "./actionContracts.ts";
 
-const RUNNER_CHAT_MUTATION_ACTIONS = new Set([
-  "agent.workflow_request",
-  "human_review.respond",
-  "issue.create",
-  "issue.cancel",
-  "issue.delete",
-  "issue.acceptance_request",
-  "issue.enqueue",
-  "issue.schedule_enqueue",
-  "issue.status_update",
-  "issue.state_repair",
-  "issue_completion_watch.create",
-  "issue_completion_watch.cancel",
-  "notification.preference.update",
-  "project.create",
-  "runner.settings_update",
-  "system.restart",
-  "workspace.make_directory",
-  "workspace.write_file",
-  ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
-]);
+const RUNNER_CHAT_MUTATION_ACTIONS = new Set(runnerChatMutationActionTypes());
 
 export function scopedRunnerChatActionContext<T extends PiActionContext>(
   context: T,

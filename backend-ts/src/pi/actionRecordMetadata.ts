@@ -63,7 +63,9 @@ function legacyBypassReason(context: PiActionContext, envelope: PiActionEnvelope
 function expectedStateJson(payload: Record<string, unknown>): string {
   const expected: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(payload)) {
-    if (key.startsWith("expected_")) expected[key.slice("expected_".length)] = value;
+    if (key !== "expected_state" && key.startsWith("expected_")) {
+      expected[key.slice("expected_".length)] = value;
+    }
   }
   const explicit = objectPayload(payload.expected_state);
   return stableJson({ ...expected, ...explicit });

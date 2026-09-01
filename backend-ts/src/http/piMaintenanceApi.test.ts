@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 describe("PI stale pending action maintenance API", () => {
-  test("dry-runs and applies only stale supervisor pending actions", async () => {
+  test("dry-runs and applies stale supervisor and enqueue actions without touching fresh requests", async () => {
     const { db, root } = await openFixture();
     try {
       seedHistoricalStaleSupervisorCase(db);
@@ -25,19 +25,25 @@ describe("PI stale pending action maintenance API", () => {
       const dryRunBody = await dryRun.json() as Record<string, unknown>;
 
       expect(dryRun.status).toBe(200);
-      expect(dryRunBody).toMatchObject({ applied: false, dry_run: true, matched_count: 73 });
+      expect(dryRunBody).toMatchObject({ applied: false, dry_run: true, matched_count: 75 });
       expect(actionIDs(dryRunBody)).toContain("stale-terminal-001");
       expect(actionIDs(dryRunBody)).toContain("stale-run");
       expect(actionIDs(dryRunBody)).toContain("stale-expired");
-      expect(actionIDs(dryRunBody)).not.toContain("real-enqueue");
+      expect(actionIDs(dryRunBody)).toContain("real-enqueue");
+      expect(actionIDs(dryRunBody)).toContain("superseded-enqueue");
+      expect(actionIDs(dryRunBody)).not.toContain("fresh-enqueue");
+      expect(actionReasons(dryRunBody, "real-enqueue")).toContain("target_state_changed:done");
+      expect(actionReasons(dryRunBody, "superseded-enqueue")).toContain("superseded_by:completed-enqueue");
       expect(actionReasons(dryRunBody, "stale-terminal-001")).toContain("terminal_issue:done");
       expect(actionReasons(dryRunBody, "stale-run")).toContain("terminal_run:done");
       expect(listPiActions(db, { status: "pending" }).map((action) => action.id).sort()).toEqual([
+        "fresh-enqueue",
         "fresh-supervisor",
         "real-enqueue",
         "stale-expired",
         "stale-run",
-        ...Array.from({ length: 71 }, (_, index) => `stale-terminal-${String(index + 1).padStart(3, "0")}`)
+        ...Array.from({ length: 71 }, (_, index) => `stale-terminal-${String(index + 1).padStart(3, "0")}`),
+        "superseded-enqueue"
       ]);
 
       const applyUrl = `${BASE_URL}/api/pi/maintenance/stale-pending-actions/apply`;
@@ -54,14 +60,16 @@ describe("PI stale pending action maintenance API", () => {
       const appliedBody = await applied.json() as Record<string, unknown>;
 
       expect(applied.status).toBe(200);
-      expect(appliedBody).toMatchObject({ applied: true, dry_run: false, matched_count: 73 });
+      expect(appliedBody).toMatchObject({ applied: true, dry_run: false, matched_count: 75 });
       expect(existsSync(String(appliedBody.backup_path))).toBe(true);
       expect(getPiAction(db, "stale-terminal-001")).toMatchObject({ status: "rejected", decided_by: "maintenance" });
       expect(getPiAction(db, "stale-expired")).toMatchObject({ status: "rejected", decided_by: "maintenance" });
-      expect(getPiAction(db, "real-enqueue")).toMatchObject({ status: "pending" });
+      expect(getPiAction(db, "real-enqueue")).toMatchObject({ status: "rejected", decided_by: "maintenance" });
+      expect(getPiAction(db, "fresh-enqueue")).toMatchObject({ status: "pending" });
+      expect(getPiAction(db, "superseded-enqueue")).toMatchObject({ status: "rejected", decided_by: "maintenance" });
       expect(getPiAction(db, "fresh-supervisor")).toMatchObject({ status: "pending" });
       expect(listPiActionEvents(db).filter((event) => event.event_type === "maintenance_stale_cleanup"))
-        .toHaveLength(73);
+        .toHaveLength(75);
     } finally {
       db.close();
     }
@@ -89,8 +97,26 @@ function seedHistoricalStaleSupervisorCase(db: RunnerDatabase): void {
   insertIssue(db, 386, "done");
   insertIssue(db, 387, "triage");
   insertIssue(db, 388, "triage");
+  insertIssue(db, 389, "triage");
+  insertIssue(db, 390, "todo");
   insertRun(db, 388, "done");
   insertPiAction(db, { actionType: "issue.enqueue", id: "real-enqueue", issueID: 386, source: "runner_chat" });
+  insertPiAction(db, { actionType: "issue.enqueue", id: "fresh-enqueue", issueID: 389, source: "runner_chat" });
+  insertPiAction(db, {
+    actionType: "issue.enqueue",
+    createdAt: "2026-01-01T00:00:00Z",
+    id: "superseded-enqueue",
+    issueID: 390,
+    source: "runner_chat"
+  });
+  insertPiAction(db, {
+    actionType: "issue.enqueue",
+    createdAt: "2026-01-02T00:00:00Z",
+    id: "completed-enqueue",
+    issueID: 390,
+    source: "runner_chat",
+    status: "completed"
+  });
   insertPiAction(db, {
     actionType: "needs_user.escalate",
     id: "fresh-supervisor",
@@ -136,10 +162,12 @@ function insertRun(db: RunnerDatabase, issueID: number, status: string): void {
 
 type PiActionFixture = {
   actionType: string;
+  createdAt?: string;
   id: string;
   issueID: number;
   payload?: Record<string, unknown>;
   source: string;
+  status?: string;
 };
 
 function insertPiAction(db: RunnerDatabase, input: PiActionFixture): void {
@@ -147,11 +175,12 @@ function insertPiAction(db: RunnerDatabase, input: PiActionFixture): void {
     `insert into pi_actions
       (id, project_id, issue_id, action_type, status, source, gate_decision,
        payload_json, created_at, updated_at)
-     values (?, 'demo', ?, ?, 'pending', ?, 'ask', ?, ?, ?)`,
+     values (?, 'demo', ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      input.id, input.issueID, input.actionType, input.source,
+      input.id, input.issueID, input.actionType, input.status ?? "pending", input.source,
+      input.status === "completed" ? "execute" : "ask",
       JSON.stringify(input.payload ?? { issue_id: input.issueID }),
-      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
+      input.createdAt ?? "2026-01-01T00:00:00Z", input.createdAt ?? "2026-01-01T00:00:00Z"
     ]
   );
 }
