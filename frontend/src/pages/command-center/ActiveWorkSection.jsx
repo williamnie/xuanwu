@@ -70,7 +70,11 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
 
   useEffect(() => {
     load();
-    return () => requestRef.current?.controller.abort();
+    return () => {
+      const activeRequest = requestRef.current;
+      requestRef.current = null;
+      activeRequest?.controller.abort();
+    };
   }, [load]);
 
   useEffect(() => {

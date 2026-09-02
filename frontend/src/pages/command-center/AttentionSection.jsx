@@ -45,7 +45,11 @@ export default function AttentionSection() {
 
   useEffect(() => {
     load();
-    return () => requestRef.current?.controller.abort();
+    return () => {
+      const activeRequest = requestRef.current;
+      requestRef.current = null;
+      activeRequest?.controller.abort();
+    };
   }, [load]);
   useEffect(() => {
     const interval = window.setInterval(() => load({ silent: true }), REFRESH_INTERVAL_MS);

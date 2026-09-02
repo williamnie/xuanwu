@@ -79,7 +79,11 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
 
   useEffect(() => {
     load();
-    return () => requestRef.current?.controller.abort();
+    return () => {
+      const activeRequest = requestRef.current;
+      requestRef.current = null;
+      activeRequest?.controller.abort();
+    };
   }, [load]);
   useEffect(() => {
     if (!projects.some(project => project.id === selectedProjectID)) {

@@ -9,6 +9,7 @@ const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
 const projectsSource = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
 const runsSource = readFileSync(new URL('./Runs.jsx', import.meta.url), 'utf8');
 const activeWorkSource = readFileSync(new URL('./command-center/ActiveWorkSection.jsx', import.meta.url), 'utf8');
+const attentionSource = readFileSync(new URL('./command-center/AttentionSection.jsx', import.meta.url), 'utf8');
 const recentDeliveriesSource = readFileSync(new URL('./command-center/RecentDeliveriesSection.jsx', import.meta.url), 'utf8');
 const firstDeliverySource = readFileSync(new URL('./command-center/FirstDeliveryGuide.jsx', import.meta.url), 'utf8');
 const usageSource = readFileSync(new URL('../components/CodexUsagePanel.jsx', import.meta.url), 'utf8');
@@ -81,4 +82,14 @@ test('first delivery onboarding uses bounded Work and Evidence reads', () => {
   assert.doesNotMatch(firstDeliverySource, /workApi\.getAllWorks\(\)/);
   assert.doesNotMatch(firstDeliverySource, /Promise\.allSettled/);
   assert.match(firstDeliverySource, /candidateWorkID/);
+});
+
+test('Dashboard request cleanup releases the active request before aborting it', () => {
+  for (const source of [activeWorkSource, attentionSource, recentDeliveriesSource, firstDeliverySource]) {
+    assert.match(
+      source,
+      /const activeRequest = requestRef\.current;\s*requestRef\.current = null;\s*activeRequest\?\.controller\.abort\(\);/,
+    );
+    assert.doesNotMatch(source, /return \(\) => requestRef\.current\?\.controller\.abort\(\)/);
+  }
 });

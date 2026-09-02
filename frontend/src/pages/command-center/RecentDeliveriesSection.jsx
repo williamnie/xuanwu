@@ -60,7 +60,11 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
   useEffect(() => {
     if (!visible) return undefined;
     load();
-    return () => requestRef.current?.controller.abort();
+    return () => {
+      const activeRequest = requestRef.current;
+      requestRef.current = null;
+      activeRequest?.controller.abort();
+    };
   }, [load, visible]);
 
   useEffect(() => {
