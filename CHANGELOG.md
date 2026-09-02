@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-09-02
+
+### Fixed / 修复
+
+- Command Center 的 Attention 仅读取最近七天内的有限 Action，并增加对应数据库索引，避免
+  历史 Action 持续增长后拖慢概览请求。
+- Recent Deliveries 列表限制最大高度并支持区域内滚动，避免交付记录较多时页面被过度拉长。
+
 ## [0.2.9] - 2026-09-01
 
 ### Fixed / 修复
@@ -140,7 +148,8 @@
 
 - 首个 GitHub Release，包含 macOS/Linux 的 arm64、amd64 预构建资产和一键安装脚本。
 
-[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.9...HEAD
+[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.10...HEAD
+[0.2.10]: https://github.com/williamnie/xuanwu/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/williamnie/xuanwu/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/williamnie/xuanwu/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/williamnie/xuanwu/compare/v0.2.6...v0.2.7
