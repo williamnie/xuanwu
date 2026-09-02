@@ -1,4 +1,3 @@
-import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -14,6 +13,7 @@ import {
 import { workApi } from '../api/work.js';
 import { eventsApi } from '../api/events.js';
 import EvidencePanel from '../components/EvidencePanel.jsx';
+import ModalOverlay from '../components/ModalOverlay.jsx';
 import { selectProjects, selectWorkSummary, useDataStore } from '../store/dataStore';
 import { message } from '../store/toastStore.js';
 import WorkDetail from './WorkDetail.jsx';
@@ -641,8 +641,8 @@ function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit
 
 function WorkEvidenceDialog({ onClose, work }) {
   const { t } = useI18n();
-  return createPortal(
-    <div className="modal-overlay work-evidence-overlay" onMouseDown={event => event.target === event.currentTarget && onClose()}>
+  return (
+    <ModalOverlay className="work-evidence-overlay" onBackdropMouseDown={onClose}>
       <div aria-labelledby="work-evidence-title" aria-modal="true" className="work-evidence-dialog" role="dialog">
         <header>
           <div>
@@ -654,8 +654,7 @@ function WorkEvidenceDialog({ onClose, work }) {
         </header>
         <EvidencePanel title="Work Evidence" workId={work.id} />
       </div>
-    </div>,
-    document.body,
+    </ModalOverlay>
   );
 }
 

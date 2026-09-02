@@ -1,4 +1,3 @@
-import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Pencil, X } from 'lucide-react';
 import { workApi } from '../../api/work.js';
@@ -8,6 +7,7 @@ import { message } from '../../store/toastStore.js';
 import { useI18n } from '../../i18n/context.js';
 import PromptEditor from '../../components/editor/PromptEditor.jsx';
 import AgentProfileSelectOptions from '../../components/AgentProfileSelectOptions.jsx';
+import ModalOverlay from '../../components/ModalOverlay.jsx';
 import { editorDraft, effectiveProfilePreview } from './workProfileRouting.js';
 import { availableAgentProfiles, codeAgentAvailable, effectiveProjectProvider } from '../../utils/codeAgents.js';
 
@@ -99,8 +99,8 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
     }
   };
 
-  return createPortal(
-    <div className="modal-overlay work-dialog-overlay">
+  return (
+    <ModalOverlay className="work-dialog-overlay">
       <div aria-labelledby="work-dialog-title" aria-modal="true" className="work-dialog" role="dialog">
         <header>
           <div>
@@ -181,8 +181,7 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
           </footer>
         </form>
       </div>
-    </div>,
-    document.body,
+    </ModalOverlay>
   );
 }
 

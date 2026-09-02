@@ -1100,17 +1100,27 @@ textarea:focus-visible {
 
 /* Modals */
 .modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(15, 23, 42, 0.3);
-  backdrop-filter: blur(4px);
-  display: flex;
   align-items: center;
+  background: color-mix(in srgb, var(--bg-primary) 48%, transparent);
+  backdrop-filter: blur(8px);
+  box-sizing: border-box;
+  display: flex;
+  inset: 0;
   justify-content: center;
+  overflow: auto;
+  padding: 24px;
+  position: fixed;
   z-index: 1000;
+}
+
+.modal-overlay > * {
+  margin-block: auto;
+}
+
+@media (max-width: 760px) {
+  .modal-overlay {
+    padding: 12px;
+  }
 }
 
 .modal-content {

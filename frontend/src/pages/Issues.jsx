@@ -17,6 +17,7 @@ import {
 import PromptEditor from '../components/editor/PromptEditor';
 import AgentProfileSelectOptions from '../components/AgentProfileSelectOptions.jsx';
 import IssueEditModal from '../components/IssueEditModal';
+import ModalOverlay from '../components/ModalOverlay.jsx';
 import IssueCard from './IssueCard';
 import { sortIssuesByIdDesc } from '../utils/issueSort';
 import { serviceTierPayload } from '../utils/serviceTier';
@@ -476,7 +477,7 @@ export default function Issues({
 
       {/* 新建 Issue 高级模态框 (完美融合) */}
       {isNewIssueOpen && (
-        <div className="modal-overlay">
+        <ModalOverlay>
           <div className="glass-card modal-content issues-page__create-modal">
 
             <div className="issues-page__modal-header">
@@ -585,7 +586,7 @@ export default function Issues({
             </form>
 
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {issueToDelete && (
@@ -622,7 +623,7 @@ function omitKey(record, key) {
 
 function IssueDeleteConfirmModal({ issue, deleting, onCancel, onConfirm }) {
   return (
-    <div className="modal-overlay">
+    <ModalOverlay>
       <div className="glass-card modal-content issue-delete-modal">
         <div className="issue-delete-modal-header">
           <Trash2 size={18} color="var(--error)" />
@@ -640,7 +641,7 @@ function IssueDeleteConfirmModal({ issue, deleting, onCancel, onConfirm }) {
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

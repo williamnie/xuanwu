@@ -12,6 +12,7 @@ import {
   XCircle,
   XOctagon,
 } from 'lucide-react';
+import ModalOverlay from '../../components/ModalOverlay.jsx';
 import { canEditIssue } from '../../utils/issueEdit';
 
 export default function IssueDetailActions({
@@ -99,7 +100,7 @@ export function IssueManualControls({ issue, onMarkStatus }) {
 
 export function IssueDeleteConfirmModal({ issue, deleting, onCancel, onConfirm }) {
   return (
-    <div className="modal-overlay">
+    <ModalOverlay>
       <div className="glass-card modal-content issue-delete-modal">
         <div className="issue-delete-modal-header">
           <Trash2 size={18} color="var(--error)" />
@@ -117,6 +118,6 @@ export function IssueDeleteConfirmModal({ issue, deleting, onCancel, onConfirm }
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

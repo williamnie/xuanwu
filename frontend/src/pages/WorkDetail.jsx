@@ -18,6 +18,7 @@ import { handoffsApi } from '../api/handoffs.js';
 import { runsApi } from '../api/runs.js';
 import { workApi } from '../api/work.js';
 import MarkdownPreview from '../components/editor/MarkdownPreview.jsx';
+import ModalOverlay from '../components/ModalOverlay.jsx';
 import { message } from '../store/toastStore.js';
 import WorkEditorDialog from './work/WorkEditorDialog.jsx';
 import { workProfileSummary } from './work/workProfileRouting.js';
@@ -458,7 +459,7 @@ function InlineConfirmation({ busy, onCancel, onConfirm }) {
 function ReviewDialog({ action, busy, comment, onCancel, onChange, onConfirm, request }) {
   const { t } = useI18n();
   const commentRequired = action === 'reject' || action === 'request_changes';
-  return <div className="modal-overlay work-dialog-overlay"><form className="work-review-dialog" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}><span>{t('work.reviewGate')}</span><h2>{reviewTitle(action, t)}</h2><p className="work-review-question">{request?.question}</p><p>{action === 'request_changes' ? t('work.reviewRevisionFlow') : t('work.reviewAudit')}</p><label><span>{t(commentRequired ? 'work.reviewNoteRequired' : 'work.reviewNoteOptional')}</span><textarea autoFocus={commentRequired} className="form-control" onChange={event => onChange(event.target.value)} placeholder={action === 'request_changes' ? t('work.reviewChangesPlaceholder') : ''} rows={5} value={comment} /></label><div><button disabled={busy} onClick={onCancel} type="button">{t('work.cancel')}</button><button className={action === 'reject' ? 'danger' : 'primary'} disabled={busy || (commentRequired && !comment.trim())} type="submit">{busy ? t('work.submitting') : action === 'request_changes' ? t('work.submitChangesAndContinue') : t('work.submitReview')}</button></div></form></div>;
+  return <ModalOverlay className="work-dialog-overlay"><form className="work-review-dialog" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}><span>{t('work.reviewGate')}</span><h2>{reviewTitle(action, t)}</h2><p className="work-review-question">{request?.question}</p><p>{action === 'request_changes' ? t('work.reviewRevisionFlow') : t('work.reviewAudit')}</p><label><span>{t(commentRequired ? 'work.reviewNoteRequired' : 'work.reviewNoteOptional')}</span><textarea autoFocus={commentRequired} className="form-control" onChange={event => onChange(event.target.value)} placeholder={action === 'request_changes' ? t('work.reviewChangesPlaceholder') : ''} rows={5} value={comment} /></label><div><button disabled={busy} onClick={onCancel} type="button">{t('work.cancel')}</button><button className={action === 'reject' ? 'danger' : 'primary'} disabled={busy || (commentRequired && !comment.trim())} type="submit">{busy ? t('work.submitting') : action === 'request_changes' ? t('work.submitChangesAndContinue') : t('work.submitReview')}</button></div></form></ModalOverlay>;
 }
 
 function fulfilledItems(result) {

@@ -5,6 +5,7 @@ import {
   UserCheck,
   XCircle,
 } from 'lucide-react';
+import ModalOverlay from '../../components/ModalOverlay.jsx';
 import './IssueDetailDecision.css';
 
 export default function IssueDetailDecision({ evidence, decision, onAccept, onReject, onRequestChanges }) {
@@ -83,7 +84,7 @@ export function HumanReviewResponseModal({ action, draft, request, submitting, o
   const title = rejecting ? '不同意 PI 建议' : action === 'accept' ? '同意 PI 建议' : '提出调整意见';
   const commentRequired = action !== 'accept';
   return (
-    <div className="modal-overlay">
+    <ModalOverlay>
       <form
         className="glass-card modal-content human-review-response-modal"
         onSubmit={(event) => {
@@ -115,6 +116,6 @@ export function HumanReviewResponseModal({ action, draft, request, submitting, o
           </button>
         </div>
       </form>
-    </div>
+    </ModalOverlay>
   );
 }

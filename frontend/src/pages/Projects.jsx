@@ -1,6 +1,5 @@
 import { projectsApi } from '../api/projects.js';
 import { useImmer } from 'use-immer';
-import { createPortal } from 'react-dom';
 import './Projects.css';
 import { message } from '../store/toastStore';
 import {
@@ -22,6 +21,7 @@ import {
 } from 'lucide-react';
 import ProjectHoldNotice from './ProjectHoldNotice';
 import ProjectSettingsEditor from './ProjectSettingsEditor';
+import ModalOverlay from '../components/ModalOverlay.jsx';
 
 function compactPath(cwd = '') {
   const text = String(cwd || '').trim().replace(/[\\/]+$/, '');
@@ -329,8 +329,8 @@ export default function Projects() {
       </div>
 
 
-      {modalMode && (modalMode === 'create' || selectedProject) && createPortal(
-        <div className="modal-overlay project-modal-overlay">
+      {modalMode && (modalMode === 'create' || selectedProject) && (
+        <ModalOverlay className="project-modal-overlay">
           <div className={`modal-content project-config-modal project-config-modal-${modalMode}`}>
             <div className="project-config-modal-header">
               <div>
@@ -358,12 +358,11 @@ export default function Projects() {
               project={selectedProject}
             />
           </div>
-        </div>,
-        document.body,
+        </ModalOverlay>
       )}
 
-      {deleteProject && createPortal(
-        <div className="modal-overlay project-modal-overlay">
+      {deleteProject && (
+        <ModalOverlay className="project-modal-overlay">
           <div
             aria-describedby="project-delete-dialog-description"
             aria-labelledby="project-delete-dialog-title"
@@ -409,8 +408,7 @@ export default function Projects() {
               </button>
             </div>
           </div>
-        </div>,
-        document.body,
+        </ModalOverlay>
       )}
     </section>
   );

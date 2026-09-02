@@ -1,7 +1,7 @@
 import { workApi } from '../api/work.js';
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Save, X } from 'lucide-react';
+import ModalOverlay from './ModalOverlay.jsx';
 import PromptEditor from './editor/PromptEditor';
 import AgentProfileSelectOptions from './AgentProfileSelectOptions.jsx';
 import { projectsApi } from '../api/projects.js';
@@ -94,8 +94,8 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
 
   if (!canEditIssue(issue)) return null;
 
-  return createPortal(
-    <div className="modal-overlay">
+  return (
+    <ModalOverlay>
       <div className="glass-card modal-content issue-edit-modal">
         <ModalHeader issue={issue} onClose={onClose} />
         <form className="issue-edit-modal__form" onSubmit={submitEdit}>
@@ -115,8 +115,7 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
           <ModalActions saving={saving} onClose={onClose} />
         </form>
       </div>
-    </div>,
-    document.body,
+    </ModalOverlay>
   );
 }
 
