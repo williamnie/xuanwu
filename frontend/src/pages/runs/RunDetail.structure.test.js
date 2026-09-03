@@ -51,8 +51,11 @@ test('embedded provider transcript exposes read failures and provider-neutral ve
   assert.doesNotMatch(infoSource, /qodercli_version|message\.content/);
 });
 
-test('logs and raw events reuse bounded existing APIs instead of expanding the Run contract', () => {
+test('logs, raw events, and transcript commentary use bounded Run APIs', () => {
   assert.match(apiSource, /request\(`\/api\/issues\/\$\{encodeURIComponent\(issueId\)\}\/events\?/);
+  assert.match(apiSource, /\/api\/runs\/\$\{encodeURIComponent\(id\)\}\/transcript/);
+  assert.match(detailSource, /getRunTranscript\(run\.id, \{ attemptId: attempt\?\.id \|\| '', limit: 200 \}\)/);
+  assert.doesNotMatch(detailSource, /itemsView:\s*'full'/);
   assert.doesNotMatch(apiSource, /getRunApprovals|approval-requests/);
   assert.match(modelSource, /RUN_EVENT_PAGE_SIZE = 100/);
   assert.match(modelSource, /RUN_EVENT_SCAN_LIMIT = 500/);

@@ -115,6 +115,53 @@ describe("Run HTTP API", () => {
     }
   });
 
+  test("returns bounded agent messages for the selected Run Attempt without loading full provider history", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueID = insertIssue(db, "demo", "Codex transcript", "in_progress");
+      const runID = insertRun(db, issueID, "in_progress", {
+        provider: "codex",
+        sessionID: "thread-transcript",
+        startedAt: timestamp(1),
+        turnID: "turn-transcript"
+      });
+      const attemptID = db.sqlite.query<{ attempt_id: string }, [string]>(
+        "select attempt_id from run_attempts where run_id=?"
+      ).get(runID)?.attempt_id ?? "";
+      insertTranscriptMessage(db, issueID, runID, attemptID, 2, "commentary-1", "commentary", "我先检查当前实现。");
+      insertTranscriptMessage(db, issueID, runID, attemptID, 3, "final-1", "final_answer", "修复完成。");
+      insertTranscriptMessage(db, issueID, runID, `${attemptID}-other`, 4, "other", "commentary", "其他 Attempt");
+      const router = createDefaultRouter({ database: db });
+
+      const response = await router.handle(new Request(
+        `${BASE_URL}/api/runs/${encodeURIComponent(runID)}/transcript?attempt_id=${encodeURIComponent(attemptID)}&limit=20`
+      ));
+      const body = await response.json() as Record<string, any>;
+      const latestPage = await router.handle(new Request(
+        `${BASE_URL}/api/runs/${encodeURIComponent(runID)}/transcript?attempt_id=${encodeURIComponent(attemptID)}&limit=1`
+      ));
+      const latestBody = await latestPage.json() as Record<string, any>;
+      const olderPage = await router.handle(new Request(
+        `${BASE_URL}/api/runs/${encodeURIComponent(runID)}/transcript?attempt_id=${encodeURIComponent(attemptID)}&limit=1&before_id=${latestBody.nextCursor}`
+      ));
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        data: [
+          { id: "commentary-1", phase: "commentary", provider_turn_id: "turn-transcript", text: "我先检查当前实现。", type: "agentMessage" },
+          { id: "final-1", phase: "final_answer", provider_turn_id: "turn-transcript", text: "修复完成。", type: "agentMessage" }
+        ],
+        nextCursor: ""
+      });
+      expect(JSON.stringify(body)).not.toContain("其他 Attempt");
+      expect(latestBody).toMatchObject({ data: [{ id: "final-1" }], nextCursor: expect.any(String) });
+      expect(await olderPage.json()).toMatchObject({ data: [{ id: "commentary-1" }], nextCursor: "" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("lists and details a large Run set with bounded pagination and dimension filters", async () => {
     const db = await openFixtureDatabase();
     try {
@@ -518,4 +565,33 @@ function issueStatus(db: RunnerDatabase, issueID: number): string {
 
 function timestamp(seconds: number): string {
   return new Date(Date.UTC(2026, 0, 1, 0, 0, seconds)).toISOString();
+}
+
+function insertTranscriptMessage(
+  db: RunnerDatabase,
+  issueID: number,
+  runID: string,
+  attemptID: string,
+  seconds: number,
+  itemID: string,
+  phase: string,
+  text: string
+): void {
+  db.sqlite.run(
+    "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
+    [issueID, JSON.stringify({
+      payload: { item_id: itemID, item_type: "agentMessage", phase },
+      provider: "codex",
+      raw_method: "item/completed",
+      runtime_evidence_correlation: {
+        attempt_id: attemptID,
+        issue_run_id: runID.replace("xw:run:issue_runs:", ""),
+        provider_session_id: "thread-transcript",
+        provider_turn_id: "turn-transcript",
+        run_id: runID
+      },
+      text,
+      type: "raw"
+    }), timestamp(seconds)]
+  );
 }

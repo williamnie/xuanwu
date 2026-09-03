@@ -550,6 +550,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/integrations/webhook/events", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/runs", family: "run-session-drilldown" },
   { method: "GET", path: "/api/runs/:id", family: "run-session-drilldown" },
+  { method: "GET", path: "/api/runs/:id/transcript", family: "run-session-drilldown" },
   { method: "POST", path: "/api/runs/:id/actions/:action", family: "run-session-drilldown" },
   { method: "GET", path: "/api/works", family: "work-ledger" },
   { method: "GET", path: "/api/works/:id", family: "work-ledger" },

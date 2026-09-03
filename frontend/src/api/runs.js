@@ -12,6 +12,13 @@ export const runsApi = {
 
   getRun: (id, options = {}) => request(`/api/runs/${encodeURIComponent(id)}`, options),
 
+  getRunTranscript: (id, { attemptId = '', beforeId = '', limit = 100 } = {}, options = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (attemptId) params.set('attempt_id', attemptId);
+    if (beforeId) params.set('before_id', String(beforeId));
+    return request(`/api/runs/${encodeURIComponent(id)}/transcript?${params.toString()}`, options);
+  },
+
   getRunEvents: (issueId, { beforeId = '', limit = 100, types = [] } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (beforeId) params.append('before_id', String(beforeId));

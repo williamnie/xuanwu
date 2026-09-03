@@ -34,6 +34,8 @@ import type { ProviderTransport } from "../providers/core/manifest.ts";
 import { translateLegacyExecutionPolicy } from "../providers/core/legacyExecutionPolicy.ts";
 import { resolveExecutionPolicy } from "../providers/core/policyResolution.ts";
 
+const LIVE_PROVIDER_PAYLOAD_MAX_BYTES = 64 * 1024;
+
 export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   agentProfileId?: string;
   agentRole?: string;
@@ -190,6 +192,7 @@ function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string
     push(event: ProviderEvent) {
       if (event.runEvent?.kind === "error") failure = true;
       input.onLog?.(event);
+      publishLiveProviderEvent(input, event);
       const persistSession = Boolean(event.session) &&
         (!sessionObserved || eventSessionStatus(event) !== "");
       processRuntimeEvent(input, event, activeRunID, persistSession);
@@ -220,6 +223,33 @@ function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string
       input.onRuntimeEvent?.(event);
     }
   };
+}
+
+function publishLiveProviderEvent(input: RunnerIssueExecutionInput, event: ProviderEvent): void {
+  const payload = liveProviderPayload(event);
+  input.bus?.publish(compactAppEvent({
+    type: "agent.event",
+    issueId: input.issueId,
+    projectId: input.projectId,
+    provider: event.provider,
+    threadId: event.session?.sessionId,
+    turnId: event.session?.turnId,
+    agent_event_type: event.type,
+    method: event.raw?.method,
+    raw_method: event.raw?.method,
+    payload,
+    command: event.command,
+    path: event.path,
+    status: event.status,
+    text: event.text,
+    error: event.error
+  }));
+}
+
+function liveProviderPayload(event: ProviderEvent): string | undefined {
+  const value = rawPayloadText(event.raw?.payload) ?? rawPayloadText(event.payload);
+  if (!value || Buffer.byteLength(value) > LIVE_PROVIDER_PAYLOAD_MAX_BYTES) return undefined;
+  return value;
 }
 
 function persistRunnerOutcomeMarker(

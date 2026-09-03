@@ -55,11 +55,12 @@ test('Claude SDK live events retain provider-qualified identity', () => {
   assert.equal(isAgentEvent(event), true);
   assert.equal(eventSessionKey(event), 'claude:session-1');
   assert.equal(isSessionStartEvent(event), true);
+  assert.equal(isSessionStartEvent({ ...event, agent_event_type: 'provider.session_started' }), true);
 });
 
-test('issue execution events create a visible running session before provider list refresh', () => {
+test('provider live events create a visible running session without replaying durable issue logs', () => {
   const event = {
-    type: 'issue.log',
+    type: 'agent.event',
     agent_event_type: 'turn_started',
     provider: 'codex',
     threadId: 'thread-new',
@@ -69,6 +70,7 @@ test('issue execution events create a visible running session before provider li
   };
 
   assert.equal(isAgentEvent(event), true);
+  assert.equal(isAgentEvent({ ...event, type: 'issue.log' }), false);
   assert.equal(isSessionStartEvent(event), true);
   assert.deepEqual(upsertRunningSessionFromEvent([], event, [{ id: 'demo', cwd: '/tmp/demo' }]), [{
     id: 'codex:thread-new',

@@ -142,6 +142,7 @@ describe("read API route contracts", () => {
     expect(captureRoutes(registerRunRoutes)).toEqual([
       "GET /api/runs",
       "GET /api/runs/:id",
+      "GET /api/runs/:id/transcript",
       "POST /api/runs/:id/actions/:action"
     ]);
     expect(RUN_READ_AUTHORITY).toBe("issue_runs");

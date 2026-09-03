@@ -68,7 +68,7 @@ test('Qoder Run transcript renders the design order with real provider identity'
   assert.match(markup, /<time class="session-message-time">\d{2}:\d{2}:\d{2}<\/time>/);
 });
 
-test('persisted provider history folds progress and opaque MCP events while keeping only the final reply visible', () => {
+test('persisted provider history keeps commentary visible and folds only opaque MCP events', () => {
   const markup = renderToStaticMarkup(React.createElement(SessionTranscript, {
     session: {
       id: 'codex:session-2',
@@ -96,7 +96,8 @@ test('persisted provider history folds progress and opaque MCP events while keep
   }));
 
   assert.match(markup, /执行过程 · 2 个动作/);
+  assert.match(markup, /我先检查当前实现。/);
   assert.match(markup, /页面已经修复并完成验证。/);
-  assert.doesNotMatch(markup, /我先检查当前实现。/);
   assert.doesNotMatch(markup, /mcpToolCall|\[object Object\]/);
+  assert.ok(markup.indexOf('我先检查当前实现。') < markup.indexOf('页面已经修复并完成验证。'));
 });

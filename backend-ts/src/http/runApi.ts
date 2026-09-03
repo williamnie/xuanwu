@@ -50,10 +50,12 @@ export const RUN_WRITE_AUTHORITY = "domain-run-command-service-over-issue_runs";
 
 type PageInput = { page: number; page_size: number };
 type RunAction = "interrupt" | "resume" | "retry";
+type RunTranscriptRow = { created_at: string; id: number; payload: string };
 
 export function registerRunRoutes(router: Router, context: ReadApiContext): void {
   router.get("/api/runs", (request) => runResponse(() => listResponse(context, request), request));
   router.get("/api/runs/:id", (request) => runResponse(() => detailResponse(context, request)));
+  router.get("/api/runs/:id/transcript", (request) => runResponse(() => transcriptResponse(context, request)));
   router.post("/api/runs/:id/actions/:action", async (request) => runResponse(async () => {
     const run = requireRun(context, runID(request));
     const action = actionInput(request);
@@ -138,6 +140,59 @@ function listResponse(context: ReadApiContext, request: Request): Record<string,
 function detailResponse(context: ReadApiContext, request: Request): Record<string, unknown> {
   return {
     run: publicRun(requireRun(context, runID(request), context.readDatabase ?? context.database))
+  };
+}
+
+function transcriptResponse(context: ReadApiContext, request: Request): Record<string, unknown> {
+  const database = context.readDatabase ?? context.database;
+  const run = requireRun(context, runID(request), database);
+  const params = new URL(request.url).searchParams;
+  const requestedAttemptID = optionalString(params.get("attempt_id"));
+  const attempt = requestedAttemptID
+    ? run.attempts.find((candidate) => candidate.id === requestedAttemptID)
+    : run.attempts.at(-1);
+  if (!attempt) throw runError(400, "invalid_request", "attempt_id does not belong to this Run");
+  const beforeID = optionalPositiveInteger(params.get("before_id"), "before_id");
+  const limit = positiveIntegerParam(params.get("limit"), "limit", 100, 200);
+  const clauses = [
+    "issue_id=?",
+    "type='issue.log'",
+    "json_valid(payload)",
+    "json_extract(payload, '$.raw_method')='item/completed'",
+    "json_extract(payload, '$.payload.item_type')='agentMessage'",
+    "length(trim(coalesce(json_extract(payload, '$.text'), ''))) > 0",
+    "json_extract(payload, '$.runtime_evidence_correlation.run_id')=?",
+    "json_extract(payload, '$.runtime_evidence_correlation.attempt_id')=?"
+  ];
+  const args: Array<number | string> = [issueIDFromWorkID(run.work_id), run.id, attempt.id];
+  if (beforeID !== undefined) {
+    clauses.push("id < ?");
+    args.push(beforeID);
+  }
+  args.push(limit + 1);
+  const rows = database.sqlite.query<RunTranscriptRow, Array<number | string>>(`
+    select id, payload, created_at from issue_events indexed by idx_issue_events_issue_type
+    where ${clauses.join(" and ")} order by id desc limit ?
+  `).all(...args);
+  const page = rows.slice(0, limit);
+  return {
+    data: page.reverse().map((row) => transcriptMessage(row, attempt.provider_ref.turn_ref)),
+    nextCursor: rows.length > limit ? String(page[0]?.id ?? "") : ""
+  };
+}
+
+function transcriptMessage(row: RunTranscriptRow, fallbackTurnID: string): Record<string, unknown> {
+  const body = safeJSONRecord(row.payload);
+  const snapshot = safeRecord(body.payload);
+  const correlation = safeRecord(body.runtime_evidence_correlation);
+  return {
+    created_at: row.created_at,
+    id: optionalString(snapshot.item_id) || `issue-event:${row.id}`,
+    phase: optionalString(snapshot.phase) || "commentary",
+    provider_turn_id: optionalString(correlation.provider_turn_id) || fallbackTurnID,
+    source_event_id: row.id,
+    text: optionalString(body.text),
+    type: "agentMessage"
   };
 }
 
@@ -456,6 +511,15 @@ function positiveIntegerParam(value: string | null, field: string, fallback: num
   return parsed;
 }
 
+function optionalPositiveInteger(value: string | null, field: string): number | undefined {
+  const raw = optionalString(value);
+  if (raw === "") return undefined;
+  if (!/^[1-9][0-9]*$/.test(raw)) throw runError(400, "invalid_request", `${field} must be a positive integer`);
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed)) throw runError(400, "invalid_request", `${field} must be a positive integer`);
+  return parsed;
+}
+
 function stringParams(params: URLSearchParams, key: string): string[] {
   return [...new Set(params.getAll(key)
     .flatMap((value) => value.split(","))
@@ -524,6 +588,18 @@ function requiredControlRef(value: unknown, message: string): string {
 
 function optionalString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function safeJSONRecord(value: string): Record<string, unknown> {
+  try {
+    return safeRecord(JSON.parse(value));
+  } catch {
+    return {};
+  }
+}
+
+function safeRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function assertKeys(body: Record<string, unknown>, allowed: string[]): void {

@@ -48,6 +48,9 @@ test('interrupt completion notice distinguishes completed cancelled and error ev
 test('interrupt stop event matcher accepts cancelled terminal shapes', () => {
   assert.equal(isSessionStopEvent({ method: 'turn/completed' }), true);
   assert.equal(isSessionStopEvent({ agent_event_type: 'agent.error' }), true);
+  assert.equal(isSessionStopEvent({ agent_event_type: 'provider.error' }), true);
+  assert.equal(isSessionStopEvent({ agent_event_type: 'done', status: 'completed' }), true);
+  assert.equal(isSessionStopEvent({ agent_event_type: 'provider.completed', status: 'completed' }), true);
   assert.equal(isSessionStopEvent({ agent_event_type: 'agent.turn.cancelled' }), true);
   assert.equal(isSessionStopEvent({ method: 'turn/canceled' }), true);
   assert.equal(isSessionStopEvent({ method: 'turn/started' }), false);

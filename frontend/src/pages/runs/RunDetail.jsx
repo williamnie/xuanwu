@@ -21,6 +21,7 @@ import {
   eventPageCursor,
   eventsWithinAttempt,
   mergeRunEventPages,
+  mergeRunTranscriptPage,
   runAttemptProviderSessionRef,
   runCostView,
   runEventInitialBeforeId,
@@ -115,6 +116,13 @@ export default function RunDetail({ navigateTo, run }) {
 }
 
 function ProviderSessionDrillDown({ attempt, navigateTo, run, sessionRef }) {
+  const loadTranscriptPage = useCallback(async (sessionId, input) => {
+    const [page, transcript] = await Promise.all([
+      runsApi.getSessionTurns(sessionId, input),
+      runsApi.getRunTranscript(run.id, { attemptId: attempt?.id || '', limit: 200 }),
+    ]);
+    return mergeRunTranscriptPage(page, transcript);
+  }, [attempt?.id, run.id]);
   if (!sessionRef) {
     return <EmptyState icon={Terminal} text="This Attempt has no provider session observation reference." />;
   }
@@ -136,6 +144,7 @@ function ProviderSessionDrillDown({ attempt, navigateTo, run, sessionRef }) {
         <Sessions
           autoSelectFirstSession={false}
           navigateTo={navigateTo}
+          loadTranscriptPage={(attempt?.provider_ref?.provider || run.provider) === 'codex' ? loadTranscriptPage : undefined}
           selectedSessionId={sessionRef}
           showEvidence={false}
           showSidebar={false}

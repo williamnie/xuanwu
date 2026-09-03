@@ -17,8 +17,9 @@ class BlockingStreamingProvider implements ExecutorProvider {
   async run(input: ProviderRunInput) {
     input.onEvent?.({
       provider: this.id,
-      type: "provider.message",
+      type: "message",
       text: "live provider output",
+      raw: { method: "qoder/assistant" },
       session: { provider: this.id, sessionId: `fake-session-${input.issueId}`, turnId: `fake-turn-${input.issueId}` }
     });
     await new Promise<void>((resolve) => {
@@ -45,7 +46,7 @@ afterEach(async () => {
 });
 
 describe("project loop realtime issue log events", () => {
-  test("publishes provider issue.log rows to the SSE event bus while the run is still active", async () => {
+  test("publishes raw provider events to SSE even when normal log mode does not persist them", async () => {
     const db = await openFixtureDatabase();
     const bus = new EventBus();
     const events = bus.subscribe();
@@ -56,13 +57,18 @@ describe("project loop realtime issue log events", () => {
 
       startProjectLoop({ database: db, providers: { [provider.id]: provider }, bus }, "demo");
 
-      const event = await nextMatchingEvent(events, (item) => item.type === "issue.log");
+      const event = await nextMatchingEvent(events, (item) => item.type === "agent.event");
       expect(event).toMatchObject({
-        type: "issue.log",
+        type: "agent.event",
+        agent_event_type: "message",
         issueId,
-        projectId: "demo"
+        projectId: "demo",
+        raw_method: "qoder/assistant",
+        text: "live provider output"
       });
-      expect(event?.payload).toContain("live provider output");
+      expect(db.sqlite.query<{ count: number }, [number]>(
+        "select count(*) as count from issue_events where issue_id=? and type='issue.log'"
+      ).get(issueId)?.count).toBe(0);
     } finally {
       provider.release?.();
       events.close();
@@ -99,7 +105,7 @@ function insertIssue(db: RunnerDatabase): number {
   db.sqlite.run(
     `insert into issues (project_id, title, status, issue_log_mode, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?)`,
-    ["demo", "Realtime log", "todo", "debug", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    ["demo", "Realtime log", "todo", "normal", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");

@@ -306,7 +306,7 @@ function agentEventType(event) {
 
 function normalizedProviderAgentEventType(type) {
   if (type === 'turn_started') return 'agent.turn.started';
-  if (type === 'text' || type === 'text_delta') return 'agent.message.delta';
+  if (type === 'text' || type === 'text_delta' || type === 'message' || type === 'provider.message') return 'agent.message.delta';
   if (type === 'tool') return 'agent.command.started';
   if (type === 'tool_result') return 'agent.command.completed';
   if (type === 'done') return 'agent.turn.completed';

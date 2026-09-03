@@ -69,11 +69,14 @@ export function sessionStopKind(event) {
   const type = normalizeStatusValue(event?.agent_event_type);
   const method = normalizeStatusValue(event?.method || event?.raw_method);
   const status = normalizeStatusValue(event?.status);
-  if (type === 'agent.error' || method === 'error') return 'error';
+  if (type === 'agent.error' || type === 'error' || type === 'provider.error' || method === 'error') return 'error';
   if (type === 'agent.turn.cancelled' || type === 'agent.turn.canceled') return 'cancelled';
   if (method === 'turn.cancelled' || method === 'turn.canceled') return 'cancelled';
   if (method === 'turn/cancelled' || method === 'turn/canceled') return 'cancelled';
   if (type === 'agent.turn.completed' || method === 'turn/completed') {
+    return isCancelledStatus(status) ? 'cancelled' : 'completed';
+  }
+  if (type === 'done' || type === 'provider.completed') {
     return isCancelledStatus(status) ? 'cancelled' : 'completed';
   }
   return isCancelledStatus(status) && (type.startsWith('agent.turn.') || method.startsWith('turn/'))

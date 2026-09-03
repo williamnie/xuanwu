@@ -355,9 +355,24 @@ function TurnItem({ turn, turnIndex, provider, model, project, session }) {
 }
 
 function ProviderExecutionBlock({ items, model, project, provider, timestamp }) {
-  const finalMessageIndex = items.findLastIndex((item) => item.type === 'agentMessage' && String(item.text || '').trim());
-  const finalMessage = finalMessageIndex >= 0 ? items[finalMessageIndex] : null;
-  const processItems = items.filter((_, index) => index !== finalMessageIndex);
+  const content = [];
+  let tools = [];
+  let groupIndex = 0;
+  const flushTools = () => {
+    if (tools.length === 0) return;
+    content.push(<ToolsCollapsible key={`tools-${groupIndex}`} tools={tools} />);
+    tools = [];
+    groupIndex += 1;
+  };
+  items.forEach((item, index) => {
+    if (item.type === 'agentMessage' && String(item.text || '').trim()) {
+      flushTools();
+      content.push(<AgentMessageBubble item={item} key={item.id || `message-${index}`} />);
+      return;
+    }
+    tools.push(item);
+  });
+  flushTools();
 
   return (
     <div className="session-provider-message">
@@ -367,8 +382,7 @@ function ProviderExecutionBlock({ items, model, project, provider, timestamp }) 
         timestamp={timestamp}
       />
       <div className="session-provider-message-body" data-project={project?.name || ''}>
-        {processItems.length > 0 && <ToolsCollapsible tools={processItems} />}
-        {finalMessage && <AgentMessageBubble item={finalMessage} />}
+        {content}
       </div>
     </div>
   );

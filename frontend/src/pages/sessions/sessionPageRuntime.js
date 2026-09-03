@@ -82,12 +82,12 @@ export function isSessionFileEvent(event) {
 export function isAgentEvent(event) {
   return event?.type === 'agent.event' ||
     event?.type === 'codex.event' ||
-    event?.type === 'claude.event' ||
-    (event?.type === 'issue.log' && Boolean(event?.threadId && event?.agent_event_type));
+    event?.type === 'claude.event';
 }
 
 export function isSessionStartEvent(event) {
   return event?.agent_event_type === 'agent.turn.started' ||
+    event?.agent_event_type === 'provider.session_started' ||
     event?.agent_event_type === 'turn_started' ||
     event?.method === 'turn/started' ||
     event?.raw_method === 'turn/started';

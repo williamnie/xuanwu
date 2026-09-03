@@ -14,6 +14,7 @@ Run API 在现有 Issue / Session / provider runtime 上提供统一查询和控
 | --- | --- | --- |
 | `GET` | `/api/runs` | 按 `work_id`、`project_id`、`provider`、`status` 查询；`page_size` 最大 100 |
 | `GET` | `/api/runs/:id` | 返回 Run、全部 Attempt、确定性 progress 与 logs/evidence/audit drill-down links |
+| `GET` | `/api/runs/:id/transcript` | 按 Attempt 有界返回已落库的用户可见 Agent 文案，补充 provider summary 省略的 commentary；不读取完整 Session payload |
 | `POST` | `/api/runs/:id/actions/:action` | `interrupt|resume|retry`；所有动作经过 P03.04 command service |
 
 列表在 repository SQL 中完成 filter、count、order、limit/offset，不把全量 Runs 载入内存后分页。Run ID 和 Work ID 必须分别是 `xw:run:issue_runs:*` 与 `xw:work:issues:<positive id>`；未知 legacy lifecycle 值返回 `status=null + mapping_errors[]`，不能猜成成功或失败。

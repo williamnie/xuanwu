@@ -83,6 +83,7 @@ export default function Sessions({
   showEvidence = true,
   showSidebar = true,
   keepNewSessionRoute = false,
+  loadTranscriptPage,
 }) {
   const projects = useDataStore(selectProjects);
   const refreshData = useDataStore(selectRefreshData);
@@ -267,7 +268,7 @@ export default function Sessions({
       const [detail, turnPage] = await Promise.all([
         runsApi.getSession(requestId),
         refreshTranscript
-          ? runsApi.getSessionTurns(requestId, { limit: SESSION_TURN_PAGE_SIZE })
+          ? (loadTranscriptPage || runsApi.getSessionTurns)(requestId, { limit: SESSION_TURN_PAGE_SIZE })
           : Promise.resolve(null),
       ]);
       if (selectedIdRef.current !== requestId) return;
@@ -301,13 +302,13 @@ export default function Sessions({
         setDetailLoading(false);
       }
     }
-  }, [selectedId]);
+  }, [loadTranscriptPage, selectedId]);
 
   const loadOlderTurns = useCallback(async () => {
     if (!selectedId || !turnCursor || turnsRequestRef.current) return;
     const requestId = selectedId;
     setTurnsLoading(true);
-    const promise = runsApi.getSessionTurns(requestId, {
+    const promise = (loadTranscriptPage || runsApi.getSessionTurns)(requestId, {
       cursor: turnCursor,
       limit: SESSION_TURN_PAGE_SIZE,
     });
@@ -326,7 +327,7 @@ export default function Sessions({
       if (turnsRequestRef.current === promise) turnsRequestRef.current = null;
       if (selectedIdRef.current === requestId) setTurnsLoading(false);
     }
-  }, [selectedId, turnCursor]);
+  }, [loadTranscriptPage, selectedId, turnCursor]);
 
   const loadModels = useCallback(async (provider = 'codex', runtimeStatus = null) => {
     const requestId = modelRequestRef.current + 1;

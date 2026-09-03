@@ -66,6 +66,37 @@ export function runLogSummary(event, maximum = 280) {
   return truncate(value.replace(/\s+/g, ' '), maximum);
 }
 
+export function mergeRunTranscriptPage(page = {}, transcript = {}) {
+  const messages = Array.isArray(transcript?.data) ? transcript.data : [];
+  if (messages.length === 0) return page;
+  const byTurn = new Map();
+  messages.forEach((message) => {
+    const turnID = text(message?.provider_turn_id);
+    if (!turnID) return;
+    const current = byTurn.get(turnID) || [];
+    current.push(message);
+    byTurn.set(turnID, current);
+  });
+  const turns = (Array.isArray(page?.data) ? page.data : []).map((turn) => {
+    const supplemental = byTurn.get(text(turn?.id)) || [];
+    byTurn.delete(text(turn?.id));
+    return supplemental.length > 0 ? { ...turn, items: mergeTranscriptItems(turn?.items, supplemental) } : turn;
+  });
+  for (const [turnID, supplemental] of [...byTurn].reverse()) turns.unshift({ id: turnID, items: supplemental });
+  return { ...page, data: turns };
+}
+
+function mergeTranscriptItems(items = [], supplemental = []) {
+  const existing = Array.isArray(items) ? items : [];
+  const supplementalIDs = new Set(supplemental.map((item) => text(item?.id)).filter(Boolean));
+  const supplementalTexts = new Set(supplemental.map((item) => text(item?.text)).filter(Boolean));
+  const users = existing.filter((item) => item?.type === 'userMessage');
+  const remaining = existing.filter((item) => item?.type !== 'userMessage' &&
+    !supplementalIDs.has(text(item?.id)) &&
+    !(item?.type === 'agentMessage' && supplementalTexts.has(text(item?.text))));
+  return [...users, ...supplemental, ...remaining];
+}
+
 export function runCostView(cost) {
   const usage = object(cost?.usage);
   const money = object(cost?.money);

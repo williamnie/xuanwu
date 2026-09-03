@@ -50,6 +50,7 @@ export default function Dashboard({
     // 订阅全局 SSE 事件流
     const unsubscribe = eventsApi.subscribeToEvents(
       (event) => {
+        if (event.type === 'agent.event') return;
         // 将新事件加入实时活动流，限制最多保存 20 条
         updateEvents((draft) => {
           draft.unshift({

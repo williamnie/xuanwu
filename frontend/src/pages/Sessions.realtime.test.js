@@ -7,7 +7,7 @@ const transcriptSource = readFileSync(new URL('./sessions/SessionTranscript.jsx'
 const chatWorkspaceSource = readFileSync(new URL('./sessions/SessionChatWorkspace.jsx', import.meta.url), 'utf8');
 
 test('session detail uses paginated summary turns without periodic full transcript replay', () => {
-  assert.match(sessionsSource, /runsApi\.getSessionTurns\(requestId/);
+  assert.match(sessionsSource, /\(loadTranscriptPage \|\| runsApi\.getSessionTurns\)\(requestId/);
   assert.match(sessionsSource, /SESSION_TURN_PAGE_SIZE\s*=\s*20/);
   assert.doesNotMatch(sessionsSource, /SESSION_DETAIL_RECONCILE_INTERVAL_MS/);
   assert.doesNotMatch(sessionsSource, /setInterval\([^)]*loadSelected/);

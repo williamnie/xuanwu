@@ -5,6 +5,7 @@ import {
   eventPageCursor,
   eventsWithinAttempt,
   mergeRunEventPages,
+  mergeRunTranscriptPage,
   runAttemptProviderSessionRef,
   runCostView,
   runEventInitialBeforeId,
@@ -72,6 +73,29 @@ test('cost presentation preserves unavailable money and provider-neutral token t
     reasoning: '20',
     total: '2,300',
   });
+});
+
+test('Run transcript messages restore bounded commentary omitted by provider summary pages', () => {
+  const page = {
+    data: [{
+      id: 'turn-1',
+      items: [
+        { id: 'user-1', type: 'userMessage', content: [{ type: 'input_text', text: 'fix it' }] },
+        { id: 'final-1', type: 'agentMessage', phase: 'final_answer', text: 'done' },
+      ],
+    }],
+    nextCursor: 'older',
+  };
+  const transcript = {
+    data: [
+      { id: 'comment-1', provider_turn_id: 'turn-1', type: 'agentMessage', phase: 'commentary', text: 'checking' },
+      { id: 'final-1', provider_turn_id: 'turn-1', type: 'agentMessage', phase: 'final_answer', text: 'done' },
+    ],
+  };
+
+  const merged = mergeRunTranscriptPage(page, transcript);
+  assert.equal(merged.nextCursor, 'older');
+  assert.deepEqual(merged.data[0].items.map(item => item.id), ['user-1', 'comment-1', 'final-1']);
 });
 
 function fixtureRun() {

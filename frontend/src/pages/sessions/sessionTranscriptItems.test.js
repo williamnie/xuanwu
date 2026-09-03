@@ -186,6 +186,18 @@ test('live stream parser maps Claude SDK deltas and tool results into the provid
   });
 });
 
+test('live stream parser maps every configured code agent text event into assistant copy', () => {
+  const parsed = parseLiveSessionEvents([
+    { type: 'agent.event', provider: 'codex', agent_event_type: 'text', raw_method: 'item/agentMessage/delta', text: 'Codex ' },
+    { type: 'agent.event', provider: 'claude', agent_event_type: 'text_delta', raw_method: 'stream_event', text: 'Claude ' },
+    { type: 'agent.event', provider: 'qoder', agent_event_type: 'message', raw_method: 'qoder/assistant', text: 'Qoder ' },
+    { type: 'agent.event', provider: 'pi-coding-agent', agent_event_type: 'provider.message', raw_method: 'item/agentMessage/delta', text: 'Pi' },
+  ]);
+
+  assert.equal(parsed.agentMessageText, 'Codex Claude Qoder Pi');
+  assert.equal(parsed.tools.length, 0);
+});
+
 test('live stream parser exposes pending approval events', () => {
   const parsed = parseLiveSessionEvents([
     {
