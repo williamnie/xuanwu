@@ -83,6 +83,12 @@ xuanwu-update upgrade \
 
 ## 4. Migration notes
 
+### v0.2.11
+
+- migration：none。相对 `v0.2.10` 没有新增、删除或修改数据库 schema。
+- 最低可回滚 binary：`v0.2.10`；本版本持久化合同保持兼容。
+- operator action：升级前仍按常规流程生成并验证 `runner.db` 备份；没有额外配置迁移或默认值切换。
+
 ### v0.2.4
 
 - migration：新增 additive migration `081_telegram_channel_runtime` 与
