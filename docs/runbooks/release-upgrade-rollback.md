@@ -83,6 +83,14 @@ xuanwu-update upgrade \
 
 ## 4. Migration notes
 
+### v0.2.12
+
+- migration：none。相对 `v0.2.11` 没有新增、删除或修改数据库 schema，保持 `xuanwu.storage-compat.v1`。
+- 最低可回滚 binary：`v0.2.11`；已生成的标题由 Codex 持久化，回滚不会清除已有标题。
+- operator action：升级前按常规流程生成并验证 `runner.db` 备份；无需新增模型或鉴权配置。
+  未指定标题的 Codex 会话默认复用 Supervisor 模型自动命名；配置不可用时保留原名。
+  用户指定的标题及已有非空标题不会被批量修改，无额外数据迁移。
+
 ### v0.2.11
 
 - migration：none。相对 `v0.2.10` 没有新增、删除或修改数据库 schema。

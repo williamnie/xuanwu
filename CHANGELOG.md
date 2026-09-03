@@ -4,6 +4,26 @@
 
 ## [Unreleased]
 
+## [0.2.12] - 2026-09-03
+
+### Added / 新增
+
+- 未指定标题的 Codex 会话可复用 Supervisor 的模型与鉴权，通过一次 LLM 调用根据 Issue
+  或用户消息自动命名，格式为 `MMDD｜类型｜主题`；日期取上海时区的会话创建时间。
+- 支持在创建 Codex 会话时显式传入标题，并保护用户在生成期间修改的名称；无法判断主题、
+  模型调用失败或超时时保留原名，自动命名不阻塞任务执行，也不批量改写已有会话。
+
+### Security / 安全
+
+- 将后端传递依赖 `fast-uri` 从 `3.1.5` 升级至兼容补丁 `3.1.6`，修复 URI 主机名规范化
+  相关的四项安全公告，恢复依赖审计门禁。
+- 将后端传递依赖 `qs` 升级至 `6.16.0`，修复输入解析相关的拒绝服务问题。
+- 将 Tiptap 编辑器组件统一升级至 `3.30.4`，修复属性合并可能引入可执行 DOM 属性的问题。
+
+### Fixed / 修复
+
+- 编辑器重新载入 Markdown 时保持本地文档路径和裸 URL 为纯文本，显式创建的链接仍可使用。
+
 ## [0.2.11] - 2026-09-03
 
 ### Fixed / 修复
@@ -158,7 +178,9 @@
 
 - 首个 GitHub Release，包含 macOS/Linux 的 arm64、amd64 预构建资产和一键安装脚本。
 
-[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.10...HEAD
+[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.12...HEAD
+[0.2.12]: https://github.com/williamnie/xuanwu/compare/v0.2.11...v0.2.12
+[0.2.11]: https://github.com/williamnie/xuanwu/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/williamnie/xuanwu/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/williamnie/xuanwu/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/williamnie/xuanwu/compare/v0.2.7...v0.2.8

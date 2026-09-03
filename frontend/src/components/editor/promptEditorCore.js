@@ -16,7 +16,9 @@ const AttachmentImage = Image.extend({
 
 const ManualLink = Link.extend({
   parseMarkdown: (token, helpers) => {
-    if (isLocalMarkdownSelfLink(token.text, token.href)) {
+    // Markdown 解析器也会识别裸 URL；与输入/粘贴一致，仅保留显式 Markdown 链接。
+    const isBareUrl = typeof token.raw === 'string' && token.raw === token.text;
+    if (isBareUrl || isLocalMarkdownSelfLink(token.text, token.href)) {
       return helpers.createTextNode(token.raw || `[${token.text}](${token.href})`);
     }
     return helpers.applyMark('link', helpers.parseInline(token.tokens || []), {

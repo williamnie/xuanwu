@@ -12,6 +12,7 @@ import { remarkPlainLocalDocSelfLinks } from './localDocLinks.js';
 
 const EMPTY_DOC = { type: 'doc', content: [{ type: 'paragraph' }] };
 const LOCAL_DOC_PATH_EXAMPLE = 'docs/integrations/[home-v2-frontend-diff.md](http://home-v2-frontend-diff.md)';
+const LOCAL_DOC_PATH_MARKDOWN = String.raw`docs/integrations/\[home-v2-frontend-diff.md\](http://home-v2-frontend-diff.md)`;
 
 function createEditor(markdown = '') {
   const editor = new Editor({
@@ -37,8 +38,15 @@ test('pasted local document path markdown is serialized as plain text', () => {
   const paragraph = editor.schema.nodes.paragraph.create(null, editor.schema.text(LOCAL_DOC_PATH_EXAMPLE));
   editor.view.dispatch(editor.state.tr.replaceSelection(paragraph.slice(0)).setMeta('uiEvent', 'paste'));
 
-  assert.equal(editor.getMarkdown(), LOCAL_DOC_PATH_EXAMPLE);
+  // 新版序列化器转义文字方括号；显示内容与再次载入后的文本必须完全保留。
+  assert.equal(editor.getMarkdown(), LOCAL_DOC_PATH_MARKDOWN);
+  assert.equal(editor.getText(), LOCAL_DOC_PATH_EXAMPLE);
   assert.equal(hasLinkMark(editor.getJSON()), false);
+
+  const restored = createEditor(editor.getMarkdown());
+  assert.equal(restored.getText(), LOCAL_DOC_PATH_EXAMPLE);
+  assert.equal(hasLinkMark(restored.getJSON()), false);
+  restored.destroy();
 
   editor.destroy();
 });
@@ -46,7 +54,8 @@ test('pasted local document path markdown is serialized as plain text', () => {
 test('local document path markdown parses back as plain editor text', () => {
   const editor = createEditor(LOCAL_DOC_PATH_EXAMPLE);
 
-  assert.equal(editor.getMarkdown(), LOCAL_DOC_PATH_EXAMPLE);
+  assert.equal(editor.getMarkdown(), LOCAL_DOC_PATH_MARKDOWN);
+  assert.equal(editor.getText(), LOCAL_DOC_PATH_EXAMPLE);
   assert.equal(hasLinkMark(editor.getJSON()), false);
 
   editor.destroy();
@@ -60,6 +69,13 @@ test('manual links remain available through link command', () => {
   assert.equal(editor.getMarkdown(), '[Open](https://example.com/docs) docs');
   assert.equal(hasLinkMark(editor.getJSON()), true);
 
+  editor.destroy();
+});
+
+test('bare URLs remain plain text when markdown is restored', () => {
+  const editor = createEditor('https://example.com/docs');
+  assert.equal(editor.getText(), 'https://example.com/docs');
+  assert.equal(hasLinkMark(editor.getJSON()), false);
   editor.destroy();
 });
 
