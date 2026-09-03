@@ -102,7 +102,7 @@ describe("Xuanwu capability disposition inventory", () => {
     );
     const inventoriedPi: string[] = PI_MODULE_FAMILIES.flatMap((family) => [...family.source_files]).sort();
     expect(inventoriedPi).toEqual(piFiles);
-    expect(inventoriedPi).toHaveLength(158);
+    expect(inventoriedPi).toHaveLength(160);
     expect(unique(inventoriedPi)).toHaveLength(inventoriedPi.length);
   });
 

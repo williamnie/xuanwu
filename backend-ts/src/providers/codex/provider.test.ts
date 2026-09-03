@@ -12,11 +12,15 @@ class FakeCodexIssueAdapter {
   readThreadResult: ThreadSummary | null = null;
   resumeThreadResult: ThreadSummary | null = null;
   startTurnError: Error | null = null;
+  threadName?: string;
 
   async initialize(): Promise<CodexInitializeResult> {
     this.calls.push({ method: "initialize" });
     return { protocolVersion: "fixture", capabilities: {} };
   }
+
+  async listThreads() { return { data: [], nextCursor: undefined }; }
+  async listModels() { return { data: [] }; }
 
   async readThread(threadID: string, input: { includeTurns?: boolean } = {}): Promise<ThreadSummary> {
     this.calls.push({ method: "thread/read", params: { threadID, ...input } });
@@ -35,11 +39,12 @@ class FakeCodexIssueAdapter {
 
   async startThread(input: ThreadStartInput): Promise<ThreadStartResult> {
     this.calls.push({ method: "thread/start", params: input });
-    return { id: "codex:thread-1", provider: "codex", provider_session_id: "thread-1", sessionId: "thread-1", thread_id: "thread-1", ephemeral: false };
+    return { ...this.threadSummary("thread-1"), thread_id: "thread-1" };
   }
 
   async setThreadName(threadID: string, name: string): Promise<{ ok: true; provider_session_id: string }> {
     this.calls.push({ method: "thread/name/set", params: { threadID, name } });
+    this.threadName = name;
     return { ok: true, provider_session_id: threadID };
   }
 
@@ -60,7 +65,10 @@ class FakeCodexIssueAdapter {
   }
 
   private threadSummary(threadID: string): ThreadSummary {
-    return { id: `codex:${threadID}`, provider: "codex", provider_session_id: threadID, sessionId: threadID, ephemeral: false };
+    return {
+      id: `codex:${threadID}`, provider: "codex", provider_session_id: threadID, sessionId: threadID, ephemeral: false,
+      name: this.threadName, createdAt: Date.parse("2026-09-02T16:00:00Z") / 1000
+    };
   }
 }
 
@@ -95,6 +103,55 @@ class FakeCodexRuntimeControl {
 }
 
 describe("Codex executor provider", () => {
+  test("Issue turn 先启动，LLM 完成后才更新默认标题，恢复时不重复生成", async () => {
+    const adapter = new FakeCodexIssueAdapter();
+    let complete!: (value: string | null) => void;
+    const result = new Promise<string | null>((resolve) => { complete = resolve; });
+    let calls = 0;
+    const provider = new CodexExecutorProvider(adapter, "instructions", undefined, undefined, async (input) => {
+      calls++;
+      expect(input.issueId).toBe(913);
+      expect(input.thread.createdAt).toBe(Date.parse("2026-09-02T16:00:00Z") / 1000);
+      return result;
+    });
+    try {
+      const run = await provider.run({ issueId: 913, projectId: "demo", cwd: "/tmp/demo", prompt: "修复消息重复" });
+      expect(run.session?.turnId).toBe("turn-1");
+      expect(adapter.threadName).toBe("Issue #913");
+      complete("0903｜修复｜消息重复");
+      await Bun.sleep(0);
+      expect(adapter.threadName).toBe("0903｜修复｜消息重复");
+      await provider.recover({ issueId: 913, projectId: "demo", cwd: "/tmp/demo", prompt: "继续", session: run.session! });
+      expect(calls).toBe(1);
+    } finally { await provider.stop(); }
+  });
+
+  test("手动指定标题时不调用 LLM，后续消息仍保留标题", async () => {
+    const adapter = new FakeCodexIssueAdapter();
+    let calls = 0;
+    const provider = new CodexExecutorProvider(adapter, "instructions", undefined, undefined, async () => { calls++; return "0903｜修复｜消息重复"; });
+    try {
+      await provider.createSession({ cwd: "/tmp/demo", title: "我的原始标题", prompt: "修复消息重复" });
+      await provider.sendSessionMessage({ sessionId: "thread-1", prompt: "继续" });
+      expect(calls).toBe(0);
+      expect(adapter.threadName).toBe("我的原始标题");
+    } finally { await provider.stop(); }
+  });
+
+  test("空会话收到第一条消息后自动生成标题", async () => {
+    const adapter = new FakeCodexIssueAdapter();
+    let calls = 0;
+    const provider = new CodexExecutorProvider(adapter, "instructions", undefined, undefined, async () => { calls++; return "0903｜修复｜消息重复"; });
+    try {
+      await provider.createSession({ cwd: "/tmp/demo" });
+      expect(calls).toBe(0);
+      await provider.sendSessionMessage({ sessionId: "thread-1", prompt: "修复消息重复" });
+      await Bun.sleep(0);
+      expect(calls).toBe(1);
+      expect(adapter.threadName).toBe("0903｜修复｜消息重复");
+    } finally { await provider.stop(); }
+  });
+
   test("starts a Codex thread and one issue turn", async () => {
     const adapter = new FakeCodexIssueAdapter();
     const events: unknown[] = [];

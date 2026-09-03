@@ -82,6 +82,11 @@ the presence of adapter code.
 | Pi Coding Agent | **Preview** | RPC-based execution with session read/resume, interrupt, model discovery, and in-session model switching. The release includes the Xuanwu policy extension, but the provider remains preview while broader live use is evaluated. |
 | Qoder | **Preview** | SDK execution with a pinned CLI runtime, session create/list/read/resume, interrupt, approvals, and model discovery. Real-account acceptance exists, but the integration and redistribution boundary remain preview. |
 
+Codex sessions without an explicit title can be named automatically with one LLM call using the
+Supervisor's configured model. Titles follow `MMDD｜类型｜主题`, using the creation date in
+Asia/Shanghai; user titles are preserved and naming failures do not block execution.
+See [Codex integration](docs/codex-integration.md) for the naming rules and API option.
+
 ## Roadmap
 
 Xuanwu is evolving toward a provider-neutral, remotely operable control plane for always-on

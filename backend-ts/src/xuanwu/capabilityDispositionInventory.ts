@@ -886,6 +886,10 @@ export const PI_MODULE_FAMILIES = [
     source_files: ["backend-ts/src/pi/issueSupervisorDecisionTestSupport.ts", "backend-ts/src/pi/issueSupervisorRecoveryFixtures.ts", "backend-ts/src/pi/personaABFixtures.ts"]
   },
   {
+    id: "session-title", disposition: "keep", target: "Provider conversation title generation", source_of_truth: "Codex thread.name; existing Supervisor model configuration",
+    source_files: ["backend-ts/src/pi/sessionTitleGenerator.ts", "backend-ts/src/pi/sessionTitlePrompt.ts"]
+  },
+  {
     id: "pi-acceptance", disposition: "keep", target: "PI Session-context acceptance", source_of_truth: "Provider Session, workspace, commands, Git facts, and PI decision",
     source_files: ["backend-ts/src/pi/internalReadAuthorization.ts", "backend-ts/src/pi/issueAcceptance.ts", "backend-ts/src/pi/meaningfulProgress.ts", "backend-ts/src/pi/projectFindings.ts", "backend-ts/src/pi/projectSnapshot.ts", "backend-ts/src/pi/repoContextPack.ts"]
   },

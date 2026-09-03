@@ -465,7 +465,7 @@ GET /api/issues/:id/runs
 
 ## 8. PI 模块清单
 
-`backend-ts/src/pi` 的 153 个非 `*.test.ts` 模块全部在下面 family 中逐项列出；测试保证没有漏项或重复归属。
+`backend-ts/src/pi` 的生产模块按下面 family 归类；可执行清单和测试保证没有漏项或重复归属。
 
 | family | 文件数 | 结论 | 目标 | source of truth |
 | --- | ---: | --- | --- | --- |
@@ -478,8 +478,18 @@ GET /api/issues/:id/runs
 | `policy-role` | 4 | **keep** | Deterministic policy and role selection | project policy plus static role contracts |
 | `reporting` | 9 | **merge** | Evidence/Handoff reporting projections | underlying immutable facts remain authoritative |
 | `test-support` | 3 | **keep** | Focused deterministic fixtures | test-only import graph |
+| `session-title` | 2 | **keep** | Provider conversation title generation | Codex thread.name; existing Supervisor model configuration |
 | `pi-acceptance` | 6 | **keep** | PI Session-context acceptance | Provider Session, workspace, commands, Git facts, and PI decision |
 | `work-run-orchestration` | 34 | **merge** | Work/Run orchestration and recovery | issues and issue_runs authorities |
+
+<details><summary><code>session-title</code> 的逐项 modules</summary>
+
+```text
+backend-ts/src/pi/sessionTitleGenerator.ts
+backend-ts/src/pi/sessionTitlePrompt.ts
+```
+
+</details>
 
 <details><summary><code>action-permission-gate</code> 的逐项 modules</summary>
 

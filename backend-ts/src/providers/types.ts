@@ -191,6 +191,8 @@ export type SessionTurnsListResult = {
   nextCursor?: string;
 };
 export type SessionCreateInput = {
+  /** 用户明确填写的会话标题；缺省时由支持自动命名的 provider 生成。 */
+  title?: string;
   approvalPolicy?: string;
   cwd: string;
   model?: string;
@@ -211,7 +213,7 @@ export type SessionCreateResult = {
   thread_id: string;
   turn_id?: string;
 };
-export type SessionMessageInput = Omit<SessionCreateInput, "cwd" | "projectId"> & {
+export type SessionMessageInput = Omit<SessionCreateInput, "cwd" | "projectId" | "title"> & {
   cwd?: string;
   mode?: string;
   projectId?: string;

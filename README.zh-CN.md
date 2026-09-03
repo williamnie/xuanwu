@@ -72,6 +72,10 @@ catalog 中允许提交新 Work；这里的状态表示真实验收程度，不�
 | Pi Coding Agent | **预览** | 通过 RPC 执行，支持 Session 读取/恢复、中断、模型发现及 Session 内模型切换；Release 已包含 Xuanwu policy extension，但在更广泛的真实使用评估完成前保持预览。 |
 | Qoder | **预览** | 通过 SDK 执行并包含固定版本的 CLI runtime，支持 Session 创建/列表/读取/恢复、中断、审批和模型发现；已有真实账号验收，但集成与再分发边界仍保持预览。 |
 
+未指定标题的 Codex 会话可复用 Supervisor 的模型配置，通过一次 LLM 调用自动命名。
+格式为 `MMDD｜类型｜主题`，日期取上海时区的会话创建日期；保留用户标题，命名失败不阻塞执行。
+命名规则与 API 参数见 [Codex 对接说明](docs/codex-integration.md)。
+
 ## 路线图
 
 玄武正在向一个 Provider-neutral、可远程操作、能够长期无人值守运行的 AI 工程控制面演进。

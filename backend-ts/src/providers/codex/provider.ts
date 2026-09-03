@@ -23,6 +23,7 @@ import type { CodexInitializeResult, ThreadSummary, TurnStartResult } from "./ad
 import { CodexStdioJsonRpcTransport, type CodexProcessLease } from "./jsonRpc.ts";
 import { recoverCodexRolloutExecEvents } from "./rolloutExecRecovery.ts";
 import { publicCodexSessionDetail, publicCodexSessionSummary } from "./sessionHistory.ts";
+import { CodexThreadNaming, type CodexThreadTitleGenerator } from "./threadNaming.ts";
 
 const PROVIDER_CODEX = "codex";
 const DEFAULT_DEVELOPER_INSTRUCTIONS = [
@@ -69,6 +70,7 @@ class CodexEventHub implements CodexEventSource {
 }
 
 export class CodexExecutorProvider implements ExecutorProvider {
+  private readonly threadNaming: CodexThreadNaming;
   readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"] as const;
   readonly id = PROVIDER_CODEX;
   readonly interruptScope = "turn" as const;
@@ -76,8 +78,15 @@ export class CodexExecutorProvider implements ExecutorProvider {
     private readonly adapter: CodexIssueAdapter,
     private readonly developerInstructions = DEFAULT_DEVELOPER_INSTRUCTIONS,
     private readonly eventSource?: CodexEventSource,
-    private readonly runtimeControl?: CodexRuntimeControl
-  ) {}
+    private readonly runtimeControl?: CodexRuntimeControl,
+    generateTitle?: CodexThreadTitleGenerator
+  ) {
+    this.threadNaming = new CodexThreadNaming(adapter, {
+      generate: generateTitle,
+      acquire: (owner) => this.acquire(owner),
+      subscribe: eventSource ? (handler) => eventSource.subscribe(handler) : undefined
+    });
+  }
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     const lease = this.acquire(`project:${input.projectId}:issue:${input.issueId}:run`);
@@ -99,7 +108,11 @@ export class CodexExecutorProvider implements ExecutorProvider {
         method: "thread/started",
         metadata: { protocol_version: initialized.protocolVersion }
       }));
-      await this.nameThread(thread.provider_session_id, input.issueId);
+      const hasName = typeof thread.name === "string" && thread.name.trim() !== "";
+      if (!hasName) {
+        await this.nameThread(thread.provider_session_id, input.issueId);
+        thread.name = `Issue #${input.issueId}`;
+      }
       stopForwarding = this.forwardRunEvents(input, thread, () => lease.release());
       const turn = await this.adapter.startTurn(thread.provider_session_id, codexUserInputs(input), {
         model: input.model,
@@ -110,6 +123,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
       });
       lease.bind(turn.provider_session_id, turn.turn_id);
       input.onEvent?.(turnStartedEvent(turn, input, initialized));
+      if (!hasName) this.threadNaming.schedule({ ...input, thread });
       return { runId: runID(turn), session: sessionRef(turn) };
     } catch (error) {
       stopForwarding();
@@ -142,12 +156,15 @@ export class CodexExecutorProvider implements ExecutorProvider {
       await this.adapter.initialize();
       const thread = await this.adapter.startThread({ ...threadOptions(input, this.developerInstructions), threadSource: "user" });
       lease.bind(thread.provider_session_id);
+      const title = input.title?.trim();
+      if (title) await this.adapter.setThreadName(thread.provider_session_id, title);
       const result = createResult(thread.provider_session_id);
       if (input.prompt?.trim()) {
         const turn = await this.adapter.startTurn(thread.provider_session_id, codexUserInputs(input), turnOptions(input));
         lease.bind(turn.provider_session_id, turn.turn_id);
         result.turn_id = turn.turn_id;
         result.provider_turn_id = turn.turn_id;
+        if (!title && !thread.name) this.threadNaming.schedule({ ...input, prompt: input.prompt, thread });
       } else {
         lease.release();
       }
@@ -176,6 +193,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
       lease.bind(resumedThreadID);
       const turn = await this.adapter.startTurn(resumedThreadID, codexUserInputs(input), turnOptions(input));
       lease.bind(turn.provider_session_id, turn.turn_id);
+      if (!session.name) this.threadNaming.schedule({ ...input, prompt: input.prompt ?? "", thread: session });
       return turn;
     } catch (error) {
       lease.release();
@@ -233,6 +251,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
   }
 
   async stop(): Promise<void> {
+    this.threadNaming.stop();
     await this.runtimeControl?.stop();
   }
 
@@ -299,19 +318,19 @@ export class CodexExecutorProvider implements ExecutorProvider {
 export function createCodexExecutorProvider(
   config: ProviderRuntimeConfig,
   appEventSink?: CodexAppEventSink,
-  options: { ownershipFile?: string } = {}
+  options: { ownershipFile?: string; generateTitle?: CodexThreadTitleGenerator } = {}
 ): CodexExecutorProvider {
   const events = new CodexEventHub();
   const publish = (event: ProviderEvent) => {
     events.publish(event);
-    if (isApprovalProviderEvent(event)) appEventSink?.(codexProviderAppEvent(event));
+    if (isApprovalProviderEvent(event) || event.raw?.method === "thread/name/updated") appEventSink?.(codexProviderAppEvent(event));
   };
   const transport = new CodexStdioJsonRpcTransport(config, {
     onDiagnostic: publish,
     onEvent: publish,
     ownershipFile: options.ownershipFile
   });
-  return new CodexExecutorProvider(new CodexAdapter(transport), DEFAULT_DEVELOPER_INSTRUCTIONS, events, transport);
+  return new CodexExecutorProvider(new CodexAdapter(transport), DEFAULT_DEVELOPER_INSTRUCTIONS, events, transport, options.generateTitle);
 }
 
 export function codexProviderAppEvent(event: ProviderEvent): AppEvent {

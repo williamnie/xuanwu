@@ -118,6 +118,17 @@ Sessions 页面直接消费 provider session/thread 能力。Codex provider 支�
 | `POST /api/sessions/{threadId}/messages` | `thread/resume` + `turn/start` |
 | `POST /api/sessions/{threadId}/interrupt` | `turn/interrupt` |
 
+### 会话自动命名
+
+Codex 会话未指定标题时，玄武在第一条任务消息启动后，使用 Xuanwu Supervisor 已配置的模型和鉴权直接调用一次 LLM 生成标题，不创建 Agent 会话、不挂载工具。Issue 会话使用原始 Issue 标题和正文；手动创建的会话使用用户消息。
+
+- 标题格式为 `MMDD｜类型｜主题`，例如 `0903｜修复｜消息重复`。日期只取 Codex thread 的 `createdAt`（Unix 秒），按 `Asia/Shanghai` 转换，不能用 `updatedAt` 替代。
+- 类型限定为功能、设计、修复、优化、发布、探索、文档、研究；主题不重复项目名，无法判断时保留原名。
+- `POST /api/sessions` 的 Codex 请求可传可选 `title`；非空时直接使用该名称，不调用标题模型。已有非空名称的会话不会在后续消息或恢复时重新生成。
+- 自动命名在后台运行，最多等待 20 秒，不重试 LLM；模型配置缺失、输出无效、返回 `null`、超时或失败均保留原名。Issue 的默认名称仍为 `Issue #<id>`。
+- 写入前重新读取会话名称，并监听改名通知；生成期间发生用户改名则放弃自动写入。仅调用 `thread/name/set`，不更改项目名称、内容、项目归属、排序、置顶或归档状态。
+- 命名结果由 Codex 持久化，不批量改写已有会话。Prompt 和格式校验见 `backend-ts/src/pi/sessionTitlePrompt.ts`。
+
 ## Agent/provider 通过 CLI 或 API 反向更新 Runner
 
 agent/provider 在执行 issue 时不直接访问 SQLite，而是通过短命令 CLI 调 Runner API。CLI 默认读取 `XUANWU_ADDR`，未设置时连接 `127.0.0.1:3008`。

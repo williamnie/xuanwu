@@ -325,7 +325,7 @@ export async function ensurePiSessionFile(session: {
   }
 }
 
-function piRuntimePaths(db: RunnerDatabase) {
+export function piRuntimePaths(db: RunnerDatabase) {
   const stateDir = dirname(db.path);
   const agentDir = join(stateDir, PI_RUNTIME_ROOT, PI_AGENT_DIR);
   return {
@@ -384,7 +384,7 @@ function noopRuntimeCleanup(): void {}
 
 type PiModelRegistry = { find(provider: string, modelID: string): Model<any> | undefined };
 
-function resolvePiModel(modelRegistry: PiModelRegistry, agent: PiAgent) {
+export function resolvePiModel(modelRegistry: PiModelRegistry, agent: PiAgent) {
   if (agent.model_provider === "" || agent.model_id === "") {
     throw new Error(`PI agent ${agent.id} has no configured model provider/model`);
   }

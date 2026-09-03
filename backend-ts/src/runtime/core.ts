@@ -77,7 +77,11 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   if (config.providers.codex) {
     providersRegistry.registerFactory(codexFactory({
       appEventSink: (event) => bus?.publish(event),
-      ownershipFile: codexOwnershipFile
+      ownershipFile: codexOwnershipFile,
+      generateTitle: async (input, signal) => {
+        const { generateSessionTitle } = await import("../pi/sessionTitleGenerator.ts");
+        return generateSessionTitle(database, input, signal);
+      }
     }));
   }
   if (config.providers.claude) {

@@ -5,6 +5,7 @@ import type { ProviderFactory, ProviderRuntimeConfig as RegistryProviderConfig, 
 import { detectProviderCommand } from "../core/command.ts";
 import { createCodexExecutorProvider, type CodexAppEventSink } from "./provider.ts";
 import { CODEX_EXECUTION_POLICY_CAPABILITIES, codexExecutionPolicyAdapter } from "./executionPolicy.ts";
+import type { CodexThreadTitleGenerator } from "./threadNaming.ts";
 
 /**
  * P7：Codex ProviderFactory——app-server 生命周期迁入 registry facet。
@@ -59,6 +60,7 @@ export function codexManifest(): ExecutorProviderManifest {
 export type CodexFactoryOptions = {
   appEventSink?: CodexAppEventSink;
   ownershipFile?: string;
+  generateTitle?: CodexThreadTitleGenerator;
 };
 
 export function codexFactory(options: CodexFactoryOptions = {}): ProviderFactory {
@@ -73,7 +75,8 @@ export function codexFactory(options: CodexFactoryOptions = {}): ProviderFactory
     },
     create: (config: RegistryProviderConfig) => {
       const instance = createCodexExecutorProvider(config as ProviderRuntimeConfig, options.appEventSink, {
-        ownershipFile: options.ownershipFile
+        ownershipFile: options.ownershipFile,
+        generateTitle: options.generateTitle
       }) as ExecutorProvider;
       return Object.assign(instance, { manifest, policyAdapter: codexExecutionPolicyAdapter }) as RegisteredProvider;
     }

@@ -309,6 +309,7 @@ function sessionCreateInput(
     ?? inheritedPolicy;
   return {
     projectId: project?.id,
+    ...(provider === "codex" && stringBody(body, "title").trim() ? { title: stringBody(body, "title").trim() } : {}),
     cwd: firstNonEmpty(stringBody(body, "cwd"), project?.cwd ?? ""),
     model: sessionModel(body, project, provider),
     reasoningEffort: stringBody(body, "reasoning_effort"),

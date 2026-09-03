@@ -33,6 +33,22 @@ afterEach(async () => {
 });
 
 describe("Bun Sessions API compatibility", () => {
+  test("Codex 创建请求传递用户明确指定的标题", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new SessionsProvider();
+    let title: string | undefined;
+    const create = provider.createSession.bind(provider);
+    provider.createSession = async (input) => { title = input.title as string | undefined; return create(input); };
+    try {
+      insertProject(database, { id: "demo", cwd: "/tmp/demo" });
+      const response = await createDefaultRouter({ database, providers: { codex: provider } }).handle(jsonRequest("/api/sessions", {
+        project_id: "demo", prompt: "修复消息重复", title: " 用户的标题 "
+      }));
+      expect(response.status).toBe(201);
+      expect(title).toBe("用户的标题");
+    } finally { database.close(); }
+  });
+
   test("lists, creates, reads, and sends Codex session turns", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionsProvider();
@@ -826,7 +842,7 @@ class SessionsProvider implements ExecutorProvider {
   readSessionError: Error | null = null;
   readSessionResult: Record<string, unknown> | null = null;
 
-  async run(_input: ProviderRunInput) {
+  async run(_input: ProviderRunInput): Promise<never> {
     throw new Error("not implemented");
   }
 
