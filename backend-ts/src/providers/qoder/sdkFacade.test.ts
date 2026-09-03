@@ -63,6 +63,31 @@ function result(
 }
 
 describe("Qoder Q2 real facade with offline fake streams", () => {
+  test("prompt-free discovery keeps input open until control requests finish", async () => {
+    let inputClosed = false;
+    let closed: Promise<void> | undefined;
+    const facade = createQoderSdkFacade(config(1_000), {
+      discoveryQueryFactory: ({ prompt }) => {
+        closed = prompt[Symbol.asyncIterator]().next().then((result) => {
+          expect(result.done).toBe(true);
+          expect(result.value).toBeUndefined();
+          inputClosed = true;
+        });
+        return {
+          initializationResult: async () => { await Promise.resolve(); expect(inputClosed).toBe(false); },
+          getAvailableModels: async () => {
+            expect(inputClosed).toBe(false);
+            return [{ value: "performance", displayName: "Performance", description: "fixture", isEnabled: true }];
+          },
+          interrupt: async () => {}
+        } as unknown as Query;
+      }
+    });
+    await expect(facade.listModels()).resolves.toHaveLength(1);
+    await closed;
+    expect(inputClosed).toBe(true);
+  });
+
   test("prompt-free model discovery uses a short TTL cache and refreshes explicitly", async () => {
     let now = 1_000;
     let discoveries = 0;
@@ -91,16 +116,21 @@ describe("Qoder Q2 real facade with offline fake streams", () => {
 
   test("model discovery has a bounded deadline and interrupts a stalled control query", async () => {
     let interrupts = 0;
+    let signal: AbortSignal | undefined;
     const facade = createQoderSdkFacade(config(1_000), {
       modelDiscoveryTimeoutMs: 8,
-      discoveryQueryFactory: () => ({
-        initializationResult: () => new Promise(() => {}),
-        interrupt: async () => { interrupts += 1; },
-      } as unknown as Query),
+      discoveryQueryFactory: ({ options }) => {
+        signal = options.abortController?.signal;
+        return {
+          initializationResult: () => new Promise(() => {}),
+          interrupt: async () => { interrupts += 1; },
+        } as unknown as Query;
+      },
     });
 
     await expect(facade.listModels()).rejects.toThrow("Qoder model discovery timed out");
     expect(interrupts).toBe(1);
+    expect(signal?.aborted).toBe(true);
   });
 
   test("projects result, model, assistant-request, and session Credits with explicit provenance", async () => {

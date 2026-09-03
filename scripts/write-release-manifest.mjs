@@ -24,6 +24,10 @@ const targets = options.targets.map(target => ({
 }));
 if (targets.length === 0) throw new Error('at least one --target is required');
 
+const backendPackage = JSON.parse(await readFile(resolve(root, 'backend-ts/package.json'), 'utf8'));
+const qoderCliVersion = backendPackage.dependencies['@qoder-ai/qodercli'];
+if (!/^\d+\.\d+\.\d+$/.test(qoderCliVersion || '')) throw new Error('Qoder CLI must use an exact pinned version');
+
 const manifest = {
   schema_version: 'xuanwu.release.v1',
   version,
@@ -32,6 +36,7 @@ const manifest = {
   generated_at: new Date().toISOString(),
   source_of_truth: 'runner.db',
   storage_compatibility: 'xuanwu.storage-compat.v1',
+  qoder_cli_version: qoderCliVersion,
   migration_notes: 'docs/runbooks/release-upgrade-rollback.md#migration-notes',
   rollback: 'Restore release-owned files from a release snapshot; restore runner.db only from a separately verified backup when migrations require it.',
   targets,

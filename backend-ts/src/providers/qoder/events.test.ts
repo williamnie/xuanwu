@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { SDKMessage, SDKResultMessage } from "@qoder-ai/qoder-agent-sdk";
 import { projectQoderMessage, qoderFailureEvent, qoderResultFailure } from "./events.ts";
+import { qoderMessageTerminal } from "./sdkFacade.ts";
 
 function usage(): SDKResultMessage["usage"] {
   return {
@@ -38,6 +39,15 @@ function result(overrides: Partial<SDKResultMessage> = {}): SDKResultMessage {
 }
 
 describe("Qoder Q2 native event projection", () => {
+  test.each(["completed", "cancelled", "discarded"] as const)("protocol 1.3 command_lifecycle %s does not terminate the main Run", (state) => {
+    const message = {
+      type: "command_lifecycle", command_uuid: "command-1", state, uuid: "lifecycle-1", session_id: "session-1"
+    } satisfies SDKMessage;
+    const event = projectQoderMessage(message, { invocationRef: "inv-1" });
+    expect(event.runEvent?.terminal).toBe(false);
+    expect(qoderMessageTerminal(message)).toBeUndefined();
+  });
+
   test("unknown native messages are preserved and nonterminal", () => {
     const event = projectQoderMessage({
       type: "cloud_agent_event",

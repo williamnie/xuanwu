@@ -80,7 +80,7 @@ the presence of adapter code.
 | Codex | **Tested** | Default full-featured provider; real execution, session, recovery, interrupt, and delivery paths have been exercised. |
 | Claude / Claude Code | **Preview — not live-tested** | Reuses local Claude Code login, settings, and sessions, with explicit SDK authentication also available. Automated coverage exists, but the real-account end-to-end path has not completed live acceptance. |
 | Pi Coding Agent | **Preview** | RPC-based execution with session read/resume, interrupt, model discovery, and in-session model switching. The release includes the Xuanwu policy extension, but the provider remains preview while broader live use is evaluated. |
-| Qoder | **Preview** | SDK execution with a pinned CLI runtime, session create/list/read/resume, interrupt, approvals, and model discovery. Real-account acceptance exists, but the integration and redistribution boundary remain preview. |
+| Qoder | **Preview** | SDK 1.0.32 with its paired CLI 1.1.40, session create/list/read/resume, interrupt, approvals, and model discovery. Real-account acceptance exists, but the integration and redistribution boundary remain preview. |
 
 Codex sessions without an explicit title can be named automatically with one LLM call using the
 Supervisor's configured model. Titles follow `MMDD｜类型｜主题`, using the creation date in

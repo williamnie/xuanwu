@@ -101,7 +101,7 @@ stage_qodercli_runtime() {
   [ -f "$source/qodercli.js" ] || fail "missing exact-pinned Qoder CLI bundle: $source/qodercli.js"
   [ -f "$source/policies/sandbox-default.toml" ] || fail "missing Qoder CLI runtime policies"
   version="$(node -p "require('$package_dir/package.json').version")"
-  [ "$version" = "1.1.23" ] || fail "Qoder CLI version $version does not match required 1.1.23"
+  [ "$version" = "1.1.40" ] || fail "Qoder CLI version $version does not match required 1.1.40"
   target="$pkg_dir/xuanwu.qodercli"
   mkdir -p "$target"
   cp -R "$source/." "$target/"

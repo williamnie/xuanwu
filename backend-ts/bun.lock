@@ -10,8 +10,8 @@
         "@earendil-works/pi-ai": "^0.84.4",
         "@earendil-works/pi-coding-agent": "^0.84.4",
         "@larksuiteoapi/node-sdk": "^1.73.0",
-        "@qoder-ai/qoder-agent-sdk": "1.0.23",
-        "@qoder-ai/qodercli": "1.1.23",
+        "@qoder-ai/qoder-agent-sdk": "1.0.32",
+        "@qoder-ai/qodercli": "1.1.40",
         "@sinclair/typebox": "^0.34.52",
       },
       "devDependencies": {
@@ -214,21 +214,21 @@
 
     "@protobufjs/utf8": ["@protobufjs/utf8@1.1.2", "", {}, "sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug=="],
 
-    "@qoder-ai/qoder-agent-sdk": ["@qoder-ai/qoder-agent-sdk@1.0.23", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.27.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-r3ogzHwVQo5oarY4GjlJb8v7THl2ECo9VyFnSDaM3FUrYUlOoRDfsZsUrKfZIxW5k0R4pFmQ9kKmRAPMdF03dw=="],
+    "@qoder-ai/qoder-agent-sdk": ["@qoder-ai/qoder-agent-sdk@1.0.32", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.27.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-3EJ3s5CczBTWZyhf22aK6ETJs+w8P8EM5fFNVwC+lBF3P8gapQmT/pY75rGWw3FjAPk5x2HASXnOF4RfwhWgVw=="],
 
-    "@qoder-ai/qodercli": ["@qoder-ai/qodercli@1.1.23", "", { "dependencies": { "@crosscopy/clipboard": "0.3.6", "sharp": "^0.34.5" }, "optionalDependencies": { "@qoder-ai/qodercli-ripgrep-darwin-arm64": "1.1.23", "@qoder-ai/qodercli-ripgrep-darwin-x64": "1.1.23", "@qoder-ai/qodercli-ripgrep-linux-arm64": "1.1.23", "@qoder-ai/qodercli-ripgrep-linux-x64": "1.1.23", "@qoder-ai/qodercli-ripgrep-win32-arm64": "1.1.23", "@qoder-ai/qodercli-ripgrep-win32-x64": "1.1.23" }, "os": [ "linux", "win32", "darwin", ], "bin": { "qoder": "bundle/qoder-npm-dispatcher.cjs", "qodercli": "bundle/qodercli.js" } }, "sha512-BKjSa5J7Ly9y26k9PIGOMuQ38ridWi1z0KufnfwQl+eMXMwKqchoWljp5QXwRz2W55lepAMT1iqSCztYiqr4IQ=="],
+    "@qoder-ai/qodercli": ["@qoder-ai/qodercli@1.1.40", "", { "dependencies": { "@crosscopy/clipboard": "0.3.6", "@silvia-odwyer/photon-node": "0.3.4", "sharp": "^0.34.5" }, "optionalDependencies": { "@qoder-ai/qodercli-ripgrep-darwin-arm64": "1.1.40", "@qoder-ai/qodercli-ripgrep-darwin-x64": "1.1.40", "@qoder-ai/qodercli-ripgrep-linux-arm64": "1.1.40", "@qoder-ai/qodercli-ripgrep-linux-x64": "1.1.40", "@qoder-ai/qodercli-ripgrep-win32-arm64": "1.1.40", "@qoder-ai/qodercli-ripgrep-win32-x64": "1.1.40" }, "os": [ "linux", "win32", "darwin", ], "bin": { "qoder": "bundle/qoder-npm-dispatcher.cjs", "qodercli": "bundle/qodercli.js" } }, "sha512-pvgHgc3WQ0dCawApq98t3xStPvudRxP/yFo+Ihm8IOM/d92vBrCCWqqqzB1IwJS+/ZYDFuSgyiOIDX/sYbtckA=="],
 
-    "@qoder-ai/qodercli-ripgrep-darwin-arm64": ["@qoder-ai/qodercli-ripgrep-darwin-arm64@1.1.23", "", { "os": "darwin", "cpu": "arm64" }, "sha512-BbiK9j/L1obuY9+GIeB+xFTaOU8ys6wb1EFOZJeFVfFrQVqjTZiwsqvmvSxUBmh6LR5Fsrj29admiqYgOOVrQA=="],
+    "@qoder-ai/qodercli-ripgrep-darwin-arm64": ["@qoder-ai/qodercli-ripgrep-darwin-arm64@1.1.40", "", { "os": "darwin", "cpu": "arm64" }, "sha512-K1Oi5iSCKkgMryiM/rHzdgaCuSO41FCsog3Arovzoi+h5VvCfHJGOMsvibFel53rLRCB0a3zE0kiSDjp/yr7HA=="],
 
-    "@qoder-ai/qodercli-ripgrep-darwin-x64": ["@qoder-ai/qodercli-ripgrep-darwin-x64@1.1.23", "", { "os": "darwin", "cpu": "x64" }, "sha512-wnrIVjMyLitbmNEsh39klfY4sTMgPStbGknjbyraXne6zt1oSeZ3t5fHJHfPfGzh4TWUgk0QrPm/vRlEZvgXFw=="],
+    "@qoder-ai/qodercli-ripgrep-darwin-x64": ["@qoder-ai/qodercli-ripgrep-darwin-x64@1.1.40", "", { "os": "darwin", "cpu": "x64" }, "sha512-bvXMFkqX5MuzVBffqruu/03DyA6NVAyRqgX2KckPNpG/qbpCaqrF6I+OWu1XBuXLBFWBD+eSOo9s/YWkZxnqcQ=="],
 
-    "@qoder-ai/qodercli-ripgrep-linux-arm64": ["@qoder-ai/qodercli-ripgrep-linux-arm64@1.1.23", "", { "os": "linux", "cpu": "arm64" }, "sha512-MYX7oIQT6cLe1T5Ow386RZzBysve+ZYzS50Pm5zQZHRL2d6Pxq3ZWjigXeDqLx1uQHbIejLVhvK1vHB+lAa6DQ=="],
+    "@qoder-ai/qodercli-ripgrep-linux-arm64": ["@qoder-ai/qodercli-ripgrep-linux-arm64@1.1.40", "", { "os": "linux", "cpu": "arm64" }, "sha512-5yT9hGnKSJQX8MVtsk3bLoDilusFQ1wl5TfsDC5DSmuzuTfrVsl7PO6BmXIx43tPW/Gc3GdK0PfdfpCzcI+R2w=="],
 
-    "@qoder-ai/qodercli-ripgrep-linux-x64": ["@qoder-ai/qodercli-ripgrep-linux-x64@1.1.23", "", { "os": "linux", "cpu": "x64" }, "sha512-b3mAXCmO5Jl8joSamGwgxSduitEzb15OzFy5oe8bSu/ts0Eg7GMPRgzgrTYc3D5JyYxSZ6+uslrbn+o3zU1/Dw=="],
+    "@qoder-ai/qodercli-ripgrep-linux-x64": ["@qoder-ai/qodercli-ripgrep-linux-x64@1.1.40", "", { "os": "linux", "cpu": "x64" }, "sha512-jw1tcjIdJL+ON7chJI7sb5KEWgfsFtiKagKKwtOH3TiQ36FgngFgxpkYyMfV5zWgNuHb5F3X5phkD1cDGBXedQ=="],
 
-    "@qoder-ai/qodercli-ripgrep-win32-arm64": ["@qoder-ai/qodercli-ripgrep-win32-arm64@1.1.23", "", { "os": "win32", "cpu": "arm64" }, "sha512-tAYnV60Eo2q5DvtHaiA+OaWIAbxvLP7PL9pNfd9AhniOy2sCnieJn4FCy8VD9Eep4+rUZUcrR8b3Y1jo9E3Xxg=="],
+    "@qoder-ai/qodercli-ripgrep-win32-arm64": ["@qoder-ai/qodercli-ripgrep-win32-arm64@1.1.40", "", { "os": "win32", "cpu": "arm64" }, "sha512-TMZTLa5U+IkzuVYXbkpgy/TaL3xPbCh6rOgST8HvwYswgIEAcPSm7Mxj+uzsDecQE7y8H8g0EgFojhyqfFAYvg=="],
 
-    "@qoder-ai/qodercli-ripgrep-win32-x64": ["@qoder-ai/qodercli-ripgrep-win32-x64@1.1.23", "", { "os": "win32", "cpu": "x64" }, "sha512-M+UmxUa7cIBPX8plsTNKbov5IDRHjnSNm2Mq6Su1+Vi1bqVPSitoRQe9gLyaOU4WuJ+qoxbLVsLJJAAnBk9DYw=="],
+    "@qoder-ai/qodercli-ripgrep-win32-x64": ["@qoder-ai/qodercli-ripgrep-win32-x64@1.1.40", "", { "os": "win32", "cpu": "x64" }, "sha512-CuHIx1Q+Uz90Fql5nijjjQFGtp7ik+u/lgh/OYT9q/xEQv0F+LFErpvP5SLQIzbFjk2HeG7adeqodWhVJDS7+w=="],
 
     "@silvia-odwyer/photon-node": ["@silvia-odwyer/photon-node@0.3.4", "", {}, "sha512-bnly4BKB3KDTFxrUIcgCLbaeVVS8lrAkri1pEzskpmxu9MdfGQTy8b8EgcD83ywD3RPMsIulY8xJH5Awa+t9fA=="],
 

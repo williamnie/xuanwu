@@ -107,7 +107,8 @@ test('deployment requires, stages, and snapshots the exact-pinned Qoder CLI runt
   assert.match(source, /"\$QODERCLI_RUNTIME_PATH"/);
   assert.match(releaseSource, /release asset does not contain exact-pinned Qoder CLI executable/);
   assert.match(releaseSource, /release asset does not contain Qoder CLI runtime policies/);
-  assert.match(releaseSource, /Qoder CLI version \$qoder_version does not match required 1\.1\.23/);
+  assert.match(releaseSource, /expected_qoder_version="\$\(release_qoder_cli_version "\$metadata"\)"/);
+  assert.match(releaseSource, /Qoder CLI version \$qoder_version does not match required \$expected_qoder_version/);
   assert.match(releaseSource, /mv "\$qoder_staged" "\$QODERCLI_RUNTIME_PATH"/);
 });
 

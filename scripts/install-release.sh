@@ -238,6 +238,18 @@ release_version() {
   sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -n 1
 }
 
+release_qoder_cli_version() {
+  local version
+  # 旧发布包未声明该字段，保留当时冻结的 CLI 配对；新包必须精确校验自己的版本。
+  if ! grep -q '"qoder_cli_version"[[:space:]]*:' "$1"; then
+    printf '1.1.23'
+    return
+  fi
+  version="$(sed -n 's/^[[:space:]]*"qoder_cli_version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -n 1)"
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "release metadata contains invalid qoder_cli_version"
+  printf '%s' "$version"
+}
+
 resolve_codex_cmd() {
   if [ -n "$CODEX_CMD" ]; then
     printf '%s' "$CODEX_CMD"
@@ -250,7 +262,7 @@ resolve_codex_cmd() {
 }
 
 download_binary() {
-  local os="$1" arch="$2" asset url tmp archive checksums metadata staged sdk_staged qoder_staged qoder_previous pi_policy_staged daemon_staged installer_staged updater_staged binary_version qoder_version
+  local os="$1" arch="$2" asset url tmp archive checksums metadata staged sdk_staged qoder_staged qoder_previous pi_policy_staged daemon_staged installer_staged updater_staged binary_version qoder_version expected_qoder_version
   asset="xuanwu_${os}_${arch}.tar.gz"
   url="$(release_asset_url "$asset")"
   tmp="$(mktemp -d)"
@@ -283,8 +295,9 @@ download_binary() {
   [ "$binary_version" = "$RESOLVED_VERSION" ] \
     || fail "binary version $binary_version does not match release metadata $RESOLVED_VERSION"
   qoder_version="$("$tmp/xuanwu.qodercli/qodercli.mjs" --version | awk 'NR == 1 { print $1 }')"
-  [ "$qoder_version" = "1.1.23" ] \
-    || fail "Qoder CLI version $qoder_version does not match required 1.1.23"
+  expected_qoder_version="$(release_qoder_cli_version "$metadata")"
+  [ "$qoder_version" = "$expected_qoder_version" ] \
+    || fail "Qoder CLI version $qoder_version does not match required $expected_qoder_version"
   mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$LOG_DIR" "$(dirname "$AUTH_TOKEN_FILE")"
   sdk_staged="$INSTALL_DIR/.xuanwu.claude-agent-sdk.stage.$$"
   install -m 0755 "$tmp/xuanwu.claude-agent-sdk" "$sdk_staged"

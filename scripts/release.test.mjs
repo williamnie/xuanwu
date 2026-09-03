@@ -18,7 +18,11 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     const calls = join(temp, 'calls.log');
     const releaseMissingQoder = await createRelease(temp, 'missing-qoder', 'v0.9.0', { includeQoder: false });
     const releaseV1 = await createRelease(temp, 'v1', 'v1.0.0');
-    const releaseV2 = await createRelease(temp, 'v2', 'v1.1.0');
+    const releaseV2 = await createRelease(temp, 'v2', 'v1.1.0', { qoderCliVersion: '1.1.40' });
+    const releaseWrongQoder = await createRelease(temp, 'wrong-qoder', 'v1.1.0', {
+      qoderCliVersion: '1.1.40', bundledQoderCliVersion: '1.1.23'
+    });
+    const releaseInvalidQoder = await createRelease(temp, 'invalid-qoder', 'v1.1.0', { qoderCliVersion: null });
     await mkdir(join(home, 'Library', 'LaunchAgents'), { recursive: true });
     await mkdir(fakeBin, { recursive: true });
     await writeExecutable(join(fakeBin, 'uname'), '#!/bin/sh\ncase "$1" in -s) echo Darwin ;; -m) echo arm64 ;; *) echo Darwin ;; esac\n');
@@ -48,10 +52,22 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     assert.notEqual(missingQoder.status, 0);
     assert.match(missingQoder.stderr, /does not contain exact-pinned Qoder CLI executable/);
 
+    const wrongQoder = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], {
+      env: { ...env, FIXTURE_RELEASE_DIR: releaseWrongQoder }, encoding: 'utf8'
+    });
+    assert.notEqual(wrongQoder.status, 0);
+    assert.match(wrongQoder.stderr, /Qoder CLI version 1\.1\.23 does not match required 1\.1\.40/);
+    const invalidQoder = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], {
+      env: { ...env, FIXTURE_RELEASE_DIR: releaseInvalidQoder }, encoding: 'utf8'
+    });
+    assert.notEqual(invalidQoder.status, 0);
+    assert.match(invalidQoder.stderr, /invalid qoder_cli_version/);
+
     const fresh = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], { env, encoding: 'utf8' });
     assert.equal(fresh.status, 0, `${fresh.stdout}\n${fresh.stderr}`);
     assert.match(runVersion(join(install, 'xuanwu'), env), /v1\.0\.0/);
     assert.match(await readFile(join(install, 'xuanwu.qodercli', 'qodercli.mjs'), 'utf8'), /release-v1/);
+    assert.match(runVersion(join(install, 'xuanwu.qodercli', 'qodercli.mjs'), env), /1\.1\.23/);
     assert.equal(await readFile(join(install, 'xuanwu.qodercli', 'policies', 'sandbox-default.toml'), 'utf8'), 'fixture-policy\n');
     const authTokenPath = join(state, 'auth_token');
     const authToken = (await readFile(authTokenPath, 'utf8')).trim();
@@ -105,6 +121,7 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     assert.equal(upgrade.status, 0, `${upgrade.stdout}\n${upgrade.stderr}`);
     assert.match(runVersion(join(install, 'xuanwu'), updateEnv), /v1\.1\.0/);
     assert.match(await readFile(join(install, 'xuanwu.qodercli', 'qodercli.mjs'), 'utf8'), /release-v2/);
+    assert.match(runVersion(join(install, 'xuanwu.qodercli', 'qodercli.mjs'), env), /1\.1\.40/);
     assert.equal(await readFile(join(state, 'runner.db'), 'utf8'), 'authority-survives-release-changes');
     assert.equal((await readFile(authTokenPath, 'utf8')).trim(), authToken);
 
@@ -113,6 +130,7 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     });
     assert.equal(rollback.status, 0, `${rollback.stdout}\n${rollback.stderr}`);
     assert.match(runVersion(join(install, 'xuanwu'), updateEnv), /v1\.0\.0/);
+    assert.match(runVersion(join(install, 'xuanwu.qodercli', 'qodercli.mjs'), env), /1\.1\.23/);
     assert.match(await readFile(join(install, 'xuanwu.qodercli', 'qodercli.mjs'), 'utf8'), /release-v1/);
     assert.equal(await readFile(join(state, 'runner.db'), 'utf8'), 'authority-survives-release-changes');
     assert.equal((await readFile(authTokenPath, 'utf8')).trim(), authToken);
@@ -139,6 +157,8 @@ test('release manifest enforces tag format, changelog, and target metadata', asy
     const manifest = JSON.parse(await readFile(output, 'utf8'));
     assert.equal(manifest.version, 'v0.1.0');
     assert.equal(manifest.source_of_truth, 'runner.db');
+    const backendPackage = JSON.parse(await readFile(join(root, 'backend-ts/package.json'), 'utf8'));
+    assert.equal(manifest.qoder_cli_version, backendPackage.dependencies['@qoder-ai/qodercli']);
     assert.deepEqual(manifest.targets, [{
       asset: 'xuanwu_darwin_arm64.tar.gz',
       target: 'bun-darwin-arm64'
@@ -296,7 +316,8 @@ exit 0
   await writeExecutable(join(fixture, 'xuanwu.claude-agent-sdk'), '#!/bin/sh\nexit 0\n');
   if (options.includeQoder !== false) {
     await mkdir(join(fixture, 'xuanwu.qodercli', 'policies'), { recursive: true });
-    await writeExecutable(join(fixture, 'xuanwu.qodercli', 'qodercli.mjs'), `#!/bin/sh\n# release-${name}\necho 1.1.23\n`);
+    const qoderCliVersion = options.bundledQoderCliVersion ?? options.qoderCliVersion ?? '1.1.23';
+    await writeExecutable(join(fixture, 'xuanwu.qodercli', 'qodercli.mjs'), `#!/bin/sh\n# release-${name}\necho ${qoderCliVersion}\n`);
     await writeFile(join(fixture, 'xuanwu.qodercli', 'policies', 'sandbox-default.toml'), 'fixture-policy\n');
   }
   await writeFile(join(fixture, 'xuanwu.pi-policy-extension.ts'), `// release-${name}\nexport default function extension() {}\n`);
@@ -308,7 +329,10 @@ exit 0
   const archive = join(release, 'xuanwu_darwin_arm64.tar.gz');
   assert.equal(spawnSync('tar', ['-czf', archive, '-C', fixture, '.']).status, 0);
   const metadata = join(release, 'release.json');
-  await writeFile(metadata, `${JSON.stringify({ version }, null, 2)}\n`);
+  await writeFile(metadata, `${JSON.stringify({
+    version,
+    ...('qoderCliVersion' in options ? { qoder_cli_version: options.qoderCliVersion } : {})
+  }, null, 2)}\n`);
   await writeFile(join(release, 'checksums.txt'), [
     `${await sha256(archive)}  xuanwu_darwin_arm64.tar.gz`,
     `${await sha256(metadata)}  release.json`,

@@ -14,8 +14,8 @@
     "@earendil-works/pi-ai": "^0.84.4",
     "@earendil-works/pi-coding-agent": "^0.84.4",
     "@larksuiteoapi/node-sdk": "^1.73.0",
-    "@qoder-ai/qoder-agent-sdk": "1.0.23",
-    "@qoder-ai/qodercli": "1.1.23",
+    "@qoder-ai/qoder-agent-sdk": "1.0.32",
+    "@qoder-ai/qodercli": "1.1.40",
     "@sinclair/typebox": "^0.34.52"
   },
   "devDependencies": {

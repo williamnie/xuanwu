@@ -110,7 +110,7 @@ export type QoderSdkFacadeOptions = {
   /** Offline fake-stream seam; production uses the pinned SDK query export. */
   queryFactory?: (input: { prompt: string; options: Options }) => Query;
   /** Offline control-query seam; production starts a prompt-free SDK query. */
-  discoveryQueryFactory?: (input: { options: Options }) => Promise<Query> | Query;
+  discoveryQueryFactory?: (input: { options: Options; prompt: AsyncIterable<never> }) => Promise<Query> | Query;
   modelDiscoveryTimeoutMs?: number;
   modelCacheTtlMs?: number;
   now?: () => number;
@@ -332,6 +332,9 @@ class RealQoderSdkFacade implements QoderSdkFacade {
     if (this.modelCache && now < this.modelCache.expiresAt) return structuredClone(this.modelCache.models);
     const timeoutMs = Math.max(1, this.options.modelDiscoveryTimeoutMs ?? DEFAULT_QODER_MODEL_DISCOVERY_TIMEOUT_MS);
     const deadline = Date.now() + timeoutMs;
+    const controller = new AbortController();
+    const prompt = controlPrompt(controller.signal);
+    let transport: Transport | undefined;
     const queryOptions: Options = {
       ...buildQoderQueryOptions({
         approvalPolicy: "never",
@@ -339,14 +342,15 @@ class RealQoderSdkFacade implements QoderSdkFacade {
         invocationKey: "qoder-model-discovery",
         sandbox: "read-only"
       }, this.config),
-      persistSession: false
+      persistSession: false,
+      abortController: controller
     };
     let query: Query | undefined;
     try {
       query = await qoderModelDiscoveryStep(
         this.options.discoveryQueryFactory
-          ? Promise.resolve(this.options.discoveryQueryFactory({ options: queryOptions }))
-          : this.productionDiscoveryQuery(queryOptions),
+          ? Promise.resolve(this.options.discoveryQueryFactory({ options: queryOptions, prompt }))
+          : this.productionDiscoveryQuery(prompt, queryOptions, (created) => { transport = created; }),
         deadline
       );
       await qoderModelDiscoveryStep(query.initializationResult(), deadline);
@@ -362,7 +366,10 @@ class RealQoderSdkFacade implements QoderSdkFacade {
     } catch (error) {
       throw qoderError("sdk", `Qoder model discovery failed: ${redactSensitiveText(error instanceof Error ? error.message : String(error))}`);
     } finally {
-      await query?.interrupt().catch(() => undefined);
+      const interrupted = query?.interrupt().catch(() => undefined);
+      controller.abort("Qoder model discovery finished");
+      transport?.close();
+      await interrupted;
     }
   }
 
@@ -408,9 +415,18 @@ class RealQoderSdkFacade implements QoderSdkFacade {
     return sdk.query({ prompt, options: { ...options, transport } });
   }
 
-  private async productionDiscoveryQuery(options: Options): Promise<Query> {
+  private async productionDiscoveryQuery(prompt: AsyncIterable<never>, options: Options, onTransport: (transport: Transport) => void): Promise<Query> {
     const sdk = await import("@qoder-ai/qoder-agent-sdk");
-    return sdk.query({ prompt: emptyPrompt(), options });
+    options.abortController?.signal.throwIfAborted();
+    // 与执行 Query 使用同一已安装的 CLI，避免 SDK 默认 Worker runtime 的额外启动路径。
+    const transport: QueryTransportProvider<ProcessTransportOptions> = {
+      create: (input) => {
+        const created = new sdk.ProcessTransport(input);
+        onTransport(created);
+        return created;
+      }
+    };
+    return sdk.query({ prompt, options: { ...options, transport } });
   }
 }
 
@@ -594,8 +610,14 @@ function validModelInfo(value: ModelInfo): boolean {
   return clean(value?.value) !== "" && clean(value?.displayName) !== "" && value?.isEnabled !== false;
 }
 
-function emptyPrompt(): AsyncIterable<never> {
-  return { async *[Symbol.asyncIterator]() {} };
+function controlPrompt(signal: AbortSignal): AsyncIterable<never> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      // 不发送用户消息；控制请求完成前保持输入流打开，避免 CLI 因 EOF 提前关闭连接。
+      if (signal.aborted) return;
+      await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+    }
+  };
 }
 
 function compactObject(input: Record<string, unknown>): Record<string, unknown> {

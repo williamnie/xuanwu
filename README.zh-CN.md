@@ -70,7 +70,7 @@ catalog 中允许提交新 Work；这里的状态表示真实验收程度，不�
 | Codex | **已测试** | 默认完整 Provider；真实执行、Session、恢复、中断和交付链路已经过测试。 |
 | Claude / Claude Code | **预览，尚未真实测试** | 可复用本机 Claude Code 登录、配置与 Session，也支持显式 SDK 认证；已有自动化测试覆盖，但真实账号端到端链路尚未完成 live acceptance。 |
 | Pi Coding Agent | **预览** | 通过 RPC 执行，支持 Session 读取/恢复、中断、模型发现及 Session 内模型切换；Release 已包含 Xuanwu policy extension，但在更广泛的真实使用评估完成前保持预览。 |
-| Qoder | **预览** | 通过 SDK 执行并包含固定版本的 CLI runtime，支持 Session 创建/列表/读取/恢复、中断、审批和模型发现；已有真实账号验收，但集成与再分发边界仍保持预览。 |
+| Qoder | **预览** | 使用 SDK 1.0.32 与配套 CLI 1.1.40，支持 Session 创建/列表/读取/恢复、中断、审批和模型发现；已有真实账号验收，但集成与再分发边界仍保持预览。 |
 
 未指定标题的 Codex 会话可复用 Supervisor 的模型配置，通过一次 LLM 调用自动命名。
 格式为 `MMDD｜类型｜主题`，日期取上海时区的会话创建日期；保留用户标题，命名失败不阻塞执行。

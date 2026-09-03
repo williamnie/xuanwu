@@ -40,7 +40,7 @@ describe("Qoder Q1 offline runtime readiness", () => {
           cli_version: "",
           protocol_status: "unavailable",
           sdk_ready: true,
-          sdk_version: "1.0.23"
+          sdk_version: "1.0.32"
         }
       }
     });
@@ -50,7 +50,7 @@ describe("Qoder Q1 offline runtime readiness", () => {
     const root = await mkdtemp(join(tmpdir(), "qoder-runtime-assets-"));
     roots.push(root);
     const command = join(root, "qodercli.mjs");
-    await writeFile(command, "#!/bin/sh\necho 1.1.23\n", "utf8");
+    await writeFile(command, "#!/bin/sh\necho 1.1.40\n", "utf8");
     await chmod(command, 0o755);
     const config = buildConfig({ qoderAuthMode: "pat-env", qoderPat: "fixture-pat" }).providers.qoder!;
 
@@ -71,7 +71,7 @@ describe("Qoder Q1 offline runtime readiness", () => {
   test("reports missing auth as not-ready even with the exact CLI pair", () => {
     const config = buildConfig({ qoderAuthMode: "pat-env" }).providers.qoder!;
     const probe = probeQoderRuntime(config, {
-      inspectCli: () => ({ installed: true, version: "1.1.23" })
+      inspectCli: () => ({ installed: true, version: "1.1.40" })
     });
 
     expect(probe).toMatchObject({
@@ -89,7 +89,7 @@ describe("Qoder Q1 offline runtime readiness", () => {
   test("keeps an incomplete secret-ref config visible as not-ready", () => {
     const config = buildConfig({ qoderAuthMode: "pat-secret-ref" }).providers.qoder!;
     const probe = probeQoderRuntime(config, {
-      inspectCli: () => ({ installed: true, version: "1.1.23" })
+      inspectCli: () => ({ installed: true, version: "1.1.40" })
     });
 
     expect(probe).toMatchObject({
@@ -115,7 +115,7 @@ describe("Qoder Q1 offline runtime readiness", () => {
     expect(probe.status.platform_profile).toMatchObject({
       cli_version: "1.1.19",
       protocol_status: "unavailable",
-      protocol_version: "1.2.0"
+      protocol_version: "1.3.0"
     });
   });
 

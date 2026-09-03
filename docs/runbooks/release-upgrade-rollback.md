@@ -6,6 +6,7 @@
 - `release.json`、压缩包内后端 `--version`、前端 build version 和 tag 必须完全一致。`checksums.txt` 绑定所有平台压缩包与 `release.json`；仓库公开时，GitHub Actions 再为这些 digest 生成 signed build provenance。个人账户下的私有 GitHub 仓库不支持 artifact attestations，因此私有预发布只能依赖 checksum，不能冒充已签名产物。
 - 运行数据的唯一 source of truth 仍是 `${XUANWU_STATE_DIR}/runner.db`。升级快照只保存 Runner-owned binary、web、Supervisor package 和运维脚本，不复制数据库、token、`.env` 或用户 artifact。
 - 当前 release 文件没有双写/双读窗口。数据库 migration 仍由既有 forward-only `schema_migrations` 执行，兼容合同是 `xuanwu.storage-compat.v1`；不能以 release snapshot 替代数据库备份。
+- 新发布清单的可选 `qoder_cli_version` 声明包内冻结的 Qoder CLI 版本，安装器必须验证其与可执行文件一致；字段缺失的历史发布包继续校验 `1.1.23`。非法字段或版本不匹配均拒绝安装，升级/回滚继续保留各自完整的 Qoder runtime。
 
 ## 2. 发布人操作
 
@@ -82,6 +83,12 @@ xuanwu-update upgrade \
 默认只保留最近 3 个 release snapshot；可以用 `XUANWU_RELEASE_RETENTION` 调整。自动删除旧 snapshot 同样记录 `snapshot-prune` audit，并且永远不删除数据库、备份、token、uploads 或 artifacts。
 
 ## 4. Migration notes
+
+### Qoder SDK 1.0.32 / CLI 1.1.40 升级
+
+- migration：none，保持 `xuanwu.storage-compat.v1`；可回滚到 `v0.2.12` 的完整 runtime。
+- operator action：`v0.2.12` 及以前的 Release 安装器将 CLI 版本固定为 `1.1.23`，不会识别新清单字段。首次跨越此版本边界时，须使用新版 `scripts/install-release.sh`，并沿用原安装目录、state 目录及验证过的数据库备份；不能直接依赖旧安装器完成这次 CLI 升级。源码部署继续使用 `./redeploy.sh`。
+- 新安装器同时支持旧版无字段清单和新版 `qoder_cli_version` 清单；后续升级与回滚按包内版本校验。
 
 ### v0.2.12
 
