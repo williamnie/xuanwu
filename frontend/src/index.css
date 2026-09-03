@@ -146,7 +146,7 @@ textarea:focus-visible {
 
 .animate-spin,
 .spin-animation {
-  animation: xuanwu-spin 0.82s linear infinite !important;
+  animation: xuanwu-spin 1s linear infinite !important;
   transform-origin: center;
 }
 

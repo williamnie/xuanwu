@@ -39,6 +39,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [surface, setSurface] = useState(selectedSessionId ? 'compat-session' : 'run');
@@ -57,6 +58,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
     if (!silent) setLoading(true);
     const controller = new AbortController();
     listController.current = controller;
+    setRefreshing(true);
     const pending = runsApi.getRuns(
       { page: 1, pageSize: RUN_PAGE_SIZE },
       { signal: controller.signal },
@@ -72,9 +74,12 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
     } catch (loadError) {
       if (loadError?.name !== 'AbortError') setError(loadError.message || '加载 Runs 失败');
     } finally {
-      if (listRequest.current === pending) listRequest.current = null;
+      if (listRequest.current === pending) {
+        listRequest.current = null;
+        setRefreshing(false);
+        if (!silent) setLoading(false);
+      }
       if (listController.current === controller) listController.current = null;
-      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -102,7 +107,10 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
   useEffect(() => {
     loadFirstPage();
     return () => {
-      listController.current?.abort();
+      const controller = listController.current;
+      listController.current = null;
+      listRequest.current = null;
+      controller?.abort();
       loadMoreController.current?.abort();
     };
   }, [loadFirstPage]);
@@ -205,6 +213,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
           hasMore={hasMore}
           loading={loading}
           loadingMore={loadingMore}
+          refreshing={refreshing}
           onLoadMore={loadMore}
           onNewProviderSession={() => {
             openNewProviderSession();

@@ -10,6 +10,7 @@ export default function RunSidebar({
   hasMore,
   loading,
   loadingMore,
+  refreshing,
   onLoadMore,
   onNewProviderSession,
   onRefresh,
@@ -46,8 +47,8 @@ export default function RunSidebar({
           <span className="sidebar-section-title">Runs</span>
           <small>执行历史</small>
         </div>
-        <button aria-label="刷新 Runs" className="runs-sidebar-refresh" disabled={loading} onClick={onRefresh} type="button">
-          <RotateCw className={loading ? 'is-spinning' : ''} size={13} />
+        <button aria-busy={refreshing} aria-label="刷新 Runs" className="runs-sidebar-refresh" disabled={refreshing} onClick={onRefresh} type="button">
+          <RotateCw className={refreshing ? 'animate-spin' : ''} size={13} />
         </button>
       </div>
 

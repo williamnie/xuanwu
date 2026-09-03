@@ -63,6 +63,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
   const [dialog, setDialog] = useState(null);
   const [evidenceWork, setEvidenceWork] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMoreStatus, setLoadingMoreStatus] = useState('');
   const [error, setError] = useState('');
   const [lanePages, setLanePages] = useState({});
@@ -95,6 +96,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
 
     const controller = new AbortController();
     boardController.current = controller;
+    setRefreshing(true);
     const pending = workApi.getWorkBoard({ statuses: OPERATIONAL_STATUSES }, { signal: controller.signal });
     boardRequest.current = pending;
     try {
@@ -107,9 +109,12 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
     } catch (loadError) {
       if (!silent && loadError?.name !== 'AbortError') setError(loadError.message || t('board.loadFailed'));
     } finally {
-      if (boardRequest.current === pending) boardRequest.current = null;
+      if (boardRequest.current === pending) {
+        boardRequest.current = null;
+        setRefreshing(false);
+        if (!silent) setLoading(false);
+      }
       if (boardController.current === controller) boardController.current = null;
-      if (!silent) setLoading(false);
     }
     return undefined;
   }, [selectedWorkId, t]);
@@ -346,7 +351,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
       <WorkBoardHeader
         filteredCount={filteredWorks.length}
         loadedCount={works.length}
-        loading={loading}
+        refreshing={refreshing}
         onCreate={() => setDialog({ mode: 'create' })}
         onQueryChange={query => setFilters({ ...EMPTY_FILTERS, query })}
         onRefresh={refresh}
@@ -423,7 +428,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
   );
 }
 
-function WorkBoardHeader({ filteredCount, loadedCount, loading, onCreate, onQueryChange, onRefresh, query, total }) {
+function WorkBoardHeader({ filteredCount, loadedCount, refreshing, onCreate, onQueryChange, onRefresh, query, total }) {
   const { t } = useI18n();
   return (
     <header className="work-ledger-header">
@@ -445,8 +450,8 @@ function WorkBoardHeader({ filteredCount, loadedCount, loading, onCreate, onQuer
             value={query}
           />
         </label>
-        <button className="work-action-secondary" disabled={loading} onClick={onRefresh} type="button">
-          <RefreshCw className={loading ? 'is-spinning' : ''} size={15} /> {t('work.refresh')}
+        <button aria-busy={refreshing} className="work-action-secondary" disabled={refreshing} onClick={onRefresh} type="button">
+          <RefreshCw className={refreshing ? 'animate-spin' : ''} size={14} /> {t('work.refresh')}
         </button>
         <button className="work-action-primary" onClick={onCreate} type="button">
           <Plus size={16} /> {t('board.newWork')}
