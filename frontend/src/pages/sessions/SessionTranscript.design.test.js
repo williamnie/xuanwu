@@ -15,10 +15,94 @@ test('persisted turns render task input cards before provider execution blocks',
 });
 
 test('provider execution history is concise and starts collapsed', () => {
-  assert.match(transcriptSource, /useState\(Boolean\(isLive\)\)/);
+  assert.match(transcriptSource, /useState\(false\)/);
   assert.match(transcriptSource, /执行过程 · \$\{actionCount\} 个动作/);
-  assert.match(transcriptSource, /toolSummaryLabel\(latestTool\)/);
-  assert.match(transcriptSource, /<SlidersHorizontal/);
+  assert.match(transcriptSource, /aria-expanded=\{canExpand \? isOpen : undefined\}/);
+});
+
+function renderLiveTranscript(liveEvents, overrides = {}) {
+  return renderToStaticMarkup(React.createElement(SessionTranscript, {
+    session: { id: 'codex:live-1', provider: 'codex', turns: [] },
+    liveEvents,
+    optimisticUserMessages: [],
+    running: true,
+    sending: false,
+    pendingApproval: null,
+    navigateTo() {},
+    ...overrides,
+  }));
+}
+
+const commandStarted = {
+  method: 'item/started',
+  payload: JSON.stringify({ item: { id: 'command-1', type: 'commandExecution', command: 'bun test', status: 'inProgress' } }),
+};
+
+test('live tool execution and assistant streaming share one collapsed status row', () => {
+  const markup = renderLiveTranscript([
+    commandStarted,
+    { method: 'item/commandExecution/outputDelta', text: 'private tool output' },
+    { method: 'turn/diff/updated', payload: '{"diff":"raw patch"}' },
+    { method: 'item/agentMessage/delta', text: '回复正文保持可见。' },
+  ]);
+
+  assert.equal((markup.match(/session-execution-summary/g) || []).length, 1);
+  assert.equal((markup.match(/spin-animation/g) || []).length, 1);
+  assert.match(markup, /aria-expanded="false"/);
+  assert.match(markup, /正在输出回复/);
+  assert.match(markup, /执行详情/);
+  assert.match(markup, /回复正文保持可见。/);
+  assert.doesNotMatch(markup, /tools-details-content|private tool output|turn\/diff\/updated|raw patch/);
+  assert.doesNotMatch(markup, /Streaming\.\.\.|live-activity-banner|thinking-placeholder|typing-dots/);
+});
+
+test('thinking and text-only streaming retain a single non-expandable status row', () => {
+  for (const [events, label] of [
+    [[], '正在思考'],
+    [[{ method: 'item/agentMessage/delta', text: '正文' }], '正在输出回复'],
+  ]) {
+    const markup = renderLiveTranscript(events);
+    assert.match(markup, new RegExp(label));
+    assert.equal((markup.match(/spin-animation/g) || []).length, 1);
+    assert.doesNotMatch(markup, /aria-expanded|执行详情|thinking-placeholder|streaming-badge/);
+  }
+});
+
+test('command-only execution has one loading indicator without a thinking placeholder', () => {
+  const markup = renderLiveTranscript([commandStarted]);
+  assert.match(markup, /正在运行命令/);
+  assert.equal((markup.match(/spin-animation/g) || []).length, 1);
+  assert.doesNotMatch(markup, /正在思考|bun test|tools-details-content/);
+});
+
+test('errors and approvals remain visible outside collapsed details with no loading animation', () => {
+  for (const [event, label, tone] of [
+    [{ method: 'error', error: 'command failed' }, '运行出错：command failed', 'error'],
+    [{ method: 'approval/requested', payload: '{}' }, '已暂停，等待审批', 'approval'],
+  ]) {
+    const markup = renderLiveTranscript([commandStarted, event], { running: false });
+    assert.match(markup, new RegExp(label));
+    assert.match(markup, new RegExp(`data-tone="${tone}"`));
+    assert.match(markup, /aria-expanded="false"/);
+    assert.doesNotMatch(markup, /spin-animation|tools-details-content/);
+  }
+});
+
+test('completed turns show a quiet collapsed action count and keep the final reply visible', () => {
+  const markup = renderLiveTranscript([commandStarted], {
+    running: false,
+    session: { id: 'codex:live-1', provider: 'codex', turns: [{
+      id: 'turn-1',
+      items: [
+        { type: 'commandExecution', command: 'bun test', text: 'PASS', status: 'completed' },
+        { type: 'agentMessage', text: '已完成验证。' },
+      ],
+    }] },
+  });
+  assert.match(markup, /执行过程 · 1 个动作/);
+  assert.match(markup, /已完成验证。/);
+  assert.match(markup, /aria-expanded="false"/);
+  assert.doesNotMatch(markup, /spin-animation|tools-details-content|PASS|active-live/);
 });
 
 test('message time formatting accepts API epoch seconds and optimistic ISO timestamps', () => {

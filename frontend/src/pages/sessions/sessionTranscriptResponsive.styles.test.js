@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const sessionsCss = readFileSync(new URL('./Sessions.css', import.meta.url), 'utf8');
 const clientCss = readFileSync(new URL('./SessionsClient.css', import.meta.url), 'utf8');
+const transcriptCss = readFileSync(new URL('./SessionTranscript.css', import.meta.url), 'utf8');
 
 function ruleFor(css, selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -90,4 +91,28 @@ test('provider transcript restores the design message anatomy and square tool su
   assert.match(toolTextRule, /white-space:\s*nowrap/);
   assert.match(terminalRule, /background:\s*var\(--bg-terminal\)/);
   assert.match(terminalRule, /max-width:\s*none/);
+});
+
+test('unified execution summary uses a quiet token-backed surface in both themes', () => {
+  const summaryRule = ruleFor(transcriptCss, '.session-provider-message .tools-collapsible-wrapper .tools-trigger-btn.session-execution-summary');
+  assert.match(summaryRule, /background:\s*transparent/);
+  assert.match(summaryRule, /border-bottom:\s*1px solid var\(--border-light\)/);
+  assert.match(summaryRule, /border-radius:\s*var\(--button-radius\)/);
+  assert.match(summaryRule, /font-family:\s*var\(--font-mono\)/);
+  assert.match(summaryRule, /min-width:\s*0/);
+  assert.match(summaryRule, /width:\s*100%/);
+  assert.doesNotMatch(transcriptCss, /#[\da-f]{3,8}\b|rgba?\(/i);
+  assert.match(transcriptCss, /\[data-tone='running'\][^{]*\{\s*color:\s*var\(--info\)/);
+  assert.match(transcriptCss, /\[data-tone='error'\][^{]*\{\s*color:\s*var\(--error\)/);
+  assert.match(transcriptCss, /\[data-tone='approval'\][^{]*\{\s*color:\s*var\(--warning\)/);
+});
+
+test('execution summaries wrap errors on narrow screens and keep details reachable', () => {
+  const textRule = ruleFor(transcriptCss, '.session-provider-message .session-execution-summary .tools-trigger-text');
+  const detailsRule = ruleFor(transcriptCss, '.session-execution-details-label');
+  assert.match(textRule, /white-space:\s*normal/);
+  assert.match(textRule, /overflow-wrap:\s*anywhere/);
+  assert.match(detailsRule, /flex:\s*0 0 auto/);
+  assert.match(transcriptCss, /:focus-visible\s*\{[^}]*outline:\s*1px solid var\(--primary\)/);
+  assert.match(transcriptCss, /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation:\s*none/);
 });

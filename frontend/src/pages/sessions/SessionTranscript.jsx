@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { ChevronDown, ExternalLink, FileCode, Loader2, SlidersHorizontal } from 'lucide-react';
+import { useCallback, useId, useMemo, useState } from 'react';
+import { CircleAlert, ChevronDown, ExternalLink, FileCode, Loader2, Pause, SlidersHorizontal } from 'lucide-react';
 import MarkdownPreview from '../../components/editor/MarkdownPreview';
 import { message as toast } from '../../store/toastStore';
 import SessionCommandReplay from './SessionCommandReplay.js';
@@ -9,9 +9,9 @@ import { providerLabel } from './sessionPageRuntime';
 import {
   isRenderableToolItem,
   isInspectableToolItem,
+  liveActivityStatus,
   parseLiveSessionEvents,
   shouldRenderLiveTurn,
-  shouldShowLiveActivityBanner,
   toolDisplayForItem,
 } from './sessionTranscriptItems';
 import { useSmartAutoScroll } from './smartAutoScroll';
@@ -277,6 +277,7 @@ export default function SessionTranscript({
           ))}
           {showLiveTurn && (
             <LiveTurnItem
+              key={session?.id || providerSessionId}
               liveEvents={liveEvents}
               persistedTurns={turns}
               provider={providerId}
@@ -388,45 +389,56 @@ function ProviderExecutionBlock({ items, model, project, provider, timestamp }) 
   );
 }
 
-function ToolsCollapsible({ tools, isLive }) {
-  const [isOpen, setIsOpen] = useState(Boolean(isLive));
+function ToolsCollapsible({ tools, liveStatus }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const detailsId = useId();
   const normalizedTools = tools.map((tool) => (tool?.item ? tool.item : tool));
   const detailItems = normalizedTools.filter((item) => (
     item?.type === 'agentMessage' || isInspectableToolItem(item)
   ));
   const actionCount = normalizedTools.filter((item) => item?.type !== 'agentMessage').length;
   const progressCount = normalizedTools.length - actionCount;
-  const latestTool = normalizedTools.filter((item) => item?.type !== 'agentMessage').at(-1);
   const canExpand = detailItems.length > 0;
-  const summary = isLive
-    ? `正在执行工具 · ${toolSummaryLabel(latestTool)}`
-    : actionCount > 0
-      ? `执行过程 · ${actionCount} 个动作`
-      : `执行过程 · ${progressCount} 条进展`;
+  const summary = liveStatus?.label || (actionCount > 0
+    ? `执行过程 · ${actionCount} 个动作`
+    : `执行过程 · ${progressCount} 条进展`);
+  const tone = liveStatus?.tone || 'idle';
+  const StatusIcon = tone === 'running' ? Loader2
+    : tone === 'error' ? CircleAlert
+      : tone === 'approval' ? Pause : SlidersHorizontal;
 
   return (
     <div className="tools-collapsible-wrapper">
       <button
+        type="button"
+        aria-label={canExpand && liveStatus ? `${summary}，执行详情` : summary}
         aria-expanded={canExpand ? isOpen : undefined}
-        className={`tools-trigger-btn ${isOpen ? 'open' : ''} ${isLive ? 'live' : ''} ${canExpand ? '' : 'static'}`}
+        aria-controls={canExpand && isOpen ? detailsId : undefined}
+        className={`tools-trigger-btn session-execution-summary ${isOpen ? 'open' : ''} ${canExpand ? '' : 'static'}`}
+        data-tone={tone}
         disabled={!canExpand}
-        onClick={() => canExpand && setIsOpen(!isOpen)}
+        onClick={() => canExpand && setIsOpen((open) => !open)}
       >
         <span className="tools-trigger-left">
-          <span className="tools-indicator-icon">
-            <SlidersHorizontal size={13} className={isLive ? 'spin-animation' : ''} />
+          <span className="tools-indicator-icon" aria-hidden="true">
+            <StatusIcon size={13} className={tone === 'running' ? 'spin-animation' : ''} />
           </span>
-          <span className="tools-trigger-text">{summary}</span>
+          <span className="tools-trigger-text" role={tone === 'error' ? 'alert' : liveStatus ? 'status' : undefined}>
+            {summary}
+          </span>
         </span>
         {canExpand && (
-          <span className="tools-trigger-chevron">
-            <ChevronDown size={14} />
+          <span className="session-execution-details-label">
+            {liveStatus ? '执行详情' : null}
+            <span className="tools-trigger-chevron" aria-hidden="true">
+              <ChevronDown size={14} />
+            </span>
           </span>
         )}
       </button>
 
       {isOpen && canExpand && (
-        <div className="tools-details-content animate-slide-down">
+        <div id={detailsId} className="tools-details-content">
           {detailItems.map((item, idx) => item.type === 'agentMessage' ? (
             <div className="session-process-note" key={item.id || idx}>
               <MarkdownText text={item.text || ''} />
@@ -570,9 +582,7 @@ function AgentMessageBubble({ item }) {
 function LiveTurnItem({ liveEvents, persistedTurns, provider }) {
   const parsed = useMemo(() => parseLiveSessionEvents(liveEvents, persistedTurns), [liveEvents, persistedTurns]);
 
-  const { tools, agentMessageText, agentMessageDeduped, reasoningText, errorText, approvalPending, activity } = parsed;
-  const showThinking = !agentMessageDeduped && !agentMessageText && !errorText;
-  const showActivityBanner = shouldShowLiveActivityBanner(parsed);
+  const { tools, agentMessageText, reasoningText } = parsed;
 
   return (
     <div className="turn-container active-live session-provider-message">
@@ -581,15 +591,7 @@ function LiveTurnItem({ liveEvents, persistedTurns, provider }) {
         role={providerIdentity(provider, '')}
         timestamp={formatTranscriptTime(liveEvents.at(-1)?.created_at || liveEvents.at(-1)?.occurred_at)}
       />
-      {showActivityBanner && (
-        <LiveActivityBanner activity={activity} approvalPending={approvalPending} errorText={errorText} provider={provider} />
-      )}
-      {tools.length > 0 && (
-        <ToolsCollapsible
-          tools={tools}
-          isLive={true}
-        />
-      )}
+      <ToolsCollapsible tools={tools} liveStatus={liveActivityStatus(parsed)} />
 
       {reasoningText && (
         <div className="live-reasoning-card">
@@ -598,22 +600,10 @@ function LiveTurnItem({ liveEvents, persistedTurns, provider }) {
         </div>
       )}
 
-      {showThinking && (
-        <div className="session-agent-copy thinking-placeholder">
-          <span>正在思考中</span>
-          <span className="typing-dots"><i></i><i></i><i></i></span>
-        </div>
-      )}
-
       {agentMessageText && (
         <div className="session-agent-copy streaming">
-          <span className="streaming-badge">Streaming...</span>
           <MarkdownText text={agentMessageText} />
         </div>
-      )}
-
-      {errorText && (
-        <span className="sr-only">{errorText}</span>
       )}
     </div>
   );
@@ -667,39 +657,6 @@ function turnTimestamp(turn, session, role) {
     ? session?.createdAt || session?.created_at
     : session?.updatedAt || session?.updated_at;
   return formatTranscriptTime(turnValue || sessionValue);
-}
-
-function toolSummaryLabel(tool) {
-  if (!tool) return 'Tool';
-  if (/^mcpTool(?:Call|Result)$/i.test(String(tool.type || ''))) return '后台动作';
-  if (tool.type === 'commandExecution') return tool.command || 'Terminal';
-  if (tool.type === 'fileChange') {
-    const file = filesFromFileChangeTool(tool).at(-1);
-    return file?.path ? `Edit ${file.path}` : 'Edit files';
-  }
-  const display = toolDisplayForItem(tool);
-  return display?.title || tool.type || 'Tool';
-}
-
-function LiveActivityBanner({ activity, approvalPending, errorText, provider }) {
-  const labelName = providerLabel(provider);
-  if (errorText) return <div className="live-activity-banner error">{labelName} 运行出错：{errorText}</div>;
-  if (approvalPending) return <div className="live-activity-banner approval">{labelName} 已暂停，正在等待网页审批。</div>;
-  const label = liveActivityLabel(activity, labelName);
-  return <div className="live-activity-banner"><Loader2 size={13} className="spin-animation" /> {label}</div>;
-}
-
-function liveActivityLabel(activity, provider) {
-  switch (activity) {
-    case 'streaming':
-      return `${provider} is working · 正在输出回复`;
-    case 'command':
-      return `${provider} is working · 正在运行命令`;
-    case 'file-change':
-      return `${provider} is working · 正在整理文件改动`;
-    default:
-      return 'Agent is running';
-  }
 }
 
 function MarkdownText({ text }) {

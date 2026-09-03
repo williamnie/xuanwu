@@ -20,13 +20,9 @@ test('embedded Run transcript does not load or poll the global session list', ()
   assert.doesNotMatch(sessionsSource, /SESSION_LIST_RECONCILE_INTERVAL_MS/);
 });
 
-test('live thinking state avoids duplicate thinking labels', () => {
-  assert.match(transcriptSource, /const showActivityBanner = shouldShowLiveActivityBanner\(parsed\);/);
-  assert.match(transcriptSource, /\{showActivityBanner && \(\s*<LiveActivityBanner/);
-  assert.doesNotMatch(
-    transcriptSource,
-    /<div className="chat-bubble-sender">Agent <span className="streaming-badge">Thinking\.\.\.<\/span><\/div>\s*<div className="chat-bubble-body thinking-placeholder">/,
-  );
+test('live activity is consolidated in the execution summary without duplicate loading labels', () => {
+  assert.match(transcriptSource, /<ToolsCollapsible tools=\{tools\} liveStatus=\{liveActivityStatus\(parsed\)\}/);
+  assert.doesNotMatch(transcriptSource, /LiveActivityBanner|streaming-badge|thinking-placeholder|typing-dots/);
 });
 
 test('an in-flight send renders the optimistic user message before the existing working turn', () => {

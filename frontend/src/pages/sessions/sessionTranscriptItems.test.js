@@ -6,7 +6,7 @@ import {
   isInspectableToolItem,
   parseLiveSessionEvents,
   shouldRenderLiveTurn,
-  shouldShowLiveActivityBanner,
+  liveActivityStatus,
   toolDisplayForItem,
 } from './sessionTranscriptItems.js';
 
@@ -121,14 +121,26 @@ test('live stream parser keeps SSE errors visible', () => {
   assert.equal(display.body, 'boom');
 });
 
-test('turn start renders a live thinking placeholder before assistant text', () => {
+test('turn start supplies the unified thinking status before assistant text', () => {
   const parsed = parseLiveSessionEvents([{ method: 'turn/started', status: 'inProgress' }]);
 
   assert.equal(parsed.activity, 'thinking');
   assert.equal(parsed.agentMessageText, '');
   assert.equal(parsed.tools.length, 0);
   assert.equal(shouldRenderLiveTurn([{ method: 'turn/started' }], true), true);
-  assert.equal(shouldShowLiveActivityBanner(parsed), false);
+  assert.deepEqual(liveActivityStatus(parsed), { tone: 'running', label: '正在思考' });
+});
+
+test('live activity labels describe the current phase without exposing protocol event names', () => {
+  assert.deepEqual(liveActivityStatus({ activity: 'streaming' }), { tone: 'running', label: '正在输出回复' });
+  assert.deepEqual(liveActivityStatus({ activity: 'file-change' }), { tone: 'running', label: '正在整理文件改动' });
+  assert.deepEqual(liveActivityStatus({ activity: 'turn/diff/updated' }), { tone: 'running', label: '正在思考' });
+});
+
+test('errors take priority over approval and running activity in the unified status', () => {
+  assert.deepEqual(liveActivityStatus({ activity: 'command', approvalPending: true, errorText: 'boom' }), {
+    tone: 'error', label: '运行出错：boom',
+  });
 });
 
 test('live stream parser keeps command output delta readable without started item', () => {
@@ -137,7 +149,7 @@ test('live stream parser keeps command output delta readable without started ite
   ]);
 
   assert.equal(parsed.activity, 'command');
-  assert.equal(shouldShowLiveActivityBanner(parsed), true);
+  assert.deepEqual(liveActivityStatus(parsed), { tone: 'running', label: '正在运行命令' });
   assert.equal(parsed.tools.length, 1);
   assert.equal(parsed.tools[0].type, 'commandExecution');
   assert.equal(parsed.tools[0].text, 'PASS\n');
@@ -212,7 +224,7 @@ test('live stream parser exposes pending approval events', () => {
 
   assert.equal(parsed.activity, 'approval');
   assert.equal(parsed.approvalPending, true);
-  assert.equal(shouldShowLiveActivityBanner(parsed), true);
+  assert.deepEqual(liveActivityStatus(parsed), { tone: 'approval', label: '已暂停，等待审批' });
   assert.equal(parsed.tools.length, 1);
   assert.equal(toolDisplayForItem(parsed.tools[0]).title, '等待审批');
   assert.match(toolDisplayForItem(parsed.tools[0]).body, /npm test/);

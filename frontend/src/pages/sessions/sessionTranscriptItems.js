@@ -164,10 +164,15 @@ export function shouldRenderLiveTurn(liveEvents, running) {
   return Boolean(running || hasLiveError(liveEvents) || hasPendingApproval(liveEvents));
 }
 
-export function shouldShowLiveActivityBanner(parsed) {
-  if (!parsed) return false;
-  if (parsed.errorText || parsed.approvalPending) return true;
-  return parsed.activity !== 'thinking';
+export function liveActivityStatus(parsed) {
+  if (parsed.errorText) return { tone: 'error', label: `运行出错：${parsed.errorText}` };
+  if (parsed.approvalPending) return { tone: 'approval', label: '已暂停，等待审批' };
+  const labels = {
+    streaming: '正在输出回复',
+    command: '正在运行命令',
+    'file-change': '正在整理文件改动',
+  };
+  return { tone: 'running', label: labels[parsed.activity] || '正在思考' };
 }
 
 export function parseLiveSessionEvents(liveEvents, persistedTurns = []) {

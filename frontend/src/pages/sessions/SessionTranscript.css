@@ -15,3 +15,121 @@
   font-size: 0.78rem;
   font-style: italic;
 }
+
+/* 合并实时状态与详情入口；覆盖会话页和嵌入 Run 页的旧工具卡表面。 */
+.session-provider-message.active-live.turn-container {
+  gap: 12px;
+}
+
+.session-provider-message.active-live > .session-message-head {
+  margin-bottom: 0;
+}
+
+.session-provider-message.active-live > .tools-collapsible-wrapper {
+  margin: 0;
+  min-width: 0;
+}
+
+.session-provider-message .tools-collapsible-wrapper .tools-trigger-btn.session-execution-summary {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-light);
+  border-radius: var(--button-radius);
+  box-shadow: none;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  gap: 8px;
+  min-height: var(--button-height);
+  min-width: 0;
+  padding: 8px 0;
+  text-align: left;
+  transform: none;
+  transition: background-color 140ms ease, border-color 140ms ease;
+  width: 100%;
+}
+
+.session-provider-message .tools-trigger-btn.session-execution-summary:hover:not(:disabled) {
+  background: var(--nav-hover);
+  border-color: var(--border-color-hover);
+}
+
+.session-provider-message .tools-trigger-btn.session-execution-summary:focus-visible {
+  outline: 1px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.session-provider-message .session-execution-summary:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.session-provider-message .session-execution-summary .tools-trigger-left {
+  min-width: 0;
+  gap: 8px;
+}
+
+.session-provider-message .session-execution-summary .tools-trigger-text {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.session-provider-message .session-execution-summary .tools-indicator-icon {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  flex: 0 0 16px;
+  height: 16px;
+  width: 16px;
+}
+
+.session-provider-message .session-execution-summary[data-tone='running'] .tools-indicator-icon {
+  color: var(--info);
+}
+
+.session-provider-message .session-execution-summary[data-tone='error'] .tools-trigger-left {
+  color: var(--error);
+}
+
+.session-provider-message .session-execution-summary[data-tone='approval'] .tools-trigger-left {
+  color: var(--warning);
+}
+
+.session-provider-message .session-execution-summary[data-tone='error'] .tools-indicator-icon,
+.session-provider-message .session-execution-summary[data-tone='approval'] .tools-indicator-icon {
+  color: inherit;
+}
+
+.session-execution-details-label {
+  align-items: center;
+  color: var(--text-muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  gap: 6px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.session-provider-message .session-execution-summary .tools-trigger-chevron {
+  transition: transform 120ms ease;
+}
+
+.session-provider-message .session-execution-summary:not(.open) .tools-trigger-chevron {
+  transform: rotate(-90deg);
+}
+
+.session-provider-message .tools-collapsible-wrapper .tools-details-content {
+  animation: none;
+}
+
+.session-execution-summary .spin-animation {
+  animation-duration: 1s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-execution-summary .spin-animation {
+    animation: none;
+  }
+}
