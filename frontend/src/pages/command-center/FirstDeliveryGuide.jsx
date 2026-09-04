@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, ChevronRight, Clipboard, FolderPlus, Loader2,
-  RefreshCw, Rocket, Settings2,
+  AlertTriangle, CheckCircle2, ChevronRight, Clipboard, Cpu, FolderPlus, Loader2,
+  Monitor, RefreshCw, Rocket, Terminal,
 } from 'lucide-react';
 import { evidenceApi } from '../../api/evidence.js';
+import { firstDeliveryApi } from '../../api/firstDelivery.js';
 import { handoffsApi } from '../../api/handoffs.js';
 import { projectsApi } from '../../api/projects.js';
 import { systemApi } from '../../api/system.js';
 import { workApi } from '../../api/work.js';
 import { selectRefreshData, useDataStore } from '../../store/dataStore.js';
 import { message } from '../../store/toastStore.js';
+import { codexBackendChoices, codexBackendUpdatePayload } from '../../utils/codexBackends.js';
 import { readFirstDeliveryConnectionTest } from '../../utils/firstDeliveryConnection.js';
 import {
   FIRST_DELIVERY_TITLE,
@@ -18,17 +20,25 @@ import {
   onboardingProjectID,
   sampleWorkPayload,
 } from './firstDeliveryGuideModel.js';
+import OnboardingSupervisorConnection from './OnboardingSupervisorConnection.jsx';
 import './FirstDeliveryGuide.css';
 
-const EMPTY_SNAPSHOT = { codeAgents: [], connectionTest: null, doctor: null, evidence: [], handoffs: [], works: [] };
+const EMPTY_SNAPSHOT = { codeAgents: [], connectionTest: null, doctor: null, evidence: [], handoffs: [], runnerSettings: null, works: [] };
+const AGENT_DESCRIPTIONS = Object.freeze({
+  codex: 'Codex CLI / Codex App',
+  claude: 'Claude Code CLI / Agent SDK',
+  'pi-coding-agent': 'Pi Coding Agent RPC',
+  qoder: 'Qoder Agent SDK / qodercli',
+});
 
-export default function FirstDeliveryGuide({ navigateTo, projects }) {
+export default function FirstDeliveryGuide({ onComplete, projects }) {
   const refreshData = useDataStore(selectRefreshData);
   const [snapshot, setSnapshot] = useState(EMPTY_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [cwd, setCwd] = useState('');
+  const [selectedCodeAgentID, setSelectedCodeAgentID] = useState('');
   const [selectedProjectID, setSelectedProjectID] = useState(projects[0]?.id || '');
   const [creationNeedsRefresh, setCreationNeedsRefresh] = useState(false);
   const requestRef = useRef(null);
@@ -40,12 +50,13 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
     const promise = Promise.all([
       systemApi.getRuntimeDoctor(),
       systemApi.getCodeAgents(),
+      systemApi.getRunnerSettings(),
       workApi.getWorks({ pageSize: 8 }, { signal: controller.signal }),
       handoffsApi.getHandoffs({ limit: 20 }),
     ]);
     requestRef.current = { controller, promise };
     try {
-      const [doctor, codeAgentsResponse, worksPage, handoffPage] = await promise;
+      const [doctor, codeAgentsResponse, runnerSettings, worksPage, handoffPage] = await promise;
       const works = worksPage?.items || [];
       const handoffs = handoffPage?.items || [];
       const sample = works.find(work => work?.title === FIRST_DELIVERY_TITLE);
@@ -57,14 +68,14 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
       const evidencePage = candidateWorkID
         ? await evidenceApi.listEvidence({ limit: 10, status: 'passed', workId: candidateWorkID })
         : null;
-      const evidence = evidencePage?.items || [];
       if (controller.signal.aborted) return;
       setSnapshot({
         codeAgents: Array.isArray(codeAgentsResponse?.agents) ? codeAgentsResponse.agents : [],
         connectionTest: readFirstDeliveryConnectionTest(),
         doctor,
-        evidence,
+        evidence: evidencePage?.items || [],
         handoffs,
+        runnerSettings,
         works,
       });
       setError('');
@@ -91,21 +102,99 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
     }
   }, [projects, selectedProjectID]);
 
+  const selectedProject = projects.find(project => project.id === selectedProjectID) || projects[0] || null;
+  const effectiveCodeAgentID = selectedCodeAgentID || selectedProject?.provider || '';
   const state = useMemo(
-    () => firstDeliveryState({ ...snapshot, projects }),
-    [projects, snapshot],
+    () => firstDeliveryState({ ...snapshot, projects, selectedCodeAgentID: effectiveCodeAgentID }),
+    [effectiveCodeAgentID, projects, snapshot],
   );
   const recovery = firstDeliveryRecovery(state, snapshot.doctor);
   const steps = Object.fromEntries(state.steps.map(step => [step.id, step]));
+
+  const updateCodeAgents = (response) => {
+    const codeAgents = Array.isArray(response?.agents) ? response.agents : [];
+    setSnapshot(current => ({ ...current, codeAgents }));
+    return codeAgents;
+  };
+
+  const selectCodeAgent = async (agent) => {
+    if (agent.enabled && !agent.submittable) return setError(agent.readiness_reason || `${agent.label || agent.id} 尚未就绪`);
+    setBusy(`agent:${agent.id}`);
+    setError('');
+    try {
+      let enabled = agent;
+      if (!agent.enabled) {
+        const agents = updateCodeAgents(await systemApi.updateCodeAgent(agent.id, true));
+        enabled = agents.find(item => item.id === agent.id);
+      }
+      if (!enabled?.submittable) return setError(enabled?.readiness_reason || `${enabled?.label || agent.id} 已启用，但尚未就绪`);
+      if (selectedProject && selectedProject.provider !== agent.id) {
+        await projectsApi.updateProject(selectedProject.id, {
+          default_agent_profile_id: '',
+          model: agent.id === 'codex' ? 'codex-default' : '',
+          provider: agent.id,
+        });
+        await refreshData(['projects', 'workSummary']);
+      }
+      setSelectedCodeAgentID(agent.id);
+      message.success(`${enabled.label || agent.id} 已选中${selectedProject ? '并绑定当前项目' : ''}`);
+    } catch (agentError) {
+      setError(agentError.message || '启用 Code Agent 失败');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const discoverCodeAgents = async () => {
+    setBusy('agent:discover');
+    setError('');
+    try {
+      const agents = updateCodeAgents(await systemApi.discoverCodeAgents());
+      if (selectedCodeAgentID && !agents.some(agent => agent.id === selectedCodeAgentID && agent.enabled && agent.submittable)) {
+        setSelectedCodeAgentID('');
+      }
+    } catch (agentError) {
+      setError(agentError.message || '重新发现 Code Agents 失败');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const selectCodexBackend = async (mode) => {
+    setBusy('agent:codex-backend');
+    setError('');
+    try {
+      const runnerSettings = await systemApi.updateRunnerSettings(codexBackendUpdatePayload(mode));
+      const agents = updateCodeAgents(await systemApi.discoverCodeAgents());
+      setSnapshot(current => ({ ...current, runnerSettings }));
+      if (agents.some(agent => agent.id === 'codex' && agent.enabled && agent.submittable)) {
+        if (selectedProject && selectedProject.provider !== 'codex') {
+          await projectsApi.updateProject(selectedProject.id, { default_agent_profile_id: '', model: 'codex-default', provider: 'codex' });
+          await refreshData(['projects', 'workSummary']);
+        }
+        setSelectedCodeAgentID('codex');
+      } else setSelectedCodeAgentID('');
+      if (runnerSettings?.runtime_apply?.codexTransport === 'deferred_active_sessions') {
+        message.warning('Codex 后端已保存；当前 Session 结束或服务重启后生效');
+      } else {
+        message.success(`新的 Codex 任务将使用 ${mode === 'app' ? 'Codex App' : 'Codex CLI'}`);
+      }
+    } catch (agentError) {
+      setError(agentError.message || '切换 Codex 后端失败');
+    } finally {
+      setBusy('');
+    }
+  };
 
   const createProject = async (event) => {
     event.preventDefault();
     const path = cwd.trim();
     if (!path) return setError('请输入本地仓库绝对路径');
+    if (!state.selectedCodeAgent) return setError('请先选择可用的 Code Agent');
     setBusy('project');
     setError('');
     try {
-      const provider = state.availableCodeAgents[0]?.id || 'codex';
+      const provider = state.selectedCodeAgent.id;
       const id = onboardingProjectID(path);
       await projectsApi.createProject({
         approval_policy: 'never',
@@ -119,7 +208,7 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
       });
       await refreshData(['projects', 'workSummary']);
       setSelectedProjectID(id);
-      message.success('项目已添加，并开启 Auto Run');
+      message.success(`项目已添加，并绑定 ${state.selectedCodeAgent.label || provider}`);
       await load();
     } catch (createError) {
       setError(createError.message || '添加项目失败');
@@ -141,8 +230,8 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
       });
       const existing = (authority?.items || []).find(work => work?.title === FIRST_DELIVERY_TITLE);
       if (!existing) await workApi.createWork(sampleWorkPayload(project.id));
-      await projectsApi.startProjectLoop(project.id);
-      message.success(existing ? '已恢复现有示例 Work 并启动 Loop' : '只读示例 Work 已创建并启动');
+      await firstDeliveryApi.startProjectLoop(project.id);
+      message.success(existing ? '已恢复现有示例 Work 并启动 Loop' : '示例 Work 已创建并启动');
       await refreshData(['projects', 'workSummary']);
       await load();
     } catch (createError) {
@@ -168,9 +257,9 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
         <div className="first-delivery-heading">
           <span className="first-delivery-icon"><Rocket size={19} /></span>
           <div>
-            <span className="first-delivery-kicker">10-MINUTE FIRST DELIVERY</span>
-            <h2 id="first-delivery-title">{state.completed ? '首次交付已可证明' : '完成第一个可审查 Work'}</h2>
-            <p>从 Agent、项目到 Evidence / Handoff；全程使用现有 authority，无需进入 Advanced。</p>
+            <span className="first-delivery-kicker">FIRST SETUP</span>
+            <h2 id="first-delivery-title">{state.completed ? '玄武可以开始工作了' : '先完成一次配置'}</h2>
+            <p>配好 Code Agent、Supervisor 和项目，之后就可以直接把 Issue 交给玄武。</p>
           </div>
         </div>
         <button className="first-delivery-refresh" disabled={loading || Boolean(busy)} onClick={load} type="button">
@@ -178,9 +267,9 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
         </button>
       </header>
 
-      <div className="first-delivery-checklist">
+      <div className="first-delivery-checklist" aria-label="首次配置进度">
         {state.steps.map((step, index) => (
-          <div className={`first-delivery-step ${step.complete ? 'done' : index === state.currentStep ? 'current' : ''}`} key={step.id}>
+          <div aria-current={index === state.currentStep ? 'step' : undefined} aria-label={`${step.label}：${step.complete ? '已完成' : index === state.currentStep ? '当前步骤' : '未完成'}`} className={`first-delivery-step ${step.complete ? 'done' : index === state.currentStep ? 'current' : ''}`} key={step.id}>
             <span>{step.complete ? <CheckCircle2 size={15} /> : index + 1}</span>
             <strong>{step.label}</strong>
           </div>
@@ -188,20 +277,31 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
       </div>
 
       {error ? <div className="first-delivery-error" role="alert"><AlertTriangle size={15} /> {error}</div> : null}
-      {!state.completed ? (
+      {loading && !snapshot.doctor ? <div className="first-delivery-inline-loading"><Loader2 className="spin-animation" size={14} /> 正在读取首次配置状态…</div> : null}
+      {!state.completed && snapshot.doctor ? (
         <div className="first-delivery-actions">
-          {!steps['code-agent'].complete ? (
-            <ActionCard title="选择 Code Agent" description="启用一个可执行的 Agent；Codex 可明确选择 CLI 或 App app-server。">
-              <button className="btn btn-primary" onClick={() => navigateTo('settings', null, '', '', { settingsSection: 'code-agents' })} type="button"><Settings2 size={14} /> 打开 Code Agents</button>
+          {!steps.runtime.complete ? (
+            <ActionCard description="Service 或 Database 未通过检查；修复后在原地重新读取状态。" title="确认运行环境">
+              <button className="btn btn-primary" disabled={loading} onClick={load} type="button"><RefreshCw size={14} /> 重新检查</button>
             </ActionCard>
-          ) : null}
-          {steps['code-agent'].complete && !steps.supervisor.complete ? (
-            <ActionCard title="配置玄武" description="在设置 → Xuanwu Supervisor 中选择 Provider、测试连接并保存。">
-              <button className="btn btn-primary" onClick={() => navigateTo('settings', null, '', '', { settingsSection: 'supervisor' })} type="button"><Settings2 size={14} /> 打开 Supervisor 设置</button>
+          ) : !steps['code-agent'].complete ? (
+            <ActionCard description="选择实际执行 Issue 的 Code Agent；未配置的执行器不会被静默选中。" title="选择 Code Agent" wide>
+              <CodeAgentPicker
+                agents={snapshot.codeAgents}
+                busy={busy}
+                codexChoices={codexBackendChoices(snapshot.runnerSettings || {})}
+                onDiscover={discoverCodeAgents}
+                onSelect={selectCodeAgent}
+                onSelectCodexBackend={selectCodexBackend}
+                selectedID={selectedCodeAgentID}
+              />
             </ActionCard>
-          ) : null}
-          {steps.supervisor.complete && !steps.project.complete ? (
-            <ActionCard title="添加第一个项目" description="路径必须是 Runner 所在机器上已存在的目录。">
+          ) : !steps.supervisor.complete ? (
+            <ActionCard description="只展示两类兼容 API 与 Codex OAuth；其他协议保留在高级设置。" title="连接 Supervisor" wide>
+              <OnboardingSupervisorConnection onComplete={load} />
+            </ActionCard>
+          ) : !steps.project.complete ? (
+            <ActionCard description={`路径必须存在于 Runner 所在机器；新项目将绑定 ${state.selectedCodeAgent?.label || state.selectedCodeAgent?.id}。`} title="添加第一个项目">
               <form className="first-delivery-project-form" onSubmit={createProject}>
                 <input aria-label="本地项目绝对路径" className="form-control" onChange={event => setCwd(event.target.value)} placeholder="/absolute/path/to/repository" value={cwd} />
                 <button className="btn btn-primary" disabled={busy === 'project'} type="submit">
@@ -209,38 +309,90 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
                 </button>
               </form>
             </ActionCard>
-          ) : null}
-          {steps.project.complete && !steps.work.complete ? (
-            <ActionCard title="运行只读示例 Work" description="只检查 README / manifest / Git 状态，不改文件、不 commit、不对外写入。">
-              <div className="first-delivery-work-action">
-                <select aria-label="示例 Work 项目" className="form-control" onChange={event => setSelectedProjectID(event.target.value)} value={selectedProjectID || projects[0]?.id || ''}>
-                  {projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}
-                </select>
-                <button className="btn btn-primary" disabled={busy === 'work' || creationNeedsRefresh} onClick={createSampleWork} type="button">
-                  {busy === 'work' ? <Loader2 className="spin-animation" size={14} /> : <Rocket size={14} />} 创建并开始
-                </button>
+          ) : !steps.work.complete ? (
+            <ActionCard description="玄武会创建一个测试 Issue，让 Code Agent 真正执行一次；不会修改项目代码。" title="启动第一个 Issue" wide>
+              <div className="first-delivery-work-panel">
+                <code><span>$</span> printf 'Hello Xuanwu\n'</code>
+                <ul>
+                  <li><CheckCircle2 size={13} /> 玄武创建并启动 Issue</li>
+                  <li><CheckCircle2 size={13} /> Code Agent 实际执行一次</li>
+                  <li><CheckCircle2 size={13} /> 做完后回到这里看结果</li>
+                </ul>
+                <div className="first-delivery-work-action">
+                  <select aria-label="示例 Work 项目" className="form-control" onChange={event => setSelectedProjectID(event.target.value)} value={selectedProjectID || projects[0]?.id || ''}>
+                    {projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}
+                  </select>
+                  <button className="btn btn-primary" disabled={busy === 'work' || creationNeedsRefresh} onClick={createSampleWork} type="button">
+                    {busy === 'work' ? <Loader2 className="spin-animation" size={14} /> : <Rocket size={14} />} 创建并开始
+                  </button>
+                </div>
               </div>
             </ActionCard>
-          ) : null}
-          {steps.work.complete ? (
-            <ActionCard title={state.targetWork?.title || '首个 Work'} description={`${state.targetWork?.id || ''} · ${state.targetWork?.status || 'unknown'}`}>
-              <button className="btn btn-secondary" onClick={() => navigateTo('work', state.targetWork?.id)} type="button">打开 Work <ChevronRight size={14} /></button>
+          ) : (
+            <ActionCard description={`${state.targetWork?.id || ''} · ${state.targetWork?.status || 'unknown'}`} title={state.targetWork?.title || '首个 Work'}>
+              <button className="btn btn-secondary" disabled={loading} onClick={load} type="button"><RefreshCw className={loading ? 'spin-animation' : ''} size={14} /> 刷新交付状态</button>
             </ActionCard>
-          ) : null}
+          )}
         </div>
       ) : null}
 
       <div className={`first-delivery-recovery ${state.completed ? 'success' : ''}`}>
         <div>
-          <strong>{state.completed ? '成功清单已通过' : '失败恢复'}</strong>
-          <p>{state.completed ? `${state.targetWork?.id} 已有 ${state.targetEvidence.length} 条 passed Evidence 和同 Work Handoff。` : recovery}</p>
+          <strong>{state.completed ? '第一次执行完成' : '这一步的恢复方式'}</strong>
+          <p>{state.completed ? `${state.targetWork?.title || '测试 Issue'} 已完成，可以进入指挥中心查看结果。` : recovery}</p>
         </div>
-        {!state.completed ? <button aria-label="复制恢复步骤" onClick={copyRecovery} type="button"><Clipboard size={14} /> 复制</button> : null}
+        {state.completed ? (
+          <button className="first-delivery-complete" onClick={onComplete} type="button">进入指挥中心 <ChevronRight size={14} /></button>
+        ) : <button aria-label="复制恢复步骤" onClick={copyRecovery} type="button"><Clipboard size={14} /> 复制</button>}
       </div>
     </section>
   );
 }
 
-function ActionCard({ children, description, title }) {
-  return <div className="first-delivery-action-card"><div><strong>{title}</strong><p>{description}</p></div><div>{children}</div></div>;
+function ActionCard({ children, description, title, wide = false }) {
+  return <div className={`first-delivery-action-card${wide ? ' wide' : ''}`}><div><strong>{title}</strong><p>{description}</p></div><div>{children}</div></div>;
+}
+
+function CodeAgentPicker({ agents, busy, codexChoices, onDiscover, onSelect, onSelectCodexBackend, selectedID }) {
+  return (
+    <div className="first-delivery-agent-picker">
+      <div className="first-delivery-agent-list">
+        {agents.map(agent => {
+          const ready = agent.enabled && agent.submittable;
+          const selected = ready && selectedID === agent.id;
+          const agentBusy = busy === `agent:${agent.id}`;
+          return (
+            <button
+              aria-pressed={selected}
+              className={selected ? 'selected' : ''}
+              disabled={Boolean(busy) || (agent.enabled && !agent.submittable)}
+              key={agent.id}
+              onClick={() => onSelect(agent)}
+              type="button"
+            >
+              <span className="first-delivery-agent-icon"><Cpu size={15} /></span>
+              <span><strong>{agent.label || agent.id}</strong><small>{AGENT_DESCRIPTIONS[agent.id] || agent.id}</small></span>
+              <em className={ready ? 'ready' : ''}>{agentBusy ? '处理中' : selected ? '已选择' : ready ? '可用' : agent.enabled ? '未就绪' : '启用'}</em>
+            </button>
+          );
+        })}
+      </div>
+      {agents.some(agent => agent.id === 'codex' && agent.enabled && agent.submittable) ? (
+        <div className="first-delivery-codex-backends">
+          <span>CODEX APP-SERVER</span>
+          <div>
+            {codexChoices.map(choice => (
+              <button aria-pressed={choice.active} className={choice.active ? 'active' : ''} disabled={Boolean(busy) || !choice.status.ready} key={choice.id} onClick={() => onSelectCodexBackend(choice.id)} type="button">
+                {choice.id === 'app' ? <Monitor size={14} /> : <Terminal size={14} />}
+                <span><strong>{choice.label}</strong><small>{choice.status.ready ? choice.status.detail : `未就绪 · ${choice.status.detail}`}</small></span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <button className="btn btn-secondary first-delivery-discover" disabled={Boolean(busy)} onClick={onDiscover} type="button">
+        <RefreshCw className={busy === 'agent:discover' ? 'spin-animation' : ''} size={14} /> 重新发现
+      </button>
+    </div>
+  );
 }

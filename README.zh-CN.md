@@ -23,6 +23,16 @@
 > 玄武是采用 Apache License 2.0 的开源软件。遵守许可证条款即可进行商业使用、修改和分发，
 > 详见[许可证](#许可证)。
 
+## 最简单的用法
+
+把你本来想对 Codex 说的话写成 Issue。事情列好以后，只要说：
+
+> 我列了 10 个 Issue 在玄武里。现在启动这 10 个，你自己看着做。
+
+玄武会启动你选中的 Issue，交给 Coding Agent 执行，能继续的事情自己继续；卡住时带着具体问题来问你，你回一句，它接着做。
+
+第一次使用时，先[安装玄武和 Xuanwu Skill](#安装玄武和-xuanwu-skill)，之后直接说人话即可。
+
 ## 当你离开电脑以后
 
 Coding Agent 会写代码，玄武负责在人离开终端以后继续推进工程工作：
@@ -101,34 +111,47 @@ daemon、scheduler 与恢复模型，不是可用性 SLA；宿主机与配置的
 GitHub 仓库、Release 资产、二进制、CLI、Skill、环境变量、服务标识和默认数据目录统一使用
 **Xuanwu**：命令为 `xuanwu`，环境变量前缀为 `XUANWU_*`。
 
-## 让你的 Agent 安装玄武（推荐）
+## 安装玄武和 Xuanwu Skill
 
 玄武自带 Issue 管理 Skill。安装后，Codex 或 Claude Code 可以替你注册项目、创建与启动 Issue、
 查看执行状态，以及处理重试和取消；真正执行 Issue 的 Coding Agent 由玄武统一调度。
 
-把下面这段话直接发送给你的 Codex 或 Claude Code：
+### 让 Agent 安装全部内容（推荐）
+
+把下面这句话直接发送给 Codex 或 Claude Code：
 
 ```text
-请帮我安装 Xuanwu：https://github.com/williamnie/xuanwu
-
-请先阅读仓库 README 和安装脚本，再安装适合当前系统的最新 Release；然后识别你当前是
-Codex 还是 Claude Code，把仓库中的 xuanwu Skill 安装到对应的个人 Skills 目录。
-安装后运行 xuanwu-daemon doctor，确认玄武服务健康，并告诉我 Skill 的安装路径。全新交互式安装时，
-把只显示一次的 Remote access token 和保存路径告诉我，方便浏览器首次连接；不要把 token 写入其他
-位置，也不要修改与本次安装无关的配置。
+请从 https://github.com/williamnie/xuanwu 安装最新 Release 和 xuanwu Skill。
+把 Skill 安装到你当前使用的 Coding Agent 个人 Skills 目录，然后运行 xuanwu-daemon doctor，
+确认服务健康并告诉我 Skill 的安装路径。全新安装时，再告诉我一次性浏览器 Token 的保存位置，
+不要把 Token 复制到其他地方，也不要修改其他配置。
 ```
 
-如果已经克隆仓库，也可以手动安装 Skill：
+### 已克隆仓库，只安装 Skill
 
 ```bash
 ./scripts/install-agent-skill.sh codex   # 安装到 Codex
 ./scripts/install-agent-skill.sh claude  # 安装到 Claude Code
+./scripts/install-agent-skill.sh all     # 两边都安装
+```
+
+默认安装位置：
+
+```text
+Codex        ${CODEX_HOME:-$HOME/.codex}/skills/xuanwu
+Claude Code  $HOME/.claude/skills/xuanwu
+```
+
+验证 Codex Skill 已安装：
+
+```bash
+test -f "${CODEX_HOME:-$HOME/.codex}/skills/xuanwu/SKILL.md"
 ```
 
 把 Xuanwu Skill 安装到 Claude Code，与在玄武中选择 Claude 作为执行 Provider 是两件事；
 安装 Skill 不会改变上面 Claude Provider **尚未真实测试**的状态。
 
-安装后可以直接告诉 Agent：`请用 Xuanwu 为当前仓库创建一个 triage Issue：修复登录页错误提示。`
+安装后直接说人话即可：`我列了 10 个 Issue 在玄武里，现在启动这 10 个，你自己看着做。`
 
 ## 安装 Release
 

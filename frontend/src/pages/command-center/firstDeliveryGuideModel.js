@@ -1,6 +1,6 @@
 export const FIRST_DELIVERY_TITLE = '玄武首次交付：只读项目体检';
 
-export function firstDeliveryState({ codeAgents = [], connectionTest = null, doctor, evidence = [], handoffs = [], projects = [], works = [] } = {}) {
+export function firstDeliveryState({ codeAgents = [], connectionTest = null, doctor, evidence = [], handoffs = [], projects = [], selectedCodeAgentID = '', works = [] } = {}) {
   const runtimeReady = Boolean(doctor?.service?.alive && doctor?.db?.ok);
   const availableCodeAgents = (Array.isArray(codeAgents) ? codeAgents : [])
     .filter(agent => agent?.enabled !== false && agent?.submittable === true);
@@ -26,7 +26,8 @@ export function firstDeliveryState({ codeAgents = [], connectionTest = null, doc
     && targetEvidence.length > 0
     && targetHandoff,
   );
-  const codeAgentReady = availableCodeAgents.length > 0;
+  const selectedCodeAgent = availableCodeAgents.find(agent => agent.id === selectedCodeAgentID) || null;
+  const codeAgentReady = Boolean(selectedCodeAgent || deliveryReady);
   const supervisorReady = connectionTest?.ok === true;
 
   return {
@@ -41,14 +42,15 @@ export function firstDeliveryState({ codeAgents = [], connectionTest = null, doc
               : !targetWork ? 4
                 : 5,
     steps: [
-      { id: 'runtime', complete: runtimeReady, label: '运行环境可用' },
-      { id: 'code-agent', complete: codeAgentReady, label: 'Code Agent 已选择并就绪' },
-      { id: 'supervisor', complete: supervisorReady, label: 'Supervisor 连接测试通过' },
-      { id: 'project', complete: projects.length > 0, label: '已添加项目' },
-      { id: 'work', complete: Boolean(targetWork), label: '已创建首个 Work' },
-      { id: 'delivery', complete: deliveryReady, label: 'Work 已完成且有 Evidence / Handoff' },
+      { id: 'runtime', complete: runtimeReady, label: '玄武可以运行' },
+      { id: 'code-agent', complete: codeAgentReady, label: '选择谁来做' },
+      { id: 'supervisor', complete: supervisorReady, label: '配置玄武' },
+      { id: 'project', complete: projects.length > 0, label: '告诉玄武项目在哪' },
+      { id: 'work', complete: Boolean(targetWork), label: '启动第一个 Issue' },
+      { id: 'delivery', complete: deliveryReady, label: '看到执行结果' },
     ],
     supervisorReady,
+    selectedCodeAgent,
     targetEvidence,
     targetHandoff,
     targetWork,
@@ -61,10 +63,10 @@ export function firstDeliveryRecovery(state, doctor) {
   }
   if (!state.steps[1].complete) {
     const discovered = (doctor?.providers || []).map(provider => provider?.label || provider?.id).filter(Boolean).join(' / ') || 'Codex';
-    return `没有已启用且就绪的 Code Agent（已发现：${discovered}）。到设置 → Code Agents 选择 Codex CLI / Codex App 或其他执行器，并确认状态为“可用”。`;
+    return `尚未选择已启用且就绪的 Code Agent（已发现：${discovered}）。在当前步骤选择 Codex CLI / Codex App 或其他可用执行器。`;
   }
   if (!state.steps[2].complete) {
-    return 'Code Agent 已可用，但当前浏览器会话还没有成功的 Supervisor Provider 连接测试。在设置 → Xuanwu Supervisor 测试并保存；无需进入 Advanced。';
+    return 'Code Agent 已选定，但当前浏览器会话还没有成功的 Supervisor 连接测试。在当前步骤完成 API 或 Codex OAuth 连接并保存；无需进入 Advanced。';
   }
   if (!state.steps[3].complete) {
     return '还没有项目。输入一个已存在的本地仓库绝对路径；创建失败时保留原路径，修正后可直接重试。';
@@ -74,15 +76,15 @@ export function firstDeliveryRecovery(state, doctor) {
   }
   const workID = state.targetWork?.id || '<work-id>';
   if (state.targetWork?.status === 'failed') {
-    return `Work ${workID} 执行失败。在 Runs 查看错误，修复 Agent/权限后使用既有 Retry；不要新建重复 Work。`;
+    return `Work ${workID} 执行失败。如需查看 Runs 详情，点击右上角“稍后设置”进入指挥中心；修复 Agent/权限后使用既有 Retry，不要新建重复 Work。`;
   }
   if (state.targetWork?.status !== 'done') {
-    return `Work ${workID} 尚未完成。在 Runs 查看当前 Run；若未启动，到 Projects 启动该项目 Loop。`;
+    return `Work ${workID} 尚未完成。先点击“刷新交付状态”；若仍无进展，可稍后进入指挥中心，从 Runs 查看当前 Run。`;
   }
   if (state.targetEvidence.length === 0) {
     return `Work ${workID} 已结束但没有 passed Evidence。重试时要求 Agent 直接执行一条最小只读验证命令，不得用文本结论代替 Evidence。`;
   }
-  return `Work ${workID} 已有 Evidence 但尚无同 Work Handoff。不要手写或复制 Handoff；先打开该 Work，再使用已附带 Work 上下文的 Ask Xuanwu 运行已注册 Workflow，并在确定性 Action Gate 中确认。`;
+  return `Work ${workID} 已有 Evidence 但尚无同 Work Handoff。不要手写或复制 Handoff；点击“稍后设置”进入指挥中心，打开该 Work，再使用已附带 Work 上下文的 Ask Xuanwu 运行已注册 Workflow，并在确定性 Action Gate 中确认。`;
 }
 
 export function onboardingProjectID(cwd) {
@@ -102,10 +104,11 @@ export function sampleWorkPayload(projectID, now = new Date().toISOString(), non
     },
     goal: [
       '在 10 分钟内完成首次可审查交付。',
-      '1. 只读检查项目 README、manifest 和当前 Git 状态；不修改文件。',
-      '2. 选择一条最小、只读的验证命令并直接执行，使结果成为 Evidence。',
-      '3. 汇报项目用途、可用的验证入口、一个风险和建议下一步。',
-      '4. 通过现有确定性完成门禁结束 Work；不 commit、push、deploy 或写入外部系统。',
+      "1. 首先直接执行 `printf 'Hello Xuanwu\\n'`，将 exact stdout `Hello Xuanwu` 作为第一条 passed Evidence。",
+      '2. 随后只读检查项目 README、manifest 和当前 Git 状态；不修改文件。',
+      '3. 再选择一条最小、只读的项目验证命令并直接执行，使结果成为后续 Evidence。',
+      '4. 汇报项目用途、可用的验证入口、一个风险和建议下一步。',
+      '5. 通过现有确定性完成门禁结束 Work；不 commit、push、deploy 或写入外部系统。',
     ].join('\n'),
     project_id: projectID,
     status: 'todo',

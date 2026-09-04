@@ -16,12 +16,16 @@ import GuardianAlertBanner from './components/GuardianAlertBanner';
 import ReleaseUpdateDialog from './components/ReleaseUpdateDialog';
 import TurtleLoader from './components/TurtleLoader';
 import {
+  selectBackendOnline,
   selectLoading,
+  selectProjects,
   selectRefreshData,
   selectSetBackendConnectionState,
+  selectWorkSummary,
   useDataStore,
 } from './store/dataStore';
 import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
+import { readFirstRunOnboardingState, resolveFirstRunOnboarding, writeFirstRunOnboardingState } from './utils/firstRunOnboarding.js';
 import { Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
 import { message as toast } from './store/toastStore';
@@ -44,6 +48,7 @@ const PiChat = lazy(() => import('./pages/PiChat'));
 const GlobalAskComposer = lazy(() => import('./components/GlobalAskComposer'));
 const Automations = lazy(() => import('./pages/Automations'));
 const Settings = lazy(() => import('./pages/Settings'));
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage.jsx'));
 
 const WORK_SUMMARY_RECONCILE_EVENT_TYPES = new Set([
   'issue.created',
@@ -120,10 +125,14 @@ export default function App() {
     // 远程访问 token 第一阶段：本地保存后才发起 API 请求
     authReady: Boolean(getAuthToken()),
   }));
+  const [firstRunOnboarding, setFirstRunOnboarding] = useState(() => readFirstRunOnboardingState() || 'pending');
 
+  const backendOnline = useDataStore(selectBackendOnline);
   const loading = useDataStore(selectLoading);
+  const projects = useDataStore(selectProjects);
   const refreshData = useDataStore(selectRefreshData);
   const setBackendConnectionState = useDataStore(selectSetBackendConnectionState);
+  const workSummary = useDataStore(selectWorkSummary);
 
   const {
     currentPage,
@@ -432,6 +441,13 @@ export default function App() {
   }, [authReady, currentPage, refreshVisibleData, selectedIssueId]);
 
   useEffect(() => {
+    if (!authReady || loading || !backendOnline || firstRunOnboarding !== 'pending') return;
+    const next = resolveFirstRunOnboarding('', workSummary.counts.total);
+    writeFirstRunOnboardingState(next === 'active' ? 'active' : 'completed');
+    setFirstRunOnboarding(next);
+  }, [authReady, backendOnline, firstRunOnboarding, loading, workSummary.counts.total]);
+
+  useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('codex-theme', theme);
   }, [theme]);
@@ -483,6 +499,18 @@ export default function App() {
     writeBrowserRoute({ currentPage: 'issues' });
   };
 
+  const completeFirstRunOnboarding = () => {
+    writeFirstRunOnboardingState('completed');
+    setFirstRunOnboarding('hidden');
+    navigateTo('command-center');
+  };
+
+  const skipFirstRunOnboarding = () => {
+    writeFirstRunOnboardingState('dismissed');
+    setFirstRunOnboarding('hidden');
+    navigateTo('command-center');
+  };
+
   const assistantModule = assistantModuleForPage(currentPage);
   const mobileNavPage = productNavPageForRoute(currentPage);
   const mobilePageTitle = t(MOBILE_PAGE_TITLE_KEYS[mobileNavPage] || 'nav.commandCenter');
@@ -493,6 +521,25 @@ export default function App() {
       <>
         <ToastContainer />
         <AuthGate onUnlock={setAuthReady} />
+      </>
+    );
+  }
+
+  const shouldShowOnboarding = firstRunOnboarding === 'active'
+    || (firstRunOnboarding === 'pending' && !loading && backendOnline && workSummary.counts.total === 0);
+  if (shouldShowOnboarding) {
+    return (
+      <>
+        <ToastContainer />
+        <Suspense fallback={<PageLoadingFallback />}>
+          <OnboardingPage
+            onComplete={completeFirstRunOnboarding}
+            onSkip={skipFirstRunOnboarding}
+            projects={projects}
+            theme={theme}
+            toggleTheme={toggleTheme}
+          />
+        </Suspense>
       </>
     );
   }

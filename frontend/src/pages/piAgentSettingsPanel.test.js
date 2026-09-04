@@ -129,6 +129,7 @@ test('Supervisor behavior applies the model selected above without duplicating m
 test('recommended defaults remain stable and API keys stay write-only in local state', () => {
   assert.match(stateSource, /modelId: 'gpt-5\.4'/);
   assert.match(stateSource, /modelProvider: 'openai'/);
+  assert.match(stateSource, /baseUrl: 'https:\/\/api\.openai\.com\/v1'/);
   assert.match(stateSource, /apiKey: ''/);
   assert.match(stateSource, /configured\?\.models\?\.\[0\] \|\| preset\.recommended_model/);
   assert.match(panelSource, /type=\{visible \? 'text' : 'password'\}/);

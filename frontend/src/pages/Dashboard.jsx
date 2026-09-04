@@ -7,7 +7,6 @@ import RuntimeHealthStrip from '../components/RuntimeHealthStrip';
 import ActiveWorkSection from './command-center/ActiveWorkSection.jsx';
 import AttentionSection from './command-center/AttentionSection.jsx';
 import RecentDeliveriesSection from './command-center/RecentDeliveriesSection.jsx';
-import FirstDeliveryGuide from './command-center/FirstDeliveryGuide.jsx';
 import {
   selectBackendOnline,
   selectProjects,
@@ -108,8 +107,6 @@ export default function Dashboard({
           </button>
         </div>
       )}
-
-      {counts.total === 0 ? <FirstDeliveryGuide navigateTo={navigateTo} projects={projects} /> : null}
 
       <RuntimeHealthStrip backendOnline={backendOnline} navigateTo={navigateTo} />
 

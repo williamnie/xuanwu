@@ -15,17 +15,22 @@ const readyDoctor = {
 };
 const readyCodeAgents = [{ enabled: true, id: 'codex', submittable: true }];
 
-test('clean state starts at project setup after runtime and Agent pass', () => {
+test('clean state requires an explicit ready Code Agent selection before Supervisor setup', () => {
   const waiting = firstDeliveryState({ doctor: readyDoctor });
   assert.equal(waiting.currentStep, 1);
   assert.deepEqual(waiting.steps.map(step => step.complete), [true, false, false, false, false, false]);
-  assert.match(firstDeliveryRecovery(waiting, readyDoctor), /Code Agents/);
+  assert.match(firstDeliveryRecovery(waiting, readyDoctor), /Code Agent/);
 
   const supervisorWaiting = firstDeliveryState({ codeAgents: readyCodeAgents, doctor: readyDoctor });
-  assert.equal(supervisorWaiting.currentStep, 2);
-  assert.match(firstDeliveryRecovery(supervisorWaiting, readyDoctor), /Supervisor Provider/);
+  assert.equal(supervisorWaiting.currentStep, 1);
+  assert.match(firstDeliveryRecovery(supervisorWaiting, readyDoctor), /Code Agent/);
 
-  const state = firstDeliveryState({ codeAgents: readyCodeAgents, connectionTest: { ok: true }, doctor: readyDoctor });
+  const selectedAgent = firstDeliveryState({ codeAgents: readyCodeAgents, doctor: readyDoctor, selectedCodeAgentID: 'codex' });
+  assert.equal(selectedAgent.currentStep, 2);
+  assert.equal(selectedAgent.selectedCodeAgent.id, 'codex');
+  assert.match(firstDeliveryRecovery(selectedAgent, readyDoctor), /Supervisor/);
+
+  const state = firstDeliveryState({ codeAgents: readyCodeAgents, connectionTest: { ok: true }, doctor: readyDoctor, selectedCodeAgentID: 'codex' });
   assert.equal(state.currentStep, 3);
   assert.deepEqual(state.steps.map(step => step.complete), [true, true, true, false, false, false]);
   assert.match(firstDeliveryRecovery(state, readyDoctor), /绝对路径/);
@@ -63,6 +68,8 @@ test('sample mutation is uniquely audited and strictly read-only', () => {
   assert.notEqual(first.audit.event_id, second.audit.event_id);
   assert.equal(first.status, 'todo');
   assert.match(first.goal, /不修改文件/);
+  assert.ok(first.goal.indexOf("printf 'Hello Xuanwu\\n'") < first.goal.indexOf('README'));
+  assert.match(first.goal, /第一条 passed Evidence/);
   assert.match(first.goal, /Evidence/);
   assert.equal(onboardingProjectID('/tmp/My Demo/'), 'my-demo');
 });
@@ -70,6 +77,7 @@ test('sample mutation is uniquely audited and strictly read-only', () => {
 test('recovery keeps a failed or partially delivered Work on its existing authority', () => {
   const failed = firstDeliveryState({
     codeAgents: readyCodeAgents, connectionTest: { ok: true }, doctor: readyDoctor, projects: [{ id: 'demo' }],
+    selectedCodeAgentID: 'codex',
     works: [{ id: 'xw:work:issues:4', status: 'failed', title: FIRST_DELIVERY_TITLE }],
   });
   assert.match(firstDeliveryRecovery(failed, readyDoctor), /Retry/);
@@ -79,6 +87,7 @@ test('recovery keeps a failed or partially delivered Work on its existing author
     codeAgents: readyCodeAgents, connectionTest: { ok: true }, doctor: readyDoctor,
     evidence: [{ status: 'passed', work_id: 'xw:work:issues:5' }],
     projects: [{ id: 'demo' }],
+    selectedCodeAgentID: 'codex',
     works: [{ id: 'xw:work:issues:5', status: 'done', title: FIRST_DELIVERY_TITLE }],
   });
   assert.match(firstDeliveryRecovery(evidenceOnly, readyDoctor), /已附带 Work 上下文/);

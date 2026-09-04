@@ -25,6 +25,17 @@ and brings you back only when human judgment is needed.
 > modification, and redistribution are permitted subject to the license terms.
 > See [License](#license).
 
+## The simplest way to use Xuanwu
+
+Turn what you would normally tell Codex into issues. Once the list is ready, say:
+
+> I put 10 issues in Xuanwu. Start those ten now and handle the rest.
+
+Xuanwu starts the exact issues you selected, sends them to coding agents, and keeps moving when it
+can. If it gets stuck, it asks about the specific issue; reply normally and it continues.
+
+First time here? [Install Xuanwu and its Skill](#install-xuanwu-and-its-skill), then speak normally.
+
 ## What happens while you are away
 
 Coding agents can produce code. Xuanwu keeps the engineering work moving after you leave the
@@ -117,36 +128,42 @@ The GitHub repository, release assets, binary, CLI, Skill, environment variables
 and default state directories all use **Xuanwu**: the command is `xuanwu`, and environment
 variables use the `XUANWU_*` prefix.
 
-## Let your agent install Xuanwu (recommended)
+## Install Xuanwu and its Skill
 
 Xuanwu ships with an issue-management Skill. Once installed, Codex or Claude Code can register
 projects, create and start issues, inspect their status, and handle retries or cancellation for
 you. Xuanwu then dispatches each issue to the configured coding-agent provider.
 
-Send this prompt directly to Codex or Claude Code:
+### Let your agent install everything (recommended)
+
+Send this short request directly to Codex or Claude Code:
 
 ```text
-Please install Xuanwu for me: https://github.com/williamnie/xuanwu
-
-Read the repository README and installation scripts first, then install the latest Release for
-this system. Detect whether you are running in Codex or Claude Code and install the repository's
-xuanwu Skill into the matching personal Skills directory. After installation, run
-xuanwu-daemon doctor, confirm that Xuanwu is healthy, and tell me where the Skill was installed.
-On a fresh interactive install, show me the one-time Remote access token and its file path so I can
-connect the browser. Do not write the token anywhere else or change unrelated configuration.
+Install Xuanwu and its xuanwu Skill from https://github.com/williamnie/xuanwu
+Use the latest Release, install the Skill for the coding agent you are running in, run
+xuanwu-daemon doctor, and tell me the Skill path. For a fresh install, also tell me where the
+one-time browser token is stored; never copy it elsewhere. Do not change unrelated configuration.
 ```
 
-If you have already cloned the repository, you can also install the Skill manually:
+### Install only the Skill from a cloned repository
 
 ```bash
 ./scripts/install-agent-skill.sh codex   # Install for Codex
 ./scripts/install-agent-skill.sh claude  # Install for Claude Code
+./scripts/install-agent-skill.sh all     # Install for both
+```
+
+The default targets are `${CODEX_HOME:-$HOME/.codex}/skills/xuanwu` for Codex and
+`$HOME/.claude/skills/xuanwu` for Claude Code. Verify the installed entrypoint:
+
+```bash
+test -f "${CODEX_HOME:-$HOME/.codex}/skills/xuanwu/SKILL.md"
 ```
 
 Installing the Xuanwu Skill in Claude Code is separate from selecting Claude as Xuanwu's execution
 provider. The Skill integration does not change the Claude provider's **not live-tested** status above.
 
-You can then tell the agent: `Use Xuanwu to create a triage issue for this repository: fix the login-page error message.`
+You can then speak normally: `I put 10 issues in Xuanwu. Start those ten now and handle the rest.`
 
 ## Install a release
 
