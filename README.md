@@ -160,6 +160,11 @@ The default targets are `${CODEX_HOME:-$HOME/.codex}/skills/xuanwu` for Codex an
 test -f "${CODEX_HOME:-$HOME/.codex}/skills/xuanwu/SKILL.md"
 ```
 
+Binary releases bundle the matching Skill and install it for Codex by default. Set
+`XUANWU_AGENT_SKILL_TARGET=claude`, `all`, or `none` before installation to choose Claude Code,
+both agents, or no Skill. Custom roots can be provided through `XUANWU_CODEX_SKILLS_DIR` and
+`XUANWU_CLAUDE_SKILLS_DIR`. The Skill is available to the coding agent on its next turn or session.
+
 Installing the Xuanwu Skill in Claude Code is separate from selecting Claude as Xuanwu's execution
 provider. The Skill integration does not change the Claude provider's **not live-tested** status above.
 
@@ -173,9 +178,10 @@ You can then speak normally: `I put 10 issues in Xuanwu. Start those ten now and
 - `curl`, `tar`, and a user-level `launchd` or `systemd` session;
 - the [Codex CLI](https://developers.openai.com/codex/cli/) installed and authenticated.
 
-The installer downloads the matching release artifact, verifies its SHA-256 checksum, and
-registers the Web Gateway, Runner Core, and Agentic Worker as user services. Public-repository
-releases also publish GitHub provenance attestations, which the installer verifies when available:
+The installer downloads the matching release artifact, verifies its SHA-256 checksum, installs the
+Xuanwu Skill for Codex by default, and registers the Web Gateway, Runner Core, and Agentic Worker as
+user services. Public-repository releases also publish GitHub provenance attestations, which the
+installer verifies when available:
 
 ```bash
 export XUANWU_ADDR=127.0.0.1:3008

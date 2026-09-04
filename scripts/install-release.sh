@@ -52,6 +52,7 @@ QODER_CONFIG_DIR="${XUANWU_QODER_CONFIG_DIR:-}"
 QODER_CREDENTIAL_REF="${XUANWU_QODER_CREDENTIAL_REF:-}"
 QODER_MODEL="${XUANWU_QODER_MODEL:-}"
 PI_CHAT_TOOL_SURFACE="${XUANWU_PI_CHAT_TOOL_SURFACE:-bootstrap_v2}"
+AGENT_SKILL_TARGET="${XUANWU_AGENT_SKILL_TARGET:-codex}"
 if [ -z "$CLAUDE_MODE" ]; then
   CLAUDE_MODE="sdk"
 fi
@@ -95,6 +96,9 @@ Useful environment variables:
   XUANWU_QODER_CONFIG_DIR=...     Qoder CLI config directory
   XUANWU_QODER_CREDENTIAL_REF=secret://...|env://... Qoder credential locator
   XUANWU_PI_CHAT_TOOL_SURFACE=bootstrap_v2|legacy_full PI chat tool-surface rollback selector
+  XUANWU_AGENT_SKILL_TARGET=codex|claude|all|none Install the bundled agent Skill (default: codex)
+  XUANWU_CODEX_SKILLS_DIR=...   Override the Codex Skills directory
+  XUANWU_CLAUDE_SKILLS_DIR=...  Override the Claude Code Skills directory
   XUANWU_AUTH_TOKEN=...          Custom bearer token for remote access
   XUANWU_AUTH_TOKEN_FILE=...     Generated token file path
   XUANWU_VERIFY_ATTESTATION=auto|require|skip
@@ -124,6 +128,10 @@ esac
 case "$PI_CHAT_TOOL_SURFACE" in
   bootstrap_v2|legacy_full) ;;
   *) fail "XUANWU_PI_CHAT_TOOL_SURFACE must be bootstrap_v2 or legacy_full" ;;
+esac
+case "$AGENT_SKILL_TARGET" in
+  codex|claude|all|none) ;;
+  *) fail "XUANWU_AGENT_SKILL_TARGET must be codex, claude, all, or none" ;;
 esac
 if [ -n "$CLAUDE_PLATFORM_PROFILE" ] && [[ ! "$CLAUDE_PLATFORM_PROFILE" =~ ^[A-Za-z0-9_.-]+$ || "$CLAUDE_PLATFORM_PROFILE" = "." || "$CLAUDE_PLATFORM_PROFILE" = ".." ]]; then
   fail "XUANWU_CLAUDE_PLATFORM_PROFILE is invalid"
@@ -261,6 +269,20 @@ resolve_codex_cmd() {
   command -v codex
 }
 
+install_bundled_agent_skill() {
+  local package_dir="$1" installer
+  installer="$package_dir/scripts/install-agent-skill.sh"
+  [ "$AGENT_SKILL_TARGET" != "none" ] || {
+    log "skipped bundled agent Skill installation"
+    return 0
+  }
+  if [ ! -f "$package_dir/skills/xuanwu/SKILL.md" ] || [ ! -f "$installer" ]; then
+    log "warning: release $RESOLVED_VERSION does not include the bundled Xuanwu agent Skill; continuing for compatibility"
+    return 0
+  fi
+  bash "$installer" "$AGENT_SKILL_TARGET"
+}
+
 download_binary() {
   local os="$1" arch="$2" asset url tmp archive checksums metadata staged sdk_staged qoder_staged qoder_previous pi_policy_staged daemon_staged installer_staged updater_staged binary_version qoder_version expected_qoder_version
   asset="xuanwu_${os}_${arch}.tar.gz"
@@ -298,6 +320,7 @@ download_binary() {
   expected_qoder_version="$(release_qoder_cli_version "$metadata")"
   [ "$qoder_version" = "$expected_qoder_version" ] \
     || fail "Qoder CLI version $qoder_version does not match required $expected_qoder_version"
+  install_bundled_agent_skill "$tmp"
   mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$LOG_DIR" "$(dirname "$AUTH_TOKEN_FILE")"
   sdk_staged="$INSTALL_DIR/.xuanwu.claude-agent-sdk.stage.$$"
   install -m 0755 "$tmp/xuanwu.claude-agent-sdk" "$sdk_staged"

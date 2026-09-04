@@ -100,6 +100,14 @@ test('deployment stages the adjacent Claude SDK native executable atomically and
   assert.match(releaseSource, /mv -f "\$sdk_staged" "\$CLAUDE_SDK_EXECUTABLE_PATH"/);
 });
 
+test('release installation installs the bundled Xuanwu agent Skill with an explicit target selector', () => {
+  assert.match(releaseSource, /AGENT_SKILL_TARGET="\$\{XUANWU_AGENT_SKILL_TARGET:-codex\}"/);
+  assert.match(releaseSource, /codex\|claude\|all\|none/);
+  assert.match(releaseSource, /install_bundled_agent_skill "\$tmp"/);
+  assert.match(releaseSource, /bash "\$installer" "\$AGENT_SKILL_TARGET"/);
+  assert.match(releaseSource, /continuing for compatibility/);
+});
+
 test('deployment requires, stages, and snapshots the exact-pinned Qoder CLI runtime', () => {
   assert.match(source, /stage_dir_atomically "\$QODERCLI_RUNTIME_SOURCE" "\$QODERCLI_RUNTIME_PATH"/);
   assert.match(source, /if \[ -e "\$previous" \]; then\s+rm -rf "\$previous"\s+fi\s+return 0/);

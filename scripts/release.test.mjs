@@ -19,6 +19,7 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     const releaseMissingQoder = await createRelease(temp, 'missing-qoder', 'v0.9.0', { includeQoder: false });
     const releaseV1 = await createRelease(temp, 'v1', 'v1.0.0');
     const releaseV2 = await createRelease(temp, 'v2', 'v1.1.0', { qoderCliVersion: '1.1.40' });
+    const releaseWithoutSkill = await createRelease(temp, 'without-skill', 'v0.8.0', { includeAgentSkill: false });
     const releaseWrongQoder = await createRelease(temp, 'wrong-qoder', 'v1.1.0', {
       qoderCliVersion: '1.1.40', bundledQoderCliVersion: '1.1.23'
     });
@@ -63,12 +64,32 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     assert.notEqual(invalidQoder.status, 0);
     assert.match(invalidQoder.stderr, /invalid qoder_cli_version/);
 
+    const legacyHome = join(temp, 'legacy-home');
+    await mkdir(join(legacyHome, 'Library', 'LaunchAgents'), { recursive: true });
+    const compatibleOldRelease = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], {
+      env: {
+        ...env,
+        HOME: legacyHome,
+        XUANWU_INSTALL_DIR: join(temp, 'legacy-install'),
+        XUANWU_STATE_DIR: join(temp, 'legacy-state'),
+        FIXTURE_RELEASE_DIR: releaseWithoutSkill
+      },
+      encoding: 'utf8'
+    });
+    assert.equal(compatibleOldRelease.status, 0, `${compatibleOldRelease.stdout}\n${compatibleOldRelease.stderr}`);
+    assert.match(compatibleOldRelease.stdout, /does not include the bundled Xuanwu agent Skill; continuing for compatibility/);
+
     const fresh = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], { env, encoding: 'utf8' });
     assert.equal(fresh.status, 0, `${fresh.stdout}\n${fresh.stderr}`);
     assert.match(runVersion(join(install, 'xuanwu'), env), /v1\.0\.0/);
     assert.match(await readFile(join(install, 'xuanwu.qodercli', 'qodercli.mjs'), 'utf8'), /release-v1/);
     assert.match(runVersion(join(install, 'xuanwu.qodercli', 'qodercli.mjs'), env), /1\.1\.23/);
     assert.equal(await readFile(join(install, 'xuanwu.qodercli', 'policies', 'sandbox-default.toml'), 'utf8'), 'fixture-policy\n');
+    assert.equal(
+      await readFile(join(home, '.codex', 'skills', 'xuanwu', 'SKILL.md'), 'utf8'),
+      '---\nname: xuanwu\ndescription: fixture v1.0.0\n---\n'
+    );
+    assert.match(fresh.stdout, /Installed Xuanwu skill for Codex/);
     const authTokenPath = join(state, 'auth_token');
     const authToken = (await readFile(authTokenPath, 'utf8')).trim();
     assert.match(authToken, /^(?:[A-Za-z0-9+/]{43}=|[a-f0-9]{64})$/);
@@ -77,10 +98,14 @@ test('fresh install, update check, upgrade, and release-owned rollback preserve 
     assert.match(fresh.stdout, /remote access token file:/);
     assert.doesNotMatch(fresh.stdout, new RegExp(authToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     const unsignedAuto = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], {
-      env: { ...env, XUANWU_VERIFY_ATTESTATION: 'auto', GH_ATTESTATION_FAIL: '1' }, encoding: 'utf8'
+      env: { ...env, XUANWU_VERIFY_ATTESTATION: 'auto', XUANWU_AGENT_SKILL_TARGET: 'all', GH_ATTESTATION_FAIL: '1' }, encoding: 'utf8'
     });
     assert.equal(unsignedAuto.status, 0, `${unsignedAuto.stdout}\n${unsignedAuto.stderr}`);
     assert.match(unsignedAuto.stdout, /SHA-256 verified but signed GitHub provenance is unavailable/);
+    assert.equal(
+      await readFile(join(home, '.claude', 'skills', 'xuanwu', 'SKILL.md'), 'utf8'),
+      '---\nname: xuanwu\ndescription: fixture v1.0.0\n---\n'
+    );
     const corePlist = await readFile(join(home, 'Library', 'LaunchAgents', 'com.xiaobei.xuanwu.core.plist'), 'utf8');
     assert.match(corePlist, new RegExp(`<key>XUANWU_INSTALL_DIR</key>\\s*<string>${escapeRegExp(install)}</string>`));
     assert.match(corePlist, /<key>XUANWU_CLAUDE_AUTH_MODE<\/key>\s*<string>platform-profile<\/string>/);
@@ -262,6 +287,8 @@ test('release package keeps Bun runtime assets beside the executable and smokes 
   assert.match(script, /policies\/sandbox-default\.toml/);
   assert.match(script, /stage_pi_policy_extension "\$pkg_dir"/);
   assert.match(script, /"\$pkg_dir\/xuanwu\.pi-policy-extension\.ts"/);
+  assert.match(script, /"\$ROOT_DIR\/skills\/xuanwu" "\$pkg_dir\/skills\/xuanwu"/);
+  assert.match(script, /"\$ROOT_DIR\/scripts\/install-agent-skill\.sh" "\$pkg_dir\/scripts\/install-agent-skill\.sh"/);
   assert.match(script, /"\$ROOT_DIR\/README\.zh-CN\.md" "\$pkg_dir\/README\.zh-CN\.md"/);
   assert.match(script, /"\$ROOT_DIR\/LICENSE" "\$pkg_dir\/LICENSE"/);
   assert.match(script, /"\$ROOT_DIR\/NOTICE" "\$pkg_dir\/NOTICE"/);
@@ -321,6 +348,12 @@ exit 0
     await writeFile(join(fixture, 'xuanwu.qodercli', 'policies', 'sandbox-default.toml'), 'fixture-policy\n');
   }
   await writeFile(join(fixture, 'xuanwu.pi-policy-extension.ts'), `// release-${name}\nexport default function extension() {}\n`);
+  if (options.includeAgentSkill !== false) {
+    await mkdir(join(fixture, 'skills', 'xuanwu'), { recursive: true });
+    await mkdir(join(fixture, 'scripts'), { recursive: true });
+    await writeFile(join(fixture, 'skills', 'xuanwu', 'SKILL.md'), `---\nname: xuanwu\ndescription: fixture ${version}\n---\n`);
+    await writeFile(join(fixture, 'scripts', 'install-agent-skill.sh'), await readFile(join(root, 'scripts', 'install-agent-skill.sh')));
+  }
   await writeFile(join(fixture, 'web', 'index.html'), version);
   for (const script of ['daemon.sh', 'install-release.sh', 'update-release.sh']) {
     await writeFile(join(fixture, script), await readFile(join(root, 'scripts', script)));

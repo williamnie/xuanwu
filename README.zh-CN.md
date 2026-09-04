@@ -148,6 +148,16 @@ Claude Code  $HOME/.claude/skills/xuanwu
 test -f "${CODEX_HOME:-$HOME/.codex}/skills/xuanwu/SKILL.md"
 ```
 
+二进制 Release 安装器会携带与二进制同版本的 Skill，并默认安装到 Codex。需要改为安装到
+Claude Code、同时安装到两者，或跳过 Skill 时，可在安装命令前分别设置：
+
+```bash
+export XUANWU_AGENT_SKILL_TARGET=claude  # 或 all、none；默认 codex
+```
+
+自定义 Skills 根目录时使用 `XUANWU_CODEX_SKILLS_DIR` 或 `XUANWU_CLAUDE_SKILLS_DIR`。
+安装完成后，在 Coding Agent 的下一轮对话或新会话中使用 Skill。
+
 把 Xuanwu Skill 安装到 Claude Code，与在玄武中选择 Claude 作为执行 Provider 是两件事；
 安装 Skill 不会改变上面 Claude Provider **尚未真实测试**的状态。
 
@@ -161,9 +171,9 @@ test -f "${CODEX_HOME:-$HOME/.codex}/skills/xuanwu/SKILL.md"
 - `curl`、`tar`，以及用户级 `launchd` 或 `systemd` 会话；
 - 已安装并登录 [Codex CLI](https://developers.openai.com/codex/cli/)。
 
-安装器会下载匹配平台的产物、校验 SHA-256 checksum，并注册 Web Gateway、Runner Core 和
-Agentic Worker 用户服务。仓库公开后的 Release 还会发布 GitHub provenance attestations，
-安装器在可用时会一并验证：
+安装器会下载匹配平台的产物、校验 SHA-256 checksum、默认安装 Codex 的 Xuanwu Skill，并注册
+Web Gateway、Runner Core 和 Agentic Worker 用户服务。仓库公开后的 Release 还会发布 GitHub
+provenance attestations，安装器在可用时会一并验证：
 
 ```bash
 export XUANWU_ADDR=127.0.0.1:3008
