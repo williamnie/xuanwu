@@ -9,3 +9,24 @@ test('xuanwu skill documents protected issue delete command', () => {
   assert.match(skillSource, /physically removes the issue/);
   assert.match(skillSource, /in_progress/);
 });
+
+test('xuanwu skill keeps plain-language unattended decomposition rules', () => {
+  assert.match(skillSource, /must \*\*说人话\*\*/);
+  assert.match(skillSource, /Match the language of the user's current request/);
+  assert.match(skillSource, /write Issue titles, `一句话目标`.*in Simplified Chinese/);
+  assert.match(skillSource, /Every Issue must have one `一句话目标`/);
+  assert.match(skillSource, /Do not target a fixed Issue count/);
+  assert.match(skillSource, /Determine the count dynamically/);
+  assert.match(skillSource, /Ask at most one question for the entire batch/);
+  assert.match(skillSource, /Only enqueue `夜间可执行` Issues/);
+  assert.match(skillSource, /Create `需要人工` Issues as `triage` and do not enqueue them/);
+  assert.match(skillSource, /selected Agent Profile resolves to `approval=unattended`/);
+  assert.match(skillSource, /report `needs_user` truthfully/);
+  assert.match(skillSource, /Never label it `failed` or `done` merely to release the workspace lock/);
+  assert.match(skillSource, /essential context exists only in the planning conversation/);
+  assert.match(skillSource, /exact `Issue #<id>` references/);
+  assert.match(skillSource, /issue update --depends-on/);
+  assert.match(skillSource, /xuanwu issue enqueue/);
+  assert.match(skillSource, /待人工验收 N 项，完成前不算整体验收通过/);
+  assert.match(skillSource, /Do not make the user read every Issue body/);
+});
