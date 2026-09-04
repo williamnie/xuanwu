@@ -83,8 +83,10 @@ the presence of adapter code.
 | Qoder | **Preview** | SDK 1.0.32 with its paired CLI 1.1.40, session create/list/read/resume, interrupt, approvals, and model discovery. Real-account acceptance exists, but the integration and redistribution boundary remain preview. |
 
 Codex sessions without an explicit title can be named automatically with one LLM call using the
-Supervisor's configured model. Titles follow `MMDD｜类型｜主题`, using the creation date in
-Asia/Shanghai; user titles are preserved and naming failures do not block execution.
+Supervisor's configured model. Titles follow `MMDD｜Type｜Topic`, with categories and topics in
+the selected application language (Chinese or English), using the creation date in the backend's
+dynamically detected system time zone, without depending on an open browser.
+User titles are preserved and naming failures do not block execution.
 See [Codex integration](docs/codex-integration.md) for the naming rules and API option.
 
 ## Roadmap

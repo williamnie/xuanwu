@@ -3,22 +3,28 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { getPiSupervisor } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
+import { appLanguage } from "../i18n/language.ts";
 import type { CodexThreadTitleInput } from "../providers/codex/threadNaming.ts";
 import { installPiProviderSecretOverride } from "../security/secrets/piProviderRuntime.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot } from "../spikes/piSmokeSupport.ts";
-import { parseSessionTitle, SESSION_TITLE_SYSTEM_PROMPT, sessionTitleDate } from "./sessionTitlePrompt.ts";
+import { parseSessionTitle, sessionTitleSystemPrompt, sessionTitleDate, sessionTitleTimeZone } from "./sessionTitlePrompt.ts";
 
 /** 复用 PI 配置和鉴权，直接调用模型一次；不创建 AgentSession 或挂载任何工具。 */
 export async function generateSessionTitle(db: RunnerDatabase, input: CodexThreadTitleInput, signal: AbortSignal): Promise<string | null> {
-  const titleDate = sessionTitleDate(input.thread.createdAt);
+  const timeZone = sessionTitleTimeZone();
+  const titleDate = sessionTitleDate(input.thread.createdAt, timeZone);
   const agent = getPiSupervisor(db);
-  if (!titleDate || !agent?.model_provider || !agent.model_id || signal.aborted) return null;
+  if (!timeZone || !titleDate || !agent?.model_provider || !agent.model_id || signal.aborted) return null;
   const issue = input.issueId ? getIssue(db, input.issueId) : null;
   const project = input.projectId ? getProject(db, input.projectId) : null;
   // Issue 使用原始标题和正文，避免把执行器提示词、生命周期说明等当成任务主题。
   const content = issue ? `${issue.title}\n\n${issue.description}` : input.prompt;
   if (!content.trim()) return null;
+  // 每次生成读取持久化语言；同一次请求的 Prompt 和校验使用同一快照。
+  const language = appLanguage(db);
   const context = {
+    language,
+    timeZone,
     titleDate,
     currentTitle: typeof input.thread.name === "string" ? input.thread.name : "",
     projectName: project?.name ?? "",
@@ -35,7 +41,7 @@ export async function generateSessionTitle(db: RunnerDatabase, input: CodexThrea
   signal.throwIfAborted();
   const model = resolvePiModel({ find: (provider, id) => runtime.getModel(provider, id) }, agent);
   const response = await runtime.completeSimple(model, {
-    systemPrompt: SESSION_TITLE_SYSTEM_PROMPT,
+    systemPrompt: sessionTitleSystemPrompt(language),
     messages: [{ role: "user", content: JSON.stringify(context), timestamp: Date.now() }]
   }, { signal, maxTokens: 1024, reasoning: "minimal", toolChoice: "none", maxRetries: 0, timeoutMs: 20_000 });
   if (signal.aborted || response.stopReason !== "stop") return null;
