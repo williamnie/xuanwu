@@ -20,6 +20,7 @@ import { resolveFeishuActionTarget } from "./feishuActionTarget.ts";
 import { createImConversationCoordinator } from "./imConversationCoordinator.ts";
 import type { ChannelConnector } from "./channelConnectorContracts.ts";
 import { deliverImOutboundNow } from "./imOutboundDelivery.ts";
+import { notificationPresentation } from "../notifications/notificationPresentation.ts";
 
 export type FeishuConversationRunner = (input: FeishuRunnerInput) => Promise<FeishuRunnerResult>;
 export type FeishuRunnerInput = {
@@ -51,7 +52,6 @@ export type FeishuBridgeHandleResult = { reason: string; replied: boolean };
 const REPLY_LINK_TYPE = "feishu_agent_reply", REPLY_RELATIONSHIP = "agent_reply";
 const ACK_LINK_TYPE = "feishu_ack_reaction", ACK_RELATIONSHIP = "ack_reaction";
 const ACK_REACTION_EMOJI_TYPE = "OK";
-const NEW_CONVERSATION_ACK_TEXT = "已开启新的 Supervisor 上下文。你可以继续发下一条消息。";
 
 export function createFeishuAgentBridge(options: FeishuAgentBridgeOptions) {
   const coordinator = createImConversationCoordinator<
@@ -129,7 +129,7 @@ async function runnerReply(
     }
     const targetProjectId = resolvedProjectId(projectContext);
     if (route.isNewCommand && route.prompt === "") {
-      return { conversationId: route.conversationId, projectId: "", targetProjectId, text: NEW_CONVERSATION_ACK_TEXT };
+      return { conversationId: route.conversationId, projectId: "", targetProjectId, text: newConversationText(options.database) };
     }
     const prompt = route.prompt || input.event.text || "[Feishu attachment message]";
     const actionTarget = resolveFeishuActionTarget(options.database, input.event);
@@ -166,9 +166,23 @@ async function runnerReply(
     });
     return {
       conversationId: fallbackConversationID(input.event),
-      text: `我尝试交给 Runner 时出错了：${message}。你可以稍后重试，或补充项目名和目标再发我一次。`
+      text: bridgeErrorText(options.database, message)
     };
   }
+}
+
+function newConversationText(db: RunnerDatabase): string {
+  const presentation = notificationPresentation(db);
+  return presentation.language === "en-US"
+    ? `${presentation.display_name}: A fresh conversation is ready. Send the next message when you are ready.`
+    : `${presentation.display_name}：新会话准备好了，继续发消息就行。`;
+}
+
+function bridgeErrorText(db: RunnerDatabase, error: string): string {
+  const presentation = notificationPresentation(db);
+  return presentation.language === "en-US"
+    ? `${presentation.display_name} could not hand this request to Runner: ${error}. Try again later, or include the project name and goal.`
+    : `${presentation.display_name} 暂时没接住这条请求：${error}。你可以稍后重试；如果目标不明确，补上项目名和要做的事。`;
 }
 
 function messageSender(options: FeishuAgentBridgeOptions): FeishuMessageClient {

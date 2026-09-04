@@ -48,8 +48,8 @@ describe("Feishu lifecycle notification intents", () => {
       expect(failed).toMatchObject({ queued: true, reason: "queued" });
       expect(outbox).toHaveLength(1);
       expect(content).toContain("准备启动");
-      expect(content).toContain("已完成");
-      expect(content).toContain("执行失败/阻塞");
+      expect(content).toContain("已结束");
+      expect(content).toContain("没有完成");
       expectSendNowIntent(intents, { issueID, kind: "issue_start" });
       expectSendNowIntent(intents, { issueID, kind: "issue_done" });
       expectSendNowIntent(intents, { issueID: failedIssueID, kind: "issue_failed" });
@@ -86,7 +86,7 @@ describe("Feishu lifecycle notification intents", () => {
       ]);
       expect(intents[0]?.source_event_sequence_id).toBe(inbox[0]?.sequence_id);
       expect(outbox).toHaveLength(1);
-      expect(outbox[0]?.content).toContain("issue #1 已完成");
+      expect(outbox[0]?.content).toContain("#1「Feishu task」已结束");
     } finally {
       db.close();
     }
@@ -150,7 +150,7 @@ describe("Feishu lifecycle notification intents", () => {
         issue_id: failedIssue.id,
         target_chat_id: "oc_default"
       });
-      expect(outbox[0]?.content).toContain("执行失败/阻塞");
+      expect(outbox[0]?.content).toContain("没有完成");
       expect(intents).toEqual(expect.arrayContaining([
         expect.objectContaining({
           decision: "send_now",
@@ -212,8 +212,8 @@ describe("Feishu lifecycle notification intents", () => {
       expect(failed).toMatchObject({ queued: true, reason: "queued" });
       expect(outbox).toHaveLength(1);
       expect(outbox.map((item) => item.target_chat_id)).toEqual(["oc_group"]);
-      expect(content).toContain("已完成");
-      expect(content).toContain("执行失败/阻塞");
+      expect(content).toContain("已结束");
+      expect(content).toContain("没有完成");
       expectSendNowIntent(listPiNotificationIntents(db, { issueId: doneIssueID }), {
         issueID: doneIssueID,
         kind: "issue_done"

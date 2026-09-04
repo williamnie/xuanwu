@@ -90,7 +90,7 @@ describe("Feishu approval notification queue", () => {
       expect(content).toContain("git status");
       expect(outbox[0]).toMatchObject({
         approval_action_id: "approval-1",
-        content: expect.stringContaining("issue #1 需要 Codex 授权"),
+        content: expect.stringContaining("#1「Feishu task」需要你确认"),
         issue_id: issueID,
         status: "pending",
         target_chat_id: "oc_group"
@@ -272,7 +272,7 @@ describe("Feishu approval notification queue", () => {
       await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
       expect(outbox).toHaveLength(1);
-      expect(outbox.map((item) => item.content).join("\n")).toContain("issue #1 已完成");
+      expect(outbox.map((item) => item.content).join("\n")).toContain("#1「Feishu task」已结束");
       expect(outbox.map((item) => item.content).join("\n")).not.toContain("bun test");
       expect(listPiNotificationIntents(db, { issueId: issueID })).toEqual(expect.arrayContaining([
         expect.objectContaining({

@@ -73,7 +73,7 @@ describe("PI Guardian watchdog detector", () => {
       });
       expect(sender.calls).toHaveLength(1);
       expect(sender.calls[0]).toMatchObject({ receiveId: "oc_guardian", receiveIdType: "chat_id" });
-      expect(sender.calls[0]?.text).toContain("[玄武 Supervisor] 项目 PI Runtime 不可用");
+      expect(sender.calls[0]?.text).toContain("玄武 Supervisor：项目 PI Runtime 不可用");
       expect(sender.calls[0]?.text).toContain("发生了什么：项目的 PI Agent、会话或运行配置不可用");
       expect(sender.calls[0]?.text).toContain("需要你处理：检查项目的 PI Agent 是否存在并启用");
       expect(sender.calls[0]?.text).toContain("影响位置：项目 demo");

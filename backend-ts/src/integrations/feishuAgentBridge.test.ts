@@ -443,7 +443,7 @@ describe("Feishu agent bridge", () => {
     const text = sent[0]?.text ?? "";
 
     expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
-    expect(text).toContain("尝试交给 Runner 时出错");
+    expect(text).toContain("暂时没接住这条请求");
     expect(text).not.toContain("Runner agent failed");
     expect(text).not.toContain("secret");
     expect(text).not.toContain("/Users/xiaobei/private");

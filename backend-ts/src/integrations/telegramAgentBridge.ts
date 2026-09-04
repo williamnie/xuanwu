@@ -17,6 +17,7 @@ import { IM_OUTBOUND_SCHEMA_VERSION, createImOutboundEnvelope, type ImInteractio
 import { createTelegramImOutboundEnvelope, telegramConnectorTarget } from "./telegramChannelConnector.ts";
 import type { TelegramInboundHandler } from "./telegramReceiver.ts";
 import type { TelegramConnectorConfig } from "./telegramTypes.ts";
+import { notificationPresentation } from "../notifications/notificationPresentation.ts";
 
 export type TelegramSupervisorConversation = (input: {
   channelContext: string;
@@ -101,10 +102,10 @@ async function runConversation(
 ): Promise<RunResult> {
   const resolvedProject = projectContext.status === "resolved" ? projectContext.projectId : "";
   if (route.isNewCommand && route.prompt === "") {
-    return { kind: "reply", projectContext, route, targetProjectId: resolvedProject, text: "已开启新的 Supervisor 上下文。你可以继续发下一条消息。" };
+    return { kind: "reply", projectContext, route, targetProjectId: resolvedProject, text: newConversationText(options.database) };
   }
   if (projectContext.status === "ambiguous") {
-    return { kind: "selection", projectContext, route, text: "请选择要用于处理这条请求的项目。" };
+    return { kind: "selection", projectContext, route, text: projectSelectionText(options.database) };
   }
   try {
     if (!options.runSupervisorConversation) throw new Error("Xuanwu Supervisor conversation provider is unavailable");
@@ -159,7 +160,7 @@ async function runConversation(
       source: "supervisor",
       sourceEventID: `external_events:${input.externalEventId}`
     });
-    return { kind: "reply", projectContext, route, text: `我尝试交给 Runner 时出错了：${message}。你可以稍后重试，或补充项目名和目标再发我一次。` };
+    return { kind: "reply", projectContext, route, text: bridgeErrorText(options.database, message) };
   }
 }
 
@@ -328,7 +329,13 @@ async function resolveProjectSelection(options: Options, input: {
   });
   if (result.status !== "consumed" || !result.selection) return { ok: false, status: `project_selection_${result.status}` };
   const selection = result.selection;
-  await sendStandaloneText(options, selection.chat_id, `已选择 ${input.projectId}，我会用它处理刚才这句。`, `${input.callbackId}:selected`, input.threadId);
+  await sendStandaloneText(
+    options,
+    selection.chat_id,
+    projectSelectedText(options.database, input.projectId),
+    `${input.callbackId}:selected`,
+    input.threadId
+  );
   if (!options.runSupervisorConversation) return { ok: true, status: "project_selection_saved" };
   try {
     const projection = buildImConversationPromptProjection(options.database, {
@@ -352,9 +359,50 @@ async function resolveProjectSelection(options: Options, input: {
     if (reply.text.trim()) await sendStandaloneText(options, selection.chat_id, reply.text, `${input.callbackId}:continued`, input.threadId);
     return { ok: true, status: "project_selection_continued" };
   } catch (error) {
-    await sendStandaloneText(options, selection.chat_id, `已选择 ${input.projectId}，但继续处理时出错：${safeError(error)}。`, `${input.callbackId}:failed`, input.threadId);
+    await sendStandaloneText(
+      options,
+      selection.chat_id,
+      projectSelectionErrorText(options.database, input.projectId, safeError(error)),
+      `${input.callbackId}:failed`,
+      input.threadId
+    );
     return { ok: false, status: "project_selection_continue_failed" };
   }
+}
+
+function newConversationText(db: RunnerDatabase): string {
+  const presentation = notificationPresentation(db);
+  return presentation.language === "en-US"
+    ? `${presentation.display_name}: A fresh conversation is ready. Send the next message when you are ready.`
+    : `${presentation.display_name}：新会话准备好了，继续发消息就行。`;
+}
+
+function projectSelectionText(db: RunnerDatabase): string {
+  const presentation = notificationPresentation(db);
+  return presentation.language === "en-US"
+    ? `${presentation.display_name}: Choose the project for this request.`
+    : `${presentation.display_name}：请选择这条请求对应的项目。`;
+}
+
+function bridgeErrorText(db: RunnerDatabase, error: string): string {
+  const presentation = notificationPresentation(db);
+  return presentation.language === "en-US"
+    ? `${presentation.display_name} could not hand this request to Runner: ${error}. Try again later, or include the project name and goal.`
+    : `${presentation.display_name} 暂时没接住这条请求：${error}。你可以稍后重试；如果目标不明确，补上项目名和要做的事。`;
+}
+
+function projectSelectedText(db: RunnerDatabase, projectID: string): string {
+  const presentation = notificationPresentation(db);
+  return presentation.language === "en-US"
+    ? `${presentation.display_name}: I will use ${projectID} for your previous request.`
+    : `${presentation.display_name}：已选择 ${projectID}，我会用它处理刚才的请求。`;
+}
+
+function projectSelectionErrorText(db: RunnerDatabase, projectID: string, error: string): string {
+  const presentation = notificationPresentation(db);
+  return presentation.language === "en-US"
+    ? `${presentation.display_name}: ${projectID} was selected, but I could not continue: ${error}.`
+    : `${presentation.display_name}：已选择 ${projectID}，但继续处理时出错：${error}。`;
 }
 
 async function sendStandaloneText(options: Options, chatId: string, text: string, key: string, threadId = ""): Promise<void> {

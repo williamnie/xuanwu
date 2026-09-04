@@ -317,7 +317,8 @@ describe("Bun SQLite database connection", () => {
         { id: "080_execution_policy_json" },
         { id: "081_telegram_channel_runtime" },
         { id: "082_im_context_lifecycle" },
-        { id: "083_attention_action_recent_index" }
+        { id: "083_attention_action_recent_index" },
+        { id: "084_supervisor_natural_instructions" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
@@ -656,11 +657,28 @@ describe("Bun SQLite database connection", () => {
         provider: "pi-sdk",
         thinking_level: "medium",
         cwd_policy: "project",
-        instructions: "你是玄武 Xuanwu Supervisor，作为 Engineering Chief of Staff 将工程目标组织为 Work，监督 Run，以 Evidence 判定完成，并产出可审查的 Handoff；所有写操作必须经过确定性权限与审计门禁。",
+        instructions: "先回答用户真正关心的问题，再补必要理由；说人话，避免不必要的内部术语和流程播报。",
         enabled: 1
       });
     } finally {
       connection.close();
+    }
+  });
+
+  test("updates only the legacy Supervisor instructions and preserves user customization", async () => {
+    const root = await tempPath("xuanwu-bun-natural-supervisor-instructions-");
+    const stateDir = join(root, "state");
+    const first = await openDatabase({ stateDir });
+    first.sqlite.run("update pi_agents set instructions='用户自己的表达偏好' where id='runner-default'");
+    first.sqlite.run("delete from schema_migrations where id='084_supervisor_natural_instructions'");
+    first.close();
+
+    const migrated = await openDatabase({ stateDir });
+    try {
+      expect(migrated.sqlite.query("select instructions from pi_agents where id='runner-default'").get())
+        .toEqual({ instructions: "用户自己的表达偏好" });
+    } finally {
+      migrated.close();
     }
   });
 
@@ -753,7 +771,7 @@ describe("Bun SQLite database connection", () => {
       expect(migrated.sqlite.query("select id, name, instructions from pi_agents").get()).toEqual({
         id: "runner-default",
         name: "Xuanwu Supervisor",
-        instructions: "你是玄武 Xuanwu Supervisor，作为 Engineering Chief of Staff 将工程目标组织为 Work，监督 Run，以 Evidence 判定完成，并产出可审查的 Handoff；所有写操作必须经过确定性权限与审计门禁。"
+        instructions: "先回答用户真正关心的问题，再补必要理由；说人话，避免不必要的内部术语和流程播报。"
       });
       expect(migrated.sqlite.query("select project_id from project_pi_settings where project_id='legacy-extra-project'").get())
         .toEqual({ project_id: "legacy-extra-project" });
@@ -962,7 +980,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 84 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 85 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
@@ -1021,7 +1039,7 @@ describe("Bun SQLite database connection", () => {
 
     const upgraded = await openDatabase({ stateDir });
     try {
-      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 84 });
+      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 85 });
       expect(tableNames(upgraded)).toEqual(expect.arrayContaining([
         "im_conversation_state",
         "im_interaction_bindings",

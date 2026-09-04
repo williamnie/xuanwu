@@ -27,7 +27,7 @@ function SupervisorSettingsForm({ onOpenCodeAgents, state }) {
         <ProviderConnectionSettings state={state} />
       </ConfigurationStage>
       <ConfigurationStage
-        description="配置玄武的名称、thinking、运行指令与对话表达。模型默认值在上方连接区维护。"
+        description="配置玄武的名称、thinking、运行指令，以及对话和通知的表达方式。模型默认值在上方连接区维护。"
         index="02"
         title="身份与运行偏好"
       >
@@ -509,18 +509,18 @@ function ChatPersonaSettings({ state }) {
   const form = state.form;
   return (
     <details className="persona-settings-disclosure">
-      <summary><Sparkles size={16} /><span><strong>Chat 表达风格</strong><small>只对 chat profile 的最终回复生效 · revision {form.personaRevision}</small></span></summary>
+      <summary><Sparkles size={16} /><span><strong>对话与通知表达风格</strong><small>影响 chat 最终回复和通知 message 措辞 · revision {form.personaRevision}</small></span></summary>
       <div className="persona-settings-content">
-        <p className="persona-boundary-notice">这里只控制 Chat 最终回复的表达方式，不改变权限、审批、工具调用、Issue 状态和完成判定。</p>
+        <p className="persona-boundary-notice">这里只控制对话和通知的最终措辞，不改变通知是否发送，也不改变权限、审批、工具调用、Issue 状态和完成判定。</p>
         {state.personaConflictDraft ? <PersonaConflictNotice state={state} /> : null}
-        <label className="persona-enable-field"><input type="checkbox" checked={form.personaEnabled} onChange={(event) => state.updateField('personaEnabled', event.target.checked)} />启用 Chat Persona（默认关闭）</label>
+        <label className="persona-enable-field"><input type="checkbox" checked={form.personaEnabled} onChange={(event) => state.updateField('personaEnabled', event.target.checked)} />启用表达 Persona（默认关闭）</label>
         <Field label={`性格描述 · ${form.personaPersonality.length}/1000`}><textarea className="form-control" maxLength={1000} rows={3} value={form.personaPersonality} onChange={(event) => state.updateField('personaPersonality', event.target.value)} /></Field>
         <Field label={`沟通风格 · ${form.personaCommunicationStyle.length}/2000`}><textarea className="form-control" maxLength={2000} rows={4} value={form.personaCommunicationStyle} onChange={(event) => state.updateField('personaCommunicationStyle', event.target.value)} /></Field>
         <div className="persona-select-grid">
           <Field label="回复长度"><select className="form-control" value={form.personaVerbosity} onChange={(event) => state.updateField('personaVerbosity', event.target.value)}><option value="adaptive">自适应</option><option value="concise">简短</option><option value="detailed">详细</option></select></Field>
           <Field label="语言"><select className="form-control" value={form.personaLanguageMode} onChange={(event) => state.updateField('personaLanguageMode', event.target.value)}><option value="system">跟随系统</option><option value="follow_user">跟随当前用户消息</option></select></Field>
         </div>
-        <span className="persona-profile-badge">生效 profile：chat</span>
+        <span className="persona-profile-badge">生效范围：chat / notification.message</span>
       </div>
     </details>
   );
@@ -552,7 +552,7 @@ function PromptSummaryDebug({ state }) {
           <div className="prompt-debug-summary">
             <span>Custom instructions: {summary.custom_instructions_configured ? `${summary.custom_instructions_chars} chars` : '未配置'}</span>
             <span>Prompt profiles：{summary.profiles?.join(' / ')}</span>
-            <span>Chat Persona：{summary.persona_enabled ? `已启用 · ${summary.persona_chars} chars · revision ${summary.persona_revision}` : `未启用 · revision ${summary.persona_revision}`}</span>
+            <span>表达 Persona：{summary.persona_enabled ? `已启用 · ${summary.persona_chars} chars · revision ${summary.persona_revision}` : `未启用 · revision ${summary.persona_revision}`}</span>
             <span>Persona 生效范围：{summary.persona_profiles?.join(' / ') || 'chat'} · language_mode={summary.language_mode}</span>
             <span>注入位置：{summary.injected_after}</span><span>优先级：{summary.conflict_policy}</span>
             {summary.custom_instructions_preview ? <code>{summary.custom_instructions_preview}</code> : null}

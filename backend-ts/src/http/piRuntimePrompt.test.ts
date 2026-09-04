@@ -72,6 +72,10 @@ describe("Xuanwu PI runtime prompt", () => {
         expect(prompt).not.toContain(PI_PERSONA_PROMPT_HEADER);
         expect(prompt).not.toContain("Manual context trigger workflow:");
         expect(prompt).not.toContain("CHANNEL_SENTINEL");
+        if (profile === "notification") {
+          expect(prompt).toContain("authenticated notification presentation block");
+          expect(prompt).toContain("only the user-facing message field");
+        }
       }
       const manager = buildPiRuntimeSystemPrompt({ ...common, promptProfile: "manager_cycle" }, db);
       expect(manager).toContain("Runtime prompt profile: manager_cycle");

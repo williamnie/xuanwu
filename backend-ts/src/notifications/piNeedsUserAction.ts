@@ -181,11 +181,9 @@ function needsUserCommentBody(action: PiAction, issue: Issue, payload: Record<st
   const nextStep = redactCommentText(payload.next_step) || redactCommentText(payload.nextStep) ||
     "请查看 Runner issue 并补充授权、凭证或下一步处理方式。";
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 需要用户介入。`,
-    provider ? `Provider：${provider}` : "",
-    `诊断：${diagnosis}`,
-    `摘要：${message}`,
-    `下一步：${nextStep}`
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：#${issue.id} 现在需要你处理。`,
+    `我看到的问题是：${message}（${diagnosis}${provider ? `，执行器 ${provider}` : ""}）。`,
+    `请你：${nextStep}`
   ].filter(Boolean).join("\n");
 }
 

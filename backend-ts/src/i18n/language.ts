@@ -35,6 +35,16 @@ export function parseAppLanguage(value: unknown): AppLanguage {
   throw new Error("language must be zh-CN or en-US");
 }
 
+export function inferAppLanguageFromText(value: unknown, fallback: AppLanguage): AppLanguage {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (text === "") return fallback;
+  const han = text.match(/\p{Script=Han}/gu)?.length ?? 0;
+  const latin = text.match(/[A-Za-z]/g)?.length ?? 0;
+  if (han >= 2) return "zh-CN";
+  if (latin >= 2) return "en-US";
+  return fallback;
+}
+
 export function piLanguageContract(language: AppLanguage): string {
   if (language === "en-US") {
     return [

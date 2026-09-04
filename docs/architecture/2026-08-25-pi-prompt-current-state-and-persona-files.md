@@ -20,8 +20,9 @@
 
 | profile | 构建函数 | 用途 |
 | --- | --- | --- |
-| `chat` | `buildPiChatSystemPrompt`（:29-70） | 用户对话，唯一注入 persona 的 profile |
-| `acceptance` / `recovery` / `notification` | `buildPiInternalSystemPrompt`（:71-84） | 内部结构化输出任务，明确禁止 Persona 风格（:82-83） |
+| `chat` | `buildPiChatSystemPrompt`（:29-70） | 用户对话，注入完整 Chat Persona |
+| `acceptance` / `recovery` | `buildPiInternalSystemPrompt`（:71-84） | 内部结构化输出任务，不注入表达风格 |
+| `notification` | `buildPiInternalSystemPrompt`（:71-84） | 保持严格 JSON，只允许受限 presentation data 影响 `message` 措辞；见 ADR-XW-0095 |
 | `manager_cycle` | `buildPiManagerCycleSystemPrompt`（:85-105） | 项目管控周期，明确"Do not inherit Chat Persona"（:94） |
 
 profile 枚举定义于 `backend-ts/src/pi/runtimePromptProfile.ts:1-8`；`XUANWU_PI_CHAT_TOOL_SURFACE`（同文件 :18）只做 chat 工具面 legacy/full 回退，不影响 prompt 内容。
@@ -67,7 +68,7 @@ profile 枚举定义于 `backend-ts/src/pi/runtimePromptProfile.ts:1-8`；`XUANW
 | 配置 | 存储 | 粒度 | 注入位置 | 约束 |
 | --- | --- | --- | --- | --- |
 | 自定义指令 `pi_agents.instructions` | DB | 整段文本 | chat 第 6 段、manager_cycle | 明确"不得覆盖核心角色/权威/工具/记忆/数据安全合同"（`piRuntimePrompt.ts:271-273`） |
-| persona `pi_persona` | DB（单行/Agent） | 4 个字段拼接 | chat 最后一段 | 仅作用于最终用户可见措辞，"cannot authorize tools, alter risk, choose state truth, change completion criteria"（`personaPrompt.ts:19-20`） |
+| persona `pi_persona` | DB（单行/Agent） | 4 个字段拼接 | chat 最后一段；notification 只投影 display name/style/verbosity/language | 仅作用于最终用户可见措辞，不能改变发送决策、权限、事实或完成判定 |
 
 **persona schema**（`backend-ts/src/db/schema/063_pi_persona.ts:12-31`）：`enabled`（默认 0，关闭）、`personality`、`communication_style`、`verbosity`（adaptive/concise/detailed）、`language_mode`（system/follow_user）、`revision`（乐观锁）。字符上限：personality 1000 / communication_style 2000 / 合计 3000（`backend-ts/src/db/repositories/pi/persona.ts:7-9`）；审计只存字段名、字符数、sha256，不存明文（:129-131）。
 
@@ -75,7 +76,7 @@ profile 枚举定义于 `backend-ts/src/pi/runtimePromptProfile.ts:1-8`；`XUANW
 
 **API**（`backend-ts/src/http/piApi.ts`）：`GET /api/pi/supervisor`（:66-68）、`PATCH /api/pi/supervisor` 内嵌 persona（:104-129、:223-227，revision 冲突返回 409）、`GET /api/pi/supervisor/runtime-prompt` 返回 prompt 摘要（persona 只给元数据不给明文，`piRuntimePrompt.ts:244-268`）。
 
-**前端**（`frontend/src/pages/PiAgentSettingsPanel.jsx`）："运行指令" textarea（:326-328）；"Chat 表达风格"折叠面板（:460-475）：启用开关、性格、沟通风格、回复长度、语言模式，并明示"只控制 Chat 最终回复的表达方式"；`PromptSummaryDebug`（:496-510）展示 persona 元数据。
+**前端**（`frontend/src/pages/PiAgentSettingsPanel.jsx`）："运行指令" textarea；"对话与通知表达风格"折叠面板提供启用开关、性格、沟通风格、回复长度和语言模式，并明示它只控制最终措辞；`PromptSummaryDebug` 展示安全元数据。
 
 **环境变量**：`backend-ts/src/config/env.ts:55-59` 只有 `XUANWU_PI_CMD/CWD/ENABLED/ENV/TIMEOUT_MS` 五个进程级变量，**没有任何 prompt/persona 内容类 env 配置**。
 

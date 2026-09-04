@@ -80,7 +80,7 @@ describe("PI Guardian direct Feishu alert target routing", () => {
       });
 
       expect(sender.calls).toMatchObject([{ receiveId: "oc_default", receiveIdType: "chat_id" }]);
-      expect(sender.calls[0]?.text).toContain("[玄武 Supervisor] 摘要发送延迟");
+      expect(sender.calls[0]?.text).toContain("玄武 Supervisor：摘要发送延迟");
       expect(sender.calls[0]?.text).toContain("发生了什么：摘要发送超过预期时间");
       expect(sender.calls[0]?.text).toContain("PI 处理：PI 会重试摘要生成和发送");
       expect(sender.calls[0]?.text).toContain("需要你处理：若持续超过 30 分钟");

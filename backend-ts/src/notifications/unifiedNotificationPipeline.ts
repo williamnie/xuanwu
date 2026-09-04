@@ -12,6 +12,7 @@ import {
   alreadyQueuedNotification,
   type NotificationOutboxTarget
 } from "./notificationOutbox.ts";
+import { applyNotificationSpeaker, notificationPresentation } from "./notificationPresentation.ts";
 
 export type NotificationRoute = NotificationOutboxTarget & { channel: string };
 export type NotificationDecision = "aggregate" | "send_now" | "suppress";
@@ -58,7 +59,8 @@ export function routeNotification(
   input: UnifiedNotificationInput
 ): UnifiedNotificationRouteResult[] {
   const routes = uniqueRoutes(input.routes);
-  return routes.map((route) => routeOne(db, normalizeInput(input), route));
+  const normalized = normalizeInput(db, input);
+  return routes.map((route) => routeOne(db, normalized, route));
 }
 
 export function queueExistingNotificationIntent(
@@ -98,7 +100,10 @@ export function queueExistingNotificationIntent(
   }
   const pending = stageAgentCommunication(db, updated, {
     approvalActionID: input.approvalActionID,
-    content: contentWithDeepLink(input.content, input.deepLink),
+    content: applyNotificationSpeaker(
+      contentWithDeepLink(input.content, input.deepLink),
+      notificationPresentation(db)
+    ),
     notificationID: cleanString(input.notificationID) || updated.idempotency_key,
     notificationType: input.notificationType,
     route
@@ -203,10 +208,14 @@ function stageAgentCommunication(
   });
 }
 
-function normalizeInput(input: UnifiedNotificationInput) {
+function normalizeInput(db: RunnerDatabase, input: UnifiedNotificationInput) {
+  const presentation = notificationPresentation(db);
   return {
     approvalActionID: cleanString(input.approvalActionID),
-    content: requiredText(redactSensitiveText(input.content), "content"),
+    content: applyNotificationSpeaker(
+      requiredText(redactSensitiveText(input.content), "content"),
+      presentation
+    ),
     conversationID: cleanString(input.conversationID),
     decision: input.decision,
     deepLink: safeDeepLink(input.deepLink),

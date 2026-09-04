@@ -3,7 +3,7 @@ import type { Database as SQLiteDatabase } from "bun:sqlite";
 export const DEFAULT_PI_AGENT_ID = "runner-default";
 export const DEFAULT_PI_AGENT_NAME = "Xuanwu Supervisor";
 
-const DEFAULT_PI_AGENT_INSTRUCTIONS = "你是玄武 Xuanwu Supervisor，作为 Engineering Chief of Staff 将工程目标组织为 Work，监督 Run，以 Evidence 判定完成，并产出可审查的 Handoff；所有写操作必须经过确定性权限与审计门禁。";
+export const DEFAULT_PI_AGENT_INSTRUCTIONS = "先回答用户真正关心的问题，再补必要理由；说人话，避免不必要的内部术语和流程播报。";
 
 type PiAgentBootstrapDatabase = {
   readonly: boolean;
@@ -24,7 +24,10 @@ type PiAgentSeed = {
 
 export function ensureDefaultPiAgent(db: PiAgentBootstrapDatabase): void {
   if (db.readonly) return;
-  if (hasRunnerDefault(db.sqlite)) return;
+  if (hasRunnerDefault(db.sqlite)) {
+    normalizeLegacySupervisorDefaults(db.sqlite);
+    return;
+  }
   const timestamp = new Date().toISOString();
   const seed = legacyPiAgentSeed(db.sqlite) ?? builtInPiAgentSeed();
   db.sqlite.run(
@@ -65,6 +68,7 @@ function normalizeLegacySupervisorDefaults(sqlite: SQLiteDatabase): void {
   sqlite.run(
     `update pi_agents set instructions=?, updated_at=?
       where id=? and instructions in (
+        '你是玄武 Xuanwu Supervisor，作为 Engineering Chief of Staff 将工程目标组织为 Work，监督 Run，以 Evidence 判定完成，并产出可审查的 Handoff；所有写操作必须经过确定性权限与审计门禁。',
         '你是玄武的 Supervisor runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀工程记忆。',
         '你是全局 PI Assistant runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
         '你是全局 Runner Agent，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',

@@ -24,6 +24,7 @@ import { createFeishuChannelConnector, createFeishuImOutboundEnvelope } from "./
 import { feishuTargetForConversation, feishuTargetForIssue } from "./feishuNotificationTargets.ts";
 import type { ChannelConnector } from "./channelConnectorContracts.ts";
 import { deliverImOutboundNow } from "./imOutboundDelivery.ts";
+import { notificationPresentation } from "../notifications/notificationPresentation.ts";
 
 export type PiGuardianDirectFeishuOptions = {
   config: FeishuConnectorConfig;
@@ -57,7 +58,7 @@ export async function sendDirectFeishuGuardianAlert(
       config: options.config,
       sender: options.sender ?? createFeishuMessageClient({ config: options.config })
     });
-    const text = alertText(alert, options, presentation);
+    const text = alertText(db, alert, options, presentation);
     const envelope = createFeishuImOutboundEnvelope({
       actionGateRef: `${alertRef}:retry-policy`,
       actionID: `${alertRef}:direct-feishu`,
@@ -139,11 +140,17 @@ function targetAllowed(config: FeishuConnectorConfig, target: SendTarget): boole
 }
 
 function alertText(
+  db: RunnerDatabase,
   alert: PiGuardianAlert,
   options: PiGuardianDirectFeishuOptions,
   presentation: ReturnType<typeof guardianAlertPresentation>
 ): string {
-  return options.formatText?.(alert) ?? formatGuardianAlertText(alert, options.now, presentation);
+  return options.formatText?.(alert) ?? formatGuardianAlertText(
+    alert,
+    options.now,
+    presentation,
+    notificationPresentation(db)
+  );
 }
 
 function allowed(values: string[], value: string): boolean {

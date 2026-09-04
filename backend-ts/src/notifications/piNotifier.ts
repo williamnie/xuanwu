@@ -112,11 +112,9 @@ function actionMessage(
   nextStep: string
 ): string {
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issueID} 需要用户介入。`,
-    provider ? `Provider：${provider}` : "",
-    `诊断：${diagnosis}`,
-    `摘要：${redactNotificationText(message ?? "Supervisor 判断当前无法继续自动恢复。")}`,
-    `下一步：${nextStep}`
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：#${issueID} 现在需要你处理。`,
+    `我看到的问题是：${redactNotificationText(message ?? "当前无法继续自动恢复。")}（${diagnosis}${provider ? `，执行器 ${provider}` : ""}）。`,
+    `请你：${nextStep}`
   ].filter(Boolean).join("\n");
 }
 

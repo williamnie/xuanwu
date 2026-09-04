@@ -49,7 +49,7 @@ describe("Feishu lifecycle notifications", () => {
         target_message_id: "77",
         target_thread_id: "9"
       });
-      expect(outbox[0]?.content).toContain("已完成");
+      expect(outbox[0]?.content).toContain("已结束");
     } finally {
       db.close();
     }
@@ -73,7 +73,7 @@ describe("Feishu lifecycle notifications", () => {
       expect(replay).toMatchObject({ queued: false, reason: "duplicate" });
       expect(outbox).toHaveLength(1);
       expect(outbox[0]?.content).toContain("准备启动");
-      expect(outbox[0]?.content).toContain("issue #1");
+      expect(outbox[0]?.content).toContain("#1「Feishu task」");
     } finally {
       db.close();
     }
@@ -93,8 +93,8 @@ describe("Feishu lifecycle notifications", () => {
       const content = listSyncOutbox(db, { source: "feishu" })[0]?.content ?? "";
 
       expect(result).toMatchObject({ queued: true, reason: "queued" });
-      expect(content).toContain("执行失败");
-      expect(content).toContain("下一步");
+      expect(content).toContain("没有完成");
+      expect(content).toContain("请查看 #1 的执行记录");
       expect(content).toContain("[redacted]");
       expect(content).not.toContain("fixture-secret");
       expect(content).not.toContain("/Users/example");
@@ -126,7 +126,7 @@ describe("Feishu lifecycle notifications", () => {
       expect(outbox).toHaveLength(1);
       expect(outbox.map((item) => item.target_chat_id)).toEqual(["oc_group"]);
       expect(outbox.map((item) => item.content).join("\n")).toContain("准备启动");
-      expect(outbox.map((item) => item.content).join("\n")).toContain("已完成");
+      expect(outbox.map((item) => item.content).join("\n")).toContain("已结束");
     } finally {
       detach();
       db.close();
@@ -281,7 +281,7 @@ describe("Feishu lifecycle notifications", () => {
       const outbox = listSyncOutbox(db, { source: "feishu" });
       expect(outbox).toHaveLength(1);
       expect(outbox[0]).toMatchObject({ target_chat_id: "oc_group" });
-      expect(outbox[0]?.content).toContain("需要用户确认");
+      expect(outbox[0]?.content).toContain("需要你确认");
       expect(outbox[0]?.content).toContain("pi-action-1");
     } finally {
       detach();

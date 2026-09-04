@@ -31,6 +31,7 @@ import {
   buildPiRuntimeContextEnvelope,
   recordPiRuntimeContextEnvelopeAudit
 } from "../pi/runtimeContextEnvelope.ts";
+import type { AppLanguage } from "../i18n/language.ts";
 
 export type { PiRuntimePromptProfile } from "../pi/runtimePromptProfile.ts";
 
@@ -57,6 +58,7 @@ export type RuntimeSessionInput = {
     replyToMessageID?: string;
     threadID?: string;
   };
+  outputLanguage?: AppLanguage;
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
   promptProfile: PiRuntimePromptProfile;

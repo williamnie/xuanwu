@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { openDatabase } from "../db/database.ts";
 import { buildPiRuntimeSystemPrompt } from "./piRuntimePrompt.ts";
 import { createDefaultRouter } from "./server.ts";
+import { inferAppLanguageFromText } from "../i18n/language.ts";
+import { updatePiPersona } from "../db/repositories/pi.ts";
+import { conversationOutputLanguage } from "./piConversationApi.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 
@@ -41,6 +44,42 @@ describe("i18n API", () => {
       expect(prompt).toContain("current system language is English (en-US)");
       expect(prompt).toContain("must be in English");
       expect(prompt).not.toContain("same language as the user's latest message");
+
+      const overridden = buildPiRuntimeSystemPrompt({
+        agent: agentRecord(),
+        conversationID: "i18n-conversation-override",
+        outputLanguage: "zh-CN",
+        promptProfile: "chat"
+      }, database);
+      expect(overridden).toContain("当前系统语言为简体中文");
+    } finally {
+      database.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("infers a supported language for follow-user conversation turns", () => {
+    expect(inferAppLanguageFromText("帮我 fix login bug", "en-US")).toBe("zh-CN");
+    expect(inferAppLanguageFromText("Please fix login", "zh-CN")).toBe("en-US");
+    expect(inferAppLanguageFromText("#123", "zh-CN")).toBe("zh-CN");
+  });
+
+  test("lets a chat turn override the global language without changing internal profiles", async () => {
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-conversation-language-"));
+    const database = await openDatabase({ stateDir: join(root, "state") });
+    try {
+      const router = createDefaultRouter({ database });
+      await router.handle(new Request(`${BASE_URL}/api/i18n`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ language: "en-US" })
+      }));
+      updatePiPersona(database, { enabled: 1, expected_revision: 0, language_mode: "follow_user" }, {
+        actor: "test", reason: "conversation language", requestedAt: new Date().toISOString()
+      });
+
+      expect(conversationOutputLanguage(database, undefined, "帮我看看这个任务")).toBe("zh-CN");
+      expect(conversationOutputLanguage(database, "en-US", "帮我看看这个任务")).toBe("en-US");
     } finally {
       database.close();
       await rm(root, { recursive: true, force: true });

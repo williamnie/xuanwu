@@ -18,15 +18,15 @@ test('Xuanwu Supervisor Settings exposes runtime prompt summary debug without se
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
 });
 
-test('Xuanwu Supervisor Settings exposes revisioned presentation-only Chat Persona controls', () => {
-  assert.match(panelSource, /Chat 表达风格/);
-  assert.match(panelSource, /只对 chat profile 的最终回复生效/);
-  assert.match(panelSource, /不改变权限、审批、工具调用、Issue 状态和完成判定/);
+test('Xuanwu Supervisor Settings exposes revisioned presentation-only Persona controls', () => {
+  assert.match(panelSource, /对话与通知表达风格/);
+  assert.match(panelSource, /影响 chat 最终回复和通知 message 措辞/);
+  assert.match(panelSource, /不改变通知是否发送/);
   assert.match(panelSource, /personaPersonality/);
   assert.match(panelSource, /personaCommunicationStyle/);
   assert.match(panelSource, /personaVerbosity/);
   assert.match(panelSource, /personaLanguageMode/);
-  assert.match(panelSource, /生效 profile：chat/);
+  assert.match(panelSource, /生效范围：chat \/ notification\.message/);
   assert.match(stateSource, /expected_revision: form\.personaRevision/);
   assert.match(stateSource, /err\?\.status === 409/);
   assert.match(stateSource, /保留本地草稿供你合并/);
@@ -163,7 +163,7 @@ test('Supervisor settings distinguishes model credentials from Codex and Claude 
 test('Supervisor settings relies on migrated canonical data instead of UI compatibility projections', () => {
   assert.doesNotMatch(stateSource, /LEGACY_PI_ASSISTANT_INSTRUCTIONS|LEGACY_PI_AGENT_NAMES/);
   assert.match(stateSource, /normalizedInstructions\(supervisor\.instructions\)/);
-  assert.match(stateSource, /Engineering Chief of Staff/);
-  assert.match(stateSource, /Work，监督 Run，以 Evidence 判定完成/);
+  assert.match(stateSource, /说人话/);
+  assert.doesNotMatch(stateSource, /Engineering Chief of Staff/);
   assert.match(stateSource, /normalizedSupervisorName\(supervisor\.name\)/);
 });

@@ -14,6 +14,7 @@ import {
 } from "./imNotificationTargets.ts";
 import { telegramConnectorStatus } from "./telegramConfig.ts";
 import type { TelegramConnectorConfig } from "./telegramTypes.ts";
+import { notificationPresentation } from "../notifications/notificationPresentation.ts";
 
 type Options = {
   database: RunnerDatabase;
@@ -39,7 +40,12 @@ export function createImGuardianAlertDelivery(options: Options): GuardianAlertDe
       if (!guardianAlertPresentation(alert, now).requires_user) return;
       const target = linkedTarget(options.database, alert) ?? telegramFallback(options, alert);
       if (!target) return options.fallback?.send(alert, deliveryOptions);
-      const content = deliveryOptions.formatText?.(alert) ?? formatGuardianAlertText(alert, now);
+      const content = deliveryOptions.formatText?.(alert) ?? formatGuardianAlertText(
+        alert,
+        now,
+        guardianAlertPresentation(alert, now),
+        notificationPresentation(options.database)
+      );
       const queued = queueNotificationOutbox(options.database, {
         channel: target.connector_id,
         content,

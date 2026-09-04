@@ -40,7 +40,7 @@ describe("PI report generator", () => {
         source: "manual",
         status: "generated",
         summary: { total: 0 },
-        summary_text_zh: expect.stringContaining("无活动"),
+        summary_text_zh: expect.stringContaining("没有任务活动"),
         type: "night_run_summary"
       });
       expect(published).toBe(0);
@@ -165,10 +165,10 @@ describe("PI report generator", () => {
       expect(failedNeedsUser?.error).toContain("[redacted]");
       expect(failedNeedsUser?.error).not.toContain("secret-value");
       expect(failedNeedsUser?.error).not.toContain("/Users/xiaobei");
-      expect(String(report.summary_text_zh)).toContain("夜间执行总结");
+      expect(String(report.summary_text_zh)).toContain("夜间任务有结果");
       expect(String(report.summary_text_zh)).toContain("完成 1");
       expect(String(report.summary_text_zh)).toContain("失败 2");
-      expect(String(report.summary_text_zh)).toContain("需用户 1");
+      expect(String(report.summary_text_zh)).toContain("需要你处理 1");
       expect(String(report.summary_text_zh)).toContain("阻塞 0");
       expect(String(report.summary_text_zh)).toContain(`/api/issues/${done}`);
       expect(String(report.summary_text_zh)).toContain(`/api/pi/audit-events?project_id=demo&issue_id=${done}`);

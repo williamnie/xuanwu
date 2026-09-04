@@ -63,7 +63,7 @@ describe("Bun PI settings API", () => {
           persona_enabled: true,
           persona_revision: 1,
           persona_chars: 8,
-          persona_profiles: ["chat"],
+          persona_profiles: ["chat", "notification.message"],
           language_mode: "follow_user"
         }
       });
@@ -99,7 +99,7 @@ describe("Bun PI settings API", () => {
         provider: "pi-sdk",
         thinking_level: "medium",
         cwd_policy: "project",
-        instructions: expect.stringContaining("Engineering Chief of Staff"),
+        instructions: expect.stringContaining("说人话"),
         enabled: 1
       });
 

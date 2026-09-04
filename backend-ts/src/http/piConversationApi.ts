@@ -17,6 +17,7 @@ import {
   createPiConversation,
   getPiAgent,
   getPiConversation,
+  getPiPersona,
   getPiSupervisor,
   listPiActionEvents,
   listPiConversations,
@@ -60,6 +61,12 @@ import {
   type ImConversationPromptProjection
 } from "../integrations/imConversationContext.ts";
 import { resolvePiChatToolMode } from "../pi/runtimePromptProfile.ts";
+import {
+  appLanguage,
+  inferAppLanguageFromText,
+  parseAppLanguage,
+  type AppLanguage
+} from "../i18n/language.ts";
 
 type PiConversationContext = {
   auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
@@ -79,6 +86,7 @@ export type PiConversationPromptInput = {
   clearProjectId?: boolean;
   conversationId?: string;
   intent?: string;
+  language?: AppLanguage;
   projectId?: string;
   prompt: string;
   targetProjectId?: string;
@@ -241,6 +249,7 @@ async function preparePiConversationTurn(
     : imRunnerChatSource(trusted.channelContextProjection?.connectorID) ?? runnerChatSource(titledConversation);
   const resolvedSource = source ?? (review ? "runner_review" : "runner_chat");
   const turnID = crypto.randomUUID();
+  const outputLanguage = conversationOutputLanguage(context.database, body.language, prompt);
   let contextReservation: ImContextProjectionReservation | undefined;
   let channelContext = cleanString(trusted.channelContext);
   const projection = trusted.channelContextProjection;
@@ -301,7 +310,8 @@ async function preparePiConversationTurn(
       projection ? {
         connectorID: projection.connectorID,
         conversationID: projection.conversationID
-      } : undefined
+      } : undefined,
+      outputLanguage
     );
   } catch (error) {
     if (contextReservation) failImContextProjectionReservation(context.database, contextReservation, "runtime_open_failed");
@@ -540,6 +550,7 @@ async function dispatchPiConversationPrompt(
   }
   return sendPiConversationMessage(context, id, {
     intent: input.intent,
+    language: input.language,
     prompt: input.prompt,
     target_project_id: input.targetProjectId || projectID,
     target_project_source: input.targetProjectSource || (projectID === "" ? undefined : "request_project")
@@ -878,7 +889,8 @@ async function openConversationRuntime(
     conversationID: string;
     replyToMessageID?: string;
     threadID?: string;
-  }
+  },
+  outputLanguage?: AppLanguage
 ) {
   const { createPiRuntimeSession, PI_RUNNER_CHAT_ACTIONS } = await import("./piRuntime.ts");
   const project = conversation.project_id === "" || (
@@ -910,6 +922,7 @@ async function openConversationRuntime(
       providers: context.providers
     }, projectID, { forceOnce: true }),
     notificationTarget,
+    outputLanguage,
     project,
     promptProfile: "chat",
     providers: context.providers,
@@ -922,6 +935,18 @@ async function openConversationRuntime(
     supervisorContext,
     supervisorManaged: context.supervisorManaged,
   });
+}
+
+export function conversationOutputLanguage(
+  db: RunnerDatabase,
+  requested: unknown,
+  userPrompt: string
+): AppLanguage | undefined {
+  const explicit = cleanString(requested);
+  if (explicit !== "") return parseAppLanguage(explicit);
+  const persona = getPiPersona(db);
+  if (persona?.enabled !== 1 || persona.language_mode !== "follow_user") return undefined;
+  return inferAppLanguageFromText(userPrompt, appLanguage(db));
 }
 
 function conversationAuthorization(

@@ -109,10 +109,10 @@ function pendingActionText(action: PendingPiActionNotification): string {
     tool: text(payload.tool_name)
   })).slice(0, 360);
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：${action.issue_id > 0 ? `issue #${action.issue_id}` : "当前任务"} 需要用户确认才能继续。`,
-    `待确认动作：${action.action_type}（${action.id}）`,
-    detail === "{}" ? "" : `范围：${detail}`,
-    "下一步：可在当前 IM 交互中批准、拒绝、要求修改或暂缓；Runner issue/后端 API 仍作为备用入口。"
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：${action.issue_id > 0 ? `#${action.issue_id}` : "当前任务"} 有一项操作需要你确认。`,
+    `操作是 ${action.action_type}（${action.id}）。`,
+    detail === "{}" ? "" : `涉及范围：${detail}`,
+    "你可以直接批准、拒绝、要求修改或暂缓。"
   ].filter(Boolean).join("\n");
 }
 

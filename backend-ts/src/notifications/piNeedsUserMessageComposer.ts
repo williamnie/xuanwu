@@ -18,11 +18,11 @@ const TITLE_LIMIT = 80;
 export function composePiNeedsUserMessage(input: PiNeedsUserMessageInput): string {
   const issueTitle = summary(input.issue.title || "未命名任务", TITLE_LIMIT);
   return [
-    `我检查了 issue #${input.issue.id}（${issueTitle}）的真实执行状态，确认现在需要你介入。`,
-    `当前状态：${runtimeStatus(input)}`,
-    `我看到的阻塞点：${blockerSummary(input)}`,
-    `我暂时没有继续自动重试：${retryRationale(input.diagnosis)}`,
-    `需要你决定：${nextStep(input)}`
+    `#${input.issue.id}「${issueTitle}」现在需要你处理。`,
+    `我看到的问题是：${blockerSummary(input)}`,
+    `当前执行记录是 ${runtimeStatus(input)}。`,
+    `我没有继续自动重试，因为${retryRationale(input.diagnosis)}`,
+    `请你：${nextStep(input)}`
   ].join("\n");
 }
 

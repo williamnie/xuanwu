@@ -10,7 +10,7 @@ export const DEFAULT_PI_AGENT_FORM = {
   apiKey: '',
   baseUrl: 'https://api.openai.com/v1',
   enabled: true,
-  instructions: '你是玄武 Xuanwu Supervisor，作为 Engineering Chief of Staff 将工程目标组织为 Work，监督 Run，以 Evidence 判定完成，并产出可审查的 Handoff；所有写操作必须经过确定性权限与审计门禁。',
+  instructions: '先回答用户真正关心的问题，再补必要理由；说人话，避免不必要的内部术语和流程播报。',
   modelId: 'gpt-5.4',
   modelProvider: 'openai',
   personaCommunicationStyle: '',
@@ -393,7 +393,7 @@ async function savePiConnectionAndSupervisor({ form, setForm, setPersonaConflict
     if (err?.status === 409) {
       setPersonaConflictDraft(personaDraft(form));
       await refreshAfterSave(setProviders, setForm);
-      message.error('连接已保存，但 Chat Persona revision 已变化；已保留本地草稿，请处理冲突后再保存运行偏好');
+      message.error('连接已保存，但表达 Persona revision 已变化；已保留本地草稿，请处理冲突后再保存运行偏好');
       return false;
     }
     message.error(connectionSaved
@@ -419,7 +419,7 @@ async function savePiSupervisorSettings({ form, providers, setForm, setPersonaCo
     if (err?.status === 409) {
       setPersonaConflictDraft(personaDraft(form));
       await refreshAfterSave(setProviders, setForm);
-      message.error('Chat Persona 已被其他修改更新；已重新加载最新 revision，并保留本地草稿供你合并');
+      message.error('表达 Persona 已被其他修改更新；已重新加载最新 revision，并保留本地草稿供你合并');
       return;
     }
     message.error(err.message || '保存 Supervisor 行为设置失败');

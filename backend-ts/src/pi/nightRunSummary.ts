@@ -52,11 +52,11 @@ function categorizeIssues(input: NightRunSummaryInput): NightRunIssueCategories 
 function chineseSummary(input: NightRunSummaryInput, categories: NightRunIssueCategories): string {
   const total = input.allIssues.length;
   const lines = [
-    `夜间执行总结：${input.projectLabel || "全部项目"}，窗口 ${input.window.since} 至 ${input.window.until}。`,
-    `来源：${input.source || "manual"}；Delegation：${input.delegationID || "无"}；Heartbeat：${input.heartbeatIDs.join(", ") || "无"}。`
+    `${input.projectLabel || "全部项目"} 的夜间任务有结果了，统计范围是 ${input.window.since} 至 ${input.window.until}。`,
+    `来源 ${input.source || "manual"}；Delegation ${input.delegationID || "无"}；Heartbeat ${input.heartbeatIDs.join(", ") || "无"}。`
   ];
-  if (total === 0) return [...lines, "本窗口无活动，生成空摘要。"].join("\n");
-  lines.push(`结果：完成 ${categories.completed.length}，失败 ${categories.failed.length}，需用户 ${categories.needs_user.length}，阻塞 ${categories.blocked.length}，总计 ${total}。`);
+  if (total === 0) return [...lines, "这段时间没有任务活动。"].join("\n");
+  lines.push(`共 ${total} 个任务：完成 ${categories.completed.length}，失败 ${categories.failed.length}，需要你处理 ${categories.needs_user.length}，阻塞 ${categories.blocked.length}。`);
   lines.push(...categoryLines("完成", categories.completed, false));
   lines.push(...categoryLines("失败", categories.failed, true));
   lines.push(...categoryLines("需用户", categories.needs_user, true));

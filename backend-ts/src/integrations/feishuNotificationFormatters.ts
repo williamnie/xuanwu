@@ -18,10 +18,10 @@ export function formatApprovalNotification(issue: Issue, command: string, path: 
   const detail = [command ? `命令：${safeSummary(command, SUMMARY_LIMIT)}` : "",
     path ? `路径：${safeSummary(path, SUMMARY_LIMIT)}` : ""].filter(Boolean).join("；");
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 需要 Codex 授权/确认才能继续。`,
-    detail || "授权详情请到 Runner/Codex 面板查看。",
-    "可选操作：批准一次 / 本 session 批准 / 拒绝 / 暂缓。",
-    "风险：会影响当前 Codex session 的执行授权；页面 Supervisor 控制台仅作为备用入口。"
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：#${issue.id}「${safeSummary(issue.title || "任务", 80)}」需要你确认后才能继续。`,
+    detail || "具体操作可以在 Runner/Codex 面板查看。",
+    "你可以回复：批准一次 / 本次执行都批准 / 拒绝 / 暂缓。",
+    "这次选择只影响当前执行授权。"
   ].join("\n");
 }
 
@@ -35,10 +35,10 @@ export function formatPiActionPendingNotification(input: {
   const actionID = safeSummary(input.actionID, 80);
   const actionType = safeSummary(input.actionType || "Supervisor action", 80);
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：${issue} 需要用户确认才能继续。`,
-    `待确认动作：${actionType}（${actionID}）`,
-    input.actionDetail ? `范围：${safeSummary(input.actionDetail, 360)}` : "",
-    "下一步：可直接在本 Feishu 卡片批准、拒绝、要求修改或暂缓；Runner issue/后端 API 仍作为备用入口。"
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：${issue} 有一项操作需要你确认。`,
+    `操作是 ${actionType}（${actionID}）。`,
+    input.actionDetail ? `涉及范围：${safeSummary(input.actionDetail, 360)}` : "",
+    "你可以直接批准、拒绝、要求修改或暂缓。"
   ].filter(Boolean).join("\n");
 }
 
@@ -58,11 +58,9 @@ export function formatPiNeedsUserNotification(input: {
   const message = safeSummary(input.message || "Supervisor 判断当前无法继续自动恢复。", SUMMARY_LIMIT);
   const nextStep = safeSummary(input.nextStep || "请查看 Runner issue 并补充授权、凭证或下一步处理方式。", SUMMARY_LIMIT);
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：${issue} 需要用户介入。`,
-    `Provider：${provider}`,
-    `诊断：${diagnosis}`,
-    `摘要：${message}`,
-    `下一步：${nextStep}`
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：${issue} 现在需要你处理。`,
+    `我看到的问题是：${message}（${diagnosis}，执行器 ${provider}）。`,
+    `请你：${nextStep}`
   ].join("\n");
 }
 
@@ -71,51 +69,53 @@ export function formatIssueCompletionWatchNotification(payload: Record<string, u
   const issues = watchIssues(payload.issues);
   const total = numberField(stats.total) || issues.length;
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：你关注的 ${total} 个 issue 已结束`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：你关注的 ${total} 个任务都结束了。`,
     watchStatsLine(stats),
-    "列表：",
+    "结果如下：",
     ...watchIssueLines(issues),
-    `下一步：${watchNextStep(stats)}`
+    watchNextStep(stats)
   ].join("\n");
 }
 
 function startText(issueID: number, title: string, status: string): string {
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issueID} ${status}：${title}`,
-    "状态：我会在需要授权、完成、失败或阻塞时继续通知。"
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：#${issueID}「${title}」${status}。`,
+    "有结果或需要你时，我再告诉你。"
   ].join("\n");
 }
 
 function doneText(issue: Issue, title: string): string {
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 已完成：${title}`,
-    `验证状态：${issue.error ? safeSummary(issue.error, SUMMARY_LIMIT) : "已标记完成，未附加验证摘要。"}`
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：#${issue.id}「${title}」已结束。`,
+    issue.error
+      ? `可核对的验证结果：${safeSummary(issue.error, SUMMARY_LIMIT)}`
+      : "任务已结束，但这次通知里没有可核对的验证结果。"
   ].join("\n");
 }
 
 function needsUserText(issue: Issue, title: string): string {
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 需要用户处理：${title}`,
-    `Supervisor 判断：${issue.error ? safeSummary(issue.error, SUMMARY_LIMIT) : "请查看明确问题并选择后续动作。"}`
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：#${issue.id}「${title}」需要你处理。`,
+    issue.error ? `原因是：${safeSummary(issue.error, SUMMARY_LIMIT)}` : "请查看具体问题并选择下一步。"
   ].join("\n");
 }
 
 function failedText(issue: Issue, title: string): string {
   const error = safeSummary(issue.error || "未提供错误摘要", SUMMARY_LIMIT);
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 执行失败/阻塞：${title}`,
-    `错误摘要：${error}`,
-    `下一步：请查看 Runner issue #${issue.id} 的日志，补充授权/信息后 retry 或重新排队。`
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：#${issue.id}「${title}」没有完成。`,
+    `原因是：${error}`,
+    `请查看 #${issue.id} 的执行记录；补齐授权或信息后再重试。`
   ].join("\n");
 }
 
 function watchStatsLine(stats: Record<string, unknown>): string {
   return [
-    `done：${numberField(stats.done)}`,
-    `failed：${numberField(stats.failed)}`,
-    `cancelled：${numberField(stats.cancelled)}`,
-    `needs_user：${numberField(stats.needs_user)}`
-  ].join(" / ");
+    `完成 ${numberField(stats.done)}`,
+    `失败 ${numberField(stats.failed)}`,
+    `取消 ${numberField(stats.cancelled)}`,
+    `需要你处理 ${numberField(stats.needs_user)}`
+  ].join("，");
 }
 
 function watchIssueLines(issues: Array<Record<string, unknown>>): string[] {
@@ -130,9 +130,9 @@ function watchIssueLines(issues: Array<Record<string, unknown>>): string[] {
 
 function watchNextStep(stats: Record<string, unknown>): string {
   if (numberField(stats.failed) + numberField(stats.cancelled) > 0) {
-    return "存在 failed/cancelled，请先处理失败或取消项，再决定是否继续测试。";
+    return "有任务失败或取消，请先查看这些任务，再决定是否继续。";
   }
-  return "全部 Issue 已由 Supervisor 判断完成，可以开始下一阶段。";
+  return "这些任务都已经结束，可以开始下一阶段。";
 }
 
 function safeSummary(value: unknown, maxRunes: number): string {

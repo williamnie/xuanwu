@@ -15,17 +15,17 @@ const SUMMARY_LIMIT = 140;
 export function formatRunGroupDigest(intent: PiNotificationIntent): string {
   const view = digestView(intent);
   return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：运行组 ${safeSummary(view.runGroupID || intent.run_group_id || "digest", 80)} 摘要`,
-    `原因：${safeSummary(intent.flush_reason || "digest", 40)}；批次：${intent.flush_sequence || intent.flush_bucket || "-"}`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：这批任务有新结果了。`,
+    `批次 ${safeSummary(view.runGroupID || intent.run_group_id || "digest", 80)}，汇总原因 ${safeSummary(intent.flush_reason || "digest", 40)}。`,
     [
-      `总数：${view.total}`,
-      `完成：${view.completed}`,
-      `待验证：${view.verification}`,
-      `失败：${view.failed}`,
-      `需要用户：${view.needsUser}`,
-      `仍在跑：${view.active}`,
-      `跳过：${view.skipped}`
-    ].join(" / "),
+      `共 ${view.total}`,
+      `完成 ${view.completed}`,
+      `待验证 ${view.verification}`,
+      `失败 ${view.failed}`,
+      `需要你处理 ${view.needsUser}`,
+      `仍在跑 ${view.active}`,
+      `跳过 ${view.skipped}`
+    ].join("，"),
     ...issueSections(view.issues),
     nextStep(view)
   ].filter(Boolean).join("\n");
@@ -67,10 +67,10 @@ function issueLine(issue: DigestIssue): string {
 }
 
 function nextStep(view: DigestView): string {
-  if (view.needsUser > 0) return "下一步：有任务需要用户处理，请查看对应 issue 后继续。";
-  if (view.failed > 0) return "下一步：有任务失败/阻塞，请查看对应 issue 日志后 retry 或重新排队。";
-  if (view.active > 0) return "下一步：仍有任务在跑，我会继续等待并在后续摘要更新。";
-  return "下一步：本批次已完成或无需继续处理。";
+  if (view.needsUser > 0) return "有任务需要你处理，请查看对应任务后继续。";
+  if (view.failed > 0) return "有任务失败或阻塞，请查看执行记录后再重试。";
+  if (view.active > 0) return "还有任务在跑，我会在有新结果时再更新。";
+  return "这批任务已经结束，暂时不用处理。";
 }
 
 function uniqueIssues(issues: DigestIssue[]): DigestIssue[] {

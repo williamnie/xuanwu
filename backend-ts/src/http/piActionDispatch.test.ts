@@ -545,19 +545,19 @@ describe("PI action dispatcher supervisor actions", () => {
       expect(comments).toHaveLength(1);
       expect(JSON.parse(comments[0]?.payload ?? "{}")).toMatchObject({
         author: "agent",
-        body: expect.stringContaining("我检查了 issue #421")
+        body: expect.stringContaining("#421「Supervisor issue」现在需要你处理")
       });
       expect(notifications).toMatchObject([
         expect.objectContaining({
           event: "pi.needs_user",
           issue_id: 421,
-          message: expect.stringContaining("我暂时没有继续自动重试"),
+          message: expect.stringContaining("我没有继续自动重试"),
           read_at: ""
         })
       ]);
       expect(JSON.parse(String((events[0] as { payload?: string } | undefined)?.payload ?? "{}"))).toMatchObject({
         composer: "pi_needs_user_v1",
-        user_facing_message: expect.stringContaining("当前状态：issue=in_progress")
+        user_facing_message: expect.stringContaining("当前执行记录是 issue=in_progress")
       });
       expect(getIssue(db, 421)).toMatchObject({ status: "needs_user" });
       expect(listIssueRuns(db, 421).at(-1)).toMatchObject({

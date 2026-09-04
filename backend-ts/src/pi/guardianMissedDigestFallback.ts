@@ -2,7 +2,10 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { getPiGuardianAlert, type PiGuardianAlert } from "../db/repositories/pi.ts";
 import type { GuardianAlertDelivery } from "./guardianAlertDelivery.ts";
-import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
+import {
+  notificationPresentation,
+  type NotificationPresentation
+} from "../notifications/notificationPresentation.ts";
 
 export async function sendMissedDigestPendingFallback(
   db: RunnerDatabase,
@@ -13,18 +16,23 @@ export async function sendMissedDigestPendingFallback(
   for (const id of unique(alertIds)) {
     const alert = getPiGuardianAlert(db, id);
     if (!isMissedDigestPending(alert)) continue;
-    await delivery.send(alert, { formatText: missedDigestText });
+    const presentation = notificationPresentation(db);
+    await delivery.send(alert, { formatText: (current) => missedDigestText(current, presentation) });
   }
 }
 
-function missedDigestText(alert: PiGuardianAlert): string {
+function missedDigestText(alert: PiGuardianAlert, presentation: NotificationPresentation): string {
+  if (presentation.language === "en-US") {
+    return [
+      `${presentation.display_name}: A notification digest still needs attention.`,
+      `Project: ${field(alert.project_id)}; severity: ${field(alert.severity)}; observed: ${field(alert.watchdog_seen_at)}.`,
+      "The digest could not be delivered or has no valid target. Check Guardian and the Supervisor recovery summary."
+    ].join("\n");
+  }
   return [
-    `【${SUPERVISOR_NOTIFICATION_PREFIX} · Guardian】通知摘要待处理`,
-    `项目：${field(alert.project_id)}`,
-    `级别：${severityLabel(alert.severity)}`,
-    `时间：${field(alert.watchdog_seen_at)}`,
-    "说明：摘要发送暂不可用或缺少可用目标，可能有通知未被汇总送达。",
-    "请查看 Guardian 横幅和 Supervisor 恢复摘要；摘要管道恢复前，不会强行发送摘要。"
+    `${presentation.display_name}：有一份通知摘要还没送达。`,
+    `项目 ${field(alert.project_id)}，级别 ${severityLabel(alert.severity)}，发现时间 ${field(alert.watchdog_seen_at)}。`,
+    "摘要发送暂不可用或没有有效目标，请查看 Guardian 横幅和恢复摘要。"
   ].join("\n");
 }
 

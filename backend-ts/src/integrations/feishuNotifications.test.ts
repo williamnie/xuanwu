@@ -56,7 +56,7 @@ describe("Feishu notification queue", () => {
       expect(second).toMatchObject({ queued: false, reason: "duplicate" });
       expect(outbox).toHaveLength(1);
       expect(outbox[0]).toMatchObject({
-        content: expect.stringContaining("issue #1 已完成"),
+        content: expect.stringContaining("#1「Feishu task」已结束"),
         issue_id: issueID,
         status: "pending",
         target_chat_id: "oc_group"
@@ -202,9 +202,9 @@ describe("Feishu notification queue", () => {
       expect(sender.calls).toEqual([{
         receiveId: "oc_default",
         receiveIdType: "chat_id",
-        text: "玄武 Supervisor：issue #1 执行失败/阻塞：Needs human\n" +
-          "错误摘要：backend contract missing\n" +
-          "下一步：请查看 Runner issue #1 的日志，补充授权/信息后 retry 或重新排队。\n" +
+        text: "玄武 Supervisor：#1「Needs human」没有完成。\n" +
+          "原因是：backend contract missing\n" +
+          "请查看 #1 的执行记录；补齐授权或信息后再重试。\n" +
           "查看：/api/issues/1"
       }]);
       expect(outbox[0]).toMatchObject({ feishu_message_id: "om_auto_sent_1", status: "sent" });
@@ -395,7 +395,7 @@ describe("Feishu notification queue", () => {
       expect(result).toMatchObject({ queued: true, reason: "queued" });
       expect(outbox).toHaveLength(1);
       expect(outbox[0]).toMatchObject({
-        content: expect.stringContaining("issue #1 需要用户介入"),
+        content: expect.stringContaining("issue #1 现在需要你处理"),
         issue_id: issue.id,
         target_chat_id: "oc_default"
       });

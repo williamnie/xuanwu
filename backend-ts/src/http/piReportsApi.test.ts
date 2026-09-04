@@ -92,8 +92,8 @@ describe("PI reports API", () => {
       expect(body.failed_retry_summary.failed_issues[0].error).not.toContain("secret-value");
       expect(body.failed_retry_summary.failed_issues[0].error).not.toContain("/Users/xiaobei");
       expect(body.issue_categories.needs_user).toEqual([expect.objectContaining({ id: failed })]);
-      expect(body.summary_text_zh).toContain("夜间执行总结");
-      expect(body.summary_text_zh).toContain("需用户 1");
+      expect(body.summary_text_zh).toContain("夜间任务有结果");
+      expect(body.summary_text_zh).toContain("需要你处理 1");
       expect(body.blocked_escalations).toEqual([expect.objectContaining({
         issue_id: failed,
         notification_event: "pi.needs_user"

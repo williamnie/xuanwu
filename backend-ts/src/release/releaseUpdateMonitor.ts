@@ -11,6 +11,7 @@ import {
   defaultReleaseUpdaterPath,
   type ReleaseUpdateCheck
 } from "./releaseUpdateCheck.ts";
+import { notificationPresentation, type NotificationPresentation } from "../notifications/notificationPresentation.ts";
 
 const DEFAULT_INITIAL_DELAY_MS = 30_000;
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -94,7 +95,7 @@ async function notifyConfiguredChannels(
 ): Promise<void> {
   const routes = configuredRoutes(options.feishuConfig(), options.telegramConfig());
   const notificationID = `release_update:${check.latest}`;
-  const content = releaseUpdateText(check);
+  const content = releaseUpdateText(check, notificationPresentation(options.database));
   for (const route of routes) {
     try {
       const queued = queueNotificationOutbox(options.database, {
@@ -139,9 +140,16 @@ function configuredRoutes(
   return routes;
 }
 
-function releaseUpdateText(check: ReleaseUpdateCheck): string {
+function releaseUpdateText(check: ReleaseUpdateCheck, presentation: NotificationPresentation): string {
+  if (presentation.language === "en-US") {
+    return [
+      `${presentation.display_name}: Xuanwu ${check.latest} is available; the current version is ${check.current}.`,
+      "Open Runner → Settings → Projects → Safe Upgrade when you are ready.",
+      "The upgrade creates a backup and runs an isolated restore rehearsal before the brief service restart."
+    ].join("\n");
+  }
   return [
-    `玄武发现新版本 ${check.latest}（当前 ${check.current}）。`,
+    `${presentation.display_name}：玄武有新版本 ${check.latest}，当前是 ${check.current}。`,
     "请打开 Runner 网页 → 设置 → 项目 → 安全升级。",
     "升级会先生成备份并完成隔离恢复演练，随后服务会短暂重启；失败时会恢复上一份 Release。"
   ].join("\n");
