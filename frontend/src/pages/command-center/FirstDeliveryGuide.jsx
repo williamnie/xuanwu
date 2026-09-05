@@ -6,6 +6,7 @@ import {
 import { evidenceApi } from '../../api/evidence.js';
 import { firstDeliveryApi } from '../../api/firstDelivery.js';
 import { handoffsApi } from '../../api/handoffs.js';
+import { runsApi } from '../../api/runs.js';
 import { projectsApi } from '../../api/projects.js';
 import { systemApi } from '../../api/system.js';
 import { workApi } from '../../api/work.js';
@@ -20,6 +21,7 @@ import {
   onboardingProjectID,
   sampleWorkPayload,
 } from './firstDeliveryGuideModel.js';
+import OnboardingDeliveryReview from './OnboardingDeliveryReview.jsx';
 import OnboardingSupervisorConnection from './OnboardingSupervisorConnection.jsx';
 import './FirstDeliveryGuide.css';
 
@@ -42,6 +44,7 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
   const [selectedProjectID, setSelectedProjectID] = useState(projects[0]?.id || '');
   const [creationNeedsRefresh, setCreationNeedsRefresh] = useState(false);
   const requestRef = useRef(null);
+  const targetWorkRef = useRef('');
 
   const load = useCallback(async () => {
     if (requestRef.current) return requestRef.current.promise;
@@ -51,7 +54,7 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
       systemApi.getRuntimeDoctor(),
       systemApi.getCodeAgents(),
       systemApi.getRunnerSettings(),
-      workApi.getWorks({ pageSize: 8 }, { signal: controller.signal }),
+      workApi.getWorks({ pageSize: 8, query: FIRST_DELIVERY_TITLE }, { signal: controller.signal }),
       handoffsApi.getHandoffs({ limit: 20 }),
     ]);
     requestRef.current = { controller, promise };
@@ -61,22 +64,21 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
       const handoffs = handoffPage?.items || [];
       const sample = works.find(work => work?.title === FIRST_DELIVERY_TITLE);
       const candidateWorkID = [
+        targetWorkRef.current,
         sample?.id,
         ...handoffs.filter(item => item?.evidence_count > 0).map(item => item.work_id),
         works[0]?.id,
       ].find(Boolean);
-      const evidencePage = candidateWorkID
-        ? await evidenceApi.listEvidence({ limit: 10, status: 'passed', workId: candidateWorkID })
-        : null;
+      const delivery = candidateWorkID ? await loadDeliverySnapshot(candidateWorkID) : { evidence: [], handoffs, works };
+      targetWorkRef.current = candidateWorkID || '';
       if (controller.signal.aborted) return;
       setSnapshot({
         codeAgents: Array.isArray(codeAgentsResponse?.agents) ? codeAgentsResponse.agents : [],
         connectionTest: readFirstDeliveryConnectionTest(),
         doctor,
-        evidence: evidencePage?.items || [],
-        handoffs,
+        ...delivery,
+        targetWorkID: candidateWorkID || '',
         runnerSettings,
-        works,
       });
       setError('');
       setCreationNeedsRefresh(false);
@@ -108,6 +110,23 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
     () => firstDeliveryState({ ...snapshot, projects, selectedCodeAgentID: effectiveCodeAgentID }),
     [effectiveCodeAgentID, projects, snapshot],
   );
+  const deliveryWorkID = state.targetWork?.id || '';
+  useEffect(() => {
+    if (!deliveryWorkID || state.completed) return undefined;
+    let active = true;
+    let pending = false;
+    const timer = window.setInterval(async () => {
+      if (pending || requestRef.current || document.visibilityState === 'hidden') return;
+      pending = true;
+      try {
+        const delivery = await loadDeliverySnapshot(deliveryWorkID);
+        if (active) setSnapshot(current => ({ ...current, ...delivery, targetWorkID: deliveryWorkID }));
+      } catch (failure) {
+        if (active) setError(failure.message || '交付状态暂未刷新，请重新检查');
+      } finally { pending = false; }
+    }, 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [deliveryWorkID, state.completed]);
   const recovery = firstDeliveryRecovery(state, snapshot.doctor);
   const steps = Object.fromEntries(state.steps.map(step => [step.id, step]));
 
@@ -229,7 +248,8 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
         query: FIRST_DELIVERY_TITLE,
       });
       const existing = (authority?.items || []).find(work => work?.title === FIRST_DELIVERY_TITLE);
-      if (!existing) await workApi.createWork(sampleWorkPayload(project.id));
+      const created = existing || await workApi.createWork(sampleWorkPayload(project.id));
+      targetWorkRef.current = created?.work?.id || created?.id || existing?.id || '';
       await firstDeliveryApi.startProjectLoop(project.id);
       message.success(existing ? '已恢复现有示例 Work 并启动 Loop' : '示例 Work 已创建并启动');
       await refreshData(['projects', 'workSummary']);
@@ -329,11 +349,15 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
               </div>
             </ActionCard>
           ) : (
-            <ActionCard description={`${state.targetWork?.id || ''} · ${state.targetWork?.status || 'unknown'}`} title={state.targetWork?.title || '首个 Work'}>
+            <ActionCard wide description={`${state.targetWork?.id || ''} · ${state.targetWork?.status || 'unknown'}`} title={state.targetWork?.title || '首个 Work'}>
               <button className="btn btn-secondary" disabled={loading} onClick={load} type="button"><RefreshCw className={loading ? 'spin-animation' : ''} size={14} /> 刷新交付状态</button>
             </ActionCard>
           )}
         </div>
+      ) : null}
+
+      {state.targetWork && !state.completed && ['done', 'failed', 'needs_user'].includes(state.targetWork.status) ? (
+        <OnboardingDeliveryReview key={state.targetWork.id} onRefresh={load} work={state.targetWork} />
       ) : null}
 
       <div className={`first-delivery-recovery ${state.completed ? 'success' : ''}`}>
@@ -395,4 +419,22 @@ function CodeAgentPicker({ agents, busy, codexChoices, onDiscover, onSelect, onS
       </button>
     </div>
   );
+}
+
+async function loadDeliverySnapshot(workID) {
+  const [response, evidencePage, handoffPage, runsPage] = await Promise.all([
+    workApi.getWork(workID),
+    evidenceApi.listEvidence({ limit: 100, status: 'passed', workId: workID }),
+    handoffsApi.getHandoffs({ limit: 20, workId: workID }),
+    runsApi.getRuns({ pageSize: 1, workId: workID }),
+  ]);
+  const work = response?.work || response;
+  const candidates = handoffPage?.items || [];
+  const latestRunID = runsPage?.items?.[0]?.id;
+  const detail = candidates[0] ? await handoffsApi.getHandoff(candidates[0].id) : null;
+  return {
+    works: work?.id === workID ? [work] : [],
+    evidence: evidencePage?.items || [],
+    handoffs: detail?.handoff && latestRunID && detail.handoff.run_ids?.includes(latestRunID) ? [{ ...detail.handoff, evidence_count: detail.handoff.evidence_ids?.length || 0 }] : [],
+  };
 }

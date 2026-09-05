@@ -124,3 +124,7 @@ Focused tests 必须证明：
 - required action、review、risk 和 rollback 规则生效；
 - status、external write 与 destructive action 都需要 trusted gate/audit，LLM authority 被拒绝；
 - supersede 必须指向新的 Handoff identity。
+
+## 只读任务的零文件凭证
+
+`local_changes` 允许 `changed_files=[]`，仅限 baseline_revision 与 final_revision 相同、delivery_actions 为空且关联 Run 和 Evidence。ready/delivered 仍必须关联同 Work 的 passed Evidence。该凭证只声明验证及快照，不声明已有脏文件归属。其他交付模式仍要求原有文件、动作、审批及回滚事实。首启检查通过现有 recordHandoffDelivery 写入同一事件流，未增加数据库表或状态机。

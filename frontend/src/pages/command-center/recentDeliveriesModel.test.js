@@ -16,7 +16,7 @@ test('Recent Deliveries presents every Handoff mode with its authoritative refs'
   const modes = [
     ['local_changes', { working_tree_ref: 'git:tree' }, 'Working tree', '本地改动快照'],
     ['branch_commit', { branch_ref: 'refs/heads/xw/697', commit_ref: 'abc123' }, 'Commit', '本地分支与 commit'],
-    ['push', { branch_ref: 'refs/heads/xw/697', commit_ref: 'abc123', remote_ref: 'origin/xw/697' }, 'Remote', '已推送远端'],
+    ['push', { branch_ref: 'refs/heads/xw/697', commit_ref: 'abc123', remote_ref: 'origin/xw/697' }, 'Remote', '推送远端'],
     ['draft_pr', prDelivery(), 'Pull request', '草稿 PR'],
     ['ready_pr', prDelivery(), 'Pull request', '待评审 PR'],
     ['deploy', { deployment_ref: 'deploy:697', environment: 'staging', revision_ref: 'abc123' }, 'Deployment', '部署'],
@@ -40,8 +40,8 @@ test('Evidence, review, delivery and risk conclusions stay deterministic', () =>
     risk_count: 1,
     status: 'ready',
   }));
-  assert.equal(view.evidenceLabel, '3 Evidence passed');
-  assert.equal(view.evidencePassed, true);
+  assert.equal(view.evidenceLabel, '3 条验证记录 · 查看结果');
+  assert.equal(view.evidencePassed, false);
   assert.equal(view.reviewLabel, 'Review approved');
   assert.equal(view.statusLabel, '交付中');
   assert.equal(view.statusTone, 'amber');

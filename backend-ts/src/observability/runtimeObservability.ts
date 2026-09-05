@@ -1,3 +1,4 @@
+import { buildDeliveryEffectiveness } from "./deliveryEffectiveness.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { basename, join } from "node:path";
 import { redactedUserVisibleText } from "../util/redact.ts";
@@ -158,6 +159,7 @@ function buildAndCacheRuntimeObservability(
       }
     },
     cost: aggregateProviderCost(providers),
+    delivery_effectiveness: buildDeliveryEffectiveness(database, new Date(generatedAt)),
     health_signals: healthSignals(database, traces, generatedAt),
     trace_correlation: {
       trace_id_contract: "canonical Work id",

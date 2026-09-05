@@ -4,6 +4,7 @@ import { useImmer } from 'use-immer';
 import { PRODUCT_NAV_LABELS } from '../brand.js';
 import CodexUsagePanel from '../components/CodexUsagePanel';
 import RuntimeHealthStrip from '../components/RuntimeHealthStrip';
+import DeliveryEffectivenessSection from './command-center/DeliveryEffectivenessSection.jsx';
 import ActiveWorkSection from './command-center/ActiveWorkSection.jsx';
 import AttentionSection from './command-center/AttentionSection.jsx';
 import RecentDeliveriesSection from './command-center/RecentDeliveriesSection.jsx';
@@ -138,11 +139,12 @@ export default function Dashboard({
           </div>
           <div>
             <div className="dashboard-stat-value">{counts.done}</div>
-            <div className="dashboard-stat-label">已自动修复 Issue</div>
+            <div className="dashboard-stat-label">已完成 Issue</div>
           </div>
         </div>
       </div>
 
+      <DeliveryEffectivenessSection />
       <CodexUsagePanel />
 
 

@@ -131,10 +131,11 @@ describe("read API route contracts", () => {
     });
   });
 
-  test("locks Handoff method, path, and authority contracts", () => {
+  test("locks Handoff reads and the audited onboarding delivery write contract", () => {
     expect(captureRoutes(registerHandoffRoutes)).toEqual([
       "GET /api/handoffs",
-      "GET /api/handoffs/:id"
+      "GET /api/handoffs/:id",
+      "POST /api/onboarding/works/:id/delivery-check"
     ]);
   });
 

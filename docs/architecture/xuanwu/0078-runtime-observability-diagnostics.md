@@ -64,3 +64,11 @@ npm run build
 
 fixture 同时在 raw `issue_events.payload` 放入不可见 sentinel/secret，并只在 summary projection 放入脱敏事件；断言统一
 指标看得到 Work → Run → Workflow → Provider → Automation 和 token/cost，却看不到 raw sentinel 或 secret。
+
+## 无人值守效果投影
+
+`observability.delivery_effectiveness` 为 additive 只读字段，沿用 15 秒缓存和隔离 reader worker。按最后结束 Run 位于近 30 天且 Work 为 done/failed/cancelled 的最近 100 个任务取样，超过上限显式标记 truncated。没有执行记录的历史手工完成任务不进入分母。
+
+交付率要求 done、最新 Run 被最新 Handoff 关联、交付 ready/delivered、所有关联 Evidence 已通过且必需交付操作成功。无求助记录的交付率额外排除审批请求/需要用户处理的通知，但不声称完整捕获人工介入。恢复后交付率分母为样本中具有 progress/no_progress/failed 恢复尝试的任务；多次无进展为至少两条 no_progress，不推断连续性。
+
+完成耗时为首次 Run 开始到最后结束的中位数。成本仅聚合已完成任务的全部执行 Attempt；任何 Run 缺 Attempt、金额未知或单任务币种冲突都记为未知，不补零，不混加币种，不包含 Supervisor 成本。交付仅通过类型受限的结构化 Handoff/Evidence repository 读取，不扫描原始会话或 issue.log。

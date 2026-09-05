@@ -254,3 +254,15 @@
   .first-delivery-oauth-actions { display: grid; grid-template-columns: 1fr; }
   .first-delivery-recovery { align-items: flex-start; }
 }
+
+.onboarding-delivery-review { border-top: 1px solid var(--border-color); padding-top: 16px; min-width: 0; }
+.onboarding-delivery-review > p { color: var(--text-secondary); font-size: .78rem; margin: 0 0 12px; }
+.onboarding-delivery-review > [role="alert"] { color: var(--error); }
+.onboarding-delivery-review .pi-chat-main { height: 640px; max-height: 80vh; min-width: 0; }
+@media (max-width: 760px) {
+  .onboarding-delivery-review .pi-chat-main { height: 560px; }
+}
+
+.onboarding-delivery-review > button { margin: 0 8px 12px 0; }
+
+.onboarding-delivery-empty { color: var(--text-secondary); font-size: .78rem; line-height: 1.6; }

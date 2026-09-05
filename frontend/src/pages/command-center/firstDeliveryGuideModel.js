@@ -1,6 +1,6 @@
 export const FIRST_DELIVERY_TITLE = '玄武首次交付：只读项目体检';
 
-export function firstDeliveryState({ codeAgents = [], connectionTest = null, doctor, evidence = [], handoffs = [], projects = [], selectedCodeAgentID = '', works = [] } = {}) {
+export function firstDeliveryState({ codeAgents = [], connectionTest = null, doctor, evidence = [], handoffs = [], projects = [], selectedCodeAgentID = '', targetWorkID = '', works = [] } = {}) {
   const runtimeReady = Boolean(doctor?.service?.alive && doctor?.db?.ok);
   const availableCodeAgents = (Array.isArray(codeAgents) ? codeAgents : [])
     .filter(agent => agent?.enabled !== false && agent?.submittable === true);
@@ -14,12 +14,15 @@ export function firstDeliveryState({ codeAgents = [], connectionTest = null, doc
     && workByID.has(item.work_id)
   ));
   const sampleWork = works.find(work => work?.title === FIRST_DELIVERY_TITLE);
-  const targetWork = deliveredHandoff ? workByID.get(deliveredHandoff.work_id) : sampleWork || works[0] || null;
+  const targetWork = targetWorkID ? workByID.get(targetWorkID) || null
+    : sampleWork || (deliveredHandoff ? workByID.get(deliveredHandoff.work_id) : works[0]) || null;
   const targetEvidence = targetWork
     ? evidence.filter(item => item?.work_id === targetWork.id && item?.status === 'passed')
     : [];
   const targetHandoff = targetWork
-    ? handoffs.find(item => item?.work_id === targetWork.id && item?.evidence_count > 0) || null
+    ? handoffs.find(item => item?.work_id === targetWork.id
+      && ['ready', 'delivered'].includes(item.status)
+      && item.evidence_ids?.some(id => targetEvidence.some(evidence => evidence.id === id))) || null
     : null;
   const deliveryReady = Boolean(
     targetWork?.status === 'done'
@@ -84,7 +87,7 @@ export function firstDeliveryRecovery(state, doctor) {
   if (state.targetEvidence.length === 0) {
     return `Work ${workID} 已结束但没有 passed Evidence。重试时要求 Agent 直接执行一条最小只读验证命令，不得用文本结论代替 Evidence。`;
   }
-  return `Work ${workID} 已有 Evidence 但尚无同 Work Handoff。不要手写或复制 Handoff；点击“稍后设置”进入指挥中心，打开该 Work，再使用已附带 Work 上下文的 Ask Xuanwu 运行已注册 Workflow，并在确定性 Action Gate 中确认。`;
+  return `任务 ${workID} 已有验证结果，还缺交付凭证。点击“完成交付检查”即可在本页整理；如果检查未通过，点击“让玄武协助”继续处理。`;
 }
 
 export function onboardingProjectID(cwd) {

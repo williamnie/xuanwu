@@ -354,7 +354,10 @@ function validateDelivery(handoff: HandoffRecord, errors: string[]): void {
   }
   if (["local_changes", "branch_commit", "push", "draft_pr", "ready_pr"].includes(delivery.mode) &&
     handoff.changed_files.length === 0) {
-    errors.push(`${delivery.mode} requires changed_files`);
+    const readOnlyReceipt = delivery.mode === "local_changes"
+      && handoff.baseline_revision === handoff.final_revision
+      && handoff.delivery_actions.length === 0 && handoff.run_ids.length > 0 && handoff.evidence_ids.length > 0;
+    if (!readOnlyReceipt) errors.push(`${delivery.mode} requires changed_files or an unchanged read-only receipt`);
   }
 }
 

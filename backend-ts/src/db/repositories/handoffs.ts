@@ -224,7 +224,7 @@ function handoffListWhere(
     "json_valid(event.payload)",
     `not exists (
       select 1 from issue_events newer
-      where newer.type in (${placeholders}) and json_valid(newer.payload)
+      where newer.issue_id=event.issue_id and newer.type in (${placeholders}) and json_valid(newer.payload)
         and json_extract(newer.payload, '$.handoff.id')=json_extract(event.payload, '$.handoff.id')
         and (
           cast(json_extract(newer.payload, '$.handoff.revision') as integer) >
@@ -240,6 +240,9 @@ function handoffListWhere(
   const args: Array<number | string> = [...HANDOFF_RECORD_EVENT_TYPES, ...HANDOFF_RECORD_EVENT_TYPES];
   addFilter(clauses, args, "event.id < ?", filter.before_event_id);
   addFilter(clauses, args, "issue.project_id=?", filter.project_id);
+  // Issue-backed Work 查询先走 issue_id 索引，避免逐任务统计反复扫描全部交付事件。
+  const issueID = /^xw:work:issues:([1-9]\d*)$/.exec(filter.work_id || "")?.[1];
+  if (issueID) addFilter(clauses, args, "event.issue_id=?", Number(issueID));
   addFilter(clauses, args, "json_extract(event.payload, '$.handoff.work_id')=?", filter.work_id);
   addListFilter(clauses, args, "json_extract(event.payload, '$.handoff.status')", filter.statuses);
   addListFilter(clauses, args, "json_extract(event.payload, '$.handoff.delivery.mode')", filter.delivery_modes);

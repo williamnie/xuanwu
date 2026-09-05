@@ -45,9 +45,9 @@ import './PiChatSidebar.css';
 import './PiChatThread.css';
 import { useI18n } from '../i18n/context.js';
 
-export default function PiChat({ navigateTo, initialConversationId = '', onConversationChange = null }) {
+export default function PiChat({ navigateTo, initialConversationId = '', onConversationChange = null, embedded = false }) {
   const state = usePiChatState(initialConversationId, onConversationChange);
-  return <PiChatLayout navigateTo={navigateTo} state={state} />;
+  return embedded ? <PiChatMain embedded navigateTo={navigateTo} state={state} /> : <PiChatLayout navigateTo={navigateTo} state={state} />;
 }
 
 function PiChatLayout({ navigateTo, state }) {
@@ -137,7 +137,7 @@ function PiChatSidebarHeader({ loading, navigateTo, onRefresh }) {
   );
 }
 
-function PiChatMain({ navigateTo, state }) {
+function PiChatMain({ embedded = false, navigateTo, state }) {
   return (
     <main className="pi-chat-main glass-card">
       {state.error ? (
@@ -149,8 +149,8 @@ function PiChatMain({ navigateTo, state }) {
       ) : state.loading ? <LoadingState /> : (
         <>
           <ChatHeader state={state} />
-          <ChatContextBar navigateTo={navigateTo} project={state.selectedProject} transcript={state.transcript} />
-          <ChatThread navigateTo={navigateTo} state={state} />
+          {!embedded ? <ChatContextBar navigateTo={navigateTo} project={state.selectedProject} transcript={state.transcript} /> : null}
+          <ChatThread embedded={embedded} navigateTo={navigateTo} state={state} />
           <ChatComposer state={state} />
         </>
       )}
@@ -276,7 +276,7 @@ function ConversationList({ conversations, emptyLabel, onSelect, selectedId, unr
   );
 }
 
-function ChatThread({ navigateTo, state }) {
+function ChatThread({ embedded = false, navigateTo, state }) {
   const { t } = useI18n();
   const lastMessage = state.transcript[state.transcript.length - 1];
   const autoScrollWatchKey = [
@@ -300,8 +300,7 @@ function ChatThread({ navigateTo, state }) {
     <div className="pi-chat-thread-frame">
       <div className="pi-chat-thread" ref={scrollRef} onScroll={handleScroll}>
         <div className="pi-chat-thread-content" ref={contentRef}>
-          {state.transcript.length === 0 ? (
-            <EmptyChat
+          {state.transcript.length === 0 ? (embedded ? <p className="onboarding-delivery-empty">当前会话用于这次交付检查。可以在下方说明需要协助的事项。</p> : <EmptyChat
               navigateTo={navigateTo}
               hasRuntime={Boolean(state.supervisor)}
               onPromptSelect={state.setPrompt}

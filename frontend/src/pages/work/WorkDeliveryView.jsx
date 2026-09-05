@@ -42,6 +42,7 @@ export default function WorkDeliveryView({
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   useEffect(() => {
     const requested = selectedHandoffId || '';
@@ -55,11 +56,17 @@ export default function WorkDeliveryView({
       return undefined;
     }
     let active = true;
+    setDetail(null);
     setDetailLoading(true);
     setDetailError('');
     handoffsApi.getHandoff(selectedId)
       .then(response => {
-        if (active) setDetail(response);
+        if (!active) return;
+        if (work?.id && response?.handoff?.work_id !== work.id) {
+          setDetailError(t('delivery.loadFailed'));
+          return;
+        }
+        setDetail(response);
       })
       .catch(error => {
         if (active) setDetailError(error.message || t('delivery.loadFailed'));
@@ -68,7 +75,7 @@ export default function WorkDeliveryView({
         if (active) setDetailLoading(false);
       });
     return () => { active = false; };
-  }, [selectedId, t]);
+  }, [refreshVersion, selectedId, t, work?.id]);
 
 
   const view = useMemo(() => workDeliveryView({ detail, evidence, language, work }), [detail, evidence, language, work]);
@@ -84,16 +91,7 @@ export default function WorkDeliveryView({
 
   const refresh = async () => {
     await onRefresh?.();
-    if (!selectedId) return;
-    setDetailLoading(true);
-    try {
-      setDetail(await handoffsApi.getHandoff(selectedId));
-      setDetailError('');
-    } catch (error) {
-      setDetailError(error.message || t('delivery.refreshFailed'));
-    } finally {
-      setDetailLoading(false);
-    }
+    setRefreshVersion(version => version + 1);
   };
 
 
@@ -146,7 +144,12 @@ export default function WorkDeliveryView({
 
       <section className="work-delivery-conclusion" data-mode={view.mode || 'missing'}>
         <div><CircleDot size={16} /><strong>{view.statusLabel} · {view.modeLabel}</strong></div>
+        <p><strong>{language === 'en-US' ? 'What changed' : '改了什么'}</strong> · {view.changeSummary}</p>
         <p>{view.deliverySummary}</p>
+        <div className="work-delivery-milestones" aria-label={language === 'en-US' ? 'Verified delivery facts' : '实际交付进度'}>
+          {(view.milestones || []).map(item => <div key={item.key} data-status={item.status}><span>{item.label}</span><strong>{item.value}</strong></div>)}
+        </div>
+        <p><strong>{language === 'en-US' ? 'Your next step' : '需要你做什么'}</strong> · {view.nextAction}</p>
         <div className="work-delivery-conclusion-counts">
           <span>{t('delivery.files', { count: view.changedFileCount })}</span>
           <span>{t('delivery.evidenceCount', { count: view.evidenceLinked })}</span>

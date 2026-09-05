@@ -185,3 +185,11 @@
 @media (max-width: 980px) { .work-overview-grid { grid-template-columns: 1fr; } }
 @media (max-width: 980px) { .work-delivery-summary-grid, .work-delivery-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-delivery-body:has(.work-delivery-history) { grid-template-columns: 1fr; } .work-delivery-history { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-delivery-history > div { grid-column: 1 / -1; } }
 @media (max-width: 720px) { .work-detail-page { padding-top: 18px; } .work-detail-toolbar { align-items: flex-start; flex-direction: column; } .work-detail-actions { justify-content: flex-start; } .work-detail-hero { align-items: start; grid-template-columns: 1fr; padding: 20px; } .work-detail-identity { border-left: 0; border-top: 1px solid var(--border-light); padding-left: 0; padding-top: 15px; } .work-inline-confirm { align-items: flex-start; grid-template-columns: auto 1fr; } .work-delivery-view { padding: 16px; } .work-delivery-header { flex-direction: column; } .work-delivery-summary-grid, .work-delivery-detail-grid, .work-delivery-history { grid-template-columns: 1fr; } .work-delivery-history > div { grid-column: auto; } .work-delivery-refs > div { grid-template-columns: 1fr auto; } .work-delivery-refs span { grid-column: 1 / -1; } }
+
+.work-delivery-milestones { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px 0; border-block: 1px solid var(--border-color); }
+.work-delivery-milestones > div { display: flex; flex-direction: column; gap: 6px; padding-right: 16px; border-right: 1px solid var(--border-light); }
+.work-delivery-milestones span { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .08em; font-size: .62rem; color: var(--text-muted); }
+.work-delivery-milestones strong { font-size: .78rem; color: var(--text-secondary); }
+.work-delivery-milestones [data-status="succeeded"] strong { color: var(--success); }
+.work-delivery-milestones [data-status="failed"] strong { color: var(--error); }
+@media (max-width: 760px) { .work-delivery-milestones > div { flex-basis: calc(50% - 12px); } }

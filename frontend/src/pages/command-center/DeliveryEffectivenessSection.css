@@ -1,0 +1,14 @@
+.delivery-effectiveness { border-block: 1px solid var(--border-color); padding: 16px 0; min-width: 0; }
+.delivery-effectiveness header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.delivery-effectiveness header span, .delivery-effectiveness dt { font-family: var(--font-mono); font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.delivery-effectiveness h3 { font-size: 1.1rem; margin: 6px 0; }
+.delivery-effectiveness p, .delivery-effectiveness summary { color: var(--text-secondary); font-size: .78rem; line-height: 1.6; }
+.delivery-effectiveness dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.delivery-effectiveness dl > div { border-left: 1px solid var(--border-light); padding-left: 12px; min-width: 0; }
+.delivery-effectiveness dd { color: var(--text-primary); font-family: var(--font-mono); font-size: .95rem; margin: 8px 0; overflow-wrap: anywhere; }
+.delivery-effectiveness small { color: var(--text-muted); font-size: .72rem; }
+.delivery-effectiveness summary { cursor: pointer; }
+@media (max-width: 760px) {
+  .delivery-effectiveness dl { grid-template-columns: 1fr; }
+  .delivery-effectiveness header { align-items: flex-start; flex-wrap: wrap; }
+}

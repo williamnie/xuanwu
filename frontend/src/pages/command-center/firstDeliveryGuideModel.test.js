@@ -42,8 +42,8 @@ test('success requires done Work plus passed Evidence and Handoff for the same W
     codeAgents: readyCodeAgents,
     doctor: readyDoctor,
     connectionTest: { ok: true },
-    evidence: [{ status: 'passed', work_id: work.id }],
-    handoffs: [{ evidence_count: 1, id: 'xw:handoff:derived:1', work_id: work.id }],
+    evidence: [{ id: 'e1', status: 'passed', work_id: work.id }],
+    handoffs: [{ status: 'ready', evidence_ids: ['e1'], evidence_count: 1, id: 'xw:handoff:derived:1', work_id: work.id }],
     projects: [{ id: 'demo' }],
     works: [work],
   });
@@ -54,7 +54,7 @@ test('success requires done Work plus passed Evidence and Handoff for the same W
     codeAgents: readyCodeAgents,
     doctor: readyDoctor,
     connectionTest: { ok: true },
-    evidence: [{ status: 'passed', work_id: work.id }],
+    evidence: [{ id: 'e1', status: 'passed', work_id: work.id }],
     handoffs: [{ evidence_count: 1, work_id: 'xw:work:issues:2' }],
     projects: [{ id: 'demo' }],
     works: [work],
@@ -90,6 +90,20 @@ test('recovery keeps a failed or partially delivered Work on its existing author
     selectedCodeAgentID: 'codex',
     works: [{ id: 'xw:work:issues:5', status: 'done', title: FIRST_DELIVERY_TITLE }],
   });
-  assert.match(firstDeliveryRecovery(evidenceOnly, readyDoctor), /已附带 Work 上下文/);
-  assert.match(firstDeliveryRecovery(evidenceOnly, readyDoctor), /Action Gate/);
+  assert.match(firstDeliveryRecovery(evidenceOnly, readyDoctor), /完成交付检查/);
+  assert.match(firstDeliveryRecovery(evidenceOnly, readyDoctor), /让玄武协助/);
+});
+
+test('draft or unrelated passed Evidence cannot complete onboarding', () => {
+  const work = { id: 'xw:work:issues:1', status: 'done', title: FIRST_DELIVERY_TITLE };
+  const input = { works: [work], targetWorkID: work.id, evidence: [{ id: 'passed', work_id: work.id, status: 'passed' }],
+    handoffs: [{ status: 'ready', work_id: work.id, evidence_ids: ['another'], evidence_count: 1 }] };
+  assert.equal(firstDeliveryState(input).completed, false);
+  input.handoffs[0].evidence_ids = ['passed'];
+  input.handoffs[0].status = 'draft';
+  assert.equal(firstDeliveryState(input).completed, false);
+  input.handoffs[0].status = 'ready';
+  assert.equal(firstDeliveryState(input).completed, true);
+  input.targetWorkID = 'xw:work:issues:2';
+  assert.equal(firstDeliveryState(input).completed, false);
 });

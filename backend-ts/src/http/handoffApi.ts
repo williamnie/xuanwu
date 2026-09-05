@@ -1,3 +1,4 @@
+import { completeFirstDelivery } from "../domain/handoff/firstDelivery.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getStoredEvidence } from "../db/repositories/evidence.ts";
 import { getIssue } from "../db/repositories/issues.ts";
@@ -37,6 +38,15 @@ type DeliveryStatus = {
 
 export function registerHandoffRoutes(router: Router, context: ReadApiContext): void {
   const readDatabase = context.readDatabase ?? context.database;
+  router.post("/api/onboarding/works/:id/delivery-check", request => handoffResponse(async () => {
+    const match = /^\/api\/onboarding\/works\/([^/]+)\/delivery-check$/.exec(new URL(request.url).pathname);
+    let workID = "";
+    try { workID = decodeURIComponent(match?.[1] || ""); } catch { /* rejected below */ }
+    const id = /^xw:work:issues:([1-9]\d*)$/.exec(workID);
+    if (!id || !Number.isSafeInteger(Number(id[1]))) throw handoffError(400, "invalid_work_id", "Work id is invalid");
+    try { return await completeFirstDelivery(context.database, Number(id[1]), { bus: context.bus }); }
+    catch (error) { throw handoffError(409, "first_delivery_not_ready", error instanceof Error ? error.message : "交付检查失败"); }
+  }));
   router.get("/api/handoffs", (request) => handoffResponse(() => listResponse(readDatabase, request)));
   router.get("/api/handoffs/:id", (request) => handoffResponse(() => detailResponse(readDatabase, request)));
 }

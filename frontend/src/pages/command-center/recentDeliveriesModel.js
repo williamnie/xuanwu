@@ -7,7 +7,7 @@ import {
 const MODE_META = {
   local_changes: { label: '本地改动快照', operation: '本地交付' },
   branch_commit: { label: '本地分支与 commit', operation: 'Commit' },
-  push: { label: '已推送远端', operation: 'Push' },
+  push: { label: '推送远端', operation: 'Push' },
   draft_pr: { label: '草稿 PR', operation: 'Pull request' },
   ready_pr: { label: '待评审 PR', operation: 'Pull request' },
   deploy: { label: '部署', operation: 'Deploy' },
@@ -59,10 +59,8 @@ export function recentDeliveryView(item) {
   return {
     detailRoute: recentDeliveryDetailRoute(item),
     evidenceCount,
-    evidencePassed: ['ready', 'delivered'].includes(item?.status),
-    evidenceLabel: ['ready', 'delivered'].includes(item?.status)
-      ? `${evidenceCount} Evidence passed`
-      : `${evidenceCount} Evidence linked`,
+    evidencePassed: false,
+    evidenceLabel: `${evidenceCount} 条验证记录 · 查看结果`,
     externalHref: safeExternalUrl(delivery.url || delivery.external_url),
     mode,
     modeLabel: modeMeta.label,

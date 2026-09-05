@@ -60,6 +60,19 @@ describe("Handoff / Delivery domain contract", () => {
     }
   });
 
+  test("zero-file local receipts require unchanged refs, no delivery actions and linked execution evidence", () => {
+    const handoff = record("local_changes");
+    handoff.changed_files = [];
+    expect(validateHandoff(handoff, context()).ok).toBe(false);
+    handoff.baseline_revision = handoff.final_revision;
+    expect(validateHandoff(handoff, context()).ok).toBe(true);
+    handoff.run_ids = [];
+    expect(validateHandoff(handoff, context()).ok).toBe(false);
+    const external = record("push");
+    external.changed_files = [];
+    expect(validateHandoff(external, context()).ok).toBe(false);
+  });
+
   test("fails closed when a delivery mode omits its required artifact fields", () => {
     const requiredFieldByMode: Record<DeliveryMode, string> = {
       local_changes: "working_tree_ref",

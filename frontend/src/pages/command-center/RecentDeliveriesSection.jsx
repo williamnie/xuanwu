@@ -120,7 +120,7 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
         <div>
           <div className="recent-deliveries-kicker"><PackageCheck size={15} /> Recent Deliveries</div>
           <h3>最近交付</h3>
-          <p>Handoff、Evidence、review 与不可变交付引用的最新状态。</p>
+          <p>查看做了什么、验证结果和需要你处理的事项。</p>
         </div>
         <div className="recent-deliveries-header-actions">
           {summary?.section?.freshness?.is_stale || summary?.detailFailures > 0 ? (
@@ -137,7 +137,7 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
 
       {!visible ? (
         <div className="recent-deliveries-state empty">
-          <strong>最近交付按需读取，不阻塞工作台首屏</strong>
+          <strong>查看最近完成的交付及待验收结果</strong>
           <button onClick={() => setVisible(true)} type="button">加载最近交付</button>
         </div>
       ) : error ? (
@@ -173,7 +173,7 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
                   {item.issue?.id ? `#${item.issue.id} ` : ''}{item.issue?.title || item.summary}
                 </button>
 
-                <p className="recent-delivery-summary">{view.modeLabel} · {view.statusLabel}</p>
+                <p className="recent-delivery-summary">{item.summary || `${view.modeLabel} · ${view.statusLabel}`}</p>
 
                 <div className="recent-delivery-badges">
                   <span className={view.evidencePassed ? 'evidence passed' : 'evidence'}>

@@ -85,3 +85,29 @@ function fixtureDetail(overrides = {}) {
     ...overrides,
   };
 }
+
+test('planned push is never presented as successful and missing evidence needs action', () => {
+  const detail = fixtureDetail();
+  detail.handoff.delivery = { mode: 'push', remote_ref: 'refs/heads/main' };
+  detail.handoff.delivery_actions = [{ action: 'push', required: true, outcome: 'not_executed', audit_event_ref: 'push:1' }];
+  const view = workDeliveryView({ detail });
+  assert.equal(view.milestones.find(item => item.key === 'push').status, 'pending');
+  assert.doesNotMatch(view.deliverySummary, /已推送/);
+  assert.equal(view.nextAction, '读取或补齐验证证据');
+  detail.delivery_status.actions = [{ action: 'push', source_ref: 'push:1', current_status: 'failed' }];
+  assert.equal(workDeliveryView({ detail }).milestones.find(item => item.key === 'push').status, 'failed');
+});
+
+test('a previous Work detail cannot appear as the selected Work delivery', () => {
+  assert.equal(workDeliveryView({ detail: fixtureDetail(), work: { id: 'xw:work:issues:999' } }).status, 'missing');
+});
+
+test('failed checks and pending review remain actionable', () => {
+  const detail = fixtureDetail();
+  const evidence = detail.handoff.evidence_ids.map(id => ({ id, status: 'passed', kind: 'test' }));
+  evidence[0].status = 'failed';
+  assert.equal(workDeliveryView({ detail, evidence }).nextAction, '处理未通过的验证');
+  evidence[0].status = 'passed';
+  detail.handoff.review = { state: 'pending' };
+  assert.equal(workDeliveryView({ detail, evidence }).nextAction, '完成交付评审');
+});
