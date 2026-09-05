@@ -30,8 +30,9 @@ This prompt introduces no dual write or dual read: deterministic SQLite/API/Runn
 
 exports[`Xuanwu PI runtime prompt keeps the static and assembled prompt inside the token-size baseline 1`] = `
 {
-  "assembled_chars": 24632,
-  "assembled_estimated_tokens": 6158,
+  "assembled_chars": 32438,
+  "assembled_estimated_tokens": 8110,
+  "planning_estimated_tokens": 1816,
   "role_chars": 3462,
   "role_estimated_tokens": 866,
 }

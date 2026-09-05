@@ -371,7 +371,7 @@ describe("Bun PI actions API", () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ id: action.action_id, status: "completed" });
       expect(created).toMatchObject({ status: "triage", title: "Repo context issue" });
-      expect(created?.description).toContain("## 需求理解");
+      expect(created?.description).toContain("## 一句话目标");
       expect(created?.description).toContain("## 相关证据");
       expect(created?.description).toContain("src/Panel.tsx");
       expect(created?.description).toContain("bun test src/Panel.test.tsx");

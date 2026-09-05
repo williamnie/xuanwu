@@ -145,13 +145,14 @@ describe("PI repo context pack contract", () => {
       description: "实现折叠面板\nTOKEN=must-not-leak"
     });
 
-    expect(markdown).toContain("## 需求理解");
+    expect(markdown).toContain("## 一句话目标");
     expect(markdown).toContain("## 相关证据");
-    expect(markdown).toContain("## 建议改动");
+    expect(markdown).toContain("## 做什么");
     expect(markdown).toContain("## 验收标准");
-    expect(markdown).toContain("## 验证建议");
+    expect(markdown).toContain("## 自动验证");
     expect(markdown).toContain("## 未确认问题");
-    expect(markdown).toContain(REPO_CONTEXT_PACK_NOTICE);
+    expect(markdown).not.toContain("置信度：");
+    expect(markdown).toContain("## 依赖\n- 无");
     expect(markdown).toContain("src/components/Accordion.tsx");
     expect(markdown).toContain("bun test src/components/Accordion.test.tsx");
     expect(markdown).not.toContain("super-secret");

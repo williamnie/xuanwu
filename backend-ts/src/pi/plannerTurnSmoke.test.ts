@@ -96,7 +96,7 @@ describe("PI read-only planner turn smoke", () => {
       expect(issues.every((issue) => issue.status === "triage")).toBe(true);
       expect(issues.every((issue) => issue.description.includes("## 相关证据") &&
         !issue.description.includes("## 相关证据\n- (none)") &&
-        !issue.description.includes("## 建议改动\n- (none)"))).toBe(true);
+        !issue.description.includes("## 做什么\n- (none)"))).toBe(true);
       expect(fixture.db.sqlite.query<{ total: number }, []>(
         "select count(*) as total from work_relations where kind='depends_on'"
       ).get()?.total).toBe(4);
@@ -293,10 +293,10 @@ function assertTriageIssueWithContextPack(db: RunnerDatabase): void {
   expect(issues).toHaveLength(1);
   const issue = issues[0];
   expect(issue).toMatchObject({ status: "triage", title: "实现折叠面板功能" });
-  expect(issue.description).toContain("## 需求理解");
+  expect(issue.description).toContain("## 一句话目标");
   expect(issue.description).toContain("## 相关证据");
   expect(issue.description).toContain("## 验收标准");
-  expect(issue.description).toContain("## 验证建议");
+  expect(issue.description).toContain("## 自动验证");
   expect(issue.description).toContain(TARGET_FILE);
   expect(issue.description).toContain("用户可以展开和收起面板");
   expect(issue.description).toContain("bun test src/components/AccordionPanel.test.tsx");

@@ -1,7 +1,7 @@
+import { issueBodySections, renderIssueBodySections, type IssueBodySection } from "./issuePlanningBody.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import {
-  REPO_CONTEXT_PACK_NOTICE,
   createRepoContextPack,
   type RepoContextEvidenceItem,
   type RepoContextPack,
@@ -36,14 +36,31 @@ export function renderRepoContextPackIssueMarkdown(
   pack: RepoContextPack,
   options: IssueProposalContextRenderOptions = {}
 ): string {
-  return [
-    section("需求理解", requirementLines(pack, options.description)),
-    section("相关证据", evidenceLines(pack)),
-    section("建议改动", numbered(pack.proposed_changes)),
-    section("验收标准", numbered(pack.acceptance_criteria)),
-    section("验证建议", numbered(pack.validation)),
-    section("未确认问题", numbered(pack.open_questions))
-  ].join("\n").trim();
+  const original = cleanText(options.description);
+  const sections = issueBodySections(original);
+  const compact = sections.some(({ heading }) => /^(一句话目标|Goal)$/i.test(heading));
+  const english = sections.some(({ heading }) => /^Goal$/i.test(heading));
+  const body: IssueBodySection[] = compact ? sections : [];
+  const add = (zh: string, en: string, lines: string[]) => {
+    const found = body.find(({ heading }) => heading === zh || heading.toLowerCase() === en.toLowerCase());
+    if (found) {
+      const existing = new Set(found.body.split("\n").map(normalizeListLine));
+      const missing = lines.filter((line) => line && (line.includes("\n")
+        ? !found.body.includes(line) : !existing.has(normalizeListLine(line))));
+      if (missing.length) found.body = [found.body, ...missing].filter(Boolean).join("\n");
+    } else if (lines.length) body.push({ heading: english ? en : zh, body: lines.join("\n") });
+  };
+  if (!compact) add("一句话目标", "Goal", [pack.intent]);
+  add("做什么", "Scope", [...(!compact && original ? [original] : []), ...numbered(pack.proposed_changes)]);
+  add("验收标准", "Acceptance criteria", numbered(pack.acceptance_criteria));
+  const manual = body.some(({ heading }) => /^(人工验收|Manual acceptance)$/i.test(heading));
+  add(manual ? "人工验收" : "自动验证", manual ? "Manual acceptance" : "Automated validation", numbered(pack.validation));
+  if (!body.some(({ heading }) => /^(依赖|dependencies?)$/i.test(heading))) {
+    add("依赖", "Dependencies", [english ? "- None" : "- 无"]);
+  }
+  add("相关证据", "Evidence", evidenceLines(pack));
+  add("未确认问题", "Open questions", numbered(pack.open_questions));
+  return renderIssueBodySections(body);
 }
 
 function createIssueProposalContextPack(
@@ -95,20 +112,15 @@ function contextProject(
   };
 }
 
-function requirementLines(pack: RepoContextPack, description: unknown): string[] {
-  const original = cleanText(description);
-  return [
-    original && `- 原始描述：${singleLine(original)}`,
-    `- Supervisor 理解：${pack.intent || "(未提供)"}`,
-    `- 项目：${projectLabel(pack.project)}`,
-    `- 置信度：${pack.confidence}；生成时间：${pack.generated_at}`,
-    `- 来源：${sourceLabel(pack.source)}`,
-    `> ${REPO_CONTEXT_PACK_NOTICE}`
-  ].filter(Boolean) as string[];
+function normalizeListLine(line: string): string {
+  return line.trim().replace(/^(?:[-*]|\d+\.)\s+/, "");
 }
 
 function evidenceLines(pack: RepoContextPack): string[] {
+  const source = [pack.source.session_key && `session=${pack.source.session_key}`,
+    pack.source.message_id && `message=${pack.source.message_id}`].filter(Boolean).join(" ");
   return [
+    source && `- 来源：${source}`,
     ...pack.evidence.map(evidenceLine),
     ...pack.relevant_files.map(relevantFileLine)
   ].filter(Boolean);
@@ -137,10 +149,6 @@ function evidenceLocator(item: RepoContextEvidenceItem): string {
 
 function numbered(items: string[]): string[] {
   return items.length > 0 ? items.map((item, index) => `${index + 1}. ${item}`) : [];
-}
-
-function section(title: string, lines: string[]): string {
-  return [`## ${title}`, ...(lines.length > 0 ? lines : ["- (none)"]), ""].join("\n");
 }
 
 function mergeArrays(...values: unknown[]): unknown[] {
@@ -186,14 +194,6 @@ function normalizeTextList(items: unknown[]): string[] {
   return [...new Set(items.map(textValue).filter(Boolean))];
 }
 
-function projectLabel(project: RepoContextPack["project"]): string {
-  return [project.id, project.name, project.cwd].filter(Boolean).join(" / ") || "(未指定)";
-}
-
-function sourceLabel(source: RepoContextPack["source"]): string {
-  return [source.kind, source.channel, source.message_id, source.session_key].filter(Boolean).join(" / ") || "(未指定)";
-}
-
 function singleLine(value: string): string {
   return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).join(" / ");
 }
@@ -203,5 +203,8 @@ function textValue(value: unknown): string {
 }
 
 function cleanText(value: unknown): string {
-  return redactSensitiveText(textValue(value)).trim();
+  return redactSensitiveText(textValue(value)).split(/\r?\n/).map((line) =>
+    /(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY)\s*[:=]/i.test(line)
+      ? "[redacted sensitive line]" : line
+  ).join("\n").trim();
 }

@@ -1231,7 +1231,7 @@ describe("PI runner action tools", () => {
       expect(result).toMatchObject({ decision: "execute", status: "completed" });
       expect(payload.context_pack).toBeUndefined();
       expect(payload.evidence).toBeUndefined();
-      expect(payload.description).toContain("## 需求理解");
+      expect(payload.description).toContain("## 一句话目标");
       expect(payload.description).toContain("## 相关证据");
       expect(payload.description).toContain("README.md");
       expect(payload.description).toContain("Feishu request");
@@ -1270,14 +1270,14 @@ describe("PI runner action tools", () => {
       }) as { result?: { id?: number } };
       const issue = getIssue(fixture.db, result.result?.id ?? 0);
 
-      expect(issue?.description).toContain("Supervisor 理解：按 PRD 建立服装图片生成 MVP。");
+      expect(issue?.description).toContain("按 PRD 建立服装图片生成 MVP。");
       expect(issue?.description).toContain("PRD 第 6 节定义上传、任务与结果流程。");
       expect(issue?.description).toContain("1. 先固定 API 合同。");
       expect(issue?.description).toContain("1. 任务可从 pending 到 succeeded。");
       expect(issue?.description?.match(/任务可从 pending 到 succeeded。/g)).toHaveLength(1);
       expect(issue?.description).toContain("1. 运行真实 Provider smoke。");
       expect(issue?.description).not.toContain("## 相关证据\n- (none)");
-      expect(issue?.description).not.toContain("## 建议改动\n- (none)");
+      expect(issue?.description).not.toContain("## 做什么\n- (none)");
       expect(() => actions.createIssueProposal({
         context_pack: { unexpected_section: ["must not disappear"] } as never,
         description: "invalid",
@@ -1319,7 +1319,7 @@ describe("PI runner action tools", () => {
       expect(issues).toHaveLength(3);
       expect(issues.map((issue) => issue.status)).toEqual(["triage", "triage", "triage"]);
       expect(issues.every((issue) => issue.description.includes("## 相关证据") &&
-        issue.description.includes("## 建议改动") && !issue.description.includes("## 建议改动\n- (none)"))).toBe(true);
+        issue.description.includes("## 做什么") && !issue.description.includes("## 做什么\n- (none)"))).toBe(true);
       expect(action).toMatchObject({ conversation_id: "conv-prd-batch", status: "completed" });
       expect(JSON.parse(action?.payload_json ?? "{}").batch_items).toHaveLength(3);
       expect(fixture.db.sqlite.query<{ dependency_issue_ids_json: string }, [number]>(

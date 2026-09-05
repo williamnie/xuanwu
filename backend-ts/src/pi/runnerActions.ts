@@ -4,6 +4,7 @@ import { deleteIssues, enqueueIssue } from "../db/repositories/issueActions.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { auditIssueSkillIntents } from "../skills/intentAudit.ts";
 import { getSkillMetadata, readSkillRegistry, recommendSkillIntents } from "../skills/registry.ts";
+import { withIssueBodyDependencies } from "./issuePlanningBody.ts";
 import { parseSkillIntentList } from "../skills/intents.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
@@ -726,7 +727,8 @@ function issueCreateProposal(
     payload: {
       project_id: projectID,
       title: input.title ?? "",
-      description,
+      description: input.depends_on_issue_ids === undefined ? description
+        : withIssueBodyDependencies(description, input.depends_on_issue_ids),
       ...(input.depends_on_issue_ids === undefined
         ? {}
         : { depends_on_issue_ids: input.depends_on_issue_ids }),

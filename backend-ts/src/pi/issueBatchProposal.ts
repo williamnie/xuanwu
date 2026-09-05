@@ -1,5 +1,8 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import { updateIssue } from "../db/repositories/issueUpdate.ts";
+import { getIssue } from "../db/repositories/issues.ts";
+import { withIssueBodyDependencies } from "./issuePlanningBody.ts";
 
 export const ISSUE_BATCH_MAX_ITEMS = 40;
 
@@ -52,7 +55,7 @@ export function materializeIssueBatch(
       const issue = createIssue(db, {
         project_id: payload.project_id,
         title: item.title,
-        description: item.description,
+        description: withIssueBodyDependencies(item.description, dependencyIDs),
         depends_on_issue_ids: dependencyIDs,
         required_skill_intents: item.required_skill_intents,
         recommended_skill_intents: item.recommended_skill_intents,
@@ -61,6 +64,14 @@ export function materializeIssueBatch(
         status: "triage"
       }, { createdEventPayload: { batch_ref: item.ref } });
       createdByRef.set(item.ref, { id: issue.id, ref: item.ref, title: issue.title });
+    }
+    // 所有 ID 存在后再补双向验收引用；与创建同事务，失败不留下半张图。
+    for (const item of ordered) {
+      const id = requiredCreatedID(createdByRef, item.ref);
+      const issue = getIssue(db, id)!;
+      const description = issue.description.replace(/\{\{issue:([^{}]+)\}\}/g,
+        (_match, ref: string) => `Issue #${requiredCreatedID(createdByRef, ref)}`);
+      if (description !== issue.description) updateIssue(db, id, { description });
     }
   });
   createAll();
@@ -101,6 +112,9 @@ function validateRefs(items: IssueBatchPayloadItem[]): void {
     refs.add(item.ref);
   }
   for (const item of items) {
+    for (const match of item.description.matchAll(/\{\{issue:([^{}]+)\}\}/g)) {
+      if (!refs.has(match[1]!)) throw new Error(`batch issue ${item.ref} references unknown ref: ${match[1]}`);
+    }
     const dependencies = new Set<string>();
     for (const ref of item.depends_on_refs) {
       if (!refs.has(ref)) throw new Error(`batch issue ${item.ref} depends on unknown ref: ${ref}`);

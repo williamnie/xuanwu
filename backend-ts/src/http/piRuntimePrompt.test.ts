@@ -12,6 +12,8 @@ import {
 } from "./piRuntimePrompt.ts";
 import { PI_PERSONA_PROMPT_HEADER } from "../pi/personaPrompt.ts";
 import { PI_RUNTIME_PROMPT_PROFILES } from "../pi/runtimePromptProfile.ts";
+import { ISSUE_PLANNING_POLICY } from "../pi/issuePlanningPolicy.ts";
+import { readFileSync } from "node:fs";
 
 const DECISION_FIXTURES = [
   {
@@ -60,6 +62,10 @@ describe("Xuanwu PI runtime prompt", () => {
         promptProfile: "chat",
         channelContext: "CHANNEL_SENTINEL"
       }, db);
+      const sharedPolicy = readFileSync(new URL("../../../skills/xuanwu/references/issue-planning.md", import.meta.url), "utf8").trim();
+      expect(ISSUE_PLANNING_POLICY).toBe(sharedPolicy);
+      expect(chat.split(sharedPolicy)).toHaveLength(2);
+      expect(chat).not.toContain("The created triage issue must include sections: 需求理解");
       expect(chat.match(new RegExp(PI_PERSONA_PROMPT_HEADER, "g"))).toHaveLength(1);
       for (const marker of ["CHANNEL_SENTINEL", "Supervisor commitment context", "Reusable Supervisor memory"]) {
         expect(chat.indexOf(marker)).toBeLessThan(chat.indexOf(PI_PERSONA_PROMPT_HEADER));
@@ -72,6 +78,7 @@ describe("Xuanwu PI runtime prompt", () => {
         expect(prompt).not.toContain(PI_PERSONA_PROMPT_HEADER);
         expect(prompt).not.toContain("Manual context trigger workflow:");
         expect(prompt).not.toContain("CHANNEL_SENTINEL");
+        expect(prompt).not.toContain(sharedPolicy);
         if (profile === "notification") {
           expect(prompt).toContain("authenticated notification presentation block");
           expect(prompt).toContain("only the user-facing message field");
@@ -299,13 +306,16 @@ describe("Xuanwu PI runtime prompt", () => {
       const benchmark = {
         assembled_chars: prompt.length,
         assembled_estimated_tokens: estimatedTokens(prompt),
+        planning_estimated_tokens: estimatedTokens(ISSUE_PLANNING_POLICY),
         role_chars: role.length,
         role_estimated_tokens: estimatedTokens(role)
       };
 
       expect(benchmark).toMatchSnapshot();
       expect(benchmark.role_estimated_tokens).toBeLessThanOrEqual(1_000);
-      expect(benchmark.assembled_estimated_tokens).toBeLessThanOrEqual(6_200);
+      // 保留原有提示词预算，另列共享规范和内部工具适配的固定开销。
+      expect(benchmark.planning_estimated_tokens).toBeLessThanOrEqual(2_000);
+      expect(benchmark.assembled_estimated_tokens - benchmark.planning_estimated_tokens).toBeLessThanOrEqual(6_500);
     });
   });
 });

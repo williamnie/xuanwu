@@ -1,3 +1,4 @@
+import { ISSUE_PLANNING_POLICY } from "../pi/issuePlanningPolicy.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAgent, PiPersona } from "../db/repositories/pi.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
@@ -37,7 +38,7 @@ export function buildPiChatSystemPrompt(input: RuntimeSessionInput, db: RunnerDa
     xuanwuPiRoleContractPrompt(),
     promptInjectionDefenseSystemPrompt(),
     xuanwuSupervisorCompatibilityPrompt(),
-    "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
+    "Use discovered skills as metadata and issue intents only; do not execute arbitrary skills in this phase. The bundled Shared Issue Planning Contract below is built-in Supervisor guidance and is always available without skill discovery or a project skill allowlist.",
     "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
     agentInstructionsSection(input.agent),
     manualContextWorkflow(),
@@ -48,6 +49,7 @@ export function buildPiChatSystemPrompt(input: RuntimeSessionInput, db: RunnerDa
     "Retry diagnosis: before recommending or calling retry, read issue_execution_status and the latest Provider Session. If completion.state is acceptance_pending, do not retry mechanically: PI must first decide accept, continue_same_session, retry, needs_user, or failed. issue_acceptance_request only schedules that PI decision. Retry a failed dependent only when its dependencies are ready and issue_execution_status recommends retry.",
     "Token economy: prefer bounded issue, Run, Session, and repository reads. Use issue_read, issue_execution_status, session_read_summary, repo_search, and repo_read_excerpt to establish current facts; Evidence and Handoff are optional historical artifacts and never lifecycle gates.",
     publicUrlSourceWorkflow(),
+    ISSUE_PLANNING_POLICY,
     repoAwareIssueProposalWorkflow(),
     `Current runner time: ${new Date().toISOString()} timezone=${Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}.`,
     skillContext.promptSection,
@@ -179,7 +181,7 @@ function workToolWorkflow(): string {
     "Work control tool workflow:",
     "If a long-tail tool is inactive, capability_search its exact name or concise purpose; use the top match's required_parameters, tool_id, and schema_hash with capability_invoke. Retry the exact name once before reporting unavailable.",
     "For authoritative query use issue_list/issue_read, issue_execution_status, session_read_summary, and repository tools. Unqualified runner-wide counts require issue_status_summary scope='global'; use scope='project' plus project_id only when this user turn names the Project, and state the returned scope. Never infer completion from Provider prose.",
-    "For a concrete Work creation use work_create with a stable caller idempotency_key; use work_control with expected_revision for enqueue/retry/cancel. Use run_control only with the current Run/Attempt revisions and provider preconditions. Do not fabricate revisions or idempotency keys from mutable prose.",
+    "For a concrete Work creation use work_create with a stable caller idempotency_key; put the shared compact Issue body in goal and start in triage. Use work_control with expected_revision for enqueue/retry/cancel after the shared preflight. Use run_control only with the current Run/Attempt revisions and provider preconditions. Do not fabricate revisions or idempotency keys from mutable prose.",
     "run_control interrupt stops only the current Run; it never resolves the Work. After interrupt, wait for or read the terminal Run and resolve the linked Issue before giving a final answer: use human_review_response for an open review, issue_cancel when the user abandons the Work, or the PI acceptance path for a semantic success/failure decision. Never leave an ended Run with an in_progress Issue and merely promise that no retry will occur.",
     "issue_create_proposal/issue_enqueue_proposal remain available when the user is asking for a proposal rather than an authorized direct Work mutation; issue_schedule_enqueue handles a stated RFC3339 time.",
     "Use depends_on_issue_ids only for success dependencies: the downstream Work must remain blocked unless every referenced Issue is done. Do not use a hard dependency for failure-continuation Work that must still run after an upstream failed or was cancelled, such as rollback verification, incident review, cleanup, or a final report. For that case, keep the upstream id as provenance in the Work body and create or enqueue the continuation only after authoritative terminal status is observed. Never combine depends_on_issue_ids with acceptance text that says the Work must proceed when that dependency fails. Do not encode true hard dependencies only as Markdown; the structured field is the scheduler authority.",
@@ -232,15 +234,14 @@ function repoAwareIssueProposalWorkflow(): string {
     "project_status, issue_status_summary, issue_execution_status, issue_read, session_read_summary, repo_search, repo_read_excerpt, repo_tree, memory_search.",
     "If the request references a PRD, specification, design, roadmap, or named local document, reading only the directory entry is insufficient: read the authoritative document in bounded excerpts until its relevant scope, goals, non-goals, acceptance criteria, and open questions are covered before proposing Work.",
     "For one focused outcome, call issue_create_proposal. For a broad initiative spanning independent contracts, persistence, providers, UI flows, reliability, or end-to-end journeys, decompose it into independently implementable and independently verifiable triage Works and call issue_create_batch_proposal once with stable refs and a structured dependency DAG.",
-    "Do not use frontend/backend/Agent as three executable umbrella buckets when each bucket still contains multiple independently testable deliverables. An executable Work should have one primary outcome, bounded scope and non-goals, concrete acceptance criteria, a replayable validation path, and only the dependencies required for success.",
-    "Separate the shortest MVP delivery chain from post-MVP productization backlog. Do not target a magic issue count: prefer the smallest complete DAG that preserves independent implementation, rollback, and ownership boundaries. Executor self-checks and the normal completion-card acceptance are not separate business Issues; create review or independent-acceptance Work only when it has distinct scope and produces incremental information.",
-    "Machine field names inside context_pack must use intent, evidence, relevant_files, proposed_changes, acceptance_criteria, validation, and open_questions; section headings rendered to users remain Chinese.",
+    "Machine field names inside context_pack must use intent, evidence, relevant_files, proposed_changes, acceptance_criteria, validation, and open_questions. Keep the compact Issue body in description, using the shared contract headings in the active output language; keep context_pack for supporting evidence rather than duplicating the body.",
     "If the user asks to review the plan before creation, present the complete numbered plan and dependency outline without calling a mutation tool. If the user asks to create issues but not start them, create triage issues only and never enqueue them. issue_create_batch_proposal never enqueues.",
     "Then call issue_create_proposal or issue_create_batch_proposal with a repo_context_pack-compatible context_pack/evidence/open_questions payload.",
-    "The created triage issue must include sections: 需求理解, 相关证据, 建议改动, 验收标准, 验证建议, 未确认问题.",
+    "For an unattended Issue, description contains goal, scope, non-goals when relevant, acceptance criteria, automated validation, and dependencies. For a manual Issue, use 人工验收 (Manual acceptance) with device/account/action/evidence details instead of 自动验证 (Automated validation). Do not flatten manual acceptance or excluded scope into context_pack.validation or proposed_changes.",
+    "For issue_create_batch_proposal, use depends_on_refs for the complete structured dependency DAG and initially write 无/None in each description dependency section. The tool materializes real Issue IDs atomically. Use {{issue:ref}} in non-goals or manual evidence notes to reference a sibling before its ID exists; these references do not create dependencies. Read back the created bodies and dependencies before enqueueing. For a single proposal with existing prerequisites, pass depends_on_issue_ids and matching real IDs in its body.",
     "Supervisor must not edit code or run destructive commands; the pack is non-binding and executor must re-read and verify.",
     "If information is insufficient, 最多追问一个关键问题 (ask at most one key question); do not block simple requests waiting for a perfect plan.",
-    "After creating one focused proposal/triage issue from chat/IM, enqueue it by default unless the user asks to wait or schedule later. After creating a multi-Work batch, never enqueue the whole DAG blindly; if the user explicitly asks to start now, enqueue only dependency-ready root Work and let authoritative dependency readiness govern later Work."
+    "After creating one focused proposal/triage issue from chat/IM, enqueue it by default only if it passes the shared unattended eligibility gate and the user has not asked to wait or schedule later. Keep manual Issues in triage. After creating a multi-Work batch, never enqueue the whole DAG blindly; if the user explicitly asks to start now, enqueue only dependency-ready root Work and let authoritative dependency readiness govern later Work."
   ].join(" ");
 }
 
