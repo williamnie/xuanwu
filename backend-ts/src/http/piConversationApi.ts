@@ -1,3 +1,4 @@
+import { createBoundedEventStream } from "./boundedEventStream.ts";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { readFile, stat } from "node:fs/promises";
 import { PI_MANAGER_ROLE } from "../agents/roles.ts";
@@ -148,12 +149,14 @@ async function piConversationCreateResponse(context: PiConversationContext, requ
   return writeResponse(async () => createConversationWithRuntime(context, body), 201);
 }
 
-function piConversationResponse(context: PiConversationContext, request: Request): Response {
+async function piConversationResponse(context: PiConversationContext, request: Request): Promise<Response> {
   const conversation = getPiConversation(context.database, pathPart(request, "conversations"));
   if (!conversation) throw new HttpError(404, "资源不存在");
+  // 转录读取会让出事件循环；保留请求开始时的运行态，避免流中快照被终态覆盖。
+  const runtimeState = piConversationRuntimeState(conversation);
   return json({
-    ...piConversationDetail(conversation),
-    ...piConversationRuntimeState(conversation)
+    ...await piConversationDetail(conversation),
+    ...runtimeState
   });
 }
 
@@ -162,7 +165,7 @@ async function piConversationMessageResponse(context: PiConversationContext, req
   const id = pathPart(request, "conversations");
   try {
     const turn = await preparePiConversationTurn(context, id, body);
-    return piConversationTurnStreamResponse(context, turn);
+    return piConversationTurnStreamResponse(context, turn, request.signal);
   } catch (error) {
     if (error instanceof HttpError) throw error;
     if (error instanceof Error) throw new HttpError(400, error.message);
@@ -405,79 +408,44 @@ function piConversationTurnResult(turn: PiConversationTurn): PiConversationTurnR
 
 function piConversationTurnStreamResponse(
   context: PiConversationContext,
-  turn: PiConversationTurn
+  turn: PiConversationTurn,
+  signal?: AbortSignal
 ): Response {
-  const encoder = new TextEncoder();
-  let connected = true;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
-  let controller: ReadableStreamDefaultController<Uint8Array>;
-  const stream = new ReadableStream<Uint8Array>({
-    start(streamController) {
-      controller = streamController;
-      enqueuePiTurnEvent("accepted", piTurnEventBase(turn, { status: "accepted" }));
-      heartbeat = setInterval(() => enqueueComment("heartbeat"), PI_TURN_HEARTBEAT_MS);
-      void executePiConversationTurn(context, turn, (event) => {
-        if (event.type === "start") {
-          enqueuePiTurnEvent("start", piTurnEventBase(turn, { status: "running" }));
-          return;
-        }
-        enqueuePiTurnEvent("assistant_text_delta", piTurnEventBase(turn, {
-          delta: event.delta,
-          text: event.delta
-        }));
-      }).then((result) => {
-        if (result.status === "completed") {
-          enqueuePiTurnEvent("completed", result);
-        } else {
-          enqueuePiTurnEvent("failed", {
-            ...result,
-            error: piConversationTurnError(turn.runtime.session)
-          });
-        }
-      }).catch((error) => {
-        enqueuePiTurnEvent("failed", {
-          ...piConversationTurnResult(turn),
-          error: {
-            code: "runtime_error",
-            message: redactSensitiveText(error instanceof Error ? error.message : String(error))
-          },
-          status: "failed"
-        });
-      }).finally(() => close());
-    },
-    cancel() {
-      connected = false;
-      clearHeartbeat();
+  const output = createBoundedEventStream({ signal, onClose: clearHeartbeat });
+  enqueuePiTurnEvent("accepted", piTurnEventBase(turn, { status: "accepted" }));
+  if (!output.closed) heartbeat = setInterval(() => output.write(": heartbeat\n\n"), PI_TURN_HEARTBEAT_MS);
+  void executePiConversationTurn(context, turn, (event) => {
+    if (event.type === "start") {
+      enqueuePiTurnEvent("start", piTurnEventBase(turn, { status: "running" }));
+      return;
     }
-  });
+    enqueuePiTurnEvent("assistant_text_delta", piTurnEventBase(turn, {
+      delta: event.delta,
+      text: event.delta
+    }));
+  }).then((result) => {
+    if (result.status === "completed") {
+      enqueuePiTurnEvent("completed", result);
+    } else {
+      enqueuePiTurnEvent("failed", {
+        ...result,
+        error: piConversationTurnError(turn.runtime.session)
+      });
+    }
+  }).catch((error) => {
+    enqueuePiTurnEvent("failed", {
+      ...piConversationTurnResult(turn),
+      error: {
+        code: "runtime_error",
+        message: redactSensitiveText(error instanceof Error ? error.message : String(error))
+      },
+      status: "failed"
+    });
+  }).finally(() => output.close());
 
   function enqueuePiTurnEvent(event: string, data: Record<string, unknown>): void {
-    enqueue(`id: ${turn.turnID}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  }
-
-  function enqueueComment(comment: string): void {
-    enqueue(`: ${comment}\n\n`);
-  }
-
-  function enqueue(value: string): void {
-    if (!connected) return;
-    try {
-      controller.enqueue(encoder.encode(value));
-    } catch {
-      connected = false;
-      clearHeartbeat();
-    }
-  }
-
-  function close(): void {
-    clearHeartbeat();
-    if (!connected) return;
-    connected = false;
-    try {
-      controller.close();
-    } catch {
-      // The client may have disconnected after the final event was produced.
-    }
+    if (!output.closed) output.write(`id: ${turn.turnID}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   }
 
   function clearHeartbeat(): void {
@@ -485,7 +453,7 @@ function piConversationTurnStreamResponse(
     heartbeat = undefined;
   }
 
-  return new Response(stream, {
+  return new Response(output.stream, {
     status: 201,
     headers: {
       "cache-control": "no-cache, no-transform",

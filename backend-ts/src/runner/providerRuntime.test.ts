@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { listStoredEvidence } from "../db/repositories/evidence.ts";
@@ -234,6 +234,69 @@ afterEach(async () => {
 });
 
 describe("executor provider runtime seam", () => {
+  test("flushes artifact logs in source order before terminal reconciliation and snapshots mutable inputs", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const source: ProviderEvent = {
+        provider: "codex", type: "raw", text: "original".repeat(12_000), raw: { method: "custom/large" }
+      };
+      const original = source.text;
+      const provider = {
+        id: "codex" as const,
+        capabilities: ["issue_execution"] as const,
+        async run(input: ProviderRunInput) {
+          input.onEvent?.(source);
+          source.text = "mutated";
+          input.onEvent?.({ provider: "codex", type: "raw", text: "second", raw: { method: "custom/small" } });
+          input.onEvent?.({ provider: "codex", type: "done", status: "completed", raw: { method: "turn/completed" } });
+          return { runId: "ordered" };
+        }
+      };
+      await runIssueWithProvider(provider, { database: db, issueId, projectId: "demo", cwd: "/tmp/project", prompt: "ordered" });
+      const events = listIssueEvents(db, issueId);
+      const logs = events.filter((event) => event.type === "issue.log");
+      expect(logs.map((event) => JSON.parse(event.payload).text)).toEqual([original, "second", undefined]);
+      const acceptance = events.find((event) => event.type === "issue.pi_acceptance_requested.v1");
+      expect(acceptance).toBeDefined();
+      expect(acceptance!.id).toBeGreaterThan(logs.at(-1)!.id);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("artifact I/O failure rejects Run flush and prevents success reconciliation", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const root = join(dirname(db.path), "artifacts");
+      await mkdir(root, { recursive: true });
+      await writeFile(join(root, "issue-logs"), "not a directory");
+      let completed = false;
+      const provider = {
+        id: "codex" as const,
+        capabilities: ["issue_execution"] as const,
+        async run(input: ProviderRunInput) {
+          input.onEvent?.({ provider: "codex", type: "raw", text: "x".repeat(100_000), raw: { method: "custom/large" } });
+          input.onEvent?.({ provider: "codex", type: "done", status: "completed", raw: { method: "turn/completed" } });
+          return { runId: "must-fail-flush" };
+        }
+      };
+      await expect(runIssueWithProvider(provider, {
+        database: db, issueId, projectId: "demo", cwd: "/tmp/project", prompt: "failure",
+        onRunComplete: () => { completed = true; }
+      })).rejects.toThrow();
+      expect(completed).toBe(false);
+      expect(listIssueEvents(db, issueId).filter((event) => event.type === "issue.pi_acceptance_requested.v1")).toHaveLength(0);
+      expect(listIssueRuns(db, issueId).at(-1)?.ended_at).toBe("");
+      expect(getIssue(db, issueId)?.issue_log_mode).toBe("normal");
+    } finally {
+      db.close();
+    }
+  });
+
   test("P10: Pi 已是 executor provider id（RPC adapter 注册后）", () => {
     expect(isExecutorProviderId("pi")).toBe(true);
   });

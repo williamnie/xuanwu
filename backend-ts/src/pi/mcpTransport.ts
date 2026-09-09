@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { runStdioProcess, type StdioProcessResult } from "../mcp/stdioProcess.ts";
 import type { McpCapability, McpServerRegistry } from "../mcp/registry.ts";
 import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
 
@@ -36,18 +36,18 @@ const INVOKE_ID = 2;
 const STDOUT_LIMIT = 64 * 1024;
 const STDERR_LIMIT = 8 * 1024;
 
-export function invokeMcpTransport(request: McpTransportInvokeRequest): McpTransportInvokeResult {
+export async function invokeMcpTransport(request: McpTransportInvokeRequest): Promise<McpTransportInvokeResult> {
   const started = performance.now();
   const transport = request.server.transport;
   if (!transport) return failed(started, error("serverUnavailable", "MCP server transport is not configured"));
-  const outcome = spawnSync(transport.command, transport.args, {
+  const outcome = await runStdioProcess({
+    command: transport.command, args: transport.args,
     cwd: transport.cwd,
-    encoding: "utf8",
     env: transportEnv(transport.env),
     input: requestPayload(request),
-    maxBuffer: STDOUT_LIMIT + STDERR_LIMIT,
-    shell: false,
-    timeout: request.timeoutMs
+    stdoutLimit: STDOUT_LIMIT,
+    stderrLimit: STDERR_LIMIT,
+    timeoutMs: request.timeoutMs
   });
   const metadata = transportMetadata(request, outcome);
   if (timedOut(outcome.error)) {
@@ -204,7 +204,7 @@ function rpcError(value: { code?: unknown; data?: unknown; message?: unknown }):
 
 function transportMetadata(
   request: McpTransportInvokeRequest,
-  outcome: ReturnType<typeof spawnSync>
+  outcome: StdioProcessResult
 ): Record<string, unknown> {
   return {
     mcp_transport: {

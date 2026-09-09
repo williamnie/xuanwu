@@ -128,6 +128,23 @@ describe("Claude Code provider", () => {
     });
   });
 
+  test("CLI fallback honors metadata-only and enforces history source budget", async () => {
+    let messageReads = 0;
+    const provider = new ClaudeExecutorProvider(runtimeConfig({ authMode: "local-cli", mode: "cli-fallback" }), {
+      authInspector: () => ({ checked: true, logged_in: true }),
+      processFactory: scriptedProcessFactory({ stdout: "" }).factory,
+      sessionFunctions: {
+        getSessionInfo: async () => ({ sessionId: "metadata", summary: "Large history", cwd: "/tmp/project", lastModified: 0, fileSize: 64 * 1024 * 1024 + 1 }),
+        getSessionMessages: async () => { messageReads++; throw new Error("must not load history"); },
+      },
+    });
+    expect(await provider.readSession("metadata", { includeTurns: false })).toMatchObject({
+      id: "claude:metadata", name: "Large history", cwd: "/tmp/project", turns: [],
+    });
+    await expect(provider.readSession("metadata", { includeTurns: true })).rejects.toThrow("64 MiB source limit");
+    expect(messageReads).toBe(0);
+  });
+
   test("creates, discovers, reads, and resumes local Claude Code sessions", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-session-cwd-"));
     tempRoots.push(cwd);

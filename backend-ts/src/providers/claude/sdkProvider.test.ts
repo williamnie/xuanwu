@@ -5,6 +5,19 @@ import type { ProviderEvent } from "../types.ts";
 const cwd = import.meta.dir;
 
 describe("Claude Agent SDK provider", () => {
+  test("metadata-only reads never load or project transcript messages", async () => {
+    let reads = 0;
+    const provider = new ClaudeSdkExecutorProvider(config(), {
+      queryFactory: (() => fromMessages([])) as ClaudeQueryFactory,
+      sessionFunctions: {
+        getSessionInfo: async () => ({ sessionId: "metadata", summary: "Summary", lastModified: 2000, cwd }),
+        getSessionMessages: async () => { reads++; throw new Error("Transcript must not be read"); },
+      },
+    });
+    expect(await provider.readSession("metadata", { includeTurns: false })).toMatchObject({ id: "claude:metadata", turns: [], name: "Summary" });
+    expect(reads).toBe(0);
+  });
+
   test("emits stream events before the query completes and maps provider session/cost/result", async () => {
     let release!: () => void;
     const paused = new Promise<void>((resolve) => { release = resolve; });

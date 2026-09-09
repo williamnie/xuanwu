@@ -124,7 +124,7 @@ describe("PI MCP registry and envelope tools", () => {
         project
       });
 
-      const result = actions.readMcpResource({ capability_id: "docs:resource:runbook" });
+      const result = await actions.readMcpResource({ capability_id: "docs:resource:runbook" });
 
       expect(result).toMatchObject({
         error: { code: "mcp_server_unavailable", message: "MCP server has no executable transport" },
@@ -161,7 +161,7 @@ describe("PI MCP registry and envelope tools", () => {
         capability_id: "docs:tool:search",
         input: { query: "deploy" }
       });
-      const resource = actions.readMcpResource({ capability_id: "docs:resource:runbook" });
+      const resource = await actions.readMcpResource({ capability_id: "docs:resource:runbook" });
       const audits = listPiActionEvents(db, { eventType: "tool_call_audit" })
         .map((event) => JSON.parse(event.payload_json) as Record<string, any>);
 
@@ -217,8 +217,8 @@ describe("PI MCP registry and envelope tools", () => {
       const toolError = await runTool(tools, "mcp_tool_call", { capability_id: "tool-error:tool:search" });
       const toolTimeout = await runTool(tools, "mcp_tool_call", { capability_id: "tool-slow:tool:search" });
       const spawnFailure = await runTool(tools, "mcp_tool_call", { capability_id: "spawn-missing:tool:search" });
-      const resourceSchema = actions.readMcpResource({ capability_id: "resource-bad:resource:runbook" });
-      const resourceTimeout = actions.readMcpResource({ capability_id: "resource-slow:resource:runbook" });
+      const resourceSchema = await actions.readMcpResource({ capability_id: "resource-bad:resource:runbook" });
+      const resourceTimeout = await actions.readMcpResource({ capability_id: "resource-slow:resource:runbook" });
       const audits = listPiActionEvents(db, { eventType: "tool_call_audit" })
         .map((event) => JSON.parse(event.payload_json) as Record<string, any>);
 
@@ -269,8 +269,8 @@ describe("PI MCP registry and envelope tools", () => {
         project
       });
 
-      const allowed = actions.readMcpResource({ capability_id: "docs:resource:runbook" }) as { decision: string; status: string };
-      const denied = actions.readMcpResource({ capability_id: "docs:resource:secret" }) as { decision: string; status: string };
+      const allowed = await actions.readMcpResource({ capability_id: "docs:resource:runbook" }) as { decision: string; status: string };
+      const denied = await actions.readMcpResource({ capability_id: "docs:resource:secret" }) as { decision: string; status: string };
       const allowedAction = listPiActions(db).find((action) => action.action_type === "mcp.resource.read" && action.status === "completed");
 
       expect(allowed).toMatchObject({ capability: { id: "docs:resource:runbook" }, content: "real deploy safely" });
@@ -328,9 +328,9 @@ describe("PI MCP registry and envelope tools", () => {
     try {
       const actions = createPiRunnerActions(db, { project });
 
-      const resource = actions.readMcpResource({ capability_id: "docs:resource:secret" }) as { decision: string; risk_level: string; status: string };
+      const resource = await actions.readMcpResource({ capability_id: "docs:resource:secret" }) as { decision: string; risk_level: string; status: string };
       const offlineList = actions.listMcpResources({ server_id: "offline-docs" }) as { decision: string; status: string };
-      const offlineRead = actions.readMcpResource({ capability_id: "offline-docs:resource:guide" }) as { decision: string; status: string };
+      const offlineRead = await actions.readMcpResource({ capability_id: "offline-docs:resource:guide" }) as { decision: string; status: string };
       const deniedActions = listPiActions(db, { status: "denied" });
 
       expect(resource).toMatchObject({ decision: "deny", risk_level: "high", status: "denied" });
@@ -355,7 +355,7 @@ describe("PI MCP registry and envelope tools", () => {
     Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
     try {
       const actions = createPiRunnerActions(db, { project });
-      const result = actions.readMcpResource({ capability_id: "docs:resource:internal" }) as {
+      const result = await actions.readMcpResource({ capability_id: "docs:resource:internal" }) as {
         decision: string;
         risk_level: string;
         status: string;
@@ -394,7 +394,7 @@ describe("PI MCP registry and envelope tools", () => {
         },
         project
       });
-      const result = actions.readMcpResource({ capability_id: "docs:resource:internal" }) as {
+      const result = await actions.readMcpResource({ capability_id: "docs:resource:internal" }) as {
         content: string;
         decision?: string;
         status?: string;

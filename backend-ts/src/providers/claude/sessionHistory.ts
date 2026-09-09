@@ -1,4 +1,4 @@
-import type { SDKSessionInfo, SessionMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { GetSessionMessagesOptions, SDKSessionInfo, SessionMessage } from "@anthropic-ai/claude-agent-sdk";
 import { redactRegisteredSecrets } from "../../security/redactionRegistry.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
 import {
@@ -10,6 +10,67 @@ import {
 } from "../core/sessionView.ts";
 
 const PROVIDER = "claude";
+
+export const CLAUDE_HISTORY_MESSAGE_LIMIT = 10_000;
+export const CLAUDE_HISTORY_TEXT_BYTES = 32 * 1024 * 1024;
+export const CLAUDE_HISTORY_FILE_BYTES = 64 * 1024 * 1024;
+const CLAUDE_HISTORY_VALUE_LIMIT = 250_000;
+const CLAUDE_HISTORY_CONCURRENCY = 4;
+let activeHistoryReads = 0;
+
+export async function readBoundedClaudeSessionHistory(
+  sessionId: string,
+  info: SDKSessionInfo | undefined,
+  readMessages: (id: string, options?: GetSessionMessagesOptions) => Promise<SessionMessage[]>
+): Promise<SessionMessage[]> {
+  // SDK 先解析/构建完整 parentUuid 链，最后才应用 offset/limit；不能把
+  // message 分页当作 turn 分页，也不能靠重复分页降低 SDK 内部读取成本。
+  if (info?.fileSize !== undefined && info.fileSize > CLAUDE_HISTORY_FILE_BYTES) {
+    throw new Error("Claude history exceeds 64 MiB source limit; archive or split this session");
+  }
+  if (activeHistoryReads >= CLAUDE_HISTORY_CONCURRENCY) throw new Error("Claude history is busy; retry the request");
+  activeHistoryReads++;
+  try {
+    const messages = await readMessages(sessionId, {
+      ...(info?.cwd ? { dir: info.cwd } : {}),
+      includeSystemMessages: false,
+      limit: CLAUDE_HISTORY_MESSAGE_LIMIT + 1,
+      offset: 0
+    });
+    assertClaudeSessionHistoryBudget(messages);
+    return messages;
+  } finally {
+    activeHistoryReads--;
+  }
+}
+
+export function assertClaudeSessionHistoryBudget(messages: SessionMessage[]): void {
+  if (messages.length > CLAUDE_HISTORY_MESSAGE_LIMIT) {
+    throw new Error("Claude history exceeds 10000 messages; archive or split this session");
+  }
+  let textBytes = 0;
+  let values = 0;
+  // 遍历已有对象计数，不先 JSON.stringify 复制整份大历史。深度/节点上限
+  // 同时约束大量空对象、超深工具参数等低字节高对象数的输入。
+  const visit = (value: unknown, depth: number): void => {
+    if (++values > CLAUDE_HISTORY_VALUE_LIMIT || depth > 64) {
+      throw new Error("Claude history exceeds object complexity limit; archive or split this session");
+    }
+    if (typeof value === "string") textBytes += Buffer.byteLength(value, "utf8");
+    else if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1);
+    } else if (value && typeof value === "object") {
+      for (const key of Object.keys(value)) {
+        textBytes += Buffer.byteLength(key, "utf8");
+        visit((value as Record<string, unknown>)[key], depth + 1);
+      }
+    }
+    if (textBytes > CLAUDE_HISTORY_TEXT_BYTES) {
+      throw new Error("Claude history exceeds 32 MiB content limit; archive or split this session");
+    }
+  };
+  for (const message of messages) visit(message, 0);
+}
 
 export function publicClaudeSessionSummary(info: SDKSessionInfo, running = false): ProviderSessionView {
   return providerSessionSummary(PROVIDER, {

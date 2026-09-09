@@ -35,6 +35,8 @@ describe("SQLite slow query trace", () => {
         rows: 1,
         sql_preview: "select ? as secret, ? as value"
       });
+      expect(entries[0]?.pid).toBe(process.pid);
+      expect(Number.isFinite(Date.parse(String(entries[0]?.timestamp)))).toBe(true);
       expect(String(entries[0]?.caller)).toContain("slowQueryTrace.test.ts");
       expect(String(entries[0]?.sql_fingerprint)).toMatch(/^[a-f0-9]{16}$/);
       expect(JSON.stringify(entries[0])).not.toContain("private-value");

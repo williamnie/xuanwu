@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase } from "../../db/database.ts";
 import { createIssue } from "../../db/repositories/issueCreate.ts";
-import { recordIssueLogEvent, RUNTIME_EVIDENCE_CORRELATION_CONTRACT } from "../../db/repositories/issueEvents.ts";
+import { listIssueEvents, recordIssueLogEvent, RUNTIME_EVIDENCE_CORRELATION_CONTRACT } from "../../db/repositories/issueEvents.ts";
 import { createIssueRun, insertIssueRunRecord, updateIssueRuntime } from "../../db/repositories/issueRuns.ts";
 import { prepareReservedIssueRun } from "../run/runPreparation.ts";
 import { makeRunAttemptID } from "../run/contracts.ts";
@@ -82,7 +82,7 @@ describe("completion card", () => {
       const endedAt = new Date(Date.now() + 1_000).toISOString();
       db.sqlite.run("update issue_runs set status='done', ended_at=? where id=?", [endedAt, run.id]);
       await writeFile(join(root, "uncommitted.txt"), "terminal workspace change\n");
-      recordCompletionGitObservation(db, {
+      await recordCompletionGitObservation(db, {
         issue_id: issue.id,
         observed_at: endedAt,
         repository: root,
@@ -146,6 +146,35 @@ describe("completion card", () => {
       db.close();
     }
   });
+  test("failed Git inspection cannot persist a false clean terminal observation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "completion-card-git-failure-"));
+    roots.push(root);
+    git(root, "init");
+    git(root, "config", "user.email", "test@example.com");
+    git(root, "config", "user.name", "Test");
+    await writeFile(join(root, "README.md"), "base\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "base");
+    const db = await openDatabase({ stateDir: join(root, ".state") });
+    try {
+      db.sqlite.run(`insert into projects (id, name, cwd, provider, created_at, updated_at)
+        values ('demo', 'Demo', ?, 'codex', ?, ?)`, [root, new Date().toISOString(), new Date().toISOString()]);
+      const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Failed observation" });
+      const run = createIssueRun(db, issue.id);
+      const endedAt = new Date().toISOString();
+      const missingRevision = "a".repeat(40);
+      db.sqlite.run("update issue_runs set ended_at=?, git_base_revision=? where id=?", [endedAt, missingRevision, run.id]);
+      await recordCompletionGitObservation(db, {
+        issue_id: issue.id, observed_at: endedAt, repository: root,
+        run: { ...run, ended_at: endedAt, git_base_revision: missingRevision }
+      });
+      const types = listIssueEvents(db, issue.id).map((event) => event.type);
+      expect(types).toContain("issue.completion_git_observation_failed.v1");
+      expect(types).not.toContain("issue.completion_git_observation.v1");
+      await expect(buildIssueCompletionCard(db, issue.id)).rejects.toThrow("Git workspace observation failed");
+    } finally { db.close(); }
+  });
+
 });
 
 function commandEvent(id: string, command: string, exitCode: number, aggregatedOutput: string) {

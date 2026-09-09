@@ -21,25 +21,25 @@ export type McpResourceReadAdapterInput = {
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
-export function readMcpResourceWithAdapter(input: McpResourceReadAdapterInput): unknown {
+export async function readMcpResourceWithAdapter(input: McpResourceReadAdapterInput): Promise<unknown> {
   const invocationID = input.invocationID || crypto.randomUUID();
   const startedAt = new Date();
   const started = performance.now();
   const capability = readMcpCapability(input.capabilityID, input.registry);
   const server = capability ? readMcpServer(capability.server_id, input.registry) : null;
-  const result = resourceResult(input, invocationID, startedAt, started, capability, server);
+  const result = await resourceResult(input, invocationID, startedAt, started, capability, server);
   auditResult(input, result, capability, server);
   return legacyResourceOutput(capability, result);
 }
 
-function resourceResult(
+async function resourceResult(
   input: McpResourceReadAdapterInput,
   invocationID: string,
   startedAt: Date,
   started: number,
   capability: McpCapability | null,
   server: McpServerRegistry | null
-): ToolResult {
+): Promise<ToolResult> {
   if (!capability || capability.kind !== "resource") {
     const resultError = error("mcp_resource_not_found", "MCP resource not found");
     return finish(invocationID, startedAt, started, "failed", resultError);
@@ -58,7 +58,7 @@ function resourceResult(
     );
   }
   const timeoutMs = capability.timeout_ms ?? DEFAULT_TIMEOUT_MS;
-  const result = invokeMcpTransport({ capability, operation: "resource.read", server, timeoutMs });
+  const result = await invokeMcpTransport({ capability, operation: "resource.read", server, timeoutMs });
   return fixed(invocationID, startedAt, result.durationMs, result.status, result.error, result.output, {
     mcp: mcpMetadata(capability, server, timeoutMs),
     ...(result.metadata ?? {})

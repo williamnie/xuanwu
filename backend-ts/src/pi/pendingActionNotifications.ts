@@ -2,7 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import {
   createPiNotificationIntent,
   listPendingPiActionNotifications,
-  listPiNotificationIntentStatesByKind,
+  listLatestPiNotificationIntentStatesForSources,
   type PendingPiActionNotification
 } from "../db/repositories/pi.ts";
 import {
@@ -17,13 +17,15 @@ export function queuePendingImActionNotifications(
   db: RunnerDatabase,
   options: { lookbackMs?: number; maxPerSweep?: number; now?: Date } = {}
 ): { failed: number; queued: number; scanned: number; skipped: number } {
-  const intents = new Map(listPiNotificationIntentStatesByKind(db, "pi_action_pending")
-    .map((intent) => [intent.source_event_id, intent]));
   const summary = { failed: 0, queued: 0, scanned: 0, skipped: 0 };
   const cutoff = (options.now ?? new Date()).getTime() - (options.lookbackMs ?? 10 * 60_000);
   const cutoffText = new Date(cutoff).toISOString();
   const limit = Math.max(1, Math.min(20, Math.trunc(options.maxPerSweep ?? 5)));
-  for (const action of listPendingPiActionNotifications(db, cutoffText)) {
+  const actions = listPendingPiActionNotifications(db, cutoffText);
+  const intents = new Map(listLatestPiNotificationIntentStatesForSources(
+    db, "pi_action_pending", actions.map((action) => action.id)
+  ).map((intent) => [intent.source_event_id, intent]));
+  for (const action of actions) {
     summary.scanned += 1;
     const existing = intents.get(action.id);
     if ((existing && existing.state !== "failed") || summary.queued >= limit) {

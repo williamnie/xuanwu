@@ -1,4 +1,4 @@
-import { useCallback, useId, useMemo, useState } from 'react';
+import { memo, useCallback, useId, useMemo, useState } from 'react';
 import { CircleAlert, ChevronDown, ExternalLink, FileCode, Loader2, Pause, SlidersHorizontal } from 'lucide-react';
 import MarkdownPreview from '../../components/editor/MarkdownPreview';
 import { message as toast } from '../../store/toastStore';
@@ -152,6 +152,12 @@ export default function SessionTranscript({
   const codexAppUrl = useMemo(() => codexAppThreadUrl(session), [session]);
   const resume = useMemo(() => buildSessionResumeCommand(session), [session]);
   const model = session?.model || '';
+  const transcriptClock = useMemo(() => ({
+    createdAt: session?.createdAt,
+    created_at: session?.created_at,
+    updatedAt: session?.updatedAt,
+    updated_at: session?.updated_at,
+  }), [session?.createdAt, session?.created_at, session?.updatedAt, session?.updated_at]);
   const lastLiveEvent = liveEvents[liveEvents.length - 1];
   const autoScrollWatchKey = [
     session?.updatedAt || '',
@@ -269,7 +275,7 @@ export default function SessionTranscript({
               provider={providerId}
               model={model}
               project={project}
-              session={session}
+              session={transcriptClock}
             />
           ))}
           {localUserMessages.map((message) => (
@@ -307,7 +313,7 @@ function RuntimeStatusPill({ running, pendingApproval }) {
   );
 }
 
-function TurnItem({ turn, turnIndex, provider, model, project, session }) {
+const TurnItem = memo(function TurnItem({ turn, turnIndex, provider, model, project, session }) {
   const elements = [];
   let providerItems = [];
   let providerBlockIndex = 0;
@@ -353,7 +359,7 @@ function TurnItem({ turn, turnIndex, provider, model, project, session }) {
       {elements}
     </div>
   );
-}
+});
 
 function ProviderExecutionBlock({ items, model, project, provider, timestamp }) {
   const content = [];
@@ -634,6 +640,10 @@ function providerIdentity(provider, model) {
   return modelText ? `${providerText} · ${modelText}` : providerText;
 }
 
+const transcriptTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+});
+
 function formatTranscriptTime(value) {
   if (!value) return '';
   const numeric = typeof value === 'number' ? value : Number(value);
@@ -641,12 +651,7 @@ function formatTranscriptTime(value) {
     ? new Date(numeric < 1_000_000_000_000 ? numeric * 1000 : numeric)
     : new Date(value);
   if (!Number.isFinite(date.getTime())) return '';
-  return new Intl.DateTimeFormat('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).format(date);
+  return transcriptTimeFormatter.format(date);
 }
 
 function turnTimestamp(turn, session, role) {

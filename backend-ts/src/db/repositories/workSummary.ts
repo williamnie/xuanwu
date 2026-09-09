@@ -43,17 +43,27 @@ export function readWorkSummary(db: RunnerDatabase, input: WorkSummaryInput): Wo
       select project_id,
         case when status='pending_verification' then 'needs_user' else status end as normalized_status,
         count(*) as total,
-        sum(case when status='in_progress' and (
+        0 as guarding
+      from issues
+      ${projectID ? "where project_id = ?" : ""}
+      group by project_id, normalized_status
+    `).all(...(projectID ? [projectID] : []));
+    // 状态汇总走现有覆盖索引；标题匹配只检查正在运行的 Work。
+    const guardingRows = db.sqlite.query<{ project_id: string; guarding: number }, string[]>(`
+      select project_id, count(*) as guarding from issues
+      where status='in_progress' ${projectID ? "and project_id=?" : ""}
+        and (
           instr(lower(title), 'verifier') > 0 or instr(lower(title), 'verify') > 0 or
           instr(lower(title), 'guardian') > 0 or instr(lower(title), 'guard') > 0 or
           instr(lower(title), 'supervisor') > 0 or instr(lower(title), 'quality') > 0 or
           instr(lower(title), 'gate') > 0 or instr(title, '验证') > 0 or
           instr(title, '守护') > 0 or instr(title, '门禁') > 0
-        ) then 1 else 0 end) as guarding
-      from issues
-      ${projectID ? "where project_id = ?" : ""}
-      group by project_id, normalized_status
+        ) group by project_id
     `).all(...(projectID ? [projectID] : []));
+    const guardingByProject = new Map(guardingRows.map((row) => [row.project_id, row.guarding]));
+    for (const row of rows) {
+      if (row.normalized_status === "in_progress") row.guarding = guardingByProject.get(String(row.project_id)) ?? 0;
+    }
     return { projectIDs, rows };
   });
   const snapshot = read();

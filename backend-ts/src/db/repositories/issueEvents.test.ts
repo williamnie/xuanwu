@@ -10,7 +10,8 @@ import {
   ISSUE_LOG_INLINE_PAYLOAD_LIMIT_BYTES,
   latestIssueEventsByIssueID,
   listIssueEvents,
-  recordIssueLogEvent
+  recordIssueLogEvent,
+  recordIssueLogEventAsync
 } from "./issueEvents.ts";
 
 const tempRoots: string[] = [];
@@ -29,6 +30,54 @@ afterEach(async () => {
 });
 
 describe("Bun issue event repository logs", () => {
+  test("asynchronously stores large artifacts, reuses verified content and preserves replay", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueId = insertIssue(database, "demo");
+      const source = {
+        provider: "codex" as const,
+        type: "text",
+        text: "长日志".repeat(100_000),
+        raw: { method: "item/agentMessage/delta" }
+      };
+      let eventLoopProgress = false;
+      const tick = new Promise<void>((resolve) => setImmediate(() => { eventLoopProgress = true; resolve(); }));
+      const pending = recordIssueLogEventAsync(database, issueId, source);
+      expect(listIssueEvents(database, issueId)).toHaveLength(0);
+      const first = await pending;
+      expect(eventLoopProgress).toBe(true);
+      await tick;
+      const second = await recordIssueLogEventAsync(database, issueId, source);
+      const sync = recordIssueLogEvent(database, issueId, source);
+      expect(first.id).toBeLessThan(second.id);
+      expect(second.id).toBeLessThan(sync.id);
+      expect(JSON.parse(first.payload).issue_log_artifact).toEqual(JSON.parse(sync.payload).issue_log_artifact);
+      expect(listIssueEvents(database, issueId).map((event) => JSON.parse(event.payload).text)).toEqual([
+        source.text, source.text, source.text
+      ]);
+      expect(await artifactFiles(dirname(database.path))).toHaveLength(1);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("async artifact integrity failures reject without inserting a misleading log row", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueId = insertIssue(database, "demo");
+      const source = { provider: "codex" as const, type: "text", text: "x".repeat(100_000) };
+      const first = await recordIssueLogEventAsync(database, issueId, source);
+      const artifact = JSON.parse(first.payload).issue_log_artifact;
+      await writeFile(join(dirname(database.path), artifact.ref), "corrupt");
+      await expect(recordIssueLogEventAsync(database, issueId, source)).rejects.toThrow("stored byte count mismatch");
+      expect(listIssueEvents(database, issueId, { hydrateArtifacts: false })).toHaveLength(1);
+    } finally {
+      database.close();
+    }
+  });
+
   test("loads the latest typed event for many Issues in one batch", async () => {
     const database = await openFixtureDatabase();
     try {

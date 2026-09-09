@@ -95,7 +95,8 @@ export class BackgroundProjectionWorker {
         if (state.read_version === "v2" || state.observation_started_at) {
           const compact = projectPendingCompactEventSummaries(this.#database, {
             batchSize: BACKGROUND_PROJECTION_POLICY.batch_size,
-            maxBatches: 1
+            maxBatches: 1,
+            maxWallMs: Math.max(0.1, this.#maxWallMs - (performance.now() - started))
           });
           batches += compact.batches;
           rows += compact.projected_rows;

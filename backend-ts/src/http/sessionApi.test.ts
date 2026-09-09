@@ -33,6 +33,28 @@ afterEach(async () => {
 });
 
 describe("Bun Sessions API compatibility", () => {
+  test("metadata-only preserves indexed provider model without loading transcript", async () => {
+    const database = await openFixtureDatabase();
+    const claude: ExecutorProvider = {
+      id: "claude", capabilities: ["sessions"],
+      async run(): Promise<never> { throw new Error("not used by metadata reads"); },
+    };
+    try {
+      upsertAgentSession(database, {
+        provider: "claude", provider_session_id: "metadata", title: "Indexed title",
+        raw_ref: { model: "claude-history-model", settings_provider: "claude" }, status: "idle",
+      });
+      claude.readSession = async (id, input = {}) => {
+        expect(input.includeTurns).toBe(false);
+        return providerSessionDetail("claude", { sessionRef: id, name: "Native title", cwd: "/tmp/project", status: "idle" });
+      };
+      const response = await createDefaultRouter({ database, providers: { claude } }).handle(new Request(`${BASE_URL}/api/sessions/claude:metadata`));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ model: "claude-history-model", name: "Native title", cwd: "/tmp/project", status: "idle", turns: [] });
+      expect(JSON.parse(getAgentSession(database, "claude:metadata")!.raw_ref).model).toBe("claude-history-model");
+    } finally { database.close(); }
+  });
+
   test("Codex 创建请求传递用户明确指定的标题", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionsProvider();

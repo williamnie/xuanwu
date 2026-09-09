@@ -6,7 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import { createPiAction, listPiNotificationIntents } from "../db/repositories/pi.ts";
+import { createPiAction, createPiNotificationIntent, listLatestPiNotificationIntentStatesForSources, listPiNotificationIntents } from "../db/repositories/pi.ts";
 import { queuePendingImActionNotifications } from "./pendingActionNotifications.ts";
 
 const roots: string[] = [];
@@ -65,6 +65,24 @@ describe("pending IM action notification sweep", () => {
         target_chat_id: "-100opaque",
         target_message_id: "message-1"
       }]);
+    } finally { db.close(); }
+  });
+
+  test("reads only candidate action histories and preserves the latest retry state", async () => {
+    const db = await fixture();
+    try {
+      for (const [id, source, state] of [
+        ["a", "candidate", "failed"], ["b", "candidate", "sent"], ["c", "unrelated", "sent"]
+      ]) {
+        createPiNotificationIntent(db, {
+          id, idempotency_key: id, kind: "pi_action_pending", source_event_id: source,
+          state, project_id: "demo"
+        });
+      }
+      db.sqlite.run("update pi_notification_intents set created_at='2026-09-09T00:00:00Z'");
+      expect(listLatestPiNotificationIntentStatesForSources(db, "pi_action_pending", ["candidate", "candidate", "missing"]))
+        .toEqual([{ source_event_id: "candidate", state: "sent" }]);
+      expect(listLatestPiNotificationIntentStatesForSources(db, "pi_action_pending", [])).toEqual([]);
     } finally { db.close(); }
   });
 

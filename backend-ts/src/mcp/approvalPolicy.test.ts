@@ -21,15 +21,15 @@ describe("MCP approval policy", () => {
   test("auto-runs ordinary writes, asks for every-write, and denies writes in read-only mode", async () => {
     const { db, project } = await fixture("medium");
     try {
-      expect(call(db, project)).toMatchObject({ status: "failed" });
+      expect(await call(db, project)).toMatchObject({ status: "failed" });
       expect(latest(db)).toMatchObject({ gate_decision: "execute", status: "completed" });
 
       patchPiMcpServer(db, "fixture", { approval_mode: "every_write" });
-      expect(call(db, project)).toMatchObject({ decision: "ask", status: "pending" });
+      expect(await call(db, project)).toMatchObject({ decision: "ask", status: "pending" });
       expect(latest(db)).toMatchObject({ gate_decision: "ask", status: "pending" });
 
       patchPiMcpServer(db, "fixture", { approval_mode: "read_only" });
-      expect(call(db, project)).toMatchObject({ decision: "deny", status: "denied" });
+      expect(await call(db, project)).toMatchObject({ decision: "deny", status: "denied" });
       expect(latest(db)).toMatchObject({ gate_decision: "deny", status: "denied" });
     } finally { db.close(); }
   });
@@ -37,7 +37,7 @@ describe("MCP approval policy", () => {
   test("approve-always creates an exact project capability grant and executes the pending call", async () => {
     const { db, project } = await fixture("high");
     try {
-      const pending = call(db, project) as { action_id: string; status: string };
+      const pending = await call(db, project) as { action_id: string; status: string };
       expect(pending.status).toBe("pending");
 
       const completed = await resolvePiActionDecision({ database: db }, {
@@ -50,11 +50,11 @@ describe("MCP approval policy", () => {
       expect(listPiMcpApprovalGrants(db, { projectID: project.id })).toEqual([
         expect.objectContaining({ capability_id: "fixture:tool:write", granted_by: "test:user", revoked_at: "" })
       ]);
-      expect(call(db, project)).toMatchObject({ status: "failed" });
+      expect(await call(db, project)).toMatchObject({ status: "failed" });
       expect(latest(db)).toMatchObject({ gate_decision: "execute", status: "completed" });
 
       patchPiMcpServer(db, "fixture", { command: "/changed/mcp/server" });
-      expect(call(db, project)).toMatchObject({ decision: "ask", status: "pending" });
+      expect(await call(db, project)).toMatchObject({ decision: "ask", status: "pending" });
       expect(latest(db)).toMatchObject({ gate_decision: "ask", status: "pending" });
     } finally { db.close(); }
   });

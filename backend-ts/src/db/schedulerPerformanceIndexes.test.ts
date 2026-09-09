@@ -87,6 +87,40 @@ test("Attention reads only the newest seven-day active Action window", async () 
   }
 });
 
+test("runtime statistics and watchdogs avoid history table scans and route sorting", async () => {
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-runtime-indexes-"));
+  const db = await openDatabase({ stateDir: root });
+  try {
+    const cases = [
+      ["select count(*) from issue_runs where ended_at=''", "idx_issue_runs_active_provider"],
+      ["select count(*) from issue_runs where ended_at='' and provider='codex'", "idx_issue_runs_active_provider"],
+      ["select count(*) from agent_sessions where status in ('running','inProgress')", "idx_agent_sessions_status"],
+      ["select project_id from pi_conversations where project_id<>'' and status='failed' and updated_at<='2026-09-09'", "idx_pi_conversations_failed_health"],
+      ["select max(updated_at) from agent_sessions where project_id='demo' and agent_role='pi_manager'", "idx_agent_sessions_manager_health"],
+      ["select project_id from pi_notification_intents where target_channel<>'' and (target_chat_id<>'' or target_thread_id<>'' or target_message_id<>'') order by updated_at desc, created_at desc, id desc limit 500", "idx_pi_notification_intents_recent_route"],
+      ["select project_id, count(*) from issues where status='in_progress' and instr(lower(title),'guard')>0 group by project_id", "idx_issues_in_progress_title"]
+    ];
+    for (const [sql, index] of cases) {
+      const result = plan(db.sqlite, sql!, []);
+      expect(result).toContain(index!);
+      expect(result).not.toContain("USE TEMP B-TREE");
+    }
+    expect(plan(db.sqlite, `select project_id from pi_notification_intents
+      where kind<>'digest' and state in ('pending','ready') and created_at<='2026-09-09'
+        and (target_channel<>'' or target_chat_id<>'' or target_thread_id<>'' or target_message_id<>''
+          or conversation_id<>'' or run_group_id<>'' or sent_outbox_id>0 or error<>'')`, []))
+      .toContain("idx_pi_notification_intents_stale_routable");
+    db.close();
+    const reopened = await openDatabase({ stateDir: root });
+    try {
+      expect(reopened.sqlite.query("select count(*) as n from schema_migrations where id='085_runtime_read_indexes'").get()).toEqual({ n: 1 });
+    } finally { reopened.close(); }
+  } finally {
+    db.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function plan(
   sqlite: Database,
   sql: string,

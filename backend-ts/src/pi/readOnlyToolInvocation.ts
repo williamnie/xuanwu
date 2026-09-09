@@ -81,7 +81,7 @@ async function callCli(input: ReadOnlyToolInvocationInput, clock: InvocationCloc
   });
 }
 
-function callMcp(input: ReadOnlyToolInvocationInput, tool: AssistantTool, clock: InvocationClock): ToolResult {
+async function callMcp(input: ReadOnlyToolInvocationInput, tool: AssistantTool, clock: InvocationClock): Promise<ToolResult> {
   const capabilityID = mcpCapabilityID(tool);
   if (capabilityID === "") return auditLocalResult(input, tool, failedResult(clock, {
     code: "mcp_capability_missing",

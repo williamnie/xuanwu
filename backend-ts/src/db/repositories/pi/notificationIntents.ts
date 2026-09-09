@@ -104,6 +104,25 @@ export function listPiNotificationIntentStatesByKind(
   }));
 }
 
+/** 只读取本轮候选 action 的最终通知状态，保持旧 Map 的最后一条优先语义。 */
+export function listLatestPiNotificationIntentStatesForSources(
+  db: RunnerDatabase,
+  kind: string,
+  sourceEventIDs: string[]
+): PiNotificationIntentState[] {
+  const query = db.sqlite.query<Record<string, unknown>, [string, string]>(`
+    select source_event_id, state from ${TABLE}
+    where kind=? and source_event_id=? order by created_at desc, id desc limit 1
+  `);
+  return [...new Set(sourceEventIDs)].flatMap((id) => {
+    const row = query.get(kind, id);
+    return row ? [{
+      source_event_id: optionalString(row.source_event_id),
+      state: requiredString(row.state, `${TABLE}.state`)
+    }] : [];
+  });
+}
+
 export function updatePiNotificationIntent(
   db: RunnerDatabase,
   id: string,

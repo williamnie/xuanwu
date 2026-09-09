@@ -1,3 +1,4 @@
+import type { SessionReadInput, SessionTurnsListInput, SessionTurnsListResult } from "../types.ts";
 import {
   type ApprovalDecision,
   ProviderInterruptedError,
@@ -23,6 +24,7 @@ import { normalizedRunEvent } from "../runEvents.ts";
 import {
   defaultPiSessionFunctions,
   publicPiSessionDetail,
+  piTranscriptTurns,
   type PiSessionFunctions
 } from "./sessionHistory.ts";
 
@@ -118,7 +120,7 @@ export class PiExecutorProvider implements ExecutorProvider {
     }
   }
 
-  async readSession(sessionId: string): Promise<Record<string, unknown>> {
+  private async sessionPath(sessionId: string): Promise<string> {
     const id = sessionId.trim();
     if (id === "") throw new Error("Pi session id is required");
     let path = this.sessionPaths.get(id);
@@ -127,9 +129,31 @@ export class PiExecutorProvider implements ExecutorProvider {
       if (path) this.sessionPaths.set(id, path);
     }
     if (!path) throw new Error(`Pi session ${id} was not found`);
-    const snapshot = this.sessionFunctions().read(path);
+    return path;
+  }
+
+  async readSession(sessionId: string, input: SessionReadInput = {}): Promise<Record<string, unknown>> {
+    const id = sessionId.trim();
+    const snapshot = await this.sessionFunctions().read(await this.sessionPath(id), input);
     if (snapshot.id !== id) throw new Error(`Pi session ${id} resolved to mismatched history ${snapshot.id}`);
-    return publicPiSessionDetail(snapshot, this.active && this.lastSessionRef === id);
+    const detail = publicPiSessionDetail(snapshot, this.active && this.lastSessionRef === id);
+    return input.includeTurns === false ? { ...detail, turns: [] } : detail;
+  }
+
+  async listSessionTurns(sessionId: string, input: SessionTurnsListInput): Promise<SessionTurnsListResult> {
+    const id = sessionId.trim();
+    const readTurns = this.sessionFunctions().readTurns;
+    if (readTurns) {
+      const page = await readTurns(await this.sessionPath(id), input);
+      if (page.id !== id) throw new Error(`Pi session ${id} resolved to mismatched history ${page.id}`);
+      return { data: page.groups.flatMap(piTranscriptTurns), ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) };
+    }
+    const detail = await this.readSession(id, { includeTurns: true });
+    const turns = detail.turns as Array<Record<string, unknown>>;
+    const ordered = input.sortDirection === "asc" ? turns : [...turns].reverse();
+    const offset = /^\d+$/.test(input.cursor || "") ? Number(input.cursor) : 0;
+    const limit = input.limit || 20;
+    return { data: ordered.slice(offset, offset + limit), ...(offset + limit < ordered.length ? { nextCursor: String(offset + limit) } : {}) };
   }
 
   async interrupt(_input: InterruptInput): Promise<void> {

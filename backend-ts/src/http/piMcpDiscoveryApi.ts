@@ -68,11 +68,15 @@ function deleteServerResponse(context: PiMcpDiscoveryContext, request: Request):
   return json({ ok: true });
 }
 
-function introspectResponse(context: PiMcpDiscoveryContext, request: Request): Response {
+async function introspectResponse(context: PiMcpDiscoveryContext, request: Request): Promise<Response> {
   const id = pathID(request, "servers");
   const server = getPiMcpServer(context.database, id);
   if (!server) throw new HttpError(404, "MCP server 不存在");
-  const result = introspectMcpServer(server);
+  const result = await introspectMcpServer(server);
+  const current = getPiMcpServer(context.database, id);
+  if (!current || JSON.stringify(current) !== JSON.stringify(server)) {
+    throw new HttpError(409, "MCP server 在检查期间发生变化，请重试");
+  }
   // Introspection is the authority for tool schemas and annotations. Revoke
   // project grants before replacing that contract so stale grants never remain
   // visible or reusable after a server upgrade.

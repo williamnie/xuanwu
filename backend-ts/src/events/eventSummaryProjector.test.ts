@@ -59,6 +59,53 @@ describe("event summary projector", () => {
     }
   });
 
+  test("compact wall budget yields between rows without advancing past unprocessed events", async () => {
+    const db = await fixtureDatabase();
+    try {
+      seedIssueEvents(db);
+      const partial = projectPendingCompactEventSummaries(db, { batchSize: 100, maxWallMs: Number.MIN_VALUE });
+      expect(partial).toMatchObject({ projected_rows: 1, paused: true, watermark: { last_event_id: 1, projected_row_count: 1 } });
+      const rest = projectPendingCompactEventSummaries(db, { batchSize: 100 });
+      expect(rest).toMatchObject({ projected_rows: 3, paused: false, watermark: { last_event_id: 4, projected_row_count: 4 } });
+      expect(listCompactEventSummaryProjection(db)).toHaveLength(4);
+    } finally { db.close(); }
+  });
+
+  test("compact batches query only referenced dictionary entries and preserve collision checks", async () => {
+    const db = await fixtureDatabase();
+    try {
+      seedIssueEvents(db);
+      db.sqlite.run(`with recursive n(x) as (select 1 union all select x+1 from n where x<10000)
+        insert into event_summary_projection_payloads (payload_key, summary_payload, payload_codec)
+        select randomblob(16), cast('{}' as blob), 0 from n`);
+      const queries: string[] = [];
+      const sqlite = new Proxy(db.sqlite, {
+        get(target, key) {
+          if (key === "query") return (sql: string, ...args: unknown[]) => {
+            queries.push(sql);
+            return Reflect.apply(target.query, target, [sql, ...args]);
+          };
+          const value = Reflect.get(target, key, target);
+          return typeof value === "function" ? value.bind(target) : value;
+        }
+      });
+      const observed = { ...db, sqlite };
+      const first = projectPendingCompactEventSummaries(observed, { batchSize: 2, maxBatches: 1 });
+      expect(first).toMatchObject({ batches: 1, paused: true, projected_rows: 2 });
+      expect(queries.filter((sql) => /from event_summary_projection_(payloads|runs|projects|types|compat_modes)\b/i.test(sql))
+        .every((sql) => /\bwhere\b/i.test(sql))).toBe(true);
+      const before = db.sqlite.query<{ n: number }, []>("select count(*) as n from event_summary_projection_payloads").get()!.n;
+      db.sqlite.run("update event_projection_watermarks set last_event_id=0, projected_row_count=0 where projection_id='issue_events_summary_v2'");
+      // 回放不得重复插入 payload 字典，也不能跳过内容碰撞校验。
+      projectPendingCompactEventSummaries(observed, { batchSize: 2, maxBatches: 1 });
+      expect(db.sqlite.query<{ n: number }, []>("select count(*) as n from event_summary_projection_payloads").get()!.n).toBe(before);
+      db.sqlite.run("update event_summary_projection_payloads set summary_payload=cast('corrupt' as blob), payload_codec=0 where payload_ref in (select payload_ref from event_summary_projection_compact)");
+      db.sqlite.run("update event_projection_watermarks set last_event_id=0, projected_row_count=0 where projection_id='issue_events_summary_v2'");
+      expect(() => projectPendingCompactEventSummaries(observed, { batchSize: 2, maxBatches: 1 }))
+        .toThrow("compact event summary payload key collision");
+    } finally { db.close(); }
+  });
+
   test("keeps non-log facts exact while bounding raw issue.log summaries", async () => {
     const db = await fixtureDatabase();
     try {

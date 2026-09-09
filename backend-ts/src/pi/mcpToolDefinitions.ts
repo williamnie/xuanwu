@@ -53,7 +53,7 @@ function mcpTool<TParams extends TSchema>(
     description,
     parameters,
     async execute(_toolCallId, params) {
-      const details = executeMcp(params);
+      const details = await executeMcp(params);
       return toolResult(details);
     }
   };

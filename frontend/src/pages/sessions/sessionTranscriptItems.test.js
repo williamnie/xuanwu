@@ -266,3 +266,15 @@ test('live transcript is rendered while running and closes after normal completi
   assert.equal(shouldRenderLiveTurn(liveEvents, false), false);
   assert.equal(shouldRenderLiveTurn([], true), true);
 });
+
+test('collapsed tool classification never serializes large object payloads', () => {
+  const input = { toJSON() { throw new Error('must not format collapsed tool'); } };
+  for (const item of [
+    { type: 'custom_tool_call', input },
+    { type: 'custom_tool_call_output', output: input },
+    { type: 'futureTool', payload: input },
+  ]) {
+    assert.equal(isRenderableToolItem(item), true);
+    assert.equal(isInspectableToolItem(item), true);
+  }
+});

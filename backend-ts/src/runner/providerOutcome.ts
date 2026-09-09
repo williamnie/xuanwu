@@ -43,7 +43,7 @@ export async function reconcileProviderOutcome(
   const terminalRun = getIssue(input.database, current.id)?.latest_run;
   const project = getProject(input.database, current.project_id);
   if (terminalRun?.id === input.issueRunID && project) {
-    recordCompletionGitObservation(input.database, {
+    await recordCompletionGitObservation(input.database, {
       issue_id: current.id,
       observed_at: now.toISOString(),
       repository: project.cwd,

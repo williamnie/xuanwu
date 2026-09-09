@@ -133,3 +133,9 @@
     animation: none;
   }
 }
+
+/* 浏览器仅布局邻近视口的历史回合；保留 DOM、展开选择和完整可搜索历史。 */
+.session-transcript-content > .turn-container:not(.active-live) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
+}

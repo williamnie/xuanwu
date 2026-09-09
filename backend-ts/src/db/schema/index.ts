@@ -1,3 +1,4 @@
+import { runtimeReadIndexesMigration } from "./085_runtime_read_indexes.ts";
 import { baseSchemaMigration } from "./001_base_schema.ts";
 import { agentSessionsRuntimeMigration } from "./002_agent_sessions_runtime.ts";
 import { piRuntimeMigration } from "./003_pi_runtime.ts";
@@ -171,5 +172,6 @@ export const migrations = [
   telegramChannelRuntimeMigration,
   imContextLifecycleMigration,
   attentionActionRecentIndexMigration,
-  supervisorNaturalInstructionsMigration
+  supervisorNaturalInstructionsMigration,
+  runtimeReadIndexesMigration,
 ];

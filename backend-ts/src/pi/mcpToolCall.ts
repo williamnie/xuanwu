@@ -39,24 +39,24 @@ export type McpToolCallInput = {
 const DEFAULT_TIMEOUT_MS = 10_000;
 const PERMISSION_LEVEL: Record<ToolPermission, number> = { read: 0, write: 1, dangerous: 2 };
 
-export function callMcpTool(request: McpToolCallInput): ToolResult {
+export async function callMcpTool(request: McpToolCallInput): Promise<ToolResult> {
   const invocationID = request.invocationID || crypto.randomUUID();
   const startedAt = new Date();
   const started = performance.now();
   const capability = readMcpCapability(request.capabilityID, request.registry);
   const server = capability ? readMcpServer(capability.server_id, request.registry) : null;
-  const result = mcpToolResult(request, invocationID, startedAt, started, capability, server);
+  const result = await mcpToolResult(request, invocationID, startedAt, started, capability, server);
   return auditResult(request, result, capability, server);
 }
 
-function mcpToolResult(
+async function mcpToolResult(
   request: McpToolCallInput,
   invocationID: string,
   startedAt: Date,
   started: number,
   capability: McpCapability | null,
   server: McpServerRegistry | null
-): ToolResult {
+): Promise<ToolResult> {
   if (!capability) {
     const message = `MCP tool not found: ${request.capabilityID}`;
     return timedResult(invocationID, startedAt, started, "failed", toolError("toolNotFound", message));
@@ -82,15 +82,15 @@ function mcpToolResult(
   );
 }
 
-function executeTransportTool(
+async function executeTransportTool(
   request: McpToolCallInput,
   invocationID: string,
   startedAt: Date,
   capability: McpCapability,
   server: McpServerRegistry
-): ToolResult {
+): Promise<ToolResult> {
   const timeoutMs = request.timeoutMs ?? capability.timeout_ms ?? DEFAULT_TIMEOUT_MS;
-  const result = invokeMcpTransport({
+  const result = await invokeMcpTransport({
     capability,
     input: request.input ?? {},
     operation: "tool.call",

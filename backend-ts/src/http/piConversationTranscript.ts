@@ -1,9 +1,13 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { open } from "node:fs/promises";
+import { PiHistoryLimitError, piJsonlLines } from "../providers/pi/sessionFileReader.ts";
 import type { PiConversation } from "../db/repositories/pi.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
 const LEGACY_APP_SUPPORT_SEGMENT = "/codex-issue-runner-bun-live/";
 const XUANWU_APP_SUPPORT_SEGMENT = "/xuanwu-bun-live/";
+export const PI_CONVERSATION_TEXT_BYTES = 32 * 1024 * 1024;
+export const PI_CONVERSATION_MESSAGE_LIMIT = 10_000;
 
 export type PiConversationTranscriptItem = {
   created_at: string;
@@ -13,20 +17,40 @@ export type PiConversationTranscriptItem = {
   text: string;
 };
 
-export function piConversationDetail(conversation: PiConversation): PiConversation & {
+export async function piConversationDetail(conversation: PiConversation): Promise<PiConversation & {
   message_count: number;
   transcript: PiConversationTranscriptItem[];
-} {
-  const transcript = readPiConversationTranscript(conversation);
+}> {
+  const transcript = await readPiConversationTranscript(conversation);
   return { ...conversation, message_count: transcript.length, transcript };
 }
 
-function readPiConversationTranscript(conversation: PiConversation): PiConversationTranscriptItem[] {
+async function readPiConversationTranscript(conversation: PiConversation): Promise<PiConversationTranscriptItem[]> {
   const file = resolvePiConversationSessionFile(conversation.session_file);
   if (file === "") return [];
   try {
-    return parsePiSessionJsonl(readFileSync(file, "utf8"), conversation);
-  } catch {
+    const handle = await open(file, "r");
+    try {
+      const transcript: PiConversationTranscriptItem[] = [];
+      let index = 0;
+      let textBytes = 0;
+      for await (const line of piJsonlLines(handle, (await handle.stat()).size)) {
+        const item = transcriptItemFromLine(line.text, conversation, index++);
+        if (item) {
+          textBytes += Buffer.byteLength(item.text, "utf8");
+          if (textBytes > PI_CONVERSATION_TEXT_BYTES || transcript.length >= PI_CONVERSATION_MESSAGE_LIMIT) {
+            throw new PiHistoryLimitError("Pi conversation transcript exceeds 32 MiB text or 10000 messages; archive or split this conversation");
+          }
+          transcript.push(item);
+        }
+      }
+      return transcript;
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    // 预算拒绝必须告知调用方，不能把完整历史伪装成空会话。
+    if (error instanceof PiHistoryLimitError) throw error;
     return [];
   }
 }
@@ -36,12 +60,6 @@ export function resolvePiConversationSessionFile(value: string): string {
   if (file === "" || existsSync(file)) return file;
   const migrated = file.replace(LEGACY_APP_SUPPORT_SEGMENT, XUANWU_APP_SUPPORT_SEGMENT);
   return migrated !== file && existsSync(migrated) ? migrated : file;
-}
-
-function parsePiSessionJsonl(text: string, conversation: PiConversation): PiConversationTranscriptItem[] {
-  return text.split(/\r?\n/)
-    .map((line, index) => transcriptItemFromLine(line, conversation, index))
-    .filter((item): item is PiConversationTranscriptItem => Boolean(item));
 }
 
 function transcriptItemFromLine(

@@ -379,6 +379,17 @@ describe("Qoder Q5 models and usage", () => {
 });
 
 describe("Qoder Q3 Sessions", () => {
+  test("metadata-only reads skip every SDK message page", async () => {
+    const { facade } = createFakeQoderSdkFacade([]);
+    let reads = 0;
+    const subject = provider(facade, {}, {
+      getSessionInfo: async () => ({ sessionId: "metadata", summary: "Summary", lastModified: 2000 }),
+      getSessionMessages: async () => { reads++; throw new Error("Transcript must not be read"); },
+    });
+    expect(await subject.readSession("metadata", { includeTurns: false })).toMatchObject({ id: "qoder:metadata", turns: [] });
+    expect(reads).toBe(0);
+  });
+
   const sessionInfo: SDKSessionInfo = {
     sessionId: "qoder-session-9",
     summary: "Qoder session",

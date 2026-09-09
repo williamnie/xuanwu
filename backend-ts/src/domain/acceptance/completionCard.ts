@@ -9,6 +9,7 @@ import { TOOL_OBSERVATION_SCHEMA_VERSION } from "../../runner/issueLogPersistenc
 import type { ProviderEvent } from "../../providers/types.ts";
 import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
+import { runGit, withGitWorkspaceObservation } from "../run/gitWorkspaceObservation.ts";
 import { makeRunAttemptID } from "../run/contracts.ts";
 import { projectIssueAsWork } from "../work/issueAdapter.ts";
 
@@ -188,9 +189,9 @@ export async function buildIssueCompletionCard(
     : await recoveredRolloutCommands(run);
   const allCommands = uniqueCommands([...logCommands, ...rolloutCommands]);
   const boundedCommands = boundedSequence(allCommands, MAX_COMMANDS);
-  const git = gitRunSummary(project.cwd, run, events);
+  const git = await gitRunSummary(project.cwd, run, events);
   const warnings = completionWarnings(run, allCommands, git.changed_files);
-  const session = completionSession(project.cwd, run, options.session);
+  const session = await completionSession(project.cwd, run, options.session);
   if (session.inspected && session.latest_turn_id !== "" && !session.latest_turn_matches_run) {
     warnings.push(`Provider Session has a newer Turn (${session.latest_turn_id}) than canonical Run ${run.id} (${run.provider_turn_id || "unbound"}).`);
   }
@@ -303,31 +304,22 @@ export function completionCardFingerprint(value: Record<string, unknown> | Compl
   return createHash("sha256").update(stableJson(body)).digest("hex");
 }
 
-export function recordCompletionGitObservation(
+export async function recordCompletionGitObservation(
   db: RunnerDatabase,
   input: { issue_id: number; observed_at: string; repository: string; run: IssueRun }
-): void {
-  const baseline = gitObjectID(input.run.git_base_revision) ? input.run.git_base_revision.toLowerCase() : "";
-  const head = gitText(input.repository, ["rev-parse", "--verify", "HEAD"]);
-  const diffBase = gitObjectID(baseline) ? baseline : gitObjectID(head) ? head : "";
-  const tracked = diffBase === "" ? [] : gitNullList(input.repository, ["diff", "--name-only", "-z", diffBase, "--"]);
-  const untracked = gitNullList(input.repository, ["ls-files", "--others", "--exclude-standard", "-z", "--"]);
-  const changedFiles = [...new Set([...tracked, ...untracked])].sort().slice(0, MAX_CHANGED_FILES);
-  const workingTreeDirty = gitText(input.repository, ["status", "--porcelain=v1", "--untracked-files=all"]) !== "";
-  const commits = gitCommitSummary(input.repository, baseline, head);
+): Promise<void> {
+  let summary: CompletionCardGit;
+  try { summary = await liveGitSummary(input.repository, input.run, input.observed_at); }
+  catch {
+    // 观察失败不能阻止 Provider 终态归档，也不能写出假 clean 的观察事实。
+    recordIssueEvent(db, input.issue_id, "issue.completion_git_observation_failed.v1", {
+      run_id: input.run.id, observed_at: input.observed_at, reason: "Git workspace observation unavailable or exceeded its budget"
+    });
+    return;
+  }
+  const { source: _source, ...observation } = summary;
   recordIssueEvent(db, input.issue_id, COMPLETION_GIT_OBSERVATION_EVENT_TYPE, {
-    observation: {
-      baseline_revision: baseline,
-      changed_files: changedFiles,
-      commit_count: commits.length,
-      commits,
-      contract: COMPLETION_GIT_OBSERVATION_CONTRACT,
-      final_revision: gitObjectID(head) ? head : "",
-      has_diff: changedFiles.length > 0 || (gitObjectID(baseline) && gitObjectID(head) && baseline !== head),
-      observed_at: input.observed_at,
-      run_id: input.run.id,
-      working_tree_dirty: workingTreeDirty
-    }
+    observation: { ...observation, contract: COMPLETION_GIT_OBSERVATION_CONTRACT, run_id: input.run.id }
   });
 }
 
@@ -419,11 +411,11 @@ function commandText(item: Record<string, unknown>): string {
   return actions.map((action) => cleanString(objectValue(action).command)).filter(Boolean).join(" && ");
 }
 
-function completionSession(
+async function completionSession(
   repository: string,
   run: IssueRun,
   input: CompletionCardSessionInput | undefined
-): CompletionCardSession {
+): Promise<CompletionCardSession> {
   const summary = input?.summary ?? {};
   const turns = Array.isArray(summary.turns) ? summary.turns.map(objectValue) : [];
   const latest = [...turns].reverse().find((turn) => sessionTurnID(turn) !== "") ?? {};
@@ -431,7 +423,7 @@ function completionSession(
   const matches = latestTurnID !== "" && latestTurnID === run.provider_turn_id;
   const newer = latestTurnID !== "" && !matches;
   return {
-    current_git: newer ? liveGitSummary(repository, run, sessionObservedAt(summary, latest, run)) : null,
+    current_git: newer ? await liveGitSummary(repository, run, sessionObservedAt(summary, latest, run)) : null,
     error: boundedUtf8(redactSensitiveText(cleanString(input?.error)), 1_000),
     inspected: input !== undefined,
     latest_turn_id: latestTurnID,
@@ -685,11 +677,11 @@ function eventBelongsToRun(payload: Record<string, unknown>, createdAt: string, 
   return Number.isFinite(at) && Number.isFinite(start) && Number.isFinite(end) && at >= start && at <= end;
 }
 
-function gitRunSummary(
+async function gitRunSummary(
   repository: string,
   run: IssueRun,
   events: ReturnType<typeof listIssueEvents>
-): CompletionCardGit {
+): Promise<CompletionCardGit> {
   const observed = terminalGitObservation(events, run);
   if (observed) return observed;
   // Completion Card 只针对最新的已结束 Run 构建。若终态观察事件因异常路径缺失，
@@ -697,26 +689,31 @@ function gitRunSummary(
   return liveGitSummary(repository, run, run.ended_at);
 }
 
-function liveGitSummary(repository: string, run: IssueRun, observedAt: string): CompletionCardGit {
+async function liveGitSummary(repository: string, run: IssueRun, observedAt: string): Promise<CompletionCardGit> {
   const baseline = gitObjectID(run.git_base_revision) ? run.git_base_revision.toLowerCase() : "";
-  const head = gitText(repository, ["rev-parse", "--verify", "HEAD"]);
-  const diffBase = gitObjectID(baseline) ? baseline : gitObjectID(head) ? head : "";
-  const tracked = diffBase === "" ? [] : gitNullList(repository, ["diff", "--name-only", "-z", diffBase, "--"]);
-  const untracked = gitNullList(repository, ["ls-files", "--others", "--exclude-standard", "-z", "--"]);
-  const changedFiles = [...new Set([...tracked, ...untracked])].sort().slice(0, MAX_CHANGED_FILES);
-  const workingTreeDirty = gitText(repository, ["status", "--porcelain=v1", "--untracked-files=all"]) !== "";
-  const commits = gitCommitSummary(repository, baseline, head);
-  return {
-    baseline_revision: baseline,
-    changed_files: changedFiles,
-    commit_count: commits.length,
-    commits,
-    final_revision: gitObjectID(head) ? head : "",
-    has_diff: changedFiles.length > 0 || (gitObjectID(baseline) && gitObjectID(head) && baseline !== head),
-    observed_at: observedAt,
-    source: "session_observation",
-    working_tree_dirty: workingTreeDirty
-  };
+  const summary = await withGitWorkspaceObservation(repository, async (cwd, deadline) => {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const head = await gitText(cwd, ["rev-parse", "--verify", "HEAD"], deadline, baseline !== "");
+      const requireSuccess = gitObjectID(head) || baseline !== "";
+      const diffBase = gitObjectID(baseline) ? baseline : gitObjectID(head) ? head : "";
+      const tracked = diffBase === "" ? [] : await gitNullList(cwd, ["diff", "--name-only", "-z", diffBase, "--"], deadline, requireSuccess);
+      const untracked = await gitNullList(cwd, ["ls-files", "--others", "--exclude-standard", "-z", "--"], deadline, requireSuccess);
+      const changedFiles = [...new Set([...tracked, ...untracked])].sort().slice(0, MAX_CHANGED_FILES);
+      const workingTreeDirty = (await gitText(cwd, ["status", "--porcelain=v1", "--untracked-files=all"], deadline, requireSuccess)) !== "";
+      const commits = await gitCommitSummary(cwd, baseline, head, deadline);
+      const stableHead = await gitText(cwd, ["rev-parse", "--verify", "HEAD"], deadline, requireSuccess);
+      if (stableHead !== head) continue;
+      return {
+        baseline_revision: baseline, changed_files: changedFiles, commit_count: commits.length, commits,
+        final_revision: gitObjectID(head) ? head : "",
+        has_diff: changedFiles.length > 0 || (gitObjectID(baseline) && gitObjectID(head) && baseline !== head),
+        observed_at: observedAt, source: "session_observation" as const, working_tree_dirty: workingTreeDirty
+      };
+    }
+    throw new Error("Git HEAD changed repeatedly during workspace observation");
+  });
+  if (!summary) throw new Error("Git workspace observation timed out while waiting for capacity");
+  return summary;
 }
 
 function terminalGitObservation(
@@ -751,11 +748,11 @@ function terminalGitObservation(
   return null;
 }
 
-function gitCommitSummary(repository: string, baseline: string, final: string): CompletionCardGit["commits"] {
+async function gitCommitSummary(repository: string, baseline: string, final: string, deadline: number): Promise<CompletionCardGit["commits"]> {
   if (!gitObjectID(baseline) || !gitObjectID(final)) return [];
-  const fields = gitNullList(repository, [
-    "log", "--format=%H%x00%cI%x00%s%x00", "-z", `${baseline}..${final}`
-  ]);
+  const fields = await gitNullList(repository, [
+    "log", `--max-count=${MAX_COMMITS}`, "--format=%H%x00%cI%x00%s%x00", "-z", `${baseline}..${final}`
+  ], deadline, true);
   const commits: CompletionCardGit["commits"] = [];
   for (let index = 0; index + 2 < fields.length && commits.length < MAX_COMMITS; index += 3) {
     commits.push({ revision: fields[index]!, timestamp: fields[index + 1]!, subject: fields[index + 2]! });
@@ -788,17 +785,14 @@ function boundedSequence<T>(items: T[], limit: number): T[] {
   return [...items.slice(0, first), ...items.slice(-(limit - first))];
 }
 
-function gitText(repository: string, args: string[]): string {
-  try {
-    const result = Bun.spawnSync({ cmd: ["git", ...args], cwd: repository, stderr: "ignore", stdout: "pipe" });
-    return result.exitCode === 0 ? result.stdout.toString().trim() : "";
-  } catch {
-    return "";
-  }
+async function gitText(repository: string, args: string[], deadline: number, requireSuccess = false): Promise<string> {
+  const result = await runGit(repository, args, deadline);
+  if (!result && requireSuccess) throw new Error("Git workspace observation failed or exceeded its budget");
+  return result ? new TextDecoder().decode(result.stdout).trim() : "";
 }
 
-function gitNullList(repository: string, args: string[]): string[] {
-  const output = gitText(repository, args);
+async function gitNullList(repository: string, args: string[], deadline: number, requireSuccess = false): Promise<string[]> {
+  const output = await gitText(repository, args, deadline, requireSuccess);
   return output.split("\0").map((value) => value.trim()).filter(Boolean);
 }
 

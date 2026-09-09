@@ -42,6 +42,7 @@ export type PiRpcTransportOptions = {
   env?: Record<string, string>;
   sessionRef?: string;
   timeoutMs?: number;
+  maxFrameBytes?: number;
 };
 
 export class PiRpcTransport {
@@ -54,6 +55,8 @@ export class PiRpcTransport {
   private readonly eventSinks = new Set<PiRpcEventSink>();
   private readonly decoder = new StringDecoder("utf8");
   private stdoutBuffer = "";
+  private stdoutBytes = 0;
+  private frameFailed = false;
   private seq = 0;
   private startedAt = "";
   private startupSessionRef = "";
@@ -79,6 +82,9 @@ export class PiRpcTransport {
   async start(): Promise<void> {
     if (this.running) return;
     this.stdoutBuffer = "";
+    this.stdoutBytes = 0;
+    this.frameFailed = false;
+    this.decoder.end();
     const [executable, ...configuredArgs] = splitCommand(this.options.command);
     if (!executable) throw new Error("pi rpc command is empty");
     const sessionArgs = this.startupSessionRef ? ["--session", this.startupSessionRef] : [];
@@ -187,14 +193,33 @@ export class PiRpcTransport {
   }
 
   private handleStdout(chunk: Buffer | string): void {
-    this.stdoutBuffer += typeof chunk === "string" ? chunk : this.decoder.write(chunk);
-    while (true) {
-      const newline = this.stdoutBuffer.indexOf("\n");
+    if (this.frameFailed) return;
+    const text = typeof chunk === "string" ? chunk : this.decoder.write(chunk);
+    const limit = positiveTimeout(this.options.maxFrameBytes, 16 * 1024 * 1024);
+    let start = 0;
+    while (start < text.length) {
+      const newline = text.indexOf("\n", start);
+      const end = newline < 0 ? text.length : newline;
+      const fragment = text.slice(start, end);
+      this.stdoutBytes += Buffer.byteLength(fragment, "utf8");
+      if (this.stdoutBytes > limit) {
+        this.frameFailed = true;
+        this.stdoutBuffer = "";
+        this.stdoutBytes = 0;
+        const error = new Error(`pi rpc frame exceeds ${limit} byte limit`);
+        this.rejectAll(error);
+        this.emit({ type: "error", message: error.message });
+        // 协议帧已损坏，终止本 transport 独占的子进程，防止继续积压。
+        this.process?.kill("SIGKILL");
+        return;
+      }
+      this.stdoutBuffer += fragment;
       if (newline < 0) return;
-      let line = this.stdoutBuffer.slice(0, newline);
-      this.stdoutBuffer = this.stdoutBuffer.slice(newline + 1);
-      if (line.endsWith("\r")) line = line.slice(0, -1);
+      const line = this.stdoutBuffer.endsWith("\r") ? this.stdoutBuffer.slice(0, -1) : this.stdoutBuffer;
+      this.stdoutBuffer = "";
+      this.stdoutBytes = 0;
       this.handleLine(line);
+      start = newline + 1;
     }
   }
 

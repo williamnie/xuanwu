@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { promisify } from "node:util";
+import { gunzip, gunzipSync, gzip, gzipSync } from "node:zlib";
 import type { RunnerDatabase } from "../database.ts";
 import type { ProviderEvent } from "../../providers/types.ts";
 import { createContextBundle } from "./contextBundles.ts";
@@ -52,6 +54,8 @@ const SUMMARY_ERROR_BYTES = 16 * 1024;
 const SUMMARY_COMMAND_BYTES = 4 * 1024;
 const SUMMARY_PATH_BYTES = 2 * 1024;
 const ISSUE_LOG_ARTIFACT_ATTENTION_SOURCE = "runner.issue_log_artifact_integrity";
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
 const EARLY_ARTIFACT_METHODS = new Set([
   "item/agentMessage/delta",
   "item/commandExecution/outputDelta",
@@ -179,6 +183,27 @@ export function recordIssueLogEvent(
   return mustGetIssueEvent(db, lastInsertID(db), false);
 }
 
+/** 实时日志由调用方串行 await，避免压缩和文件 I/O 阻塞 Provider 事件循环。 */
+export async function recordIssueLogEventAsync(
+  db: RunnerDatabase,
+  issueID: number,
+  event: ProviderEvent,
+  correlation?: RuntimeEvidenceCorrelation
+): Promise<IssueEvent> {
+  ensureIssueExists(db, issueID);
+  const timestamp = issueTimestamp();
+  const body = issueLogPayload(event, correlation);
+  const serialized = JSON.stringify(body);
+  const payload = needsIssueLogArtifact(body, serialized)
+    ? boundedIssueLogSummary(body, await writeIssueLogArtifactAsync(db, serialized))
+    : serialized;
+  db.sqlite.run(
+    `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
+    [issueID, "issue.log", payload, timestamp]
+  );
+  return mustGetIssueEvent(db, lastInsertID(db), false);
+}
+
 function storedIssueLogPayload(
   db: RunnerDatabase,
   event: ProviderEvent,
@@ -186,16 +211,48 @@ function storedIssueLogPayload(
 ): string {
   const body = issueLogPayload(event, correlation);
   const serialized = JSON.stringify(body);
+  if (!needsIssueLogArtifact(body, serialized)) return serialized;
+  return boundedIssueLogSummary(body, writeIssueLogArtifact(db, serialized));
+}
+
+function needsIssueLogArtifact(body: Record<string, unknown>, serialized: string): boolean {
   const bytes = Buffer.byteLength(serialized);
   const method = typeof body.raw_method === "string" ? body.raw_method : "";
-  if (bytes <= ISSUE_LOG_INLINE_PAYLOAD_LIMIT_BYTES &&
-      (bytes <= ISSUE_LOG_ARTIFACT_THRESHOLD_BYTES || !EARLY_ARTIFACT_METHODS.has(method))) return serialized;
-  const artifact = writeIssueLogArtifact(db, serialized);
+  return bytes > ISSUE_LOG_INLINE_PAYLOAD_LIMIT_BYTES ||
+    (bytes > ISSUE_LOG_ARTIFACT_THRESHOLD_BYTES && EARLY_ARTIFACT_METHODS.has(method));
+}
+
+function boundedIssueLogSummary(body: Record<string, unknown>, artifact: IssueLogArtifactRef): string {
   const summary = JSON.stringify(issueLogArtifactSummary(body, artifact));
   if (Buffer.byteLength(summary) > ISSUE_LOG_INLINE_PAYLOAD_LIMIT_BYTES) {
     throw new Error("issue.log artifact summary exceeds inline payload limit");
   }
   return summary;
+}
+
+async function writeIssueLogArtifactAsync(db: RunnerDatabase, payload: string): Promise<IssueLogArtifactRef> {
+  const bytes = Buffer.from(payload);
+  const compressed = await gzipAsync(bytes, { level: 9 });
+  const artifact = issueLogArtifact(bytes, compressed);
+  const path = issueLogArtifactPath(db, artifact.ref);
+  try {
+    const existing = await readFile(path);
+    if (existing.byteLength !== artifact.stored_bytes) throw new Error("issue.log artifact stored byte count mismatch");
+    const raw = await gunzipAsync(existing);
+    validateIssueLogArtifactRaw(artifact, raw);
+    return artifact;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, compressed, { flag: "wx", mode: 0o600 });
+    await rename(temporary, path);
+  } finally {
+    await rm(temporary, { force: true });
+  }
+  return artifact;
 }
 
 function writeIssueLogArtifact(db: RunnerDatabase, payload: string): IssueLogArtifactRef {
@@ -240,19 +297,20 @@ export function persistPlannedIssueLogArtifact(
 
 function buildIssueLogArtifact(payload: string): { artifact: IssueLogArtifactRef; compressed: Buffer } {
   const bytes = Buffer.from(payload);
+  const compressed = gzipSync(bytes, { level: 9 });
+  return { artifact: issueLogArtifact(bytes, compressed), compressed };
+}
+
+function issueLogArtifact(bytes: Buffer, compressed: Buffer): IssueLogArtifactRef {
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const ref = `${ISSUE_LOG_ARTIFACT_ROOT}/${sha256.slice(0, 2)}/${sha256}.json.gz`;
-  const compressed = gzipSync(bytes, { level: 9 });
   return {
-    artifact: {
-      bytes: bytes.byteLength,
-      encoding: "gzip+json",
-      ref,
-      schema_version: ISSUE_LOG_ARTIFACT_SCHEMA,
-      sha256,
-      stored_bytes: compressed.byteLength
-    },
-    compressed
+    bytes: bytes.byteLength,
+    encoding: "gzip+json",
+    ref,
+    schema_version: ISSUE_LOG_ARTIFACT_SCHEMA,
+    sha256,
+    stored_bytes: compressed.byteLength
   };
 }
 
@@ -447,11 +505,15 @@ export function hydrateStoredIssueLogPayloadStrict(
 function validateIssueLogArtifactBytes(artifact: IssueLogArtifactRef, compressed: Buffer): Buffer {
   if (compressed.byteLength !== artifact.stored_bytes) throw new Error("issue.log artifact stored byte count mismatch");
   const raw = gunzipSync(compressed);
+  validateIssueLogArtifactRaw(artifact, raw);
+  return raw;
+}
+
+function validateIssueLogArtifactRaw(artifact: IssueLogArtifactRef, raw: Buffer): void {
   if (raw.byteLength !== artifact.bytes) throw new Error("issue.log artifact byte count mismatch");
   if (createHash("sha256").update(raw).digest("hex") !== artifact.sha256) {
     throw new Error("issue.log artifact checksum mismatch");
   }
-  return raw;
 }
 
 function hydratedIssueLogPayload(db: RunnerDatabase, storedPayload: string): string {

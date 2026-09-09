@@ -255,6 +255,19 @@ For a source-built macOS background service:
 The canonical development and operational commands live in the
 [architecture index](docs/architecture/README.md) and [runbooks](docs/runbooks/).
 
+## Runtime resource limits
+
+Core uses indexed status reads and batch-local event projection dictionaries. Projection work
+checks its time budget between rows; MCP and Git subprocess work has bounded concurrency,
+output and deadlines. SQLite statements themselves remain synchronous.
+
+Slow SSE consumers are disconnected when their response queue exceeds 1 MiB; clients should
+reconnect and reload the current snapshot. Run log persistence is asynchronous and ordered,
+with a 32 MiB / 1,024-entry queue per Run; a queue or write failure is surfaced during Run
+completion. Session metadata reads skip transcripts. Pi history pages and Pi/Claude full
+history reads enforce explicit resource limits rather than silently returning truncated
+history. Slow SQL logs include timestamps, process IDs and redacted call stacks.
+
 ## Verify a checkout
 
 ```bash

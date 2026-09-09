@@ -84,6 +84,13 @@ xuanwu-update upgrade \
 
 ## 4. Migration notes
 
+### 2026-09-09 development redeploy：运行时性能优化
+
+- migration：`085_runtime_read_indexes`，只为活跃 Run/Session、Guardian、通知路由及运行中 Work 增加 7 个索引，不删除表或改写业务记录。
+- 可回滚到部署前 `167c5f98` runtime；新增索引可保留，数据库兼容合同仍为 `xuanwu.storage-compat.v1`。
+- operator action：在新鲜 SQLite 副本完成 preflight/forward/rollback 演练，保留已验证备份，再使用 `./redeploy.sh`。上线后确认 `085`、7 个索引和 Web/Core/Agentic 健康。
+- 运行行为：慢 SSE 连接超过 1 MiB 队列时断开并重取快照；异步日志队列和 Pi/Claude 历史读取超出资源预算时明确报错。没有新增 Provider、鉴权或自动运行配置。
+
 ### Qoder SDK 1.0.32 / CLI 1.1.40 升级
 
 - migration：none，保持 `xuanwu.storage-compat.v1`；可回滚到 `v0.2.12` 的完整 runtime。

@@ -215,9 +215,13 @@ function traceEntry(
   rows?: number
 ): Record<string, unknown> {
   const shape = sqlTraceShape(query.sql);
+  const callers = queryCallers();
   return {
+    timestamp: new Date().toISOString(),
+    pid: process.pid,
     binding_count: query.bindingCount,
-    caller: queryCaller(),
+    caller: callers[0] ?? "",
+    caller_stack: callers,
     connection_role: options.connectionRole,
     duration_ms: roundedMs(durationMs),
     event,
@@ -245,10 +249,11 @@ function changesCount(value: unknown): number | undefined {
   return Number.isFinite(changes) ? changes : undefined;
 }
 
-function queryCaller(): string {
+function queryCallers(): string[] {
   const frames = new Error().stack?.split("\n").slice(2).map((frame) => frame.trim()) ?? [];
-  const caller = frames.find((frame) => !frame.includes("slowQueryTrace.ts")) ?? "";
-  return caller.slice(0, 320);
+  return frames.filter((frame) => !frame.includes("slowQueryTrace.ts") &&
+    !/\b(?:queryCallers|traceEntry|traceExecution|tracedIterator)\b/.test(frame))
+    .slice(0, 4).map((frame) => frame.slice(0, 320));
 }
 
 function errorCode(error: unknown): string {

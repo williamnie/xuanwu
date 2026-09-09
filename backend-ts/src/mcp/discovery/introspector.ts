@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { runStdioProcess } from "../stdioProcess.ts";
 import type { PiMcpCapabilityInput } from "../../db/repositories/piMcpCapabilities.ts";
 import type { PiMcpServer } from "../../db/repositories/piMcpServers.ts";
 
@@ -15,17 +15,17 @@ type JsonRpcMessage = { error?: { message?: unknown }; id?: number | string; res
 const TIMEOUT_MS = 5000;
 const MAX_BUFFER = 96 * 1024;
 
-export function introspectMcpServer(server: PiMcpServer): McpIntrospectionResult {
+export async function introspectMcpServer(server: PiMcpServer): Promise<McpIntrospectionResult> {
   if (server.transport_type !== "stdio") return unsupportedTransport(server);
   if (!server.command) return failed("mcp_stdio_command_missing", "stdio MCP server command is missing");
-  const outcome = spawnSync(server.command, server.args, {
+  const outcome = await runStdioProcess({
+    command: server.command, args: server.args,
     cwd: server.cwd || undefined,
-    encoding: "utf8",
     env: transportEnv(server.env),
     input: requestPayload(),
-    maxBuffer: MAX_BUFFER,
-    shell: false,
-    timeout: TIMEOUT_MS
+    stdoutLimit: MAX_BUFFER,
+    stderrLimit: 8 * 1024,
+    timeoutMs: TIMEOUT_MS
   });
   if (timedOut(outcome.error)) return failed("mcp_introspection_timeout", "MCP introspection timed out");
   if (outcome.error) return failed("mcp_introspection_spawn_error", safeMessage(outcome.error));

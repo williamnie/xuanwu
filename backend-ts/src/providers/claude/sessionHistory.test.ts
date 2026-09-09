@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 import type { SDKSessionInfo, SessionMessage } from "@anthropic-ai/claude-agent-sdk";
 import {
   assertClaudeSessionHistoryIdentity,
-  publicClaudeSessionDetail
+  publicClaudeSessionDetail,
+  assertClaudeSessionHistoryBudget,
+  readBoundedClaudeSessionHistory,
+  CLAUDE_HISTORY_FILE_BYTES,
+  CLAUDE_HISTORY_MESSAGE_LIMIT,
+  CLAUDE_HISTORY_TEXT_BYTES
 } from "./sessionHistory.ts";
 
 describe("Claude Session history projection", () => {
@@ -46,4 +51,46 @@ describe("Claude Session history projection", () => {
     const messages = [{ session_id: "session-b" }] as unknown as SessionMessage[];
     expect(() => assertClaudeSessionHistoryIdentity("session-a", undefined, messages)).toThrow("mismatched history session-b");
   });
+});
+
+
+test("Claude oversized source is rejected before the SDK reads its transcript", async () => {
+  let calls = 0;
+  await expect(readBoundedClaudeSessionHistory("session", {
+    sessionId: "session", summary: "large", lastModified: 0, fileSize: CLAUDE_HISTORY_FILE_BYTES + 1,
+  }, async () => { calls++; return []; })).rejects.toThrow("64 MiB source limit");
+  expect(calls).toBe(0);
+});
+
+test("Claude asks for one overflow sentinel and fails explicitly instead of truncating turns", async () => {
+  const message = { type: "user", uuid: "user", session_id: "session", message: { content: "hi" } } as SessionMessage;
+  await expect(readBoundedClaudeSessionHistory("session", undefined, async (_id, options) => {
+    expect(options).toMatchObject({ includeSystemMessages: false, offset: 0, limit: CLAUDE_HISTORY_MESSAGE_LIMIT + 1 });
+    return Array.from({ length: CLAUDE_HISTORY_MESSAGE_LIMIT + 1 }, () => message);
+  })).rejects.toThrow("10000 messages");
+});
+
+test("Claude content and object budgets apply without serializing untrusted payloads", () => {
+  const message = (content: unknown) => [{ type: "assistant", uuid: "large", message: { content } }] as SessionMessage[];
+  expect(() => assertClaudeSessionHistoryBudget(message("x".repeat(CLAUDE_HISTORY_TEXT_BYTES + 1))))
+    .toThrow("32 MiB content limit");
+  expect(() => assertClaudeSessionHistoryBudget(message(Array.from({ length: 250_001 }, () => null))))
+    .toThrow("object complexity limit");
+  let content: unknown = "leaf";
+  for (let i = 0; i < 70; i++) content = { nested: content };
+  expect(() => assertClaudeSessionHistoryBudget(message(content))).toThrow("object complexity limit");
+  expect(() => assertClaudeSessionHistoryBudget(message({ toJSON() { throw new Error("must not serialize"); }, text: "small" }))).not.toThrow();
+});
+
+test("Claude SDK history concurrency is bounded and failure frees a slot", async () => {
+  const releases: Array<() => void> = [];
+  const reads = Array.from({ length: 4 }, () => readBoundedClaudeSessionHistory("session", undefined, async () => {
+    await new Promise<void>((resolve) => releases.push(resolve));
+    return [];
+  }));
+  await expect(readBoundedClaudeSessionHistory("session", undefined, async () => [])).rejects.toThrow("busy");
+  for (const release of releases) release();
+  await Promise.all(reads);
+  await expect(readBoundedClaudeSessionHistory("session", undefined, async () => { throw new Error("SDK failure"); })).rejects.toThrow("SDK failure");
+  expect(await readBoundedClaudeSessionHistory("session", undefined, async () => [])).toEqual([]);
 });

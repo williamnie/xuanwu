@@ -4,7 +4,23 @@ const EMPTY_DETAIL_KEYS = new Set(['type', 'status', 'call_id', 'id']);
 export function isRenderableToolItem(item) {
   if (!item || isMessageItem(item)) return false;
   if (item.type === 'commandExecution' || item.type === 'fileChange') return true;
-  return Boolean(toolDisplayForItem(item));
+  // 折叠状态只判断是否有详情，展开后才序列化工具的完整参数/输出。
+  if (item.type === 'reasoning') return Boolean(firstNonEmpty(extractText(item.summary), extractText(item.content), item.text));
+  if (item.type === 'approvalRequest') return true;
+  const fields = isToolCall(item.type)
+    ? ['arguments', 'input', 'action', 'revised_prompt']
+    : isToolOutput(item.type) ? ['output', 'tools', 'content']
+      : ['text', 'output', 'input', 'arguments', 'delta'];
+  if (fields.some((key) => hasDisplayValue(item[key]))) return true;
+  if (isToolCall(item.type) || isToolOutput(item.type)) return false;
+  return Object.entries(item).some(([key, value]) => (
+    !HIDDEN_DETAIL_KEYS.has(key) && !EMPTY_DETAIL_KEYS.has(key)
+    && value != null && value !== '' && !isEmptyArray(value)
+  ));
+}
+
+function hasDisplayValue(value) {
+  return value != null && (typeof value !== 'string' || Boolean(value.trim()));
 }
 
 export function isInspectableToolItem(item) {

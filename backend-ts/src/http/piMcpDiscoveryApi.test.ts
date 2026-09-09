@@ -94,6 +94,29 @@ describe("PI MCP discovery API", () => {
     }
   });
 
+  test("introspection does not overwrite a server changed while its process is running", async () => {
+    const fixture = await openFixture();
+    await writeFile(fixture.script, "await new Promise(resolve => setTimeout(resolve, 150));\n" + MCP_FIXTURE_SCRIPT);
+    try {
+      const router = createDefaultRouter({ database: fixture.db });
+      const created = await router.handle(new Request(`${BASE_URL}/api/pi/mcp/servers`, {
+        method: "POST", body: JSON.stringify({ name: "Concurrent MCP", transport: {
+          command: process.execPath, args: [fixture.script], type: "stdio"
+        } })
+      }));
+      const id = encodeURIComponent((await json(created)).server.id);
+      const pending = router.handle(new Request(`${BASE_URL}/api/pi/mcp/servers/${id}/introspect`, { method: "POST" }));
+      await router.handle(new Request(`${BASE_URL}/api/pi/mcp/servers/${id}`, {
+        method: "PATCH", body: JSON.stringify({ name: "Updated during introspection" })
+      }));
+      const response = await pending;
+      expect(response.status).toBe(409);
+      const results = await json(await router.handle(new Request(`${BASE_URL}/api/pi/mcp/discovery/results`)));
+      expect(results.servers[0].name).toBe("Updated during introspection");
+      expect(results.capabilities).toEqual([]);
+    } finally { fixture.db.close(); }
+  });
+
   test("manual stdio server can be introspected, enabled, called through read-only tools, and audited", async () => {
     const fixture = await openFixture();
     try {

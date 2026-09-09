@@ -1,4 +1,5 @@
-import { statSync } from "node:fs";
+import { readPiSessionFile, readPiSessionTurnPage } from "./sessionFileReader.ts";
+import type { SessionReadInput, SessionTurnsListInput } from "../types.ts";
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -26,10 +27,13 @@ export type PiSessionSnapshot = {
   id: string;
   name: string;
   updatedAt: number;
+  previewEntries?: SessionEntry[];
+  model?: string;
 };
 
 export type PiSessionFunctions = {
-  read(path: string): PiSessionSnapshot;
+  read(path: string, input?: SessionReadInput): PiSessionSnapshot | Promise<PiSessionSnapshot>;
+  readTurns?(path: string, input: SessionTurnsListInput): ReturnType<typeof readPiSessionTurnPage>;
   resolve(sessionId: string): Promise<string | undefined>;
 };
 
@@ -42,19 +46,8 @@ export const defaultPiSessionFunctions: PiSessionFunctions = {
     const sessions = await SessionManager.listAll();
     return sessions.find((session) => session.id === sessionId)?.path;
   },
-  read(path) {
-    const session = SessionManager.open(path);
-    const header = session.getHeader();
-    const stat = statSync(path);
-    return {
-      id: session.getSessionId(),
-      cwd: session.getCwd(),
-      name: session.getSessionName() ?? "",
-      entries: session.getBranch(),
-      createdAt: dateSeconds(header?.timestamp, stat.birthtimeMs || stat.ctimeMs),
-      updatedAt: Math.floor(stat.mtimeMs / 1000)
-    };
-  }
+  read: readPiSessionFile,
+  readTurns: readPiSessionTurnPage
 };
 
 /**
@@ -124,7 +117,7 @@ function isMissingDirectory(error: unknown): boolean {
 }
 
 export function publicPiSessionDetail(snapshot: PiSessionSnapshot, running = false): ProviderSessionDetailView {
-  const preview = firstUserText(snapshot.entries);
+  const preview = firstUserText(snapshot.previewEntries ?? snapshot.entries);
   return providerSessionDetail(PROVIDER, {
     sessionRef: snapshot.id,
     name: redactSensitiveText(snapshot.name || preview || "Pi session"),
@@ -134,7 +127,7 @@ export function publicPiSessionDetail(snapshot: PiSessionSnapshot, running = fal
     isRunning: running,
     createdAt: snapshot.createdAt,
     updatedAt: snapshot.updatedAt,
-    model: latestModel(snapshot.entries),
+    model: snapshot.model ?? latestModel(snapshot.entries),
     turns: piTranscriptTurns(snapshot.entries)
   });
 }
@@ -219,9 +212,4 @@ function messageText(content: unknown): string {
     const record = item as Record<string, unknown>;
     return record.type === "text" && typeof record.text === "string" ? [redactSensitiveText(record.text)] : [];
   }).filter(Boolean).join("\n");
-}
-
-function dateSeconds(value: string | undefined, fallbackMs: number): number {
-  const parsed = Date.parse(value ?? "");
-  return Number.isFinite(parsed) ? Math.floor(parsed / 1000) : Math.floor(fallbackMs / 1000);
 }

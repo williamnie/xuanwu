@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { PiConversation } from "../db/repositories/pi.ts";
-import { piConversationDetail, resolvePiConversationSessionFile } from "./piConversationTranscript.ts";
+import { piConversationDetail, resolvePiConversationSessionFile, PI_CONVERSATION_MESSAGE_LIMIT } from "./piConversationTranscript.ts";
 
 const tempRoots: string[] = [];
 
@@ -30,7 +30,7 @@ test("reads migrated Xuanwu transcripts referenced by legacy app support paths",
   }));
 
   expect(resolvePiConversationSessionFile(legacyFile)).toBe(xuanwuFile);
-  expect(piConversationDetail(conversation(legacyFile)).transcript).toEqual([
+  expect((await piConversationDetail(conversation(legacyFile))).transcript).toEqual([
     {
       id: "message-1",
       role: "user",
@@ -67,3 +67,30 @@ function conversation(sessionFile: string): PiConversation {
     updated_at: "2026-08-04T00:00:00Z"
   };
 }
+
+test("oversized transcript lines report an explicit limit instead of an empty history", async () => {
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-transcript-budget-"));
+  tempRoots.push(root);
+  const file = join(root, "session.jsonl");
+  writeFileSync(file, "x".repeat(16 * 1024 * 1024 + 1));
+  await expect(piConversationDetail(conversation(file))).rejects.toThrow("Pi history line exceeds 16 MiB limit");
+});
+
+
+test("Pi conversation total text budget rejects many individually valid UTF-8 lines", async () => {
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-transcript-total-budget-"));
+  tempRoots.push(root);
+  const file = join(root, "session.jsonl");
+  const line = JSON.stringify({ type: "message", id: "large", message: { role: "assistant", content: "汉".repeat(350_000) } }) + "\n";
+  for (let i = 0; i < 33; i++) await appendFile(file, line);
+  await expect(piConversationDetail(conversation(file))).rejects.toThrow("exceeds 32 MiB text or 10000 messages");
+});
+
+test("Pi conversation item budget rejects overflow instead of reporting a partial count", async () => {
+  const root = await mkdtemp(join(tmpdir(), "xuanwu-transcript-item-budget-"));
+  tempRoots.push(root);
+  const file = join(root, "session.jsonl");
+  const line = JSON.stringify({ type: "message", id: "small", message: { role: "user", content: "hello" } }) + "\n";
+  writeFileSync(file, line.repeat(PI_CONVERSATION_MESSAGE_LIMIT + 1));
+  await expect(piConversationDetail(conversation(file))).rejects.toThrow("exceeds 32 MiB text or 10000 messages");
+});

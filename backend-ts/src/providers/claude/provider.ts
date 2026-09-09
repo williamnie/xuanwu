@@ -1,9 +1,11 @@
+import type { SessionReadInput } from "../types.ts";
 import {
   getSessionInfo as sdkGetSessionInfo,
   getSessionMessages as sdkGetSessionMessages,
   listSessions as sdkListSessions,
   query as sdkQuery,
   type Options as ClaudeSdkOptions,
+  type GetSessionMessagesOptions,
   type Query as ClaudeSdkQuery,
   type SDKSessionInfo,
   type SessionMessage
@@ -35,7 +37,8 @@ import {
   assertClaudeSessionHistoryIdentity,
   claudeTranscriptContent,
   publicClaudeSessionDetail,
-  publicClaudeSessionSummary
+  publicClaudeSessionSummary,
+  readBoundedClaudeSessionHistory
 } from "./sessionHistory.ts";
 import {
   ProviderInterruptedError,
@@ -72,7 +75,7 @@ export type ClaudeQueryFactory = (input: QueryInput) => ClaudeQuery;
 
 export type ClaudeSessionFunctions = {
   getSessionInfo(sessionId: string, options?: { dir?: string }): Promise<SDKSessionInfo | undefined>;
-  getSessionMessages(sessionId: string, options?: { dir?: string; includeSystemMessages?: boolean }): Promise<SessionMessage[]>;
+  getSessionMessages(sessionId: string, options?: GetSessionMessagesOptions): Promise<SessionMessage[]>;
   listSessions(options?: { dir?: string; limit?: number; offset?: number }): Promise<SDKSessionInfo[]>;
 };
 
@@ -168,14 +171,16 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     };
   }
 
-  async readSession(sessionId: string): Promise<Record<string, unknown>> {
+  async readSession(sessionId: string, input: SessionReadInput = {}): Promise<Record<string, unknown>> {
     this.assertReady();
     const id = clean(sessionId);
     if (id === "") throw new Error("Claude SDK session id is required");
-    const [info, messages] = await Promise.all([
-      this.sessionFunctions().getSessionInfo(id),
-      this.sessionFunctions().getSessionMessages(id, { includeSystemMessages: false })
-    ]);
+    const functions = this.sessionFunctions();
+    const info = await functions.getSessionInfo(id);
+    assertClaudeSessionHistoryIdentity(id, info, []);
+    const messages = input.includeTurns === false ? [] : await readBoundedClaudeSessionHistory(
+      id, info, functions.getSessionMessages.bind(functions)
+    );
     if (!info && messages.length === 0) throw new Error(`Claude SDK session ${id} was not found`);
     assertClaudeSessionHistoryIdentity(id, info, messages);
     const running = this.active.has(id);
@@ -390,7 +395,7 @@ export class ClaudeExecutorProvider implements ExecutorProvider {
   recover(input: ProviderRecoveryInput) { return requireMethod(this.delegate.recover, "resume_session").call(this.delegate, input); }
   interrupt(input: InterruptInput) { return requireMethod(this.delegate.interrupt, "interrupt").call(this.delegate, input); }
   listSessions(input: SessionListInput) { return requireMethod(this.delegate.listSessions, "sessions").call(this.delegate, input); }
-  readSession(sessionId: string) { return requireMethod(this.delegate.readSession, "sessions").call(this.delegate, sessionId); }
+  readSession(sessionId: string, input?: SessionReadInput) { return requireMethod(this.delegate.readSession, "sessions").call(this.delegate, sessionId, input); }
   resolveApproval(requestId: string, decision: import("../types.ts").ApprovalDecision) {
     return requireMethod(this.delegate.resolveApproval, "approvals").call(this.delegate, requestId, decision);
   }

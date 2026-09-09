@@ -59,8 +59,8 @@ function registerProjectCompatRoutes(router: Router, handlers: FrontendCompatHan
   router.post("/api/projects/:id/hold/resume", (request) => writeResponse(() => (
     handlers.projects.resumeHold(projectIDAt(request, 1))
   )));
-  router.get("/api/projects/:id/references/search", (request) => json(
-    handlers.projects.references(projectIDAt(request, 1), projectReferenceFilter(request))
+  router.get("/api/projects/:id/references/search", async (request) => json(
+    await handlers.projects.references(projectIDAt(request, 1), projectReferenceFilter(request))
   ));
   router.post("/api/projects/sync/codex", () => writeResponse(() => handlers.projects.syncCodex()));
 }

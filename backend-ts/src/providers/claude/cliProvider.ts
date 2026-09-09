@@ -2,6 +2,7 @@ import {
   getSessionInfo as sdkGetSessionInfo,
   getSessionMessages as sdkGetSessionMessages,
   listSessions as sdkListSessions,
+  type GetSessionMessagesOptions,
   type SDKSessionInfo,
   type SessionMessage
 } from "@anthropic-ai/claude-agent-sdk";
@@ -16,7 +17,8 @@ import { claudeProcessEnvironment, environmentAuthenticationStatus } from "./aut
 import {
   assertClaudeSessionHistoryIdentity,
   publicClaudeSessionDetail,
-  publicClaudeSessionSummary
+  publicClaudeSessionSummary,
+  readBoundedClaudeSessionHistory
 } from "./sessionHistory.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import {
@@ -34,7 +36,8 @@ import {
   type SessionListResult,
   type SessionMessageInput,
   type SessionMessageResult,
-  type SessionRef
+  type SessionRef,
+  type SessionReadInput
 } from "../types.ts";
 
 const PROVIDER = "claude";
@@ -76,7 +79,7 @@ type ActiveClaudeProcess = {
 
 type ClaudeCliSessionFunctions = {
   getSessionInfo(sessionId: string, options?: { dir?: string }): Promise<SDKSessionInfo | undefined>;
-  getSessionMessages(sessionId: string, options?: { dir?: string; includeSystemMessages?: boolean }): Promise<SessionMessage[]>;
+  getSessionMessages(sessionId: string, options?: GetSessionMessagesOptions): Promise<SessionMessage[]>;
   listSessions(options?: { dir?: string; limit?: number; offset?: number }): Promise<SDKSessionInfo[]>;
 };
 
@@ -153,14 +156,16 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
     };
   }
 
-  async readSession(sessionId: string): Promise<Record<string, unknown>> {
+  async readSession(sessionId: string, input: SessionReadInput = {}): Promise<Record<string, unknown>> {
     this.assertReady();
     const id = clean(sessionId);
     if (id === "") throw new Error("Claude CLI session id is required");
-    const [info, messages] = await Promise.all([
-      this.sessionFunctions().getSessionInfo(id),
-      this.sessionFunctions().getSessionMessages(id, { includeSystemMessages: false })
-    ]);
+    const functions = this.sessionFunctions();
+    const info = await functions.getSessionInfo(id);
+    assertClaudeSessionHistoryIdentity(id, info, []);
+    const messages = input.includeTurns === false ? [] : await readBoundedClaudeSessionHistory(
+      id, info, functions.getSessionMessages.bind(functions)
+    );
     if (!info && messages.length === 0) throw new Error(`Claude CLI session ${id} was not found`);
     assertClaudeSessionHistoryIdentity(id, info, messages);
     const running = this.active.has(id);

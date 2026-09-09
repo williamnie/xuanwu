@@ -1,7 +1,7 @@
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
   recordIssueEvent,
-  recordIssueLogEvent,
+  recordIssueLogEventAsync,
   RUNTIME_EVIDENCE_CORRELATION_CONTRACT,
   type RuntimeEvidenceCorrelation
 } from "../db/repositories/issueEvents.ts";
@@ -28,6 +28,7 @@ import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
 import { syncProviderApprovalRequest } from "./providerApprovalRequests.ts";
 import { signalProviderTerminalEvent } from "./providerTerminalSignals.ts";
 import { createIssueLogPersistence, type IssueLogMode } from "./issueLogPersistence.ts";
+import { createBoundedPersistenceQueue } from "./boundedPersistenceQueue.ts";
 import { parseProviderOutcomeMarker, reconcileProviderOutcome } from "./providerOutcome.ts";
 import { ExecutionPolicyError, type ExecutionPolicyRequest, type ProviderPolicyContext } from "../providers/core/policyContracts.ts";
 import type { ProviderTransport } from "../providers/core/manifest.ts";
@@ -112,8 +113,11 @@ export async function runIssueWithProvider(
     }
     throw error;
   } finally {
-    await eventSink.flush();
-    resetDebugIssueLogMode(resolvedInput, eventSink.mode, providerID);
+    try {
+      await eventSink.flush();
+    } finally {
+      resetDebugIssueLogMode(resolvedInput, eventSink.mode, providerID);
+    }
   }
   persistRuntimeResult(resolvedInput, providerID, result, activeRunID);
   resolvedInput.onRunComplete?.({
@@ -167,29 +171,54 @@ export async function recoverIssueWithProvider(
     }
     throw error;
   } finally {
-    await eventSink.flush();
-    resetDebugIssueLogMode(resolvedInput, eventSink.mode, providerID);
+    try {
+      await eventSink.flush();
+    } finally {
+      resetDebugIssueLogMode(resolvedInput, eventSink.mode, providerID);
+    }
   }
   persistRuntimeResult(resolvedInput, providerID, result, activeRunID);
   return result;
 }
 
 function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string, activeAttempt: number) {
-  const pendingReconciliations = new Set<Promise<void>>();
   const mode = issueLogMode(input);
+  const queue = createBoundedPersistenceQueue<{ kind: "log" | "terminal" | "marker"; serialized: string }>(async (task) => {
+    const event = JSON.parse(task.serialized) as ProviderEvent;
+    if (task.kind === "log") {
+      await persistRuntimeEvent(input, event, activeRunID, activeAttempt);
+    } else if (task.kind === "marker") {
+      persistRunnerOutcomeMarker(input, event, activeRunID);
+    } else {
+      await reconcileTerminalEvent(input, event, activeRunID);
+    }
+  });
+  const enqueue = (kind: "log" | "terminal" | "marker", event: ProviderEvent) => {
+    try {
+      const serialized = JSON.stringify(event);
+      queue.push({ kind, serialized }, Buffer.byteLength(serialized));
+    } catch (error) {
+      // 定时 flush 的写入错误也留给 Run flush 传播，避免未捕获的 timer 异常。
+      queue.fail(error);
+    }
+  };
   const persistence = createIssueLogPersistence((event) => {
-    persistRuntimeEvent(input, event, activeRunID, activeAttempt);
+    enqueue("log", event);
   }, { mode });
   let failure = false;
   let sessionObserved = false;
   return {
     async flush() {
-      persistence.flush();
-      await Promise.all([...pendingReconciliations]);
+      try {
+        persistence.flush();
+      } finally {
+        await queue.flush();
+      }
     },
     mode,
     hasFailure: () => failure,
     push(event: ProviderEvent) {
+      queue.throwIfFailed();
       if (event.runEvent?.kind === "error") failure = true;
       input.onLog?.(event);
       publishLiveProviderEvent(input, event);
@@ -197,32 +226,43 @@ function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string
         (!sessionObserved || eventSessionStatus(event) !== "");
       processRuntimeEvent(input, event, activeRunID, persistSession);
       if (event.session) sessionObserved = true;
-      persistRunnerOutcomeMarker(input, event, activeRunID);
+      if (parseProviderOutcomeMarker(event.text)) enqueue("marker", event);
       persistence.push(event);
       const terminalOutcome = providerTerminalOutcome(event);
       if (terminalOutcome && input.database) {
-        const pending = reconcileProviderOutcome({
-          bus: input.bus,
-          database: input.database,
-          issueID: input.issueId,
-          issueRunID: activeRunID,
-          providerID: event.provider,
-          reportedOutcome: parseProviderOutcomeMarker(event.text) ?? terminalOutcome
-        }).then(() => undefined).catch((error) => {
-          input.onLog?.({
-            error: redactSensitiveText(error instanceof Error ? error.message : String(error)),
-            provider: event.provider,
-            raw: { method: "runtime/provider_outcome_reconcile_error" },
-            status: "failed",
-            type: "error"
-          });
-        });
-        pendingReconciliations.add(pending);
-        void pending.finally(() => pendingReconciliations.delete(pending));
+        enqueue("terminal", event);
       }
+      queue.throwIfFailed();
       input.onRuntimeEvent?.(event);
     }
   };
+}
+
+async function reconcileTerminalEvent(
+  input: RunnerIssueExecutionInput,
+  event: ProviderEvent,
+  activeRunID: string
+): Promise<void> {
+  const terminalOutcome = providerTerminalOutcome(event);
+  if (!input.database || !terminalOutcome) return;
+  try {
+    await reconcileProviderOutcome({
+      bus: input.bus,
+      database: input.database,
+      issueID: input.issueId,
+      issueRunID: activeRunID,
+      providerID: event.provider,
+      reportedOutcome: parseProviderOutcomeMarker(event.text) ?? terminalOutcome
+    });
+  } catch (error) {
+    input.onLog?.({
+      error: redactSensitiveText(error instanceof Error ? error.message : String(error)),
+      provider: event.provider,
+      raw: { method: "runtime/provider_outcome_reconcile_error" },
+      status: "failed",
+      type: "error"
+    });
+  }
 }
 
 function publishLiveProviderEvent(input: RunnerIssueExecutionInput, event: ProviderEvent): void {
@@ -452,14 +492,14 @@ function persistRuntimeResult(
   });
 }
 
-function persistRuntimeEvent(
+async function persistRuntimeEvent(
   input: RunnerIssueExecutionInput,
   event: ProviderEvent,
   activeRunID: string,
   activeAttempt: number
-): void {
+): Promise<void> {
   if (!input.database) return;
-  const persisted = recordIssueLogEvent(
+  const persisted = await recordIssueLogEventAsync(
     input.database,
     input.issueId,
     event,

@@ -1,3 +1,4 @@
+import type { SessionReadInput } from "../types.ts";
 import type {
   ExecutorCapability,
   ExecutorProvider,
@@ -122,12 +123,14 @@ export class QoderExecutorProvider implements ExecutorProvider {
     };
   }
 
-  async readSession(sessionId: string): Promise<Record<string, unknown>> {
+  async readSession(sessionId: string, input: SessionReadInput = {}): Promise<Record<string, unknown>> {
     this.assertReady();
     const id = required(sessionId, "Qoder session id");
     const functions = this.sessionFunctions();
     const info = await functions.getSessionInfo(id);
-    const history = await readQoderSessionHistory(functions, id, clean(info?.cwd));
+    const history = input.includeTurns === false
+      ? { messages: [], truncated: false }
+      : await readQoderSessionHistory(functions, id, clean(info?.cwd));
     if (!info && history.messages.length === 0) throw new Error(`Qoder session ${id} was not found`);
     assertQoderSessionHistoryIdentity(id, info, history.messages);
     return publicQoderSessionDetail(id, info, history.messages, {
