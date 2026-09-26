@@ -17,10 +17,10 @@ test('CI, package, and Release all invoke the canonical repository hygiene autho
   assert.ok(packaging.includes('node "$ROOT_DIR/scripts/repository-hygiene-audit.mjs"'));
 });
 
-test('pull request and main CI is read-only, frozen, and runs every required gate', async () => {
+test('manual CI is read-only, frozen, and runs every required gate', async () => {
   const workflow = await readFile(join(root, '.github', 'workflows', 'ci.yml'), 'utf8');
-  assert.match(workflow, /pull_request:/);
-  assert.match(workflow, /push:\n\s+branches:\n\s+- main/);
+  const triggers = workflow.match(/^on:\n([\s\S]*?)(?=^\S)/m)?.[1];
+  assert.equal(triggers?.trim(), 'workflow_dispatch:');
   assert.match(workflow, /permissions:\n\s+contents: read/);
   assert.doesNotMatch(workflow, /contents: write|packages: write|id-token: write|gh release/);
   assert.match(workflow, /bun install --cwd backend-ts --frozen-lockfile --ignore-scripts/);
