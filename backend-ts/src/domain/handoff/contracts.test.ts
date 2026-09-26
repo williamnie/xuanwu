@@ -73,6 +73,17 @@ describe("Handoff / Delivery domain contract", () => {
     expect(validateHandoff(external, context()).ok).toBe(false);
   });
 
+  test("zero-file drafts can preserve different observations but cannot promote them to a ready receipt", () => {
+    const handoff = record("local_changes");
+    handoff.status = "draft";
+    handoff.changed_files = [];
+    expect(validateHandoff(handoff, context()).ok).toBe(true);
+    expect(evaluateHandoffTransition(handoff, context(), transition(handoff, "ready")).allowed).toBe(false);
+    expect(evaluateHandoffTransition(handoff, context(), {
+      ...transition(handoff, "superseded"), superseding_handoff_id: makeDomainID("handoff", "derived", "replacement"),
+    }).allowed).toBe(true);
+  });
+
   test("fails closed when a delivery mode omits its required artifact fields", () => {
     const requiredFieldByMode: Record<DeliveryMode, string> = {
       local_changes: "working_tree_ref",

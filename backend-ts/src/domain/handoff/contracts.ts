@@ -324,6 +324,7 @@ export function evaluateHandoffTransition(
     violations.push(`illegal Handoff transition ${current.status} -> ${command.to}`);
   }
   violations.push(...validateTransitionAudit(command.audit));
+  validateDelivery({ ...current, status: command.to }, violations);
   validateStatusRequirements(current, command.to, context, violations);
 
   if (command.to === "superseded") {
@@ -354,10 +355,10 @@ function validateDelivery(handoff: HandoffRecord, errors: string[]): void {
   }
   if (["local_changes", "branch_commit", "push", "draft_pr", "ready_pr"].includes(delivery.mode) &&
     handoff.changed_files.length === 0) {
-    const readOnlyReceipt = delivery.mode === "local_changes"
-      && handoff.baseline_revision === handoff.final_revision
+    const localObservationReceipt = delivery.mode === "local_changes"
+      && (handoff.baseline_revision === handoff.final_revision || ["draft", "superseded"].includes(handoff.status))
       && handoff.delivery_actions.length === 0 && handoff.run_ids.length > 0 && handoff.evidence_ids.length > 0;
-    if (!readOnlyReceipt) errors.push(`${delivery.mode} requires changed_files or an unchanged read-only receipt`);
+    if (!localObservationReceipt) errors.push(`${delivery.mode} requires changed_files or an unchanged read-only receipt`);
   }
 }
 

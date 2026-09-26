@@ -9,7 +9,8 @@ import { TOOL_OBSERVATION_SCHEMA_VERSION } from "../../runner/issueLogPersistenc
 import type { ProviderEvent } from "../../providers/types.ts";
 import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
-import { runGit, withGitWorkspaceObservation } from "../run/gitWorkspaceObservation.ts";
+import { captureGitWorkspaceBaseline, runGit, withGitWorkspaceObservation } from "../run/gitWorkspaceObservation.ts";
+import type { CapturedGitWorkspaceBaseline } from "../evidence/runGitWorkspaceBaseline.ts";
 import { makeRunAttemptID } from "../run/contracts.ts";
 import { projectIssueAsWork } from "../work/issueAdapter.ts";
 
@@ -42,6 +43,7 @@ export type CompletionCardGit = {
   observed_at: string;
   source: "legacy_reconstruction" | "session_observation" | "terminal_observation";
   working_tree_dirty: boolean;
+  workspace_snapshot_ref?: string;
 };
 
 export type CompletionCardSessionItem = {
@@ -309,7 +311,7 @@ export async function recordCompletionGitObservation(
   input: { issue_id: number; observed_at: string; repository: string; run: IssueRun }
 ): Promise<void> {
   let summary: CompletionCardGit;
-  try { summary = await liveGitSummary(input.repository, input.run, input.observed_at); }
+  try { summary = await liveGitSummary(input.repository, input.run, input.observed_at, true); }
   catch {
     // 观察失败不能阻止 Provider 终态归档，也不能写出假 clean 的观察事实。
     recordIssueEvent(db, input.issue_id, "issue.completion_git_observation_failed.v1", {
@@ -689,7 +691,9 @@ async function gitRunSummary(
   return liveGitSummary(repository, run, run.ended_at);
 }
 
-async function liveGitSummary(repository: string, run: IssueRun, observedAt: string): Promise<CompletionCardGit> {
+async function liveGitSummary(repository: string, run: IssueRun, observedAt: string, includeWorkspace = false): Promise<CompletionCardGit & {
+  workspace_snapshot?: CapturedGitWorkspaceBaseline;
+}> {
   const baseline = gitObjectID(run.git_base_revision) ? run.git_base_revision.toLowerCase() : "";
   const summary = await withGitWorkspaceObservation(repository, async (cwd, deadline) => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -701,13 +705,16 @@ async function liveGitSummary(repository: string, run: IssueRun, observedAt: str
       const changedFiles = [...new Set([...tracked, ...untracked])].sort().slice(0, MAX_CHANGED_FILES);
       const workingTreeDirty = (await gitText(cwd, ["status", "--porcelain=v1", "--untracked-files=all"], deadline, requireSuccess)) !== "";
       const commits = await gitCommitSummary(cwd, baseline, head, deadline);
+      const workspace = includeWorkspace && gitObjectID(head) ? await captureGitWorkspaceBaseline(cwd, deadline) : null;
+      if (workspace && workspace.base_revision !== head) continue;
       const stableHead = await gitText(cwd, ["rev-parse", "--verify", "HEAD"], deadline, requireSuccess);
       if (stableHead !== head) continue;
       return {
         baseline_revision: baseline, changed_files: changedFiles, commit_count: commits.length, commits,
         final_revision: gitObjectID(head) ? head : "",
         has_diff: changedFiles.length > 0 || (gitObjectID(baseline) && gitObjectID(head) && baseline !== head),
-        observed_at: observedAt, source: "session_observation" as const, working_tree_dirty: workingTreeDirty
+        observed_at: observedAt, source: "session_observation" as const, working_tree_dirty: workingTreeDirty,
+        ...(workspace ? { workspace_snapshot: workspace } : {})
       };
     }
     throw new Error("Git HEAD changed repeatedly during workspace observation");
@@ -742,7 +749,9 @@ function terminalGitObservation(
       has_diff: observation.has_diff === true,
       observed_at: cleanString(observation.observed_at) || event.created_at,
       source: "terminal_observation",
-      working_tree_dirty: observation.working_tree_dirty === true
+      working_tree_dirty: observation.working_tree_dirty === true,
+      ...(typeof objectValue(observation.workspace_snapshot).snapshot_sha256 === "string"
+        ? { workspace_snapshot_ref: `run-git-snapshot:${run.id}:${objectValue(observation.workspace_snapshot).snapshot_sha256}` } : {})
     };
   }
   return null;

@@ -32,6 +32,8 @@ Handoff 是某个 Work 在一个确定 revision/tree 上的**版本化、可重�
 
 branch/commit/PR 模式的 `commit_ref`，deploy/release 的 `revision_ref` 必须等于 `final_revision`。前五种代码变更模式必须有 scoped `changed_files`；deploy/release 可以只交付已经存在的不可变 revision/artifact。
 
+`local_changes` 的零文件观察凭证必须关联 Run 和 Evidence，且没有 delivery action。`ready` 凭证要求 baseline/final 相同；`draft` 可保留不同或不可用的观察引用，以表达文件归属尚未确认，不能在文件列表和引用仍不满足条件时升级为 `ready`。
+
 `tracker_update` 是可选 delivery action，不构成新的 delivery mode。它与 push、PR、deploy、release 一样是外部写，必须经过独立 gate 并记录 provider result；不得因为某个 mode 已获准而隐式授权 tracker update。
 
 ## 3. Handoff schema

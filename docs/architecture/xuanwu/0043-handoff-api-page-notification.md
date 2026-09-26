@@ -11,6 +11,14 @@
 
 ## 1. 决策与 authority
 
+普通任务的 PI `accept` 由 `domain/handoff/acceptedDelivery.ts` 准备本地交付记录，`runner/piAcceptanceApplication.ts` 在同一事务内保存 Completion Card、Evidence、Handoff、通知及 Work 终态。准备阶段仅允许有界 Git 读取；进入写事务后重新核对 Work revision 和最新 Run，重复及并发接受同一卡片只生成一份记录。
+
+交付记录关联该 Work 的执行链，以首次 Run 的工作区基线与最后 Run 的终态快照归属文件，覆盖多轮执行产生的提交。开始前已存在且保持不变的脏文件被排除；混合修改、快照缺失、记录截断或失败检查保留为 `draft` 及明确风险，不改变 PI 对任务完成的判断。命令 Evidence 来自实际终态命令观察，Git Evidence 来自持久化的基线和终态观察，不把模型叙述变成证明。未采集 diff 行数时保持未知，不伪造为零。
+
+完整终态工作区快照只存事件账本，Completion Card 和 LLM 上下文携带快照引用；交付 producer 按同 Work、同 Run 和内容哈希读回，不把可能很大的文件指纹列表加入模型上下文。
+
+该自动记录固定为 `local_changes`，不会执行 commit/push/PR/deploy/release，也不会把模型声称的外部交付升级成事实。现有外部交付模式和审批门禁继续保留；已有历史任务不自动回填。无快照的旧 Run 或非 Git 任务可正常被 PI 接受，同时留下说明缺口的草稿。第一版凭证有界关联最多 256 个 Run、200 条已有 Evidence 和完成卡片的命令观察，超限显式标记不完整。
+
 P05.08 不新建 Handoff table，也不复制 Git、Evidence、review、provider 或 tracker 状态。完整
 `HandoffRecord` 由 P05.03–P05.07 producer 通过 `recordHandoff()` 追加到 Issue 所属的 `issue_events`：初始版本使用
 `handoff.prepared.v1`，后续 revision 使用 P00.04 已批准的 delivery requested/completed/failed/superseded 事件。

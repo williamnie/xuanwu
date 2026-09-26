@@ -105,7 +105,7 @@ export function issueRunGitDeliveryScope(
   const committedPaths = gitObjectID(headRevision)
     ? changedPathsBetween(input.repository_path, baseRevision, headRevision)
     : [];
-  const baseline = storedBaseline(db, issueID, input.run_id);
+  const baseline = readIssueRunGitWorkspaceBaseline(db, issueID, input.run_id);
   if (!baseline || baseline.base_revision !== baseRevision) {
     const inference = recordedBaseRevision === ""
       ? "Run Git base revision was inferred from its persisted start time"
@@ -226,12 +226,12 @@ function worktreeObjectID(repositoryPath: string, path: string): string {
   return gitObjectID(value) ? value : "missing";
 }
 
-function storedBaseline(db: RunnerDatabase, issueID: number, runID: string): WorkspaceBaseline | null {
-  const rows = db.sqlite.query<{ payload: string }, [number, string]>(`
+export function readIssueRunGitWorkspaceBaseline(db: RunnerDatabase, issueID: number, runID: string): WorkspaceBaseline | null {
+  const rows = db.sqlite.query<{ payload: string }, [number, string, string]>(`
     select payload from issue_events
-    where issue_id=? and type=?
+    where issue_id=? and type=? and json_valid(payload) and json_extract(payload, '$.run_id')=?
     order by id desc limit 20
-  `).all(issueID, ISSUE_RUN_GIT_WORKSPACE_BASELINE_EVENT);
+  `).all(issueID, ISSUE_RUN_GIT_WORKSPACE_BASELINE_EVENT, runID);
   for (const row of rows) {
     try {
       const value = JSON.parse(row.payload) as Partial<WorkspaceBaseline>;

@@ -6,6 +6,7 @@ import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.t
 import { getProject } from "../db/repositories/projects.ts";
 import {
   assertCompletionCardIntegrity,
+  recordIssueCompletionCard,
   type CompletionCard
 } from "../domain/acceptance/completionCard.ts";
 import { createHumanReviewRequest, readIssueDecisionProjection } from "../domain/review/humanReview.ts";
@@ -21,6 +22,9 @@ import {
 import { applyPiSemanticIssueStatus } from "./piIssueLifecycle.ts";
 import { recoverIssueWithProvider, runIssueWithProvider } from "./providerRuntime.ts";
 import { reconcileProviderOutcome } from "./providerOutcome.ts";
+import { prepareAcceptedDelivery, ACCEPTED_DELIVERY_SOURCE } from "../domain/handoff/acceptedDelivery.ts";
+import { recordEvidenceRecords } from "../db/repositories/evidence.ts";
+import { recordHandoffDelivery } from "../notifications/handoffNotifier.ts";
 
 export const PI_ACCEPTANCE_DECISION_EVENT = "issue.pi_acceptance_decision.v1";
 export const PI_ACCEPTANCE_APPLIED_EVENT = "issue.pi_acceptance_applied.v1";
@@ -45,8 +49,8 @@ export async function applyPiAcceptanceDecision(
   if (replay?.status === "done" && applied(runtime.database, card.issue.id, card.fingerprint)) return replay;
   assertCurrentCard(runtime.database, card);
   const effectiveDecision = honorAcceptedDeliveryReview(runtime.database, card, decision);
-  recordDecision(runtime.database, card, effectiveDecision);
   if (effectiveDecision.decision === "accept") return acceptIssue(runtime, card, effectiveDecision);
+  recordDecision(runtime.database, card, effectiveDecision);
   if (effectiveDecision.decision === "needs_user") return requestUser(runtime, card, effectiveDecision);
   if (effectiveDecision.decision === "failed") return failIssue(runtime, card, effectiveDecision);
   if (effectiveDecision.decision === "retry") return retryInNewSession(runtime, card, effectiveDecision);
@@ -143,28 +147,36 @@ function honorAcceptedDeliveryReview(
   };
 }
 
-function acceptIssue(
+async function acceptIssue(
   runtime: PiAcceptanceApplicationRuntime,
   card: CompletionCard,
   decision: PiAcceptanceDecision
-): Issue {
+): Promise<Issue> {
   const db = runtime.database;
-  const issue = mustGetIssue(db, card.issue.id);
-  const write = applyPiSemanticIssueStatus(db, issue.id, {
-    card_fingerprint: card.fingerprint,
-    decision: decision.decision,
-    reason: decision.rationale,
-    run_id: card.run.id,
-    status: "done"
-  });
-  recordIssueEvent(db, issue.id, PI_ACCEPTANCE_APPLIED_EVENT, {
-    action: "accept",
-    card_fingerprint: card.fingerprint,
-    decision,
-    from_status: issue.status,
-    run_id: card.run.id,
-    status: "done"
-  });
+  // Git 只读观察在事务外准备；事务内再次校验版本，原子保存终态与交付账本。
+  const delivery = await prepareAcceptedDelivery(db, card, decision);
+  const result = db.transaction(() => {
+    const current = mustGetIssue(db, card.issue.id);
+    if (current.status === "done" && applied(db, current.id, card.fingerprint)) return { issue: current, notification: null };
+    assertCurrentCard(db, card);
+    recordDecision(db, card, decision);
+    recordIssueCompletionCard(db, card, ACCEPTED_DELIVERY_SOURCE);
+    recordEvidenceRecords(db, card.issue.id, delivery.evidence, { recorded_at: delivery.recorded_at, source: ACCEPTED_DELIVERY_SOURCE });
+    const receipt = recordHandoffDelivery({ database: db, issue_id: card.issue.id, handoff: delivery.handoff,
+      recorded_at: delivery.recorded_at, source: ACCEPTED_DELIVERY_SOURCE });
+    const issue = applyPiSemanticIssueStatus(db, card.issue.id, {
+      card_fingerprint: card.fingerprint, decision: decision.decision, reason: decision.rationale,
+      run_id: card.run.id, status: "done"
+    });
+    recordIssueEvent(db, issue.id, PI_ACCEPTANCE_APPLIED_EVENT, {
+      action: "accept", card_fingerprint: card.fingerprint, decision,
+      from_status: current.status, run_id: card.run.id, status: "done"
+    });
+    return { issue, notification: receipt.notification };
+  }).immediate();
+  const write = result.issue;
+  if (result.notification) runtime.bus?.publish({ issueId: write.id, projectId: write.project_id,
+    type: "handoff.notification", status: delivery.handoff.status, payload: result.notification.payload });
   publishStatus(runtime, write);
   return write;
 }

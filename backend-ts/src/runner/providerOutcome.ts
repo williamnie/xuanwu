@@ -1,6 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
-import { getIssue, type Issue } from "../db/repositories/issues.ts";
+import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { restoreOpenHumanReviewAfterTerminalRun } from "../domain/review/humanReview.ts";
 import type { EventBus } from "../events/bus.ts";
@@ -40,7 +40,8 @@ export async function reconcileProviderOutcome(
   const now = input.now ?? new Date();
   if (reported.outcome === "unknown") return current;
   closeReportedTerminalRun(input.database, input.issueRunID, reported, now.toISOString());
-  const terminalRun = getIssue(input.database, current.id)?.latest_run;
+  // getIssue 是精简投影，不附带 latest_run；终态快照必须读取 canonical Run。
+  const terminalRun = listIssueRuns(input.database, current.id).at(-1);
   const project = getProject(input.database, current.project_id);
   if (terminalRun?.id === input.issueRunID && project) {
     await recordCompletionGitObservation(input.database, {

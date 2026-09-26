@@ -65,7 +65,7 @@ export async function observeGitWorkspaceBaseline(
   if (!input.run_id.trim()) return outcome("invalid_input");
   return withGitWorkspaceObservation(input.project_cwd, async (cwd, deadline) => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const captured = await captureOnce(cwd, deadline);
+      const captured = await captureGitWorkspaceBaseline(cwd, deadline);
       if (!captured) return outcome("capture_failed");
       const stableHead = await gitText(cwd, ["rev-parse", "--verify", "HEAD^{commit}"], deadline);
       if (stableHead === captured.base_revision) {
@@ -107,7 +107,8 @@ export function gitWorkspaceObservationMetrics(): Record<string, number> {
   return Object.fromEntries([...counters.entries()].sort(([left], [right]) => left.localeCompare(right)));
 }
 
-async function captureOnce(cwd: string, deadline: number): Promise<CapturedGitWorkspaceBaseline | null> {
+/** 仅在 withGitWorkspaceObservation 的并发与时限边界内调用。 */
+export async function captureGitWorkspaceBaseline(cwd: string, deadline: number): Promise<CapturedGitWorkspaceBaseline | null> {
   const baseRevision = await gitText(cwd, ["rev-parse", "--verify", "HEAD^{commit}"], deadline);
   if (!gitObjectID(baseRevision)) return null;
   const status = await runGit(cwd, [
