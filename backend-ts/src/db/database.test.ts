@@ -118,6 +118,7 @@ describe("Bun SQLite database connection", () => {
         "feishu_project_selections",
         "git_repo_mapping_events",
         "git_repo_mappings",
+        "github_issue_cases",
         "im_context_cursors",
         "im_context_event_bindings",
         "im_context_rollovers",
@@ -319,7 +320,8 @@ describe("Bun SQLite database connection", () => {
         { id: "082_im_context_lifecycle" },
         { id: "083_attention_action_recent_index" },
         { id: "084_supervisor_natural_instructions" },
-        { id: "085_runtime_read_indexes" }
+        { id: "085_runtime_read_indexes" },
+        { id: "086_github_issue_cases" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
@@ -981,7 +983,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 86 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 87 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
@@ -1040,7 +1042,7 @@ describe("Bun SQLite database connection", () => {
 
     const upgraded = await openDatabase({ stateDir });
     try {
-      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 86 });
+      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 87 });
       expect(tableNames(upgraded)).toEqual(expect.arrayContaining([
         "im_conversation_state",
         "im_interaction_bindings",

@@ -15,8 +15,19 @@ import { registerCoreReadRoutes } from "./readApiRoutes.ts";
 import { registerRunRoutes, RUN_READ_AUTHORITY, RUN_WRITE_AUTHORITY } from "./runApi.ts";
 import type { Router } from "./router.ts";
 import { registerWorkRoutes } from "./workApi.ts";
+import { registerTrackerEventRoutes } from "./trackerEventsApi.ts";
 
 describe("read API route contracts", () => {
+  test("GitHub exposes a read-only status separately from explicit sync", () => {
+    expect(captureRoutes(registerTrackerEventRoutes)).toEqual([
+      "GET /api/integrations/trackers/github/status",
+      "POST /api/integrations/trackers/:provider/events",
+      "POST /api/integrations/trackers/:provider/poll",
+      "POST /api/integrations/trackers/github/sync",
+      "PUT /api/integrations/trackers/:provider/links",
+      "PUT /api/integrations/trackers/mappings"
+    ]);
+  });
   test("locks the route registry responsibility boundary", () => {
     expect(READ_API_ROUTE_REGISTRY.map(({ id, responsibility }) => ({ id, responsibility })))
       .toMatchInlineSnapshot(`

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { workHumanReviewCopy } from './workHumanReviewCopy';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -392,7 +393,7 @@ function LatestHandoffCard({ handoff, onOpen }) {
 function WorkStateSummary({ status, decision }) {
   const { t } = useI18n();
   const pendingSummary = decision?.owner === 'human'
-    ? [t('work.state.reviewTitle'), decision?.request?.question || t('work.state.reviewDetail')]
+    ? [workHumanReviewCopy(decision?.request?.kind, t).pending, decision?.request?.question || t('work.state.reviewDetail')]
     : decision?.phase === 'pi_continuing'
       ? [t('work.state.piRepairingTitle'), t('work.state.piRepairingDetail')]
       : decision?.phase === 'pi_deciding'
@@ -439,6 +440,7 @@ function ResourceError({ error }) {
 
 function HumanReviewCard({ disabled, onSelect, request }) {
   const { t } = useI18n();
+  const copy = workHumanReviewCopy(request.kind, t);
   return <article className="work-human-review-card">
     <span>{t('work.youAreApproving')}</span>
     <h3>{request.question}</h3>
@@ -447,7 +449,7 @@ function HumanReviewCard({ disabled, onSelect, request }) {
     {request.excluded_scope?.length ? <div><strong>{t('work.notIncluded')}</strong><ul>{request.excluded_scope.map(item => <li key={item}>{item}</li>)}</ul></div> : null}
     {request.evidence_refs?.length ? <details><summary>{t('work.reviewEvidence')}</summary><ul>{request.evidence_refs.map(item => <li key={item}><code>{item}</code></li>)}</ul></details> : null}
     {request.consequences ? <p><strong>{t('work.approvalConsequences')}：</strong>{request.consequences}</p> : null}
-    <div className="work-review-actions"><button disabled={disabled} onClick={() => onSelect('accept')} type="button"><CheckCircle2 size={14} /> {t('work.accept')}</button><button disabled={disabled} onClick={() => onSelect('request_changes')} type="button"><RefreshCw size={14} /> {t('work.changes')}</button><button className="danger" disabled={disabled} onClick={() => onSelect('reject')} type="button"><XCircle size={14} /> {t('work.reject')}</button></div>
+    <div className="work-review-actions"><button disabled={disabled} onClick={() => onSelect('accept')} type="button"><CheckCircle2 size={14} /> {copy.accept}</button><button disabled={disabled} onClick={() => onSelect('request_changes')} type="button"><RefreshCw size={14} /> {t('work.changes')}</button><button className="danger" disabled={disabled} onClick={() => onSelect('reject')} type="button"><XCircle size={14} /> {t('work.reject')}</button></div>
   </article>;
 }
 
@@ -458,8 +460,9 @@ function InlineConfirmation({ busy, onCancel, onConfirm }) {
 
 function ReviewDialog({ action, busy, comment, onCancel, onChange, onConfirm, request }) {
   const { t } = useI18n();
+  const copy = workHumanReviewCopy(request?.kind, t);
   const commentRequired = action === 'reject' || action === 'request_changes';
-  return <ModalOverlay className="work-dialog-overlay"><form className="work-review-dialog" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}><span>{t('work.reviewGate')}</span><h2>{reviewTitle(action, t)}</h2><p className="work-review-question">{request?.question}</p><p>{action === 'request_changes' ? t('work.reviewRevisionFlow') : t('work.reviewAudit')}</p><label><span>{t(commentRequired ? 'work.reviewNoteRequired' : 'work.reviewNoteOptional')}</span><textarea autoFocus={commentRequired} className="form-control" onChange={event => onChange(event.target.value)} placeholder={action === 'request_changes' ? t('work.reviewChangesPlaceholder') : ''} rows={5} value={comment} /></label><div><button disabled={busy} onClick={onCancel} type="button">{t('work.cancel')}</button><button className={action === 'reject' ? 'danger' : 'primary'} disabled={busy || (commentRequired && !comment.trim())} type="submit">{busy ? t('work.submitting') : action === 'request_changes' ? t('work.submitChangesAndContinue') : t('work.submitReview')}</button></div></form></ModalOverlay>;
+  return <ModalOverlay className="work-dialog-overlay"><form className="work-review-dialog" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}><span>{t('work.reviewGate')}</span><h2>{reviewTitle(action, t, copy)}</h2><p className="work-review-question">{request?.question}</p><p>{action === 'request_changes' ? t('work.reviewRevisionFlow') : action === 'accept' ? copy.detail : t('work.reviewAudit')}</p><label><span>{t(commentRequired ? 'work.reviewNoteRequired' : 'work.reviewNoteOptional')}</span><textarea autoFocus={commentRequired} className="form-control" onChange={event => onChange(event.target.value)} placeholder={action === 'request_changes' ? t('work.reviewChangesPlaceholder') : ''} rows={5} value={comment} /></label><div><button disabled={busy} onClick={onCancel} type="button">{t('work.cancel')}</button><button className={action === 'reject' ? 'danger' : 'primary'} disabled={busy || (commentRequired && !comment.trim())} type="submit">{busy ? t('work.submitting') : action === 'request_changes' ? t('work.submitChangesAndContinue') : action === 'accept' ? copy.accept : t('work.submitReview')}</button></div></form></ModalOverlay>;
 }
 
 function fulfilledItems(result) {
@@ -472,9 +475,9 @@ function settledErrors(results, keys) {
   return Object.fromEntries(results.flatMap((result, index) => result.status === 'rejected' ? [[keys[index], result.reason?.message || `Failed to load ${keys[index]}`]] : []));
 }
 
-function reviewTitle(action, t) {
-  if (action === 'accept') return t('work.acceptDelivery');
-  if (action === 'reject') return t('work.rejectDelivery');
+function reviewTitle(action, t, copy) {
+  if (action === 'accept') return copy.title;
+  if (action === 'reject') return copy.reject;
   return t('work.requestChanges');
 }
 

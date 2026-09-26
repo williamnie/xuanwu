@@ -21,8 +21,8 @@ const ADR_PATH = "docs/architecture/xuanwu/0005-capability-disposition-inventory
 
 describe("Xuanwu capability disposition inventory", () => {
   test("covers every current source table and the two live-only legacy tables", () => {
-    expect(TABLE_DISPOSITIONS).toHaveLength(96);
-    expect(unique(TABLE_DISPOSITIONS.map((item) => item.name))).toHaveLength(96);
+    expect(TABLE_DISPOSITIONS).toHaveLength(97);
+    expect(unique(TABLE_DISPOSITIONS.map((item) => item.name))).toHaveLength(97);
     expect(Object.keys(RETENTION_LEVELS).sort()).toEqual([
       "R0_DERIVED",
       "R1_OPERATIONAL",
@@ -75,7 +75,7 @@ describe("Xuanwu capability disposition inventory", () => {
     const routes = productionHttpRoutes();
     const inventoried = API_ROUTE_DISPOSITIONS.map((route) => `${route.method} ${route.path}`).sort();
     expect(inventoried).toEqual(routes);
-    expect(inventoried).toHaveLength(265);
+    expect(inventoried).toHaveLength(267);
     expect(unique(inventoried)).toHaveLength(inventoried.length);
 
     const familyIDs = new Set(API_ROUTE_FAMILIES.map((family) => family.id));

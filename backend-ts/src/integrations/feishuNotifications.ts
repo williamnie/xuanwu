@@ -163,6 +163,11 @@ export function queueFeishuPiNeedsUserNotification(
   const target = issue ? feishuTargetForIssue(db, issue.id) : null;
   const fallback = feishuTargetForConversation(db, safeText(event.conversationId));
   const projectID = issue?.project_id ?? safeText(event.projectId);
+  const explicitProjectTarget = options.config?.projectMappings.some(mapping => mapping.projectId === projectID && (mapping.chatId || mapping.userId));
+  // GitHub 已有版本绑定的求助回写，不再落到无关的默认飞书会话；显式飞书绑定仍然有效。
+  if (issue && !target && !fallback && !explicitProjectTarget && db.sqlite.query(
+    "select 1 from github_issue_cases where issue_id=? and stage in ('investigate','repair') and external_state='open'"
+  ).get(issue.id)) return { queued: false, reason: "github_review_owns_target" };
   const projectFallback = feishuFallbackTargetForProject(options.config, projectID);
   const finalTarget = providerTarget("feishu", target ?? fallback ?? projectFallback) ?? resolveGenericTarget(db, {
     conversationID: safeText(event.conversationId),

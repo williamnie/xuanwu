@@ -21,6 +21,11 @@ export const RETENTION_LEVELS = {
 
 export const TABLE_DISPOSITIONS = [
   {
+    name: "github_issue_cases", disposition: "keep", target: "GitHub source versions and workflow correlations",
+    source_of_truth: "github_issue_cases", retention: "R2_DURABLE", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
     name: "agent_profiles", disposition: "keep", target: "Executor configuration",
     source_of_truth: "agent_profiles", retention: "R2_DURABLE", runtime_origin: "source_schema",
     live_rows: 0, delete_preconditions: []
@@ -545,6 +550,8 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "PUT", path: "/api/integrations/git/mappings", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/integrations/trackers/:provider/events", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/integrations/trackers/:provider/poll", family: "integration-intake-delivery" },
+  { method: "GET", path: "/api/integrations/trackers/github/status", family: "integration-intake-delivery" },
+  { method: "POST", path: "/api/integrations/trackers/github/sync", family: "integration-intake-delivery" },
   { method: "PUT", path: "/api/integrations/trackers/:provider/links", family: "integration-intake-delivery" },
   { method: "PUT", path: "/api/integrations/trackers/mappings", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/integrations/webhook/events", family: "integration-intake-delivery" },

@@ -14,6 +14,20 @@ const URL = "http://127.0.0.1:3008";
 afterEach(async () => { while (roots.length) await rm(roots.pop()!, { recursive: true, force: true }); });
 
 describe("Issue Tracker bidirectional sync", () => {
+  test("GitHub retains every source event so replaying an older delivery stays idempotent", async () => {
+    const database = await fixture();
+    try {
+      database.sqlite.run("insert into tracker_project_mappings (provider, scope, project_id, created_at, updated_at) values ('github', 'demo', 'demo', '2026-07-18T00:00:00.000Z', '2026-07-18T00:00:00.000Z')");
+      const opened = { ...fakeEvent("open", "2026-07-18T01:00:00.000Z"), provider: "github" as const };
+      const closed = { ...fakeEvent("closed", "2026-07-18T02:00:00.000Z"), provider: "github" as const };
+      const first = syncTrackerIssueEvent(database, opened);
+      syncTrackerIssueEvent(database, closed);
+      expect(database.sqlite.query("select count(*) as n from external_events where source='github'").get()).toEqual({ n: 2 });
+      expect(syncTrackerIssueEvent(database, opened)).toMatchObject({ replayed: true, issue_id: first.issue_id });
+      expect(getIssue(database, first.issue_id!)?.status).toBe("triage");
+      expect(database.sqlite.query("select external_id from external_links where issue_id=? order by id limit 1").get(first.issue_id!)).toEqual({ external_id: opened.external_id });
+    } finally { database.close(); }
+  });
   test("fake tracker poll creates one intake, persists a cursor, and replays without another write", async () => {
     const database = await fixture();
     try {
@@ -63,7 +77,7 @@ describe("Issue Tracker bidirectional sync", () => {
     } finally { database.close(); }
   });
 
-  test("manual link is audited and lets a mapped external status update the selected Issue", async () => {
+  test("manual link is audited and GitHub closure cannot bypass local PI acceptance", async () => {
     const database = await fixture();
     try {
       const issue = database.sqlite.run(`insert into issues (project_id, title, description, status, priority,
@@ -77,7 +91,7 @@ describe("Issue Tracker bidirectional sync", () => {
       expect(linked.status).toBe(201);
       const synced = syncTrackerIssueEvent(database, { actor: "octo", description: "", event_name: "issues", external_id: "acme/demo:99", external_status: "closed", external_updated_at: "2026-07-18T01:00:00.000Z", payload: { id: 99 }, provider: "github", scope: "acme/demo", title: "Manual target", url: "https://github.invalid/acme/demo/issues/99" });
       expect(synced).toMatchObject({ conflict: false, issue_id: issueID });
-      expect(getIssue(database, issueID)?.status).toBe("done");
+      expect(getIssue(database, issueID)?.status).toBe("todo");
       expect(database.sqlite.query("select action from tracker_sync_events where action='manual_linked'").get()).toEqual({ action: "manual_linked" });
     } finally { database.close(); }
   });

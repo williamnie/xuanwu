@@ -367,6 +367,7 @@ function effectiveFeishuInput(overrides: ConfigOverrides): FeishuConfigInput {
 function effectiveGitHubInput(overrides: ConfigOverrides): GitHubConnectorConfigInput {
   const local = overrides.integrations?.github ?? {};
   return {
+    issueSync: local.issueSync,
     apiBaseUrl: local.apiBaseUrl ?? local.GITHUB_API_URL ?? overrides.githubApiUrl,
     gitBaseUrl: local.gitBaseUrl ?? local.webBaseUrl ?? local.GITHUB_SERVER_URL ?? overrides.githubServerUrl,
     graphqlBaseUrl: local.graphqlBaseUrl ?? local.GITHUB_GRAPHQL_URL ?? overrides.githubGraphqlUrl,

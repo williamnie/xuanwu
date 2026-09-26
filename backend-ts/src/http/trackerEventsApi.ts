@@ -9,11 +9,18 @@ import {
 import { syncTrackerIssueEvent, trackerIssueFromPayload } from "../integrations/tracker/issueSync.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
+import type { GitHubIssueSyncRuntime } from "../integrations/github/issueSyncRuntime.ts";
 
-type Context = { database: RunnerDatabase };
+type Context = { database: RunnerDatabase; githubIssueSync?: GitHubIssueSyncRuntime };
 type JsonObject = Record<string, unknown>;
 
 export function registerTrackerEventRoutes(router: Router, context: Context): void {
+  router.get("/api/integrations/trackers/github/status", () => json(context.githubIssueSync?.snapshot() ?? { enabled: false }));
+  router.post("/api/integrations/trackers/github/sync", async () => {
+    if (!context.githubIssueSync) throw new HttpError(503, "GitHub issue sync is unavailable");
+    await context.githubIssueSync.sync();
+    return json(context.githubIssueSync.snapshot());
+  });
   router.put("/api/integrations/trackers/mappings", (request) => mappingResponse(context, request));
   router.put("/api/integrations/trackers/:provider/links", (request) => manualLinkResponse(context, request));
   router.post("/api/integrations/trackers/:provider/events", (request) => eventResponse(context, request));

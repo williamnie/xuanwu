@@ -43,6 +43,8 @@ import { reconcileStaleAgentSessions } from "../runner/staleSessionReconciler.ts
 import { assertInternalCoreAddress } from "../serverRole.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { createReleaseUpdateMonitor, type ReleaseUpdateMonitor } from "../release/releaseUpdateMonitor.ts";
+import { GitHubIssueSyncRuntime } from "../integrations/github/issueSyncRuntime.ts";
+import { GitHubIssueDelivery } from "../integrations/github/issueDelivery.ts";
 
 export async function startCoreRuntime(args: string[], role: "all" | "core"): Promise<void> {
   const loadedConfig = loadConfig(args);
@@ -186,6 +188,10 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     telegramConfig: () => config.integrations.telegram
   });
   const imReceiverRuntime = createImReceiverRuntime(imChannels);
+  const githubIssueDelivery = new GitHubIssueDelivery({ database, providers, bus });
+  const githubIssueSync = new GitHubIssueSyncRuntime({ config: config.integrations.github,
+    stateDir: config.stateDir, runtime: { database, providers, bus },
+    advanceDelivery: (record, policy, client) => githubIssueDelivery.advance(record, policy, client) });
   coldStartTrace("connectors_initialized");
   await primeRuntimeObservability(readDatabase).catch((error) => {
     console.warn(JSON.stringify({
@@ -210,15 +216,17 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     providers,
     providersRegistry,
     releaseUpdateMonitor,
+    githubIssueSync,
     role
   });
-  installTerminationHandlers(providersRegistry, database, readDatabase, server, processGroupMemory, projectionWorker, imReceiverRuntime, releaseUpdateMonitor);
+  installTerminationHandlers(providersRegistry, database, readDatabase, server, processGroupMemory, projectionWorker, imReceiverRuntime, releaseUpdateMonitor, githubIssueSync);
   coldStartTrace("http_routes_registered");
   void imReceiverRuntime.start().catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", component: "im-receiver-runtime", error: safeError(error) }));
   });
   projectionWorker.start();
   releaseUpdateMonitor.start();
+  githubIssueSync.start();
   void startAutoRunLoops(
     database,
     providers,
@@ -299,7 +307,8 @@ function installTerminationHandlers(
   processGroupMemory: ProcessGroupMemoryObserver,
   projectionWorker: BackgroundProjectionWorker,
   imReceiverRuntime: ImReceiverRuntime,
-  releaseUpdateMonitor: ReleaseUpdateMonitor
+  releaseUpdateMonitor: ReleaseUpdateMonitor,
+  githubIssueSync: GitHubIssueSyncRuntime
 ): void {
   let stopping = false;
   const stop = async (signal: string) => {
@@ -309,6 +318,7 @@ function installTerminationHandlers(
     processGroupMemory.stop();
     projectionWorker.stop();
     releaseUpdateMonitor.stop();
+    await githubIssueSync.stop();
     await imReceiverRuntime.stop();
     server.stop(true);
     await providersRegistry.stopAll();

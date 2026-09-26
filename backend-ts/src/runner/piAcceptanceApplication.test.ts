@@ -24,6 +24,7 @@ import type {
   ProviderRunResult
 } from "../providers/types.ts";
 import { applyPiAcceptanceDecision } from "./piAcceptanceApplication.ts";
+import { observeGitHubIssue, updateGitHubIssueCase } from "../integrations/github/issueCaseStore.ts";
 
 const roots: string[] = [];
 
@@ -32,6 +33,32 @@ afterEach(async () => {
 });
 
 describe("PI acceptance decision application", () => {
+  test("a new human decision resets the GitHub report retry budget once without accepting an invalid report", async () => {
+    const db = await fixture(); const provider = new ContinuingProvider();
+    try {
+      const issue = completedIssue(db, "GitHub report recovery");
+      observeGitHubIssue(db, { nodeId: "I_report", repositoryId: 1, repository: "acme/demo", number: 1,
+        title: "Broken report", body: "", author: "author", url: "https://github.com/acme/demo/issues/1", state: "open", stateReason: "", updatedAt: new Date().toISOString(), labels: ["xuanwu"] }, "demo");
+      updateGitHubIssueCase(db, "I_report", 1, { issue_id: issue.id, work_source_revision: 1, stage: "repair" });
+      for (const runID of ["old-1", "old-2"]) recordIssueEvent(db, issue.id, "github.acceptance_contract_failed.v1", { run_id: runID, problem: "invalid report" });
+      const runtime = { database: db, providers: { codex: provider } };
+      expect((await applyPiAcceptanceDecision(runtime, await buildIssueCompletionCard(db, issue.id), decision("accept"))).status).toBe("needs_user");
+      expect(provider.inputs).toHaveLength(0);
+      const request = readIssueDecisionProjection(db, issue.id).request!;
+      await reviewHumanIssue(db, issue.id, { action: "accept", comment: "CI 限制已确认，请收尾本地验证并修正报告。", review_request_id: request.id, review_revision: request.revision });
+      for (let i = 0; i < 2; i++) {
+        expect((await applyPiAcceptanceDecision(runtime, await buildIssueCompletionCard(db, issue.id), decision("accept"))).status).toBe("in_progress");
+      }
+      expect(provider.inputs).toHaveLength(2);
+      expect(provider.inputs[0]?.prompt).toContain("CI 限制已确认");
+      expect(provider.inputs[0]?.prompt).toContain("reproduction.status 只能为 reproduced 或 not_reproduced");
+      expect(provider.inputs[0]?.prompt).toContain("不能使用 verified_fixed");
+      expect((await applyPiAcceptanceDecision(runtime, await buildIssueCompletionCard(db, issue.id), decision("accept"))).status).toBe("needs_user");
+      expect(provider.inputs).toHaveLength(2);
+      expect(getIssue(db, issue.id)?.status).not.toBe("done");
+    } finally { db.close(); }
+  });
+
   test("accepts the exact current card, persists semantic acceptance, and is idempotent", async () => {
     const db = await fixture();
     try {

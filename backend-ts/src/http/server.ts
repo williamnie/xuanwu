@@ -45,6 +45,7 @@ import { registerImChannelRoutes } from "./imChannelsApi.ts";
 import type { TelegramConnectorConfig } from "../integrations/telegramTypes.ts";
 import { registerReleaseUpdateRoutes } from "./releaseUpdateApi.ts";
 import type { ReleaseUpdateMonitor } from "../release/releaseUpdateMonitor.ts";
+import type { GitHubIssueSyncRuntime } from "../integrations/github/issueSyncRuntime.ts";
 
 type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
 type DefaultRouterOptions = {
@@ -76,6 +77,7 @@ type DefaultRouterOptions = {
   restartDelayMs?: number;
   restartProcess?: () => void;
   releaseUpdateMonitor?: ReleaseUpdateMonitor;
+  githubIssueSync?: GitHubIssueSyncRuntime;
   role?: "all" | "core";
   supervisorManaged?: boolean;
   testBlockMs?: number;
@@ -166,7 +168,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       signingSecret: runtime.webhookSigningSecret
     });
     registerGitEventRoutes(router, { database: runtime.database });
-    registerTrackerEventRoutes(router, { database: runtime.database });
+    registerTrackerEventRoutes(router, { database: runtime.database, githubIssueSync: runtime.githubIssueSync });
     registerImReplyOutboxRoutes(router, {
       config: runtime.config?.integrations.feishu,
       database: runtime.database,

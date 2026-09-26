@@ -5,6 +5,7 @@ import {
 } from "../db/repositories/issueQueue.ts";
 import { issueTimestamp } from "../db/repositories/issueCreate.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { githubWorkExecutionContext } from "../integrations/github/issueWorkflow.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.ts";
 import type { Project } from "../db/repositories/projects.ts";
@@ -296,7 +297,8 @@ function buildIssuePrompt(project: Project, issue: Issue, database?: RunnerDatab
   const base = description === "" || description === title
     ? title
     : [`# ${title}`, "", description].join("\n");
-  return withRunnerContext(project, issue, [base, "", issueExecutionContext(issue)].join("\n"), database);
+  const humanDecisions = database && issue.source_session_id.startsWith("github:") ? githubWorkExecutionContext(database, issue.id) : "";
+  return withRunnerContext(project, issue, [base, humanDecisions, "", issueExecutionContext(issue)].filter(Boolean).join("\n"), database);
 }
 
 function issueExecutionContext(issue: Issue): string {
@@ -341,7 +343,7 @@ function governedRetryContext(
   issue: Issue
 ): { decisionID: string; reason: string } | null {
   if (!database) return null;
-  const event = listIssueEvents(database, issue.id, { limit: 1, types: [SUPERVISOR_RETRY_EVENT] })[0];
+  const event = listIssueEvents(database, issue.id, { limit: 1, types: [SUPERVISOR_RETRY_EVENT, "github.review_followup.v1"] })[0];
   if (!event) return null;
   try {
     const payload = JSON.parse(event.payload) as Record<string, unknown>;

@@ -25,6 +25,7 @@ import { reconcileProviderOutcome } from "./providerOutcome.ts";
 import { prepareAcceptedDelivery, ACCEPTED_DELIVERY_SOURCE } from "../domain/handoff/acceptedDelivery.ts";
 import { recordEvidenceRecords } from "../db/repositories/evidence.ts";
 import { recordHandoffDelivery } from "../notifications/handoffNotifier.ts";
+import { githubWorkAcceptanceProblem, githubWorkExecutionContext } from "../integrations/github/issueWorkflow.ts";
 
 export const PI_ACCEPTANCE_DECISION_EVENT = "issue.pi_acceptance_decision.v1";
 export const PI_ACCEPTANCE_APPLIED_EVENT = "issue.pi_acceptance_applied.v1";
@@ -48,7 +49,24 @@ export async function applyPiAcceptanceDecision(
   const replay = getIssue(runtime.database, card.issue.id);
   if (replay?.status === "done" && applied(runtime.database, card.issue.id, card.fingerprint)) return replay;
   assertCurrentCard(runtime.database, card);
-  const effectiveDecision = honorAcceptedDeliveryReview(runtime.database, card, decision);
+  let effectiveDecision = honorAcceptedDeliveryReview(runtime.database, card, decision);
+  if (effectiveDecision.decision === "accept" && !(card.human_review?.action === "accept" && card.human_review.request.kind === "acceptance")) {
+    const problem = githubWorkAcceptanceProblem(runtime.database, card);
+    if (problem) {
+      const answers = listIssueEvents(runtime.database, card.issue.id, { types: ["issue.human_review_answered.v1"], limit: 20 });
+      const latestApproval = [...answers].reverse().find(event => JSON.parse(event.payload).action === "accept");
+      // 新的有效人工回答允许再做有界续跑；同一回答不能在后续每个 Run 重置预算。
+      const priorFailures = listIssueEvents(runtime.database, card.issue.id, {
+        types: ["github.acceptance_contract_failed.v1"], limit: 20, afterID: latestApproval?.id ?? 0
+      });
+      const runIDs = new Set(priorFailures.map(event => JSON.parse(event.payload).run_id));
+      if (!runIDs.has(card.run.id)) recordIssueEvent(runtime.database, card.issue.id, "github.acceptance_contract_failed.v1", { run_id: card.run.id, problem });
+      effectiveDecision = { ...effectiveDecision,
+        decision: runIDs.size >= 2 ? "needs_user" : "continue_same_session", human_review_kind: "decision",
+        rationale: runIDs.size >= 2 ? `交付报告与运行事实连续无法关联，已停止重复执行；需要检查报告或集成观测数据。${problem}` : problem,
+        follow_up_prompt: `${problem} 已有证据仍可引用；不需要仅为报告格式重复测试。`, unmet_requirements: [problem] };
+    }
+  }
   if (effectiveDecision.decision === "accept") return acceptIssue(runtime, card, effectiveDecision);
   recordDecision(runtime.database, card, effectiveDecision);
   if (effectiveDecision.decision === "needs_user") return requestUser(runtime, card, effectiveDecision);
@@ -241,7 +259,7 @@ async function continueSameSession(
       issueRunId: newRun.id,
       model: selection.model,
       projectId: project.id,
-      prompt: continuationPrompt(issue, decision, card.human_review),
+      prompt: [continuationPrompt(issue, decision, card.human_review), githubWorkExecutionContext(db, issue.id)].filter(Boolean).join("\n"),
       reasoningEffort: selection.reasoning_effort,
       sandbox: selection.sandbox || project.sandbox,
       selectionReason: selection.selection_reason,
@@ -350,7 +368,7 @@ async function retryInNewSession(
       issueRunId: run.id,
       model: selection.model,
       projectId: project.id,
-      prompt: retryPrompt(issue, decision),
+      prompt: [retryPrompt(issue, decision), githubWorkExecutionContext(db, issue.id)].filter(Boolean).join("\n"),
       reasoningEffort: selection.reasoning_effort,
       sandbox: selection.sandbox || project.sandbox,
       selectionReason: selection.selection_reason,

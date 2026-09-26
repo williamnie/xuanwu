@@ -87,7 +87,7 @@ export async function prepareAcceptedDelivery(db: RunnerDatabase, card: Completi
   return { evidence, handoff, recorded_at: now };
 }
 
-async function deliveryScope(db: RunnerDatabase, card: CompletionCard, firstRunID: string): Promise<Scope> {
+export async function deliveryScope(db: RunnerDatabase, card: CompletionCard, firstRunID: string): Promise<Scope> {
   const unavailable = `completion-card:${card.fingerprint}:workspace-unavailable`;
   const scope: Scope = { baseline: unavailable, final: unavailable, paths: [], problems: [] };
   const baseline = readIssueRunGitWorkspaceBaseline(db, card.issue.id, firstRunID);
@@ -135,7 +135,7 @@ function workspaceRef(snapshot: CapturedGitWorkspaceBaseline): string {
 }
 
 // 完整快照留在事件账本；Completion Card / LLM 上下文只携带引用。
-function readFinalWorkspace(db: RunnerDatabase, card: CompletionCard): CapturedGitWorkspaceBaseline | null {
+export function readFinalWorkspace(db: RunnerDatabase, card: CompletionCard): CapturedGitWorkspaceBaseline | null {
   if (!card.git.workspace_snapshot_ref) return null;
   const rows = db.sqlite.query<{ payload: string }, [number, string, string]>(`
     select payload from issue_events where issue_id=? and type=? and json_valid(payload)

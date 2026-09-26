@@ -51,10 +51,12 @@ export function syncTrackerIssueEvent(db: RunnerDatabase, input: TrackerIssueEve
   conflict: boolean; event: ExternalEventRecord; issue_id?: number; linked: boolean; replayed: boolean;
 } {
   const event = normalizeTrackerIssueEvent(input);
-  const correlationID = `${event.provider}:${event.external_id}:${event.external_updated_at}`;
-  const dedupeKey = `${event.provider}:${event.external_id}:${event.external_updated_at}`;
-  const prior = findExternalEventByDedupe(db, event.provider, dedupeKey);
   const payloadHash = createHash("sha256").update(JSON.stringify(event.payload)).digest("hex");
+  // GitHub 评论/标签事件可共享 Issue 的 updated_at；不能将不同事件误判成冲突。
+  const correlationID = `${event.provider}:${event.external_id}:${event.external_updated_at}`;
+  const dedupeKey = event.provider === "github"
+    ? `${correlationID}:${event.event_name}:${payloadHash}` : correlationID;
+  const prior = findExternalEventByDedupe(db, event.provider, dedupeKey);
   if (prior && String(prior.summary.raw_payload_sha256 ?? "") !== payloadHash) throw new Error("tracker_event_dedupe_conflict");
   if (prior) {
     const link = getTrackerIssueLink(db, event.provider, event.external_id);
@@ -67,8 +69,11 @@ export function syncTrackerIssueEvent(db: RunnerDatabase, input: TrackerIssueEve
     const projectID = link?.project_id ?? mapping?.project_id ?? "";
     const stored = upsertExternalEvent(db, {
       actor: event.actor, content: `${event.scope}: ${event.title}`.slice(0, 4096), dedupe_key: dedupeKey,
-      event_type: "issue", external_id: event.external_id, occurred_at: event.external_updated_at,
-      normalized_message: { external_status: event.external_status, scope: event.scope, title: event.title, url: event.url },
+      event_type: "issue", external_id: event.provider === "github"
+        ? `github-event:${createHash("sha256").update(dedupeKey).digest("hex")}` : event.external_id,
+      occurred_at: event.external_updated_at,
+      normalized_message: { external_status: event.external_status, scope: event.scope, title: event.title, url: event.url,
+        ...(event.provider === "github" ? { external_issue_id: event.external_id } : {}) },
       project_hint: event.scope, project_id: projectID, provider: event.provider, raw_json: event.payload,
       source: event.provider, status: projectID ? "linked" : "attention",
       summary: { raw_payload_sha256: payloadHash, sync_trigger: trigger }, trust_level: "authenticated"
@@ -87,12 +92,12 @@ export function syncTrackerIssueEvent(db: RunnerDatabase, input: TrackerIssueEve
         external_id: event.external_id, issue_id: issue.id, last_external_updated_at: event.external_updated_at,
         last_synced_issue_updated_at: issue.updated_at, provider: event.provider
       });
-      createExternalLink(db, { external_event_id: stored.id, external_type: "tracker_issue", issue_id: issue.id, project_id: projectID, relationship: "intake", source: event.provider });
+      createExternalLink(db, { external_event_id: stored.id, external_id: event.external_id, external_type: "tracker_issue", issue_id: issue.id, project_id: projectID, relationship: "intake", source: event.provider });
       recordTrackerSyncAudit(db, { action: "intake_created", correlation_id: correlationID, external_id: event.external_id, issue_id: issue.id, project_id: savedLink.project_id, provider: event.provider });
       return { conflict: false, event: stored, issue_id: issue.id, linked: true };
     }
     const outcome = applyMappedStatus(db, link, event, correlationID);
-    createExternalLink(db, { external_event_id: stored.id, external_type: "tracker_issue", issue_id: link.issue_id, project_id: link.project_id, relationship: outcome.action, source: event.provider });
+    createExternalLink(db, { external_event_id: stored.id, external_id: event.external_id, external_type: "tracker_issue", issue_id: link.issue_id, project_id: link.project_id, relationship: outcome.action, source: event.provider });
     return { conflict: outcome.conflict, event: stored, issue_id: link.issue_id, linked: true };
   });
   const result = write.immediate();
@@ -110,6 +115,16 @@ export async function pollTrackerIssues(db: RunnerDatabase, adapter: TrackerIssu
 function applyMappedStatus(db: RunnerDatabase, link: ReturnType<typeof getTrackerIssueLink> & {}, event: TrackerIssueEvent, correlationID: string): { action: string; conflict: boolean } {
   const issue = getIssue(db, link.issue_id);
   if (!issue) throw new Error("linked issue not found");
+  if (event.provider === "github") {
+    const stale = event.external_updated_at < link.last_external_updated_at;
+    if (!stale) upsertTrackerIssueLink(db, { external_id: event.external_id, issue_id: issue.id,
+      last_external_updated_at: event.external_updated_at, provider: event.provider });
+    const action = stale ? "stale_external" : "external_state_observed";
+    recordTrackerSyncAudit(db, { action, correlation_id: correlationID, external_id: event.external_id,
+      issue_id: issue.id, project_id: issue.project_id, provider: event.provider,
+      detail: { external_status: event.external_status, issue_status: issue.status } });
+    return { action, conflict: stale };
+  }
   if (event.external_updated_at <= link.last_external_updated_at) {
     recordTrackerSyncAudit(db, { action: "stale_external", correlation_id: correlationID, external_id: event.external_id, issue_id: issue.id, project_id: issue.project_id, provider: event.provider });
     return { action: "stale_external", conflict: true };
@@ -151,6 +166,8 @@ export function trackerIssueFromPayload(provider: TrackerIssueProvider, payload:
 }
 
 function issueStatusFor(provider: TrackerIssueProvider, value: string): string {
+  // 关闭可能表示重复、撤回或符合设计；只有 PI 验收能认定本地 Work 完成。
+  if (provider === "github") return "triage";
   const status = value.trim().toLowerCase();
   if (["closed", "completed", "complete", "done"].includes(status)) return "done";
   if (["cancelled", "canceled"].includes(status)) return "cancelled";

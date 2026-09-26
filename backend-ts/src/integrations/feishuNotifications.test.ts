@@ -19,6 +19,7 @@ import { createDefaultRouter } from "../http/server.ts";
 import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
 import { dispatchFeishuOutbox, type FeishuMessageSender } from "./feishuOutboxDispatcherCompat.ts";
 import { queueFeishuIssueStatusNotification, queueFeishuPiNeedsUserNotification } from "./feishuNotifications.ts";
+import { observeGitHubIssue, updateGitHubIssueCase } from "./github/issueCaseStore.ts";
 
 const tempRoots: string[] = [];
 const BASE_URL = "http://127.0.0.1:3008";
@@ -41,6 +42,29 @@ function pendingRequiredHandoffReview(db: RunnerDatabase, issueID: number) {
 }
 
 describe("Feishu notification queue", () => {
+  test("GitHub-managed human requests stay on GitHub unless Feishu was explicitly bound", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issue = createIssue(db, { project_id: "demo", title: "GitHub task", status: "needs_user" });
+      observeGitHubIssue(db, { nodeId: "I_notification", repositoryId: 1, repository: "acme/demo", number: 1,
+        title: "GitHub task", body: "", author: "author", url: "https://github.com/acme/demo/issues/1", state: "open", stateReason: "", updatedAt: new Date().toISOString(), labels: ["xuanwu"] }, "demo");
+      updateGitHubIssueCase(db, "I_notification", 1, { issue_id: issue.id, stage: "repair" });
+      const config = buildConfig({ feishuDefaultChatId: "oc_default" }).integrations.feishu;
+      const event = { issueId: issue.id, payload: JSON.stringify({ action_id: "github-human-request", message: "Needs decision" }), projectId: "demo", type: "pi.needs_user" };
+      expect(queueFeishuPiNeedsUserNotification(db, event, { config })).toEqual({ queued: false, reason: "github_review_owns_target" });
+      expect(listPiNotificationIntents(db, { issueId: issue.id })).toHaveLength(0);
+      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+      config.projectMappings = [{ projectId: "demo", chatId: "oc_explicit" }];
+      expect(queueFeishuPiNeedsUserNotification(db, event, { config })).toMatchObject({ queued: true });
+      expect(listPiNotificationIntents(db, { issueId: issue.id })[0]?.target_chat_id).toBe("oc_explicit");
+      const linkedID = linkedFeishuIssue(db);
+      updateGitHubIssueCase(db, "I_notification", 1, { issue_id: linkedID });
+      config.projectMappings = [];
+      expect(queueFeishuPiNeedsUserNotification(db, { ...event, issueId: linkedID, payload: JSON.stringify({ action_id: "explicit-feishu-request", message: "Needs decision" }) }, { config })).toMatchObject({ queued: true });
+      expect(listPiNotificationIntents(db, { issueId: linkedID })[0]?.target_chat_id).toBe("oc_group");
+    } finally { db.close(); }
+  });
+
   test("queues one approved Feishu outbox item when a linked issue is completed", async () => {
     const db = await fixtureDatabase();
     try {

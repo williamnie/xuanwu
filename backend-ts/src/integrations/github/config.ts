@@ -5,8 +5,9 @@ import {
   type RemoteGitConnectorConfig,
   type RemoteGitConnectorStatus
 } from "../git/adapterSupport.ts";
+import { buildGitHubIssueSyncConfig, type GitHubIssueSyncConfig } from "./issueSyncConfig.ts";
 
-export type GitHubConnectorConfig = RemoteGitConnectorConfig & { graphql_base_url: string };
+export type GitHubConnectorConfig = RemoteGitConnectorConfig & { graphql_base_url: string; issueSync: GitHubIssueSyncConfig };
 
 export type GitHubConnectorConfigInput = Partial<{
   apiBaseUrl: string;
@@ -20,6 +21,7 @@ export type GitHubConnectorConfigInput = Partial<{
   GITHUB_SERVER_URL: string;
   GITHUB_TOKEN: string;
   GITHUB_TOKEN_REF: string;
+  issueSync: unknown;
 }>;
 
 export function buildGitHubConnectorConfig(input: GitHubConnectorConfigInput = {}): GitHubConnectorConfig {
@@ -40,6 +42,7 @@ export function buildGitHubConnectorConfig(input: GitHubConnectorConfigInput = {
   });
   return {
     ...base,
+    issueSync: buildGitHubIssueSyncConfig(input.issueSync),
     graphql_base_url: cleanGraphqlURL(input.graphqlBaseUrl ?? input.GITHUB_GRAPHQL_URL, base.api_base_url)
   };
 }
@@ -53,7 +56,7 @@ export function githubConnectorStatus(config: GitHubConnectorConfig): RemoteGitC
 }
 
 export function redactGitHubConnectorConfig(config: GitHubConnectorConfig): GitHubConnectorConfig {
-  return { ...redactRemoteGitConnectorConfig(config), graphql_base_url: config.graphql_base_url };
+  return { ...redactRemoteGitConnectorConfig(config), graphql_base_url: config.graphql_base_url, issueSync: structuredClone(config.issueSync) };
 }
 
 function cleanGraphqlURL(value: string | undefined, apiBaseURL: string): string {

@@ -3,7 +3,7 @@
 .work-detail-toolbar { gap: 16px; justify-content: space-between; }
 .work-detail-back, .work-detail-actions button, .work-review-actions button { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; font-size: .72rem; font-weight: 750; gap: 6px; min-height: 34px; padding: 7px 10px; }
 .work-detail-actions { flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
-.work-detail-actions button.primary, .work-review-dialog button.primary { background: var(--primary-gradient); border-color: transparent; color: var(--primary-ink); }
+.work-detail-actions button.primary, .work-review-dialog button.primary { background: var(--button-primary-bg); border-color: transparent; color: var(--button-primary-fg); }
 .work-detail-actions button.danger, .work-review-actions button.danger, .work-inline-confirm button.danger, .work-review-dialog button.danger { color: var(--error); }
 .work-detail-actions button:disabled, .work-review-actions button:disabled { cursor: not-allowed; opacity: .5; }
 .work-detail-hero { align-items: end; background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), transparent 52%), var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr) minmax(220px, .32fr); padding: 28px; }
