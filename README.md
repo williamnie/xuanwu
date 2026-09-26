@@ -63,6 +63,11 @@ and workspace facts, keeps recoverable work moving, and records whether the Work
 failed, or needs a person. Evidence and Handoffs make the result reviewable without forcing you to
 watch every turn.
 
+GitHub issue close/reopen events are recorded as external facts and preserve the linked local
+Issue's status. A first GitHub intake enters `triage`, even if already closed; PI decides semantic
+completion. GitLab and Linear keep their existing status mappings. See the
+[Tracker sync contract](docs/architecture/xuanwu/0048-issue-tracker-bidirectional-sync.md).
+
 ## What it does
 
 - **Work and Run control** — turn goals into project-bound Work, track every Run and Attempt,

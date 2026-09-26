@@ -56,6 +56,10 @@ Agent 说“完成”不等于完成。Supervisor 会检查真实 Session 与 wo
 继续推进，并记录 Work 是已经完成、执行失败还是确实需要人。Evidence 与 Handoff 让结果可审查，
 而不要求你盯着每一个 Turn。
 
+GitHub Issue 的关闭、重开事件只记录为外部事实，保留关联的本地 Issue 状态。首次接入统一进入 `triage`，
+即使 GitHub 已关闭，语义完成仍由 PI 判定。GitLab、Linear 保持既有状态映射，详见
+[Tracker 同步合同](docs/architecture/xuanwu/0048-issue-tracker-bidirectional-sync.md)。
+
 ## 核心能力
 
 - **Work 与 Run 控制**：把目标变成绑定项目的 Work，跟踪每个 Run/Attempt，明确项目、
