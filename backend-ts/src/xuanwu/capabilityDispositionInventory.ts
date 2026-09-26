@@ -856,7 +856,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "automation", disposition: "keep", target: "automation_definitions/runs/events and automation_watches execution pipeline", source_of_truth: "Automation definition/run/event and Watch/intent/outbox authorities",
-    source_files: ["backend-ts/src/pi/heartbeatActionExecution.ts", "backend-ts/src/pi/heartbeatOrchestrator.ts", "backend-ts/src/pi/heartbeatOrchestratorSupport.ts", "backend-ts/src/pi/heartbeatSignals.ts", "backend-ts/src/pi/heartbeatTypes.ts", "backend-ts/src/pi/issueCompletionAutomation.ts", "backend-ts/src/pi/issueCompletionWatchActions.ts", "backend-ts/src/pi/manualTrigger.ts"]
+    source_files: ["backend-ts/src/pi/heartbeatActionExecution.ts", "backend-ts/src/pi/heartbeatOrchestrator.ts", "backend-ts/src/pi/heartbeatOrchestratorSupport.ts", "backend-ts/src/pi/heartbeatSignals.ts", "backend-ts/src/pi/heartbeatTypes.ts", "backend-ts/src/pi/issueCompletionAutomation.ts", "backend-ts/src/pi/issueCompletionWatchActions.ts", "backend-ts/src/pi/issuePlanningBody.ts", "backend-ts/src/pi/issuePlanningPolicy.ts", "backend-ts/src/pi/manualTrigger.ts"]
   },
   {
     id: "capability-connectors", disposition: "keep", target: "Capability and connector runtime", source_of_truth: "registered provider/tool manifests and audited calls",

@@ -77,7 +77,7 @@ test('Dashboard trusts bounded summaries instead of hydrating every card detail'
 });
 
 test('first delivery onboarding uses bounded Work and Evidence reads', () => {
-  assert.match(firstDeliverySource, /workApi\.getWorks\(\{ pageSize: 8 \}/);
+  assert.match(firstDeliverySource, /workApi\.getWorks\(\{ pageSize: 8, query: FIRST_DELIVERY_TITLE \}/);
   assert.match(firstDeliverySource, /systemApi\.getCodeAgents\(\)/);
   assert.doesNotMatch(firstDeliverySource, /workApi\.getAllWorks\(\)/);
   assert.doesNotMatch(firstDeliverySource, /Promise\.allSettled/);

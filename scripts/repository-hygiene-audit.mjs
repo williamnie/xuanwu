@@ -31,6 +31,13 @@ const backendProductionRoots = backendGraphRoot ? [
     test: 'backend-ts/src/mainWiring.test.ts',
   },
   {
+    path: 'backend-ts/src/textAssets.d.ts',
+    owner: 'typescript',
+    purpose: 'ambient Markdown text imports used by the shared Issue planning policy',
+    invocation: 'backend-ts/tsconfig.json:include src/**/*.ts',
+    test: 'backend-ts/src/http/piRuntimePrompt.test.ts',
+  },
+  {
     path: 'backend-ts/src/providers/pi/xuanwuPolicyExtension.ts',
     owner: 'release-package',
     purpose: 'Pi policy extension staged beside packaged binary',
