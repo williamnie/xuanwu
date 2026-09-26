@@ -63,6 +63,17 @@ and workspace facts, keeps recoverable work moving, and records whether the Work
 failed, or needs a person. Evidence and Handoffs make the result reviewable without forcing you to
 watch every turn.
 
+In the generic Tracker event import layer, GitHub issue close/reopen events are recorded as external
+facts while preserving the linked local Issue's status. This layer must not map `closed` directly to
+local `done`; a first mapped GitHub intake enters `triage`, even if already closed.
+
+The business workflow still needs to respond to delivery facts: manually closing a GitHub issue or
+withdrawing Xuanwu's takeover should stop unfinished work, reopening should trigger a new
+investigation, and a successful fix requires evidence and PI acceptance. The close/withdrawal and
+reopen workflow coordination is follow-up integration work, not implemented in this PR. GitLab and
+Linear keep their existing status mappings. See the
+[Tracker sync contract](docs/architecture/xuanwu/0048-issue-tracker-bidirectional-sync.md).
+
 ## What it does
 
 - **Work and Run control** — turn goals into project-bound Work, track every Run and Attempt,
