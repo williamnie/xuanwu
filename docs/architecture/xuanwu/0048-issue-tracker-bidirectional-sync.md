@@ -26,13 +26,20 @@ Handoff outbound 继续使用 P05.06 的 `TrackerAdapter`、`sync_outbox(operati
   `POST .../poll` 接收最多 100 个已取得的 poll event，cursor 持久化到 `tracker_sync_cursors`。
 - 未映射的 inbound event 只进入 `external_events(status='attention')` 和 audit，不创建 Runner Issue。
 
-GitHub 状态规则依据已认证的人类决策 `event_id=549106`（2026-09-26）修订，替代本节原有的 GitHub
-状态映射：首次映射 event 一律创建 `triage` 的 Runner Issue，包括首次收到 `closed`；已关联的 GitHub
-`closed/reopened`（重开 payload 的 `state=open`）及其他状态只记录外部事实，不改变本地 Issue 状态、内容或
-`updated_at`，语义完成由 PI 判定。首次接入写 `intake_created` audit；后续新鲜 event 写
+通用 Tracker 事件导入层的 GitHub 状态规则依据已认证的人类决策 `event_id=549106`（2026-09-26）修订，
+替代本节原有的 GitHub 状态映射。此规则仅约束 `syncTrackerIssueEvent()` 的导入行为：不能把 `closed`
+直接变为本地 `done`；首次映射的 GitHub event 一律创建 `triage` 的 Runner Issue，包括首次收到 `closed`。
+已关联的 GitHub `closed/reopened`（重开 payload 的 `state=open`）及其他状态在导入层只记录外部事实，
+不改变本地 Issue 状态、内容或 `updated_at`；语义完成须由 PI 基于交付证据验收。首次接入写
+`intake_created` audit；后续新鲜 event 写
 `external_status_recorded` audit（包含 `external_status`、`issue_status`）及同名 `external_links` relationship，
 只推进 link 的 `last_external_updated_at`，保留 `last_synced_issue_updated_at`。本地已有新修改也正常记录
 外部事实，不产生状态映射的 `local_conflict`。
+
+业务工作流仍需按交付事实联动：手动关闭 GitHub Issue 或撤回玄武接管时应停止未完成任务，重新打开应
+重新调查，修复成功则需要证据与 PI 验收。依据评审决策 `github-pr-comment:5846220205`，关闭或撤回时
+停止任务、重开后重新调查的联动属于集成层后续能力，本 PR 未实现。导入层保留本地状态的规则不代表
+整个玄武永远不响应 GitHub 关闭或重开，也不替代该业务工作流。
 
 GitHub 以 `provider + external_id + external_updated_at + payload SHA-256` 区分事件，摘要取自
 `JSON.stringify(payload)`，cursor 不参与身份判定。同一时间戳的 closed/reopened 或不同编辑 payload
@@ -73,6 +80,6 @@ bun test src/db/database.test.ts src/integrations/tracker/issueSync.test.ts src/
 ```
 
 测试覆盖 fake poll E2E、cursor、幂等 replay、用户修改不被外部状态覆盖、GitHub/GitLab/Linear normalizer、
-GitHub closed/reopened 保留所有本地状态与外部事实审计、首次 closed webhook intake 进入 triage、同时间戳
+GitHub 导入层 closed/reopened 保留所有本地状态与外部事实审计、首次 closed webhook intake 进入 triage、同时间戳
 closed/reopened/编辑事件分别持久化与重放、旧键重放兼容、poll 重开、旧事件保护、非 GitHub 状态映射兼容，
 以及 P05.06 fake Handoff outbox write/replay；不访问真实 Tracker。
