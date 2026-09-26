@@ -34,18 +34,21 @@ GitHub 状态规则依据已认证的人类决策 `event_id=549106`（2026-09-26
 只推进 link 的 `last_external_updated_at`，保留 `last_synced_issue_updated_at`。本地已有新修改也正常记录
 外部事实，不产生状态映射的 `local_conflict`。
 
-GitHub 以 `provider + external_id + external_updated_at` 区分 delivery，不同键分别创建
-`external_event`，保留各自的原始 payload、外部状态和关联记录；同键同 payload 重放返回原记录及
-`replayed=true`，同键不同 payload 拒绝为 `tracker_event_dedupe_conflict`。GitHub 写事务内复查去重键，
-避免并发 delivery 重复落库；通用 `externalEvents` 的 `source + external_id` 上插语义保持不变。
+GitHub 以 `provider + external_id + external_updated_at + payload SHA-256` 区分事件，摘要取自
+`JSON.stringify(payload)`，cursor 不参与身份判定。同一时间戳的 closed/reopened 或不同编辑 payload
+分别创建 `external_event`，保留各自的原始 payload、外部状态和关联记录，不因时间戳相同而冲突或判旧。
+相同事件重放返回原记录及 `replayed=true`，不新增 event、link 或 audit。已有旧时间戳键仅在 payload
+摘要相同时作为重放命中，无需数据迁移。GitHub 写事务内复查去重键，避免并发事件重复落库；通用
+`externalEvents` 的 `source + external_id` 上插语义保持不变。
 
 GitLab、Linear 和 fake Tracker 保持既有兼容行为：首次映射 event 创建一个
 `triage/todo/in_progress/done/cancelled` 的 Runner Issue，之后可按状态映射更新 Issue；若目标状态不同且
 `issues.updated_at` 已不同于 link 的 `last_synced_issue_updated_at`，记录 `local_conflict`，保持用户当前状态。
 
 所有 provider 都写 `external_events`、`external_links`、`tracker_issue_links`；后续 title、description 绝不由
-同步覆盖。相同 delivery 以 `provider + external_id + external_updated_at` 幂等，旧时间戳记为 `stale_external`，
-均不产生第二次 Issue/外部写。
+同步覆盖。非 GitHub provider 继续以 `provider + external_id + external_updated_at` 幂等，同键不同 payload
+仍拒绝为 `tracker_event_dedupe_conflict`。GitHub 严格早于 checkpoint 的事件记为 `stale_external`，其他
+provider 仍将早于或等于 checkpoint 的新事件判旧；均不产生第二次 Issue/外部写。
 
 ## Source of truth、迁移与回滚
 
@@ -70,5 +73,6 @@ bun test src/db/database.test.ts src/integrations/tracker/issueSync.test.ts src/
 ```
 
 测试覆盖 fake poll E2E、cursor、幂等 replay、用户修改不被外部状态覆盖、GitHub/GitLab/Linear normalizer、
-GitHub closed/reopened 保留所有本地状态与外部事实审计、首次 closed webhook intake 进入 triage、poll 重开、
-旧事件保护、非 GitHub 状态映射兼容，以及 P05.06 fake Handoff outbox write/replay；不访问真实 Tracker。
+GitHub closed/reopened 保留所有本地状态与外部事实审计、首次 closed webhook intake 进入 triage、同时间戳
+closed/reopened/编辑事件分别持久化与重放、旧键重放兼容、poll 重开、旧事件保护、非 GitHub 状态映射兼容，
+以及 P05.06 fake Handoff outbox write/replay；不访问真实 Tracker。

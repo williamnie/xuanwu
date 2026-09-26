@@ -52,9 +52,17 @@ export function syncTrackerIssueEvent(db: RunnerDatabase, input: TrackerIssueEve
 } {
   const event = normalizeTrackerIssueEvent(input);
   const correlationID = `${event.provider}:${event.external_id}:${event.external_updated_at}`;
-  const dedupeKey = `${event.provider}:${event.external_id}:${event.external_updated_at}`;
-  const prior = findExternalEventByDedupe(db, event.provider, dedupeKey);
   const payloadHash = createHash("sha256").update(JSON.stringify(event.payload)).digest("hex");
+  // GitHub updated_at 不是事件身份；同一时间戳下不同 payload 分别记录，cursor 不参与去重。
+  const dedupeKey = event.provider === "github" ? `${correlationID}:${payloadHash}` : correlationID;
+  const findPriorEvent = () => {
+    const prior = findExternalEventByDedupe(db, event.provider, dedupeKey);
+    if (prior || event.provider !== "github") return prior;
+    // 兼容修复前写入的时间戳键；不同 payload 不命中旧记录，也不视为冲突。
+    const legacy = findExternalEventByDedupe(db, event.provider, correlationID);
+    return legacy?.summary.raw_payload_sha256 === payloadHash ? legacy : null;
+  };
+  const prior = findPriorEvent();
   if (prior && String(prior.summary.raw_payload_sha256 ?? "") !== payloadHash) throw new Error("tracker_event_dedupe_conflict");
   if (prior) {
     const link = getTrackerIssueLink(db, event.provider, event.external_id);
@@ -65,7 +73,7 @@ export function syncTrackerIssueEvent(db: RunnerDatabase, input: TrackerIssueEve
     const link = getTrackerIssueLink(db, event.provider, event.external_id);
     if (event.provider === "github") {
       // 写锁内复查 delivery，避免并发请求在外层去重查询后重复落库。
-      const existing = findExternalEventByDedupe(db, event.provider, dedupeKey);
+      const existing = findPriorEvent();
       if (existing) {
         if (String(existing.summary.raw_payload_sha256 ?? "") !== payloadHash) throw new Error("tracker_event_dedupe_conflict");
         return { conflict: false, event: existing, issue_id: link?.issue_id, linked: link !== null, replayed: true };
@@ -120,7 +128,8 @@ export async function pollTrackerIssues(db: RunnerDatabase, adapter: TrackerIssu
 function applyMappedStatus(db: RunnerDatabase, link: ReturnType<typeof getTrackerIssueLink> & {}, event: TrackerIssueEvent, correlationID: string): { action: string; conflict: boolean } {
   const issue = getIssue(db, link.issue_id);
   if (!issue) throw new Error("linked issue not found");
-  if (event.external_updated_at <= link.last_external_updated_at) {
+  if (event.external_updated_at < link.last_external_updated_at
+    || (event.provider !== "github" && event.external_updated_at === link.last_external_updated_at)) {
     recordTrackerSyncAudit(db, { action: "stale_external", correlation_id: correlationID, external_id: event.external_id, issue_id: issue.id, project_id: issue.project_id, provider: event.provider });
     return { action: "stale_external", conflict: true };
   }
