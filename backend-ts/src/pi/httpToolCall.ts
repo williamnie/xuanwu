@@ -23,6 +23,11 @@ type FetchOptions = {
 type RedirectHop = { from_url: string; location: string; status: number; to_url: string };
 type FetchOutcome = { finalUrl: string; redirects: RedirectHop[]; response: Response };
 type BodyExcerpt = { bytes: Uint8Array; truncated: boolean };
+class FetchUrlRejection extends Error {
+  constructor(readonly rejection: { error: ToolResultError; status: "denied" | "failed" }) {
+    super(rejection.error.message);
+  }
+}
 const DEFAULT_MAX_BYTES = 65_536;
 const MAX_BYTES = 262_144;
 const DEFAULT_MAX_REDIRECTS = 3;
@@ -63,11 +68,13 @@ async function fetchWithRedirects(options: FetchOptions, signal: AbortSignal): P
     if (!REDIRECT_STATUSES.has(response.status)) return { finalUrl: current, redirects, response };
     const location = response.headers.get("location") ?? "";
     if (location === "") return { finalUrl: current, redirects, response };
-    const next = new URL(location, current).toString();
-    redirects.push({ from_url: current, location, status: response.status, to_url: next });
     await response.body?.cancel();
+    // 每次跳转都复用入口校验，避免重定向绕过协议和敏感信息外发限制。
+    const next = normalizedUrl(new URL(location, current).toString());
+    if ("error" in next) throw new FetchUrlRejection(next);
+    redirects.push({ from_url: current, location, status: response.status, to_url: next.value });
     if (redirects.length > options.maxRedirects) throw redirectLimitError(options.maxRedirects);
-    current = next;
+    current = next.value;
   }
 }
 async function readBody(response: Response, options: FetchOptions): Promise<BodyExcerpt> {
@@ -165,6 +172,7 @@ function deniedContentType(
   }, undefined, metadata(options));
 }
 function fetchError(clock: Clock, error: unknown): ToolResult {
+  if (error instanceof FetchUrlRejection) return finish(clock, error.rejection.status, error.rejection.error);
   if (isAbortError(error)) return finish(clock, "timeout", { code: "http_timeout", message: "HTTP fetch timed out" });
   if (isRedirectLimitError(error)) return finish(clock, "failed", { code: "http_redirect_limit", message: error.message });
   return finish(clock, "failed", { code: "http_fetch_error", message: errorMessage(error) });

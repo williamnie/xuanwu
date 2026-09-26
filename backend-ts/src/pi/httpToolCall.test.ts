@@ -16,6 +16,33 @@ afterEach(async () => {
 });
 
 describe("HTTP read-only url_fetch provider", () => {
+  test("revalidates every redirect before fetching its target", async () => {
+    const db = await openFixture();
+    const visited: string[] = [];
+    const server = Bun.serve({ port: 0, fetch(request) {
+      const url = new URL(request.url);
+      visited.push(url.pathname);
+      if (url.pathname === "/chain") return Response.redirect(new URL("/file", url).href);
+      const targets: Record<string, string> = {
+        "/file": "file:///tmp/xuanwu-redirect-must-not-be-read",
+        "/data": "data:text/plain,must-not-be-read",
+        "/credentials": new URL("http://user:password@127.0.0.1/private").href,
+        "/secret": new URL("/private?api_key=fixture-secret", url).href,
+      };
+      return targets[url.pathname] ? Response.redirect(targets[url.pathname]) : new Response("unexpected target");
+    } });
+    try {
+      for (const path of ["/chain", "/data", "/credentials", "/secret"]) {
+        const result = await callUrlFetch(db, `redirect-${path}`, { url: fixtureUrl(server, path) });
+        expect(result.status).toBe("denied");
+        expect(result.error?.code).toBe(["/chain", "/data"].includes(path) ? "url_scheme_denied" : "sensitive_url_denied");
+        expect(JSON.stringify(result)).not.toContain("fixture-secret");
+        expect(JSON.stringify(result)).not.toContain("user:password");
+      }
+      expect(visited).toEqual(["/chain", "/file", "/data", "/credentials", "/secret"]);
+    } finally { server.stop(true); db.close(); }
+  });
+
   test("fetches HTTP 200, non-2xx, and redirects through url_fetch", async () => {
     const db = await openFixture();
     const server = startHttpFixture();
