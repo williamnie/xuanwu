@@ -117,6 +117,33 @@ test("memory write and completion are atomic; a crash after commit cannot cause 
   expect(listPiMemoryItems(db)).toHaveLength(1);
 });
 
+test("reflection rejects reference prefixes in source IDs and accepts the exact canonical summary IDs", async () => {
+  const { db, input } = await fixture();
+  await runMemoryReflectionOnce(db, { reflect: async (_row, lease) => {
+    const tools = createMemoryReflectionTools(db, lease);
+    const summary = (await invoke(tools, "reflection_evidence_read")).details as { work_id: string; run_id: string };
+    const content = JSON.parse(input.content);
+    expect(content.source).toMatchObject({ work_id: summary.work_id, run_id: summary.run_id,
+      refs: [`work:${summary.work_id}`, `run:${summary.run_id}`] });
+    for (const [field, prefix] of [["work_id", "work:"], ["run_id", "run:"]] as const) {
+      const malformed = { ...content, source: { ...content.source, [field]: prefix + summary[field] } };
+      const result = await invoke(tools, "memory_remember", { ...input, content: JSON.stringify(malformed) });
+      expect(result.details).toMatchObject({ rejected: true, reason: "memory is outside reflection evidence authority" });
+      expect(listPiMemoryItems(db)).toHaveLength(0);
+      expect(getMemoryReflection(db, lease.id)?.status).toBe("running");
+    }
+    const evidenceRef = content.verification.evidence_refs[0] as string;
+    const bareEvidence = await invoke(tools, "memory_remember", { ...input, evidence_ref: evidenceRef.slice("evidence:".length) });
+    expect(bareEvidence.details).toMatchObject({ rejected: true, reason: "memory is outside reflection evidence authority" });
+    expect(listPiMemoryItems(db)).toHaveLength(0);
+    await invoke(tools, "memory_remember", { ...input, evidence_ref: evidenceRef });
+    return '{"status":"saved"}';
+  } });
+  expect(rows(db)[0]).toMatchObject({ status: "completed", attempts: 1 });
+  expect(listPiMemoryItems(db)).toHaveLength(1);
+  expect(JSON.parse(listPiMemoryItems(db)[0]!.content).source).toEqual(JSON.parse(input.content).source);
+});
+
 test("model timeout, output budget, and no lesson leave Work done and stop after one retry", async () => {
   for (const reflect of [async () => new Promise<string>(() => {}), async () => "x".repeat(REFLECTION_LIMITS.outputBytes + 1)]) {
     const { db, seed } = await fixture();

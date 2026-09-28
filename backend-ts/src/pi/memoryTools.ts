@@ -7,7 +7,7 @@ import { executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
 import { containsSensitiveMemoryContent, reusableMemoryRejection } from "./memoryPolicy.ts";
 import { retrievePiMemoryContext } from "./memoryContext.ts";
 import type { MemoryScope } from "./memoryRetrieval.ts";
-import { MEMORY_EXPERIENCE_INSTRUCTIONS, parseMemoryExperience } from "./memoryExperience.ts";
+import { MEMORY_EXPERIENCE_INSTRUCTIONS, MEMORY_EXPERIENCE_SOURCE_INSTRUCTIONS, parseMemoryExperience } from "./memoryExperience.ts";
 import { memoryEvidenceRejection } from "./memoryEvidence.ts";
 import { PiMemoryWriteError } from "../db/repositories/pi/memoryHistory.ts";
 
@@ -41,8 +41,8 @@ const memorySearchParams = Type.Object({
 
 const memoryWriteCandidateParams = Type.Object({
   confidence: optionalString,
-  content: requiredText,
-  evidence_ref: optionalString,
+  content: Type.String({ minLength: 1, pattern: "\\S", description: MEMORY_EXPERIENCE_SOURCE_INSTRUCTIONS }),
+  evidence_ref: Type.Optional(Type.String({ description: "Typed source reference, not a bare canonical ID. During reflection, omit this optional field or copy an evidence:<canonical-id> reference from content.verification.evidence_refs exactly." })),
   kind: Type.Union([
     Type.Literal("user_preference"),
     Type.Literal("project_preference"),

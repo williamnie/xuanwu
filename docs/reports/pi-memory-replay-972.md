@@ -1,5 +1,63 @@
 # #972 隔离记忆验收报告
 
+## 新授权 Session（2026-09-29）
+
+**仍未通过真实 Pi 验收。** 原问题的 `source.work_id/run_id` 格式已在两次真实输出中纠正，但没有成功持久化。首次尝试触发现有状态快照误判，唯一重试触发可选 `evidence_ref` 格式拒绝；后八项真实案例均未运行。没有以 fixture 或模型的文字回复代替成功证据。
+
+本轮在起始 HEAD `ea7dc87a` 上执行，保留原有 15 个 tracked 修改和 1 个 untracked 文件。使用两个全新的隔离 DB、运行目录、无 remote 虚构 Git 项目及 SDK 会话，读取既有 `runner-default / openai-codex / gpt-5.6-terra / high` 身份。未操作当前 Issue/Run 生命周期，未创建业务或 Verifier Issue，未部署或修改生产配置。
+
+修正内容：
+
+- 复盘提示和 `content` 参数说明共享裸 canonical ID 合同，保留内部 `xw:work:` / `xw:run:` 段；只有引用数组添加引用前缀。
+- 明确可选 `evidence_ref` 应省略或复制 `verification.evidence_refs` 中的完整 `evidence:<canonical-id>`。此项在最后一次真实失败后补充，仅经离线回归，不能声称真实验证成功。
+- 补充稳定经验措辞、带版本和适用条件的复盘搜索说明。任务对照把实际 SPEC 摘要作为检索上下文，没有注入模型生成的记忆或预制答案。
+- 每例记录派发增量，调用及回执关联会话 ID；回执到达后立即刷新预算账本，记录生产提示和工具的源码指纹。
+
+Host 的来源匹配、状态快照判断、Gate、预算、遗忘、修订和持久化逻辑均未放宽。新增回归分别验证带前缀的 source ID 和裸 `evidence_ref` 被拒绝，而完整正确引用成功写入。
+
+### 本轮逐例观察
+
+| 案例 | fixture | 真实 Pi |
+| --- | --- | --- |
+| 首次学习 | passed | failed；两轮均无 memory 行 |
+| 无记忆对照 | passed | not_run |
+| 相似表达召回 | passed | not_run |
+| 不同业务规则反例 | passed | not_run |
+| 纠错 | passed | not_run |
+| 重启去重 | passed | not_run |
+| 遗忘不复活 | passed | not_run |
+| 预算失败不阻塞 | passed，故障注入 | not_run |
+| 权限边界 | passed，Host 断言 | not_run |
+
+两次真实工具顺序均为 `reflection_evidence_read → memory_search → memory_remember`，随后一次模型回复。第一次保存的 source ID 正确，`evidence_ref` 也正确，但正文的“当前业务规格”被 `transientStatusSnapshot` 的时间词规则拒绝，返回 `current Work/Run/Issue status snapshots are not memory`。第二次不再使用该时间措辞，source ID 仍正确，但顶层 `evidence_ref` 为 `xw:evidence:issue_events:replay-1`，缺少外层 `evidence:`，返回 `memory is outside reflection evidence authority`。同次 `verification.evidence_refs` 已正确加前缀。完整原始输入、输出见 JSON 的 `session_2.runs`。
+
+| 本轮预算与用量 | 实测 |
+| --- | ---: |
+| 派发（含工具循环），回执 | 8 / 20，8 / 8 |
+| 隔离会话，显式重试 | 2，1 / 1 |
+| 沿用首试开始时间的墙钟 | 156,723 ms / 1,800,000 ms |
+| input / output tokens | 11,951 / 1,361 |
+| cache read / write tokens | 10,752 / 0 |
+| reasoning tokens（已包含于 output，不重复叠加） | 534 |
+| SDK totalTokens | 24,064 |
+| SDK 估算 USD | 0.0423844 |
+
+一次重试限制已用完，没有重置预算或启动第三轮。剩余调用额度不代表验收通过，也没有用来制造替代观察。SDK 费用是估算，不是账单。原 Session 的 5 次调用不计入本次新授权的预算；两份历史证据均保留。
+
+### 本轮验证与证据
+
+- 最终记忆相关测试：56 passed / 0 failed，覆盖 6 个文件；fixture 回放 9/9，通过且没有真实模型调用。
+- GJ-06 通过。首次全量 Golden Journey 在 GJ-01 的一个用例超过默认 5 秒后停止；GJ-01 单独重查通过，其余未执行项未记为通过。
+- TypeScript：153 项诊断，与本轮起始基线输出完全一致，新增 0。
+- 仓库 hygiene 和 `git diff --check` 通过；原有 16 个脏文件 SHA-256 与开工前一致。
+- 本轮未重跑全库后端、前端构建或依赖扫描；下面旧 Session 的全库结果只是历史结果。
+
+本机证据在 `.runner/artifacts/issue-972/session-2/`，包括两个隔离 DB 副本、虚构项目、命令、工具步骤、账本、测试日志及起始脏文件指纹。可提交的 [JSON 报告](pi-memory-replay-972.json) 保留旧字段并新增 `session_2`，完整记录本轮观察和 artifact SHA-256。源码版本按每轮 provenance 区分；最后补充的 `evidence_ref` 说明未进行第三次真实演练。
+
+后续仍需真实持久化、正确召回、反例不误用和纠错成功证据，才能满足 Issue 的核心目标。状态快照词法误判仍存在；没有更改 Host 来让本次演练通过。
+
+## 原 Session 历史报告（保留）
+
 本次 **fixture 通过，真实 Pi 失败**。真实 Pi 已调用并尝试记忆写入，但没有持久化成功，不能宣称已验证真实记忆复用或纠错。已用完允许的一次重试，停止真实调用；不以 fixture 代替 live。后续需要修正模型输出与来源字段合同的衔接，并在新授权下重跑；#973 的正式项目启用及主观质量抽验仍未执行。
 
 ## 来源与隔离

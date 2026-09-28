@@ -1019,5 +1019,2161 @@
       "security.log": "ee37fb6d9ad9557f339719870d2e19ca4aa0c1bc4c15a0878643ce05beb9bf91",
       "targeted-final.log": "3d718499bace38ccffb0c9e61f20377cbe45a8e73480222c4ae3a88a0a741b5d"
     }
+  },
+  "latest_session": "session_2",
+  "legacy_fields_scope": "Original session before ea7dc87a; original runs, live_totals and automatic_validation above remain historical. See session_2 for the newly authorized run.",
+  "session_2": {
+    "acceptance": "live_failed",
+    "source_head": "ea7dc87a709f9e4b22c5c63b157687da13f4074a",
+    "runs": {
+      "fixture": {
+        "report": {
+          "root": "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-dhiSOC",
+          "provenance": {
+            "head": "ea7dc87a709f9e4b22c5c63b157687da13f4074a",
+            "branch": "codex/pi-memory-phase1",
+            "dirty": " M backend-ts/src/agentic/memoryReflectionWorker.test.ts\n M backend-ts/src/domain/review/humanReview.ts\n M backend-ts/src/http/piActionDispatch.ts\n M backend-ts/src/http/piConversationMessagesApi.test.ts\n M backend-ts/src/http/piRuntime.ts\n M backend-ts/src/pi/actionContracts.ts\n M backend-ts/src/pi/agentOrchestrationActions.ts\n M backend-ts/src/pi/authorizationScope.test.ts\n M backend-ts/src/pi/authorizationScope.ts\n M backend-ts/src/pi/issueToolViews.ts\n M backend-ts/src/pi/memoryExperience.ts\n M backend-ts/src/pi/memoryTools.ts\n M backend-ts/src/pi/runnerActionGate.test.ts\n M backend-ts/src/pi/runnerActionTools.ts\n M backend-ts/src/pi/runnerActions.ts\n M backend-ts/src/runner/piAcceptanceCoordinator.ts\n M backend-ts/src/runner/piAcceptanceRequest.ts\n M backend-ts/src/xuanwu/memoryReplay.test.ts\n M backend-ts/src/xuanwu/memoryReplay.ts\n M backend-ts/src/xuanwu/memoryReplayRuntime.ts\n M docs/architecture/xuanwu/0063-approval-action-gate.md\n M scripts/replay-pi-memory.ts\n?? backend-ts/src/pi/runnerChatMainFlow.test.ts\n",
+            "tracked_diff_sha256": "1d56317fd50eed84d0e8a8627b4d8fa0bd634e329d2e5d6c3dc4d9d7b2cdf805",
+            "replay_source_sha256": {
+              "scripts/replay-pi-memory.ts": "5d50e166badb04afcd84f449bd4a6da422386027544d0b2c69a0765c3bcde439",
+              "backend-ts/src/xuanwu/memoryReplay.ts": "00c3916ab8cb8bc01a5cc049497d2945f1cb6640f1badb1b5954fb4c9b8fdb18",
+              "backend-ts/src/xuanwu/memoryReplayRuntime.ts": "136cd18618ceb7ec081bd65468bd6820c5369f4fdd499567177b7f2e9eff6599",
+              "backend-ts/src/pi/memoryExperience.ts": "7226406c0d0943020b33c5de2e348b63d74e6e3bb7ef55c15dc741a29a91f8b6",
+              "backend-ts/src/pi/memoryTools.ts": "b94994671d3e8445530967eec1a9a6c539557ddf558e82ed92e5a156cba2fded",
+              "backend-ts/src/pi/memoryReflectionRuntime.ts": "edec1f121b37d1ebcf72b5f5dc368cee49708910dc461b6e0d33180eab022cd4",
+              "backend-ts/src/pi/memoryReflectionTools.ts": "30d213d6376ee1266eb4ee8a1cd6eb9f4809b8c20707bf27ce3edd77aa6fc16e"
+            },
+            "command": [
+              "bun",
+              "scripts/replay-pi-memory.ts"
+            ],
+            "source_execution": "Bun imports current source; no HTTP requests to a deployed Xuanwu process"
+          },
+          "kind": "fixture",
+          "status": "passed",
+          "cases": [
+            {
+              "id": "first_learning",
+              "evidence_mode": "fixture",
+              "status": "passed",
+              "elapsed_ms": 156.24516700000004,
+              "facts": {
+                "reflections": [
+                  {
+                    "id": "a2481c7d-7bbf-45e5-b0b0-0699da5a3e99",
+                    "status": "completed",
+                    "attempts": 1,
+                    "reason": "experience_saved",
+                    "memory_id": "237f7536-a6fb-49ea-a96b-d788ce6181be"
+                  }
+                ],
+                "memory": [
+                  {
+                    "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "scope": "project",
+                    "scope_id": "fictional-gate",
+                    "kind": "debugging_pattern",
+                    "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read SPEC and test T-1,T,T+1; use the campaign operator, not remembered business values\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}",
+                    "source_type": "pi.memory_reflection",
+                    "source_id": "xw:run:issue_runs:replay-1",
+                    "confidence": "high",
+                    "pinned": 0,
+                    "disabled": 0,
+                    "memory_type": "project",
+                    "layer": "long_term",
+                    "citation_type": "evidence",
+                    "citation_id": "xw:evidence:issue_events:replay-1",
+                    "citation_label": "authoritative reusable-experience evidence",
+                    "citation_url": "",
+                    "authority": "evidence_backed",
+                    "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+                    "authorized_at": "2026-09-28T16:46:14.357Z",
+                    "memory_key": "gate.threshold.boundary",
+                    "occurrence_count": 1,
+                    "last_seen_at": "2026-09-28T16:46:14Z",
+                    "revision": 1,
+                    "created_at": "2026-09-28T16:46:14Z",
+                    "updated_at": "2026-09-28T16:46:14Z"
+                  }
+                ],
+                "provider_calls": {
+                  "before": 0,
+                  "after": 0,
+                  "delta": 0
+                }
+              }
+            },
+            {
+              "id": "without_memory",
+              "evidence_mode": "fixture",
+              "status": "passed",
+              "elapsed_ms": 66.50433299999986,
+              "facts": {
+                "raw": "{\"tests\":[{\"amount\":99,\"eligible\":false},{\"amount\":100,\"eligible\":true},{\"amount\":101,\"eligible\":true}],\"memory_refs\":[],\"explanation\":\"Fixture policy uses the current specification\"}",
+                "observed": [
+                  {
+                    "amount": 99,
+                    "eligible": false,
+                    "actual": false,
+                    "passed": true
+                  },
+                  {
+                    "amount": 100,
+                    "eligible": true,
+                    "actual": true,
+                    "passed": true
+                  },
+                  {
+                    "amount": 101,
+                    "eligible": true,
+                    "actual": true,
+                    "passed": true
+                  }
+                ],
+                "memory_refs": [],
+                "correct_recall": null,
+                "misuse": false,
+                "explanation": "Fixture policy uses the current specification",
+                "provider_calls": {
+                  "before": 0,
+                  "after": 0,
+                  "delta": 0
+                }
+              }
+            },
+            {
+              "id": "similar_expression",
+              "evidence_mode": "fixture",
+              "status": "passed",
+              "elapsed_ms": 118.12608399999954,
+              "facts": {
+                "raw": "{\"tests\":[{\"amount\":99,\"eligible\":false},{\"amount\":100,\"eligible\":true},{\"amount\":101,\"eligible\":true}],\"memory_refs\":[{\"id\":\"237f7536-a6fb-49ea-a96b-d788ce6181be\",\"revision\":1,\"content_fingerprint\":\"c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8\"}],\"explanation\":\"Fixture policy uses the current specification\"}",
+                "observed": [
+                  {
+                    "amount": 99,
+                    "eligible": false,
+                    "actual": false,
+                    "passed": true
+                  },
+                  {
+                    "amount": 100,
+                    "eligible": true,
+                    "actual": true,
+                    "passed": true
+                  },
+                  {
+                    "amount": 101,
+                    "eligible": true,
+                    "actual": true,
+                    "passed": true
+                  }
+                ],
+                "memory_refs": [
+                  {
+                    "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "revision": 1,
+                    "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8"
+                  }
+                ],
+                "correct_recall": true,
+                "misuse": false,
+                "explanation": "Fixture policy uses the current specification",
+                "provider_calls": {
+                  "before": 0,
+                  "after": 0,
+                  "delta": 0
+                }
+              }
+            },
+            {
+              "id": "changed_business_rule",
+              "evidence_mode": "fixture",
+              "status": "passed",
+              "elapsed_ms": 89.18912499999988,
+              "facts": {
+                "raw": "{\"tests\":[{\"amount\":199,\"eligible\":false},{\"amount\":200,\"eligible\":false},{\"amount\":201,\"eligible\":true}],\"memory_refs\":[{\"id\":\"237f7536-a6fb-49ea-a96b-d788ce6181be\",\"revision\":1,\"content_fingerprint\":\"c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8\"}],\"explanation\":\"Fixture policy uses the current specification\"}",
+                "observed": [
+                  {
+                    "amount": 199,
+                    "eligible": false,
+                    "actual": false,
+                    "passed": true
+                  },
+                  {
+                    "amount": 200,
+                    "eligible": false,
+                    "actual": false,
+                    "passed": true
+                  },
+                  {
+                    "amount": 201,
+                    "eligible": true,
+                    "actual": true,
+                    "passed": true
+                  }
+                ],
+                "memory_refs": [
+                  {
+                    "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "revision": 1,
+                    "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8"
+                  }
+                ],
+                "correct_recall": null,
+                "misuse": false,
+                "explanation": "Fixture policy uses the current specification",
+                "provider_calls": {
+                  "before": 0,
+                  "after": 0,
+                  "delta": 0
+                }
+              }
+            },
+            {
+              "id": "correction",
+              "evidence_mode": "fixture",
+              "status": "passed",
+              "elapsed_ms": 96.1855829999995,
+              "facts": {
+                "reflections": [
+                  {
+                    "id": "a2481c7d-7bbf-45e5-b0b0-0699da5a3e99",
+                    "status": "completed",
+                    "attempts": 1,
+                    "reason": "experience_saved",
+                    "memory_id": "237f7536-a6fb-49ea-a96b-d788ce6181be"
+                  },
+                  {
+                    "id": "983fb813-3d43-45b3-9c56-29862e163038",
+                    "status": "completed",
+                    "attempts": 1,
+                    "reason": "experience_saved",
+                    "memory_id": "237f7536-a6fb-49ea-a96b-d788ce6181be"
+                  }
+                ],
+                "history": [
+                  {
+                    "memory_id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "revision": 1,
+                    "operation": "create",
+                    "snapshot": {
+                      "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "scope": "project",
+                      "scope_id": "fictional-gate",
+                      "kind": "debugging_pattern",
+                      "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read SPEC and test T-1,T,T+1; use the campaign operator, not remembered business values\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}",
+                      "source_type": "pi.memory_reflection",
+                      "source_id": "xw:run:issue_runs:replay-1",
+                      "confidence": "high",
+                      "pinned": 0,
+                      "disabled": 0,
+                      "memory_type": "project",
+                      "layer": "long_term",
+                      "citation_type": "evidence",
+                      "citation_id": "xw:evidence:issue_events:replay-1",
+                      "citation_label": "authoritative reusable-experience evidence",
+                      "citation_url": "",
+                      "authority": "evidence_backed",
+                      "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+                      "authorized_at": "2026-09-28T16:46:14.357Z",
+                      "memory_key": "gate.threshold.boundary",
+                      "occurrence_count": 1,
+                      "last_seen_at": "2026-09-28T16:46:14Z",
+                      "revision": 1,
+                      "created_at": "2026-09-28T16:46:14Z",
+                      "updated_at": "2026-09-28T16:46:14Z"
+                    },
+                    "correction": {},
+                    "recorded_at": "2026-09-28T16:46:14Z"
+                  },
+                  {
+                    "memory_id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "revision": 2,
+                    "operation": "correct",
+                    "snapshot": {
+                      "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "scope": "project",
+                      "scope_id": "fictional-gate",
+                      "kind": "debugging_pattern",
+                      "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression integer\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read the current campaign SPEC; test T-1, T, T+1 using the specified operator. B is >200, A is >=100.\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-2\"]},\"source\":{\"work_id\":\"xw:work:issues:2\",\"run_id\":\"xw:run:issue_runs:replay-2\",\"refs\":[\"work:xw:work:issues:2\",\"run:xw:run:issue_runs:replay-2\"]},\"version\":\"gate-v1.0.0\"}",
+                      "source_type": "pi.memory_reflection",
+                      "source_id": "xw:run:issue_runs:replay-2",
+                      "confidence": "high",
+                      "pinned": 0,
+                      "disabled": 0,
+                      "memory_type": "project",
+                      "layer": "long_term",
+                      "citation_type": "evidence",
+                      "citation_id": "xw:evidence:issue_events:replay-2",
+                      "citation_label": "authoritative reusable-experience evidence",
+                      "citation_url": "",
+                      "authority": "evidence_backed",
+                      "authorized_by": "evidence:xw:evidence:issue_events:replay-2",
+                      "authorized_at": "2026-09-28T16:46:15.002Z",
+                      "memory_key": "gate.threshold.boundary",
+                      "occurrence_count": 2,
+                      "last_seen_at": "2026-09-28T16:46:15Z",
+                      "revision": 2,
+                      "created_at": "2026-09-28T16:46:14Z",
+                      "updated_at": "2026-09-28T16:46:15Z"
+                    },
+                    "correction": {
+                      "expected_revision": 1,
+                      "disposition": "narrow",
+                      "reason": "Verified new campaign evidence limits reuse to the testing method; business operators must be read again"
+                    },
+                    "recorded_at": "2026-09-28T16:46:15Z"
+                  }
+                ],
+                "current": {
+                  "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                  "scope": "project",
+                  "scope_id": "fictional-gate",
+                  "kind": "debugging_pattern",
+                  "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression integer\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read the current campaign SPEC; test T-1, T, T+1 using the specified operator. B is >200, A is >=100.\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-2\"]},\"source\":{\"work_id\":\"xw:work:issues:2\",\"run_id\":\"xw:run:issue_runs:replay-2\",\"refs\":[\"work:xw:work:issues:2\",\"run:xw:run:issue_runs:replay-2\"]},\"version\":\"gate-v1.0.0\"}",
+                  "source_type": "pi.memory_reflection",
+                  "source_id": "xw:run:issue_runs:replay-2",
+                  "confidence": "high",
+                  "pinned": 0,
+                  "disabled": 0,
+                  "memory_type": "project",
+                  "layer": "long_term",
+                  "citation_type": "evidence",
+                  "citation_id": "xw:evidence:issue_events:replay-2",
+                  "citation_label": "authoritative reusable-experience evidence",
+                  "citation_url": "",
+                  "authority": "evidence_backed",
+                  "authorized_by": "evidence:xw:evidence:issue_events:replay-2",
+                  "authorized_at": "2026-09-28T16:46:15.002Z",
+                  "memory_key": "gate.threshold.boundary",
+                  "occurrence_count": 2,
+                  "last_seen_at": "2026-09-28T16:46:15Z",
+                  "revision": 2,
+                  "created_at": "2026-09-28T16:46:14Z",
+                  "updated_at": "2026-09-28T16:46:15Z"
+                },
+                "provider_calls": {
+                  "before": 0,
+                  "after": 0,
+                  "delta": 0
+                }
+              }
+            },
+            {
+              "id": "restart_deduplication",
+              "evidence_mode": "host_assertion",
+              "status": "passed",
+              "elapsed_ms": 67.97858400000041,
+              "facts": {
+                "provider_calls_delta": 0,
+                "reflections": [
+                  {
+                    "id": "a2481c7d-7bbf-45e5-b0b0-0699da5a3e99",
+                    "status": "completed",
+                    "attempts": 1,
+                    "reason": "experience_saved",
+                    "memory_id": "237f7536-a6fb-49ea-a96b-d788ce6181be"
+                  },
+                  {
+                    "id": "983fb813-3d43-45b3-9c56-29862e163038",
+                    "status": "completed",
+                    "attempts": 1,
+                    "reason": "experience_saved",
+                    "memory_id": "237f7536-a6fb-49ea-a96b-d788ce6181be"
+                  }
+                ],
+                "memory_identities": [
+                  [
+                    "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    2,
+                    2
+                  ]
+                ],
+                "retrieval": {
+                  "limits": {
+                    "item_limit": 10,
+                    "token_budget": 4000,
+                    "token_estimate": 569,
+                    "truncated": false
+                  },
+                  "memory_items": [
+                    {
+                      "authority": "evidence_backed",
+                      "authorized_at": "2026-09-28T16:46:15.002Z",
+                      "authorized_by": "evidence:xw:evidence:issue_events:replay-2",
+                      "confidence": "high",
+                      "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression integer\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read the current campaign SPEC; test T-1, T, T+1 using the specified operator. B is >200, A is >=100.\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-2\"]},\"source\":{\"work_id\":\"xw:work:issues:2\",\"run_id\":\"xw:run:issue_runs:replay-2\",\"refs\":[\"work:xw:work:issues:2\",\"run:xw:run:issue_runs:replay-2\"]},\"version\":\"gate-v1.0.0\"}",
+                      "citation_id": "xw:evidence:issue_events:replay-2",
+                      "citation_label": "authoritative reusable-experience evidence",
+                      "citation_type": "evidence",
+                      "citation_url": "",
+                      "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "kind": "debugging_pattern",
+                      "layer": "long_term",
+                      "last_seen_at": "2026-09-28T16:46:15Z",
+                      "memory_key": "gate.threshold.boundary",
+                      "memory_type": "project",
+                      "occurrence_count": 2,
+                      "pinned": 0,
+                      "provenance": {
+                        "citation_id": "xw:evidence:issue_events:replay-2",
+                        "citation_label": "authoritative reusable-experience evidence",
+                        "citation_type": "evidence",
+                        "citation_url": "",
+                        "reference": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                        "source_id": "xw:run:issue_runs:replay-2",
+                        "source_path": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                        "source_type": "pi.memory_reflection"
+                      },
+                      "reference": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "retrieval_scope": "project:fictional-gate",
+                      "selection_reason": "task terms gate, threshold, boundary, regression; project, applies_when and version matched; Pi must verify applicability",
+                      "scope": "project",
+                      "scope_id": "fictional-gate",
+                      "source_id": "xw:run:issue_runs:replay-2",
+                      "source_path": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "source_type": "pi.memory_reflection",
+                      "token_estimate": 569,
+                      "truncated": false,
+                      "updated_at": "2026-09-28T16:46:15Z",
+                      "revision": 2,
+                      "content_fingerprint": "2463d79ec4635e5154892cfc84cfd9ba53bcece6995f4dcd9f9944557da113a5",
+                      "version": "gate-v1.0.0",
+                      "selection_stage": "text_candidate"
+                    }
+                  ],
+                  "retrieval": {
+                    "scanned": 1,
+                    "scan_limited": false,
+                    "technical_limit": 3,
+                    "elapsed_ms": 3.1069580000003043,
+                    "excluded": {
+                      "ineligible": 0,
+                      "version_mismatch": 0,
+                      "applicability_mismatch": 0,
+                      "unrelated": 0
+                    },
+                    "omitted_by_candidate_limit": 0,
+                    "omitted_by_selection_or_technical_limit": 0,
+                    "reason_code": "selected"
+                  },
+                  "retrieval_scopes": [
+                    "project:fictional-gate",
+                    "global:runner"
+                  ],
+                  "truncation_summary": {
+                    "omitted_by_item_limit": 0,
+                    "omitted_by_token_budget": 0,
+                    "omitted_count": 0,
+                    "selected_count": 1,
+                    "summary": "No truncation; token budget 4000 was sufficient.",
+                    "token_budget": 4000,
+                    "total_candidates": 1,
+                    "truncated_item_ids": []
+                  }
+                },
+                "provider_calls": {
+                  "before": 0,
+                  "after": 0,
+                  "delta": 0
+                }
+              }
+            },
+            {
+              "id": "forget_no_resurrection",
+              "evidence_mode": "host_assertion",
+              "status": "passed",
+              "elapsed_ms": 130.62620799999968,
+              "facts": {
+                "reflections": [
+                  {
+                    "id": "a2481c7d-7bbf-45e5-b0b0-0699da5a3e99",
+                    "status": "completed",
+                    "attempts": 1,
+                    "reason": "experience_saved",
+                    "memory_id": "237f7536-a6fb-49ea-a96b-d788ce6181be"
+                  },
+                  {
+                    "id": "983fb813-3d43-45b3-9c56-29862e163038",
+                    "status": "completed",
+                    "attempts": 1,
+                    "reason": "experience_saved",
+                    "memory_id": "237f7536-a6fb-49ea-a96b-d788ce6181be"
+                  },
+                  {
+                    "id": "2389f013-6ed4-4d2e-99e5-84d4009dd0d7",
+                    "status": "skipped",
+                    "attempts": 0,
+                    "reason": "source_memory_suppressed",
+                    "memory_id": ""
+                  }
+                ],
+                "provider_calls_delta": 0,
+                "provider_calls": {
+                  "before": 0,
+                  "after": 0,
+                  "delta": 0
+                }
+              }
+            },
+            {
+              "id": "budget_nonblocking",
+              "evidence_mode": "fault_injection",
+              "status": "passed",
+              "elapsed_ms": 59.23070800000005,
+              "facts": {
+                "work_status": "done",
+                "attempts": 2,
+                "fault_injection": true,
+                "reflections": [
+                  {
+                    "id": "a2481c7d-7bbf-45e5-b0b0-0699da5a3e99",
+                    "status": "completed",
+                    "attempts": 1,
+                    "reason": "experience_saved",
+                    "memory_id": "237f7536-a6fb-49ea-a96b-d788ce6181be"
+                  },
+                  {
+                    "id": "983fb813-3d43-45b3-9c56-29862e163038",
+                    "status": "completed",
+                    "attempts": 1,
+                    "reason": "experience_saved",
+                    "memory_id": "237f7536-a6fb-49ea-a96b-d788ce6181be"
+                  },
+                  {
+                    "id": "2389f013-6ed4-4d2e-99e5-84d4009dd0d7",
+                    "status": "skipped",
+                    "attempts": 0,
+                    "reason": "source_memory_suppressed",
+                    "memory_id": ""
+                  },
+                  {
+                    "id": "268b4019-ea13-4683-bfb9-1db7aaf34609",
+                    "status": "failed",
+                    "attempts": 2,
+                    "reason": "The \"string\" argument must be of type string or an instance of Buffer or ArrayBuffer. Received undefined",
+                    "memory_id": ""
+                  }
+                ],
+                "provider_calls": {
+                  "before": 0,
+                  "after": 0,
+                  "delta": 0
+                }
+              }
+            },
+            {
+              "id": "permission_boundary",
+              "evidence_mode": "host_assertion",
+              "status": "passed",
+              "elapsed_ms": 27.521375000000262,
+              "facts": {
+                "result": {
+                  "action_id": "e1d63cb4-39ac-4fd4-b93b-74ea2f7c1b64",
+                  "action_type": "memory.remember",
+                  "issue_id": 0,
+                  "requires_confirmation": false,
+                  "risk_level": "low",
+                  "status": "denied",
+                  "decision": "deny",
+                  "gate_reason": "action is not covered by allowed_actions",
+                  "guardian_decision_id": "",
+                  "idempotency_key": ""
+                },
+                "provider_calls": {
+                  "before": 0,
+                  "after": 0,
+                  "delta": 0
+                }
+              }
+            }
+          ],
+          "started_at": "2026-09-28T16:46:11.966Z",
+          "retry_from": null,
+          "identity": null,
+          "finished_at": "2026-09-28T16:46:15.321Z",
+          "budget": {
+            "max_calls": 20,
+            "max_duration_ms": 1800000,
+            "model_calls": 0,
+            "retries": 0,
+            "elapsed_ms": 3355,
+            "dispatches": [],
+            "receipts": [],
+            "accounting": "Each dispatched SDK agent.streamFunction invocation counts, including tool-loop continuations and failures. SDK/provider retries and compaction disabled. Missing receipts remain unknown; SDK cost is an estimate, not a bill."
+          }
+        },
+        "artifacts": {
+          "report.json": {
+            "path": ".runner/artifacts/issue-972/session-2/fixture/report.json",
+            "sha256": "08035a5db8852a1c38ed85628c76d2aec97d56bc70978aee4a9e7cb704a77157"
+          },
+          "tool-steps.json": {
+            "path": ".runner/artifacts/issue-972/session-2/fixture/tool-steps.json",
+            "sha256": "35af50949d46bbfcf15dbc3c1886835500543be43a8ef266f1d0b0dfcb3d2019"
+          },
+          "commands.json": {
+            "path": ".runner/artifacts/issue-972/session-2/fixture/commands.json",
+            "sha256": "468c933e94e8c1df673b01c4c143af6ce4b1d4bd2c3b1ae59fe812127849e0e3"
+          },
+          "audit.json": {
+            "path": ".runner/artifacts/issue-972/session-2/fixture/audit.json",
+            "sha256": "676f0796079da60db09b51c2ced1e4a511399af31596d531678e580cc979b24d"
+          },
+          "runner.db": {
+            "path": ".runner/artifacts/issue-972/session-2/fixture/runner.db",
+            "sha256": "d1c34e63e5daf72668855781efbaf08e912d708628cc7533e65349ad19bd6c87"
+          }
+        },
+        "tool_steps": {
+          "first_learning": [
+            {
+              "name": "reflection_evidence_read",
+              "input": {},
+              "output": {
+                "project_id": "fictional-gate",
+                "work_id": "xw:work:issues:1",
+                "run_id": "xw:run:issue_runs:replay-1",
+                "outcome": "accepted",
+                "title": "gate threshold boundary regression",
+                "rationale": "Isolated replay: observed local tests passed",
+                "evidence": [
+                  {
+                    "id": "xw:evidence:issue_events:replay-1",
+                    "status": "passed",
+                    "summary": "Observed defect: gate.mjs used >100, SPEC campaign A requires >=100. Node tests 99/100/101 failed at 100 before fix; after >=100 all passed. Reusable lesson: test below/at/above threshold, read current business specification each time; do not hardcode campaign A in another campaign. Code version gate-v1.0.0.",
+                    "excerpt": "",
+                    "source": "commands.json"
+                  }
+                ]
+              },
+              "elapsed_ms": 1.4268330000004426
+            },
+            {
+              "name": "memory_search",
+              "input": {
+                "query": "gate threshold boundary regression v1.0.0"
+              },
+              "output": {
+                "items": []
+              },
+              "elapsed_ms": 48.13558400000056
+            },
+            {
+              "name": "memory_remember",
+              "input": {
+                "kind": "debugging_pattern",
+                "memory_key": "gate.threshold.boundary",
+                "confidence": "high",
+                "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read SPEC and test T-1,T,T+1; use the campaign operator, not remembered business values\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}"
+              },
+              "output": {
+                "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                "scope": "project",
+                "scope_id": "fictional-gate",
+                "kind": "debugging_pattern",
+                "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read SPEC and test T-1,T,T+1; use the campaign operator, not remembered business values\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}",
+                "source_type": "pi.memory_reflection",
+                "source_id": "xw:run:issue_runs:replay-1",
+                "confidence": "high",
+                "pinned": 0,
+                "disabled": 0,
+                "memory_type": "project",
+                "layer": "long_term",
+                "citation_type": "evidence",
+                "citation_id": "xw:evidence:issue_events:replay-1",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_url": "",
+                "authority": "evidence_backed",
+                "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+                "authorized_at": "2026-09-28T16:46:14.357Z",
+                "memory_key": "gate.threshold.boundary",
+                "occurrence_count": 1,
+                "last_seen_at": "2026-09-28T16:46:14Z",
+                "revision": 1,
+                "created_at": "2026-09-28T16:46:14Z",
+                "updated_at": "2026-09-28T16:46:14Z"
+              },
+              "elapsed_ms": 77.63612499999999
+            }
+          ],
+          "without_memory": [
+            {
+              "name": "repo_read_excerpt",
+              "input": {
+                "path": "SPEC.md"
+              },
+              "output": {
+                "excerpt": "gate-v1.0.0 / campaign A: integer amounts 0..1000. Eligibility starts at 100 units, including exactly 100. Test the boundary below, exactly at, and above the threshold.\n",
+                "line_range": {
+                  "end": 2,
+                  "start": 1
+                },
+                "path": "SPEC.md",
+                "reason": "requested_excerpt",
+                "source": "repo_read_excerpt",
+                "truncated": false
+              },
+              "elapsed_ms": 38.84437499999967
+            }
+          ],
+          "similar_expression": [
+            {
+              "name": "repo_read_excerpt",
+              "input": {
+                "path": "SPEC.md"
+              },
+              "output": {
+                "excerpt": "gate-v1.0.0 / campaign A: integer amounts 0..1000. Eligibility starts at 100 units, including exactly 100. Test the boundary below, exactly at, and above the threshold.\n",
+                "line_range": {
+                  "end": 2,
+                  "start": 1
+                },
+                "path": "SPEC.md",
+                "reason": "requested_excerpt",
+                "source": "repo_read_excerpt",
+                "truncated": false
+              },
+              "elapsed_ms": 31.805583000000297
+            },
+            {
+              "name": "memory_search",
+              "input": {
+                "query": "gate threshold boundary regression",
+                "version": "gate-v1.0.0",
+                "token_budget": 4000
+              },
+              "output": {
+                "items": [
+                  {
+                    "authority": "evidence_backed",
+                    "authorized_at": "2026-09-28T16:46:14.357Z",
+                    "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+                    "confidence": "high",
+                    "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read SPEC and test T-1,T,T+1; use the campaign operator, not remembered business values\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}",
+                    "citation_id": "xw:evidence:issue_events:replay-1",
+                    "citation_label": "authoritative reusable-experience evidence",
+                    "citation_type": "evidence",
+                    "citation_url": "",
+                    "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "kind": "debugging_pattern",
+                    "layer": "long_term",
+                    "last_seen_at": "2026-09-28T16:46:14Z",
+                    "memory_key": "gate.threshold.boundary",
+                    "memory_type": "project",
+                    "occurrence_count": 1,
+                    "pinned": 0,
+                    "provenance": {
+                      "citation_id": "xw:evidence:issue_events:replay-1",
+                      "citation_label": "authoritative reusable-experience evidence",
+                      "citation_type": "evidence",
+                      "citation_url": "",
+                      "reference": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "source_id": "xw:run:issue_runs:replay-1",
+                      "source_path": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "source_type": "pi.memory_reflection"
+                    },
+                    "reference": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "retrieval_scope": "project:fictional-gate",
+                    "selection_reason": "task terms gate, threshold, boundary, regression; project, applies_when and version matched; Pi must verify applicability",
+                    "scope": "project",
+                    "scope_id": "fictional-gate",
+                    "source_id": "xw:run:issue_runs:replay-1",
+                    "source_path": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "source_type": "pi.memory_reflection",
+                    "token_estimate": 563,
+                    "truncated": false,
+                    "updated_at": "2026-09-28T16:46:14Z",
+                    "revision": 1,
+                    "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8",
+                    "version": "gate-v1.0.0",
+                    "selection_stage": "text_candidate"
+                  }
+                ],
+                "limits": {
+                  "item_limit": 10,
+                  "token_budget": 4000,
+                  "token_estimate": 563,
+                  "truncated": false
+                },
+                "retrieval": {
+                  "scanned": 1,
+                  "scan_limited": false,
+                  "technical_limit": 3,
+                  "elapsed_ms": 11.568916000000172,
+                  "excluded": {
+                    "ineligible": 0,
+                    "version_mismatch": 0,
+                    "applicability_mismatch": 0,
+                    "unrelated": 0
+                  },
+                  "omitted_by_candidate_limit": 0,
+                  "omitted_by_selection_or_technical_limit": 0,
+                  "reason_code": "selected"
+                },
+                "truncation_summary": {
+                  "omitted_by_item_limit": 0,
+                  "omitted_by_token_budget": 0,
+                  "omitted_count": 0,
+                  "selected_count": 1,
+                  "summary": "No truncation; token budget 4000 was sufficient.",
+                  "token_budget": 4000,
+                  "total_candidates": 1,
+                  "truncated_item_ids": []
+                }
+              },
+              "elapsed_ms": 50.56054200000017
+            },
+            {
+              "name": "memory_search",
+              "input": {
+                "query": "gate threshold boundary regression",
+                "version": "gate-v1.0.0",
+                "token_budget": 4000,
+                "selection": [
+                  {
+                    "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "revision": 1,
+                    "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8",
+                    "reason": "Only reuse boundary testing method; read current spec for business values"
+                  }
+                ]
+              },
+              "output": {
+                "items": [
+                  {
+                    "authority": "evidence_backed",
+                    "authorized_at": "2026-09-28T16:46:14.357Z",
+                    "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+                    "confidence": "high",
+                    "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read SPEC and test T-1,T,T+1; use the campaign operator, not remembered business values\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}",
+                    "citation_id": "xw:evidence:issue_events:replay-1",
+                    "citation_label": "authoritative reusable-experience evidence",
+                    "citation_type": "evidence",
+                    "citation_url": "",
+                    "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "kind": "debugging_pattern",
+                    "layer": "long_term",
+                    "last_seen_at": "2026-09-28T16:46:14Z",
+                    "memory_key": "gate.threshold.boundary",
+                    "memory_type": "project",
+                    "occurrence_count": 1,
+                    "pinned": 0,
+                    "provenance": {
+                      "citation_id": "xw:evidence:issue_events:replay-1",
+                      "citation_label": "authoritative reusable-experience evidence",
+                      "citation_type": "evidence",
+                      "citation_url": "",
+                      "reference": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "source_id": "xw:run:issue_runs:replay-1",
+                      "source_path": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "source_type": "pi.memory_reflection"
+                    },
+                    "reference": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "retrieval_scope": "project:fictional-gate",
+                    "selection_reason": "task terms gate, threshold, boundary, regression; project, applies_when and version matched; Pi must verify applicability; Pi applicability: Only reuse boundary testing method; read current spec for business values",
+                    "scope": "project",
+                    "scope_id": "fictional-gate",
+                    "source_id": "xw:run:issue_runs:replay-1",
+                    "source_path": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "source_type": "pi.memory_reflection",
+                    "token_estimate": 586,
+                    "truncated": false,
+                    "updated_at": "2026-09-28T16:46:14Z",
+                    "revision": 1,
+                    "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8",
+                    "version": "gate-v1.0.0",
+                    "selection_stage": "pi_selected"
+                  }
+                ],
+                "limits": {
+                  "item_limit": 10,
+                  "token_budget": 4000,
+                  "token_estimate": 586,
+                  "truncated": false
+                },
+                "retrieval": {
+                  "scanned": 1,
+                  "scan_limited": false,
+                  "technical_limit": 3,
+                  "elapsed_ms": 6.8292499999997744,
+                  "excluded": {
+                    "ineligible": 0,
+                    "version_mismatch": 0,
+                    "applicability_mismatch": 0,
+                    "unrelated": 0
+                  },
+                  "omitted_by_candidate_limit": 0,
+                  "omitted_by_selection_or_technical_limit": 0,
+                  "reason_code": "selected"
+                },
+                "truncation_summary": {
+                  "omitted_by_item_limit": 0,
+                  "omitted_by_token_budget": 0,
+                  "omitted_count": 0,
+                  "selected_count": 1,
+                  "summary": "No truncation; token budget 4000 was sufficient.",
+                  "token_budget": 4000,
+                  "total_candidates": 1,
+                  "truncated_item_ids": []
+                }
+              },
+              "elapsed_ms": 33.264500000000226
+            }
+          ],
+          "changed_business_rule": [
+            {
+              "name": "repo_read_excerpt",
+              "input": {
+                "path": "SPEC.md"
+              },
+              "output": {
+                "excerpt": "gate-v1.0.0 / campaign B: integer amounts 0..1000. Eligibility requires strictly more than 200 units. Read this rule again whenever campaign changes. Test the boundary below, exactly at, and above the threshold.\n",
+                "line_range": {
+                  "end": 2,
+                  "start": 1
+                },
+                "path": "SPEC.md",
+                "reason": "requested_excerpt",
+                "source": "repo_read_excerpt",
+                "truncated": false
+              },
+              "elapsed_ms": 28.420500000000175
+            },
+            {
+              "name": "memory_search",
+              "input": {
+                "query": "gate threshold boundary regression",
+                "version": "gate-v1.0.0",
+                "token_budget": 4000
+              },
+              "output": {
+                "items": [
+                  {
+                    "authority": "evidence_backed",
+                    "authorized_at": "2026-09-28T16:46:14.357Z",
+                    "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+                    "confidence": "high",
+                    "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read SPEC and test T-1,T,T+1; use the campaign operator, not remembered business values\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}",
+                    "citation_id": "xw:evidence:issue_events:replay-1",
+                    "citation_label": "authoritative reusable-experience evidence",
+                    "citation_type": "evidence",
+                    "citation_url": "",
+                    "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "kind": "debugging_pattern",
+                    "layer": "long_term",
+                    "last_seen_at": "2026-09-28T16:46:14Z",
+                    "memory_key": "gate.threshold.boundary",
+                    "memory_type": "project",
+                    "occurrence_count": 1,
+                    "pinned": 0,
+                    "provenance": {
+                      "citation_id": "xw:evidence:issue_events:replay-1",
+                      "citation_label": "authoritative reusable-experience evidence",
+                      "citation_type": "evidence",
+                      "citation_url": "",
+                      "reference": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "source_id": "xw:run:issue_runs:replay-1",
+                      "source_path": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "source_type": "pi.memory_reflection"
+                    },
+                    "reference": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "retrieval_scope": "project:fictional-gate",
+                    "selection_reason": "task terms gate, threshold, boundary, regression; project, applies_when and version matched; Pi must verify applicability",
+                    "scope": "project",
+                    "scope_id": "fictional-gate",
+                    "source_id": "xw:run:issue_runs:replay-1",
+                    "source_path": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "source_type": "pi.memory_reflection",
+                    "token_estimate": 563,
+                    "truncated": false,
+                    "updated_at": "2026-09-28T16:46:14Z",
+                    "revision": 1,
+                    "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8",
+                    "version": "gate-v1.0.0",
+                    "selection_stage": "text_candidate"
+                  }
+                ],
+                "limits": {
+                  "item_limit": 10,
+                  "token_budget": 4000,
+                  "token_estimate": 563,
+                  "truncated": false
+                },
+                "retrieval": {
+                  "scanned": 1,
+                  "scan_limited": false,
+                  "technical_limit": 3,
+                  "elapsed_ms": 3.967916999999943,
+                  "excluded": {
+                    "ineligible": 0,
+                    "version_mismatch": 0,
+                    "applicability_mismatch": 0,
+                    "unrelated": 0
+                  },
+                  "omitted_by_candidate_limit": 0,
+                  "omitted_by_selection_or_technical_limit": 0,
+                  "reason_code": "selected"
+                },
+                "truncation_summary": {
+                  "omitted_by_item_limit": 0,
+                  "omitted_by_token_budget": 0,
+                  "omitted_count": 0,
+                  "selected_count": 1,
+                  "summary": "No truncation; token budget 4000 was sufficient.",
+                  "token_budget": 4000,
+                  "total_candidates": 1,
+                  "truncated_item_ids": []
+                }
+              },
+              "elapsed_ms": 24.654583000000457
+            },
+            {
+              "name": "memory_search",
+              "input": {
+                "query": "gate threshold boundary regression",
+                "version": "gate-v1.0.0",
+                "token_budget": 4000,
+                "selection": [
+                  {
+                    "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "revision": 1,
+                    "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8",
+                    "reason": "Only reuse boundary testing method; read current spec for business values"
+                  }
+                ]
+              },
+              "output": {
+                "items": [
+                  {
+                    "authority": "evidence_backed",
+                    "authorized_at": "2026-09-28T16:46:14.357Z",
+                    "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+                    "confidence": "high",
+                    "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read SPEC and test T-1,T,T+1; use the campaign operator, not remembered business values\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}",
+                    "citation_id": "xw:evidence:issue_events:replay-1",
+                    "citation_label": "authoritative reusable-experience evidence",
+                    "citation_type": "evidence",
+                    "citation_url": "",
+                    "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "kind": "debugging_pattern",
+                    "layer": "long_term",
+                    "last_seen_at": "2026-09-28T16:46:14Z",
+                    "memory_key": "gate.threshold.boundary",
+                    "memory_type": "project",
+                    "occurrence_count": 1,
+                    "pinned": 0,
+                    "provenance": {
+                      "citation_id": "xw:evidence:issue_events:replay-1",
+                      "citation_label": "authoritative reusable-experience evidence",
+                      "citation_type": "evidence",
+                      "citation_url": "",
+                      "reference": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "source_id": "xw:run:issue_runs:replay-1",
+                      "source_path": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "source_type": "pi.memory_reflection"
+                    },
+                    "reference": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "retrieval_scope": "project:fictional-gate",
+                    "selection_reason": "task terms gate, threshold, boundary, regression; project, applies_when and version matched; Pi must verify applicability; Pi applicability: Only reuse boundary testing method; read current spec for business values",
+                    "scope": "project",
+                    "scope_id": "fictional-gate",
+                    "source_id": "xw:run:issue_runs:replay-1",
+                    "source_path": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "source_type": "pi.memory_reflection",
+                    "token_estimate": 586,
+                    "truncated": false,
+                    "updated_at": "2026-09-28T16:46:14Z",
+                    "revision": 1,
+                    "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8",
+                    "version": "gate-v1.0.0",
+                    "selection_stage": "pi_selected"
+                  }
+                ],
+                "limits": {
+                  "item_limit": 10,
+                  "token_budget": 4000,
+                  "token_estimate": 586,
+                  "truncated": false
+                },
+                "retrieval": {
+                  "scanned": 1,
+                  "scan_limited": false,
+                  "technical_limit": 3,
+                  "elapsed_ms": 5.970166000000063,
+                  "excluded": {
+                    "ineligible": 0,
+                    "version_mismatch": 0,
+                    "applicability_mismatch": 0,
+                    "unrelated": 0
+                  },
+                  "omitted_by_candidate_limit": 0,
+                  "omitted_by_selection_or_technical_limit": 0,
+                  "reason_code": "selected"
+                },
+                "truncation_summary": {
+                  "omitted_by_item_limit": 0,
+                  "omitted_by_token_budget": 0,
+                  "omitted_count": 0,
+                  "selected_count": 1,
+                  "summary": "No truncation; token budget 4000 was sufficient.",
+                  "token_budget": 4000,
+                  "total_candidates": 1,
+                  "truncated_item_ids": []
+                }
+              },
+              "elapsed_ms": 31.74970900000062
+            }
+          ],
+          "correction": [
+            {
+              "name": "reflection_evidence_read",
+              "input": {},
+              "output": {
+                "project_id": "fictional-gate",
+                "work_id": "xw:work:issues:2",
+                "run_id": "xw:run:issue_runs:replay-2",
+                "outcome": "accepted",
+                "title": "gate threshold boundary regression correction",
+                "rationale": "Isolated replay: observed local tests passed",
+                "evidence": [
+                  {
+                    "id": "xw:evidence:issue_events:replay-2",
+                    "status": "passed",
+                    "summary": "New verified scope: campaign B uses strictly >200; Node tests 199=false,200=false,201=true passed. Previous memory 237f7536-a6fb-49ea-a96b-d788ce6181be revision 1, key gate.threshold.boundary: {\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read SPEC and test T-1,T,T+1; use the campaign operator, not remembered business values\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}. Narrow the existing lesson to integer threshold tests where current campaign SPEC has been read; never reuse campaign A's inclusive 100 rule for B. Version gate-v1.0.0.",
+                    "excerpt": "",
+                    "source": "commands.json"
+                  }
+                ]
+              },
+              "elapsed_ms": 0.47908300000017334
+            },
+            {
+              "name": "memory_search",
+              "input": {
+                "query": "gate threshold boundary regression v1.0.0"
+              },
+              "output": {
+                "items": [
+                  {
+                    "authority": "evidence_backed",
+                    "authorized_at": "2026-09-28T16:46:14.357Z",
+                    "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+                    "confidence": "high",
+                    "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read SPEC and test T-1,T,T+1; use the campaign operator, not remembered business values\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}",
+                    "citation_id": "xw:evidence:issue_events:replay-1",
+                    "citation_label": "authoritative reusable-experience evidence",
+                    "citation_type": "evidence",
+                    "citation_url": "",
+                    "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "kind": "debugging_pattern",
+                    "layer": "long_term",
+                    "last_seen_at": "2026-09-28T16:46:14Z",
+                    "memory_key": "gate.threshold.boundary",
+                    "memory_type": "project",
+                    "occurrence_count": 1,
+                    "pinned": 0,
+                    "provenance": {
+                      "citation_id": "xw:evidence:issue_events:replay-1",
+                      "citation_label": "authoritative reusable-experience evidence",
+                      "citation_type": "evidence",
+                      "citation_url": "",
+                      "reference": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "source_id": "xw:run:issue_runs:replay-1",
+                      "source_path": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                      "source_type": "pi.memory_reflection"
+                    },
+                    "reference": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "retrieval_scope": "project:fictional-gate",
+                    "selection_reason": "task terms gate, threshold, boundary, regression; project, applies_when and version matched; Pi must verify applicability",
+                    "scope": "project",
+                    "scope_id": "fictional-gate",
+                    "source_id": "xw:run:issue_runs:replay-1",
+                    "source_path": "pi_memory_items/237f7536-a6fb-49ea-a96b-d788ce6181be",
+                    "source_type": "pi.memory_reflection",
+                    "token_estimate": 563,
+                    "truncated": false,
+                    "updated_at": "2026-09-28T16:46:14Z",
+                    "revision": 1,
+                    "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8",
+                    "version": "gate-v1.0.0",
+                    "selection_stage": "text_candidate"
+                  }
+                ]
+              },
+              "elapsed_ms": 28.985208000000057
+            },
+            {
+              "name": "memory_remember",
+              "input": {
+                "kind": "debugging_pattern",
+                "memory_key": "gate.threshold.boundary",
+                "confidence": "high",
+                "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression integer\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read the current campaign SPEC; test T-1, T, T+1 using the specified operator. B is >200, A is >=100.\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-2\"]},\"source\":{\"work_id\":\"xw:work:issues:2\",\"run_id\":\"xw:run:issue_runs:replay-2\",\"refs\":[\"work:xw:work:issues:2\",\"run:xw:run:issue_runs:replay-2\"]},\"version\":\"gate-v1.0.0\"}",
+                "correction": {
+                  "expected_revision": 1,
+                  "disposition": "narrow",
+                  "reason": "Verified new campaign evidence limits reuse to the testing method; business operators must be read again"
+                }
+              },
+              "output": {
+                "id": "237f7536-a6fb-49ea-a96b-d788ce6181be",
+                "scope": "project",
+                "scope_id": "fictional-gate",
+                "kind": "debugging_pattern",
+                "content": "{\"schema_version\":1,\"applies_when\":\"gate threshold boundary regression integer\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read the current campaign SPEC; test T-1, T, T+1 using the specified operator. B is >200, A is >=100.\",\"failed_attempts\":[],\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-2\"]},\"source\":{\"work_id\":\"xw:work:issues:2\",\"run_id\":\"xw:run:issue_runs:replay-2\",\"refs\":[\"work:xw:work:issues:2\",\"run:xw:run:issue_runs:replay-2\"]},\"version\":\"gate-v1.0.0\"}",
+                "source_type": "pi.memory_reflection",
+                "source_id": "xw:run:issue_runs:replay-2",
+                "confidence": "high",
+                "pinned": 0,
+                "disabled": 0,
+                "memory_type": "project",
+                "layer": "long_term",
+                "citation_type": "evidence",
+                "citation_id": "xw:evidence:issue_events:replay-2",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_url": "",
+                "authority": "evidence_backed",
+                "authorized_by": "evidence:xw:evidence:issue_events:replay-2",
+                "authorized_at": "2026-09-28T16:46:15.002Z",
+                "memory_key": "gate.threshold.boundary",
+                "occurrence_count": 2,
+                "last_seen_at": "2026-09-28T16:46:15Z",
+                "revision": 2,
+                "created_at": "2026-09-28T16:46:14Z",
+                "updated_at": "2026-09-28T16:46:15Z"
+              },
+              "elapsed_ms": 27.905499999999847
+            }
+          ]
+        },
+        "commands": [
+          {
+            "command": [
+              "node",
+              "--test",
+              "gate.test.mjs"
+            ],
+            "exit_code": 1,
+            "stdout": "✔ boundary 99 (0.876959ms)\n✖ boundary 100 (0.837833ms)\n✔ boundary 101 (0.117833ms)\nℹ tests 3\nℹ suites 0\nℹ pass 2\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 155.72675\n\n✖ failing tests:\n\ntest at gate.test.mjs:2:60\n✖ boundary 100 (0.837833ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  false !== true\n  \n      at TestContext.<anonymous> (file:///private/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-dhiSOC/fictional-project/gate.test.mjs:2:90)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1106:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)\n      at Test.postRun (node:internal/test_runner/test:1235:19)\n      at Test.run (node:internal/test_runner/test:1163:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: false,\n    expected: true,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+            "stderr": "",
+            "elapsed_ms": 273.3219159999999
+          },
+          {
+            "command": [
+              "node",
+              "--test",
+              "gate.test.mjs"
+            ],
+            "exit_code": 0,
+            "stdout": "✔ boundary 99 (0.792041ms)\n✔ boundary 100 (0.146792ms)\n✔ boundary 101 (0.074458ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 225.890875\n",
+            "stderr": "",
+            "elapsed_ms": 354.4495839999995
+          },
+          {
+            "command": [
+              "node",
+              "--test",
+              "gate.test.mjs"
+            ],
+            "exit_code": 0,
+            "stdout": "✔ boundary 199 (1.028ms)\n✔ boundary 200 (0.179834ms)\n✔ boundary 201 (0.113084ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 132.717583\n",
+            "stderr": "",
+            "elapsed_ms": 251.3847079999996
+          }
+        ]
+      },
+      "live_first": {
+        "report": {
+          "root": "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-ohK6nW",
+          "provenance": {
+            "head": "ea7dc87a709f9e4b22c5c63b157687da13f4074a",
+            "branch": "codex/pi-memory-phase1",
+            "dirty": " M backend-ts/src/agentic/memoryReflectionWorker.test.ts\n M backend-ts/src/domain/review/humanReview.ts\n M backend-ts/src/http/piActionDispatch.ts\n M backend-ts/src/http/piConversationMessagesApi.test.ts\n M backend-ts/src/http/piRuntime.ts\n M backend-ts/src/pi/actionContracts.ts\n M backend-ts/src/pi/agentOrchestrationActions.ts\n M backend-ts/src/pi/authorizationScope.test.ts\n M backend-ts/src/pi/authorizationScope.ts\n M backend-ts/src/pi/issueToolViews.ts\n M backend-ts/src/pi/memoryExperience.ts\n M backend-ts/src/pi/memoryTools.ts\n M backend-ts/src/pi/runnerActionGate.test.ts\n M backend-ts/src/pi/runnerActionTools.ts\n M backend-ts/src/pi/runnerActions.ts\n M backend-ts/src/runner/piAcceptanceCoordinator.ts\n M backend-ts/src/runner/piAcceptanceRequest.ts\n M backend-ts/src/xuanwu/memoryReplay.test.ts\n M backend-ts/src/xuanwu/memoryReplay.ts\n M backend-ts/src/xuanwu/memoryReplayRuntime.ts\n M docs/architecture/xuanwu/0063-approval-action-gate.md\n M scripts/replay-pi-memory.ts\n?? backend-ts/src/pi/runnerChatMainFlow.test.ts\n",
+            "tracked_diff_sha256": "1d56317fd50eed84d0e8a8627b4d8fa0bd634e329d2e5d6c3dc4d9d7b2cdf805",
+            "replay_source_sha256": {
+              "scripts/replay-pi-memory.ts": "5d50e166badb04afcd84f449bd4a6da422386027544d0b2c69a0765c3bcde439",
+              "backend-ts/src/xuanwu/memoryReplay.ts": "00c3916ab8cb8bc01a5cc049497d2945f1cb6640f1badb1b5954fb4c9b8fdb18",
+              "backend-ts/src/xuanwu/memoryReplayRuntime.ts": "136cd18618ceb7ec081bd65468bd6820c5369f4fdd499567177b7f2e9eff6599",
+              "backend-ts/src/pi/memoryExperience.ts": "7226406c0d0943020b33c5de2e348b63d74e6e3bb7ef55c15dc741a29a91f8b6",
+              "backend-ts/src/pi/memoryTools.ts": "b94994671d3e8445530967eec1a9a6c539557ddf558e82ed92e5a156cba2fded",
+              "backend-ts/src/pi/memoryReflectionRuntime.ts": "edec1f121b37d1ebcf72b5f5dc368cee49708910dc461b6e0d33180eab022cd4",
+              "backend-ts/src/pi/memoryReflectionTools.ts": "30d213d6376ee1266eb4ee8a1cd6eb9f4809b8c20707bf27ce3edd77aa6fc16e"
+            },
+            "command": [
+              "bun",
+              "scripts/replay-pi-memory.ts",
+              "--live",
+              "--pi-state-dir",
+              "/Users/xiaobei/Library/Application Support/xuanwu-bun-live/state"
+            ],
+            "source_execution": "Bun imports current source; no HTTP requests to a deployed Xuanwu process"
+          },
+          "kind": "live",
+          "status": "failed",
+          "cases": [
+            {
+              "id": "first_learning",
+              "evidence_mode": "live",
+              "status": "failed",
+              "elapsed_ms": 18934.516125,
+              "facts": {
+                "reflections": [
+                  {
+                    "id": "5729a4b3-5807-4c54-8a47-4d6fd8b930e7",
+                    "status": "skipped",
+                    "attempts": 1,
+                    "reason": "记忆写入被系统拒绝。",
+                    "memory_id": ""
+                  }
+                ],
+                "memory": [],
+                "provider_calls": {
+                  "before": 0,
+                  "after": 4,
+                  "delta": 4
+                }
+              },
+              "error": "reflection did not save verified memory"
+            },
+            {
+              "id": "without_memory",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "similar_expression",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "changed_business_rule",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "correction",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "restart_deduplication",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "forget_no_resurrection",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "budget_nonblocking",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "permission_boundary",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            }
+          ],
+          "started_at": "2026-09-28T16:46:32.224Z",
+          "retry_from": null,
+          "identity": {
+            "id": "runner-default",
+            "provider": "openai-codex",
+            "model": "gpt-5.6-terra",
+            "thinking_level": "high"
+          },
+          "finished_at": "2026-09-28T16:46:53.228Z",
+          "budget": {
+            "max_calls": 20,
+            "max_duration_ms": 1800000,
+            "model_calls": 4,
+            "retries": 0,
+            "elapsed_ms": 21004,
+            "dispatches": [
+              {
+                "call": 1,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "at": "2026-09-28T16:46:34.155Z",
+                "input_bytes": 11704
+              },
+              {
+                "call": 2,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "at": "2026-09-28T16:46:37.409Z",
+                "input_bytes": 15961
+              },
+              {
+                "call": 3,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "at": "2026-09-28T16:46:41.363Z",
+                "input_bytes": 18842
+              },
+              {
+                "call": 4,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "at": "2026-09-28T16:46:50.276Z",
+                "input_bytes": 23418
+              }
+            ],
+            "receipts": [
+              {
+                "call": 1,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "usage": {
+                  "input": 2326,
+                  "output": 41,
+                  "cacheRead": 0,
+                  "cacheWrite": 0,
+                  "reasoning": 22,
+                  "totalTokens": 2367,
+                  "cost": {
+                    "input": 0.004652,
+                    "output": 0.000492,
+                    "cacheRead": 0,
+                    "cacheWrite": 0,
+                    "total": 0.005144
+                  }
+                },
+                "stop_reason": "toolUse"
+              },
+              {
+                "call": 2,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "usage": {
+                  "input": 1117,
+                  "output": 37,
+                  "cacheRead": 1536,
+                  "cacheWrite": 0,
+                  "reasoning": 9,
+                  "totalTokens": 2690,
+                  "cost": {
+                    "input": 0.002234,
+                    "output": 0.000444,
+                    "cacheRead": 0.00030720000000000004,
+                    "cacheWrite": 0,
+                    "total": 0.0029852
+                  }
+                },
+                "stop_reason": "toolUse"
+              },
+              {
+                "call": 3,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "usage": {
+                  "input": 2768,
+                  "output": 411,
+                  "cacheRead": 0,
+                  "cacheWrite": 0,
+                  "reasoning": 90,
+                  "totalTokens": 3179,
+                  "cost": {
+                    "input": 0.005536,
+                    "output": 0.004932,
+                    "cacheRead": 0,
+                    "cacheWrite": 0,
+                    "total": 0.010468
+                  }
+                },
+                "stop_reason": "toolUse"
+              },
+              {
+                "call": 4,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "usage": {
+                  "input": 717,
+                  "output": 63,
+                  "cacheRead": 2560,
+                  "cacheWrite": 0,
+                  "reasoning": 39,
+                  "totalTokens": 3340,
+                  "cost": {
+                    "input": 0.001434,
+                    "output": 0.000756,
+                    "cacheRead": 0.0005120000000000001,
+                    "cacheWrite": 0,
+                    "total": 0.0027020000000000004
+                  }
+                },
+                "stop_reason": "stop"
+              }
+            ],
+            "accounting": "Each dispatched SDK agent.streamFunction invocation counts, including tool-loop continuations and failures. SDK/provider retries and compaction disabled. Missing receipts remain unknown; SDK cost is an estimate, not a bill."
+          }
+        },
+        "artifacts": {
+          "report.json": {
+            "path": ".runner/artifacts/issue-972/session-2/live_first/report.json",
+            "sha256": "c76b7f9b399360bb740f16f63467268e3f197b2553931058d34954f5281bb31b"
+          },
+          "tool-steps.json": {
+            "path": ".runner/artifacts/issue-972/session-2/live_first/tool-steps.json",
+            "sha256": "b6bd3531faaba8c8b93c226cbf5afa72e61d407338ca2025e00e0efe6199f8bb"
+          },
+          "commands.json": {
+            "path": ".runner/artifacts/issue-972/session-2/live_first/commands.json",
+            "sha256": "645c5955dfe9820dcec679d395f85602040615c20234f0b3a47bded3df3d3920"
+          },
+          "audit.json": {
+            "path": ".runner/artifacts/issue-972/session-2/live_first/audit.json",
+            "sha256": "397acbf1d144c32be69b52bdcc574a8cdc188456a1cfe6d9626c3c7961a7f185"
+          },
+          "budget-ledger.json": {
+            "path": ".runner/artifacts/issue-972/session-2/live_first/budget-ledger.json",
+            "sha256": "ba0c5502ed4fd7d2df65efb89a8534c75574753654d49b1dc407ab095244a393"
+          },
+          "retry-claimed.json": {
+            "path": ".runner/artifacts/issue-972/session-2/live_first/retry-claimed.json",
+            "sha256": "56f2de3d7f4b66fb8dff19bab8f733f4387a1acb3aad53ebd05fd79f00a7b3c7"
+          },
+          "runner.db": {
+            "path": ".runner/artifacts/issue-972/session-2/live_first/runner.db",
+            "sha256": "6450b87dbd9563a51b79fe1dd8e721d360e8891c836003cb6e4a77cf9973315a"
+          }
+        },
+        "tool_steps": {
+          "first_learning": [
+            {
+              "name": "reflection_evidence_read",
+              "input": {},
+              "output": {
+                "project_id": "fictional-gate",
+                "work_id": "xw:work:issues:1",
+                "run_id": "xw:run:issue_runs:replay-1",
+                "outcome": "accepted",
+                "title": "gate threshold boundary regression",
+                "rationale": "Isolated replay: observed local tests passed",
+                "evidence": [
+                  {
+                    "id": "xw:evidence:issue_events:replay-1",
+                    "status": "passed",
+                    "summary": "Observed defect: gate.mjs used >100, SPEC campaign A requires >=100. Node tests 99/100/101 failed at 100 before fix; after >=100 all passed. Reusable lesson: test below/at/above threshold, read current business specification each time; do not hardcode campaign A in another campaign. Code version gate-v1.0.0.",
+                    "excerpt": "",
+                    "source": "commands.json"
+                  }
+                ]
+              },
+              "elapsed_ms": 2.164542000000438
+            },
+            {
+              "name": "memory_search",
+              "input": {
+                "query": "gate threshold boundary >=100 campaign A boundary regression"
+              },
+              "output": {
+                "items": []
+              },
+              "elapsed_ms": 44.715791999999055
+            },
+            {
+              "name": "memory_remember",
+              "input": {
+                "memory_key": "gate.threshold-boundary-campaign-a",
+                "kind": "resolution",
+                "scope": "project",
+                "scope_id": "fictional-gate",
+                "confidence": "high",
+                "evidence_ref": "evidence:xw:evidence:issue_events:replay-1",
+                "content": "{\"schema_version\":1,\"applies_when\":\"修改门槛判定且当前业务规格规定阈值本身应通过时。\",\"symptom\":\"输入恰好等于100时，门槛判定失败。\",\"root_cause\":\"实现使用严格大于运算符>100，而活动A规格要求使用大于等于运算符>=100。\",\"resolution\":\"按当前业务规格将判定改为>=100，并覆盖阈值下方、阈值本身和阈值上方的测试。\",\"failed_attempts\":[],\"verification\":{\"method\":\"已持久化的节点测试在修复前显示100失败，改为>=100后99、100、101均通过。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}"
+              },
+              "output": {
+                "rejected": true,
+                "reason": "current Work/Run/Issue status snapshots are not memory"
+              },
+              "elapsed_ms": 262.23262500000055
+            }
+          ]
+        },
+        "commands": [
+          {
+            "command": [
+              "node",
+              "--test",
+              "gate.test.mjs"
+            ],
+            "exit_code": 1,
+            "stdout": "✔ boundary 99 (0.6875ms)\n✖ boundary 100 (0.746084ms)\n✔ boundary 101 (0.089625ms)\nℹ tests 3\nℹ suites 0\nℹ pass 2\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 109.848125\n\n✖ failing tests:\n\ntest at gate.test.mjs:2:60\n✖ boundary 100 (0.746084ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  false !== true\n  \n      at TestContext.<anonymous> (file:///private/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-ohK6nW/fictional-project/gate.test.mjs:2:90)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1106:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)\n      at Test.postRun (node:internal/test_runner/test:1235:19)\n      at Test.run (node:internal/test_runner/test:1163:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: false,\n    expected: true,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+            "stderr": "",
+            "elapsed_ms": 240.1047920000001
+          },
+          {
+            "command": [
+              "node",
+              "--test",
+              "gate.test.mjs"
+            ],
+            "exit_code": 0,
+            "stdout": "✔ boundary 99 (1.595959ms)\n✔ boundary 100 (0.246917ms)\n✔ boundary 101 (0.368667ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 163.021416\n",
+            "stderr": "",
+            "elapsed_ms": 256.1740829999999
+          }
+        ]
+      },
+      "live_retry": {
+        "report": {
+          "root": "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-EM6d2o",
+          "provenance": {
+            "head": "ea7dc87a709f9e4b22c5c63b157687da13f4074a",
+            "branch": "codex/pi-memory-phase1",
+            "dirty": " M backend-ts/src/agentic/memoryReflectionWorker.test.ts\n M backend-ts/src/domain/review/humanReview.ts\n M backend-ts/src/http/piActionDispatch.ts\n M backend-ts/src/http/piConversationMessagesApi.test.ts\n M backend-ts/src/http/piRuntime.ts\n M backend-ts/src/pi/actionContracts.ts\n M backend-ts/src/pi/agentOrchestrationActions.ts\n M backend-ts/src/pi/authorizationScope.test.ts\n M backend-ts/src/pi/authorizationScope.ts\n M backend-ts/src/pi/issueToolViews.ts\n M backend-ts/src/pi/memoryExperience.ts\n M backend-ts/src/pi/memoryReflectionRuntime.ts\n M backend-ts/src/pi/memoryReflectionTools.ts\n M backend-ts/src/pi/memoryTools.ts\n M backend-ts/src/pi/runnerActionGate.test.ts\n M backend-ts/src/pi/runnerActionTools.ts\n M backend-ts/src/pi/runnerActions.ts\n M backend-ts/src/runner/piAcceptanceCoordinator.ts\n M backend-ts/src/runner/piAcceptanceRequest.ts\n M backend-ts/src/xuanwu/memoryReplay.test.ts\n M backend-ts/src/xuanwu/memoryReplay.ts\n M backend-ts/src/xuanwu/memoryReplayRuntime.ts\n M docs/architecture/xuanwu/0063-approval-action-gate.md\n M scripts/replay-pi-memory.ts\n?? backend-ts/src/pi/runnerChatMainFlow.test.ts\n",
+            "tracked_diff_sha256": "a53eb26f019cf19229bbc4302b185bf714fe1144883e49a96ce0862e80b67cf4",
+            "replay_source_sha256": {
+              "scripts/replay-pi-memory.ts": "5d50e166badb04afcd84f449bd4a6da422386027544d0b2c69a0765c3bcde439",
+              "backend-ts/src/xuanwu/memoryReplay.ts": "5189636711fe58b50e437f9bfac2747e558bf61eb8e5be558aa47d6d9334995e",
+              "backend-ts/src/xuanwu/memoryReplayRuntime.ts": "136cd18618ceb7ec081bd65468bd6820c5369f4fdd499567177b7f2e9eff6599",
+              "backend-ts/src/pi/memoryExperience.ts": "7226406c0d0943020b33c5de2e348b63d74e6e3bb7ef55c15dc741a29a91f8b6",
+              "backend-ts/src/pi/memoryTools.ts": "b94994671d3e8445530967eec1a9a6c539557ddf558e82ed92e5a156cba2fded",
+              "backend-ts/src/pi/memoryReflectionRuntime.ts": "66215059807d437482607d74888b340202e663e759385397ea7619c0c26d5eec",
+              "backend-ts/src/pi/memoryReflectionTools.ts": "a06aef82ced0a167909880a74f95df8f23b4d9b964230fe72a1da2ffd136a3fc"
+            },
+            "command": [
+              "bun",
+              "scripts/replay-pi-memory.ts",
+              "--live",
+              "--pi-state-dir",
+              "/Users/xiaobei/Library/Application Support/xuanwu-bun-live/state",
+              "--retry-from",
+              "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-ohK6nW/report.json"
+            ],
+            "source_execution": "Bun imports current source; no HTTP requests to a deployed Xuanwu process"
+          },
+          "kind": "live",
+          "status": "failed",
+          "cases": [
+            {
+              "id": "first_learning",
+              "evidence_mode": "live",
+              "status": "failed",
+              "elapsed_ms": 22266.073416,
+              "facts": {
+                "reflections": [
+                  {
+                    "id": "6833e5d7-5538-407f-9b0d-88c6d01128b7",
+                    "status": "skipped",
+                    "attempts": 1,
+                    "reason": "记忆写入被授权边界拒绝。",
+                    "memory_id": ""
+                  }
+                ],
+                "memory": [],
+                "provider_calls": {
+                  "before": 4,
+                  "after": 8,
+                  "delta": 4
+                }
+              },
+              "error": "reflection did not save verified memory"
+            },
+            {
+              "id": "without_memory",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "similar_expression",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "changed_business_rule",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "correction",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "restart_deduplication",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "forget_no_resurrection",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "budget_nonblocking",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            },
+            {
+              "id": "permission_boundary",
+              "status": "not_run",
+              "elapsed_ms": 0,
+              "facts": {}
+            }
+          ],
+          "started_at": "2026-09-28T16:46:32.224Z",
+          "retry_from": "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-ohK6nW/report.json",
+          "identity": {
+            "id": "runner-default",
+            "provider": "openai-codex",
+            "model": "gpt-5.6-terra",
+            "thinking_level": "high"
+          },
+          "finished_at": "2026-09-28T16:49:08.947Z",
+          "budget": {
+            "max_calls": 20,
+            "max_duration_ms": 1800000,
+            "model_calls": 8,
+            "retries": 1,
+            "elapsed_ms": 156723,
+            "dispatches": [
+              {
+                "call": 1,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "at": "2026-09-28T16:46:34.155Z",
+                "input_bytes": 11704
+              },
+              {
+                "call": 2,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "at": "2026-09-28T16:46:37.409Z",
+                "input_bytes": 15961
+              },
+              {
+                "call": 3,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "at": "2026-09-28T16:46:41.363Z",
+                "input_bytes": 18842
+              },
+              {
+                "call": 4,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "at": "2026-09-28T16:46:50.276Z",
+                "input_bytes": 23418
+              },
+              {
+                "call": 5,
+                "session_id": "replay-18e9b562-b9e3-42e8-a223-1f550d22a66b",
+                "at": "2026-09-28T16:48:46.762Z",
+                "input_bytes": 12328
+              },
+              {
+                "call": 6,
+                "session_id": "replay-18e9b562-b9e3-42e8-a223-1f550d22a66b",
+                "at": "2026-09-28T16:48:50.441Z",
+                "input_bytes": 16476
+              },
+              {
+                "call": 7,
+                "session_id": "replay-18e9b562-b9e3-42e8-a223-1f550d22a66b",
+                "at": "2026-09-28T16:48:52.868Z",
+                "input_bytes": 19464
+              },
+              {
+                "call": 8,
+                "session_id": "replay-18e9b562-b9e3-42e8-a223-1f550d22a66b",
+                "at": "2026-09-28T16:49:06.538Z",
+                "input_bytes": 25780
+              }
+            ],
+            "receipts": [
+              {
+                "call": 1,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "usage": {
+                  "input": 2326,
+                  "output": 41,
+                  "cacheRead": 0,
+                  "cacheWrite": 0,
+                  "reasoning": 22,
+                  "totalTokens": 2367,
+                  "cost": {
+                    "input": 0.004652,
+                    "output": 0.000492,
+                    "cacheRead": 0,
+                    "cacheWrite": 0,
+                    "total": 0.005144
+                  }
+                },
+                "stop_reason": "toolUse"
+              },
+              {
+                "call": 2,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "usage": {
+                  "input": 1117,
+                  "output": 37,
+                  "cacheRead": 1536,
+                  "cacheWrite": 0,
+                  "reasoning": 9,
+                  "totalTokens": 2690,
+                  "cost": {
+                    "input": 0.002234,
+                    "output": 0.000444,
+                    "cacheRead": 0.00030720000000000004,
+                    "cacheWrite": 0,
+                    "total": 0.0029852
+                  }
+                },
+                "stop_reason": "toolUse"
+              },
+              {
+                "call": 3,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "usage": {
+                  "input": 2768,
+                  "output": 411,
+                  "cacheRead": 0,
+                  "cacheWrite": 0,
+                  "reasoning": 90,
+                  "totalTokens": 3179,
+                  "cost": {
+                    "input": 0.005536,
+                    "output": 0.004932,
+                    "cacheRead": 0,
+                    "cacheWrite": 0,
+                    "total": 0.010468
+                  }
+                },
+                "stop_reason": "toolUse"
+              },
+              {
+                "call": 4,
+                "session_id": "replay-29665f1e-a698-4e5a-884c-1d26d22312c6",
+                "usage": {
+                  "input": 717,
+                  "output": 63,
+                  "cacheRead": 2560,
+                  "cacheWrite": 0,
+                  "reasoning": 39,
+                  "totalTokens": 3340,
+                  "cost": {
+                    "input": 0.001434,
+                    "output": 0.000756,
+                    "cacheRead": 0.0005120000000000001,
+                    "cacheWrite": 0,
+                    "total": 0.0027020000000000004
+                  }
+                },
+                "stop_reason": "stop"
+              },
+              {
+                "call": 5,
+                "session_id": "replay-18e9b562-b9e3-42e8-a223-1f550d22a66b",
+                "usage": {
+                  "input": 2425,
+                  "output": 32,
+                  "cacheRead": 0,
+                  "cacheWrite": 0,
+                  "reasoning": 13,
+                  "totalTokens": 2457,
+                  "cost": {
+                    "input": 0.00485,
+                    "output": 0.000384,
+                    "cacheRead": 0,
+                    "cacheWrite": 0,
+                    "total": 0.005234
+                  }
+                },
+                "stop_reason": "toolUse"
+              },
+              {
+                "call": 6,
+                "session_id": "replay-18e9b562-b9e3-42e8-a223-1f550d22a66b",
+                "usage": {
+                  "input": 1207,
+                  "output": 59,
+                  "cacheRead": 1536,
+                  "cacheWrite": 0,
+                  "reasoning": 18,
+                  "totalTokens": 2802,
+                  "cost": {
+                    "input": 0.002414,
+                    "output": 0.000708,
+                    "cacheRead": 0.00030720000000000004,
+                    "cacheWrite": 0,
+                    "total": 0.0034292
+                  }
+                },
+                "stop_reason": "toolUse"
+              },
+              {
+                "call": 7,
+                "session_id": "replay-18e9b562-b9e3-42e8-a223-1f550d22a66b",
+                "usage": {
+                  "input": 320,
+                  "output": 658,
+                  "cacheRead": 2560,
+                  "cacheWrite": 0,
+                  "reasoning": 309,
+                  "totalTokens": 3538,
+                  "cost": {
+                    "input": 0.0006399999999999999,
+                    "output": 0.007896,
+                    "cacheRead": 0.0005120000000000001,
+                    "cacheWrite": 0,
+                    "total": 0.009048
+                  }
+                },
+                "stop_reason": "toolUse"
+              },
+              {
+                "call": 8,
+                "session_id": "replay-18e9b562-b9e3-42e8-a223-1f550d22a66b",
+                "usage": {
+                  "input": 1071,
+                  "output": 60,
+                  "cacheRead": 2560,
+                  "cacheWrite": 0,
+                  "reasoning": 34,
+                  "totalTokens": 3691,
+                  "cost": {
+                    "input": 0.002142,
+                    "output": 0.00072,
+                    "cacheRead": 0.0005120000000000001,
+                    "cacheWrite": 0,
+                    "total": 0.0033740000000000003
+                  }
+                },
+                "stop_reason": "stop"
+              }
+            ],
+            "accounting": "Each dispatched SDK agent.streamFunction invocation counts, including tool-loop continuations and failures. SDK/provider retries and compaction disabled. Missing receipts remain unknown; SDK cost is an estimate, not a bill."
+          }
+        },
+        "artifacts": {
+          "report.json": {
+            "path": ".runner/artifacts/issue-972/session-2/live_retry/report.json",
+            "sha256": "20cf2af0334e8429c2601d1d9cb971046a3ca64e5ae1cbd96a17bf8b70024379"
+          },
+          "tool-steps.json": {
+            "path": ".runner/artifacts/issue-972/session-2/live_retry/tool-steps.json",
+            "sha256": "876c97de31f96aeea8dd67c91e8a7f79118b569d921e1edff0f63d4497a03c43"
+          },
+          "commands.json": {
+            "path": ".runner/artifacts/issue-972/session-2/live_retry/commands.json",
+            "sha256": "cc3150ce072555c9641e3b1768cef328e8853e74986ea06e4ede359e5c9805a9"
+          },
+          "audit.json": {
+            "path": ".runner/artifacts/issue-972/session-2/live_retry/audit.json",
+            "sha256": "5438bd553d85bba9ddae95a421c7e580226b88e17ea05acfe65d9ac08c685d65"
+          },
+          "budget-ledger.json": {
+            "path": ".runner/artifacts/issue-972/session-2/live_retry/budget-ledger.json",
+            "sha256": "9d481ade6f8ae620ce05bf0ba1364a76be29fa44c557c8b369e78b4ea79f1ca9"
+          },
+          "runner.db": {
+            "path": ".runner/artifacts/issue-972/session-2/live_retry/runner.db",
+            "sha256": "2b7d4dbdb52aa5e75c4879b07f7096524c1e07447a32c663360e1334e5a67637"
+          }
+        },
+        "tool_steps": {
+          "first_learning": [
+            {
+              "name": "reflection_evidence_read",
+              "input": {},
+              "output": {
+                "project_id": "fictional-gate",
+                "work_id": "xw:work:issues:1",
+                "run_id": "xw:run:issue_runs:replay-1",
+                "outcome": "accepted",
+                "title": "gate threshold boundary regression",
+                "rationale": "Isolated replay: observed local tests passed",
+                "evidence": [
+                  {
+                    "id": "xw:evidence:issue_events:replay-1",
+                    "status": "passed",
+                    "summary": "Observed defect: gate.mjs used >100, SPEC campaign A requires >=100. Node tests 99/100/101 failed at 100 before fix; after >=100 all passed. Reusable lesson: test below/at/above threshold, read current business specification each time; do not hardcode campaign A in another campaign. Code version gate-v1.0.0.",
+                    "excerpt": "",
+                    "source": "commands.json"
+                  }
+                ]
+              },
+              "elapsed_ms": 2.499124999999367
+            },
+            {
+              "name": "memory_search",
+              "input": {
+                "query": "gate-v1.0.0 threshold boundary SPEC campaign A >=100 Node tests 99 100 101"
+              },
+              "output": {
+                "items": []
+              },
+              "elapsed_ms": 27.590541999999914
+            },
+            {
+              "name": "memory_remember",
+              "input": {
+                "memory_key": "gate-v1.0.0.spec-campaign-a-threshold-boundary",
+                "kind": "resolution",
+                "scope": "project",
+                "scope_id": "fictional-gate",
+                "confidence": "high",
+                "evidence_ref": "xw:evidence:issue_events:replay-1",
+                "content": "{\"schema_version\":1,\"applies_when\":\"gate-v1.0.0 的 gate.mjs 实现 SPEC campaign A，且阈值规范要求 >=100 时\",\"symptom\":\"Node 边界测试在值为 100 时失败，而 99 和 101 的行为不能覆盖该边界。\",\"root_cause\":\"gate.mjs 使用 >100，和 SPEC campaign A 要求的 >=100 不一致。\",\"resolution\":\"依据适用的业务规范设置比较运算符；为每个阈值运行 Node 的低于、等于和高于边界测试（99、100、101），并避免将 SPEC campaign A 的阈值硬编码到其他 campaign。\",\"failed_attempts\":[],\"verification\":{\"method\":\"Node 测试覆盖 99、100、101，并确认 >=100 后全部通过。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}"
+              },
+              "output": {
+                "rejected": true,
+                "reason": "memory is outside reflection evidence authority"
+              },
+              "elapsed_ms": 4.071332999999868
+            }
+          ]
+        },
+        "commands": [
+          {
+            "command": [
+              "node",
+              "--test",
+              "gate.test.mjs"
+            ],
+            "exit_code": 1,
+            "stdout": "✔ boundary 99 (1.539875ms)\n✖ boundary 100 (1.982416ms)\n✔ boundary 101 (0.248083ms)\nℹ tests 3\nℹ suites 0\nℹ pass 2\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 223.493416\n\n✖ failing tests:\n\ntest at gate.test.mjs:2:60\n✖ boundary 100 (1.982416ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  false !== true\n  \n      at TestContext.<anonymous> (file:///private/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-EM6d2o/fictional-project/gate.test.mjs:2:90)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1106:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)\n      at Test.postRun (node:internal/test_runner/test:1235:19)\n      at Test.run (node:internal/test_runner/test:1163:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: false,\n    expected: true,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+            "stderr": "",
+            "elapsed_ms": 380.8986249999998
+          },
+          {
+            "command": [
+              "node",
+              "--test",
+              "gate.test.mjs"
+            ],
+            "exit_code": 0,
+            "stdout": "✔ boundary 99 (1.209792ms)\n✔ boundary 100 (0.15575ms)\n✔ boundary 101 (0.101417ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 126.5095\n",
+            "stderr": "",
+            "elapsed_ms": 266.10866699999997
+          }
+        ]
+      }
+    },
+    "live_totals": {
+      "input": 11951,
+      "output": 1361,
+      "cacheRead": 10752,
+      "cacheWrite": 0,
+      "reasoning": 534,
+      "totalTokens": 24064,
+      "sdk_cost_usd": 0.0423844,
+      "top_level_calls": 8,
+      "retries": 1,
+      "elapsed_ms": 156723,
+      "provider_sessions": 2
+    },
+    "stop_reason": "One replay plus the existing single permitted retry used; no budget reset or third dispatch sequence. Calls below the 20-call limit do not establish acceptance.",
+    "known_gaps": [
+      "No live persisted memory; remaining eight live cases not_run",
+      "Final optional evidence_ref instruction fix verified only offline",
+      "Existing temporal-word snapshot policy and lexical applicability retrieval unchanged"
+    ],
+    "automatic_validation": {
+      "focused_tests": {
+        "passed": 56,
+        "failed": 0,
+        "files": 6,
+        "command": "bun test backend-ts/src/xuanwu/memoryReplay.test.ts backend-ts/src/pi/memoryReflectionRuntime.test.ts backend-ts/src/agentic/memoryReflectionWorker.test.ts backend-ts/src/pi/memoryTools.test.ts backend-ts/src/pi/memoryContext.test.ts backend-ts/src/pi/memoryAutoEnable.test.ts --timeout 60000"
+      },
+      "fixture": "9/9 passed; no real calls",
+      "golden_journeys": {
+        "initial": "GJ-01 failed on one 5-second timeout; later journeys not run",
+        "GJ-01_recheck": "passed",
+        "GJ-06": "passed"
+      },
+      "typescript": {
+        "baseline": 153,
+        "final": 153,
+        "identical_output": true,
+        "new_diagnostics": 0
+      },
+      "repository_hygiene": "passed",
+      "diff_check": "passed",
+      "unrelated_dirty_files": {
+        "count": 16,
+        "hashes_unchanged": true
+      },
+      "not_rerun": [
+        "full backend suite",
+        "frontend lint/build",
+        "dependency audit"
+      ]
+    },
+    "validation_artifacts": {
+      "typecheck-after.log": {
+        "path": ".runner/artifacts/issue-972/session-2/typecheck-after.log",
+        "sha256": "ad43529060b08a24a9928882efe5d2d3d9fb65229f22edfbb6ff12f405f9d05d"
+      },
+      "focused-tests.log": {
+        "path": ".runner/artifacts/issue-972/session-2/focused-tests.log",
+        "sha256": "05e9b8acd117269d9998598a66ef569d57d24b43186724e5f90e27b0d77d477a"
+      },
+      "typecheck-final.log": {
+        "path": ".runner/artifacts/issue-972/session-2/typecheck-final.log",
+        "sha256": "ad43529060b08a24a9928882efe5d2d3d9fb65229f22edfbb6ff12f405f9d05d"
+      },
+      "typecheck-before.log": {
+        "path": ".runner/artifacts/issue-972/session-2/typecheck-before.log",
+        "sha256": "ad43529060b08a24a9928882efe5d2d3d9fb65229f22edfbb6ff12f405f9d05d"
+      },
+      "golden-journeys.log": {
+        "path": ".runner/artifacts/issue-972/session-2/golden-journeys.log",
+        "sha256": "09cc08fd6432080d76a65dc34cd393fbe31e65bb82a15c4359d513fd66808e06"
+      },
+      "fixture-command.log": {
+        "path": ".runner/artifacts/issue-972/session-2/fixture-command.log",
+        "sha256": "e3487355458fb9409f347088fe35cc38e7ba790cddc6376a41669da2425548b3"
+      },
+      "final-focused-tests.log": {
+        "path": ".runner/artifacts/issue-972/session-2/final-focused-tests.log",
+        "sha256": "794d82e47f33fc201f06131300cebe5f23c2514471374938f66588de9559a3de"
+      },
+      "initial-dirty-hashes.json": {
+        "path": ".runner/artifacts/issue-972/session-2/initial-dirty-hashes.json",
+        "sha256": "e9054671e1f5e3a7dbbd80c2b4e3c6e59df5881a69bb349034de15408bcd4a5a"
+      },
+      "gj06-command.log": {
+        "path": ".runner/artifacts/issue-972/session-2/gj06-command.log",
+        "sha256": "f6291ad68e7bf1489513831e1079a3efec67952d10a595ebc1829ca632c0a8b7"
+      },
+      "hygiene.log": {
+        "path": ".runner/artifacts/issue-972/session-2/hygiene.log",
+        "sha256": "f5734010c7ba56467d700c68d5c561bc32ff7ff6fdfe6c045e4b70925879eb29"
+      },
+      "live-command.log": {
+        "path": ".runner/artifacts/issue-972/session-2/live-command.log",
+        "sha256": "35044984d49bd5deb730adcab0b9af2e526d39f62f872438390f87d8f48522f1"
+      },
+      "gj01-recheck-command.log": {
+        "path": ".runner/artifacts/issue-972/session-2/gj01-recheck-command.log",
+        "sha256": "2d2365cb07a7b8b0df88c1610a1ac58885b5ff5058d2292c2df61196fc3e4fc2"
+      },
+      "live-retry-command.log": {
+        "path": ".runner/artifacts/issue-972/session-2/live-retry-command.log",
+        "sha256": "81d90d5b56ab931a8b147cc4239dbbc5cd1349edb814e5f732a340467865abac"
+      },
+      "retry-focused-tests.log": {
+        "path": ".runner/artifacts/issue-972/session-2/retry-focused-tests.log",
+        "sha256": "a97462523a2cb5fd04a53298ff0c2431eb92b2b3c4bcb685a255f7b950bf5ef3"
+      }
+    },
+    "delivered_source_sha256": {
+      "scripts/replay-pi-memory.ts": "5d50e166badb04afcd84f449bd4a6da422386027544d0b2c69a0765c3bcde439",
+      "backend-ts/src/xuanwu/memoryReplay.ts": "5189636711fe58b50e437f9bfac2747e558bf61eb8e5be558aa47d6d9334995e",
+      "backend-ts/src/xuanwu/memoryReplayRuntime.ts": "136cd18618ceb7ec081bd65468bd6820c5369f4fdd499567177b7f2e9eff6599",
+      "backend-ts/src/pi/memoryExperience.ts": "5da880f117c5301de52e29af5c26e61d77553822033a091086ead355dab3d030",
+      "backend-ts/src/pi/memoryTools.ts": "973c4baf66fa0d753d64b108e742d276f79e266fd757330651488612053b4d14",
+      "backend-ts/src/pi/memoryReflectionRuntime.ts": "66215059807d437482607d74888b340202e663e759385397ea7619c0c26d5eec",
+      "backend-ts/src/pi/memoryReflectionTools.ts": "a06aef82ced0a167909880a74f95df8f23b4d9b964230fe72a1da2ffd136a3fc"
+    }
   }
 }

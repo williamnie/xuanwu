@@ -7,7 +7,7 @@ bun scripts/replay-pi-memory.ts --live --pi-state-dir '/path/to/existing/state'
 
 第一条只执行 fixture，不调用模型。第二条通过 SDK `readStoredCredential`、`ModelRuntime` 和既有 SecretService 复用已配置 Pi 身份，使用当前源码；不请求线上 Xuanwu HTTP 服务。鉴权存储适配器只读，无法刷新时报告 `needs_user`，不复制或导出凭据。模型目录禁用网络刷新，缓存、项目和 DB 均放在本次新临时目录。无 Shell、外部消息、任务调度、部署或 GitHub 工具。
 
-每次命令输出 `report.json` 路径。目录同时保留新 `state/runner.db`、无 remote 的虚构 Git 项目、`commands.json`、`tool-steps.json`、`audit.json`、调用预算账本。报告含 HEAD、分支、起始脏文件清单、tracked diff 指纹及回放源码指纹；脏树不能冒充某个纯提交版本。每个案例在执行后保存事实，首个失败后其余标为 `not_run`；不填充期望观察。临时目录由调用者在证据归档后清理。
+每次命令输出 `report.json` 路径。目录同时保留新 `state/runner.db`、无 remote 的虚构 Git 项目、`commands.json`、`tool-steps.json`、`audit.json`、调用预算账本。报告含 HEAD、分支、起始脏文件清单、tracked diff 指纹及回放、生产复盘提示和工具源码指纹；脏树不能冒充某个纯提交版本。每个案例保存调用前后计数，派发和回执关联独立会话 ID。用量回执到达后立即刷新账本。每个案例在执行后保存事实，首个失败后其余标为 `not_run`；不填充期望观察。临时目录由调用者在证据归档后清理。
 
 真实演练全局预算：30 分钟、最多 20 次顶层 SDK `agent.streamFunction` 派发；工具循环后的继续调用也计入，失败调用也计入。SDK/Provider 隐式重试、自动压缩关闭，复盘继续受生产的 4 调用、3,000 输出 token、45 秒/6 工具上限约束。Provider 用量回执逐次保存 input/output/cache/reasoning token 和 SDK 估算美元成本；缺失回执表示未知，不能当作免费调用。
 
@@ -35,7 +35,9 @@ bun scripts/replay-pi-memory.ts --live --pi-state-dir '/path/to/existing/state' 
 
 `kind=live` 不表示每一条都调用模型。重启/遗忘/权限为 Host 断言，预算是故障注入；`evidence_mode` 明确区分。fixture 的语义输出是预先定义的策略，评分只说明 Host 链路可重放。真实模型不接收 fixture 预制的记忆正文或答案，观察完全来自 SDK 与工具回执。
 
-此对照仅测试边界测试建议与记忆工具链，不是 Coding Provider 自动修改项目、正式服务启用或总体质量/速度的因果试验。当前生产复盘 Prompt 与来源校验沿用原实现；回放暴露的 live 失败必须保留。#973 仍负责正式项目启用和主观质量抽验。
+此对照仅测试边界测试建议与记忆工具链，不是 Coding Provider 自动修改项目、正式服务启用或总体质量/速度的因果试验。生产复盘提示和工具参数说明明确区分裸 canonical ID 与引用：`content.source.work_id/run_id` 原样复制摘要；`source.refs` 使用 `work:` / `run:`，`verification.evidence_refs` 使用 `evidence:`；可选顶层 `evidence_ref` 在复盘时省略或原样复制一个 verification 引用，不得填写裸 Evidence ID。Host 校验、状态快照规则、遗忘和预算保护保持不变。回放暴露的 live 失败必须保留。#973 仍负责正式项目启用和主观质量抽验。
+
+复盘搜索需要在 `query` 中包含证据提供的版本和适用条件；任务对照使用相同任务和真实 SPEC 摘要作为 `task_description`。模型自行生成经验和选择候选，不从 fixture 复制正文或答案。经验措辞指导不能代替真实写入和召回验收；快照规则对时间词的误判、词法适用性召回的限制仍须按实际结果报告。
 
 ## 集成验证
 

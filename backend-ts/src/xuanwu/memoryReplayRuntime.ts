@@ -21,20 +21,20 @@ export class ReplayBudget {
   onDispatch: () => void = () => {};
   calls = 0;
   retries = 0;
-  receipts: Array<{ call: number; usage: unknown; stop_reason: string }> = [];
-  dispatches: Array<{ call: number; at: string; input_bytes: number }> = [];
+  receipts: Array<{ call: number; session_id?: string; usage: unknown; stop_reason: string }> = [];
+  dispatches: Array<{ call: number; session_id?: string; at: string; input_bytes: number }> = [];
   constructor(readonly limit = 20, readonly durationMs = 30 * 60_000) {
     assert(Number.isInteger(limit) && limit > 0 && limit <= 20);
     assert(durationMs > 0 && durationMs <= 30 * 60_000);
   }
-  dispatch(context: unknown) {
+  dispatch(context: unknown, sessionID?: string) {
     this.controller.signal.throwIfAborted();
     if (Date.now() - this.started >= this.durationMs || this.calls >= this.limit) {
       this.controller.abort(new Error("replay global budget exhausted"));
       throw this.controller.signal.reason;
     }
     this.calls++;
-    this.dispatches.push({ call: this.calls, at: new Date().toISOString(), input_bytes: Buffer.byteLength(JSON.stringify(context)) });
+    this.dispatches.push({ call: this.calls, session_id: sessionID, at: new Date().toISOString(), input_bytes: Buffer.byteLength(JSON.stringify(context)) });
     this.onDispatch();
     return this.calls;
   }
@@ -86,11 +86,14 @@ export async function liveReplayDriver(sourceState: string, runtimeRoot: string,
     const stream = session.agent.streamFunction;
     let call = 0;
     session.agent.streamFunction = (selected, context, options) => {
-      call = budget.dispatch(context);
+      call = budget.dispatch(context, input.conversationID);
       return stream(selected, context, { ...options, signal: AbortSignal.any([budget.controller.signal, ...(options?.signal ? [options.signal] : [])]), maxRetries: 0 });
     };
     const off = session.subscribe(event => {
-      if (event.type === "message_end" && event.message.role === "assistant") budget.receipts.push({ call, usage: event.message.usage, stop_reason: event.message.stopReason });
+      if (event.type === "message_end" && event.message.role === "assistant") {
+        budget.receipts.push({ call, session_id: input.conversationID, usage: event.message.usage, stop_reason: event.message.stopReason });
+        budget.onDispatch();
+      }
     });
     return { session, dispose() { off(); session.dispose(); } };
   };

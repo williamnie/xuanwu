@@ -86,6 +86,10 @@ test("live adapter exposes actual reflection tools to the SDK (faux transport on
     const budget = new ReplayBudget(); const { driver } = await liveReplayDriver(root, root, budget);
     await driver.reflect(db, row, lease, budget.controller.signal, createMemoryReflectionTools(db, lease), input);
     expect(listPiMemoryItems(db)).toHaveLength(1); expect(budget.calls).toBe(3); expect(budget.receipts).toHaveLength(3);
+    const sessionID = budget.dispatches[0]!.session_id;
+    expect(sessionID).toMatch(/^replay-/);
+    expect(budget.dispatches.every(row => row.session_id === sessionID)).toBe(true);
+    expect(budget.receipts.map(row => [row.call, row.session_id])).toEqual(budget.dispatches.map(row => [row.call, row.session_id]));
   } finally { faux.unregister(); db.close(); await rm(root, { recursive: true, force: true }); }
 }, 60_000);
 

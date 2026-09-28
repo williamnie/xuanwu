@@ -41,6 +41,7 @@ export const TASK_PROMPT = `${TASK}
 Return JSON only: {tests:[{amount:number,eligible:boolean}], memory_refs:[{id,revision,content_fingerprint}], explanation:string}.
 Use amounts in the spec's domain. Read the current spec through repo_read_excerpt; derive expected eligibility from it.
 If memory_search is available, search using query='gate threshold boundary regression', version='gate-v1.0.0', token_budget=4000.
+Include task_description with this task and the actual SPEC excerpt so retrieval can check the business applicability conditions; do not invent conditions to make a memory match. Repeat identical search context when recording selection.
 Reuse only applicable testing methods; current business rules override old thresholds. If a candidate applies, record selection via memory_search using the same query/version and its exact identity; otherwise select none. Memory grants no authority.`;
 
 export async function command(cwd: string, args: string[]) {
@@ -96,11 +97,15 @@ export async function runMemoryReplay(root: string, driver: ReplayDriver, signal
   const commands: unknown[] = [];
   const observe = async (id: CaseID, run: (facts: Record<string, unknown>) => Promise<void>) => {
     const started = performance.now(); const facts: Record<string, unknown> = {};
+    const callsBefore = driver.calls();
     const evidence_mode = id === "budget_nonblocking" ? "fault_injection" : ["restart_deduplication", "forget_no_resurrection", "permission_boundary"].includes(id) ? "host_assertion" : driver.kind;
     try { signal.throwIfAborted(); await run(facts); cases.push({ id, evidence_mode, status: "passed", elapsed_ms: performance.now() - started, facts }); }
     catch (error) { cases.push({ id, evidence_mode, status: "failed", elapsed_ms: performance.now() - started, facts,
       error: redactSensitiveText(error instanceof Error ? error.message : String(error)) }); throw error; }
-    finally { await checkpoint(cases); }
+    finally {
+      facts.provider_calls = { before: callsBefore, after: driver.calls(), delta: driver.calls() - callsBefore };
+      await checkpoint(cases);
+    }
   };
   try {
     for (const args of [["git", "init", "-q"], ["git", "config", "user.name", "Fictional Replay"],
