@@ -35,9 +35,11 @@ bun scripts/replay-pi-memory.ts --live --pi-state-dir '/path/to/existing/state' 
 
 `kind=live` 不表示每一条都调用模型。重启/遗忘/权限为 Host 断言，预算是故障注入；`evidence_mode` 明确区分。fixture 的语义输出是预先定义的策略，评分只说明 Host 链路可重放。真实模型不接收 fixture 预制的记忆正文或答案，观察完全来自 SDK 与工具回执。
 
-此对照仅测试边界测试建议与记忆工具链，不是 Coding Provider 自动修改项目、正式服务启用或总体质量/速度的因果试验。生产复盘提示和工具参数说明明确区分裸 canonical ID 与引用：`content.source.work_id/run_id` 原样复制摘要；`source.refs` 使用 `work:` / `run:`，`verification.evidence_refs` 使用 `evidence:`；可选顶层 `evidence_ref` 在复盘时省略或原样复制一个 verification 引用，不得填写裸 Evidence ID。Host 校验、状态快照规则、遗忘和预算保护保持不变。回放暴露的 live 失败必须保留。#973 仍负责正式项目启用和主观质量抽验。
+此对照仅测试边界测试建议与记忆工具链，不是 Coding Provider 自动修改项目、正式服务启用或总体质量/速度的因果试验。复盘专用 `memory_remember` 接收结构化 `content` 对象，模型只选择 `reflection_evidence_read` 给出的可用 `evidence_index`。Host 绑定项目、Work、Run、schema version、失败诊断标记和完整 Evidence 引用，不让模型拼装这些字段。持久化结构和普通聊天的工具合同保持兼容，来源仍经公共校验与 Action Gate。回放暴露的 live 失败必须保留。#973 仍负责正式项目启用和主观质量抽验。
 
-复盘搜索需要在 `query` 中包含证据提供的版本和适用条件；任务对照使用相同任务和真实 SPEC 摘要作为 `task_description`。模型自行生成经验和选择候选，不从 fixture 复制正文或答案。经验措辞指导不能代替真实写入和召回验收；快照规则对时间词的误判、词法适用性召回的限制仍须按实际结果报告。
+纠错先通过 `memory_search` 读取旧经验；模型提供原 `memory_key`、`correction.disposition/reason`，Host 使用本次工具实际返回的记录与版本补齐 `expected_revision`。并发修改、过期/不可信证据、跨项目和遗忘保护仍会阻止写入。复盘搜索使用 4,000 token 的候选预算，再受 8 KB 返回限制与整个复盘的输入预算约束。纠错案例的证据摘要只引用旧记忆的身份与版本，全文从搜索工具读取，避免截断掉新证据与收窄范围。
+
+复盘搜索需要在 `query` 中包含证据提供的版本和适用条件；任务对照使用相同任务和真实 SPEC 摘要作为 `task_description`。模型自行生成经验和选择候选，不从 fixture 复制正文或答案。状态规则匹配实际任务状态、队列与数量，不把“当前业务规格”等时间词单独当作状态快照。候选召回保留项目、版本、显式排除/限定及否定条件检查，但普通适用条件不要求逐词相等；候选不代表已适用，Pi 仍须根据实际规格选择。经验措辞指导和离线回归不能代替真实写入、召回与反例验收。
 
 ## 集成验证
 

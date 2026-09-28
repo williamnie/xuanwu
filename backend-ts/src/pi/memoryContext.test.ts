@@ -270,7 +270,7 @@ describe("task-scoped experience retrieval", () => {
           version: experience.version, selection_stage: "text_candidate", authority: "evidence_backed",
           provenance: { reference: "pi_memory_items/timeout" } });
         expect(result.memory_items[0].content_fingerprint).toMatch(/^[a-f0-9]{64}$/);
-        expect(result.memory_items[0].selection_reason).toContain("applies_when and version matched");
+        expect(result.memory_items[0].selection_reason).toContain("Pi must verify applicability");
       }
       expect(retrievePiMemoryContext(db, { projectID: "demo", query: "async callback timeout v0.2.13" }).memory_items).toHaveLength(1);
       createPiMemoryItem(db, { id: "path-only", scope: "project", scope_id: "demo", kind: "resolution", authority: "evidence_backed",
@@ -281,6 +281,28 @@ describe("task-scoped experience retrieval", () => {
         content: JSON.stringify({ ...experience, applies_when: "timeout", symptom: "timeout" }) });
       expect(retrievePiMemoryContext(db, { projectID: "demo", errorText: "ETIMEDOUT", version: "v0.2.13" })
         .memory_items.map((item) => item.id)).toEqual(["error-only"]);
+    } finally { db.close(); }
+  });
+
+  test("recalls mixed-language specification guidance as candidates without requiring every prose word", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const { experience } = seedMemoryExperience(db);
+      createPiMemoryItem(db, { id: "gate-method", scope: "project", scope_id: "demo", kind: "resolution",
+        authority: "evidence_backed", content: JSON.stringify({ ...experience, version: "gate-v1.0.0",
+          applies_when: "gate-v1.0.0 的 gate.mjs 按业务规格判定数值阈值，且规格可随 campaign 变化。",
+          symptom: "Threshold equality rejected", resolution: "Read SPEC and test the boundary for each campaign" }) });
+      const input = { projectID: "demo", query: "gate threshold boundary regression", version: "gate-v1.0.0",
+        filePaths: ["SPEC.md", "gate.mjs"],
+        taskDescription: "campaign A: integer amounts 0..1000. Eligibility starts at 100 units, including exactly 100." };
+      const result = retrievePiMemoryContext(db, input);
+      expect(result.memory_items).toHaveLength(1);
+      expect(result.memory_items[0]).toMatchObject({ id: "gate-method", selection_stage: "text_candidate" });
+      expect(result.memory_items[0].selection_reason).not.toContain("applies_when and version matched");
+      expect(retrievePiMemoryContext(db, { ...input, selection: [] }).memory_items).toEqual([]);
+      expect(retrievePiMemoryContext(db, { projectID: "demo", version: "gate-v1.0.0",
+        query: "gate-v1.0.0 billing invoice" }).memory_items).toEqual([]);
+      expect(retrievePiMemoryContext(db, { ...input, version: "gate-v2.0.0" }).memory_items).toEqual([]);
     } finally { db.close(); }
   });
 

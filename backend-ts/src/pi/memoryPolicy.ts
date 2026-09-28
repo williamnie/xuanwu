@@ -144,7 +144,9 @@ const LEGACY_REUSABLE_KINDS = new Set([
 const ROOT_CAUSE_PATTERN = /(?:root cause|根因|原因|caused by|because)/i;
 const RESOLUTION_PATTERN = /(?:fix|fixed|修复|解决|处理方式|verification|verified|验证|复验|test)/i;
 const STATUS_SNAPSHOT_PATTERNS = [
-  /(?:当前|截至|本次|本轮|现在|today|currently|current status|manager cycle observation)/i,
+  // 时间词也可用于“读取当前业务规格”等稳定经验，必须匹配实际状态表达。
+  /(?:current status|manager cycle observation)/i,
+  /(?:当前|截至|本次|本轮|现在|today|currently|current)\s*(?:issue|work|run|任务)\s*(?:#?\d+\s*)?(?:(?:is|are|was|were)\s+|状态[为是：:]?\s*)?(?:done\b|failed\b|cancelled\b|triage\b|todo\b|in_progress\b|needs_user\b|失败|已完成|已取消|等待人工|运行中|进行中|待处理)/i,
   /(?:status_counts|unfinished_total|active pi_manager sessions)/i,
   /(?:全部终态|没有未完成|无未完成|all terminal|no unfinished|all (?:issues|works?) (?:are |were )?done)/i,
   /(?:issue|work|run|任务)\s*#?\d+[^\n]{0,48}(?:done|failed|cancelled|triage|todo|in_progress|needs_user|失败|已完成|已取消)/i,

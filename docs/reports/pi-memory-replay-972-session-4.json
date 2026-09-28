@@ -1,0 +1,2626 @@
+{
+  "issue": 972,
+  "session": "4",
+  "status": "isolated_live_acceptance_passed",
+  "base_head": "d3aa54dee64900e54c62e11f9e63ae08e7d4e356",
+  "authorization": {
+    "max_real_provider_calls": 20,
+    "max_duration_ms": 1800000,
+    "new_business_or_verifier_issues": false,
+    "production_writes": false,
+    "lifecycle_actions": false
+  },
+  "execution_note": "Current dirty source based on d3aa54de; exact live source is archived and all nine provenance hashes match. This execution preserved concurrent edits, fixed only the replay budget fault-injection context and assertions, and added its evidence and reports.",
+  "live_report": {
+    "root": "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-QoDBSj",
+    "provenance": {
+      "head": "d3aa54dee64900e54c62e11f9e63ae08e7d4e356",
+      "branch": "codex/pi-memory-phase1",
+      "dirty": " M backend-ts/src/agentic/memoryReflectionWorker.test.ts\n M backend-ts/src/domain/review/humanReview.ts\n M backend-ts/src/http/piActionDispatch.ts\n M backend-ts/src/http/piConversationMessagesApi.test.ts\n M backend-ts/src/http/piRuntime.ts\n M backend-ts/src/pi/actionContracts.ts\n M backend-ts/src/pi/agentOrchestrationActions.ts\n M backend-ts/src/pi/authorizationScope.test.ts\n M backend-ts/src/pi/authorizationScope.ts\n M backend-ts/src/pi/issueToolViews.ts\n M backend-ts/src/pi/memoryContext.test.ts\n M backend-ts/src/pi/memoryPolicy.ts\n M backend-ts/src/pi/memoryReflectionRuntime.ts\n M backend-ts/src/pi/memoryReflectionTools.ts\n M backend-ts/src/pi/memoryRetrieval.ts\n M backend-ts/src/pi/runnerActionGate.test.ts\n M backend-ts/src/pi/runnerActionTools.ts\n M backend-ts/src/pi/runnerActions.ts\n M backend-ts/src/runner/piAcceptanceCoordinator.ts\n M backend-ts/src/runner/piAcceptanceRequest.ts\n M backend-ts/src/xuanwu/memoryReplay.test.ts\n M backend-ts/src/xuanwu/memoryReplay.ts\n M backend-ts/src/xuanwu/memoryReplayRuntime.ts\n M docs/architecture/xuanwu/0063-approval-action-gate.md\n M docs/reports/pi-memory-replay-972.json\n M docs/reports/pi-memory-replay-972.md\n M docs/runbooks/pi-memory-replay.md\n M scripts/replay-pi-memory.ts\n?? backend-ts/src/pi/memoryPolicy.test.ts\n?? backend-ts/src/pi/runnerChatMainFlow.test.ts\n",
+      "tracked_diff_sha256": "78218ff2ab3918a74a8e3c2014f55ca20baddb653518a2ca592005ccc0f5f834",
+      "replay_source_sha256": {
+        "scripts/replay-pi-memory.ts": "94e58ac8dfe6a2543d55ebc42cc571cec578b208347910c9842638119ef741a8",
+        "backend-ts/src/xuanwu/memoryReplay.ts": "2f2d427fd2696546cb11114dea2e62de8118b9e9155764bf31148490724b9dc7",
+        "backend-ts/src/xuanwu/memoryReplayRuntime.ts": "b15e1f47d70bff3f8009b256f89d53d372fff6ad50b051bff3440aaf687e80b8",
+        "backend-ts/src/pi/memoryExperience.ts": "5da880f117c5301de52e29af5c26e61d77553822033a091086ead355dab3d030",
+        "backend-ts/src/pi/memoryTools.ts": "973c4baf66fa0d753d64b108e742d276f79e266fd757330651488612053b4d14",
+        "backend-ts/src/pi/memoryReflectionRuntime.ts": "b02509f26c2e9dc134cfe77626736249a2e486e61129f83233bfcc9563fdb4d1",
+        "backend-ts/src/pi/memoryReflectionTools.ts": "b7fa34172efc51d298a3cfe48242102a608bd67b535f0c5b5a0050e42c43b318",
+        "backend-ts/src/pi/memoryPolicy.ts": "5c97335ea8ff1c1e524a8d0e08c6a6ef09410cbacf8d47be5bb8581d42dac3a5",
+        "backend-ts/src/pi/memoryRetrieval.ts": "f5e21acfd6e2b07ce8482fe6a102cf94a8e09db09852c9eaa9890b95cfd5e1fb"
+      },
+      "command": [
+        "bun",
+        "scripts/replay-pi-memory.ts",
+        "--live",
+        "--pi-state-dir",
+        "/Users/xiaobei/Library/Application Support/xuanwu-bun-live/state"
+      ],
+      "source_execution": "Bun imports current source; no HTTP requests to a deployed Xuanwu process"
+    },
+    "kind": "live",
+    "status": "passed",
+    "cases": [
+      {
+        "id": "first_learning",
+        "evidence_mode": "live",
+        "status": "passed",
+        "elapsed_ms": 13643.279584,
+        "facts": {
+          "reflections": [
+            {
+              "id": "51c9ea01-3149-4b59-bdf5-18f546ad7bd0",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3"
+            }
+          ],
+          "memory": [
+            {
+              "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "scope": "project",
+              "scope_id": "fictional-gate",
+              "kind": "resolution",
+              "content": "{\"applies_when\":\"gate-v1.0.0 中实现或修改按 campaign 定义的数值阈值 gate 时。\",\"symptom\":\"Node 阈值测试在恰好等于 100 的输入失败。\",\"root_cause\":\"gate.mjs 使用了 >100，而 campaign A 的当前业务规格要求 >=100。\",\"resolution\":\"先阅读当前业务规格以确定目标 campaign 的比较运算符和阈值，避免将 campaign A 规则硬编码到其他 campaign；为每个阈值补充低于、等于和高于边界的测试（例如 99/100/101）。\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"Node 测试验证：修正为 >=100 后，99/100/101 边界测试全部通过。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]}}",
+              "source_type": "pi.memory_reflection",
+              "source_id": "xw:run:issue_runs:replay-1",
+              "confidence": "high",
+              "pinned": 0,
+              "disabled": 0,
+              "memory_type": "project",
+              "layer": "long_term",
+              "citation_type": "evidence",
+              "citation_id": "xw:evidence:issue_events:replay-1",
+              "citation_label": "authoritative reusable-experience evidence",
+              "citation_url": "",
+              "authority": "evidence_backed",
+              "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+              "authorized_at": "2026-09-28T23:30:35.557Z",
+              "memory_key": "gate.threshold-boundary.campaign-spec",
+              "occurrence_count": 1,
+              "last_seen_at": "2026-09-28T23:30:35Z",
+              "revision": 1,
+              "created_at": "2026-09-28T23:30:35Z",
+              "updated_at": "2026-09-28T23:30:35Z"
+            }
+          ],
+          "provider_calls": {
+            "before": 0,
+            "after": 4,
+            "delta": 4
+          }
+        }
+      },
+      {
+        "id": "without_memory",
+        "evidence_mode": "live",
+        "status": "passed",
+        "elapsed_ms": 9041.775957999998,
+        "facts": {
+          "raw": "{\"tests\":[{\"amount\":99,\"eligible\":false},{\"amount\":100,\"eligible\":true},{\"amount\":101,\"eligible\":true}],\"memory_refs\":[],\"explanation\":\"依据 SPEC：\\\"integer amounts 0..1000. Eligibility starts at 100 units, including exactly 100.\\\" 覆盖门槛下、恰好门槛、门槛上；未提供可用 memory_search，未选择记忆。\"}",
+          "observed": [
+            {
+              "amount": 99,
+              "eligible": false,
+              "actual": false,
+              "passed": true
+            },
+            {
+              "amount": 100,
+              "eligible": true,
+              "actual": true,
+              "passed": true
+            },
+            {
+              "amount": 101,
+              "eligible": true,
+              "actual": true,
+              "passed": true
+            }
+          ],
+          "memory_refs": [],
+          "correct_recall": null,
+          "misuse": false,
+          "explanation": "依据 SPEC：\"integer amounts 0..1000. Eligibility starts at 100 units, including exactly 100.\" 覆盖门槛下、恰好门槛、门槛上；未提供可用 memory_search，未选择记忆。",
+          "provider_calls": {
+            "before": 4,
+            "after": 6,
+            "delta": 2
+          }
+        }
+      },
+      {
+        "id": "similar_expression",
+        "evidence_mode": "live",
+        "status": "passed",
+        "elapsed_ms": 18762.714500000002,
+        "facts": {
+          "raw": "{\"tests\":[{\"amount\":99,\"eligible\":false},{\"amount\":100,\"eligible\":true},{\"amount\":101,\"eligible\":true}],\"memory_refs\":[{\"id\":\"9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3\",\"revision\":1,\"content_fingerprint\":\"daabdfda8cf693c12f93d0bfa22455044d97fb1c8976e25af4a688108f868ffb\"}],\"explanation\":\"SPEC 定义整数范围 0..1000，100（含）起合格；因此重放 99/100/101 边界矩阵。gate.mjs 的 >= 100 与该规则一致。\"}",
+          "observed": [
+            {
+              "amount": 99,
+              "eligible": false,
+              "actual": false,
+              "passed": true
+            },
+            {
+              "amount": 100,
+              "eligible": true,
+              "actual": true,
+              "passed": true
+            },
+            {
+              "amount": 101,
+              "eligible": true,
+              "actual": true,
+              "passed": true
+            }
+          ],
+          "memory_refs": [
+            {
+              "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "revision": 1,
+              "content_fingerprint": "daabdfda8cf693c12f93d0bfa22455044d97fb1c8976e25af4a688108f868ffb"
+            }
+          ],
+          "correct_recall": true,
+          "misuse": false,
+          "explanation": "SPEC 定义整数范围 0..1000，100（含）起合格；因此重放 99/100/101 边界矩阵。gate.mjs 的 >= 100 与该规则一致。",
+          "provider_calls": {
+            "before": 6,
+            "after": 10,
+            "delta": 4
+          }
+        }
+      },
+      {
+        "id": "changed_business_rule",
+        "evidence_mode": "live",
+        "status": "passed",
+        "elapsed_ms": 20274.477917000004,
+        "facts": {
+          "raw": "{\"tests\":[{\"amount\":199,\"eligible\":false},{\"amount\":200,\"eligible\":false},{\"amount\":201,\"eligible\":true}],\"memory_refs\":[{\"id\":\"9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3\",\"revision\":1,\"content_fingerprint\":\"daabdfda8cf693c12f93d0bfa22455044d97fb1c8976e25af4a688108f868ffb\"}],\"explanation\":\"SPEC 要求 amount 为 0..1000 的整数，且仅严格大于 200 才 eligible；因此覆盖 199、200、201，200 应为 false。\"}",
+          "observed": [
+            {
+              "amount": 199,
+              "eligible": false,
+              "actual": false,
+              "passed": true
+            },
+            {
+              "amount": 200,
+              "eligible": false,
+              "actual": false,
+              "passed": true
+            },
+            {
+              "amount": 201,
+              "eligible": true,
+              "actual": true,
+              "passed": true
+            }
+          ],
+          "memory_refs": [
+            {
+              "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "revision": 1,
+              "content_fingerprint": "daabdfda8cf693c12f93d0bfa22455044d97fb1c8976e25af4a688108f868ffb"
+            }
+          ],
+          "correct_recall": null,
+          "misuse": false,
+          "explanation": "SPEC 要求 amount 为 0..1000 的整数，且仅严格大于 200 才 eligible；因此覆盖 199、200、201，200 应为 false。",
+          "provider_calls": {
+            "before": 10,
+            "after": 14,
+            "delta": 4
+          }
+        }
+      },
+      {
+        "id": "correction",
+        "evidence_mode": "live",
+        "status": "passed",
+        "elapsed_ms": 12730.083083999998,
+        "facts": {
+          "reflections": [
+            {
+              "id": "51c9ea01-3149-4b59-bdf5-18f546ad7bd0",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3"
+            },
+            {
+              "id": "d04ddb8a-223c-44e5-a673-fd53c3ef78c0",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3"
+            }
+          ],
+          "history": [
+            {
+              "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "revision": 1,
+              "operation": "create",
+              "snapshot": {
+                "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "scope": "project",
+                "scope_id": "fictional-gate",
+                "kind": "resolution",
+                "content": "{\"applies_when\":\"gate-v1.0.0 中实现或修改按 campaign 定义的数值阈值 gate 时。\",\"symptom\":\"Node 阈值测试在恰好等于 100 的输入失败。\",\"root_cause\":\"gate.mjs 使用了 >100，而 campaign A 的当前业务规格要求 >=100。\",\"resolution\":\"先阅读当前业务规格以确定目标 campaign 的比较运算符和阈值，避免将 campaign A 规则硬编码到其他 campaign；为每个阈值补充低于、等于和高于边界的测试（例如 99/100/101）。\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"Node 测试验证：修正为 >=100 后，99/100/101 边界测试全部通过。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]}}",
+                "source_type": "pi.memory_reflection",
+                "source_id": "xw:run:issue_runs:replay-1",
+                "confidence": "high",
+                "pinned": 0,
+                "disabled": 0,
+                "memory_type": "project",
+                "layer": "long_term",
+                "citation_type": "evidence",
+                "citation_id": "xw:evidence:issue_events:replay-1",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_url": "",
+                "authority": "evidence_backed",
+                "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+                "authorized_at": "2026-09-28T23:30:35.557Z",
+                "memory_key": "gate.threshold-boundary.campaign-spec",
+                "occurrence_count": 1,
+                "last_seen_at": "2026-09-28T23:30:35Z",
+                "revision": 1,
+                "created_at": "2026-09-28T23:30:35Z",
+                "updated_at": "2026-09-28T23:30:35Z"
+              },
+              "correction": {},
+              "recorded_at": "2026-09-28T23:30:35Z"
+            },
+            {
+              "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "revision": 2,
+              "operation": "correct",
+              "snapshot": {
+                "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "scope": "project",
+                "scope_id": "fictional-gate",
+                "kind": "resolution",
+                "content": "{\"applies_when\":\"gate-v1.0.0 中已阅读当前业务规格、且为 campaign B 实现或修改整数数值阈值 gate 时。\",\"symptom\":\"campaign B 的 Node 阈值测试在恰好等于 200 的输入失败或错误放行。\",\"root_cause\":\"将 campaign A 的包含边界规则 >=100 复用于 campaign B；campaign B 的当前业务规格要求严格 >200。\",\"resolution\":\"先阅读当前业务规格，按目标 campaign 确定比较运算符和阈值；对 campaign B 增加低于、等于和高于边界的 Node 测试（199/200/201），并验证结果分别为 false、false、true。\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"Node 测试验证 campaign B 的 199=false、200=false、201=true。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-2\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:2\",\"run_id\":\"xw:run:issue_runs:replay-2\",\"refs\":[\"work:xw:work:issues:2\",\"run:xw:run:issue_runs:replay-2\"]}}",
+                "source_type": "pi.memory_reflection",
+                "source_id": "xw:run:issue_runs:replay-2",
+                "confidence": "high",
+                "pinned": 0,
+                "disabled": 0,
+                "memory_type": "project",
+                "layer": "long_term",
+                "citation_type": "evidence",
+                "citation_id": "xw:evidence:issue_events:replay-2",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_url": "",
+                "authority": "evidence_backed",
+                "authorized_by": "evidence:xw:evidence:issue_events:replay-2",
+                "authorized_at": "2026-09-28T23:31:37.002Z",
+                "memory_key": "gate.threshold-boundary.campaign-spec",
+                "occurrence_count": 2,
+                "last_seen_at": "2026-09-28T23:31:37Z",
+                "revision": 2,
+                "created_at": "2026-09-28T23:30:35Z",
+                "updated_at": "2026-09-28T23:31:37Z"
+              },
+              "correction": {
+                "disposition": "narrow",
+                "reason": "新验证证据将适用范围限定为已读取当前规格的 campaign B 整数阈值；其规则为严格 >200，不能泛化为 campaign A 的 >=100。",
+                "expected_revision": 1
+              },
+              "recorded_at": "2026-09-28T23:31:37Z"
+            }
+          ],
+          "current": {
+            "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+            "scope": "project",
+            "scope_id": "fictional-gate",
+            "kind": "resolution",
+            "content": "{\"applies_when\":\"gate-v1.0.0 中已阅读当前业务规格、且为 campaign B 实现或修改整数数值阈值 gate 时。\",\"symptom\":\"campaign B 的 Node 阈值测试在恰好等于 200 的输入失败或错误放行。\",\"root_cause\":\"将 campaign A 的包含边界规则 >=100 复用于 campaign B；campaign B 的当前业务规格要求严格 >200。\",\"resolution\":\"先阅读当前业务规格，按目标 campaign 确定比较运算符和阈值；对 campaign B 增加低于、等于和高于边界的 Node 测试（199/200/201），并验证结果分别为 false、false、true。\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"Node 测试验证 campaign B 的 199=false、200=false、201=true。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-2\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:2\",\"run_id\":\"xw:run:issue_runs:replay-2\",\"refs\":[\"work:xw:work:issues:2\",\"run:xw:run:issue_runs:replay-2\"]}}",
+            "source_type": "pi.memory_reflection",
+            "source_id": "xw:run:issue_runs:replay-2",
+            "confidence": "high",
+            "pinned": 0,
+            "disabled": 0,
+            "memory_type": "project",
+            "layer": "long_term",
+            "citation_type": "evidence",
+            "citation_id": "xw:evidence:issue_events:replay-2",
+            "citation_label": "authoritative reusable-experience evidence",
+            "citation_url": "",
+            "authority": "evidence_backed",
+            "authorized_by": "evidence:xw:evidence:issue_events:replay-2",
+            "authorized_at": "2026-09-28T23:31:37.002Z",
+            "memory_key": "gate.threshold-boundary.campaign-spec",
+            "occurrence_count": 2,
+            "last_seen_at": "2026-09-28T23:31:37Z",
+            "revision": 2,
+            "created_at": "2026-09-28T23:30:35Z",
+            "updated_at": "2026-09-28T23:31:37Z"
+          },
+          "provider_calls": {
+            "before": 14,
+            "after": 18,
+            "delta": 4
+          }
+        }
+      },
+      {
+        "id": "restart_deduplication",
+        "evidence_mode": "host_assertion",
+        "status": "passed",
+        "elapsed_ms": 74.21041700000933,
+        "facts": {
+          "provider_calls_delta": 0,
+          "reflections": [
+            {
+              "id": "51c9ea01-3149-4b59-bdf5-18f546ad7bd0",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3"
+            },
+            {
+              "id": "d04ddb8a-223c-44e5-a673-fd53c3ef78c0",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3"
+            }
+          ],
+          "memory_identities": [
+            [
+              "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              2,
+              2
+            ]
+          ],
+          "retrieval": {
+            "limits": {
+              "item_limit": 10,
+              "token_budget": 4000,
+              "token_estimate": 690,
+              "truncated": false
+            },
+            "memory_items": [
+              {
+                "authority": "evidence_backed",
+                "authorized_at": "2026-09-28T23:31:37.002Z",
+                "authorized_by": "evidence:xw:evidence:issue_events:replay-2",
+                "confidence": "high",
+                "content": "{\"applies_when\":\"gate-v1.0.0 中已阅读当前业务规格、且为 campaign B 实现或修改整数数值阈值 gate 时。\",\"symptom\":\"campaign B 的 Node 阈值测试在恰好等于 200 的输入失败或错误放行。\",\"root_cause\":\"将 campaign A 的包含边界规则 >=100 复用于 campaign B；campaign B 的当前业务规格要求严格 >200。\",\"resolution\":\"先阅读当前业务规格，按目标 campaign 确定比较运算符和阈值；对 campaign B 增加低于、等于和高于边界的 Node 测试（199/200/201），并验证结果分别为 false、false、true。\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"Node 测试验证 campaign B 的 199=false、200=false、201=true。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-2\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:2\",\"run_id\":\"xw:run:issue_runs:replay-2\",\"refs\":[\"work:xw:work:issues:2\",\"run:xw:run:issue_runs:replay-2\"]}}",
+                "citation_id": "xw:evidence:issue_events:replay-2",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_type": "evidence",
+                "citation_url": "",
+                "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "kind": "resolution",
+                "layer": "long_term",
+                "last_seen_at": "2026-09-28T23:31:37Z",
+                "memory_key": "gate.threshold-boundary.campaign-spec",
+                "memory_type": "project",
+                "occurrence_count": 2,
+                "pinned": 0,
+                "provenance": {
+                  "citation_id": "xw:evidence:issue_events:replay-2",
+                  "citation_label": "authoritative reusable-experience evidence",
+                  "citation_type": "evidence",
+                  "citation_url": "",
+                  "reference": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                  "source_id": "xw:run:issue_runs:replay-2",
+                  "source_path": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                  "source_type": "pi.memory_reflection"
+                },
+                "reference": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "retrieval_scope": "project:fictional-gate",
+                "selection_reason": "task terms gate, campaign; project and version matched; applies_when text overlaps; Pi must verify applicability",
+                "scope": "project",
+                "scope_id": "fictional-gate",
+                "source_id": "xw:run:issue_runs:replay-2",
+                "source_path": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "source_type": "pi.memory_reflection",
+                "token_estimate": 690,
+                "truncated": false,
+                "updated_at": "2026-09-28T23:31:37Z",
+                "revision": 2,
+                "content_fingerprint": "28dd5c68140b71555b99ea0c27ffa5073f2fd8bdb92b0966e6cc64dc887d1365",
+                "version": "gate-v1.0.0",
+                "selection_stage": "text_candidate"
+              }
+            ],
+            "retrieval": {
+              "scanned": 1,
+              "scan_limited": false,
+              "technical_limit": 3,
+              "elapsed_ms": 5.838499999998021,
+              "excluded": {
+                "ineligible": 0,
+                "version_mismatch": 0,
+                "applicability_mismatch": 0,
+                "unrelated": 0
+              },
+              "omitted_by_candidate_limit": 0,
+              "omitted_by_selection_or_technical_limit": 0,
+              "reason_code": "selected"
+            },
+            "retrieval_scopes": [
+              "project:fictional-gate",
+              "global:runner"
+            ],
+            "truncation_summary": {
+              "omitted_by_item_limit": 0,
+              "omitted_by_token_budget": 0,
+              "omitted_count": 0,
+              "selected_count": 1,
+              "summary": "No truncation; token budget 4000 was sufficient.",
+              "token_budget": 4000,
+              "total_candidates": 1,
+              "truncated_item_ids": []
+            }
+          },
+          "provider_calls": {
+            "before": 18,
+            "after": 18,
+            "delta": 0
+          }
+        }
+      },
+      {
+        "id": "forget_no_resurrection",
+        "evidence_mode": "host_assertion",
+        "status": "passed",
+        "elapsed_ms": 64.51408300000185,
+        "facts": {
+          "reflections": [
+            {
+              "id": "51c9ea01-3149-4b59-bdf5-18f546ad7bd0",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3"
+            },
+            {
+              "id": "d04ddb8a-223c-44e5-a673-fd53c3ef78c0",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3"
+            },
+            {
+              "id": "14c60d47-2eac-49f3-b2cd-e4e21e90588d",
+              "status": "skipped",
+              "attempts": 0,
+              "reason": "source_memory_suppressed",
+              "memory_id": ""
+            }
+          ],
+          "provider_calls_delta": 0,
+          "provider_calls": {
+            "before": 18,
+            "after": 18,
+            "delta": 0
+          }
+        }
+      },
+      {
+        "id": "budget_nonblocking",
+        "evidence_mode": "fault_injection",
+        "status": "passed",
+        "elapsed_ms": 24.454249999995227,
+        "facts": {
+          "work_status": "done",
+          "attempts": 2,
+          "fault_injection": true,
+          "reflections": [
+            {
+              "id": "51c9ea01-3149-4b59-bdf5-18f546ad7bd0",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3"
+            },
+            {
+              "id": "d04ddb8a-223c-44e5-a673-fd53c3ef78c0",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3"
+            },
+            {
+              "id": "14c60d47-2eac-49f3-b2cd-e4e21e90588d",
+              "status": "skipped",
+              "attempts": 0,
+              "reason": "source_memory_suppressed",
+              "memory_id": ""
+            },
+            {
+              "id": "25383ee2-2a8c-4432-a5ca-1609216e2ab8",
+              "status": "failed",
+              "attempts": 2,
+              "reason": "The \"string\" argument must be of type string or an instance of Buffer or ArrayBuffer. Received undefined",
+              "memory_id": ""
+            }
+          ],
+          "provider_calls": {
+            "before": 18,
+            "after": 18,
+            "delta": 0
+          }
+        }
+      },
+      {
+        "id": "permission_boundary",
+        "evidence_mode": "host_assertion",
+        "status": "passed",
+        "elapsed_ms": 5.690082999994047,
+        "facts": {
+          "result": {
+            "action_id": "4b794784-57a0-4125-bd65-c7b7dabe231f",
+            "action_type": "memory.remember",
+            "issue_id": 0,
+            "requires_confirmation": false,
+            "risk_level": "low",
+            "status": "denied",
+            "decision": "deny",
+            "gate_reason": "action is not covered by allowed_actions",
+            "guardian_decision_id": "",
+            "idempotency_key": ""
+          },
+          "provider_calls": {
+            "before": 18,
+            "after": 18,
+            "delta": 0
+          }
+        }
+      }
+    ],
+    "started_at": "2026-09-28T23:30:21.386Z",
+    "retry_from": null,
+    "identity": {
+      "id": "runner-default",
+      "provider": "openai-codex",
+      "model": "gpt-5.6-terra",
+      "thinking_level": "high"
+    },
+    "finished_at": "2026-09-28T23:31:38.067Z",
+    "budget": {
+      "max_calls": 20,
+      "max_duration_ms": 1800000,
+      "model_calls": 18,
+      "retries": 0,
+      "elapsed_ms": 76681,
+      "dispatches": [
+        {
+          "call": 1,
+          "session_id": "replay-131b9112-5940-4ada-a5b1-d73cbd1a6c4f",
+          "at": "2026-09-28T23:30:23.149Z",
+          "input_bytes": 10340
+        },
+        {
+          "call": 2,
+          "session_id": "replay-131b9112-5940-4ada-a5b1-d73cbd1a6c4f",
+          "at": "2026-09-28T23:30:25.699Z",
+          "input_bytes": 14620
+        },
+        {
+          "call": 3,
+          "session_id": "replay-131b9112-5940-4ada-a5b1-d73cbd1a6c4f",
+          "at": "2026-09-28T23:30:29.737Z",
+          "input_bytes": 17502
+        },
+        {
+          "call": 4,
+          "session_id": "replay-131b9112-5940-4ada-a5b1-d73cbd1a6c4f",
+          "at": "2026-09-28T23:30:35.775Z",
+          "input_bytes": 25126
+        },
+        {
+          "call": 5,
+          "session_id": "replay-86fb05c3-ecca-44dd-8619-3f8c3fc8a2fa",
+          "at": "2026-09-28T23:30:36.756Z",
+          "input_bytes": 2368
+        },
+        {
+          "call": 6,
+          "session_id": "replay-86fb05c3-ecca-44dd-8619-3f8c3fc8a2fa",
+          "at": "2026-09-28T23:30:40.683Z",
+          "input_bytes": 7212
+        },
+        {
+          "call": 7,
+          "session_id": "replay-e13c8aca-de74-4feb-9c22-0b8aa8dde49c",
+          "at": "2026-09-28T23:30:45.795Z",
+          "input_bytes": 3916
+        },
+        {
+          "call": 8,
+          "session_id": "replay-e13c8aca-de74-4feb-9c22-0b8aa8dde49c",
+          "at": "2026-09-28T23:30:50.671Z",
+          "input_bytes": 8959
+        },
+        {
+          "call": 9,
+          "session_id": "replay-e13c8aca-de74-4feb-9c22-0b8aa8dde49c",
+          "at": "2026-09-28T23:30:54.478Z",
+          "input_bytes": 19545
+        },
+        {
+          "call": 10,
+          "session_id": "replay-e13c8aca-de74-4feb-9c22-0b8aa8dde49c",
+          "at": "2026-09-28T23:31:00.561Z",
+          "input_bytes": 30912
+        },
+        {
+          "call": 11,
+          "session_id": "replay-1b095617-cfa0-4518-81c1-595a36d037c1",
+          "at": "2026-09-28T23:31:04.893Z",
+          "input_bytes": 3916
+        },
+        {
+          "call": 12,
+          "session_id": "replay-1b095617-cfa0-4518-81c1-595a36d037c1",
+          "at": "2026-09-28T23:31:09.392Z",
+          "input_bytes": 8952
+        },
+        {
+          "call": 13,
+          "session_id": "replay-1b095617-cfa0-4518-81c1-595a36d037c1",
+          "at": "2026-09-28T23:31:13.855Z",
+          "input_bytes": 19744
+        },
+        {
+          "call": 14,
+          "session_id": "replay-1b095617-cfa0-4518-81c1-595a36d037c1",
+          "at": "2026-09-28T23:31:20.669Z",
+          "input_bytes": 31554
+        },
+        {
+          "call": 15,
+          "session_id": "replay-459e2d6a-fbfa-454d-8823-aaf58369b6d4",
+          "at": "2026-09-28T23:31:25.198Z",
+          "input_bytes": 10343
+        },
+        {
+          "call": 16,
+          "session_id": "replay-459e2d6a-fbfa-454d-8823-aaf58369b6d4",
+          "at": "2026-09-28T23:31:27.747Z",
+          "input_bytes": 14694
+        },
+        {
+          "call": 17,
+          "session_id": "replay-459e2d6a-fbfa-454d-8823-aaf58369b6d4",
+          "at": "2026-09-28T23:31:29.664Z",
+          "input_bytes": 23499
+        },
+        {
+          "call": 18,
+          "session_id": "replay-459e2d6a-fbfa-454d-8823-aaf58369b6d4",
+          "at": "2026-09-28T23:31:37.012Z",
+          "input_bytes": 31716
+        }
+      ],
+      "receipts": [
+        {
+          "call": 1,
+          "session_id": "replay-131b9112-5940-4ada-a5b1-d73cbd1a6c4f",
+          "usage": {
+            "input": 2015,
+            "output": 29,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 10,
+            "totalTokens": 2044,
+            "cost": {
+              "input": 0.00403,
+              "output": 0.000348,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.004378
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 2,
+          "session_id": "replay-131b9112-5940-4ada-a5b1-d73cbd1a6c4f",
+          "usage": {
+            "input": 803,
+            "output": 60,
+            "cacheRead": 1536,
+            "cacheWrite": 0,
+            "reasoning": 15,
+            "totalTokens": 2399,
+            "cost": {
+              "input": 0.001606,
+              "output": 0.00072,
+              "cacheRead": 0.00030720000000000004,
+              "cacheWrite": 0,
+              "total": 0.0026332
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 3,
+          "session_id": "replay-131b9112-5940-4ada-a5b1-d73cbd1a6c4f",
+          "usage": {
+            "input": 941,
+            "output": 272,
+            "cacheRead": 1536,
+            "cacheWrite": 0,
+            "reasoning": 45,
+            "totalTokens": 2749,
+            "cost": {
+              "input": 0.001882,
+              "output": 0.003264,
+              "cacheRead": 0.00030720000000000004,
+              "cacheWrite": 0,
+              "total": 0.005453199999999999
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 4,
+          "session_id": "replay-131b9112-5940-4ada-a5b1-d73cbd1a6c4f",
+          "usage": {
+            "input": 1880,
+            "output": 9,
+            "cacheRead": 1536,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 3425,
+            "cost": {
+              "input": 0.00376,
+              "output": 0.000108,
+              "cacheRead": 0.00030720000000000004,
+              "cacheWrite": 0,
+              "total": 0.0041752
+            }
+          },
+          "stop_reason": "stop"
+        },
+        {
+          "call": 5,
+          "session_id": "replay-86fb05c3-ecca-44dd-8619-3f8c3fc8a2fa",
+          "usage": {
+            "input": 480,
+            "output": 112,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 25,
+            "totalTokens": 592,
+            "cost": {
+              "input": 0.0009599999999999999,
+              "output": 0.0013440000000000001,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.002304
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 6,
+          "session_id": "replay-86fb05c3-ecca-44dd-8619-3f8c3fc8a2fa",
+          "usage": {
+            "input": 918,
+            "output": 239,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 140,
+            "totalTokens": 1157,
+            "cost": {
+              "input": 0.001836,
+              "output": 0.002868,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.004704
+            }
+          },
+          "stop_reason": "stop"
+        },
+        {
+          "call": 7,
+          "session_id": "replay-e13c8aca-de74-4feb-9c22-0b8aa8dde49c",
+          "usage": {
+            "input": 785,
+            "output": 137,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 50,
+            "totalTokens": 922,
+            "cost": {
+              "input": 0.00157,
+              "output": 0.001644,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.003214
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 8,
+          "session_id": "replay-e13c8aca-de74-4feb-9c22-0b8aa8dde49c",
+          "usage": {
+            "input": 1248,
+            "output": 157,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 19,
+            "totalTokens": 1405,
+            "cost": {
+              "input": 0.002496,
+              "output": 0.001884,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.00438
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 9,
+          "session_id": "replay-e13c8aca-de74-4feb-9c22-0b8aa8dde49c",
+          "usage": {
+            "input": 2680,
+            "output": 278,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 16,
+            "totalTokens": 2958,
+            "cost": {
+              "input": 0.00536,
+              "output": 0.003336,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.008696
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 10,
+          "session_id": "replay-e13c8aca-de74-4feb-9c22-0b8aa8dde49c",
+          "usage": {
+            "input": 1716,
+            "output": 164,
+            "cacheRead": 2560,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 4440,
+            "cost": {
+              "input": 0.0034319999999999997,
+              "output": 0.001968,
+              "cacheRead": 0.0005120000000000001,
+              "cacheWrite": 0,
+              "total": 0.005912000000000001
+            }
+          },
+          "stop_reason": "stop"
+        },
+        {
+          "call": 11,
+          "session_id": "replay-1b095617-cfa0-4518-81c1-595a36d037c1",
+          "usage": {
+            "input": 785,
+            "output": 122,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 35,
+            "totalTokens": 907,
+            "cost": {
+              "input": 0.00157,
+              "output": 0.001464,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.0030340000000000002
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 12,
+          "session_id": "replay-1b095617-cfa0-4518-81c1-595a36d037c1",
+          "usage": {
+            "input": 1238,
+            "output": 179,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 35,
+            "totalTokens": 1417,
+            "cost": {
+              "input": 0.002476,
+              "output": 0.002148,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.004624
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 13,
+          "session_id": "replay-1b095617-cfa0-4518-81c1-595a36d037c1",
+          "usage": {
+            "input": 2700,
+            "output": 309,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 44,
+            "totalTokens": 3009,
+            "cost": {
+              "input": 0.005399999999999999,
+              "output": 0.003708,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.009108
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 14,
+          "session_id": "replay-1b095617-cfa0-4518-81c1-595a36d037c1",
+          "usage": {
+            "input": 4334,
+            "output": 188,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 30,
+            "totalTokens": 4522,
+            "cost": {
+              "input": 0.008668,
+              "output": 0.002256,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.010924
+            }
+          },
+          "stop_reason": "stop"
+        },
+        {
+          "call": 15,
+          "session_id": "replay-459e2d6a-fbfa-454d-8823-aaf58369b6d4",
+          "usage": {
+            "input": 2013,
+            "output": 30,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 11,
+            "totalTokens": 2043,
+            "cost": {
+              "input": 0.004026,
+              "output": 0.00036,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.004386
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 16,
+          "session_id": "replay-459e2d6a-fbfa-454d-8823-aaf58369b6d4",
+          "usage": {
+            "input": 831,
+            "output": 60,
+            "cacheRead": 1536,
+            "cacheWrite": 0,
+            "reasoning": 15,
+            "totalTokens": 2427,
+            "cost": {
+              "input": 0.0016619999999999998,
+              "output": 0.00072,
+              "cacheRead": 0.00030720000000000004,
+              "cacheWrite": 0,
+              "total": 0.0026892
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 17,
+          "session_id": "replay-459e2d6a-fbfa-454d-8823-aaf58369b6d4",
+          "usage": {
+            "input": 1910,
+            "output": 365,
+            "cacheRead": 1536,
+            "cacheWrite": 0,
+            "reasoning": 68,
+            "totalTokens": 3811,
+            "cost": {
+              "input": 0.0038199999999999996,
+              "output": 0.00438,
+              "cacheRead": 0.00030720000000000004,
+              "cacheWrite": 0,
+              "total": 0.0085072
+            }
+          },
+          "stop_reason": "toolUse"
+        },
+        {
+          "call": 18,
+          "session_id": "replay-459e2d6a-fbfa-454d-8823-aaf58369b6d4",
+          "usage": {
+            "input": 1935,
+            "output": 9,
+            "cacheRead": 2560,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 4504,
+            "cost": {
+              "input": 0.0038699999999999997,
+              "output": 0.000108,
+              "cacheRead": 0.0005120000000000001,
+              "cacheWrite": 0,
+              "total": 0.00449
+            }
+          },
+          "stop_reason": "stop"
+        }
+      ],
+      "accounting": "Each dispatched SDK agent.streamFunction invocation counts, including tool-loop continuations and failures. SDK/provider retries and compaction disabled. Missing receipts remain unknown; SDK cost is an estimate, not a bill."
+    }
+  },
+  "tool_steps": {
+    "first_learning": [
+      {
+        "name": "reflection_evidence_read",
+        "input": {},
+        "output": {
+          "project_id": "fictional-gate",
+          "work_id": "xw:work:issues:1",
+          "run_id": "xw:run:issue_runs:replay-1",
+          "outcome": "accepted",
+          "title": "gate threshold boundary regression",
+          "rationale": "Isolated replay: observed local tests passed",
+          "evidence": [
+            {
+              "id": "xw:evidence:issue_events:replay-1",
+              "status": "passed",
+              "summary": "Observed defect: gate.mjs used >100, SPEC campaign A requires >=100. Node tests 99/100/101 failed at 100 before fix; after >=100 all passed. Reusable lesson: test below/at/above threshold, read current business specification each time; do not hardcode campaign A in another campaign. Code version gate-v1.0.0.",
+              "excerpt": "",
+              "source": "commands.json",
+              "evidence_index": 0
+            }
+          ]
+        },
+        "elapsed_ms": 0.8951250000000073
+      },
+      {
+        "name": "memory_search",
+        "input": {
+          "query": "gate-v1.0.0 threshold boundary gate.mjs campaign A >=100 test 99/100/101 current business specification"
+        },
+        "output": {
+          "items": []
+        },
+        "elapsed_ms": 34.642667000000074
+      },
+      {
+        "name": "memory_remember",
+        "input": {
+          "kind": "resolution",
+          "memory_key": "gate.threshold-boundary.campaign-spec",
+          "confidence": "high",
+          "content": {
+            "applies_when": "gate-v1.0.0 中实现或修改按 campaign 定义的数值阈值 gate 时。",
+            "symptom": "Node 阈值测试在恰好等于 100 的输入失败。",
+            "root_cause": "gate.mjs 使用了 >100，而 campaign A 的当前业务规格要求 >=100。",
+            "resolution": "先阅读当前业务规格以确定目标 campaign 的比较运算符和阈值，避免将 campaign A 规则硬编码到其他 campaign；为每个阈值补充低于、等于和高于边界的测试（例如 99/100/101）。",
+            "failed_attempts": [],
+            "version": "gate-v1.0.0",
+            "verification": {
+              "method": "Node 测试验证：修正为 >=100 后，99/100/101 边界测试全部通过。",
+              "evidence_indices": [
+                0
+              ]
+            }
+          }
+        },
+        "output": {
+          "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+          "scope": "project",
+          "scope_id": "fictional-gate",
+          "kind": "resolution",
+          "content": "{\"applies_when\":\"gate-v1.0.0 中实现或修改按 campaign 定义的数值阈值 gate 时。\",\"symptom\":\"Node 阈值测试在恰好等于 100 的输入失败。\",\"root_cause\":\"gate.mjs 使用了 >100，而 campaign A 的当前业务规格要求 >=100。\",\"resolution\":\"先阅读当前业务规格以确定目标 campaign 的比较运算符和阈值，避免将 campaign A 规则硬编码到其他 campaign；为每个阈值补充低于、等于和高于边界的测试（例如 99/100/101）。\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"Node 测试验证：修正为 >=100 后，99/100/101 边界测试全部通过。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]}}",
+          "source_type": "pi.memory_reflection",
+          "source_id": "xw:run:issue_runs:replay-1",
+          "confidence": "high",
+          "pinned": 0,
+          "disabled": 0,
+          "memory_type": "project",
+          "layer": "long_term",
+          "citation_type": "evidence",
+          "citation_id": "xw:evidence:issue_events:replay-1",
+          "citation_label": "authoritative reusable-experience evidence",
+          "citation_url": "",
+          "authority": "evidence_backed",
+          "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+          "authorized_at": "2026-09-28T23:30:35.557Z",
+          "memory_key": "gate.threshold-boundary.campaign-spec",
+          "occurrence_count": 1,
+          "last_seen_at": "2026-09-28T23:30:35Z",
+          "revision": 1,
+          "created_at": "2026-09-28T23:30:35Z",
+          "updated_at": "2026-09-28T23:30:35Z"
+        },
+        "elapsed_ms": 344.01729200000045
+      }
+    ],
+    "without_memory": [
+      {
+        "name": "repo_read_excerpt",
+        "input": {
+          "path": "SPEC.md",
+          "start_line": 1,
+          "max_lines": 400,
+          "max_bytes": 30000
+        },
+        "output": {
+          "excerpt": "gate-v1.0.0 / campaign A: integer amounts 0..1000. Eligibility starts at 100 units, including exactly 100. Test the boundary below, exactly at, and above the threshold.\n",
+          "line_range": {
+            "end": 2,
+            "start": 1
+          },
+          "path": "SPEC.md",
+          "reason": "requested_excerpt",
+          "source": "repo_read_excerpt",
+          "truncated": false
+        },
+        "elapsed_ms": 58.92883299999812
+      },
+      {
+        "name": "repo_read_excerpt",
+        "input": {
+          "path": "gate.mjs",
+          "start_line": 1,
+          "max_lines": 400,
+          "max_bytes": 30000
+        },
+        "output": {
+          "excerpt": "export const eligible = amount => amount >= 100;\n",
+          "line_range": {
+            "end": 2,
+            "start": 1
+          },
+          "path": "gate.mjs",
+          "reason": "requested_excerpt",
+          "source": "repo_read_excerpt",
+          "truncated": false
+        },
+        "elapsed_ms": 22.29962499999965
+      }
+    ],
+    "similar_expression": [
+      {
+        "name": "repo_read_excerpt",
+        "input": {
+          "path": "SPEC.md",
+          "start_line": 1,
+          "max_lines": 400,
+          "max_bytes": 20000
+        },
+        "output": {
+          "excerpt": "gate-v1.0.0 / campaign A: integer amounts 0..1000. Eligibility starts at 100 units, including exactly 100. Test the boundary below, exactly at, and above the threshold.\n",
+          "line_range": {
+            "end": 2,
+            "start": 1
+          },
+          "path": "SPEC.md",
+          "reason": "requested_excerpt",
+          "source": "repo_read_excerpt",
+          "truncated": false
+        },
+        "elapsed_ms": 42.11000000000058
+      },
+      {
+        "name": "repo_read_excerpt",
+        "input": {
+          "path": "gate.mjs",
+          "start_line": 1,
+          "max_lines": 400,
+          "max_bytes": 20000
+        },
+        "output": {
+          "excerpt": "export const eligible = amount => amount >= 100;\n",
+          "line_range": {
+            "end": 2,
+            "start": 1
+          },
+          "path": "gate.mjs",
+          "reason": "requested_excerpt",
+          "source": "repo_read_excerpt",
+          "truncated": false
+        },
+        "elapsed_ms": 18.117582999999286
+      },
+      {
+        "name": "memory_search",
+        "input": {
+          "query": "gate threshold boundary regression",
+          "version": "gate-v1.0.0",
+          "token_budget": 4000,
+          "task_description": "gate threshold boundary regression v1.0.0: 门槛刚好达标的边缘值似乎判错，请读 SPEC.md 和 gate.mjs，提出可重放测试矩阵。 Actual SPEC excerpt: \"gate-v1.0.0 / campaign A: integer amounts 0..1000. Eligibility starts at 100 units, including exactly 100. Test the boundary below, exactly at, and above the threshold.\\n\""
+        },
+        "output": {
+          "items": [
+            {
+              "authority": "evidence_backed",
+              "authorized_at": "2026-09-28T23:30:35.557Z",
+              "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+              "confidence": "high",
+              "content": "{\"applies_when\":\"gate-v1.0.0 中实现或修改按 campaign 定义的数值阈值 gate 时。\",\"symptom\":\"Node 阈值测试在恰好等于 100 的输入失败。\",\"root_cause\":\"gate.mjs 使用了 >100，而 campaign A 的当前业务规格要求 >=100。\",\"resolution\":\"先阅读当前业务规格以确定目标 campaign 的比较运算符和阈值，避免将 campaign A 规则硬编码到其他 campaign；为每个阈值补充低于、等于和高于边界的测试（例如 99/100/101）。\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"Node 测试验证：修正为 >=100 后，99/100/101 边界测试全部通过。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]}}",
+              "citation_id": "xw:evidence:issue_events:replay-1",
+              "citation_label": "authoritative reusable-experience evidence",
+              "citation_type": "evidence",
+              "citation_url": "",
+              "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "kind": "resolution",
+              "layer": "long_term",
+              "last_seen_at": "2026-09-28T23:30:35Z",
+              "memory_key": "gate.threshold-boundary.campaign-spec",
+              "memory_type": "project",
+              "occurrence_count": 1,
+              "pinned": 0,
+              "provenance": {
+                "citation_id": "xw:evidence:issue_events:replay-1",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_type": "evidence",
+                "citation_url": "",
+                "reference": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "source_id": "xw:run:issue_runs:replay-1",
+                "source_path": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "source_type": "pi.memory_reflection"
+              },
+              "reference": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "retrieval_scope": "project:fictional-gate",
+              "selection_reason": "task terms gate, gate.mjs, 测试; project and version matched; applies_when text overlaps; Pi must verify applicability",
+              "scope": "project",
+              "scope_id": "fictional-gate",
+              "source_id": "xw:run:issue_runs:replay-1",
+              "source_path": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "source_type": "pi.memory_reflection",
+              "token_estimate": 670,
+              "truncated": false,
+              "updated_at": "2026-09-28T23:30:35Z",
+              "revision": 1,
+              "content_fingerprint": "daabdfda8cf693c12f93d0bfa22455044d97fb1c8976e25af4a688108f868ffb",
+              "version": "gate-v1.0.0",
+              "selection_stage": "text_candidate"
+            }
+          ],
+          "limits": {
+            "item_limit": 10,
+            "token_budget": 4000,
+            "token_estimate": 670,
+            "truncated": false
+          },
+          "retrieval": {
+            "scanned": 1,
+            "scan_limited": false,
+            "technical_limit": 3,
+            "elapsed_ms": 14.636582999999519,
+            "excluded": {
+              "ineligible": 0,
+              "version_mismatch": 0,
+              "applicability_mismatch": 0,
+              "unrelated": 0
+            },
+            "omitted_by_candidate_limit": 0,
+            "omitted_by_selection_or_technical_limit": 0,
+            "reason_code": "selected"
+          },
+          "truncation_summary": {
+            "omitted_by_item_limit": 0,
+            "omitted_by_token_budget": 0,
+            "omitted_count": 0,
+            "selected_count": 1,
+            "summary": "No truncation; token budget 4000 was sufficient.",
+            "token_budget": 4000,
+            "total_candidates": 1,
+            "truncated_item_ids": []
+          }
+        },
+        "elapsed_ms": 41.494291000002704
+      },
+      {
+        "name": "memory_search",
+        "input": {
+          "query": "gate threshold boundary regression",
+          "version": "gate-v1.0.0",
+          "token_budget": 4000,
+          "task_description": "gate threshold boundary regression v1.0.0: 门槛刚好达标的边缘值似乎判错，请读 SPEC.md 和 gate.mjs，提出可重放测试矩阵。 Actual SPEC excerpt: \"gate-v1.0.0 / campaign A: integer amounts 0..1000. Eligibility starts at 100 units, including exactly 100. Test the boundary below, exactly at, and above the threshold.\\n\"",
+          "selection": [
+            {
+              "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "revision": 1,
+              "content_fingerprint": "daabdfda8cf693c12f93d0bfa22455044d97fb1c8976e25af4a688108f868ffb",
+              "reason": "Applies to the current gate-v1.0.0 campaign A threshold: the current SPEC confirms threshold 100 is inclusive and requires below/equal/above tests; reuse only the boundary-testing method."
+            }
+          ]
+        },
+        "output": {
+          "items": [
+            {
+              "authority": "evidence_backed",
+              "authorized_at": "2026-09-28T23:30:35.557Z",
+              "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+              "confidence": "high",
+              "content": "{\"applies_when\":\"gate-v1.0.0 中实现或修改按 campaign 定义的数值阈值 gate 时。\",\"symptom\":\"Node 阈值测试在恰好等于 100 的输入失败。\",\"root_cause\":\"gate.mjs 使用了 >100，而 campaign A 的当前业务规格要求 >=100。\",\"resolution\":\"先阅读当前业务规格以确定目标 campaign 的比较运算符和阈值，避免将 campaign A 规则硬编码到其他 campaign；为每个阈值补充低于、等于和高于边界的测试（例如 99/100/101）。\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"Node 测试验证：修正为 >=100 后，99/100/101 边界测试全部通过。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]}}",
+              "citation_id": "xw:evidence:issue_events:replay-1",
+              "citation_label": "authoritative reusable-experience evidence",
+              "citation_type": "evidence",
+              "citation_url": "",
+              "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "kind": "resolution",
+              "layer": "long_term",
+              "last_seen_at": "2026-09-28T23:30:35Z",
+              "memory_key": "gate.threshold-boundary.campaign-spec",
+              "memory_type": "project",
+              "occurrence_count": 1,
+              "pinned": 0,
+              "provenance": {
+                "citation_id": "xw:evidence:issue_events:replay-1",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_type": "evidence",
+                "citation_url": "",
+                "reference": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "source_id": "xw:run:issue_runs:replay-1",
+                "source_path": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "source_type": "pi.memory_reflection"
+              },
+              "reference": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "retrieval_scope": "project:fictional-gate",
+              "selection_reason": "task terms gate, gate.mjs, 测试; project and version matched; applies_when text overlaps; Pi must verify applicability; Pi applicability: Applies to the current gate-v1.0.0 campaign A threshold: the current SPEC confirms threshold 100 is inclusive and requires below/equal/above tests; reuse only the boundary-testing method.",
+              "scope": "project",
+              "scope_id": "fictional-gate",
+              "source_id": "xw:run:issue_runs:replay-1",
+              "source_path": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "source_type": "pi.memory_reflection",
+              "token_estimate": 721,
+              "truncated": false,
+              "updated_at": "2026-09-28T23:30:35Z",
+              "revision": 1,
+              "content_fingerprint": "daabdfda8cf693c12f93d0bfa22455044d97fb1c8976e25af4a688108f868ffb",
+              "version": "gate-v1.0.0",
+              "selection_stage": "pi_selected"
+            }
+          ],
+          "limits": {
+            "item_limit": 10,
+            "token_budget": 4000,
+            "token_estimate": 721,
+            "truncated": false
+          },
+          "retrieval": {
+            "scanned": 1,
+            "scan_limited": false,
+            "technical_limit": 3,
+            "elapsed_ms": 8.24991699999373,
+            "excluded": {
+              "ineligible": 0,
+              "version_mismatch": 0,
+              "applicability_mismatch": 0,
+              "unrelated": 0
+            },
+            "omitted_by_candidate_limit": 0,
+            "omitted_by_selection_or_technical_limit": 0,
+            "reason_code": "selected"
+          },
+          "truncation_summary": {
+            "omitted_by_item_limit": 0,
+            "omitted_by_token_budget": 0,
+            "omitted_count": 0,
+            "selected_count": 1,
+            "summary": "No truncation; token budget 4000 was sufficient.",
+            "token_budget": 4000,
+            "total_candidates": 1,
+            "truncated_item_ids": []
+          }
+        },
+        "elapsed_ms": 36.81308399999398
+      }
+    ],
+    "changed_business_rule": [
+      {
+        "name": "repo_read_excerpt",
+        "input": {
+          "path": "SPEC.md",
+          "start_line": 1,
+          "max_lines": 400,
+          "max_bytes": 30000
+        },
+        "output": {
+          "excerpt": "gate-v1.0.0 / campaign B: integer amounts 0..1000. Eligibility requires strictly more than 200 units. Read this rule again whenever campaign changes. Test the boundary below, exactly at, and above the threshold.\n",
+          "line_range": {
+            "end": 2,
+            "start": 1
+          },
+          "path": "SPEC.md",
+          "reason": "requested_excerpt",
+          "source": "repo_read_excerpt",
+          "truncated": false
+        },
+        "elapsed_ms": 46.89329199999338
+      },
+      {
+        "name": "repo_read_excerpt",
+        "input": {
+          "path": "gate.mjs",
+          "start_line": 1,
+          "max_lines": 400,
+          "max_bytes": 30000
+        },
+        "output": {
+          "excerpt": "export const eligible = amount => amount > 200;\n",
+          "line_range": {
+            "end": 2,
+            "start": 1
+          },
+          "path": "gate.mjs",
+          "reason": "requested_excerpt",
+          "source": "repo_read_excerpt",
+          "truncated": false
+        },
+        "elapsed_ms": 23.48487500000192
+      },
+      {
+        "name": "memory_search",
+        "input": {
+          "query": "gate threshold boundary regression",
+          "version": "gate-v1.0.0",
+          "token_budget": 4000,
+          "task_description": "gate threshold boundary regression v1.0.0: 门槛刚好达标的边缘值似乎判错，请读 SPEC.md 和 gate.mjs，提出可重放测试矩阵。 Current SPEC.md excerpt: \"gate-v1.0.0 / campaign B: integer amounts 0..1000. Eligibility requires strictly more than 200 units. Read this rule again whenever campaign changes. Test the boundary below, exactly at, and above the threshold.\\n\""
+        },
+        "output": {
+          "items": [
+            {
+              "authority": "evidence_backed",
+              "authorized_at": "2026-09-28T23:30:35.557Z",
+              "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+              "confidence": "high",
+              "content": "{\"applies_when\":\"gate-v1.0.0 中实现或修改按 campaign 定义的数值阈值 gate 时。\",\"symptom\":\"Node 阈值测试在恰好等于 100 的输入失败。\",\"root_cause\":\"gate.mjs 使用了 >100，而 campaign A 的当前业务规格要求 >=100。\",\"resolution\":\"先阅读当前业务规格以确定目标 campaign 的比较运算符和阈值，避免将 campaign A 规则硬编码到其他 campaign；为每个阈值补充低于、等于和高于边界的测试（例如 99/100/101）。\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"Node 测试验证：修正为 >=100 后，99/100/101 边界测试全部通过。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]}}",
+              "citation_id": "xw:evidence:issue_events:replay-1",
+              "citation_label": "authoritative reusable-experience evidence",
+              "citation_type": "evidence",
+              "citation_url": "",
+              "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "kind": "resolution",
+              "layer": "long_term",
+              "last_seen_at": "2026-09-28T23:30:35Z",
+              "memory_key": "gate.threshold-boundary.campaign-spec",
+              "memory_type": "project",
+              "occurrence_count": 1,
+              "pinned": 0,
+              "provenance": {
+                "citation_id": "xw:evidence:issue_events:replay-1",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_type": "evidence",
+                "citation_url": "",
+                "reference": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "source_id": "xw:run:issue_runs:replay-1",
+                "source_path": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "source_type": "pi.memory_reflection"
+              },
+              "reference": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "retrieval_scope": "project:fictional-gate",
+              "selection_reason": "task terms gate, gate.mjs, 测试, gate-v1.0.0; project and version matched; applies_when text overlaps; Pi must verify applicability",
+              "scope": "project",
+              "scope_id": "fictional-gate",
+              "source_id": "xw:run:issue_runs:replay-1",
+              "source_path": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "source_type": "pi.memory_reflection",
+              "token_estimate": 673,
+              "truncated": false,
+              "updated_at": "2026-09-28T23:30:35Z",
+              "revision": 1,
+              "content_fingerprint": "daabdfda8cf693c12f93d0bfa22455044d97fb1c8976e25af4a688108f868ffb",
+              "version": "gate-v1.0.0",
+              "selection_stage": "text_candidate"
+            }
+          ],
+          "limits": {
+            "item_limit": 10,
+            "token_budget": 4000,
+            "token_estimate": 673,
+            "truncated": false
+          },
+          "retrieval": {
+            "scanned": 1,
+            "scan_limited": false,
+            "technical_limit": 3,
+            "elapsed_ms": 3.092040999996243,
+            "excluded": {
+              "ineligible": 0,
+              "version_mismatch": 0,
+              "applicability_mismatch": 0,
+              "unrelated": 0
+            },
+            "omitted_by_candidate_limit": 0,
+            "omitted_by_selection_or_technical_limit": 0,
+            "reason_code": "selected"
+          },
+          "truncation_summary": {
+            "omitted_by_item_limit": 0,
+            "omitted_by_token_budget": 0,
+            "omitted_count": 0,
+            "selected_count": 1,
+            "summary": "No truncation; token budget 4000 was sufficient.",
+            "token_budget": 4000,
+            "total_candidates": 1,
+            "truncated_item_ids": []
+          }
+        },
+        "elapsed_ms": 20.633958999998868
+      },
+      {
+        "name": "memory_search",
+        "input": {
+          "query": "gate threshold boundary regression",
+          "version": "gate-v1.0.0",
+          "token_budget": 4000,
+          "task_description": "gate threshold boundary regression v1.0.0: 门槛刚好达标的边缘值似乎判错，请读 SPEC.md 和 gate.mjs，提出可重放测试矩阵。 Current SPEC.md excerpt: \"gate-v1.0.0 / campaign B: integer amounts 0..1000. Eligibility requires strictly more than 200 units. Read this rule again whenever campaign changes. Test the boundary below, exactly at, and above the threshold.\\n\"",
+          "selection": [
+            {
+              "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "revision": 1,
+              "content_fingerprint": "daabdfda8cf693c12f93d0bfa22455044d97fb1c8976e25af4a688108f868ffb",
+              "reason": "Applicable only for its reusable boundary-testing method: current campaign B specification independently requires cases below, at, and above its threshold. Its campaign A threshold and comparator are overridden by the current specification."
+            }
+          ]
+        },
+        "output": {
+          "items": [
+            {
+              "authority": "evidence_backed",
+              "authorized_at": "2026-09-28T23:30:35.557Z",
+              "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+              "confidence": "high",
+              "content": "{\"applies_when\":\"gate-v1.0.0 中实现或修改按 campaign 定义的数值阈值 gate 时。\",\"symptom\":\"Node 阈值测试在恰好等于 100 的输入失败。\",\"root_cause\":\"gate.mjs 使用了 >100，而 campaign A 的当前业务规格要求 >=100。\",\"resolution\":\"先阅读当前业务规格以确定目标 campaign 的比较运算符和阈值，避免将 campaign A 规则硬编码到其他 campaign；为每个阈值补充低于、等于和高于边界的测试（例如 99/100/101）。\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"Node 测试验证：修正为 >=100 后，99/100/101 边界测试全部通过。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]}}",
+              "citation_id": "xw:evidence:issue_events:replay-1",
+              "citation_label": "authoritative reusable-experience evidence",
+              "citation_type": "evidence",
+              "citation_url": "",
+              "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "kind": "resolution",
+              "layer": "long_term",
+              "last_seen_at": "2026-09-28T23:30:35Z",
+              "memory_key": "gate.threshold-boundary.campaign-spec",
+              "memory_type": "project",
+              "occurrence_count": 1,
+              "pinned": 0,
+              "provenance": {
+                "citation_id": "xw:evidence:issue_events:replay-1",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_type": "evidence",
+                "citation_url": "",
+                "reference": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "source_id": "xw:run:issue_runs:replay-1",
+                "source_path": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "source_type": "pi.memory_reflection"
+              },
+              "reference": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "retrieval_scope": "project:fictional-gate",
+              "selection_reason": "task terms gate, gate.mjs, 测试, gate-v1.0.0; project and version matched; applies_when text overlaps; Pi must verify applicability; Pi applicability: Applicable only for its reusable boundary-testing method: current campaign B specification independently requires cases below, at, and above its threshold. Its campaign A threshold and comparator are overridden by the current specification.",
+              "scope": "project",
+              "scope_id": "fictional-gate",
+              "source_id": "xw:run:issue_runs:replay-1",
+              "source_path": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "source_type": "pi.memory_reflection",
+              "token_estimate": 738,
+              "truncated": false,
+              "updated_at": "2026-09-28T23:30:35Z",
+              "revision": 1,
+              "content_fingerprint": "daabdfda8cf693c12f93d0bfa22455044d97fb1c8976e25af4a688108f868ffb",
+              "version": "gate-v1.0.0",
+              "selection_stage": "pi_selected"
+            }
+          ],
+          "limits": {
+            "item_limit": 10,
+            "token_budget": 4000,
+            "token_estimate": 738,
+            "truncated": false
+          },
+          "retrieval": {
+            "scanned": 1,
+            "scan_limited": false,
+            "technical_limit": 3,
+            "elapsed_ms": 3.4297089999963646,
+            "excluded": {
+              "ineligible": 0,
+              "version_mismatch": 0,
+              "applicability_mismatch": 0,
+              "unrelated": 0
+            },
+            "omitted_by_candidate_limit": 0,
+            "omitted_by_selection_or_technical_limit": 0,
+            "reason_code": "selected"
+          },
+          "truncation_summary": {
+            "omitted_by_item_limit": 0,
+            "omitted_by_token_budget": 0,
+            "omitted_count": 0,
+            "selected_count": 1,
+            "summary": "No truncation; token budget 4000 was sufficient.",
+            "token_budget": 4000,
+            "total_candidates": 1,
+            "truncated_item_ids": []
+          }
+        },
+        "elapsed_ms": 19.948833000002196
+      }
+    ],
+    "correction": [
+      {
+        "name": "reflection_evidence_read",
+        "input": {},
+        "output": {
+          "project_id": "fictional-gate",
+          "work_id": "xw:work:issues:2",
+          "run_id": "xw:run:issue_runs:replay-2",
+          "outcome": "accepted",
+          "title": "gate threshold boundary regression correction",
+          "rationale": "Isolated replay: observed local tests passed",
+          "evidence": [
+            {
+              "id": "xw:evidence:issue_events:replay-2",
+              "status": "passed",
+              "summary": "New verified scope: campaign B uses strictly >200; Node tests 199=false,200=false,201=true passed. Previous memory 9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3 revision 1, key gate.threshold-boundary.campaign-spec. Narrow the existing lesson to integer threshold tests where current campaign SPEC has been read; never reuse campaign A's inclusive 100 rule for B. Version gate-v1.0.0.",
+              "excerpt": "",
+              "source": "commands.json",
+              "evidence_index": 0
+            }
+          ]
+        },
+        "elapsed_ms": 1.1258750000124564
+      },
+      {
+        "name": "memory_search",
+        "input": {
+          "query": "gate-v1.0.0 campaign B strictly >200 integer threshold tests current campaign SPEC read gate.threshold-boundary.campaign-spec"
+        },
+        "output": {
+          "items": [
+            {
+              "authority": "evidence_backed",
+              "authorized_at": "2026-09-28T23:30:35.557Z",
+              "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+              "confidence": "high",
+              "content": "{\"applies_when\":\"gate-v1.0.0 中实现或修改按 campaign 定义的数值阈值 gate 时。\",\"symptom\":\"Node 阈值测试在恰好等于 100 的输入失败。\",\"root_cause\":\"gate.mjs 使用了 >100，而 campaign A 的当前业务规格要求 >=100。\",\"resolution\":\"先阅读当前业务规格以确定目标 campaign 的比较运算符和阈值，避免将 campaign A 规则硬编码到其他 campaign；为每个阈值补充低于、等于和高于边界的测试（例如 99/100/101）。\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"Node 测试验证：修正为 >=100 后，99/100/101 边界测试全部通过。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]}}",
+              "citation_id": "xw:evidence:issue_events:replay-1",
+              "citation_label": "authoritative reusable-experience evidence",
+              "citation_type": "evidence",
+              "citation_url": "",
+              "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "kind": "resolution",
+              "layer": "long_term",
+              "last_seen_at": "2026-09-28T23:30:35Z",
+              "memory_key": "gate.threshold-boundary.campaign-spec",
+              "memory_type": "project",
+              "occurrence_count": 1,
+              "pinned": 0,
+              "provenance": {
+                "citation_id": "xw:evidence:issue_events:replay-1",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_type": "evidence",
+                "citation_url": "",
+                "reference": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "source_id": "xw:run:issue_runs:replay-1",
+                "source_path": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+                "source_type": "pi.memory_reflection"
+              },
+              "reference": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "retrieval_scope": "project:fictional-gate",
+              "selection_reason": "task terms gate-v1.0.0, campaign; project and version matched; applies_when text overlaps; Pi must verify applicability",
+              "scope": "project",
+              "scope_id": "fictional-gate",
+              "source_id": "xw:run:issue_runs:replay-1",
+              "source_path": "pi_memory_items/9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+              "source_type": "pi.memory_reflection",
+              "token_estimate": 669,
+              "truncated": false,
+              "updated_at": "2026-09-28T23:30:35Z",
+              "revision": 1,
+              "content_fingerprint": "daabdfda8cf693c12f93d0bfa22455044d97fb1c8976e25af4a688108f868ffb",
+              "version": "gate-v1.0.0",
+              "selection_stage": "text_candidate"
+            }
+          ]
+        },
+        "elapsed_ms": 34.40649999999732
+      },
+      {
+        "name": "memory_remember",
+        "input": {
+          "kind": "resolution",
+          "memory_key": "gate.threshold-boundary.campaign-spec",
+          "confidence": "high",
+          "content": {
+            "applies_when": "gate-v1.0.0 中已阅读当前业务规格、且为 campaign B 实现或修改整数数值阈值 gate 时。",
+            "symptom": "campaign B 的 Node 阈值测试在恰好等于 200 的输入失败或错误放行。",
+            "root_cause": "将 campaign A 的包含边界规则 >=100 复用于 campaign B；campaign B 的当前业务规格要求严格 >200。",
+            "resolution": "先阅读当前业务规格，按目标 campaign 确定比较运算符和阈值；对 campaign B 增加低于、等于和高于边界的 Node 测试（199/200/201），并验证结果分别为 false、false、true。",
+            "failed_attempts": [],
+            "version": "gate-v1.0.0",
+            "verification": {
+              "method": "Node 测试验证 campaign B 的 199=false、200=false、201=true。",
+              "evidence_indices": [
+                0
+              ]
+            }
+          },
+          "correction": {
+            "disposition": "narrow",
+            "reason": "新验证证据将适用范围限定为已读取当前规格的 campaign B 整数阈值；其规则为严格 >200，不能泛化为 campaign A 的 >=100。"
+          }
+        },
+        "output": {
+          "id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+          "scope": "project",
+          "scope_id": "fictional-gate",
+          "kind": "resolution",
+          "content": "{\"applies_when\":\"gate-v1.0.0 中已阅读当前业务规格、且为 campaign B 实现或修改整数数值阈值 gate 时。\",\"symptom\":\"campaign B 的 Node 阈值测试在恰好等于 200 的输入失败或错误放行。\",\"root_cause\":\"将 campaign A 的包含边界规则 >=100 复用于 campaign B；campaign B 的当前业务规格要求严格 >200。\",\"resolution\":\"先阅读当前业务规格，按目标 campaign 确定比较运算符和阈值；对 campaign B 增加低于、等于和高于边界的 Node 测试（199/200/201），并验证结果分别为 false、false、true。\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"Node 测试验证 campaign B 的 199=false、200=false、201=true。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-2\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:2\",\"run_id\":\"xw:run:issue_runs:replay-2\",\"refs\":[\"work:xw:work:issues:2\",\"run:xw:run:issue_runs:replay-2\"]}}",
+          "source_type": "pi.memory_reflection",
+          "source_id": "xw:run:issue_runs:replay-2",
+          "confidence": "high",
+          "pinned": 0,
+          "disabled": 0,
+          "memory_type": "project",
+          "layer": "long_term",
+          "citation_type": "evidence",
+          "citation_id": "xw:evidence:issue_events:replay-2",
+          "citation_label": "authoritative reusable-experience evidence",
+          "citation_url": "",
+          "authority": "evidence_backed",
+          "authorized_by": "evidence:xw:evidence:issue_events:replay-2",
+          "authorized_at": "2026-09-28T23:31:37.002Z",
+          "memory_key": "gate.threshold-boundary.campaign-spec",
+          "occurrence_count": 2,
+          "last_seen_at": "2026-09-28T23:31:37Z",
+          "revision": 2,
+          "created_at": "2026-09-28T23:30:35Z",
+          "updated_at": "2026-09-28T23:31:37Z"
+        },
+        "elapsed_ms": 17.219250000009197
+      }
+    ]
+  },
+  "commands": [
+    {
+      "command": [
+        "node",
+        "--test",
+        "gate.test.mjs"
+      ],
+      "exit_code": 1,
+      "stdout": "✔ boundary 99 (0.817833ms)\n✖ boundary 100 (1.039209ms)\n✔ boundary 101 (0.351417ms)\nℹ tests 3\nℹ suites 0\nℹ pass 2\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 140.954917\n\n✖ failing tests:\n\ntest at gate.test.mjs:2:60\n✖ boundary 100 (1.039209ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  false !== true\n  \n      at TestContext.<anonymous> (file:///private/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-QoDBSj/fictional-project/gate.test.mjs:2:90)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1106:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)\n      at Test.postRun (node:internal/test_runner/test:1235:19)\n      at Test.run (node:internal/test_runner/test:1163:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: false,\n    expected: true,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "stderr": "",
+      "elapsed_ms": 273.25470799999994
+    },
+    {
+      "command": [
+        "node",
+        "--test",
+        "gate.test.mjs"
+      ],
+      "exit_code": 0,
+      "stdout": "✔ boundary 99 (4.910083ms)\n✔ boundary 100 (0.564792ms)\n✔ boundary 101 (0.174125ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 132.900417\n",
+      "stderr": "",
+      "elapsed_ms": 254.6243340000001
+    },
+    {
+      "command": [
+        "node",
+        "--test",
+        "gate.test.mjs"
+      ],
+      "exit_code": 0,
+      "stdout": "✔ boundary 199 (0.928208ms)\n✔ boundary 200 (0.165208ms)\n✔ boundary 201 (0.099167ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 146.648708\n",
+      "stderr": "",
+      "elapsed_ms": 331.19612499999494
+    }
+  ],
+  "audit": [
+    {
+      "action_type": "memory.remember",
+      "status": "completed"
+    },
+    {
+      "action_type": "memory.remember",
+      "status": "completed"
+    },
+    {
+      "action_type": "memory.search",
+      "status": "completed"
+    },
+    {
+      "action_type": "memory.search",
+      "status": "completed"
+    },
+    {
+      "action_type": "memory.search",
+      "status": "completed"
+    },
+    {
+      "action_type": "memory.search",
+      "status": "completed"
+    },
+    {
+      "action_type": "memory.search",
+      "status": "completed"
+    },
+    {
+      "action_type": "memory.search",
+      "status": "completed"
+    },
+    {
+      "action_type": "repo.read_excerpt",
+      "status": "completed"
+    },
+    {
+      "action_type": "repo.read_excerpt",
+      "status": "completed"
+    },
+    {
+      "action_type": "repo.read_excerpt",
+      "status": "completed"
+    },
+    {
+      "action_type": "repo.read_excerpt",
+      "status": "completed"
+    },
+    {
+      "action_type": "repo.read_excerpt",
+      "status": "completed"
+    },
+    {
+      "action_type": "repo.read_excerpt",
+      "status": "completed"
+    },
+    {
+      "action_type": "memory.remember",
+      "status": "denied"
+    }
+  ],
+  "usage_totals": {
+    "input": 29212,
+    "output": 2719,
+    "cacheRead": 12800,
+    "cacheWrite": 0,
+    "reasoning": 558,
+    "totalTokens": 44731,
+    "estimated_cost_usd": 0.093612
+  },
+  "budget_case_review": {
+    "original_score": "passed",
+    "original_evidence_accepted": false,
+    "reason": "Original fault injection omitted context, causing a TypeError before the call budget. Do not count that error as budget rejection.",
+    "supplemental": {
+      "status": "passed",
+      "evidence_mode": "fault_injection",
+      "real_provider_calls": 0,
+      "root": "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-budget-972-tY4YoK",
+      "fake_dispatches_per_attempt": [
+        4,
+        4
+      ],
+      "worker_results": [
+        true,
+        true,
+        false
+      ],
+      "reflections": [
+        {
+          "status": "failed",
+          "attempts": 2,
+          "reason": "reflection model call budget exceeded"
+        }
+      ],
+      "work_status": "done",
+      "global_guard": {
+        "accepted": 20,
+        "rejected_call": 21
+      },
+      "deadline_guard": {
+        "max_duration_ms": 1800000,
+        "accepted": 0
+      },
+      "caveat": "Original live harness passed this case on an undefined-context TypeError. This supplemental run supplies valid context and verifies the exact budget rejection without real Provider calls."
+    }
+  },
+  "artifact_verification": {
+    "status": "passed",
+    "assertions": [
+      "18 bounded dispatches and matching receipts",
+      "5 independent SDK sessions",
+      "canonical IDs and typed refs in both persisted revisions",
+      "exact live Pi selection identities",
+      "business B boundary 199/200/201",
+      "same memory key and id corrected from revision 1 to 2",
+      "restart preserves revision and occurrence",
+      "forget leaves zero memory and tombstone",
+      "source snapshot matches all live provenance hashes",
+      "synthetic Git has no remote",
+      "DB integrity ok",
+      "budget supplemented with exact budget error"
+    ],
+    "readback": {
+      "memory_count": 0,
+      "history": [
+        {
+          "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+          "revision": 1,
+          "operation": "create"
+        },
+        {
+          "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+          "revision": 2,
+          "operation": "correct"
+        },
+        {
+          "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+          "revision": 3,
+          "operation": "forget"
+        }
+      ],
+      "suppressions": [
+        {
+          "scope": "project",
+          "scope_id": "fictional-gate",
+          "memory_key": "gate.threshold-boundary.campaign-spec",
+          "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3",
+          "state": "forgotten"
+        }
+      ],
+      "reflections": [
+        {
+          "status": "completed",
+          "attempts": 1,
+          "reason": "experience_saved",
+          "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3"
+        },
+        {
+          "status": "completed",
+          "attempts": 1,
+          "reason": "experience_saved",
+          "memory_id": "9db5fdf7-1413-4d2c-9f42-9a58c9ff95c3"
+        },
+        {
+          "status": "skipped",
+          "attempts": 0,
+          "reason": "source_memory_suppressed",
+          "memory_id": ""
+        },
+        {
+          "status": "failed",
+          "attempts": 2,
+          "reason": "The \"string\" argument must be of type string or an instance of Buffer or ArrayBuffer. Received undefined",
+          "memory_id": ""
+        }
+      ],
+      "quick_check": "ok"
+    }
+  },
+  "fixture_report": {
+    "root": "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-1Gbpww",
+    "provenance": {
+      "head": "d3aa54dee64900e54c62e11f9e63ae08e7d4e356",
+      "branch": "codex/pi-memory-phase1",
+      "dirty": " M backend-ts/src/agentic/memoryReflectionWorker.test.ts\n M backend-ts/src/domain/review/humanReview.ts\n M backend-ts/src/http/piActionDispatch.ts\n M backend-ts/src/http/piConversationMessagesApi.test.ts\n M backend-ts/src/http/piRuntime.ts\n M backend-ts/src/pi/actionContracts.ts\n M backend-ts/src/pi/agentOrchestrationActions.ts\n M backend-ts/src/pi/authorizationScope.test.ts\n M backend-ts/src/pi/authorizationScope.ts\n M backend-ts/src/pi/issueToolViews.ts\n M backend-ts/src/pi/memoryContext.test.ts\n M backend-ts/src/pi/memoryPolicy.ts\n M backend-ts/src/pi/memoryReflectionRuntime.ts\n M backend-ts/src/pi/memoryReflectionTools.ts\n M backend-ts/src/pi/memoryRetrieval.ts\n M backend-ts/src/pi/runnerActionGate.test.ts\n M backend-ts/src/pi/runnerActionTools.ts\n M backend-ts/src/pi/runnerActions.ts\n M backend-ts/src/runner/piAcceptanceCoordinator.ts\n M backend-ts/src/runner/piAcceptanceRequest.ts\n M backend-ts/src/xuanwu/memoryReplay.test.ts\n M backend-ts/src/xuanwu/memoryReplay.ts\n M backend-ts/src/xuanwu/memoryReplayRuntime.ts\n M docs/architecture/xuanwu/0063-approval-action-gate.md\n M docs/reports/pi-memory-replay-972.json\n M docs/reports/pi-memory-replay-972.md\n M docs/runbooks/pi-memory-replay.md\n M scripts/replay-pi-memory.ts\n?? backend-ts/src/pi/memoryPolicy.test.ts\n?? backend-ts/src/pi/runnerChatMainFlow.test.ts\n",
+      "tracked_diff_sha256": "78218ff2ab3918a74a8e3c2014f55ca20baddb653518a2ca592005ccc0f5f834",
+      "replay_source_sha256": {
+        "scripts/replay-pi-memory.ts": "94e58ac8dfe6a2543d55ebc42cc571cec578b208347910c9842638119ef741a8",
+        "backend-ts/src/xuanwu/memoryReplay.ts": "2f2d427fd2696546cb11114dea2e62de8118b9e9155764bf31148490724b9dc7",
+        "backend-ts/src/xuanwu/memoryReplayRuntime.ts": "b15e1f47d70bff3f8009b256f89d53d372fff6ad50b051bff3440aaf687e80b8",
+        "backend-ts/src/pi/memoryExperience.ts": "5da880f117c5301de52e29af5c26e61d77553822033a091086ead355dab3d030",
+        "backend-ts/src/pi/memoryTools.ts": "973c4baf66fa0d753d64b108e742d276f79e266fd757330651488612053b4d14",
+        "backend-ts/src/pi/memoryReflectionRuntime.ts": "b02509f26c2e9dc134cfe77626736249a2e486e61129f83233bfcc9563fdb4d1",
+        "backend-ts/src/pi/memoryReflectionTools.ts": "b7fa34172efc51d298a3cfe48242102a608bd67b535f0c5b5a0050e42c43b318",
+        "backend-ts/src/pi/memoryPolicy.ts": "5c97335ea8ff1c1e524a8d0e08c6a6ef09410cbacf8d47be5bb8581d42dac3a5",
+        "backend-ts/src/pi/memoryRetrieval.ts": "f5e21acfd6e2b07ce8482fe6a102cf94a8e09db09852c9eaa9890b95cfd5e1fb"
+      },
+      "command": [
+        "bun",
+        "scripts/replay-pi-memory.ts"
+      ],
+      "source_execution": "Bun imports current source; no HTTP requests to a deployed Xuanwu process"
+    },
+    "kind": "fixture",
+    "status": "passed",
+    "cases": [
+      {
+        "id": "first_learning",
+        "evidence_mode": "fixture",
+        "status": "passed",
+        "elapsed_ms": 106.33237499999996,
+        "facts": {
+          "reflections": [
+            {
+              "id": "2e714e6a-952b-47e8-a197-ef588ea21c2b",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b"
+            }
+          ],
+          "memory": [
+            {
+              "id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+              "scope": "project",
+              "scope_id": "fictional-gate",
+              "kind": "debugging_pattern",
+              "content": "{\"applies_when\":\"gate threshold boundary regression\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read SPEC and test T-1,T,T+1; use the campaign operator, not remembered business values\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]}}",
+              "source_type": "pi.memory_reflection",
+              "source_id": "xw:run:issue_runs:replay-1",
+              "confidence": "high",
+              "pinned": 0,
+              "disabled": 0,
+              "memory_type": "project",
+              "layer": "long_term",
+              "citation_type": "evidence",
+              "citation_id": "xw:evidence:issue_events:replay-1",
+              "citation_label": "authoritative reusable-experience evidence",
+              "citation_url": "",
+              "authority": "evidence_backed",
+              "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+              "authorized_at": "2026-09-28T23:29:30.369Z",
+              "memory_key": "gate.threshold.boundary",
+              "occurrence_count": 1,
+              "last_seen_at": "2026-09-28T23:29:30Z",
+              "revision": 1,
+              "created_at": "2026-09-28T23:29:30Z",
+              "updated_at": "2026-09-28T23:29:30Z"
+            }
+          ],
+          "provider_calls": {
+            "before": 0,
+            "after": 0,
+            "delta": 0
+          }
+        }
+      },
+      {
+        "id": "without_memory",
+        "evidence_mode": "fixture",
+        "status": "passed",
+        "elapsed_ms": 31.865084000000024,
+        "facts": {
+          "raw": "{\"tests\":[{\"amount\":99,\"eligible\":false},{\"amount\":100,\"eligible\":true},{\"amount\":101,\"eligible\":true}],\"memory_refs\":[],\"explanation\":\"Fixture policy uses the current specification\"}",
+          "observed": [
+            {
+              "amount": 99,
+              "eligible": false,
+              "actual": false,
+              "passed": true
+            },
+            {
+              "amount": 100,
+              "eligible": true,
+              "actual": true,
+              "passed": true
+            },
+            {
+              "amount": 101,
+              "eligible": true,
+              "actual": true,
+              "passed": true
+            }
+          ],
+          "memory_refs": [],
+          "correct_recall": null,
+          "misuse": false,
+          "explanation": "Fixture policy uses the current specification",
+          "provider_calls": {
+            "before": 0,
+            "after": 0,
+            "delta": 0
+          }
+        }
+      },
+      {
+        "id": "similar_expression",
+        "evidence_mode": "fixture",
+        "status": "passed",
+        "elapsed_ms": 74.983792,
+        "facts": {
+          "raw": "{\"tests\":[{\"amount\":99,\"eligible\":false},{\"amount\":100,\"eligible\":true},{\"amount\":101,\"eligible\":true}],\"memory_refs\":[{\"id\":\"01ab31d2-54eb-48d4-9cab-be57215ebd8b\",\"revision\":1,\"content_fingerprint\":\"c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8\"}],\"explanation\":\"Fixture policy uses the current specification\"}",
+          "observed": [
+            {
+              "amount": 99,
+              "eligible": false,
+              "actual": false,
+              "passed": true
+            },
+            {
+              "amount": 100,
+              "eligible": true,
+              "actual": true,
+              "passed": true
+            },
+            {
+              "amount": 101,
+              "eligible": true,
+              "actual": true,
+              "passed": true
+            }
+          ],
+          "memory_refs": [
+            {
+              "id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+              "revision": 1,
+              "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8"
+            }
+          ],
+          "correct_recall": true,
+          "misuse": false,
+          "explanation": "Fixture policy uses the current specification",
+          "provider_calls": {
+            "before": 0,
+            "after": 0,
+            "delta": 0
+          }
+        }
+      },
+      {
+        "id": "changed_business_rule",
+        "evidence_mode": "fixture",
+        "status": "passed",
+        "elapsed_ms": 84.26587500000005,
+        "facts": {
+          "raw": "{\"tests\":[{\"amount\":199,\"eligible\":false},{\"amount\":200,\"eligible\":false},{\"amount\":201,\"eligible\":true}],\"memory_refs\":[{\"id\":\"01ab31d2-54eb-48d4-9cab-be57215ebd8b\",\"revision\":1,\"content_fingerprint\":\"c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8\"}],\"explanation\":\"Fixture policy uses the current specification\"}",
+          "observed": [
+            {
+              "amount": 199,
+              "eligible": false,
+              "actual": false,
+              "passed": true
+            },
+            {
+              "amount": 200,
+              "eligible": false,
+              "actual": false,
+              "passed": true
+            },
+            {
+              "amount": 201,
+              "eligible": true,
+              "actual": true,
+              "passed": true
+            }
+          ],
+          "memory_refs": [
+            {
+              "id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+              "revision": 1,
+              "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8"
+            }
+          ],
+          "correct_recall": null,
+          "misuse": false,
+          "explanation": "Fixture policy uses the current specification",
+          "provider_calls": {
+            "before": 0,
+            "after": 0,
+            "delta": 0
+          }
+        }
+      },
+      {
+        "id": "correction",
+        "evidence_mode": "fixture",
+        "status": "passed",
+        "elapsed_ms": 87.29983300000004,
+        "facts": {
+          "reflections": [
+            {
+              "id": "2e714e6a-952b-47e8-a197-ef588ea21c2b",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b"
+            },
+            {
+              "id": "f1827a58-22fd-46d8-8552-703815a3c96c",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b"
+            }
+          ],
+          "history": [
+            {
+              "memory_id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+              "revision": 1,
+              "operation": "create",
+              "snapshot": {
+                "id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+                "scope": "project",
+                "scope_id": "fictional-gate",
+                "kind": "debugging_pattern",
+                "content": "{\"applies_when\":\"gate threshold boundary regression\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read SPEC and test T-1,T,T+1; use the campaign operator, not remembered business values\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:1\",\"run_id\":\"xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]}}",
+                "source_type": "pi.memory_reflection",
+                "source_id": "xw:run:issue_runs:replay-1",
+                "confidence": "high",
+                "pinned": 0,
+                "disabled": 0,
+                "memory_type": "project",
+                "layer": "long_term",
+                "citation_type": "evidence",
+                "citation_id": "xw:evidence:issue_events:replay-1",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_url": "",
+                "authority": "evidence_backed",
+                "authorized_by": "evidence:xw:evidence:issue_events:replay-1",
+                "authorized_at": "2026-09-28T23:29:30.369Z",
+                "memory_key": "gate.threshold.boundary",
+                "occurrence_count": 1,
+                "last_seen_at": "2026-09-28T23:29:30Z",
+                "revision": 1,
+                "created_at": "2026-09-28T23:29:30Z",
+                "updated_at": "2026-09-28T23:29:30Z"
+              },
+              "correction": {},
+              "recorded_at": "2026-09-28T23:29:30Z"
+            },
+            {
+              "memory_id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+              "revision": 2,
+              "operation": "correct",
+              "snapshot": {
+                "id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+                "scope": "project",
+                "scope_id": "fictional-gate",
+                "kind": "debugging_pattern",
+                "content": "{\"applies_when\":\"gate threshold boundary regression integer\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read the current campaign SPEC; test T-1, T, T+1 using the specified operator. B is >200, A is >=100.\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-2\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:2\",\"run_id\":\"xw:run:issue_runs:replay-2\",\"refs\":[\"work:xw:work:issues:2\",\"run:xw:run:issue_runs:replay-2\"]}}",
+                "source_type": "pi.memory_reflection",
+                "source_id": "xw:run:issue_runs:replay-2",
+                "confidence": "high",
+                "pinned": 0,
+                "disabled": 0,
+                "memory_type": "project",
+                "layer": "long_term",
+                "citation_type": "evidence",
+                "citation_id": "xw:evidence:issue_events:replay-2",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_url": "",
+                "authority": "evidence_backed",
+                "authorized_by": "evidence:xw:evidence:issue_events:replay-2",
+                "authorized_at": "2026-09-28T23:29:30.932Z",
+                "memory_key": "gate.threshold.boundary",
+                "occurrence_count": 2,
+                "last_seen_at": "2026-09-28T23:29:30Z",
+                "revision": 2,
+                "created_at": "2026-09-28T23:29:30Z",
+                "updated_at": "2026-09-28T23:29:30Z"
+              },
+              "correction": {
+                "disposition": "narrow",
+                "reason": "Verified new campaign evidence limits reuse to the testing method; business operators must be read again",
+                "expected_revision": 1
+              },
+              "recorded_at": "2026-09-28T23:29:30Z"
+            }
+          ],
+          "current": {
+            "id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+            "scope": "project",
+            "scope_id": "fictional-gate",
+            "kind": "debugging_pattern",
+            "content": "{\"applies_when\":\"gate threshold boundary regression integer\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read the current campaign SPEC; test T-1, T, T+1 using the specified operator. B is >200, A is >=100.\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-2\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:2\",\"run_id\":\"xw:run:issue_runs:replay-2\",\"refs\":[\"work:xw:work:issues:2\",\"run:xw:run:issue_runs:replay-2\"]}}",
+            "source_type": "pi.memory_reflection",
+            "source_id": "xw:run:issue_runs:replay-2",
+            "confidence": "high",
+            "pinned": 0,
+            "disabled": 0,
+            "memory_type": "project",
+            "layer": "long_term",
+            "citation_type": "evidence",
+            "citation_id": "xw:evidence:issue_events:replay-2",
+            "citation_label": "authoritative reusable-experience evidence",
+            "citation_url": "",
+            "authority": "evidence_backed",
+            "authorized_by": "evidence:xw:evidence:issue_events:replay-2",
+            "authorized_at": "2026-09-28T23:29:30.932Z",
+            "memory_key": "gate.threshold.boundary",
+            "occurrence_count": 2,
+            "last_seen_at": "2026-09-28T23:29:30Z",
+            "revision": 2,
+            "created_at": "2026-09-28T23:29:30Z",
+            "updated_at": "2026-09-28T23:29:30Z"
+          },
+          "provider_calls": {
+            "before": 0,
+            "after": 0,
+            "delta": 0
+          }
+        }
+      },
+      {
+        "id": "restart_deduplication",
+        "evidence_mode": "host_assertion",
+        "status": "passed",
+        "elapsed_ms": 68.82874999999967,
+        "facts": {
+          "provider_calls_delta": 0,
+          "reflections": [
+            {
+              "id": "2e714e6a-952b-47e8-a197-ef588ea21c2b",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b"
+            },
+            {
+              "id": "f1827a58-22fd-46d8-8552-703815a3c96c",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b"
+            }
+          ],
+          "memory_identities": [
+            [
+              "01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+              2,
+              2
+            ]
+          ],
+          "retrieval": {
+            "limits": {
+              "item_limit": 10,
+              "token_budget": 4000,
+              "token_estimate": 572,
+              "truncated": false
+            },
+            "memory_items": [
+              {
+                "authority": "evidence_backed",
+                "authorized_at": "2026-09-28T23:29:30.932Z",
+                "authorized_by": "evidence:xw:evidence:issue_events:replay-2",
+                "confidence": "high",
+                "content": "{\"applies_when\":\"gate threshold boundary regression integer\",\"symptom\":\"Threshold equality rejected\",\"root_cause\":\"Strict comparison used for inclusive campaign A\",\"resolution\":\"Read the current campaign SPEC; test T-1, T, T+1 using the specified operator. B is >200, A is >=100.\",\"failed_attempts\":[],\"version\":\"gate-v1.0.0\",\"verification\":{\"method\":\"node --test gate.test.mjs\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-2\"]},\"schema_version\":1,\"source\":{\"work_id\":\"xw:work:issues:2\",\"run_id\":\"xw:run:issue_runs:replay-2\",\"refs\":[\"work:xw:work:issues:2\",\"run:xw:run:issue_runs:replay-2\"]}}",
+                "citation_id": "xw:evidence:issue_events:replay-2",
+                "citation_label": "authoritative reusable-experience evidence",
+                "citation_type": "evidence",
+                "citation_url": "",
+                "id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+                "kind": "debugging_pattern",
+                "layer": "long_term",
+                "last_seen_at": "2026-09-28T23:29:30Z",
+                "memory_key": "gate.threshold.boundary",
+                "memory_type": "project",
+                "occurrence_count": 2,
+                "pinned": 0,
+                "provenance": {
+                  "citation_id": "xw:evidence:issue_events:replay-2",
+                  "citation_label": "authoritative reusable-experience evidence",
+                  "citation_type": "evidence",
+                  "citation_url": "",
+                  "reference": "pi_memory_items/01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+                  "source_id": "xw:run:issue_runs:replay-2",
+                  "source_path": "pi_memory_items/01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+                  "source_type": "pi.memory_reflection"
+                },
+                "reference": "pi_memory_items/01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+                "retrieval_scope": "project:fictional-gate",
+                "selection_reason": "task terms gate, threshold, boundary, regression; project and version matched; applies_when text overlaps; Pi must verify applicability",
+                "scope": "project",
+                "scope_id": "fictional-gate",
+                "source_id": "xw:run:issue_runs:replay-2",
+                "source_path": "pi_memory_items/01ab31d2-54eb-48d4-9cab-be57215ebd8b",
+                "source_type": "pi.memory_reflection",
+                "token_estimate": 572,
+                "truncated": false,
+                "updated_at": "2026-09-28T23:29:30Z",
+                "revision": 2,
+                "content_fingerprint": "2463d79ec4635e5154892cfc84cfd9ba53bcece6995f4dcd9f9944557da113a5",
+                "version": "gate-v1.0.0",
+                "selection_stage": "text_candidate"
+              }
+            ],
+            "retrieval": {
+              "scanned": 1,
+              "scan_limited": false,
+              "technical_limit": 3,
+              "elapsed_ms": 3.775416000000405,
+              "excluded": {
+                "ineligible": 0,
+                "version_mismatch": 0,
+                "applicability_mismatch": 0,
+                "unrelated": 0
+              },
+              "omitted_by_candidate_limit": 0,
+              "omitted_by_selection_or_technical_limit": 0,
+              "reason_code": "selected"
+            },
+            "retrieval_scopes": [
+              "project:fictional-gate",
+              "global:runner"
+            ],
+            "truncation_summary": {
+              "omitted_by_item_limit": 0,
+              "omitted_by_token_budget": 0,
+              "omitted_count": 0,
+              "selected_count": 1,
+              "summary": "No truncation; token budget 4000 was sufficient.",
+              "token_budget": 4000,
+              "total_candidates": 1,
+              "truncated_item_ids": []
+            }
+          },
+          "provider_calls": {
+            "before": 0,
+            "after": 0,
+            "delta": 0
+          }
+        }
+      },
+      {
+        "id": "forget_no_resurrection",
+        "evidence_mode": "host_assertion",
+        "status": "passed",
+        "elapsed_ms": 61.52583299999969,
+        "facts": {
+          "reflections": [
+            {
+              "id": "2e714e6a-952b-47e8-a197-ef588ea21c2b",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b"
+            },
+            {
+              "id": "f1827a58-22fd-46d8-8552-703815a3c96c",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b"
+            },
+            {
+              "id": "e5d55dfa-bcdd-4595-aa53-e28d60453f3b",
+              "status": "skipped",
+              "attempts": 0,
+              "reason": "source_memory_suppressed",
+              "memory_id": ""
+            }
+          ],
+          "provider_calls_delta": 0,
+          "provider_calls": {
+            "before": 0,
+            "after": 0,
+            "delta": 0
+          }
+        }
+      },
+      {
+        "id": "budget_nonblocking",
+        "evidence_mode": "fault_injection",
+        "status": "passed",
+        "elapsed_ms": 48.40045900000041,
+        "facts": {
+          "work_status": "done",
+          "attempts": 2,
+          "fault_injection": true,
+          "reflections": [
+            {
+              "id": "2e714e6a-952b-47e8-a197-ef588ea21c2b",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b"
+            },
+            {
+              "id": "f1827a58-22fd-46d8-8552-703815a3c96c",
+              "status": "completed",
+              "attempts": 1,
+              "reason": "experience_saved",
+              "memory_id": "01ab31d2-54eb-48d4-9cab-be57215ebd8b"
+            },
+            {
+              "id": "e5d55dfa-bcdd-4595-aa53-e28d60453f3b",
+              "status": "skipped",
+              "attempts": 0,
+              "reason": "source_memory_suppressed",
+              "memory_id": ""
+            },
+            {
+              "id": "dfa98801-64fd-47cc-b892-604b05a1ffb6",
+              "status": "failed",
+              "attempts": 2,
+              "reason": "The \"string\" argument must be of type string or an instance of Buffer or ArrayBuffer. Received undefined",
+              "memory_id": ""
+            }
+          ],
+          "provider_calls": {
+            "before": 0,
+            "after": 0,
+            "delta": 0
+          }
+        }
+      },
+      {
+        "id": "permission_boundary",
+        "evidence_mode": "host_assertion",
+        "status": "passed",
+        "elapsed_ms": 15.414207999999235,
+        "facts": {
+          "result": {
+            "action_id": "263505fb-dcee-4a0e-98a5-6a2a73ce6812",
+            "action_type": "memory.remember",
+            "issue_id": 0,
+            "requires_confirmation": false,
+            "risk_level": "low",
+            "status": "denied",
+            "decision": "deny",
+            "gate_reason": "action is not covered by allowed_actions",
+            "guardian_decision_id": "",
+            "idempotency_key": ""
+          },
+          "provider_calls": {
+            "before": 0,
+            "after": 0,
+            "delta": 0
+          }
+        }
+      }
+    ],
+    "started_at": "2026-09-28T23:29:28.270Z",
+    "retry_from": null,
+    "identity": null,
+    "finished_at": "2026-09-28T23:29:31.150Z",
+    "budget": {
+      "max_calls": 20,
+      "max_duration_ms": 1800000,
+      "model_calls": 0,
+      "retries": 0,
+      "elapsed_ms": 2880,
+      "dispatches": [],
+      "receipts": [],
+      "accounting": "Each dispatched SDK agent.streamFunction invocation counts, including tool-loop continuations and failures. SDK/provider retries and compaction disabled. Missing receipts remain unknown; SDK cost is an estimate, not a bill."
+    }
+  },
+  "related_validation": {
+    "command": "bun test backend-ts/src/xuanwu/memoryReplay.test.ts backend-ts/src/agentic/memoryReflectionWorker.test.ts backend-ts/src/pi/memoryReflectionRuntime.test.ts backend-ts/src/pi/memoryTools.test.ts --timeout 60000",
+    "exit_code": 0,
+    "passed": 43,
+    "failed": 0,
+    "elapsed_ms": 38030,
+    "log": "verified-related-tests.log",
+    "includes": "fixture 9-case replay including corrected budget assertions, canonical binding, evidence rejection, CAS and memory gates",
+    "note": "Final current-source offline checks; concurrent post-live changes are not represented as additional live validation."
+  },
+  "source_changes_after_live_start": {
+    "scripts/replay-pi-memory.ts": {
+      "live_sha256": "94e58ac8dfe6a2543d55ebc42cc571cec578b208347910c9842638119ef741a8",
+      "current_sha256": "0ea757ae8fc9bfefac68cc5d0ef63b9d3b67553e7a2342487b629850cd26fc98"
+    },
+    "backend-ts/src/xuanwu/memoryReplay.ts": {
+      "live_sha256": "2f2d427fd2696546cb11114dea2e62de8118b9e9155764bf31148490724b9dc7",
+      "current_sha256": "7d860a68a902624db06ff6ae90db45300855422a9b21f7f3f5ac3f135a04444a"
+    },
+    "backend-ts/src/xuanwu/memoryReplayRuntime.ts": {
+      "live_sha256": "b15e1f47d70bff3f8009b256f89d53d372fff6ad50b051bff3440aaf687e80b8",
+      "current_sha256": "136cd18618ceb7ec081bd65468bd6820c5369f4fdd499567177b7f2e9eff6599"
+    },
+    "backend-ts/src/pi/memoryReflectionTools.ts": {
+      "live_sha256": "b7fa34172efc51d298a3cfe48242102a608bd67b535f0c5b5a0050e42c43b318",
+      "current_sha256": "670e0f5cab1ff29261f0158645304b1c7889a8609fed2441f95523dd815fd5ea"
+    }
+  },
+  "limitations": [
+    "Single synthetic project and one live run; no production rollout or general quality/latency claim.",
+    "Correction persisted a narrower campaign B scope but described a failed 200 test and reused-A root cause that the new evidence did not actually observe; treat that narrative as a quality risk, not a verified B incident.",
+    "Restart, forgetting and permissions are Host assertions; budget is fault injection, not paid Provider traffic.",
+    "Latest workspace source differs from live-start snapshot; later concurrent source edits were not live-rerun."
+  ],
+  "artifact_root": ".runner/artifacts/issue-972/session-4-20260929T072554",
+  "artifact_manifest": ".runner/artifacts/issue-972/session-4-20260929T072554/artifact-sha256.json",
+  "source_archive_sha256": "5ec05186c743cc09b733e2f3f3c48ebf18389a11ac00e0ceb1273c04cb700ab7"
+}

@@ -150,10 +150,11 @@ describe("Bun PI reusable memory API", () => {
           if (mode === "budget") throw new Error("reflection model input budget exceeded");
           if (mode === "saved") {
             const tools = createMemoryReflectionTools(db, lease);
+            const { schema_version, source, outcome, verification, ...content } = seed.experience;
             await tools[0]!.execute("read", {}, undefined, undefined, {} as never);
             await tools.find(t => t.name === "memory_remember")!.execute("save", {
-              kind: "debugging_pattern", memory_key: "callback.timeout", confidence: "high", content: JSON.stringify({ ...seed.experience,
-                source: { ...seed.experience.source, refs: [`work:${seed.workID}`, `run:${seed.runID}`] } })
+              kind: "debugging_pattern", memory_key: "callback.timeout", confidence: "high",
+              content: { ...content, verification: { method: verification.method, evidence_indices: [0] } }
             }, undefined, undefined, {} as never);
             return '{"status":"saved"}';
           }

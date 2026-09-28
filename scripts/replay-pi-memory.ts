@@ -44,7 +44,8 @@ const provenance = { head: (await command(sourceRoot, ["git", "rev-parse", "HEAD
   dirty: (await command(sourceRoot, ["git", "status", "--short"])).stdout,
   tracked_diff_sha256: hash((await command(sourceRoot, ["git", "diff", "--binary", "HEAD"])).stdout),
   replay_source_sha256: Object.fromEntries(await Promise.all(["scripts/replay-pi-memory.ts", "backend-ts/src/xuanwu/memoryReplay.ts", "backend-ts/src/xuanwu/memoryReplayRuntime.ts",
-    "backend-ts/src/pi/memoryExperience.ts", "backend-ts/src/pi/memoryTools.ts", "backend-ts/src/pi/memoryReflectionRuntime.ts", "backend-ts/src/pi/memoryReflectionTools.ts"
+    "backend-ts/src/pi/memoryExperience.ts", "backend-ts/src/pi/memoryTools.ts", "backend-ts/src/pi/memoryReflectionRuntime.ts", "backend-ts/src/pi/memoryReflectionTools.ts",
+    "backend-ts/src/pi/memoryPolicy.ts", "backend-ts/src/pi/memoryRetrieval.ts"
   ].map(async path => [path, hash(await readFile(join(sourceRoot, path), "utf8"))]))),
   command: ["bun", "scripts/replay-pi-memory.ts", ...args], source_execution: "Bun imports current source; no HTTP requests to a deployed Xuanwu process" };
 let report: Record<string, unknown> = { root, provenance, kind: live ? "live" : "fixture", status: "running", cases: REPLAY_CASES.map(id => ({ id, status: "not_run", facts: {} })), started_at: new Date(budget.started).toISOString(), retry_from: retryFrom ?? null };

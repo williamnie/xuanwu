@@ -83,7 +83,8 @@ function versionMatches(recorded: string, input: MemoryTaskContext): boolean {
 function applicabilityMatches(appliesWhen: string, task: string): boolean {
   const [positive, ...negative] = appliesWhen.split(/(?:不适用(?:于)?|除外|excluding|except|not applicable(?: to)?)/i);
   if (negative.some((clause) => matches(task, terms(clause)).length > 0)) return false;
-  const anchors = terms(positive);
+  // 版本已单独校验，不能只因版本字面量相同而召回无关经验。
+  const anchors = terms(positive).filter((word) => !/\d+\.\d+/.test(word));
   if (anchors.length === 0 || matches(task, anchors).length === 0) return false;
   // 显式否定、反向条件不能仅因词相同而命中。
   let remaining = positive.toLowerCase();
@@ -95,8 +96,17 @@ function applicabilityMatches(appliesWhen: string, task: string): boolean {
   }
   const conditions = [...segmenter.segment(remaining)].filter((word) => word.isWordLike)
     .map((word) => word.segment).filter((word) => word.length > 1 && !STOP_WORDS.has(word));
-  return conditions.every((word) => containsTerm(task.toLowerCase(), word) &&
-    !new RegExp(`(?:no |not |without |非|无|没有|不)[^,;。；\\n]{0,8}${word}`, "i").test(task));
+  if (conditions.some((word) => negatedTerm(task, word))) return false;
+  // 显式限定仍需满足；普通自然语言只负责召回候选，不要求中英文逐词相等。
+  const restrictions = [...remaining.matchAll(/(?:\bonly\b|仅限于?|仅适用于?|只适用于?|仅在)([^,;。；\n]+)/gi)];
+  return restrictions.every(([, clause]) => [...segmenter.segment(clause!)].filter((word) => word.isWordLike)
+    .map((word) => word.segment).filter((word) => word.length > 1 && !STOP_WORDS.has(word))
+    .every((word) => containsTerm(task.toLowerCase(), word)));
+}
+
+function negatedTerm(task: string, term: string): boolean {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:no |not |without |非|无|没有|不)[^,;。；\\n]{0,8}${escaped}`, "i").test(task);
 }
 
 export function rankMemoryCandidates(
@@ -146,7 +156,7 @@ export function rankMemoryCandidates(
       if (task && hits.length === 0 && (technical || input.query?.trim())) { excluded.unrelated++; continue; }
       const score = hits.length + (experience ? matches(experience.symptom, needles).length * 2 : 0);
       ranked.push({ item, score, reason: technical
-        ? `task terms ${hits.slice(0, 4).join(", ")}; project, applies_when and version matched; Pi must verify applicability`
+        ? `task terms ${hits.slice(0, 4).join(", ")}; project and version matched; applies_when text overlaps; Pi must verify applicability`
         : hits.length ? `task terms ${hits.slice(0, 4).join(", ")} matched` : "" });
     }
   }

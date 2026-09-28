@@ -174,7 +174,8 @@ export async function runMemoryReplay(root: string, driver: ReplayDriver, signal
     await task("changed_business_rule", 200, false);
     await observe("correction", async facts => {
       const previous = listPiMemoryItems(db)[0];
-      const next = seedAccepted(db, "gate threshold boundary regression correction", `New verified scope: campaign B uses strictly >200; Node tests 199=false,200=false,201=true passed. Previous memory ${previous.id} revision ${previous.revision}, key ${previous.memory_key}: ${previous.content}. Narrow the existing lesson to integer threshold tests where current campaign SPEC has been read; never reuse campaign A's inclusive 100 rule for B. Version ${VERSION}.`, revision);
+      // 旧正文通过 memory_search 读取；重复嵌入会挤掉 Host 有界摘要中的新证据与纠错范围。
+      const next = seedAccepted(db, "gate threshold boundary regression correction", `New verified scope: campaign B uses strictly >200; Node tests 199=false,200=false,201=true passed. Previous memory ${previous.id} revision ${previous.revision}, key ${previous.memory_key}. Narrow the existing lesson to integer threshold tests where current campaign SPEC has been read; never reuse campaign A's inclusive 100 rule for B. Version ${VERSION}.`, revision);
       const input = memoryInput(next);
       const content = JSON.parse(String(input.content)); content.applies_when = "gate threshold boundary regression integer";
       content.resolution = "Read the current campaign SPEC; test T-1, T, T+1 using the specified operator. B is >200, A is >=100.";
@@ -215,19 +216,24 @@ export async function runMemoryReplay(root: string, driver: ReplayDriver, signal
     await observe("budget_nonblocking", async facts => {
       const last = seedAccepted(db, "gate budget failure", "Synthetic completed Work for budget-failure injection only", revision);
       let invoked = 0;
+      const dispatches: number[] = [];
       const fail = async () => {
         invoked++;
-        const fauxAgent = { streamFunction: () => ({}), subscribe: () => () => {} };
+        let dispatched = 0;
+        const fauxAgent = { streamFunction: (_model: unknown, _context: unknown) => { dispatched++; return {}; }, subscribe: () => () => {} };
         const stop = installMemoryReflectionBudget(fauxAgent as never, signal);
-        try { for (let i = 0; i < 5; i++) fauxAgent.streamFunction(); }
-        finally { stop(); }
+        try { for (let i = 0; i < 5; i++) fauxAgent.streamFunction({}, { messages: [] }); }
+        finally { dispatches.push(dispatched); stop(); }
         throw new Error("reflection budget did not stop dispatch");
       };
       for (let i = 0; i < 3; i++) await runMemoryReflectionOnce(db, { signal, reflect: fail });
       assert.equal(invoked, 2);
+      assert.deepEqual(dispatches, [4, 4], "each attempt must reach the real call-budget boundary");
+      const reflections = reflectionRows(db);
+      assert.equal(reflections.at(-1)?.reason, "reflection model call budget exceeded");
       const status = db.sqlite.query<{status: string}, [number]>("select status from issues where id=?").get(last.issueID)!.status;
       assert.equal(status, "done"); facts.work_status = status; facts.attempts = invoked; facts.fault_injection = true;
-      facts.reflections = reflectionRows(db);
+      facts.fake_dispatches_per_attempt = dispatches; facts.reflections = reflections;
     });
     await observe("permission_boundary", async facts => {
       const tools = createPiMemoryTools(db, { projectID: PROJECT, source: "pi_memory_reflection", authorization: {
@@ -295,7 +301,13 @@ export const fixtureDriver: ReplayDriver = {
   kind: "fixture", calls: () => 0,
   async reflect(_db, _row, _lease, _signal, tools, example) {
     await invoke(tools, "reflection_evidence_read"); await invoke(tools, "memory_search", { query: "gate threshold boundary regression v1.0.0" });
-    const result = await invoke(tools, "memory_remember", example); assert(result.id, JSON.stringify(result)); return '{"status":"saved"}';
+    // 仅离线 fixture 适配测试策略；live driver 不读取 example，也不改写模型输出。
+    const { schema_version, source, outcome, verification, ...content } = parseMemoryExperience(String(example.content))!;
+    const correction = example.correction as { disposition: "narrow" | "disable"; reason: string } | undefined;
+    const result = await invoke(tools, "memory_remember", { ...example,
+      content: { ...content, verification: { method: verification.method, evidence_indices: [0] } },
+      ...(correction ? { correction: { disposition: correction.disposition, reason: correction.reason } } : {}) });
+    assert(result.id, JSON.stringify(result)); return '{"status":"saved"}';
   },
   async task(_db, _tools, _prompt, _signal, fixture) { return fixture(); }
 };

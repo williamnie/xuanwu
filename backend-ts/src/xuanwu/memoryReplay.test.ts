@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fixtureDriver, runMemoryReplay, scoreTask, REPLAY_CASES, type ToolStep } from "./memoryReplay.ts";
+import { fixtureDriver, runMemoryReplay, scoreTask, REPLAY_CASES, invoke, type ToolStep } from "./memoryReplay.ts";
 import { ReplayBudget, readOnlyReplayCredentials } from "./memoryReplayRuntime.ts";
 
 test("memory journey replays the real persistence, tool gate, correction, restart and suppression paths in a fresh DB", async () => {
@@ -15,6 +15,34 @@ test("memory journey replays the real persistence, tool gate, correction, restar
     expect(steps.similar_expression.some((step: any) => step.output?.items?.some((item: any) => item.selection_stage === "pi_selected"))).toBe(true);
     const commands = JSON.parse(await readFile(join(root, "commands.json"), "utf8"));
     expect(commands.map((row: any) => row.exit_code)).toEqual([1, 0, 0]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 60_000);
+
+test("correction evidence retains its new scope after Host truncation even when the previous memory is long", async () => {
+  const root = await mkdtemp(join(tmpdir(), "memory-correction-summary-"));
+  let checked = false;
+  try {
+    const result = await runMemoryReplay(root, { ...fixtureDriver,
+      async reflect(db, row, lease, signal, tools, example) {
+        if (JSON.parse(row.summary_json).title.endsWith("correction")) {
+          const visible = await invoke(tools, "reflection_evidence_read");
+          const summary = visible.evidence[0].summary;
+          expect(summary.length).toBeLessThanOrEqual(1024);
+          expect(summary).toContain("Narrow the existing lesson");
+          expect(summary).toContain("current campaign SPEC has been read");
+          expect(summary).toContain("gate-v1.0.0");
+          expect(summary).not.toContain('"schema_version"');
+          checked = true;
+        } else {
+          const content = JSON.parse(String(example.content));
+          content.resolution += " Keep the boundary method independent from old business constants.".repeat(30);
+          example = { ...example, content: JSON.stringify(content) };
+        }
+        return fixtureDriver.reflect(db, row, lease, signal, tools, example);
+      }
+    }, new AbortController().signal);
+    expect(result.cases.map(row => [row.id, row.status, row.error])).toEqual(REPLAY_CASES.map(id => [id, "passed", undefined]));
+    expect(checked).toBe(true);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 60_000);
 
@@ -76,8 +104,9 @@ test("live adapter exposes actual reflection tools to the SDK (faux transport on
     recordIssueEvent(db, seed.issueID, "issue.pi_acceptance_applied.v1", { action: "accept", run_id: seed.legacyRunID });
     reconcileMemoryReflectionEvents(db); const row = claimMemoryReflection(db)!;
     const lease = { id: row.id, token: row.lease_token };
-    const input = { kind: "debugging_pattern", confidence: "high", memory_key: "callback.timeout", content: JSON.stringify({ ...seed.experience,
-      source: { ...seed.experience.source, refs: [`work:${seed.workID}`, `run:${seed.runID}`] } }) };
+    const { schema_version, source, outcome, verification, ...content } = seed.experience;
+    const input = { kind: "debugging_pattern", confidence: "high", memory_key: "callback.timeout",
+      content: { ...content, verification: { method: verification.method, evidence_indices: [0] } } };
     faux.setResponses([
       fauxAssistantMessage([fauxToolCall("reflection_evidence_read", {}), fauxToolCall("memory_search", { query: "timeout" })], { stopReason: "toolUse" }),
       fauxAssistantMessage([fauxToolCall("memory_remember", input)], { stopReason: "toolUse" }),
