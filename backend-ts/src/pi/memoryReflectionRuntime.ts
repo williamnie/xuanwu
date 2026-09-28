@@ -6,9 +6,10 @@ import { MEMORY_EXPERIENCE_INSTRUCTIONS } from "./memoryExperience.ts";
 import { reflectionAuthorization } from "./memoryReflectionTools.ts";
 import { REFLECTION_LIMITS, type MemoryReflection, type ReflectionLease } from "./memoryReflectionQueue.ts";
 import { structuredAssistantProviderError } from "./structuredAssistantOutput.ts";
+import { unknownReflectionUsage, type ReflectionUsage } from "./memoryReflectionTelemetry.ts";
 
 export async function runMemoryReflectionRuntime(db: RunnerDatabase, request: MemoryReflection,
-  lease: ReflectionLease, signal: AbortSignal): Promise<string> {
+  lease: ReflectionLease, signal: AbortSignal, usage = unknownReflectionUsage()): Promise<string> {
   const agent = getPiSupervisor(db);
   const project = getProject(db, request.project_id);
   if (!agent || agent.enabled !== 1 || !project) throw new Error("reflection Supervisor/project unavailable");
@@ -23,7 +24,7 @@ export async function runMemoryReflectionRuntime(db: RunnerDatabase, request: Me
   const session = runtime.session;
   const abort = () => { void session.abort().catch(() => undefined); };
   signal.addEventListener("abort", abort, { once: true });
-  const unsubscribe = installMemoryReflectionBudget(session.agent, signal);
+  const unsubscribe = installMemoryReflectionBudget(session.agent, signal, usage);
   try {
     signal.throwIfAborted();
     await session.prompt([
@@ -52,23 +53,40 @@ export async function runMemoryReflectionRuntime(db: RunnerDatabase, request: Me
 // 在 SDK 的每次请求与工具执行前计量，禁用隐式重试/压缩的调用方共享这个总预算。
 export function installMemoryReflectionBudget(
   agent: Pick<Awaited<ReturnType<typeof createPiRuntimeSession>>["session"]["agent"], "streamFunction" | "subscribe">,
-  signal: AbortSignal
+  signal: AbortSignal,
+  usage: ReflectionUsage = unknownReflectionUsage()
 ): () => void {
   const stream = agent.streamFunction;
   let calls = 0;
   let inputBytes = 0;
   let outputBytes = 0;
   let outputTokens = 0;
+  Object.assign(usage, { model_calls: 0, completed_calls: 0, input_bytes: 0, output_bytes: 0,
+    input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, cost_usd: 0 });
   agent.streamFunction = (model, context, options) => {
     signal.throwIfAborted();
     inputBytes += Buffer.byteLength(JSON.stringify(context));
-    if (++calls > REFLECTION_LIMITS.modelCalls || inputBytes > REFLECTION_LIMITS.inputBytes
-      || outputTokens >= REFLECTION_LIMITS.outputTokens) throw new Error("reflection model input/call budget exceeded");
+    if (++calls > REFLECTION_LIMITS.modelCalls) throw new Error("reflection model call budget exceeded");
+    if (inputBytes > REFLECTION_LIMITS.inputBytes) throw new Error("reflection model input budget exceeded");
+    if (outputTokens >= REFLECTION_LIMITS.outputTokens) throw new Error("reflection model token budget exceeded");
+    usage.model_calls!++;
+    usage.input_bytes = inputBytes;
     return stream(model, context, { ...options, maxTokens: REFLECTION_LIMITS.outputTokens - outputTokens });
   };
   const unsubscribe = agent.subscribe(event => {
     if ((event.type !== "message_end" && event.type !== "message_update") || event.message.role !== "assistant") return;
     const bytes = Buffer.byteLength(JSON.stringify(event.message.content));
+    if (event.type === "message_end") {
+      usage.completed_calls!++;
+      usage.output_bytes! += bytes;
+      const reported = event.message.usage;
+      for (const [field, value] of [["input_tokens", reported?.input], ["output_tokens", reported?.output],
+        ["cache_read_tokens", reported?.cacheRead], ["cache_write_tokens", reported?.cacheWrite],
+        ["cost_usd", reported?.cost?.total]] as const) {
+        usage[field] = usage[field] !== null && typeof value === "number" && Number.isFinite(value) && value >= 0
+          ? usage[field]! + value : null;
+      }
+    }
     if (outputBytes + bytes > REFLECTION_LIMITS.outputBytes) throw new Error("reflection model output budget exceeded");
     if (event.type === "message_update") return;
     outputBytes += bytes;

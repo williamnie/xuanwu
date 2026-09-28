@@ -19,7 +19,7 @@ export function reflectionAuthorization(projectID: string): PiGatePolicy {
 export function createMemoryReflectionTools(db: RunnerDatabase, lease: ReflectionLease): ToolDefinition[] {
   const request = requireReflectionLease(db, lease);
   const summary = JSON.parse(request.summary_json) as ReflectionSummary;
-  const context = { projectID: request.project_id, source: "pi_memory_reflection",
+  const context = { projectID: request.project_id, issueID: request.issue_id, source: "pi_memory_reflection",
     conversationID: `pi-reflection-${request.id}-${request.attempts}`, authorization: reflectionAuthorization(request.project_id) };
   const memoryTools = createPiMemoryTools(db, context);
   const remember = memoryTools.find(tool => tool.name === "memory_remember")!;

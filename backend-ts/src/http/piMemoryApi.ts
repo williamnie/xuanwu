@@ -15,10 +15,13 @@ import { applyPiMemoryBatchAction, type PiMemoryBatchAction } from "../pi/memory
 import { assertMemoryContentSafe, reusableMemoryRejection } from "../pi/memoryPolicy.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { readMemoryDiagnostics } from "./piMemoryDiagnostics.ts";
 
 type PiMemoryContext = { database: RunnerDatabase };
 
 export function registerPiMemoryRoutes(router: Router, context: PiMemoryContext): void {
+  router.get("/api/projects/:id/pi/memory-diagnostics", request =>
+    json(readMemoryDiagnostics(context.database, request, reflectionProjectID(context, request))));
   router.get("/api/projects/:id/pi/memory-reflection", request => {
     const projectID = reflectionProjectID(context, request);
     return json({ project_id: projectID, enabled: memoryReflectionEnabled(context.database, projectID) });

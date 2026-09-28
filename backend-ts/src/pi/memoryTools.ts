@@ -14,7 +14,7 @@ import { PiMemoryWriteError } from "../db/repositories/pi/memoryHistory.ts";
 export const PI_MEMORY_TOOL_NAMES = ["memory_search", "memory_remember"] as const;
 
 type MemoryToolName = (typeof PI_MEMORY_TOOL_NAMES)[number];
-type MemoryContext = PiActionContext & { projectID?: string };
+type MemoryContext = PiActionContext & { projectID?: string; issueID?: number };
 type MemoryExecutor<TParams extends TSchema> = (params: Static<TParams>) => unknown;
 
 const objectOptions = { additionalProperties: false };
@@ -71,6 +71,7 @@ export function createPiMemoryTools(db: RunnerDatabase, context: MemoryContext =
         actionType: "memory.search",
         payload: params,
         projectID: actionProjectID(params, context),
+        issueID: context.issueID,
         execute: () => searchMemory(db, context, params)
       })),
     memoryTool("memory_remember", "Remember Reusable Experience",
@@ -85,15 +86,28 @@ export function executePiMemoryRemember(db: RunnerDatabase, context: MemoryConte
   if (containsSensitiveMemoryContent(JSON.stringify(params))) {
     return { rejected: true, reason: "memory content contains sensitive data" };
   }
+  let writeResult = "unknown";
+  let elapsedMs: number | null = null;
   return executeSafePiAction(db, { ...context, source: context.source || "pi_memory_tool" }, {
     actionType: "memory.remember", payload: params, projectID: actionProjectID(params, context),
+    issueID: context.issueID,
     execute: () => {
-      try { return db.transaction(() => rememberMemory(db, context, params)).immediate(); }
+      const started = performance.now();
+      try { return db.transaction(() => {
+        const scope = cleanString(params.scope) || "project";
+        const previous = getPiMemoryItemByKey(db, scope, cleanString(params.scope_id) || defaultScopeID(scope, context) || "", params.memory_key);
+        const result = rememberMemory(db, context, params);
+        writeResult = "rejected" in result ? "rejected" : !previous ? "created"
+          : result.revision === previous.revision ? "unchanged" : "updated";
+        return result;
+      }).immediate(); }
       catch (error) {
-        if (error instanceof PiMemoryWriteError) return { rejected: true, reason: error.message };
+        if (error instanceof PiMemoryWriteError) { writeResult = "rejected"; return { rejected: true, reason: error.message }; }
         throw error;
       }
-    }
+      finally { elapsedMs = Math.max(0, performance.now() - started); }
+    },
+    resultForAudit: result => ({ ...(result as object), diagnostics: { write_result: writeResult, elapsed_ms: elapsedMs } })
   });
 }
 

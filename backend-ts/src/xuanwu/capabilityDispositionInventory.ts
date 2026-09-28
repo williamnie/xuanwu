@@ -379,6 +379,36 @@ export const TABLE_DISPOSITIONS = [
     live_rows: 4, delete_preconditions: []
   },
   {
+    name: "pi_memory_history", disposition: "keep", target: "Memory lifecycle and reflection audit",
+    source_of_truth: "pi_memory_history", retention: "R4_SENSITIVE", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "pi_memory_receipts", disposition: "keep", target: "Memory lifecycle and reflection audit",
+    source_of_truth: "pi_memory_receipts", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "pi_memory_suppressions", disposition: "keep", target: "Memory lifecycle and reflection audit",
+    source_of_truth: "pi_memory_suppressions", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "pi_memory_reflections", disposition: "keep", target: "Memory lifecycle and reflection audit",
+    source_of_truth: "pi_memory_reflections", retention: "R4_SENSITIVE", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "pi_memory_reflection_settings", disposition: "keep", target: "Memory lifecycle and reflection audit",
+    source_of_truth: "pi_memory_reflection_settings", retention: "R2_DURABLE", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "pi_memory_reflection_cursor", disposition: "keep", target: "Memory lifecycle and reflection audit",
+    source_of_truth: "pi_memory_reflection_cursor", retention: "R1_OPERATIONAL", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
     name: "pi_memory_items", disposition: "keep", target: "Supporting knowledge store",
     source_of_truth: "pi_memory_items", retention: "R4_SENSITIVE", runtime_origin: "source_schema",
     live_rows: 1, delete_preconditions: []
@@ -708,6 +738,10 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "PATCH", path: "/api/pi/mcp/servers/:id", family: "capability-policy" },
   { method: "POST", path: "/api/pi/mcp/servers/:id/introspect", family: "capability-policy" },
   { method: "GET", path: "/api/pi/memory", family: "assistant-runtime" },
+  { method: "GET", path: "/api/pi/memory/:id/history", family: "assistant-runtime" },
+  { method: "GET", path: "/api/projects/:id/pi/memory-reflection", family: "assistant-runtime" },
+  { method: "PUT", path: "/api/projects/:id/pi/memory-reflection", family: "assistant-runtime" },
+  { method: "GET", path: "/api/projects/:id/pi/memory-diagnostics", family: "assistant-runtime" },
   { method: "POST", path: "/api/pi/memory", family: "assistant-runtime" },
   { method: "DELETE", path: "/api/pi/memory/:id", family: "assistant-runtime" },
   { method: "PATCH", path: "/api/pi/memory/:id", family: "assistant-runtime" },
@@ -888,7 +922,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "memory", disposition: "keep", target: "Supporting knowledge store", source_of_truth: "pi_memory_items",
-    source_files: ["backend-ts/src/pi/memoryContext.ts", "backend-ts/src/pi/memoryLifecycle.ts", "backend-ts/src/pi/memoryPolicy.ts", "backend-ts/src/pi/memoryTools.ts"]
+    source_files: ["backend-ts/src/pi/memoryContext.ts", "backend-ts/src/pi/memoryEvidence.ts", "backend-ts/src/pi/memoryExperience.ts", "backend-ts/src/pi/memoryExperienceTestFixtures.ts", "backend-ts/src/pi/memoryLifecycle.ts", "backend-ts/src/pi/memoryPolicy.ts", "backend-ts/src/pi/memoryReflectionQueue.ts", "backend-ts/src/pi/memoryReflectionRuntime.ts", "backend-ts/src/pi/memoryReflectionTelemetry.ts", "backend-ts/src/pi/memoryReflectionTools.ts", "backend-ts/src/pi/memoryRetrieval.ts", "backend-ts/src/pi/memoryTools.ts", "backend-ts/src/pi/runMemoryContext.ts"]
   },
   {
     id: "policy-role", disposition: "keep", target: "Deterministic policy and role selection", source_of_truth: "project policy plus static role contracts",

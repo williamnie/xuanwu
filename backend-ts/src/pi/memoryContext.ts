@@ -84,7 +84,9 @@ export type PiMemoryRetrievalResult = {
   retrieval_scopes: string[];
   limits: PiMemoryRetrievalLimits;
   truncation_summary: PiMemoryTruncationSummary;
-  retrieval: { scanned: number; scan_limited: boolean; technical_limit: number };
+  retrieval: { scanned: number; scan_limited: boolean; technical_limit: number;
+    elapsed_ms?: number; reason_code?: string; excluded?: Record<string, number>;
+    omitted_by_candidate_limit?: number; omitted_by_selection_or_technical_limit?: number };
 };
 
 const DEFAULT_MEMORY_LIMIT = 10;
@@ -111,10 +113,12 @@ export function retrievePiMemoryContext(
   db: RunnerDatabase,
   input: PiMemoryPromptContextInput = {}
 ): PiMemoryRetrievalResult {
+  const started = performance.now();
   input = withIssueTask(db, input);
   const itemLimit = memoryLimit(input.limit);
   const tokenBudget = memoryTokenBudget(input.tokenBudget);
-  const ranked = itemLimit === 0 || tokenBudget === 0 ? { candidates: [], scanned: 0, scanLimited: false }
+  const ranked = itemLimit === 0 || tokenBudget === 0 ? { candidates: [], scanned: 0, scanLimited: false,
+    excluded: { ineligible: 0, version_mismatch: 0, applicability_mismatch: 0, unrelated: 0 }, omittedByCandidateLimit: 0 }
     : rankMemoryCandidates(db, memoryScopeFilters(input), input, input.projectID);
   const candidates = rawMemoryContextItems(ranked.candidates, input);
   const selected = selectWithinBudget(candidates, itemLimit, tokenBudget);
@@ -126,7 +130,13 @@ export function retrievePiMemoryContext(
       truncated: selected.truncated
     },
     memory_items: selected.items,
-    retrieval: { scanned: ranked.scanned, scan_limited: ranked.scanLimited, technical_limit: MEMORY_TECHNICAL_LIMIT },
+    retrieval: { scanned: ranked.scanned, scan_limited: ranked.scanLimited, technical_limit: MEMORY_TECHNICAL_LIMIT,
+      elapsed_ms: Math.max(0, performance.now() - started), excluded: ranked.excluded,
+      omitted_by_candidate_limit: ranked.omittedByCandidateLimit,
+      omitted_by_selection_or_technical_limit: ranked.candidates.length - candidates.length,
+      reason_code: !itemLimit || !tokenBudget ? "retrieval_budget_disabled"
+        : selected.items.length ? "selected" : selected.stoppedByTokenBudget ? "token_budget_exhausted"
+        : !ranked.scanned ? "no_memory_in_window" : !ranked.candidates.length ? "no_matching_candidate" : "pi_selected_none" },
     retrieval_scopes: memoryScopeFilters(input).map(scopeKey),
     truncation_summary: truncationSummary(candidates, selected, itemLimit, tokenBudget)
   };

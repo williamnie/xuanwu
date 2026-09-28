@@ -4,6 +4,7 @@ import { listStoredEvidence } from "../db/repositories/evidence.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { canSatisfyEvidenceGate } from "../domain/evidence/contracts.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 
 export const REFLECTION_LIMITS = {
   timeoutMs: 45_000, leaseMs: 60_000, maxAttempts: 2, summaryBytes: 48_000, inputBytes: 128_000,
@@ -57,18 +58,33 @@ export function requestMemoryReflection(db: RunnerDatabase, issueID: number): vo
 
 function enqueueMemoryReflection(db: RunnerDatabase, issueID: number): void {
   const issue = getIssue(db, issueID);
-  if (!issue || !["done", "failed"].includes(issue.status) || !memoryReflectionEnabled(db, issue.project_id)) return;
+  if (!issue || !["done", "failed"].includes(issue.status)) return;
   const run = listIssueRuns(db, issueID).at(-1);
   if (!run?.ended_at || !["succeeded", "failed", "cancelled"].includes(run.status)) return;
-  const accepted = db.sqlite.query<{ payload: string }, [string, number, string]>(`
-    select e.payload from issue_events e join pi_memory_reflection_settings s on s.project_id=?
-    where e.issue_id=? and e.type='issue.pi_acceptance_applied.v1' and e.id>s.after_event_id
+  const accepted = db.sqlite.query<{ id: number; payload: string }, [number, string]>(`
+    select e.id, e.payload from issue_events e
+    where e.issue_id=? and e.type='issue.pi_acceptance_applied.v1'
       and json_valid(e.payload) and json_extract(e.payload, '$.run_id')=?
     order by e.id desc limit 1
-  `).get(issue.project_id, issueID, run.id);
+  `).get(issueID, run.id);
   if (!accepted) return;
   const applied = JSON.parse(accepted.payload);
   if (!applied || applied.action !== (issue.status === "done" ? "accept" : "failed")) return;
+  const setting = db.sqlite.query<{ enabled: number; after_event_id: number }, [string]>(
+    "select enabled, after_event_id from pi_memory_reflection_settings where project_id=?"
+  ).get(issue.project_id);
+  const blocked = setting?.enabled !== 1 ? "project_disabled"
+    : accepted.id <= setting.after_event_id ? "before_enabled_window" : "";
+  if (blocked) {
+    // 同一验收游标只记录一次关闭/不回填事实，不创建另一套任务状态。
+    const exists = db.sqlite.query<{ id: number }, [number, number]>(`select id from issue_events
+      where issue_id=? and type='issue.memory_reflection_trigger.v1'
+        and json_extract(payload, '$.acceptance_event_id')=? limit 1`).get(issueID, accepted.id);
+    if (!exists) recordIssueEvent(db, issueID, "issue.memory_reflection_trigger.v1", {
+      issue_run_id: run.id, acceptance_event_id: accepted.id, status: "skipped", reason_code: blocked
+    });
+    return;
+  }
   const workID = `xw:work:issues:${issueID}`;
   const runID = `xw:run:issue_runs:${run.id}`;
   const page = listStoredEvidence(db, { issue_ids: [issueID], run_ids: [runID], limit: 16 });
@@ -98,10 +114,15 @@ function enqueueMemoryReflection(db: RunnerDatabase, issueID: number): void {
     : !validEvidence ? "no_valid_evidence"
     : Buffer.byteLength(summaryJSON) > REFLECTION_LIMITS.summaryBytes ? "input_budget_exceeded" : "";
   const now = new Date().toISOString();
-  db.sqlite.run(`insert or ignore into pi_memory_reflections
+  const reflectionID = crypto.randomUUID();
+  const inserted = db.sqlite.run(`insert or ignore into pi_memory_reflections
     (id, project_id, issue_id, run_id, fingerprint, summary_json, status, reason, created_at, updated_at)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [crypto.randomUUID(), issue.project_id, issueID, runID, fingerprint,
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [reflectionID, issue.project_id, issueID, runID, fingerprint,
     reason === "input_budget_exceeded" ? "{}" : summaryJSON, reason ? "skipped" : "pending", reason, now, now]);
+  if (inserted.changes) recordIssueEvent(db, issueID, "issue.memory_reflection_trigger.v1", {
+    issue_run_id: run.id, acceptance_event_id: accepted.id, fingerprint, reflection_id: reflectionID,
+    status: reason ? "skipped" : "pending", reason_code: reason || "queued"
+  });
 }
 
 export function safelyRequestMemoryReflection(db: RunnerDatabase, issueID: number): void {

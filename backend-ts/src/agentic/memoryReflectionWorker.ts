@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { recordReflectionAttempt, unknownReflectionUsage } from "../pi/memoryReflectionTelemetry.ts";
 import {
   claimMemoryReflection, failMemoryReflectionAttempt, finishMemoryReflection, getMemoryReflection,
   reconcileMemoryReflectionEvents, requireReflectionLease, REFLECTION_LIMITS,
@@ -15,6 +16,10 @@ export async function runMemoryReflectionOnce(db: RunnerDatabase, options: {
   const request = claimMemoryReflection(db);
   if (!request) return false;
   const lease = { id: request.id, token: request.lease_token };
+  const startedAt = new Date().toISOString();
+  const started = performance.now();
+  const usage = unknownReflectionUsage();
+  let attemptError = "";
   const controller = new AbortController();
   const abort = () => controller.abort(new Error("reflection worker stopped"));
   options.signal?.addEventListener("abort", abort, { once: true });
@@ -29,7 +34,7 @@ export async function runMemoryReflectionOnce(db: RunnerDatabase, options: {
     });
     const reflect = options.reflect ?? (async (row, token, signal) => {
       const { runMemoryReflectionRuntime } = await import("../pi/memoryReflectionRuntime.ts");
-      return runMemoryReflectionRuntime(db, row, token, signal);
+      return runMemoryReflectionRuntime(db, row, token, signal, usage);
     });
     const raw = await Promise.race([reflect(request, lease, controller.signal), cancelled]);
     // memory_remember 已将记忆和 completed 原子提交；尾部输出失败不撤销这个结果。
@@ -45,11 +50,19 @@ export async function runMemoryReflectionOnce(db: RunnerDatabase, options: {
     }).immediate();
   } catch (error) {
     // 旧 worker 的迟到回调只能更新自己的 token，不能覆盖新领取或已完成的记录。
-    failMemoryReflectionAttempt(db, lease, error instanceof Error ? error.message : String(error));
+    attemptError = error instanceof Error ? error.message : String(error);
+    failMemoryReflectionAttempt(db, lease, attemptError);
   } finally {
     if (timer) clearTimeout(timer);
     controller.signal.removeEventListener("abort", onAbort);
     options.signal?.removeEventListener("abort", abort);
+    const current = getMemoryReflection(db, lease.id);
+    // 即使记忆已原子提交，尾部模型失败仍单独报告；迟到回调不更新本次事实。
+    try {
+      recordReflectionAttempt(db, request, { startedAt, elapsedMs: Math.max(0, performance.now() - started),
+        status: attemptError ? "failed" : current?.status ?? "unknown",
+        reason: attemptError || current?.reason || "", usage: { ...usage } });
+    } catch { console.warn("[pi-memory] reflection attempt telemetry unavailable"); }
   }
   return true;
 }

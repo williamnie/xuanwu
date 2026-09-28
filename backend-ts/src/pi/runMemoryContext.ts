@@ -122,9 +122,12 @@ export function appendRunMemoryPrompt(
   ].join("\n");
   recordIssueEvent(db, issueID, INJECTED_EVENT, {
     issue_run_id: runID, snapshot_id: snapshot.snapshot_id, phase,
-    memory_refs: projection.memory.memory_items.map(({ id, revision, content_fingerprint }) => ({ id, revision, content_fingerprint })),
+    memory_refs: projection.memory.memory_items.map(({ id, revision, content_fingerprint, version, provenance }) =>
+      ({ id, revision, content_fingerprint, version, provenance })),
     applicability: projection.run_memory.applicability,
-    prompt_section_sha256: digest(section), delivery: "provider_input_prepared", effectiveness: "not_evaluated"
+    prompt_section_sha256: digest(section), prompt_section_bytes: Buffer.byteLength(section),
+    prompt_section_token_estimate: Math.ceil([...section].reduce((sum, char) => sum + (char.charCodeAt(0) < 128 ? 0.25 : 1), 0)),
+    delivery: "provider_input_prepared", effectiveness: "not_evaluated"
   });
   return `${prompt}\n\n${section}`;
 }
@@ -147,6 +150,7 @@ function recordCitations(db: RunnerDatabase, issueID: number, runID: string, tex
     recordIssueEvent(db, issueID, CITED_EVENT, {
       issue_run_id: runID, snapshot_id: snapshot.snapshot_id, id: item.id, revision: item.revision,
       content_fingerprint: item.content_fingerprint, attribution: "executor_explicit_reference",
+      version: item.version, provenance: item.provenance,
       effectiveness: "not_evaluated"
     });
   }

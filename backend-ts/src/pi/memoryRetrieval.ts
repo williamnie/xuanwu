@@ -101,12 +101,13 @@ function applicabilityMatches(appliesWhen: string, task: string): boolean {
 
 export function rankMemoryCandidates(
   db: RunnerDatabase, scopes: MemoryScope[], input: MemoryTaskContext, projectID?: string
-): { candidates: RankedMemory[]; scanned: number; scanLimited: boolean } {
+) {
   const task = memoryTaskText(input);
   const needles = terms(task);
   const ranked: RankedMemory[] = [];
   let scanned = 0;
   let scanLimited = false;
+  const excluded = { ineligible: 0, version_mismatch: 0, applicability_mismatch: 0, unrelated: 0 };
   // 旧全局偏好曾用空 scope_id，仍按 runner 全局偏好读取。
   const windows = scopes.flatMap((scope) => scope.scope === "global" && (!scope.scopeId || scope.scopeId === "runner")
     ? [{ scope: "global", scopeId: "runner" }, { scope: "global", scopeId: "" }] : [scope]);
@@ -128,12 +129,13 @@ export function rankMemoryCandidates(
     for (const item of pool.slice(0, MEMORY_SCAN_LIMIT)) {
       if (item.disabled || item.suppressed || !item.content ||
         !retrievableMemoryKind(item.kind) || !retrievableMemoryContent(item.kind, item.content) ||
-        containsSensitiveMemoryContent(item.content) || (input.kind && item.kind !== input.kind)) continue;
+        containsSensitiveMemoryContent(item.content) || (input.kind && item.kind !== input.kind)) { excluded.ineligible++; continue; }
       const experience = parseMemoryExperience(item.content);
       const technical = technicalMemory(item);
       if (technical && (!projectID || item.scope !== "project" || item.scope_id !== projectID ||
-        item.confidence === "low" || !experience || !task || !versionMatches(experience.version, input) ||
-        !applicabilityMatches(experience.applies_when, task))) continue;
+        item.confidence === "low" || !experience || !task)) { excluded.ineligible++; continue; }
+      if (technical && !versionMatches(experience!.version, input)) { excluded.version_mismatch++; continue; }
+      if (technical && !applicabilityMatches(experience!.applies_when, task)) { excluded.applicability_mismatch++; continue; }
       // failed_attempts、验证记录和来源不是正向召回信号。
       const searchable = experience ? `${experience.applies_when}\n${experience.symptom}\n${experience.root_cause}\n${experience.resolution}` : `${item.kind}\n${item.content}`;
       const hits = matches(searchable, needles);
@@ -141,7 +143,7 @@ export function rankMemoryCandidates(
         hits.push(input.query.trim().slice(0, 128));
       }
       // 上下文投影保留作用域策略语义；显式 query 则仍是纯文本查询。
-      if (task && hits.length === 0 && (technical || input.query?.trim())) continue;
+      if (task && hits.length === 0 && (technical || input.query?.trim())) { excluded.unrelated++; continue; }
       const score = hits.length + (experience ? matches(experience.symptom, needles).length * 2 : 0);
       ranked.push({ item, score, reason: technical
         ? `task terms ${hits.slice(0, 4).join(", ")}; project, applies_when and version matched; Pi must verify applicability`
@@ -151,5 +153,6 @@ export function rankMemoryCandidates(
   ranked.sort((a, b) => Number(technicalMemory(a.item)) - Number(technicalMemory(b.item)) ||
     Number(b.item.authority === "user_explicit") - Number(a.item.authority === "user_explicit") || b.score - a.score ||
     b.item.pinned - a.item.pinned || b.item.updated_at.localeCompare(a.item.updated_at) || a.item.id.localeCompare(b.item.id));
-  return { candidates: ranked.slice(0, MEMORY_CANDIDATE_LIMIT), scanned, scanLimited };
+  return { candidates: ranked.slice(0, MEMORY_CANDIDATE_LIMIT), scanned, scanLimited, excluded,
+    omittedByCandidateLimit: Math.max(0, ranked.length - MEMORY_CANDIDATE_LIMIT) };
 }

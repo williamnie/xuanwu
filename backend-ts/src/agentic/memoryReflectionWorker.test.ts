@@ -13,6 +13,7 @@ import {
   REFLECTION_LIMITS, requestMemoryReflection, setMemoryReflectionEnabled, type MemoryReflection
 } from "../pi/memoryReflectionQueue.ts";
 import { runMemoryReflectionOnce } from "./memoryReflectionWorker.ts";
+import { recordReflectionAttempt, unknownReflectionUsage } from "../pi/memoryReflectionTelemetry.ts";
 
 const roots: string[] = [];
 const databases: RunnerDatabase[] = [];
@@ -123,8 +124,33 @@ test("model timeout, output budget, and no lesson leave Work done and stop after
     expect(rows(db)[0]).toMatchObject({ status: "failed", attempts: 2 });
     expect(db.sqlite.query<{ status: string }, [number]>("select status from issues where id=?").get(seed.issueID)?.status).toBe("done");
     expect(listPiMemoryItems(db)).toHaveLength(0);
+    const attempts = db.sqlite.query<{ payload: string }, []>(
+      "select payload from issue_events where type='issue.memory_reflection_attempt.v1' order by id"
+    ).all().map(row => JSON.parse(row.payload));
+    expect(attempts).toHaveLength(2);
+    expect(attempts.map(row => row.attempt)).toEqual([1, 2]);
+    for (const attempt of attempts) {
+      expect(["timeout", "output_budget_exhausted"]).toContain(attempt.reason_code);
+      expect(attempt.elapsed_ms).toBeGreaterThanOrEqual(0);
+      expect(attempt.usage.cost_usd).toBeNull();
+    }
     expect(db.sqlite.query<{ n: number }, []>("select count(*) n from issues").get()!.n).toBe(1);
   }
+});
+
+test("a dispatched model call without a usage receipt persists unknown tokens and price, never a free call", async () => {
+  const { db } = await fixture();
+  reconcileMemoryReflectionEvents(db);
+  const row = claimMemoryReflection(db)!;
+  recordReflectionAttempt(db, row, { startedAt: new Date().toISOString(), elapsedMs: 45_000,
+    status: "failed", reason: "reflection timed out", usage: { ...unknownReflectionUsage(),
+      model_calls: 1, completed_calls: 0, input_bytes: 120, input_tokens: 0, output_tokens: 0, cost_usd: 0 } });
+  const event = db.sqlite.query<{ payload: string }, []>(
+    "select payload from issue_events where type='issue.memory_reflection_attempt.v1' order by id desc limit 1"
+  ).get()!;
+  expect(JSON.parse(event.payload)).toMatchObject({ reason_code: "timeout", usage: { completeness: "partial",
+    input_bytes: 120, input_tokens: null, output_tokens: null, cost_usd: null } });
+  expect(event.payload).not.toContain(row.lease_token);
 });
 
 test("disabled project revokes an active lease; empty or superseded evidence never calls a model", async () => {
@@ -212,6 +238,14 @@ test("Agentic uses the configured Pi identity and actual SDK with only reflectio
     await runMemoryReflectionOnce(db);
     expect(rows(db)[0]).toMatchObject({ status: "completed", attempts: 1 });
     expect(listPiMemoryItems(db)).toHaveLength(1);
+    const attempt = db.sqlite.query<{ payload: string }, []>(
+      "select payload from issue_events where type='issue.memory_reflection_attempt.v1' order by id desc limit 1"
+    ).get();
+    const telemetry = JSON.parse(attempt!.payload);
+    expect(telemetry).toMatchObject({ status: "completed", reason_code: "experience_saved",
+      usage: { model_calls: 3, completed_calls: 3, completeness: "reported" } });
+    expect(telemetry.elapsed_ms).toBeGreaterThanOrEqual(0);
+    expect(telemetry.usage.input_tokens).toBeGreaterThanOrEqual(0);
     const audit = db.sqlite.query<{ payload_json: string }, []>(
       "select payload_json from pi_action_events where event_type='runtime_tool_registry_snapshot'"
     ).all().map(row => JSON.parse(row.payload_json));

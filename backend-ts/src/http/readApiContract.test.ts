@@ -17,7 +17,32 @@ import type { Router } from "./router.ts";
 import { registerWorkRoutes } from "./workApi.ts";
 import { registerTrackerEventRoutes } from "./trackerEventsApi.ts";
 
+import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
+import { MEMORY_DIAGNOSTICS_CONTRACT } from "./piMemoryDiagnostics.ts";
+
 describe("read API route contracts", () => {
+  test("locks memory reads, lifecycle routes and bounded diagnostics", () => {
+    expect(captureRoutes(registerPiMemoryRoutes)).toEqual([
+      "DELETE /api/pi/memory/:id",
+      "GET /api/pi/memory",
+      "GET /api/pi/memory/:id/history",
+      "GET /api/pi/memory/digest",
+      "GET /api/projects/:id/pi/memory-diagnostics",
+      "GET /api/projects/:id/pi/memory-reflection",
+      "PATCH /api/pi/memory/:id",
+      "POST /api/pi/memory",
+      "POST /api/pi/memory/:id/approve",
+      "POST /api/pi/memory/:id/disable",
+      "POST /api/pi/memory/:id/enable",
+      "POST /api/pi/memory/:id/forget",
+      "POST /api/pi/memory/:id/pin",
+      "POST /api/pi/memory/:id/promote",
+      "POST /api/pi/memory/batch",
+      "POST /api/pi/memory/candidates",
+      "PUT /api/projects/:id/pi/memory-reflection"
+    ]);
+    expect(MEMORY_DIAGNOSTICS_CONTRACT).toBe("xw.memory-diagnostics.v1");
+  });
   test("GitHub exposes a read-only status separately from explicit sync", () => {
     expect(captureRoutes(registerTrackerEventRoutes)).toEqual([
       "GET /api/integrations/trackers/github/status",
