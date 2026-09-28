@@ -33,6 +33,8 @@ import {
   type ProjectLoopStartOptions
 } from "../runner/projectLoopManager.ts";
 import type { EventBus } from "../events/bus.ts";
+import { reconcileCurrentProviderTurn } from "../runner/providerSessionReconciliation.ts";
+import { recoverSupervisorIssue } from "./piSupervisorProviderRecovery.ts";
 
 type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -69,7 +71,7 @@ async function resumeSessionFollowup(
   const sessionID = sessionProviderSessionID(payload);
   const prompt = requiredText(payload.prompt, "prompt");
   const provider = context.providers?.[providerID];
-  if (!provider?.sendSessionMessage) throw new Error(`provider "${providerID}" 不支持 capability "resume_session"`);
+  if (!provider?.recover) throw new Error(`provider "${providerID}" 不支持 managed recovery`);
   const replay = await resolveResumeFollowupReplay(context.database, { action, issueID, payload, provider, providerID, sessionID });
   if (replay) {
     recordSupervisorResult(context.database, action, payload, replay.result);
@@ -78,6 +80,12 @@ async function resumeSessionFollowup(
   assertFreshSupervisorState(context.database, issueID, providerID, sessionID, payload, [
     "expected_issue_updated_at", "expected_run_id", "expected_provider_turn_id", "expected_session_updated_at"
   ], "resume_revalidate");
+  const observed = await reconcileCurrentProviderTurn({ database: context.database, issueID, provider, bus: context.bus });
+  if (!["unsupported", "interrupted"].includes(observed)) {
+    const result = { outcome: observed, skipped: true };
+    recordSupervisorResult(context.database, action, payload, result);
+    return result;
+  }
   const prepared = await prepareResumeFollowupAttempt(context.database, { action, issueID, payload, provider, providerID, sessionID });
   if (prepared.skip) {
     recordSupervisorResult(context.database, action, payload, prepared.result);
@@ -102,18 +110,24 @@ async function resumeSessionFollowup(
     return skipped;
   }
   let result: SessionMessageResult;
+  let started = false;
   try {
-    result = await provider.sendSessionMessage({ prompt, sessionId: sessionID });
-    const turnID = requiredText(result.turn_id, "provider turn id");
-    completeRunAttemptStart(context.database, resumeLifecycleEventID(action), {
-      invocation_ref: `${providerID}:${sessionID}:${turnID}`,
-      provider_session_id: cleanString(result.provider_session_id) || cleanString(result.sessionId) || sessionID,
-      provider_turn_id: turnID
+    result = await recoverSupervisorIssue(context, provider, {
+      issueID, runID: requiredText(payload.expected_run_id, "expected_run_id"), sessionID,
+      previousTurnID: requiredText(payload.expected_provider_turn_id, "expected_provider_turn_id"), prompt
+    }, (runtime) => {
+      const turnID = requiredText(runtime.turn_id, "provider turn id");
+      completeRunAttemptStart(context.database, resumeLifecycleEventID(action), {
+        invocation_ref: `${providerID}:${sessionID}:${turnID}`,
+        provider_session_id: runtime.provider_session_id,
+        provider_turn_id: turnID
+      });
+      started = true;
+      persistFollowupRuntime(context.database, { action, issueID, providerID, result: runtime, sessionID });
+      markResumeFollowupAttemptStarted(context.database, prepared.attempt.id, turnID);
     });
-    persistFollowupRuntime(context.database, { action, issueID, providerID, result, sessionID });
-    markResumeFollowupAttemptStarted(context.database, prepared.attempt.id, turnID);
   } catch (error) {
-    failRunAttemptStart(context.database, resumeLifecycleEventID(action), error);
+    if (!started) failRunAttemptStart(context.database, resumeLifecycleEventID(action), error);
     updatePiRecoveryAttemptStatus(context.database, prepared.attempt.id, { error: safeError(error), status: "failed" });
     throw error;
   }
@@ -169,11 +183,11 @@ function prepareSupervisorResumeAttempt(
     expected_attempt_revision: attempt.revision,
     expected_revision: readRunRevision(db, issueID, runID),
     issue_run_id: issueRunID,
-    kind: "resume",
+    kind: "recovery",
     previous_attempt_terminal: {
-      reason: "previous provider turn completed before Supervisor follow-up",
+      reason: "previous provider invocation interrupted before Supervisor recovery",
       source_ref: `pi_recovery_attempts:${recoveryAttemptID}`,
-      status: "succeeded"
+      status: "interrupted"
     },
     provider_ref: { provider: providerID, session_ref: sessionID },
     run_id: runID

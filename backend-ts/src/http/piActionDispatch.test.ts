@@ -892,6 +892,12 @@ class SupervisorProvider implements ExecutorProvider {
     });
   }
 
+  async recover(input: Parameters<NonNullable<ExecutorProvider["recover"]>>[0]) {
+    const result = await this.sendSessionMessage({ prompt: input.prompt, sessionId: input.session.sessionId });
+    return { runId: `codex:${result.sessionId}:${result.turn_id}`,
+      session: { provider: this.id, sessionId: result.sessionId, turnId: result.turn_id } };
+  }
+
   async sendSessionMessage(input: SessionMessageInput) {
     this.calls.push({ prompt: input.prompt, sessionId: input.sessionId });
     return {

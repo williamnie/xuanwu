@@ -15,6 +15,22 @@ afterEach(async () => {
 });
 
 describe("issue supervisor progress tracker", () => {
+  test("finds the action's recovery row even when its decision id and dedupe key differ", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo"); insertRunningIssue(db, 703, "demo", "thread-703", "turn-old");
+      recordAction(db, 703, "resume-action-703", "2026-06-10T07:00:00Z");
+      recordPiRecoveryAttempt(db, {
+        ...attemptInput(703, "recovery-resume-action-703", "unrelated", beforeSnapshot()),
+        source_decision_id: "supervisor-703-at-time", idempotency_key: "resume:thread-703:turn-old:supervisor-703-at-time"
+      });
+      refreshSupervisorProgressResult({
+        context: buildIssueSupervisorRecoveryContext(db, 703, { now: new Date("2026-06-10T07:06:30Z") }),
+        database: db, issueID: 703, now: new Date("2026-06-10T07:06:30Z"), projectID: "demo", staleAfterSeconds: 60
+      });
+      expect(getPiRecoveryAttempt(db, "recovery-resume-action-703")?.status).toBe("no_progress");
+    } finally { db.close(); }
+  });
   test("updates recovery attempt as no_progress for keepalive/token/repeated-error only activity", async () => {
     const db = await fixtureDb();
     try {

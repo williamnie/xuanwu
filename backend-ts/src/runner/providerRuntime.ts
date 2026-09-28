@@ -103,7 +103,7 @@ export async function runIssueWithProvider(
       selection_reason: resolvedInput.selectionReason
     });
   }
-  const eventSink = providerEventSink(resolvedInput, activeRunID, activeRun?.attempt ?? 0);
+  const eventSink = providerEventSink(resolvedInput, activeRunID, activeAttemptSequence(resolvedInput, activeRunID, activeRun?.attempt ?? 0));
   let result: ProviderRunResult;
   try {
     result = await provider.run(providerInput(resolvedInput, eventSink.push));
@@ -161,7 +161,7 @@ export async function recoverIssueWithProvider(
       selection_reason: resolvedInput.selectionReason
     });
   }
-  const eventSink = providerEventSink(resolvedInput, activeRunID, activeRun?.attempt ?? 0);
+  const eventSink = providerEventSink(resolvedInput, activeRunID, activeAttemptSequence(resolvedInput, activeRunID, activeRun?.attempt ?? 0));
   let result: ProviderRunResult;
   try {
     result = await provider.recover(providerRecoveryInput(resolvedInput, eventSink.push));
@@ -181,9 +181,32 @@ export async function recoverIssueWithProvider(
   return result;
 }
 
+export async function persistRecoveredProviderEvents(input: RunnerIssueExecutionInput, events: ProviderEvent[]): Promise<void> {
+  const runID = cleanString(input.issueRunId);
+  const sink = providerEventSink(input, runID, activeAttemptSequence(input, runID, 1));
+  for (const event of events) sink.push(event);
+  await sink.flush();
+}
+
+function activeAttemptSequence(input: RunnerIssueExecutionInput, runID: string, fallback: number): number {
+  return input.database?.sqlite.query<{ sequence: number }, [string]>(
+    "select sequence from run_attempts where issue_run_id=? order by sequence desc limit 1"
+  ).get(runID)?.sequence ?? fallback;
+}
+
 function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string, activeAttempt: number) {
   const mode = issueLogMode(input);
+  const currentAttempt = () => {
+    if (!input.database || !activeRunID) return true;
+    const current = input.database.sqlite.query<{ id: string; sequence: number; status: string }, [number]>(`
+      select ir.id, ra.sequence, i.status from issues i join issue_runs ir on ir.issue_id=i.id
+      join run_attempts ra on ra.issue_run_id=ir.id where i.id=?
+      order by ir.attempt desc, ra.sequence desc limit 1
+    `).get(input.issueId);
+    return current?.status === "in_progress" && current.id === activeRunID && current.sequence === activeAttempt;
+  };
   const queue = createBoundedPersistenceQueue<{ kind: "log" | "terminal" | "marker"; serialized: string }>(async (task) => {
+    if (!currentAttempt()) return;
     const event = JSON.parse(task.serialized) as ProviderEvent;
     if (task.kind === "log") {
       await persistRuntimeEvent(input, event, activeRunID, activeAttempt);
@@ -218,6 +241,7 @@ function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string
     mode,
     hasFailure: () => failure,
     push(event: ProviderEvent) {
+      if (!currentAttempt()) return;
       queue.throwIfFailed();
       if (event.runEvent?.kind === "error") failure = true;
       input.onLog?.(event);
@@ -252,6 +276,7 @@ async function reconcileTerminalEvent(
       issueID: input.issueId,
       issueRunID: activeRunID,
       providerID: event.provider,
+      providerTurnID: event.session?.turnId,
       reportedOutcome: parseProviderOutcomeMarker(event.text) ?? terminalOutcome
     });
   } catch (error) {

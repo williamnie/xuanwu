@@ -34,6 +34,7 @@ export type PiRecoveryResumeTurnFilter = {
 };
 export type PiRecoveryAttemptCountFilter = {
   actionType?: string; issueId?: number; projectId?: string; sessionId?: string; since: string;
+  excludeWaits?: boolean;
   statuses?: PiRecoveryAttemptStatus[];
 };
 export type PiRecoveryAttemptWindowFilter = PiRecoveryAttemptCountFilter;
@@ -138,11 +139,11 @@ export function latestPiRecoveryAttemptForAction(
 ): PiRecoveryAttempt | null {
   const actionID = cleanString(input.actionID);
   if (actionID === "") return null;
-  const row = db.sqlite.query<Record<string, unknown>, [number, string, string]>(
+  const row = db.sqlite.query<Record<string, unknown>, [number, string, string, string]>(
     `select ${COLUMNS} from ${TABLE}
-      where issue_id=? and (source_decision_id=? or idempotency_key like ? escape '\\')
+      where issue_id=? and (id=? or source_decision_id=? or idempotency_key like ? escape '\\')
       order by created_at desc, id desc limit 1`
-  ).get(integerInput(input.issueID), actionID, `%${escapeLike(actionID)}%`);
+  ).get(integerInput(input.issueID), `recovery-${actionID}`, actionID, `%${escapeLike(actionID)}%`);
   return row ? mapAttempt(row) : null;
 }
 
@@ -175,6 +176,7 @@ export function firstPiRecoveryAttemptCreatedAt(
 
 function windowQuery(filter: PiRecoveryAttemptWindowFilter): { args: SQLValue[]; where: string } {
   const conditions = ["created_at>=?"];
+  if (filter.excludeWaits) conditions.push("action_type<>'issue.retry_after'");
   const args: SQLValue[] = [requiredString(filter.since, "since")];
   addCondition(conditions, args, "project_id=?", filter.projectId);
   addCondition(conditions, args, "issue_id=?", filter.issueId);

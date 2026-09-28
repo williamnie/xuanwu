@@ -120,6 +120,7 @@ function buildIssueSupervisorRecoveryContextFromEvents(
       history,
       legacyInvalidFallbackDiagnosis: legacyInvalidFallbackDiagnosis(issue.error),
       issueStatus: issue.status,
+      retryAfterAt: issue.auto_retry_next_at,
       latestRun,
       now,
       policy,

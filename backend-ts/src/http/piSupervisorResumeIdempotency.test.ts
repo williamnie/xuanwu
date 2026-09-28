@@ -10,6 +10,7 @@ import { createPiAction } from "../db/repositories/pi.ts";
 import { listPiRecoveryAttempts, recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";
+import { normalizeCodexEvent } from "../providers/codex/events.ts";
 
 const tempRoots: string[] = [];
 
@@ -18,6 +19,82 @@ afterEach(async () => {
 });
 
 describe("PI supervisor resume follow-up idempotency", () => {
+  test("events remain connected after recover returns and an old Attempt cannot overwrite the new one", async () => {
+    const db = await fixtureDb();
+    const provider = new ResumeProvider();
+    const sinks: Array<NonNullable<Parameters<NonNullable<ExecutorProvider["recover"]>>[0]["onEvent"]>> = [];
+    try {
+      insertProject(db, "demo"); insertIssueRunSession(db, 323);
+      provider.recover = async (input) => {
+        sinks.push(input.onEvent!);
+        return { runId: `recovered-${sinks.length}`, session: { provider: "codex", sessionId: input.session.sessionId, turnId: `turn-${sinks.length}` } };
+      };
+      const first = resumeAction(db, 323);
+      await dispatchPiAction({ database: db, providers: { codex: provider } }, first);
+      const second = createPiAction(db, { id: "resume-second-323", action_type: first.action_type, issue_id: 323, project_id: "demo", status: "approved",
+        payload_json: JSON.stringify({ ...JSON.parse(first.payload_json), expected_provider_turn_id: "turn-1" }) });
+      await dispatchPiAction({ database: db, providers: { codex: provider } }, second);
+      const done = (turnId: string) => normalizeCodexEvent({ method: "turn/completed", params: { threadId: "thread-323", turnId, turn: { id: turnId, status: "completed" } } });
+      sinks[0]!(done("turn-1"));
+      expect(listIssueRuns(db, 323).at(-1)).toMatchObject({ status: "in_progress", provider_turn_id: "turn-2" });
+      sinks[1]!(done("turn-2"));
+      for (let index = 0; index < 100; index++) {
+        if (listIssueEvents(db, 323).some((event) => event.type === "issue.pi_acceptance_requested.v1")) break;
+        await Bun.sleep(5);
+      }
+      expect(listIssueRuns(db, 323).at(-1)?.status).toBe("succeeded");
+      expect(listIssueEvents(db, 323).filter((event) => event.type === "issue.pi_acceptance_requested.v1")).toHaveLength(1);
+    } finally { db.close(); }
+  });
+
+  test("managed recovery persists completion and evidence even before recover returns", async () => {
+    const db = await fixtureDb();
+    const provider = new ResumeProvider();
+    try {
+      insertProject(db, "demo");
+      insertIssueRunSession(db, 321);
+      provider.recover = async (input) => {
+        const params = { threadId: input.session.sessionId, turnId: "turn-recovered" };
+        input.onEvent?.(normalizeCodexEvent({ method: "turn/started", params }));
+        input.onEvent?.(normalizeCodexEvent({ method: "item/completed", params: { ...params, item: {
+          id: "check-321", type: "commandExecution", command: "bun test", status: "completed", exitCode: 0, aggregatedOutput: "33 pass, 0 fail"
+        } } }));
+        input.onEvent?.(normalizeCodexEvent({ method: "item/completed", params: { ...params, item: {
+          id: "final-321", type: "agentMessage", phase: "final_answer", text: "Verified.\nRUNNER_OUTCOME: completed"
+        } } }));
+        input.onEvent?.(normalizeCodexEvent({ method: "turn/completed", params: { ...params, turn: { id: params.turnId, status: "completed" } } }));
+        return { runId: "recovered", session: { provider: "codex", sessionId: params.threadId, turnId: params.turnId } };
+      };
+      await dispatchPiAction({ database: db, providers: { codex: provider } }, resumeAction(db, 321));
+      expect(provider.calls).toEqual([]);
+      expect(listIssueRuns(db, 321).at(-1)).toMatchObject({ status: "succeeded", provider_turn_id: "turn-recovered" });
+      expect(getAgentSession(db, "codex:thread-321")?.status).toBe("completed");
+      expect(db.sqlite.query("select sequence,status from run_attempts where issue_run_id=? order by sequence").all("issue-321-attempt-1"))
+        .toEqual([{ sequence: 1, status: "interrupted" }, { sequence: 2, status: "succeeded" }]);
+      const events = listIssueEvents(db, 321);
+      expect(events.map((event) => event.type)).toContain("issue.pi_acceptance_requested.v1");
+      const command = events.map((event) => JSON.parse(event.payload || "{}"))
+        .find((event) => event.command === "bun test");
+      expect(command.runtime_evidence_correlation.attempt_id).toEndWith("~attempt:2");
+    } finally { db.close(); }
+  });
+
+  test("a completed native turn is reconciled without sending another follow-up", async () => {
+    const db = await fixtureDb();
+    const provider: ExecutorProvider = new ResumeProvider();
+    try {
+      insertProject(db, "demo");
+      insertIssueRunSession(db, 322);
+      provider.listSessionTurns = async () => ({ data: [{ id: "turn-old", status: "completed", items: [
+        { id: "final-322", type: "agentMessage", text: "RUNNER_OUTCOME: completed", phase: "final_answer" }
+      ] }] });
+      const result = await dispatchPiAction({ database: db, providers: { codex: provider } }, resumeAction(db, 322));
+      expect(result).toMatchObject({ outcome: "reconciled", skipped: true });
+      expect(attempts(db, 322)).toHaveLength(0);
+      expect(listIssueRuns(db, 322).at(-1)?.status).toBe("succeeded");
+    } finally { db.close(); }
+  });
+
   test("records executing attempt before provider call and saves result turn", async () => {
     const db = await fixtureDb();
     const provider = new ResumeProvider();
@@ -246,6 +323,12 @@ class ResumeProvider implements ExecutorProvider {
       sessionId,
       ...(this.readTurnID === "" ? {} : { provider_turn_id: this.readTurnID, turn_id: this.readTurnID })
     };
+  }
+
+  async recover(input: Parameters<NonNullable<ExecutorProvider["recover"]>>[0]) {
+    const result = await this.sendSessionMessage({ prompt: input.prompt, sessionId: input.session.sessionId });
+    return { runId: `codex:${result.sessionId}:${result.turn_id}`,
+      session: { provider: this.id, sessionId: result.sessionId, turnId: result.turn_id } };
   }
 
   async sendSessionMessage(input: SessionMessageInput) {

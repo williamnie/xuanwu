@@ -28,6 +28,70 @@ afterEach(async () => {
 });
 
 describe("PI issue supervisor scheduler", () => {
+  test("completion during PI reasoning invalidates a pending needs-user escalation", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-decision-race-"));
+      insertRunningIssue(db, { issueID: 494, projectID: "demo", threadID: "thread-494", turnID: "turn-494", sessionUpdatedAt: "2026-06-10T07:00:00Z" });
+      let status = "interrupted";
+      const provider: ExecutorProvider = { id: "codex", capabilities: ["sessions"], run: async () => ({ runId: "unused" }),
+        listSessionTurns: async () => ({ data: [{ id: "turn-494", status, items: [] }] }) };
+      await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, providers: { codex: provider },
+        runDecision: async () => { status = "completed"; return validDecision(needsUserDecision("No progress")); } });
+      expect(listPiActions(db, { issueId: 494 })).toEqual([]);
+      expect(db.sqlite.query("select status from issue_runs where issue_id=494").get()).toEqual({ status: "succeeded" });
+    } finally { db.close(); }
+  });
+
+  test("reconciles the completed native turn before an exhausted budget can escalate", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-completed-native-"));
+      insertRunningIssue(db, { issueID: 496, projectID: "demo", threadID: "thread-496", turnID: "turn-496", sessionUpdatedAt: "2026-06-10T07:00:00Z" });
+      for (let index = 0; index < 6; index++) recordPiRecoveryAttempt(db, {
+        id: `exhausted-${index}`, idempotency_key: `exhausted-${index}`, issue_id: 496, project_id: "demo",
+        action_type: "issue.retry", diagnosis_code: "session_no_recent_progress", status: "executing",
+        budget_window_started_at: "2026-06-10T07:00:00Z", created_at: "2026-06-10T07:00:00Z"
+      });
+      let reads = 0;
+      const provider: ExecutorProvider = {
+        id: "codex", capabilities: ["sessions"], run: async () => { throw new Error("must not start"); },
+        async listSessionTurns(_id, options) {
+          reads++;
+          expect(options).toEqual({ limit: 1, itemsView: "full", sortDirection: "desc" });
+          return { data: [{ id: "turn-496", status: "completed", items: [
+            { id: "result", type: "agentMessage", phase: "final_answer", text: "33 tests passed.\nRUNNER_OUTCOME: completed" }
+          ] }] };
+        }
+      };
+      const input = { database: db, now: NOW, providers: { codex: provider }, runDecision: async () => { throw new Error("must request acceptance instead of recovery"); } };
+      await runPiIssueSupervisorSchedulerOnce(input);
+      await runPiIssueSupervisorSchedulerOnce(input);
+      expect(reads).toBe(1);
+      expect(db.sqlite.query("select status from issues where id=496").get()).toEqual({ status: "in_progress" });
+      expect(db.sqlite.query("select status from issue_runs where issue_id=496").get()).toEqual({ status: "succeeded" });
+      expect(listIssueEvents(db, 496).filter((event) => event.type === "issue.pi_acceptance_requested.v1")).toHaveLength(1);
+      expect(listPiActions(db, { issueId: 496 })).toEqual([]);
+    } finally { db.close(); }
+  });
+
+  test("a live native turn and a newer turn are never blindly resumed", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-live-native-"));
+      insertRunningIssue(db, { issueID: 495, projectID: "demo", threadID: "thread-495", turnID: "turn-495", sessionUpdatedAt: "2026-06-10T07:00:00Z" });
+      const provider: ExecutorProvider = { id: "codex", capabilities: ["sessions"], run: async () => ({ runId: "unused" }),
+        listSessionTurns: async () => ({ data: [{ id: "turn-495", status: "inProgress", items: [] }] }) };
+      const input = { database: db, now: NOW, providers: { codex: provider }, runDecision: async () => { throw new Error("must not resume"); } };
+      expect((await runPiIssueSupervisorSchedulerOnce(input)).decisions).toBe(0);
+      provider.listSessionTurns = async () => ({ data: [{ id: "newer-turn", status: "completed", items: [] }] });
+      expect((await runPiIssueSupervisorSchedulerOnce(input)).decisions).toBe(0);
+      provider.listSessionTurns = async () => { throw new Error("transport disconnected"); };
+      expect((await runPiIssueSupervisorSchedulerOnce(input)).decisions).toBe(0);
+      expect(db.sqlite.query("select status from issue_runs where issue_id=495").get()).toEqual({ status: "in_progress" });
+    } finally { db.close(); }
+  });
+
   test("uses the five-minute scheduler stale threshold when no override is provided", async () => {
     const db = await fixtureDb();
     let calls = 0;
@@ -544,6 +608,10 @@ describe("PI issue supervisor scheduler", () => {
 
       const result = await runPiIssueSupervisorSchedulerOnce({
         database: db,
+        providers: { codex: {
+          id: "codex", capabilities: ["sessions"], run: async () => ({ runId: "unused" }),
+          listSessionTurns: async () => { throw new Error("terminal failures use the existing PI path"); }
+        } },
         runDecision: async () => {
           calls += 1;
           return validDecision(noopDecision());
@@ -825,6 +893,12 @@ class SupervisorProvider implements ExecutorProvider {
 
   async run(_input: ProviderRunInput): Promise<never> {
     throw new Error("not implemented");
+  }
+
+  async recover(input: Parameters<NonNullable<ExecutorProvider["recover"]>>[0]) {
+    const result = await this.sendSessionMessage({ prompt: input.prompt, sessionId: input.session.sessionId });
+    return { runId: `codex:${result.sessionId}:${result.turn_id}`,
+      session: { provider: this.id, sessionId: result.sessionId, turnId: result.turn_id } };
   }
 
   async sendSessionMessage(input: SessionMessageInput) {
