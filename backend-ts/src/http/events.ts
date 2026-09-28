@@ -28,7 +28,7 @@ function eventStreamResponse(context: EventRoutesContext, signal: AbortSignal): 
   });
   if (output.write(`retry: 1000\n\n${comment("connected")}`)) {
     heartbeat = setInterval(() => output.write(comment("heartbeat")), heartbeatMs);
-    void pumpEvents().catch((error) => output.abort(error));
+    void pumpEvents().catch(() => output.abort());
   }
 
   async function pumpEvents(): Promise<void> {

@@ -66,7 +66,7 @@ describe("Bun SSE events endpoint", () => {
       await Promise.resolve();
     }
     expect(bus.subscriberCount()).toBe(0);
-    await expect(response.body!.getReader().read()).rejects.toThrow("SSE buffer limit exceeded");
+    expect((await response.body!.getReader().read()).done).toBe(true);
   });
 
   test("request abort detaches a subscriber waiting for its next event", async () => {
@@ -79,7 +79,7 @@ describe("Bun SSE events endpoint", () => {
     await reader.read();
     const pending = reader.read();
     abort.abort(new Error("disconnected"));
-    await expect(pending).rejects.toThrow("disconnected");
+    expect((await pending).done).toBe(true);
     expect(bus.subscriberCount()).toBe(0);
   });
 
@@ -96,7 +96,7 @@ describe("Bun SSE events endpoint", () => {
       expect(new TextDecoder().decode((await reader.read()).value)).toContain(`"id":${i}`);
     }
     expect(bus.subscriberCount()).toBe(1);
-    await expect(slow.body!.getReader().read()).rejects.toThrow("SSE buffer limit exceeded");
+    expect((await slow.body!.getReader().read()).done).toBe(true);
     await reader.cancel();
     expect(bus.subscriberCount()).toBe(0);
   });

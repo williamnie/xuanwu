@@ -10,7 +10,7 @@ describe("bounded SSE response stream", () => {
     expect(output.closed).toBe(true);
     expect(closed).toBe(1);
     expect(output.write("later")).toBe(false);
-    await expect(output.stream.getReader().read()).rejects.toThrow("reconnect and reload the snapshot");
+    expect((await output.stream.getReader().read()).done).toBe(true);
     output.close();
     output.abort();
     expect(closed).toBe(1);
@@ -45,16 +45,43 @@ describe("bounded SSE response stream", () => {
     const output = createBoundedEventStream({ signal: signal.signal, onClose: () => closed++ });
     output.write("queued");
     signal.abort(new Error("client disconnected"));
-    await expect(output.stream.getReader().read()).rejects.toThrow("client disconnected");
+    expect((await output.stream.getReader().read()).done).toBe(true);
     const next = createBoundedEventStream({ signal: signal.signal, onClose: () => closed++ });
     expect(next.write("unreachable")).toBe(false);
-    await expect(next.stream.getReader().read()).rejects.toThrow("client disconnected");
+    expect((await next.stream.getReader().read()).done).toBe(true);
     expect(closed).toBe(2);
   });
 
   test("rejects oversized single events without retaining them", async () => {
     const output = createBoundedEventStream({ maxBufferBytes: 8 });
     expect(output.write("x".repeat(9))).toBe(false);
-    await expect(output.stream.getReader().read()).rejects.toThrow("SSE buffer limit exceeded");
+    expect((await output.stream.getReader().read()).done).toBe(true);
+  });
+
+  test("normal completion drains all queued final events in order", async () => {
+    let closed = 0;
+    const output = createBoundedEventStream({ maxBufferBytes: 16, onClose: () => closed++ });
+    output.write("accepted");
+    output.write("done");
+    output.close();
+    expect(closed).toBe(1);
+    expect(output.write("later")).toBe(false);
+    const reader = output.stream.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe("accepted");
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe("done");
+    expect((await reader.read()).done).toBe(true);
+  });
+
+  test("abort completes pending reads and cancel discards a graceful close backlog", async () => {
+    const output = createBoundedEventStream();
+    const reader = output.stream.getReader();
+    const pending = [reader.read(), reader.read()];
+    output.abort();
+    expect((await Promise.all(pending)).every((read) => read.done)).toBe(true);
+    const next = createBoundedEventStream();
+    next.write("queued");
+    next.close();
+    await next.stream.cancel();
+    expect((await next.stream.getReader().read()).done).toBe(true);
   });
 });
