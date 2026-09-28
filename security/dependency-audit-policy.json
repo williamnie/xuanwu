@@ -7,6 +7,13 @@
       "severity": "high",
       "required_path": "@qoder-ai/qodercli > sharp",
       "reason": "Qoder SDK 1.0.32 requires companion CLI 1.1.40; that CLI still declares sharp ^0.34.5 and excludes the patched sharp 0.35.x versions."
+    },
+    {
+      "package": "sharp",
+      "advisory": "GHSA-rgj7-g3m4-5g8c",
+      "severity": "high",
+      "required_path": "@qoder-ai/qodercli > sharp",
+      "reason": "User explicitly deferred Qoder on 2026-09-28 for the v0.2.13 release. Both the pinned CLI 1.1.40 and upstream CLI 1.1.64 still bundle sharp 0.34.5; overriding to patched sharp 0.35.4 breaks the bundled 0.34.5 wrapper. Preserve the SDK/CLI pair pending an upstream-compatible fix; this exception does not mean the vulnerability is fixed."
     }
   ]
 }

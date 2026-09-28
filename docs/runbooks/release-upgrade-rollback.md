@@ -91,6 +91,7 @@ xuanwu-update upgrade \
 - operator action：升级前备份并验证 `runner.db`、`runner-settings.local.json` 及新增的 `${XUANWU_STATE_DIR}/skill-library`。GitHub 自动接管和 Jev 辅助技能须显式配置，不会因升级自动启用。
 - Qoder CLI 从旧 Release 的 `1.1.23` 升级至 `1.1.40`，首次跨版本安装必须使用支持 `qoder_cli_version` 的新版 installer；详见下方 Qoder 升级说明。
 - 本次采用本地四平台构建与人工授权上传，不执行 GitHub Actions，不提供 GitHub OIDC/Sigstore attestation；以发布 tag、`release.json` 和 SHA-256 checksums 对照产物。安装器默认 `auto` 模式仍校验 checksum 并提示缺少 signed provenance；显式要求 `XUANWU_VERIFY_ATTESTATION=require` 的环境不能将本次发布视为已签名产物。
+- 安全审计：Tiptap `3.30.5`、Hono `4.13.5` 消除本次对应告警。维护者在 2026-09-28 明确暂缓 Qoder，`sharp 0.34.5` 的 `GHSA-f88m-g3jw-g9cj` 与 `GHSA-rgj7-g3m4-5g8c` 保留为精确允许清单中的已知高风险例外；不能将审计门禁通过解释为全部依赖零漏洞。
 
 ### 2026-09-09 development redeploy：运行时性能优化
 
