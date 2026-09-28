@@ -447,7 +447,7 @@ describe("executor provider runtime seam", () => {
         issue_id: issueId,
         raw_ref: "{\"provider_turn_id\":\"fake-turn\",\"run_id\":\"fake-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"},\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
       });
-      const issueEvents = listIssueEvents(db, issueId);
+      const issueEvents = listIssueEvents(db, issueId, { types: ["issue.log"] });
       expect(issueEvents).toMatchObject([{
         issue_id: issueId,
         type: "issue.log"

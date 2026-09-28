@@ -8,6 +8,7 @@ import { appLanguage } from "../i18n/language.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { piInternalReadAuthorization } from "./internalReadAuthorization.ts";
 import { withOptionalJevTool } from "../skills/jev/policy.ts";
+import { recordExecutorMemoryCitations, RUN_MEMORY_RULES } from "./runMemoryContext.ts";
 import {
   parseStructuredAssistantOutput,
   structuredAssistantProviderError,
@@ -73,6 +74,7 @@ export async function runPiIssueAcceptance(input: {
   database: RunnerDatabase;
   project: Project;
 }): Promise<PiAcceptanceRuntimeResult> {
+  recordExecutorMemoryCitations(input.database, input.card.issue.id, input.card.run.id, input.card.final_message);
   const { createPiRuntimeSession } = await import("../http/piRuntime.ts");
   const toolNames = withOptionalJevTool(input.database, { projectID: input.project.id, issueID: input.card.issue.id, source: "pi_issue_acceptance" }, ACCEPTANCE_TOOL_NAMES);
   const runtime = await createPiRuntimeSession(input.database, {
@@ -84,6 +86,7 @@ export async function runPiIssueAcceptance(input: {
     }),
     conversationID: `pi-acceptance-${input.card.issue.id}-${input.card.fingerprint.slice(0, 12)}`,
     issueID: input.card.issue.id,
+    issueRunID: input.card.run.id,
     heartbeatID: `pi-acceptance:${input.project.id}:${input.card.issue.id}:${input.card.fingerprint.slice(0, 12)}`,
     promptProfile: "acceptance",
     project: input.project,
@@ -144,6 +147,8 @@ function acceptancePrompt(card: CompletionCard, language: string): string {
   return [
     "You are the Xuanwu PI accepting one completed Work on the user's behalf.",
     "This is a semantic acceptance decision, not a shell-command classifier and not a project manager meeting.",
+    RUN_MEMORY_RULES,
+    "Use durable_context.run_memory to trace this exact Run's snapshot. Historical memory verification is not current Run evidence; injection and citations alone never justify acceptance or progress.",
     "Return exactly one JSON object. No markdown, code fences, or prose outside JSON.",
     language === "zh-CN"
       ? "rationale、unmet_requirements、progress.summary、follow_up_prompt 使用简体中文；schema key 和 decision 枚举保持英文。"

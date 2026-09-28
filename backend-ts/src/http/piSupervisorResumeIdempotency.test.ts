@@ -6,7 +6,8 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { listIssueRuns } from "../db/repositories/issues.ts";
-import { createPiAction } from "../db/repositories/pi.ts";
+import { createPiAction, createPiMemoryItem, updatePiMemoryItem } from "../db/repositories/pi.ts";
+import { appendRunMemoryPrompt, readRunMemorySnapshot } from "../pi/runMemoryContext.ts";
 import { listPiRecoveryAttempts, recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";
@@ -18,6 +19,31 @@ afterEach(async () => {
 });
 
 describe("PI supervisor resume follow-up idempotency", () => {
+  test("resume and steer carry the original snapshot and recheck disabled memory at the dispatch boundary", async () => {
+    for (const actionType of ["session.resume_followup", "session.steer"] as const) {
+      const db = await fixtureDb();
+      const provider = new ResumeProvider();
+      try {
+        insertProject(db, "demo");
+        insertIssueRunSession(db, 325);
+        createPiMemoryItem(db, { id: "dispatch-policy", scope: "project", scope_id: "demo", kind: "project_policy",
+          content: "Retired dispatch lesson body" });
+        appendRunMemoryPrompt(db, 325, "issue-325-attempt-1", "Task", "execution");
+        const snapshot = readRunMemorySnapshot(db, 325, "issue-325-attempt-1")!;
+        updatePiMemoryItem(db, "dispatch-policy", { disabled: 1 });
+        const action = actionType === "session.resume_followup" ? resumeAction(db, 325) : createPiAction(db, {
+          id: "memory-steer", action_type: actionType, issue_id: 325, project_id: "demo", status: "approved",
+          payload_json: JSON.stringify({ session_key: "codex:thread-325", prompt: "Recheck", provider_turn_id: "turn-old" })
+        });
+        await dispatchPiAction({ database: db, providers: { codex: provider } }, action);
+        expect(provider.calls).toHaveLength(1);
+        expect(provider.calls[0]!.prompt).toContain(snapshot.snapshot_id);
+        expect(provider.calls[0]!.prompt).toContain("excluded_not_current_candidate");
+        expect(provider.calls[0]!.prompt).not.toContain("Retired dispatch lesson body");
+      } finally { db.close(); }
+    }
+  });
+
   test("records executing attempt before provider call and saves result turn", async () => {
     const db = await fixtureDb();
     const provider = new ResumeProvider();

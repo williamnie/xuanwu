@@ -3,6 +3,8 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
 import type { RuntimeSessionInput } from "../http/piRuntime.ts";
 import { retrievePiMemoryContext } from "./memoryContext.ts";
+import { listIssueRuns } from "../db/repositories/issues.ts";
+import { projectRunMemoryContext, RUN_MEMORY_RULES } from "./runMemoryContext.ts";
 
 export const PI_RUNTIME_CONTEXT_SCHEMA_VERSION = "xw.pi-runtime-context.v1" as const;
 
@@ -10,7 +12,10 @@ export type PiRuntimeContextEnvelope = ReturnType<typeof buildPiRuntimeContextEn
 
 export function buildPiRuntimeContextEnvelope(db: RunnerDatabase, input: RuntimeSessionInput) {
   const project = input.toolProject ?? input.project;
-  const memory = retrievePiMemoryContext(db, {
+  const runMemory = ["acceptance", "recovery"].includes(input.promptProfile) && input.issueID && project
+    ? projectRunMemoryContext(db, input.issueID, input.issueRunID ?? listIssueRuns(db, input.issueID).at(-1)?.id ?? "", project.id)
+    : null;
+  const memory = runMemory?.memory ?? retrievePiMemoryContext(db, {
     conversationID: input.conversationID,
     issueID: input.issueID,
     taskDescription: input.sourceTurn?.userPrompt,
@@ -36,6 +41,7 @@ export function buildPiRuntimeContextEnvelope(db: RunnerDatabase, input: Runtime
       project_id: cleanString(project?.id)
     },
     durable_context: {
+      ...(runMemory ? { run_memory: runMemory.run_memory } : {}),
       memory_items: memory.memory_items.map((item) => ({
         authority: item.authority,
         confidence: item.confidence,
@@ -63,7 +69,8 @@ export function buildPiRuntimeContextEnvelope(db: RunnerDatabase, input: Runtime
       "advisory memory is a hint only",
       "Pi must check technical candidates' applies_when, version and counterexamples; memory_search selects exact revisions",
       "current Work, Run, Issue, Provider Session, approval, permission, and repository state must come from authoritative runtime records or tools",
-      "the explicit issue target for this invocation must never be replaced by unrelated conversation history"
+      "the explicit issue target for this invocation must never be replaced by unrelated conversation history",
+      ...(runMemory ? [RUN_MEMORY_RULES] : [])
     ]
   };
 }
@@ -103,6 +110,7 @@ export function recordPiRuntimeContextEnvelopeAudit(
         identity: envelope.identity,
         invocation: envelope.invocation,
         target: envelope.target,
+        run_memory: envelope.durable_context.run_memory,
         memory_refs: envelope.durable_context.memory_items.map((item) => ({
           id: item.id,
           revision: item.revision,

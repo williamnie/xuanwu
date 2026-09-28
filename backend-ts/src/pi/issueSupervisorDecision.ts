@@ -4,6 +4,7 @@ import { createIssueSupervisorEvent, type PiAgent } from "../db/repositories/pi.
 import type { Project } from "../db/repositories/projects.ts";
 import { piInternalReadAuthorization } from "./internalReadAuthorization.ts";
 import { withOptionalJevTool } from "../skills/jev/policy.ts";
+import { RUN_MEMORY_RULES } from "./runMemoryContext.ts";
 import {
   PI_SUPERVISOR_DECISION_JSON_SCHEMA,
   type PiSupervisorDecisionJson
@@ -66,6 +67,7 @@ export async function runPiSupervisorDecision(
     }),
     conversationID: `pi-supervisor-${issueID(input.context)}-${Date.now()}`,
     issueID: issueID(input.context),
+    issueRunID: cleanString(input.context.latest_run?.id),
     heartbeatID: `pi-supervisor:${input.project.id}:${issueID(input.context)}`,
     promptProfile: "recovery",
     project: input.project,
@@ -139,6 +141,8 @@ function decisionPrompt(context: IssueSupervisorRecoveryContext, now: Date, lang
     "Allowed fallback_if_no_progress values: needs_user, retry_issue, blocked. Do not put explanatory prose in this field.",
     "Omit optional recovery_message or wait_until when unused; never return null.",
     "Boundary constraints:",
+    RUN_MEMORY_RULES,
+    "Use durable_context.run_memory for this Run's frozen snapshot and Host applicability recheck. Independently check current code/version, every applies_when condition and counterexample before citing or proposing reuse; do not treat the Host text filter as semantic approval.",
     "- PI owns semantic Issue lifecycle decisions. The Host performs authorized writes; Codex/Claude are Provider workers; Supervisor only detects and signals.",
     "- Check current issue/session/project state before recommending recovery.",
     "- Avoid duplicate operations and repeated recovery loops.",

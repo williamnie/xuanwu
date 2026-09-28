@@ -4,7 +4,8 @@ import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSes
 import { deleteIssues, enqueueIssue } from "../db/repositories/issueActions.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
-import { getIssue, listIssues } from "../db/repositories/issues.ts";
+import { getIssue, listIssues, listIssueRuns } from "../db/repositories/issues.ts";
+import { appendRunMemoryPrompt } from "../pi/runMemoryContext.ts";
 import { approveImReplyDraft, createImReplyDraft } from "../db/repositories/imReplyOutbox.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { applyIssueStateRepair } from "../pi/issueStateManager.ts";
@@ -629,9 +630,13 @@ async function steerSession(
   if (prompt === "") throw new Error("prompt is required");
   const provider = context.providers?.[providerID];
   if (!provider?.sendSessionMessage) throw new Error(`provider "${providerID}" 不支持 capability "resume_session"`);
+  const session = getAgentSession(context.database, `${providerID}:${sessionID}`);
+  const run = session?.issue_id ? listIssueRuns(context.database, session.issue_id).at(-1) : undefined;
+  const memoryPrompt = run?.ended_at === "" && run.provider === providerID && run.provider_session_id === sessionID
+    ? appendRunMemoryPrompt(context.database, session!.issue_id, run.id, prompt, "recovery") : prompt;
   const result = await provider.sendSessionMessage({
     mode: "steer",
-    prompt,
+    prompt: memoryPrompt,
     sessionId: sessionID,
     turnId: latestSessionTurnID(context.database, providerID, sessionID, payload)
   });

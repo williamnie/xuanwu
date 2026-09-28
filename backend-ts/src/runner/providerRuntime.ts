@@ -34,6 +34,7 @@ import { ExecutionPolicyError, type ExecutionPolicyRequest, type ProviderPolicyC
 import type { ProviderTransport } from "../providers/core/manifest.ts";
 import { translateLegacyExecutionPolicy } from "../providers/core/legacyExecutionPolicy.ts";
 import { resolveExecutionPolicy } from "../providers/core/policyResolution.ts";
+import { appendRunMemoryPrompt, recordExecutorMemoryCitations } from "../pi/runMemoryContext.ts";
 
 const LIVE_PROVIDER_PAYLOAD_MAX_BYTES = 64 * 1024;
 
@@ -106,7 +107,10 @@ export async function runIssueWithProvider(
   const eventSink = providerEventSink(resolvedInput, activeRunID, activeRun?.attempt ?? 0);
   let result: ProviderRunResult;
   try {
-    result = await provider.run(providerInput(resolvedInput, eventSink.push));
+    const prompt = resolvedInput.database ? appendRunMemoryPrompt(
+      resolvedInput.database, input.issueId, activeRunID, input.prompt, "execution"
+    ) : input.prompt;
+    result = await provider.run(providerInput({ ...resolvedInput, prompt }, eventSink.push));
   } catch (error) {
     if (!isProviderInterruptedError(error) && !eventSink.hasFailure()) {
       eventSink.push(providerRunErrorEvent(providerID, error));
@@ -164,7 +168,10 @@ export async function recoverIssueWithProvider(
   const eventSink = providerEventSink(resolvedInput, activeRunID, activeRun?.attempt ?? 0);
   let result: ProviderRunResult;
   try {
-    result = await provider.recover(providerRecoveryInput(resolvedInput, eventSink.push));
+    const prompt = resolvedInput.database ? appendRunMemoryPrompt(
+      resolvedInput.database, input.issueId, activeRunID, input.prompt, "recovery"
+    ) : input.prompt;
+    result = await provider.recover(providerRecoveryInput({ ...resolvedInput, prompt }, eventSink.push));
   } catch (error) {
     if (!isProviderInterruptedError(error) && !eventSink.hasFailure()) {
       eventSink.push(providerRunErrorEvent(providerID, error));
@@ -185,6 +192,9 @@ function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string
   const mode = issueLogMode(input);
   const queue = createBoundedPersistenceQueue<{ kind: "log" | "terminal" | "marker"; serialized: string }>(async (task) => {
     const event = JSON.parse(task.serialized) as ProviderEvent;
+    if ((event.type === "provider.message" || event.type === "text") && !event.command && event.text && input.database) {
+      recordExecutorMemoryCitations(input.database, input.issueId, activeRunID, event.text);
+    }
     if (task.kind === "log") {
       await persistRuntimeEvent(input, event, activeRunID, activeAttempt);
     } else if (task.kind === "marker") {

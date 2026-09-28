@@ -63,6 +63,7 @@ export type RuntimeSessionInput = {
   project?: Project;
   promptProfile: PiRuntimePromptProfile;
   memoryReflection?: import("../pi/memoryReflectionQueue.ts").ReflectionLease;
+  issueRunID?: string;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   restartDelayMs?: number;
   restartProcess?: () => void;

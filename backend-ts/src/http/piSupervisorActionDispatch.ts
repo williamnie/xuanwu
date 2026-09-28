@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { appendRunMemoryPrompt } from "../pi/runMemoryContext.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { updateIssueRuntime } from "../db/repositories/issueRuns.ts";
@@ -103,7 +104,10 @@ async function resumeSessionFollowup(
   }
   let result: SessionMessageResult;
   try {
-    result = await provider.sendSessionMessage({ prompt, sessionId: sessionID });
+    result = await provider.sendSessionMessage({
+      prompt: appendRunMemoryPrompt(context.database, issueID, requiredText(payload.expected_run_id, "expected_run_id"), prompt, "recovery"),
+      sessionId: sessionID
+    });
     const turnID = requiredText(result.turn_id, "provider turn id");
     completeRunAttemptStart(context.database, resumeLifecycleEventID(action), {
       invocation_ref: `${providerID}:${sessionID}:${turnID}`,
