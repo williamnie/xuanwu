@@ -196,7 +196,8 @@ describe("PI memory tools", () => {
         occurrence_count: 1, revision: 1
       });
       expect(listPiMemoryItems(fixture.db)).toHaveLength(1);
-      expect(retrievePiMemoryContext(fixture.db, { projectID: "demo", tokenBudget: 4000 }).memory_items[0])
+      expect(retrievePiMemoryContext(fixture.db, { projectID: "demo", tokenBudget: 4000,
+        taskDescription: "异步请求超时且回调仍可能执行时，响应被重复写入", version: "v0.2.13" }).memory_items[0])
         .toMatchObject({ authority: "evidence_backed", content: JSON.stringify(seeded.experience) });
     } finally {
       await fixture.close();
@@ -507,6 +508,55 @@ describe("PI memory tools", () => {
       }, undefined, undefined, {} as never);
       expect(search.details).toMatchObject({ decision: "deny" });
       expect(listPiMemoryItems(fixture.db)).toEqual([]);
+    } finally { await fixture.close(); }
+  });
+
+  test("lets Pi narrow bounded text candidates and rejects stale, forged or suppressed selections", async () => {
+    const fixture = await openFixture();
+    try {
+      const { experience } = seedMemoryExperience(fixture.db);
+      const item = createPiMemoryItem(fixture.db, { id: "selectable", scope: "project", scope_id: "demo", kind: "resolution",
+        authority: "evidence_backed", content: JSON.stringify(experience) });
+      const search = toolByName(createPiMemoryTools(fixture.db, { projectID: "demo" }), "memory_search");
+      const input = { task_description: "async callback timed out", error_text: "ERR_STREAM_WRITE_AFTER_END",
+        file_paths: ["src/response.ts"], version: "v0.2.13", token_budget: 4000 };
+      expect(validateArgs(search, input)).toEqual(input);
+      const result = await search.execute("candidates", input, undefined, undefined, {} as never);
+      const candidates = (result.details as { items: Array<{ id: string; revision: number; content_fingerprint: string }> }).items;
+      expect(candidates).toHaveLength(1);
+      const { id, revision, content_fingerprint } = candidates[0];
+      const choice = { id, revision, content_fingerprint, reason: "相同异步超时回调条件，v0.2.13，复核后适用" };
+      const selected = await search.execute("select", { ...input, selection: [choice] }, undefined, undefined, {} as never);
+      expect((selected.details as { items: unknown[] }).items).toMatchObject([{ id, revision: 1, selection_stage: "pi_selected",
+        selection_reason: expect.stringContaining(choice.reason) }]);
+      for (const selection of [[], [{ ...choice, id: "invented" }], [{ ...choice, revision: 2 }],
+        [{ ...choice, content_fingerprint: "0".repeat(64) }]]) {
+        expect(itemIds((await search.execute("reject", { ...input, selection }, undefined, undefined, {} as never)).details)).toEqual([]);
+      }
+      updatePiMemoryItem(fixture.db, item.id, { content: JSON.stringify({ ...experience, resolution: "先注销回调，再释放响应" }) });
+      expect(itemIds((await search.execute("stale", { ...input, selection: [choice] }, undefined, undefined, {} as never)).details)).toEqual([]);
+      updatePiMemoryItem(fixture.db, item.id, { disabled: 1 });
+      expect(itemIds((await search.execute("disabled", input, undefined, undefined, {} as never)).details)).toEqual([]);
+      deletePiMemoryItem(fixture.db, item.id);
+      expect(itemIds((await search.execute("forgotten", input, undefined, undefined, {} as never)).details)).toEqual([]);
+    } finally { await fixture.close(); }
+  });
+
+  test("keeps query-only search, treats SQL metacharacters literally and rejects unbound scopes", async () => {
+    const fixture = await openFixture();
+    try {
+      seedProjectPolicyFixture(fixture.db);
+      const search = toolByName(createPiMemoryTools(fixture.db, { projectID: "demo", conversationID: "own" }), "memory_search");
+      for (const query of ["%", "' OR 1=1 --", "irrelevant-needle"]) {
+        expect(itemIds((await search.execute("literal", { query }, undefined, undefined, {} as never)).details)).toEqual([]);
+      }
+      for (const input of [{ scope: "project", scope_id: "other" }, { scope: "conversation", scope_id: "other" }, { scope: "issue", scope_id: "999" }]) {
+        expect((await search.execute("scope", input, undefined, undefined, {} as never)).details).toMatchObject({ rejected: true });
+      }
+      const result = await search.execute("query-only", { query: "concise" }, undefined, undefined, {} as never);
+      expect(itemIds(result.details)).toEqual(["global-user-preference"]);
+      expect((result.details as { limits: { token_estimate: number } }).limits.token_estimate).toBeLessThanOrEqual(900);
+      expect((await search.execute("empty-budget", { token_budget: 0 }, undefined, undefined, {} as never)).details).toMatchObject({ items: [] });
     } finally { await fixture.close(); }
   });
 });

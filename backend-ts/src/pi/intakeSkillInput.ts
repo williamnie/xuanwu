@@ -51,6 +51,7 @@ export function buildIntakeSkillInput(db: RunnerDatabase, bundle: ContextBundleR
     context_retrieval: retrievePiMemoryContext(db, {
       limit: 8,
       projectID: projectIDFromBundle(bundle),
+      taskDescription: events.slice(0, 8).map((event) => event.summary).join("\n").slice(0, 4096),
       sourceID: bundle.source,
       tokenBudget: 700
     }),

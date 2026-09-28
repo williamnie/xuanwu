@@ -115,10 +115,11 @@ describe("Bun PI reusable memory API", () => {
       expect(await enabled.json()).toMatchObject({ disabled: 0 });
       expect(await edited.json()).toMatchObject({
         citation_label: "Verified incident review",
+        content: "根因是仅查看 Run 叙述；修复并复验 completion gate、Evidence 和 Handoff。",
         disabled: 0,
         pinned: 1
       });
-      expect(beforeForget).toContain("修复并复验 completion gate、Evidence 和 Handoff");
+      expect(beforeForget).not.toContain("修复并复验 completion gate、Evidence 和 Handoff");
       expect(await forgot.json()).toEqual({ forgotten: true });
       expect(buildPiMemoryPromptContext(database, { projectID: "demo" })).not.toContain("typed-memory");
     } finally {
@@ -228,7 +229,8 @@ describe("Bun PI reusable memory API", () => {
       expect(resolution.status).toBe(201);
       expect(await resolution.json()).toMatchObject({ disabled: 0, kind: "resolution" });
       const prompt = buildPiMemoryPromptContext(database, { projectID: "demo" });
-      expect(prompt).toContain("Issue #785 failed 的根因");
+      // 旧文本仍可管理，但缺少适用条件/版本的技术经验不自动注入。
+      expect(prompt).not.toContain("Issue #785 failed 的根因");
       expect(prompt).toContain("always query authoritative tools for current state");
     } finally {
       database.close();

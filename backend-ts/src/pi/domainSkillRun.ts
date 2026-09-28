@@ -119,6 +119,7 @@ function domainContextRetrieval(
     inboxItemID: item.id,
     limit: 8,
     projectID: confidentProjectID(item),
+    taskDescription: item.title,
     skillID,
     sourceID: item.source || bundle?.source,
     tokenBudget: 700

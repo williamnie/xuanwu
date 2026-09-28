@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { runDelegationHeartbeatsOnce, runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
+import { createPiMemoryItem } from "../db/repositories/pi.ts";
+import { seedMemoryExperience } from "./memoryExperienceTestFixtures.ts";
 
 const tempRoots: string[] = [];
 
@@ -21,6 +23,22 @@ afterEach(async () => {
 });
 
 describe("PI heartbeat memory signals", () => {
+  test("only recalls technical experience for the bound task with a matching version", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const { experience, issueID } = seedMemoryExperience(db);
+      createPiMemoryItem(db, { id: "timeout-experience", scope: "project", scope_id: "demo", kind: "resolution",
+        authority: "evidence_backed", content: JSON.stringify(experience) });
+      const projectOnly = await runPiHeartbeatOnce({ database: db, projectID: "demo", now: new Date("2026-06-02T10:00:00Z") });
+      expect(projectOnly.signals.memory_items).toEqual([]);
+      db.sqlite.run("update issues set description=? where id=?", ["async callback timed out v0.2.13", issueID]);
+      insertDelegation(db, "task-memory", "demo", [issueID]);
+      const scoped = await runDelegationHeartbeatsOnce({ database: db, now: new Date("2026-06-02T10:01:00Z") });
+      expect(scoped.runs[0]?.signals.memory_items).toMatchObject([{ id: "timeout-experience", revision: 1,
+        content_fingerprint: expect.stringMatching(/^[a-f0-9]{64}$/), selection_stage: "text_candidate" }]);
+    } finally { db.close(); }
+  });
+
   test("retrieves confirmed project memory and omits disabled candidates", async () => {
     const db = await openFixtureDatabase();
     try {

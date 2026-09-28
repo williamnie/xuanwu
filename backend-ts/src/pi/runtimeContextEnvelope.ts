@@ -13,6 +13,7 @@ export function buildPiRuntimeContextEnvelope(db: RunnerDatabase, input: Runtime
   const memory = retrievePiMemoryContext(db, {
     conversationID: input.conversationID,
     issueID: input.issueID,
+    taskDescription: input.sourceTurn?.userPrompt,
     projectID: project?.id,
     sourceID: input.source || input.sourceTurn?.source
   });
@@ -40,18 +41,27 @@ export function buildPiRuntimeContextEnvelope(db: RunnerDatabase, input: Runtime
         confidence: item.confidence,
         content: item.content,
         kind: item.kind,
+        id: item.id,
+        revision: item.revision,
+        content_fingerprint: item.content_fingerprint,
+        version: item.version,
+        provenance: item.provenance,
+        selection_reason: item.selection_reason,
+        selection_stage: item.selection_stage,
         memory_key: item.memory_key,
         reference: item.reference,
         retrieval_scope: item.retrieval_scope,
         updated_at: item.updated_at
       })),
       retrieval_scopes: memory.retrieval_scopes,
+      retrieval: memory.retrieval,
       truncation: memory.truncation_summary
     },
     authority_rules: [
       "user_explicit memory is binding only for the exact stored preference, workflow, constraint, or acceptance choice in scope",
       "evidence_backed memory is reusable technical evidence and must still be checked against current facts",
       "advisory memory is a hint only",
+      "Pi must check technical candidates' applies_when, version and counterexamples; memory_search selects exact revisions",
       "current Work, Run, Issue, Provider Session, approval, permission, and repository state must come from authoritative runtime records or tools",
       "the explicit issue target for this invocation must never be replaced by unrelated conversation history"
     ]
@@ -94,6 +104,10 @@ export function recordPiRuntimeContextEnvelopeAudit(
         invocation: envelope.invocation,
         target: envelope.target,
         memory_refs: envelope.durable_context.memory_items.map((item) => ({
+          id: item.id,
+          revision: item.revision,
+          content_fingerprint: item.content_fingerprint,
+          selection_reason: item.selection_reason,
           authority: item.authority,
           memory_key: item.memory_key,
           reference: item.reference,

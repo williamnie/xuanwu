@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { buildPiMemoryPromptContext, retrievePiMemoryContext } from "./memoryContext.ts";
+import { createPiMemoryItem, deletePiMemoryItem, updatePiMemoryItem } from "../db/repositories/pi.ts";
+import { seedMemoryExperience } from "./memoryExperienceTestFixtures.ts";
+import { MEMORY_SCAN_LIMIT } from "./memoryRetrieval.ts";
 
 const tempRoots: string[] = [];
 
@@ -69,8 +72,7 @@ describe("PI memory prompt context", () => {
       expect(context).toContain("User prefers concise Chinese status updates");
       expect(context).not.toContain("Unconfirmed guess");
       expect(context).not.toContain("等待人工处理");
-      expect(context).toContain("Issue #785 failed 的根因");
-      expect(context).toContain("修复方式是以 Evidence、Handoff 和 completion gate 复验");
+      expect(context).not.toContain("Issue #785 failed 的根因");
       expect(context).toContain("pi_memory_items/project-policy");
       expect(context).toContain("source=runbook:policy-doc");
       expect(context).toContain("updated=2026-01-01T00:00:00Z");
@@ -194,13 +196,13 @@ describe("PI memory prompt context", () => {
         scopeID: "demo"
       });
 
-      const result = retrievePiMemoryContext(db, { projectID: "demo", tokenBudget: 80 });
+      const result = retrievePiMemoryContext(db, { projectID: "demo", tokenBudget: 320 });
 
       expect(result.memory_items).toHaveLength(1);
       expect(result.memory_items[0]).toMatchObject({ id: "long-memory", truncated: true });
       expect(result.memory_items[0].content).toContain("…");
-      expect(result.limits).toMatchObject({ token_budget: 80, truncated: true });
-      expect(result.limits.token_estimate).toBeLessThanOrEqual(80);
+      expect(result.limits).toMatchObject({ token_budget: 320, truncated: true });
+      expect(result.limits.token_estimate).toBeLessThanOrEqual(320);
     } finally {
       db.close();
     }
@@ -225,7 +227,7 @@ describe("PI memory prompt context", () => {
         scopeID: "demo"
       });
 
-      const result = retrievePiMemoryContext(db, { projectID: "demo", tokenBudget: 80 });
+      const result = retrievePiMemoryContext(db, { projectID: "demo", tokenBudget: 320 });
 
       expect(result.memory_items[0]).toMatchObject({
         id: "explain-long",
@@ -242,7 +244,7 @@ describe("PI memory prompt context", () => {
         omitted_count: 1,
         omitted_by_token_budget: 1,
         selected_count: 1,
-        token_budget: 80,
+        token_budget: 320,
         total_candidates: 2,
         truncated_item_ids: ["explain-long"]
       });
@@ -250,6 +252,122 @@ describe("PI memory prompt context", () => {
     } finally {
       db.close();
     }
+  });
+});
+
+describe("task-scoped experience retrieval", () => {
+  test("recalls synonyms, error keywords and paths with versioned provenance", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const { experience } = seedMemoryExperience(db);
+      const memory = createPiMemoryItem(db, { id: "timeout", scope: "project", scope_id: "demo", kind: "resolution",
+        authority: "evidence_backed", content: JSON.stringify({ ...experience, symptom: "ERR_STREAM_WRITE_AFTER_END in src/response.ts" }) });
+      for (const query of ["异步请求逾时，回调重复响应", "async callback timed out", "async callback ETIMEDOUT"]) {
+        const result = retrievePiMemoryContext(db, { projectID: "demo", query, errorText: "ERR_STREAM_WRITE_AFTER_END",
+          filePaths: ["src/response.ts"], version: "v0.2.13", tokenBudget: 4000 });
+        expect(result.memory_items).toHaveLength(1);
+        expect(result.memory_items[0]).toMatchObject({ id: memory.id, revision: 1,
+          version: experience.version, selection_stage: "text_candidate", authority: "evidence_backed",
+          provenance: { reference: "pi_memory_items/timeout" } });
+        expect(result.memory_items[0].content_fingerprint).toMatch(/^[a-f0-9]{64}$/);
+        expect(result.memory_items[0].selection_reason).toContain("applies_when and version matched");
+      }
+      expect(retrievePiMemoryContext(db, { projectID: "demo", query: "async callback timeout v0.2.13" }).memory_items).toHaveLength(1);
+      createPiMemoryItem(db, { id: "path-only", scope: "project", scope_id: "demo", kind: "resolution", authority: "evidence_backed",
+        content: JSON.stringify({ ...experience, applies_when: "src/response.ts" }) });
+      expect(retrievePiMemoryContext(db, { projectID: "demo", filePaths: ["src/response.ts"], version: "v0.2.13" })
+        .memory_items.map((item) => item.id)).toEqual(["path-only"]);
+      createPiMemoryItem(db, { id: "error-only", scope: "project", scope_id: "demo", kind: "resolution", authority: "evidence_backed",
+        content: JSON.stringify({ ...experience, applies_when: "timeout", symptom: "timeout" }) });
+      expect(retrievePiMemoryContext(db, { projectID: "demo", errorText: "ETIMEDOUT", version: "v0.2.13" })
+        .memory_items.map((item) => item.id)).toEqual(["error-only"]);
+    } finally { db.close(); }
+  });
+
+  test("excludes unrelated, negative, unknown-version, obsolete and cross-project experience", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const { experience } = seedMemoryExperience(db);
+      for (const [id, patch] of Object.entries({
+        own: {}, other: { scope_id: "other" }, global: { scope: "global", scope_id: "runner" },
+        disabled: { disabled: 1 }, forgotten: {}, old: { content: JSON.stringify({ ...experience, version: "v0.1.0" }) },
+        platform: { content: JSON.stringify({ ...experience, applies_when: "async callback timeout only on Windows" }) },
+        substring: { content: JSON.stringify({ ...experience, applies_when: "OOM", symptom: "out of memory" }) },
+        excluded: { content: JSON.stringify({ ...experience, applies_when: "async callback timeout; not applicable to Linux" }) }
+      })) {
+        createPiMemoryItem(db, { id, scope: "project", scope_id: "demo", kind: "resolution", authority: "evidence_backed",
+          content: JSON.stringify(experience), ...patch });
+      }
+      deletePiMemoryItem(db, "forgotten");
+      const input = { projectID: "demo", taskDescription: "async callback timeout on Linux", version: "v0.2.13", tokenBudget: 4000 };
+      expect(retrievePiMemoryContext(db, input).memory_items.map((item) => item.id)).toEqual(["own"]);
+      for (const patch of [
+        { taskDescription: "unrelated billing invoice" }, { taskDescription: "async callback without timeout" },
+        { taskDescription: "room reservation" }, { taskDescription: experience.failed_attempts[0] },
+        { version: "v0.2.14" }, { version: "v0.2.13 v0.2.14" }, { version: "" }, { projectID: "" }
+      ]) expect(retrievePiMemoryContext(db, { ...input, ...patch }).memory_items).toEqual([]);
+      updatePiMemoryItem(db, "own", { disabled: 1 });
+      expect(retrievePiMemoryContext(db, input).memory_items).toEqual([]);
+    } finally { db.close(); }
+  });
+
+  test("keeps explicit global policy authority, caps technical memories at three and budgets complete items", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const { experience } = seedMemoryExperience(db);
+      for (let i = 0; i < 8; i++) createPiMemoryItem(db, { id: `technical-${i}`, scope: "project", scope_id: "demo",
+        kind: "resolution", authority: "evidence_backed", content: JSON.stringify(experience) });
+      createPiMemoryItem(db, { id: "preference", scope: "global", scope_id: "runner", kind: "user_preference",
+        authority: "user_explicit", content: "用户要求只做本地验证，不自动部署" });
+      const input = { projectID: "demo", taskDescription: "异步请求超时且回调仍可能执行时", version: "v0.2.13", tokenBudget: 4000 };
+      const result = retrievePiMemoryContext(db, input);
+      expect(result.memory_items).toHaveLength(4);
+      expect(result.memory_items[0]).toMatchObject({ id: "preference", authority: "user_explicit", selection_stage: "policy" });
+      expect(result.memory_items.filter((item) => item.selection_stage === "text_candidate")).toHaveLength(3);
+      expect(result.limits.token_estimate).toBeLessThanOrEqual(4000);
+      for (const budget of [0, 1, 80, 320, 700, 900]) {
+        const bounded = retrievePiMemoryContext(db, { ...input, tokenBudget: budget });
+        expect(bounded.limits.token_estimate).toBeLessThanOrEqual(budget);
+        for (const item of bounded.memory_items.filter((item) => item.selection_stage !== "policy")) {
+          expect(item.truncated).toBe(false);
+          expect(JSON.parse(item.content).failed_attempts).toEqual(experience.failed_attempts);
+        }
+      }
+      expect(retrievePiMemoryContext(db, { ...input, taskDescription: "unrelated" }).memory_items.map((item) => item.id)).toEqual(["preference"]);
+    } finally { db.close(); }
+  });
+
+  test("bounds scans for large stores and ranks relevant experience ahead of newer noise", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const { experience } = seedMemoryExperience(db);
+      db.transaction(() => {
+        const insert = db.sqlite.prepare(`insert into pi_memory_items
+          (id, scope, scope_id, kind, content, authority, created_at, updated_at) values (?, 'project', 'demo', 'resolution', ?, 'evidence_backed', ?, ?)`);
+        for (let i = 0; i < 3000; i++) {
+          const at = `2026-09-28T${String(i).padStart(8, "0")}`;
+          insert.run(`noise-${i}`, JSON.stringify({ ...experience, applies_when: "billing invoice", symptom: "invoice missing" }), at, at);
+        }
+        insert.run("relevant", JSON.stringify(experience), "2026-09-28T00002900", "2026-09-28T00002900");
+        insert.run("outside-window", JSON.stringify(experience), "2026-01-01", "2026-01-01");
+      })();
+      const result = retrievePiMemoryContext(db, { projectID: "demo", taskDescription: "async callback timed out", version: "v0.2.13" });
+      expect(result.memory_items.map((item) => item.id)).toEqual(["relevant"]);
+      expect(result.retrieval).toMatchObject({ scanned: MEMORY_SCAN_LIMIT, scan_limited: true });
+      expect(result.truncation_summary.total_candidates).toBe(1);
+    } finally { db.close(); }
+  });
+
+  test("uses the bound issue description without reading a different project's task", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const { experience, issueID } = seedMemoryExperience(db);
+      createPiMemoryItem(db, { id: "issue-context", scope: "project", scope_id: "demo", kind: "resolution",
+        authority: "evidence_backed", content: JSON.stringify(experience) });
+      db.sqlite.run("update issues set description=? where id=?", ["async callback timed out v0.2.13", issueID]);
+      expect(retrievePiMemoryContext(db, { projectID: "demo", issueID }).memory_items.map((item) => item.id)).toEqual(["issue-context"]);
+      expect(retrievePiMemoryContext(db, { projectID: "other", issueID }).memory_items).toEqual([]);
+    } finally { db.close(); }
   });
 });
 
