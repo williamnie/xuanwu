@@ -84,6 +84,14 @@ xuanwu-update upgrade \
 
 ## 4. Migration notes
 
+### v0.2.13
+
+- migration：`084_supervisor_natural_instructions` 仅替换仍使用旧内置默认文案的 Supervisor 指令；`085_runtime_read_indexes` 增加 7 个运行时查询索引；`086_github_issue_cases` 增加 GitHub Case 表及关联索引。没有删表，继续使用 `xuanwu.storage-compat.v1`。
+- 最低可回滚 binary：`v0.2.12` 的完整 runtime。旧版本不使用新增 GitHub Case 表和技能库；回滚不删除这些数据。084 修改后的默认文案不会随二进制回滚自动恢复，自定义文案不受该 migration 影响。
+- operator action：升级前备份并验证 `runner.db`、`runner-settings.local.json` 及新增的 `${XUANWU_STATE_DIR}/skill-library`。GitHub 自动接管和 Jev 辅助技能须显式配置，不会因升级自动启用。
+- Qoder CLI 从旧 Release 的 `1.1.23` 升级至 `1.1.40`，首次跨版本安装必须使用支持 `qoder_cli_version` 的新版 installer；详见下方 Qoder 升级说明。
+- 本次采用本地四平台构建与人工授权上传，不执行 GitHub Actions，不提供 GitHub OIDC/Sigstore attestation；以发布 tag、`release.json` 和 SHA-256 checksums 对照产物。安装器默认 `auto` 模式仍校验 checksum 并提示缺少 signed provenance；显式要求 `XUANWU_VERIFY_ATTESTATION=require` 的环境不能将本次发布视为已签名产物。
+
 ### 2026-09-09 development redeploy：运行时性能优化
 
 - migration：`085_runtime_read_indexes`，只为活跃 Run/Session、Guardian、通知路由及运行中 Work 增加 7 个索引，不删除表或改写业务记录。
