@@ -3,6 +3,7 @@ import {
   deletePiMemoryItem,
   getPiMemoryItem,
   listPiMemoryItems,
+  listPiMemoryHistory,
   rememberPiMemoryItem,
   updatePiMemoryItem,
   type PiMemoryItemFilter,
@@ -18,6 +19,7 @@ type PiMemoryContext = { database: RunnerDatabase };
 export function registerPiMemoryRoutes(router: Router, context: PiMemoryContext): void {
   router.get("/api/pi/memory", (request) => json(listPiMemoryItems(context.database, memoryFilter(request))));
   router.get("/api/pi/memory/digest", () => retiredReviewQueueResponse());
+  router.get("/api/pi/memory/:id/history", (request) => json(listPiMemoryHistory(context.database, memoryID(request))));
   router.post("/api/pi/memory", async (request) => createMemoryResponse(context, request));
   router.post("/api/pi/memory/batch", async (request) => batchMemoryResponse(context, request));
   router.post("/api/pi/memory/candidates", () => retiredReviewQueueResponse());
@@ -40,18 +42,37 @@ async function batchMemoryResponse(context: PiMemoryContext, request: Request): 
 }
 
 async function createMemoryResponse(context: PiMemoryContext, request: Request): Promise<Response> {
-  const body = normalizeMemoryInput(await parseObjectBody(request), true);
+  const raw = await parseObjectBody(request);
+  const body = normalizeMemoryInput(raw, true);
   assertReusableManualMemory(body);
   body.disabled = 0;
-  return writeResponse(() => rememberPiMemoryItem(context.database, body), 201);
+  markUserMemory(body);
+  return writeResponse(() => rememberPiMemoryItem(context.database, body, {
+    reenable: raw.reenable === true, expectedRevision: expectedRevision(raw)
+  }), 201);
 }
 
 async function patchMemoryResponse(context: PiMemoryContext, request: Request): Promise<Response> {
   const id = memoryID(request);
   if (!getPiMemoryItem(context.database, id)) throw new HttpError(404, "资源不存在");
-  const body = normalizeMemoryInput(await parseObjectBody(request), false);
+  const raw = await parseObjectBody(request);
+  const body = normalizeMemoryInput(raw, false);
   assertReusableManualMemory({ ...getPiMemoryItem(context.database, id), ...body });
-  return writeResponse(() => updatePiMemoryItem(context.database, id, body));
+  if (hasValue(raw, "content") || hasValue(raw, "kind")) markUserMemory(body);
+  return writeResponse(() => updatePiMemoryItem(context.database, id, body, { expectedRevision: expectedRevision(raw) }));
+}
+
+function markUserMemory(body: PiMemoryItemInput): void {
+  body.authority = "user_explicit";
+  body.authorized_by = "manual_settings";
+  body.authorized_at = new Date().toISOString();
+}
+
+function expectedRevision(input: Record<string, unknown>): number | undefined {
+  if (!hasValue(input, "expected_revision")) return undefined;
+  const value = input.expected_revision;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) throw new HttpError(400, "expected_revision must be a positive integer");
+  return value;
 }
 
 function enableMemoryResponse(context: PiMemoryContext, request: Request): Promise<Response> {

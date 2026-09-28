@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import type { PiMemoryItem } from "../db/repositories/pi.ts";
 import { buildPiMemoryPromptContext } from "../pi/memoryContext.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -70,10 +71,10 @@ describe("Bun PI reusable memory API", () => {
         disabled: 0,
         id: "mem-first",
         memory_key: "project.patch-policy",
-        occurrence_count: 2
+        occurrence_count: 1
       });
       expect(await list.json()).toEqual([
-        expect.objectContaining({ id: "mem-first", occurrence_count: 2 })
+        expect.objectContaining({ id: "mem-first", occurrence_count: 1 })
       ]);
     } finally {
       database.close();
@@ -109,6 +110,48 @@ describe("Bun PI reusable memory API", () => {
     } finally {
       database.close();
     }
+  });
+
+  test("exposes immutable correction history and honors optional revision preconditions", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      const original = await createResolution(router, "history-memory").then((res) => res.json()) as PiMemoryItem;
+      const edited = await request(router, "/api/pi/memory/history-memory", "PATCH", {
+        content: "根因限定为共享响应时的取消竞争；修复后通过双回调顺序测试。", expected_revision: 1,
+        occurrence_count: 999, revision: 999
+      });
+      expect(await edited.json()).toMatchObject({ revision: 2, occurrence_count: 1, authority: "user_explicit" });
+      const stale = await request(router, "/api/pi/memory/history-memory", "PATCH", { content: "根因是旧判断；修复方式待验证。", expected_revision: 1 });
+      expect(stale.status).toBe(400);
+      const history = await router.handle(new Request(`${BASE_URL}/api/pi/memory/history-memory/history`)).then((res) => res.json());
+      expect(history).toMatchObject([
+        { revision: 1, operation: "create", snapshot: { content: original.content, citation_id: "issue-785" } },
+        { revision: 2, operation: "edit", snapshot: { occurrence_count: 1 } }
+      ]);
+      await request(router, "/api/pi/memory/history-memory/forget", "POST", {});
+      const forgottenHistory = await router.handle(new Request(`${BASE_URL}/api/pi/memory/history-memory/history`)).then((res) => res.json());
+      expect(forgottenHistory).toHaveLength(3);
+      expect(JSON.stringify(forgottenHistory)).not.toContain(original.content);
+    } finally { database.close(); }
+  });
+
+  test("create/replay cannot bypass disable or delete; explicit re-enable remains available", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      const original = await createResolution(router, "lifecycle-memory").then((res) => res.json()) as PiMemoryItem;
+      await request(router, "/api/pi/memory/lifecycle-memory/disable", "POST", {});
+      expect((await createResolution(router, "lifecycle-memory")).status).toBe(400);
+      expect((await request(router, "/api/pi/memory/batch", "POST", { action: "enable", ids: [original.id] })).status).toBe(200);
+      expect((await createResolution(router, "lifecycle-memory")).status).toBe(201);
+      const deleted = await request(router, "/api/pi/memory/lifecycle-memory", "DELETE", {});
+      expect(await deleted.json()).toEqual({ deleted: true });
+      expect((await createResolution(router, "lifecycle-memory")).status).toBe(400);
+      const restored = await request(router, "/api/pi/memory", "POST", { ...original, reenable: true });
+      expect(restored.status).toBe(201);
+      expect(await restored.json()).toMatchObject({ id: original.id, disabled: 0, revision: 5, occurrence_count: 1 });
+    } finally { database.close(); }
   });
 
   test("retires candidate creation, digest, approve, and promote review endpoints", async () => {

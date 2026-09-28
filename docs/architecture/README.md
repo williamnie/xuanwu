@@ -24,6 +24,7 @@
 | Evidence / verification | [0027–0035](#evidence) |
 | Handoff / delivery | [0036–0043](#handoff) |
 | Supervisor、Workflow、Skill 与产品导航 | [0044–0059](#supervisor-workflow-skill) |
+| Pi 可复用经验格式、来源校验与旧记忆兼容 | [0044 §7](xuanwu/0044-supervisor-role-prompt-contract.md#7-pi-可复用经验与来源校验) |
 | Automation、Attention 与 Approval | [0060–0063](#automation-attention-approval) |
 | Channel、Connector、安全、可靠性与退出迁移 | [0064 及以后](#connector-security-reliability-retirement) |
 | IM 上下文预算、工具按需加载与 PI Session 自动换代 | [0092](xuanwu/0092-im-context-budget-and-session-rollover.md) |

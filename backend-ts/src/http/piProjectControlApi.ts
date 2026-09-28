@@ -16,6 +16,7 @@ import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
 import { createProjectStatusSnapshot } from "../pi/projectSnapshot.ts";
 import { diagnoseIssueState } from "../pi/issueStateManager.ts";
+import { MEMORY_EXPERIENCE_INSTRUCTIONS } from "../pi/memoryExperience.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
 import { HttpError, json } from "./errors.ts";
@@ -206,7 +207,7 @@ function managerCyclePrompt(
     "Do not decide an Issue from project-list state alone. When its latest Provider Turn has ended, the issue-scoped PI service reads the Session context and owns accept / continue_same_session / retry / needs_user / failed. The Issue remains in_progress until that decision. After Done, re-read dependency readiness and enqueue the next ready Work.",
     "This project is managed by Supervisor. After reading the exact Work and confirming it is complete, authorized, dependency-ready, inside cwd/deadline policy, use work_control action=enqueue with an explicit stable intent idempotency_key. Do not create or enqueue guessed or cross-project Work.",
     "Memory is reusable experience, never a status archive. Do not remember current Work/Run/Issue status, counts, queue emptiness, timestamps, manager-session counts, temporary commitments, or cycle summaries.",
-    "Only when an authoritative Handoff/Evidence/Run/Work record contains a reusable bug root cause plus its resolution or verification method, call memory_remember with kind=debugging_pattern or resolution, a stable memory_key, and that authoritative evidence_ref. Repeated observations must reuse the same memory_key.",
+    MEMORY_EXPERIENCE_INSTRUCTIONS,
     `Do not exceed ${maxActions} action proposals in this cycle.`,
     "Stop after this single cycle and return a concise summary."
   ].join("\n");

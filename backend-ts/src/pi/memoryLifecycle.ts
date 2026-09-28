@@ -10,9 +10,10 @@ export type PiMemoryBatchInput = { action: PiMemoryBatchAction; ids: string[] };
 
 export function applyPiMemoryBatchAction(db: RunnerDatabase, input: PiMemoryBatchInput) {
   const ids = uniqueIDs(input.ids);
-  if (input.action === "forget") return forgetBatch(db, ids);
-  const updated = ids.flatMap((id) => updateBatchItem(db, id, input.action));
-  return { action: input.action, skipped: ids.filter((id) => !updated.includes(id)), updated };
+  const action = input.action;
+  if (action === "forget") return forgetBatch(db, ids);
+  const updated = ids.flatMap((id) => updateBatchItem(db, id, action));
+  return { action, skipped: ids.filter((id) => !updated.includes(id)), updated };
 }
 
 function updateBatchItem(db: RunnerDatabase, id: string, action: Exclude<PiMemoryBatchAction, "forget">): string[] {

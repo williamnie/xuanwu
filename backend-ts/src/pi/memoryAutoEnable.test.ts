@@ -3,9 +3,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { listPiMemoryItems } from "../db/repositories/pi.ts";
+import { listPiMemoryItems, listPiMemoryHistory, rememberPiMemoryItem } from "../db/repositories/pi.ts";
+import { applyPiMemoryBatchAction } from "./memoryLifecycle.ts";
 import { buildPiMemoryPromptContext } from "./memoryContext.ts";
 import { createPiMemoryTools } from "./memoryTools.ts";
+import { seedMemoryExperience } from "./memoryExperienceTestFixtures.ts";
 
 describe("PI automatic reusable memory policy", () => {
   test("auto-enables an explicit user naming preference", async () => {
@@ -114,6 +116,76 @@ describe("PI automatic reusable memory policy", () => {
     } finally {
       await fixture.close();
     }
+  });
+
+  test("does not let automatic experience replace an explicit user rule with the same key", async () => {
+    const fixture = await openFixture();
+    try {
+      const own = seedMemoryExperience(fixture.db);
+      const explicit = memoryTool(fixture.db, "runner_chat", "conv-rule");
+      await explicit.execute("preference", {
+        kind: "project_preference", content: "修改后运行超时回归", memory_key: "project.timeout", user_authorized: true
+      }, undefined, undefined, {} as never);
+      const automatic = memoryTool(fixture.db, "pi_manager_cycle", "cycle-rule");
+      const result = await automatic.execute("experience", {
+        kind: "resolution", content: JSON.stringify(own.experience), memory_key: "project.timeout"
+      }, undefined, undefined, {} as never);
+      expect(result.details).toMatchObject({ rejected: true, reason: "automatic experience cannot overwrite explicit user memory" });
+      expect(listPiMemoryItems(fixture.db)).toMatchObject([{ authority: "user_explicit", content: "修改后运行超时回归", occurrence_count: 1 }]);
+    } finally { await fixture.close(); }
+  });
+
+  test("persists disable/forget intent across restart and only a separate user request restores it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-memory-suppression-"));
+    const stateDir = join(root, "state");
+    let db = await openDatabase({ stateDir });
+    try {
+      const own = seedMemoryExperience(db);
+      const input = { kind: "resolution" as const, memory_key: "bug.timeout", content: JSON.stringify(own.experience) };
+      const execute = (source: string, extra = {}) => memoryTool(db, source, "review").execute("remember", { ...input, ...extra }, undefined, undefined, {} as never);
+      const initial = (await execute("pi_manager_cycle")).details as { id: string };
+      applyPiMemoryBatchAction(db, { action: "disable", ids: [initial.id] });
+      db.close();
+      db = await openDatabase({ stateDir });
+      expect((await execute("pi_manager_cycle")).details).toMatchObject({ rejected: true });
+      expect((await execute("pi_manager_cycle", { reenable: true, user_authorized: true })).details).toMatchObject({ rejected: true });
+      // user_authorized 表示内容来自用户，不隐含撤销之前的停用。
+      expect((await execute("runner_chat", { user_authorized: true })).details).toMatchObject({ rejected: true });
+      expect(listPiMemoryItems(db)).toMatchObject([{ disabled: 1, revision: 2, occurrence_count: 1 }]);
+      expect(buildPiMemoryPromptContext(db, { projectID: "demo" })).not.toContain(initial.id);
+      expect(applyPiMemoryBatchAction(db, { action: "enable", ids: [initial.id] }))
+        .toMatchObject({ action: "enable", updated: [initial.id], skipped: [] });
+      expect((await execute("pi_manager_cycle")).details).toMatchObject({ disabled: 0, revision: 3, occurrence_count: 1 });
+      applyPiMemoryBatchAction(db, { action: "forget", ids: [initial.id] });
+      db.close();
+      db = await openDatabase({ stateDir });
+      expect((await execute("pi_manager_cycle")).details).toMatchObject({ rejected: true });
+      expect(() => rememberPiMemoryItem(db, {
+        id: "other-id", scope: "project", scope_id: "demo", ...input, disabled: 0
+      })).toThrow(/explicit user re-enable/);
+      expect(listPiMemoryItems(db)).toEqual([]);
+      const history = listPiMemoryHistory(db, initial.id);
+      expect(history.map((entry) => entry.operation)).toEqual(["create", "disable", "enable", "forget"]);
+      expect(JSON.stringify(history)).not.toContain(own.experience.root_cause);
+      expect((await execute("runner_chat", { user_authorized: true })).details).toMatchObject({ rejected: true });
+      expect((await execute("runner_chat", { user_authorized: true, reenable: true })).details)
+        .toMatchObject({ disabled: 0, occurrence_count: 1, authority: "user_explicit" });
+    } finally { db.close(); await rm(root, { recursive: true, force: true }); }
+  });
+
+  test("an explicit user adoption is preserved even when the source and text are unchanged", async () => {
+    const fixture = await openFixture();
+    try {
+      const own = seedMemoryExperience(fixture.db);
+      const input = { kind: "resolution" as const, memory_key: "adopted.lesson", content: JSON.stringify(own.experience) };
+      const automatic = memoryTool(fixture.db, "pi_manager_cycle", "review");
+      await automatic.execute("automatic", input, undefined, undefined, {} as never);
+      const adopted = await memoryTool(fixture.db, "runner_chat", "user-adoption").execute("adopt", {
+        ...input, user_authorized: true
+      }, undefined, undefined, {} as never);
+      expect(adopted.details).toMatchObject({ authority: "user_explicit", authorized_by: "user-adoption", revision: 2, occurrence_count: 1 });
+      expect((await automatic.execute("replay", input, undefined, undefined, {} as never)).details).toMatchObject({ rejected: true });
+    } finally { await fixture.close(); }
   });
 });
 

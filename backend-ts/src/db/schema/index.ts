@@ -86,6 +86,7 @@ import { telegramChannelRuntimeMigration } from "./081_telegram_channel_runtime.
 import { imContextLifecycleMigration } from "./082_im_context_lifecycle.ts";
 import { attentionActionRecentIndexMigration } from "./083_attention_action_recent_index.ts";
 import { supervisorNaturalInstructionsMigration } from "./084_supervisor_natural_instructions.ts";
+import { piMemoryHistoryMigration } from "./087_pi_memory_history.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -176,4 +177,5 @@ export const migrations = [
   supervisorNaturalInstructionsMigration,
   runtimeReadIndexesMigration,
   githubIssueCasesMigration,
+  piMemoryHistoryMigration,
 ];

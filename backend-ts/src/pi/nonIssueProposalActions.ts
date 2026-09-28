@@ -73,7 +73,10 @@ export function createMemoryFromAction(db: RunnerDatabase, action: PiAction, pay
     scope: cleanString(payload.scope) || "inbox",
     scope_id: memoryScopeID(action, payload),
     source_id: cleanString(payload.source_id) || cleanString(payload.proposal_id) || action.id,
-    source_type: cleanString(payload.source_type) || "action_proposal"
+    source_type: cleanString(payload.source_type) || "action_proposal",
+    authority: "user_explicit",
+    authorized_by: cleanString(action.approved_by) || cleanString(payload.approved_proposal_by),
+    authorized_at: new Date().toISOString()
   });
   return {
     candidate: false,

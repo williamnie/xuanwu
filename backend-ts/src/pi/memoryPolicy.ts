@@ -1,3 +1,6 @@
+import { containsSecretLikeValue, redactionRegistry } from "../security/redactionRegistry.ts";
+import { parseMemoryExperience } from "./memoryExperience.ts";
+
 const SENSITIVE_MEMORY_ERROR = "memory content contains sensitive data";
 const SENSITIVE_LINE_MARKERS = [
   "authorization:", "auth_token", "auth-token", "bearer ", "api_key=", "api-key=",
@@ -40,7 +43,19 @@ export function memoryRejectedResult(content: string): { reason: string; rejecte
 export function containsSensitiveMemoryContent(content: string): boolean {
   const text = content.trim();
   if (text === "") return false;
-  return text.split(/\r?\n/).some(sensitiveLine) || SECRET_ASSIGNMENT_PATTERN.test(text) || BEARER_PATTERN.test(text);
+  if (text.split(/\r?\n/).some(sensitiveLine) || SECRET_ASSIGNMENT_PATTERN.test(text) || BEARER_PATTERN.test(text) ||
+    containsSecretLikeValue(text) || /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]+@/i.test(text) ||
+    /(?:password|secret|token|api[_-]?key)["']\s*:\s*["']\S+/i.test(text) ||
+    /(?:密码|密钥|令牌)\s*[:=：]\s*\S+/.test(text)) return true;
+  try {
+    const decoded: unknown = JSON.parse(text);
+    if (typeof decoded === "string") return containsSensitiveMemoryContent(decoded);
+    if (decoded && typeof decoded === "object") {
+      return redactionRegistry.findings(decoded).length > 0 || Object.values(decoded)
+        .some((value) => containsSensitiveMemoryContent(typeof value === "string" ? value : JSON.stringify(value)));
+    }
+  } catch { /* 普通文本与旧记忆仍可读取。 */ }
+  return false;
 }
 
 export function reusableMemoryRejection(input: ReusableMemoryWrite): string | undefined {
@@ -49,7 +64,8 @@ export function reusableMemoryRejection(input: ReusableMemoryWrite): string | un
   if (!validMemoryKey(input.memoryKey)) return "memory_key must be a stable lowercase identifier";
   if (clean(input.confidence) === "low") return "low-confidence observations are not memory";
   if (containsSensitiveMemoryContent(input.content)) return SENSITIVE_MEMORY_ERROR;
-  if (transientStatusSnapshot(input.content) && !reusableResolution(input)) {
+  if (transientStatusSnapshot(input.content) &&
+    (managerSource(input.source) || !reusableExperienceContent(input.kind, input.content))) {
     return "current Work/Run/Issue status snapshots are not memory";
   }
   if (managerSource(input.source)) return managerMemoryRejection(input);
@@ -73,6 +89,13 @@ export function retrievableMemoryContent(kind: string, content: string): boolean
 
 export function transientStatusSnapshot(content: string): boolean {
   const text = content.trim();
+  try {
+    const decoded: unknown = JSON.parse(text);
+    if (typeof decoded === "string") return transientStatusSnapshot(decoded);
+    if (decoded && typeof decoded === "object") {
+      return Object.values(decoded).some((value) => transientStatusSnapshot(typeof value === "string" ? value : JSON.stringify(value)));
+    }
+  } catch { /* 旧版纯文本不要求 JSON。 */ }
   return STATUS_SNAPSHOT_PATTERNS.some((pattern) => pattern.test(text));
 }
 
@@ -80,14 +103,9 @@ function managerMemoryRejection(input: ReusableMemoryWrite): string | undefined 
   if (!EXPERIENCE_MEMORY_KINDS.has(clean(input.kind).toLowerCase())) {
     return "manager cycles may remember only reusable debugging patterns or resolutions";
   }
-  if (!authoritativeEvidenceRef(input.evidenceRef)) {
-    return "manager-cycle experience memory requires a Handoff, Evidence, Run, or Work reference";
-  }
-  return reusableResolution(input) ? undefined : "experience memory must include root cause and resolution or verification";
-}
-
-function reusableResolution(input: ReusableMemoryWrite): boolean {
-  return reusableExperienceContent(input.kind, input.content);
+  if (clean(input.scope) !== "project") return "automatic experience memory must be project-scoped";
+  if (!["", "medium", "high"].includes(clean(input.confidence))) return "automatic experience confidence must be medium or high";
+  return parseMemoryExperience(input.content) ? undefined : "automatic experience requires structured content schema_version=1";
 }
 
 function reusableExperienceContent(kind: string, value: string): boolean {
@@ -102,10 +120,6 @@ function isReusableMemoryKind(kind: string): kind is ReusableMemoryKind {
 
 function validMemoryKey(value: string): boolean {
   return /^[a-z0-9][a-z0-9._:/-]{2,119}$/.test(clean(value));
-}
-
-function authoritativeEvidenceRef(value: string | undefined): boolean {
-  return /^(?:handoff|evidence|run|work|issue_event):\S+$/i.test(clean(value));
 }
 
 function managerSource(source: string | undefined): boolean {
@@ -131,7 +145,8 @@ const STATUS_SNAPSHOT_PATTERNS = [
   /(?:status_counts|unfinished_total|active pi_manager sessions)/i,
   /(?:全部终态|没有未完成|无未完成|all terminal|no unfinished|all (?:issues|works?) (?:are |were )?done)/i,
   /(?:issue|work|run|任务)\s*#?\d+[^\n]{0,48}(?:done|failed|cancelled|triage|todo|in_progress|needs_user|失败|已完成|已取消)/i,
-  /(?:done|failed|cancelled|triage|todo|in_progress|needs_user)\s*[=:]\s*\d+/i
+  /(?:done|failed|cancelled|triage|todo|in_progress|needs_user)\s*[=:]\s*\d+/i,
+  /(?:queue|queued|队列|排队)[^\n]{0,24}(?:\b\d+\b|为空|空了|empty)/i
 ];
 
 function sensitiveLine(line: string): boolean {
