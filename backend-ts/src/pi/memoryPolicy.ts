@@ -105,6 +105,9 @@ function managerMemoryRejection(input: ReusableMemoryWrite): string | undefined 
   }
   if (clean(input.scope) !== "project") return "automatic experience memory must be project-scoped";
   if (!["", "medium", "high"].includes(clean(input.confidence))) return "automatic experience confidence must be medium or high";
+  if (parseMemoryExperience(input.content)?.outcome === "diagnosis_only" && input.kind !== "debugging_pattern") {
+    return "diagnosis-only experience cannot claim a successful resolution";
+  }
   return parseMemoryExperience(input.content) ? undefined : "automatic experience requires structured content schema_version=1";
 }
 
@@ -123,7 +126,7 @@ function validMemoryKey(value: string): boolean {
 }
 
 function managerSource(source: string | undefined): boolean {
-  return clean(source) === "pi_manager_cycle";
+  return ["pi_manager_cycle", "pi_memory_reflection"].includes(clean(source));
 }
 
 function normalChatSource(source: string | undefined): boolean {

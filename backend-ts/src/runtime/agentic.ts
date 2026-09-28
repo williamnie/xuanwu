@@ -1,3 +1,4 @@
+import { startMemoryReflectionWorker } from "../agentic/memoryReflectionWorker.ts";
 import { startAgenticServer } from "../agentic/server.ts";
 import { bunBuildInfo } from "../buildInfo.ts";
 import { loadConfig } from "../config/env.ts";
@@ -15,7 +16,8 @@ export async function startAgenticRuntime(args: string[]): Promise<void> {
   });
   const reconciliation = reconcileStaleManagerCycleConversations(database);
   const server = await startAgenticServer(config, database);
-  installTerminationHandlers(server, database);
+  const stopReflectionWorker = startMemoryReflectionWorker(database);
+  installTerminationHandlers(server, database, stopReflectionWorker);
   console.log(JSON.stringify({
     build: bunBuildInfo(),
     listen: `${server.hostname}:${server.port}`,
@@ -28,13 +30,15 @@ export async function startAgenticRuntime(args: string[]): Promise<void> {
 
 function installTerminationHandlers(
   server: { stop(closeActiveConnections?: boolean): void },
-  database: Awaited<ReturnType<typeof openDatabase>>
+  database: Awaited<ReturnType<typeof openDatabase>>,
+  stopReflectionWorker: () => void
 ): void {
   let stopping = false;
   const stop = (signal: string) => {
     if (stopping) return;
     stopping = true;
     console.info(JSON.stringify({ event: "runner.shutdown_started", role: "agentic", signal }));
+    stopReflectionWorker();
     server.stop(true);
     database.close();
     process.exit(0);

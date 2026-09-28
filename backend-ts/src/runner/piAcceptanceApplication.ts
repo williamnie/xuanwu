@@ -1,3 +1,4 @@
+import { safelyRequestMemoryReflection } from "../pi/memoryReflectionQueue.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { insertIssueRunRecord } from "../db/repositories/issueRuns.ts";
@@ -47,7 +48,10 @@ export async function applyPiAcceptanceDecision(
 ): Promise<Issue> {
   assertCompletionCardIntegrity(card);
   const replay = getIssue(runtime.database, card.issue.id);
-  if (replay?.status === "done" && applied(runtime.database, card.issue.id, card.fingerprint)) return replay;
+  if (replay?.status === "done" && applied(runtime.database, card.issue.id, card.fingerprint)) {
+    safelyRequestMemoryReflection(runtime.database, card.issue.id);
+    return replay;
+  }
   assertCurrentCard(runtime.database, card);
   let effectiveDecision = honorAcceptedDeliveryReview(runtime.database, card, decision);
   if (effectiveDecision.decision === "accept" && !(card.human_review?.action === "accept" && card.human_review.request.kind === "acceptance")) {
@@ -193,6 +197,7 @@ async function acceptIssue(
     return { issue, notification: receipt.notification };
   }).immediate();
   const write = result.issue;
+  safelyRequestMemoryReflection(db, write.id);
   if (result.notification) runtime.bus?.publish({ issueId: write.id, projectId: write.project_id,
     type: "handoff.notification", status: delivery.handoff.status, payload: result.notification.payload });
   publishStatus(runtime, write);
@@ -433,20 +438,24 @@ function failIssue(
   card: CompletionCard,
   decision: PiAcceptanceDecision
 ): Issue {
-  const issue = applyPiSemanticIssueStatus(runtime.database, card.issue.id, {
-    card_fingerprint: card.fingerprint,
-    decision: decision.decision,
-    reason: decision.rationale,
-    run_id: card.run.id,
-    status: "failed"
-  });
-  recordIssueEvent(runtime.database, card.issue.id, PI_ACCEPTANCE_APPLIED_EVENT, {
-    action: "failed",
-    card_fingerprint: card.fingerprint,
-    decision,
-    run_id: card.run.id,
-    status: "failed"
-  });
+  const issue = runtime.database.transaction(() => {
+    const failed = applyPiSemanticIssueStatus(runtime.database, card.issue.id, {
+      card_fingerprint: card.fingerprint,
+      decision: decision.decision,
+      reason: decision.rationale,
+      run_id: card.run.id,
+      status: "failed"
+    });
+    recordIssueEvent(runtime.database, card.issue.id, PI_ACCEPTANCE_APPLIED_EVENT, {
+      action: "failed",
+      card_fingerprint: card.fingerprint,
+      decision,
+      run_id: card.run.id,
+      status: "failed"
+    });
+    return failed;
+  }).immediate();
+  safelyRequestMemoryReflection(runtime.database, issue.id);
   publishStatus(runtime, issue);
   return issue;
 }

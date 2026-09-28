@@ -62,25 +62,26 @@ export function createPiMemoryTools(db: RunnerDatabase, context: MemoryContext =
       })),
     memoryTool("memory_remember", "Remember Reusable Experience",
       `Remember an explicit user preference/decision/workflow or evidence-backed reusable experience. Never store secrets, current status, counts, queues or temporary commitments. Stable memory_key updates the same memory. ${MEMORY_EXPERIENCE_INSTRUCTIONS}`,
-      memoryWriteCandidateParams, (params) => {
-        // 必须在 Action payload/audit 持久化之前拒绝凭据，包括元数据字段中的凭据。
-        if (containsSensitiveMemoryContent(JSON.stringify(params))) {
-          return { rejected: true, reason: "memory content contains sensitive data" };
-        }
-        return executeSafePiAction(db, { ...context, source: context.source || "pi_memory_tool" }, {
-          actionType: "memory.remember",
-          payload: params,
-          projectID: actionProjectID(params, context),
-          execute: () => {
-            try { return db.transaction(() => rememberMemory(db, context, params)).immediate(); }
-            catch (error) {
-              if (error instanceof PiMemoryWriteError) return { rejected: true, reason: error.message };
-              throw error;
-            }
-          }
-        });
-      })
+      memoryWriteCandidateParams, (params) => executePiMemoryRemember(db, context, params))
   ];
+}
+
+// 同步写入口供复盘租约事务复用；始终经过敏感数据保护、Action Gate 和来源校验。
+export type PiMemoryRememberInput = Static<typeof memoryWriteCandidateParams>;
+export function executePiMemoryRemember(db: RunnerDatabase, context: MemoryContext, params: PiMemoryRememberInput) {
+  if (containsSensitiveMemoryContent(JSON.stringify(params))) {
+    return { rejected: true, reason: "memory content contains sensitive data" };
+  }
+  return executeSafePiAction(db, { ...context, source: context.source || "pi_memory_tool" }, {
+    actionType: "memory.remember", payload: params, projectID: actionProjectID(params, context),
+    execute: () => {
+      try { return db.transaction(() => rememberMemory(db, context, params)).immediate(); }
+      catch (error) {
+        if (error instanceof PiMemoryWriteError) return { rejected: true, reason: error.message };
+        throw error;
+      }
+    }
+  });
 }
 
 function searchMemory(
@@ -115,7 +116,7 @@ function rememberMemory(
     userAuthorized: input.user_authorized
   });
   if (reason) return { rejected: true, reason };
-  const authority = cleanString(context.source) === "pi_manager_cycle" ? "evidence_backed" : "user_explicit";
+  const authority = ["pi_manager_cycle", "pi_memory_reflection"].includes(cleanString(context.source)) ? "evidence_backed" : "user_explicit";
   if (input.reenable && (authority !== "user_explicit" || input.user_authorized !== true)) {
     return { rejected: true, reason: "re-enable requires a separate explicit user request" };
   }
@@ -228,6 +229,7 @@ function defaultScopeID(scope: string, context: MemoryContext): string | undefin
 
 function memorySourceType(source: unknown): string {
   const text = cleanString(source);
+  if (text === "pi_memory_reflection") return "pi.memory_reflection";
   if (text === "pi_manager_cycle") return "pi.manager_cycle";
   if (text === "pi_supervisor_decision") return "pi.supervisor";
   return "pi.conversation";

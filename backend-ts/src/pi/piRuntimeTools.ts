@@ -1,3 +1,5 @@
+import { createMemoryReflectionTools } from "./memoryReflectionTools.ts";
+import type { ReflectionLease } from "./memoryReflectionQueue.ts";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
@@ -55,6 +57,7 @@ export type PiRuntimeToolAuditInput = {
 export type PiRuntimeToolSelection = {
   chatToolMode?: PiChatToolMode;
   promptProfile: PiRuntimePromptProfile;
+  memoryReflection?: ReflectionLease;
 };
 
 const READ_ONLY_TOOL_NAMES = new Set<string>(PI_READ_ONLY_TOOLS);
@@ -65,6 +68,19 @@ export function createPiRuntimeToolKit(
   context: ToolContext = {},
   selection: PiRuntimeToolSelection = { promptProfile: "chat" }
 ): PiRuntimeToolKit {
+  if (selection.promptProfile === "memory_reflection") {
+    if (!selection.memoryReflection) throw new Error("memory reflection requires a Host lease");
+    const snapshot = loadAssistantToolRegistrySnapshot(db);
+    if (!snapshot.providers.some(provider => provider.id === RUNNER_BUILTIN_PROVIDER_ID && provider.status !== "disabled")) {
+      throw new Error("builtin tool provider is unavailable");
+    }
+    const customTools = createMemoryReflectionTools(db, selection.memoryReflection);
+    const names = customTools.map(tool => tool.name);
+    return { customTools, tools: names, source: "registry",
+      readOnlyToolNames: ["reflection_evidence_read", "memory_search"],
+      auditTargets: Object.fromEntries(names.map(name => [name, { permission: name === "memory_remember" ? "write" : "read", providerID: RUNNER_BUILTIN_PROVIDER_ID }])),
+      audit: auditSnapshot("registry", names, customTools, [RUNNER_BUILTIN_PROVIDER_ID], [], "memory_reflection") };
+  }
   return registryToolKit(db, project, context, selection);
 }
 
@@ -198,7 +214,7 @@ function selectedToolNames(
 
 function runtimeToolProfile(selection: PiRuntimeToolSelection): PiRuntimeToolProfile {
   if (selection.promptProfile === "chat") return selection.chatToolMode === "review" ? "review" : "chat";
-  if (selection.promptProfile === "notification") throw new Error("notification profile has no runtime tools");
+  if (selection.promptProfile === "notification" || selection.promptProfile === "memory_reflection") throw new Error("notification profile has no runtime tools");
   return selection.promptProfile;
 }
 

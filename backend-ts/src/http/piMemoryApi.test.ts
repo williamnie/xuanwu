@@ -1,3 +1,4 @@
+import { seedMemoryExperience } from "../pi/memoryExperienceTestFixtures.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,6 +25,19 @@ afterEach(async () => {
 });
 
 describe("Bun PI reusable memory API", () => {
+  test("project reflection setting defaults off and accepts only an explicit boolean", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      seedMemoryExperience(database);
+      const router = createDefaultRouter({ database });
+      const path = "/api/projects/demo/pi/memory-reflection";
+      expect(await (await router.handle(new Request(BASE_URL + path))).json()).toMatchObject({ enabled: false });
+      expect((await request(router, path, "PUT", { enabled: "true" })).status).toBe(400);
+      expect(await (await request(router, path, "PUT", { enabled: true })).json()).toMatchObject({ enabled: true });
+      expect(await (await request(router, path, "PUT", { enabled: false })).json()).toMatchObject({ enabled: false });
+    } finally { database.close(); }
+  });
+
   test("creates active memory and updates the same stable key instead of appending", async () => {
     const database = await openFixtureDatabase();
     try {

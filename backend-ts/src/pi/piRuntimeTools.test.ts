@@ -1,3 +1,6 @@
+import { seedMemoryExperience } from "./memoryExperienceTestFixtures.ts";
+import { claimMemoryReflection, setMemoryReflectionEnabled, requestMemoryReflection } from "./memoryReflectionQueue.ts";
+import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -18,6 +21,29 @@ afterEach(async () => {
 });
 
 describe("PI runtime tool registry adapter", () => {
+  test("reflection exposes only bounded evidence and memory tools under a Host lease", async () => {
+    const db = await openFixture();
+    try {
+      const seed = seedMemoryExperience(db);
+      setMemoryReflectionEnabled(db, "demo", true);
+      db.sqlite.run("update issues set status='done' where id=?", [seed.issueID]);
+      db.sqlite.run("update issue_runs set status='succeeded', ended_at=? where id=?", [new Date().toISOString(), seed.legacyRunID]);
+      recordIssueEvent(db, seed.issueID, "issue.pi_acceptance_applied.v1", { action: "accept", run_id: seed.legacyRunID });
+      requestMemoryReflection(db, seed.issueID);
+      const row = claimMemoryReflection(db)!;
+      const kit = createPiRuntimeToolKit(db, getProject(db, "demo")!, {}, {
+        promptProfile: "memory_reflection", memoryReflection: { id: row.id, token: row.lease_token }
+      });
+      expect(kit.tools.sort()).toEqual(["memory_remember", "memory_search", "reflection_evidence_read"]);
+      expect(kit.readOnlyToolNames.sort()).toEqual(["memory_search", "reflection_evidence_read"]);
+      expect(kit.auditTargets.memory_remember?.permission).toBe("write");
+      expect(() => createPiRuntimeToolKit(db, undefined, {}, { promptProfile: "memory_reflection" })).toThrow("Host lease");
+      const evidence = kit.customTools.find(tool => tool.name === "reflection_evidence_read")!;
+      for (let n = 0; n < 6; n++) await evidence.execute("read", {}, undefined, undefined, {} as never);
+      await expect(evidence.execute("read", {}, undefined, undefined, {} as never)).rejects.toThrow("budget");
+    } finally { db.close(); }
+  });
+
   test("assembles builtin runtime tools from the current registry", async () => {
     const db = await openFixture();
     try {

@@ -1,3 +1,4 @@
+import { setMemoryReflectionEnabled } from "../pi/memoryReflectionQueue.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -30,6 +31,20 @@ afterEach(async () => {
 });
 
 describe("issue-scoped PI acceptance coordinator", () => {
+  test("reconciles post-acceptance delivery events without invoking PI again", async () => {
+    const db = await fixture();
+    try {
+      setMemoryReflectionEnabled(db, "demo", true);
+      completedIssue(db, "Reflection recovery");
+      await runPiAcceptanceCoordinatorOnce({ database: db, decideIssueAcceptance: async () => acceptance("accept") });
+      db.sqlite.run("delete from pi_memory_reflections"); // 模拟验收提交后请求入库前崩溃。
+      await runPiAcceptanceCoordinatorOnce({ database: db, decideIssueAcceptance: async () => { throw new Error("unexpected PI call"); } });
+      expect(db.sqlite.query("select count(*) n from pi_memory_reflections").get()).toEqual({ n: 1 });
+      await runPiAcceptanceCoordinatorOnce({ database: db, decideIssueAcceptance: async () => { throw new Error("unexpected PI call"); } });
+      expect(db.sqlite.query("select count(*) n from pi_memory_reflections").get()).toEqual({ n: 1 });
+    } finally { db.close(); }
+  });
+
   test("calls PI once with a bounded completion card and accepts without a Verifier Issue", async () => {
     const db = await fixture();
     try {

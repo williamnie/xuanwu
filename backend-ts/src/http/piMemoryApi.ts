@@ -1,3 +1,5 @@
+import { getProject } from "../db/repositories/projects.ts";
+import { memoryReflectionEnabled, setMemoryReflectionEnabled } from "../pi/memoryReflectionQueue.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import {
   deletePiMemoryItem,
@@ -17,6 +19,17 @@ import type { Router } from "./router.ts";
 type PiMemoryContext = { database: RunnerDatabase };
 
 export function registerPiMemoryRoutes(router: Router, context: PiMemoryContext): void {
+  router.get("/api/projects/:id/pi/memory-reflection", request => {
+    const projectID = reflectionProjectID(context, request);
+    return json({ project_id: projectID, enabled: memoryReflectionEnabled(context.database, projectID) });
+  });
+  router.put("/api/projects/:id/pi/memory-reflection", async request => {
+    const projectID = reflectionProjectID(context, request);
+    const body = await parseObjectBody(request);
+    if (typeof body.enabled !== "boolean" || Object.keys(body).length !== 1) throw new HttpError(400, "enabled must be boolean");
+    setMemoryReflectionEnabled(context.database, projectID, body.enabled);
+    return json({ project_id: projectID, enabled: body.enabled });
+  });
   router.get("/api/pi/memory", (request) => json(listPiMemoryItems(context.database, memoryFilter(request))));
   router.get("/api/pi/memory/digest", () => retiredReviewQueueResponse());
   router.get("/api/pi/memory/:id/history", (request) => json(listPiMemoryHistory(context.database, memoryID(request))));
@@ -238,4 +251,10 @@ function positiveInteger(value: unknown): number {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function reflectionProjectID(context: PiMemoryContext, request: Request): string {
+  const id = decodeURIComponent(new URL(request.url).pathname.split("/")[3] ?? "");
+  if (!getProject(context.database, id)) throw new HttpError(404, "project not found");
+  return id;
 }

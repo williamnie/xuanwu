@@ -1,3 +1,5 @@
+import { setMemoryReflectionEnabled } from "../pi/memoryReflectionQueue.ts";
+import { seedMemoryExperience } from "../pi/memoryExperienceTestFixtures.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -56,6 +58,41 @@ describe("PI acceptance decision application", () => {
       expect((await applyPiAcceptanceDecision(runtime, await buildIssueCompletionCard(db, issue.id), decision("accept"))).status).toBe("needs_user");
       expect(provider.inputs).toHaveLength(2);
       expect(getIssue(db, issue.id)?.status).not.toBe("done");
+    } finally { db.close(); }
+  });
+
+  test("automatically persists one reflection for accepted evidence; request failure never rolls back done", async () => {
+    const db = await fixture();
+    try {
+      const seed = seedMemoryExperience(db);
+      setMemoryReflectionEnabled(db, "demo", true);
+      db.sqlite.run("update issue_runs set status='succeeded', ended_at=? where id=?", [new Date().toISOString(), seed.legacyRunID]);
+      recordIssueEvent(db, seed.issueID, "issue.pi_acceptance_requested.v1", { issue_run_id: seed.legacyRunID });
+      const card = await buildIssueCompletionCard(db, seed.issueID);
+      db.sqlite.run("create trigger reflection_storage_error before insert on pi_memory_reflections begin select raise(abort, 'storage unavailable'); end");
+      expect((await applyPiAcceptanceDecision({ database: db }, card, decision("accept"))).status).toBe("done");
+      db.sqlite.run("drop trigger reflection_storage_error");
+      await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
+      await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
+      expect(db.sqlite.query("select status, attempts from pi_memory_reflections").all()).toEqual([{ status: "pending", attempts: 0 }]);
+      expect(db.sqlite.query("select count(*) n from pi_memory_items").get()).toEqual({ n: 0 });
+    } finally { db.close(); }
+  });
+
+  test("final failure persists a diagnostic reflection but needs_user does not", async () => {
+    const db = await fixture();
+    try {
+      setMemoryReflectionEnabled(db, "demo", true);
+      for (const outcome of ["failed", "needs_user"] as const) {
+        const seed = seedMemoryExperience(db);
+        db.sqlite.run("update issue_runs set status='failed', ended_at=? where id=?", [new Date().toISOString(), seed.legacyRunID]);
+        recordIssueEvent(db, seed.issueID, "issue.pi_acceptance_requested.v1", { issue_run_id: seed.legacyRunID });
+        const card = await buildIssueCompletionCard(db, seed.issueID);
+        expect((await applyPiAcceptanceDecision({ database: db }, card, decision(outcome))).status).toBe(outcome);
+      }
+      const rows = db.sqlite.query<{ summary_json: string }, []>("select summary_json from pi_memory_reflections").all();
+      expect(rows).toHaveLength(1);
+      expect(JSON.parse(rows[0]!.summary_json).outcome).toBe("failed");
     } finally { db.close(); }
   });
 

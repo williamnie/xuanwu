@@ -1,6 +1,7 @@
 export const PI_RUNTIME_PROMPT_PROFILES = [
   "chat",
   "acceptance",
+  "memory_reflection",
   "recovery",
   "manager_cycle",
   "notification"

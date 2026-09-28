@@ -23,6 +23,10 @@ export function memoryEvidenceRejection(
     return "experience Run is missing or belongs to another Work/project";
   }
 
+  const diagnosisOnly = experience.outcome === "diagnosis_only";
+  if (diagnosisOnly && (issue.status !== "failed" || !run.ended_at)) {
+    return "diagnosis-only experience requires a terminal failed Work";
+  }
   const evidenceError = (id: string, requirePassed: boolean): string | undefined => {
     const stored = getStoredEvidence(db, id);
     if (!stored || stored.project_id !== projectID || stored.issue_id !== issueID ||
@@ -38,6 +42,7 @@ export function memoryEvidenceRejection(
     if (["agent_claim", "legacy_import"].includes(stored.evidence.provenance.assertion_origin)) {
       return "experience Evidence must have trusted provenance";
     }
+    if (diagnosisOnly && !["passed", "failed"].includes(stored.evidence.status)) return "diagnosis requires terminal Evidence";
     if (requirePassed && (!canSatisfyEvidenceGate(stored.evidence) ||
       (stored.evidence.decisive_output.exit_code !== undefined && stored.evidence.decisive_output.exit_code !== 0))) {
       return "experience verification requires trusted passed Evidence";
@@ -91,7 +96,7 @@ export function memoryEvidenceRejection(
   }
   for (const reference of experience.verification.evidence_refs) {
     if (!reference.startsWith("evidence:")) return "experience verification requires Evidence references";
-    const reason = evidenceError(reference.slice("evidence:".length), true);
+    const reason = evidenceError(reference.slice("evidence:".length), !diagnosisOnly);
     if (reason) return reason;
   }
   return undefined;

@@ -62,6 +62,7 @@ export type RuntimeSessionInput = {
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
   promptProfile: PiRuntimePromptProfile;
+  memoryReflection?: import("../pi/memoryReflectionQueue.ts").ReflectionLease;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   restartDelayMs?: number;
   restartProcess?: () => void;
@@ -174,7 +175,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   const model = resolvePiModel({ find: (provider, modelID) => modelRuntime.getModel(provider, modelID) }, input.agent);
   const compactionSettings = piRuntimeCompactionSettings(model);
   settingsManager.applyOverrides({
-    compaction: compactionSettings,
+    compaction: input.promptProfile === "memory_reflection" ? { ...compactionSettings, enabled: false } : compactionSettings,
     ...(input.retry ? { retry: input.retry } : {})
   });
   const sessionManager = input.sessionFile
@@ -213,7 +214,8 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   try {
     runtimeTools = createPiRuntimeToolKit(db, toolProject, toolContext, {
       chatToolMode: input.chatToolMode,
-      promptProfile: input.promptProfile
+      promptProfile: input.promptProfile,
+      memoryReflection: input.memoryReflection
     });
     recordPiRuntimeToolRegistryAudit(db, toolAuditInput, runtimeTools.audit);
   } catch (error) {

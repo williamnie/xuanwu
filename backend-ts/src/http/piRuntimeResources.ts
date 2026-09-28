@@ -80,7 +80,7 @@ export async function createPiRuntimeResourceLoader(
   options: Omit<ControlledPiResourceOptions, "allowedSkillIDs" | "onSnapshot">
 ): Promise<ResourceLoader & { snapshot(): PiRuntimeResourceSnapshot }> {
   const promptProject = input.toolProject ?? input.project;
-  const optionalJev = input.promptProfile !== "notification" && jevAvailableForContext(db, { ...input, projectID: promptProject?.id });
+  const optionalJev = input.promptProfile !== "notification" && input.promptProfile !== "memory_reflection" && jevAvailableForContext(db, { ...input, projectID: promptProject?.id });
   const resourceScope = input.promptProfile === "chat" || input.promptProfile === "manager_cycle" ? "full" : "core";
   const skillContext = resourceScope === "full"
     ? buildSkillPromptContext(db, { ...input, project: promptProject })

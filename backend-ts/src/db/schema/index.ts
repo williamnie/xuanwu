@@ -1,3 +1,4 @@
+import { piMemoryReflectionsMigration } from "./088_pi_memory_reflections.ts";
 import { runtimeReadIndexesMigration } from "./085_runtime_read_indexes.ts";
 import { githubIssueCasesMigration } from "./086_github_issue_cases.ts";
 import { baseSchemaMigration } from "./001_base_schema.ts";
@@ -178,4 +179,5 @@ export const migrations = [
   runtimeReadIndexesMigration,
   githubIssueCasesMigration,
   piMemoryHistoryMigration,
+  piMemoryReflectionsMigration,
 ];

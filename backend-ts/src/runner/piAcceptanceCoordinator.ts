@@ -1,3 +1,4 @@
+import { reconcileMemoryReflectionEvents } from "../pi/memoryReflectionQueue.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue } from "../db/repositories/issues.ts";
 import { getProjectPiSettings, isPiHeartbeatPaused } from "../db/repositories/pi.ts";
@@ -52,6 +53,8 @@ export async function runPiAcceptanceCoordinatorOnce(
   input: PiAcceptanceCoordinatorInput
 ): Promise<PiAcceptanceCoordinatorResult> {
   const now = input.now ?? new Date();
+  try { reconcileMemoryReflectionEvents(input.database); }
+  catch { console.warn("[pi-memory] delivery event recovery deferred"); }
   repairRedundantHumanReviewLoops(input);
   restoreHumanOwnedTerminalIssues(input);
   const issues = dueIssues(input.database, now, input.cooldownMs ?? DEFAULT_COOLDOWN_MS);

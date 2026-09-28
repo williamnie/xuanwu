@@ -20,6 +20,7 @@ import { PI_RUNTIME_PROMPT_PROFILES } from "../pi/runtimePromptProfile.ts";
 export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
   switch (input.promptProfile) {
     case "chat": return buildPiChatSystemPrompt(input, db);
+    case "memory_reflection": return buildPiInternalSystemPrompt(input, db);
     case "acceptance": return buildPiInternalSystemPrompt(input, db);
     case "recovery": return buildPiInternalSystemPrompt(input, db);
     case "manager_cycle": return buildPiManagerCycleSystemPrompt(input, db);
