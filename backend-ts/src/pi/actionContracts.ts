@@ -13,6 +13,7 @@ export type PiActionContract = {
 };
 
 const CONTRACTS: PiActionContract[] = [
+  ...["install", "enable", "disable", "update", "rollback", "uninstall"].map(action => contract(`skill.${action}`, "confirm", "project", "ttl_only", "inline_current_turn")),
   contract("agent.workflow_request", "confirm", "issue", "ttl_only"),
   contract("human_review.respond", "confirm", "issue", "required"),
   contract("issue.acceptance_request", "confirm", "issue", "ttl_only"),

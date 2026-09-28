@@ -777,3 +777,22 @@ bunx tsc --ignoreConfig --noEmit --target ES2022 --module ESNext \
 ```
 
 测试会验证：91 张 current source table + 2 张 captured live-only table = 93；257 条唯一用户 API route 全覆盖；36 个 JSX 页面组件与 153 个 PI 模块恰好归属一次；12 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。
+
+
+## 2026-09-28 Skills 增量
+
+以下入口归入 `capability-policy`，复用同一技能库与 Action Gate：
+
+```text
+GET /api/pi/skill-library
+GET /api/pi/skill-library/:key
+POST /api/pi/skill-library/inspect
+POST /api/pi/skill-library/install
+POST /api/pi/skill-library/manage
+POST /api/pi/skill-library/verify
+GET /api/pi/skills/jev-assist/settings
+PUT /api/pi/skills/jev-assist/settings
+POST /api/pi/skills/jev-assist/test
+```
+
+页面模块新增 `SkillLibraryPanel.jsx`，并补录已有的 `JevSkillSettings.jsx`。PI 模块新增 `skillLibraryTools.ts`、`skillLibraryContracts.ts`。技能正文及不可变版本保存在实例数据目录的 `skill-library/`；项目作用域由项目 ID 隔离。变更、验证与使用经现有 PI Action/工具审计记录，不新增数据库表。

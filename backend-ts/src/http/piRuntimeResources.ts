@@ -6,7 +6,7 @@ import type {
   Skill
 } from "@earendil-works/pi-coding-agent";
 import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
-import { basename, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
 import { buildSkillPromptContext } from "../skills/promptContext.ts";
@@ -15,6 +15,10 @@ import { JEV_SKILL_ID, jevPackage } from "../skills/jev/config.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { SmokeRuntime } from "../spikes/piSmokeSupport.ts";
 import type { RuntimeSessionInput } from "./piRuntime.ts";
+import { libraryRegistryOptions } from "../skills/libraryContext.ts";
+import { resolveSkillFile } from "../skills/registry.ts";
+import { visibleManagedSkills } from "../skills/managedStore.ts";
+import { verifyLibrarySkill } from "../skills/libraryService.ts";
 
 export type PiRuntimeResourceDiagnostic = {
   code: string;
@@ -42,6 +46,8 @@ export type ControlledPiResourceOptions = {
   runtimeRoot: string;
   resourceScope?: "core" | "full";
   systemPrompt: string;
+  skillPaths?: string[];
+  skillLoadDiagnostics?: PiRuntimeResourceDiagnostic[];
 };
 
 type ResourceType = PiRuntimeResourceDiagnostic["resource_type"];
@@ -84,9 +90,28 @@ export async function createPiRuntimeResourceLoader(
     ...skillContext.audit.missing_skill_intents.filter(id => id !== JEV_SKILL_ID),
     ...(optionalJev ? [JEV_SKILL_ID] : [])
   ]);
+  const managed = visibleManagedSkills(dirname(db.path), promptProject?.id);
+  const skillLoadDiagnostics: PiRuntimeResourceDiagnostic[] = [];
+  const skillPaths = (await Promise.all(allowedSkillIDs.map(async id => {
+    const installed = managed.find(item => item.id === id);
+    if (installed) {
+      try {
+        const verified = await verifyLibrarySkill(db, installed.key);
+        if (verified.status === "blocked") throw new Error("Skill dependencies unavailable");
+      }
+      catch {
+        skillLoadDiagnostics.push({ code: "installed_skill_invalid", message: `Skill ${id} failed integrity, dependency or SDK validation; run skill_verify for details`, resource_type: "skill", severity: "error", source_path: `installed:${id}` });
+        return [];
+      }
+    }
+    const path = resolveSkillFile(id, libraryRegistryOptions(db, promptProject));
+    return path ? [path] : [];
+  }))).flat();
   return await createControlledPiResourceLoader(sdk, {
     ...options,
     allowedSkillIDs,
+    skillPaths,
+    skillLoadDiagnostics,
     resourceScope,
     onSnapshot: (snapshot) => recordPiRuntimeResourceSnapshot(db, input, promptProject?.id, snapshot)
   });
@@ -121,6 +146,8 @@ class ControlledPiResourceLoader implements ResourceLoader {
   getThemes() { return this.active.getThemes(); }
   getAgentsFiles() { return this.active.getAgentsFiles(); }
   getSystemPrompt(): string | undefined { return this.active.getSystemPrompt(); }
+  getSystemPromptSource() { return this.active.getSystemPromptSource(); }
+  getAppendSystemPromptSources() { return this.active.getAppendSystemPromptSources(); }
 
   getAppendSystemPrompt(): string[] {
     return [
@@ -277,10 +304,12 @@ class ControlledPiResourceLoader implements ResourceLoader {
 }
 
 function discoverResources(options: ControlledPiResourceOptions): Discovery {
-  const diagnostics: PiRuntimeResourceDiagnostic[] = [];
+  const diagnostics: PiRuntimeResourceDiagnostic[] = [...(options.skillLoadDiagnostics ?? [])];
   const optionalPackage = options.allowedSkillIDs.includes(JEV_SKILL_ID) ? jevPackage() : null;
   const optionalPaths = optionalPackage?.installed ? [optionalPackage.directory] : [];
   const optionalRoots: AllowedRoot[] = optionalPaths.map(path => ({ label: "optional-skill", path, resourceType: "skill" }));
+  const registeredPaths = options.skillPaths ?? [];
+  const registeredRoots: AllowedRoot[] = registeredPaths.map(path => ({ label: "skill-registry", path, resourceType: "skill" }));
   if (options.resourceScope === "core") {
     return {
       agents: [],
@@ -300,8 +329,10 @@ function discoverResources(options: ControlledPiResourceOptions): Discovery {
     ...pluginCandidates(options, diagnostics)
   ].filter((item): item is ResourcePackage => item.path !== "");
   const packages = dedupePackages(candidates).filter(hasResources);
-  const allowedRoots = [...packages.flatMap(packageAllowedRoots), ...optionalRoots];
-  const skillPaths = [...packages.flatMap((source) => packagePaths(source, "skill", diagnostics)), ...optionalPaths];
+  const allowedRoots = [...packages.flatMap(packageAllowedRoots), ...optionalRoots, ...registeredRoots];
+  const skillPaths = options.skillPaths
+    ? [...registeredPaths, ...optionalPaths]
+    : [...packages.flatMap((source) => packagePaths(source, "skill", diagnostics)), ...optionalPaths];
   const promptPaths = packages.flatMap((source) => packagePaths(source, "prompt", diagnostics));
   const extensionPaths = packages
     .flatMap((source) => packagePaths(source, "extension", diagnostics))
@@ -592,6 +623,8 @@ function coreOnlyLoader(sdk: SmokeRuntime, systemPrompt: string): ResourceLoader
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getSkills: () => ({ skills: [], diagnostics: [] }),
     getSystemPrompt: () => systemPrompt,
+    getSystemPromptSource: () => undefined,
+    getAppendSystemPromptSources: () => [],
     getThemes: () => ({ themes: [], diagnostics: [] }),
     extendResources: () => {},
     reload: async () => {}

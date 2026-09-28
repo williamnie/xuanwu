@@ -1,6 +1,7 @@
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { Project } from "../db/repositories/projects.ts";
+import { createSkillLibraryTools, SKILL_LIBRARY_TOOL_NAMES } from "../pi/skillLibraryTools.ts";
 import { createPiMemoryTools, PI_MEMORY_TOOL_NAMES } from "../pi/memoryTools.ts";
 import {
   createPiNotificationPreferenceTools,
@@ -21,6 +22,7 @@ import {
 export const PI_READ_ONLY_TOOLS = ["read", "grep", "find", "ls"] as const;
 export const PI_ALLOWED_TOOLS = [
   ...PI_READ_ONLY_TOOLS,
+  ...SKILL_LIBRARY_TOOL_NAMES,
   ...PI_RUNNER_ACTION_TOOL_NAMES,
   ...SUPERVISOR_CONTROL_TOOL_NAMES,
   ...PI_LOCAL_WORKSPACE_TOOL_NAMES,
@@ -35,6 +37,7 @@ export function createPiProjectTools(
   context: Omit<PiRunnerActionContext, "project"> = {}
 ): ToolDefinition[] {
   return [
+    ...createSkillLibraryTools(db, project, context),
     ...createPiRunnerActionTools(createPiRunnerActions(db, { ...context, project })),
     ...createPiLocalWorkspaceTools(db, project, context),
     ...createPiSupervisorControlTools(db, project, context),

@@ -85,6 +85,7 @@ export type PiAuthorizationScope = {
 };
 
 export const PI_SAFE_ACTION_TYPES = [
+  "skill.library_list", "skill.inspect_source", "skill.verify", "skill.use",
   "agent.catalog_list",
   "agent.profile_recommend",
   "human_review.request",
@@ -104,6 +105,7 @@ export const PI_SAFE_ACTION_TYPES = [
   ...SUPERVISOR_CONTROL_READ_ACTION_TYPES
 ];
 export const PI_READ_ONLY_ACTION_TYPES = [
+  "skill.library_list", "skill.inspect_source", "skill.verify", "skill.use",
   "agent.catalog_list",
   "agent.profile_recommend",
   "issue.execution_status", "issue.list", "issue.read", "issue.state_diagnose", "issue.status_summary",

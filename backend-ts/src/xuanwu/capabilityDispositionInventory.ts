@@ -732,6 +732,15 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/pi/reports", family: "evidence-handoff" },
   { method: "GET", path: "/api/pi/reports/:id", family: "evidence-handoff" },
   { method: "POST", path: "/api/pi/reports/generate", family: "evidence-handoff" },
+  { method: "GET", path: "/api/pi/skill-library", family: "capability-policy" },
+  { method: "GET", path: "/api/pi/skill-library/:key", family: "capability-policy" },
+  { method: "POST", path: "/api/pi/skill-library/inspect", family: "capability-policy" },
+  { method: "POST", path: "/api/pi/skill-library/install", family: "capability-policy" },
+  { method: "POST", path: "/api/pi/skill-library/manage", family: "capability-policy" },
+  { method: "POST", path: "/api/pi/skill-library/verify", family: "capability-policy" },
+  { method: "GET", path: "/api/pi/skills/jev-assist/settings", family: "capability-policy" },
+  { method: "PUT", path: "/api/pi/skills/jev-assist/settings", family: "capability-policy" },
+  { method: "POST", path: "/api/pi/skills/jev-assist/test", family: "capability-policy" },
   { method: "GET", path: "/api/pi/skills", family: "capability-policy" },
   { method: "GET", path: "/api/pi/skills/:id", family: "capability-policy" },
   { method: "POST", path: "/api/pi/skills/:id/domain-runs", family: "capability-policy" },
@@ -812,7 +821,7 @@ export const PAGE_SURFACES = [
   {
     id: "capability-policy", disposition: "keep", target: "Capability registry and deterministic permission policy",
     page_ids: ["settings", "pi-connectors", "pi-skills", "pi-policies"],
-    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/CodeAgentsPanel.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/ImChannelRegistryPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RemoteAccessTokenPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/OnboardingPage.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx", "frontend/src/pages/TelegramSettingsPanel.jsx"]
+    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/CodeAgentsPanel.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/ImChannelRegistryPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RemoteAccessTokenPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/OnboardingPage.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SkillLibraryPanel.jsx", "frontend/src/pages/JevSkillSettings.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx", "frontend/src/pages/TelegramSettingsPanel.jsx"]
   },
   {
     id: "evidence-handoff", disposition: "merge", target: "Evidence/Handoff read models and audited action requests",
@@ -867,7 +876,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "capability-connectors", disposition: "keep", target: "Capability and connector runtime", source_of_truth: "registered provider/tool manifests and audited calls",
-    source_files: ["backend-ts/src/pi/browserConnectorHealth.ts", "backend-ts/src/pi/browserToolCall.ts", "backend-ts/src/pi/browserToolProvider.ts", "backend-ts/src/pi/builtinToolRegistry.ts", "backend-ts/src/pi/capabilityTools.ts", "backend-ts/src/pi/cliConnectorHealth.ts", "backend-ts/src/pi/cliConnectorManifest.ts", "backend-ts/src/pi/cliConnectorProvider.ts", "backend-ts/src/pi/cliConnectorToolCall.ts", "backend-ts/src/pi/cliRawEventSync.ts", "backend-ts/src/pi/cliToolRunner.ts", "backend-ts/src/pi/cliToolRunnerSupport.ts", "backend-ts/src/pi/httpToolCall.ts", "backend-ts/src/pi/httpToolProvider.ts", "backend-ts/src/pi/localWorkspaceTools.ts", "backend-ts/src/pi/mcpActionTools.ts", "backend-ts/src/pi/mcpApprovalExpiry.ts", "backend-ts/src/pi/mcpResourceRead.ts", "backend-ts/src/pi/mcpToolCall.ts", "backend-ts/src/pi/mcpToolDefinitions.ts", "backend-ts/src/pi/mcpToolProvider.ts", "backend-ts/src/pi/mcpTransport.ts", "backend-ts/src/pi/piRuntimeTools.ts", "backend-ts/src/pi/readOnlyRuntimeTools.ts", "backend-ts/src/pi/readOnlyToolInvocation.ts", "backend-ts/src/pi/repoReadActionTools.ts", "backend-ts/src/pi/repoReadActions.ts", "backend-ts/src/pi/toolCallAudit.ts", "backend-ts/src/pi/toolProviderEnvelope.ts", "backend-ts/src/pi/toolRegistrySnapshot.ts"]
+    source_files: ["backend-ts/src/pi/browserConnectorHealth.ts", "backend-ts/src/pi/browserToolCall.ts", "backend-ts/src/pi/browserToolProvider.ts", "backend-ts/src/pi/builtinToolRegistry.ts", "backend-ts/src/pi/capabilityTools.ts", "backend-ts/src/pi/cliConnectorHealth.ts", "backend-ts/src/pi/cliConnectorManifest.ts", "backend-ts/src/pi/cliConnectorProvider.ts", "backend-ts/src/pi/cliConnectorToolCall.ts", "backend-ts/src/pi/cliRawEventSync.ts", "backend-ts/src/pi/cliToolRunner.ts", "backend-ts/src/pi/cliToolRunnerSupport.ts", "backend-ts/src/pi/httpToolCall.ts", "backend-ts/src/pi/httpToolProvider.ts", "backend-ts/src/pi/localWorkspaceTools.ts", "backend-ts/src/pi/skillLibraryTools.ts", "backend-ts/src/pi/skillLibraryContracts.ts", "backend-ts/src/pi/mcpActionTools.ts", "backend-ts/src/pi/mcpApprovalExpiry.ts", "backend-ts/src/pi/mcpResourceRead.ts", "backend-ts/src/pi/mcpToolCall.ts", "backend-ts/src/pi/mcpToolDefinitions.ts", "backend-ts/src/pi/mcpToolProvider.ts", "backend-ts/src/pi/mcpTransport.ts", "backend-ts/src/pi/piRuntimeTools.ts", "backend-ts/src/pi/readOnlyRuntimeTools.ts", "backend-ts/src/pi/readOnlyToolInvocation.ts", "backend-ts/src/pi/repoReadActionTools.ts", "backend-ts/src/pi/repoReadActions.ts", "backend-ts/src/pi/toolCallAudit.ts", "backend-ts/src/pi/toolProviderEnvelope.ts", "backend-ts/src/pi/toolRegistrySnapshot.ts"]
   },
   {
     id: "guardian-attention", disposition: "merge", target: "Attention detection, routing and delivery", source_of_truth: "Guardian authorities projected into Attention",

@@ -12,6 +12,9 @@ import {
   type DomainSkillOutput
 } from "../skills/builtinDomainProposal.ts";
 import { readSkillRegistry, type SkillMetadata } from "../skills/registry.ts";
+import { libraryRegistryOptions } from "../skills/libraryContext.ts";
+import { validateManagedSkill, visibleManagedSkills } from "../skills/managedStore.ts";
+import { dirname } from "node:path";
 import { executeSkillRuntime, type ExecuteSkillRuntimeInput, type SkillRuntimeRun } from "../skills/runtime.ts";
 import { retrievePiMemoryContext, type PiMemoryRetrievalResult } from "./memoryContext.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
@@ -40,6 +43,11 @@ export async function createDomainSkillProposal(
   options: DomainSkillRunOptions = {}
 ): Promise<DomainSkillRunResult> {
   const skill = options.skill ?? requireDomainSkill(db, skillID, options);
+  const installed = visibleManagedSkills(dirname(db.path), confidentProjectID(item)).find(candidate => candidate.id === skill.id);
+  if (installed) {
+    if (!installed.enabled) throw new Error(`skill disabled: ${skill.id}`);
+    await validateManagedSkill(dirname(db.path), installed);
+  }
   const contextRetrieval = domainContextRetrieval(db, item, skill.id);
   const execution = await executeSkillRuntime<DomainSkillOutput>({
     auditContext: {
@@ -161,7 +169,7 @@ function requireDomainSkill(
     provider_id: tool.provider_id
   }));
   const wanted = normalizeSkillID(skillID);
-  const registry = readSkillRegistry({ availableTools });
+  const registry = readSkillRegistry({ ...libraryRegistryOptions(db), availableTools });
   const skill = registry.items.find((item) => item.id === wanted || item.name === wanted);
   if (!skill) throw new Error(`domain skill not found: ${skillID}`);
   if (skill.kind !== "domain") throw new Error(`skill kind must be domain: ${skillID}`);

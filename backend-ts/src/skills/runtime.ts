@@ -91,6 +91,10 @@ const BUILTIN_HANDLERS: Readonly<Record<string, SkillRuntimeHandler>> = {
   )
 };
 
+export function hasBuiltinSkillHandler(handler: string): boolean {
+  return Object.hasOwn(BUILTIN_HANDLERS, handler);
+}
+
 export async function executeSkillRuntime<TOutput = unknown>(
   input: ExecuteSkillRuntimeInput
 ): Promise<SkillRuntimeResult<TOutput>> {

@@ -15,10 +15,12 @@ import {
   SUPERVISOR_CONTROL_TOOL_NAMES
 } from "./supervisorControlContracts.ts";
 import { PI_LOCAL_WORKSPACE_TOOL_NAMES } from "./localWorkspaceTools.ts";
+import { SKILL_LIBRARY_READ_TOOLS } from "./skillLibraryContracts.ts";
 
 export const RUNNER_BUILTIN_PROVIDER_ID = "runner-builtin";
 const PRIMITIVE_READ_TOOL_NAMES = ["read", "grep", "find", "ls"] as const;
 const READ_TOOL_NAMES = new Set<string>([
+  ...SKILL_LIBRARY_READ_TOOLS,
   ...PRIMITIVE_READ_TOOL_NAMES,
   "agent_catalog_list",
   "issue_list",
@@ -56,6 +58,7 @@ const DANGEROUS_TOOL_NAMES = new Set<string>([
 const SUPERVISOR_CONTROL_TOOLS = new Set<string>(SUPERVISOR_CONTROL_TOOL_NAMES);
 const LOCAL_WORKSPACE_TOOLS = new Set<string>(PI_LOCAL_WORKSPACE_TOOL_NAMES);
 const CHAT_BOOTSTRAP_TOOLS = new Set([
+  "skill_use",
   "agent_catalog_list",
   "project_status", "project_list", "issue_list", "issue_status_summary", "issue_execution_status", "issue_read",
   "project_create", "workspace_make_directory", "workspace_write_file", "manual_context_intake",
@@ -84,6 +87,9 @@ const MANAGER_CYCLE_TOOLS = new Set([
   "memory_search", "memory_remember", "review_workflow_request", "report_workflow_request"
 ]);
 const TOOL_ALIASES: Record<string, string[]> = {
+  skill_install: ["安装技能", "install skill", "添加 skill", "安装 skills"],
+  skill_manage: ["更新技能", "卸载技能", "启用技能", "停用技能", "回滚技能", "update uninstall enable disable skill"],
+  skill_verify: ["验证技能", "test skill", "检查技能依赖"],
   agent_catalog_list: [
     "list code agents and agent profiles",
     "available code agents",

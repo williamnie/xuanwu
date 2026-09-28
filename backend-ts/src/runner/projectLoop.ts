@@ -17,6 +17,9 @@ import { parseMcpPolicy } from "../mcp/policy.ts";
 import { publicMcpRegistry } from "../mcp/registry.ts";
 import { mergeSkillIntents, parseSkillPolicy } from "../skills/intents.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
+import { libraryRegistryOptions, managedSkillPolicy } from "../skills/libraryContext.ts";
+import { currentSkillRevision, revisionPath, visibleManagedSkills } from "../skills/managedStore.ts";
+import { dirname } from "node:path";
 import { resolveExecutorSelection, type AgentRecommendation } from "../pi/agentOrchestration.ts";
 import {
   isExecutorProviderId,
@@ -318,7 +321,7 @@ function withRunnerContext(project: Project, issue: Issue, prompt: string, datab
   return withMcpRequirementContext(
     project,
     issue,
-    withSkillIntentContext(project, issue, withGovernedRetryContext(database, issue, prompt))
+    withSkillIntentContext(project, issue, withGovernedRetryContext(database, issue, prompt), database)
   );
 }
 
@@ -363,10 +366,10 @@ function boundedPromptText(value: unknown, limit: number): string {
   return value.trim().slice(0, limit);
 }
 
-function withSkillIntentContext(project: Project, issue: Issue, prompt: string): string {
+function withSkillIntentContext(project: Project, issue: Issue, prompt: string, database?: RunnerDatabase): string {
   if (!hasSkillIntentContext(project, issue)) return prompt.trim();
   const policy = parseSkillPolicy(project.default_skill_policy);
-  const metadata = matchedSkillMetadata(issue, policy);
+  const metadata = matchedSkillMetadata(issue, policy, database, project);
   const skillContext = [
     "",
     "## Skill Intent Context",
@@ -378,7 +381,7 @@ function withSkillIntentContext(project: Project, issue: Issue, prompt: string):
   return `${prompt.trim()}${skillContext}`.trim();
 }
 
-function matchedSkillMetadata(issue: Issue, policy: ReturnType<typeof parseSkillPolicy>) {
+function matchedSkillMetadata(issue: Issue, policy: ReturnType<typeof parseSkillPolicy>, database?: RunnerDatabase, project?: Project) {
   const requested = new Set(mergeSkillIntents(
     issue.required_skill_intents,
     issue.recommended_skill_intents,
@@ -386,9 +389,19 @@ function matchedSkillMetadata(issue: Issue, policy: ReturnType<typeof parseSkill
     policy.recommended
   ));
   if (requested.size === 0) return [];
-  return listSkillRegistry()
+  const managed = database ? visibleManagedSkills(dirname(database.path), project?.id) : [];
+  const disabled = database ? managedSkillPolicy(database, project?.id).disabled : [];
+  return listSkillRegistry(database ? libraryRegistryOptions(database, project) : {})
     .filter((skill) => requested.has(skill.id) || requested.has(skill.name))
-    .map(skillSummary);
+    .filter(skill => !disabled.includes(skill.id))
+    .map(skill => {
+      const installed = managed.find(item => item.id === skill.id);
+      return { ...skillSummary(skill), ...(installed && database ? {
+        revision: installed.revision,
+        base_directory: revisionPath(dirname(database.path), currentSkillRevision(installed)),
+        usage: "Read SKILL.md and its referenced resources. Keep this version immutable; write outputs and install dependencies in the task workspace."
+      } : {}) };
+    });
 }
 
 function hasSkillIntentContext(project: Project, issue: Issue): boolean {

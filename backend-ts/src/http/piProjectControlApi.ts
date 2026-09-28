@@ -222,7 +222,7 @@ function managerCycleResult(
   return {
     managed: true,
     conversation_id: conversation.id,
-    message_count: session.state.messages.length,
+    message_count: session.state.messages.filter(message => message.role !== "system").length,
     issue_state: issueState,
     notifications,
     pi_session_id: session.sessionId,

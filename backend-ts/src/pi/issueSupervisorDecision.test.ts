@@ -231,7 +231,7 @@ describe("PI supervisor decision runtime", () => {
       });
       expect(result.valid).toBe(true);
       expect(result.decision.decision).toBe("retry_issue");
-      const supervisorPrompt = JSON.parse(promptText).messages[0].content[0].text as string;
+      const supervisorPrompt = JSON.parse(promptText).messages.find((message: { role: string }) => message.role === "user").content[0].text as string;
       expect(supervisorPrompt).toContain("PI owns semantic Issue lifecycle");
       expect(supervisorPrompt).toContain("Provider workers");
       expect(supervisorPrompt).toContain("Codex/Claude");

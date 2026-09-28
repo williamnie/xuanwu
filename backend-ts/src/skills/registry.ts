@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { emptyRuntime, readSkillRuntimeManifest, type SkillRegistryTool, type SkillRuntimeMetadata } from "./runtimeManifest.ts";
 
 export type SkillMetadata = SkillRuntimeMetadata & {
   allowed_roles: string[];
   description: string;
+  disable_model_invocation?: boolean;
   id: string;
   instruction_bytes: number;
   instruction_sha256: string;
@@ -36,8 +37,8 @@ export type SkillRegistryDiagnostic = {
 };
 
 export type SkillRegistry = { diagnostics: SkillRegistryDiagnostic[]; items: SkillMetadata[] };
-export type SkillRegistryRoot = { label?: string; path: string; prefix?: string };
-export type SkillRegistryOptions = { availableTools?: SkillRegistryTool[]; roots?: SkillRegistryRoot[] };
+export type SkillRegistryRoot = { label?: string; path: string; prefix?: string; boundary?: string };
+export type SkillRegistryOptions = { availableTools?: SkillRegistryTool[]; roots?: SkillRegistryRoot[]; additionalRoots?: SkillRegistryRoot[]; cwd?: string; agentDir?: string };
 export type SkillRecommendationInput = { description?: string; title?: string };
 export type SkillRecommendation = SkillMetadata & { reason: string; score: number };
 
@@ -79,18 +80,18 @@ export function recommendSkillIntents(
     .slice(0, 8);
 }
 
-function registryRoots(options: SkillRegistryOptions): SkillRegistryRoot[] {
+export function registryRoots(options: SkillRegistryOptions = {}): SkillRegistryRoot[] {
   if (options.roots?.length) return options.roots;
   const home = Bun.env.CODEX_HOME?.trim() || join(homedir(), ".codex");
   const packageDir = Bun.env.PI_PACKAGE_DIR?.trim();
   const repoSkills = join(repoRoot(), "skills");
-  const runnerRoots: SkillRegistryRoot[] = [];
-  if (existsSync(repoSkills)) runnerRoots.push({ label: "repo", path: repoSkills });
-  if (packageDir && existsSync(join(packageDir, "skills"))) {
-    runnerRoots.push({ label: "runner-package", path: join(packageDir, "skills") });
-  }
+  const runnerRoots: SkillRegistryRoot[] = resourceRoots(repoRoot(), "repo");
+  if (packageDir) runnerRoots.push(...resourceRoots(packageDir, "runner-package"));
   if (runnerRoots.length === 0) runnerRoots.push({ label: "repo", path: repoSkills });
   return [
+    ...(options.additionalRoots ?? []),
+    ...(options.cwd ? resourceRoots(join(options.cwd, ".pi"), "project") : []),
+    ...(options.agentDir ? resourceRoots(options.agentDir, "runtime") : []),
     ...runnerRoots,
     { label: "codex-home", path: join(home, "skills") },
     { label: "codex-superpowers", path: join(home, "superpowers", "skills"), prefix: "superpowers" },
@@ -98,9 +99,51 @@ function registryRoots(options: SkillRegistryOptions): SkillRegistryRoot[] {
   ];
 }
 
+function resourceRoots(path: string, label: string): SkillRegistryRoot[] {
+  const roots: SkillRegistryRoot[] = [];
+  const boundary = label === "project" ? dirname(path) : path;
+  const addPackage = (directory: string, packageLabel: string) => {
+    let entries = ["skills"];
+    try {
+      const manifest = JSON.parse(readFileSync(join(directory, "package.json"), "utf8"));
+      if (Array.isArray(manifest.pi?.skills)) entries = manifest.pi.skills.filter((item: unknown) => typeof item === "string");
+    } catch { /* 普通目录无需 package.json。 */ }
+    for (const entry of entries) {
+      if (isAbsolute(entry) || entry.split(/[\\/]/).includes("..")) continue;
+      const skillPath = resolve(directory, entry);
+      if (existsSync(skillPath)) roots.push({ label: packageLabel, path: skillPath, boundary });
+    }
+  };
+  addPackage(path, label);
+  const plugins = join(path, "plugins");
+  if (existsSync(plugins)) for (const name of readdirSync(plugins).slice(0, 64)) {
+    addPackage(join(plugins, name), `${label}-plugin-${name}`);
+  }
+  return roots;
+}
+
+export function resolveSkillFile(id: string, options: SkillRegistryOptions = {}): string | undefined {
+  const wanted = normalizeID(id);
+  for (const root of registryRoots(options)) for (const file of findSkillFiles(root, 0, [])) {
+    const metadata = readSkillFile(file, root, options, []);
+    if (metadata && (metadata.id === wanted || metadata.name === wanted)) return file;
+  }
+  return undefined;
+}
+
 function findSkillFiles(root: SkillRegistryRoot, depth: number, diagnostics: SkillRegistryDiagnostic[]): string[] {
   if (depth > MAX_DEPTH) return [];
   if (!existsSync(root.path)) return rootMissing(root, depth, diagnostics);
+  if (root.boundary) {
+    try {
+      const candidate = existsSync(join(root.path, "SKILL.md")) ? join(root.path, "SKILL.md") : root.path;
+      const part = relative(realpathSync(root.boundary), realpathSync(candidate));
+      if (isAbsolute(part) || part === ".." || part.startsWith(`..${sep}`)) {
+        diagnostics.push(diagnostic("read_error", publicPath(root.path, root), "Skill directory escapes its allowed root"));
+        return [];
+      }
+    } catch { return []; }
+  }
   const stat = safeStat(root.path);
   if (!stat?.isDirectory()) return rootNotDirectory(root, depth, diagnostics);
   const skill = join(root.path, "SKILL.md");
@@ -128,6 +171,7 @@ function readSkillFile(
   return {
     allowed_roles: allowedRoles(description),
     description,
+    disable_model_invocation: frontMatter["disable-model-invocation"] === true,
     id,
     instruction_bytes: Buffer.byteLength(text),
     instruction_sha256: instructionSha256,
@@ -160,17 +204,15 @@ function hasFrontMatter(text: string): boolean {
   return text.startsWith("---") && text.indexOf("\n---", 3) >= 0;
 }
 
-function parseFrontMatter(text: string): Record<string, string> {
+function parseFrontMatter(text: string): Record<string, unknown> {
   if (!text.startsWith("---")) return {};
   const end = text.indexOf("\n---", 3);
   if (end < 0) return {};
-  return Object.fromEntries(text.slice(3, end).split(/\r?\n/).map(frontMatterLine).filter(Boolean) as Array<[string, string]>);
-}
-
-function frontMatterLine(line: string): [string, string] | undefined {
-  const separator = line.indexOf(":");
-  if (separator < 0) return undefined;
-  return [line.slice(0, separator).trim(), line.slice(separator + 1).trim().replace(/^['"]|['"]$/g, "")];
+  try {
+    const parsed = Bun.YAML.parse(text.slice(3, end));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed as Record<string, unknown>;
+  } catch { return {}; }
 }
 
 function recommendation(skill: SkillMetadata, terms: string[]): SkillRecommendation {

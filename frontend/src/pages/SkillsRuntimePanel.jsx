@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Boxes, Play, RefreshCw, Sparkles } from 'lucide-react';
 import { message } from '../store/toastStore';
 import JevSkillSettings from './JevSkillSettings.jsx';
+import SkillLibraryPanel from './SkillLibraryPanel.jsx';
 import './SkillsRuntimePanel.css';
 
 const KIND_LABEL = { domain: '处理事项', intake: '入箱识别' };
@@ -37,6 +38,7 @@ export default function SkillsRuntimePanel() {
   const runSelected = () => runSkill(selected, form, setState);
   return (
     <section className="glass-card skills-runtime-panel">
+      <SkillLibraryPanel />
       <PanelHeader loading={state.loading} onRefresh={() => loadAll(setState)} />
       {state.error && <div className="skills-runtime-error">{state.error}</div>}
       {state.notice && <div className="skills-runtime-empty compact">{state.notice}</div>}

@@ -155,6 +155,8 @@ function createSmokeResourceLoader(runtime: SmokeRuntime): ResourceLoader {
     getAgentsFiles: () => ({ agentsFiles: [] }),
     getSystemPrompt: () => "You are a minimal PI smoke test assistant. Reply concisely.",
     getAppendSystemPrompt: () => [],
+    getSystemPromptSource: () => undefined,
+    getAppendSystemPromptSources: () => [],
     extendResources: () => {},
     reload: async () => {}
   };

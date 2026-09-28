@@ -4,6 +4,7 @@ import { deleteIssues, enqueueIssue } from "../db/repositories/issueActions.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { auditIssueSkillIntents } from "../skills/intentAudit.ts";
 import { getSkillMetadata, readSkillRegistry, recommendSkillIntents } from "../skills/registry.ts";
+import { libraryRegistryOptions } from "../skills/libraryContext.ts";
 import { withIssueBodyDependencies } from "./issuePlanningBody.ts";
 import { parseSkillIntentList } from "../skills/intents.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
@@ -787,7 +788,7 @@ function safeListSkills(db: RunnerDatabase, context: PiRunnerActionContext) {
   return executeSafePiAction(db, context, {
     actionType: "skill.list",
     payload: {},
-    execute: () => readSkillRegistry({ availableTools: skillRegistryTools(db) })
+    execute: () => readSkillRegistry({ ...libraryRegistryOptions(db, context.project), availableTools: skillRegistryTools(db) })
   });
 }
 
@@ -795,7 +796,7 @@ function safeReadSkill(db: RunnerDatabase, context: PiRunnerActionContext, input
   return executeSafePiAction(db, context, {
     actionType: "skill.read",
     payload: { id: cleanString(input.id) },
-    execute: () => getSkillMetadata(input.id, { availableTools: skillRegistryTools(db) }) ?? { id: cleanString(input.id), missing: true }
+    execute: () => getSkillMetadata(input.id, { ...libraryRegistryOptions(db, context.project), availableTools: skillRegistryTools(db) }) ?? { id: cleanString(input.id), missing: true }
   });
 }
 
@@ -805,7 +806,7 @@ function safeRecommendSkills(db: RunnerDatabase, context: PiRunnerActionContext,
     actionType: "skill.recommend",
     payload: cleanObjectPayload({ project_id: projectID, title: input.title ?? "", description: input.description ?? "" }),
     projectID,
-    execute: () => ({ items: recommendSkillIntents(input).map(compactSkillRecommendation) })
+    execute: () => ({ items: recommendSkillIntents(input, libraryRegistryOptions(db, context.project)).map(compactSkillRecommendation) })
   });
 }
 

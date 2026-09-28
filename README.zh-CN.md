@@ -111,6 +111,10 @@ daemon、scheduler 与恢复模型，不是可用性 SLA；宿主机与配置的
 GitHub 仓库、Release 资产、二进制、CLI、Skill、环境变量、服务标识和默认数据目录统一使用
 **Xuanwu**：命令为 `xuanwu`，环境变量前缀为 `XUANWU_*`。
 
+## 给玄武安装技能
+
+在「设置 → 高级 → 技能」管理玄武自己的技能库，也可以直接在对话中要求安装、使用、更新、回滚或卸载技能。支持 Git 仓库、本地目录和直接编写，提供项目级与实例级作用域。详见[技能库使用说明](docs/skills.md)。
+
 ## 安装玄武和 Xuanwu Skill
 
 玄武自带 Issue 管理 Skill。安装后，Codex 或 Claude Code 可以替你注册项目、创建与启动 Issue、

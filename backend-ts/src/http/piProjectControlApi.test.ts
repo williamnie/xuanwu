@@ -93,7 +93,7 @@ describe("Bun project PI control API", () => {
       expect(promptContext).toContain("Project status snapshot");
       expect(promptContext).toContain("Issue state diagnostics");
       expect(promptContext).toContain("Failed issue");
-      const promptText = JSON.parse(promptContext).messages[0].content[0].text;
+      const promptText = JSON.parse(promptContext).messages.find((message: { role: string }) => message.role === "user").content[0].text;
       expect(promptText).toContain('"failed": 1');
     } finally {
       faux.unregister();

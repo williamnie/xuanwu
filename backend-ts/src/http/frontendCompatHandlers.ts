@@ -13,6 +13,7 @@ import { getProject, ProjectNotFoundError, updateProject } from "../db/repositor
 import { createImageUpload, mustGetUpload } from "../db/repositories/uploads.ts";
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
+import { libraryRegistryOptions } from "../skills/libraryContext.ts";
 import { isProjectLoopActive, startProjectLoop as startManagedProjectLoop } from "../runner/projectLoopManager.ts";
 import type { EventBus } from "../events/bus.ts";
 import { constrainApprovalGrantScope } from "../pi/approvalGrantScope.ts";
@@ -53,7 +54,7 @@ export function createFrontendCompatHandlers(context: FrontendCompatContext) {
     approvals: {
       resolve: (id: string, body: Record<string, unknown>) => resolveApproval(context, id, body)
     },
-    capabilities: () => ({ skills: listSkillRegistry(), plugins: [] }),
+    capabilities: () => ({ skills: listSkillRegistry(libraryRegistryOptions(context.database)), plugins: [] }),
     commands: {
       execute: (body: Record<string, unknown>) => executeCommand(context, body)
     },

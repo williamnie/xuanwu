@@ -19,10 +19,15 @@ import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { publicIntakeRun, redactedJsonObject, runDiagnostics } from "./piSkillRunViews.ts";
 import type { Router } from "./router.ts";
 import { publicJevSkillSettings, registerJevSkillSettingsRoutes } from "./jevSkillSettingsApi.ts";
+import { registerSkillLibraryRoutes } from "./skillLibraryApi.ts";
+import { libraryRegistryOptions, managedSkillPolicy } from "../skills/libraryContext.ts";
+import { visibleManagedSkills, validateManagedSkill } from "../skills/managedStore.ts";
+import { dirname } from "node:path";
 
 type SkillRouteContext = { config?: RunnerConfig; database: RunnerDatabase };
 type JsonObject = Record<string, unknown>;
 type SkillRegistryView = {
+  disabled?: string[];
   jev?: Record<string, unknown>;
   diagnostics: SkillRegistryDiagnostic[];
   items: SkillMetadata[];
@@ -32,6 +37,7 @@ type SkillRegistryView = {
 const RUN_STATUSES = new Set(["running", "succeeded", "failed"]);
 
 export function registerPiSkillRoutes(router: Router, context?: SkillRouteContext): void {
+  if (context) registerSkillLibraryRoutes(router, context.database);
   if (context) registerJevSkillSettingsRoutes(router, context);
   router.get("/api/pi/skills", () => skillsResponse(context));
   router.get("/api/pi/skills/intake-runs", (request) => json(intakeRunsResponse(context, request)));
@@ -86,7 +92,7 @@ function domainRunsResponse(context: SkillRouteContext | undefined, request: Req
 
 async function startIntakeRun(context: SkillRouteContext | undefined, request: Request): Promise<Response> {
   const db = requireDatabase(context);
-  const skill = requireRuntimeSkill(request, context, "intake");
+  const skill = await requireRuntimeSkill(request, context, "intake");
   const body = await objectBody(request);
   const bundle = getContextBundle(db, positiveBodyID(body, "bundle_id"));
   if (!bundle) throw new HttpError(404, "context bundle not found");
@@ -102,7 +108,7 @@ async function startIntakeRun(context: SkillRouteContext | undefined, request: R
 
 async function startDomainRun(context: SkillRouteContext | undefined, request: Request): Promise<Response> {
   const db = requireDatabase(context);
-  const skill = requireRuntimeSkill(request, context, "domain");
+  const skill = await requireRuntimeSkill(request, context, "domain");
   const body = await objectBody(request);
   const item = getAttentionInboxItem(db, positiveBodyID(body, "item_id"));
   if (!item) throw new HttpError(404, "attention inbox item not found");
@@ -183,7 +189,8 @@ function decoratedSkill(
     return tool ? [publicResolvedTool(grant, tool)] : [];
   });
   const missingCapabilities = skill.required_tools.filter((grant) => !resolveTool(registry.tools, grant));
-  const availability = diagnostics.length > 0 || manifestOnly ? "blocked" : "ready";
+  const disabled = registry.disabled?.includes(skill.id) === true;
+  const availability = disabled ? "disabled" : diagnostics.length > 0 || manifestOnly ? "blocked" : "ready";
   const { instructions, ...metadata } = skill;
   return {
     ...metadata,
@@ -191,7 +198,7 @@ function decoratedSkill(
     availability_status: availability,
     diagnostics,
     discovery_status: "discovered",
-    enabled: skill.kind ? diagnostics.length === 0 && !manifestOnly : true,
+    enabled: !disabled && (skill.kind ? diagnostics.length === 0 && !manifestOnly : true),
     executable,
     lifecycle: {
       availability,
@@ -214,15 +221,23 @@ function skillDiagnostics(skill: SkillMetadata, diagnostics: SkillRegistryDiagno
   return diagnostics.filter((item) => item.source_path === path || item.source_path === skill.source_path);
 }
 
-function requireRuntimeSkill(
+async function requireRuntimeSkill(
   request: Request,
   context: SkillRouteContext | undefined,
   kind: "domain" | "intake"
-): SkillMetadata {
+): Promise<SkillMetadata> {
   const id = skillID(request);
   const registry = readRegistry(context);
   const skill = findSkill(registry.items, id);
   if (!skill) throw new HttpError(404, `skill 不存在: ${id}`);
+  if (registry.disabled?.includes(skill.id)) throw new HttpError(409, "技能已停用");
+  if (context) {
+    const installed = visibleManagedSkills(dirname(context.database.path)).find(item => item.id === skill.id);
+    if (installed) {
+      try { await validateManagedSkill(dirname(context.database.path), installed); }
+      catch { throw new HttpError(409, "技能完整性检查失败，请更新或重新安装"); }
+    }
+  }
   if (skill.kind !== kind) throw new HttpError(400, `skill kind 必须是 ${kind}`);
   if (kind === "domain" && !skill.execution) throw new HttpError(400, "domain skill 缺少可执行 runtime");
   const diagnostics = skillDiagnostics(skill, registry.diagnostics);
@@ -241,7 +256,7 @@ function readRegistry(context?: SkillRouteContext): SkillRegistryView {
     permission: tool.permission,
     provider_id: tool.provider_id
   }));
-  return { ...readSkillRegistry({ availableTools }), tools: snapshot.tools, jev: publicJevSkillSettings(context.database) };
+  return { ...readSkillRegistry({ ...libraryRegistryOptions(context.database), availableTools }), disabled: managedSkillPolicy(context.database).disabled, tools: snapshot.tools, jev: publicJevSkillSettings(context.database) };
 }
 
 function resolveTool(tools: AssistantTool[], grant: string): AssistantTool | undefined {

@@ -8,6 +8,9 @@ import { mergeSkillIntents, parseSkillIntentList, parseSkillPolicy } from "./int
 import { listSkillRegistry, type SkillMetadata } from "./registry.ts";
 import { jevAvailableForContext } from "./jev/policy.ts";
 import { JEV_SKILL_ID } from "./jev/config.ts";
+import { libraryRegistryOptions, managedSkillPolicy } from "./libraryContext.ts";
+import { visibleManagedSkills } from "./managedStore.ts";
+import { dirname } from "node:path";
 
 export type SkillPromptContextInput = {
   authorization?: PiGatePolicy;
@@ -40,7 +43,7 @@ export type SkillPromptContextAudit = {
 
 type AllowSource = { ids: string[]; name: string };
 type SkillPromptSummary = Pick<SkillMetadata,
-  "allowed_roles" | "description" | "id" | "name" | "risk_level" | "source_path" | "summary" | "trigger_rules"
+  "allowed_roles" | "description" | "disable_model_invocation" | "id" | "name" | "risk_level" | "source_path" | "summary" | "trigger_rules"
 >;
 
 export function buildSkillPromptContext(db: RunnerDatabase, input: SkillPromptContextInput): SkillPromptContext {
@@ -48,9 +51,11 @@ export function buildSkillPromptContext(db: RunnerDatabase, input: SkillPromptCo
   const allowSources = skillAllowSources(db, input);
   const requested = requestedSkillIntents(input.project, issue);
   const fallback = mergeSkillIntents(...allowSources.map((source) => source.ids));
-  const candidates = requested.length > 0 ? requested : fallback;
-  const filtered = filterUnauthorized(candidates, allowSources);
-  const registry = skillRegistryByID();
+  const managed = managedSkillPolicy(db, input.project?.id);
+  const candidates = mergeSkillIntents(requested.length > 0 ? requested : fallback, managed.enabled);
+  const filtered = filterUnauthorized(candidates, allowSources.length ? allowSources : [{ name: "installed-skills", ids: managed.enabled }]);
+  filtered.authorized = filtered.authorized.filter(id => !managed.disabled.includes(id));
+  const registry = new Map(listSkillRegistry(libraryRegistryOptions(db, input.project)).map(skill => [skill.id, skill]));
   const optionalJev = jevAvailableForContext(db, { ...input, projectID: input.project?.id });
   const ids = [...new Set([...filtered.authorized.filter(id => id !== JEV_SKILL_ID || optionalJev), ...(optionalJev ? [JEV_SKILL_ID] : [])])];
   const injected = ids.flatMap((id) => registry.get(id) ?? []);
@@ -100,8 +105,12 @@ function requestedSkillIntents(project: Project | undefined, issue: ReturnType<t
 }
 
 function skillAllowSources(db: RunnerDatabase, input: SkillPromptContextInput): AllowSource[] {
+  // 项目级显式启用本身是该项目的技能授权；运行时/委派上限仍单独求交集。
+  const projectEnabled = visibleManagedSkills(dirname(db.path), input.project?.id)
+    .filter(item => item.scope === "project" && item.enabled).map(item => item.id);
+  const projectAllowed = parseSkillPolicy(input.project?.default_skill_policy).allowed ?? [];
   return [
-    { name: "project.default_skill_policy.allowed", ids: parseSkillPolicy(input.project?.default_skill_policy).allowed ?? [] },
+    { name: "project.default_skill_policy.allowed", ids: projectAllowed.length ? mergeSkillIntents(projectAllowed, projectEnabled) : [] },
     { name: "runtime.authorization.allowedSkillIntents", ids: runtimeAllowedSkills(input.authorization) },
     { name: "delegation.allowed_skill_intents", ids: delegationAllowedSkills(db, input.delegationID) }
   ].filter((source) => source.ids.length > 0);
@@ -122,10 +131,6 @@ function filterUnauthorized(candidates: string[], sources: AllowSource[]) {
   const allowedSets = sources.map((source) => new Set(source.ids));
   const authorized = candidates.filter((id) => allowedSets.every((allowed) => allowed.has(id)));
   return { authorized, unauthorized: candidates.filter((id) => !authorized.includes(id)) };
-}
-
-function skillRegistryByID(): Map<string, SkillMetadata> {
-  return new Map(listSkillRegistry().map((skill) => [skill.id, skill]));
 }
 
 function promptContextAudit(
@@ -155,7 +160,7 @@ function promptContextAudit(
 function formatPromptSection(audit: SkillPromptContextAudit): string {
   return [
     "Relevant Skill Metadata:",
-    formatUntrustedContent(audit.injected_skills, "skill"),
+    formatUntrustedContent(audit.injected_skills.filter(skill => !skill.disable_model_invocation), "skill"),
     "Skill metadata policy: only project/issue/delegation-authorized skill summaries above are visible in this prompt.",
     "Authorized injected skill ids:",
     JSON.stringify(audit.injected_skill_ids)
@@ -195,6 +200,7 @@ function skillPromptSummary(skill: SkillMetadata): SkillPromptSummary {
   return {
     allowed_roles: skill.allowed_roles,
     description: skill.description,
+    disable_model_invocation: skill.disable_model_invocation,
     id: skill.id,
     name: skill.name,
     risk_level: skill.risk_level,

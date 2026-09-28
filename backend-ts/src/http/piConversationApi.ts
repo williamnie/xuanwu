@@ -402,7 +402,7 @@ function piConversationTurnResult(turn: PiConversationTurn): PiConversationTurnR
     status: runtime.session.state.errorMessage ? "failed" : "completed",
     title: conversation.title,
     text: piConversationResultText(runtime.session),
-    message_count: runtime.session.state.messages.length,
+    message_count: runtime.session.state.messages.filter(message => message.role !== "system").length,
     turn_id: turnID
   };
 }
@@ -939,6 +939,7 @@ function runnerChatAuthorization(
     authorizedActions: runnerChatAuthorizedActions(actions),
     mode: "delegated" as const,
     scopes: [
+      { runner_resource: "skills" },
       { runner_resource: "agent_catalog" },
       { runner_resource: "issues" },
       { runner_resource: "runner_settings" },
@@ -963,6 +964,7 @@ function unboundRunnerChatAuthorization(runnerChatActions: readonly string[]) {
     authorizedActions: runnerChatAuthorizedActions(directlyAuthorizedActions),
     mode: "delegated" as const,
     scopes: [
+      { runner_resource: "skills" },
       { runner_resource: "agent_catalog" },
       { runner_resource: "issues" },
       { runner_resource: "projects" },

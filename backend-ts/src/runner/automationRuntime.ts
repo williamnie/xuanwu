@@ -8,6 +8,7 @@ import { loadAssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
+import { libraryRegistryOptions, managedSkillPolicy } from "../skills/libraryContext.ts";
 import { workIDToIssueID } from "../domain/work/issueAdapter.ts";
 import { implementWorkflowRegistryContributions } from "../workflows/implement.ts";
 import { investigateWorkflowRegistryContributions } from "../workflows/investigate.ts";
@@ -53,11 +54,12 @@ export function createNativeWorkflowRegistry(database: RunnerDatabase): Workflow
     longRunningWorkflowRegistryContributions()
   ];
   const tools = loadAssistantToolRegistrySnapshot(database).tools;
+  const disabledSkills = new Set(managedSkillPolicy(database).disabled);
   return createWorkflowRegistry({
     agent_profile_ids: listAgentProfiles(database).map((profile) => profile.id),
     available_actions: [...BUILTIN_WORKFLOW_ACTIONS],
     manifests: contributions.flatMap((item) => item.manifests),
-    skills: listSkillRegistry({ availableTools: tools }),
+    skills: listSkillRegistry({ ...libraryRegistryOptions(database), availableTools: tools }).filter(skill => !disabledSkills.has(skill.id)),
     tools,
     verification_policies: contributions.flatMap((item) => item.verification_policies)
   });
