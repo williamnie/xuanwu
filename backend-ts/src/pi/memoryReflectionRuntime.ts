@@ -21,7 +21,16 @@ export async function runMemoryReflectionRuntime(db: RunnerDatabase, request: Me
     authorization: reflectionAuthorization(project.id),
     retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0, timeoutMs: REFLECTION_LIMITS.timeoutMs } }
   });
-  const session = runtime.session;
+  try { return await promptMemoryReflectionSession(runtime.session, signal, usage); }
+  finally { runtime.dispose(); }
+}
+
+// 隔离回放复用同一提示、预算和错误检查；会话资源与鉴权由调用方显式绑定。
+export async function promptMemoryReflectionSession(
+  session: Awaited<ReturnType<typeof createPiRuntimeSession>>["session"],
+  signal: AbortSignal,
+  usage = unknownReflectionUsage()
+): Promise<string> {
   const abort = () => { void session.abort().catch(() => undefined); };
   signal.addEventListener("abort", abort, { once: true });
   const unsubscribe = installMemoryReflectionBudget(session.agent, signal, usage);
@@ -46,7 +55,6 @@ export async function runMemoryReflectionRuntime(db: RunnerDatabase, request: Me
   } finally {
     unsubscribe();
     signal.removeEventListener("abort", abort);
-    runtime.dispose();
   }
 }
 

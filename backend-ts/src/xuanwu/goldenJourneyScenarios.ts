@@ -86,7 +86,8 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
     api_paths: ["/api/evidence", "/api/handoffs", "/api/notifications"],
     backend_tests: [
       "backend-ts/src/cli/issue.test.ts",
-      "backend-ts/src/http/handoffApi.test.ts"
+      "backend-ts/src/http/handoffApi.test.ts",
+      "backend-ts/src/xuanwu/memoryReplay.test.ts"
     ],
     fixture_projects: 1,
     frontend_route: "#/work/:work_id/delivery/:handoff_id",

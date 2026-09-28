@@ -1,0 +1,1023 @@
+{
+  "issue": 972,
+  "acceptance": "live_failed",
+  "source_head": "91a5ba25bbd5b8427e2663e6ce3264d1013c6a85",
+  "scope": "source-isolated synthetic Git project; no production activation; #973 still required",
+  "runs": {
+    "live_first": {
+      "report": {
+        "root": "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-BRfl24",
+        "provenance": {
+          "head": "91a5ba25bbd5b8427e2663e6ce3264d1013c6a85",
+          "branch": "codex/pi-memory-phase1",
+          "dirty": " M backend-ts/src/domain/review/humanReview.ts\n M backend-ts/src/http/piActionDispatch.ts\n M backend-ts/src/http/piConversationMessagesApi.test.ts\n M backend-ts/src/http/piRuntime.ts\n M backend-ts/src/pi/actionContracts.ts\n M backend-ts/src/pi/agentOrchestrationActions.ts\n M backend-ts/src/pi/authorizationScope.test.ts\n M backend-ts/src/pi/authorizationScope.ts\n M backend-ts/src/pi/issueToolViews.ts\n M backend-ts/src/pi/memoryReflectionRuntime.ts\n M backend-ts/src/pi/runnerActionGate.test.ts\n M backend-ts/src/pi/runnerActionTools.ts\n M backend-ts/src/pi/runnerActions.ts\n M backend-ts/src/runner/piAcceptanceCoordinator.ts\n M backend-ts/src/runner/piAcceptanceRequest.ts\n M docs/architecture/xuanwu/0063-approval-action-gate.md\n?? backend-ts/src/pi/runnerChatMainFlow.test.ts\n?? backend-ts/src/xuanwu/memoryReplay.ts\n?? backend-ts/src/xuanwu/memoryReplayRuntime.ts\n?? scripts/replay-pi-memory.ts\n",
+          "tracked_diff_sha256": "6732bc8d1814e6264653addec25c831afcb905557a7e82944e88b7016e31a885",
+          "replay_source_sha256": {
+            "scripts/replay-pi-memory.ts": "340b6a2a6a85ce18de8640e5338c3ec06f8b029acb0493fcdbe865c8c44641b5",
+            "backend-ts/src/xuanwu/memoryReplay.ts": "5d376cfb3a3faa9686403ce6fe232afd774c013f8e01961412ecd49527572cf1",
+            "backend-ts/src/xuanwu/memoryReplayRuntime.ts": "9bf8cf6426f51c3822bba09c4999736f737fe49113d4cee430082e7028bf347f"
+          },
+          "command": [
+            "bun",
+            "scripts/replay-pi-memory.ts",
+            "--live",
+            "--pi-state-dir",
+            "/Users/xiaobei/Library/Application Support/xuanwu-bun-live/state"
+          ],
+          "source_execution": "Bun imports current source; no HTTP requests to a deployed Xuanwu process"
+        },
+        "kind": "live",
+        "status": "failed",
+        "started_at": "2026-09-28T16:10:51.175Z",
+        "identity": {
+          "id": "runner-default",
+          "provider": "openai-codex",
+          "model": "gpt-5.6-terra",
+          "thinking_level": "high"
+        },
+        "cases": [
+          {
+            "id": "first_learning",
+            "status": "failed",
+            "elapsed_ms": 4109.665917,
+            "facts": {
+              "reflections": [
+                {
+                  "id": "a527337c-668e-41fa-b416-e4f61bc3da1d",
+                  "status": "skipped",
+                  "attempts": 1,
+                  "reason": "未提供可读取的 reflection_evidence_read 证据摘要，无法形成可验证的复用经验。",
+                  "memory_id": ""
+                }
+              ],
+              "memory": []
+            },
+            "error": "reflection did not save verified memory"
+          },
+          {
+            "id": "without_memory",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "similar_expression",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "changed_business_rule",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "correction",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "restart_deduplication",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "forget_no_resurrection",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "budget_nonblocking",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "permission_boundary",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          }
+        ],
+        "finished_at": "2026-09-28T16:10:57.556Z",
+        "budget": {
+          "max_calls": 20,
+          "max_duration_ms": 1800000,
+          "model_calls": 1,
+          "retries": 0,
+          "elapsed_ms": 6828,
+          "dispatches": [
+            {
+              "call": 1,
+              "at": "2026-09-28T16:10:53.471Z",
+              "input_bytes": 6423
+            }
+          ],
+          "receipts": [
+            {
+              "call": 1,
+              "usage": {
+                "input": 1294,
+                "output": 90,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "reasoning": 52,
+                "totalTokens": 1384,
+                "cost": {
+                  "input": 0.002588,
+                  "output": 0.00108,
+                  "cacheRead": 0,
+                  "cacheWrite": 0,
+                  "total": 0.0036680000000000003
+                }
+              },
+              "stop_reason": "stop"
+            }
+          ],
+          "accounting": "Each dispatched SDK agent.streamFunction invocation counts, including tool-loop continuations and failures. SDK/provider retries and compaction disabled. Missing receipts remain unknown; SDK cost is an estimate, not a bill."
+        }
+      },
+      "artifacts": {
+        "report.json": {
+          "path": ".runner/artifacts/issue-972/live_first/report.json",
+          "sha256": "43e15376123862fd6260db033cc3198d00c3caccfa0a9eee23245a7aef0a0927"
+        },
+        "commands.json": {
+          "path": ".runner/artifacts/issue-972/live_first/commands.json",
+          "sha256": "a981042018e0848024ed02e08de072dc76a36ff9cf198f2201669e6573242248"
+        },
+        "tool-steps.json": {
+          "path": ".runner/artifacts/issue-972/live_first/tool-steps.json",
+          "sha256": "02cf7b13fdefa86312e983417f834fca2822df9c12794a5873157f1e423ff86a"
+        },
+        "audit.json": {
+          "path": ".runner/artifacts/issue-972/live_first/audit.json",
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      },
+      "tool_steps": {
+        "first_learning": []
+      }
+    },
+    "live_retry": {
+      "report": {
+        "root": "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-YBU0uS",
+        "provenance": {
+          "head": "91a5ba25bbd5b8427e2663e6ce3264d1013c6a85",
+          "branch": "codex/pi-memory-phase1",
+          "dirty": " M backend-ts/src/domain/review/humanReview.ts\n M backend-ts/src/http/piActionDispatch.ts\n M backend-ts/src/http/piConversationMessagesApi.test.ts\n M backend-ts/src/http/piRuntime.ts\n M backend-ts/src/pi/actionContracts.ts\n M backend-ts/src/pi/agentOrchestrationActions.ts\n M backend-ts/src/pi/authorizationScope.test.ts\n M backend-ts/src/pi/authorizationScope.ts\n M backend-ts/src/pi/issueToolViews.ts\n M backend-ts/src/pi/memoryReflectionRuntime.ts\n M backend-ts/src/pi/runnerActionGate.test.ts\n M backend-ts/src/pi/runnerActionTools.ts\n M backend-ts/src/pi/runnerActions.ts\n M backend-ts/src/runner/piAcceptanceCoordinator.ts\n M backend-ts/src/runner/piAcceptanceRequest.ts\n M docs/architecture/xuanwu/0063-approval-action-gate.md\n?? backend-ts/src/pi/runnerChatMainFlow.test.ts\n?? backend-ts/src/xuanwu/memoryReplay.test.ts\n?? backend-ts/src/xuanwu/memoryReplay.ts\n?? backend-ts/src/xuanwu/memoryReplayRuntime.ts\n?? scripts/replay-pi-memory.ts\n",
+          "tracked_diff_sha256": "6732bc8d1814e6264653addec25c831afcb905557a7e82944e88b7016e31a885",
+          "replay_source_sha256": {
+            "scripts/replay-pi-memory.ts": "6f17b1932fdb63a98992aa1a0e5dd00faa1d42dd8baf3c9710d8f8b3d7ecd9a0",
+            "backend-ts/src/xuanwu/memoryReplay.ts": "5d376cfb3a3faa9686403ce6fe232afd774c013f8e01961412ecd49527572cf1",
+            "backend-ts/src/xuanwu/memoryReplayRuntime.ts": "8424d1b70dd5750fd949fbea572730369c937fa89bda62bd9d999bdca49358e8"
+          },
+          "command": [
+            "bun",
+            "scripts/replay-pi-memory.ts",
+            "--live",
+            "--pi-state-dir",
+            "/Users/xiaobei/Library/Application Support/xuanwu-bun-live/state",
+            "--retry-from",
+            "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-BRfl24/report.json"
+          ],
+          "source_execution": "Bun imports current source; no HTTP requests to a deployed Xuanwu process"
+        },
+        "kind": "live",
+        "status": "failed",
+        "started_at": "2026-09-28T16:10:51.175Z",
+        "retry_from": "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-BRfl24/report.json",
+        "identity": {
+          "id": "runner-default",
+          "provider": "openai-codex",
+          "model": "gpt-5.6-terra",
+          "thinking_level": "high"
+        },
+        "cases": [
+          {
+            "id": "first_learning",
+            "status": "failed",
+            "elapsed_ms": 15842.429792,
+            "facts": {
+              "reflections": [
+                {
+                  "id": "7abd7df2-945a-4f92-b1c8-3d6c9b861809",
+                  "status": "skipped",
+                  "attempts": 1,
+                  "reason": "持久化记忆写入未获证据授权。",
+                  "memory_id": ""
+                }
+              ],
+              "memory": []
+            },
+            "error": "reflection did not save verified memory"
+          },
+          {
+            "id": "without_memory",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "similar_expression",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "changed_business_rule",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "correction",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "restart_deduplication",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "forget_no_resurrection",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "budget_nonblocking",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          },
+          {
+            "id": "permission_boundary",
+            "status": "not_run",
+            "elapsed_ms": 0,
+            "facts": {}
+          }
+        ],
+        "finished_at": "2026-09-28T16:13:56.556Z",
+        "budget": {
+          "max_calls": 20,
+          "max_duration_ms": 1800000,
+          "model_calls": 5,
+          "retries": 1,
+          "elapsed_ms": 185381,
+          "dispatches": [
+            {
+              "call": 1,
+              "at": "2026-09-28T16:10:53.471Z",
+              "input_bytes": 6423
+            },
+            {
+              "call": 2,
+              "at": "2026-09-28T16:13:40.779Z",
+              "input_bytes": 9983
+            },
+            {
+              "call": 3,
+              "at": "2026-09-28T16:13:44.187Z",
+              "input_bytes": 14295
+            },
+            {
+              "call": 4,
+              "at": "2026-09-28T16:13:46.132Z",
+              "input_bytes": 17278
+            },
+            {
+              "call": 5,
+              "at": "2026-09-28T16:13:54.794Z",
+              "input_bytes": 21880
+            }
+          ],
+          "receipts": [
+            {
+              "call": 1,
+              "usage": {
+                "input": 1294,
+                "output": 90,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "reasoning": 52,
+                "totalTokens": 1384,
+                "cost": {
+                  "input": 0.002588,
+                  "output": 0.00108,
+                  "cacheRead": 0,
+                  "cacheWrite": 0,
+                  "total": 0.0036680000000000003
+                }
+              },
+              "stop_reason": "stop"
+            },
+            {
+              "call": 2,
+              "usage": {
+                "input": 1911,
+                "output": 36,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "reasoning": 17,
+                "totalTokens": 1947,
+                "cost": {
+                  "input": 0.003822,
+                  "output": 0.000432,
+                  "cacheRead": 0,
+                  "cacheWrite": 0,
+                  "total": 0.004254
+                }
+              },
+              "stop_reason": "toolUse"
+            },
+            {
+              "call": 3,
+              "usage": {
+                "input": 697,
+                "output": 44,
+                "cacheRead": 1536,
+                "cacheWrite": 0,
+                "reasoning": 17,
+                "totalTokens": 2277,
+                "cost": {
+                  "input": 0.0013939999999999998,
+                  "output": 0.000528,
+                  "cacheRead": 0.00030720000000000004,
+                  "cacheWrite": 0,
+                  "total": 0.0022291999999999998
+                }
+              },
+              "stop_reason": "toolUse"
+            },
+            {
+              "call": 4,
+              "usage": {
+                "input": 819,
+                "output": 425,
+                "cacheRead": 1536,
+                "cacheWrite": 0,
+                "reasoning": 82,
+                "totalTokens": 2780,
+                "cost": {
+                  "input": 0.001638,
+                  "output": 0.0051,
+                  "cacheRead": 0.00030720000000000004,
+                  "cacheWrite": 0,
+                  "total": 0.0070452
+                }
+              },
+              "stop_reason": "toolUse"
+            },
+            {
+              "call": 5,
+              "usage": {
+                "input": 1337,
+                "output": 43,
+                "cacheRead": 1536,
+                "cacheWrite": 0,
+                "reasoning": 15,
+                "totalTokens": 2916,
+                "cost": {
+                  "input": 0.0026739999999999997,
+                  "output": 0.000516,
+                  "cacheRead": 0.00030720000000000004,
+                  "cacheWrite": 0,
+                  "total": 0.0034972
+                }
+              },
+              "stop_reason": "stop"
+            }
+          ],
+          "accounting": "Each dispatched SDK agent.streamFunction invocation counts, including tool-loop continuations and failures. SDK/provider retries and compaction disabled. Missing receipts remain unknown; SDK cost is an estimate, not a bill."
+        }
+      },
+      "artifacts": {
+        "report.json": {
+          "path": ".runner/artifacts/issue-972/live_retry/report.json",
+          "sha256": "62c440703a1c05bf402868901cd0ad782a34a690dac46778c00f6e40f28ff855"
+        },
+        "commands.json": {
+          "path": ".runner/artifacts/issue-972/live_retry/commands.json",
+          "sha256": "a03ad97fd6a098278863ae2aa89dc00043232139360f42879377662827da351f"
+        },
+        "tool-steps.json": {
+          "path": ".runner/artifacts/issue-972/live_retry/tool-steps.json",
+          "sha256": "ff16725dff34c70046354aefeee3f01575ce10e7523f4214ad17ace96a818aa2"
+        },
+        "audit.json": {
+          "path": ".runner/artifacts/issue-972/live_retry/audit.json",
+          "sha256": "5438bd553d85bba9ddae95a421c7e580226b88e17ea05acfe65d9ac08c685d65"
+        }
+      },
+      "tool_steps": {
+        "first_learning": [
+          {
+            "name": "reflection_evidence_read",
+            "input": {},
+            "output": {
+              "project_id": "fictional-gate",
+              "work_id": "xw:work:issues:1",
+              "run_id": "xw:run:issue_runs:replay-1",
+              "outcome": "accepted",
+              "title": "gate threshold boundary regression",
+              "rationale": "Isolated replay: observed local tests passed",
+              "evidence": [
+                {
+                  "id": "xw:evidence:issue_events:replay-1",
+                  "status": "passed",
+                  "summary": "Observed defect: gate.mjs used >100, SPEC campaign A requires >=100. Node tests 99/100/101 failed at 100 before fix; after >=100 all passed. Reusable lesson: test below/at/above threshold, read current business specification each time; do not hardcode campaign A in another campaign. Code version gate-v1.0.0.",
+                  "excerpt": "",
+                  "source": "commands.json"
+                }
+              ]
+            },
+            "elapsed_ms": 1.7910409999994954
+          },
+          {
+            "name": "memory_search",
+            "input": {
+              "query": "gate threshold boundary regression campaign A >=100"
+            },
+            "output": {
+              "items": []
+            },
+            "elapsed_ms": 123.02008400000159
+          },
+          {
+            "name": "memory_remember",
+            "input": {
+              "memory_key": "gate.threshold-boundary-campaign-a",
+              "kind": "resolution",
+              "scope": "project",
+              "scope_id": "fictional-gate",
+              "confidence": "high",
+              "evidence_ref": "evidence:xw:evidence:issue_events:replay-1",
+              "content": "{\"schema_version\":1,\"applies_when\":\"修改 gate-v1.0.0 中基于活动规格判定阈值的门槛逻辑时。\",\"symptom\":\"阈值恰为 100 时未通过，而规格要求该边界值通过。\",\"root_cause\":\"实现使用了严格大于比较（>100），与活动 A 要求的大于等于 100（>=100）不一致。\",\"resolution\":\"按当前业务规格使用 >=100，并覆盖阈值下方、恰好阈值和阈值上方三个测试点；其他活动不得复用或硬编码活动 A 的阈值规则。\",\"failed_attempts\":[],\"verification\":{\"method\":\"Node 测试覆盖 99、100、101；修正为 >=100 后全部通过。\",\"evidence_refs\":[\"evidence:xw:evidence:issue_events:replay-1\"]},\"source\":{\"work_id\":\"work:xw:work:issues:1\",\"run_id\":\"run:xw:run:issue_runs:replay-1\",\"refs\":[\"work:xw:work:issues:1\",\"run:xw:run:issue_runs:replay-1\"]},\"version\":\"gate-v1.0.0\"}"
+            },
+            "output": {
+              "rejected": true,
+              "reason": "memory is outside reflection evidence authority"
+            },
+            "elapsed_ms": 6.99750000000131
+          }
+        ]
+      }
+    },
+    "fixture": {
+      "report": {
+        "root": "/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/xuanwu-memory-replay-c0kgjX",
+        "provenance": {
+          "head": "91a5ba25bbd5b8427e2663e6ce3264d1013c6a85",
+          "branch": "codex/pi-memory-phase1",
+          "dirty": " M backend-ts/src/domain/review/humanReview.ts\n M backend-ts/src/http/piActionDispatch.ts\n M backend-ts/src/http/piConversationMessagesApi.test.ts\n M backend-ts/src/http/piRuntime.ts\n M backend-ts/src/pi/actionContracts.ts\n M backend-ts/src/pi/agentOrchestrationActions.ts\n M backend-ts/src/pi/authorizationScope.test.ts\n M backend-ts/src/pi/authorizationScope.ts\n M backend-ts/src/pi/issueToolViews.ts\n M backend-ts/src/pi/memoryReflectionRuntime.ts\n M backend-ts/src/pi/runnerActionGate.test.ts\n M backend-ts/src/pi/runnerActionTools.ts\n M backend-ts/src/pi/runnerActions.ts\n M backend-ts/src/runner/piAcceptanceCoordinator.ts\n M backend-ts/src/runner/piAcceptanceRequest.ts\n M backend-ts/src/xuanwu/goldenJourneyScenarios.ts\n M docs/architecture/xuanwu/0063-approval-action-gate.md\n?? backend-ts/src/pi/runnerChatMainFlow.test.ts\n?? backend-ts/src/xuanwu/memoryReplay.test.ts\n?? backend-ts/src/xuanwu/memoryReplay.ts\n?? backend-ts/src/xuanwu/memoryReplayRuntime.ts\n?? docs/reports/\n?? docs/runbooks/pi-memory-replay.md\n?? scripts/replay-pi-memory.ts\n",
+          "tracked_diff_sha256": "9ec905d9065900b0c822211bd58c765c9f69437e9169f1228524a13cd2bcc708",
+          "replay_source_sha256": {
+            "scripts/replay-pi-memory.ts": "ee2540ad2a20faffb6c1508d6b0b565111b52e106fe91f45ac962360170e0a78",
+            "backend-ts/src/xuanwu/memoryReplay.ts": "da8094ddd1200465f33401a464a262bf3d421c70325dbe15dc4933830031d444",
+            "backend-ts/src/xuanwu/memoryReplayRuntime.ts": "0ddb520d575846a7dfb99b01072c71ffd240c5a95d05d9ba7ed8f183df822eef"
+          },
+          "command": [
+            "bun",
+            "scripts/replay-pi-memory.ts"
+          ],
+          "source_execution": "Bun imports current source; no HTTP requests to a deployed Xuanwu process"
+        },
+        "kind": "fixture",
+        "status": "passed",
+        "cases": [
+          {
+            "id": "first_learning",
+            "evidence_mode": "fixture",
+            "status": "passed",
+            "elapsed_ms": 301.7415000000001,
+            "facts": {
+              "saved_memory": [
+                {
+                  "id": "9b85ccd9-c59f-421f-8a54-10e2e409d017",
+                  "revision": 1,
+                  "memory_key": "gate.threshold.boundary",
+                  "authority": "evidence_backed"
+                }
+              ],
+              "reflections": [
+                {
+                  "id": "f1ef8f30-887d-49f8-8938-6e9f2273da0b",
+                  "status": "completed",
+                  "attempts": 1,
+                  "reason": "experience_saved",
+                  "memory_id": "9b85ccd9-c59f-421f-8a54-10e2e409d017"
+                }
+              ]
+            }
+          },
+          {
+            "id": "without_memory",
+            "evidence_mode": "fixture",
+            "status": "passed",
+            "elapsed_ms": 69.82474999999977,
+            "facts": {
+              "observed": [
+                {
+                  "amount": 99,
+                  "eligible": false,
+                  "actual": false,
+                  "passed": true
+                },
+                {
+                  "amount": 100,
+                  "eligible": true,
+                  "actual": true,
+                  "passed": true
+                },
+                {
+                  "amount": 101,
+                  "eligible": true,
+                  "actual": true,
+                  "passed": true
+                }
+              ],
+              "memory_refs": [],
+              "correct_recall": null,
+              "misuse": false
+            }
+          },
+          {
+            "id": "similar_expression",
+            "evidence_mode": "fixture",
+            "status": "passed",
+            "elapsed_ms": 162.09462499999972,
+            "facts": {
+              "observed": [
+                {
+                  "amount": 99,
+                  "eligible": false,
+                  "actual": false,
+                  "passed": true
+                },
+                {
+                  "amount": 100,
+                  "eligible": true,
+                  "actual": true,
+                  "passed": true
+                },
+                {
+                  "amount": 101,
+                  "eligible": true,
+                  "actual": true,
+                  "passed": true
+                }
+              ],
+              "memory_refs": [
+                {
+                  "id": "9b85ccd9-c59f-421f-8a54-10e2e409d017",
+                  "revision": 1,
+                  "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8"
+                }
+              ],
+              "correct_recall": true,
+              "misuse": false
+            }
+          },
+          {
+            "id": "changed_business_rule",
+            "evidence_mode": "fixture",
+            "status": "passed",
+            "elapsed_ms": 156.0921249999992,
+            "facts": {
+              "observed": [
+                {
+                  "amount": 199,
+                  "eligible": false,
+                  "actual": false,
+                  "passed": true
+                },
+                {
+                  "amount": 200,
+                  "eligible": false,
+                  "actual": false,
+                  "passed": true
+                },
+                {
+                  "amount": 201,
+                  "eligible": true,
+                  "actual": true,
+                  "passed": true
+                }
+              ],
+              "memory_refs": [
+                {
+                  "id": "9b85ccd9-c59f-421f-8a54-10e2e409d017",
+                  "revision": 1,
+                  "content_fingerprint": "c33b9a5eba72f86a04206821f66e63917e493045a4f765385c43ca70902d9ed8"
+                }
+              ],
+              "correct_recall": null,
+              "misuse": false
+            }
+          },
+          {
+            "id": "correction",
+            "evidence_mode": "fixture",
+            "status": "passed",
+            "elapsed_ms": 121.1239999999998,
+            "facts": {
+              "history": [
+                {
+                  "memory_id": "9b85ccd9-c59f-421f-8a54-10e2e409d017",
+                  "revision": 1,
+                  "operation": "create",
+                  "correction": {}
+                },
+                {
+                  "memory_id": "9b85ccd9-c59f-421f-8a54-10e2e409d017",
+                  "revision": 2,
+                  "operation": "correct",
+                  "correction": {
+                    "expected_revision": 1,
+                    "disposition": "narrow",
+                    "reason": "Verified new campaign evidence limits reuse to the testing method; business operators must be read again"
+                  }
+                }
+              ],
+              "reflections": [
+                {
+                  "id": "f1ef8f30-887d-49f8-8938-6e9f2273da0b",
+                  "status": "completed",
+                  "attempts": 1,
+                  "reason": "experience_saved",
+                  "memory_id": "9b85ccd9-c59f-421f-8a54-10e2e409d017"
+                },
+                {
+                  "id": "3ae8829e-88cd-4f1d-a680-5044ab18b3ec",
+                  "status": "completed",
+                  "attempts": 1,
+                  "reason": "experience_saved",
+                  "memory_id": "9b85ccd9-c59f-421f-8a54-10e2e409d017"
+                }
+              ],
+              "current": {
+                "id": "9b85ccd9-c59f-421f-8a54-10e2e409d017",
+                "revision": 2,
+                "memory_key": "gate.threshold.boundary",
+                "authority": "evidence_backed"
+              }
+            }
+          },
+          {
+            "id": "restart_deduplication",
+            "evidence_mode": "host_assertion",
+            "status": "passed",
+            "elapsed_ms": 78.25116600000001,
+            "facts": {
+              "provider_calls_delta": 0,
+              "memory_identities": [
+                [
+                  "9b85ccd9-c59f-421f-8a54-10e2e409d017",
+                  2,
+                  2
+                ]
+              ],
+              "reflections": [
+                {
+                  "id": "f1ef8f30-887d-49f8-8938-6e9f2273da0b",
+                  "status": "completed",
+                  "attempts": 1,
+                  "reason": "experience_saved",
+                  "memory_id": "9b85ccd9-c59f-421f-8a54-10e2e409d017"
+                },
+                {
+                  "id": "3ae8829e-88cd-4f1d-a680-5044ab18b3ec",
+                  "status": "completed",
+                  "attempts": 1,
+                  "reason": "experience_saved",
+                  "memory_id": "9b85ccd9-c59f-421f-8a54-10e2e409d017"
+                }
+              ]
+            }
+          },
+          {
+            "id": "forget_no_resurrection",
+            "evidence_mode": "host_assertion",
+            "status": "passed",
+            "elapsed_ms": 147.25204200000007,
+            "facts": {
+              "provider_calls_delta": 0,
+              "reflections": [
+                {
+                  "id": "f1ef8f30-887d-49f8-8938-6e9f2273da0b",
+                  "status": "completed",
+                  "attempts": 1,
+                  "reason": "experience_saved",
+                  "memory_id": "9b85ccd9-c59f-421f-8a54-10e2e409d017"
+                },
+                {
+                  "id": "3ae8829e-88cd-4f1d-a680-5044ab18b3ec",
+                  "status": "completed",
+                  "attempts": 1,
+                  "reason": "experience_saved",
+                  "memory_id": "9b85ccd9-c59f-421f-8a54-10e2e409d017"
+                },
+                {
+                  "id": "d4197033-ccc8-45b6-b68f-74c4afa74b09",
+                  "status": "skipped",
+                  "attempts": 0,
+                  "reason": "source_memory_suppressed",
+                  "memory_id": ""
+                }
+              ]
+            }
+          },
+          {
+            "id": "budget_nonblocking",
+            "evidence_mode": "fault_injection",
+            "status": "passed",
+            "elapsed_ms": 85.40929199999846,
+            "facts": {
+              "work_status": "done",
+              "attempts": 2,
+              "fault_injection": true,
+              "reflections": [
+                {
+                  "id": "f1ef8f30-887d-49f8-8938-6e9f2273da0b",
+                  "status": "completed",
+                  "attempts": 1,
+                  "reason": "experience_saved",
+                  "memory_id": "9b85ccd9-c59f-421f-8a54-10e2e409d017"
+                },
+                {
+                  "id": "3ae8829e-88cd-4f1d-a680-5044ab18b3ec",
+                  "status": "completed",
+                  "attempts": 1,
+                  "reason": "experience_saved",
+                  "memory_id": "9b85ccd9-c59f-421f-8a54-10e2e409d017"
+                },
+                {
+                  "id": "d4197033-ccc8-45b6-b68f-74c4afa74b09",
+                  "status": "skipped",
+                  "attempts": 0,
+                  "reason": "source_memory_suppressed",
+                  "memory_id": ""
+                },
+                {
+                  "id": "4b7d1089-a1b8-46c0-a149-bef2d03568fb",
+                  "status": "failed",
+                  "attempts": 2,
+                  "reason": "The \"string\" argument must be of type string or an instance of Buffer or ArrayBuffer. Received undefined",
+                  "memory_id": ""
+                }
+              ]
+            }
+          },
+          {
+            "id": "permission_boundary",
+            "evidence_mode": "host_assertion",
+            "status": "passed",
+            "elapsed_ms": 42.80945799999972,
+            "facts": {
+              "gate_result": {
+                "action_id": "8d99acbc-ce87-4cbd-beee-9cd79c647fd2",
+                "action_type": "memory.remember",
+                "issue_id": 0,
+                "requires_confirmation": false,
+                "risk_level": "low",
+                "status": "denied",
+                "decision": "deny",
+                "gate_reason": "action is not covered by allowed_actions",
+                "guardian_decision_id": "",
+                "idempotency_key": ""
+              }
+            }
+          }
+        ],
+        "started_at": "2026-09-28T16:30:41.068Z",
+        "retry_from": null,
+        "identity": null,
+        "finished_at": "2026-09-28T16:30:46.501Z",
+        "budget": {
+          "max_calls": 20,
+          "max_duration_ms": 1800000,
+          "model_calls": 0,
+          "retries": 0,
+          "elapsed_ms": 5434,
+          "dispatches": [],
+          "receipts": [],
+          "accounting": "Each dispatched SDK agent.streamFunction invocation counts, including tool-loop continuations and failures. SDK/provider retries and compaction disabled. Missing receipts remain unknown; SDK cost is an estimate, not a bill."
+        }
+      },
+      "artifacts": {
+        "report.json": {
+          "path": ".runner/artifacts/issue-972/fixture/report.json",
+          "sha256": "bce3c6a086a91dfc4e2dbf3cc2f1c4694fc285dda925fbe71cb2f27291039fe0"
+        },
+        "commands.json": {
+          "path": ".runner/artifacts/issue-972/fixture/commands.json",
+          "sha256": "fb32619bec04711125aee1c54d7cd447efa02b08fdbb6e47f69e58872daded40"
+        },
+        "tool-steps.json": {
+          "path": ".runner/artifacts/issue-972/fixture/tool-steps.json",
+          "sha256": "403551863165b5d0efe82f544586b1c32ff736140876ba193e9398d634af849d"
+        },
+        "audit.json": {
+          "path": ".runner/artifacts/issue-972/fixture/audit.json",
+          "sha256": "676f0796079da60db09b51c2ced1e4a511399af31596d531678e580cc979b24d"
+        }
+      }
+    }
+  },
+  "prerequisites": [
+    {
+      "issue": 966,
+      "runs": [
+        {
+          "id": "issue-966-attempt-1",
+          "status": "succeeded",
+          "exit_reason": "provider_reported_completed",
+          "git_base_revision": "abe3fbbf043147344a864215597f29d9df42b271"
+        }
+      ],
+      "evidence_statuses": {
+        "passed": 28,
+        "failed": 8,
+        "blocked": 1
+      }
+    },
+    {
+      "issue": 967,
+      "runs": [
+        {
+          "id": "issue-967-attempt-1",
+          "status": "needs_user",
+          "exit_reason": "pi_semantic_decision",
+          "git_base_revision": "abe3fbbf043147344a864215597f29d9df42b271"
+        }
+      ],
+      "evidence_statuses": {
+        "passed": 27,
+        "failed": 5,
+        "blocked": 1
+      }
+    },
+    {
+      "issue": 968,
+      "runs": [
+        {
+          "id": "issue-968-attempt-1",
+          "status": "succeeded",
+          "exit_reason": "provider_reported_completed",
+          "git_base_revision": "36053d7f1d64da50ab5c5e14a1551f74b470ce9c"
+        }
+      ],
+      "evidence_statuses": {
+        "passed": 33,
+        "failed": 3,
+        "blocked": 1
+      }
+    },
+    {
+      "issue": 969,
+      "runs": [
+        {
+          "id": "issue-969-attempt-1",
+          "status": "succeeded",
+          "exit_reason": "provider_reported_completed",
+          "git_base_revision": "0ac18a5da9aac154903713a7161cce48a615009b"
+        }
+      ],
+      "evidence_statuses": {
+        "passed": 31,
+        "failed": 5,
+        "blocked": 1
+      }
+    },
+    {
+      "issue": 970,
+      "runs": [
+        {
+          "id": "issue-970-attempt-1",
+          "status": "succeeded",
+          "exit_reason": "provider_reported_completed",
+          "git_base_revision": "9cd5ab91fbd4bfcbad96989cb5cc17e56117e89a"
+        }
+      ],
+      "evidence_statuses": {
+        "passed": 31,
+        "failed": 5,
+        "blocked": 1
+      }
+    },
+    {
+      "issue": 971,
+      "runs": [
+        {
+          "id": "issue-971-attempt-1",
+          "status": "succeeded",
+          "exit_reason": "provider_reported_completed",
+          "git_base_revision": "f07098d2fcb80981596e0a37fba0e266aa73c7de"
+        }
+      ],
+      "evidence_statuses": {
+        "passed": 27,
+        "failed": 9,
+        "blocked": 1
+      }
+    }
+  ],
+  "live_totals": {
+    "input": 6058,
+    "output": 638,
+    "cacheRead": 4608,
+    "cacheWrite": 0,
+    "reasoning": 183,
+    "totalTokens": 11304,
+    "sdk_cost_usd": 0.0206936,
+    "top_level_calls": 5,
+    "retries": 1
+  },
+  "fixture_report_projection": "Compact projection of observed facts; complete report and tool results are in the hashed local artifacts.",
+  "automatic_validation": {
+    "backend": {
+      "passed": 2568,
+      "failed": 7,
+      "baseline_passed": 2561,
+      "baseline_failed": 8,
+      "new_failures": 0
+    },
+    "node_scripts": {
+      "passed": 28,
+      "failed": 4,
+      "baseline_passed": 28,
+      "baseline_failed": 4
+    },
+    "frontend_lint_build": "passed",
+    "golden_journeys": "6/6 passed; final GJ-06 passed",
+    "security": "passed with 2 documented Qoder upstream residuals",
+    "focused_tests": {
+      "passed": 9,
+      "failed": 0
+    },
+    "typescript": {
+      "diagnostics": 153,
+      "baseline_diagnostics": 153,
+      "new_diagnostics": 0
+    },
+    "comparison": {
+      "backend": {
+        "baseline_failed": [
+          "(fail) Bun PI settings API > updates Persona with Supervisor settings atomically and returns a safe prompt summary",
+          "(fail) Bun SQLite database connection > keeps migrations idempotent across repeated runtime opens",
+          "(fail) Bun SQLite database connection > runs the base schema migration on an empty runtime database",
+          "(fail) Bun SQLite database connection > upgrades the current live 069 schema through the P0 query indexes",
+          "(fail) PI skill metadata API > lists intake and domain runs, manual runs, links, and redacted failures",
+          "(fail) PI tool registry read API > calls CLI connector tools and records standard audit",
+          "(fail) Work timeline projection > benchmarks a 12000-event Work query on the indexed summary projection",
+          "(fail) Xuanwu PI runtime prompt > keeps the static and assembled prompt inside the token-size baseline"
+        ],
+        "final_failed": [
+          "(fail) Bun PI settings API > updates Persona with Supervisor settings atomically and returns a safe prompt summary",
+          "(fail) Bun SQLite database connection > keeps migrations idempotent across repeated runtime opens",
+          "(fail) Bun SQLite database connection > runs the base schema migration on an empty runtime database",
+          "(fail) Bun SQLite database connection > upgrades the current live 069 schema through the P0 query indexes",
+          "(fail) PI skill metadata API > lists intake and domain runs, manual runs, links, and redacted failures",
+          "(fail) Work timeline projection > benchmarks a 12000-event Work query on the indexed summary projection",
+          "(fail) Xuanwu PI runtime prompt > keeps the static and assembled prompt inside the token-size baseline"
+        ],
+        "new": [],
+        "not_reproduced": [
+          "(fail) PI tool registry read API > calls CLI connector tools and records standard audit"
+        ]
+      },
+      "typescript": {
+        "baseline": 153,
+        "final": 153,
+        "new": 0
+      },
+      "node_scripts": {
+        "baseline_pass": 28,
+        "baseline_fail": 4,
+        "final_pass": 28,
+        "final_fail": 4
+      }
+    },
+    "log_sha256": {
+      "backend-baseline.log": "89223b18d73f8651ed95b28213742c2b72a97412dc2c654f909e0f4997b829d7",
+      "backend-final.log": "6a50594d3cf108f15bb0c2c80f9480c0dff78d72bdcd7c53412ef3d34cb683b2",
+      "scripts.log": "68abf31f08d47ac0d2507a3dccded66a8e366a59e312458971fc4ed1d65dc616",
+      "scripts-baseline-source.log": "ccdbc3005fe3859dcc2a578b685f4276b851f26681f5d9991f3ea3d6b0085d30",
+      "types-final.log": "ad43529060b08a24a9928882efe5d2d3d9fb65229f22edfbb6ff12f405f9d05d",
+      "types-baseline-source.log": "ad43529060b08a24a9928882efe5d2d3d9fb65229f22edfbb6ff12f405f9d05d",
+      "frontend-build.log": "f36a0d3de9a2d79a1f1981bf5d5ecb0288d5b7e7a2e2870219cd81b779eaedf8",
+      "golden.log": "c99236c4ffaca99f650cdc8ed5a71732e08c13ed65db0205cbae3584992792a7",
+      "golden-06-final.log": "672add10175d13474dadf7741b9ee8aaa2552d45a2d308f540d3a6980b1f400f",
+      "security.log": "ee37fb6d9ad9557f339719870d2e19ca4aa0c1bc4c15a0878643ce05beb9bf91",
+      "targeted-final.log": "3d718499bace38ccffb0c9e61f20377cbe45a8e73480222c4ae3a88a0a741b5d"
+    }
+  }
+}
