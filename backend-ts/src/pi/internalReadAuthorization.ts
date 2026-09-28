@@ -23,6 +23,8 @@ export function piInternalReadAuthorization(input: {
 }
 
 function authorizedReadAction(actionType: string, projectID: string, issueID: number): PiAuthorizedAction {
+  if (actionType === "skill.optional.call") return { action_type: actionType, project_id: projectID, issue_id: issueID,
+    payload: { skill_id: "jev-assist", capability_id: "jev-assist:tool:jev_classify_report" } };
   return issueBoundAction(actionType)
     ? { action_type: actionType, issue_id: issueID, project_id: projectID }
     : { action_type: actionType, project_id: projectID };
@@ -33,6 +35,7 @@ function issueBoundAction(actionType: string): boolean {
 }
 
 function actionTypeForTool(name: string): string {
+  if (name === "jev_classify_report") return "skill.optional.call";
   if (name.startsWith("issue_")) return name.replace("issue_", "issue.");
   if (name.startsWith("session_")) return name.replace("session_", "session.");
   if (name.startsWith("repo_")) return name.replace("repo_", "repo.");

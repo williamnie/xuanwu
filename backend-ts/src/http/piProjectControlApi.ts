@@ -20,6 +20,7 @@ import { parseMcpPolicy } from "../mcp/policy.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
 import { HttpError, json } from "./errors.ts";
 import { managerCycleAuthorization } from "./piProjectControlAuthorization.ts";
+import { managerJevAuthorization } from "../skills/jev/policy.ts";
 import {
   createPiRuntimeSession,
   ensurePiSessionFile,
@@ -108,7 +109,7 @@ async function createManagerCycleState(
   const conversationID = crypto.randomUUID();
   const runtime = await createPiRuntimeSession(context.database, {
     agent,
-    authorization: managerCycleAuthorization(project),
+    authorization: managerJevAuthorization(context.database, project.id, managerCycleAuthorization(project)),
     bus: context.bus,
     conversationID,
     delegationID: `pi-cycle:${project.id}`,

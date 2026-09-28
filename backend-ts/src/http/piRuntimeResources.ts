@@ -10,6 +10,8 @@ import { basename, extname, isAbsolute, join, relative, resolve, sep } from "nod
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
 import { buildSkillPromptContext } from "../skills/promptContext.ts";
+import { jevAvailableForContext } from "../skills/jev/policy.ts";
+import { JEV_SKILL_ID, jevPackage } from "../skills/jev/config.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { SmokeRuntime } from "../spikes/piSmokeSupport.ts";
 import type { RuntimeSessionInput } from "./piRuntime.ts";
@@ -72,13 +74,15 @@ export async function createPiRuntimeResourceLoader(
   options: Omit<ControlledPiResourceOptions, "allowedSkillIDs" | "onSnapshot">
 ): Promise<ResourceLoader & { snapshot(): PiRuntimeResourceSnapshot }> {
   const promptProject = input.toolProject ?? input.project;
+  const optionalJev = input.promptProfile !== "notification" && jevAvailableForContext(db, { ...input, projectID: promptProject?.id });
   const resourceScope = input.promptProfile === "chat" || input.promptProfile === "manager_cycle" ? "full" : "core";
   const skillContext = resourceScope === "full"
     ? buildSkillPromptContext(db, { ...input, project: promptProject })
     : { audit: { injected_skill_ids: [], missing_skill_intents: [] } };
   const allowedSkillIDs = unique([
     ...skillContext.audit.injected_skill_ids,
-    ...skillContext.audit.missing_skill_intents
+    ...skillContext.audit.missing_skill_intents.filter(id => id !== JEV_SKILL_ID),
+    ...(optionalJev ? [JEV_SKILL_ID] : [])
   ]);
   return await createControlledPiResourceLoader(sdk, {
     ...options,
@@ -274,15 +278,18 @@ class ControlledPiResourceLoader implements ResourceLoader {
 
 function discoverResources(options: ControlledPiResourceOptions): Discovery {
   const diagnostics: PiRuntimeResourceDiagnostic[] = [];
+  const optionalPackage = options.allowedSkillIDs.includes(JEV_SKILL_ID) ? jevPackage() : null;
+  const optionalPaths = optionalPackage?.installed ? [optionalPackage.directory] : [];
+  const optionalRoots: AllowedRoot[] = optionalPaths.map(path => ({ label: "optional-skill", path, resourceType: "skill" }));
   if (options.resourceScope === "core") {
     return {
       agents: [],
-      allowedRoots: [],
+      allowedRoots: optionalRoots,
       diagnostics,
       extensionPaths: [],
       packages: [],
       promptPaths: [],
-      skillPaths: []
+      skillPaths: optionalPaths
     };
   }
   const candidates: ResourcePackage[] = [
@@ -293,8 +300,8 @@ function discoverResources(options: ControlledPiResourceOptions): Discovery {
     ...pluginCandidates(options, diagnostics)
   ].filter((item): item is ResourcePackage => item.path !== "");
   const packages = dedupePackages(candidates).filter(hasResources);
-  const allowedRoots = packages.flatMap(packageAllowedRoots);
-  const skillPaths = packages.flatMap((source) => packagePaths(source, "skill", diagnostics));
+  const allowedRoots = [...packages.flatMap(packageAllowedRoots), ...optionalRoots];
+  const skillPaths = [...packages.flatMap((source) => packagePaths(source, "skill", diagnostics)), ...optionalPaths];
   const promptPaths = packages.flatMap((source) => packagePaths(source, "prompt", diagnostics));
   const extensionPaths = packages
     .flatMap((source) => packagePaths(source, "extension", diagnostics))

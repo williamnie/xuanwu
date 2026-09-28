@@ -3,6 +3,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createIssueSupervisorEvent, type PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import { piInternalReadAuthorization } from "./internalReadAuthorization.ts";
+import { withOptionalJevTool } from "../skills/jev/policy.ts";
 import {
   PI_SUPERVISOR_DECISION_JSON_SCHEMA,
   type PiSupervisorDecisionJson
@@ -55,12 +56,13 @@ export async function runPiSupervisorDecision(
 ): Promise<PiSupervisorDecisionRuntimeResult> {
   const language = appLanguage(input.database);
   const { createPiRuntimeSession } = await import("../http/piRuntime.ts");
+  const toolNames = withOptionalJevTool(input.database, { projectID: input.project.id, issueID: issueID(input.context), source: "pi_supervisor_decision" }, SUPERVISOR_TOOL_NAMES);
   const runtime = await createPiRuntimeSession(input.database, {
     agent: input.agent,
     authorization: piInternalReadAuthorization({
       issueID: issueID(input.context),
       projectID: input.project.id,
-      toolNames: SUPERVISOR_TOOL_NAMES
+      toolNames
     }),
     conversationID: `pi-supervisor-${issueID(input.context)}-${Date.now()}`,
     issueID: issueID(input.context),
@@ -70,7 +72,7 @@ export async function runPiSupervisorDecision(
     retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0 } },
     source: "pi_supervisor_decision"
   });
-  runtime.session.setActiveToolsByName(SUPERVISOR_TOOL_NAMES);
+  runtime.session.setActiveToolsByName(toolNames);
   try {
     await promptSupervisorWithTimeout(runtime.session, decisionPrompt(input.context, input.now ?? new Date(), language));
     const output = parseStructuredAssistantOutput(runtime.session, (raw) => {

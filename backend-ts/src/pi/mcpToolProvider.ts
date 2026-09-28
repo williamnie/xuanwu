@@ -81,6 +81,7 @@ function providerMetadata(server: McpServerRegistry): ToolEnvelopeMetadata {
 
 function toolMetadata(server: McpServerRegistry, capability: McpCapability): ToolEnvelopeMetadata {
   return {
+    ...capability.metadata,
     allowed_actions: capability.allowed_actions,
     capability_id: capability.id,
     connector: "mcp",

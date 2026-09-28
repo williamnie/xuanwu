@@ -12,6 +12,7 @@ export const MCP_TRANSPORT_ERROR_CODES = {
 
 export type McpTransportOperation = "resource.read" | "tool.call";
 export type McpTransportInvokeRequest = {
+  beforeStart?: () => boolean;
   capability: McpCapability;
   input?: Record<string, unknown>;
   operation: McpTransportOperation;
@@ -41,6 +42,7 @@ export async function invokeMcpTransport(request: McpTransportInvokeRequest): Pr
   const transport = request.server.transport;
   if (!transport) return failed(started, error("serverUnavailable", "MCP server transport is not configured"));
   const outcome = await runStdioProcess({
+    beforeStart: request.beforeStart,
     command: transport.command, args: transport.args,
     cwd: transport.cwd,
     env: transportEnv(transport.env),

@@ -6,6 +6,8 @@ import type { PiGatePolicy } from "../pi/actionGate.ts";
 import { formatUntrustedContent } from "../security/promptInjectionDefense.ts";
 import { mergeSkillIntents, parseSkillIntentList, parseSkillPolicy } from "./intents.ts";
 import { listSkillRegistry, type SkillMetadata } from "./registry.ts";
+import { jevAvailableForContext } from "./jev/policy.ts";
+import { JEV_SKILL_ID } from "./jev/config.ts";
 
 export type SkillPromptContextInput = {
   authorization?: PiGatePolicy;
@@ -14,6 +16,7 @@ export type SkillPromptContextInput = {
   heartbeatID?: string;
   issueID?: number;
   project?: Project;
+  source?: string;
 };
 
 export type SkillPromptContext = {
@@ -48,8 +51,14 @@ export function buildSkillPromptContext(db: RunnerDatabase, input: SkillPromptCo
   const candidates = requested.length > 0 ? requested : fallback;
   const filtered = filterUnauthorized(candidates, allowSources);
   const registry = skillRegistryByID();
-  const injected = filtered.authorized.flatMap((id) => registry.get(id) ?? []);
+  const optionalJev = jevAvailableForContext(db, { ...input, projectID: input.project?.id });
+  const ids = [...new Set([...filtered.authorized.filter(id => id !== JEV_SKILL_ID || optionalJev), ...(optionalJev ? [JEV_SKILL_ID] : [])])];
+  const injected = ids.flatMap((id) => registry.get(id) ?? []);
   const audit = promptContextAudit(input, issue?.id ?? 0, requested, allowSources, filtered, injected);
+  if (optionalJev && registry.has(JEV_SKILL_ID)) {
+    audit.authorization_sources.push("optionalSkills.jev-assist");
+    audit.unauthorized_skill_intents = audit.unauthorized_skill_intents.filter(id => id !== JEV_SKILL_ID);
+  }
   return { audit, promptSection: formatPromptSection(audit) };
 }
 

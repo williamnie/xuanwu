@@ -85,7 +85,7 @@ export function assessDataEgress(value: unknown): DataEgressDecision {
 }
 
 export function isExternalEgressAction(actionType: string): boolean {
-  return EXTERNAL_ACTION.test(actionType.trim());
+  return actionType === "skill.optional.call" || EXTERNAL_ACTION.test(actionType.trim());
 }
 
 export function unsafeUrlEgressReason(url: URL): string {

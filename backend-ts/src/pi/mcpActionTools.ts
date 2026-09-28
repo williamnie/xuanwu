@@ -79,6 +79,7 @@ function safeMcpToolCall(db: RunnerDatabase, context: McpActionContext, input: M
   return executeSafePiAction(db, context, {
     ...request,
     execute: () => callMcpTool({
+      authorization: context.authorization,
       auditContext: auditContext(context),
       capabilityID,
       db,

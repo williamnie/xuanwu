@@ -7,6 +7,7 @@ import type { CompletionCard } from "../domain/acceptance/completionCard.ts";
 import { appLanguage } from "../i18n/language.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { piInternalReadAuthorization } from "./internalReadAuthorization.ts";
+import { withOptionalJevTool } from "../skills/jev/policy.ts";
 import {
   parseStructuredAssistantOutput,
   structuredAssistantProviderError,
@@ -73,12 +74,13 @@ export async function runPiIssueAcceptance(input: {
   project: Project;
 }): Promise<PiAcceptanceRuntimeResult> {
   const { createPiRuntimeSession } = await import("../http/piRuntime.ts");
+  const toolNames = withOptionalJevTool(input.database, { projectID: input.project.id, issueID: input.card.issue.id, source: "pi_issue_acceptance" }, ACCEPTANCE_TOOL_NAMES);
   const runtime = await createPiRuntimeSession(input.database, {
     agent: input.agent,
     authorization: piInternalReadAuthorization({
       issueID: input.card.issue.id,
       projectID: input.project.id,
-      toolNames: ACCEPTANCE_TOOL_NAMES
+      toolNames
     }),
     conversationID: `pi-acceptance-${input.card.issue.id}-${input.card.fingerprint.slice(0, 12)}`,
     issueID: input.card.issue.id,
@@ -88,7 +90,7 @@ export async function runPiIssueAcceptance(input: {
     retry: { baseDelayMs: 1_000, enabled: true, maxRetries: 2, provider: { maxRetries: 0 } },
     source: "pi_issue_acceptance"
   });
-  runtime.session.setActiveToolsByName(ACCEPTANCE_TOOL_NAMES);
+  runtime.session.setActiveToolsByName(toolNames);
   try {
     await promptWithTimeout(runtime.session, acceptancePrompt(input.card, appLanguage(input.database)));
     return interpretAcceptanceSession(runtime.session);

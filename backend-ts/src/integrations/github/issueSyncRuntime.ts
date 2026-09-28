@@ -9,7 +9,6 @@ import type { GitHubConnectorConfig } from "./config.ts";
 import type { GitHubIssueRepository } from "./issueSyncConfig.ts";
 import { GitHubIssueClient, GitHubIssueApiError, createGitHubIssueTokenProvider, resolveGitHubWriterLogin, githubRepositoryPath, type GitHubObject } from "./issueClient.ts";
 import { auditGitHubCase, fingerprint, getGitHubIssueCase, listGitHubIssueCases, observeGitHubIssue, queueGitHubWrite, updateGitHubIssueCase, type GitHubIssueCase, type GitHubIssueSource } from "./issueCaseStore.ts";
-import { classifyGitHubIssue } from "./jevRouting.ts";
 import { createGitHubCaseWork, readAcceptedGitHubReport } from "./issueWorkflow.ts";
 import { dispatchGitHubWrites, publicGitHubSummary } from "./issueOutbox.ts";
 import { syncGitHubHumanReview } from "./issueHumanBridge.ts";
@@ -62,7 +61,7 @@ export class GitHubIssueSyncRuntime {
 
   snapshot(): Record<string, unknown> {
     return { enabled: this.options.config.issueSync.enabled, running: this.active !== null,
-      last_run_at: this.lastRunAt, last_error: this.lastError, jev_mode: this.options.config.issueSync.jev.mode,
+      last_run_at: this.lastRunAt, last_error: this.lastError,
       repositories: this.options.config.issueSync.repositories.map(policy => ({ repository: policy.repository,
         project_id: policy.projectId, intake_label: policy.intakeLabel, auto_enqueue: policy.autoEnqueue,
         ci_failure_mode: policy.ciFailureMode, ci_failure_reason: publicGitHubSummary(policy.ciFailureReason),
@@ -193,12 +192,7 @@ export class GitHubIssueSyncRuntime {
       auditGitHubCase(db, record.issue_node_id, record.project_id, "source_work_superseded", { issue_id: issue.id, source_revision: record.source_revision });
     }
     if (!record.issue_id || (record.work_source_revision !== record.source_revision && issue && ["done", "failed", "cancelled"].includes(issue.status))) {
-      const jev = await classifyGitHubIssue({ config: this.options.config.issueSync.jev, stateDir: this.options.stateDir, title: source.title, body: source.body });
-      auditGitHubCase(db, record.issue_node_id, record.project_id, "jev_routing", jev as unknown as Record<string, unknown>);
-      const routingHint = jev.route === "answer_question"
-        ? "快速分类建议走使用咨询路径：优先查阅使用文档并回答问题；此建议不是结论，若发现实际缺陷仍须复现与查证。"
-        : jev.route === "investigate" ? "快速分类建议优先调查疑似缺陷；分类不是 Bug 证据，仍须独立确认预期行为并复现。" : "";
-      record = createGitHubCaseWork(db, record, policy, "investigate", routingHint);
+      record = createGitHubCaseWork(db, record, policy, "investigate");
       this.startWork(record, policy);
       this.progress(record, "已接收，正在查证预期行为并尝试复现。", "intake");
       return;

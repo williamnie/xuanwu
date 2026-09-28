@@ -3,6 +3,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { listPiMcpCapabilities } from "../db/repositories/piMcpCapabilities.ts";
 import { listPiMcpServers } from "../db/repositories/piMcpServers.ts";
 import { mcpCapabilitiesFromPayload, parseMcpCapabilityList } from "./policy.ts";
+import { optionalJevMcpServers } from "../skills/jev/registry.ts";
 
 export type McpRiskLevel = "low" | "medium" | "high";
 export type McpCapabilityKind = "resource" | "tool";
@@ -87,7 +88,9 @@ export function readMcpRegistry(options: McpRegistryOptions = {}): McpRegistry {
   const normalized = [...servers, ...managed].map((server) => normalizeServer(objectValue(server))).filter(Boolean)
     .slice(0, MAX_SERVERS) as McpServerRegistry[];
   diagnostics.push(...normalized.flatMap((server) => server.diagnostics));
-  return { diagnostics, servers: normalized };
+  // 可选技能只在安装、启用且具备凭据时声明工具；错误配置不会阻断其他 MCP。
+  return { diagnostics, servers: [...normalized.filter(server => server.id !== "jev-assist"),
+    ...(options.database ? optionalJevMcpServers(options.database) : [])] };
 }
 
 export function readMcpCapability(id: string, options: McpRegistryOptions = {}): McpCapability | null {

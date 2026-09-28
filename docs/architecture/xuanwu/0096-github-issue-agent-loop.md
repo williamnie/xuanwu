@@ -54,25 +54,20 @@ GitHub 已接管的调查/修复 Work 默认在原 Issue 回写求助，不再�
           "allowFix": true,
           "allowPullRequest": true,
           "closeOnMerge": false
-        }],
-        "jev": {
-          "mode": "shadow",
-          "model": "jev-latest",
-          "apiKeyRef": "env://TYPESAFE_API_KEY"
-        }
+        }]
       }
     }
   }
 }
 ```
 
-App 模式使用 auth.mode=github-app，加 appId、installationId、privateKeyRef（secret:// 或 env://）。Jev 支持 apiKeyRef，也支持显式指定只对当前用户可读写的 apiKeyEnvFile，其中仅读取 TYPESAFE_API_KEY，不执行 shell 或修改进程环境。
+App 模式使用 auth.mode=github-app，加 appId、installationId、privateKeyRef（secret:// 或 env://）。Jev 已迁移为[可选辅助 Skill](0097-optional-jev-skill.md)，配置位于 `optionalSkills.jev-assist`；旧 `issueSync.jev` 仅兼容读取并保持 GitHub 范围。
 
 仓库 `ciFailureMode` 默认 `repair`，检查失败时先诊断原因，仅修复本任务回归。维护者已确认 Actions 额度或其他外部限制时，可设 `ciFailureMode: "report_only"` 并填写 `ciFailureReason`。此模式保留失败状态和原因，不自动启动 CI 修复，不覆盖人工评审反馈，也不放宽合并后自动关单的 CI 门禁。检查恢复后可删除这两个配置项，恢复默认行为。当前版本评审反馈优先于自动 CI 诊断；重新验证得到相同文件树时复用原提交，避免空提交重复触发 Actions。
 
 ## Jev 的边界
 
-Jev 负责窄问题分类：报告意图、资料完整性、评论意图。shadow 只记录建议；routing 仅启用经过实际样本评估的低风险分流。置信度不是权限或验收证据。未配置、超时、无效输出、低置信度均回退 PI。快分类不能直接关单、批准风险或认定修复成功。浏览器桥接不是此服务端 API 的依赖。
+GitHub polling 不再直接调用 Jev；Agent 按需使用同一个全局可选 skill，GitHub Work 只添加可选推荐。shadow 只记录观察状态，assist 返回经过校验的辅助建议。未配置、超时、无效输出、低置信度均继续正常流程。置信度不是权限或验收证据，分类不能直接关单、批准风险或认定修复成功。浏览器桥接不是依赖。后文 Jev 样本数据为旧专属接入时的历史验证，不代表新技能路径已通过真实服务验收。
 
 ## 完成门禁
 

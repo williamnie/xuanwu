@@ -18,10 +18,12 @@ import { SKILL_RUNTIME_COMPLETED_EVENT } from "../skills/runtime.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { publicIntakeRun, redactedJsonObject, runDiagnostics } from "./piSkillRunViews.ts";
 import type { Router } from "./router.ts";
+import { publicJevSkillSettings, registerJevSkillSettingsRoutes } from "./jevSkillSettingsApi.ts";
 
 type SkillRouteContext = { config?: RunnerConfig; database: RunnerDatabase };
 type JsonObject = Record<string, unknown>;
 type SkillRegistryView = {
+  jev?: Record<string, unknown>;
   diagnostics: SkillRegistryDiagnostic[];
   items: SkillMetadata[];
   tools: AssistantTool[];
@@ -30,6 +32,7 @@ type SkillRegistryView = {
 const RUN_STATUSES = new Set(["running", "succeeded", "failed"]);
 
 export function registerPiSkillRoutes(router: Router, context?: SkillRouteContext): void {
+  if (context) registerJevSkillSettingsRoutes(router, context);
   router.get("/api/pi/skills", () => skillsResponse(context));
   router.get("/api/pi/skills/intake-runs", (request) => json(intakeRunsResponse(context, request)));
   router.get("/api/pi/skills/domain-runs", (request) => json(domainRunsResponse(context, request)));
@@ -47,6 +50,7 @@ function skillResponse(request: Request, context?: SkillRouteContext): Response 
   const id = skillID(request);
   const registry = readRegistry(context);
   const skill = findSkill(registry.items, id);
+  if (!skill && id === "jev-assist" && registry.jev) return json({ diagnostics: [], skill: jevSkillView(registry.jev) });
   if (!skill) throw new HttpError(404, `skill 不存在: ${id}`);
   return json({ diagnostics: registry.diagnostics, skill: decoratedSkill(skill, registry, true) });
 }
@@ -154,7 +158,16 @@ function domainRunView(db: RunnerDatabase, event: PiActionEvent): JsonObject {
 }
 
 function decorateSkills(registry: SkillRegistryView, includeInstructions: boolean): JsonObject[] {
-  return registry.items.map((skill) => decoratedSkill(skill, registry, includeInstructions));
+  const items = registry.items.map((skill) => decoratedSkill(skill, registry, includeInstructions));
+  if (registry.jev && !registry.items.some(skill => skill.id === "jev-assist")) items.push(jevSkillView(registry.jev));
+  return items;
+}
+
+function jevSkillView(settings: Record<string, unknown>): JsonObject {
+  return { id: "jev-assist", name: "Jev 辅助判断", description: "可选的报告分类与信息完整性判断；不可用时继续正常处理任务。",
+    optional: true, enabled: settings.enabled, installed: settings.installed, availability_status: settings.availability,
+    runtime_status: "optional", discovery_status: settings.installed ? "discovered" : "missing", executable: false,
+    required_tools: ["jev-assist:tool:jev_classify_report"] };
 }
 
 function decoratedSkill(
@@ -191,7 +204,8 @@ function decoratedSkill(
     resolved_tools: resolvedTools,
     runtime_status: manifestOnly
       ? "manifest_only"
-      : skill.kind ? (diagnostics.length === 0 ? "enabled" : "diagnostic") : "metadata_only"
+      : skill.kind ? (diagnostics.length === 0 ? "enabled" : "diagnostic") : "metadata_only",
+    ...(skill.id === "jev-assist" && registry.jev ? jevSkillView(registry.jev) : {})
   };
 }
 
@@ -216,7 +230,7 @@ function requireRuntimeSkill(
   return skill;
 }
 
-function readRegistry(context?: SkillRouteContext) {
+function readRegistry(context?: SkillRouteContext): SkillRegistryView {
   if (!context) return { ...readSkillRegistry(), tools: [] };
   const snapshot = loadAssistantToolRegistrySnapshot(context.database, {
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs ?? []
@@ -227,7 +241,7 @@ function readRegistry(context?: SkillRouteContext) {
     permission: tool.permission,
     provider_id: tool.provider_id
   }));
-  return { ...readSkillRegistry({ availableTools }), tools: snapshot.tools };
+  return { ...readSkillRegistry({ availableTools }), tools: snapshot.tools, jev: publicJevSkillSettings(context.database) };
 }
 
 function resolveTool(tools: AssistantTool[], grant: string): AssistantTool | undefined {

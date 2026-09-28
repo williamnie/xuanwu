@@ -4,8 +4,11 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { invokeReadOnlyAssistantTool } from "./readOnlyToolInvocation.ts";
 import type { AssistantTool, ToolProvider } from "./toolProviderEnvelope.ts";
 import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense.ts";
+import type { PiGatePolicy } from "./actionGate.ts";
+import { jevAvailableForContext } from "../skills/jev/policy.ts";
 
 export type RuntimeReadOnlyToolContext = {
+  authorization?: PiGatePolicy;
   cliConnectorDirs?: string[];
   conversationID?: string;
   delegationID?: string;
@@ -33,7 +36,8 @@ export function createReadOnlyRuntimeTools(input: {
 }): RuntimeReadOnlyToolKit {
   const providerByID = new Map(input.providers.map((provider) => [provider.id, provider]));
   const selected = input.tools.filter((tool) =>
-    shouldExposeReadOnlyRuntimeTool(tool, providerByID.get(tool.provider_id), input.existingNames));
+    shouldExposeReadOnlyRuntimeTool(tool, providerByID.get(tool.provider_id), input.existingNames) &&
+    (tool.metadata?.optional_skill !== "jev-assist" || jevAvailableForContext(input.db, { ...input.context, projectID: input.projectID })));
   return {
     providerIDs: sortedUnique(selected.map((tool) => tool.provider_id)),
     tools: selected.map((tool) => runtimeToolDefinition(input, tool))
@@ -46,7 +50,7 @@ function shouldExposeReadOnlyRuntimeTool(
   existingNames: Set<string>
 ): boolean {
   if (!provider || provider.status === "disabled") return false;
-  if (!RUNTIME_READ_ONLY_PROVIDER_KINDS.has(provider.kind)) return false;
+  if (!RUNTIME_READ_ONLY_PROVIDER_KINDS.has(provider.kind) && !(provider.kind === "mcp" && tool.metadata?.optional_skill === "jev-assist")) return false;
   if (tool.permission !== "read" || existingNames.has(tool.name)) return false;
   return cleanString(tool.name) !== "" && cleanString(tool.provider_id) !== "";
 }
@@ -67,10 +71,17 @@ function runtimeToolDefinition(
     description: tool.description,
     parameters: unsafeParameters(tool.input_schema),
     promptSnippet: `${tool.name}: ${tool.description}`,
-    promptGuidelines: [`Use ${tool.name} for bounded read-only source evidence before answering about URLs or web pages.`],
+    promptGuidelines: [tool.metadata?.optional_skill === "jev-assist"
+      ? "Use jev-assist only when a bounded classification helps; unavailable, shadow or low-confidence results do not block the task."
+      : `Use ${tool.name} for bounded read-only source evidence before answering about URLs or web pages.`],
     async execute(toolCallID, params) {
+      const audit = auditContext(input.context, input.projectID);
+      if (tool.metadata?.optional_skill === "jev-assist" && !input.context.source) {
+        audit.source = input.context.heartbeatID || input.context.delegationID ? "pi_runtime" : "runner_chat";
+      }
       const result = await invokeReadOnlyAssistantTool({
-        auditContext: auditContext(input.context, input.projectID),
+        authorization: input.context.authorization,
+        auditContext: audit,
         db: input.db,
         env: input.context.env,
         input: recordValue(params),

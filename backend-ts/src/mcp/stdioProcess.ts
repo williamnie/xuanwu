@@ -1,7 +1,7 @@
 import { runBoundedProcess, type BoundedProcessInput, type BoundedProcessResult } from "../util/boundedProcess.ts";
 
 export type StdioProcessResult = BoundedProcessResult;
-type ProcessInput = BoundedProcessInput;
+type ProcessInput = BoundedProcessInput & { beforeStart?: () => boolean };
 
 const MAX_ACTIVE = 4;
 const MAX_QUEUED = 32;
@@ -23,6 +23,17 @@ export function runStdioProcess(input: ProcessInput): Promise<StdioProcessResult
       const remaining = deadline - performance.now();
       if (remaining <= 0) {
         resolve(failed("ETIMEDOUT", "MCP process queue timed out"));
+        queue.shift()?.();
+        return;
+      }
+      try {
+        if (input.beforeStart && !input.beforeStart()) {
+          resolve(failed("ECANCELED", "MCP process was disabled before start"));
+          queue.shift()?.();
+          return;
+        }
+      } catch {
+        resolve(failed("ECANCELED", "MCP process preflight failed"));
         queue.shift()?.();
         return;
       }

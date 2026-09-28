@@ -38,7 +38,7 @@ describe("GitHub issue configuration and transport", () => {
     expect(buildGitHubIssueSyncConfig({ repositories: [{ repository: "acme/demo", projectId: "demo", ciFailureMode: "report_only", ciFailureReason: "Actions quota exhausted" }] }).repositories[0]?.ciFailureMode).toBe("report_only");
     expect(() => buildGitHubIssueSyncConfig({ enabled: true })).toThrow();
     expect(() => buildGitHubIssueSyncConfig({ repositories: [{ repository: "../secret", projectId: "demo" }] })).toThrow();
-    expect(() => buildGitHubIssueSyncConfig({ jev: { minConfidence: 0 } })).toThrow();
+    expect(() => buildGitHubIssueSyncConfig({ jev: { minConfidence: 0 } })).not.toThrow();
     expect(() => buildGitHubIssueSyncConfig({ auth: { mode: "github-app" } })).toThrow();
   });
 

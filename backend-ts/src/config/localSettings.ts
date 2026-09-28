@@ -24,6 +24,7 @@ export type QoderLocalSettings = {
 };
 
 export type RunnerLocalSettings = {
+  optionalSkills?: Record<string, Record<string, unknown>>;
   integrations?: {
     feishu?: Record<string, unknown>;
     github?: Record<string, unknown>;
@@ -97,6 +98,7 @@ function normalizeLocalSettings(value: unknown): RunnerLocalSettings {
     ...(Object.keys(telegram).length === 0 ? {} : { telegram })
   };
   return {
+    ...(Object.keys(recordValue(raw.optionalSkills)).length ? { optionalSkills: recordValue(raw.optionalSkills) as RunnerLocalSettings["optionalSkills"] } : {}),
     ...(Object.keys(normalizedIntegrations).length === 0 ? {} : { integrations: normalizedIntegrations }),
     ...normalizedProviderSettings(raw.providers),
     ...normalizedRunnerSettings(raw.runner)

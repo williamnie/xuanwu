@@ -108,6 +108,7 @@
 - [ADR-XW-0056：Repair 与 Review Workflows](xuanwu/0056-repair-review-workflows.md)
 - [XW P06.11：Release、Research 与 Migrate Workflows](xuanwu/0057-release-research-migrate-workflows.md)
 - [ADR-XW-0058：可执行 Skill Runtime 与权限审计](xuanwu/0058-executable-skill-runtime.md)
+- [ADR-XW-0097：Jev 可选辅助 Skill](xuanwu/0097-optional-jev-skill.md)
 - [Provider 推荐卡片与连接合同](xuanwu/0059-provider-presets-connections.md)
 
 ### Automation, Attention, Approval

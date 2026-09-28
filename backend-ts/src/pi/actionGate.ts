@@ -99,6 +99,7 @@ export const PI_SAFE_ACTION_TYPES = [
   "run.interrupt",
   "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
   "skill.list", "skill.read", "skill.recommend", "skill.intent_audit",
+  "skill.optional.call",
   "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read",
   ...SUPERVISOR_CONTROL_READ_ACTION_TYPES
 ];
@@ -115,6 +116,7 @@ export const PI_READ_ONLY_ACTION_TYPES = [
   "notification.preference.read",
   "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
   "skill.list", "skill.read", "skill.recommend",
+  "skill.optional.call",
   "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read",
   ...SUPERVISOR_CONTROL_READ_ACTION_TYPES
 ];

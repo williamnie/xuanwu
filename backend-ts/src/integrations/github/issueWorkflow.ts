@@ -8,6 +8,7 @@ import { assertCompletionCardIntegrity, type CompletionCard, COMPLETION_CARD_EVE
 import { redactSensitiveText } from "../../util/redact.ts";
 import { getGitHubIssueCase, updateGitHubIssueCase, type GitHubIssueCase, type GitHubIssueSource } from "./issueCaseStore.ts";
 import type { GitHubIssueRepository } from "./issueSyncConfig.ts";
+import { jevAvailableForContext } from "../../skills/jev/policy.ts";
 
 export const GITHUB_REPORT_MARKER = "XUANWU_GITHUB_REPORT:";
 export function githubWorkExecutionContext(db: RunnerDatabase, issueID: number): string {
@@ -142,6 +143,7 @@ export function createGitHubCaseWork(db: RunnerDatabase, record: GitHubIssueCase
     const source: GitHubIssueSource = JSON.parse(record.source_json);
     const issue = createIssue(db, {
       project_id: record.project_id, status: "triage",
+      recommended_skill_intents: jevAvailableForContext(db, { projectID: record.project_id, source: "github" }) ? '["jev-assist"]' : "[]",
       title: Array.from(`${stage === "investigate" ? "调查" : "修复"} GitHub #${record.issue_number}：${source.title}`).slice(0, 50).join(""),
       description: githubWorkBody(record, policy, stage, extraContext), source_excerpt: source.url,
       source_session_id: `github:${record.issue_node_id}`, source_turn_id: `github:${record.issue_node_id}:${record.source_revision}:${stage}`,

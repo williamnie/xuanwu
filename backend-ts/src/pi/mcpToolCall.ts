@@ -11,6 +11,9 @@ import { recordToolCallAuditEvent, type ToolCallAuditContext } from "./toolCallA
 import { mcpToolProviderID } from "./mcpToolProvider.ts";
 import { invokeMcpTransport } from "./mcpTransport.ts";
 import type { ToolPermission, ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
+import type { PiGatePolicy } from "./actionGate.ts";
+import { JEV_CAPABILITY_ID } from "../skills/jev/config.ts";
+import { invokeJevSkill } from "../skills/jev/invoke.ts";
 
 export const MCP_TOOL_ERROR_CODES = {
   capabilityNotTool: "mcp_capability_not_tool",
@@ -24,6 +27,7 @@ export const MCP_TOOL_ERROR_CODES = {
 } as const;
 
 export type McpToolCallInput = {
+  authorization?: PiGatePolicy;
   auditContext?: Partial<ToolCallAuditContext>;
   auditProviderID?: string;
   auditToolName?: string;
@@ -40,6 +44,8 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const PERMISSION_LEVEL: Record<ToolPermission, number> = { read: 0, write: 1, dangerous: 2 };
 
 export async function callMcpTool(request: McpToolCallInput): Promise<ToolResult> {
+  if (request.capabilityID === JEV_CAPABILITY_ID) return invokeJevSkill({ db: request.db,
+    context: { ...request.auditContext, authorization: request.authorization }, input: request.input ?? {}, invocationID: request.invocationID });
   const invocationID = request.invocationID || crypto.randomUUID();
   const startedAt = new Date();
   const started = performance.now();

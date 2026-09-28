@@ -223,6 +223,9 @@ package_target() {
   mkdir -p "$pkg_dir/scripts" "$pkg_dir/skills"
   cp "$ROOT_DIR/scripts/install-agent-skill.sh" "$pkg_dir/scripts/install-agent-skill.sh"
   cp -R "$ROOT_DIR/skills/xuanwu" "$pkg_dir/skills/xuanwu"
+  if [ -d "$ROOT_DIR/skills/jev-assist" ]; then
+    cp -R "$ROOT_DIR/skills/jev-assist" "$pkg_dir/skills/jev-assist"
+  fi
   mkdir -p "$pkg_dir/docs"
   cp -R "$ROOT_DIR/docs/runbooks" "$pkg_dir/docs/runbooks"
   cp "$ROOT_DIR/docs/backup-restore.md" "$pkg_dir/docs/backup-restore.md"

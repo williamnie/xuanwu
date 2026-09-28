@@ -72,6 +72,8 @@ function matchIssueScope(envelope: PiActionEnvelope, issueIDs: number[], project
 }
 
 function matchRunnerResourceScope(envelope: PiActionEnvelope, resource: string): PiAuthorizationScopeMatch {
+  if (resource === "optional_skills") return envelope.action_type === "skill.optional.call"
+    ? matched("scope matched optional skills") : denied(`optional skills scope does not match action ${envelope.action_type}`);
   if (resource === "agent_catalog") return envelope.action_type === "agent.catalog_list"
     ? matched("scope matched agent catalog")
     : denied(`agent catalog scope does not match action ${envelope.action_type}`);

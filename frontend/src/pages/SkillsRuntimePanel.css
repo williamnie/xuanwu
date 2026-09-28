@@ -37,16 +37,16 @@
 
 .skills-runtime-grid {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
 }
 
 .skills-runtime-list,
 .skills-runtime-detail,
 .skills-run-row {
-  background: var(--bg-secondary);
+  background: transparent;
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-md);
 }
 
 .skills-runtime-list {
@@ -59,27 +59,51 @@
 .skills-runtime-list button {
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--button-radius);
   color: var(--text-primary);
   cursor: pointer;
   display: grid;
-  gap: 5px;
+  gap: 4px;
   padding: 10px;
   text-align: left;
 }
 
-.skills-runtime-list button.active,
 .skills-runtime-list button:hover {
-  background: color-mix(in srgb, var(--primary) 7%, transparent);
-  border-color: color-mix(in srgb, var(--primary) 24%, var(--border-color));
+  background: var(--nav-hover);
+  border-color: var(--border-color-hover);
+}
+
+.skills-runtime-list button.active {
+  background: var(--nav-active);
+  border-color: color-mix(in srgb, var(--primary) 20%, transparent);
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.skills-runtime-list button strong {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.skills-runtime-head h2,
+.skills-runtime-title h3 {
+  font-size: 1.1rem;
+}
+
+.skills-runtime-list,
+.skills-runtime-detail {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .skills-runtime-list small,
 .skills-chip-block > span,
 .skills-run-row small {
   color: var(--text-muted);
-  font-size: 0.74rem;
-  font-weight: 760;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .skills-runtime-detail,
@@ -101,9 +125,12 @@
   border-radius: var(--radius-xs);
   color: var(--text-secondary);
   display: inline-flex;
-  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
   font-style: normal;
-  font-weight: 820;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   padding: 4px 8px;
   width: fit-content;
 }
@@ -123,21 +150,21 @@
 
 .skills-chip-block {
   display: grid;
-  gap: 7px;
+  gap: 8px;
 }
 
 .skills-chip-block > div,
 .skills-run-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px;
   justify-content: flex-start;
 }
 
 .skills-run-controls {
-  background: color-mix(in srgb, var(--primary) 5%, var(--bg-secondary));
+  background: transparent;
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xs);
   padding: 12px;
 }
 
@@ -145,7 +172,7 @@
   color: var(--text-muted);
   display: grid;
   flex: 1;
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   font-weight: 800;
   gap: 6px;
 }
@@ -172,7 +199,7 @@
 
 .skills-schema pre {
   background: var(--bg-card);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xs);
   color: var(--text-secondary);
   font-size: 0.78rem;
   margin: 10px 0 0;
@@ -197,7 +224,7 @@
 
 .skills-runtime-empty {
   border: 1px dashed var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xs);
   color: var(--text-muted);
   padding: 18px;
 }
@@ -206,7 +233,12 @@
   padding: 12px;
 }
 
-@media (max-width: 920px) {
+@media (max-width: 760px) {
+  .skills-runtime-panel,
+  .skills-runtime-detail {
+    padding: 12px;
+  }
+
   .skills-runtime-grid,
   .skills-run-controls {
     grid-template-columns: 1fr;

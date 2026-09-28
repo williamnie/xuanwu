@@ -10,8 +10,11 @@ import { recordToolCallAuditEvent, type ToolCallAuditContext } from "./toolCallA
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 import type { AssistantTool, ToolPermission, ToolProvider, ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
 import { assessDataEgress } from "../security/promptInjectionDefense.ts";
+import type { PiGatePolicy } from "./actionGate.ts";
+import { JEV_CAPABILITY_ID, JEV_TOOL_NAME } from "../skills/jev/config.ts";
 
 export type ReadOnlyToolInvocationInput = {
+  authorization?: PiGatePolicy;
   auditContext?: Partial<ToolCallAuditContext>;
   db: RunnerDatabase;
   env?: Record<string, string | undefined>;
@@ -37,6 +40,11 @@ type InvocationClock = { invocationID: string; started: number; startedAt: Date 
 
 export async function invokeReadOnlyAssistantTool(input: ReadOnlyToolInvocationInput): Promise<ToolResult> {
   const clock = invocationClock(input.invocationID);
+  // 已加载的会话也必须在每次调用重新检查开关；卸载后返回可降级结果而非抛错。
+  if (input.providerID === "mcp-jev-assist" && input.toolName === JEV_TOOL_NAME) return callMcpTool({
+    db: input.db, capabilityID: JEV_CAPABILITY_ID, authorization: input.authorization,
+    input: input.input, auditContext: { ...input.auditContext, projectID: input.projectID || input.auditContext?.projectID }, invocationID: clock.invocationID
+  });
   const target = findInvocationTarget(input);
   if (!target) throw new ToolInvocationNotFoundError(`tool 不存在: ${input.providerID}:${input.toolName}`);
   const maxPermission = input.maxPermission ?? "read";
@@ -88,6 +96,7 @@ async function callMcp(input: ReadOnlyToolInvocationInput, tool: AssistantTool, 
     message: "MCP tool metadata missing capability_id"
   }));
   return callMcpTool({
+    authorization: input.authorization,
     auditContext: auditContext(input),
     auditProviderID: tool.provider_id,
     auditToolName: tool.name,

@@ -1,7 +1,8 @@
 import { assistantApi } from '../api/assistant.js';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Boxes, Play, RefreshCw, Sparkles } from 'lucide-react';
 import { message } from '../store/toastStore';
+import JevSkillSettings from './JevSkillSettings.jsx';
 import './SkillsRuntimePanel.css';
 
 const KIND_LABEL = { domain: '处理事项', intake: '入箱识别' };
@@ -20,6 +21,18 @@ export default function SkillsRuntimePanel() {
   useEffect(() => { if (!selectedId && skills[0]) setSelectedId(skills[0].id); }, [skills, selectedId]);
   useEffect(() => { if (selectedId) loadSkillDetail(selectedId, setState); }, [selectedId]);
   useEffect(() => setForm((previous) => defaultInputs(previous, state.bundles, state.items)), [state.bundles, state.items]);
+  const updateJevStatus = useCallback(settings => {
+    setState(previous => {
+      const update = skill => skill?.id === settings.skill_id
+        ? { ...skill, enabled: settings.enabled, availability_status: settings.availability, load_status: settings.installed ? 'loaded' : 'missing' }
+        : skill;
+      return {
+        ...previous,
+        skills: previous.skills.map(update),
+        skillDetails: Object.fromEntries(Object.entries(previous.skillDetails).map(([id, skill]) => [id, update(skill)])),
+      };
+    });
+  }, []);
 
   const runSelected = () => runSkill(selected, form, setState);
   return (
@@ -29,7 +42,7 @@ export default function SkillsRuntimePanel() {
       {state.notice && <div className="skills-runtime-empty compact">{state.notice}</div>}
       <div className="skills-runtime-grid">
         <SkillList selectedId={selected?.id} skills={skills} onSelect={setSelectedId} />
-        <SkillDetail form={form} runs={runsForSkill(state, selected)} selected={selected} setForm={setForm} onRun={runSelected} />
+        <SkillDetail form={form} runs={runsForSkill(state, selected)} selected={selected} setForm={setForm} onRun={runSelected} onJevStatus={updateJevStatus} />
       </div>
     </section>
   );
@@ -39,8 +52,8 @@ function PanelHeader({ loading, onRefresh }) {
   return (
     <div className="skills-runtime-head">
       <div>
-        <h2><Boxes size={18} color="var(--primary)" /> Skills Runtime</h2>
-        <p>展示 intake/domain skill 的启用状态、schema、依赖工具、运行历史与诊断。</p>
+        <h2><Boxes aria-hidden="true" size={16} /> 技能运行与配置</h2>
+        <p>查看处理技能的运行记录，配置按需使用的可选辅助技能。</p>
       </div>
       <button className="btn btn-secondary" disabled={loading} onClick={onRefresh} type="button">
         <RefreshCw size={15} className={loading ? 'spin-animation' : ''} /> 刷新
@@ -50,37 +63,46 @@ function PanelHeader({ loading, onRefresh }) {
 }
 
 function SkillList({ onSelect, selectedId, skills }) {
-  if (!skills.length) return <div className="skills-runtime-empty">暂无 intake/domain skill manifest。</div>;
+  if (!skills.length) return <div className="skills-runtime-empty">暂无可用技能。</div>;
   return (
     <aside className="skills-runtime-list">
       {skills.map((skill) => (
-        <button className={skill.id === selectedId ? 'active' : ''} key={skill.id} onClick={() => onSelect(skill.id)} type="button">
-          <span className={`skills-kind ${skill.kind}`}>{KIND_LABEL[skill.kind]}</span>
+        <button aria-current={skill.id === selectedId ? 'true' : undefined} className={skill.id === selectedId ? 'active' : ''} key={skill.id} onClick={() => onSelect(skill.id)} type="button">
+          <span className={`skills-kind ${skill.optional ? 'optional' : skill.kind}`}>{skill.optional ? '可选辅助' : KIND_LABEL[skill.kind]}</span>
           <strong>{skill.name || skill.id}</strong>
-          <small>{skill.availability_status || (skill.enabled ? 'ready' : 'blocked')} · tools {(skill.required_tools || []).length}</small>
+          <small>{skill.availability_status || (skill.enabled ? 'ready' : 'blocked')} · {skill.optional ? '按需调用' : `tools ${(skill.required_tools || []).length}`}</small>
         </button>
       ))}
     </aside>
   );
 }
 
-function SkillDetail({ form, onRun, runs, selected, setForm }) {
+function SkillDetail({ form, onJevStatus, onRun, runs, selected, setForm }) {
   if (!selected) return <div className="skills-runtime-empty">选择一个 skill 查看详情。</div>;
   return (
     <main className="skills-runtime-detail">
       <div className="skills-runtime-title">
         <div>
-          <span className={`skills-kind ${selected.kind}`}>{KIND_LABEL[selected.kind]}</span>
+          <span className={`skills-kind ${selected.optional ? 'optional' : selected.kind}`}>{selected.optional ? '可选辅助' : KIND_LABEL[selected.kind]}</span>
           <h3>{selected.name || selected.id}</h3>
           <p>{selected.description}</p>
         </div>
-        <span className={`skills-enabled ${selected.availability_status === 'blocked' ? 'warn' : 'ok'}`}>
-          {selected.load_status} · {selected.availability_status}
+        <span className={`skills-enabled ${selected.availability_status === 'ready' ? 'ok' : 'warn'}`}>
+          {[selected.load_status, selected.availability_status].filter(Boolean).join(' · ')}
         </span>
       </div>
-      <SkillMeta skill={selected} />
-      <ManualRunControls form={form} onRun={onRun} selected={selected} setForm={setForm} />
-      <RunHistory runs={runs} />
+      {selected.optional ? (
+        <>
+          {selected.id === 'jev-assist' && <JevSkillSettings onStatus={onJevStatus} />}
+          {selected.instructions && <SchemaBlock title="技能使用说明 · SKILL.md" value={selected.instructions} raw />}
+        </>
+      ) : (
+        <>
+          <SkillMeta skill={selected} />
+          <ManualRunControls form={form} onRun={onRun} selected={selected} setForm={setForm} />
+          <RunHistory runs={runs} />
+        </>
+      )}
     </main>
   );
 }
@@ -213,7 +235,7 @@ function runtimeNotice(results) {
 }
 
 function runtimeSkills(skills) {
-  return (skills || []).filter((skill) => skill.kind === 'intake' || skill.kind === 'domain');
+  return (skills || []).filter((skill) => skill.optional === true || skill.kind === 'intake' || skill.kind === 'domain');
 }
 
 function selectedSkill(skills, selectedId) {

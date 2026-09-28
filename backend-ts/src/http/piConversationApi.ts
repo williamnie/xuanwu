@@ -247,9 +247,10 @@ async function preparePiConversationTurn(
   if (activePiRuns.has(conversation.id)) throw new HttpError(409, "PI conversation is already running");
   const titledConversation = ensureConversationTitle(context.database, conversation, prompt);
   const review = isReviewConversationIntent(intent);
+  const imSource = imRunnerChatSource(trusted.channelContextProjection?.connectorID);
   const source = review
-    ? reviewConversationSource(titledConversation)
-    : imRunnerChatSource(trusted.channelContextProjection?.connectorID) ?? runnerChatSource(titledConversation);
+    ? imSource?.replace(/_runner_chat$/, "_runner_review") ?? reviewConversationSource(titledConversation)
+    : imSource ?? runnerChatSource(titledConversation);
   const resolvedSource = source ?? (review ? "runner_review" : "runner_chat");
   const turnID = crypto.randomUUID();
   const outputLanguage = conversationOutputLanguage(context.database, body.language, prompt);
@@ -967,7 +968,8 @@ function unboundRunnerChatAuthorization(runnerChatActions: readonly string[]) {
       { runner_resource: "projects" },
       { runner_resource: "runner_settings" },
       { runner_resource: "service_lifecycle" },
-      { runner_resource: "workspace" }
+      { runner_resource: "workspace" },
+      { runner_resource: "optional_skills" }
     ]
   };
 }
