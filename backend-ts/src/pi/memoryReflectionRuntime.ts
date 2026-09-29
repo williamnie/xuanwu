@@ -42,6 +42,8 @@ export async function promptMemoryReflectionSession(
       "Preserve the evidence's technical vocabulary. Keep applies_when to concise, searchable applicability conditions; put the testing or repair procedure in resolution.",
       "Describe reusable code/environment conditions and methods, not temporary Work/Run status or queue summaries. Reading the current business specification is a valid reusable method.",
       "Do not infer a root cause from needs_user, uncertainty, or task failure alone. No new useful experience is a valid result.",
+      "Every factual claim in symptom, root_cause and failed_attempts must be supported by the selected evidence for that same scenario. Passing tests or a changed applicability scope do not establish that a failure occurred or how it was caused.",
+      "When evidence only verifies successful behavior or narrows applicability, explicitly say no failure or root cause was observed for that scope. Describe preventive advice as advice, never as an observed incident. A correction must not transfer an old scenario's failure or root cause to the new scenario.",
       "For outcome=failed, save only an established diagnostic root cause as debugging_pattern; Host binds diagnosis_only.",
       "A diagnosis never proves a fix. Host records resolution as unverified. Never claim repair success for a failed Work.",
       "Select evidence by the evidence_index returned by reflection_evidence_read; Host constructs canonical references. No logs, repository, tasks or external tools.",

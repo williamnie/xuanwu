@@ -306,6 +306,22 @@ describe("task-scoped experience retrieval", () => {
     } finally { db.close(); }
   });
 
+  test("keeps single-letter and numeric identifiers in explicit exclusions without excluding their siblings", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const { experience } = seedMemoryExperience(db);
+      createPiMemoryItem(db, { id: "scoped-gate", scope: "project", scope_id: "demo", kind: "resolution", authority: "evidence_backed",
+        content: JSON.stringify({ ...experience, version: "gate-v1.0.0", applies_when: "gate threshold tests; not applicable to campaign B; excluding protocol 2" }) });
+      const input = { projectID: "demo", query: "gate threshold tests", version: "gate-v1.0.0" };
+      for (const taskDescription of ["campaign A protocol 1", "campaign C protocol 3"]) {
+        expect(retrievePiMemoryContext(db, { ...input, taskDescription }).memory_items.map(item => item.id)).toEqual(["scoped-gate"]);
+      }
+      for (const taskDescription of ["campaign B protocol 1", "CAMPAIGN B protocol 3", "campaign A protocol 2"]) {
+        expect(retrievePiMemoryContext(db, { ...input, taskDescription }).memory_items).toEqual([]);
+      }
+    } finally { db.close(); }
+  });
+
   test("excludes unrelated, negative, unknown-version, obsolete and cross-project experience", async () => {
     const db = await openFixtureDatabase();
     try {

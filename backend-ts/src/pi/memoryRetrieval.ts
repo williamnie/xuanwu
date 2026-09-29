@@ -82,7 +82,7 @@ function versionMatches(recorded: string, input: MemoryTaskContext): boolean {
 
 function applicabilityMatches(appliesWhen: string, task: string): boolean {
   const [positive, ...negative] = appliesWhen.split(/(?:不适用(?:于)?|除外|excluding|except|not applicable(?: to)?)/i);
-  if (negative.some((clause) => matches(task, terms(clause)).length > 0)) return false;
+  if (negative.some((clause) => excludedClauseMatches(clause, task))) return false;
   // 版本已单独校验，不能只因版本字面量相同而召回无关经验。
   const anchors = terms(positive).filter((word) => !/\d+\.\d+/.test(word));
   if (anchors.length === 0 || matches(task, anchors).length === 0) return false;
@@ -102,6 +102,17 @@ function applicabilityMatches(appliesWhen: string, task: string): boolean {
   return restrictions.every(([, clause]) => [...segmenter.segment(clause!)].filter((word) => word.isWordLike)
     .map((word) => word.segment).filter((word) => word.length > 1 && !STOP_WORDS.has(word))
     .every((word) => containsTerm(task.toLowerCase(), word)));
+}
+
+function excludedClauseMatches(clause: string, task: string): boolean {
+  // campaign B 等带单字母/数字的标识必须整体匹配；丢掉 B 会误排除 campaign A。
+  const identifiers = clause.match(/\b[a-z][a-z0-9_-]*[ \t]+(?:[a-z]|\d+)\b/gi) ?? [];
+  let remaining = clause;
+  for (const identifier of identifiers) {
+    if (containsTerm(task.toLowerCase().replace(/[ \t]+/g, " "), identifier.toLowerCase().replace(/[ \t]+/g, " "))) return true;
+    remaining = remaining.replace(identifier, " ");
+  }
+  return matches(task, terms(remaining)).length > 0;
 }
 
 function negatedTerm(task: string, term: string): boolean {

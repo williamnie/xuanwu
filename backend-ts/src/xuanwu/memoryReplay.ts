@@ -191,6 +191,7 @@ export async function runMemoryReplay(root: string, driver: ReplayDriver, signal
     await observe("restart_deduplication", async facts => {
       const calls = driver.calls(); const previous = reflectionRows(db).length;
       const memories = listPiMemoryItems(db).map(item => [item.id, item.revision, item.occurrence_count]);
+      const retrievalBefore = readReplayRestartContexts(db);
       acceptance(db, seed.issueID, seed.legacyRunID);
       db.close(); db = await openDatabase({ stateDir: state });
       let invoked = 0;
@@ -198,8 +199,10 @@ export async function runMemoryReplay(root: string, driver: ReplayDriver, signal
       assert.equal(invoked, 0); assert.equal(driver.calls(), calls); assert.equal(reflectionRows(db).length, previous);
       assert.deepEqual(listPiMemoryItems(db).map(item => [item.id, item.revision, item.occurrence_count]), memories);
       facts.provider_calls_delta = driver.calls() - calls; facts.reflections = reflectionRows(db); facts.memory_identities = memories;
-      facts.retrieval = retrievePiMemoryContext(db, { projectID: PROJECT, query: "gate threshold boundary regression integer current campaign SPEC read", version: VERSION, tokenBudget: 4000 });
-      assert((facts.retrieval as any).memory_items.some((item: any) => item.id === memoryID), "corrected experience cannot be retrieved");
+      const retrievalAfter = readReplayRestartContexts(db);
+      facts.retrieval_contexts = retrievalAfter;
+      assert.deepEqual(retrievalAfter, retrievalBefore, "restart changed scoped memory retrieval");
+      assert(retrievalAfter.some(row => row.identities.some(item => item.id === memoryID)), "corrected experience cannot be retrieved in either verified campaign scope");
     });
     await observe("forget_no_resurrection", async facts => {
       deletePiMemoryItem(db, memoryID);
@@ -260,6 +263,19 @@ export async function runMemoryReplay(root: string, driver: ReplayDriver, signal
     await checkpoint(cases);
   }
   return { kind: driver.kind, cases, status: cases.every(row => row.status === "passed") ? "passed" : "failed", root };
+}
+
+// 使用已验证的两个业务场景比较重启前后结果；不从模型的记忆正文拼造匹配条件。
+export function readReplayRestartContexts(db: RunnerDatabase) {
+  return [
+    { scenario: "campaign A", spec: "gate-v1.0.0 / campaign A: integer amounts 0..1000. Eligibility starts at 100 units, including exactly 100 (>=100)." },
+    { scenario: "campaign B", spec: "gate-v1.0.0 / campaign B: integer amounts 0..1000. Eligibility requires strictly more than 200 units (>200)." }
+  ].map(({ scenario, spec }) => {
+    const result = retrievePiMemoryContext(db, { projectID: PROJECT,
+      query: "gate threshold boundary regression integer current campaign SPEC read", version: VERSION, tokenBudget: 4000,
+      taskDescription: `Read current campaign SPEC before modifying gate.mjs integer threshold tests. ${spec}` });
+    return { scenario, identities: result.memory_items.map(({ id, revision, content_fingerprint }) => ({ id, revision, content_fingerprint })) };
+  });
 }
 
 function reflectionRows(db: RunnerDatabase) {

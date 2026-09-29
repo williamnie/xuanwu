@@ -57,6 +57,27 @@ test("scoring rejects old business rules, fabricated references, denied reads an
   expect(() => scoreTask(JSON.stringify({ ...valid, tests: [...valid.tests.slice(0, 2), { amount: 202, eligible: true }] }), [read], 200, false, false)).toThrow("boundary missing");
 });
 
+test("restart checks the actual campaign scope after a correction explicitly excludes campaign B", async () => {
+  const root = await mkdtemp(join(tmpdir(), "memory-restart-scope-"));
+  try {
+    const result = await runMemoryReplay(root, { ...fixtureDriver,
+      async reflect(db, row, lease, signal, tools, example) {
+        if (JSON.parse(row.summary_json).title.endsWith("correction")) {
+          const content = JSON.parse(String(example.content));
+          content.applies_when = "在 gate-v1.0.0 中修改 gate.mjs 的整数阈值判断，且已阅读当前业务规格并确认规则属于 campaign A 的 >=100 时；不适用于 campaign B。";
+          example = { ...example, content: JSON.stringify(content) };
+        }
+        return fixtureDriver.reflect(db, row, lease, signal, tools, example);
+      }
+    }, new AbortController().signal);
+    expect(result.cases.map(row => [row.id, row.status, row.error])).toEqual(REPLAY_CASES.map(id => [id, "passed", undefined]));
+    const restart = result.cases.find(row => row.id === "restart_deduplication")!;
+    const contexts = restart.facts.retrieval_contexts as Array<{ scenario: string; identities: unknown[] }>;
+    expect(contexts.find(row => row.scenario === "campaign A")?.identities).toHaveLength(1);
+    expect(contexts.find(row => row.scenario === "campaign B")?.identities).toHaveLength(0);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 60_000);
+
 test("global budget stops before call 21 and independently enforces deadline without counting a rejected dispatch", () => {
   const budget = new ReplayBudget();
   for (let i = 0; i < 20; i++) budget.dispatch({ turn: i });
