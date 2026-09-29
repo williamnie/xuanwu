@@ -33,7 +33,11 @@ export default function GitHubSettingsPanel() {
         : operation === 'apply' ? await githubSettingsApi.reload(state.remote.revision) : await githubSettingsApi.test(state.draft);
       if (current === sequence.current) dispatch(operation === 'test' ? { type: 'tested', result: response } : { type: operation === 'save' ? 'saved' : 'applied', remote: response });
     } catch (error) {
-      if (current === sequence.current) dispatch({ type: 'error', message: error.message || '操作失败，请重试。', status: error.status });
+      let remote;
+      if (error.status === 409) {
+        try { remote = await githubSettingsApi.get(); } catch { /* 读取失败时保留草稿，等待显式刷新后才能解决冲突。 */ }
+      }
+      if (current === sequence.current) dispatch({ type: 'error', message: error.message || '操作失败，请重试。', status: error.status, remote });
     } finally { inFlight.current = false; }
   }
   return <GitHubSettingsView state={state} dispatch={dispatch} onRefresh={() => load()} onAction={action} />;
@@ -82,9 +86,9 @@ export function GitHubSettingsView({ state, dispatch, onRefresh, onAction }) {
             </div>
           </fieldset>
         </form>
-        {state.conflict && <div className="github-settings__conflict" role="status"><p>配置冲突或应用失败；草稿已保留。先刷新状态，再核对保存版本与当前草稿。</p>
-          <details><summary>查看最新保存版本</summary><pre>{JSON.stringify(remote.settings, null, 2)}</pre></details>
-          <div className="github-settings__actions"><button className="btn btn-secondary" disabled={busy} onClick={() => dispatch({ type: 'use-server' })}>使用保存版本</button><button className="btn btn-secondary" disabled={busy} onClick={() => dispatch({ type: 'rebase' })}>保留草稿重试</button></div>
+        {state.conflict && <div className="github-settings__conflict" role="status"><p>配置冲突或应用失败；草稿已保留。{state.conflictNeedsRefresh ? '请先刷新状态，读取最新保存版本。' : '已读取最新保存版本，请核对后选择。'}</p>
+          <details><summary>{state.conflictNeedsRefresh ? '查看上次读取的保存版本' : '查看最新保存版本'}</summary><pre>{JSON.stringify(remote.settings, null, 2)}</pre></details>
+          <div className="github-settings__actions"><button className="btn btn-secondary" disabled={busy || state.conflictNeedsRefresh} onClick={() => dispatch({ type: 'use-server' })}>使用保存版本</button><button className="btn btn-secondary" disabled={busy || state.conflictNeedsRefresh} onClick={() => dispatch({ type: 'rebase' })}>保留草稿重试</button></div>
         </div>}
         {state.notice && <p role="status">{state.notice}</p>}
         {state.testResult && <div className="github-settings__results" role="status">

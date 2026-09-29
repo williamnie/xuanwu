@@ -44,3 +44,19 @@ test('connection, application and workflow labels explain supported scenarios', 
   for (const status of ['pending', 'applied', 'unavailable']) assert.notEqual(githubApplicationLabel(status), status);
   for (const stage of ['intake', 'investigate', 'repair', 'needs_user', 'review', 'paused', 'resolved']) assert.notEqual(githubPhaseLabel(stage), stage);
 });
+
+test('conflict resolution cannot adopt a stale snapshot before the latest saved version is read', () => {
+  let state = reduce(initialGitHubSettings(), { type: 'loaded', remote: remote('one') });
+  const draft = { ...state.draft, enabled: true };
+  state = reduce(state, { type: 'edit', draft });
+  state = reduce(state, { type: 'error', status: 409, message: 'config_conflict' });
+  assert.equal(reduce(state, { type: 'use-server' }).conflict, true);
+  assert.equal(reduce(state, { type: 'rebase' }).conflict, true);
+  const latest = { ...remote('two'), settings: { ...remote('two').settings, pollIntervalSeconds: 90 } };
+  state = reduce(state, { type: 'error', status: 409, message: 'config_conflict', remote: latest });
+  assert.deepEqual(state.draft, draft);
+  state = reduce(state, { type: 'use-server' });
+  assert.equal(state.revision, 'two');
+  assert.equal(state.draft.pollIntervalSeconds, 90);
+  assert.equal(state.conflict, false);
+});
