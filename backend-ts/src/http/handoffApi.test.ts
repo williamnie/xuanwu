@@ -115,6 +115,9 @@ describe("Handoff HTTP API and delivery notification", () => {
       const notifications = listNotifications(db, { projectID: "fixture", unreadOnly: true });
 
       expect(stored).toMatchObject({ created: true, notification: { event: "handoff.ready" } });
+      expect(stored.notification?.message).toContain("当前凭证未提供 CI、合并结果");
+      expect(stored.notification?.message).toContain("部署未确认");
+      expect(stored.notification?.message).toContain("不等于全部通过");
       expect(replay).toMatchObject({ created: false, notification: null });
       expect(git(repository, "rev-parse", local.branch_ref)).toBe(local.commit_revision);
       expect(list.status).toBe(200);

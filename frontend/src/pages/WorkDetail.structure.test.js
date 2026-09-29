@@ -53,4 +53,9 @@ test('Work Detail only exposes review for an explicit request and closes request
   assert.match(detail, /review_revision/);
   assert.match(detail, /submitChangesAndContinue/);
   assert.match(detail, /reviewRevisionFlow/);
+  assert.match(detail, /review_request_id: reviewRequest\?\.id/);
+  assert.match(detail, /review_revision: reviewRequest\?\.revision/);
+  assert.match(detail, /request=\{reviewRequest\}/);
+  assert.match(detail, /reviewError\.status === 409/);
+  assert.match(detail, /<WorkFeedback feedback=\{detail\?\.feedback\}/);
 });

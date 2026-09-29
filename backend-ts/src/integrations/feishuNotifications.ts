@@ -1,5 +1,8 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
+import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
+import { readHumanFeedback } from "../domain/review/humanFeedback.ts";
+import { humanFeedbackNotificationText } from "../notifications/humanFeedbackPresentation.ts";
 import { listAgentSessions } from "../db/repositories/agentSessions.ts";
 import {
   getPiAction,
@@ -160,6 +163,11 @@ export function queueFeishuPiNeedsUserNotification(
   const notifyID = safeText(payload.action_id) || needsUserNotifyID(event, payload);
   if (notifyID === "") return { queued: false, reason: "missing_needs_user_id" };
   const issue = issueID > 0 ? getIssue(db, issueID) : null;
+  const decision = issue ? readIssueDecisionProjection(db, issueID) : null;
+  const reviewID = safeText(payload.review_request_id);
+  if (reviewID && (decision?.request?.id !== reviewID || decision.request.revision !== payload.review_revision
+    || decision.owner !== "human" || decision.request.status !== "open")) return { queued: false, reason: "stale_review_request" };
+  const feedbackText = issue ? humanFeedbackNotificationText(readHumanFeedback(db, issueID, decision!)) : "";
   const target = issue ? feishuTargetForIssue(db, issue.id) : null;
   const fallback = feishuTargetForConversation(db, safeText(event.conversationId));
   const projectID = issue?.project_id ?? safeText(event.projectId);
@@ -176,14 +184,15 @@ export function queueFeishuPiNeedsUserNotification(
   });
   if (!finalTarget) return { queued: false, reason: "missing_feishu_target" };
   const result = routeNotification(db, {
-    content: formatPiNeedsUserNotification({
+    content: [formatPiNeedsUserNotification({
       diagnosis: safeText(payload.diagnosis) || safeText(payload.reason),
       issueID: issueID || undefined,
       message: safeText(payload.message) || safeText(event.text),
       nextStep: safeText(payload.next_step) || safeText(payload.nextStep),
       provider: safeText(payload.provider),
       userFacingMessage: safeText(payload.user_facing_message)
-    }),
+    }), reviewID ? `请求 ${reviewID} · 版本 ${decision!.request!.revision}；可在当前 IM 对话回答。` : "", feedbackText].filter(Boolean).join("\n"),
+    deepLink: issue ? `#/work/${encodeURIComponent(`xw:work:issues:${issueID}`)}` : undefined,
     conversationID: finalTarget.threadID || finalTarget.chatID,
     idempotencyKey: `pi_needs_user:${notifyID}`,
     issueID,
@@ -193,7 +202,8 @@ export function queueFeishuPiNeedsUserNotification(
     payload: {
       action_id: notifyID,
       issue_id: issueID,
-      provider: safeText(payload.provider)
+      provider: safeText(payload.provider),
+      ...(reviewID ? { review_request_id: reviewID, review_revision: decision!.request!.revision } : {})
     },
     projectID,
     requiresUser: true,

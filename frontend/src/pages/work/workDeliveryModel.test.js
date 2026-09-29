@@ -111,3 +111,31 @@ test('failed checks and pending review remain actionable', () => {
   detail.handoff.review = { state: 'pending' };
   assert.equal(workDeliveryView({ detail, evidence }).nextAction, '完成交付评审');
 });
+
+test('local checks and a delivered credential never imply CI, merge or deployment', () => {
+  const detail = fixtureDetail();
+  detail.delivery_status.overall = 'delivered';
+  const evidence = [{ id: 'xw:evidence:test:809', kind: 'test', status: 'passed' }];
+  const view = workDeliveryView({ detail, evidence, work: { status: 'done' } });
+  assert.equal(view.milestones.find(row => row.key === 'ci').status, 'not_recorded');
+  assert.equal(view.milestones.find(row => row.key === 'merge').status, 'not_recorded');
+  assert.equal(view.milestones.find(row => row.key === 'deploy').status, 'not_recorded');
+  assert.ok(view.unverified.some(text => text.includes('CI')));
+  assert.ok(view.unverified.some(text => text.includes('部署')));
+});
+
+test('failed and blocked linked evidence stay in the remaining work list', () => {
+  const view = workDeliveryView({ detail: fixtureDetail(), evidence: [{ id: 'xw:evidence:test:809', kind: 'test', status: 'blocked' }] });
+  assert.ok(view.unverified.some(text => text.includes('blocked')));
+  assert.ok(view.unverified.some(text => text.includes('尚未加载')));
+  assert.equal(view.nextAction, '补齐等待中或受阻的验证');
+});
+
+test('delivery mode and references alone cannot assert a push or deployment', () => {
+  for (const mode of ['push', 'deploy', 'release']) {
+    const detail = fixtureDetail();
+    detail.handoff.delivery = { mode };
+    detail.delivery_status.overall = 'delivered';
+    assert.match(workDeliveryView({ detail }).deliverySummary, /需核对操作凭证/);
+  }
+});

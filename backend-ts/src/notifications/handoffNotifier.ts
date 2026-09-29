@@ -90,9 +90,8 @@ export function recordHandoffDelivery(input: RecordHandoffDeliveryInput): {
 export function buildHandoffNotificationSummary(handoff: HandoffRecord): HandoffNotificationSummary {
   const refs = deliveryRefs(handoff);
   const nextStep = handoffNextStep(handoff);
-  const fileLabel = `${handoff.changed_files.length} file${handoff.changed_files.length === 1 ? "" : "s"}`;
-  const evidenceLabel = `${handoff.evidence_ids.length} Evidence`;
-  const riskLabel = `${handoff.risks.length} risk${handoff.risks.length === 1 ? "" : "s"}`;
+  const deployed = handoff.delivery_actions.some(action => action.action === "deploy" && action.outcome === "succeeded")
+    && !handoff.delivery_actions.some(action => action.action === "deploy" && action.outcome !== "succeeded");
   return {
     ...refs,
     changed_file_count: handoff.changed_files.length,
@@ -104,7 +103,12 @@ export function buildHandoffNotificationSummary(handoff: HandoffRecord): Handoff
     revision: handoff.revision,
     risk_count: handoff.risks.length,
     status: handoff.status,
-    summary: `${titleCase(handoff.status)} · ${handoff.delivery.mode} · ${fileLabel} · ${evidenceLabel} · ${riskLabel} · Next: ${nextStep}`,
+    summary: [
+      `${titleCase(handoff.status)} · ${handoff.delivery.mode} · 改动 ${handoff.changed_files.length} 个文件`,
+      `关联 ${handoff.evidence_ids.length} 项 Evidence（不等于全部通过） · 风险 ${handoff.risks.length} 项`,
+      `未验证：当前凭证未提供 CI、合并结果；${deployed ? "已记录部署动作，环境验收请核对证据" : "部署未确认"}。`,
+      `下一步：${nextStep}。页面可查看改动、证据、风险及反馈；也可在当前 IM 对话反馈。`
+    ].join("\n"),
     work_id: handoff.work_id
   };
 }

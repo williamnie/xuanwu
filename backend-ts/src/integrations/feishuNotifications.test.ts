@@ -14,7 +14,7 @@ import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
-import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
+import { createHumanReviewRequest, reviewHumanIssue } from "../domain/review/humanReview.ts";
 import { createDefaultRouter } from "../http/server.ts";
 import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
 import { dispatchFeishuOutbox, type FeishuMessageSender } from "./feishuOutboxDispatcherCompat.ts";
@@ -42,6 +42,44 @@ function pendingRequiredHandoffReview(db: RunnerDatabase, issueID: number) {
 }
 
 describe("Feishu notification queue", () => {
+  test("feedback continuation gets its own version-bound receipt after the original start and dedupes replay", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issueID = linkedFeishuIssue(db);
+      updateIssue(db, issueID, { status: "in_progress" });
+      const run = createIssueRun(db, issueID);
+      db.sqlite.run("update issue_runs set status='succeeded', ended_at='2026-09-29' where id=?", [run.id]);
+      expect(queueFeishuIssueStatusNotification(db, issueID).queued).toBe(true);
+      await flushAgentCommunicationTestMessages(db);
+      updateIssue(db, issueID, { status: "needs_user" });
+      const request = createHumanReviewRequest(db, issueID, { question: "确认仅本地交付？", kind: "decision" });
+      await reviewHumanIssue(db, issueID, { action: "accept", comment: "同意", review_request_id: request.id, review_revision: request.revision });
+      expect(queueFeishuIssueStatusNotification(db, issueID, { suppressDirectStart: true }).queued).toBe(true);
+      await flushAgentCommunicationTestMessages(db);
+      expect(queueFeishuIssueStatusNotification(db, issueID).queued).toBe(false);
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+      expect(outbox).toHaveLength(2);
+      const receipt = outbox.find(item => item.content.includes("反馈："))!;
+      expect(receipt.content).toContain("已收到");
+      expect(receipt.content).toContain(request.id);
+      expect(receipt.content).toContain("版本 1");
+      expect(receipt.content).toContain("尚未记录反馈后的新 Run");
+      expect(receipt.content).not.toContain("已启动 executor session");
+      expect(receipt.content).toContain(`#/work/${encodeURIComponent(`xw:work:issues:${issueID}`)}`);
+    } finally { db.close(); }
+  });
+
+  test("old review notification cannot invite an answer to a superseded version", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issueID = linkedFeishuIssue(db);
+      updateIssue(db, issueID, { status: "needs_user" });
+      const old = createHumanReviewRequest(db, issueID, { question: "旧问题" });
+      createHumanReviewRequest(db, issueID, { question: "新问题" });
+      expect(queueFeishuPiNeedsUserNotification(db, { issueId: issueID, type: "pi.needs_user", payload: JSON.stringify({ action_id: old.id, review_request_id: old.id, review_revision: old.revision }) })).toEqual({ queued: false, reason: "stale_review_request" });
+      expect(listPiNotificationIntents(db, { issueId: issueID })).toHaveLength(0);
+    } finally { db.close(); }
+  });
   test("GitHub-managed human requests stay on GitHub unless Feishu was explicitly bound", async () => {
     const db = await fixtureDatabase();
     try {
@@ -229,7 +267,7 @@ describe("Feishu notification queue", () => {
         text: "玄武 Supervisor：#1「Needs human」没有完成。\n" +
           "原因是：backend contract missing\n" +
           "请查看 #1 的执行记录；补齐授权或信息后再重试。\n" +
-          "查看：/api/issues/1"
+          "查看：#/work/xw%3Awork%3Aissues%3A1"
       }]);
       expect(outbox[0]).toMatchObject({ feishu_message_id: "om_auto_sent_1", status: "sent" });
     } finally {
@@ -319,6 +357,7 @@ describe("Feishu notification queue", () => {
       });
       expect(content).toContain(`你正在审批：${question}`);
       expect(content).toContain("不包含：安装数据库；启动完整程序");
+      expect(content).toContain(`请求 ${request.id} · 版本 ${request.revision}`);
       expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
         expect.objectContaining({
           kind: "pi_needs_user",

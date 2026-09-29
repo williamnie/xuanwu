@@ -99,3 +99,15 @@ npm run build
 `handoffApi.test.ts` 使用真实临时 Git repository 执行 P05.03 local branch/commit service，再持久化 Git Evidence、
 Handoff、notification，并通过真实 Router 读取 list/detail；同时验证 branch 指向 commit、幂等 replay、通知深链和
 通知不含 changed path。前端 fixture 验证 link round-trip、copy summary、HTTP(S)-only open action 与 lazy route wiring。
+
+## 6. Work 交付与反馈展示（#977）
+
+Work 交付页集中展示改动摘要、未验证事项、风险和当前明确审批问题。关联 Evidence 可按 ID 展开决定性输出、退出码并下载已有 artifact；只在展开时请求明细，核对 Evidence ID 与 Work scope。CI、合并、部署分别展示：本地测试通过、Work done、Handoff ready/delivered 或交付类型引用均不能替代外部事实。当前 Handoff 不提供 CI/merge authority，因此显示“未记录”。
+
+`GET /api/works/:id` 增加只读 `feedback` 投影，读取既有 Review/Revision/PI 事件与 Issue Run，不增加数据库 schema、审批状态或消息状态。反馈保留原问题、Review ID/revision、原文、来源事件、原 Run、续跑 Run/Session/Turn。已预约但未确认启动、Run 已结束且 PI 尚未决定均显示“已收到”；已启动显示“执行中”；仅 Issue done 显示“完成（不代表已上线）”；新 open Review 显示“需补充”。失败、取消单独展示。读取最多 500 条相关审计事件，缺少可匹配请求时不推断反馈。
+
+页面仍调用原 human-review API。确认框固定提交打开时的请求快照；409 后刷新权威状态，不自动重试旧回答。待处理反馈在可见页面每 10 秒刷新，确认框打开时停止轮询；SSE transport 不变。
+
+IM 沿用 `pi_notification_intents` 与现有 outbox，反馈通知去重键绑定回答事件；同一回答重放不再次通知，也不被原任务启动通知吞掉。通知保留请求版本和 Work 深链，旧版本审批通知拒绝入队。交付通知保留计数型脱敏边界，明确关联 Evidence 不等于通过，实际内容在交付页核对。消息偏好、聚合和 Agent Communication Gateway 的既有策略继续有效。
+
+#977 只在临时 DB、Provider stub 与本地浏览器 fixture 中自动验证；真实 IM 发送、真实页面及主观视觉验收归 #980，不包含发布或部署。

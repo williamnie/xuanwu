@@ -26,7 +26,7 @@ export type LifecycleIntentResult = {
 
 export function coordinateIssueLifecycleNotification(
   db: RunnerDatabase,
-  input: { event: PiGuardianEvent; issue: Issue; now?: Date; target?: LifecycleTarget }
+  input: { event: PiGuardianEvent; issue: Issue; now?: Date; target?: LifecycleTarget; feedbackEventID?: number }
 ): LifecycleIntentResult {
   const item = latestRunGroupItemForIssue(db, input.issue.id);
   const runGroupID = item?.run_group_id ?? "";
@@ -39,7 +39,7 @@ export function coordinateIssueLifecycleNotification(
     conversation_id: input.event.conversation_id,
     decision,
     flush_after_at: decision === "aggregate" ? quietUntil : "",
-    idempotency_key: lifecycleIntentKey(input.issue, input.event, runGroupID, input.target?.connectorID ?? ""),
+    idempotency_key: lifecycleIntentKey(input.issue, input.event, runGroupID, input.target?.connectorID ?? "", input.feedbackEventID),
     issue_id: input.issue.id,
     kind: lifecycleKind(input.issue.status),
     payload_json: lifecycleIntentPayload(input.issue),
@@ -197,8 +197,8 @@ function lifecycleKind(status: string): string {
   return `issue_${status}`;
 }
 
-function lifecycleIntentKey(issue: Issue, event: PiGuardianEvent, runGroupID: string, connectorID: string): string {
-  const source = isStartStatus(issue.status) ? "start" : event.id;
+function lifecycleIntentKey(issue: Issue, event: PiGuardianEvent, runGroupID: string, connectorID: string, feedbackEventID?: number): string {
+  const source = isStartStatus(issue.status) ? (feedbackEventID ? `feedback:${feedbackEventID}` : "start") : event.id;
   return `${lifecycleKind(issue.status)}:${issue.project_id}:${issue.id}:${runGroupID}:${source}:${connectorID}`;
 }
 

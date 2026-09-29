@@ -1,5 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
+import { readHumanFeedback } from "../domain/review/humanFeedback.ts";
+import { humanFeedbackNotificationText } from "../notifications/humanFeedbackPresentation.ts";
 import { listExternalLinksByIssue } from "../db/repositories/externalLinks.ts";
 import {
   getPiRunGroup,
@@ -79,14 +81,15 @@ export function queueFeishuIssueStatusNotification(
     return { queued: false, reason: "issue_completion_watch_owns_target" };
   }
   const target = linkedTarget ?? providerTarget("feishu", fallbackLifecycleTarget(issue, options.config));
-  const intentResult = createLifecycleIntent(db, issue, event, target, options.now);
+  const feedback = readHumanFeedback(db, issue.id);
+  const intentResult = createLifecycleIntent(db, issue, event, target, options.now, feedback?.source_event_id);
   if (intentResult.decision === "suppress") {
     return { queued: false, reason: "run_group_lifecycle_suppressed" };
   }
   if (intentResult.decision === "aggregate") {
     return { queued: false, reason: "run_group_lifecycle_aggregated" };
   }
-  if (options.suppressDirectStart && isStartStatus(issue.status)) {
+  if (options.suppressDirectStart && isStartStatus(issue.status) && !feedback) {
     suppressLifecycleIntent(db, intentResult.intent, "runner_chat_start_summarized_by_pi");
     return { queued: false, reason: "runner_chat_start_summarized_by_pi" };
   }
@@ -120,10 +123,12 @@ function createLifecycleIntent(
   issue: Issue,
   event: ReturnType<typeof ingestIssueLifecycleEvent>,
   target: LifecycleTarget | null,
-  now?: Date
+  now?: Date,
+  feedbackEventID?: number
 ): LifecycleIntentResult {
   return coordinateIssueLifecycleNotification(db, {
     event,
+    feedbackEventID,
     issue,
     now,
     target: target ? {
@@ -224,10 +229,13 @@ function queueLifecycleIntent(
   target: LifecycleTarget,
   intentResult: LifecycleIntentResult
 ): QueueResult {
-  const notifyID = issueNotificationID(issue);
+  const feedback = readHumanFeedback(db, issue.id);
+  const notifyID = feedback ? `${issueNotificationID(issue)}:feedback:${feedback.source_event_id}` : issueNotificationID(issue);
   const queued = queueExistingNotificationIntent(db, {
-    content: formatIssueStatusNotification(issue),
-    deepLink: `/api/issues/${issue.id}`,
+    content: feedback
+      ? `#${issue.id} · ${humanFeedbackNotificationText(feedback)}`
+      : formatIssueStatusNotification(issue),
+    deepLink: `#/work/${encodeURIComponent(`xw:work:issues:${issue.id}`)}`,
     intent: intentResult.intent,
     notificationID: notifyID,
     notificationType: ISSUE_STATUS_NOTIFY_TYPE,

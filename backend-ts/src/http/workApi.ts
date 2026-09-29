@@ -22,6 +22,7 @@ import {
 } from "../domain/work/contracts.ts";
 import { queryWorkTimeline } from "../domain/work/timeline.ts";
 import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
+import { readHumanFeedback } from "../domain/review/humanFeedback.ts";
 import {
   READINESS_STAGES,
   declareIssueReadinessRequirements,
@@ -299,8 +300,10 @@ function listResponse(db: RunnerDatabase, request: Request): Record<string, unkn
 
 function detailResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
   const work = requireWork(db, workID(request));
+  const decision = readIssueDecisionProjection(db, workIDToIssueID(work.id));
   return {
-    decision: readIssueDecisionProjection(db, workIDToIssueID(work.id)),
+    decision,
+    feedback: readHumanFeedback(db, workIDToIssueID(work.id), decision),
     work
   };
 }

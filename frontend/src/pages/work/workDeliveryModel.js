@@ -80,6 +80,7 @@ export function workDeliveryView({ detail, evidence = [], language = 'zh-CN', wo
   const linkedEvidence = evidence.filter(item => linkedIDs.has(item?.id));
   const passedEvidence = linkedEvidence.filter(item => item?.status === 'passed').length;
   const failedEvidence = linkedEvidence.filter(item => item?.status === 'failed').length;
+  const unpassedEvidence = linkedEvidence.filter(item => item?.status !== 'passed').length;
   const risks = Array.isArray(handoff.risks) ? handoff.risks : [];
   const highRiskCount = risks.filter(risk => risk?.severity === 'high' || risk?.severity === 'critical').length;
   const requiredActions = Array.isArray(handoff.delivery_actions)
@@ -89,15 +90,19 @@ export function workDeliveryView({ detail, evidence = [], language = 'zh-CN', wo
   const milestones = deliveryMilestones(detail, evidence, language);
   const missingEvidence = linkedIDs.size - linkedEvidence.length;
   const reviewState = handoff.review?.state || 'not_requested';
+  const modeAction = { branch_commit: 'commit', push: 'push', draft_pr: 'pull_request', ready_pr: 'pull_request', deploy: 'deploy', release: 'release' }[mode];
+  const modeConfirmed = !modeAction || (handoff.delivery_actions || []).some(action => action.action === modeAction && actionOutcome(detail, action) === 'succeeded');
 
   return {
     changedFileCount: Array.isArray(handoff.changed_files) ? handoff.changed_files.length : 0,
     deliverySummary: status === 'failed' ? (english ? 'Delivery failed; inspect the recorded action results below.' : '交付操作失败，请检查下方各项实际结果。')
       : pendingActions.length > 0 || !['ready', 'delivered'].includes(status)
         ? (english ? 'Delivery is not complete. See the recorded results below.' : '交付尚未完成，请以下方实际操作结果为准。')
-        : mode === 'local_changes' && handoff.changed_files?.length === 0 ? (english ? 'Recorded verification and workspace snapshot; no code changes claimed.' : '已记录验证和工作区快照；没有声明代码改动。') : meta.summary,
+        : !modeConfirmed ? (english ? 'Only the delivery type and references are recorded; completion requires action evidence.' : '当前仅记录交付类型与引用；实际完成情况需核对操作凭证。')
+          : mode === 'local_changes' && handoff.changed_files?.length === 0 ? (english ? 'Recorded verification and workspace snapshot; no code changes claimed.' : '已记录验证和工作区快照；没有声明代码改动。') : meta.summary,
     changeSummary: handoff.summary || (english ? 'No change summary recorded' : '尚未记录改动摘要'),
     milestones,
+    unverified: deliveryUnverified(detail, evidence, language),
     missingEvidence,
     evidenceFailed: failedEvidence,
     evidenceLinked: linkedIDs.size,
@@ -106,7 +111,7 @@ export function workDeliveryView({ detail, evidence = [], language = 'zh-CN', wo
     highRiskCount,
     mode,
     modeLabel: mode === 'local_changes' && handoff.changed_files?.length === 0 ? (english ? 'Read-only check receipt' : '只读检查凭证') : meta.label,
-    nextAction: nextDeliveryAction({ failedEvidence, highRiskCount, language, linkedCount: linkedIDs.size, missingEvidence, pendingActions, reviewState, status, work }),
+    nextAction: nextDeliveryAction({ failedEvidence, unpassedEvidence, highRiskCount, language, linkedCount: linkedIDs.size, missingEvidence, pendingActions, reviewState, status, work }),
     riskCount: risks.length,
     status,
     statusLabel: (english ? STATUS_LABELS_EN : STATUS_LABELS)[status] || status,
@@ -177,11 +182,12 @@ function emptyDeliveryView(work, language) {
   };
 }
 
-function nextDeliveryAction({ failedEvidence, highRiskCount, language, linkedCount, missingEvidence, pendingActions, reviewState, status, work }) {
+function nextDeliveryAction({ failedEvidence, unpassedEvidence, highRiskCount, language, linkedCount, missingEvidence, pendingActions, reviewState, status, work }) {
   const english = language === 'en-US';
   if (status === 'failed') return english ? 'Inspect the delivery failure' : '检查交付失败原因';
   if (highRiskCount > 0) return english ? 'Inspect high-risk attribution issues' : '检查高风险归因问题';
   if (failedEvidence > 0) return english ? 'Resolve failed checks' : '处理未通过的验证';
+  if (unpassedEvidence > 0) return english ? 'Complete pending or blocked checks' : '补齐等待中或受阻的验证';
   if (missingEvidence > 0 || linkedCount === 0) return english ? 'Load or complete verification evidence' : '读取或补齐验证证据';
   if (reviewState === 'changes_requested') return english ? 'Address the review feedback' : '处理评审提出的修改要求';
   if (reviewState === 'pending') return english ? 'Review this delivery' : '完成交付评审';
@@ -212,7 +218,12 @@ export function deliveryMilestones(detail, evidence = [], language = 'zh-CN') {
   const statuses = english
     ? { succeeded: 'Confirmed', failed: 'Failed', pending: 'Pending', unknown: 'Not verified', not_recorded: 'Not recorded' }
     : { succeeded: '已确认', failed: '失败', pending: '待完成', unknown: '未验证', not_recorded: '未记录' };
-  const milestones = [{ key: 'checks', label: english ? 'Checks' : '验证', status: checkStatus }];
+  const milestones = [
+    { key: 'checks', label: english ? 'Recorded checks' : '已记录验证', status: checkStatus },
+    // Handoff 没有 CI/merge authority，不能从本地测试、PR 或 Work done 推断。
+    { key: 'ci', label: 'CI', status: 'not_recorded' },
+    { key: 'merge', label: english ? 'Merge' : '合并', status: 'not_recorded' },
+  ];
   for (const [key, zh, en] of [['commit', '提交', 'Commit'], ['push', '推送', 'Push'], ['deploy', '部署', 'Deployment'], ['release', '发布', 'Release']]) {
     const actions = (detail?.handoff?.delivery_actions || []).filter(action => action.action === key);
     const results = actions.map(action => actionOutcome(detail, action));
@@ -221,4 +232,19 @@ export function deliveryMilestones(detail, evidence = [], language = 'zh-CN') {
     milestones.push({ key, label: english ? en : zh, status });
   }
   return milestones.map(item => ({ ...item, value: statuses[item.status] }));
+}
+
+function deliveryUnverified(detail, evidence, language) {
+  const english = language === 'en-US';
+  const rows = deliveryEvidenceRows(detail, evidence, language);
+  const milestones = deliveryMilestones(detail, evidence, language);
+  return [
+    ...rows.filter(row => row.status !== 'passed').map(row => !row.loaded
+      ? (english ? `Evidence not loaded: ${row.id}` : `证据尚未加载：${row.id}`)
+      : `${row.kind} · ${row.status}：${row.summary}`),
+    ...(rows.length === 0 ? [english ? 'No verification evidence linked.' : '尚未关联验证证据。'] : []),
+    english ? 'This credential does not provide CI or merge results.' : '当前凭证未提供 CI、合并结果。',
+    ...(milestones.find(row => row.key === 'deploy')?.status !== 'succeeded'
+      ? [english ? 'Deployment is not confirmed.' : '部署尚未确认。'] : []),
+  ];
 }

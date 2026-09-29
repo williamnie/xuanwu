@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { workHumanReviewCopy } from './workHumanReviewCopy';
+import WorkFeedback from './work/WorkFeedback.jsx';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -61,6 +62,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   const [editorOpen, setEditorOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState('');
   const [reviewAction, setReviewAction] = useState('');
+  const [reviewRequest, setReviewRequest] = useState(null);
   const [reviewComment, setReviewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -129,6 +131,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     setEditorOpen(false);
     setPendingAction('');
     setReviewAction('');
+    setReviewRequest(null);
     setReviewComment('');
     loadDetail();
     loadOverview();
@@ -143,6 +146,16 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   const projectName = projects.find(project => project.id === work?.owner?.project_id)?.name || work?.owner?.project_id || 'Unscoped';
   const decision = detail?.decision || null;
   const availableActions = workAvailableActions(work?.status, decision);
+  const feedbackPending = ['received', 'executing'].includes(detail?.feedback?.status);
+  useEffect(() => {
+    if (!feedbackPending || reviewAction) return undefined;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void loadDetail({ silent: true });
+      void loadOverview();
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [feedbackPending, loadDetail, loadOverview, reviewAction]);
   const visibleTimeline = useMemo(() => filterTimelineItems(timeline, timelineKind), [timeline, timelineKind]);
   const customAcceptance = useMemo(
     () => (work?.acceptance?.criteria || []).filter(criterion => criterion.id !== DEFAULT_ACCEPTANCE_ID),
@@ -211,8 +224,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       await workApi.answerWorkHumanReview(work.id, {
         action: reviewAction,
         comment,
-        review_request_id: decision?.request?.id,
-        review_revision: decision?.request?.revision,
+        review_request_id: reviewRequest?.id,
+        review_revision: reviewRequest?.revision,
       });
       message.success(t('work.reviewSubmitted'));
       setReviewAction('');
@@ -221,9 +234,15 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       onWorkChanged?.();
     } catch (reviewError) {
       message.error(reviewError.message || t('work.reviewFailed'));
+      if (reviewError.status === 409) { setReviewAction(''); await refreshAll(); }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const selectReview = (action) => {
+    setReviewRequest(decision?.request || null);
+    setReviewAction(action);
   };
 
   if (loading && !work) return <WorkDetailLoading />;
@@ -288,7 +307,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
             <section className="work-detail-panel">
               <SectionHeading eyebrow={t('work.current')} title={t('work.nextStep')} />
               <WorkStateSummary status={work.status} decision={decision} />
-              {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={setReviewAction} request={decision.request} /> : null}
+              <WorkFeedback feedback={detail?.feedback} />
+              {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={selectReview} request={decision.request} /> : null}
             </section>
 
             <section className="work-detail-panel">
@@ -331,12 +351,14 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
         </div>
       ) : activeView === 'delivery' ? (
         <section className="work-detail-panel work-delivery-panel">
+          <WorkFeedback feedback={detail?.feedback} />
+          {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={selectReview} request={decision.request} /> : null}
           <WorkDeliveryView
             evidence={overview.evidence}
             handoffs={overview.handoffs}
             loading={overviewLoading}
             loadError={overviewErrors.evidence || overviewErrors.handoffs}
-            onRefresh={loadOverview}
+            onRefresh={refreshAll}
             onSelectionChange={setActiveDeliveryId}
             selectedHandoffId={activeDeliveryId}
             work={work}
@@ -365,7 +387,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       )}
 
       {editorOpen ? <WorkEditorDialog mode="edit" onClose={() => setEditorOpen(false)} onSaved={async () => { setEditorOpen(false); await refreshAll(); onWorkChanged?.(); }} projects={projects} work={work} /> : null}
-      {reviewAction ? <ReviewDialog action={reviewAction} busy={submitting} comment={reviewComment} onCancel={() => { setReviewAction(''); setReviewComment(''); }} onChange={setReviewComment} onConfirm={submitReview} request={decision?.request} /> : null}
+      {reviewAction ? <ReviewDialog action={reviewAction} busy={submitting} comment={reviewComment} onCancel={() => { setReviewAction(''); setReviewComment(''); }} onChange={setReviewComment} onConfirm={submitReview} request={reviewRequest} /> : null}
     </section>
   );
 }
@@ -444,6 +466,7 @@ function HumanReviewCard({ disabled, onSelect, request }) {
   return <article className="work-human-review-card">
     <span>{t('work.youAreApproving')}</span>
     <h3>{request.question}</h3>
+    <p className="work-review-request-ref"><code>{request.id} · v{request.revision}</code>{request.origin_run_id ? ` · ${request.origin_run_id}` : ''}</p>
     {request.recommendation ? <p><strong>{t('work.piRecommendation')}：</strong>{request.recommendation}</p> : null}
     {request.acceptance_summary?.length ? <div><strong>{t('work.acceptanceIncludes')}</strong><ul>{request.acceptance_summary.map(item => <li key={item}>{item}</li>)}</ul></div> : null}
     {request.excluded_scope?.length ? <div><strong>{t('work.notIncluded')}</strong><ul>{request.excluded_scope.map(item => <li key={item}>{item}</li>)}</ul></div> : null}

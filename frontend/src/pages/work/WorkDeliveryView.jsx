@@ -26,6 +26,7 @@ import {
   workDeliveryView,
 } from './workDeliveryModel.js';
 import { useI18n } from '../../i18n/context.js';
+import WorkDeliveryEvidence from './WorkDeliveryEvidence.jsx';
 
 export default function WorkDeliveryView({
   evidence = [],
@@ -43,6 +44,8 @@ export default function WorkDeliveryView({
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const selectedVersion = handoffs.find(item => item.id === selectedId)?.revision;
+  const selectedUpdatedAt = handoffs.find(item => item.id === selectedId)?.updated_at;
 
   useEffect(() => {
     const requested = selectedHandoffId || '';
@@ -75,7 +78,7 @@ export default function WorkDeliveryView({
         if (active) setDetailLoading(false);
       });
     return () => { active = false; };
-  }, [refreshVersion, selectedId, t, work?.id]);
+  }, [refreshVersion, selectedId, selectedVersion, selectedUpdatedAt, t, work?.id]);
 
 
   const view = useMemo(() => workDeliveryView({ detail, evidence, language, work }), [detail, evidence, language, work]);
@@ -146,8 +149,13 @@ export default function WorkDeliveryView({
         <div><CircleDot size={16} /><strong>{view.statusLabel} · {view.modeLabel}</strong></div>
         <p><strong>{language === 'en-US' ? 'What changed' : '改了什么'}</strong> · {view.changeSummary}</p>
         <p>{view.deliverySummary}</p>
+        <p>{language === 'en-US' ? 'Work completion and Handoff readiness do not confirm CI, merge, or deployment.' : 'Work 完成、凭证就绪不代表 CI 通过、已合并或已部署。'}</p>
         <div className="work-delivery-milestones" aria-label={language === 'en-US' ? 'Verified delivery facts' : '实际交付进度'}>
           {(view.milestones || []).map(item => <div key={item.key} data-status={item.status}><span>{item.label}</span><strong>{item.value}</strong></div>)}
+        </div>
+        <div className="work-delivery-unverified">
+          <strong>{language === 'en-US' ? 'Unverified / remaining work' : '未验证与剩余事项'}</strong>
+          <ul>{(view.unverified || []).map(item => <li key={item}>{item}</li>)}</ul>
         </div>
         <p><strong>{language === 'en-US' ? 'Your next step' : '需要你做什么'}</strong> · {view.nextAction}</p>
         <div className="work-delivery-conclusion-counts">
@@ -195,6 +203,7 @@ export default function WorkDeliveryView({
                       <strong>{evidenceKindLabel(row.kind, t)}</strong>
                       <p>{row.summary}</p>
                       <span>{row.observedAt ? formatTime(row.observedAt, language) : t('delivery.summaryNotLoaded')}</span>
+                      <WorkDeliveryEvidence id={row.id} workId={work?.id || detail?.handoff?.work_id} />
                     </div>
                   </article>
                 ))}
