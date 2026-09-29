@@ -27,6 +27,7 @@ import { prepareAcceptedDelivery, ACCEPTED_DELIVERY_SOURCE } from "../domain/han
 import { recordEvidenceRecords } from "../db/repositories/evidence.ts";
 import { recordHandoffDelivery } from "../notifications/handoffNotifier.ts";
 import { githubWorkAcceptanceProblem, githubWorkExecutionContext } from "../integrations/github/issueWorkflow.ts";
+import { assertPriorEvidenceReferences, assertPriorExecutionEvidenceFresh, assertPriorExecutionEvidenceLedgerFresh } from "../domain/acceptance/priorExecutionEvidence.ts";
 
 export const PI_ACCEPTANCE_DECISION_EVENT = "issue.pi_acceptance_decision.v1";
 export const PI_ACCEPTANCE_APPLIED_EVENT = "issue.pi_acceptance_applied.v1";
@@ -53,7 +54,9 @@ export async function applyPiAcceptanceDecision(
     return replay;
   }
   assertCurrentCard(runtime.database, card);
+  assertPriorEvidenceReferences(card, decision);
   let effectiveDecision = honorAcceptedDeliveryReview(runtime.database, card, decision);
+  if (effectiveDecision.decision === "accept") await assertPriorExecutionEvidenceFresh(runtime.database, card);
   if (effectiveDecision.decision === "accept" && !(card.human_review?.action === "accept" && card.human_review.request.kind === "acceptance")) {
     const problem = githubWorkAcceptanceProblem(runtime.database, card);
     if (problem) {
@@ -68,7 +71,7 @@ export async function applyPiAcceptanceDecision(
       effectiveDecision = { ...effectiveDecision,
         decision: runIDs.size >= 2 ? "needs_user" : "continue_same_session", human_review_kind: "decision",
         rationale: runIDs.size >= 2 ? `交付报告与运行事实连续无法关联，已停止重复执行；需要检查报告或集成观测数据。${problem}` : problem,
-        follow_up_prompt: `${problem} 已有证据仍可引用；不需要仅为报告格式重复测试。`, unmet_requirements: [problem] };
+        follow_up_prompt: `${problem} 仅 prior_evidence 中 reusable 且输入/环境覆盖范围已确认的原始命令可复用；若只是报告字段缺失，不重复执行这些命令。revalidation_required 按 reasons 选择必要补验；revalidation_commands 是来源索引，不得自动重放修改或外部副作用。`, unmet_requirements: [problem] };
     }
   }
   if (effectiveDecision.decision === "accept") return acceptIssue(runtime, card, effectiveDecision);
@@ -177,10 +180,12 @@ async function acceptIssue(
   const db = runtime.database;
   // Git 只读观察在事务外准备；事务内再次校验版本，原子保存终态与交付账本。
   const delivery = await prepareAcceptedDelivery(db, card, decision);
+  await assertPriorExecutionEvidenceFresh(db, card);
   const result = db.transaction(() => {
     const current = mustGetIssue(db, card.issue.id);
     if (current.status === "done" && applied(db, current.id, card.fingerprint)) return { issue: current, notification: null };
     assertCurrentCard(db, card);
+    assertPriorExecutionEvidenceLedgerFresh(db, card);
     recordDecision(db, card, decision);
     recordIssueCompletionCard(db, card, ACCEPTED_DELIVERY_SOURCE);
     recordEvidenceRecords(db, card.issue.id, delivery.evidence, { recorded_at: delivery.recorded_at, source: ACCEPTED_DELIVERY_SOURCE });

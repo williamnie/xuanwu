@@ -13,6 +13,8 @@ import { captureGitWorkspaceBaseline, runGit, withGitWorkspaceObservation } from
 import type { CapturedGitWorkspaceBaseline } from "../evidence/runGitWorkspaceBaseline.ts";
 import { makeRunAttemptID } from "../run/contracts.ts";
 import { projectIssueAsWork } from "../work/issueAdapter.ts";
+import { recordExecutionEvidenceContext } from "./executionEvidenceContext.ts";
+import { buildPriorExecutionEvidence, type PriorExecutionEvidence } from "./priorExecutionEvidence.ts";
 
 export const COMPLETION_CARD_CONTRACT = "xw.issue-completion-card.v1" as const;
 export const COMPLETION_CARD_EVENT_TYPE = "issue.completion_card.v1";
@@ -21,6 +23,8 @@ export const COMPLETION_GIT_OBSERVATION_EVENT_TYPE = "issue.completion_git_obser
 export const TERMINAL_COMMAND_OBSERVATION_CONTRACT = "xw.all-terminal-command-observations.v1" as const;
 
 export type CompletionCardCommand = {
+  source_event_ref?: string;
+  source_run_id?: string;
   command: string;
   cwd: string;
   duration_ms: number;
@@ -122,6 +126,7 @@ export type CompletionCardHumanReview = {
 };
 
 export type CompletionCard = {
+  prior_evidence?: PriorExecutionEvidence;
   acceptance: {
     criteria: Array<{ description: string; id: string; required: boolean }>;
   };
@@ -237,8 +242,9 @@ export async function buildIssueCompletionCard(
     session,
     warnings
   };
-  const fingerprint = createHash("sha256").update(stableJson(body)).digest("hex");
-  return { ...body, fingerprint, generated_at: (options.now ?? new Date()).toISOString() };
+  const facts = { ...body, prior_evidence: await buildPriorExecutionEvidence(db, body) };
+  const fingerprint = createHash("sha256").update(stableJson(facts)).digest("hex");
+  return { ...facts, fingerprint, generated_at: (options.now ?? new Date()).toISOString() };
 }
 
 export function recordIssueCompletionCard(db: RunnerDatabase, card: CompletionCard, source: string): void {
@@ -323,6 +329,7 @@ export async function recordCompletionGitObservation(
   recordIssueEvent(db, input.issue_id, COMPLETION_GIT_OBSERVATION_EVENT_TYPE, {
     observation: { ...observation, contract: COMPLETION_GIT_OBSERVATION_CONTRACT, run_id: input.run.id }
   });
+  recordExecutionEvidenceContext(db, input.issue_id, input.run.id, "terminal");
 }
 
 function commandsFromIssueLogs(
@@ -336,7 +343,11 @@ function commandsFromIssueLogs(
     if (!eventBelongsToRun(payload, event.created_at, run)) continue;
     const item = commandItemFromIssueLog(payload);
     const observation = commandObservation(item, event.created_at, "issue_log");
-    if (observation) output.push(observation);
+    if (observation) {
+      const correlatedRun = cleanString(objectValue(payload.runtime_evidence_correlation).issue_run_id);
+      output.push({ ...observation, ...(correlatedRun === run.id
+        ? { source_event_ref: `event:${event.id}`, source_run_id: run.id } : {}) });
+    }
   }
   return output;
 }

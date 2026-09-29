@@ -1,3 +1,6 @@
+import { sameObservedCommand } from "../../domain/acceptance/observedCommand.ts";
+import { assertPriorExecutionEvidenceLedgerFresh } from "../../domain/acceptance/priorExecutionEvidence.ts";
+export { sameObservedCommand } from "../../domain/acceptance/observedCommand.ts";
 import type { RunnerDatabase } from "../../db/database.ts";
 import { createIssue } from "../../db/repositories/issueCreate.ts";
 import { recordIssueEvent, listIssueEvents } from "../../db/repositories/issueEvents.ts";
@@ -68,53 +71,18 @@ export function githubWorkAcceptanceProblem(db: RunnerDatabase, card: Completion
   if (!report) return `请修正最终回复中 ${GITHUB_REPORT_MARKER} 后的单行 JSON 报告：source_revision=${record.work_source_revision}，stage=${record.stage}；修复阶段 result 只能为 fixed。reproduction.status 只能为 reproduced 或 not_reproduced（不能使用 verified_fixed 等其他值），并需包含 steps 数组、expected 和 actual 字符串；expected_basis、evidence_commands、regression_commands 均为字符串数组。已有 JSON 不代表字段值符合契约，请逐项核对，不要原样重复无效报告。`;
   // source 后续变化由同步器重新调查；原 Work 只验收它被分配的版本。
   if (report.source_revision !== record.work_source_revision || report.stage !== record.stage) return "调查报告引用了错误的源版本或执行阶段，请使用当前 Work 绑定的版本。";
-  const history = priorWorkCards(db, card);
-  const observed = [card, ...history].flatMap(item => item.commands.items);
-  if (!report.evidence_commands.length || report.evidence_commands.some(command => !observed.some(item => sameObservedCommand(item.command, command)))) return "报告的 evidence_commands 必须引用本 Work 实际执行的完整命令，至少一条；不需要添加 Provider 的 shell 包装，也不可编造。";
+  try { assertPriorExecutionEvidenceLedgerFresh(db, card); }
+  catch { return "前序执行证据条件或撤回记录已变化，必须重新生成 completion card 并按失效原因补验。"; }
+  const history = card.prior_evidence?.items.filter(item => item.status === "reusable") ?? [];
+  const observed = [...card.commands.items, ...history.flatMap(item => item.commands)];
+  const revalidation = (card.prior_evidence?.items.filter(item => item.status === "revalidation_required") ?? []).slice(0, 3)
+    .map(item => `${item.source_run_id}: ${item.reasons.join(", ")}; 来源命令: ${item.revalidation_commands.join("; ").slice(0, 600)}`).join(" | ");
+  if (!report.evidence_commands.length || report.evidence_commands.some(command => !observed.some(item => sameObservedCommand(item.command, command)))) return `报告的 evidence_commands 必须引用本 Work 实际执行的完整命令，至少一条；不需要添加 Provider 的 shell 包装，也不可编造。${revalidation ? ` 前序证据需重新验证：${revalidation}` : ""}`;
   if (["bug", "as_designed", "fixed"].includes(report.result) && !report.expected_basis.length) return "必须提供预期行为的文档、验收标准或已确认决策依据；现有代码行为不是设计依据。";
   if (["bug", "fixed"].includes(report.result) && report.reproduction.status !== "reproduced") return "未复现的问题不能标记为已确认 Bug 或已修复。";
-  const verifiedAtCurrentSnapshot = [card, ...history.filter(previous => sameTerminalSnapshot(previous, card))].flatMap(item => item.commands.items);
   if (report.stage === "repair" && (!report.regression_commands.length || report.regression_commands.some(command =>
-    !verifiedAtCurrentSnapshot.some(item => sameObservedCommand(item.command, command) && item.exit_code === 0 && item.status === "completed")))) return "修复报告必须引用当前文件快照上实际成功的 regression_commands，并覆盖原复现与相关回归。";
+    !observed.some(item => sameObservedCommand(item.command, command) && item.exit_code === 0 && item.status === "completed")))) return "修复报告必须引用当前文件快照上实际成功的 regression_commands，并覆盖原复现与相关回归。";
   return "";
-}
-
-function priorWorkCards(db: RunnerDatabase, current: CompletionCard): CompletionCard[] {
-  return listIssueEvents(db, current.issue.id, { types: [COMPLETION_CARD_EVENT_TYPE], limit: 8 }).flatMap(event => {
-    try {
-      const card = JSON.parse(event.payload).card;
-      assertCompletionCardIntegrity(card);
-      return card.issue.id === current.issue.id && card.run.id !== current.run.id ? [card] : [];
-    } catch { return []; }
-  });
-}
-function sameTerminalSnapshot(left: CompletionCard, right: CompletionCard): boolean {
-  const hash = (card: CompletionCard) => card.git.workspace_snapshot_ref?.split(":").at(-1) ?? "";
-  return left.git.source === "terminal_observation" && right.git.source === "terminal_observation" &&
-    left.git.final_revision === right.git.final_revision && !!hash(left) && hash(left) === hash(right);
-}
-
-/** Provider 可把命令记录为 /bin/zsh -lc 'script'；只去掉这层 argv 包装，不模糊匹配命令内容。 */
-export function sameObservedCommand(observed: string, reported: string): boolean {
-  const unwrap = (value: string): string => {
-    const match = /^(?:\/(?:[^\s/]+\/)*|)(?:bash|zsh|sh|dash)\s+-(?:lc|c)\s+([\s\S]+)$/.exec(value.trim());
-    if (!match) return value.trim();
-    const encoded = match[1]!;
-    let quote = ""; let output = "";
-    for (let i = 0; i < encoded.length; i++) {
-      const char = encoded[i]!;
-      if (!quote && /\s|[;&|<>()[\]`$]/.test(char)) return value.trim();
-      if (!quote && (char === "'" || char === '"')) { quote = char; continue; }
-      if (quote && char === quote) { quote = ""; continue; }
-      if (char === "\\" && quote !== "'") {
-        const next = encoded[++i];
-        if (next === undefined) return value.trim();
-        output += quote === '"' && !/[\\"$`\n]/.test(next) ? `\\${next}` : next === "\n" ? "" : next;
-      } else output += char;
-    }
-    return quote ? value.trim() : output.trim();
-  };
-  return unwrap(observed) === unwrap(reported);
 }
 
 export function readAcceptedGitHubReport(db: RunnerDatabase, record: GitHubIssueCase): { report: GitHubWorkReport; card: CompletionCard } | null {

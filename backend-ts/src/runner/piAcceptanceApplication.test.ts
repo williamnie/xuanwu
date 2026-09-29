@@ -1,4 +1,8 @@
 import { setMemoryReflectionEnabled } from "../pi/memoryReflectionQueue.ts";
+import { evidenceReuseFixture, reuseReport } from "../domain/acceptance/evidenceReuseTestSupport.ts";
+import { EXECUTION_EVIDENCE_REVOKED_EVENT } from "../domain/acceptance/priorExecutionEvidence.ts";
+import { writeFile } from "node:fs/promises";
+import { githubWorkAcceptanceProblem } from "../integrations/github/issueWorkflow.ts";
 import { seedMemoryExperience } from "../pi/memoryExperienceTestFixtures.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -35,6 +39,84 @@ afterEach(async () => {
 });
 
 describe("PI acceptance decision application", () => {
+  for (const stage of ["investigate", "repair"] as const) test(`accepts ${stage} report corrections using matched prior commands`, async () => {
+    const f = await evidenceReuseFixture();
+    try {
+      f.bindGitHub(stage);
+      await f.run([{ command: "bun test", exit: 0 }], "missing report fields");
+      const card = await f.run([], reuseReport(stage));
+      expect((await applyPiAcceptanceDecision({ database: f.db }, card, decision("accept"))).status).toBe("done");
+      expect(listIssueRuns(f.db, f.issue.id)).toHaveLength(2);
+      expect(f.db.sqlite.query("select count(*) n from pi_memory_items").get()).toEqual({ n: 0 });
+    } finally { await f.close(); }
+  });
+
+  for (const change of ["workspace", "revocation"] as const) test(`rejects a formerly reusable card after ${change}`, async () => {
+    const f = await evidenceReuseFixture();
+    try {
+      const source = await f.run([{ command: "bun test", exit: 0 }]);
+      const card = await f.run();
+      expect(card.prior_evidence?.items[0]?.status).toBe("reusable");
+      if (change === "workspace") await writeFile(join(f.cwd, "input.txt"), "changed after card");
+      else recordIssueEvent(f.db, f.issue.id, EXECUTION_EVIDENCE_REVOKED_EVENT,
+        { source_card_fingerprint: source.fingerprint, reason: "撤回错误输入的观察" });
+      await expect(applyPiAcceptanceDecision({ database: f.db }, card, decision("accept"))).rejects.toThrow("Prior execution evidence changed");
+      expect(getIssue(f.db, f.issue.id)?.status).toBe("in_progress");
+      expect(f.events().some(event => event.type === "issue.pi_acceptance_applied.v1")).toBe(false);
+    } finally { await f.close(); }
+  });
+
+  test("stale prior green cannot satisfy a repair report with no new command", async () => {
+    const f = await evidenceReuseFixture();
+    try {
+      f.bindGitHub("repair");
+      await f.run([{ command: "bun test", exit: 0 }]);
+      await writeFile(join(f.cwd, "input.txt"), "new implementation");
+      const card = await f.run([], reuseReport("repair"));
+      expect((await applyPiAcceptanceDecision({ database: f.db }, card, decision("accept"))).status).not.toBe("done");
+      expect(f.events().find(event => event.type === "github.acceptance_contract_failed.v1")?.payload).toContain("code_snapshot_changed");
+    } finally { await f.close(); }
+  });
+
+  test("non-GitHub acceptance cannot cite an invalid source or label history as new progress", async () => {
+    const f = await evidenceReuseFixture();
+    try {
+      const source = await f.run([{ command: "bun test", exit: 0 }]);
+      const card = await f.run();
+      const progress = decision("accept");
+      progress.progress.evidence_refs = [`run:${source.run.id}`];
+      await expect(applyPiAcceptanceDecision({ database: f.db }, card, progress)).rejects.toThrow("not current Run progress");
+      recordIssueEvent(f.db, f.issue.id, EXECUTION_EVIDENCE_REVOKED_EVENT, { source_run_id: source.run.id, reason: "撤回" });
+      const invalid = await buildIssueCompletionCard(f.db, f.issue.id);
+      const accept = decision("accept");
+      accept.evidence_refs = [`run:${source.run.id}`];
+      await expect(applyPiAcceptanceDecision({ database: f.db }, invalid, accept)).rejects.toThrow("requires revalidation");
+    } finally { await f.close(); }
+  });
+
+  test("fresh validation satisfies a changed snapshot without inheriting the old green", async () => {
+    const f = await evidenceReuseFixture();
+    try {
+      f.bindGitHub("repair");
+      await f.run([{ command: "bun test", exit: 0 }]);
+      await writeFile(join(f.cwd, "input.txt"), "new code");
+      const fresh = await f.run([{ command: "bun test", exit: 0 }], reuseReport("repair"));
+      expect(fresh.prior_evidence?.items[0]?.status).toBe("revalidation_required");
+      expect((await applyPiAcceptanceDecision({ database: f.db }, fresh, decision("accept"))).status).toBe("done");
+    } finally { await f.close(); }
+  });
+
+  test("report reader rechecks revocation instead of trusting a stored reusable projection", async () => {
+    const f = await evidenceReuseFixture();
+    try {
+      f.bindGitHub();
+      const source = await f.run([{ command: "bun test", exit: 0 }]);
+      const card = await f.run([], reuseReport());
+      expect(githubWorkAcceptanceProblem(f.db, card)).toBe("");
+      recordIssueEvent(f.db, f.issue.id, EXECUTION_EVIDENCE_REVOKED_EVENT, { source_run_id: source.run.id, reason: "输入错误" });
+      expect(githubWorkAcceptanceProblem(f.db, card)).toContain("撤回记录已变化");
+    } finally { await f.close(); }
+  });
   test("a new human decision resets the GitHub report retry budget once without accepting an invalid report", async () => {
     const db = await fixture(); const provider = new ContinuingProvider();
     try {

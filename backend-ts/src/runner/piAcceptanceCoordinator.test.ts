@@ -1,4 +1,5 @@
 import { setMemoryReflectionEnabled } from "../pi/memoryReflectionQueue.ts";
+import { evidenceReuseFixture, reuseReport } from "../domain/acceptance/evidenceReuseTestSupport.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -31,6 +32,24 @@ afterEach(async () => {
 });
 
 describe("issue-scoped PI acceptance coordinator", () => {
+  for (const changed of [false, true]) test(`coordinator exposes the cross-Run chain and ${changed ? "rejects stale proof" : "avoids redundant execution"}`, async () => {
+    const f = await evidenceReuseFixture();
+    try {
+      f.bindGitHub();
+      const source = await f.run([{ command: "bun test", exit: 0 }]);
+      if (changed) f.db.sqlite.run("update projects set sandbox='changed' where id='reuse'");
+      await f.run([], reuseReport());
+      const result = await runPiAcceptanceCoordinatorOnce({ database: f.db, decideIssueAcceptance: async card => {
+        expect(card.commands.total).toBe(0);
+        expect(card.prior_evidence?.items[0]).toMatchObject({ source_run_id: source.run.id,
+          status: changed ? "revalidation_required" : "reusable" });
+        return acceptance("accept");
+      } });
+      expect(result.failed).toBe(0);
+      expect(getIssue(f.db, f.issue.id)?.status === "done").toBe(!changed);
+      expect(listIssueRuns(f.db, f.issue.id)).toHaveLength(2);
+    } finally { await f.close(); }
+  });
   test("reconciles post-acceptance delivery events without invoking PI again", async () => {
     const db = await fixture();
     try {
