@@ -983,7 +983,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 87 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 90 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
@@ -1042,7 +1042,7 @@ describe("Bun SQLite database connection", () => {
 
     const upgraded = await openDatabase({ stateDir });
     try {
-      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 87 });
+      expect(upgraded.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 90 });
       expect(tableNames(upgraded)).toEqual(expect.arrayContaining([
         "im_conversation_state",
         "im_interaction_bindings",

@@ -1,40 +1,37 @@
 import type { RunnerDatabase } from "../../database.ts";
-import { listContextBundles } from "../contextBundles.ts";
-import { listExternalEvents } from "../externalEvents.ts";
-import { getAttentionInboxItem, listAttentionInboxItems, listIntakeRuns } from "../intakeRuns.ts";
-import { listImReplyDrafts, listSyncOutbox } from "../imReplyOutbox.ts";
-import { getIssue, listIssues } from "../issues.ts";
-import { getActionProposal, listActionProposals, type ActionProposalRecord } from "./actionProposals.ts";
-import { listPiActionEvents, listPiActions, type PiAction } from "./actions.ts";
+import { getAttentionInboxItem } from "../intakeRuns.ts";
+import { getIssue } from "../issues.ts";
+import { getActionProposal, type ActionProposalRecord } from "./actionProposals.ts";
+import { listPiActivityActionEvents, listPiActivityActions, type PiAction } from "./actions.ts";
 import { emptyActivityScope, type PiActivityFilter, type PiActivityScope } from "./activityTimelineTypes.ts";
 import { addActivityRef, clean, DEFAULT_ACTIVITY_LIMIT, externalEventIds, positiveNumber, refNumber, textRefs } from "./activityTimelineSupport.ts";
+import { hydrateActivityEntities, loadActivityEntities } from "./activityTimelineReads.ts";
 
 export type PiActivityRows = ReturnType<typeof loadPiActivityRows>;
 
 export function loadPiActivityRows(db: RunnerDatabase, filter: PiActivityFilter) {
   const source = clean(filter.source);
   return {
-    actions: listPiActions(db),
-    bundles: listContextBundles(db, source, 500),
-    inboxItems: listAttentionInboxItems(db, { limit: 500, source }),
-    intakeRuns: listIntakeRuns(db, { limit: 500 }),
-    issues: filter.issueId ? [getIssue(db, filter.issueId)].filter(Boolean) : listIssues(db),
-    proposals: listActionProposals(db),
-    rawEvents: listExternalEvents(db, { limit: 500, source }),
-    replies: listImReplyDrafts(db, { source }),
-    syncOutbox: listSyncOutbox(db, { source })
+    ...loadActivityEntities(db, filter),
+    actions: filter.inboxItemId || filter.proposalId ? [] : listPiActivityActions(db, {
+      conversationId: clean(filter.conversationId),
+      issueIds: filter.issueId ? [filter.issueId] : [],
+      since: filter.since, source, until: filter.until
+    })
   };
 }
 
 export function buildPiActivityScope(db: RunnerDatabase, rows: PiActivityRows, filter: PiActivityFilter): PiActivityScope {
   const scope = emptyActivityScope(clean(filter.source));
+  scope.since = filter.since;
+  scope.until = filter.until;
   if (!hasNarrowFilter(filter)) seedRecent(rows, scope);
   if (scope.source !== "") seedSource(rows, scope);
   if (filter.conversationId) seedConversation(db, rows, scope, filter.conversationId);
   if (filter.inboxItemId) addInbox(scope, getAttentionInboxItem(db, filter.inboxItemId));
   if (filter.proposalId) addProposal(scope, getActionProposal(db, filter.proposalId));
   if (filter.issueId) addIssue(scope, getIssue(db, filter.issueId));
-  expandScope(rows, scope);
+  expandScope(db, rows, scope);
   return scope;
 }
 
@@ -48,6 +45,7 @@ function seedRecent(rows: PiActivityRows, scope: PiActivityScope): void {
 }
 
 function seedSource(rows: PiActivityRows, scope: PiActivityScope): void {
+  for (const action of rows.actions.filter((row) => row.source === scope.source)) scope.actionIds.add(action.id);
   for (const event of rows.rawEvents.filter((row) => row.source === scope.source)) scope.rawEventIds.add(event.id);
   for (const bundle of rows.bundles.filter((row) => row.source === scope.source)) scope.bundleIds.add(bundle.id);
   for (const item of rows.inboxItems.filter((row) => row.source === scope.source)) scope.inboxIds.add(item.id);
@@ -61,24 +59,41 @@ function seedConversation(db: RunnerDatabase, rows: PiActivityRows, scope: PiAct
     scope.actionIds.add(action.id);
     addPossibleIssue(scope, action.issue_id);
   }
-  for (const event of listPiActionEvents(db, { conversationId: id })) {
+  for (const event of listPiActivityActionEvents(db, { conversationId: id, since: scope.since, until: scope.until })) {
     scope.actionIds.add(event.action_id);
     addPossibleIssue(scope, event.issue_id);
   }
 }
 
-function expandScope(rows: PiActivityRows, scope: PiActivityScope): void {
+function expandScope(db: RunnerDatabase, rows: PiActivityRows, scope: PiActivityScope): void {
   for (let pass = 0; pass < 5; pass += 1) {
     const before = scopeSize(scope);
+    hydrateActivityEntities(db, rows, scope);
     for (const event of rows.rawEvents) if (scope.rawEventIds.has(event.id) || event.source === scope.source) scope.rawEventIds.add(event.id);
     for (const bundle of rows.bundles) expandBundle(scope, bundle);
     for (const run of rows.intakeRuns) expandIntakeRun(scope, run);
     for (const item of rows.inboxItems) expandInboxItem(scope, item);
     for (const proposal of rows.proposals) expandProposal(scope, proposal);
+    hydrateScopeActions(db, rows, scope);
     for (const action of rows.actions) expandAction(scope, action);
     for (const issue of rows.issues) if (issue) expandIssue(scope, issue);
     for (const reply of rows.replies) expandReply(scope, reply);
     if (scopeSize(scope) === before) return;
+  }
+}
+
+function hydrateScopeActions(db: RunnerDatabase, rows: PiActivityRows, scope: PiActivityScope): void {
+  if (scope.actionIds.size === 0 && scope.issueIds.size === 0) return;
+  const loaded = new Set(rows.actions.map(action => action.id));
+  const missing = [...scope.actionIds].filter(id => !loaded.has(id)).slice(0, 500);
+  const related = [
+    ...(missing.length ? listPiActivityActions(db, { actionIds: missing }) : []),
+    ...(scope.issueIds.size ? listPiActivityActions(db, { issueIds: [...scope.issueIds].slice(0, 500) }) : [])
+  ];
+  for (const action of related) {
+    if (loaded.has(action.id)) continue;
+    loaded.add(action.id);
+    rows.actions.push(action);
   }
 }
 

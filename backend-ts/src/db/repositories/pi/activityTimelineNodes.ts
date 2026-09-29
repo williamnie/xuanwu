@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../../database.ts";
-import { queryEventSummaries } from "../../../events/eventSummaryQuery.ts";
-import { listIssueRuns } from "../issues.ts";
-import { listPiActionEvents, type PiAction, type PiActionEvent } from "./actions.ts";
+import { listEventSummaryProjectionForRead } from "../compactEventSummaryProjection.ts";
+import { listActivityIssueRuns } from "./activityTimelineReads.ts";
+import { listPiActivityActionEvents, type PiAction, type PiActionEvent } from "./actions.ts";
 import type { ActionProposalRecord } from "./actionProposals.ts";
 import type { PiActivityRows } from "./activityTimelineScope.ts";
 import type { PiActivityNode, PiActivityScope } from "./activityTimelineTypes.ts";
@@ -19,7 +19,7 @@ export function buildPiActivityNodes(db: RunnerDatabase, rows: PiActivityRows, s
   for (const event of scopedActionEvents(db, scope)) nodes.push(actionEventNode(event));
   for (const proposal of rows.proposals) if (scope.proposalIds.has(proposal.id)) nodes.push(proposalNode(proposal));
   for (const issue of rows.issues) if (issue && scope.issueIds.has(issue.id)) nodes.push(issueNode(issue));
-  for (const issueID of scope.issueIds) nodes.push(...issueChildNodes(db, issueID));
+  for (const issueID of scope.issueIds) nodes.push(...issueChildNodes(db, issueID, scope));
   for (const reply of rows.replies) if (replyIncluded(scope, reply)) nodes.push(replyNode(reply));
   for (const outbox of rows.syncOutbox) if (scope.actionIds.has(outbox.approval_action_id)) nodes.push(outboxNode(outbox));
   return dedupeBy(nodes, (item) => item.id);
@@ -99,12 +99,12 @@ function issueNode(issue: NonNullable<PiActivityRows["issues"][number]>): PiActi
   }, { issue_id: issue.id, project_id: issue.project_id, source_turn_id: issue.source_turn_id });
 }
 
-function issueChildNodes(db: RunnerDatabase, issueID: number): PiActivityNode[] {
-  const events = safeIssueEvents(db, issueID).map((event) => node("issue_event", `issue_event:${event.id}`, event.created_at, event.type, event.type, event.payload, {
+function issueChildNodes(db: RunnerDatabase, issueID: number, scope: PiActivityScope): PiActivityNode[] {
+  const events = safeIssueEvents(db, issueID, scope).map((event) => node("issue_event", `issue_event:${event.id}`, event.created_at, event.type, event.type, event.payload, {
     issue: `/api/issues/${issueID}`,
     events: `/api/issues/${issueID}/events`
   }, { issue_event_id: event.id, issue_id: issueID }, [`issue:${issueID}`]));
-  const runs = listIssueRuns(db, issueID).map((run) => node("session", `issue_run:${run.id}`, run.ended_at || run.started_at, run.status, `Session ${run.provider}:${run.provider_session_id || run.id}`, run.error || run.exit_reason || run.selection_reason, {
+  const runs = listActivityIssueRuns(db, issueID, scope).map((run) => node("session", `issue_run:${run.id}`, run.ended_at || run.started_at, run.status, `Session ${run.provider}:${run.provider_session_id || run.id}`, run.error || run.exit_reason || run.selection_reason, {
     issue: `/api/issues/${issueID}`,
     runs: `/api/issues/${issueID}/runs`
   }, { issue_id: issueID, provider: run.provider, run_id: run.id, session_id: run.provider_session_id }, [`issue:${issueID}`]));
@@ -124,10 +124,9 @@ function outboxNode(outbox: PiActivityRows["syncOutbox"][number]): PiActivityNod
 }
 
 function scopedActionEvents(db: RunnerDatabase, scope: PiActivityScope): PiActionEvent[] {
-  const events: PiActionEvent[] = [];
-  for (const actionID of scope.actionIds) events.push(...listPiActionEvents(db, { actionId: actionID }));
-  for (const issueID of scope.issueIds) events.push(...listPiActionEvents(db, { issueId: issueID }));
-  return dedupeBy(events, (event) => String(event.id));
+  return listPiActivityActionEvents(db, {
+    actionIds: [...scope.actionIds], issueIds: [...scope.issueIds], since: scope.since, until: scope.until
+  });
 }
 
 function actionParents(action: PiAction): string[] {
@@ -138,8 +137,15 @@ function replyIncluded(scope: PiActivityScope, reply: PiActivityRows["replies"][
   return scope.actionIds.has(reply.approval_action_id) || scope.rawEventIds.has(reply.external_event_id) || scope.issueIds.has(reply.issue_id);
 }
 
-function safeIssueEvents(db: RunnerDatabase, issueID: number) {
-  try { return queryEventSummaries(db, { issueID, limit: 500 }).items; } catch { return []; }
+function safeIssueEvents(db: RunnerDatabase, issueID: number, scope: PiActivityScope) {
+  try {
+    return listEventSummaryProjectionForRead(db, {
+      issueID, limit: 500, since: scope.since, until: scope.until
+    }).map(event => ({
+      id: event.source_event_id, created_at: event.event_created_at,
+      type: event.event_type, payload: event.summary_payload
+    }));
+  } catch { return []; }
 }
 
 function actionList(actions: ActionProposalRecord["actions"]): string {

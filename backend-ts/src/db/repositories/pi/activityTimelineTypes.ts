@@ -38,6 +38,8 @@ export type PiActivityScope = {
   proposalIds: Set<string>;
   rawEventIds: Set<number>;
   source: string;
+  since?: string;
+  until?: string;
 };
 
 export function emptyActivityScope(source: string): PiActivityScope {

@@ -17,8 +17,9 @@ const SENSITIVE_LINE_MARKERS = [
   "xuanwu_bun_auth_token",
   "bearer "
 ];
+// 字段只从标识符边界扫描一次；先确认敏感标记，再消费完整字段，避免长行二次方回溯。
 const SECRET_ASSIGNMENT_PATTERN =
-  /([A-Z0-9_-]*(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY)[A-Z0-9_-]*\s*(?:=|:(?!\/\/))\s*)[^\s,;]+/gi;
+  /(?<![A-Z0-9_-])((?=[A-Z0-9_-]*(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY))[A-Z0-9_-]+\s*(?:=|:(?!\/\/))\s*)[^\s,;]+/gi;
 const SECRET_PHRASE_PATTERN =
   /\b(token|secret|password|api[_-]?key|access[_-]?key)\b\s+(?:is\s+|was\s+)?(?!\[redacted\])[^\s,;]+/gi;
 const SECRET_QUERY_PATTERN = /([?&](?:access_token|token|secret|password|api[_-]?key|access[_-]?key)=)(?!\[redacted\])[^&#\s]*/gi;

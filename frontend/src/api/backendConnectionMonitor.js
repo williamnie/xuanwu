@@ -48,11 +48,11 @@ export function createBackendConnectionMonitor({
     if (stopped || probeInFlight) return;
     probeInFlight = true;
     const currentGeneration = ++generation;
-    controller = new AbortController();
-    const timeout = setTimeout(() => controller?.abort(), probeTimeoutMs);
-    let retry = false;
+    const probeController = new AbortController();
+    controller = probeController;
+    const timeout = setTimeout(() => probeController.abort(), probeTimeoutMs);
     try {
-      await probe(controller.signal);
+      await probe(probeController.signal);
       if (stopped || currentGeneration !== generation) return;
       consecutiveFailures = 0;
       emit('reconnecting');
@@ -60,13 +60,13 @@ export function createBackendConnectionMonitor({
       if (stopped || currentGeneration !== generation) return;
       consecutiveFailures += 1;
       if (consecutiveFailures >= failureThreshold) emit('offline');
-      retry = true;
     } finally {
       clearTimeout(timeout);
       if (currentGeneration === generation) {
         controller = null;
         probeInFlight = false;
-        if (retry) scheduleProbe(retryDelayMs);
+        // Core 恢复不等于事件流恢复，直到 onOpen 前仍持续检查。
+        scheduleProbe(retryDelayMs);
       }
     }
   };

@@ -89,6 +89,22 @@ export function listPiNotificationIntents(
   ], "created_at asc, flush_sequence asc, id asc"));
 }
 
+/** 在 SQL 层限定本轮候选；ready 的 flush_after_at 表示失败后的最早重试时间。 */
+export function listReadyPiDigestNotificationIntents(
+  db: RunnerDatabase,
+  input: { channel?: string; limit: number; now: Date }
+): PiNotificationIntent[] {
+  const limit = Number.isSafeInteger(input.limit) && input.limit > 0 ? Math.min(input.limit, 100) : 20;
+  const channel = cleanString(input.channel);
+  return db.sqlite.query<Record<string, unknown>, Array<string | number>>(`
+    select ${COLUMNS} from ${TABLE}
+    where kind='digest' and state='ready' and sent_outbox_id=0
+      and (flush_after_at='' or julianday(flush_after_at)<=julianday(?))
+      ${channel ? "and (target_channel=? or target_channel='')" : ""}
+    order by created_at asc, flush_sequence asc, id asc limit ?
+  `).all(input.now.toISOString(), ...(channel ? [channel] : []), limit).map(mapIntent);
+}
+
 export function listPiNotificationIntentStatesByKind(
   db: RunnerDatabase,
   kind: string

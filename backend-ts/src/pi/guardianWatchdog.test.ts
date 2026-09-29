@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import {
+  createPiNotificationIntent,
   getPiGuardianWatchdogStatus,
   listPiGuardianAlerts,
   listPiNotificationIntents,
@@ -26,6 +27,37 @@ afterEach(async () => {
 });
 
 describe("PI Guardian watchdog detector", () => {
+  test("detects old ready digests without active run groups, including failures in backoff", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      for (const id of ["stuck", "retrying", "fresh", "linked", "aggregated"]) {
+        createPiNotificationIntent(db, {
+          id, idempotency_key: id, kind: "digest", project_id: "demo",
+          run_group_id: id, flush_reason: "completed", flush_sequence: 1, target_channel: "telegram",
+          ready_at: id === "fresh" ? NOW.toISOString() : "2026-06-19T00:00:00Z",
+          state: id === "aggregated" ? "aggregated" : "ready",
+          sent_outbox_id: id === "linked" ? 1 : 0,
+          error: id === "retrying" ? "missing_im_target" : "",
+          flush_after_at: id === "retrying" ? "2026-06-19T01:15:00Z" : ""
+        });
+      }
+      db.sqlite.run("update pi_notification_intents set created_at='2026-06-19T00:00:00Z'");
+      const result = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
+      expect(result.checks.filter((check) => check.component === "digest")).toEqual([
+        expect.objectContaining({
+          alert_type: "digest_flush_stalled", ok: false, project_id: "demo",
+          evidence: expect.objectContaining({ count: 2, reason: "ready_notifications_stalled" })
+        })
+      ]);
+      expect(sideEffectCounts(db).outbox).toBe(0);
+      db.sqlite.run("update pi_notification_intents set state='agent_pending' where id in ('stuck','retrying')");
+      const recovered = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
+      expect(recovered.checks.filter((check) => check.component === "digest")).toEqual([
+        { component: "digest", ok: true }
+      ]);
+    } finally { db.close(); }
+  });
+
   test("reports granular stage timings without exposing SQL payloads", async () => {
     const db = await openFixtureDatabase();
     const timings: Array<{ stage: string; status: string }> = [];

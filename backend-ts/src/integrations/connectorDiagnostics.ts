@@ -23,6 +23,7 @@ export const CONNECTOR_DIAGNOSTIC_SCHEMA = "xuanwu.connector-diagnostics.v1" as 
 
 export type ConnectorDiagnosticState =
   | "unconfigured"
+  | "unknown"
   | "healthy"
   | "degraded"
   | "rate_limited"
@@ -230,7 +231,9 @@ function publicDiagnostic(
   const history = connectorTestHistory(context.database, definition.manifest.id, now);
   const operation = latestOutboundState(context.database, definition.manifest.id, definition.source, now);
   const revoked = definition.secret_refs.some((item) => item.required === true && item.status === "revoked");
-  const staticState = revoked ? "revoked" : healthState(definition.configured, history.test);
+  const staticState = revoked ? "revoked" : definition.configured && operation.error
+    ? operation.rate_limit ? "rate_limited" : "failed"
+    : healthState(definition.configured, history.test);
   const receiver = definition.manifest.id === "feishu" ? context.feishuReceiverStatus : undefined;
   const state = receiverHealthState(staticState, receiver);
   const lastSyncAt = lastSync(context.database, definition.manifest.id, definition.source);
@@ -327,12 +330,12 @@ function permission(capability: ConnectorCapability): Record<string, unknown> {
 
 function healthState(configured: boolean, latest: ConnectorProbeResult | null): ConnectorDiagnosticState {
   if (!configured) return "unconfigured";
-  return latest?.state ?? "degraded";
+  return latest?.state ?? "unknown";
 }
 
 function legacyStatus(state: ConnectorDiagnosticState, configured: boolean): string {
   if (state === "healthy") return "configured";
-  if (configured && state === "degraded") return "configured";
+  if (configured && (state === "degraded" || state === "unknown")) return "configured";
   if (state === "unconfigured") return configured ? "misconfigured" : "disabled";
   if (state === "revoked") return "misconfigured";
   return "error";

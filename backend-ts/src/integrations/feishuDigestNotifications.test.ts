@@ -22,6 +22,31 @@ afterEach(async () => {
 });
 
 describe("Feishu run group digest notifications", () => {
+  test("shares bounded retries while preserving Feishu routing and channel isolation", async () => {
+    const db = await fixtureDatabase();
+    const now = new Date("2026-09-29T00:00:00Z");
+    try {
+      for (let index = 0; index < 22; index += 1) {
+        const id = `digest-${String(index).padStart(2, "0")}`;
+        createPiNotificationIntent(db, {
+          id, run_group_id: id, flush_reason: "completed", flush_sequence: 1,
+          kind: "digest", state: "ready", target_channel: index === 0 ? "telegram" : "feishu",
+          target_chat_id: index === 0 || index === 21 ? "chat-ready" : ""
+        });
+      }
+      const result = queueReadyFeishuDigestNotifications(db, { now });
+      expect(result).toEqual({ failed: 20, queued: 1, scanned: 21, skipped: 0 });
+      expect(getPiNotificationIntent(db, "digest-00")?.state).toBe("ready");
+      expect(getPiNotificationIntent(db, "digest-01")).toMatchObject({
+        error: "missing_feishu_target", flush_after_at: "2026-09-29T00:15:00.000Z"
+      });
+      const queued = getPiNotificationIntent(db, "digest-21");
+      expect(JSON.parse(queued?.payload_json ?? "{}").agent_communication.notification_type)
+        .toBe("feishu_run_group_digest_notification");
+      expect(queueReadyFeishuDigestNotifications(db, { now }).scanned).toBe(0);
+    } finally { db.close(); }
+  });
+
   test("queues a redacted digest summary through the existing outbox", async () => {
     const db = await fixtureDatabase();
     try {

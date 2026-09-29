@@ -7,16 +7,14 @@ import {
   getPiRunGroup,
   listPiActions,
   listPiNotificationIntents,
-  updatePiNotificationIntent,
   type PiNotificationIntent
 } from "../db/repositories/pi.ts";
 import { issueCompletionAutomationOwnsTargetForIssue } from "../pi/issueCompletionAutomation.ts";
 import type { FeishuConnectorConfig } from "./feishu.ts";
-import { formatRunGroupDigest } from "../pi/digestFormatter.ts";
+import { queueReadyDigestNotifications, type DigestNotificationQueueOptions } from "../pi/digestNotifications.ts";
 import { ingestIssueLifecycleEvent } from "../pi/guardianEventIngest.ts";
 import {
   coordinateIssueLifecycleNotification,
-  markNotificationIntentRetry,
   suppressLifecycleIntent,
   type LifecycleIntentResult
 } from "../pi/notificationCoordinator.ts";
@@ -38,7 +36,6 @@ export type DigestQueueResult = { failed: number; queued: number; scanned: numbe
 
 const ISSUE_STATUS_NOTIFY_TYPE = "feishu_issue_status_notification";
 const DIGEST_NOTIFY_TYPE = "feishu_run_group_digest_notification";
-const DEFAULT_DIGEST_LIMIT = 20;
 
 type LifecycleTarget = {
   connectorID: string;
@@ -102,12 +99,17 @@ export function queueFeishuIssueStatusNotification(
 
 export function queueReadyFeishuDigestNotifications(
   db: RunnerDatabase,
-  options: { limit?: number } = {}
+  options: DigestNotificationQueueOptions = {}
 ): DigestQueueResult {
-  const intents = readyDigestIntents(db, options.limit ?? DEFAULT_DIGEST_LIMIT);
-  const result: DigestQueueResult = { failed: 0, queued: 0, scanned: intents.length, skipped: 0 };
-  for (const intent of intents) safelyQueueDigestIntent(db, intent, result);
-  return result;
+  return queueReadyDigestNotifications(db, {
+    channel: "feishu",
+    missingRouteReason: () => "missing_feishu_target",
+    notificationType: DIGEST_NOTIFY_TYPE,
+    resolveRoute: (database, intent) => {
+      const target = digestTarget(database, intent);
+      return target ? { channel: "feishu", ...target } : null;
+    }
+  }, options);
 }
 
 function isLifecycleStatus(status: string): boolean {
@@ -275,66 +277,6 @@ function genericLifecycleTarget(
   } : null;
 }
 
-function safelyQueueDigestIntent(
-  db: RunnerDatabase,
-  intent: PiNotificationIntent,
-  result: DigestQueueResult
-): void {
-  try {
-    queueDigestIntent(db, intent, result);
-  } catch (error) {
-    markNotificationIntentRetry(db, intent, safeError(error));
-    result.failed += 1;
-  }
-}
-
-function queueDigestIntent(
-  db: RunnerDatabase,
-  intent: PiNotificationIntent,
-  result: DigestQueueResult
-): void {
-  if ((intent.target_channel !== "" && intent.target_channel !== "feishu") || intent.sent_outbox_id > 0) {
-    result.skipped += 1;
-    return;
-  }
-  const target = digestTarget(db, intent);
-  if (!target) {
-    markNotificationIntentRetry(db, intent, "missing_feishu_target");
-    result.failed += 1;
-    return;
-  }
-  const routedIntent = intent.target_channel === "feishu" && intent.target_chat_id === target.chatID &&
-    intent.target_message_id === target.messageID && intent.target_thread_id === target.threadID
-    ? intent
-    : updatePiNotificationIntent(db, intent.id, {
-      target_channel: "feishu",
-      target_chat_id: target.chatID,
-      target_message_id: target.messageID,
-      target_thread_id: target.threadID
-    });
-  const queued = queueExistingNotificationIntent(db, {
-    content: formatRunGroupDigest(intent),
-    deepLink: `/api/pi/guardian/run-groups/${encodeURIComponent(intent.run_group_id)}`,
-    intent: routedIntent,
-    notificationID: digestNotificationID(intent),
-    notificationType: DIGEST_NOTIFY_TYPE,
-    route: {
-      channel: "feishu",
-      chatID: target.chatID,
-      eventID: target.eventID,
-      messageID: target.messageID,
-      threadID: target.threadID
-    }
-  });
-  if (queued.queued) result.queued += 1;
-  else result.skipped += 1;
-}
-
-function readyDigestIntents(db: RunnerDatabase, limit: number): PiNotificationIntent[] {
-  return listPiNotificationIntents(db, { kind: "digest", state: "ready" })
-    .slice(0, boundedLimit(limit));
-}
-
 function digestTarget(db: RunnerDatabase, intent: PiNotificationIntent) {
   if (intent.target_chat_id !== "" || intent.target_message_id !== "") {
     return {
@@ -346,18 +288,6 @@ function digestTarget(db: RunnerDatabase, intent: PiNotificationIntent) {
   }
   return feishuTargetForConversation(db, intent.conversation_id) ??
     feishuTargetForConversation(db, getPiRunGroup(db, intent.run_group_id)?.origin_conversation_id ?? "");
-}
-
-function digestNotificationID(intent: PiNotificationIntent): string {
-  return intent.idempotency_key || intent.id;
-}
-
-function boundedLimit(limit: number): number {
-  return Number.isInteger(limit) && limit > 0 ? Math.min(limit, DEFAULT_DIGEST_LIMIT) : DEFAULT_DIGEST_LIMIT;
-}
-
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function cleanString(value: unknown): string {

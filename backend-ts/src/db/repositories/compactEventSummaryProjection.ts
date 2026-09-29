@@ -308,6 +308,12 @@ function compactListQuery(filter: EventSummaryProjectionFilter) {
   if (excluded.length > 0) addTypeFilter(clauses, args, "t.event_type", "not in", excluded);
   if (filter.beforeID !== undefined) addIntegerFilter(clauses, args, "c.source_event_id<?", filter.beforeID);
   if (filter.afterID !== undefined) addIntegerFilter(clauses, args, "c.source_event_id>?", filter.afterID);
+  if (filter.since && Number.isFinite(Date.parse(filter.since))) {
+    clauses.push("julianday(c.event_created_at)>=julianday(?)"); args.push(filter.since);
+  }
+  if (filter.until && Number.isFinite(Date.parse(filter.until))) {
+    clauses.push("julianday(c.event_created_at)<=julianday(?)"); args.push(filter.until);
+  }
   const limit = normalizedLimit(filter.limit);
   const reverseResult = limit !== undefined && filter.afterID === undefined;
   const order = reverseResult ? "c.source_event_id desc" : "c.source_event_id asc";

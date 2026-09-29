@@ -184,10 +184,13 @@ const RUN_DETAIL_COLUMNS = `
 export function listRuns(db: RunnerDatabase, filter: RunListFilter): RunView[] {
   const query = runBaseQuery(filter);
   const status = runStatusFilter(filter.statuses);
+  // 创建时间与 Attempt 无关，可先取页；状态过滤和其他排序保留投影后分页。
+  const pageCandidates = filter.sort === "created_at" && status.args.length === 0;
   return listRunSummaryRows(db, {
     args: [...query.args, ...status.args, filter.limit, filter.offset],
+    candidatePage: pageCandidates ? `${runOrder(filter, "run")} limit ? offset ?` : "",
     candidateWhere: query.where,
-    limit: "limit ? offset ?",
+    limit: pageCandidates ? "" : "limit ? offset ?",
     order: runOrder(filter, "run"),
     selectedWhere: status.where
   }).map((row) => mapRunRow(db, row, "summary"));
@@ -197,6 +200,7 @@ function listRunSummaryRows(
   db: RunnerDatabase,
   query: {
     args: Array<number | string>;
+    candidatePage?: string;
     candidateWhere: string;
     limit: string;
     order: string;
@@ -223,12 +227,13 @@ function listRunSummaryRows(
       from issue_runs run
       join issues issue on issue.id=run.issue_id
       ${query.candidateWhere}
+      ${query.candidatePage ?? ""}
     ),
     attempt_stats as materialized (
-      select attempt.issue_run_id, count(*) as attempt_count, max(attempt.sequence) as latest_sequence
-      from run_attempts attempt
-      join candidate_runs candidate on candidate.legacy_id=attempt.issue_run_id
-      group by attempt.issue_run_id
+      select candidate.legacy_id as issue_run_id, count(*) as attempt_count, max(attempt.sequence) as latest_sequence
+      from candidate_runs candidate
+      cross join run_attempts attempt on attempt.run_id=candidate.run_id
+      group by candidate.legacy_id
     ),
     ranked_runs as materialized (
       select
@@ -244,7 +249,7 @@ function listRunSummaryRows(
       from candidate_runs candidate
       left join attempt_stats stats on stats.issue_run_id=candidate.legacy_id
       left join run_attempts latest
-        on latest.issue_run_id=candidate.legacy_id and latest.sequence=stats.latest_sequence
+        on latest.run_id=candidate.run_id and latest.sequence=stats.latest_sequence
     ),
     selected_runs as materialized (
       select * from ranked_runs run

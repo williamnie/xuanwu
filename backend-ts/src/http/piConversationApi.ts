@@ -551,10 +551,11 @@ async function resolveImContextRollover(
     };
   }
   const trigger = forcedTrigger || await imContextRolloverTrigger(context.database, parent);
-  const observed = (context.database.sqlite.query<{ count: number }, [string]>(`
-    select count(*) as count from pi_action_events
+  const observed = context.database.sqlite.query<{ id: number }, [string]>(`
+    select id from pi_action_events
     where conversation_id=? and event_type='im_context_policy_observed'
-  `).get(parentID)?.count ?? 0) > 0;
+    limit 1
+  `).get(parentID) !== null;
   if (!observed && forcedTrigger === "") {
     createPiActionEvent(context.database, {
       action_id: `im-context-policy:${parentID}:${crypto.randomUUID()}`,

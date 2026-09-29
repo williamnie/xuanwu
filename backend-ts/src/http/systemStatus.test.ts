@@ -319,6 +319,22 @@ describe("Bun system status endpoints", () => {
     }
   });
 
+  test("an unprobed Telegram connector does not report a service outage", async () => {
+    const { config, database } = await openFixtureRuntime({ telegramBotToken: "123456:fixture-token" });
+    config.integrations.telegram.allowedChatIds = ["1"];
+    config.integrations.telegram.allowedUserIds = ["2"];
+    try {
+      const router = createDefaultRouter();
+      registerSystemStatusRoute(router, { authToken: "", config, database });
+      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+      const body = await response.json() as SystemStatusBody;
+      expect(body.connector_health.find(connector => connector.id === "telegram"))
+        .toMatchObject({ enabled: true, health: { checked: false, state: "unknown" } });
+      expect((body.health as { reasons?: Array<{ source_ref?: string }> }).reasons ?? [])
+        .not.toContainEqual(expect.objectContaining({ source_ref: "connector:telegram" }));
+    } finally { database.close(); }
+  });
+
   test("uses the live Feishu websocket receiver as connector health authority", async () => {
     const { config, database } = await openFixtureRuntime({
       feishuAppId: "cli_app_id",
@@ -649,6 +665,7 @@ async function openFixtureRuntime(options: {
   feishuAppSecret?: string;
   feishuEncryptKey?: string;
   feishuVerificationToken?: string;
+  telegramBotToken?: string;
   secret?: string;
 } = {}): Promise<{
   config: ReturnType<typeof buildConfig>;
@@ -672,6 +689,7 @@ async function openFixtureRuntime(options: {
     feishuAppSecret: options.feishuAppSecret,
     feishuEncryptKey: options.feishuEncryptKey,
     feishuVerificationToken: options.feishuVerificationToken,
+    telegramBotToken: options.telegramBotToken,
     stateDir
   });
   const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });

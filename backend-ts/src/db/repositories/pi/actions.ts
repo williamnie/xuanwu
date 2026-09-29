@@ -102,6 +102,62 @@ export function listPiActions(db: RunnerDatabase, filter: PiActionFilter = {}): 
   ], "created_at asc, id asc"));
 }
 
+/** 仅加载活动窗口内的详情，避免单个 Issue 请求反序列化全部历史 payload。 */
+export function listPiActivityActions(db: RunnerDatabase, filter: {
+  actionIds?: string[]; issueIds?: number[]; conversationId?: string; source?: string;
+  since?: string; until?: string; limit?: number;
+}): PiAction[] {
+  const args: Array<string | number> = [];
+  const scope: string[] = [];
+  if (filter.actionIds?.length) {
+    scope.push(`id in (${placeholders(filter.actionIds.length)})`);
+    args.push(...filter.actionIds);
+  }
+  if (filter.issueIds?.length) {
+    scope.push(`issue_id in (${placeholders(filter.issueIds.length)})`);
+    args.push(...filter.issueIds);
+  }
+  if (filter.conversationId) { scope.push("conversation_id=?"); args.push(filter.conversationId); }
+  const where = scope.length ? [`(${scope.join(" or ")})`] : [];
+  if (filter.source) { where.push("source=?"); args.push(filter.source); }
+  if (filter.since && Number.isFinite(Date.parse(filter.since))) { where.push("julianday(updated_at)>=julianday(?)"); args.push(filter.since); }
+  if (filter.until && Number.isFinite(Date.parse(filter.until))) { where.push("julianday(updated_at)<=julianday(?)"); args.push(filter.until); }
+  const limit = Number.isSafeInteger(filter.limit) && Number(filter.limit) > 0 ? Math.min(500, Number(filter.limit)) : 500;
+  return db.sqlite.query<Record<string, unknown>, Array<string | number>>(`
+    select ${COLUMNS} from ${TABLE}
+    ${where.length ? `where ${where.join(" and ")}` : ""}
+    order by updated_at desc, id desc limit ?
+  `).all(...args, limit).map(mapPiAction);
+}
+
+export function latestCompletedEnqueueAction(db: RunnerDatabase, issueID: number): Pick<PiAction, "id" | "source"> | null {
+  return db.sqlite.query<Pick<PiAction, "id" | "source">, [number]>(`
+    select id, source from pi_actions
+    where issue_id=? and action_type='issue.enqueue' and status='completed'
+    order by created_at desc, id desc limit 1
+  `).get(issueID);
+}
+
+/** 一次读取最新的关联审计，避免逐 Action/Issue 扫描并重复加载历史。 */
+export function listPiActivityActionEvents(db: RunnerDatabase, scope: {
+  actionIds?: string[]; issueIds?: number[]; conversationId?: string;
+  since?: string; until?: string;
+}): PiActionEvent[] {
+  const args: Array<string | number> = [];
+  const where: string[] = [];
+  if (scope.actionIds?.length) { where.push(`action_id in (${placeholders(scope.actionIds.length)})`); args.push(...scope.actionIds); }
+  if (scope.issueIds?.length) { where.push(`issue_id in (${placeholders(scope.issueIds.length)})`); args.push(...scope.issueIds); }
+  if (scope.conversationId) { where.push("conversation_id=?"); args.push(scope.conversationId); }
+  if (where.length === 0) return [];
+  const conditions = [`(${where.join(" or ")})`];
+  if (scope.since && Number.isFinite(Date.parse(scope.since))) { conditions.push("julianday(created_at)>=julianday(?)"); args.push(scope.since); }
+  if (scope.until && Number.isFinite(Date.parse(scope.until))) { conditions.push("julianday(created_at)<=julianday(?)"); args.push(scope.until); }
+  return db.sqlite.query<Record<string, unknown>, Array<string | number>>(`
+    select ${EVENT_COLUMNS} from ${EVENT_TABLE} where ${conditions.join(" and ")}
+    order by id desc limit 500
+  `).all(...args).map(mapPiActionEvent);
+}
+
 export function listRecentAttentionPiActions(
   db: RunnerDatabase,
   filter: RecentAttentionPiActionFilter

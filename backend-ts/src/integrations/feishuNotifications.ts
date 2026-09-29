@@ -4,6 +4,7 @@ import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 import { readHumanFeedback } from "../domain/review/humanFeedback.ts";
 import { humanFeedbackNotificationText } from "../notifications/humanFeedbackPresentation.ts";
 import { listAgentSessions } from "../db/repositories/agentSessions.ts";
+import { latestCompletedEnqueueAction } from "../db/repositories/pi/actions.ts";
 import {
   getPiAction,
   getPiApprovalRequest,
@@ -522,12 +523,6 @@ function hasRunGroupMembership(db: RunnerDatabase, issueID: number): boolean {
     "select count(*) as count from pi_run_group_items where issue_id=?"
   ).get(issueID);
   return (row?.count ?? 0) > 0;
-}
-
-function latestCompletedEnqueueAction(db: RunnerDatabase, issueID: number) {
-  const actions = listPiActions(db, { issueId: issueID })
-    .filter((action) => action.action_type === "issue.enqueue" && action.status === "completed");
-  return actions.at(-1);
 }
 
 function isRunnerChatEnqueueAction(db: RunnerDatabase, payload: Record<string, unknown>): boolean {

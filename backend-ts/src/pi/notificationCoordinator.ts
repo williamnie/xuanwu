@@ -87,10 +87,12 @@ export function markNotificationIntentSent(
 export function markNotificationIntentRetry(
   db: RunnerDatabase,
   intent: PiNotificationIntent,
-  reason: string
+  reason: string,
+  options: { retryAfterAt?: string } = {}
 ): PiNotificationIntent {
   return updatePiNotificationIntent(db, intent.id, {
     error: redactSensitiveText(reason),
+    ...(options.retryAfterAt ? { flush_after_at: options.retryAfterAt } : {}),
     state: "ready"
   });
 }

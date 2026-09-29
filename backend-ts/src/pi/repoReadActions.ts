@@ -1,4 +1,4 @@
-import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, opendirSync, readdirSync, readSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Project } from "../db/repositories/projects.ts";
 import { redactSensitiveText } from "../util/redact.ts";
@@ -18,36 +18,92 @@ const MAX_TREE_DEPTH = 4;
 const DEFAULT_TREE_ENTRIES = 100;
 const MAX_TREE_ENTRIES = 200;
 const SEARCH_TIMEOUT_MS = 250;
+const READ_CHUNK_BYTES = 8192;
+const MAX_EXCERPT_SCAN_BYTES = 8 * 1024 * 1024;
+const MAX_EXCERPT_REDACTION_BYTES = 2 * MAX_ALLOWED_BYTES;
+const MAX_SEARCH_FILE_BYTES = 1024 * 1024;
+const MAX_SEARCH_TOTAL_BYTES = 4 * MAX_SEARCH_FILE_BYTES;
+const MAX_SEARCH_ENTRIES = 2000;
 const SENSITIVE_NAMES = new Set([".env", ".git", ".npmrc", "node_modules", "secrets"]);
+
+type RepoTarget = ReturnType<typeof resolveRepoTarget>;
+type ReadBudget = { deadline: number; remaining: number };
+type RepoLine = { number: number; oversized: boolean; text: string };
+type FileScan = { complete: boolean };
+type SearchState = {
+  budget: ReadBudget; entriesRemaining: number; halted: boolean; limit: number;
+  results: unknown[]; skipped: Array<{ path: string; reason: string }>; truncated: boolean;
+};
 
 export function readRepoExcerpt(project: Project, input: RepoReadExcerptInput) {
   const target = resolveRepoTarget(project.cwd, input.path);
-  assertReadableFile(target, byteLimit(input.max_bytes));
-  const lines = readFileSync(target.fullPath, "utf8").split(/\r?\n/);
-  const start = boundedInteger(input.start_line, 1, Math.max(1, lines.length), 1);
+  const maxBytes = byteLimit(input.max_bytes);
+  let start = boundedInteger(input.start_line, 1, Number.MAX_SAFE_INTEGER, 1);
   const maxLines = boundedInteger(input.max_lines, 1, MAX_ALLOWED_LINES, DEFAULT_MAX_LINES);
-  const selected = lines.slice(start - 1, start - 1 + maxLines);
+  const budget = { deadline: Date.now() + SEARCH_TIMEOUT_MS, remaining: MAX_EXCERPT_SCAN_BYTES };
+  const scan = { complete: false };
+  const selected: string[] = [];
+  let selectedBytes = 0;
+  let last: RepoLine | undefined;
+  let truncated = false;
+  let windowComplete = false;
+  let omitted = "";
+  for (const line of scanFileLines(target, budget, MAX_EXCERPT_SCAN_BYTES, scan)) {
+    last = line;
+    if (line.number < start) continue;
+    if (selected.length >= maxLines) { truncated = true; break; }
+    if (line.oversized) { omitted = "[line exceeds read budget]"; break; }
+    const nextBytes = selectedBytes + Buffer.byteLength(line.text) + (selected.length > 0 ? 1 : 0);
+    if (nextBytes > MAX_EXCERPT_REDACTION_BYTES) { omitted = "[excerpt exceeds read budget]"; break; }
+    selected.push(line.text);
+    selectedBytes = nextBytes;
+    windowComplete = selected.length === maxLines;
+  }
+  // 保留请求超出 EOF 时返回最后一行的既有行为；预算耗尽不冒充 EOF。
+  if (selected.length === 0 && last && scan.complete) {
+    start = last.number;
+    if (last.oversized) omitted = "[line exceeds read budget]";
+    else selected.push(last.text);
+  }
+  windowComplete ||= scan.complete;
+  // 输出预算不能提前切断跨行脱敏窗口；读取预算不足时不返回可能包含秘密前缀的残片。
+  if (!windowComplete && !omitted && selected.length > 0) omitted = "[excerpt exceeds read budget]";
+  const redacted = omitted || redactSensitiveText(selected.join("\n"));
+  const excerpt = utf8Prefix(redacted, maxBytes);
+  const sourceLines = omitted ? Math.max(1, (last?.number ?? start) - start + 1) : excerptSourceLines(selected, excerpt, redacted);
   return {
-    excerpt: redactSensitiveText(selected.join("\n")),
-    line_range: { end: start + selected.length - 1, start },
+    excerpt,
+    line_range: { end: start + sourceLines - 1, start },
     path: target.relativePath,
     reason: "requested_excerpt",
     source: "repo_read_excerpt",
-    truncated: start - 1 + maxLines < lines.length
+    truncated: truncated || !scan.complete || Boolean(omitted) || excerpt !== redacted
   };
+}
+
+function excerptSourceLines(lines: string[], excerpt: string, redacted: string): number {
+  if (excerpt === "" && redacted !== "") return 0;
+  // 反查覆盖输出前缀的最短原始行窗口，保留跨行敏感值被压成一行时的源行号。
+  for (let count = 1; count <= lines.length; count += 1) {
+    if (redactSensitiveText(lines.slice(0, count).join("\n")).startsWith(excerpt)) return count;
+  }
+  return lines.length;
 }
 
 export function searchRepo(project: Project, input: RepoSearchInput) {
   const query = cleanQuery(input.query);
   const base = resolveRepoTarget(project.cwd, input.path || ".");
   const deadline = Date.now() + SEARCH_TIMEOUT_MS;
-  const state = {
+  const state: SearchState = {
+    budget: { deadline, remaining: MAX_SEARCH_TOTAL_BYTES },
+    entriesRemaining: MAX_SEARCH_ENTRIES,
+    halted: false,
     limit: boundedInteger(input.max_results, 1, MAX_ALLOWED_RESULTS, DEFAULT_MAX_RESULTS),
     results: [] as unknown[],
     skipped: [] as Array<{ path: string; reason: string }>,
     truncated: false
   };
-  searchTarget(base, query, state, deadline);
+  searchTarget(base, query, state);
   return { query, results: state.results, skipped: state.skipped, source: "repo_search", truncated: state.truncated };
 }
 
@@ -98,64 +154,152 @@ function cleanRelativePath(value: string): string {
   return segments.join(sep) || ".";
 }
 
-function assertReadableFile(target: ReturnType<typeof resolveRepoTarget>, maxBytes: number): void {
+function assertReadableFile(target: RepoTarget): void {
   const stat = lstatSync(target.fullPath);
   if (!stat.isFile()) throw new Error("repo path is not a regular file");
-  if (stat.size > maxBytes) throw new Error(`repo file exceeds max read bytes (${maxBytes})`);
+  const canonicalRelative = relative(target.rootPath, realpathSync(target.fullPath));
+  if (canonicalRelative.startsWith("..") || isAbsolute(canonicalRelative)) throw new Error("repo path is outside project scope");
+  assertNotSensitive(canonicalRelative.split(sep).join("/"));
+}
+
+// 固定缓冲读取，超长行只报告一次并丢弃内容，避免截断敏感值后再脱敏。
+function* scanFileLines(target: RepoTarget, budget: ReadBudget, maxFileBytes: number, scan: FileScan): Generator<RepoLine> {
+  assertReadableFile(target);
+  const fd = openSync(target.fullPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) throw new Error("repo path is not a regular file");
+    const chunk = Buffer.allocUnsafe(READ_CHUNK_BYTES);
+    const line = Buffer.allocUnsafe(MAX_ALLOWED_BYTES);
+    let lineBytes = 0;
+    let number = 1;
+    let oversized = false;
+    let bytesRead = 0;
+    while (bytesRead < stat.size) {
+      if (Date.now() > budget.deadline || budget.remaining <= 0 || bytesRead >= maxFileBytes) return;
+      const read = readSync(fd, chunk, 0, Math.min(chunk.length, budget.remaining, maxFileBytes - bytesRead, stat.size - bytesRead), null);
+      if (read === 0) break;
+      budget.remaining -= read;
+      bytesRead += read;
+      let offset = 0;
+      while (offset < read) {
+        if (Date.now() > budget.deadline) return;
+        const newline = chunk.subarray(0, read).indexOf(10, offset);
+        const end = newline === -1 ? read : newline;
+        if (!oversized && lineBytes + end - offset > line.length) {
+          oversized = true;
+          yield { number, oversized: true, text: "" };
+        }
+        if (!oversized) {
+          chunk.copy(line, lineBytes, offset, end);
+          lineBytes += end - offset;
+        }
+        if (newline === -1) break;
+        if (!oversized) {
+          const length = lineBytes > 0 && line[lineBytes - 1] === 13 ? lineBytes - 1 : lineBytes;
+          yield { number, oversized: false, text: line.toString("utf8", 0, length) };
+        }
+        number += 1;
+        lineBytes = 0;
+        oversized = false;
+        offset = newline + 1;
+      }
+    }
+    if (!oversized) yield { number, oversized: false, text: line.toString("utf8", 0, lineBytes) };
+    scan.complete = true;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function utf8Prefix(text: string, maxBytes: number): string {
+  const bytes = Buffer.from(text);
+  if (bytes.length <= maxBytes) return text;
+  let end = maxBytes;
+  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end -= 1;
+  return bytes.toString("utf8", 0, end);
 }
 
 function searchTarget(
-  target: ReturnType<typeof resolveRepoTarget>,
+  target: RepoTarget,
   query: string,
-  state: { limit: number; results: unknown[]; skipped: Array<{ path: string; reason: string }>; truncated: boolean },
-  deadline: number
+  state: SearchState
 ): void {
-  if (state.truncated || Date.now() > deadline) return truncate(state);
+  if (searchHalted(state)) return;
   const stat = lstatSync(target.fullPath);
-  if (stat.isDirectory()) return searchDirectory(target, query, state, deadline);
+  if (stat.isDirectory()) return searchDirectory(target, query, state);
   if (!stat.isFile()) return state.skipped.push({ path: target.relativePath, reason: "unsupported file type" }) as never;
-  if (stat.size > DEFAULT_MAX_BYTES) {
-    state.skipped.push({ path: target.relativePath, reason: "file exceeds max read bytes" });
-    return;
-  }
   searchFile(target, query, state);
 }
 
 function searchDirectory(
-  target: ReturnType<typeof resolveRepoTarget>,
+  target: RepoTarget,
   query: string,
-  state: { limit: number; results: unknown[]; skipped: Array<{ path: string; reason: string }>; truncated: boolean },
-  deadline: number
+  state: SearchState
 ): void {
-  for (const entry of sortedEntries(target.fullPath)) {
-    if (state.truncated || Date.now() > deadline) return truncate(state);
+  const entries: string[] = [];
+  const directory = opendirSync(target.fullPath);
+  try {
+    while (!searchHalted(state)) {
+      const entry = directory.readSync();
+      if (!entry) break;
+      if (state.entriesRemaining <= 0) { state.truncated = true; break; }
+      state.entriesRemaining -= 1;
+      entries.push(entry.name);
+    }
+  } finally {
+    directory.closeSync();
+  }
+  for (const entry of entries.sort((a, b) => a.localeCompare(b))) {
+    if (searchHalted(state)) return;
     const childPath = childRelativePath(target.relativePath, entry);
     if (sensitivePath(childPath)) {
       state.skipped.push({ path: childPath, reason: "sensitive path skipped" });
       continue;
     }
-    searchTarget({ fullPath: resolve(target.fullPath, entry), relativePath: childPath, rootPath: target.rootPath }, query, state, deadline);
+    searchTarget({ fullPath: resolve(target.fullPath, entry), relativePath: childPath, rootPath: target.rootPath }, query, state);
   }
 }
 
 function searchFile(
-  target: ReturnType<typeof resolveRepoTarget>,
+  target: RepoTarget,
   query: string,
-  state: { limit: number; results: unknown[]; skipped: Array<{ path: string; reason: string }>; truncated: boolean }
+  state: SearchState
 ): void {
-  const lines = readFileSync(target.fullPath, "utf8").split(/\r?\n/);
-  for (const [index, line] of lines.entries()) {
-    if (!line.includes(query)) continue;
+  const scan = { complete: false };
+  let skippedLongLine = false;
+  for (const line of scanFileLines(target, state.budget, MAX_SEARCH_FILE_BYTES, scan)) {
+    if (line.oversized) { skippedLongLine = true; continue; }
+    if (!line.text.includes(query)) continue;
+    const redacted = redactSensitiveText(line.text);
+    // 保留匹配位置附近上下文，长行命中不应被输出预算切掉。
+    let excerptStart = Math.max(0, redacted.indexOf(query) - 200);
+    if (excerptStart > 0 && /[\uDC00-\uDFFF]/.test(redacted[excerptStart]!)) excerptStart -= 1;
+    const excerpt = utf8Prefix(redacted.slice(excerptStart), DEFAULT_MAX_BYTES);
+    state.truncated ||= excerpt !== redacted;
     state.results.push({
-      excerpt: redactSensitiveText(line),
-      line_range: { end: index + 1, start: index + 1 },
-      matched_text: redactSensitiveText(line),
+      excerpt,
+      line_range: { end: line.number, start: line.number },
+      matched_text: excerpt,
       path: target.relativePath,
       reason: "query_match",
-      source: "repo_search"
+      source: "repo_search",
+      truncated: excerpt !== redacted
     });
-    if (state.results.length >= state.limit) return truncate(state);
+    if (state.results.length >= state.limit) { state.halted = true; return truncate(state); }
   }
+  if (!scan.complete || skippedLongLine) {
+    state.truncated = true;
+    state.skipped.push({ path: target.relativePath, reason: !scan.complete ? "file read budget exceeded" : "line read budget exceeded" });
+  }
+}
+
+function searchHalted(state: SearchState): boolean {
+  if (state.halted || state.budget.remaining <= 0 || Date.now() > state.budget.deadline) {
+    state.halted = true;
+    state.truncated = true;
+  }
+  return state.halted;
 }
 
 function walkTree(target: ReturnType<typeof resolveRepoTarget>, state: {

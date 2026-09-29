@@ -15,6 +15,18 @@ afterEach(async () => {
 });
 
 describe("connector diagnostics", () => {
+  test("configured connectors without a probe have unknown health, not a reported failure", async () => {
+    const fixture = await databaseFixture();
+    try {
+      const config = buildConfig({ githubToken: "fixture-secret", stateDir: fixture.dir });
+      const bundle = buildConnectorDiagnosticBundle({ config, database: fixture.db, now: () => NOW });
+      const connector = (bundle.connectors as Array<Record<string, unknown>>).find(item => item.id === "github-events");
+      expect(connector).toMatchObject({
+        enabled: true, status: "configured", health: { checked: false, state: "unknown", last_error: null }
+      });
+    } finally { fixture.db.close(); }
+  });
+
   test("reports unconfigured without making a network request", async () => {
     let called = false;
     const result = await probeConnectorConnection({
@@ -25,6 +37,25 @@ describe("connector diagnostics", () => {
     });
     expect(result).toMatchObject({ ok: false, state: "unconfigured", error: { code: "not_configured" } });
     expect(called).toBe(false);
+  });
+
+  test("an actual delivery failure is visible without a probe and does not revive a disabled connector", async () => {
+    const fixture = await databaseFixture();
+    try {
+      fixture.db.sqlite.run(`insert into sync_outbox
+        (source, content, status, last_error, operation_kind, payload_json, created_at, updated_at)
+        values ('github', 'fixture', 'failed', 'fixture delivery failure', 'tracker_update', ?, ?, ?)`, [
+        JSON.stringify({ target: { provider_id: "github" } }), NOW.toISOString(), NOW.toISOString()
+      ]);
+      const config = buildConfig({ githubToken: "fixture-secret", stateDir: fixture.dir });
+      const connector = () => {
+        const bundle = buildConnectorDiagnosticBundle({ config, database: fixture.db, now: () => NOW });
+        return (bundle.connectors as Array<Record<string, unknown>>).find(item => item.id === "github-issues");
+      };
+      expect(connector()).toMatchObject({ health: { checked: false, state: "failed", last_error: { code: "delivery_failed" } } });
+      config.integrations.github.token = "";
+      expect(connector()).toMatchObject({ enabled: false, health: { state: "unconfigured" } });
+    } finally { fixture.db.close(); }
   });
 
   test("normalizes expired, rate-limited and offline probes without response bodies", async () => {
@@ -118,6 +149,8 @@ describe("connector diagnostics", () => {
       `).all("github-events").map((row) => row.detail);
       expect(plan.some((detail) => detail.includes("idx_pi_action_events_connector_test_history"))).toBe(true);
       expect(bundle).toMatchObject({ schema_version: "xuanwu.connector-diagnostics.v1" });
+      expect((bundle.connectors as Array<Record<string, unknown>>).find(item => item.id === "github-events"))
+        .toMatchObject({ health: { checked: true, state: "rate_limited" } });
       expect(text).not.toContain("diagnostic-secret");
     } finally {
       fixture.db.close();

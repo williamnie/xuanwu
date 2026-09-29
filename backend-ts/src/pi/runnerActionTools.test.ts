@@ -687,6 +687,9 @@ describe("PI runner action tools", () => {
         ])
       });
       const searchResult = actions.searchRepo({ query: "needle", max_results: 5 });
+      expect(searchResult).not.toMatchObject({
+        skipped: expect.arrayContaining([expect.objectContaining({ path: "large.txt" })])
+      });
       expect(searchResult).toMatchObject({
         truncated: false,
         results: [
@@ -694,7 +697,6 @@ describe("PI runner action tools", () => {
           expect.objectContaining({ path: "src/App.tsx", source: "repo_search" })
         ],
         skipped: expect.arrayContaining([
-          expect.objectContaining({ path: "large.txt", reason: expect.stringContaining("exceeds") }),
           expect.objectContaining({ path: "secret.token", reason: expect.stringContaining("sensitive") })
         ])
       });
@@ -713,7 +715,9 @@ describe("PI runner action tools", () => {
       expect(() => actions.readRepoExcerpt({ path: "../outside.txt" })).toThrow(/project scope/);
       expect(() => actions.readRepoExcerpt({ path: join(fixture.project.cwd, "README.md") })).toThrow(/absolute/);
       expect(() => actions.readRepoExcerpt({ path: ".git/config" })).toThrow(/sensitive/);
-      expect(() => actions.readRepoExcerpt({ path: "large.txt" })).toThrow(/exceeds/);
+      expect(actions.readRepoExcerpt({ path: "large.txt" })).toMatchObject({
+        excerpt: "x".repeat(4096), line_range: { start: 1, end: 1 }, truncated: true
+      });
       expect(readFileSync(join(fixture.project.cwd, "README.md"), "utf8")).toBe("# Demo\nTOKEN=secret\nneedle line\n");
       const repoActions = listPiActions(fixture.db).filter((action) => action.action_type.startsWith("repo."));
 

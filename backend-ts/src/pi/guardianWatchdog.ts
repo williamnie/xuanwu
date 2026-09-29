@@ -246,12 +246,28 @@ function digestChecks(context: PiGuardianWatchdogContext): PiGuardianWatchdogChe
     order by created_at asc limit ${context.limit}
   `).all();
   const due = rows.filter((row) => digestOverdue(row, context.now, context.staleAfterMs));
-  if (due.length === 0) return [ok("digest")];
-  return due.map((row) => alert("digest", "digest_flush_stalled", {
+  const checks = due.map((row) => alert("digest", "digest_flush_stalled", {
     evidence: row,
     message: `digest flush overdue for run group ${row.id}`,
     project_id: row.project_id,
     run_group_id: row.id
+  }));
+  checks.push(...digestDeliveryChecks(context));
+  return checks.length > 0 ? checks : [ok("digest")];
+}
+function digestDeliveryChecks(context: PiGuardianWatchdogContext): PiGuardianWatchdogCheck[] {
+  const rows = context.db.sqlite.query<CountRow, [string, number]>(`
+    select project_id, count(*) as count,
+      min(coalesce(nullif(ready_at, ''), created_at)) as oldest_created_at
+    from pi_notification_intents
+    where kind='digest' and state='ready' and sent_outbox_id=0
+      and julianday(coalesce(nullif(ready_at, ''), created_at))<=julianday(?)
+    group by project_id order by count desc, project_id asc limit ?
+  `).all(context.cutoffText, context.limit);
+  return rows.map((row) => alert("digest", "digest_flush_stalled", {
+    evidence: { ...row, reason: "ready_notifications_stalled" },
+    message: `digest delivery stalled: ${row.count} stale ready notification(s)`,
+    project_id: row.project_id
   }));
 }
 function approvalChecks(context: PiGuardianWatchdogContext): PiGuardianWatchdogCheck[] {
