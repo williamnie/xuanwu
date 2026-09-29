@@ -10,7 +10,6 @@ import { SkillLibraryError } from "../skills/managedTypes.ts";
 import { buildSkillPromptContext } from "../skills/promptContext.ts";
 import { inspectSkillSource } from "../skills/sourceInspection.ts";
 import { createExperienceTemplateDraft } from "../skills/experienceTemplates.ts";
-import type { ExperienceTemplateSelection } from "../skills/experienceTemplateFormat.ts";
 import { executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
 import type { PiRunnerActionContext } from "./runnerActions.ts";
 import { scopedRunnerChatActionContext, isRunnerChatSource } from "./runnerChatAuthorization.ts";
@@ -38,7 +37,7 @@ export const experienceTemplateSchema = Type.Object({
   project_id: text, memory_id: text, expected_memory_revision: Type.Integer({ minimum: 1 })
 }, objectOptions);
 
-export function createSkillLibraryTools(db: RunnerDatabase, project?: Project, context: Omit<PiRunnerActionContext, "project"> = {}, selection: ExperienceTemplateSelection = {}): ToolDefinition[] {
+export function createSkillLibraryTools(db: RunnerDatabase, project?: Project, context: Omit<PiRunnerActionContext, "project"> = {}): ToolDefinition[] {
   const run = (actionType: string, payload: Record<string, unknown>, targetProjectID: string, execute: () => unknown) => {
     const actionContext = skillActionContext(context, actionType, targetProjectID);
     return executeSafePiAction(db, actionContext, { actionType, payload: auditPayload(payload), projectID: targetProjectID, execute });
@@ -63,8 +62,8 @@ export function createSkillLibraryTools(db: RunnerDatabase, project?: Project, c
     tool("skill_manage", "Manage Skill", "Enable, disable, update, roll back, or uninstall an installed skill. Read skill_library_list for key and expected_revision; never guess them. Updates preserve the previous version.", skillManageSchema, params => {
       const installed = requireManagedSkill(db, params.key);
       return run(`skill.${params.operation}`, params, installed.project_id, async () => {
-        // HTTP 的单独管理选择可启用或回滚；更新必须通过重新核验草稿的选择入口。
-        const result = await changeManagedSkill(dirname(db.path), params as Parameters<typeof changeManagedSkill>[1], params.operation === "update" ? {} : selection);
+        // 通用入口不授予经验模板选择能力；模板写操作由 templates/select 核验。
+        const result = await changeManagedSkill(dirname(db.path), params as Parameters<typeof changeManagedSkill>[1]);
         return { operation: params.operation, skill: publicManagedSkill(result), ...(params.operation === "uninstall" ? { uninstalled: true } : { verification: await verifyLibrarySkill(db, result.key) }) };
       });
     }),

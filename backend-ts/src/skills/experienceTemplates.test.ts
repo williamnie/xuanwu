@@ -34,6 +34,43 @@ async function fixture(count = 2) {
   return { db, root, seeds, memory: memory!, input, project: getProject(db, "demo")! };
 }
 
+function httpPost(db: RunnerDatabase) {
+  const router = createDefaultRouter({ database: db });
+  return (path: string, body: unknown) => router.handle(new Request(`http://localhost/api/pi/skill-library/${path}`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
+  }));
+}
+
+for (const operation of ["install", "enable", "rollback"] as const) test(`generic HTTP ${operation} cannot bypass template selection`, async () => {
+  const { db, root, input, memory } = await fixture();
+  const post = httpPost(db);
+  const draft = createExperienceTemplateDraft(db, input);
+  let body: Record<string, unknown> = { id: input.id, project_id: input.project_id, scope: "project", enabled: true,
+    source: { kind: "inline", content: draft.content } };
+  if (operation !== "install") {
+    const first = await selectExperienceTemplate(db, { ...input, template_revision: draft.template_revision, choice: "save" }) as any;
+    let current = first.skill;
+    if (operation === "rollback") {
+      const seed = seedMemoryExperience(db);
+      const latest = rememberPiMemoryItem(db, { ...memory, content: JSON.stringify(seed.experience) });
+      const nextInput = { ...input, expected_memory_revision: latest.revision };
+      const next = createExperienceTemplateDraft(db, nextInput);
+      current = (await selectExperienceTemplate(db, { ...nextInput, key: first.skill.key, expected_revision: first.skill.revision,
+        template_revision: next.template_revision, choice: "save" }) as any).skill;
+    }
+    body = { key: current.key, expected_revision: current.revision, operation,
+      ...(operation === "rollback" ? { revision: first.skill.revision } : {}) };
+  }
+  const before = readSkillCatalog(root);
+  const response = await post(operation === "install" ? "install" : "manage", body);
+  expect(response.status).toBe(403);
+  expect(await response.text()).toContain("明确选择");
+  expect(readSkillCatalog(root)).toEqual(before);
+  const forged = await post(operation === "install" ? "install" : "manage", { ...body, experienceTemplateSelection: true });
+  expect(forged.status).toBe(400);
+  expect(readSkillCatalog(root)).toEqual(before);
+});
+
 test("draft requires independent verified Works and never installs or enables a skill", async () => {
   const single = await fixture(1);
   await expect(Promise.resolve().then(() => createExperienceTemplateDraft(single.db, single.input))).rejects.toThrow("至少两个");
@@ -81,10 +118,7 @@ test("rejects secrets and old task state before returning a draft", async () => 
 test("explicit save is disabled, explicit enable replays in a new task with unchanged tool ceilings", async () => {
   const { db, root, input, project } = await fixture();
   const draft = createExperienceTemplateDraft(db, input);
-  const router = createDefaultRouter({ database: db });
-  const post = (path: string, body: unknown) => router.handle(new Request(`http://localhost/api/pi/skill-library/${path}`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
-  }));
+  const post = httpPost(db);
   const selection = { ...input, template_revision: draft.template_revision };
   expect((await post("templates/select", selection)).status).toBe(400);
   expect(readSkillCatalog(root).skills).toHaveLength(0);
@@ -98,7 +132,14 @@ test("explicit save is disabled, explicit enable replays in a new task with unch
   await expect(tools.find(tool => tool.name === "skill_manage")!.execute("auto-enable", {
     key: saved.skill.key, expected_revision: saved.skill.revision, operation: "enable"
   }, undefined, undefined, undefined as never)).rejects.toThrow("明确选择");
-  expect((await post("manage", { key: saved.skill.key, expected_revision: saved.skill.revision, operation: "enable" })).status).toBe(200);
+  const enable = { ...selection, key: saved.skill.key, expected_revision: saved.skill.revision, choice: "enable" as const };
+  expect((await post("templates/select", { ...enable, template_revision: "0".repeat(64) })).status).toBe(409);
+  expect((await post("templates/select", { ...enable, expected_memory_revision: 1 })).status).toBe(409);
+  expect(await selectExperienceTemplate(db, enable, { source: "runner_chat", authorization: {
+    forbiddenActions: ["skill.enable"], scope: { project_id: "demo" }
+  } })).toMatchObject({ status: "denied" });
+  expect(readSkillCatalog(root).skills[0]!.enabled).toBe(false);
+  expect((await post("templates/select", enable)).status).toBe(200);
   const newTaskTools = createSkillLibraryTools(db, project, { source: "runner_chat" });
   const replay = await newTaskTools.find(tool => tool.name === "skill_use")!.execute("new-task", { id: input.id }, undefined, undefined, undefined as never);
   expect((replay.details as any).content).toBe(draft.content);
@@ -173,7 +214,25 @@ test("template updates and rollbacks reuse immutable skill versions and reject c
   expect(second.skill.enabled).toBe(true); // 更新保留用户此前的启用选择。
   await expect(selectExperienceTemplate(db, { ...nextInput, template_revision: next.template_revision, choice: "save", key: first.skill.key, expected_revision: first.skill.revision })).rejects.toThrow("版本");
   await expect(changeManagedSkill(root, { key: first.skill.key, expected_revision: second.skill.revision, operation: "update", source: { kind: "inline", content: "---\nname: timeout-template\ndescription: overwritten\n---\nerase provenance" } })).rejects.toThrow("明确选择");
-  const rolled = await changeManagedSkill(root, { key: first.skill.key, expected_revision: second.skill.revision, operation: "rollback" }, { experienceTemplateSelection: true });
-  expect(rolled.revision).toBe(first.skill.revision);
+  const post = httpPost(db);
+  const rollback = { ...nextInput, template_revision: draft.template_revision, key: first.skill.key,
+    expected_revision: second.skill.revision, revision: first.skill.revision, choice: "rollback" as const };
+  expect((await post("templates/select", { ...rollback, choice: undefined })).status).toBe(400);
+  expect((await post("templates/select", { ...rollback, revision: undefined })).status).toBe(400);
+  expect((await post("templates/select", { ...rollback, template_revision: next.template_revision })).status).toBe(409);
+  expect((await post("templates/select", { ...rollback, expected_memory_revision: memory.revision })).status).toBe(409);
+  expect((await post("templates/select", { ...rollback, expected_revision: first.skill.revision })).status).toBe(409);
+  expect(await selectExperienceTemplate(db, rollback, { source: "runner_chat", authorization: {
+    forbiddenActions: ["skill.rollback"], scope: { project_id: "demo" }
+  } })).toMatchObject({ status: "denied" });
+  expect(readSkillCatalog(root).skills[0]!.revision).toBe(second.skill.revision);
+  const response = await post("templates/select", rollback);
+  expect(response.status).toBe(200);
+  expect((await response.json() as any).skill.revision).toBe(first.skill.revision);
   expect((await readLibrarySkillResource(db, input.id, undefined, getProject(db, "demo")!)).content).toContain(seeds[0].workID);
+  const edited = updatePiMemoryItem(db, memory.id, { content: JSON.stringify({ ...third.experience, applies_when: "仅限修正后的更小范围" }) });
+  const before = readSkillCatalog(root);
+  expect((await post("templates/select", { ...rollback, expected_memory_revision: edited.revision, expected_revision: first.skill.revision, revision: second.skill.revision,
+    template_revision: next.template_revision })).status).toBe(409);
+  expect(readSkillCatalog(root)).toEqual(before);
 });

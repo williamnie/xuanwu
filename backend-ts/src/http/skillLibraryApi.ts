@@ -21,7 +21,7 @@ export function registerSkillLibraryRoutes(router: Router, db: RunnerDatabase): 
   const action = (toolName: string) => (request: Request) => response(async () => {
       const body = await parseJsonBody(request);
       const project = libraryProject(db, body && typeof body === "object" && "project_id" in body && typeof body.project_id === "string" ? body.project_id : undefined);
-      const definition = createSkillLibraryTools(db, project, { source: "runner_chat" }, { experienceTemplateSelection: true }).find(item => item.name === toolName)!;
+      const definition = createSkillLibraryTools(db, project, { source: "runner_chat" }).find(item => item.name === toolName)!;
       if (!Value.Check(definition.parameters, body)) throw new HttpError(400, "技能请求字段不完整或格式错误");
       return (await definition.execute(`web:${crypto.randomUUID()}`, body as never, undefined, undefined, undefined as never)).details;
     });
@@ -34,8 +34,9 @@ export function registerSkillLibraryRoutes(router: Router, db: RunnerDatabase): 
     const body = await parseJsonBody(request);
     const schema = Type.Object({ ...experienceTemplateSchema.properties,
       template_revision: Type.String({ pattern: "^[a-f0-9]{64}$" }),
-      choice: Type.Union([Type.Literal("save"), Type.Literal("save_and_enable")]),
-      key: Type.Optional(Type.String({ minLength: 1 })), expected_revision: Type.Optional(Type.String({ minLength: 1 }))
+      choice: Type.Union([Type.Literal("save"), Type.Literal("save_and_enable"), Type.Literal("enable"), Type.Literal("rollback")]),
+      key: Type.Optional(Type.String({ minLength: 1 })), expected_revision: Type.Optional(Type.String({ minLength: 1 })),
+      revision: Type.Optional(Type.String({ minLength: 1 }))
     }, { additionalProperties: false });
     if (!Value.Check(schema, body)) throw new HttpError(400, "请明确选择草稿、版本及保存或启用操作");
     libraryProject(db, body.project_id);
