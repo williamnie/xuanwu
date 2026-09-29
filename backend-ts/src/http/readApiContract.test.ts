@@ -197,6 +197,7 @@ describe("read API route contracts", () => {
         "GET /api/issues/:id/runs",
         "GET /api/projects",
         "GET /api/projects/:id",
+        "GET /api/system/delivery-effectiveness",
         "PATCH /api/issues/:id",
         "PATCH /api/projects/:id",
         "POST /api/issues",

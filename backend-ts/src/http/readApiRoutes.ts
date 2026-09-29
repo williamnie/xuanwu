@@ -10,6 +10,7 @@ import {
   type ReadApiDomainHandlers
 } from "./readApiDomain.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
+import { readDeliveryEffectiveness } from "./deliveryEffectivenessApi.ts";
 import type { Router } from "./router.ts";
 import { HumanReviewConflictError } from "../domain/review/humanReview.ts";
 
@@ -18,6 +19,7 @@ export function registerCoreReadRoutes(router: Router, context: ReadApiContext):
   const readHandlers = context.readDatabase
     ? createReadApiDomainHandlers({ ...context, database: context.readDatabase })
     : handlers;
+  router.get("/api/system/delivery-effectiveness", async request => json(await readDeliveryEffectiveness(context.readDatabase ?? context.database, request)));
   registerIssuesPageAuxRoutes(router, readHandlers);
   registerProjectRoutes(router, handlers, readHandlers);
   registerIssueCollectionRoutes(router, handlers, readHandlers);
