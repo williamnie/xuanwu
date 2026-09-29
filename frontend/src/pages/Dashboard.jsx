@@ -1,253 +1,61 @@
-import { eventsApi } from '../api/events.js';
-import { useEffect } from 'react';
-import { useImmer } from 'use-immer';
-import { PRODUCT_NAV_LABELS } from '../brand.js';
-import CodexUsagePanel from '../components/CodexUsagePanel';
+import { AlertTriangle, ArrowRight, MessageSquare } from 'lucide-react';
 import RuntimeHealthStrip from '../components/RuntimeHealthStrip';
-import DeliveryEffectivenessSection from './command-center/DeliveryEffectivenessSection.jsx';
 import ActiveWorkSection from './command-center/ActiveWorkSection.jsx';
 import AttentionSection from './command-center/AttentionSection.jsx';
 import RecentDeliveriesSection from './command-center/RecentDeliveriesSection.jsx';
-import {
-  selectBackendOnline,
-  selectProjects,
-  selectRefreshData,
-  selectWorkSummary,
-  useDataStore,
-} from '../store/dataStore';
-import { 
-  Folder, 
-  ListTodo, 
-  CheckCircle2, 
-  Terminal, 
-  AlertTriangle
-} from 'lucide-react';
+import { selectBackendOnline, selectProjects, selectRefreshData, selectWorkSummary, useDataStore } from '../store/dataStore';
+import { useI18n } from '../i18n/context.js';
 import './Dashboard.css';
 
-export default function Dashboard({
-  navigateTo,
-}) {
+export default function Dashboard({ navigateTo }) {
+  const { t } = useI18n();
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
   const backendOnline = useDataStore(selectBackendOnline);
   const refreshData = useDataStore(selectRefreshData);
-  const [events, updateEvents] = useImmer([]);
-
-  useEffect(() => {
-    let active = true;
-    eventsApi.getEventSummaries({ limit: 20 })
-      .then(result => {
-        if (!active) return;
-        const history = [...(result?.items || [])].reverse().map(summaryDashboardEvent);
-        updateEvents(draft => {
-          const liveIDs = new Set(draft.map(event => event.id).filter(Boolean));
-          draft.push(...history.filter(event => !liveIDs.has(event.id)));
-          if (draft.length > 20) draft.length = 20;
-        });
-      })
-      .catch(() => {});
-
-    // 订阅全局 SSE 事件流
-    const unsubscribe = eventsApi.subscribeToEvents(
-      (event) => {
-        if (event.type === 'agent.event') return;
-        // 将新事件加入实时活动流，限制最多保存 20 条
-        updateEvents((draft) => {
-          draft.unshift({
-            viewId: `${Date.now()}-${Math.random()}`,
-            timestamp: new Date().toLocaleTimeString(),
-            ...event
-          });
-          if (draft.length > 20) {
-            draft.length = 20;
-          }
-        });
-      },
-      () => {
-        // SSE 错误处理
-      }
-    );
-
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [updateEvents]);
-
-  // 统计计算
-  const activeLoopsCount = projects.filter(p => p.loop_status === 'running' || p.auto_run === 1).length; // 简化展示
   const counts = workSummary.counts;
+  const openSettings = section => navigateTo('settings', null, '', '', { settingsSection: section });
 
   return (
-    <div className="dashboard-page animate-fade-in">
-      
-      {/* 头部标题区域 */}
-      <div className="page-intro">
+    <div className="dashboard-page">
+      <header className="dashboard-intro">
         <div>
-          <h1>{PRODUCT_NAV_LABELS.commandCenter}</h1>
-          <p>实时监控项目 Loop 运行状态与待处理 Issue 队列</p>
+          <span className="dashboard-eyebrow">WORKSPACE</span>
+          <h1>{t('nav.commandCenter')}</h1>
+          <p>先处理需要你决定的事，再看工作进展。</p>
         </div>
-        <div className="page-intro-status">
-          <span className={`status-dot ${activeLoopsCount > 0 ? 'active' : 'idle'}`}></span>
-          <span className="page-intro-status-label">
-            {activeLoopsCount > 0 ? `${activeLoopsCount} 个项目 Loop 运行中` : 'Loop 空闲中'}
-          </span>
-        </div>
-      </div>
+        <button className="btn btn-primary" onClick={() => navigateTo('ask-xuanwu')} type="button">
+          <MessageSquare size={14} /> 交给玄武
+        </button>
+      </header>
 
-      {/* 错误警报 */}
       {!backendOnline && (
-        <div className="glass-card dashboard-alert dashboard-alert-error">
-          <AlertTriangle className="dashboard-alert-icon" color="var(--error)" size={24} />
-          <div>
-            <h4>连接后端 API 失败</h4>
-            <p>无法连接到 Runner 后端服务。请确认当前 API 入口已启动且 /api/* 接口可用。</p>
-          </div>
-          <button className="btn btn-secondary" onClick={() => refreshData(['projects', 'workSummary'])}>
-            重试连接
-          </button>
+        <div className="dashboard-connection-error" role="alert">
+          <AlertTriangle size={16} />
+          <div><strong>暂时无法连接玄武</strong><p>当前内容可能不是最新状态，恢复连接后可继续查看。</p></div>
+          <button className="btn btn-secondary" onClick={() => refreshData(['projects', 'workSummary'])} type="button">重试连接</button>
         </div>
       )}
-
       <RuntimeHealthStrip backendOnline={backendOnline} navigateTo={navigateTo} />
 
-      {/* 统计指标网格 */}
-      <div className="grid-cols-3 dashboard-stats">
-        <div className="glass-card dashboard-stat-card">
-          <div className="dashboard-stat-icon dashboard-stat-icon-primary">
-            <Folder size={24} />
-          </div>
-          <div>
-            <div className="dashboard-stat-value">{projects.length}</div>
-            <div className="dashboard-stat-label">总监控项目</div>
-          </div>
-        </div>
+      <dl className="dashboard-facts" aria-label="工作概况">
+        <div><dt>已接入项目</dt><dd>{projects.length}</dd></div>
+        <div><dt>等待执行</dt><dd>{counts.todo}</dd></div>
+        <div><dt>正在执行</dt><dd>{counts.in_progress}</dd></div>
+        <div><dt>累计完成</dt><dd>{counts.done}</dd></div>
+      </dl>
 
-        <div className="glass-card dashboard-stat-card">
-          <div className="dashboard-stat-icon dashboard-stat-icon-warning">
-            <ListTodo size={24} />
-          </div>
-          <div>
-            <div className="dashboard-stat-value">{counts.todo + counts.in_progress}</div>
-            <div className="dashboard-stat-label">队列中 (待处理/运行中)</div>
-          </div>
-        </div>
-
-        <div className="glass-card dashboard-stat-card">
-          <div className="dashboard-stat-icon dashboard-stat-icon-success">
-            <CheckCircle2 size={24} />
-          </div>
-          <div>
-            <div className="dashboard-stat-value">{counts.done}</div>
-            <div className="dashboard-stat-label">已完成 Issue</div>
-          </div>
-        </div>
+      <AttentionSection />
+      <div className="dashboard-work-grid">
+        <ActiveWorkSection navigateTo={navigateTo} projects={projects} />
+        <RecentDeliveriesSection navigateTo={navigateTo} projects={projects} />
       </div>
-
-      <DeliveryEffectivenessSection />
-      <CodexUsagePanel />
-
-
-      {/* 双栏布局 */}
-      <div className="grid-cols-2 dashboard-main-grid">
-        {/* 左栏：Active Work */}
-        <div className="dashboard-col-left">
-          <AttentionSection />
-          <ActiveWorkSection navigateTo={navigateTo} projects={projects} />
-        </div>
-
-        {/* 右栏：系统实时通知 / 活动流 */}
-        <div className="dashboard-col-right">
-          <RecentDeliveriesSection navigateTo={navigateTo} projects={projects} />
-
-          <h3 className="dashboard-events-title">
-            <Terminal size={18} color="var(--primary)" /> 全局活动事件流
-          </h3>
-
-          <div className="glass-card dashboard-events-card">
-            <div className="dashboard-events-header">
-              <span>事件</span>
-              <span>时间</span>
-            </div>
-            
-            <div className="dashboard-events-list">
-              {events.length === 0 ? (
-                <div className="dashboard-events-empty">[等待事件接收...]</div>
-              ) : (
-                events.map(event => {
-                  let badgeTone = 'default';
-                  let text;
-
-                  switch (event.type) {
-                    case 'issue.created':
-                      badgeTone = 'created';
-                      text = `新建任务 Issue #${event.issueId}`;
-                      break;
-                    case 'issue.status_changed':
-                      badgeTone = event.status === 'done' ? 'success' : event.status === 'failed' ? 'error' : 'warning';
-                      text = `Issue #${event.issueId} 状态变更 -> ${event.status}`;
-                      break;
-                    case 'issue.log':
-                      badgeTone = 'log';
-                      text = `Issue #${event.issueId} 日志输出: ${event.text ? event.text.slice(0, 40) + '...' : ''}`;
-                      break;
-                    case 'issue.error':
-                      badgeTone = 'error';
-                      text = `Issue #${event.issueId} 执行失败: ${event.error}`;
-                      break;
-                    case 'runner.started':
-                      badgeTone = 'success';
-                      text = `项目 Loop [${event.projectId}] 已启动`;
-                      break;
-                    case 'runner.stopped':
-                      badgeTone = 'triage';
-                      text = `项目 Loop [${event.projectId}] 已停止`;
-                      break;
-                    case 'approval.required':
-                      badgeTone = 'warning';
-                      text = `Issue #${event.issueId} 触发人工审批请求 [ID: ${event.approvalId}]`;
-                      break;
-                    default:
-                      text = JSON.stringify(event);
-                  }
-
-                  return (
-                    <div key={event.viewId} className="dashboard-event-row">
-                      <span className="dashboard-event-text">
-                        <span className={`dashboard-event-dot is-${badgeTone}`}>•</span>
-                        <span>{text}</span>
-                      </span>
-                      <span className="dashboard-event-time">{event.timestamp}</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
+      <nav className="dashboard-links" aria-label="更多工作入口">
+        <button onClick={() => navigateTo('work')} type="button">查看全部工作 <ArrowRight size={14} /></button>
+        <button onClick={() => navigateTo('analytics')} type="button">查看统计分析 <ArrowRight size={14} /></button>
+        <button onClick={() => openSettings('general')} type="button">管理项目 <ArrowRight size={14} /></button>
+        <button onClick={() => openSettings('advanced:activity')} type="button">查看活动记录 <ArrowRight size={14} /></button>
+      </nav>
     </div>
   );
-}
-
-function summaryDashboardEvent(event) {
-  const payload = dashboardEventPayload(event.payload);
-  return {
-    ...event,
-    viewId: `summary-${event.id}`,
-    issueId: event.issue_id,
-    projectId: event.project_id,
-    status: payload.status || '',
-    text: event.summary || payload.text || '',
-    timestamp: event.created_at ? new Date(event.created_at).toLocaleTimeString() : ''
-  };
-}
-
-function dashboardEventPayload(value) {
-  try {
-    return JSON.parse(value || '{}');
-  } catch {
-    return {};
-  }
 }

@@ -37,14 +37,14 @@ test('Settings renders behavior sections and gates internal panels behind Advanc
     assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
   }
   assert.match(sectionsSource, /tier === 'advanced'/);
-  assert.match(chromeSource, /SETTINGS_PRIMARY_TABS/);
-  assert.match(chromeSource, /SETTINGS_ADVANCED_TABS/);
-  assert.match(chromeSource, /settings-advanced-gate/);
-  assert.match(chromeSource, /const toggleAdvanced/);
-  assert.match(chromeSource, /tab: lastPrimaryTab\.current/);
-  assert.doesNotMatch(chromeSource, /普通设置|settings-advanced-back|ChevronLeft/);
-  assert.match(stylesSource, /\.settings-navigation-row \{\s*flex-wrap: wrap;/);
-  assert.match(stylesSource, /\.settings-tab \{[\s\S]*?border-radius: var\(--radius-sm\);/);
+  assert.match(chromeSource, /SETTINGS_NAVIGATION_GROUPS/);
+  assert.match(chromeSource, /settings-directory/);
+  assert.match(chromeSource, /aria-current=\{route\.tab === tab \? 'page' : undefined\}/);
+  assert.match(chromeSource, /<select value=\{route\.tab\}/);
+  assert.match(chromeSource, /<optgroup/);
+  assert.doesNotMatch(chromeSource, /settings-advanced-gate|toggleAdvanced|role="tab"|role="tablist"/);
+  assert.match(stylesSource, /\.settings-workspace \{[\s\S]*?grid-template-columns: 208px minmax\(0, 1fr\);/);
+  assert.match(stylesSource, /\.settings-directory-link \{[\s\S]*?border-radius: var\(--button-radius\);/);
   assert.doesNotMatch(settingsSource, /CronTasksPanel/);
   assert.doesNotMatch(chromeSource, /Cron 任务已在侧边栏/);
   assert.match(settingsNavigationSource, /id: 'supervisor'/);
@@ -55,7 +55,7 @@ test('Settings renders behavior sections and gates internal panels behind Advanc
 
 test('Settings primary IA owns the complete project list and editor flow', () => {
   assert.match(chromeSource, /title = 'Settings'/);
-  assert.match(chromeSource, /t\('settings\.eyebrow'\)/);
+  assert.match(chromeSource, /settings-eyebrow">SETTINGS/);
   assert.match(sectionsSource, /<Projects \/>/);
   assert.doesNotMatch(sectionsSource, /ProjectSettingsEditor|selectProjects|settings-project-select/);
   assert.match(projectsSource, /projects\.map\(proj =>/);
@@ -94,13 +94,45 @@ test('Settings primary IA owns the complete project list and editor flow', () =>
   assert.match(sectionsSource, /SourcePoliciesPanel/);
 });
 
+test('Settings content stays anchored and maintenance is outside everyday project setup', () => {
+  assert.match(settingsSource, /className="settings-workspace"/);
+  assert.match(settingsSource, /aria-labelledby="settings-section-title"/);
+  assert.match(settingsSource, /contentRef\.current\.scrollTop = 0/);
+  assert.doesNotMatch(settingsSource, /settings-page animate-fade-in/);
+  assert.match(stylesSource, /scrollbar-gutter: stable/);
+  assert.match(stylesSource, /@media \(max-width: 760px\)/);
+  assert.match(stylesSource, /\.settings-directory-link:focus-visible/);
+  const general = sectionsSource.slice(sectionsSource.indexOf('function GeneralSettingsTab'), sectionsSource.indexOf('function LanguageAndVersionCard'));
+  assert.match(general, /<Projects \/>/);
+  assert.doesNotMatch(general, /ReleaseUpdatePanel|RuntimeStatusPanel|RestartAction/);
+  const diagnostics = sectionsSource.slice(sectionsSource.indexOf('function AdvancedDiagnosticsSettingsTab'));
+  assert.match(diagnostics, /<ReleaseUpdatePanel \/>/);
+});
+
+test('Connection setup loads only visited platforms and keeps their drafts mounted between switches', () => {
+  assert.match(sectionsSource, /const \[visitedChannels, setVisitedChannels\] = useState\(\['github'\]\)/);
+  assert.match(sectionsSource, /visited\.includes\(nextChannel\) \? visited : \[\.\.\.visited, nextChannel\]/);
+  for (const channel of ['github', 'feishu', 'telegram', 'health']) {
+    assert.match(sectionsSource, new RegExp(`visitedChannels\\.includes\\('${channel}'\\) && <div`));
+  }
+  assert.match(sectionsSource, /hidden=\{channel !== 'github'\}><GitHubSettingsPanel/);
+  assert.match(sectionsSource, /hidden=\{channel !== 'feishu'\}><FeishuSettingsPanel/);
+  assert.match(sectionsSource, /hidden=\{channel !== 'telegram'\}><TelegramSettingsPanel/);
+  assert.match(sectionsSource, /hidden=\{channel !== 'health'\}><ConnectorDiagnosticsPanel/);
+  assert.match(sectionsSource, /aria-pressed=\{channel === id\}/);
+  assert.match(sectionsSource, /const \[toolsVisited, setToolsVisited\] = useState\(false\)/);
+  assert.match(sectionsSource, /if \(event\.currentTarget\.open\) setToolsVisited\(true\)/);
+  assert.match(sectionsSource, /toolsVisited && <div className="settings-disclosure-content">/);
+  assert.doesNotMatch(sectionsSource, /setToolsVisited\(false\)/);
+});
+
 test('Supervisor Settings keeps provider, behavior and MCP on one page with separate authorities', () => {
   assert.match(sectionsSource, /function SupervisorSettingsTab/);
   assert.match(sectionsSource, /<PiAgentSettingsPanel onOpenCodeAgents=/);
   assert.match(sectionsSource, /<PiMcpManagementPanel embedded \/>/);
   assert.match(sectionsSource, /工具与 MCP/);
-  assert.match(piAgentSource, /Supervisor 模型连接/);
-  assert.match(piAgentSource, /身份与运行偏好/);
+  assert.match(piAgentSource, /连接助手模型/);
+  assert.match(piAgentSource, /助手偏好/);
   assert.match(piAgentSource, /handleConnectionApply/);
   assert.match(piAgentSource, /handleAgentSave/);
   assert.match(piAgentSource, /<SupervisorBehaviorSettings state=\{state\} \/>/);
@@ -215,15 +247,14 @@ test('Settings owns provider, Code Agent, integration and MCP management', () =>
 test('Permissions projects live connector capabilities and preserves deterministic Approval authority', () => {
   assert.match(sectionsSource, /PermissionsSettingsPanel/);
   assert.match(permissionsSettingsSource, /connectorsApi\.getPiConnectors\(\)/);
-  assert.match(permissionsSettingsSource, /Connector permission matrix/);
-  assert.match(permissionsSettingsSource, /Action Gate 风险边界/);
-  for (const authority of ['pi_approval_requests', 'pi_actions', 'pi_action_events']) {
-    assert.match(permissionsSettingsSource, new RegExp(authority));
-  }
+  assert.match(permissionsSettingsSource, /外部连接权限/);
+  assert.match(permissionsSettingsSource, /操作与审批规则/);
+  assert.match(permissionsSettingsSource, /审批决定和执行结果都会保留记录/);
+  assert.match(permissionsSettingsSource, /批准后也不能超出项目允许的权限范围/);
   for (const risk of ['read_only', 'internal_write', 'external_write', 'dangerous']) {
     assert.match(permissionsSettingsSource, new RegExp(risk));
   }
-  assert.match(permissionsSettingsSource, /不能降低风险、扩大 scope 或绕过确定性 deny/);
+  assert.match(permissionsSettingsSource, /不能自行降低风险等级、扩大授权范围或绕过明确禁止的操作/);
   assert.doesNotMatch(permissionsSettingsSource, /window\.confirm|window\.alert/);
 });
 
@@ -233,7 +264,7 @@ test('Notifications edits the existing versioned preference authority and shows 
   assert.match(notificationSettingsSource, /assistantApi\.createPiGuardianPreference/);
   assert.match(notificationSettingsSource, /assistantApi\.disablePiGuardianPreference/);
   assert.match(notificationSettingsSource, /connectorsApi\.getPiConnectors/);
-  assert.match(notificationSettingsSource, /版本与审计记录/);
+  assert.match(notificationSettingsSource, /保存记录/);
   assert.match(settingsProductModelsSource, /source_message_id: 'settings:notifications'/);
   assert.match(settingsProductModelsSource, /digest_policy: form\.digestPolicy/);
   assert.doesNotMatch(notificationSettingsSource, /window\.confirm|window\.alert/);

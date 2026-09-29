@@ -24,11 +24,11 @@ const STATUS_LABELS = {
 };
 
 const REVIEW_LABELS = {
-  approved: 'Review approved',
-  changes_requested: 'Changes requested',
-  not_applicable: 'Review not applicable',
-  not_requested: 'Review not requested',
-  pending: 'Review pending',
+  approved: '评审已通过',
+  changes_requested: '需要修改',
+  not_applicable: '无需评审',
+  not_requested: '尚未请求评审',
+  pending: '等待评审',
 };
 
 export function mergeRecentDeliveryDetail(summary, detail) {
@@ -70,7 +70,7 @@ export function recentDeliveryView(item) {
     reviewLabel: REVIEW_LABELS[reviewState] || reviewState,
     reviewState,
     riskCount,
-    riskLabel: riskCount === 0 ? 'No known risk' : `${riskCount} risk${riskCount === 1 ? '' : 's'}`,
+    riskLabel: riskCount === 0 ? '未记录风险' : `${riskCount} 项风险`,
     status,
     statusLabel: STATUS_LABELS[status] || status,
     statusTone: deliveryTone(status),

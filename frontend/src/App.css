@@ -191,3 +191,10 @@
     width: 100%;
   }
 }
+
+/* 路由切换保持内容位置；不要对整页重播淡入或 padding 位移。 */
+.main-content { scrollbar-gutter: stable; transition: none; }
+.main-content > .animate-fade-in {
+  animation: none;
+}
+.page-navigation-status { position: fixed; z-index: 100; top: 12px; right: 20px; padding: 8px 12px; color: var(--text-secondary); background: var(--surface-overlay); border: 1px solid var(--border-color); font-size: .72rem; pointer-events: none; }

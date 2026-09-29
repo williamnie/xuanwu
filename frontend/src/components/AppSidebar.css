@@ -34,3 +34,6 @@
 .sub-filter-dot.is-failed { background: #ef4444; }
 .sub-filter-dot.is-archive { background: #10b981; }
 .sub-filter-dot.is-project { background: var(--primary); }
+
+.sidebar-footer-actions .nav-item:has(.sidebar-footer-label) { flex-basis: auto; width: auto; padding: 0 10px; gap: 6px; }
+.sidebar-footer-label { font-size: .78rem; }

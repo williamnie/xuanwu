@@ -42,10 +42,10 @@ test('Evidence, review, delivery and risk conclusions stay deterministic', () =>
   }));
   assert.equal(view.evidenceLabel, '3 条验证记录 · 查看结果');
   assert.equal(view.evidencePassed, false);
-  assert.equal(view.reviewLabel, 'Review approved');
+  assert.equal(view.reviewLabel, '评审已通过');
   assert.equal(view.statusLabel, '交付中');
   assert.equal(view.statusTone, 'amber');
-  assert.equal(view.riskLabel, '1 risk');
+  assert.equal(view.riskLabel, '1 项风险');
   assert.equal(view.externalHref, 'https://git.example.test/pulls/697');
 });
 
@@ -88,7 +88,7 @@ test('Dashboard trusts the aggregate Handoff status without per-card hydration o
   assert.match(page, /event\.type !== 'handoff\.notification'/);
   assert.match(page, /REFRESH_INTERVAL_MS = 30_000/);
   assert.match(page, /navigator\.clipboard\.writeText/);
-  assert.match(page, /history\?\.replaceState\?\.\(null, '', item\.links\.view\)/);
+  assert.doesNotMatch(page, /history\?\.replaceState/);
   assert.match(page, /navigateTo\?\.\(route\.page, route\.workId \|\| item\.work_id, '', route\.handoffId\)/);
   assert.doesNotMatch(page, /createHandoff|updateHandoff|controlWork|controlRun/);
   assert.match(dashboard, /<RecentDeliveriesSection navigateTo=\{navigateTo\} projects=\{projects\} \/>/);

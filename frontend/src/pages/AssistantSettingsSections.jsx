@@ -42,47 +42,52 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navi
 }
 
 function SupervisorSettingsTab({ navigateTo }) {
+  const { language } = useI18n();
+  const [toolsVisited, setToolsVisited] = useState(false);
+  const english = language === 'en-US';
   return (
     <div className="settings-supervisor-page">
       <PiAgentSettingsPanel onOpenCodeAgents={() => navigateTo('settings', null, '', '', { settingsSection: 'code-agents' })} />
-      <section className="glass-card settings-configuration-stage settings-supervisor-tools">
-        <SettingsStageHeader
-          description="发现并启用 Supervisor 可以调用的工具，分别控制 server、capability 与写入审批。"
-          index="03"
-          title="工具与 MCP"
-        />
-        <PiMcpManagementPanel embedded />
-      </section>
+      <details className="settings-disclosure" onToggle={(event) => { if (event.currentTarget.open) setToolsVisited(true); }}>
+        <summary>
+          <strong>{english ? 'Tools & MCP' : '工具与 MCP'}</strong>
+          <span>{english ? 'Connect external tools when your assistant needs them.' : '需要让助手调用外部工具时，再展开配置。'}</span>
+        </summary>
+        {toolsVisited && <div className="settings-disclosure-content"><PiMcpManagementPanel embedded /></div>}
+      </details>
     </div>
   );
 }
 
 function IntegrationsSettingsTab() {
+  const { language } = useI18n();
+  const [channel, setChannel] = useState('github');
+  const [visitedChannels, setVisitedChannels] = useState(['github']);
+  const english = language === 'en-US';
+  const selectChannel = (nextChannel) => {
+    setChannel(nextChannel);
+    setVisitedChannels((visited) => visited.includes(nextChannel) ? visited : [...visited, nextChannel]);
+  };
+  const channels = [
+    ['github', 'GitHub', english ? 'Repositories and issues' : '代码仓库与议题'],
+    ['feishu', english ? 'Feishu' : '飞书', english ? 'Messages and notifications' : '消息与通知'],
+    ['telegram', 'Telegram', english ? 'Messages and notifications' : '消息与通知'],
+    ['health', english ? 'Connection health' : '连接检查', english ? 'Status and troubleshooting' : '查看状态与排查问题'],
+  ];
   return (
     <div className="settings-integrations-page">
-      <section className="settings-section-intro">
-        <div className="settings-entry-eyebrow">External channels</div>
-        <h2>Integrations</h2>
-        <p>管理飞书、Git、Tracker、Webhook 等外部事件入口、通知出口与同步健康；Supervisor 主动调用的工具在“工具与 MCP”中管理。</p>
-      </section>
-      <GitHubSettingsPanel />
-      <ConnectorDiagnosticsPanel />
-      <ImChannelRegistryPanel />
-      <FeishuSettingsPanel />
-      <TelegramSettingsPanel />
-    </div>
-  );
-}
-
-function SettingsStageHeader({ description, index, title }) {
-  return (
-    <header className="settings-stage-header">
-      <span>{index}</span>
-      <div>
-        <h2>{title}</h2>
-        <p>{description}</p>
+      <div className="settings-channel-navigation" aria-label={english ? 'Choose a platform' : '选择连接平台'} role="group">
+        {channels.map(([id, title, description]) => (
+          <button aria-pressed={channel === id} className={channel === id ? 'active' : ''} key={id} onClick={() => selectChannel(id)} type="button">
+            <strong>{title}</strong><span>{description}</span>
+          </button>
+        ))}
       </div>
-    </header>
+      {visitedChannels.includes('github') && <div hidden={channel !== 'github'}><GitHubSettingsPanel /></div>}
+      {visitedChannels.includes('feishu') && <div hidden={channel !== 'feishu'}><FeishuSettingsPanel /></div>}
+      {visitedChannels.includes('telegram') && <div hidden={channel !== 'telegram'}><TelegramSettingsPanel /></div>}
+      {visitedChannels.includes('health') && <div className="settings-connection-health" hidden={channel !== 'health'}><ConnectorDiagnosticsPanel /><ImChannelRegistryPanel /></div>}
+    </div>
   );
 }
 
@@ -90,7 +95,6 @@ function GeneralSettingsTab() {
   return (
     <>
       <LanguageAndVersionCard />
-      <ReleaseUpdatePanel />
       <Projects />
     </>
   );
@@ -116,14 +120,17 @@ function LanguageAndVersionCard() {
     <section className="settings-language-bar" title={t('settings.languageDescription')}>
       <div className="settings-language-label">
         <Languages aria-hidden="true" size={15} />
-        <strong>{t('settings.languageTitle')}</strong>
+        <div>
+          <strong>{t('settings.languageTitle')}</strong>
+          <p>{language === 'en-US' ? 'Applies to the interface and future replies from Xuanwu.' : '同时用于界面和玄武后续回答。'}</p>
+        </div>
         {saving ? <span>{t('settings.languageSaving')}</span> : null}
       </div>
-      <div className="settings-language-options" role="radiogroup" aria-label={t('settings.languageTitle')}>
-        <button aria-checked={language === 'zh-CN'} className={language === 'zh-CN' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('zh-CN')} role="radio" type="button">
+      <div className="settings-language-options" role="group" aria-label={t('settings.languageTitle')}>
+        <button aria-pressed={language === 'zh-CN'} className={language === 'zh-CN' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('zh-CN')} type="button">
           {t('settings.chinese')}
         </button>
-        <button aria-checked={language === 'en-US'} className={language === 'en-US' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('en-US')} role="radio" type="button">
+        <button aria-pressed={language === 'en-US'} className={language === 'en-US' ? 'active' : ''} disabled={saving} onClick={() => selectLanguage('en-US')} type="button">
           {t('settings.english')}
         </button>
       </div>
@@ -159,6 +166,11 @@ function AdvancedDiagnosticsSettingsTab({ RuntimeStatusPanel }) {
   const { t } = useI18n();
   return (
     <>
+      <ReleaseUpdatePanel />
+      <RuntimeStatusPanel />
+      <RemoteAccessTokenPanel />
+      <RunnerSettingsPanel />
+      <ProviderAvailabilityPanel />
       <section className="glass-card settings-advanced-danger-zone">
         <div>
           <div className="settings-entry-eyebrow">{t('settings.advancedDiagnostics')}</div>
@@ -167,10 +179,6 @@ function AdvancedDiagnosticsSettingsTab({ RuntimeStatusPanel }) {
         </div>
         <RestartAction />
       </section>
-      <RuntimeStatusPanel />
-      <RemoteAccessTokenPanel />
-      <RunnerSettingsPanel />
-      <ProviderAvailabilityPanel />
     </>
   );
 }

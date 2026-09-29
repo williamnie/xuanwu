@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openDeliveryReview } from './onboardingDeliveryReview.js';
-import { effectivenessFacts } from './deliveryEffectivenessModel.js';
+import { effectivenessFacts, costFacts } from './deliveryEffectivenessModel.js';
 const work = { id: 'xw:work:issues:1', owner: { project_id: 'demo' } };
 
 test('review binds the original Work and reopens persisted conversation without replaying a message', async () => {
@@ -26,7 +26,7 @@ test('metrics preserve unknown costs and do not add currencies together', () => 
   const data = { sampled_works: 0, delivered_works: 0, help_requested_works: 0, delivery_rate: null,
     duration: { median_ms: null }, cost: { unknown_works: 2 } };
   assert.equal(effectivenessFacts(data)[0].value, '—');
-  assert.equal(effectivenessFacts(data).at(-1).value, '未知');
+  assert.equal(costFacts(data).at(-1).value, '未知');
   data.cost.by_currency = [{ currency: 'USD', mean_micros: 0 }, { currency: 'CNY', mean_micros: 1000000 }];
-  assert.equal(effectivenessFacts(data).at(-1).value, 'USD 0.0000 / CNY 1.0000');
+  assert.equal(costFacts(data).at(-1).value, 'USD 0.0000 / CNY 1.0000');
 });

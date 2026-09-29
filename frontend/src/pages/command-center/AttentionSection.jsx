@@ -122,21 +122,20 @@ export default function AttentionSection() {
       <header className="attention-section-header">
         <div>
           <div className="attention-section-kicker"><BellRing size={15} /> Attention</div>
-          <h3>这里只放未送达或必须兜底处理的事项</h3>
-          <p>高危审批优先推送飞书；页面是失败兜底与审计入口，已推送事项默认折叠。</p>
+          <h3>需要你处理</h3>
+          <p>审批、补充信息和异常处理，都在这里。已发送飞书的审批可展开查看。</p>
         </div>
         <div className="attention-section-header-actions">
-          <select aria-label="Attention 类型筛选" className="attention-type-filter" onChange={event => setTypeFilter(event.target.value)} value={typeFilter}>
+          <select aria-label="待处理事项类型" className="attention-type-filter" onChange={event => setTypeFilter(event.target.value)} value={typeFilter}>
             <option value="">全部类型</option><option value="approval_required">等待审批</option><option value="failure">失败</option>
             <option value="blocker">阻塞</option><option value="input_required">等待输入</option><option value="verification_required">待验收</option><option value="connection_issue">连接异常</option>
           </select>
           {summary?.section?.freshness?.is_stale ? <span className="attention-freshness"><AlertTriangle size={13} /> 数据可能过期</span> : null}
           <span className="attention-count">{summary?.section?.counts?.total ?? items.length}</span>
-          <button aria-label="刷新 Attention" disabled={loading} onClick={() => load()} type="button"><RefreshCw className={loading ? 'is-spinning' : ''} size={15} /></button>
+          <button aria-label="刷新待处理事项" disabled={loading} onClick={() => load()} type="button"><RefreshCw className={loading ? 'is-spinning' : ''} size={15} /></button>
         </div>
       </header>
 
-      {!error && summary ? <PiOperationsSummary operations={summary.section.operations} recentHistory={summary.section.recent_history} /> : null}
 
       {error ? <State error={error} onRetry={() => load()} /> : loading && !summary ? <State loading /> : filteredItems.length === 0 ? <State filtered={Boolean(typeFilter)} /> : (
         <><div className="attention-priority-groups">
@@ -148,6 +147,7 @@ export default function AttentionSection() {
           ) : null)}
         </div><PushedApprovalFallback items={pushedApprovals} onReviewApproval={reviewApproval} onSubmit={submit} submitting={submitting} /></>
       )}
+      {!error && summary ? <details className="dashboard-operations"><summary>查看玄武自动维护记录</summary><PiOperationsSummary operations={summary.section.operations} recentHistory={summary.section.recent_history} /></details> : null}
       {approval.loading || approval.error || approval.detail ? <ApprovalDetail approval={approval} onClose={() => setApproval({ detail: null, error: '', loading: false })} onResolve={resolveApproval} submitting={submitting} /> : null}
     </section>
   );
@@ -186,7 +186,7 @@ function AttentionCard({ item, onReviewApproval, onSubmit, submitting }) {
       {view.canAcknowledge ? <button disabled={Boolean(submitting)} onClick={() => onSubmit(item, 'acknowledge')} type="button"><Check size={13} /> {pending('acknowledge') ? '提交中…' : '我知道了，不再显示'}</button> : null}
       {view.canSnooze ? <button disabled={Boolean(submitting)} onClick={() => onSubmit(item, 'snooze')} type="button"><TimerReset size={13} /> {pending('snooze') ? '提交中…' : '稍后提醒'}</button> : null}
       {item.type === 'approval_required' ? (
-        <button className="open" onClick={() => onReviewApproval(item)} type="button">审阅 Decision <ShieldCheck size={13} /></button>
+        <button className="open" onClick={() => onReviewApproval(item)} type="button">查看审批 <ShieldCheck size={13} /></button>
       ) : item.links?.view === '#/attention-inbox' ? (
         <a className="open" href={item.links?.self} rel="noreferrer noopener" target="_blank">查看来源事实 <ArrowUpRight size={13} /></a>
       ) : (
@@ -303,6 +303,6 @@ function formatGateExpiry(value) {
 
 function State({ error = '', filtered = false, loading = false, onRetry }) {
   if (error) return <div className="attention-state error" role="alert"><AlertTriangle size={18} /><span>{error}</span><button onClick={onRetry} type="button">重试</button></div>;
-  if (loading) return <div className="attention-state"><RefreshCw className="is-spinning" size={20} /><strong>正在读取 Attention…</strong></div>;
-  return <div className="attention-state"><CheckCircle2 size={22} /><strong>{filtered ? '当前筛选下没有事项' : '当前没有需要你介入的事项'}</strong><span>{filtered ? '选择其他类型查看。' : 'PI 正在后台处理运行告警；需要你决定时才会出现在这里。'}</span></div>;
+  if (loading) return <div className="attention-state"><RefreshCw className="is-spinning" size={20} /><strong>正在读取待处理事项…</strong></div>;
+  return <div className="attention-state"><CheckCircle2 size={22} /><strong>{filtered ? '当前筛选下没有事项' : '当前没有需要你介入的事项'}</strong><span>{filtered ? '选择其他类型查看。' : '有需要你决定或补充的信息，会出现在这里。'}</span></div>;
 }

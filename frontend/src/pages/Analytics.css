@@ -1,0 +1,7 @@
+.analytics-page { display: flex; flex-direction: column; gap: 24px; min-width: 0; padding-top: 24px; }
+.analytics-intro > span { color: var(--text-muted); font-family: var(--font-mono); font-size: .56rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.analytics-intro h1 { font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 650; letter-spacing: -.02em; margin: 6px 0; }
+.analytics-intro p { color: var(--text-secondary); font-size: .88rem; line-height: 1.6; margin: 0; }
+.analytics-usage { border-top: 1px solid var(--border-color); padding-top: 16px; }
+.analytics-usage > summary { color: var(--text-secondary); cursor: pointer; font-size: .78rem; padding-bottom: 16px; }
+@media (max-width: 760px) { .analytics-page { padding-top: 16px; gap: 16px; } }

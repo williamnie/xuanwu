@@ -34,7 +34,7 @@ test('runtime imports the canonical design tokens for both themes', () => {
   assert.match(designTokensCss, /--button-height:\s*32px/);
   assert.match(designTokensCss, /--sessions-message-max-width:\s*1120px/);
   assert.match(designTokensCss, /--composer-max-width:\s*780px/);
-  assert.match(designTokensCss, /--page-gutter:\s*clamp\(18px,\s*3vw,\s*42px\)/);
+  assert.match(designTokensCss, /--page-gutter:\s*clamp\(18px,\s*3vw,\s*24px\)/);
   assert.match(foundationCss, /--sessions-transcript-max-width:\s*var\(--sessions-message-max-width\)/);
   assert.match(foundationCss, /\.status-badge,[^{]*\{[^}]*border-radius:\s*var\(--radius-xs\)/);
 });

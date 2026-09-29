@@ -8,7 +8,8 @@ export const GLOBAL_COMPOSER_PERMISSION_MODES = [
 const PAGE_LABELS = {
   'ask-xuanwu': 'Ask Xuanwu',
   automations: 'Automations',
-  'command-center': 'Dashboard',
+  analytics: '统计分析',
+  'command-center': '工作台',
   handoffs: 'Handoffs',
   issues: 'Work',
   projects: 'Projects',

@@ -1,4 +1,5 @@
 import {
+  ChartNoAxesCombined,
   CalendarClock,
   BriefcaseBusiness,
   ChevronLeft,
@@ -34,6 +35,7 @@ const NAV_ICONS = {
   work: BriefcaseBusiness,
   runs: Layers,
   automations: CalendarClock,
+  analytics: ChartNoAxesCombined,
   settings: Settings,
 };
 
@@ -43,6 +45,7 @@ const NAV_TRANSLATION_KEYS = {
   work: 'nav.work',
   runs: 'nav.runs',
   automations: 'nav.automations',
+  analytics: 'nav.analytics',
   settings: 'nav.settings',
 };
 
@@ -146,7 +149,7 @@ export default function AppSidebar({
               }}
               type="button"
             >
-              <FooterIcon Icon={NAV_ICONS[item.icon]} />
+              <FooterIcon Icon={NAV_ICONS[item.icon]} /><span className="sidebar-footer-label">{navLabel(item)}</span>
             </button>
           ))}
           <button

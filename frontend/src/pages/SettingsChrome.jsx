@@ -1,95 +1,77 @@
 import { systemApi } from '../api/system.js';
-import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Boxes, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { message } from '../store/toastStore';
-import { SETTINGS_ADVANCED_TABS, SETTINGS_PRIMARY_TABS } from './settingsNavigation';
+import { SETTINGS_NAVIGATION_GROUPS, resolveSettingsRoute, settingsSectionCopy } from './settingsNavigation';
 import { useI18n } from '../i18n/context.js';
 
-export function SettingsHeader({ onRouteChange, route, title = 'Settings' }) {
-  const { t } = useI18n();
+export function SettingsHeader({ title = 'Settings' }) {
+  const { language, t } = useI18n();
   return (
     <header className="settings-header">
       <div className="settings-title-row">
         <div>
-          <div className="settings-eyebrow">
-            <Boxes size={14} /> {t('settings.eyebrow')}
-          </div>
+          <div className="settings-eyebrow">SETTINGS</div>
           <h1>{title === 'Settings' ? t('settings.title') : title}</h1>
+          <p>{language === 'en-US'
+            ? 'Set up your projects, assistant, and notifications. Start with the section you need.'
+            : '管理项目、助手和通知，从你需要调整的设置开始。'}</p>
         </div>
       </div>
-      <SettingsNavigation onRouteChange={onRouteChange} route={route} />
     </header>
   );
 }
 
-function SettingsNavigation({ onRouteChange, route }) {
-  const { t } = useI18n();
-  const advanced = route.tier === 'advanced';
-  const lastPrimaryTab = useRef(advanced ? 'general' : route.tab);
-
-  useEffect(() => {
-    if (!advanced) lastPrimaryTab.current = route.tab;
-  }, [advanced, route.tab]);
-
-  const toggleAdvanced = () => {
-    onRouteChange(advanced
-      ? { tier: 'primary', tab: lastPrimaryTab.current }
-      : { tier: 'advanced', tab: 'diagnostics' });
-  };
-
+export function SettingsNavigation({ onRouteChange, route }) {
+  const { language } = useI18n();
+  const locale = language === 'en-US' ? 'en-US' : 'zh-CN';
+  const label = locale === 'en-US' ? 'Settings sections' : '设置目录';
   return (
-    <div className="settings-navigation-stack">
-      <div className="settings-navigation-row">
-        <nav className="settings-tabs" role="tablist" aria-label={t('settings.primarySections')}>
-          {SETTINGS_PRIMARY_TABS.map((tab) => (
-            <TabButton
-              key={tab.id}
-              active={!advanced && route.tab === tab.id}
-              onClick={() => onRouteChange({ tier: 'primary', tab: tab.id })}
-              tab={tab}
-            />
+    <>
+      <nav className="settings-directory" aria-label={label}>
+        {SETTINGS_NAVIGATION_GROUPS.map((group) => (
+          <div className="settings-directory-group" key={group.id}>
+            <h2>{group.label[locale]}</h2>
+            {group.tabs.map((tab) => {
+              const copy = settingsSectionCopy(tab, locale);
+              return (
+                <button
+                  aria-current={route.tab === tab ? 'page' : undefined}
+                  className={`settings-directory-link${route.tab === tab ? ' active' : ''}`}
+                  key={tab}
+                  onClick={() => onRouteChange(resolveSettingsRoute(tab))}
+                  type="button"
+                >
+                  <span>{copy.title}</span>
+                  <small>{copy.hint}</small>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </nav>
+      <label className="settings-mobile-directory">
+        <span>{label}</span>
+        <select value={route.tab} onChange={(event) => onRouteChange(resolveSettingsRoute(event.target.value))}>
+          {SETTINGS_NAVIGATION_GROUPS.map((group) => (
+            <optgroup key={group.id} label={group.label[locale]}>
+              {group.tabs.map((tab) => <option key={tab} value={tab}>{settingsSectionCopy(tab, locale).title}</option>)}
+            </optgroup>
           ))}
-        </nav>
-        <button
-          aria-label={advanced ? t('settings.closeAdvanced') : t('settings.openAdvanced')}
-          aria-pressed={advanced}
-          className={`settings-advanced-gate ${advanced ? 'active' : ''}`}
-          onClick={toggleAdvanced}
-          type="button"
-        >
-          <SlidersHorizontal size={15} /> {t('settings.advanced')}
-        </button>
-      </div>
-      {advanced && (
-        <div className="settings-advanced-navigation">
-          <nav className="settings-tabs settings-advanced-tabs" role="tablist" aria-label={t('settings.advancedSections')}>
-            {SETTINGS_ADVANCED_TABS.map((tab) => (
-              <TabButton
-                key={tab.id}
-                active={route.tab === tab.id}
-                onClick={() => onRouteChange({ tier: 'advanced', tab: tab.id })}
-                tab={tab}
-              />
-            ))}
-          </nav>
-        </div>
-      )}
-    </div>
+        </select>
+      </label>
+    </>
   );
 }
 
-function TabButton({ active, onClick, tab }) {
-  const { t } = useI18n();
+export function SettingsSectionIntro({ route }) {
+  const { language } = useI18n();
+  const copy = settingsSectionCopy(route.tab, language);
   return (
-    <button
-      aria-selected={active}
-      className={`settings-tab ${active ? 'active' : ''}`}
-      onClick={onClick}
-      role="tab"
-      type="button"
-    >
-      {t(`settings.${tab.id}`)}
-    </button>
+    <header className="settings-section-intro">
+      <h2 id="settings-section-title">{copy.title}</h2>
+      <p>{copy.description}</p>
+    </header>
   );
 }
 

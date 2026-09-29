@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   SETTINGS_ADVANCED_TABS,
   SETTINGS_PRIMARY_TABS,
+  SETTINGS_NAVIGATION_GROUPS,
+  settingsSectionCopy,
   resolveSettingsRoute,
   settingsRouteId,
 } from './settingsNavigation.js';
@@ -23,6 +25,20 @@ test('Settings exposes runtime configuration tabs and keeps diagnostics in Advan
     'activity',
     'policies',
   ]);
+});
+
+test('Every settings section has a visible purpose in both languages and exactly one navigation group', () => {
+  const sections = [...SETTINGS_PRIMARY_TABS, ...SETTINGS_ADVANCED_TABS];
+  const groupedIds = SETTINGS_NAVIGATION_GROUPS.flatMap(group => group.tabs);
+  assert.equal(new Set(groupedIds).size, groupedIds.length);
+  assert.deepEqual([...groupedIds].sort(), sections.map(section => section.id).sort());
+  for (const section of sections) {
+    for (const language of ['zh-CN', 'en-US']) {
+      const copy = settingsSectionCopy(section.id, language);
+      assert.ok(copy.title && copy.description && copy.hint, `${section.id} ${language}`);
+      if (language === 'zh-CN') assert.match(copy.title, /[\u4e00-\u9fff]/);
+    }
+  }
 });
 
 test('Settings accepts only current configuration sections', () => {

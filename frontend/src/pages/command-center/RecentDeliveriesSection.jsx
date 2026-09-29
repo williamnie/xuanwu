@@ -24,7 +24,6 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [visible, setVisible] = useState(false);
   const requestRef = useRef(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
@@ -58,23 +57,20 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
   }, []);
 
   useEffect(() => {
-    if (!visible) return undefined;
     load();
     return () => {
       const activeRequest = requestRef.current;
       requestRef.current = null;
       activeRequest?.controller.abort();
     };
-  }, [load, visible]);
+  }, [load]);
 
   useEffect(() => {
-    if (!visible) return undefined;
     const interval = window.setInterval(() => load({ silent: true }), REFRESH_INTERVAL_MS);
     return () => window.clearInterval(interval);
-  }, [load, visible]);
+  }, [load]);
 
   useEffect(() => {
-    if (!visible) return undefined;
     let timer = 0;
     const unsubscribe = eventsApi.subscribeToEvents((event) => {
       if (timer || event.type !== 'handoff.notification') return;
@@ -87,7 +83,7 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
       window.clearTimeout(timer);
       unsubscribe();
     };
-  }, [load, visible]);
+  }, [load]);
 
   const projectNames = useMemo(
     () => new Map(projects.map(project => [project.id, project.name])),
@@ -101,7 +97,6 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
       toast.error('Handoff 链接无效，已阻止打开');
       return;
     }
-    globalThis.history?.replaceState?.(null, '', item.links.view);
     navigateTo?.(route.page, route.workId || item.work_id, '', route.handoffId);
   };
 
@@ -115,7 +110,7 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
   };
 
   return (
-    <section className="recent-deliveries-section" aria-busy={visible && loading}>
+    <section className="recent-deliveries-section" aria-busy={loading}>
       <header className="recent-deliveries-header">
         <div>
           <div className="recent-deliveries-kicker"><PackageCheck size={15} /> Recent Deliveries</div>
@@ -128,22 +123,17 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
               <AlertTriangle size={13} /> {summary?.detailFailures > 0 ? '部分状态未刷新' : '数据可能过期'}
             </span>
           ) : null}
-          <span className="recent-deliveries-count">{summary?.section?.counts?.total ?? items.length}</span>
-          <button aria-label="刷新 Recent Deliveries" disabled={!visible || loading} onClick={() => load()} type="button">
+          <span className="recent-deliveries-count">{summary ? summary.section.counts?.total ?? items.length : '—'}</span>
+          <button aria-label="刷新最近交付" disabled={loading} onClick={() => load()} type="button">
             <RefreshCw className={loading ? 'is-spinning' : ''} size={15} />
           </button>
         </div>
       </header>
 
-      {!visible ? (
-        <div className="recent-deliveries-state empty">
-          <strong>查看最近完成的交付及待验收结果</strong>
-          <button onClick={() => setVisible(true)} type="button">加载最近交付</button>
-        </div>
-      ) : error ? (
+      {error ? (
         <div className="recent-deliveries-state error" role="alert">
           <AlertTriangle size={18} />
-          <div><strong>Recent Deliveries 暂不可用</strong><span>{error}</span></div>
+          <div><strong>最近交付暂不可用</strong><span>{error}</span></div>
           <button onClick={() => load()} type="button">重试</button>
         </div>
       ) : loading && !summary ? (
@@ -154,9 +144,9 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
       ) : items.length === 0 ? (
         <div className="recent-deliveries-state empty">
           <PackageCheck size={24} />
-          <strong>还没有 Handoff 交付</strong>
-          <span>形成 draft、ready 或 delivered Handoff 后会显示在这里。</span>
-          <button onClick={() => navigateTo?.('work')} type="button">打开 Work Board</button>
+          <strong>还没有交付记录</strong>
+          <span>任务产生交付结果后，会显示内容摘要与验证状态。</span>
+          <button onClick={() => navigateTo?.('work')} type="button">查看全部工作</button>
         </div>
       ) : (
         <div aria-label="最近交付列表" className="recent-deliveries-list" role="region" tabIndex={0}>
@@ -184,6 +174,9 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
                   </span>
                 </div>
 
+                <details className="recent-delivery-details">
+                  <summary>查看交付记录</summary>
+                  <p>{item.summary}</p>
                 <div className="recent-delivery-status-grid">
                   <div><span>Mode</span><strong>{view.modeLabel}</strong></div>
                   <div><span>Review</span><strong data-state={view.reviewState}>{view.reviewLabel}</strong></div>
@@ -199,15 +192,16 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
                   ))}
                 </div>
 
+                </details>
                 <div className="recent-delivery-actions">
                   <button onClick={() => copyRef(view.primaryRef, view.refs.at(-1)?.label || 'Handoff ID')} type="button">
-                    <Copy size={12} /> Copy ref
+                    <Copy size={12} /> 复制引用
                   </button>
                   {view.externalHref ? (
-                    <a href={view.externalHref} rel="noreferrer noopener" target="_blank"><ExternalLink size={12} /> Open PR</a>
+                    <a href={view.externalHref} rel="noreferrer noopener" target="_blank"><ExternalLink size={12} /> 查看 PR</a>
                   ) : null}
                   <button className="open" onClick={() => openHandoff(item)} type="button">
-                    打开 <ArrowUpRight size={13} />
+                    查看结果 <ArrowUpRight size={13} />
                   </button>
                 </div>
 

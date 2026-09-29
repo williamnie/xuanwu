@@ -20,17 +20,17 @@ test('Xuanwu Supervisor Settings exposes runtime prompt summary debug without se
 
 test('Xuanwu Supervisor Settings exposes revisioned presentation-only Persona controls', () => {
   assert.match(panelSource, /对话与通知表达风格/);
-  assert.match(panelSource, /影响 chat 最终回复和通知 message 措辞/);
+  assert.match(panelSource, /调整回复和通知的措辞/);
   assert.match(panelSource, /不改变通知是否发送/);
   assert.match(panelSource, /personaPersonality/);
   assert.match(panelSource, /personaCommunicationStyle/);
   assert.match(panelSource, /personaVerbosity/);
   assert.match(panelSource, /personaLanguageMode/);
-  assert.match(panelSource, /生效范围：chat \/ notification\.message/);
+  assert.match(panelSource, /生效范围：对话回复与通知内容/);
   assert.match(stateSource, /expected_revision: form\.personaRevision/);
   assert.match(stateSource, /err\?\.status === 409/);
   assert.match(stateSource, /保留本地草稿供你合并/);
-  assert.match(panelSource, /检测到 revision 冲突/);
+  assert.match(panelSource, /配置已被更新/);
   assert.match(panelSource, /恢复本地草稿/);
   assert.match(panelSource, /使用服务器版本/);
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
@@ -63,7 +63,7 @@ test('Supervisor page uses one flat API-first connection console with discovered
   assert.match(panelStylesSource, /\.provider-mode-tabs/);
   assert.match(panelStylesSource, /border-radius: 0;/);
   assert.doesNotMatch(panelStylesSource, /\.provider-preset-card/);
-  assert.match(panelSource, /title="Supervisor 模型连接"/);
+  assert.match(panelSource, /title="连接助手模型"/);
   assert.match(panelSource, /<ProviderConnectionSettings state=\{state\} \/>/);
   assert.match(panelSource, /API 连接/);
   assert.match(panelSource, /OAuth 快捷登录/);
@@ -109,9 +109,9 @@ test('saved Supervisor connections can be deleted with in-app confirmation and a
 });
 
 test('Supervisor behavior applies the model selected above without duplicating model controls or rewriting credentials', () => {
-  assert.match(panelSource, /title="身份与运行偏好"/);
+  assert.match(panelSource, /title="助手偏好"/);
   assert.match(panelSource, /<SupervisorBehaviorSettings state=\{state\} \/>/);
-  assert.match(panelSource, /配置玄武使用的模型连接、运行偏好与工具授权/);
+  assert.match(panelSource, /连接玄武助手使用的模型，设置它如何思考、处理任务和回复/);
   assert.match(panelSource, /当前默认模型/);
   assert.doesNotMatch(panelSource, /label="Model Provider"|label="Model ID"/);
   assert.match(panelSource, /state\.handleAgentSave/);
@@ -152,11 +152,11 @@ test('Supervisor settings no longer expose multi-agent or internal provider cont
 });
 
 test('Supervisor settings distinguishes model credentials from Codex and Claude Code login state', () => {
-  assert.match(panelSource, /本页只配置 Supervisor 自己使用的模型连接/);
-  assert.match(panelSource, /Codex \/ Claude Code 作为执行器时使用本机登录态/);
-  assert.match(panelSource, /查看 Code Agents/);
-  assert.match(panelSource, /目前 Supervisor 快捷登录支持 Codex \/ ChatGPT/);
-  assert.match(panelSource, /Claude Code 的本机登录仍在 Code Agents 中管理/);
+  assert.match(panelSource, /为玄武助手选择理解和处理任务的模型/);
+  assert.match(panelSource, /负责写代码的 Codex \/ Claude Code 使用本机登录状态/);
+  assert.match(panelSource, /查看编程工具/);
+  assert.match(panelSource, /助手快捷登录目前支持 Codex \/ ChatGPT/);
+  assert.match(panelSource, /Claude Code 的本机登录请前往“编程工具”检查/);
   assert.match(panelSource, /Base URL \/ API Path/);
 });
 

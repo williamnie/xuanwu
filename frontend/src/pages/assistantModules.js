@@ -38,6 +38,13 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
     availability: 'compatibility',
   },
   {
+    page: 'analytics',
+    label: PRODUCT_NAV_LABELS.analytics,
+    icon: 'analytics',
+    placement: 'primary',
+    availability: 'available',
+  },
+  {
     page: 'settings',
     label: PRODUCT_NAV_LABELS.settings,
     icon: 'settings',

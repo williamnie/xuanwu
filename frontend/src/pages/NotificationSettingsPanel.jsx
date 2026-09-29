@@ -7,9 +7,9 @@ import { PanelLoader } from '../components/TurtleLoader';
 import { buildNotificationPreferencePayload } from './settingsProductModels.js';
 
 const NOTIFY_OPTIONS = [
-  ['needs_user', '需要用户介入'],
+  ['needs_user', '需要你处理'],
   ['budget_exhausted', '预算耗尽'],
-  ['unsafe_or_external', '外部写或安全风险'],
+  ['unsafe_or_external', '外部操作或安全风险'],
   ['actionable', '可立即处理'],
   ['warning', '一般告警'],
   ['info', '普通状态'],
@@ -82,7 +82,7 @@ function NotificationHeader({ loading, onRefresh }) {
     <div className="settings-product-header">
       <div>
         <h2><BellRing size={18} color="var(--primary)" /> 通知渠道与偏好</h2>
-        <p>写入现有 <code>pi_notification_preferences</code>；每次保存创建新版本并保留旧版本状态，不新增通知存储。</p>
+        <p>选择普通消息的通知方式，并查看通知渠道是否已连接。保存为全局偏好，历史设置会保留在下方。</p>
       </div>
       <button className="btn btn-secondary" disabled={loading} onClick={onRefresh} type="button">
         <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />刷新
@@ -96,12 +96,12 @@ function NotificationForm({ state }) {
     <form className="settings-notification-form" onSubmit={state.save}>
       <div className="settings-notification-grid">
         <label className="form-group">
-          <span>投递模式</span>
+          <span>通知方式</span>
           <select className="form-control" value={state.form.mode} onChange={event => state.updateField('mode', event.target.value)}>
-            <option value="normal">Normal · 普通事件立即投递</option>
-            <option value="digest">Digest · 普通事件聚合</option>
-            <option value="quiet">Quiet · 普通事件静默/延后</option>
-            <option value="verbose">Verbose · 扩大普通通知</option>
+            <option value="normal">及时通知 · 普通消息立即发送</option>
+            <option value="digest">汇总通知 · 合并普通消息</option>
+            <option value="quiet">安静模式 · 普通消息静默或延后</option>
+            <option value="verbose">详细通知 · 接收更多普通消息</option>
           </select>
         </label>
         <NotificationChannels connectors={state.connectors} />
@@ -115,8 +115,8 @@ function NotificationForm({ state }) {
           </label>
         ))}
       </fieldset>
-      <div className="settings-notification-safety"><ShieldAlert size={15} /> <strong>安全边界：</strong>urgent、needs_user、预算耗尽和不安全外部写仍可被确定性策略立即送达，普通偏好不能关闭审批或 Action Gate。</div>
-      <button className="btn btn-primary" disabled={state.saving} type="submit"><Save size={15} />{state.saving ? '保存中…' : '保存全局偏好'}</button>
+      <div className="settings-notification-safety"><ShieldAlert size={15} /> <strong>重要提醒：</strong>紧急事项、需要你处理的操作、预算耗尽和有安全风险的外部操作，仍可能立即通知。通知偏好不能关闭审批或解除执行限制。</div>
+      <button className="btn btn-primary" disabled={state.saving} type="submit"><Save size={15} />{state.saving ? '保存中…' : '保存通知偏好'}</button>
     </form>
   );
 }
@@ -126,12 +126,12 @@ function NotificationChannels({ connectors }) {
   return (
     <div className="settings-channel-picker">
       <span>通知渠道</span>
-      <label><CheckCircle2 size={15} color="var(--success)" /> Runner UI <small>本地通知始终可用</small></label>
+      <label><CheckCircle2 size={15} color="var(--success)" /> 玄武页面 <small>本地通知始终可用</small></label>
       {channels.map(channel => {
         const ready = channel.status === 'configured';
         return <label key={channel.id}>
           <span className={`status-dot ${ready ? 'active' : 'idle'}`} />
-          {channel.id === 'feishu' ? 'Feishu' : 'Telegram'} <small>{ready ? '已连接' : '未配置或异常；请在设置 → Integrations 配置'}</small>
+          {channel.id === 'feishu' ? '飞书' : 'Telegram'} <small>{ready ? '已连接' : '未连接或连接异常，请前往设置 → 外部连接检查'}</small>
         </label>;
       })}
     </div>
@@ -139,15 +139,15 @@ function NotificationChannels({ connectors }) {
 }
 
 function PreferenceHistory({ disabling, onDisable, preferences }) {
-  if (preferences.length === 0) return <div className="settings-empty-state">暂无全局通知偏好，当前使用 system default。</div>;
+  if (preferences.length === 0) return <div className="settings-empty-state">尚未自定义通知偏好，当前使用系统默认设置。</div>;
   return (
     <div className="settings-preference-history">
-      <div className="settings-block-title">版本与审计记录</div>
+      <div className="settings-block-title">保存记录</div>
       {preferences.slice(0, 8).map(preference => (
         <div className="settings-preference-row" key={preference.id}>
           <div>
             <strong>{preference.mode} · v{preference.version}</strong>
-            <span>{preference.status} · channels: {channelText(preference)} · updated: {formatTime(preference.updated_at)}</span>
+            <span>{preference.status} · 渠道：{channelText(preference)} · 更新于 {formatTime(preference.updated_at)}</span>
           </div>
           {preference.status === 'active' && !preference.admin_enforced && (
             <button className="btn btn-secondary" disabled={disabling === preference.id} onClick={() => onDisable(preference)} type="button">
@@ -165,7 +165,7 @@ async function savePreference(event, form, load, setError, setSaving) {
   setSaving(true);
   try {
     await assistantApi.createPiGuardianPreference(buildNotificationPreferencePayload(form));
-    message.success('通知偏好已保存并生成新审计版本');
+    message.success('通知偏好已保存');
     setError('');
     await load();
   } catch (error) {
@@ -179,7 +179,7 @@ async function disablePreference(preference, load, setDisabling, setError) {
   setDisabling(preference.id);
   try {
     await assistantApi.disablePiGuardianPreference(preference.id);
-    message.success('通知偏好已禁用；历史版本保留用于审计');
+    message.success('通知偏好已停用，保存记录仍可查看');
     setError('');
     await load();
   } catch (error) {
@@ -204,11 +204,11 @@ function formFromPreference(preference) {
 
 function channelText(preference) {
   const channels = preference.digest_policy?.channels;
-  return Array.isArray(channels) && channels.length > 0 ? channels.join(', ') : 'all configured';
+  return Array.isArray(channels) && channels.length > 0 ? channels.join(', ') : '已连接的全部渠道';
 }
 
 function formatTime(value) {
-  if (!value) return 'unknown';
+  if (!value) return '未知';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }

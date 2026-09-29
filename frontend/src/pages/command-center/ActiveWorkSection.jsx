@@ -108,7 +108,7 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
       navigateTo?.('runs', null, item.latest_run.id);
       return;
     }
-    navigateTo?.('work');
+    navigateTo?.('work', item.id);
   };
 
   const submitAction = async () => {
@@ -148,14 +148,14 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
         <div>
           <div className="active-work-kicker"><Clock3 size={15} /> Active Work</div>
           <h3>进行中的工作</h3>
-          <p>运行、排队、验证与恢复中的 Work，以及最新可审计进展。</p>
+          <p>查看正在执行、排队和验证的任务。</p>
         </div>
         <div className="active-work-header-actions">
           {summary?.section?.freshness?.is_stale ? (
             <span className="active-work-freshness stale"><AlertTriangle size={13} /> 数据可能过期</span>
           ) : null}
           <span className="active-work-count">{summary?.section?.counts?.total ?? items.length}</span>
-          <button aria-label="刷新 Active Work" disabled={loading} onClick={() => load()} type="button">
+          <button aria-label="刷新进行中的工作" disabled={loading} onClick={() => load()} type="button">
             <RefreshCw className={loading ? 'is-spinning' : ''} size={15} />
           </button>
         </div>
@@ -170,13 +170,13 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
       ) : loading && !summary ? (
         <div className="active-work-state empty">
           <RefreshCw className="is-spinning" size={20} />
-          <strong>正在读取 Active Work…</strong>
+          <strong>正在读取工作进展…</strong>
         </div>
       ) : items.length === 0 ? (
         <div className="active-work-state empty">
           <Clock3 size={22} />
-          <strong>当前没有 Active Work</strong>
-          <span>排队、运行、验证或恢复中的 Work 会出现在这里。</span>
+          <strong>当前没有进行中的工作</strong>
+          <span>把任务交给玄武后，可以在这里跟进。</span>
         </div>
       ) : (
         <div className="active-work-list">

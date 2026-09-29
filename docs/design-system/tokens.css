@@ -63,13 +63,13 @@
 
   /* 阴影（只允许这两档） */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 12px 32px -18px rgba(46, 54, 36, 0.25);
+  --shadow-lg: 0 12px 32px -18px rgba(0, 0, 0, 0.12);
 
   /* 版式 */
   --content-max-width: 900px;
   --sessions-message-max-width: 1120px;
   --composer-max-width: 780px;
-  --page-gutter: clamp(18px, 3vw, 42px);
+  --page-gutter: clamp(18px, 3vw, 24px);
 
   /* 终端固定使用深色表面，但仍通过令牌表达 */
   --terminal-bg: #0d1210;
@@ -119,6 +119,6 @@
   --border-light: #181d1b;
   --border-color-hover: #3a423e;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 12px 32px -18px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 32px -18px rgba(0, 0, 0, 0.12);
 }

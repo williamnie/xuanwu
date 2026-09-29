@@ -162,7 +162,7 @@ export default function Projects() {
         <div>
           <div className="settings-entry-eyebrow">项目级设置</div>
           <h2>项目管理</h2>
-          <p>在这里添加、同步和维护项目。添加后，项目会进入 Issue Loop 无人值守接管。</p>
+          <p>添加工作目录、查看项目状态和调整执行配置。启用自动执行后，玄武会处理项目中的待办任务。</p>
         </div>
         <div className="settings-project-panel-actions">
           <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing} type="button">
@@ -274,7 +274,7 @@ export default function Projects() {
                   {/* 队列看板 */}
                   <div className="project-card-stats">
                     <div className="project-card-stat">
-                      <span>Todo</span>
+                      <span>待执行</span>
                       <strong className="count-todo">{todoCount}</strong>
                     </div>
                     <div className="project-card-stat">

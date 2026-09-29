@@ -1,7 +1,7 @@
 /* Page-level refinement for the Xuanwu geek workbench. */
 
 /* Dashboard: inline styles extracted, sharper geometry, mono numerics */
-.dashboard-page { gap: 28px !important; }
+.dashboard-page { gap: 24px; }
 
 .page-intro {
   display: flex;
@@ -196,7 +196,7 @@
 }
 
 /* Dashboard and shared metrics */
-.dashboard-page { gap: 26px !important; }
+.dashboard-page { gap: 24px; }
 .dashboard-page > .grid-cols-3 { gap: 14px; }
 .dashboard-page > .grid-cols-3 > .glass-card {
   min-height: 108px;
@@ -498,7 +498,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 }
 
 @media (max-width: 760px) {
-  .dashboard-page { gap: 18px !important; }
+  .dashboard-page { gap: 16px; }
   .pi-chat-sidebar.glass-card { max-height: 44vh; min-height: 250px; }
   .pi-chat-main.glass-card { min-height: 52vh; }
   .pi-chat-thread { padding: 22px 16px; }

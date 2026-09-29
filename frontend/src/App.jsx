@@ -1,5 +1,5 @@
 import { eventsApi } from './api/events.js';
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react';
 import { useImmer } from 'use-immer';
 import { systemApi } from './api/system.js';
 import { createBackendConnectionMonitor } from './api/backendConnectionMonitor.js';
@@ -39,6 +39,7 @@ import { useI18n } from './i18n/context.js';
 
 // 页面仅在用户实际访问时下载，避免 Dashboard 首屏载入编辑器和会话历史等重型依赖。
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Analytics = lazy(() => import('./pages/Analytics'));
 const WorkBoard = lazy(() => import('./pages/WorkBoard'));
 const Issues = lazy(() => import('./pages/Issues'));
 const IssueDetail = lazy(() => import('./pages/IssueDetail'));
@@ -67,6 +68,7 @@ const PROJECT_RECONCILE_EVENT_TYPES = new Set([
 ]);
 
 const PAGE_DATA_SLICES = {
+  analytics: ['workSummary'],
   automations: ['projects'],
   'command-center': ['projects', 'workSummary'],
   issues: ['projects', 'workSummary'],
@@ -79,6 +81,7 @@ const MOBILE_PAGE_TITLE_KEYS = {
   'ask-xuanwu': 'nav.askXuanwu',
   automations: 'nav.automations',
   'command-center': 'nav.commandCenter',
+  analytics: 'nav.analytics',
   runs: 'nav.runs',
   settings: 'nav.settings',
   work: 'nav.work',
@@ -101,9 +104,11 @@ function PageLoadingFallback() {
 
 export default function App() {
   const { refreshLanguage, t } = useI18n();
+  const [pagePending, startPageTransition] = useTransition();
   const [isMobileViewport, setIsMobileViewport] = useState(() => globalThis.matchMedia?.('(max-width: 760px)').matches || false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const mobileMenuButtonRef = useRef(null);
+  const mainContentRef = useRef(null);
   const sidebarRef = useRef(null);
   const initialRoute = appRouteFromHash(globalThis.location?.hash, { workBoardEnabled: WORK_BOARD_ENABLED });
   const [appState, updateAppState] = useImmer(() => ({
@@ -284,7 +289,7 @@ export default function App() {
       selectedWorkId: targetWorkId,
       settingsSection: targetSettingsSection,
     };
-    updateAppState(draft => {
+    startPageTransition(() => updateAppState(draft => {
       if (draft.currentPage !== resolvedPage) {
         draft.currentPage = resolvedPage;
       }
@@ -301,10 +306,15 @@ export default function App() {
       draft.settingsSection = targetSettingsSection;
       draft.selectedHandoffId = targetHandoffId;
       draft.pageContext = null;
-    });
+    }));
     setMobileSidebarOpen(false);
     writeBrowserRoute(targetRoute);
   }, [selectedPiConversationId, updateAppState, writeBrowserRoute]);
+
+  // 目标页面提交后回到页首，避免继承上一页的长内容滚动位置。
+  useLayoutEffect(() => {
+    if (mainContentRef.current) mainContentRef.current.scrollTop = 0;
+  }, [currentPage]);
 
   const navigateToSettingsSection = useCallback((section) => {
     navigateTo('settings', null, '', '', { settingsSection: section });
@@ -321,13 +331,13 @@ export default function App() {
 
   const openSupervisorConversation = useCallback((conversationId) => {
     const targetConversationId = conversationId || '';
-    updateAppState(draft => {
+    startPageTransition(() => updateAppState(draft => {
       draft.selectedPiConversationId = targetConversationId;
       draft.currentPage = 'ask-xuanwu';
       draft.selectedIssueId = null;
       draft.selectedWorkId = '';
       draft.pageContext = null;
-    });
+    }));
     writeBrowserRoute({
       currentPage: 'ask-xuanwu',
       selectedPiConversationId: targetConversationId,
@@ -350,7 +360,7 @@ export default function App() {
     if (!globalThis.addEventListener) return undefined;
     const syncBrowserRoute = () => {
       const route = appRouteFromHash(globalThis.location?.hash, { workBoardEnabled: WORK_BOARD_ENABLED });
-      updateAppState(draft => {
+      startPageTransition(() => updateAppState(draft => {
         draft.currentPage = route.currentPage;
         draft.filterProject = route.filterProject;
         draft.focusFilter = route.focusFilter;
@@ -362,7 +372,7 @@ export default function App() {
         draft.settingsSection = route.settingsSection;
         draft.selectedWorkId = route.selectedWorkId;
         draft.pageContext = null;
-      });
+      }));
       setMobileSidebarOpen(false);
     };
     globalThis.addEventListener('hashchange', syncBrowserRoute);
@@ -598,7 +608,8 @@ export default function App() {
       />
 
       {/* 右侧主工作区 */}
-      <main className="main-content" inert={isMobileViewport && mobileSidebarOpen ? true : undefined}>
+      <main className="main-content" ref={mainContentRef} aria-busy={pagePending} inert={isMobileViewport && mobileSidebarOpen ? true : undefined}>
+        {pagePending ? <span className="page-navigation-status" role="status">正在打开页面…</span> : null}
         <GuardianAlertBanner />
         {loading ? (
           <div className="app-loading-stage">
@@ -608,6 +619,8 @@ export default function App() {
           <Suspense fallback={<PageLoadingFallback />}>
             {currentPage === 'command-center' ? (
               <Dashboard navigateTo={navigateTo} />
+            ) : currentPage === 'analytics' ? (
+              <Analytics />
             ) : currentPage === 'work' ? (
               <WorkBoard
                 navigateTo={navigateTo}

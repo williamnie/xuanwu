@@ -20,6 +20,7 @@ const EXPECTED_PAGES = [
   'work',
   'runs',
   'automations',
+  'analytics',
   'settings',
 ];
 

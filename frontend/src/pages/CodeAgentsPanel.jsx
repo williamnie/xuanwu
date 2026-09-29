@@ -52,9 +52,9 @@ export default function CodeAgentsPanel() {
       const response = await systemApi.discoverCodeAgents();
       setState({ agents: Array.isArray(response?.agents) ? response.agents : [], error: '', loading: false, runnerSettings });
       if (runnerSettings?.runtime_apply?.codexTransport === 'deferred_active_sessions') {
-        message.warning('Codex app-server 选择已保存；当前 Session 结束后请再次选择，或重启服务以切换 transport');
+        message.warning('Codex 运行方式已保存；请在当前会话结束后再次选择，或重启服务完成切换');
       } else {
-        message.success(`新的 Codex 任务将使用 ${mode === 'app' ? 'Codex App' : 'Codex CLI'} app-server`);
+        message.success(`新的 Codex 任务将使用 ${mode === 'app' ? 'Codex App' : 'Codex CLI'}`);
       }
     } catch (error) {
       setState(current => ({ ...current, error: error.message || '更新 Codex app-server 失败' }));
@@ -68,11 +68,11 @@ export default function CodeAgentsPanel() {
       <header className="code-agents-header">
         <div>
           <span className="code-agents-kicker"><Terminal size={14} /> Execution runtimes</span>
-          <h2>Code Agents</h2>
-          <p>自动探测本机已注册的代码执行器。只有已启用且可用的 Agent 才会出现在新建 Issue、Work、Project 和 Profile 的选择器中。</p>
+          <h2>编程工具</h2>
+          <p>检测本机可用的编程工具。启用并就绪后，可在创建工作项、配置项目或执行方案时选择。</p>
         </div>
         <button className="btn btn-secondary" disabled={state.loading || Boolean(busyAgentID)} onClick={() => load(true)} type="button">
-          <RefreshCw className={state.loading ? 'spin-animation' : ''} size={15} /> 重新发现
+          <RefreshCw className={state.loading ? 'spin-animation' : ''} size={15} /> 重新检测
         </button>
       </header>
 
@@ -88,7 +88,7 @@ export default function CodeAgentsPanel() {
             runnerSettings={state.runnerSettings}
           />
         ))}
-        {!state.loading && state.agents.length === 0 ? <div className="code-agents-empty">没有已注册的 Code Agent。</div> : null}
+        {!state.loading && state.agents.length === 0 ? <div className="code-agents-empty">尚未检测到可用的编程工具。安装并登录后，点击“重新检测”。</div> : null}
       </div>
     </section>
   );
@@ -148,8 +148,8 @@ function CodexBackendSelector({ busy, onSelect, settings }) {
   return (
     <div className="codex-backend-selector">
       <div className="codex-backend-heading">
-        <strong>Codex app-server</strong>
-        <span>同一个 Codex Code Agent 的运行后端；历史 Provider / Session 标识保持不变。</span>
+        <strong>Codex 运行方式</strong>
+        <span>选择新任务使用 Codex CLI 还是 Codex App，已有会话记录会保留。</span>
       </div>
       <div className="codex-backend-options">
         {choices.map(choice => (
@@ -173,7 +173,7 @@ function CodexBackendSelector({ busy, onSelect, settings }) {
           </button>
         ))}
       </div>
-      <p className="codex-backend-note">每次只选择一个默认 app-server；不会在 CLI 与 App 不可用时静默 fallback。</p>
+      <p className="codex-backend-note">每次只能选择一种默认运行方式。如果所选方式不可用，任务会提示错误，不会自动改用另一种。</p>
     </div>
   );
 }

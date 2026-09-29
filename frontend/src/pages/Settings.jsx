@@ -1,6 +1,6 @@
 import { systemApi } from '../api/system.js';
 import { connectorsApi } from '../api/connectors.js';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AlertTriangle, Copy, Download, RefreshCw, ServerCog } from 'lucide-react';
 import { message } from '../store/toastStore';
 import RuntimeLogsPanel from '../components/RuntimeLogsPanel';
@@ -9,12 +9,17 @@ import { formatRuntimeLogsSummary } from '../utils/runtimeLogs';
 import { buildRuntimeDiagnosticsBundle, formatRuntimeDiagnosticsBundle } from '../utils/runtimeDiagnostics';
 import { APP_VERSION, buildVersionSummary } from '../version';
 import SettingsTabContent from './AssistantSettingsSections';
-import { SettingsHeader } from './SettingsChrome';
+import { SettingsHeader, SettingsNavigation, SettingsSectionIntro } from './SettingsChrome';
 import { resolveSettingsRoute, settingsRouteId } from './settingsNavigation';
 import './Settings.css';
 
 export default function Settings({ initialTab = 'general', navigateTo, onSectionChange, pageTitle }) {
   const [route, setRoute] = useState(() => resolveSettingsRoute(initialTab));
+  const contentRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [route.tab]);
 
   useEffect(() => {
     setRoute(resolveSettingsRoute(initialTab));
@@ -26,10 +31,14 @@ export default function Settings({ initialTab = 'general', navigateTo, onSection
   };
 
   return (
-    <div className="settings-page animate-fade-in">
-      <SettingsHeader onRouteChange={handleRouteChange} route={route} title={pageTitle} />
-      <div className="settings-tab-content" role="tabpanel">
-        <SettingsTabContent activeTab={route.tab} tier={route.tier} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />
+    <div className="settings-page">
+      <SettingsHeader title={pageTitle} />
+      <div className="settings-workspace">
+        <SettingsNavigation onRouteChange={handleRouteChange} route={route} />
+        <section className="settings-tab-content" aria-labelledby="settings-section-title" ref={contentRef}>
+          <SettingsSectionIntro route={route} />
+          <SettingsTabContent activeTab={route.tab} tier={route.tier} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />
+        </section>
       </div>
     </div>
   );

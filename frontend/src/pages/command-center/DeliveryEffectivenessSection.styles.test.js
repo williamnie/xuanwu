@@ -13,3 +13,11 @@ test('delivery statistics inherits both themes and confines wide tables at stand
   assert.match(css, /delivery-table-scroll \{ overflow-x: auto/);
   assert.match(css, /overflow-wrap: anywhere/);
 });
+
+test('short pages retain the report footprint and narrow controls wrap without hiding pagination', () => {
+  assert.match(css, /\.delivery-table-scroll\s*\{[^}]*height:\s*280px/);
+  assert.match(css, /\.delivery-query-status\s*\{[^}]*min-height:/);
+  assert.match(css, /\.delivery-results\s*\{[^}]*min-height:/);
+  assert.match(css, /\.delivery-pagination\s*\{[^}]*justify-content:\s*space-between/);
+  assert.match(css, /:disabled\s*\{[^}]*cursor:\s*not-allowed/);
+});

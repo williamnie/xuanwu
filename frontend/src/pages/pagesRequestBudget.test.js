@@ -33,9 +33,9 @@ test('issue detail excludes logs from initial reads and loads a bounded log page
   assert.match(issueDetailDataSource, /activeTab !== 'logs'/);
 });
 
-test('dashboard hydrates bounded persisted activity from the event summary projection', () => {
-  assert.match(dashboardSource, /eventsApi\.getEventSummaries\(\{ limit: 20 \}\)/);
-  assert.match(dashboardSource, /subscribeToEvents/);
+test('dashboard links to activity on demand without hydrating the raw event feed', () => {
+  assert.doesNotMatch(dashboardSource, /eventsApi|subscribeToEvents/);
+  assert.match(dashboardSource, /advanced:activity/);
 });
 
 test('selected issue detail does not reconcile the global issue list', () => {
@@ -68,8 +68,9 @@ test('Runs coalesces lifecycle refreshes, aborts stale reads, and loads detail o
 test('Dashboard trusts bounded summaries instead of hydrating every card detail', () => {
   assert.doesNotMatch(activeWorkSource, /hydrateRunDetails/);
   assert.doesNotMatch(recentDeliveriesSource, /hydrateDeliveryStatuses|handoffsApi\.getHandoff/);
-  assert.match(recentDeliveriesSource, /if \(!visible\) return undefined/);
-  assert.match(recentDeliveriesSource, /setVisible\(true\)/);
+  assert.match(recentDeliveriesSource, /const RECENT_DELIVERY_LIMIT = 5/);
+  assert.match(recentDeliveriesSource, /useEffect\(\(\) => \{\s*load\(\)/);
+  assert.doesNotMatch(recentDeliveriesSource, /setVisible|加载最近交付/);
   assert.match(usageSource, /getProviderUsage\(\{ compact: true, refresh: true \}\)/);
   assert.match(usageSource, /Promise\.all\(/);
   assert.match(usageSource, /useEffect/);

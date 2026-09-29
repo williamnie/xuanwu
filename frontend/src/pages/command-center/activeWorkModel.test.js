@@ -101,6 +101,7 @@ test('Dashboard reads aggregate facts and writes only through Work and Run contr
   const pageSource = readFileSync(new URL('./ActiveWorkSection.jsx', import.meta.url), 'utf8');
   assert.match(apiSource, /\/api\/command-center\/summary/);
   assert.match(pageSource, /sections: \['active_work'\]/);
+  assert.match(pageSource, /navigateTo\?\.\('work', item\.id\)/);
   assert.match(pageSource, /runsApi\.getRun/);
   assert.match(pageSource, /runsApi\.controlRun/);
   assert.match(pageSource, /freshness\?\.is_stale/);

@@ -9,7 +9,7 @@ export default function PiAgentSettingsPanel({ onOpenCodeAgents }) {
   return (
     <section className="supervisor-settings-panel">
       <PanelHeader loading={state.loading} onRefresh={state.loadSettings} />
-      {state.loading ? <PanelLoader label="玄武正在读取 Supervisor 配置…" /> : <SupervisorSettingsForm onOpenCodeAgents={onOpenCodeAgents} state={state} />}
+      {state.loading ? <PanelLoader label="正在读取玄武助手配置…" /> : <SupervisorSettingsForm onOpenCodeAgents={onOpenCodeAgents} state={state} />}
     </section>
   );
 }
@@ -20,16 +20,16 @@ function SupervisorSettingsForm({ onOpenCodeAgents, state }) {
       <SupervisorScopeNote onOpenCodeAgents={onOpenCodeAgents} />
       <SupervisorReadiness state={state} />
       <ConfigurationStage
-        description="从 API 协议、地址和 Key 开始；OAuth 只是可选的快捷认证。获取模型后直接保存为默认模型。"
+        description="填写模型服务提供的 API 地址和 Key，或使用账号快捷登录。获取并选择模型后，保存为默认模型。"
         index="01"
-        title="Supervisor 模型连接"
+        title="连接助手模型"
       >
         <ProviderConnectionSettings state={state} />
       </ConfigurationStage>
       <ConfigurationStage
-        description="配置玄武的名称、thinking、运行指令，以及对话和通知的表达方式。模型默认值在上方连接区维护。"
+        description="设置玄武的名称、思考强度、工作指令，以及对话和通知的表达方式。"
         index="02"
-        title="身份与运行偏好"
+        title="助手偏好"
       >
         <SupervisorBehaviorSettings state={state} />
       </ConfigurationStage>
@@ -42,12 +42,12 @@ function SupervisorScopeNote({ onOpenCodeAgents }) {
     <aside className="supervisor-scope-note">
       <div className="supervisor-scope-copy">
         <span>MODEL RUNTIME</span>
-        <strong>本页只配置 Supervisor 自己使用的模型连接</strong>
-        <p>Codex / Claude Code 作为执行器时使用本机登录态，在 Code Agents 中单独检查。</p>
+        <strong>为玄武助手选择理解和处理任务的模型</strong>
+        <p>负责写代码的 Codex / Claude Code 使用本机登录状态，可在“编程工具”中单独检查。</p>
       </div>
       {onOpenCodeAgents ? (
         <button className="btn btn-secondary supervisor-code-agents-link" onClick={onOpenCodeAgents} type="button">
-          查看 Code Agents <ArrowRight size={14} />
+          查看编程工具 <ArrowRight size={14} />
         </button>
       ) : null}
     </aside>
@@ -211,7 +211,7 @@ function OAuthConnectionFlow({ state }) {
     <section className="provider-flow-section">
       <FlowHeading badge="可选捷径" description="OAuth 只替代 API 地址和 Key；登录后仍要获取并选择模型。" title="用现有账号快捷登录" />
       <CodexOAuthPanel state={state} />
-      <p className="supervisor-oauth-note">目前 Supervisor 快捷登录支持 Codex / ChatGPT。Claude Code 的本机登录仍在 Code Agents 中管理。</p>
+      <p className="supervisor-oauth-note">助手快捷登录目前支持 Codex / ChatGPT。Claude Code 的本机登录请前往“编程工具”检查。</p>
     </section>
   );
 }
@@ -273,7 +273,7 @@ function ConnectionActions({ state }) {
   const busy = state.connectionTest.busy && state.connectionTest.providerId === state.form.modelProvider;
   return (
     <footer className="provider-connection-actions">
-      <p>一次保存连接参数、模型目录和 Supervisor 默认模型，不需要在其他区块重复选择。</p>
+      <p>保存后，玄武助手会使用这里选定的连接和默认模型。</p>
       <div>
         <button className="btn btn-secondary" disabled={busy} onClick={state.testConnection} type="button">
           {busy ? <Loader2 size={14} className="spin-animation" /> : <PlugZap size={14} />} 测试连接
@@ -309,7 +309,7 @@ function ConnectionProgress({ oauthMode, state }) {
       <div className="provider-progress-list">
         <ProgressStep index="1" label="连接凭据" ready={credentialReady} value={oauthMode ? 'Codex OAuth 快捷登录' : '协议、API 地址与 Key'} />
         <ProgressStep index="2" label="选择模型" ready={modelReady} value="远端目录或手动填写" />
-        <ProgressStep index="3" label="保存为默认" ready={applied} value="应用到 Supervisor" />
+        <ProgressStep index="3" label="保存为默认" ready={applied} value="应用到玄武助手" />
       </div>
       <div className="provider-connection-summary">
         <span>连接摘要</span>
@@ -388,7 +388,7 @@ function PanelHeader({ loading, onRefresh }) {
       <div>
         <span className="settings-entry-eyebrow"><Bot size={13} /> XUANWU / MODEL RUNTIME</span>
         <h2>Xuanwu Supervisor</h2>
-        <p>配置玄武使用的模型连接、运行偏好与工具授权。</p>
+        <p>连接玄武助手使用的模型，设置它如何思考、处理任务和回复。</p>
       </div>
       <button className="btn btn-secondary" onClick={onRefresh} disabled={loading} type="button">
         <RefreshCw size={14} className={loading ? 'spin-animation' : ''} /> 刷新
@@ -430,7 +430,7 @@ function ApiTypeField({ state }) {
 function SupervisorSettingsGrid({ state }) {
   return (
     <div className="supervisor-behavior-grid">
-      <TextField form={state.form} label="Supervisor 名称" name="agentName" updateField={state.updateField} />
+      <TextField form={state.form} label="助手名称" name="agentName" updateField={state.updateField} />
       <ThinkingField form={state.form} updateField={state.updateField} />
     </div>
   );
@@ -438,7 +438,7 @@ function SupervisorSettingsGrid({ state }) {
 
 function ThinkingField({ form, updateField }) {
   return (
-    <Field label="Thinking 强度">
+    <Field label="思考强度">
       <select className="form-control" value={form.thinkingLevel} onChange={(event) => updateField('thinkingLevel', event.target.value)}>
         {['off', 'minimal', 'low', 'medium', 'high', 'xhigh'].map((level) => <option key={level} value={level}>{level}</option>)}
       </select>
@@ -509,18 +509,18 @@ function ChatPersonaSettings({ state }) {
   const form = state.form;
   return (
     <details className="persona-settings-disclosure">
-      <summary><Sparkles size={16} /><span><strong>对话与通知表达风格</strong><small>影响 chat 最终回复和通知 message 措辞 · revision {form.personaRevision}</small></span></summary>
+      <summary><Sparkles size={16} /><span><strong>对话与通知表达风格</strong><small>调整回复和通知的措辞 · 配置版本 {form.personaRevision}</small></span></summary>
       <div className="persona-settings-content">
-        <p className="persona-boundary-notice">这里只控制对话和通知的最终措辞，不改变通知是否发送，也不改变权限、审批、工具调用、Issue 状态和完成判定。</p>
+        <p className="persona-boundary-notice">这里只控制对话和通知的最终措辞，不改变通知是否发送，也不改变权限、审批、工具调用、工作项状态和完成判定。</p>
         {state.personaConflictDraft ? <PersonaConflictNotice state={state} /> : null}
-        <label className="persona-enable-field"><input type="checkbox" checked={form.personaEnabled} onChange={(event) => state.updateField('personaEnabled', event.target.checked)} />启用表达 Persona（默认关闭）</label>
+        <label className="persona-enable-field"><input type="checkbox" checked={form.personaEnabled} onChange={(event) => state.updateField('personaEnabled', event.target.checked)} />启用自定义表达风格（默认关闭）</label>
         <Field label={`性格描述 · ${form.personaPersonality.length}/1000`}><textarea className="form-control" maxLength={1000} rows={3} value={form.personaPersonality} onChange={(event) => state.updateField('personaPersonality', event.target.value)} /></Field>
         <Field label={`沟通风格 · ${form.personaCommunicationStyle.length}/2000`}><textarea className="form-control" maxLength={2000} rows={4} value={form.personaCommunicationStyle} onChange={(event) => state.updateField('personaCommunicationStyle', event.target.value)} /></Field>
         <div className="persona-select-grid">
           <Field label="回复长度"><select className="form-control" value={form.personaVerbosity} onChange={(event) => state.updateField('personaVerbosity', event.target.value)}><option value="adaptive">自适应</option><option value="concise">简短</option><option value="detailed">详细</option></select></Field>
           <Field label="语言"><select className="form-control" value={form.personaLanguageMode} onChange={(event) => state.updateField('personaLanguageMode', event.target.value)}><option value="system">跟随系统</option><option value="follow_user">跟随当前用户消息</option></select></Field>
         </div>
-        <span className="persona-profile-badge">生效范围：chat / notification.message</span>
+        <span className="persona-profile-badge">生效范围：对话回复与通知内容</span>
       </div>
     </details>
   );
@@ -530,7 +530,7 @@ function PersonaConflictNotice({ state }) {
   const draft = state.personaConflictDraft;
   return (
     <div className="persona-conflict-notice" role="status">
-      <strong>检测到 revision 冲突</strong>
+      <strong>配置已被更新</strong>
       <span>表单已显示服务器最新配置；下面保留了本地草稿，请比较后选择是否恢复并继续编辑。</span>
       <details><summary>查看本地草稿</summary><pre>{JSON.stringify({ enabled: draft.personaEnabled, personality: draft.personaPersonality, communication_style: draft.personaCommunicationStyle, verbosity: draft.personaVerbosity, language_mode: draft.personaLanguageMode }, null, 2)}</pre></details>
       <div><button className="btn btn-secondary" onClick={state.restorePersonaConflictDraft} type="button">恢复本地草稿</button><button className="btn btn-secondary" onClick={state.dismissPersonaConflictDraft} type="button">使用服务器版本</button></div>
@@ -542,7 +542,7 @@ function PromptSummaryDebug({ state }) {
   const summary = state.promptSummary?.runtime_prompt_summary;
   return (
     <details className="prompt-debug-disclosure">
-      <summary><Eye size={16} /><span><strong>运行 Prompt 调试</strong><small>查看当前生效 Prompt 摘要，不回显 API key/token 或 Persona 原文</small></span></summary>
+      <summary><Eye size={16} /><span><strong>查看生效指令</strong><small>检查当前生效的配置摘要，不回显 API key/token 或表达风格原文</small></span></summary>
       <div className="prompt-debug-content">
         <div className="prompt-debug-heading">
           <div><strong>当前生效 Prompt 摘要</strong><p>只显示自定义 instructions 与 Persona 安全摘要。</p></div>
@@ -564,14 +564,14 @@ function PromptSummaryDebug({ state }) {
 }
 
 function SupervisorEnableField({ form, updateField }) {
-  return <label className="supervisor-enable-field"><input type="checkbox" checked={form.enabled} onChange={(event) => updateField('enabled', event.target.checked)} /> 启用 Supervisor</label>;
+  return <label className="supervisor-enable-field"><input type="checkbox" checked={form.enabled} onChange={(event) => updateField('enabled', event.target.checked)} /> 启用玄武助手</label>;
 }
 
 function SaveRow({ onSave, saving }) {
   return (
     <div className="supervisor-save-row">
       <button className="btn btn-primary" onClick={onSave} disabled={saving} type="button">{saving ? <Loader2 size={14} className="spin-animation" /> : <Save size={14} />} 保存运行偏好</button>
-      <span>只更新名称、Thinking、运行指令与表达风格，不会改写上方连接凭据。</span>
+      <span>保存名称、思考强度、运行指令与表达风格，不会改写上方连接凭据。</span>
     </div>
   );
 }

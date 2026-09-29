@@ -1,17 +1,31 @@
 const percentage = value => typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(0)}%` : '—';
 
 export function effectivenessFacts(data) {
-  const money = data.cost?.by_currency || [];
-  const time = data.duration?.median_ms;
   return [
-    { label: '可验收交付率', value: percentage(data.delivery_rate), detail: `${data.delivered_works} / ${data.sampled_works} 个结束任务` },
-    { label: '无求助记录的交付率', value: percentage(data.without_help_delivery_rate), detail: `${data.help_requested_works ?? '—'} 个任务有求助记录` },
-    { label: '恢复后交付率', value: percentage(data.recovery?.delivery_rate), detail: `${data.recovery?.delivered_works ?? '未知'} / ${data.recovery?.works ?? '未知'} 个恢复任务` },
-    { label: '多次恢复无进展', value: data.recovery?.repeated_no_progress_works ?? '—', detail: `累计 ${data.recovery?.no_progress_attempts ?? '未知'} 次无进展` },
-    { label: '完成耗时中位数', value: typeof time === 'number' ? `${Math.round(time / 60000)} 分钟` : '—', detail: `${data.duration?.known_works ?? '未知'} 个完成任务有时间记录` },
-    { label: '每个完成任务平均成本', value: money.length ? money.map(item => `${item.currency} ${(item.mean_micros / 1e6).toFixed(4)}`).join(' / ') : '未知', detail: `${data.cost?.known_works ?? '未知'} 个已知 · ${data.cost?.unknown_works ?? '未知'} 个未知` },
+    { label: '交付验证通过率', value: percentage(data.delivery_rate), detail: data.sampled_works == null ? '交付与验证记录覆盖情况未知' : `${data.delivered_works ?? '未知'} / ${data.sampled_works} 个结束任务已完成且交付、验证记录齐全` },
+    { label: '已完成任务', value: data.completed_works ?? '未知', detail: '任务已标为完成；交付验证通过才计入通过率' },
+    { label: '请求协助的任务', value: data.help_requested_works ?? '未知', detail: data.intervention?.no_help_record_works == null ? '无求助记录的任务数未知；人工介入情况仍未知' : `${data.intervention.no_help_record_works} 个任务无求助记录；不代表没有人工介入` },
+    { label: '完成用时中位数', value: metricMinutes(data.duration?.median_ms), detail: data.duration?.known_works == null ? '时间记录覆盖情况未知' : `${data.duration.known_works} 个完成任务有时间记录；不含缺失数据` },
   ];
 }
+
+export function costFacts(data) {
+  const money = data.cost?.by_currency || [];
+  return [
+    { label: '任务执行金额（已知小计）', value: currencySubtotal(data.execution_cost), detail: `${data.execution_cost?.known_works ?? '未知'} / ${data.sampled_works ?? '未知'} 个结束任务有完整金额，包括失败和取消的任务` },
+    { label: '每个完成任务平均金额', value: money.length ? money.map(item => `${item.currency} ${(item.mean_micros / 1e6).toFixed(4)}`).join(' / ') : '未知', detail: `${data.cost?.known_works ?? '未知'} 个已知 · ${data.cost?.unknown_works ?? '未知'} 个未知；不外推缺失金额` },
+  ];
+}
+
+export function recoveryFacts(data) {
+  return [
+    { label: '恢复后交付验证通过率', value: percentage(data.recovery?.delivery_rate), detail: `${data.recovery?.delivered_works ?? '未知'} / ${data.recovery?.works ?? '未知'} 个恢复任务` },
+    { label: '多次恢复仍无进展', value: data.recovery?.repeated_no_progress_works ?? '未知', detail: `累计 ${data.recovery?.no_progress_attempts ?? '未知'} 次无进展` },
+  ];
+}
+
+export const currencySubtotal = cost => cost?.by_currency?.length
+  ? cost.by_currency.map(item => `${item.currency} ${(item.amount_micros / 1e6).toFixed(4)}`).join(' / ') : '未知';
 
 export const metricMinutes = value => typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value / 60000)} 分钟` : '未知';
 export const metricMoney = cost => cost?.status === 'known' && Number.isFinite(cost.amount_micros) ? `${cost.currency} ${(cost.amount_micros / 1e6).toFixed(4)}` : '未知';
