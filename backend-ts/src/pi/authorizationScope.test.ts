@@ -56,6 +56,17 @@ describe("PI authorization scope matcher", () => {
       .toEqual({ matched: false, reason: "runner workspace scope does not match action issue.enqueue" });
   });
 
+  test("global Issue scope includes lifecycle tools without granting repository or arbitrary Session writes", () => {
+    for (const action_type of ["human_review.request", "human_review.respond", "agent.executor_assign", "agent.profile_recommend",
+      "work.create", "work.read", "work.update", "run.read", "run.resume", "session.list", "session.read_summary"]) {
+      expect(matchPiAuthorizationScope({ ...BASE, action_type, project_id: "other" }, { runner_resource: "issues" }).matched).toBe(true);
+    }
+    for (const action_type of ["repo.search", "workspace.write_file", "session.steer", "skill.install"]) {
+      expect(matchPiAuthorizationScope({ ...BASE, action_type, project_id: "other" }, { runner_resource: "issues" }).matched).toBe(false);
+    }
+    expect(matchPiAuthorizationScope({ ...BASE, action_type: "human_review.respond", project_id: "other" }, { project_id: "demo" }).matched).toBe(false);
+  });
+
   test("keeps Runner settings and service lifecycle in explicit global scopes", () => {
     expect(matchPiAuthorizationScope(
       { ...BASE, action_type: "agent.catalog_list", project_id: "" },

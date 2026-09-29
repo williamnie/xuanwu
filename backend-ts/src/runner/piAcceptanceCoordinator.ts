@@ -197,6 +197,8 @@ function dueIssues(db: RunnerDatabase, now: Date, cooldownMs: number): Issue[] {
     if (!activity) return true;
     if (activity.status === "queued" && activity.source === "human-review-redundant-recovery") return true;
     if (activity.status === "completed") {
+      if (listIssueEvents(db, issue.id, { limit: 1, afterID: activity.event_id,
+        types: ["issue.human_review_answered.v1", "issue.pi_acceptance_requested.v1"] }).length > 0) return true;
       const currentCard = readCurrentIssueCompletionCard(db, issue.id);
       return currentCard?.fingerprint !== activity.card_fingerprint;
     }

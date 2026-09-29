@@ -376,33 +376,36 @@ export async function reviewHumanIssue(
   if (action === "request_changes") {
     return resumeRevisionInSameSession(db, mustGetIssue(db, issueID), request, comment, runtime);
   }
-  if (comment) {
-    recordIssueEvent(db, issueID, "issue.comment", {
-      author: "user",
-      body: comment,
-      source: `human_review_${action}`
+  return db.transaction(() => {
+    requireCurrentReviewRequest(db, issueID, input);
+    if (comment) {
+      recordIssueEvent(db, issueID, "issue.comment", {
+        author: "user",
+        body: comment,
+        source: `human_review_${action}`
+      });
+    }
+    recordIssueEvent(db, issueID, HUMAN_REVIEW_EVENT_TYPES.superseded, {
+      action,
+      comment,
+      request_id: request.id,
+      revision: request.revision
     });
-  }
-  recordIssueEvent(db, issueID, HUMAN_REVIEW_EVENT_TYPES.superseded, {
-    action,
-    comment,
-    request_id: request.id,
-    revision: request.revision
-  });
-  updateIssue(db, issueID, { error: "", status: "in_progress" });
-  recordIssueEvent(db, issueID, "issue.human_review_answered.v1", {
-    action,
-    comment,
-    origin_card_fingerprint: request.origin_card_fingerprint,
-    origin_run_id: request.origin_run_id,
-    request_snapshot: humanReviewRequestSnapshot(request),
-    request_id: request.id,
-    revision: request.revision
-  });
-  return requestIssuePiAcceptance(db, issueID, {
-    reason: `human review answered: ${action}`,
-    source: "human_review"
-  });
+    updateIssue(db, issueID, { error: "", status: "in_progress", auto_retry_next_at: "", auto_retry_reason: "" });
+    recordIssueEvent(db, issueID, "issue.human_review_answered.v1", {
+      action,
+      comment,
+      origin_card_fingerprint: request.origin_card_fingerprint,
+      origin_run_id: request.origin_run_id,
+      request_snapshot: humanReviewRequestSnapshot(request),
+      request_id: request.id,
+      revision: request.revision
+    });
+    return requestIssuePiAcceptance(db, issueID, {
+      reason: `human review answered: ${action}`,
+      source: "human_review"
+    });
+  }).immediate();
 }
 
 function humanReviewRequestSnapshot(request: HumanReviewRequest): Omit<HumanReviewRequest, "status"> {

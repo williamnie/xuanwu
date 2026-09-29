@@ -82,3 +82,13 @@ bun test src/xuanwu/approvalSemantics.test.ts src/pi/actionGate.test.ts src/pi/a
 ```
 
 覆盖：越权/过期 gate deny；LLM policy 不能把 high-risk 变 execute；session grant 降级/TTL=0；idempotency recovery replay 不重复 dispatch；canonical source-of-truth/rollback/delete gate。provider resolver 的 terminal/retry 行为继续由 `approvalRequests`、`piApprovalRequestsApi` 和 `providerApprovalRequests` focused tests 覆盖。
+
+## 9. Runner Chat 的全局 Issue 管理与人工收尾
+
+`runner_chat` 与所有 `*_runner_chat` 通道按明确 Issue ID 管理已有任务；聊天当前绑定的 Project 不限制可操作的 Issue。`runner_resource: issues` 包含人工请求/回答、执行器选择、Work/Run 操作与执行 Session 的只读观察。动作 allowlist、精确授权 envelope、运行态前置条件和高风险确认仍独立校验；这不授予仓库文件或外部系统权限。Issue mutation 的目标范围由 `actionContracts.ts` 统一声明，不能只补工具可见性或动作名单而遗漏 scope。
+
+已结束的 `needs_user` Run 如果没有待回答的人工请求，可经 `issue_acceptance_request` 回到 PI 验收；事务内记录请求并恢复 Issue 的 `in_progress`，不新建或重开 Run。存在 open review 时必须用其 request ID/revision 回答。用户明确接受当前交付应记录 `kind=acceptance`，不能误标为仅授权进一步执行的 `risk_acceptance`；已经给出的明确确认不要求用户再说一遍。
+
+人工回答、Issue 状态和验收请求在同一事务中保存，前置条件失败时整体回滚。调度器按事件 ID 检测新的人工回答，避免秒级时间戳相同导致回答被忽略。完成仍由既有 PI 验收与 Handoff writer 落库，后续依赖仍以 authoritative `done` 为准。
+
+回归入口：`runnerChatMainFlow.test.ts` 覆盖四类聊天来源、全局/跨项目上下文、人工收尾、无额外 Run、依赖解锁和失败回滚；`piConversationMessagesApi.test.ts` 覆盖真实聊天入口、capability invocation 和 Action Gate 的贯通。

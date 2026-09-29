@@ -217,14 +217,14 @@ export function createPiRunnerActions(
     ...createPiAgentOrchestrationActions(db, context),
     ...createPiMcpActions(db, { ...context, projectID: context.project?.id }),
     ...createPiRepoReadActions(db, context),
-    commentIssue: (input) => executeSafePiAction(db, context, {
+    commentIssue: (input) => executeSafePiAction(db, scopedRunnerChatActionContext(context, "issue.comment", { issueID: input.issue_id }), {
       actionType: "issue.comment",
       issueID: input.issue_id,
       payload: { body: input.body, issue_id: input.issue_id },
       projectID: issueProjectID(db, input.issue_id, context),
       execute: () => createIssueComment(db, input.issue_id, { author: "agent", body: input.body })
     }),
-    createHumanReviewRequest: (input) => executeSafePiAction(db, context, {
+    createHumanReviewRequest: (input) => executeSafePiAction(db, scopedRunnerChatActionContext(context, "human_review.request", { issueID: input.issue_id }), {
       actionType: "human_review.request",
       issueID: input.issue_id,
       payload: cleanObjectPayload(input),

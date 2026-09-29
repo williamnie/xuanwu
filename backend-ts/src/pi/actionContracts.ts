@@ -14,10 +14,13 @@ export type PiActionContract = {
 
 const CONTRACTS: PiActionContract[] = [
   ...["install", "enable", "disable", "update", "rollback", "uninstall"].map(action => contract(`skill.${action}`, "confirm", "project", "ttl_only", "inline_current_turn")),
+  contract("agent.executor_assign", "confirm", "issue", "ttl_only"),
   contract("agent.workflow_request", "confirm", "issue", "ttl_only"),
+  contract("human_review.request", "safe", "issue", "ttl_only", "inline_current_turn"),
   contract("human_review.respond", "confirm", "issue", "required"),
   contract("issue.acceptance_request", "confirm", "issue", "ttl_only"),
   contract("issue.cancel", "confirm", "issue_batch", "required"),
+  contract("issue.comment", "safe", "issue", "ttl_only"),
   contract("issue.create", "confirm", "project", "ttl_only"),
   contract("issue.delete", "high", "issue_batch", "required"),
   contract("issue.enqueue", "confirm", "issue", "required"),

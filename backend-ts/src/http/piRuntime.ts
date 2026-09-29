@@ -84,6 +84,7 @@ export type RuntimeSessionInput = {
 export const PI_RUNNER_CHAT_ACTIONS = [
   "skill.install", "skill.enable", "skill.disable", "skill.update", "skill.rollback", "skill.uninstall",
   ...PI_SAFE_ACTION_TYPES,
+  "agent.executor_assign",
   "agent.workflow_request",
   "human_review.respond",
   "issue.create",
@@ -107,7 +108,10 @@ export const PI_RUNNER_CHAT_ACTIONS = [
 
 export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
   "skill.install", "skill.enable", "skill.disable", "skill.update", "skill.rollback", "skill.uninstall",
+  "agent.executor_assign",
   "agent.workflow_request",
+  "human_review.request",
+  "issue.comment",
   "human_review.respond",
   "issue.create",
   "issue.cancel",

@@ -75,10 +75,12 @@ export type PiActionDispatchContext = {
 };
 
 export const PI_ACTION_DISPATCH_TYPES = new Set([
+  "agent.executor_assign",
   "agent.workflow_request",
   "human_review.respond",
   "issue.acceptance_request",
   "issue.cancel",
+  "issue.comment",
   "issue.create",
   "issue.delete",
   "issue.enqueue",

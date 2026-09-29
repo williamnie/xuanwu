@@ -105,9 +105,13 @@ function assignExecutorProfileProposal(
   input: ExecutorAssignmentInput
 ) {
   const proposal = createExecutorAssignmentProposal(db, context.project, input);
+  const actionContext = scopedRunnerChatActionContext(context, "agent.executor_assign", {
+    issueID: proposal.issueID,
+    projectID: proposal.projectID
+  });
   return createPendingPiAction(
     db,
-    context,
+    actionContext,
     { ...proposal, actionType: "agent.executor_assign" },
     () => updateIssue(db, input.issue_id, objectPayload(proposal.payload.patch))
   );

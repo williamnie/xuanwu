@@ -228,7 +228,7 @@ describe("PI runner action gate", () => {
         expect(getPiAction(fixture.db, result.action_id)).toMatchObject({
           action_type: "human_review.respond",
           gate_decision: "execute",
-          gate_reason: expect.stringContaining(`scope matched issue ${issueID}`),
+          gate_reason: expect.stringContaining("scope matched runner issues"),
           issue_id: issueID,
           project_id: fixture.project.id,
           status: "completed"

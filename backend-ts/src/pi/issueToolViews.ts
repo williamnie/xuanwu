@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 
 export const DEFAULT_ISSUE_LIST_LIMIT = 50;
 export const MAX_ISSUE_LIST_LIMIT = 50;
@@ -101,17 +102,24 @@ export function createIssueCompletionProjection(
   const request = latestPiDecisionRequest(db, issue.id);
   const runEnded = Boolean(latestRun?.ended_at);
   const implementationComplete = issue.status === "done";
+  const humanReview = readIssueDecisionProjection(db, issue.id).owner === "human";
   const state = issue.status === "done"
     ? "complete"
-    : issue.status === "in_progress" && runEnded
-      ? "acceptance_pending"
-      : issue.status === "failed" && latestRun?.status === "failed"
-        ? "execution_failed"
-        : runEnded
-          ? "completion_unresolved"
-          : latestRun
-            ? "running"
-            : "not_started";
+    : issue.status === "cancelled"
+      ? "cancelled"
+      : humanReview
+        ? "human_review"
+        : issue.status === "needs_user" && !runEnded
+          ? "needs_user"
+          : issue.status === "in_progress" && runEnded
+            ? "acceptance_pending"
+            : issue.status === "failed" && latestRun?.status === "failed"
+              ? "execution_failed"
+              : runEnded
+                ? "completion_unresolved"
+                : latestRun
+                  ? "running"
+                  : "not_started";
   return {
     blocker: null,
     formal_status: issue.status,
@@ -140,6 +148,9 @@ function latestPiDecisionRequest(db: RunnerDatabase, issueID: number): Record<st
 
 function completionNextStep(state: string): string {
   if (state === "complete") return "No completion action is required.";
+  if (state === "cancelled") return "The Issue is cancelled; no acceptance or automatic retry is required.";
+  if (state === "human_review") return "Read the current review request and use human_review_response with its exact id and revision to record the user's decision.";
+  if (state === "needs_user") return "Inspect the current Issue and Run before recording a human decision; do not start an automatic retry.";
   if (state === "acceptance_pending") return "Let the issue-scoped PI read the Completion Card and Provider Session, then make one semantic acceptance decision.";
   if (state === "execution_failed") return "Inspect the failed Run and retry only after confirming the failure is retryable.";
   if (state === "running") return "Wait for or inspect the active Run.";

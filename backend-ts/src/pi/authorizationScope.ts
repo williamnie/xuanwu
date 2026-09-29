@@ -1,4 +1,6 @@
 import type { PiActionEnvelope, PiAuthorizationScope, PiGatePolicy } from "./actionGate.ts";
+import { piActionContract } from "./actionContracts.ts";
+import { SUPERVISOR_CONTROL_READ_ACTION_TYPES } from "./supervisorControlContracts.ts";
 
 export type PiAuthorizationScopeMatch = { matched: boolean; reason: string };
 
@@ -108,7 +110,13 @@ function matchRunnerScope(
 }
 
 function runnerIssueAction(actionType: string): boolean {
+  // 全局 Issue 管理包含其人工决策、执行器与 Work/Run 入口，不包含仓库文件访问。
+  const target = piActionContract(actionType)?.target;
   return actionType.startsWith("issue.") || actionType.startsWith("issue_completion_watch.") ||
+    target === "issue" || target === "issue_batch" || target === "work" || target === "run" ||
+    actionType === "work.create" ||
+    SUPERVISOR_CONTROL_READ_ACTION_TYPES.some(type => type === actionType) ||
+    actionType === "agent.profile_recommend" || actionType === "session.list" || actionType === "session.read_summary" ||
     actionType === "project.status" || actionType === "project.list";
 }
 

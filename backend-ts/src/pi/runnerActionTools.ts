@@ -199,7 +199,7 @@ function agentOrchestrationTools(actions: PiRunnerActionLayer): ToolDefinition[]
       Type.Object({ issue_id: positiveID, reason: requiredText, requested_action: optionalString }, objectOptions),
       actions.escalateNeedsUser),
     actionTool("human_review_request_create", "Human Review Request Create",
-      "Create an immediate, explicit human review request only when PI cannot decide a product, scope, or risk tradeoff. The question must say exactly what the human is approving.",
+      "Create an explicit review for a needs_user Issue. Use kind=acceptance when the user confirms the current delivery is complete or accepts it as-is; use decision/risk_acceptance only for choices or authorization to do further work. If the user already explicitly confirmed this delivery, record that exact scope here and answer it with human_review_response in this turn; do not ask them to confirm again or switch Project chats. The question must say exactly what is accepted.",
       Type.Object({
         acceptance_summary: textList,
         consequences: optionalString,
@@ -256,7 +256,7 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
       "Return compact Run and PI acceptance status for one issue without raw logs. Check completion.retry_recommended before proposing retry.",
       Type.Object({ id: positiveID }, objectOptions), actions.issueExecutionStatus),
     actionTool("issue_acceptance_request", "Issue Acceptance Request",
-      "Request issue-scoped PI semantic acceptance for an ended Run. PI reads the current Provider Session and workspace facts before deciding.",
+      "Request issue-scoped PI semantic acceptance for an ended Run in in_progress or needs_user without an open human review. If a review is open, use human_review_response. Explicit human acceptance of a needs_user delivery should be recorded through human_review_request_create(kind=acceptance) and human_review_response, not as a request for further verification. PI reads current facts before deciding; this tool does not force done or start a new Run.",
       Type.Object({ issue_id: positiveID, rationale: optionalString }, objectOptions),
       actions.requestIssueAcceptanceAction),
     actionTool("issue_read", "Issue Read", "Read one runner Issue with its full body, dependency readiness, compact Run state, recent events, and current PI decision state.",

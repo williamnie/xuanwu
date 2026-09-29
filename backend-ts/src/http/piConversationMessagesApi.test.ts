@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listContextBundles } from "../db/repositories/contextBundles.ts";
@@ -18,7 +19,10 @@ import {
   readPiConversationSse
 } from "./piConversationSse.testSupport.ts";
 import { createDefaultRouter } from "./server.ts";
-import { getAgentSession } from "../db/repositories/agentSessions.ts";
+import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
+import { createIssueRun } from "../db/repositories/issueRuns.ts";
+import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
+import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -37,6 +41,53 @@ afterEach(async () => {
 });
 
 describe("Bun PI conversation message API", () => {
+  test("global chat invokes human acceptance and cross-project Work/Session reads through the real tool runtime", async () => {
+    const database = await openFixtureDatabase();
+    const provider = "pi-global-acceptance";
+    const faux = registerFauxProvider({ api: `${provider}-api`, provider });
+    const invoke = (name: string, args: Parameters<typeof fauxToolCall>[1]) => {
+      const tool = listBuiltinAssistantTools().find(tool => tool.name === name)!;
+      return fauxAssistantMessage([fauxToolCall("capability_invoke", {
+        tool_id: `${tool.provider_id}:${name}`,
+        schema_hash: createHash("sha256").update(JSON.stringify(tool.input_schema)).digest("hex"),
+        arguments: args
+      })], { stopReason: "toolUse" });
+    };
+    try {
+      insertProject(database, "target");
+      insertIssue(database, { id: 967, projectID: "target", status: "needs_user" });
+      const run = createIssueRun(database, 967);
+      database.sqlite.run("update issue_runs set ended_at=?,status='needs_user' where id=?", [new Date().toISOString(), run.id]);
+      upsertAgentSession(database, { provider: "codex", provider_session_id: "target-session", project_id: "target", issue_id: 967 });
+      insertFauxAgent(database, provider);
+      writeFauxModelsConfig(database, provider);
+      faux.setResponses([
+        invoke("session_read_summary", { session_key: "codex:target-session" }),
+        invoke("work_read", { work_id: "xw:work:issues:967" }),
+        invoke("human_review_request_create", { issue_id: 967, kind: "acceptance", question: "接受已人工核对的当前交付" }),
+        () => {
+          const review = readIssueDecisionProjection(database, 967).request;
+          expect(review?.status).toBe("open");
+          return invoke("human_review_response", { issue_id: 967, action: "accept",
+            review_request_id: review!.id, review_revision: review!.revision, comment: "用户已核对，停止追加校验" });
+        },
+        fauxAssistantMessage("人工确认已记录，等待收尾。")
+      ]);
+      const router = createDefaultRouter({ database });
+      await request(router, "/api/pi/conversations", { id: "conv-global-acceptance" });
+      const response = await request(router, "/api/pi/conversations/conv-global-acceptance/messages", {
+        prompt: "#967 我已人工核对完了，接受当前交付，直接完成并继续后面的任务"
+      });
+      expect(await finalPiConversationSseData(response)).toMatchObject({ text: "人工确认已记录，等待收尾。" });
+      const actions = listPiActions(database, { conversationId: "conv-global-acceptance" });
+      for (const action_type of ["session.read_summary", "work.read", "human_review.request", "human_review.respond"]) {
+        expect(actions).toContainEqual(expect.objectContaining({ action_type, status: "completed", gate_decision: "execute" }));
+      }
+      expect(actions.some(action => action.status === "denied" || action.status === "pending")).toBe(false);
+      expect(readIssueDecisionProjection(database, 967)).toMatchObject({ owner: "pi", request: { status: "accepted", kind: "acceptance" } });
+    } finally { faux.unregister(); database.close(); }
+  });
+
   test("streams accepted and ordered assistant deltas before PI completion", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({
