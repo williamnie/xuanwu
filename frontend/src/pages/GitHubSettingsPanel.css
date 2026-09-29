@@ -1,0 +1,66 @@
+.github-settings,
+.github-settings__form,
+.github-settings__repository {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.github-settings {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  color: var(--text-primary);
+}
+.github-settings__header,
+.github-settings__actions,
+.github-settings__operations,
+.github-settings__case-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.github-settings__header,
+.github-settings__case-heading { justify-content: space-between; }
+.github-settings h2,
+.github-settings h3,
+.github-settings h4 { margin: 0; font-size: 1rem; font-weight: 650; }
+.github-settings p,
+.github-settings__actions { margin: 0; color: var(--text-secondary); font-size: 0.72rem; line-height: 1.6; overflow-wrap: anywhere; }
+.github-settings small,
+.github-settings__case-heading span {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.github-settings__facts { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--border-light); }
+.github-settings__facts > div { display: grid; gap: 4px; padding: 8px 16px 8px 0; margin-right: 16px; border-right: 1px solid var(--border-light); }
+.github-settings__facts strong { font-family: var(--font-mono); font-size: 0.78rem; overflow-wrap: anywhere; }
+.github-settings__form { border: 0; padding: 0; margin: 0; }
+.github-settings__repository,
+.github-settings__results,
+.github-settings__cases,
+.github-settings__conflict { border: 0; border-top: 1px solid var(--border-color); padding: 12px 0 0; margin: 0; }
+.github-settings__repository legend { padding: 0 8px 0 0; font-size: 0.78rem; font-weight: 600; }
+.github-settings__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.github-settings__fields label { display: grid; gap: 6px; min-width: 0; font-size: 0.78rem; color: var(--text-secondary); }
+.github-settings .form-control { background: var(--control-bg); border: 1px solid var(--border-color); border-radius: var(--radius-xs); color: var(--text-primary); font-family: var(--font-display); font-size: 0.84rem; min-height: var(--button-height); min-width: 0; width: 100%; padding: 6px 8px; }
+.github-settings .btn { border-radius: var(--button-radius); }
+.github-settings__check { display: inline-flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--text-secondary); }
+.github-settings__check input { accent-color: var(--text-primary); margin: 0; }
+.github-settings summary { cursor: pointer; font-size: 0.78rem; padding: 4px 0; }
+.github-settings pre { font-family: var(--font-mono); font-size: 0.72rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.github-settings .github-settings__error { color: var(--error); }
+.github-settings__cases ol { list-style: none; padding: 0; margin: 0; }
+.github-settings__cases section,
+.github-settings__cases li { display: grid; gap: 6px; padding: 12px 0; border-top: 1px solid var(--border-light); overflow-wrap: anywhere; }
+.github-settings__case-heading strong { font-size: 0.78rem; }
+@media (max-width: 760px) {
+  .github-settings { padding: 12px; }
+  .github-settings__fields { grid-template-columns: minmax(0, 1fr); }
+  .github-settings__actions { align-items: flex-start; }
+}

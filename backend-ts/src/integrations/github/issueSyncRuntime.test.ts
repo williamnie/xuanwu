@@ -152,3 +152,43 @@ test("human reply checks request revision and current repository permission", as
   expect(getIssue(f.db, record.issue_id!)?.status).toBe("needs_user");
   expect(f.db.sqlite.query("select action from tracker_sync_events where action='github.unauthorized_human_reply'").get()).toBeTruthy();
 });
+
+test("configuration reload rejects an active poll without stopping it and applies after it settles", async () => {
+  const f = await fixture();
+  let release!: () => void;
+  const identity = new Promise<void>(resolve => { release = resolve; });
+  const runtime = new GitHubIssueSyncRuntime({ config: f.config, stateDir: f.root, runtime: { database: f.db }, client: f.client,
+    actorLogin: async () => { await identity; return "fixture-bot"; } });
+  const running = runtime.sync();
+  const disabled = { ...f.config, issueSync: { ...f.config.issueSync, enabled: false } };
+  expect(() => runtime.reload(disabled)).toThrow("busy");
+  expect(runtime.configuration().enabled).toBe(true);
+  release();
+  await running;
+  expect(getGitHubIssueCase(f.db, "I_test1")?.stage).toBe("investigate");
+  runtime.reload(disabled);
+  expect(runtime.configuration().enabled).toBe(false);
+  const count = f.requests.length;
+  await runtime.sync();
+  expect(f.requests.length).toBe(count);
+  await runtime.stop();
+  expect(() => runtime.reload(f.config)).toThrow("stopped");
+});
+
+test("changing intake label scans the new range without the previous label watermark", async () => {
+  const f = await fixture();
+  const queries: URL[] = [];
+  const client = new GitHubIssueClient({ apiBaseUrl: "https://api.github.com", token: async () => "fixture-token", fetch: async input => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/issues")) { queries.push(url); return Response.json([]); }
+    return Response.json({ id: 123, full_name: "acme/demo" });
+  } });
+  f.db.sqlite.run("insert into tracker_sync_cursors (provider, scope, position, updated_at) values ('github', 'issue-sync:acme/demo', ?, ?)",
+    [JSON.stringify({ repositoryId: 123, since: "2026-09-26T01:00:00Z", query: "/repos/acme/demo/issues?labels=old", etag: "old-etag" }), new Date().toISOString()]);
+  const runtime = new GitHubIssueSyncRuntime({ config: f.config, stateDir: f.root, runtime: { database: f.db }, client, actorLogin: async () => "fixture-bot" });
+  await runtime.sync();
+  expect(queries).toHaveLength(1);
+  expect(queries[0]!.searchParams.get("labels")).toBe("xuanwu");
+  expect(queries[0]!.searchParams.has("since")).toBe(false);
+  await runtime.stop();
+});

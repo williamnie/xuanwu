@@ -20,6 +20,7 @@ import { registerImReplyOutboxRoutes } from "./imReplyOutboxApi.ts";
 import { registerWebhookEventRoutes } from "./webhookEventsApi.ts";
 import { registerGitEventRoutes } from "./gitEventsApi.ts";
 import { registerTrackerEventRoutes } from "./trackerEventsApi.ts";
+import { registerGitHubSettingsRoutes } from "./githubSettingsApi.ts";
 import type { FeishuMessageSender } from "../integrations/feishuOutboxDispatcherCompat.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import type { PiOpenAICodexModelDiscovery, PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
@@ -169,6 +170,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     });
     registerGitEventRoutes(router, { database: runtime.database });
     registerTrackerEventRoutes(router, { database: runtime.database, githubIssueSync: runtime.githubIssueSync });
+    registerGitHubSettingsRoutes(router, { config: runtime.config, database: runtime.database, githubIssueSync: runtime.githubIssueSync });
     registerImReplyOutboxRoutes(router, {
       config: runtime.config?.integrations.feishu,
       database: runtime.database,

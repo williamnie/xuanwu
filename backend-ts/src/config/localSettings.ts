@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { chmod, mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 
 export const LOCAL_SETTINGS_FILENAME = "runner-settings.local.json";
 
@@ -72,16 +72,31 @@ export async function readLocalSettingsFile(path: string): Promise<RunnerLocalSe
 
 export async function writeLocalSettingsFile(path: string, value: RunnerLocalSettings): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  const temporary = `${path}.${crypto.randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+    await rename(temporary, path);
+  } finally { await rm(temporary, { force: true }); }
 }
+
+const settingsUpdates = new Map<string, Promise<unknown>>();
 
 export async function updateLocalSettingsFile(
   path: string,
   update: (current: RunnerLocalSettings) => RunnerLocalSettings
 ): Promise<RunnerLocalSettings> {
-  const next = update(await readLocalSettingsFile(path));
-  await writeLocalSettingsFile(path, next);
-  return next;
+  // 同一 Host 内串行读改写，避免不同设置页面互相覆盖；文件替换不暴露半份 JSON。
+  const key = resolve(path);
+  const operation = (settingsUpdates.get(key) ?? Promise.resolve()).catch(() => {}).then(async () => {
+    const current = await readLocalSettingsFile(path);
+    const next = update(current);
+    // 返回原对象表示仅在锁内检查或应用，不重复写入文件。
+    if (next !== current) await writeLocalSettingsFile(path, next);
+    return next;
+  });
+  settingsUpdates.set(key, operation);
+  try { return await operation; }
+  finally { if (settingsUpdates.get(key) === operation) settingsUpdates.delete(key); }
 }
 
 function normalizeLocalSettings(value: unknown): RunnerLocalSettings {

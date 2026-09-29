@@ -36,7 +36,8 @@ export class GitHubIssueSyncRuntime {
   private lastError = "";
   private actorLogin = "";
   private readonly abort = new AbortController();
-  private readonly client: GitHubIssueClient;
+  private client: GitHubIssueClient;
+  private started = false;
   private readonly now: () => Date;
 
   constructor(private readonly options: RuntimeOptions) {
@@ -46,17 +47,36 @@ export class GitHubIssueSyncRuntime {
   }
 
   start(): void {
+    this.started = true;
     if (!this.stopped || !this.options.config.issueSync.enabled) return;
     this.stopped = false;
     this.schedule(1000);
   }
 
   async stop(): Promise<void> {
+    this.started = false;
     this.stopped = true;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.abort.abort();
     await this.active?.catch(() => {});
+  }
+
+  configuration() { return structuredClone(this.options.config.issueSync); }
+
+  reload(config: GitHubConnectorConfig): void {
+    // 不打断正在对账的远程写入或任何 Work；调用方保留已保存的配置供稍后重试。
+    if (this.active || this.abort.signal.aborted) throw new Error("GitHub sync busy or stopped");
+    const client = this.options.client ?? new GitHubIssueClient({ apiBaseUrl: config.api_base_url,
+      token: createGitHubIssueTokenProvider(config, this.options.stateDir), signal: this.abort.signal });
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.options.config = config;
+    this.client = client;
+    this.actorLogin = "";
+    this.lastError = "";
+    this.stopped = !this.started || !config.issueSync.enabled;
+    if (this.started && !this.stopped) this.schedule(1000);
   }
 
   snapshot(): Record<string, unknown> {
@@ -116,7 +136,9 @@ export class GitHubIssueSyncRuntime {
     const repositoryId = positiveID(repository.id);
     if (cursor.repositoryId && cursor.repositoryId !== repositoryId) throw new Error("GitHub repository identity changed");
     const query = new URLSearchParams({ state: "all", sort: "updated", direction: "asc", per_page: "100", labels: policy.intakeLabel });
-    if (cursor.since) query.set("since", new Date(Date.parse(cursor.since) - 60000).toISOString());
+    // 更换接管标签后完整扫描新范围，不能沿用旧标签的时间水位遗漏旧 Issue。
+    const sameLabel = !cursor.query || new URL(cursor.query, "https://github.invalid").searchParams.get("labels") === policy.intakeLabel;
+    if (cursor.since && sameLabel) query.set("since", new Date(Date.parse(cursor.since) - 60000).toISOString());
     const queryPath = `${path}/issues?${query}`;
     const first = await this.client.page(queryPath, cursor.query === queryPath ? cursor.etag : "");
     const incoming = [...first.items, ...(first.next ? await this.client.all(first.next, 19) : [])];

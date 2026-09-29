@@ -581,6 +581,10 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/integrations/trackers/:provider/events", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/integrations/trackers/:provider/poll", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/integrations/trackers/github/status", family: "integration-intake-delivery" },
+  { method: "GET", path: "/api/integrations/trackers/github/settings", family: "integration-intake-delivery" },
+  { method: "PUT", path: "/api/integrations/trackers/github/settings", family: "integration-intake-delivery" },
+  { method: "POST", path: "/api/integrations/trackers/github/test", family: "integration-intake-delivery" },
+  { method: "POST", path: "/api/integrations/trackers/github/reload", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/integrations/trackers/github/sync", family: "integration-intake-delivery" },
   { method: "PUT", path: "/api/integrations/trackers/:provider/links", family: "integration-intake-delivery" },
   { method: "PUT", path: "/api/integrations/trackers/mappings", family: "integration-intake-delivery" },
@@ -855,7 +859,8 @@ export const PAGE_SURFACES = [
   {
     id: "capability-policy", disposition: "keep", target: "Capability registry and deterministic permission policy",
     page_ids: ["settings", "pi-connectors", "pi-skills", "pi-policies"],
-    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/CodeAgentsPanel.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/ImChannelRegistryPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RemoteAccessTokenPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/OnboardingPage.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SkillLibraryPanel.jsx", "frontend/src/pages/JevSkillSettings.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx", "frontend/src/pages/TelegramSettingsPanel.jsx"]
+    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/CodeAgentsPanel.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx",
+      "frontend/src/pages/GitHubSettingsPanel.jsx", "frontend/src/pages/ImChannelRegistryPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RemoteAccessTokenPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/OnboardingPage.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SkillLibraryPanel.jsx", "frontend/src/pages/JevSkillSettings.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx", "frontend/src/pages/TelegramSettingsPanel.jsx"]
   },
   {
     id: "evidence-handoff", disposition: "merge", target: "Evidence/Handoff read models and audited action requests",
