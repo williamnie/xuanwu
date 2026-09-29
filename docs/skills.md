@@ -17,6 +17,7 @@
 | 工具 | 用途 |
 | --- | --- |
 | `skill_inspect_source` | 识别来源中的技能名称和子目录，不安装或执行脚本 |
+| `skill_template_draft` | 从多次验证的项目经验生成待用户选择的模板草稿，不安装或启用 |
 | `skill_library_list` | 查询来源、作用域、当前版本、启用状态与实际授权状态 |
 | `skill_install` | 校验、安装，默认启用；可只安装而不启用 |
 | `skill_manage` | 启用、停用、更新、回滚、卸载；必须提供当前版本 |
@@ -96,3 +97,56 @@ POST /api/pi/skill-library/verify
 ```
 
 管理动作经过现有 Action Gate 和 PI Action 审计；对话中的实际调用另有工具审计。权限拒绝、版本冲突和缺失依赖都会显式返回，不会自动扩大工具或委派权限。
+
+## 从稳定经验提出模板
+
+Pi 可以通过 `memory_search` 选择值得复用的经验，再调用 `skill_template_draft`。不会为每条记忆自动生成技能，也没有新的 Workflow 或 Skill 运行时。
+
+Host 读取首期 `pi_memory_items` 及其版本历史，重新核验对应的 Work、Run、Evidence 和 Handoff。模板需要同一项目、同一经验内容及适用版本下至少两个不同 Work 的可信通过证据；出现次数、重复复盘、诊断结论或已被替代的证据不能充当验证。经验被编辑、缩小适用范围、停用或重新启用后，需在新范围重新积累验证。草稿携带输入要求、适用条件、步骤、验证方式和交付目标；原始来源与版本放在 `SKILL.md` 的 `xuanwu-experience-template` 元数据中，既有证据不被修改。
+
+生成草稿可使用 Pi 工具，或调用已有认证保护下的 HTTP 接口：
+
+```text
+POST /api/pi/skill-library/templates/draft
+```
+
+```json
+{
+  "id": "timeout-cleanup",
+  "project_id": "my-project",
+  "memory_id": "<memory_search 返回的 ID>",
+  "expected_memory_revision": 2
+}
+```
+
+返回 `status: "draft"`、`enabled: false`、完整 `content`、`provenance` 和内容摘要 `template_revision`。查看草稿后，由用户选择入口提交同一组字段以及以下字段：
+
+```text
+POST /api/pi/skill-library/templates/select
+```
+
+```json
+{
+  "id": "timeout-cleanup",
+  "project_id": "my-project",
+  "memory_id": "<草稿中的 memory_id>",
+  "expected_memory_revision": 2,
+  "template_revision": "<草稿返回的 SHA-256>",
+  "choice": "save"
+}
+```
+
+- `save` 仅保存，保持停用；`save_and_enable` 明确选择保存并启用。没有选择字段不会安装。
+- 保存会重读经验版本与验证证据，并比较草稿摘要，拒绝过期草稿。作用域固定为来源项目。
+- 本期提供 Pi 草稿工具和 HTTP 选择接口；保存接口不注册成模型写工具，也不新增页面。模型不能通过普通安装或管理工具自动保存、启用或回滚经验模板。
+- 已保存的模板可在现有技能管理页面明确启用、停用、校验、回滚或卸载。启用和回滚沿用 `manage` 接口及其版本校验。
+- 更新需重新生成并查看草稿，在选择请求中追加安装记录的 `key`、`expected_revision`，使用 `choice: "save"`；更新保留原启用状态。需要启用时单独选择，旧版本继续可回滚。普通更新不能擦除模板来源。
+
+模板沿用技能库的不可变版本、完整性校验、项目隔离、工具及委派允许列表和 Action Gate。新任务通过 `skill_use` 或现有 Coding Provider 技能入口重放，必须提供新输入并重新验证；旧任务 ID 只用于来源追溯，不作为执行目标。模板不复制旧任务状态或秘密，不授予额外工具权限，也不表示新任务已通过验收。
+
+自动回归使用临时数据库、技能目录和明确用户选择 fixture，覆盖保存、启用、新任务加载、权限拒绝、证据失效、版本冲突、更新与回滚；不向正式项目安装模板，不调用真实 Provider，也不替代真实任务效果验收：
+
+```sh
+cd backend-ts
+bun test src/skills/experienceTemplates.test.ts src/skills/managedSkills.test.ts src/http/skillConversation.test.ts
+```

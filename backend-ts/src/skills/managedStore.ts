@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { readSkillRegistry } from "./registry.ts";
 import { digestSkillTree, normalizeSkillSource, stageSkillSource, within } from "./managedSource.ts";
 import { SkillLibraryError, skillID, type ManagedSkill, type SkillCatalog, type SkillRevision, type SkillScope, type SkillSource } from "./managedTypes.ts";
+import { assertExperienceTemplateScope, assertExperienceTemplateSelection, isExperienceTemplate, type ExperienceTemplateSelection } from "./experienceTemplateFormat.ts";
 
 export type InstallSkillInput = { id: string; scope: SkillScope; project_id?: string; source: SkillSource; enabled?: boolean };
 export type ChangeSkillInput = { key: string; expected_revision: string; operation: "enable" | "disable" | "update" | "rollback" | "uninstall"; source?: SkillSource; revision?: string };
@@ -47,7 +48,7 @@ export function revisionPath(stateDir: string, revision: SkillRevision): string 
   return path;
 }
 
-export async function installManagedSkill(stateDir: string, input: InstallSkillInput): Promise<ManagedSkill> {
+export async function installManagedSkill(stateDir: string, input: InstallSkillInput, selection: ExperienceTemplateSelection = {}): Promise<ManagedSkill> {
   const id = skillID(input.id);
   if (!["instance", "project"].includes(input.scope)) throw new SkillLibraryError(400, "请选择实例或项目作用域");
   const projectID = input.scope === "project" ? input.project_id?.trim() : "";
@@ -57,24 +58,29 @@ export async function installManagedSkill(stateDir: string, input: InstallSkillI
   const key = createHash("sha256").update(`${input.scope}\0${projectID}\0${id}`).digest("hex").slice(0, 24);
   return await mutateCatalog(stateDir, async catalog => {
     if (catalog.skills.some(item => item.key === key)) throw new SkillLibraryError(409, "该作用域已安装同名技能，请使用更新操作");
-    const revision = await stageRevision(stateDir, key, id, source);
+    const revision = await stageRevision(stateDir, key, id, source, input.scope, projectID || "", selection);
     const skill: ManagedSkill = { key, id, scope: input.scope, project_id: projectID || "", enabled: input.enabled ?? true, revision: revision.revision, revisions: [revision] };
     catalog.skills.push(skill);
     return skill;
   });
 }
 
-export async function changeManagedSkill(stateDir: string, input: ChangeSkillInput): Promise<ManagedSkill> {
+export async function changeManagedSkill(stateDir: string, input: ChangeSkillInput, selection: ExperienceTemplateSelection = {}): Promise<ManagedSkill> {
   return await mutateCatalog(stateDir, async catalog => {
     const skill = catalog.skills.find(item => item.key === input.key);
     if (!skill) throw new SkillLibraryError(404, "技能未安装或已卸载");
     if (input.expected_revision !== skill.revision) throw new SkillLibraryError(409, "技能版本已变化，请刷新后重试");
+    // Host 生成的模板仅使用 inline 来源；即使回滚也保留选择边界。
+    const template = skill.revisions.some(revision => isExperienceTemplate(revision.source.content || ""));
+    if (template && ["enable", "update", "rollback"].includes(input.operation)) assertExperienceTemplateSelection(selection);
     switch (input.operation) {
       case "enable": await validateManagedSkill(stateDir, skill); skill.enabled = true; break;
       case "disable": skill.enabled = false; break;
       case "uninstall": catalog.skills = catalog.skills.filter(item => item.key !== skill.key); break;
       case "update": {
-        const revision = await stageRevision(stateDir, skill.key, skill.id, normalizeSkillSource(input.source ?? currentSkillRevision(skill).source));
+        const source = normalizeSkillSource(input.source ?? currentSkillRevision(skill).source);
+        if (template && (source.kind !== "inline" || !isExperienceTemplate(source.content || ""))) throw new SkillLibraryError(400, "经验模板更新必须保留来源，请重新生成并选择草稿");
+        const revision = await stageRevision(stateDir, skill.key, skill.id, source, skill.scope, skill.project_id, selection);
         if (revision.digest === currentSkillRevision(skill).digest && revision.resolved_ref === currentSkillRevision(skill).resolved_ref && JSON.stringify(revision.source) === JSON.stringify(currentSkillRevision(skill).source)) {
           await rm(join(skillStoreRoot(stateDir), "packages", skill.key, revision.revision), { recursive: true, force: true });
           break;
@@ -88,7 +94,8 @@ export async function changeManagedSkill(stateDir: string, input: ChangeSkillInp
         const revision = input.revision ? skill.revisions.find(item => item.revision === input.revision)
           : skill.revisions.filter(item => item.revision !== skill.revision).at(-1);
         if (!revision) throw new SkillLibraryError(400, "没有可回滚版本");
-        await validateManagedSkill(stateDir, { ...skill, revision: revision.revision });
+        const validated = await validateManagedSkill(stateDir, { ...skill, revision: revision.revision });
+        if (isExperienceTemplate(readFileSync(join(validated.directory, "SKILL.md"), "utf8"))) assertExperienceTemplateSelection(selection);
         skill.revision = revision.revision;
         break;
       }
@@ -113,10 +120,11 @@ export async function validateManagedSkill(stateDir: string, skill: ManagedSkill
   const registry = readSkillRegistry({ roots: [{ label: "managed", path: directory }] });
   const metadata = registry.items[0];
   if (!metadata || registry.diagnostics.some(item => item.code !== "missing_tool")) throw new SkillLibraryError(400, "技能 SKILL.md 或 manifest.json 无效");
+  assertExperienceTemplateScope(readFileSync(join(directory, "SKILL.md"), "utf8"), skill.scope, skill.project_id);
   return { metadata, ...tree, directory };
 }
 
-async function stageRevision(stateDir: string, key: string, id: string, source: SkillSource): Promise<SkillRevision> {
+async function stageRevision(stateDir: string, key: string, id: string, source: SkillSource, scope: SkillScope, projectID: string, selection: ExperienceTemplateSelection): Promise<SkillRevision> {
   const revision = crypto.randomUUID();
   const root = skillStoreRoot(stateDir), scratch = join(root, "staging", revision);
   const directory = `${key}/${revision}/${id}`;
@@ -127,6 +135,12 @@ async function stageRevision(stateDir: string, key: string, id: string, source: 
     const registry = readSkillRegistry({ roots: [{ label: "staged", path: destination }] });
     const metadata = registry.items[0];
     if (!metadata || registry.diagnostics.length) throw new SkillLibraryError(400, `技能校验失败：${registry.diagnostics.map(item => item.message).join("；") || "缺少 SKILL.md"}`);
+    const content = readFileSync(join(destination, "SKILL.md"), "utf8");
+    if (isExperienceTemplate(content)) {
+      assertExperienceTemplateSelection(selection);
+      if (source.kind !== "inline") throw new SkillLibraryError(400, "经验模板必须通过 Host 生成并选择草稿");
+      assertExperienceTemplateScope(content, scope, projectID);
+    }
     if (metadata.name !== id) throw new SkillLibraryError(400, `SKILL.md 的 name (${metadata.name}) 必须与安装名称 (${id}) 一致`);
     const sdk = loadSkillsFromDir({ dir: destination, source: "xuanwu-library" });
     if (!sdk.skills.some(item => item.name === id) || sdk.diagnostics.length) throw new SkillLibraryError(400, `Pi 技能加载校验失败：${sdk.diagnostics.map(item => item.message).join("；")}`);

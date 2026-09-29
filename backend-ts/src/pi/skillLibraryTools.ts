@@ -9,6 +9,8 @@ import { libraryProject, listSkillLibrary, publicManagedSkill, readLibrarySkillR
 import { SkillLibraryError } from "../skills/managedTypes.ts";
 import { buildSkillPromptContext } from "../skills/promptContext.ts";
 import { inspectSkillSource } from "../skills/sourceInspection.ts";
+import { createExperienceTemplateDraft } from "../skills/experienceTemplates.ts";
+import type { ExperienceTemplateSelection } from "../skills/experienceTemplateFormat.ts";
 import { executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
 import type { PiRunnerActionContext } from "./runnerActions.ts";
 import { scopedRunnerChatActionContext, isRunnerChatSource } from "./runnerChatAuthorization.ts";
@@ -31,13 +33,21 @@ export const skillManageSchema = Type.Object({
   operation: Type.Union(["enable", "disable", "update", "rollback", "uninstall"].map(value => Type.Literal(value))),
   source: Type.Optional(skillSourceSchema), revision: optionalText
 }, objectOptions);
+export const experienceTemplateSchema = Type.Object({
+  id: Type.String({ pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$", maxLength: 64 }),
+  project_id: text, memory_id: text, expected_memory_revision: Type.Integer({ minimum: 1 })
+}, objectOptions);
 
-export function createSkillLibraryTools(db: RunnerDatabase, project?: Project, context: Omit<PiRunnerActionContext, "project"> = {}): ToolDefinition[] {
+export function createSkillLibraryTools(db: RunnerDatabase, project?: Project, context: Omit<PiRunnerActionContext, "project"> = {}, selection: ExperienceTemplateSelection = {}): ToolDefinition[] {
   const run = (actionType: string, payload: Record<string, unknown>, targetProjectID: string, execute: () => unknown) => {
     const actionContext = skillActionContext(context, actionType, targetProjectID);
     return executeSafePiAction(db, actionContext, { actionType, payload: auditPayload(payload), projectID: targetProjectID, execute });
   };
   return [
+    tool("skill_template_draft", "Draft Experience Template", "从 memory_search 选择值得复用的稳定经验生成工作模板草稿。Requires at least two independent verified Works, exact memory revision and project. Returns inputs, steps, applicability, verification, delivery and provenance. Never installs or enables; show the draft for explicit user selection via the template selection API. Do not automatically convert every memory into a skill.", experienceTemplateSchema, params => {
+      if (project && params.project_id !== project.id) throw new SkillLibraryError(403, "经验模板不能跨越当前项目范围");
+      return run("skill.inspect_source", { ...params, source_kind: "experience_template" }, params.project_id, () => createExperienceTemplateDraft(db, params));
+    }),
     tool("skill_inspect_source", "Inspect Skill Source", "Inspect a local or public Git source and discover installable skill names and subdirectories before installing. This never enables skills or executes scripts.", Type.Object({ source: skillSourceSchema }, objectOptions), params =>
       run("skill.inspect_source", params, project?.id || "", () => inspectSkillSource(dirname(db.path), params.source))),
     tool("skill_library_list", "Skill Library", "List installed and discovered skills, their exact keys, revisions, sources, scopes and enabled status.", Type.Object({ project_id: optionalText }, objectOptions), params =>
@@ -53,7 +63,8 @@ export function createSkillLibraryTools(db: RunnerDatabase, project?: Project, c
     tool("skill_manage", "Manage Skill", "Enable, disable, update, roll back, or uninstall an installed skill. Read skill_library_list for key and expected_revision; never guess them. Updates preserve the previous version.", skillManageSchema, params => {
       const installed = requireManagedSkill(db, params.key);
       return run(`skill.${params.operation}`, params, installed.project_id, async () => {
-        const result = await changeManagedSkill(dirname(db.path), params as Parameters<typeof changeManagedSkill>[1]);
+        // HTTP 的单独管理选择可启用或回滚；更新必须通过重新核验草稿的选择入口。
+        const result = await changeManagedSkill(dirname(db.path), params as Parameters<typeof changeManagedSkill>[1], params.operation === "update" ? {} : selection);
         return { operation: params.operation, skill: publicManagedSkill(result), ...(params.operation === "uninstall" ? { uninstalled: true } : { verification: await verifyLibrarySkill(db, result.key) }) };
       });
     }),
