@@ -16,6 +16,18 @@ afterEach(async () => {
 });
 
 describe("PI recovery budget", () => {
+  test("four recoveries and two waits only spend four slots", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo"); insertIssue(db, 501, 1);
+      for (let index = 0; index < 6; index++) recordAttempt(db, {
+        id: `wait-regression-${index}`, issueID: 501, status: "planned", at: "2026-06-18T01:20:00Z",
+        actionType: index < 4 ? "session.resume_followup" : "issue.retry_after"
+      });
+      expect(readPiRecoveryBudget(db, budgetInput(501, "session.resume_followup")))
+        .toMatchObject({ issue_attempts_24h: 4, issue_budget_remaining: 2, status: "allow" });
+    } finally { db.close(); }
+  });
   test("honors the six-attempt issue recovery limit and ignores issues.attempt_count", async () => {
     const db = await fixtureDb();
     try {

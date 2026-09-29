@@ -165,9 +165,12 @@ async function observedProviderTurnID(
 }
 
 async function readProviderTurnID(provider: ExecutorProvider, sessionID: string): Promise<string> {
-  if (!provider.readSession) return "";
   try {
-    return turnIDFromSession(await provider.readSession(sessionID));
+    if (provider.listSessionTurns) {
+      const page = await provider.listSessionTurns(sessionID, { limit: 1, sortDirection: "desc", itemsView: "notLoaded" });
+      return cleanString(page.data[0]?.id);
+    }
+    return provider.readSession ? turnIDFromSession(await provider.readSession(sessionID)) : "";
   } catch {
     return "";
   }

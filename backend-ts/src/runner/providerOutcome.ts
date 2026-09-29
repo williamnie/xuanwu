@@ -23,6 +23,7 @@ export type ReconcileProviderOutcomeInput = {
   now?: Date;
   providerID: ExecutorProviderId;
   providerRunID?: string;
+  providerTurnID?: string;
   reportedOutcome?: ProviderReportedOutcome;
 };
 
@@ -36,10 +37,21 @@ export async function reconcileProviderOutcome(
 ): Promise<Issue | null> {
   const current = getIssue(input.database, input.issueID);
   if (!current || current.status !== "in_progress") return current;
+  const currentRun = listIssueRuns(input.database, current.id).at(-1);
+  if (currentRun?.id !== input.issueRunID || currentRun.ended_at !== "" ||
+    (input.providerTurnID && currentRun.provider_turn_id !== input.providerTurnID)) return current;
   const reported = input.reportedOutcome ?? providerReportedOutcome(input.database, current.id, input.issueRunID);
   const now = input.now ?? new Date();
   if (reported.outcome === "unknown") return current;
-  closeReportedTerminalRun(input.database, input.issueRunID, reported, now.toISOString());
+  const applied = input.database.transaction(() => {
+    const latest = listIssueRuns(input.database, current.id).at(-1);
+    if (getIssue(input.database, current.id)?.status !== "in_progress" || latest?.id !== input.issueRunID ||
+      latest.ended_at !== "" || (input.providerTurnID && latest.provider_turn_id !== input.providerTurnID)) return false;
+    closeReportedTerminalRun(input.database, input.issueRunID, reported, now.toISOString());
+    input.database.sqlite.run("update issues set auto_retry_next_at='', auto_retry_reason='' where id=?", [current.id]);
+    return true;
+  }).immediate();
+  if (!applied) return getIssue(input.database, current.id);
   // getIssue 是精简投影，不附带 latest_run；终态快照必须读取 canonical Run。
   const terminalRun = listIssueRuns(input.database, current.id).at(-1);
   const project = getProject(input.database, current.project_id);
@@ -80,6 +92,12 @@ function closeReportedTerminalRun(
       error=case when error='' then ? else error end where id=?`,
     [status, endedAt, `provider_reported_${reported.outcome}`, reported.reason, issueRunID]
   );
+  // legacy trigger 只更新首个 Attempt；续跑的终态必须落到当前 Attempt。
+  db.sqlite.run(`update run_attempts set status=?, ended_at=?, terminal_reason=?,
+    terminal_source_ref=?, revision=revision+1, updated_at=?
+    where attempt_id=(select attempt_id from run_attempts where issue_run_id=? order by sequence desc limit 1)
+      and status in ('created', 'running')`,
+  [status, endedAt, reported.reason, `provider-outcome:${issueRunID}`, endedAt, issueRunID]);
 }
 
 function recordPiDecisionRequest(

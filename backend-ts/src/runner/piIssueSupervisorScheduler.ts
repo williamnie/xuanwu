@@ -21,6 +21,7 @@ import {
 import { applyIssueSupervisorDecisionActions } from "../pi/issueSupervisorActions.ts";
 import { ingestPiGuardianEvent } from "../pi/guardianEventIngest.ts";
 import { iso } from "../pi/heartbeatOrchestratorSupport.ts";
+import { reconcileCurrentProviderTurn } from "./providerSessionReconciliation.ts";
 import {
   refreshSupervisorProgressResult,
   supervisorResultOutcome
@@ -85,6 +86,15 @@ export async function runPiIssueSupervisorSchedulerOnce(
         result.failed += 1;
         continue;
       }
+      // PI 思考期间 Provider 可能已完成，不能依据旧摘要再发恢复或人工求助。
+      const provider = input.providers?.[String(target.context.latest_run?.provider) as ExecutorProviderId];
+      const observed = await reconcileCurrentProviderTurn({
+        database: input.database, issueID: target.issueID, provider, bus: input.bus
+      });
+      if (!["unsupported", "interrupted"].includes(observed)) {
+        result.skipped += 1;
+        continue;
+      }
       await applyIssueSupervisorDecisionActions({
         bus: input.bus,
         context: target.context,
@@ -106,7 +116,7 @@ export async function runPiIssueSupervisorSchedulerOnce(
 async function collectTargets(
   db: RunnerDatabase,
   now: Date,
-  options: Pick<PiIssueSupervisorSchedulerInput, "limit" | "staleAfterSeconds">
+  options: Pick<PiIssueSupervisorSchedulerInput, "limit" | "staleAfterSeconds" | "providers" | "bus">
 ): Promise<{ ready: SupervisorTarget[]; scanned: number; signaled: number }> {
   const issueIDs = scanIssueIDs(db, now, options.limit ?? DEFAULT_LIMIT);
   const staleAfterSeconds = options.staleAfterSeconds ?? DEFAULT_STALE_SECONDS;
@@ -121,6 +131,11 @@ async function collectTargets(
       staleAfterSeconds
     });
     if (clean(context.policy.mode) === "off") continue;
+    if (context.candidates.length > 0) {
+      const provider = options.providers?.[String(context.latest_run?.provider) as ExecutorProviderId];
+      const observed = await reconcileCurrentProviderTurn({ database: db, issueID, provider, bus: options.bus });
+      if (!["unsupported", "interrupted"].includes(observed)) continue;
+    }
     if (refreshSupervisorProgressResult({
       context,
       database: db,

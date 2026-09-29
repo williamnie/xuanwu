@@ -74,7 +74,15 @@ IM Reply Outbox 的 durable lease/fence 缺口不是可由本 ADR 偷加的旁�
 3. 有 receipt：写同一 carrier 的 CAS terminal outcome；无 receipt：保持/标记 Attention，走 explicit approval 的 repair，而非重放。
 4. 保存 repair 的 actor、reason、gate、correlation、before/after 与 evidence ref；恢复后重复执行一次 read-only reconciliation，确认没有新 external call。
 
-### 验证
+### Codex 已完成但 Runner 仍显示运行中
+
+- Supervisor 扫描、执行决定及实际续跑前，通过有界 `thread/turns/list` 核对当前 Run 绑定的最新 Turn。已完成的回合沿既有运行事件入口补入命令、回复和终态，再请求 PI 验收；不能因旧摘要或恢复预算耗尽再次续跑。回合仍在执行、读取失败或引用改变时不盲目启动新回合。
+- 自动恢复必须使用 `recoverIssueWithProvider`，保留事件订阅、权限解析与 Evidence 关联；普通 `sendSessionMessage` 不承担 Issue 运行的收尾。中断后使用 `recovery` Attempt，不把上一回合伪记为成功。
+- 事件按当前 Run/Attempt 隔离，旧 Attempt 的迟到事件不得改变新运行。完成必须同时收口当前 Attempt 和 Run，Issue 仍由 PI 决定。
+- `issue.retry_after` 是等待决定，不是限流证据，也不消耗实际恢复次数；真实限流须来自 Provider 诊断。恢复进度通过稳定 Action ID 关联对应的持久化记录。
+- 已处于 `needs_user` 的历史 Issue 保持人工边界；本逻辑不自动重开它们。先保存相关代码、核验 Provider 结果，再通过已有受审计验收/修复流程收尾。
+
+### 验证命令
 
 ```bash
 cd backend-ts

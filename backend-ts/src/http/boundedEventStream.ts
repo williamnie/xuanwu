@@ -14,20 +14,30 @@ export function createBoundedEventStream(options: BoundedEventStreamOptions = {}
   }
   const encoder = new TextEncoder();
   let controller: ReadableStreamDefaultController<Uint8Array>;
+  let chunks: Uint8Array[] = [];
+  let bufferedBytes = 0;
+  let waitingForRead = false;
+  let streamClosed = false;
   let closed = false;
-  const onAbort = () => abort(options.signal?.reason);
+  const onAbort = () => abort();
   const stream = new ReadableStream<Uint8Array>({
     start(value) {
       controller = value;
       options.signal?.addEventListener("abort", onAbort, { once: true });
       if (options.signal?.aborted) onAbort();
     },
+    pull() {
+      waitingForRead = true;
+      flush();
+    },
     cancel() {
+      streamClosed = true;
+      discard();
       cleanup();
     }
   }, {
-    highWaterMark: maxBufferBytes,
-    size: (chunk) => chunk?.byteLength ?? 0
+    // 自己持有积压，断线时可丢弃；只在消费者请求数据时交给流。
+    highWaterMark: 0
   });
 
   function cleanup(): void {
@@ -37,16 +47,17 @@ export function createBoundedEventStream(options: BoundedEventStreamOptions = {}
     options.onClose?.();
   }
 
-  function abort(reason: unknown = new Error("SSE connection aborted")): void {
-    if (closed) return;
-    controller.error(reason);
+  function abort(): void {
+    if (streamClosed) return;
+    discard();
     cleanup();
+    flush();
   }
 
   function close(): void {
     if (closed) return;
-    controller.close();
     cleanup();
+    flush();
   }
 
   function write(value: string): boolean {
@@ -54,14 +65,36 @@ export function createBoundedEventStream(options: BoundedEventStreamOptions = {}
     // UTF-8 字节数不小于 UTF-16 长度，先拒绝显然超限的数据以避免额外大分配。
     if (value.length > maxBufferBytes) return overflow();
     const chunk = encoder.encode(value);
-    if (chunk.byteLength > (controller.desiredSize ?? 0)) return overflow();
-    controller.enqueue(chunk);
+    if (chunk.byteLength > maxBufferBytes - bufferedBytes) return overflow();
+    chunks.push(chunk);
+    bufferedBytes += chunk.byteLength;
+    flush();
     return true;
   }
 
+  function discard(): void {
+    chunks = [];
+    bufferedBytes = 0;
+  }
+
+  function flush(): void {
+    if (streamClosed) return;
+    if (waitingForRead && chunks.length > 0) {
+      const chunk = chunks.shift()!;
+      bufferedBytes -= chunk.byteLength;
+      waitingForRead = false;
+      controller.enqueue(chunk);
+    }
+    if (closed && chunks.length === 0) {
+      streamClosed = true;
+      // Bun 1.3.10 在 HTTP 响应断线时对 controller.error 产生未处理拒绝，
+      // 会退出整个 Core。结束传输即可让 SSE 客户端重连，不向 HTTP sink 注入错误。
+      controller.close();
+    }
+  }
+
   function overflow(): false {
-    // error 会立即释放旧队列；close 则仍会为慢客户端保留全部积压。
-    abort(new Error("SSE buffer limit exceeded; reconnect and reload the snapshot"));
+    abort();
     return false;
   }
 

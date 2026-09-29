@@ -32,6 +32,7 @@ type CandidateInput = {
   events: IssueEvent[];
   history: Record<string, unknown>;
   issueStatus: string;
+  retryAfterAt?: string;
   legacyInvalidFallbackDiagnosis?: PiSupervisorDiagnosisCode;
   latestRun: IssueRun | null;
   now: Date;
@@ -67,6 +68,9 @@ const RECOVERY_ACTIONS = new Set([
 export function candidates(input: CandidateInput): SupervisorCandidate[] {
   const out: SupervisorCandidate[] = [];
   const { providerError, session, history, latestRun, now } = input;
+  // 已结束的运行交给验收；普通等待不能被预算或旧错误再次抢占。
+  if (input.issueStatus === "in_progress" && latestRun?.ended_at) return out;
+  if (Date.parse(input.retryAfterAt ?? "") > now.getTime()) return out;
   const runOpen = latestRun?.status === "in_progress" && latestRun.ended_at === "";
   const stopped = stoppedSession(session);
   const stale = staleSession(session, input.activityUpdatedAt, now, input.staleAfterSeconds ?? DEFAULT_STALE_SECONDS);
@@ -124,6 +128,9 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
 
 export function latestProviderError(events: IssueEvent[], now: Date): ProviderErrorSignal | null {
   for (const event of [...events].reverse()) {
+    if (event.type === "issue.supervisor_resume_followup" || event.type === "issue.provider_session_reconciled.v1") return null;
+    // 调度器的等待决定不是 Provider 错误，不能自行制造 rate_limit。
+    if (event.type === "issue.retry_after_scheduled") continue;
     const payload = parsePayload(event.payload);
     const signal = adjustRetryWindow(
       parseIssueEventProviderError(payload, { now: eventDate(event, now) }),
@@ -131,26 +138,8 @@ export function latestProviderError(events: IssueEvent[], now: Date): ProviderEr
       eventDate(event, now)
     );
     if (signal.category !== "unknown") return signal;
-    const scheduled = retryAfterScheduledSignal(event, payload, now);
-    if (scheduled) return scheduled;
   }
   return null;
-}
-
-function retryAfterScheduledSignal(event: IssueEvent, payload: unknown, now: Date): ProviderErrorSignal | null {
-  if (event.type !== "issue.retry_after_scheduled") return null;
-  const record = objectValue(payload);
-  const retryAfterAt = clean(record.retry_after_at);
-  if (retryAfterAt === "" || !Number.isFinite(Date.parse(retryAfterAt))) return null;
-  return {
-    category: "rate_limit",
-    diagnosis_code: retryDiagnosis(retryAfterAt, now),
-    observed_at: event.created_at,
-    raw_summary: truncate(redactAuditText(clean(record.reason) || "issue retry-after scheduled")),
-    retry_after_at: retryAfterAt,
-    retry_after_seconds: secondsUntil(retryAfterAt, now),
-    source_event_type: event.type
-  };
 }
 
 function adjustRetryWindow(signal: ProviderErrorSignal, now: Date, observedAt: Date): ProviderErrorSignal {

@@ -65,12 +65,14 @@ export function readPiRecoveryBudget(db: RunnerDatabase, input: PiRecoveryBudget
     statuses: BUDGET_STATUSES
   });
   const issueAttempts = countPiRecoveryAttempts(db, {
+    excludeWaits: true,
     issueId: input.issueID,
     since: issueSince,
     statuses: BUDGET_STATUSES
   });
   const sessionAttempts = sessionResumeAttempts(db, input, issueSince);
   const projectAttempts = countPiRecoveryAttempts(db, {
+    excludeWaits: true,
     projectId: input.projectID,
     since: projectSince,
     statuses: BUDGET_STATUSES
@@ -134,6 +136,7 @@ function decision(
   }
 ): PiRecoveryBudgetDecision {
   const base = baseDecision(state);
+  if (input.actionType === "issue.retry_after") return base;
   if (isSessionResume(input.actionType) && state.sessionAttempts >= state.sessionLimit) {
     return exhausted(base, "session_resume_exhausted", "session_recovery_exhausted", "budget_exhausted");
   }

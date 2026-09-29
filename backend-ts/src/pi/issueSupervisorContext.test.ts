@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssueSupervisorEvent, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
 import { recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import { buildIssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
+import { latestProviderError } from "./issueSupervisorContextSupport.ts";
 
 const NOW = new Date("2026-06-10T08:00:00Z");
 const tempRoots: string[] = [];
@@ -15,6 +16,14 @@ afterEach(async () => {
 });
 
 describe("PI issue supervisor context builder", () => {
+  test("scheduled waits do not invent rate limits and a resumed turn clears old provider errors", () => {
+    const wait = { id: 1, issue_id: 967, type: "issue.retry_after_scheduled", created_at: "2026-06-10T07:00:00Z",
+      payload: JSON.stringify({ reason: "session_no_recent_progress", retry_after_at: "2026-06-10T07:05:00Z" }) };
+    expect(latestProviderError([wait], NOW)).toBeNull();
+    const error = { ...wait, type: "issue.log", payload: JSON.stringify({ type: "error", raw_payload: { status_code: 429, retry_after: 600 } }) };
+    expect(latestProviderError([error, wait], NOW)?.category).toBe("rate_limit");
+    expect(latestProviderError([error, wait, { ...wait, type: "issue.supervisor_resume_followup" }], NOW)).toBeNull();
+  });
   test("builds #298 disconnect context with last error, open run, session id, and 6h stale gap", async () => {
     const db = await fixtureDb();
     try {

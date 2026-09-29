@@ -283,4 +283,10 @@ class SupervisorProvider implements ExecutorProvider {
       turn_id: "turn-followup"
     };
   }
+
+  async recover(input: Parameters<NonNullable<ExecutorProvider["recover"]>>[0]) {
+    const result = await this.sendSessionMessage({ prompt: input.prompt, sessionId: input.session.sessionId });
+    return { runId: `codex:${result.sessionId}:${result.turn_id}`,
+      session: { provider: this.id, sessionId: result.sessionId, turnId: result.turn_id } };
+  }
 }

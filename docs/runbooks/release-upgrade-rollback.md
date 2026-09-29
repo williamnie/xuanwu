@@ -84,6 +84,13 @@ xuanwu-update upgrade \
 
 ## 4. Migration notes
 
+### 2026-09-29 development redeploy：Pi 记忆首期与验收修复
+
+- migration：`087_pi_memory_history` 为记忆增加 revision、历史、收据和停用/遗忘抑制记录，并将既有手动来源的 advisory 记忆标记为 user_explicit；`088_pi_memory_reflections` 增加复盘设置、游标与任务表。没有删除既有表，沿用 `xuanwu.storage-compat.v1`。
+- 最低可回滚 runtime：部署前的 `36053d7f`。新增列/表可保留；回滚二进制不会撤销 087 的 authority 归一化，完整恢复旧数据语义需另行授权并使用部署前备份。
+- operator action：在 fresh SQLite 副本完成 preflight/forward/rollback 演练，随后用 `./redeploy.sh` 保存正式库备份及 runtime 快照；上线后核对 087/088、Web/Core/Agentic、运行 stamp 和 SSE 断线恢复。
+- 复盘默认关闭，本次不批量启用正式项目；原始目标与授权说明在执行、PI 验收及续跑中统一，目录锁释放仍以可验证的安全条件为准。
+
 ### v0.2.13
 
 - migration：`084_supervisor_natural_instructions` 仅替换仍使用旧内置默认文案的 Supervisor 指令；`085_runtime_read_indexes` 增加 7 个运行时查询索引；`086_github_issue_cases` 增加 GitHub Case 表及关联索引。没有删表，继续使用 `xuanwu.storage-compat.v1`。
