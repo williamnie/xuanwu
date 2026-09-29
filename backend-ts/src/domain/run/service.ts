@@ -6,6 +6,7 @@ import {
   type RunRevisionIssueScopeMismatch
 } from "../../db/runRevisionScopeAudit.ts";
 import { issueTimestamp } from "../../db/repositories/issueCreate.ts";
+import { assertWorkspaceWaitSessionControl, readWorkspaceWait } from "../../db/repositories/workspaceWaits.ts";
 import {
   emptyRunCost,
   makeRunAttemptID,
@@ -195,6 +196,8 @@ export function prepareRunAttempt(
     if (replay) return replay;
     const run = mustGetRun(db, command.issue_run_id, command.run_id);
     const attempt = mustGetLatestAttempt(db, run.legacy_id);
+    try { assertWorkspaceWaitSessionControl(db, command.provider_ref.provider, clean(command.provider_ref.session_ref)); }
+    catch (error) { throw new RunCommandConflictError(error instanceof Error ? error.message : String(error)); }
     const violations = attemptPreparationViolations(db, run, attempt, command);
     if (violations.length > 0) throw new RunCommandValidationError(violations.join("; "));
 
@@ -431,6 +434,9 @@ export function requestNewRun(db: RunnerDatabase, command: NewRunCommand): NewRu
     const replay = replayNewRunRequest(db, command.audit.event_id, fingerprint);
     if (replay) return replay;
     const run = mustGetRun(db, command.issue_run_id, command.run_id);
+    if (readWorkspaceWait(db, run.issue_id)?.state === "released") {
+      throw new RunCommandConflictError("Workspace wait requires a current human answer before retry");
+    }
     const latestAttempt = mustGetLatestAttempt(db, run.legacy_id);
     const violations = newRunViolations(db, run, latestAttempt, command);
     const requestedSequence = nextRunSequence(db, run.issue_id);

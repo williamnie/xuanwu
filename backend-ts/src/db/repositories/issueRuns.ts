@@ -6,6 +6,7 @@ import {
 } from "../../domain/evidence/runGitWorkspaceBaseline.ts";
 import { issueTimestamp } from "./issueCreate.ts";
 import { listIssueRuns, type IssueRun } from "./issues.ts";
+import { assertWorkspaceWaitCanStart, readWorkspaceWait } from "./workspaceWaits.ts";
 
 export type IssueRunRuntimeInput = {
   agent_profile_id?: string;
@@ -41,6 +42,17 @@ export function insertIssueRunRecord(
   db: RunnerDatabase,
   issueID: number,
   input: { provider?: string; startedAt?: string } = {}
+): ReservedIssueRun {
+  return db.transaction(() => {
+    assertWorkspaceWaitCanStart(db, issueID);
+    return insertReservedIssueRun(db, issueID, input);
+  }).immediate();
+}
+
+function insertReservedIssueRun(
+  db: RunnerDatabase,
+  issueID: number,
+  input: { provider?: string; startedAt?: string }
 ): ReservedIssueRun {
   const attempt = nextAttempt(db, issueID);
   const requested = pendingRunCreation(db, issueID, attempt);
@@ -95,6 +107,8 @@ export function finalizeIssueRunPreparation(
 }
 
 export function mustGetCurrentOpenIssueRun(db: RunnerDatabase, issueID: number, runID: string): IssueRun {
+  const wait = readWorkspaceWait(db, issueID);
+  if (wait && wait.state !== "consumed") throw new Error("Workspace wait Run must pass preparation before Provider execution");
   const id = cleanString(runID);
   if (!id) throw new Error("issueRunId is required");
   const row = db.sqlite.query<{ id: string }, [number, string]>(`

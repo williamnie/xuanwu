@@ -3,6 +3,7 @@ import { issueTimestamp } from "./issueCreate.ts";
 import { insertIssueRunRecord, type ReservedIssueRun } from "./issueRuns.ts";
 import { getIssue, type Issue } from "./issues.ts";
 import { readProjectIssueDependencies } from "../../domain/work/issueDependency.ts";
+import { canonicalWorkspace, isWorkspaceWaitReleased, readWorkspaceWait } from "./workspaceWaits.ts";
 
 const STATUS_TODO = "todo";
 const STATUS_IN_PROGRESS = "in_progress";
@@ -63,21 +64,16 @@ export function countActiveExecutorWorkForProject(
 ): number {
   const lock = parsedProjectExecutionLockKey(db, projectID);
   void at;
-  if (lock.kind === "cwd") {
-    return countRows(db, `
-      select count(distinct i.id) as count
-      from issues i
-      join projects p on p.id=i.project_id
-      left join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
-      where trim(p.cwd)=? and (i.status in (?, 'needs_user') or ir.id is not null)
-    `, [lock.value, STATUS_IN_PROGRESS]);
-  }
-  return countRows(db, `
-    select count(distinct i.id) as count
-    from issues i
-    left join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
-    where i.project_id=? and (i.status in (?, 'needs_user') or ir.id is not null)
-  `, [lock.value, STATUS_IN_PROGRESS]);
+  const rows = db.sqlite.query<{ id: number; project_id: string; cwd: string; status: string; open_run: number }, []>(`
+    select i.id,i.project_id,p.cwd,i.status,
+      exists(select 1 from issue_runs ir where ir.issue_id=i.id and ir.ended_at='') as open_run
+    from issues i join projects p on p.id=i.project_id
+    where i.status in ('in_progress','needs_user')
+      or exists(select 1 from issue_runs ir where ir.issue_id=i.id and ir.ended_at='')
+  `).all();
+  return rows.filter(row => (lock.kind === "cwd"
+    ? row.cwd.trim() && canonicalWorkspace(row.cwd) === lock.value : row.project_id === lock.value)
+    && (row.open_run || row.status === STATUS_IN_PROGRESS || !isWorkspaceWaitReleased(db, row.id))).length;
 }
 
 export function hasTodoIssue(db: RunnerDatabase, projectID: string): boolean {
@@ -142,7 +138,7 @@ export function projectExecutionLockKey(db: RunnerDatabase, projectID: string): 
   const cwd = db.sqlite.query<ProjectCwdRow, [string]>(
     "select cwd from projects where id=?"
   ).get(cleanProjectID)?.cwd.trim() ?? "";
-  return cwd === "" ? `project:${cleanProjectID}` : `cwd:${cwd}`;
+  return cwd === "" ? `project:${cleanProjectID}` : `cwd:${canonicalWorkspace(cwd)}`;
 }
 
 function parsedProjectExecutionLockKey(db: RunnerDatabase, projectID: string): { kind: "cwd" | "project"; value: string } {
@@ -163,6 +159,7 @@ function nextIssueRow(db: RunnerDatabase, projectID: string, filter: IssueClaimF
   return rows.find((row) => {
     if (dependencyByIssueID.get(row.id)?.ready !== true) return false;
     const issue = getIssue(db, row.id);
+    if (readWorkspaceWait(db, row.id)?.state === "released") return false;
     return issue !== null && filter(issue);
   }) ?? null;
 }

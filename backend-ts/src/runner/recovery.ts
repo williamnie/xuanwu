@@ -6,6 +6,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { isProviderId, type ExecutorProviderId, type SessionRef } from "../providers/types.ts";
 import { requestIssuePiAcceptance } from "./piAcceptanceRequest.ts";
 import { reconcileProviderOutcome, type ProviderReportedOutcome } from "./providerOutcome.ts";
+import { restoreUnstartedWorkspaceWait } from "../domain/review/workspaceWait.ts";
 
 export type RecoveryInput = {
   database: RunnerDatabase;
@@ -47,6 +48,7 @@ async function reconcileIssueOnStartup(
     return "reconciled";
   }
   if (canRequeueUnstartedClaim(db, issue)) {
+    if (restoreUnstartedWorkspaceWait(db, issue.id)) return "signaled";
     requeueUnstartedIssueClaim(db, issue.id);
     recordIssueEvent(db, issue.id, "issue.recovery_requeued.v1", {
       issue_run_id: run.id,

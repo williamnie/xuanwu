@@ -132,7 +132,8 @@ async function dispatchIssueAcceptance(
       database: input.database,
       providers: input.providers
     }, card, decision);
-    if (updated.status === "done" || updated.status === "failed" || updated.status === "cancelled") {
+    if (updated.status === "done" || updated.status === "failed" || updated.status === "cancelled"
+      || updated.status === "needs_user") {
       startProjectLoop({
         bus: input.bus,
         database: input.database,

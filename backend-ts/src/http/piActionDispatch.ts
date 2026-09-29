@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
+import { assertWorkspaceWaitSessionControl } from "../db/repositories/workspaceWaits.ts";
 import { deleteIssues, enqueueIssue } from "../db/repositories/issueActions.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
@@ -633,6 +634,7 @@ async function steerSession(
   const provider = context.providers?.[providerID];
   if (!provider?.sendSessionMessage) throw new Error(`provider "${providerID}" 不支持 capability "resume_session"`);
   const session = getAgentSession(context.database, `${providerID}:${sessionID}`);
+  assertWorkspaceWaitSessionControl(context.database, providerID, sessionID);
   const run = session?.issue_id ? listIssueRuns(context.database, session.issue_id).at(-1) : undefined;
   const memoryPrompt = run?.ended_at === "" && run.provider === providerID && run.provider_session_id === sessionID
     ? appendRunMemoryPrompt(context.database, session!.issue_id, run.id, prompt, "recovery") : prompt;

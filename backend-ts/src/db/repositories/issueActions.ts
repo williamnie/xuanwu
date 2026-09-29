@@ -9,6 +9,7 @@ import { issueTimestamp } from "./issueCreate.ts";
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "./issues.ts";
 import { syncPiRunGroupsForIssueStatus } from "./pi/runGroups.ts";
 import { getProject, ProjectNotFoundError } from "./projects.ts";
+import { readWorkspaceWait } from "./workspaceWaits.ts";
 
 const STATUS_TODO = "todo";
 const STATUS_IN_PROGRESS = "in_progress";
@@ -190,6 +191,9 @@ function queueIssue(
   const serviceTier = cleanString(options.serviceTier);
   const hasServiceTier = options.serviceTierProvided === true;
   const write = db.transaction((record: Issue) => {
+    if (readWorkspaceWait(db, record.id)?.state === "released") {
+      throw new Error("Workspace wait requires a current human answer before enqueue");
+    }
     db.sqlite.run(`update issues set status=?, error='',
       codex_thread_id=case when ?=1 then '' else codex_thread_id end, codex_turn_id='',
       service_tier=case when ?=1 then ? else service_tier end,
@@ -203,7 +207,7 @@ function queueIssue(
     } : queued, STATUS_TODO, "status_changed", timestamp);
     recordStatusEvent(db, record.id, statusEventPayload(STATUS_TODO, hasServiceTier, serviceTier), timestamp);
   });
-  write(issue);
+  write.immediate(issue);
   return mustGetIssue(db, issue.id);
 }
 

@@ -12,6 +12,8 @@ import {
 import type { RunnerDatabase } from "../db/database.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import { refreshSafeWorkspaceWaits } from "../domain/review/workspaceWait.ts";
+import { workspaceWaitIssueIDs } from "../db/repositories/workspaceWaits.ts";
 
 export type ProjectLoopRuntime = {
   bus?: Pick<EventBus, "publish">;
@@ -107,11 +109,14 @@ async function runProject(runtime: ProjectLoopRuntime, projectID: string): Promi
 
 async function runProjectLoop(runtime: ProjectLoopRuntime, projectID: string): Promise<boolean> {
   const state = stateFor(runtime.database);
+  await refreshSafeWorkspaceWaits(runtime.database, projectID);
+  let progressed = false;
   while (shouldContinue(runtime, projectID, state.forcedProjects.has(projectID))) {
     const result = await runProjectLoopOnce(loopInput(runtime, projectID));
     if (!result.claimed) break;
+    progressed = true;
   }
-  return true;
+  return progressed;
 }
 
 function shouldContinue(runtime: ProjectLoopRuntime, projectID: string, forceOnce: boolean): boolean {
@@ -140,7 +145,8 @@ function requeueProjectsWithTodo(runtime: ProjectLoopRuntime): void {
     "select id from projects where auto_run=1 order by sort_order asc, created_at asc, id asc"
   ).all();
   for (const project of projects) {
-    if (state.activeLoops.has(project.id) || hasActiveExecutorWorkForProject(runtime.database, project.id) ||
+    if (state.activeLoops.has(project.id) || (hasActiveExecutorWorkForProject(runtime.database, project.id)
+      && workspaceWaitIssueIDs(runtime.database, project.id).length === 0) ||
       !projectLoopDecision(loopInput(runtime, project.id), false).allowed) continue;
     state.activeLoops.add(project.id);
     incrementActiveLoop(project.id);
@@ -182,7 +188,8 @@ function nextRunnableProject(runtime: ProjectLoopRuntime, state: ProjectLoopStat
       continue;
     }
     const gate = projectLoopDecision(loopInput(runtime, id), state.forcedProjects.has(id));
-    if (hasActiveExecutorWorkForProject(runtime.database, id) || !gate.allowed) {
+    if ((hasActiveExecutorWorkForProject(runtime.database, id)
+      && workspaceWaitIssueIDs(runtime.database, id).length === 0) || !gate.allowed) {
       if (!gate.allowed) recordProjectLoopDecision(runtime.database, gate);
       state.forcedProjects.delete(id);
       deleteActiveLoop(state, id);

@@ -4,6 +4,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import type { CompletionCard } from "../domain/acceptance/completionCard.ts";
+import { ISSUE_EXECUTION_AUTHORITY_RULES } from "../domain/work/issueExecutionAuthority.ts";
 import { appLanguage } from "../i18n/language.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { piInternalReadAuthorization } from "./internalReadAuthorization.ts";
@@ -147,6 +148,7 @@ function acceptancePrompt(card: CompletionCard, language: string): string {
   return [
     "You are the Xuanwu PI accepting one completed Work on the user's behalf.",
     "This is a semantic acceptance decision, not a shell-command classifier and not a project manager meeting.",
+    ISSUE_EXECUTION_AUTHORITY_RULES,
     RUN_MEMORY_RULES,
     "Use durable_context.run_memory to trace this exact Run's snapshot. Historical memory verification is not current Run evidence; injection and citations alone never justify acceptance or progress.",
     "Return exactly one JSON object. No markdown, code fences, or prose outside JSON.",
@@ -158,6 +160,7 @@ function acceptancePrompt(card: CompletionCard, language: string): string {
     "confidence MUST be exactly one string literal: low, medium, or high. Never output a number, probability, percentage, or any other confidence form.",
     "The exact JSON shape is: {\"decision\":\"accept|continue_same_session|retry|needs_user|failed\",\"confidence\":\"low|medium|high\",\"rationale\":\"...\",\"evidence_refs\":[\"...\"],\"unmet_requirements\":[\"...\"],\"progress\":{\"made_progress\":true|false,\"evidence_refs\":[\"...\"],\"summary\":\"...\"},\"human_review_kind\":\"decision|acceptance|risk_acceptance when needs_user\",\"follow_up_prompt\":\"optional...\"}.",
     "Judge whether the chronological facts satisfy the authoritative Issue goal and acceptance criteria.",
+    "Before choosing accept, explain how the current delivered behavior or answer satisfies issue.goal and its acceptance criteria, incorporating applicable human_review decisions. Completing your previous follow_up_prompt is not sufficient. If an earlier PI instruction mistakenly removed the requested implementation, acknowledge the mistake and choose a bounded continuation to restore the authorized result, or needs_user when substantive authorization is genuinely unresolved; never redefine implementation success as rollback success.",
     "Judge progress for this Run separately from completion. Set progress.made_progress=true only when this Run produced a concrete new implementation, decision, verified fact, or validation result that materially reduced the remaining work. Repeated planning, repeated inspection, an empty assistant turn, or read-only commands that do not establish a new relevant fact are not progress. Cite only current Run/card facts in progress.evidence_refs.",
     "Commands are observations, not pre-classified proof. Read their command, exit_code, order, output excerpt, changed files, commits, final message, and warnings together.",
     "prior_evidence contains original observations from earlier Runs of this same Work, never current-Run tests or long-term memory. Reuse only status=reusable, cite source_event_ref and source_run_id, and independently judge whether the recorded repository_and_host scope covers the command's inputs and environment. It does not prove remote services, external files, ignored dependencies, or a provider's private shell/toolchain stayed unchanged. If any relevant condition is outside that scope or cannot be confirmed, require fresh verification. Never infer current progress from historical tests. For report-only corrections do not repeat covered, unchanged verification; for revalidation_required follow reasons and revalidation_commands. Historical success never overrides a later failure.",

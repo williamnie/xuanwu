@@ -397,6 +397,29 @@ describe("PI acceptance decision application", () => {
     }
   });
 
+  for (const action of ["continue_same_session", "retry"] as const) {
+    test(`${action} retains the original feature goal when PI wrongly requests a planning-only rollback`, async () => {
+      const db = await fixture();
+      const provider = action === "retry" ? new FreshSessionProvider() : new ContinuingProvider();
+      try {
+        const issue = completedIssue(db, "安全释放等待任务工作目录");
+        const goal = "满足安全条件时释放目录；恢复时复核工作区。\n本批次只建 Issue，不启动。\n不自动 stash/reset/commit。";
+        db.sqlite.run("update issues set description=? where id=?", [goal, issue.id]);
+        const card = await buildIssueCompletionCard(db, issue.id);
+        await applyPiAcceptanceDecision({ database: db, providers: { codex: provider } }, card,
+          decision(action, "撤销本 Run 的全部实现，恢复为仅创建待办 Issue。"));
+        const prompt = provider.inputs[0]?.prompt ?? "";
+        expect(prompt).toContain(goal);
+        expect(prompt).toContain("pre-dispatch planning state and is not a reason to undo this active Run");
+        expect(prompt).toContain("PI follow-up instructions do not replace the original Issue goal");
+        expect(prompt).toContain("A successful rollback or a clean workspace alone does not satisfy a feature implementation goal");
+        expect(prompt).toContain("If substantive authorization is genuinely ambiguous, preserve the workspace and request a human decision");
+        expect(getIssue(db, issue.id)?.status).toBe("in_progress");
+        expect((await buildIssueCompletionCard(db, issue.id)).issue.goal).toBe(goal);
+      } finally { db.close(); }
+    });
+  }
+
   test("pauses same-session continuation and notifies the user after three no-progress Runs", async () => {
     const db = await fixture();
     const provider = new ContinuingProvider();
@@ -520,55 +543,62 @@ describe("PI acceptance decision application", () => {
     }
   });
 
-  test("Q7 authorization review resumes the original Codex Session instead of accepting delivery", async () => {
-    const db = await fixture();
-    const provider = new ContinuingProvider();
-    try {
-      const issue = completedIssue(db, "Qoder Q7：安装登录与真实账号最终验收", "q7-codex-session", "q7-blocked-turn");
-      const originCard = await buildIssueCompletionCard(db, issue.id);
-      await applyPiAcceptanceDecision(
-        { database: db },
-        originCard,
-        decision(
-          "needs_user",
-          "请授权安装、登录和真实付费测试，并提供认证方式及预算上限。",
-          "risk_acceptance"
-        )
-      );
-      const request = readIssueDecisionProjection(db, issue.id).request!;
-      expect(request).toMatchObject({ kind: "risk_acceptance", status: "open" });
+  for (const action of ["continue_same_session", "retry"] as const) {
+    test(`Q7 authorization survives ${action} without accepting delivery or widening its scope`, async () => {
+      const db = await fixture();
+      const provider = action === "retry" ? new FreshSessionProvider() : new ContinuingProvider();
+      try {
+        const issue = completedIssue(db, "Qoder Q7：安装登录与真实账号最终验收", "q7-codex-session", "q7-blocked-turn");
+        const originCard = await buildIssueCompletionCard(db, issue.id);
+        await applyPiAcceptanceDecision(
+          { database: db },
+          originCard,
+          decision(
+            "needs_user",
+            "请授权安装、登录和真实付费测试，并提供认证方式及预算上限。",
+            "risk_acceptance"
+          )
+        );
+        const request = readIssueDecisionProjection(db, issue.id).request!;
+        expect(request).toMatchObject({ kind: "risk_acceptance", status: "open" });
 
-      await reviewHumanIssue(db, issue.id, {
-        action: "accept",
-        comment: "授权真实测试；认证使用已登录的 local-cli；MAX_PAID_TURNS=10；MAX_CREDITS=3。",
-        review_request_id: request.id,
-        review_revision: request.revision
-      });
-      const answeredCard = await buildIssueCompletionCard(db, issue.id);
-      const updated = await applyPiAcceptanceDecision(
-        { database: db, providers: { codex: provider } },
-        answeredCard,
-        decision("continue_same_session", "按已授权预算继续 Q7 真实验收。")
-      );
+        await reviewHumanIssue(db, issue.id, {
+          action: "accept",
+          comment: "授权真实测试；认证使用已登录的 local-cli；MAX_PAID_TURNS=10；MAX_CREDITS=3。",
+          review_request_id: request.id,
+          review_revision: request.revision
+        });
+        const answeredCard = await buildIssueCompletionCard(db, issue.id);
+        const updated = await applyPiAcceptanceDecision(
+          { database: db, providers: { codex: provider } },
+          answeredCard,
+          decision(action, "按已授权预算继续 Q7 真实验收。")
+        );
 
-      expect(updated.status).toBe("in_progress");
-      expect(provider.inputs).toHaveLength(1);
-      expect(provider.inputs[0]).toMatchObject({
-        session: { provider: "codex", sessionId: "q7-codex-session", turnId: "q7-blocked-turn" }
-      });
-      expect(provider.inputs[0]?.prompt).toContain("已认证的人类回复类型：risk_acceptance");
-      expect(provider.inputs[0]?.prompt).toContain("MAX_PAID_TURNS=10；MAX_CREDITS=3");
-      expect(listIssueRuns(db, issue.id)).toMatchObject([
-        { attempt: 1, provider_session_id: "q7-codex-session", provider_turn_id: "q7-blocked-turn" },
-        { attempt: 2, provider_session_id: "q7-codex-session", provider_turn_id: "turn-next" }
-      ]);
-      expect(db.sqlite.query<{ count: number }, [number]>(
-        "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
-      ).get(issue.id)?.count).toBe(0);
-    } finally {
-      db.close();
-    }
-  });
+        expect(updated.status).toBe("in_progress");
+        expect(provider.inputs).toHaveLength(1);
+        if (action === "continue_same_session") {
+          expect(provider.inputs[0]).toMatchObject({
+            session: { provider: "codex", sessionId: "q7-codex-session", turnId: "q7-blocked-turn" }
+          });
+        }
+        expect(provider.inputs[0]?.prompt).toContain("已认证的人类回复类型：risk_acceptance");
+        expect(provider.inputs[0]?.prompt).toContain("已认证的人类回复动作：accept");
+        expect(provider.inputs[0]?.prompt).toContain("MAX_PAID_TURNS=10；MAX_CREDITS=3");
+        expect(provider.inputs[0]?.prompt).toContain("release or paid-operation gates remain binding");
+        expect(listIssueRuns(db, issue.id)).toMatchObject([
+          { attempt: 1, provider_session_id: "q7-codex-session", provider_turn_id: "q7-blocked-turn" },
+          { attempt: 2, provider_session_id: action === "retry" ? "session-fresh" : "q7-codex-session",
+            provider_turn_id: action === "retry" ? "turn-fresh" : "turn-next" }
+        ]);
+        expect(db.sqlite.query<{ count: number }, [number]>(
+          "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
+        ).get(issue.id)?.count).toBe(0);
+      } finally {
+        db.close();
+      }
+    });
+  }
 });
 
 class ContinuingProvider implements ExecutorProvider {

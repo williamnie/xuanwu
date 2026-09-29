@@ -6,6 +6,7 @@ import {
 } from "../../db/repositories/issueRuns.ts";
 import { observeGitWorkspaceBaseline } from "./gitWorkspaceObservation.ts";
 import { captureExecutionEvidenceContext, recordExecutionEvidenceContext } from "../acceptance/executionEvidenceContext.ts";
+import { validateReacquiredWorkspace } from "../review/workspaceWait.ts";
 
 export async function prepareReservedIssueRun(
   db: RunnerDatabase,
@@ -16,6 +17,9 @@ export async function prepareReservedIssueRun(
   const baseline = reservation.project_cwd
     ? await observe({ project_cwd: reservation.project_cwd, run_id: reservation.run_id })
     : null;
+  if (!await validateReacquiredWorkspace(db, reservation.issue_id, reservation.run_id)) {
+    return { status: "claim_invalidated", run: null };
+  }
   const result = finalizeIssueRunPreparation(db, reservation, baseline);
   if (result.status === "ready") recordExecutionEvidenceContext(db, reservation.issue_id, reservation.run_id, "start", context);
   return result;

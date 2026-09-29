@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RunnerDatabase } from "../../db/database.ts";
 import { upsertAgentSession } from "../../db/repositories/agentSessions.ts";
 import { recordIssueEvent, listIssueEvents } from "../../db/repositories/issueEvents.ts";
-import { insertIssueRunRecord, updateIssueRuntime } from "../../db/repositories/issueRuns.ts";
+import { insertIssueRunRecord, mustGetCurrentOpenIssueRun, updateIssueRuntime } from "../../db/repositories/issueRuns.ts";
 import { prepareReservedIssueRun } from "../run/runPreparation.ts";
 import { getIssue, listIssueRuns, type Issue } from "../../db/repositories/issues.ts";
 import { getProject, ProjectNotFoundError } from "../../db/repositories/projects.ts";
@@ -14,6 +14,10 @@ import {
   type ExecutorProviderId
 } from "../../providers/types.ts";
 import { requestIssuePiAcceptance } from "../../runner/piAcceptanceRequest.ts";
+import {
+  assertWorkspaceReacquisition, commitWorkspaceReacquisition, prepareWorkspaceReacquisition,
+  type WorkspaceReacquisition
+} from "./workspaceWait.ts";
 import {
   readPiAcceptanceActivity,
   recordPiAcceptanceActivity,
@@ -373,11 +377,13 @@ export async function reviewHumanIssue(
   if ((action === "request_changes" || action === "reject") && comment === "") {
     throw new Error(`${action} 必须填写具体意见`);
   }
+  const workspace = await prepareWorkspaceReacquisition(db, issueID, request);
   if (action === "request_changes") {
-    return resumeRevisionInSameSession(db, mustGetIssue(db, issueID), request, comment, runtime);
+    return resumeRevisionInSameSession(db, mustGetIssue(db, issueID), request, comment, runtime, workspace);
   }
   return db.transaction(() => {
     requireCurrentReviewRequest(db, issueID, input);
+    assertWorkspaceReacquisition(db, issueID, request, workspace);
     if (comment) {
       recordIssueEvent(db, issueID, "issue.comment", {
         author: "user",
@@ -401,6 +407,7 @@ export async function reviewHumanIssue(
       request_id: request.id,
       revision: request.revision
     });
+    commitWorkspaceReacquisition(db, issueID, workspace);
     return requestIssuePiAcceptance(db, issueID, {
       reason: `human review answered: ${action}`,
       source: "human_review"
@@ -418,7 +425,8 @@ async function resumeRevisionInSameSession(
   issue: Issue,
   request: HumanReviewRequest,
   feedback: string,
-  runtime: HumanReviewRuntime
+  runtime: HumanReviewRuntime,
+  workspace: WorkspaceReacquisition | null
 ): Promise<Issue> {
   const previousRun = listIssueRuns(db, issue.id)
     .filter((run) => cleanString(run.provider_session_id) !== "")
@@ -434,12 +442,15 @@ async function resumeRevisionInSameSession(
   if (!project) throw new ProjectNotFoundError();
 
   const prepare = db.transaction(() => {
+    requireCurrentReviewRequest(db, issue.id, { review_request_id: request.id, review_revision: request.revision });
+    assertWorkspaceReacquisition(db, issue.id, request, workspace);
     recordIssueEvent(db, issue.id, "issue.comment", {
       author: "user",
       body: feedback,
       source: "human_review_request_changes"
     });
     updateIssue(db, issue.id, { error: "", status: "in_progress" });
+    commitWorkspaceReacquisition(db, issue.id, workspace);
     const run = insertIssueRunRecord(db, issue.id, { provider: providerID });
     recordIssueEvent(db, issue.id, HUMAN_REVIEW_EVENT_TYPES.revisionRequested, {
       feedback,
@@ -458,6 +469,7 @@ async function resumeRevisionInSameSession(
   if (preparation.status !== "ready") throw new Error("Run preparation claim was invalidated before Session resume");
   const run = preparation.run;
   try {
+    mustGetCurrentOpenIssueRun(db, issue.id, run.id);
     const result = await provider.sendSessionMessage({
       cwd: project.cwd,
       prompt: revisionPrompt(issue, request, feedback),

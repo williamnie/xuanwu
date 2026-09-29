@@ -30,6 +30,8 @@ import {
 } from "../providers/types.ts";
 import { reconcileProviderOutcome } from "./providerOutcome.ts";
 import { prepareReservedIssueRun } from "../domain/run/runPreparation.ts";
+import { refreshSafeWorkspaceWaits } from "../domain/review/workspaceWait.ts";
+import { issueExecutionContext } from "../domain/work/issueExecutionAuthority.ts";
 
 export type ProjectLoopInput = {
   bus?: Pick<EventBus, "publish">;
@@ -60,6 +62,7 @@ export async function runProjectLoopOnce(input: ProjectLoopInput): Promise<Proje
     recordProjectLoopDecision(input.database, decision);
     return { claimed: false };
   }
+  await refreshSafeWorkspaceWaits(input.database, project.id);
   const claim = reserveNextIssue(input.database, project.id, (candidate) => (
     issueProviderAvailable(input.database, project, candidate, input.providers, input.now)
   ), input.now);
@@ -301,20 +304,7 @@ function buildIssuePrompt(project: Project, issue: Issue, database?: RunnerDatab
     ? title
     : [`# ${title}`, "", description].join("\n");
   const humanDecisions = database && issue.source_session_id.startsWith("github:") ? githubWorkExecutionContext(database, issue.id) : "";
-  return withRunnerContext(project, issue, [base, humanDecisions, "", issueExecutionContext(issue)].filter(Boolean).join("\n"), database);
-}
-
-function issueExecutionContext(issue: Issue): string {
-  return [
-    "## Xuanwu execution context (authoritative)",
-    `You are executing the existing, already claimed Issue #${issue.id}. The Runner and PI own its lifecycle.`,
-    "- Do not create, deduplicate, enqueue, retry, cancel, delete, or change the status of this Issue, and do not stop its current Run through Xuanwu CLI/API calls.",
-    "- An active `in_progress` state is expected. Issue-authored wording such as `keep triage`, `do not enqueue`, or `do not auto-start` describes the pre-dispatch planning state and is not a reason to undo this active Run.",
-    "- Pre-dispatch state wording does not prove that substantive prerequisites such as credentials, budget, external authorization, or user-supplied choices are satisfied. If one is still missing, do not perform the gated action; report the exact blocker for PI.",
-    "- Report `completed` when you have satisfied the Issue goal, including answers or explanations that require no code or tool use.",
-    "- Report `needs_user` only when progress is blocked on new user input, authorization, credentials, or a decision. Do not use it merely because the Issue is conversational or requires no repository changes.",
-    "- End the final response with exactly one marker: `RUNNER_OUTCOME: completed`, `RUNNER_OUTCOME: failed | <reason>`, or `RUNNER_OUTCOME: needs_user | <reason>`. The Host will reconcile the Run and PI will decide the Issue status."
-  ].join("\n");
+  return withRunnerContext(project, issue, [base, humanDecisions, "", issueExecutionContext(issue.id)].filter(Boolean).join("\n"), database);
 }
 
 function withRunnerContext(project: Project, issue: Issue, prompt: string, database?: RunnerDatabase): string {

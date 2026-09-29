@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { appendRunMemoryPrompt } from "../pi/runMemoryContext.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
+import { assertWorkspaceWaitSessionControl } from "../db/repositories/workspaceWaits.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
@@ -71,6 +72,7 @@ async function resumeSessionFollowup(
   const prompt = requiredText(payload.prompt, "prompt");
   const provider = context.providers?.[providerID];
   if (!provider?.sendSessionMessage) throw new Error(`provider "${providerID}" 不支持 capability "resume_session"`);
+  assertWorkspaceWaitSessionControl(context.database, providerID, sessionID);
   const replay = await resolveResumeFollowupReplay(context.database, { action, issueID, payload, provider, providerID, sessionID });
   if (replay) {
     recordSupervisorResult(context.database, action, payload, replay.result);
