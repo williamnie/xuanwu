@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, statSync, type Stats } from "node:fs";
 import { mkdir, open, readFile, readdir, rename, rm, stat } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 import { basename } from "node:path";
@@ -34,18 +34,29 @@ type FileRow = FileDescriptor & {
   tailChecksum: string;
 };
 type QueryState = { lastError?: string; refreshing: boolean };
+type RefreshOptions = { forceRebuild?: boolean; verifiedIndexIdentity?: string };
+type RefreshResult = { indexIdentity?: string; metrics: UsageIndexMetrics };
 
 export async function refreshUsageIndex(
   root: string,
   indexPath: string,
-  options: { forceRebuild?: boolean } = {}
+  options: RefreshOptions = {}
 ): Promise<UsageIndexMetrics> {
+  return (await refreshUsageIndexWithIdentity(root, indexPath, options)).metrics;
+}
+
+export async function refreshUsageIndexWithIdentity(
+  root: string,
+  indexPath: string,
+  options: RefreshOptions = {}
+): Promise<RefreshResult> {
   await mkdir(dirname(indexPath), { recursive: true });
   const release = await acquireLock(`${indexPath}.lock`);
   try {
-    const rebuild = options.forceRebuild || !usageIndexIsValid(indexPath, root);
-    if (rebuild) return await rebuildIndex(root, indexPath);
-    return await updateIndex(root, indexPath);
+    const rebuild = options.forceRebuild || !usageIndexIsValid(indexPath, root, options.verifiedIndexIdentity);
+    const metrics = rebuild ? await rebuildIndex(root, indexPath) : await updateIndex(root, indexPath);
+    // 持锁记录已完成刷新对应的指纹，避免 Reader 误信刷新之后的外部写入。
+    return { indexIdentity: usageIndexIdentity(indexPath), metrics };
   } finally {
     await release();
   }
@@ -54,9 +65,9 @@ export async function refreshUsageIndex(
 export async function refreshUsageIndexInWorker(
   root: string,
   indexPath: string,
-  options: { forceRebuild?: boolean } = {}
-): Promise<UsageIndexMetrics> {
-  const workerArgs = ["__usage-index-worker", root, indexPath, options.forceRebuild ? "1" : "0", String(process.pid)];
+  options: RefreshOptions = {}
+): Promise<RefreshResult> {
+  const workerArgs = ["__usage-index-worker", root, indexPath, options.forceRebuild ? "1" : "0", String(process.pid), options.verifiedIndexIdentity ?? ""];
   const command = basename(process.execPath).startsWith("bun")
     ? [process.execPath, join(import.meta.dir, "../main.ts"), ...workerArgs]
     : [process.execPath, ...workerArgs];
@@ -73,9 +84,9 @@ export async function refreshUsageIndexInWorker(
     child.exited
   ]).finally(() => clearTimeout(timeout));
   if (exitCode !== 0) throw new Error(`usage index worker failed (${exitCode}): ${stderr.trim() || stdout.trim()}`);
-  const parsed = JSON.parse(stdout) as { metrics?: UsageIndexMetrics; ok?: boolean };
+  const parsed = JSON.parse(stdout) as { indexIdentity?: string; metrics?: UsageIndexMetrics; ok?: boolean };
   if (!parsed.ok || !parsed.metrics) throw new Error("usage index worker returned an invalid result");
-  return parsed.metrics;
+  return { indexIdentity: parsed.indexIdentity, metrics: parsed.metrics };
 }
 
 function workerEnvironment(): Record<string, string> {
@@ -84,15 +95,35 @@ function workerEnvironment(): Record<string, string> {
     .filter(([, value]) => value !== ""));
 }
 
-export function usageIndexIsValid(indexPath: string, root: string): boolean {
+// 校验结果只复用于相同的数据库及 WAL；外部写入、替换或删除会使指纹失效。
+export function usageIndexIdentity(indexPath: string): string | undefined {
+  try {
+    const file = statSync(indexPath);
+    if (!file.isFile()) return undefined;
+    const identity = (value: Stats) => `${value.dev}:${value.ino}:${value.size}:${value.mtimeMs}:${value.ctimeMs}`;
+    let wal = "";
+    try {
+      wal = identity(statSync(`${indexPath}-wal`));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return undefined;
+    }
+    return `${identity(file)}|${wal}`;
+  } catch {
+    return undefined;
+  }
+}
+
+export function usageIndexIsValid(indexPath: string, root: string, verifiedIdentity?: string): boolean {
   if (!existsSync(indexPath)) return false;
   let db: Database | undefined;
   try {
     db = new Database(indexPath, { readonly: true, strict: true });
     const version = scalarNumber(db, "pragma user_version");
     const source = metadata(db, "source_root");
-    const check = scalarText(db, "pragma quick_check");
-    return version === USAGE_INDEX_VERSION && source === root && check === "ok";
+    if (version !== USAGE_INDEX_VERSION || source !== root) return false;
+    // Reader 已完整校验的同一索引无需在每个短命 worker 中再次遍历历史数据。
+    if (verifiedIdentity && usageIndexIdentity(indexPath) === verifiedIdentity) return true;
+    return scalarText(db, "pragma quick_check") === "ok";
   } catch {
     return false;
   } finally {

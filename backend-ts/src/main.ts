@@ -31,17 +31,17 @@ if (Bun.argv[2] === "__runtime-observability-worker") {
 }
 
 if (Bun.argv[2] === "__usage-index-worker") {
-  const [, root = "", indexPath = "", forceRebuild = "0", parentPIDText = "0"] = Bun.argv.slice(2);
+  const [, root = "", indexPath = "", forceRebuild = "0", parentPIDText = "0", verifiedIndexIdentity = ""] = Bun.argv.slice(2);
   const parentPID = Number(parentPIDText);
   const parentWatch = setInterval(() => {
     if (!Number.isInteger(parentPID) || parentPID <= 1) return;
     try { process.kill(parentPID, 0); } catch { process.exit(1); }
   }, 1000);
   try {
-    const { refreshUsageIndex } = await import("./usage/usageIndex.ts");
-    const metrics = await refreshUsageIndex(root, indexPath, { forceRebuild: forceRebuild === "1" });
+    const { refreshUsageIndexWithIdentity } = await import("./usage/usageIndex.ts");
+    const result = await refreshUsageIndexWithIdentity(root, indexPath, { forceRebuild: forceRebuild === "1", verifiedIndexIdentity });
     clearInterval(parentWatch);
-    process.stdout.write(JSON.stringify({ metrics, ok: true }));
+    process.stdout.write(JSON.stringify({ ...result, ok: true }));
     process.exit(0);
   } catch (error) {
     clearInterval(parentWatch);

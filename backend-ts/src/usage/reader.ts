@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   queryUsageIndex,
   refreshUsageIndexInWorker,
+  usageIndexIdentity,
   usageIndexIsValid,
   type UsageIndexMetrics
 } from "./usageIndex.ts";
@@ -31,6 +32,7 @@ export type UsageReaderOptions = {
 
 type ReaderState = {
   cache: Map<number, UsageSnapshot>;
+  indexIdentity?: string;
   lastError?: string;
   refresh?: Promise<void>;
   root: string;
@@ -89,23 +91,36 @@ export function resetUsageReaderState(): void {
 }
 
 async function ensureValidSnapshot(root: string, indexPath: string, state: ReaderState): Promise<boolean> {
-  if (state.validated) return true;
+  if (state.validated && state.refresh) return true;
+  const identity = usageIndexIdentity(indexPath);
+  if (state.validated && identity && identity === state.indexIdentity) return true;
+  state.cache.clear();
+  state.validated = false;
+  state.indexIdentity = undefined;
   if (!existsSync(indexPath)) return false;
   const valid = usageIndexIsValid(indexPath, root);
-  state.validated = valid;
+  const checkedIdentity = usageIndexIdentity(indexPath);
+  state.validated = valid && Boolean(identity) && identity === checkedIdentity;
+  if (state.validated) state.indexIdentity = checkedIdentity;
   return valid;
 }
 
 async function runRefresh(root: string, indexPath: string, state: ReaderState, forceRebuild = false): Promise<void> {
   if (state.refresh) return await state.refresh;
-  state.refresh = refreshUsageIndexInWorker(root, indexPath, { forceRebuild })
-    .then(() => {
+  state.refresh = refreshUsageIndexInWorker(root, indexPath, {
+    forceRebuild,
+    ...(state.validated ? { verifiedIndexIdentity: state.indexIdentity } : {})
+  })
+    .then((result) => {
       state.cache.clear();
       state.lastError = undefined;
-      state.validated = true;
+      state.validated = Boolean(result.indexIdentity);
+      state.indexIdentity = result.indexIdentity;
     })
     .catch((error) => {
       state.lastError = error instanceof Error ? error.message : String(error);
+      state.validated = false;
+      state.indexIdentity = undefined;
       throw error;
     })
     .finally(() => {

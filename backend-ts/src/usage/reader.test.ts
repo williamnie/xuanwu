@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { readCodexUsage } from "./codex.ts";
@@ -16,6 +16,42 @@ afterEach(async () => {
 });
 
 describe("usage reader cache", () => {
+  test("adds only new sessions and appended usage to the persisted total after restart", async () => {
+    const root = await tempDir();
+    const paths = await Promise.all(Array.from({ length: 200 }, (_, index) => writeUsageJSONL(root,
+      `2026/06/01/session-${index}.jsonl`, [sessionMeta(`thread-${index}`, "/tmp/demo"), tokenCount(100_000)])));
+    const first = await readCodexUsage({ root });
+    expect(first).toMatchObject({ summary: { all_time: { total_tokens: 20_000_000 } } });
+
+    const added = await Promise.all(Array.from({ length: 30 }, (_, index) => writeUsageJSONL(root,
+      `2026/06/01/new-${index}.jsonl`, [sessionMeta(`new-${index}`, "/tmp/demo"), tokenCount(100_000)])));
+    const appended = `${tokenCount(500)}\n`;
+    await appendFile(paths[0], appended);
+    const addedBytes = (await Promise.all(added.map((path) => Bun.file(path).stat()))).reduce((sum, info) => sum + info.size, 0);
+    resetUsageReaderState();
+
+    const second = await readCodexUsage({ root });
+    expect(second).toMatchObject({
+      cache: {
+        bytes_read: addedBytes + Buffer.byteLength(appended),
+        files_incremental: 1,
+        files_reused: 199,
+        files_scanned: 30,
+        index_rebuilds: 0
+      },
+      events_scanned: 231,
+      summary: { all_time: { total_tokens: 23_000_500 } }
+    });
+
+    await unlink(added[0]);
+    const deleted = await readCodexUsage({ root });
+    expect(deleted).toMatchObject({
+      cache: { bytes_read: 0, files_reused: 229, files_scanned: 0 },
+      events_scanned: 230,
+      summary: { all_time: { total_tokens: 22_900_500 } }
+    });
+  });
+
   test("reuses unchanged files and reads appended usage incrementally", async () => {
     const root = await tempDir();
     const usagePath = await writeUsageJSONL(root, "2026/06/01/session.jsonl", [
@@ -167,6 +203,17 @@ describe("usage reader cache", () => {
     expect(recovered.buckets[0]?.usage.total_tokens).toBe(9);
     expect(await Bun.file(`${indexPath}.tmp-abandoned`).exists()).toBe(false);
     expect(await Bun.file(usagePath).text()).toContain("thread-recovery");
+  });
+
+  test("revalidates and rebuilds a corrupted index while process state is cached", async () => {
+    const root = await tempDir();
+    await writeUsageJSONL(root, "session.jsonl", [sessionMeta("thread-corrupt", "/tmp/demo"), tokenCount(9)]);
+    await readUsageSnapshot(root);
+    await writeFile(defaultUsageIndexPath(root), "corrupted index");
+
+    const recovered = await readUsageSnapshot(root);
+    expect(recovered.cache).toMatchObject({ files_scanned: 1, index_rebuilds: 1 });
+    expect(recovered.buckets[0]?.usage.total_tokens).toBe(9);
   });
 });
 
