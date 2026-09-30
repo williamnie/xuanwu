@@ -558,9 +558,13 @@ function storedMetrics(db: Database): UsageIndexMetrics {
 }
 
 function latestRecord(db: Database, where: string, tieOrder: string): UsageRecord | undefined {
+  // 先沿现有索引定位最新时间，再按原有规则处理同一时间的记录，避免全表排序。
   const row = db.query<EventRow, []>(`
-    select * from events where ${where}
-    order by timestamp_ms desc, ${tieOrder} limit 1
+    select * from events where ${where} and timestamp_ms=(
+      select timestamp_ms from events where ${where}
+      order by timestamp_ms desc, path desc, byte_offset desc limit 1
+    )
+    order by ${tieOrder} limit 1
   `).get();
   return row ? recordFromRow(row) : undefined;
 }

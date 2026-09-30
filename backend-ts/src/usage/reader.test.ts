@@ -16,6 +16,26 @@ afterEach(async () => {
 });
 
 describe("usage reader cache", () => {
+  test("keeps day, week and month totals exact across sessions and limited reports", async () => {
+    const root = await tempDir();
+    const dates = [new Date(2026, 7, 31, 12), new Date(2026, 8, 21, 12), new Date(2026, 8, 28, 12),
+      new Date(2026, 8, 30, 12), new Date(2026, 8, 30, 13)];
+    await Promise.all(dates.map((date, index) => writeUsageJSONL(root, `${index}.jsonl`, [
+      sessionMeta(`period-${index}`, "/tmp/demo"),
+      JSON.stringify({ timestamp: date.toISOString(), type: "event_msg",
+        payload: { type: "token_count", info: { last_token_usage: { total_tokens: (index + 1) * 10 } } } })
+    ])));
+    const now = new Date(2026, 8, 30, 14);
+    expect(await readCodexUsage({ root, now })).toMatchObject({ summary: {
+      all_time: { total_tokens: 150 }, this_month: { total_tokens: 140 },
+      this_week: { total_tokens: 120 }, today: { total_tokens: 90 }
+    } });
+    expect(await readCodexUsage({ root, now, options: { limit: 3 } })).toMatchObject({ summary: {
+      all_time: { total_tokens: 120 }, this_month: { total_tokens: 120 },
+      this_week: { total_tokens: 120 }, today: { total_tokens: 90 }
+    } });
+  });
+
   test("adds only new sessions and appended usage to the persisted total after restart", async () => {
     const root = await tempDir();
     const paths = await Promise.all(Array.from({ length: 200 }, (_, index) => writeUsageJSONL(root,

@@ -1,9 +1,9 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { refreshUsageIndex, usageIndexIdentity, usageIndexIsValid } from "./usageIndex.ts";
+import { queryUsageIndex, refreshUsageIndex, usageIndexIdentity, usageIndexIsValid } from "./usageIndex.ts";
 
 const roots: string[] = [];
 
@@ -49,6 +49,38 @@ test("checks schema and source even when the index identity was verified", async
   expect(usageIndexIsValid(indexPath, root, usageIndexIdentity(indexPath))).toBe(false);
   const metrics = await refreshUsageIndex(root, indexPath, { verifiedIndexIdentity: usageIndexIdentity(indexPath) });
   expect(metrics).toMatchObject({ files_scanned: 1, index_rebuilds: 1 });
+});
+
+test("locates latest events with the timestamp index and preserves tie ordering", async () => {
+  const { root, indexPath } = await fixture();
+  const event = (tokens: number, timestamp = "2026-09-30T08:00:00Z") => JSON.stringify({
+    timestamp, type: "event_msg", payload: { type: "token_count", info: { last_token_usage: { total_tokens: tokens } } }
+  });
+  await writeFile(join(root, "a.jsonl"), `${event(3)}\n${event(4)}\n`);
+  await writeFile(join(root, "z.jsonl"), `${event(99)}\n`);
+  await appendFile(join(root, "z.jsonl"), `${JSON.stringify({
+    timestamp: "2026-09-30T09:00:00Z", type: "event_msg",
+    payload: { type: "token_count", rate_limits: { primary: { used_percent: 40 } } }
+  })}\n`);
+  await refreshUsageIndex(root, indexPath);
+  const query = spyOn(Database.prototype, "query");
+  let latestSQL: string | undefined;
+  try {
+    const snapshot = queryUsageIndex(indexPath, root, 0, { refreshing: false });
+    expect(snapshot.latestUsage?.event.payload?.info?.last_token_usage?.total_tokens).toBe(3);
+    expect(snapshot.latestLimits?.event.payload?.rate_limits?.primary?.used_percent).toBe(40);
+    latestSQL = query.mock.calls.find(([sql]) => sql.includes("info_json is not null"))?.[0];
+  } finally {
+    query.mockRestore();
+  }
+  expect(latestSQL).toBeDefined();
+  const db = new Database(indexPath, { readonly: true });
+  try {
+    const plan = db.query<{ detail: string }, []>(`explain query plan ${latestSQL}`).all();
+    expect(plan.some((row) => row.detail.includes("SEARCH events USING INDEX events_recent"))).toBe(true);
+  } finally {
+    db.close();
+  }
 });
 
 async function fixture(): Promise<{ root: string; indexPath: string }> {

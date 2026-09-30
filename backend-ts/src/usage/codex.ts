@@ -68,6 +68,9 @@ function newUsageState(root: string, now: Date, options: UsageOptions) {
   return {
     daily: new Map<string, TokenUsage>(),
     cache: {} as Record<string, number>,
+    currentDay: dayKey(now),
+    currentMonth: monthKey(now),
+    currentWeek: isoWeekKey(now),
     dimensions: newDimensionState(options),
     events_scanned: 0,
     freshness: {} as Record<string, unknown>,
@@ -77,7 +80,7 @@ function newUsageState(root: string, now: Date, options: UsageOptions) {
     latest_usage: undefined as Record<string, unknown> | undefined,
     latest_usage_ms: -1,
     monthly: new Map<string, TokenUsage>(),
-    now,
+    periodsByDay: new Map<string, { month: string; week: string }>(),
     rate_limits: null as RateLimits | null,
     root,
     summary: {
@@ -92,13 +95,16 @@ function newUsageState(root: string, now: Date, options: UsageOptions) {
 
 function addUsageToSummary(state: UsageState, ts: Date, usage: TokenUsage): void {
   if (usage.total_tokens === 0) return;
+  const day = dayKey(ts);
+  const periods = state.periodsByDay.get(day) ?? { month: monthKey(ts), week: isoWeekKey(ts) };
+  state.periodsByDay.set(day, periods);
   addUsage(state.summary.all_time, usage);
-  addUsage(mapUsage(state.daily, dayKey(ts)), usage);
-  addUsage(mapUsage(state.weekly, isoWeekKey(ts)), usage);
-  addUsage(mapUsage(state.monthly, monthKey(ts)), usage);
-  if (dayKey(ts) === dayKey(state.now)) addUsage(state.summary.today, usage);
-  if (isoWeekKey(ts) === isoWeekKey(state.now)) addUsage(state.summary.this_week, usage);
-  if (monthKey(ts) === monthKey(state.now)) addUsage(state.summary.this_month, usage);
+  addUsage(mapUsage(state.daily, day), usage);
+  addUsage(mapUsage(state.weekly, periods.week), usage);
+  addUsage(mapUsage(state.monthly, periods.month), usage);
+  if (day === state.currentDay) addUsage(state.summary.today, usage);
+  if (periods.week === state.currentWeek) addUsage(state.summary.this_week, usage);
+  if (periods.month === state.currentMonth) addUsage(state.summary.this_month, usage);
 }
 
 function captureLatestUsage(state: UsageState, event: TokenEvent): void {
