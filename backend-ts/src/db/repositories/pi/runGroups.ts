@@ -143,14 +143,60 @@ export function updatePiRunGroupItem(
 }
 
 export function refreshPiRunGroupCompletion(db: RunnerDatabase, runGroupID: string): PiRunGroup {
-  const group = requirePiRunGroup(db, runGroupID);
-  const items = listPiRunGroupItems(db, group.id);
-  const completed = items.length >= group.expected_issue_count && items.every(isRunGroupItemReportable);
-  if (!completed) return group;
+  return db.transaction(() => {
+    let group = requirePiRunGroup(db, runGroupID);
+    const items = listPiRunGroupItems(db, group.id);
+    if (items.length + removedRunGroupIssueIDs(group).length < group.expected_issue_count) {
+      // 旧版删除会级联移除成员；只使用同批次、同项目的成功入队回执恢复删除事实。
+      const removed = db.sqlite.query<{ issue_id: number }, [string, string]>(`
+        select distinct a.issue_id from pi_actions a
+        where a.project_id=? and a.action_type='issue.enqueue' and a.status='completed'
+          and a.issue_id>0 and json_valid(a.payload_json) and json_valid(a.result_json)
+          and json_extract(a.payload_json, '$.run_group_id')=?
+          and json_extract(a.payload_json, '$.issue_id')=a.issue_id
+          and json_extract(a.result_json, '$.id')=a.issue_id
+          and json_extract(a.result_json, '$.project_id')=a.project_id
+          and not exists (select 1 from issues i where i.id=a.issue_id)
+      `).all(group.project_id, group.id);
+      if (removed.length > 0) group = recordRemovedRunGroupIssues(db, group, removed.map((row) => row.issue_id));
+    }
+    const removed = removedRunGroupIssueIDs(group).filter((id) => !items.some((item) => item.issue_id === id));
+    const completed = items.length + removed.length >= group.expected_issue_count && items.every(isRunGroupItemReportable);
+    if (!completed || group.status === "completed") return group;
+    return updatePiRunGroup(db, group.id, { completed_at: group.completed_at || now(), status: "completed" });
+  }).immediate();
+}
+
+/** 在删除 Issue 的同一事务内保留成员墓碑，避免把已删除任务继续算作运行中。 */
+export function removePiRunGroupIssue(db: RunnerDatabase, issueID: number): void {
+  const groups = db.sqlite.query<{ run_group_id: string }, [number]>(
+    `select run_group_id from ${ITEM_TABLE} where issue_id=?`
+  ).all(issueID);
+  for (const { run_group_id: id } of groups) {
+    recordRemovedRunGroupIssues(db, requirePiRunGroup(db, id), [issueID]);
+    db.sqlite.run(`delete from ${ITEM_TABLE} where run_group_id=? and issue_id=?`, [id, issueID]);
+    refreshPiRunGroupCompletion(db, id);
+  }
+}
+
+export function removedRunGroupIssueIDs(group: PiRunGroup): number[] {
+  const ids = groupDigestPolicy(group).removed_issue_ids;
+  return Array.isArray(ids) ? [...new Set(ids.filter((id): id is number => Number.isSafeInteger(id) && id > 0))] : [];
+}
+
+function recordRemovedRunGroupIssues(db: RunnerDatabase, group: PiRunGroup, ids: number[]): PiRunGroup {
+  const removed = [...new Set([...removedRunGroupIssueIDs(group), ...ids])].sort((a, b) => a - b);
+  if (JSON.stringify(removed) === JSON.stringify(removedRunGroupIssueIDs(group))) return group;
   return updatePiRunGroup(db, group.id, {
-    completed_at: group.completed_at || now(),
-    status: "completed"
+    digest_policy_json: { ...groupDigestPolicy(group), removed_issue_ids: removed }
   });
+}
+
+function groupDigestPolicy(group: PiRunGroup): Record<string, unknown> {
+  try {
+    const value: unknown = JSON.parse(group.digest_policy_json);
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  } catch { return {}; }
 }
 
 export function syncPiRunGroupsForIssueStatus(

@@ -17,6 +17,7 @@ import type { FeishuTextMessageInput, FeishuTextMessageResult } from "../integra
 import { sendDirectFeishuGuardianAlert } from "../integrations/feishuGuardianAlerts.ts";
 import { sendMissedDigestPendingFallback } from "./guardianMissedDigestFallback.ts";
 import { runGuardianMissedIntentSweepOnce } from "./guardianMissedIntentSweep.ts";
+import { resolveRecoveredAlerts } from "./guardianWatchdogMaintenance.ts";
 import type { PiGuardianWatchdogComponent } from "./guardianWatchdog.ts";
 import type { PiGuardianWatchdogSummary } from "./guardianWatchdog.ts";
 
@@ -28,6 +29,43 @@ afterEach(async () => {
 });
 
 describe("PI Guardian missed intent sweep", () => {
+  test("a recovery digest carries the verified recovered state, not the old open alert", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      insertOutageAlert(db, "scheduler_stalled");
+      insertMissedIntent(db, "known-route", { issueID: 911, kind: "issue_done", state: "ready" });
+      const watchdog = recoveredWatchdog("scheduler");
+      runGuardianMissedIntentSweepOnce(db, { now: NOW, watchdog });
+      resolveRecoveredAlerts(db, watchdog.checks, NOW);
+      const payload = JSON.parse(recoveryDigests(db)[0]!.payload_json);
+      expect(payload).toMatchObject({ needs_user_count: 0, alerts: [{
+        status: "resolved", message: "scheduler recovered", recovered_at: NOW
+      }] });
+      expect(listPiGuardianAlerts(db, { alertType: "scheduler_stalled" })[0]?.status).toBe("resolved");
+    } finally { db.close(); }
+  });
+
+  test.each(["failed", "unknown", "mixed"])("does not claim recovery when component health is %s", async (health) => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      insertOutageAlert(db, "scheduler_stalled");
+      const watchdog: PiGuardianWatchdogSummary = {
+        alerts: 0, errors: 0, scanned: 1,
+        checks: health === "unknown" ? [] : [
+          { component: "scheduler", ok: false },
+          ...(health === "mixed" ? [{ component: "scheduler" as const, ok: true }] : [])
+        ]
+      };
+      const result = runGuardianMissedIntentSweepOnce(db, { now: NOW, watchdog });
+      resolveRecoveredAlerts(db, watchdog.checks, NOW);
+      expect(result.scannedAlerts).toBe(0);
+      expect(recoveryDigests(db)).toHaveLength(0);
+      expect(listPiGuardianAlerts(db, { alertType: "scheduler_stalled" })[0]?.status).toBe("open");
+    } finally { db.close(); }
+  });
+
   test("creates one idempotent recovery digest for recovered outage window missed intents", async () => {
     const db = await openFixtureDatabase();
     try {

@@ -12,6 +12,7 @@ import {
   type PiNotificationIntent
 } from "../db/repositories/pi.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { guardianComponentRecovered } from "./guardianWatchdogMaintenance.ts";
 import type {
   PiGuardianWatchdogComponent,
   PiGuardianWatchdogSummary
@@ -155,18 +156,13 @@ function recoveredOutageAlerts(
   db: RunnerDatabase,
   watchdog: PiGuardianWatchdogSummary | undefined
 ): PiGuardianAlert[] {
-  const recovered = recoveredComponents(watchdog);
   return [
     ...listPiGuardianAlerts(db, { status: "open" }),
     ...listPiGuardianAlerts(db, { status: "acked" })
   ]
     .filter((alert) => outageComponent(alert) !== undefined)
-    .filter((alert) => recovered.size === 0 || recovered.has(outageComponent(alert)!));
-}
-
-function recoveredComponents(watchdog: PiGuardianWatchdogSummary | undefined): Set<PiGuardianWatchdogComponent> {
-  if (!watchdog) return new Set();
-  return new Set(watchdog.checks.filter((check) => check.ok).map((check) => check.component));
+    .filter((alert) => guardianComponentRecovered(watchdog?.checks ?? [], outageComponent(alert)!, alert.project_id))
+    .map((alert) => ({ ...alert, status: "resolved" as const, message: `${outageComponent(alert)} recovered` }));
 }
 
 function digestPipelineAvailable(watchdog: PiGuardianWatchdogSummary | undefined): boolean {

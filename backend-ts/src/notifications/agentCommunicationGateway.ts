@@ -21,6 +21,7 @@ import {
 } from "../pi/structuredAssistantOutput.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { queueNotificationOutbox } from "./notificationOutbox.ts";
+import { agentCommunicationIncident, resolveAgentCommunicationIncident } from "./agentCommunicationIncidents.ts";
 import {
   applyNotificationSpeaker,
   containsQuestionLikeLanguage,
@@ -68,7 +69,6 @@ type AgentCommunicationFailure = {
 };
 
 const DEFAULT_LIMIT = 50;
-const FALLBACK_BUCKET_MS = 30 * 60 * 1000;
 
 /**
  * All normal user-visible notification intents stop here before outbox write.
@@ -106,6 +106,7 @@ async function processGroup(
   try {
     const presentation = notificationPresentation(db);
     const decision = validateDecision(await decide({ intents: active, now }), active, presentation);
+    resolveAgentCommunicationIncident(db, fallbackIdentity(active[0]!), now);
     recordNonActionableQuestionObservation(db, active, decision);
     if (decision.decision === "suppress") {
       for (const intent of active) markSuppressed(db, intent, `agent_suppressed:${decision.rationale}`);
@@ -344,21 +345,25 @@ function queueAgentFailureFallback(
   const presentation = notificationPresentation(db);
   const envelope = communicationEnvelope(first);
   if (!hasTarget(envelope)) return false;
-  const bucket = Math.floor(now.getTime() / FALLBACK_BUCKET_MS);
   const issue = singleIssueID(intents);
   const subject = issue > 0 ? `issue #${issue}` : "这批事项";
   const content = fallbackMessage(presentation, failureCode, subject);
-  const queued = queueNotificationOutbox(db, {
-    channel: envelope.channel,
-    content,
-    createdBy: "notification_agent_fallback",
-    issueID: issue,
-    notificationID: `agent-communication-fallback:${fallbackIdentity(first)}:${bucket}`,
-    notificationType: "agent_communication_fallback",
-    projectID: first.project_id,
-    target: envelope.target
-  });
-  return queued.queued;
+  return db.transaction(() => {
+    const incident = agentCommunicationIncident(db, {
+      identity: fallbackIdentity(first), projectID: first.project_id, failureCode, now
+    });
+    if (incident.status !== "open") return false;
+    return queueNotificationOutbox(db, {
+      channel: envelope.channel,
+      content,
+      createdBy: "notification_agent_fallback",
+      issueID: issue,
+      notificationID: `agent-communication-fallback:${incident.id}`,
+      notificationType: "agent_communication_fallback",
+      projectID: first.project_id,
+      target: envelope.target
+    }).queued;
+  }).immediate();
 }
 
 function mayAskUser(intents: PiNotificationIntent[]): boolean {

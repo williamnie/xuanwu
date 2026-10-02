@@ -7,7 +7,7 @@ import {
 } from "../../domain/run/service.ts";
 import { issueTimestamp } from "./issueCreate.ts";
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "./issues.ts";
-import { syncPiRunGroupsForIssueStatus } from "./pi/runGroups.ts";
+import { removePiRunGroupIssue, syncPiRunGroupsForIssueStatus } from "./pi/runGroups.ts";
 import { getProject, ProjectNotFoundError } from "./projects.ts";
 import { readWorkspaceWait } from "./workspaceWaits.ts";
 
@@ -104,6 +104,7 @@ export function deleteIssues(db: RunnerDatabase, ids: number[]): { deleted_issue
       }
     }
     for (const issue of issues) {
+      removePiRunGroupIssue(db, issue.id);
       db.sqlite.run("delete from works where id=?", [`xw:work:issues:${issue.id}`]);
       const result = db.sqlite.run("delete from issues where id=?", [issue.id]);
       if (result.changes === 0) throw new ProjectNotFoundError();

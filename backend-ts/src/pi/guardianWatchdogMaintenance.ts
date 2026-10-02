@@ -37,6 +37,7 @@ export function resolveRecoveredAlerts(
     if (!alertType) continue;
     for (const status of ["open", "acked"] as const) {
       for (const alert of listPiGuardianAlerts(db, { alertType, status })) {
+        if (!guardianComponentRecovered(checks, check.component, alert.project_id)) continue;
         resolvePiGuardianAlert(db, alert.id, {
           message: `${check.component} recovered`,
           watchdog_seen_at: seenAt
@@ -44,6 +45,14 @@ export function resolveRecoveredAlerts(
       }
     }
   }
+}
+
+export function guardianComponentRecovered(
+  checks: PiGuardianWatchdogCheck[], component: PiGuardianWatchdogComponent, projectID: string
+): boolean {
+  const relevant = checks.filter((check) => check.component === component &&
+    (!projectID || !check.project_id || check.project_id === projectID));
+  return relevant.some((check) => check.ok) && relevant.every((check) => check.ok);
 }
 
 export function suppressUnroutableLifecycleIntents(db: RunnerDatabase): void {

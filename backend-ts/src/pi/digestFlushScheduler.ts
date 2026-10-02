@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { removedRunGroupIssueIDs } from "../db/repositories/pi/runGroups.ts";
 import { findImConversationStateByConversationID } from "../db/repositories/imConversationState.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import {
@@ -94,7 +95,8 @@ function flushGroupDigest(
         status: nextGroupStatus(current.status, reason)
       });
       const items = listPiRunGroupItems(db, group.id);
-      const payload = digestPayload(group.id, group.expected_issue_count, items);
+      const removed = removedRunGroupIssueIDs(current).filter((id) => !items.some((item) => item.issue_id === id));
+      const payload = digestPayload(group.id, current.expected_issue_count, items, removed.length);
       const target = digestTarget(db, current);
       markCoveredLifecycleIntents(db, group.id);
       createPiNotificationIntent(db, {
@@ -195,8 +197,8 @@ function markCoveredLifecycleIntents(db: RunnerDatabase, runGroupID: string): vo
   }
 }
 
-function digestPayload(runGroupID: string, expectedCount: number, items: PiRunGroupItem[]): DigestPayload {
-  const counts = digestCounts(expectedCount, items);
+function digestPayload(runGroupID: string, expectedCount: number, items: PiRunGroupItem[], removedCount: number): DigestPayload {
+  const counts = digestCounts(expectedCount, items, removedCount);
   return {
     active: counts.active,
     active_count: counts.active,
@@ -215,11 +217,11 @@ function digestPayload(runGroupID: string, expectedCount: number, items: PiRunGr
   };
 }
 
-function digestCounts(expectedCount: number, items: PiRunGroupItem[]): DigestCounts {
+function digestCounts(expectedCount: number, items: PiRunGroupItem[], removedCount: number): DigestCounts {
   const counts: DigestCounts = {
-    active: Math.max(expectedCount - items.length, 0),
-    completed: 0, failed: 0, needsUser: 0, skipped: 0,
-    total: Math.max(expectedCount, items.length)
+    active: Math.max(expectedCount - items.length - removedCount, 0),
+    completed: 0, failed: 0, needsUser: 0, skipped: removedCount,
+    total: Math.max(expectedCount, items.length + removedCount)
   };
   for (const item of items) incrementBucket(counts, item.report_bucket);
   return counts;

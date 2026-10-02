@@ -17,11 +17,15 @@ export function missedDigestPayload(
   const failed = intents.filter((intent) => intent.state === "failed" || intent.error !== "").length;
   return {
     active_count: Math.max(intents.length - failed, 0),
-    alerts: alerts.map(alertPayload),
+    alerts: alerts.map((alert) => ({
+      ...alertPayload(alert),
+      ...(alert.status === "resolved" ? { recovered_at: window.endAt } : {})
+    })),
     completed_count: 0,
     failed_count: failed,
     issues: intents.map(intentIssuePayload).filter(hasIssueID),
-    needs_user_count: alerts.filter((alert) => alert.severity === "urgent").length,
+    needs_user_count: alerts.filter((alert) => alert.severity === "urgent" && alert.status === "open").length +
+      intents.filter((intent) => intent.requires_user === 1).length,
     outage_window: { ended_at: window.endAt, started_at: window.startAt },
     run_group_id: missedDigestScope(window),
     skipped_count: 0,

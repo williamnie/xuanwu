@@ -3,11 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../../database.ts";
-import { cancelIssue } from "../issueActions.ts";
+import { cancelIssue, deleteIssues } from "../issueActions.ts";
 import { updateIssue } from "../issueUpdate.ts";
 import {
   addPiRunGroupItem,
   createPiRunGroup,
+  getPiRunGroup,
   listPiRunGroupItems
 } from "../pi.ts";
 
@@ -21,6 +22,49 @@ afterEach(async () => {
 });
 
 describe("PI run group lifecycle report sync", () => {
+  test("deleting members updates every affected batch without consuming unregistered slots", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      [401, 402].forEach((id) => insertIssue(db, id, `Issue ${id}`));
+      for (const [id, expected] of [["complete", 2], ["unregistered", 3]] as const) {
+        createPiRunGroup(db, { id, project_id: "demo", expected_issue_count: expected });
+        [401, 402].forEach((issueID, position) => addPiRunGroupItem(db, {
+          run_group_id: id, issue_id: issueID, position, enqueue_status: "completed"
+        }));
+      }
+      updateIssue(db, 401, { status: "done" });
+      deleteIssues(db, [402, 402]);
+      expect(getPiRunGroup(db, "complete")).toMatchObject({ expected_issue_count: 2, status: "completed" });
+      expect(JSON.parse(getPiRunGroup(db, "complete")!.digest_policy_json).removed_issue_ids).toEqual([402]);
+      expect(getPiRunGroup(db, "unregistered")).toMatchObject({ expected_issue_count: 3, status: "active" });
+      deleteIssues(db, [401]);
+      expect(getPiRunGroup(db, "complete")).toMatchObject({ expected_issue_count: 2, status: "completed" });
+      expect(JSON.parse(getPiRunGroup(db, "complete")!.digest_policy_json).removed_issue_ids).toEqual([401, 402]);
+      createPiRunGroup(db, { id: "all-deleted", project_id: "demo", expected_issue_count: 1,
+        digest_policy_json: { max_interval_minutes: 240 } });
+      insertIssue(db, 403, "Deleted before completion");
+      addPiRunGroupItem(db, { run_group_id: "all-deleted", issue_id: 403 });
+      deleteIssues(db, [403]);
+      expect(getPiRunGroup(db, "all-deleted")?.status).toBe("completed");
+      expect(JSON.parse(getPiRunGroup(db, "all-deleted")!.digest_policy_json)).toEqual({
+        max_interval_minutes: 240, removed_issue_ids: [403]
+      });
+    } finally { db.close(); }
+  });
+
+  test("rejected batch deletion preserves membership and expected counts", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      [411, 412].forEach((id) => insertIssue(db, id, `Issue ${id}`));
+      createPiRunGroup(db, { id: "atomic", project_id: "demo", expected_issue_count: 2 });
+      [411, 412].forEach((issueID) => addPiRunGroupItem(db, { run_group_id: "atomic", issue_id: issueID }));
+      db.sqlite.run("update issues set status='in_progress' where id=412");
+      expect(() => deleteIssues(db, [411, 412])).toThrow("运行中的 issue 不能删除");
+      expect(getPiRunGroup(db, "atomic")?.expected_issue_count).toBe(2);
+      expect(listPiRunGroupItems(db, "atomic")).toHaveLength(2);
+    } finally { db.close(); }
+  });
+
   test("syncs issue lifecycle terminal statuses into report buckets and completion", async () => {
     const db = await openFixtureDatabase();
     try {

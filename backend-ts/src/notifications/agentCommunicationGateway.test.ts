@@ -3,7 +3,7 @@ import { fauxAssistantMessage, fauxThinking } from "@earendil-works/pi-ai/compat
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listExternalLinksByExternal } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
@@ -28,6 +28,49 @@ afterEach(async () => {
 });
 
 describe("Agent-first notification communication", () => {
+  test.each(["send", "suppress"] as const)("deduplicates an outage across hours and restarts until a successful %s", async (decision) => {
+    let db = await fixture();
+    try {
+      const issue = createIssue(db, { project_id: "demo", status: "done", title: "Periodic digest" });
+      const fail = async () => { throw new Error("socket connection was closed unexpectedly"); };
+      stage(db, issue.id, "issue_progress", "periodic digest", "outage-1");
+      expect((await runAgentCommunicationGatewayOnce(db, { decide: fail,
+        now: new Date("2026-10-02T02:00:00Z") })).fallback).toBe(1);
+      const stateDir = dirname(db.path);
+      db.close();
+      db = await openDatabase({ stateDir });
+      stage(db, issue.id, "issue_progress", "periodic digest", "outage-2");
+      expect((await runAgentCommunicationGatewayOnce(db, { decide: fail,
+        now: new Date("2026-10-02T04:00:00Z") })).fallback).toBe(0);
+      stage(db, issue.id, "issue_progress", "periodic digest", "recovery");
+      await runAgentCommunicationGatewayOnce(db, {
+        decide: async () => ({ decision, message: decision === "send" ? "已完成。" : "", rationale: "healthy" })
+      });
+      stage(db, issue.id, "issue_progress", "periodic digest", "outage-3");
+      expect((await runAgentCommunicationGatewayOnce(db, { decide: fail,
+        now: new Date("2026-10-02T04:01:00Z") })).fallback).toBe(1);
+      expect(listSyncOutbox(db).filter((row) => row.created_by === "notification_agent_fallback")).toHaveLength(2);
+    } finally { db.close(); }
+  });
+
+  test("recovery on another destination does not reset an ongoing outage", async () => {
+    const db = await fixture();
+    try {
+      const issue = createIssue(db, { project_id: "demo", status: "done", title: "Scoped outage" });
+      const fail = async () => { throw new Error("socket closed"); };
+      stage(db, issue.id, "issue_progress", "progress", "target-a-fails", false, "chat-a");
+      expect((await runAgentCommunicationGatewayOnce(db, { decide: fail })).fallback).toBe(1);
+      stage(db, issue.id, "issue_progress", "progress", "target-b-healthy", false, "chat-b");
+      await runAgentCommunicationGatewayOnce(db, {
+        decide: async () => ({ decision: "suppress", message: "", rationale: "routine" })
+      });
+      stage(db, issue.id, "issue_progress", "progress", "target-a-still-fails", false, "chat-a");
+      expect((await runAgentCommunicationGatewayOnce(db, { decide: fail })).fallback).toBe(0);
+      stage(db, issue.id, "issue_progress", "progress", "target-b-fails", false, "chat-b");
+      expect((await runAgentCommunicationGatewayOnce(db, { decide: fail })).fallback).toBe(1);
+    } finally { db.close(); }
+  });
+
   test("scopes the authenticated Supervisor presentation to notification wording", async () => {
     const db = await fixture();
     try {
@@ -225,7 +268,8 @@ function stage(
   kind: string,
   content: string,
   eventID: string,
-  requiresUser = false
+  requiresUser = false,
+  chatID = "oc_agent_first"
 ): void {
   const result = routeNotification(db, {
     content,
@@ -236,7 +280,7 @@ function stage(
     notificationType: "fixture_agent_communication",
     projectID: "demo",
     requiresUser,
-    routes: [{ channel: "feishu", chatID: "oc_agent_first" }],
+    routes: [{ channel: "feishu", chatID }],
     severity: requiresUser ? "needs_user" : "info",
     sourceEventID: eventID,
     sourceEventType: "fixture.notification",

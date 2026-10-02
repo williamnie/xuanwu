@@ -5,8 +5,10 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import {
   addPiRunGroupItem,
+  createPiAction,
   createPiNotificationIntent,
   createPiRunGroup,
+  getPiRunGroup,
   listPiNotificationIntents,
   updatePiRunGroup
 } from "../db/repositories/pi.ts";
@@ -22,6 +24,54 @@ afterEach(async () => {
 });
 
 describe("PI digest flush scheduler", () => {
+  test("repairs a legacy deleted member only from a successful matching enqueue receipt", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertIssue(db, 801, "Done", "done");
+      insertIssue(db, 802, "Deleted", "todo");
+      createPiRunGroup(db, { id: "legacy", project_id: "demo", expected_issue_count: 2 });
+      [801, 802].forEach((id) => addPiRunGroupItem(db, { run_group_id: "legacy", issue_id: id }));
+      createPiNotificationIntent(db, lifecycleIntent("legacy-route", 801, "legacy", "issue_done"));
+      createPiAction(db, {
+        id: "legacy-enqueue",
+        action_type: "issue.enqueue", project_id: "demo", issue_id: 802, status: "completed",
+        payload_json: JSON.stringify({ issue_id: 802, run_group_id: "legacy" }),
+        result_json: JSON.stringify({ id: 802, project_id: "demo", status: "todo" })
+      });
+      db.sqlite.run("delete from issues where id=802");
+      const first = runDigestFlushSchedulerOnce(db, { now: "2026-10-02T10:00:00Z" });
+      expect(first.flushed).toBe(1);
+      expect(getPiRunGroup(db, "legacy")).toMatchObject({ expected_issue_count: 2, status: "completed" });
+      const digest = digestIntents(listPiNotificationIntents(db, { runGroupId: "legacy" }))[0]!;
+      expect(JSON.parse(digest.payload_json)).toMatchObject({ active_count: 0, completed_count: 1, skipped_count: 1, total_count: 2 });
+      expect(runDigestFlushSchedulerOnce(db, { now: "2026-10-02T12:00:00Z" }).flushed).toBe(0);
+    } finally { db.close(); }
+  });
+
+  test.each(["pending", "wrong_project", "missing_receipt", "incomplete_proof"])(
+    "does not shrink missing membership from %s evidence", async (evidence) => {
+      const db = await openFixtureDatabase();
+      try {
+        insertIssue(db, 811, "Done", "done");
+        const expected = evidence === "incomplete_proof" ? 3 : 2;
+        createPiRunGroup(db, { id: "incomplete", project_id: "demo", expected_issue_count: expected });
+        addPiRunGroupItem(db, { run_group_id: "incomplete", issue_id: 811 });
+        createPiAction(db, {
+          id: "unverified-enqueue",
+          action_type: "issue.enqueue", project_id: "demo", issue_id: 812,
+          status: evidence === "pending" ? "pending" : "completed",
+          payload_json: JSON.stringify({ issue_id: 812, run_group_id: "incomplete" }),
+          result_json: JSON.stringify(evidence === "missing_receipt" ? {} : {
+            id: 812, project_id: evidence === "wrong_project" ? "other" : "demo"
+          })
+        });
+        runDigestFlushSchedulerOnce(db, { now: "2026-10-02T10:00:00Z" });
+        expect(getPiRunGroup(db, "incomplete")).toMatchObject({ expected_issue_count: expected });
+        expect(getPiRunGroup(db, "incomplete")?.status).not.toBe("completed");
+      } finally { db.close(); }
+    }
+  );
+
   test("flushes completed run groups and marks covered lifecycle intents aggregated", async () => {
     const db = await openFixtureDatabase();
     try {
