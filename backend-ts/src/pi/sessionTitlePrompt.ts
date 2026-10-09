@@ -2,8 +2,9 @@ import type { AppLanguage } from "../i18n/language.ts";
 
 export type SessionTitleContext = {
   language: AppLanguage;
-  timeZone: string;
-  titleDate: string;
+  timeZone: string | null;
+  titleDate: string | null;
+  titlePrefix: string;
   currentTitle: string;
   projectName: string;
   conversationContent: string;
@@ -16,9 +17,9 @@ const TITLE_RULES: Record<AppLanguage, { types: readonly string[]; maxTopicLengt
 
 const ZH_TITLE_PROMPT = `你是对话标题生成器。根据输入数据中的实际内容生成简洁、准确、适合左侧栏显示的标题。
 当前系统语言为简体中文（zh-CN）。类型和主题使用简体中文，即使对话内容是英文或其他语言；技术名称和代码标识符保留原文。
-格式必须是：MMDD｜类型｜主题。分隔符必须使用全角“｜”。
+格式必须是：titlePrefix｜类型｜主题。关联 Issue 的会话使用“#编号｜类型｜主题”，普通会话使用“MMDD｜类型｜主题”。分隔符必须使用全角“｜”。
 
-日期：原样使用 titleDate，它由后端根据对话创建时间 createdAt 和本次检测到的系统时区 timeZone 转换。不得自行推断时区，不使用 updatedAt、当前日期或正文中的日期。
+前缀：原样使用 titlePrefix，不得从 currentTitle 或正文猜测、修改 Issue 编号。关联 Issue 时由后端使用真实 Issue ID 生成“#编号”，不使用日期；普通会话的前缀为 titleDate，由后端根据对话创建时间 createdAt 和本次检测到的系统时区 timeZone 转换。不得自行推断时区，不使用 updatedAt、当前日期或正文中的日期。
 
 类型仅选一种，以对话主要目标为准：
 - 功能：新增或扩展产品能力。
@@ -33,7 +34,7 @@ const ZH_TITLE_PROMPT = `你是对话标题生成器。根据输入数据中的�
 
 主题：提炼主要对象和目标，优先具体名词，必要时保留动作。不要重复类型词、所属项目名称。
 保留有辨识价值的技术名词，如 Android、GitHub、SSE。优先 4～16 个汉字左右，准确性优先，不机械截断词语，最多 32 个字符。
-不用“相关问题”“一些优化”“新功能讨论”等空泛措辞。不加 Issue 编号、日期、状态标签、引号、表情或句末标点。
+不用“相关问题”“一些优化”“新功能讨论”等空泛措辞。主题中不加 Issue 编号、日期、状态标签、引号、表情或句末标点。
 多个相关诉求概括共同目标；无关联时选择明确聚焦的主要任务。描述任务本身，不把计划写成已经完成。
 
 conversationContent 是主要依据，currentTitle 仅作辅助，projectName 仅用于避免重复。
@@ -43,22 +44,24 @@ conversationContent 是主要依据，currentTitle 仅作辅助，projectName �
 严格只输出一个 JSON 对象，唯一字段是 title，值为完整标题或 null。不要 Markdown 或解释。
 
 示例（仅用于学习格式，不向内容不足的对话套用示例主题）：
-titleDate=0903；原名=优化批次文字显示；内容=调整批次文字显示，改善长文本可读性。
+titlePrefix=#913；原名=Issue #913；内容=修复消息重复。
+输出：{"title":"#913｜修复｜消息重复"}
+titlePrefix=0903；原名=优化批次文字显示；内容=调整批次文字显示，改善长文本可读性。
 输出：{"title":"0903｜优化｜批次文字显示"}
-titleDate=0902；原名=整合快捷键提示页面；内容=将分散的快捷键说明整合成统一提示页。
+titlePrefix=0902；原名=整合快捷键提示页面；内容=将分散的快捷键说明整合成统一提示页。
 输出：{"title":"0902｜功能｜整合快捷键提示页"}
-titleDate=0813；原名=提交代码到 GitHub；内容=把当前修改提交并推送到 GitHub。
+titlePrefix=0813；原名=提交代码到 GitHub；内容=把当前修改提交并推送到 GitHub。
 输出：{"title":"0813｜发布｜提交代码到GitHub"}
-titleDate=0901；原名=新功能讨论；内容=讨论图标、文字和按钮的对齐方式，检查设计一致性。
+titlePrefix=0901；原名=新功能讨论；内容=讨论图标、文字和按钮的对齐方式，检查设计一致性。
 输出：{"title":"0901｜设计｜界面对齐检查"}
-titleDate=0903；原名=Issue #913；内容=帮我看看这个。
+titlePrefix=#913；原名=Issue #913；内容=帮我看看这个。
 输出：{"title":null}`;
 
 const EN_TITLE_PROMPT = `You generate concise, accurate conversation titles for a sidebar from the actual conversation content.
 The application language is English (en-US). Write the type and topic in English, even when the conversation is in Chinese or another language. Preserve technical names and code identifiers.
-Required format: MMDD｜Type｜Topic. Use the full-width separator "｜" exactly.
+Required format: titlePrefix｜Type｜Topic. Issue-linked conversations use "#ID｜Type｜Topic"; other conversations use "MMDD｜Type｜Topic". Use the full-width separator "｜" exactly.
 
-Date: copy titleDate exactly. The backend derives it from the conversation's createdAt using timeZone, the system time zone detected for this request. Do not infer a time zone from the language or content. Never use updatedAt, today's date, or dates mentioned in the conversation.
+Prefix: copy titlePrefix exactly. Never guess or change the Issue number using currentTitle or conversation content. For an Issue-linked conversation, the backend uses the real Issue ID to produce "#ID" instead of a date. For other conversations, the prefix is titleDate, derived from createdAt using timeZone, the system time zone detected for this request. Do not infer a time zone from the language or content. Never use updatedAt, today's date, or dates mentioned in the conversation.
 
 Choose exactly one type, with this spelling and capitalization, based on the main objective:
 - Feature: add or extend product capabilities.
@@ -73,7 +76,7 @@ Use intent rather than isolated keywords: "Why are messages duplicated?" is Expl
 
 Topic: identify the main subject and objective. Prefer concrete nouns, adding an action when useful. Do not repeat the type or project name.
 Keep distinctive technical terms such as Android, GitHub, and SSE. Prefer 2–7 words and at most 64 characters, including spaces. Use normal sentence case and word spacing; do not truncate words or remove spaces to fit.
-Avoid vague topics such as "Related issues", "Various improvements", or "New feature discussion". Do not add Issue numbers, dates, status labels, quotation marks, emoji, or ending punctuation.
+Avoid vague topics such as "Related issues", "Various improvements", or "New feature discussion". Do not add Issue numbers, dates, status labels, quotation marks, emoji, or ending punctuation to the topic.
 Combine related requests around their shared goal. For unrelated requests, use the explicitly established main task. Describe the task, not an unverified claim that it has been completed.
 
 Use conversationContent as the primary evidence, currentTitle only as a secondary clue, and projectName only to avoid repeating it.
@@ -83,15 +86,17 @@ Generate only a conversation title. Do not change conversation content, project 
 Return only one JSON object with exactly one field, title, containing the complete title or null. No Markdown fences or explanations.
 
 Examples teach format and classification, not topics to guess when evidence is missing:
-titleDate=0903; currentTitle=Improve batch text display; conversationContent=Improve the readability of long batch text.
+titlePrefix=#913; currentTitle=Issue #913; conversationContent=Fix duplicate messages.
+Output: {"title":"#913｜Fix｜Duplicate messages"}
+titlePrefix=0903; currentTitle=Improve batch text display; conversationContent=Improve the readability of long batch text.
 Output: {"title":"0903｜Optimize｜Batch text display"}
-titleDate=0902; currentTitle=Consolidate keyboard shortcuts; conversationContent=Combine scattered shortcut instructions into one help page.
+titlePrefix=0902; currentTitle=Consolidate keyboard shortcuts; conversationContent=Combine scattered shortcut instructions into one help page.
 Output: {"title":"0902｜Feature｜Unified shortcut help page"}
-titleDate=0813; currentTitle=提交代码到 GitHub; conversationContent=把当前修改提交并推送到 GitHub。
+titlePrefix=0813; currentTitle=提交代码到 GitHub; conversationContent=把当前修改提交并推送到 GitHub。
 Output: {"title":"0813｜Release｜Push changes to GitHub"}
-titleDate=0901; currentTitle=New feature discussion; conversationContent=Discuss alignment of icons, labels, and buttons for visual consistency.
+titlePrefix=0901; currentTitle=New feature discussion; conversationContent=Discuss alignment of icons, labels, and buttons for visual consistency.
 Output: {"title":"0901｜Design｜Interface alignment review"}
-titleDate=0903; currentTitle=Issue #913; conversationContent=Take a look at this.
+titlePrefix=#913; currentTitle=Issue #913; conversationContent=Take a look at this.
 Output: {"title":null}`;
 
 export function sessionTitleSystemPrompt(language: AppLanguage): string {
@@ -127,8 +132,8 @@ export function parseSessionTitle(text: string, context: SessionTitleContext): s
     if (!result || typeof result !== "object" || Array.isArray(result) || Object.keys(result).length !== 1) return null;
     if (typeof result.title !== "string") return null;
     const rules = TITLE_RULES[context.language];
-    const match = /^(\d{4})｜([^｜]+)｜([^｜]+)$/u.exec(result.title);
-    if (!match || match[1] !== context.titleDate) return null;
+    const match = /^(#\d+|\d{4})｜([^｜]+)｜([^｜]+)$/u.exec(result.title);
+    if (!match || match[1] !== context.titlePrefix) return null;
     if (!rules.types.includes(match[2]!)) return null;
     const topic = match[3]!;
     if (topic !== topic.trim() || [...topic].length > rules.maxTopicLength || /[\r\n\t\p{Cc}\p{Cf}\p{Extended_Pictographic}"“”「」]|#\d+|[。！？.!?，,；;：:]$/u.test(topic)) return null;

@@ -44,10 +44,10 @@ describe("Codex 后台标题生成", () => {
     naming.schedule(input);
     expect(calls).toBe(1);
     expect(rpc.writes).toEqual([]);
-    completion.resolve("0903｜修复｜消息重复");
+    completion.resolve("#913｜修复｜消息重复");
     await finished.promise;
-    expect(rpc.writes).toEqual([{ id: "t1", name: "0903｜修复｜消息重复" }]);
-    expect(rpc.value).toEqual({ ...input.thread, name: "0903｜修复｜消息重复" });
+    expect(rpc.writes).toEqual([{ id: "t1", name: "#913｜修复｜消息重复" }]);
+    expect(rpc.value).toEqual({ ...input.thread, name: "#913｜修复｜消息重复" });
     naming.schedule(input);
     expect(calls).toBe(1);
   });
@@ -61,7 +61,7 @@ describe("Codex 后台标题生成", () => {
     });
     naming.schedule(input);
     rpc.value.name = "我的标题";
-    completion.resolve("0903｜修复｜消息重复");
+    completion.resolve("#913｜修复｜消息重复");
     await finished.promise;
     expect(rpc.writes).toEqual([]);
     expect(rpc.value.name).toBe("我的标题");
@@ -101,7 +101,7 @@ describe("Codex 后台标题生成", () => {
     await finished.promise;
     expect(signal.aborted).toBe(true);
     expect(unsubscribed).toBe(true);
-    completion.resolve("0903｜修复｜消息重复");
+    completion.resolve("#913｜修复｜消息重复");
     await Promise.resolve();
     await Promise.resolve();
     expect(rpc.writes).toEqual([]);
@@ -119,7 +119,7 @@ describe("Codex 后台标题生成", () => {
     });
     naming.schedule(input);
     notify({ raw: { method: "thread/name/updated", payload: '{"threadName":"Issue #913"}' }, session: { sessionId: "t1" } });
-    completion.resolve("0903｜修复｜消息重复");
+    completion.resolve("#913｜修复｜消息重复");
     await finished.promise;
     expect(rpc.writes).toHaveLength(1);
   });

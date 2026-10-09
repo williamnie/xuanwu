@@ -118,9 +118,9 @@ describe("Codex executor provider", () => {
       const run = await provider.run({ issueId: 913, projectId: "demo", cwd: "/tmp/demo", prompt: "修复消息重复" });
       expect(run.session?.turnId).toBe("turn-1");
       expect(adapter.threadName).toBe("Issue #913");
-      complete("0903｜修复｜消息重复");
+      complete("#913｜修复｜消息重复");
       await Bun.sleep(0);
-      expect(adapter.threadName).toBe("0903｜修复｜消息重复");
+      expect(adapter.threadName).toBe("#913｜修复｜消息重复");
       await provider.recover({ issueId: 913, projectId: "demo", cwd: "/tmp/demo", prompt: "继续", session: run.session! });
       expect(calls).toBe(1);
     } finally { await provider.stop(); }

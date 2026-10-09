@@ -33,15 +33,16 @@ describe("通过 PI 模型配置直接生成标题", () => {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const titleDate = new Intl.DateTimeFormat("en-US", { month: "2-digit", day: "2-digit" })
       .format(new Date(Number(input.thread.createdAt) * 1000)).replace("/", "");
-    const titles = { "zh-CN": `${titleDate}｜优化｜批次文字显示`, "en-US": `${titleDate}｜Optimize｜Batch text display` };
+    const topics = { "zh-CN": "优化｜批次文字显示", "en-US": "Optimize｜Batch text display" };
     let expectedLanguage: AppLanguage = "zh-CN";
+    let expectedPrefix = "#913";
     const server = Bun.serve({ port: 0, hostname: "127.0.0.1", async fetch(request) {
       expect(request.headers.get("authorization")).toBe("Bearer fixture-title-key");
       requests.push(await request.json() as Record<string, any>);
       // 模拟英文请求发出后切回中文，本轮仍须按请求开始时的语言校验。
       if (expectedLanguage === "en-US") saveAppLanguage(db, "zh-CN");
       const chunks = [
-        { id: "test", object: "chat.completion.chunk", choices: [{ index: 0, delta: { role: "assistant", content: JSON.stringify({ title: titles[expectedLanguage] }) }, finish_reason: null }] },
+        { id: "test", object: "chat.completion.chunk", choices: [{ index: 0, delta: { role: "assistant", content: JSON.stringify({ title: `${expectedPrefix}｜${topics[expectedLanguage]}` }) }, finish_reason: null }] },
         { id: "test", object: "chat.completion.chunk", choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 } }
       ];
       return new Response(chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n", {
@@ -56,22 +57,43 @@ describe("通过 PI 模型配置直接生成标题", () => {
       } }));
       updatePiSupervisor(db, { model_provider: "title-test", model_id: "title-model" });
       const before = db.sqlite.query("select * from projects").all();
-      for (const [index, language] of (["zh-CN", "en-US", "zh-CN"] as const).entries()) {
+      const noDateInput = { ...input, thread: { ...input.thread, createdAt: undefined } };
+      const manualInput = { ...input, issueId: undefined, prompt: "优化批次文字显示" };
+      const cases = [
+        { language: "zh-CN" as const, input, prefix: "#913" },
+        { language: "en-US" as const, input, prefix: "#913" },
+        { language: "zh-CN" as const, input: noDateInput, prefix: "#913" },
+        { language: "zh-CN" as const, input: manualInput, prefix: titleDate },
+        { language: "en-US" as const, input: manualInput, prefix: titleDate }
+      ];
+      for (const [index, item] of cases.entries()) {
+        const { language, prefix } = item;
         // 第一轮验证缺省语言；第二轮切英文；第三轮直接读取上一轮中已切回的中文。
         if (language === "en-US") saveAppLanguage(db, language);
         expectedLanguage = language;
-        const title = await generateSessionTitle(db, input, new AbortController().signal);
-        expect(title).toBe(titles[language]);
+        expectedPrefix = prefix;
+        const title = await generateSessionTitle(db, item.input, new AbortController().signal);
+        expect(title).toBe(`${prefix}｜${topics[language]}`);
         expect(requests).toHaveLength(index + 1);
         const request = requests[index]!;
         expect(request.model).toBe("title-model");
         expect(request.tools ?? []).toEqual([]);
         const message = request.messages.find((item: any) => item.role === "user");
-        expect(JSON.parse(message.content)).toEqual({ language, timeZone, titleDate, currentTitle: "Issue #913", projectName: "玄武", conversationContent: "优化批次文字显示\n\n调整长文本显示，提高可读性" });
+        expect(JSON.parse(message.content)).toEqual({
+          language, titlePrefix: prefix,
+          timeZone: item.input.issueId ? null : timeZone, titleDate: item.input.issueId ? null : titleDate,
+          currentTitle: "Issue #913", projectName: "玄武",
+          conversationContent: item.input.issueId ? "优化批次文字显示\n\n调整长文本显示，提高可读性" : manualInput.prompt
+        });
         const instructions = request.messages.find((item: any) => item.role === "system").content;
         expect(instructions).toContain(language === "en-US" ? "application language is English (en-US)" : "当前系统语言为简体中文（zh-CN）");
+        expect(instructions).toContain("titlePrefix");
         expect(appLanguage(db)).toBe("zh-CN");
       }
+      for (const issueId of [0, -1, 1.5, NaN, Number.MAX_SAFE_INTEGER + 1, 914]) {
+        expect(await generateSessionTitle(db, { ...input, issueId }, new AbortController().signal)).toBeNull();
+      }
+      expect(requests).toHaveLength(cases.length);
       expect(db.sqlite.query("select * from projects").all()).toEqual(before);
       expect(db.sqlite.query("select * from pi_conversations").all()).toEqual([]);
       expect(db.sqlite.query("select * from agent_sessions").all()).toEqual([]);
@@ -83,6 +105,7 @@ describe("通过 PI 模型配置直接生成标题", () => {
     const { db, input } = await fixture();
     try {
       delete input.thread.createdAt;
+      delete input.issueId;
       expect(await generateSessionTitle(db, input, new AbortController().signal)).toBeNull();
     } finally { db.close(); }
   });

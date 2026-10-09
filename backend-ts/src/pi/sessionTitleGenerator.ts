@@ -11,11 +11,14 @@ import { parseSessionTitle, sessionTitleSystemPrompt, sessionTitleDate, sessionT
 
 /** 复用 PI 配置和鉴权，直接调用模型一次；不创建 AgentSession 或挂载任何工具。 */
 export async function generateSessionTitle(db: RunnerDatabase, input: CodexThreadTitleInput, signal: AbortSignal): Promise<string | null> {
-  const timeZone = sessionTitleTimeZone();
-  const titleDate = sessionTitleDate(input.thread.createdAt, timeZone);
+  if (input.issueId !== undefined && (!Number.isSafeInteger(input.issueId) || input.issueId <= 0)) return null;
+  const issue = input.issueId === undefined ? null : getIssue(db, input.issueId);
+  if (input.issueId !== undefined && !issue) return null;
+  const timeZone = issue ? null : sessionTitleTimeZone();
+  const titleDate = issue ? null : sessionTitleDate(input.thread.createdAt, timeZone);
+  const titlePrefix = issue ? `#${issue.id}` : titleDate;
   const agent = getPiSupervisor(db);
-  if (!timeZone || !titleDate || !agent?.model_provider || !agent.model_id || signal.aborted) return null;
-  const issue = input.issueId ? getIssue(db, input.issueId) : null;
+  if (!titlePrefix || !agent?.model_provider || !agent.model_id || signal.aborted) return null;
   const project = input.projectId ? getProject(db, input.projectId) : null;
   // Issue 使用原始标题和正文，避免把执行器提示词、生命周期说明等当成任务主题。
   const content = issue ? `${issue.title}\n\n${issue.description}` : input.prompt;
@@ -26,6 +29,7 @@ export async function generateSessionTitle(db: RunnerDatabase, input: CodexThrea
     language,
     timeZone,
     titleDate,
+    titlePrefix,
     currentTitle: typeof input.thread.name === "string" ? input.thread.name : "",
     projectName: project?.name ?? "",
     conversationContent: content.slice(0, 12_000)

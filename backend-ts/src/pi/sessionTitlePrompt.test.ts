@@ -2,11 +2,26 @@ import { describe, expect, test } from "bun:test";
 import { parseSessionTitle, sessionTitleDate, sessionTitleSystemPrompt, type SessionTitleContext } from "./sessionTitlePrompt.ts";
 
 const context: SessionTitleContext = {
-  language: "zh-CN", timeZone: "Asia/Shanghai", titleDate: "0903", currentTitle: "Issue #913", projectName: "玄武", conversationContent: "修复消息重复"
+  language: "zh-CN", timeZone: "Asia/Shanghai", titleDate: "0903", titlePrefix: "0903", currentTitle: "Issue #913", projectName: "玄武", conversationContent: "修复消息重复"
 };
 const englishContext: SessionTitleContext = { ...context, language: "en-US" };
+const issueContext = { ...context, titlePrefix: "#913", timeZone: null, titleDate: null };
 
 describe("会话标题规则", () => {
+  test.each(["zh-CN", "en-US"] as const)("Issue 标题使用真实编号并保持 %s 类型规则", (language) => {
+    const input = { ...issueContext, language };
+    const title = language === "zh-CN" ? "#913｜修复｜消息重复" : "#913｜Fix｜Duplicate messages";
+    expect(parseSessionTitle(JSON.stringify({ title }), input)).toBe(title);
+    expect(parseSessionTitle(JSON.stringify({ title: title.replace("#913", "#914") }), input)).toBeNull();
+    expect(parseSessionTitle(JSON.stringify({ title: title.replace("#913", "0903") }), input)).toBeNull();
+    expect(parseSessionTitle(JSON.stringify({ title: title.replace("#913", "#0913") }), input)).toBeNull();
+  });
+
+  test("Issue 编号只允许出现在前缀，普通会话不从旧名称猜编号", () => {
+    expect(parseSessionTitle('{"title":"#913｜修复｜#913 消息重复"}', issueContext)).toBeNull();
+    expect(parseSessionTitle('{"title":"#913｜修复｜消息重复"}', context)).toBeNull();
+  });
+
   test("按指定时区处理 createdAt 的跨日和跨年，不假定上海时区", () => {
     const createdAt = Date.parse("2026-09-02T16:00:00Z") / 1000;
     expect(sessionTitleDate(createdAt, "Asia/Shanghai")).toBe("0903");
