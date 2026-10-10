@@ -775,6 +775,8 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/pi/skill-library/inspect", family: "capability-policy" },
   { method: "POST", path: "/api/pi/skill-library/install", family: "capability-policy" },
   { method: "POST", path: "/api/pi/skill-library/manage", family: "capability-policy" },
+  { method: "POST", path: "/api/pi/skill-library/templates/draft", family: "capability-policy" },
+  { method: "POST", path: "/api/pi/skill-library/templates/select", family: "capability-policy" },
   { method: "POST", path: "/api/pi/skill-library/verify", family: "capability-policy" },
   { method: "GET", path: "/api/pi/skills/jev-assist/settings", family: "capability-policy" },
   { method: "PUT", path: "/api/pi/skills/jev-assist/settings", family: "capability-policy" },
@@ -837,6 +839,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/uploads/:id/content", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/uploads/images", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/usage/codex", family: "system-observability" },
+  { method: "GET", path: "/api/system/delivery-effectiveness", family: "system-observability" },
   { method: "GET", path: "/api/usage/providers", family: "system-observability" },
 ] as const;
 
@@ -879,8 +882,8 @@ export const PAGE_SURFACES = [
   },
   {
     id: "system-observability", disposition: "keep", target: "Local runtime observability/control",
-    page_ids: ["dashboard"],
-    source_files: ["frontend/src/pages/Dashboard.jsx", "frontend/src/pages/ReleaseUpdatePanel.jsx"]
+    page_ids: ["dashboard", "analytics"],
+    source_files: ["frontend/src/pages/Analytics.jsx", "frontend/src/pages/Dashboard.jsx", "frontend/src/pages/ReleaseUpdatePanel.jsx"]
   },
   {
     id: "work-ledger", disposition: "keep", target: "Work ledger compatibility API",

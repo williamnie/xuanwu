@@ -275,10 +275,11 @@ describe("PI skill metadata API", () => {
           context_retrieval: expect.objectContaining({
             memory_items: [
               expect.objectContaining({ id: "skill-api-inbox-memory", source_path: "pi_memory_items/skill-api-inbox-memory" }),
-              expect.objectContaining({ id: "skill-api-source-memory" }),
-              expect.objectContaining({ id: "skill-api-skill-memory" }),
-              expect.objectContaining({ id: "skill-api-project-memory" })
-            ]
+              expect.objectContaining({ id: "skill-api-source-memory" })
+            ],
+            retrieval_scopes: ["inbox:1", "source:fixture-im", "skill:fixture-domain", "project:demo", "global:runner"],
+            retrieval: expect.objectContaining({ scanned: 4 }),
+            truncation_summary: expect.objectContaining({ total_candidates: 4, selected_count: 2, omitted_count: 2 })
           })
         })
       })]);

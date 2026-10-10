@@ -855,6 +855,11 @@ class ResumeProvider implements ExecutorProvider {
   readonly id = "codex" as const;
   async run(input: ProviderRunInput) { return { runId: `codex-run-${input.issueId}` }; }
   async readSession(sessionId: string) { return { provider_session_id: sessionId, provider_turn_id: "turn-519", sessionId }; }
+  async recover(input: Parameters<NonNullable<ExecutorProvider["recover"]>>[0]) {
+    const result = await this.sendSessionMessage({ prompt: input.prompt, sessionId: input.session.sessionId });
+    return { runId: `codex:${result.sessionId}:${result.turn_id}`,
+      session: { provider: this.id, sessionId: result.sessionId, turnId: result.turn_id } };
+  }
   async sendSessionMessage(input: SessionMessageInput) {
     this.calls.push({ prompt: input.prompt || "", sessionId: input.sessionId });
     return { provider: "codex" as const, provider_session_id: input.sessionId, sessionId: input.sessionId, turn_id: "turn-followup" };

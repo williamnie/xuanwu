@@ -58,7 +58,7 @@ describe("Bun PI settings API", () => {
       expect(summaryText).not.toContain("先说结论");
       expect(JSON.parse(summaryText)).toMatchObject({
         runtime_prompt_summary: {
-          profiles: ["chat", "acceptance", "recovery", "manager_cycle", "notification"],
+          profiles: ["chat", "acceptance", "memory_reflection", "recovery", "manager_cycle", "notification"],
           persona_configured: true,
           persona_enabled: true,
           persona_revision: 1,

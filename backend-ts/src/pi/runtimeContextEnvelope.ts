@@ -85,9 +85,11 @@ function runtimeTargetBinding(input: RuntimeSessionInput, hasProject: boolean): 
 }
 
 export function piRuntimeContextEnvelopePrompt(envelope: PiRuntimeContextEnvelope): string {
+  // 耗时与扫描诊断保留在完整审计中；模型只需候选、来源、范围和预算，避免无关开销与长度抖动。
+  const { retrieval: _diagnostics, ...durableContext } = envelope.durable_context;
   return [
     "Shared PI runtime context envelope (one logical PI identity; profile-scoped execution):",
-    JSON.stringify(envelope),
+    JSON.stringify({ ...envelope, durable_context: durableContext }),
     "Apply only the projection relevant to this profile. This envelope shares durable user policy and exact target identity across PI call sites; it does not merge their conversational histories, tool permissions, or output schemas."
   ].join("\n");
 }

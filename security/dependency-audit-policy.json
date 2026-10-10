@@ -14,6 +14,13 @@
       "severity": "high",
       "required_path": "@qoder-ai/qodercli > sharp",
       "reason": "User explicitly deferred Qoder on 2026-09-28 for the v0.2.13 release. Both the pinned CLI 1.1.40 and upstream CLI 1.1.64 still bundle sharp 0.34.5; overriding to patched sharp 0.35.4 breaks the bundled 0.34.5 wrapper. Preserve the SDK/CLI pair pending an upstream-compatible fix; this exception does not mean the vulnerability is fixed."
+    },
+    {
+      "package": "sharp",
+      "advisory": "GHSA-wq5f-xc86-pv6w",
+      "severity": "high",
+      "required_path": "@qoder-ai/qodercli > sharp",
+      "reason": "User explicitly deferred Qoder on 2026-10-10 for the v0.2.14 release. The pinned CLI 1.1.40 and current upstream 1.1.67 still declare sharp ^0.34.5; the bundled 0.34.5 wrapper excludes the patched sharp 0.35.5 runtime. Preserve the paired SDK/CLI pending an upstream-compatible fix; this exception does not mean the vulnerability is fixed."
     }
   ]
 }

@@ -24,6 +24,11 @@
 - 修复 SSE 断线导致 Core 退出、前端重连和恢复回合完成误判，优化慢查询、活动读取索引与 Codex 用量读取。
 - 修复批次收尾通知、通知积压和重复故障告警，避免部署与恢复期间重复发送已解决事件。
 
+### Security / 安全
+
+- 定向更新 MCP SDK、Axios、brace-expansion、fast-uri、Hono、ip-address、proxy-addr 和 source-map-js，修复本次依赖审计发现的相关公告，保留原有直接依赖和 Qoder SDK/CLI 配套版本。
+- 维护者在 2026-10-10 明确暂缓 Qoder；其内置 `sharp 0.34.5` 的三项 high 公告仍作为精确上游例外保留，不能将其视为已修复。
+
 ## [0.2.13] - 2026-09-28
 
 ### Added / 新增

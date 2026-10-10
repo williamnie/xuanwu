@@ -152,7 +152,13 @@ describe("Bun SQLite database connection", () => {
         "pi_mcp_approval_grants",
         "pi_mcp_capabilities",
         "pi_mcp_servers",
+        "pi_memory_history",
         "pi_memory_items",
+        "pi_memory_receipts",
+        "pi_memory_reflection_cursor",
+        "pi_memory_reflection_settings",
+        "pi_memory_reflections",
+        "pi_memory_suppressions",
         "pi_notification_intents",
         "pi_notification_preferences",
         "pi_persona",
@@ -321,7 +327,10 @@ describe("Bun SQLite database connection", () => {
         { id: "083_attention_action_recent_index" },
         { id: "084_supervisor_natural_instructions" },
         { id: "085_runtime_read_indexes" },
-        { id: "086_github_issue_cases" }
+        { id: "086_github_issue_cases" },
+        { id: "087_pi_memory_history" },
+        { id: "088_pi_memory_reflections" },
+        { id: "089_runtime_activity_indexes" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");

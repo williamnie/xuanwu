@@ -211,7 +211,6 @@ async function finishRun(db: RunnerDatabase, repo: string, issueID: number, runI
     } }),
   });
   const now = new Date().toISOString();
-  db.sqlite.run("update issue_runs set status='succeeded', ended_at=? where id=?", [now, runID]);
   // 走真实终态收尾入口，避免测试手工写快照而遗漏生产装配问题。
   await reconcileProviderOutcome({ database: db, issueID, issueRunID: runID, providerID: "codex",
     reportedOutcome: { outcome: "completed", reason: "" }, now: new Date(now) });

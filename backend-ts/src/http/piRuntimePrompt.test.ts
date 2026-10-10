@@ -14,6 +14,7 @@ import { PI_PERSONA_PROMPT_HEADER } from "../pi/personaPrompt.ts";
 import { PI_RUNTIME_PROMPT_PROFILES } from "../pi/runtimePromptProfile.ts";
 import { ISSUE_PLANNING_POLICY } from "../pi/issuePlanningPolicy.ts";
 import { readFileSync } from "node:fs";
+import { buildPiRuntimeContextEnvelope, piRuntimeContextEnvelopePrompt } from "../pi/runtimeContextEnvelope.ts";
 
 const DECISION_FIXTURES = [
   {
@@ -294,6 +295,29 @@ describe("Xuanwu PI runtime prompt", () => {
       expect(prompt).toContain("Project-level Supervisor preference");
       expect(prompt).toContain("Global Supervisor behavior");
       expect(prompt).not.toContain("Old chat conversation memory");
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps retrieval diagnostics in the audit envelope without inflating the model prompt", async () => {
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-context-diagnostics-"));
+    const db = await openDatabase({ stateDir: join(root, "state") });
+    try {
+      const envelope = buildPiRuntimeContextEnvelope(db, {
+        agent: agentRecord(), conversationID: "diagnostics", promptProfile: "chat",
+        project: projectRecord("/tmp/xuanwu-prompt-project")
+      });
+      const prompt = piRuntimeContextEnvelopePrompt(envelope);
+      envelope.durable_context.retrieval.elapsed_ms = 123456.789;
+      envelope.durable_context.retrieval.scanned = 999;
+      expect(piRuntimeContextEnvelopePrompt(envelope)).toBe(prompt);
+      expect(envelope.durable_context.retrieval).toMatchObject({ elapsed_ms: 123456.789, scanned: 999 });
+      const projected = JSON.parse(prompt.split("\n")[1]!);
+      expect(projected.durable_context.retrieval_scopes).toEqual(envelope.durable_context.retrieval_scopes);
+      expect(projected.durable_context.truncation).toEqual(envelope.durable_context.truncation);
+      expect(projected.authority_rules).toEqual(envelope.authority_rules);
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });

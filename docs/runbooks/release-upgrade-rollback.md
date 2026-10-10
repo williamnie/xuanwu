@@ -90,7 +90,7 @@ xuanwu-update upgrade \
 - 最低可回滚 binary：`v0.2.13` 的完整 runtime。新增列、表与索引可保留；回滚二进制不会撤销 087 的 authority 归一化，恢复旧数据语义须另行授权并使用升级前验证过的数据库备份。
 - operator action：升级前备份并验证 `runner.db`、`runner-settings.local.json` 及 `${XUANWU_STATE_DIR}/skill-library`；在隔离副本完成 migration/恢复演练后执行升级。自动复盘默认关闭，不批量启用项目；GitHub 接管和经验模板保存继续要求显式配置或选择。
 - Qoder CLI 保持 `1.1.40`；从 `v0.2.12` 及以前首次升级时，仍须使用识别 `qoder_cli_version` 的新版 installer。本次通过 GitHub Actions 构建四平台产物，并为公开仓库的 checksums 生成 signed provenance。
-- 安全审计沿用已记录的 Qoder/sharp 上游例外；发布检查通过不代表全部依赖零漏洞。
+- 安全审计：定向更新 MCP SDK、Axios、brace-expansion、fast-uri、Hono、ip-address、proxy-addr 和 source-map-js。维护者在 2026-10-10 明确暂缓 Qoder；保留 `sharp 0.34.5` 的 `GHSA-f88m-g3jw-g9cj`、`GHSA-rgj7-g3m4-5g8c` 和 `GHSA-wq5f-xc86-pv6w` 三项 high 上游例外，发布检查通过不代表这些漏洞已修复。
 
 ### 2026-09-29 development redeploy：Pi 记忆首期与验收修复
 
