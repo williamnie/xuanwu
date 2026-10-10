@@ -4,6 +4,26 @@
 
 ## [Unreleased]
 
+## [0.2.14] - 2026-10-10
+
+### Added / 新增
+
+- 增加可追溯的 Pi 执行经验：支持修订历史、事实证据、纠错、停用与遗忘保护，按任务上下文召回并保存执行快照。
+- 增加验收后自动复盘、记忆诊断和开销统计；自动复盘默认关闭，经验模板须显式选择后保存到技能库。
+- 展示 GitHub 仓库接管配置、交付证据及反馈续跑状态，补齐交付效果统计的真实事实与未知数据边界。
+
+### Changed / 变更
+
+- 重整工作台、仪表盘与设置页，优化交付记录分页和统计重试，减少刷新抖动与配置冲突。
+- Issue 关联的 Codex 会话以 `#Issue编号｜类型｜主题` 命名；普通会话继续使用本地日期前缀。
+
+### Fixed / 修复
+
+- 修复 Pi 跨项目授权、人工验收收尾与前序执行证据复用，确保验收沿用原始目标和授权范围。
+- 人工等待期间仅在执行已结束、工作区干净且状态稳定时释放目录；续跑前重新校验目录、Git revision 与并发状态。
+- 修复 SSE 断线导致 Core 退出、前端重连和恢复回合完成误判，优化慢查询、活动读取索引与 Codex 用量读取。
+- 修复批次收尾通知、通知积压和重复故障告警，避免部署与恢复期间重复发送已解决事件。
+
 ## [0.2.13] - 2026-09-28
 
 ### Added / 新增
@@ -211,7 +231,9 @@
 
 - 首个 GitHub Release，包含 macOS/Linux 的 arm64、amd64 预构建资产和一键安装脚本。
 
-[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.12...HEAD
+[Unreleased]: https://github.com/williamnie/xuanwu/compare/v0.2.14...HEAD
+[0.2.14]: https://github.com/williamnie/xuanwu/compare/v0.2.13...v0.2.14
+[0.2.13]: https://github.com/williamnie/xuanwu/compare/v0.2.12...v0.2.13
 [0.2.12]: https://github.com/williamnie/xuanwu/compare/v0.2.11...v0.2.12
 [0.2.11]: https://github.com/williamnie/xuanwu/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/williamnie/xuanwu/compare/v0.2.9...v0.2.10

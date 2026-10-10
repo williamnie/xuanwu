@@ -84,6 +84,14 @@ xuanwu-update upgrade \
 
 ## 4. Migration notes
 
+### v0.2.14
+
+- migration：相对 `v0.2.13` 新增 `087_pi_memory_history`（记忆 revision、历史、收据及停用/遗忘抑制）、`088_pi_memory_reflections`（复盘设置、游标与任务表）和 `089_runtime_activity_indexes`（活动读取与通知队列索引）。087 将既有手动来源的 advisory 记忆归一化为 `user_explicit`；没有删除既有表，沿用 `xuanwu.storage-compat.v1`。
+- 最低可回滚 binary：`v0.2.13` 的完整 runtime。新增列、表与索引可保留；回滚二进制不会撤销 087 的 authority 归一化，恢复旧数据语义须另行授权并使用升级前验证过的数据库备份。
+- operator action：升级前备份并验证 `runner.db`、`runner-settings.local.json` 及 `${XUANWU_STATE_DIR}/skill-library`；在隔离副本完成 migration/恢复演练后执行升级。自动复盘默认关闭，不批量启用项目；GitHub 接管和经验模板保存继续要求显式配置或选择。
+- Qoder CLI 保持 `1.1.40`；从 `v0.2.12` 及以前首次升级时，仍须使用识别 `qoder_cli_version` 的新版 installer。本次通过 GitHub Actions 构建四平台产物，并为公开仓库的 checksums 生成 signed provenance。
+- 安全审计沿用已记录的 Qoder/sharp 上游例外；发布检查通过不代表全部依赖零漏洞。
+
 ### 2026-09-29 development redeploy：Pi 记忆首期与验收修复
 
 - migration：`087_pi_memory_history` 为记忆增加 revision、历史、收据和停用/遗忘抑制记录，并将既有手动来源的 advisory 记忆标记为 user_explicit；`088_pi_memory_reflections` 增加复盘设置、游标与任务表。没有删除既有表，沿用 `xuanwu.storage-compat.v1`。
