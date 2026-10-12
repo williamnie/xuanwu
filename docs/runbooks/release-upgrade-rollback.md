@@ -84,6 +84,13 @@ xuanwu-update upgrade \
 
 ## 4. Migration notes
 
+### v0.2.15
+
+- migration：none，相对 `v0.2.14` 不修改数据库 schema，沿用 `xuanwu.storage-compat.v1`；最低可回滚 binary 为 `v0.2.14` 的完整 runtime。
+- operator action：按常规流程备份并验证数据库；无需变更凭据、代理或模型配置。首启引导与 Supervisor 设置会在等待 OAuth 授权期间自动刷新状态。
+- OAuth 排查：按页面“诊断 ID”检索 Core 服务日志中的 `[pi-oauth]`，或在 `pi_action_events` 的 `provider_oauth_*` 记录中查找同一 `result_json.attempt_id`。日志包含最后执行阶段、失败类别、耗时、白名单系统错误码及 token 交换 HTTP 状态；`proxy_env` 仅表示环境变量存在，不代表代理已生效或网络可达。未知异常不输出原始消息、堆栈或凭据对象。
+- 浏览器回调成功页表示收到授权码；最终结果仍以玄武页面的授权状态与连接测试为准。此版本增加可观测性并修复状态刷新，不宣称已经修复所有环境中的 OAuth 登录失败。
+
 ### v0.2.14
 
 - migration：相对 `v0.2.13` 新增 `087_pi_memory_history`（记忆 revision、历史、收据及停用/遗忘抑制）、`088_pi_memory_reflections`（复盘设置、游标与任务表）和 `089_runtime_activity_indexes`（活动读取与通知队列索引）。087 将既有手动来源的 advisory 记忆归一化为 `user_explicit`；没有删除既有表，沿用 `xuanwu.storage-compat.v1`。

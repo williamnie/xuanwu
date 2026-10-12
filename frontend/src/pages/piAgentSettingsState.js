@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PRODUCT_TERMS } from '../brand';
 import { message } from '../store/toastStore';
 import { clearFirstDeliveryConnectionTest, recordFirstDeliveryConnectionTest } from '../utils/firstDeliveryConnection.js';
+import { watchPiOAuthStatus } from './piOAuthStatusPolling.js';
 
 export const DEFAULT_PI_AGENT_FORM = {
   agentName: PRODUCT_TERMS.supervisor,
@@ -160,6 +161,13 @@ export function usePiAgentSettingsState() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  const oauthLifecycle = oauthStatus?.status || oauthStatus?.pi_oauth?.status;
+  const oauthStartedAt = oauthStatus?.started_at;
+  useEffect(() => {
+    if (oauthBusy || oauthLifecycle !== 'pending') return;
+    return watchPiOAuthStatus({ readStatus: assistantApi.getPiCodexOAuthStatus, onStatus: setOauthStatus });
+  }, [oauthBusy, oauthLifecycle, oauthStartedAt]);
 
   return { connectionTest, deletingProviderId, form, loading, modelDiscovery, modelOptions, modelSelectAvailable, oauthBusy, oauthStatus, personaConflictDraft, promptSummary, promptSummaryLoading, providerCatalog, providers, saving, selectedPreset, selectedProvider,
     copyPiCodexOAuthUrl, deleteProviderConnection, dismissPersonaConflictDraft, discoverModels, handleAgentSave, handleConnectionApply, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, restorePersonaConflictDraft, selectApiMode, selectApiProtocol, selectModelProvider, selectOAuthMode, selectProviderPreset, startNewApiConnection, startPiCodexOAuthLogin, testConnection, updateField };

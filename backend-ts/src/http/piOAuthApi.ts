@@ -7,6 +7,7 @@ import { createPiActionEvent } from "../db/repositories/pi.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { updatePiCredential } from "./piCredentialFile.ts";
+import { diagnosePiOAuthFailure, type PiOAuthFailureDiagnostic, type PiOAuthPhase } from "./piOAuthDiagnostics.ts";
 
 export type PiOAuthLoginCallbacks = {
   onAuth: (info: OAuthAuthInfo) => void;
@@ -25,6 +26,7 @@ type PiOAuthContext = {
 };
 type LoginAbortReason = "logout" | "restarted" | "timeout";
 type LoginState = {
+  attemptId: string;
   abortController: AbortController;
   abortReason?: LoginAbortReason;
   authUrl?: string;
@@ -32,6 +34,7 @@ type LoginState = {
   error?: string;
   instructions?: string;
   message?: string;
+  phase: PiOAuthPhase;
   startedAt: string;
   status: "pending" | "authenticated" | "error";
   timeout?: ReturnType<typeof setTimeout>;
@@ -54,12 +57,12 @@ async function startOpenAICodexLogin(context: PiOAuthContext) {
   if (existing?.status === "pending") await cancelPendingLogin(existing, "restarted");
   const state = pendingState(context.piOAuthLoginTimeoutMs ?? DEFAULT_OAUTH_LOGIN_TIMEOUT_MS);
   loginStates.set(authPath, state);
+  recordOAuthAudit(context.database, "provider_oauth_login_started", "pending", "", state);
   try {
     await beginLogin(context, state);
   } catch {
     throw new HttpError(502, state.message || "Codex OAuth 登录初始化失败，请重试");
   }
-  recordOAuthAudit(context.database, "provider_oauth_login_started", "pending");
   return await loginResponse(context.database, state);
 }
 
@@ -72,13 +75,15 @@ function beginLogin(context: PiOAuthContext, state: LoginState): Promise<OAuthAu
   });
   const injectedLogin = context.piOpenAICodexOAuthLogin;
   const login = injectedLogin ?? ((callbacks: PiOAuthLoginCallbacks, signal?: AbortSignal) => (
-    defaultOpenAICodexLogin(context.database, callbacks, signal)
+    defaultOpenAICodexLogin(context.database, callbacks, state, signal)
   ));
   state.completion = login({
     onAuth: (info) => {
       const normalized = withRunnerOAuthOriginator(info);
       state.authUrl = normalized.url;
       state.instructions = normalized.instructions;
+      state.phase = "provider_login";
+      recordOAuthAudit(context.database, "provider_oauth_authorization_ready", "pending", "", state);
       resolveAuth(normalized);
     },
     onPrompt: async () => { throw new Error("Manual OAuth code paste is not supported from Runner Settings yet."); }
@@ -99,9 +104,11 @@ function beginLogin(context: PiOAuthContext, state: LoginState): Promise<OAuthAu
 async function defaultOpenAICodexLogin(
   db: RunnerDatabase,
   callbacks: PiOAuthLoginCallbacks,
+  state: LoginState,
   signal?: AbortSignal
 ): Promise<OAuthCredentials> {
   const runtime = await createPiModelRuntime(db, signal);
+  state.phase = "provider_login";
   const credential = await runtime.login(OPENAI_CODEX_PROVIDER, "oauth", {
     signal,
     notify: (event) => {
@@ -137,6 +144,7 @@ async function completeLogin(
 ): Promise<void> {
   if (state.abortController.signal.aborted || loginStates.get(piAuthPath(db)) !== state) return;
   if (persistInjectedCredential) {
+    state.phase = "credential_storage";
     await updatePiCredential(piAuthPath(db), OPENAI_CODEX_PROVIDER, { type: "oauth", ...credentials });
   }
   state.status = "authenticated";
@@ -144,13 +152,15 @@ async function completeLogin(
   state.instructions = undefined;
   state.error = undefined;
   state.message = "Codex OAuth 登录成功";
-  recordOAuthAudit(db, "provider_oauth_configured", "succeeded");
+  state.phase = "complete";
+  recordOAuthAudit(db, "provider_oauth_configured", "succeeded", "", state);
 }
 
 function markLoginFailed(db: RunnerDatabase, state: LoginState, error: unknown): void {
   if (state.status === "authenticated") return;
   state.status = "error";
-  const failure = publicLoginFailure(state, error);
+  const diagnostic = state.abortReason ? undefined : diagnosePiOAuthFailure(error, state.phase);
+  const failure = publicLoginFailure(state, diagnostic);
   state.error = failure.code;
   state.message = failure.message;
   recordOAuthAudit(
@@ -159,7 +169,9 @@ function markLoginFailed(db: RunnerDatabase, state: LoginState, error: unknown):
       ? "provider_oauth_cancelled"
       : "provider_oauth_failed",
     state.abortReason === "restarted" || state.abortReason === "logout" ? "cancelled" : "failed",
-    failure.code
+    failure.code,
+    state,
+    diagnostic
   );
 }
 
@@ -261,7 +273,9 @@ function hasCodexCredential(raw: Record<string, unknown>): boolean {
 
 function pendingState(timeoutMs: number): LoginState {
   const state: LoginState = {
+    attemptId: crypto.randomUUID(),
     abortController: new AbortController(),
+    phase: "initializing_runtime",
     startedAt: new Date().toISOString(),
     status: "pending"
   };
@@ -307,7 +321,7 @@ function clearLoginTimeout(state: LoginState): void {
   state.timeout = undefined;
 }
 
-function publicLoginFailure(state: LoginState, _error: unknown): { code: string; message: string } {
+function publicLoginFailure(state: LoginState, diagnostic?: PiOAuthFailureDiagnostic): { code: string; message: string } {
   if (state.abortReason === "timeout") {
     return { code: "oauth_login_timeout", message: "Codex OAuth 登录已超时，请重新生成登录地址" };
   }
@@ -317,7 +331,14 @@ function publicLoginFailure(state: LoginState, _error: unknown): { code: string;
   if (state.abortReason === "logout") {
     return { code: "oauth_login_cancelled", message: "Codex OAuth 登录已取消" };
   }
-  return { code: "oauth_login_failed", message: "Codex OAuth 登录失败，请重新生成登录地址" };
+  const detail = diagnostic?.category === "network" ? "后端网络请求失败"
+    : diagnostic?.category === "provider_http" ? `交换凭据失败（HTTP ${diagnostic.http_status}）`
+    : diagnostic?.category === "credential_storage" ? "本地凭据读写失败"
+    : diagnostic?.category === "runtime_sync" ? "凭据已保存，但本地模型状态同步失败"
+    : diagnostic?.category === "invalid_token_response" ? "授权服务返回的凭据格式异常"
+    : diagnostic?.category === "callback" ? "授权回调失败"
+    : "授权流程失败";
+  return { code: "oauth_login_failed", message: `Codex OAuth 登录失败：${detail}。请查看服务日志 [pi-oauth]（诊断 ID：${state.attemptId}），然后重新生成登录地址` };
 }
 
 function withRunnerOAuthOriginator(info: OAuthAuthInfo): OAuthAuthInfo {
@@ -343,7 +364,21 @@ function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function recordOAuthAudit(db: RunnerDatabase, eventType: string, status: string, error = ""): void {
+function recordOAuthAudit(db: RunnerDatabase, eventType: string, status: string, error = "", state?: LoginState, diagnostic?: PiOAuthFailureDiagnostic): void {
+  const details = state ? {
+    attempt_id: state.attemptId,
+    phase: state.phase,
+    elapsed_ms: Math.max(0, Date.now() - Date.parse(state.startedAt)),
+    ...(eventType === "provider_oauth_login_started" ? {
+      proxy_env: {
+        http: Boolean(process.env.HTTP_PROXY || process.env.http_proxy),
+        https: Boolean(process.env.HTTPS_PROXY || process.env.https_proxy),
+        all: Boolean(process.env.ALL_PROXY || process.env.all_proxy)
+      }
+    } : {}),
+    ...diagnostic
+  } : {};
+  console.info("[pi-oauth]", JSON.stringify({ event: eventType, provider: OPENAI_CODEX_PROVIDER, status, error, ...details }));
   createPiActionEvent(db, {
     action_id: `provider-oauth:${OPENAI_CODEX_PROVIDER}:${crypto.randomUUID()}`,
     actor: "user",
@@ -351,6 +386,6 @@ function recordOAuthAudit(db: RunnerDatabase, eventType: string, status: string,
     event_type: eventType,
     payload_json: JSON.stringify({ provider_id: OPENAI_CODEX_PROVIDER, source: "settings_http" }),
     reason: `${eventType} for ${OPENAI_CODEX_PROVIDER}`,
-    result_json: JSON.stringify({ status })
+    result_json: JSON.stringify({ status, ...details })
   });
 }

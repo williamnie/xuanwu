@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -180,6 +180,39 @@ describe("Bun PI OAuth API", () => {
       ).get();
       expect(audit).toEqual({ error: "oauth_login_timeout", event_type: "provider_oauth_failed" });
     } finally {
+      database.close();
+    }
+  });
+
+  test("correlates failed login logs and audit records while keeping OAuth secrets out", async () => {
+    const database = await openFixtureDatabase();
+    const logs: string[] = [];
+    const logger = spyOn(console, "info").mockImplementation((...args) => { logs.push(args.join(" ")); });
+    try {
+      const router = createDefaultRouter({
+        database,
+        piOpenAICodexOAuthLogin: async (callbacks) => {
+          callbacks.onAuth({ url: "https://auth.openai.com/oauth/authorize?state=private-state&code_challenge=private-challenge" });
+          throw new Error('OpenAI Codex token exchange failed (400): {"error":{"code":"invalid_grant","message":"private-response access_token=private-access refresh_token=private-refresh"}}');
+        }
+      });
+      await router.handle(new Request(`${BASE_URL}/api/pi/oauth/openai-codex/login`, { method: "POST" }));
+      const status = await waitForOAuthStatus(router, "error");
+      const rows = database.sqlite.query<{ event_type: string; result_json: string }, []>(
+        "select event_type,result_json from pi_action_events where event_type like 'provider_oauth_%' order by id"
+      ).all();
+      const details = rows.map(row => JSON.parse(row.result_json));
+      expect(new Set(details.map(detail => detail.attempt_id)).size).toBe(1);
+      expect(details.at(-1)).toMatchObject({ phase: "token_exchange", category: "provider_http", http_status: 400, provider_code: "invalid_grant" });
+      expect(status.message).toContain(details[0].attempt_id);
+      expect(status.message).toContain("HTTP 400");
+      expect(logs).toHaveLength(3);
+      const diagnostics = JSON.stringify({ logs, rows, message: status.message });
+      for (const secret of ["private-state", "private-challenge", "private-response", "private-access", "private-refresh"]) {
+        expect(diagnostics).not.toContain(secret);
+      }
+    } finally {
+      logger.mockRestore();
       database.close();
     }
   });
