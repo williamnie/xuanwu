@@ -1,6 +1,7 @@
 import { request } from './base.js';
 
 export const projectsApi = {
+  validatePath: (path, options = {}) => request(`/api/projects/validate-path?path=${encodeURIComponent(path)}`, options),
   getProjects: () => request('/api/projects'),
 
   getAgentProfiles: () => request('/api/agent-profiles'),

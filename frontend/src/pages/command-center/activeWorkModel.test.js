@@ -95,20 +95,16 @@ test('pause uses controllable Run detail while stop uses audited Work revision',
   });
 });
 
-test('Dashboard reads aggregate facts and writes only through Work and Run controls', () => {
+test('compact Dashboard reads scheduling facts without hydrating or owning Run writes', () => {
   const apiSource = readFileSync(new URL('../../api/commandCenter.js', import.meta.url), 'utf8');
   const clientSource = readFileSync(new URL('../../api/work.js', import.meta.url), 'utf8');
-  const pageSource = readFileSync(new URL('./ActiveWorkSection.jsx', import.meta.url), 'utf8');
-  assert.match(apiSource, /\/api\/command-center\/summary/);
-  assert.match(pageSource, /sections: \['active_work'\]/);
-  assert.match(pageSource, /navigateTo\?\.\('work', item\.id\)/);
-  assert.match(pageSource, /runsApi\.getRun/);
-  assert.match(pageSource, /runsApi\.controlRun/);
-  assert.match(pageSource, /freshness\?\.is_stale/);
-  assert.match(pageSource, /item\.readiness\?\.current_stage/);
-  assert.match(pageSource, /item\.readiness\?\.missing_evidence/);
-  assert.match(clientSource, /\/api\/works\/\$\{encodeURIComponent\(id\)\}\/actions\/\$\{action\}/);
-  assert.doesNotMatch(pageSource, /updateIssue|cancelIssue|interruptSession/);
+  const pageSource = readFileSync(new URL('../Dashboard.jsx', import.meta.url), 'utf8');
+  assert.match(apiSource, /api\/command-center\/task-glance/);
+  assert.match(pageSource, /getTaskGlance/);
+  assert.match(pageSource, /navigateTo\('work',work\.id\)/);
+  assert.match(pageSource, /workBlockReason/);
+  assert.doesNotMatch(pageSource, /getRun|controlRun|updateIssue|cancelIssue|interruptSession/);
+  assert.match(clientSource, /api\/works\/\$\{encodeURIComponent\(id\)\}\/actions\/\$\{action\}/);
 });
 
 function work(overrides = {}) {

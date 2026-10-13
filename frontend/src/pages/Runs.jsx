@@ -286,7 +286,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
   );
 }
 
-function RunContextBar({ navigateTo, onRunChanged, run }) {
+export function RunContextBar({ navigateTo, onRunChanged, run }) {
   const [pendingAction, setPendingAction] = useState('');
   const [resumePrompt, setResumePrompt] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -305,7 +305,7 @@ function RunContextBar({ navigateTo, onRunChanged, run }) {
       onRunChanged(response.run);
       setPendingAction('');
       setResumePrompt('');
-      toast.success(action === 'interrupt' ? 'Run 中断已审计提交' : action === 'resume' ? 'Run 已恢复' : 'Run 重试已请求');
+      toast.success(action === 'interrupt' ? '执行中断已审计提交' : action === 'resume' ? '执行恢复请求已提交' : '执行重试请求已提交');
     } catch (controlError) {
       toast.error(controlError.message || `Run ${action} 失败`);
     } finally {

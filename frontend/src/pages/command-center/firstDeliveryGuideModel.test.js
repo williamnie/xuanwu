@@ -4,6 +4,8 @@ import {
   FIRST_DELIVERY_TITLE,
   firstDeliveryRecovery,
   firstDeliveryState,
+  firstDeliveryGuideSteps,
+  savedSupervisorConfigured,
   onboardingProjectID,
   sampleWorkPayload,
 } from './firstDeliveryGuideModel.js';
@@ -106,4 +108,13 @@ test('draft or unrelated passed Evidence cannot complete onboarding', () => {
   assert.equal(firstDeliveryState(input).completed, true);
   input.targetWorkID = 'xw:work:issues:2';
   assert.equal(firstDeliveryState(input).completed, false);
+});
+
+
+test('three visible steps preserve six authority checks and saved configuration is explicit', () => {
+  const state = firstDeliveryState({ doctor: readyDoctor, codeAgents: readyCodeAgents, selectedCodeAgentID: 'codex', connectionTest: { ok: true }, projects: [{ id: 'demo' }] });
+  assert.deepEqual(firstDeliveryGuideSteps(state).map(step => step.complete), [true, true, false]);
+  assert.equal(savedSupervisorConfigured({ enabled: 1, model_id: 'model', model_provider: 'openai' }, { providers: [{ id: 'openai', api: 'openai-completions', base_url: 'https://example.com', api_key_configured: true }] }), true);
+  assert.equal(savedSupervisorConfigured({ enabled: 1, model_id: 'model', model_provider: 'openai' }, { providers: [] }), false);
+  assert.equal(savedSupervisorConfigured({ enabled: 1, model_id: 'model', model_provider: 'openai-codex' }, { providers: [] }, { pi_oauth: { configured: false } }), false);
 });

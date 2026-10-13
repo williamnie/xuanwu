@@ -23,7 +23,7 @@ test('Work Detail keeps overview, delivery and activity together and loads Activ
 });
 
 test('Work Board stays board-only and opens canonical Work Detail', () => {
-  assert.match(board, /useState\('list'\)/);
+  assert.match(board, /props\.routeFilters\?\.view \|\| 'list'/);
   assert.match(board, /<TaskList/);
   assert.match(board, /<Automations\//);
   assert.match(board, /WORK_BOARD_STATUSES\.map\(status =>/);

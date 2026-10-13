@@ -8,13 +8,14 @@ function appendMany(params, key, values) {
   items.forEach(value => params.append(key, value));
 }
 
-function workListParams({ includeDiagnostics = false, cursor = '', order = 'desc', page = 1, pageSize = WORK_PAGE_SIZE, projectId = '', query = '', sort = 'updated_at', statuses = [], types = [] } = {}) {
+function workListParams({ source = '', includeDiagnostics = false, cursor = '', order = 'desc', page = 1, pageSize = WORK_PAGE_SIZE, projectId = '', query = '', sort = 'updated_at', statuses = [], types = [] } = {}) {
   const params = new URLSearchParams({
     order,
     page: String(page),
     page_size: String(pageSize),
     sort,
   });
+  if (source) params.set('source', source);
   if (includeDiagnostics) params.set('include_diagnostics', '1');
   if (projectId) params.set('project_id', projectId);
   if (query) params.set('q', query);
@@ -60,6 +61,8 @@ export const workApi = {
   getWorkBoard: (filters = {}, options = {}) => request(`/api/works/board?${workBoardParams(filters)}`, options),
 
   getWorkSummary: (filters = {}, options = {}) => request(`/api/works/summary?${workSummaryParams(filters)}`, options),
+
+  getCreationResult: (eventId) => request(`/api/works/creation-result?event_id=${encodeURIComponent(eventId)}`),
 
   getWork: (id) => request(`/api/works/${encodeURIComponent(id)}`),
 

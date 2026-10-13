@@ -15,7 +15,7 @@ const supervisorStateSource = readFileSync(new URL('../piAgentSettingsState.js',
 test('first delivery owns a standalone first-run page and starts the selected project loop', () => {
   assert.match(onboardingPageSource, /<FirstDeliveryGuide/);
   assert.match(onboardingPageSource, /稍后设置/);
-  assert.match(onboardingPageSource, /把 Issue 列好，剩下的交给玄武/);
+  assert.match(onboardingPageSource, /把 任务 列好，剩下的交给玄武/);
   assert.match(onboardingPageSource, /现在启动这 10 个，你自己看着做/);
   assert.doesNotMatch(onboardingPageSource, /Evidence|Handoff/);
   assert.doesNotMatch(dashboardSource, /FirstDeliveryGuide/);
@@ -28,7 +28,9 @@ test('first delivery owns a standalone first-run page and starts the selected pr
   assert.match(guideSource, /OnboardingSupervisorConnection/);
   assert.match(guideSource, /selectedCodeAgentID/);
   assert.match(guideSource, /provider: state\.selectedCodeAgent\.id|const provider = state\.selectedCodeAgent\.id/);
-  assert.match(guideSource, /projectsApi\.updateProject\(selectedProject\.id/);
+  assert.doesNotMatch(guideSource, /projectsApi\.updateProject\(selectedProject\.id/);
+  assert.match(guideSource, /firstDeliveryGuideSteps/);
+  assert.match(guideSource, /getCreationResult/);
   assert.match(guideSource, /firstDeliveryApi\.startProjectLoop\(project\.id\)/);
   assert.doesNotMatch(guideSource, /settingsSection|Settings2/);
   assert.doesNotMatch(projectsApiSource, /startProjectLoop|stopProjectLoop/);

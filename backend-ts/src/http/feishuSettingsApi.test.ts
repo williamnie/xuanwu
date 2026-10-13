@@ -1,3 +1,4 @@
+import type { FeishuDiscoveryCandidate } from "../integrations/feishuSourceDiscovery.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFile, rm, mkdtemp, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -23,6 +24,43 @@ afterEach(async () => {
 });
 
 describe("Feishu connector settings API", () => {
+  test("controlled discovery verifies ingress, explicit scope, revision and concurrent settings ownership", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const config = buildConfig({ dbPath: database.path, stateDir: dirname(database.path) });
+      const router = createDefaultRouter({ config, database });
+      await request(router, { app_id: "cli_fixture", app_secret: "private-fixture", verification_token: "verify-fixture", receive_mode: "callback", allowed_chat_ids: ["oc_old"], allowed_user_ids: ["ou_old"], project_mappings: "chat:oc_old=demo" });
+      const settings = await (await router.handle(new Request(`${BASE_URL}/api/integrations/feishu/settings`))).json() as FeishuTestSettings;
+      const session = await (await router.handle(new Request(`${BASE_URL}/api/integrations/feishu/source-discovery`, { method: "POST" }))).json() as { id: string; challenge: string };
+      const inbound = { schema: "2.0", header: { event_type: "im.message.receive_v1", token: "wrong" }, event: { sender: { sender_type: "user", sender_id: { open_id: "ou_new" } }, message: { message_id: "m_new", chat_id: "oc_new", chat_type: "group", create_time: String(Date.now()), content: JSON.stringify({ text: session.challenge }) } } };
+      const send = () => router.handle(new Request(`${BASE_URL}/api/integrations/feishu/events`, { method: "POST", body: JSON.stringify(inbound) }));
+      expect((await send()).status).toBe(401);
+      const read = async () => (await (await router.handle(new Request(`${BASE_URL}/api/integrations/feishu/source-discovery/${session.id}`))).json()) as { candidates: FeishuDiscoveryCandidate[] };
+      expect((await read()).candidates).toHaveLength(0);
+      inbound.header.token = "verify-fixture";expect((await send()).status).toBe(202);
+      const candidate = (await read()).candidates[0];expect(candidate.user_id).toBe("ou_new");
+      expect(database.sqlite.query("select count(*) as n from external_events").get()).toEqual({ n: 0 });
+      const authorize = (body: Record<string, unknown>) => router.handle(new Request(`${BASE_URL}/api/integrations/feishu/source-discovery/${session.id}/authorize`, { method: "POST", body: JSON.stringify(body) }));
+      expect((await authorize({ candidate_id: "unseen", scope: "chat", expected_revision: settings.revision })).status).toBe(400);
+      expect((await authorize({ candidate_id: candidate.id, scope: "chat", expected_revision: "stale" })).status).toBe(409);
+      const result = await authorize({ candidate_id: candidate.id, scope: "chat", expected_revision: settings.revision });expect(result.status).toBe(200);
+      const saved = await result.json() as FeishuTestSettings;expect(saved.allowed_chat_ids).toEqual(["oc_old", "oc_new"]);expect(saved.allowed_user_ids).toEqual(["ou_old"]);expect(saved.project_mappings).toBe("chat:oc_old=demo");expect(saved.app_secret_configured).toBe(true);
+      expect((await authorize({ candidate_id: candidate.id, scope: "user", expected_revision: saved.revision })).status).toBe(409);
+      const writes = await Promise.all([request(router, { default_chat_id: "oc_one", expected_revision: saved.revision }), request(router, { default_chat_id: "oc_two", expected_revision: saved.revision })]);
+      expect(writes.map(item => item.status).sort()).toEqual([200, 409]);
+      const secondSession = await (await router.handle(new Request(`${BASE_URL}/api/integrations/feishu/source-discovery`, { method: "POST" }))).json() as { id: string; challenge: string };
+      inbound.event.message.content = JSON.stringify({ text: secondSession.challenge });
+      inbound.event.message.message_id = "m_second";
+      expect((await send()).status).toBe(202);
+      const secondFacts = await (await router.handle(new Request(`${BASE_URL}/api/integrations/feishu/source-discovery/${secondSession.id}`))).json() as { candidates: FeishuDiscoveryCandidate[] };
+      const latest = await (await router.handle(new Request(`${BASE_URL}/api/integrations/feishu/settings`))).json() as FeishuTestSettings;
+      const changedApp = await (await request(router, { app_id: "other_app", expected_revision: latest.revision })).json() as FeishuTestSettings;
+      const rebound = await router.handle(new Request(`${BASE_URL}/api/integrations/feishu/source-discovery/${secondSession.id}/authorize`, { method: "POST", body: JSON.stringify({ candidate_id: secondFacts.candidates[0]!.id, scope: "user", expected_revision: changedApp.revision }) }));
+      expect(rebound.status).toBe(409);
+      expect(config.integrations.feishu.allowedUserIds).toEqual(["ou_old"]);
+
+    } finally { database.close(); }
+  });
   test("saves local Feishu connector settings without echoing secrets", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -150,3 +188,5 @@ function request(router: ReturnType<typeof createDefaultRouter>, body: Record<st
 function localSettingsPath(database: RunnerDatabase): string {
   return join(dirname(database.path), "runner-settings.local.json");
 }
+
+type FeishuTestSettings = { revision: string; allowed_chat_ids: string[]; allowed_user_ids: string[]; project_mappings: string; app_secret_configured: boolean };

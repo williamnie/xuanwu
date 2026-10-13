@@ -7,6 +7,7 @@ const OPENAI_PROTOCOLS = new Set(['openai-responses', 'openai-completions']);
 export default function OnboardingSupervisorConnection({ onComplete }) {
   const state = usePiAgentSettingsState();
   const [keyVisible, setKeyVisible] = useState(false);
+  const [manualModel, setManualModel] = useState(false);
   const oauthMode = state.form.api === 'openai-codex-responses';
   const openAICompatible = OPENAI_PROTOCOLS.has(state.form.api);
   const apiSupported = openAICompatible || state.form.api === 'anthropic';
@@ -42,8 +43,8 @@ export default function OnboardingSupervisorConnection({ onComplete }) {
 
       <div className="first-delivery-model-row">
         <label>
-          <span>MODEL</span>
-          {state.modelSelectAvailable ? (
+          <span>模型</span><button className="btn btn-secondary" type="button" onClick={() => setManualModel(current => !current)}>{manualModel ? "从目录选择" : "手动填写"}</button>
+          {state.modelSelectAvailable && !manualModel ? (
             <select className="form-control" onChange={event => state.updateField('modelId', event.target.value)} value={state.form.modelId}>
               {state.modelOptions.map(model => <option key={model} value={model}>{model}</option>)}
             </select>

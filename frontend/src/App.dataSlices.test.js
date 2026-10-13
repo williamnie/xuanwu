@@ -16,13 +16,13 @@ test('Automations page only reconciles project labels because it owns Automation
 });
 
 test('Dashboard uses projects and bounded Work summary', () => {
-  assert.match(appSource, /'command-center':\s*\['projects',\s*'workSummary'\]/);
+  assert.match(appSource, /'inbox':\s*\['projects',\s*'workSummary'\]/);
   assert.doesNotMatch(appSource, /dashboard:\s*\[/);
 });
 
 test('Work board reconciles project labels and bounded summary while owning lane loading', () => {
-  assert.match(appSource, /work:\s*\['projects',\s*'workSummary'\]/);
-  assert.doesNotMatch(appSource, /work:\s*\[[^\]]*'issues'/);
+  assert.match(appSource, /tasks:\s*\['projects',\s*'workSummary'\]/);
+  assert.doesNotMatch(appSource, /tasks:\s*\[[^\]]*'issues'/);
 });
 
 test('pages without global slices still settle the initial loading state on a direct route', () => {

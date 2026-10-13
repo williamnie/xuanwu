@@ -179,7 +179,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   useEffect(() => {
     if (!work) return;
     onPageContextChange?.({
-      page_id: 'work',
+      page_id: 'tasks',
       project_id: work.owner?.project_id || '',
       work_id: work.id,
       ...(activeDeliveryId
@@ -322,6 +322,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
         <WorkFeedback feedback={detail?.feedback} />
         <InboxRequests embedded workId={workId} navigateTo={navigateTo} />
         {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={selectReview} request={decision.request} /> : null}
+        {work.github_context?.length > 0 && <details className="work-custom-acceptance"><summary>GitHub 接管进展</summary>{work.github_context.map((context,index)=><div key={index}><strong>{context.repository} #{context.issue_number}</strong><p>本任务阶段：{context.work_stage || '关联任务'} · 接管当前阶段：{context.current_stage} · GitHub：{context.external_state}</p>{context.pull_request_number&&<a href={`https://github.com/${context.repository}/pull/${context.pull_request_number}`} target="_blank" rel="noreferrer">PR #{context.pull_request_number}</a>}</div>)}</details>}
         <details className="work-custom-acceptance"><summary>任务描述</summary><MarkdownPreview text={work.goal || t('work.noGoal')} /></details>
         {customAcceptance.length > 0 && <details className="work-custom-acceptance"><summary>{t('work.acceptanceCriteria')}</summary><ul>{customAcceptance.map(criterion => <li key={criterion.id}>{criterion.description}</li>)}</ul></details>}
       </section>

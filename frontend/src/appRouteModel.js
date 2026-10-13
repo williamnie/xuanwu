@@ -6,7 +6,7 @@ import {
 } from './pages/assistantModules.js';
 import { handoffHref, handoffRouteFromHash } from './pages/handoffPageModel.js';
 
-const FOCUS_FILTERS = new Set(['all', 'triage', 'active', 'failed', 'archive']);
+const FOCUS_FILTERS = new Set(['all', 'triage', 'active', 'failed', 'archive', 'attention', 'done']);
 const ROUTABLE_PAGES = new Set([
   ...PRODUCT_NAV_ITEMS.map((item) => item.page),
   ...PI_ASSISTANT_MODULES.map((item) => item.page),
@@ -17,7 +17,7 @@ const ROUTABLE_PAGES = new Set([
 ]);
 
 export const DEFAULT_APP_ROUTE = Object.freeze({
-  currentPage: 'command-center',
+  currentPage: 'inbox',
   filterProject: '',
   focusFilter: 'all',
   selectedHandoffId: '',
@@ -27,6 +27,10 @@ export const DEFAULT_APP_ROUTE = Object.freeze({
   selectedSessionId: '',
   selectedWorkId: '',
   settingsSection: '',
+  taskQuery: '',
+  taskSource: '',
+  taskView: 'list',
+  taskSubview: 'tasks',
 });
 
 export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
@@ -34,7 +38,7 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
   if (handoffRoute) {
     return {
       ...DEFAULT_APP_ROUTE,
-      currentPage: handoffRoute.page,
+      currentPage: handoffRoute.page === "work" ? (workBoardEnabled ? "tasks" : "handoffs") : handoffRoute.page,
       selectedHandoffId: handoffRoute.handoffId,
       selectedWorkId: handoffRoute.workId || '',
     };
@@ -60,16 +64,21 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
     currentPage,
   };
 
-  if (currentPage === 'work') {
+  if (currentPage === 'tasks') {
     route.selectedWorkId = pathEntity || routeParam(params, 'workId');
     route.selectedRunId = routeParam(params, 'runId');
     route.filterProject = routeParam(params, 'project');
+    route.focusFilter = params.has('focus') ? focusFilterParam(params) : 'active';
+    route.taskQuery = routeParam(params, 'query');
+    route.taskSource = routeParam(params, 'source') === 'github' ? 'github' : '';
+    route.taskView = routeParam(params, 'view') === 'board' ? 'board' : 'list';
+    route.taskSubview = ['automations', 'cron', 'pi-automations'].includes(requestedPage) || routeParam(params, 'subview') === 'automations' ? 'automations' : 'tasks';
     if (requestedPage === 'issues' && !route.selectedWorkId) {
       route.selectedWorkId = workIdFromIssueParam(params);
     }
   }
   if (currentPage === 'issues') {
-    route.selectedIssueId = requestedPage === 'work'
+    route.selectedIssueId = ['work', 'tasks'].includes(requestedPage)
       ? issueIdFromWorkRoute(pathEntity || routeParam(params, 'workId'))
       : positiveIntegerParam(params, 'issueId');
     route.filterProject = routeParam(params, 'project');
@@ -90,16 +99,23 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
 }
 
 export function appHashForRoute(route) {
-  const page = ROUTABLE_PAGES.has(route?.currentPage) ? route.currentPage : DEFAULT_APP_ROUTE.currentPage;
+  const page = ROUTABLE_PAGES.has(route?.currentPage) ? (route.currentPage === 'issues' ? 'issues' : resolveProductPage(route.currentPage)) : DEFAULT_APP_ROUTE.currentPage;
   const handoffId = cleanRouteValue(route?.selectedHandoffId);
   const workId = cleanRouteValue(route?.selectedWorkId);
 
-  if (handoffId && (page === 'handoffs' || page === 'work')) {
-    return handoffHref(handoffId, page === 'work' ? workId : '');
+  if (handoffId && (page === 'handoffs' || page === 'tasks')) {
+    return handoffHref(handoffId, page === 'tasks' ? workId : '');
   }
 
   const params = new URLSearchParams();
-  if (page === 'work') { if (workId) params.set('workId', workId); if (route.selectedRunId) params.set('runId', route.selectedRunId); if (route.filterProject) params.set('project', route.filterProject); }
+  if (page === 'tasks') { if (workId) params.set('workId', workId); if (route.selectedRunId) params.set('runId', route.selectedRunId); if (route.filterProject) params.set('project', route.filterProject); }
+  if (page === 'tasks') {
+    if (FOCUS_FILTERS.has(route.focusFilter) && route.focusFilter !== 'all') params.set('focus', route.focusFilter);
+    if (route.taskQuery) params.set('query', route.taskQuery);
+    if (route.taskSource === 'github') params.set('source', route.taskSource);
+    if (route.taskView === 'board') params.set('view', 'board');
+    if (route.taskSubview === 'automations') params.set('subview', 'automations');
+  }
   if (page === 'issues') {
     if (positiveInteger(route?.selectedIssueId)) params.set('issueId', String(route.selectedIssueId));
     const project = cleanRouteValue(route?.filterProject);

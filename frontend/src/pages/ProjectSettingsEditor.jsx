@@ -1,3 +1,4 @@
+import ProjectPathFeedback from "../components/ProjectPathFeedback.jsx";
 import { useCallback, useEffect } from 'react';
 import { useImmer } from 'use-immer';
 import { systemApi } from '../api/system.js';
@@ -297,6 +298,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
           </span>
         </div>
 
+        <ProjectPathFeedback path={ui.formCwd}/>
         <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setProjectRuntimeField} providerOptions={providerOptions} ui={ui} />
         <div className="form-group">
           <label>执行预设</label>

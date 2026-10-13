@@ -15,7 +15,7 @@ test('analytics can be opened, bookmarked and restored without falling back to h
 test('home prioritizes action and progress without querying diagnostic or usage feeds', () => {
   const home = read('./Dashboard.jsx');
   assert.match(home, /<InboxRequests/);
-  assert.match(home, /commandCenterApi\.getTaskGlance\(\)/);
+  assert.match(home, /commandCenterApi\.getTaskGlance\(\{signal:controller\.signal\}\)/);
   assert.match(home, /completed_today/);
   assert.match(home, /glance\.active/);
   assert.doesNotMatch(home, /DeliveryEffectivenessSection|CodexUsagePanel|eventsApi|JSON\.stringify/);

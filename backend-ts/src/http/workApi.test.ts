@@ -25,6 +25,28 @@ afterEach(async () => {
 });
 
 describe("Work HTTP API", () => {
+  test("source filtering counts all historical GitHub rounds with one cursor predicate and exact creation reconciliation", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issues = ["investigate", "repair", "ordinary"].map(title => createIssue(db, { project_id: "demo", title, status: "triage" }));
+      for (const [index, stage] of ["investigate", "repair"].entries()) db.sqlite.run("insert into external_links(source,external_id,external_type,project_id,issue_id,relationship,created_at,updated_at) values('github','node1','issue','demo',?,?,?,?)", [issues[index]!.id, stage, new Date().toISOString(), new Date().toISOString()]);
+      db.sqlite.run("insert into github_issue_cases(issue_node_id,repository_id,repository,issue_number,project_id,source_fingerprint,source_json,external_updated_at,external_state,issue_id,stage,created_at,updated_at) values('node1',1,'org/repo',7,'demo','fp','{}',?,'open',?,'review',?,?)", [new Date().toISOString(), issues[1]!.id, new Date().toISOString(), new Date().toISOString()]);
+      const router=createDefaultRouter({ database: db });
+      const first=await body(await router.handle(new Request(`${BASE_URL}/api/works?source=github&page_size=1&include_diagnostics=1`)));
+      expect(first.total).toBe(2);expect(first.has_more).toBe(true);
+      const item=(first.items as Array<Record<string, unknown>>)[0]!;expect(item.github_context).toMatchObject([{ current_stage: "review", external_state: "open" }]);
+      const second=await body(await router.handle(new Request(`${BASE_URL}/api/works?source=github&page_size=1&cursor=${encodeURIComponent(String(first.next_cursor))}`)));
+      expect(second.total).toBe(2);expect(second.has_more).toBe(false);expect((second.items as Array<{id:string}>)[0]!.id).not.toBe(item.id);
+      expect((await router.handle(new Request(`${BASE_URL}/api/works?page_size=1&cursor=${encodeURIComponent(String(first.next_cursor))}`))).status).toBe(400);
+      expect((await router.handle(new Request(`${BASE_URL}/api/works?source=feishu`))).status).toBe(400);
+      const handle=createRequestHandler(router,AUTH_TOKEN);const payload={ audit:audit("batch-one","user"), goal:"batch goal", project_id:"demo",status:"triage",type:"engineering_task" };
+      const created=await body(await handle(authenticatedJsonRequest("/api/works","POST",payload)));
+      const reconciled=await body(await router.handle(new Request(`${BASE_URL}/api/works/creation-result?event_id=${encodeURIComponent(payload.audit.event_id)}`)));
+      expect(reconciled).toMatchObject({status:"created",work:{id:(created.work as {id:string}).id}});
+      expect((await body(await router.handle(new Request(`${BASE_URL}/api/works/creation-result?event_id=missing`)))).status).toBe("not_found");
+    } finally {db.close();}
+  });
   test("queue-state keeps revision, audit idempotency and lifecycle boundaries", async () => {
     const db = await openFixtureDatabase();
     try {

@@ -59,15 +59,17 @@ const BOARD_RECONCILE_EVENT_TYPES = new Set(['issue.created', 'issue.deleted', '
 
 export default function WorkBoard(props) {
   const projects = useDataStore(selectProjects);
-  const [view, setView] = useState('list');
-  const [subview, setSubview] = useState('tasks');
+  const view = props.routeFilters?.view || 'list';
+  const setView = next => props.onRouteFiltersChange?.({ taskView: typeof next === 'function' ? next(view) : next });
+  const subview = props.routeFilters?.subview || 'tasks';
+  const setSubview = taskSubview => props.onRouteFiltersChange?.({ taskSubview });
   if (props.selectedWorkId) return <WorkDetail navigateTo={props.navigateTo} onPageContextChange={props.onPageContextChange} projects={projects} selectedHandoffId={props.selectedHandoffId} workId={props.selectedWorkId} initialRunId={props.initialRunId} />;
   return <div className="task-workspace">
     <header className="task-workspace-header"><h1>任务</h1><nav aria-label="任务子视图">
       <button className="btn btn-secondary" aria-pressed={subview==='tasks'} onClick={()=>setSubview('tasks')} type="button">任务</button>
       <button className="btn btn-secondary" aria-pressed={subview==='automations'} onClick={()=>setSubview('automations')} type="button">自动化</button>
     </nav>{subview==='tasks'&&<button className="btn btn-secondary" onClick={()=>setView(current=>current==='list'?'board':'list')} type="button">{view==='list'?'切换看板':'切换列表'}</button>}</header>
-    {subview==='automations'?<Automations/>:view==='list'?<TaskList navigateTo={props.navigateTo} initialProject={props.initialProject} onPageContextChange={props.onPageContextChange} onCreate={props.onCreate}/>:<WorkKanban {...props}/>}
+    {subview==='automations'?<Automations/>:view==='list'?<TaskList routeFilters={props.routeFilters} onRouteFiltersChange={props.onRouteFiltersChange} navigateTo={props.navigateTo} initialProject={props.initialProject} onPageContextChange={props.onPageContextChange} onCreate={props.onCreate}/>:<WorkKanban {...props}/>}
   </div>;
 }
 
@@ -278,7 +280,7 @@ function WorkKanban({ navigateTo, onPageContextChange, onCreate, selectedHandoff
   useEffect(() => {
     if (selectedWorkId) return;
     onPageContextChange?.({
-      page_id: 'work',
+      page_id: 'tasks',
       project_id: '',
     });
   }, [onPageContextChange, selectedWorkId]);

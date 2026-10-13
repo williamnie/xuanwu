@@ -1,3 +1,4 @@
+import { recentDeliveryDetailRoute } from "../command-center/recentDeliveriesModel.js";
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -87,9 +88,12 @@ export default function WorkDeliveryView({
   const risks = useMemo(() => handoffRiskPresentation(detail?.handoff?.risks), [detail]);
 
   const selectHandoff = (id) => {
+    const href = handoffHref(id, work?.id);
+    const route = recentDeliveryDetailRoute({ id, links: { view: href } });
+    if (!route || (work?.id && route.workId !== work.id)) { setDetailError(t("delivery.loadFailed")); return; }
     setSelectedId(id);
     onSelectionChange?.(id);
-    if (typeof window !== 'undefined') window.history.replaceState(null, '', handoffHref(id, work?.id));
+    if (typeof window !== 'undefined') window.history.replaceState(null, '', href);
   };
 
   const refresh = async () => {
@@ -149,7 +153,7 @@ export default function WorkDeliveryView({
         <div><CircleDot size={16} /><strong>{view.statusLabel} · {view.modeLabel}</strong></div>
         <p><strong>{language === 'en-US' ? 'What changed' : '改了什么'}</strong> · {view.changeSummary}</p>
         <p>{view.deliverySummary}</p>
-        <p>{language === 'en-US' ? 'Work completion and Handoff readiness do not confirm CI, merge, or deployment.' : 'Work 完成、凭证就绪不代表 CI 通过、已合并或已部署。'}</p>
+        <p>{language === 'en-US' ? 'Work completion and Handoff readiness do not confirm CI, merge, or deployment.' : '任务完成、凭证就绪不代表 CI 通过、已合并或已部署。'}</p>
         <div className="work-delivery-milestones" aria-label={language === 'en-US' ? 'Verified delivery facts' : '实际交付进度'}>
           {(view.milestones || []).map(item => <div key={item.key} data-status={item.status}><span>{item.label}</span><strong>{item.value}</strong></div>)}
         </div>
@@ -167,7 +171,7 @@ export default function WorkDeliveryView({
 
       <div className="work-delivery-body">
         {handoffs.length > 1 ? (
-          <aside className="work-delivery-history">
+          <aside className="work-delivery-history" aria-label={t("delivery.history")} tabIndex={0}>
             <div><History size={14} /><strong>{t('delivery.history')}</strong><span>{handoffs.length}</span></div>
             {handoffs.map(item => {
               const label = deliveryHistoryLabel(item, language);

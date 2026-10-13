@@ -1,3 +1,6 @@
+import { RunContextBar } from "../Runs.jsx";
+import SettingsDisclosure from "../../components/SettingsDisclosure.jsx";
+import { canOperateTaskRun } from "./taskRunAuthority.js";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { runsApi } from '../../api/runs.js';
 import { evidenceApi } from '../../api/evidence.js';
@@ -5,7 +8,7 @@ import SessionTranscript from '../sessions/SessionTranscript.jsx';
 import { selectedRunAttempt } from '../runs/runDetailModel.js';
 import { message } from '../../store/toastStore.js';
 
-// 只读执行过程；任何记录都必须匹配当前 Run 和 Attempt，缺失时不回退到整份 Session。
+// 记录限定当前 Run/Attempt；执行操作只在确认归属且选中当前尝试时复用原 Run authority。
 export default function TaskRunProcess({ runId, expectedWorkId, project, navigateTo }) {
   const [run, setRun] = useState(null);
   const [attemptId, setAttemptId] = useState('');
@@ -15,6 +18,9 @@ export default function TaskRunProcess({ runId, expectedWorkId, project, navigat
   const attempt = useMemo(() => selectedRunAttempt(run, attemptId), [run, attemptId]);
   useEffect(() => {
     const controller = new AbortController();
+    requestVersion.current += 1;
+    setRun(null); setAttemptId("");
+    setState({ messages: [], evidence: [], cursor: "", evidenceCursor: "", loading: true, error: "" });
     runsApi.getRun(runId, { signal: controller.signal }).then(result => { if (controller.signal.aborted) return; if (expectedWorkId && result.run?.work_id !== expectedWorkId) { setRunError('这次执行不属于当前任务');return; } setRun(result.run); setRunError(''); })
       .catch(error => { if (!controller.signal.aborted) setRunError(error.message || '读取执行失败'); });
     return () => controller.abort();
@@ -56,6 +62,11 @@ export default function TaskRunProcess({ runId, expectedWorkId, project, navigat
   const session = { id: `${runId}:${attempt?.id || ''}`, provider: attempt?.provider_ref?.provider || run?.provider || '', created_at: attempt?.started_at, updated_at: attempt?.ended_at, turns: [{ id: attempt?.id, status: attempt?.status, items: state.messages }] };
   return <div className="task-run-process">
     {runError && <p role="alert">{runError}</p>}
+    {canOperateTaskRun(run, expectedWorkId, runId, attempt) && <SettingsDisclosure title="执行操作"><RunContextBar run={run} navigateTo={navigateTo} onRunChanged={nextRun => {
+      if (nextRun?.work_id !== expectedWorkId) { setRunError("执行归属已变化，请重新核对"); return; }
+      if (nextRun.id !== runId) navigateTo("work", expectedWorkId, "", "", { runId: nextRun.id });
+      else setRun(nextRun);
+    }}/></SettingsDisclosure>}
     {run?.attempts?.length > 1 && <label>尝试<select className="form-control" aria-label="选择尝试" value={attempt?.id || ''} onChange={event => setAttemptId(event.target.value)}>{run.attempts.map(item => <option key={item.id} value={item.id}>第 {item.sequence} 次尝试 · {item.status}</option>)}</select></label>}
     {state.error && <p role="alert">部分记录暂不可用：{state.error}</p>}
     {state.loading && !state.messages.length && <p role="status">正在读取此尝试的记录…</p>}

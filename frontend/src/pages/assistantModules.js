@@ -2,14 +2,14 @@ import { PRODUCT_NAV_LABELS } from '../brand.js';
 
 export const PRODUCT_NAV_ITEMS = Object.freeze([
   {
-    page: 'command-center',
+    page: 'inbox',
     label: PRODUCT_NAV_LABELS.commandCenter,
     icon: 'command-center',
     placement: 'primary',
     availability: 'compatibility',
   },
   {
-    page: 'work',
+    page: 'tasks',
     label: PRODUCT_NAV_LABELS.work,
     icon: 'work',
     placement: 'primary',
@@ -40,15 +40,18 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
 ]);
 
 export const PRODUCT_COMPAT_ROUTE_REDIRECTS = Object.freeze({
-  dashboard: 'command-center',
+  dashboard: 'inbox',
+  'command-center': 'inbox',
+  work: 'tasks',
+  automations: 'tasks',
   'pi-chat': 'ask-xuanwu',
-  issues: 'work',
+  issues: 'tasks',
   sessions: 'runs',
-  cron: 'automations',
-  'pi-automations': 'automations',
-  'pi-approvals': 'command-center',
-  'attention-inbox': 'command-center',
-  'pi-inbox': 'command-center',
+  cron: 'tasks',
+  'pi-automations': 'tasks',
+  'pi-approvals': 'inbox',
+  'attention-inbox': 'inbox',
+  'pi-inbox': 'inbox',
   projects: 'settings',
 });
 
@@ -58,14 +61,14 @@ export function productNavigationItems({ workBoardEnabled = true } = {}) {
 
 export function resolveProductPage(page, { workBoardEnabled = true } = {}) {
   const resolvedPage = PRODUCT_COMPAT_ROUTE_REDIRECTS[page] || page;
-  if (resolvedPage === 'work' && !workBoardEnabled) return 'issues';
+  if (resolvedPage === 'tasks' && !workBoardEnabled) return 'issues';
   return resolvedPage;
 }
 
 export function productNavPageForRoute(page) {
   const resolvedPage = PRODUCT_COMPAT_ROUTE_REDIRECTS[page] || page;
   if (isAssistantModulePage(resolvedPage)) return 'settings';
-  if (resolvedPage === 'runs' || resolvedPage === 'automations') return 'work';
+  if (resolvedPage === 'runs' || resolvedPage === 'automations') return 'tasks';
   return resolvedPage;
 }
 

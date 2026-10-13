@@ -42,9 +42,9 @@ const NAV_ICONS = {
 };
 
 const NAV_TRANSLATION_KEYS = {
-  'command-center': 'nav.commandCenter',
+  inbox: 'nav.commandCenter',
   'ask-xuanwu': 'nav.askXuanwu',
-  work: 'nav.work',
+  tasks: 'nav.work',
   runs: 'nav.runs',
   automations: 'nav.automations',
   analytics: 'nav.analytics',

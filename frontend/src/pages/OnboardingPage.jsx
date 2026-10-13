@@ -23,12 +23,12 @@ export default function OnboardingPage({ onComplete, onSkip, projects, theme, to
         <section className="onboarding-page-intro" aria-labelledby="onboarding-page-title">
           <div>
             <span>THE SIMPLEST WAY TO USE XUANWU</span>
-            <h1 id="onboarding-page-title">把 Issue 列好，剩下的交给玄武</h1>
+            <h1 id="onboarding-page-title">把 任务 列好，剩下的交给玄武</h1>
             <p>你说“现在开始，你自己看着做”。玄武会自己推进；卡住时来问你，你回一句，它继续。</p>
-            <blockquote>“我列了 10 个 Issue 在玄武里。现在启动这 10 个，你自己看着做。”</blockquote>
+            <blockquote>“我列了 10 个 任务 在玄武里。现在启动这 10 个，你自己看着做。”</blockquote>
           </div>
           <dl>
-            <div><dt>你来做</dt><dd>列 ISSUE</dd></div>
+            <div><dt>你来做</dt><dd>列 任务</dd></div>
             <div><dt>玄武来做</dt><dd>自己推进</dd></div>
             <div><dt>卡住以后</dt><dd>来问你</dd></div>
           </dl>

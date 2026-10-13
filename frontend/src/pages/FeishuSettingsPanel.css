@@ -105,3 +105,8 @@
 .feishu-settings__footer-status.is-warning {
   color: var(--warning);
 }
+
+.feishu-source-discovery { display: grid; gap: 8px; border-block: 1px solid var(--border-light); padding-block: 12px; min-width: 0; }
+.feishu-source-discovery code { overflow-wrap: anywhere; }
+.feishu-discovery-candidate { border-top: 1px solid var(--border-light); padding-top: 8px; }
+.feishu-discovery-candidate button { margin: 4px; }

@@ -143,8 +143,10 @@ async function acceptMessageEvent(
       rawPayloadRef: rawRef,
       transport: "callback"
     });
-    await routeGenericIntake(context, ingest);
-    void context.agentBridge?.handle({ event, ingest });
+    if (!ingest.discovery) {
+      await routeGenericIntake(context, ingest);
+      void context.agentBridge?.handle({ event, ingest });
+    }
     return json(ingest, { status: 202 });
   } catch {
     return reject(context, "unsupported_or_invalid_event", rawRef, 400, encrypted);

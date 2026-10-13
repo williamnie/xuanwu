@@ -1,12 +1,13 @@
 const HANDOFF_HASH_PREFIX = '#/handoffs/';
-const WORK_HASH_PREFIX = '#/work/';
+const WORK_HASH_PREFIX = '#/tasks/';
+const LEGACY_WORK_HASH_PREFIX = '#/work/';
 const HANDOFF_ID_PATTERN = /^xw:handoff:derived:[A-Za-z0-9._~%-]+$/;
 const WORK_ID_PATTERN = /^xw:work:issues:[A-Za-z0-9._~%-]+$/;
 
 export function handoffHref(id, workId = '') {
   const value = String(id || '').trim();
   const work = String(workId || '').trim();
-  if (!value) return work && WORK_ID_PATTERN.test(work) ? `#/work/${encodeURIComponent(work)}` : '#/handoffs';
+  if (!value) return work && WORK_ID_PATTERN.test(work) ? `#/tasks/${encodeURIComponent(work)}` : '#/handoffs';
   if (work && WORK_ID_PATTERN.test(work)) {
     return `${WORK_HASH_PREFIX}${encodeURIComponent(work)}/delivery/${encodeURIComponent(value)}`;
   }
@@ -16,6 +17,7 @@ export function handoffHref(id, workId = '') {
 export function handoffRouteFromHash(hash) {
   const value = String(hash || '');
   if (value.startsWith(WORK_HASH_PREFIX)) return workDeliveryRoute(value);
+  if (value.startsWith(LEGACY_WORK_HASH_PREFIX)) return workDeliveryRoute(value.replace(LEGACY_WORK_HASH_PREFIX, WORK_HASH_PREFIX));
   if (!value.startsWith(HANDOFF_HASH_PREFIX)) return null;
   const encoded = value.slice(HANDOFF_HASH_PREFIX.length);
   if (!encoded || encoded.includes('/')) return null;

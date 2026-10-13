@@ -16,7 +16,7 @@ const workId = 'xw:work:issues:679';
 
 test('notification Handoff links open the exact delivery inside its Work', () => {
   const href = handoffHref(handoffId, workId);
-  assert.equal(href, `#/work/${encodeURIComponent(workId)}/delivery/${encodeURIComponent(handoffId)}`);
+  assert.equal(href, `#/tasks/${encodeURIComponent(workId)}/delivery/${encodeURIComponent(handoffId)}`);
   assert.deepEqual(handoffRouteFromHash(href), { handoffId, page: 'work', workId });
   assert.deepEqual(handoffRouteFromHash(handoffHref(handoffId)), { handoffId, page: 'handoffs' });
   assert.equal(handoffRouteFromHash('#/handoffs/javascript:alert(1)'), null);

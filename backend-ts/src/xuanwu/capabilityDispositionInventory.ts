@@ -563,6 +563,8 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/automations/:id/status", family: "automation" },
   { method: "GET", path: "/api/command-center/attention/:id", family: "attention" },
   { method: "GET", path: "/api/command-center/summary", family: "attention" },
+  { method: "GET", path: "/api/command-center/inbox", family: "attention" },
+  { method: "GET", path: "/api/command-center/task-glance", family: "attention" },
   { method: "POST", path: "/api/command-center/attention/:id/actions/:action", family: "attention" },
   { method: "GET", path: "/api/event-summaries", family: "system-observability" },
   { method: "GET", path: "/api/evidence", family: "evidence-handoff" },
@@ -598,6 +600,8 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/works/:id/timeline", family: "work-ledger" },
   { method: "GET", path: "/api/works/board", family: "work-ledger" },
   { method: "GET", path: "/api/works/summary", family: "work-ledger" },
+  { method: "GET", path: "/api/works/creation-result", family: "work-ledger" },
+  { method: "POST", path: "/api/works/:id/queue-state", family: "work-ledger" },
   { method: "PATCH", path: "/api/works/:id", family: "work-ledger" },
   { method: "POST", path: "/api/works", family: "work-ledger" },
   { method: "POST", path: "/api/works/:id/actions/:action", family: "work-ledger" },
@@ -640,6 +644,9 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/im-reply-drafts/:id/reject", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/integrations/feishu/events", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/integrations/feishu/settings", family: "integration-intake-delivery" },
+  { method: "GET", path: "/api/integrations/feishu/source-discovery/:id", family: "integration-intake-delivery" },
+  { method: "POST", path: "/api/integrations/feishu/source-discovery", family: "integration-intake-delivery" },
+  { method: "POST", path: "/api/integrations/feishu/source-discovery/:id/authorize", family: "integration-intake-delivery" },
   { method: "PUT", path: "/api/integrations/feishu/settings", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/integrations/im/channels", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/integrations/telegram/settings", family: "integration-intake-delivery" },
@@ -795,6 +802,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/pi/tools/:id", family: "capability-policy" },
   { method: "POST", path: "/api/pi/tools/:id/call", family: "capability-policy" },
   { method: "GET", path: "/api/projects", family: "project-scope" },
+  { method: "GET", path: "/api/projects/validate-path", family: "project-scope" },
   { method: "PATCH", path: "/api/projects", family: "project-scope" },
   { method: "POST", path: "/api/projects", family: "project-scope" },
   { method: "DELETE", path: "/api/projects/:id", family: "project-scope" },
@@ -847,7 +855,7 @@ export const PAGE_SURFACES = [
   {
     id: "assistant-runtime", disposition: "keep", target: "Operator conversation and supporting memory/config",
     page_ids: ["pi-chat", "pi-overview", "pi-memory"],
-    source_files: ["frontend/src/pages/PiAgentSettingsPanel.jsx", "frontend/src/pages/PiChat.jsx", "frontend/src/pages/PiChatComposerMeta.jsx", "frontend/src/pages/PiMemoryPanel.jsx"]
+    source_files: ["frontend/src/pages/PiAgentSettingsPanel.jsx", "frontend/src/pages/PersonaSettingsPanel.jsx", "frontend/src/pages/PiChat.jsx", "frontend/src/pages/PiChatComposerMeta.jsx", "frontend/src/pages/PiMemoryPanel.jsx"]
   },
   {
     id: "attention", disposition: "merge", target: "Attention projections with deterministic resolution gates",
@@ -862,8 +870,8 @@ export const PAGE_SURFACES = [
   {
     id: "capability-policy", disposition: "keep", target: "Capability registry and deterministic permission policy",
     page_ids: ["settings", "pi-connectors", "pi-skills", "pi-policies"],
-    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/CodeAgentsPanel.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx",
-      "frontend/src/pages/GitHubSettingsPanel.jsx", "frontend/src/pages/ImChannelRegistryPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RemoteAccessTokenPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/OnboardingPage.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SkillLibraryPanel.jsx", "frontend/src/pages/JevSkillSettings.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx", "frontend/src/pages/TelegramSettingsPanel.jsx"]
+    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/CodeAgentsPanel.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/FeishuSourceDiscovery.jsx", "frontend/src/pages/ConnectionSettingsList.jsx", "frontend/src/pages/ExecutionPresetsPanel.jsx",
+      "frontend/src/pages/GitHubSettingsPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/RemoteAccessTokenPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/OnboardingPage.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SkillLibraryPanel.jsx", "frontend/src/pages/JevSkillSettings.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx", "frontend/src/pages/TelegramSettingsPanel.jsx"]
   },
   {
     id: "evidence-handoff", disposition: "merge", target: "Evidence/Handoff read models and audited action requests",
@@ -882,12 +890,12 @@ export const PAGE_SURFACES = [
   },
   {
     id: "system-observability", disposition: "keep", target: "Local runtime observability/control",
-    page_ids: ["dashboard", "analytics"],
+    page_ids: ["inbox", "command-center", "dashboard", "analytics"],
     source_files: ["frontend/src/pages/Analytics.jsx", "frontend/src/pages/Dashboard.jsx", "frontend/src/pages/ReleaseUpdatePanel.jsx"]
   },
   {
     id: "work-ledger", disposition: "keep", target: "Work ledger compatibility API",
-    page_ids: ["issues", "issue-detail", "work-board", "work-detail"],
+    page_ids: ["tasks", "work", "issues", "issue-detail", "work-board", "work-detail"],
     source_files: ["frontend/src/pages/IssueCard.jsx", "frontend/src/pages/IssueCardMoreActions.jsx", "frontend/src/pages/IssueDetail.jsx", "frontend/src/pages/Issues.jsx", "frontend/src/pages/IssueSupervisorPanel.jsx", "frontend/src/pages/WorkBoard.jsx", "frontend/src/pages/WorkDetail.jsx"]
   },
 ] as const;

@@ -81,3 +81,29 @@ C2 结果：新增完整inbox按快照游标分页，115条来源记录读完、
 通用persona仅PATCH persona，expected_revision=3且旧个性/表达原值保留，AI未保存长期说明不变；409读取revision10后可恢复本地detailed草稿。授权状态与所选模型测试分开；读取旧连接保留openai-completions协议。首轮AI fixture把models错误写成对象数组导致option渲染失败，核对后端string[]合同后修正fixture，原用例复验成功。Playwright标签精确匹配含选项文字不一致导致选择器超时，改用新快照中的combobox角色复跑通过。
 
 首页、GitHub抽屉（含冲突）、AI、persona、Telegram、飞书均已真实浏览器截图浅/深1280/980/760/680并目检；760及以下抽屉全屏，Escape返回入口且root.inert恢复false。输入/秘密只保存在本地草稿，测试写入均为API fixture；没有向真实GitHub、IM、任务或配置写入。通知verbose展示为及时+进展开关，历史规则不可见，当前规则操作保留；来源策略、技能运行、处理记录与权限透明度保留。
+
+## D 验收表与合同（实施前）
+
+| 检查 | 边界和用例 |
+|---|---|
+| 来源查询 | source=github同时用于Issue adapter同一where计数/分页/cursor指纹；external_links每轮调查修复历史均匹配，兼容旧tracker link/current Case；不对前端已加载数据假筛选 |
+| 创建恢复 | 新只读creation-result按稳定audit.event_id对账；created返回原任务，不存在只能显式重试相同event id；批量逐条成功/失败/未知，不自动拆多行，不自动重试未知 |
+| 路径校验 | 新GET项目路径校验只stat和git rev-parse，不导入、不启动执行；项目导入POST仅用户点击，说明既有项目开启自动执行 |
+| 引导 | 准备AI/选项目/开始首任务；后台健康失败才插入修复；已就绪工具自动预选，助手仍独立授权且连接测试有效；同任务done+通过验证+交付才能结束 |
+| 飞书发现 | 显式启动短期挑战，仅已验证入站消息中匹配挑战的来源标识可被发现；只存临时标识，不放开allowlist、不保存消息正文；确认时版本校验并只加入选中来源 |
+| 路由 | 写入前覆盖旧work/path/workId/issueId/Handoff、Run优先Session、无归属只读、conversation/project/filter、workBoard flag、settings section、history刷新复制；新inbox/tasks映射保持全部旧入口 |
+| 隐藏字段 | batch只映射已有agent_profile_id；triage默认；预设Plugin原值；未知/不可用旧选择无隐式清空；配置与草稿保持 |
+| 错误/主题 | 409/404/超时/部分结果明确，无false empty；浅深主题980/760/680真实浏览器回归；相关前后端与style/lint/build/hygiene/Golden Journeys |
+
+
+D 结果：新来源筛选由同一数据库谓词完成计数/分页/游标，历史调查与修复轮次均可见；只读创建对账以原审计 ID 返回已创建任务。飞书挑战有效期两分钟、易失有界、只捕获最小 ID，绑定启动时配置 revision；换应用或跨窗口保存后不能借新 revision 授权旧候选。原事件认证、名单和秘密引用保持，挑战消息不写普通入站库。
+
+真实 Chromium（API fixture）：代码围栏和多行段落未被拆散；两条批量任务分别使用稳定审计 ID，均为 triage。第二条模拟提交后超时，未知项重试禁用；切换单个/批量保持原结果，核对后找到原任务，POST 总数仍为 2。飞书未保存草稿禁用发现，空发现明确提示；授权 body 只含 candidate_id/scope/expected_revision，旧群名单保留。旧 work 链接保留 project/focus/query/source，改动后生成 tasks 链接；后退、前进、复制再刷新仍保持筛选，API 实际收到 q/source/status/project_id。三步引导自动识别已配置连接，路径提示可见，显式创建的示例为 todo，未伪造交付完成。
+
+明暗主题 1280/980/760/680 的批量弹窗、飞书发现、任务列表及引导已截图目检，无横向溢出。初轮截图捕获主题过渡，等待稳定后重拍；初次路由改名误改了图标 key，浏览器发现后修复并复跑。一次脚本使用 UI query 名查询后端请求而超时，核对 API 的 q 参数后重跑成功；一次移动断点下点击桌面侧栏入口不在视口，恢复桌面宽度后复跑成功。截图和 fixture 仅在 ignored output/playwright，不作为在线 IM/GitHub 或真实编程工具执行验收。
+
+全量后端 2780 项通过（6 snapshots）；前端 691 项通过；lint/生产构建、仓库卫生与 Golden Journeys 通过。TypeScript 5.9.3 仍为原基线 153 条诊断，规范化内容一致，没有新增；不能声明全仓 typecheck 通过。新增飞书 revision 绑定后相关 170 项与定向 5 项再次通过。能力清单和 API route snapshots 已逐项同步，严格覆盖断言保留；移走的旧展示组件已删除，安全/状态/helper 测试迁到现有承接入口，避免旧 UI 留成孤儿。
+
+最终自查补回已关联任务的 Run 中断/继续/重试入口：位于过程的“执行操作”，复用既有 RunContextBar、run/attempt revision 和审计接口；历史 Attempt 或没有确定归属时保持只读。Run 切换立即清空旧记录并使旧请求失效。最终评审按精确分支与 commit 进行，由 Claude 自行 fetch/diff；不传输整份代码。
+
+最终前端 692 项（172 文件）通过，lint/build 再次通过。浏览器补验：旧 Attempt 不出现执行操作；当前 Attempt 的中断请求提交 run revision=9、attempt revision=7 与新审计 ID，返回后显示审计已提交。第一次 control fixture 漏了 API 的 actions 路径段，修正精确路径并刷新后原用例通过。

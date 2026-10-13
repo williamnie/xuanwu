@@ -24,6 +24,10 @@ export const connectorsApi = {
     body: JSON.stringify(settings),
   }),
 
+  startFeishuDiscovery: () => request('/api/integrations/feishu/source-discovery', { method: 'POST', body: '{}' }),
+  getFeishuDiscovery: id => request(`/api/integrations/feishu/source-discovery/${encodeURIComponent(id)}`),
+  authorizeFeishuSource: (id, payload) => request(`/api/integrations/feishu/source-discovery/${encodeURIComponent(id)}/authorize`, { method: 'POST', body: JSON.stringify(payload) }),
+
   getTelegramSettings: () => request('/api/integrations/telegram/settings'),
 
   updateTelegramSettings: (settings) => request('/api/integrations/telegram/settings', {

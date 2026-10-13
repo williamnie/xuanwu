@@ -1,3 +1,4 @@
+import { captureFeishuDiscovery } from "./feishuSourceDiscovery.ts";
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExternalEventRecord } from "../db/repositories/externalEvents.ts";
@@ -25,6 +26,7 @@ export type FeishuIngestMeta = {
 };
 
 export type FeishuIngestResult = {
+  discovery?: boolean;
   dedupe_key: string;
   event_id: number;
   normalized_summary: Record<string, unknown>;
@@ -49,6 +51,9 @@ export function ingestFeishuMessageEvent(
 ): FeishuIngestResult {
   const rawRef = meta.rawPayloadRef || rawPayloadRef(raw);
   const event = normalizeFeishuMessageEvent(raw, { rawEventRef: rawRef });
+  if (context.database && captureFeishuDiscovery(context.database, event)) {
+    return { ok: true, discovery: true, dedupe_key: event.dedupe_key, event_id: 0, normalized_summary: { discovery: true } };
+  }
   const attention = attentionDecision(context, event);
   const envelope = feishuInboundEnvelopeForEvent(event, attention.project_id);
   const summary = normalizedSummary(event, attention.project_id, attention);

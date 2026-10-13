@@ -169,9 +169,9 @@ test('Xuanwu product sidebar removes the PI section and keeps internal config be
   for (const route of ['pi-skills', 'pi-memory', 'pi-activity', 'pi-policies']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
-  assert.match(modulesSource, /'pi-automations': 'automations'/);
-  assert.match(modulesSource, /'pi-approvals': 'command-center'/);
-  for (const route of ['command-center', 'ask-xuanwu', 'work', 'settings']) {
+  assert.match(modulesSource, /'pi-automations': 'tasks'/);
+  assert.match(modulesSource, /'pi-approvals': 'inbox'/);
+  for (const route of ['inbox', 'ask-xuanwu', 'tasks', 'settings']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
   assert.doesNotMatch(modulesSource, /page: 'projects'/);
@@ -186,9 +186,9 @@ test('Xuanwu product sidebar removes the PI section and keeps internal config be
   assert.match(sidebarSource, /sidebar-footer-actions/);
   assert.match(appStylesSource, /\.sidebar-footer-actions \.nav-item/);
   assert.doesNotMatch(appSource, /AttentionInbox|currentPage === 'attention-inbox'|currentPage === 'pi-inbox'/);
-  assert.match(modulesSource, /'attention-inbox': 'command-center'/);
-  assert.match(modulesSource, /'pi-inbox': 'command-center'/);
-  assert.match(appSource, /currentPage === 'command-center'/);
+  assert.match(modulesSource, /'attention-inbox': 'inbox'/);
+  assert.match(modulesSource, /'pi-inbox': 'inbox'/);
+  assert.match(appSource, /currentPage === 'inbox'/);
   assert.match(appSource, /currentPage === 'ask-xuanwu'/);
   assert.match(appSource, /currentPage === 'automations'/);
   assert.doesNotMatch(appSource, /currentPage === 'connections'/);
@@ -320,6 +320,6 @@ test('Policies tab reads source profiles without retaining legacy Automation wri
 test('Automations and Approval queues live outside Settings', () => {
   assert.doesNotMatch(sectionsSource, /AutomationsRuntimePanel/);
   assert.doesNotMatch(sectionsSource, /activeTab === 'automations'/);
-  assert.match(modulesSource, /'pi-approvals': 'command-center'/);
+  assert.match(modulesSource, /'pi-approvals': 'inbox'/);
   assert.doesNotMatch(sectionsSource, /Approval queue|ApprovalQueue/);
 });

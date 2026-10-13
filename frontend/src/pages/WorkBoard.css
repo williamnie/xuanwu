@@ -350,3 +350,8 @@
 
 .work-dialog-overlay { backdrop-filter: none; }
 .work-dialog-grid label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; gap: 8px; }
+
+.batch-work-creator { display: grid; gap: 12px; min-width: 0; }
+.batch-work-row { display: grid; gap: 8px; border-top: 1px solid var(--border-light); padding-top: 12px; }
+.batch-work-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.batch-work-creator textarea { width: 100%; }

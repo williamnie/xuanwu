@@ -21,7 +21,7 @@ const works = [
 ];
 
 test('global composer stays on product pages but does not duplicate the full Ask Xuanwu page', () => {
-  assert.equal(isGlobalAskComposerVisible('command-center'), true);
+  assert.equal(isGlobalAskComposerVisible('inbox'), true);
   assert.equal(isGlobalAskComposerVisible('work'), true);
   assert.equal(isGlobalAskComposerVisible('runs'), true);
   assert.equal(isGlobalAskComposerVisible('runs', { interaction_surface: 'provider-session' }), false);
@@ -29,7 +29,7 @@ test('global composer stays on product pages but does not duplicate the full Ask
 });
 
 test('draft page context is frozen across navigation until the draft is empty', () => {
-  const commandCenter = buildGlobalComposerPageReference({ currentPage: 'command-center' }, works);
+  const commandCenter = buildGlobalComposerPageReference({ currentPage: 'inbox' }, works);
   const run = buildGlobalComposerPageReference({
     currentPage: 'runs',
     pageContext: {
@@ -46,10 +46,10 @@ test('draft page context is frozen across navigation until the draft is empty', 
 
 test('embedded delivery keeps its Handoff attached to the Work page context', () => {
   const page = buildGlobalComposerPageReference({
-    currentPage: 'work',
+    currentPage: 'tasks',
     pageContext: {
       handoff_id: 'xw:handoff:derived:698%40abc',
-      page_id: 'work',
+      page_id: 'tasks',
       project_id: 'alpha',
       work_id: 'xw:work:issues:698',
     },

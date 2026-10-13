@@ -3,6 +3,9 @@ import {
   AlertTriangle, CheckCircle2, ChevronRight, Clipboard, Cpu, FolderPlus, Loader2,
   Monitor, RefreshCw, Rocket, Terminal,
 } from 'lucide-react';
+import ProjectPathFeedback from "../../components/ProjectPathFeedback.jsx";
+import { assistantApi } from "../../api/assistant.js";
+import { effectiveProjectProvider } from "../../utils/codeAgents.js";
 import { evidenceApi } from '../../api/evidence.js';
 import { firstDeliveryApi } from '../../api/firstDelivery.js';
 import { handoffsApi } from '../../api/handoffs.js';
@@ -17,6 +20,8 @@ import { readFirstDeliveryConnectionTest } from '../../utils/firstDeliveryConnec
 import {
   FIRST_DELIVERY_TITLE,
   firstDeliveryRecovery,
+  firstDeliveryGuideSteps,
+  savedSupervisorConfigured,
   firstDeliveryState,
   onboardingProjectID,
   sampleWorkPayload,
@@ -45,6 +50,7 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
   const [creationNeedsRefresh, setCreationNeedsRefresh] = useState(false);
   const requestRef = useRef(null);
   const targetWorkRef = useRef('');
+  const samplePayloadRef = useRef(null);
 
   const load = useCallback(async () => {
     if (requestRef.current) return requestRef.current.promise;
@@ -56,14 +62,18 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
       systemApi.getRunnerSettings(),
       workApi.getWorks({ pageSize: 8, query: FIRST_DELIVERY_TITLE }, { signal: controller.signal }),
       handoffsApi.getHandoffs({ limit: 20 }),
+      Promise.all([assistantApi.getPiSupervisor(), assistantApi.getPiProviderSettings(), assistantApi.getPiCodexOAuthStatus()]).catch(() => []),
+      projectsApi.getAgentProfiles(),
     ]);
     requestRef.current = { controller, promise };
     try {
-      const [doctor, codeAgentsResponse, runnerSettings, worksPage, handoffPage] = await promise;
+      const [doctor, codeAgentsResponse, runnerSettings, worksPage, handoffPage, assistantConfig, agentProfiles] = await promise;
       const works = worksPage?.items || [];
       const handoffs = handoffPage?.items || [];
       const sample = works.find(work => work?.title === FIRST_DELIVERY_TITLE);
+      const reconciled = samplePayloadRef.current ? await workApi.getCreationResult(samplePayloadRef.current.audit.event_id) : null;
       const candidateWorkID = [
+        reconciled?.work?.id,
         targetWorkRef.current,
         sample?.id,
         ...handoffs.filter(item => item?.evidence_count > 0).map(item => item.work_id),
@@ -74,7 +84,8 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
       if (controller.signal.aborted) return;
       setSnapshot({
         codeAgents: Array.isArray(codeAgentsResponse?.agents) ? codeAgentsResponse.agents : [],
-        connectionTest: readFirstDeliveryConnectionTest(),
+        connectionTest: readFirstDeliveryConnectionTest() || (savedSupervisorConfigured(...assistantConfig) ? { ok: true, status: "configured" } : null),
+        agentProfiles: Array.isArray(agentProfiles) ? agentProfiles : agentProfiles?.items || [],
         doctor,
         ...delivery,
         targetWorkID: candidateWorkID || '',
@@ -105,7 +116,7 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
   }, [projects, selectedProjectID]);
 
   const selectedProject = projects.find(project => project.id === selectedProjectID) || projects[0] || null;
-  const effectiveCodeAgentID = selectedCodeAgentID || selectedProject?.provider || '';
+  const effectiveCodeAgentID = selectedProject ? effectiveProjectProvider(selectedProject, snapshot.agentProfiles || []) : selectedCodeAgentID || snapshot.codeAgents.find(agent => agent.enabled && agent.submittable)?.id || '';
   const state = useMemo(
     () => firstDeliveryState({ ...snapshot, projects, selectedCodeAgentID: effectiveCodeAgentID }),
     [effectiveCodeAgentID, projects, snapshot],
@@ -129,6 +140,8 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
   }, [deliveryWorkID, state.completed]);
   const recovery = firstDeliveryRecovery(state, snapshot.doctor);
   const steps = Object.fromEntries(state.steps.map(step => [step.id, step]));
+  const guideSteps = firstDeliveryGuideSteps(state);
+  const currentGuideStep = guideSteps.findIndex(step => !step.complete);
 
   const updateCodeAgents = (response) => {
     const codeAgents = Array.isArray(response?.agents) ? response.agents : [];
@@ -147,16 +160,8 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
         enabled = agents.find(item => item.id === agent.id);
       }
       if (!enabled?.submittable) return setError(enabled?.readiness_reason || `${enabled?.label || agent.id} 已启用，但尚未就绪`);
-      if (selectedProject && selectedProject.provider !== agent.id) {
-        await projectsApi.updateProject(selectedProject.id, {
-          default_agent_profile_id: '',
-          model: agent.id === 'codex' ? 'codex-default' : '',
-          provider: agent.id,
-        });
-        await refreshData(['projects', 'workSummary']);
-      }
       setSelectedCodeAgentID(agent.id);
-      message.success(`${enabled.label || agent.id} 已选中${selectedProject ? '并绑定当前项目' : ''}`);
+      message.success(`${enabled.label || agent.id} 已选中${selectedProject ? '；现有项目继续使用其原配置' : ''}`);
     } catch (agentError) {
       setError(agentError.message || '启用 Code Agent 失败');
     } finally {
@@ -187,10 +192,6 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
       const agents = updateCodeAgents(await systemApi.discoverCodeAgents());
       setSnapshot(current => ({ ...current, runnerSettings }));
       if (agents.some(agent => agent.id === 'codex' && agent.enabled && agent.submittable)) {
-        if (selectedProject && selectedProject.provider !== 'codex') {
-          await projectsApi.updateProject(selectedProject.id, { default_agent_profile_id: '', model: 'codex-default', provider: 'codex' });
-          await refreshData(['projects', 'workSummary']);
-        }
         setSelectedCodeAgentID('codex');
       } else setSelectedCodeAgentID('');
       if (runnerSettings?.runtime_apply?.codexTransport === 'deferred_active_sessions') {
@@ -213,6 +214,8 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
     setBusy('project');
     setError('');
     try {
+      const validation = await projectsApi.validatePath(path);
+      if (!validation.exists || !validation.is_directory || !validation.is_git_repository) throw new Error(validation.reason || "请选择 Git 仓库目录");
       const provider = state.selectedCodeAgent.id;
       const id = onboardingProjectID(path);
       await projectsApi.createProject({
@@ -239,6 +242,7 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
   const createSampleWork = async () => {
     const project = projects.find(item => item.id === selectedProjectID) || projects[0];
     if (!project) return setError('请先添加项目');
+    if (!state.selectedCodeAgent) return setError("项目使用的编程工具尚未就绪，请检查项目设置");
     setBusy('work');
     setError('');
     try {
@@ -248,15 +252,17 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
         query: FIRST_DELIVERY_TITLE,
       });
       const existing = (authority?.items || []).find(work => work?.title === FIRST_DELIVERY_TITLE);
-      const created = existing || await workApi.createWork(sampleWorkPayload(project.id));
+      if (!samplePayloadRef.current || samplePayloadRef.current.project_id !== project.id) samplePayloadRef.current = sampleWorkPayload(project.id);
+      const created = existing || await workApi.createWork(samplePayloadRef.current);
       targetWorkRef.current = created?.work?.id || created?.id || existing?.id || '';
+      if (!targetWorkRef.current) throw new Error("创建结果缺少任务 ID");
       await firstDeliveryApi.startProjectLoop(project.id);
-      message.success(existing ? '已恢复现有示例 Work 并启动 Loop' : '示例 Work 已创建并启动');
+      message.success(existing ? '已恢复现有示例任务 并启动项目执行' : '示例任务 已创建并启动');
       await refreshData(['projects', 'workSummary']);
       await load();
     } catch (createError) {
       setCreationNeedsRefresh(true);
-      setError(`${createError.message || '创建示例 Work 失败'}。为避免重复创建，请先重新检查。`);
+      setError(`${createError.message || '创建示例任务 失败'}。为避免重复创建，请先重新检查。`);
     } finally {
       setBusy('');
     }
@@ -279,7 +285,7 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
           <div>
             <span className="first-delivery-kicker">FIRST SETUP</span>
             <h2 id="first-delivery-title">{state.completed ? '玄武可以开始工作了' : '先完成一次配置'}</h2>
-            <p>配好 Code Agent、Supervisor 和项目，之后就可以直接把 Issue 交给玄武。</p>
+            <p>连接编程工具和玄武助手，选择项目，然后完成一个只读任务。</p>
           </div>
         </div>
         <button className="first-delivery-refresh" disabled={loading || Boolean(busy)} onClick={load} type="button">
@@ -288,8 +294,8 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
       </header>
 
       <div className="first-delivery-checklist" aria-label="首次配置进度">
-        {state.steps.map((step, index) => (
-          <div aria-current={index === state.currentStep ? 'step' : undefined} aria-label={`${step.label}：${step.complete ? '已完成' : index === state.currentStep ? '当前步骤' : '未完成'}`} className={`first-delivery-step ${step.complete ? 'done' : index === state.currentStep ? 'current' : ''}`} key={step.id}>
+        {guideSteps.map((step, index) => (
+          <div aria-current={index === currentGuideStep ? 'step' : undefined} aria-label={`${step.label}：${step.complete ? '已完成' : index === currentGuideStep ? '当前步骤' : '未完成'}`} className={`first-delivery-step ${step.complete ? 'done' : index === currentGuideStep ? 'current' : ''}`} key={step.id}>
             <span>{step.complete ? <CheckCircle2 size={15} /> : index + 1}</span>
             <strong>{step.label}</strong>
           </div>
@@ -305,7 +311,7 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
               <button className="btn btn-primary" disabled={loading} onClick={load} type="button"><RefreshCw size={14} /> 重新检查</button>
             </ActionCard>
           ) : !steps['code-agent'].complete ? (
-            <ActionCard description="选择实际执行 Issue 的 Code Agent；未配置的执行器不会被静默选中。" title="选择 Code Agent" wide>
+            <ActionCard description="选择实际执行任务 的 Code Agent；未配置的执行器不会被静默选中。" title="选择 Code Agent" wide>
               <CodeAgentPicker
                 agents={snapshot.codeAgents}
                 busy={busy}
@@ -317,29 +323,30 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
               />
             </ActionCard>
           ) : !steps.supervisor.complete ? (
-            <ActionCard description="只展示两类兼容 API 与 Codex OAuth；其他协议保留在高级设置。" title="连接 Supervisor" wide>
+            <ActionCard description="已保存的连接会自动跳过；新连接保留独立登录和手动填写模型。" title="连接玄武助手" wide>
               <OnboardingSupervisorConnection onComplete={load} />
             </ActionCard>
           ) : !steps.project.complete ? (
             <ActionCard description={`路径必须存在于 Runner 所在机器；新项目将绑定 ${state.selectedCodeAgent?.label || state.selectedCodeAgent?.id}。`} title="添加第一个项目">
               <form className="first-delivery-project-form" onSubmit={createProject}>
                 <input aria-label="本地项目绝对路径" className="form-control" onChange={event => setCwd(event.target.value)} placeholder="/absolute/path/to/repository" value={cwd} />
+                <ProjectPathFeedback path={cwd}/>
                 <button className="btn btn-primary" disabled={busy === 'project'} type="submit">
                   {busy === 'project' ? <Loader2 className="spin-animation" size={14} /> : <FolderPlus size={14} />} 添加并启用
                 </button>
               </form>
             </ActionCard>
           ) : !steps.work.complete ? (
-            <ActionCard description="玄武会创建一个测试 Issue，让 Code Agent 真正执行一次；不会修改项目代码。" title="启动第一个 Issue" wide>
+            <ActionCard description="玄武会创建一个测试任务，让 Code Agent 真正执行一次；不会修改项目代码。" title="启动第一个任务" wide>
               <div className="first-delivery-work-panel">
                 <code><span>$</span> printf 'Hello Xuanwu\n'</code>
                 <ul>
-                  <li><CheckCircle2 size={13} /> 玄武创建并启动 Issue</li>
+                  <li><CheckCircle2 size={13} /> 玄武创建并启动任务</li>
                   <li><CheckCircle2 size={13} /> Code Agent 实际执行一次</li>
                   <li><CheckCircle2 size={13} /> 做完后回到这里看结果</li>
                 </ul>
                 <div className="first-delivery-work-action">
-                  <select aria-label="示例 Work 项目" className="form-control" onChange={event => setSelectedProjectID(event.target.value)} value={selectedProjectID || projects[0]?.id || ''}>
+                  <select aria-label="示例任务 项目" className="form-control" onChange={event => setSelectedProjectID(event.target.value)} value={selectedProjectID || projects[0]?.id || ''}>
                     {projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}
                   </select>
                   <button className="btn btn-primary" disabled={busy === 'work' || creationNeedsRefresh} onClick={createSampleWork} type="button">
@@ -349,7 +356,7 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
               </div>
             </ActionCard>
           ) : (
-            <ActionCard wide description={`${state.targetWork?.id || ''} · ${state.targetWork?.status || 'unknown'}`} title={state.targetWork?.title || '首个 Work'}>
+            <ActionCard wide description={`${state.targetWork?.id || ''} · ${state.targetWork?.status || 'unknown'}`} title={state.targetWork?.title || '首个任务'}>
               <button className="btn btn-secondary" disabled={loading} onClick={load} type="button"><RefreshCw className={loading ? 'spin-animation' : ''} size={14} /> 刷新交付状态</button>
             </ActionCard>
           )}
@@ -363,10 +370,10 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
       <div className={`first-delivery-recovery ${state.completed ? 'success' : ''}`}>
         <div>
           <strong>{state.completed ? '第一次执行完成' : '这一步的恢复方式'}</strong>
-          <p>{state.completed ? `${state.targetWork?.title || '测试 Issue'} 已完成，可以进入指挥中心查看结果。` : recovery}</p>
+          <p>{state.completed ? `${state.targetWork?.title || '测试任务'} 已完成，可以进入待处理查看结果。` : recovery}</p>
         </div>
         {state.completed ? (
-          <button className="first-delivery-complete" onClick={onComplete} type="button">进入指挥中心 <ChevronRight size={14} /></button>
+          <button className="first-delivery-complete" onClick={onComplete} type="button">进入待处理 <ChevronRight size={14} /></button>
         ) : <button aria-label="复制恢复步骤" onClick={copyRecovery} type="button"><Clipboard size={14} /> 复制</button>}
       </div>
     </section>

@@ -10,6 +10,7 @@ export type IssueFilter = {
   sort?: "created_at" | "status" | "title" | "updated_at";
   sortOrder?: "asc" | "desc";
   sourceSessionId?: string;
+  source?: "github";
   status?: string;
   statuses?: string[];
 };
@@ -181,6 +182,7 @@ function buildIssueWhere(filter: IssueFilter): { args: Array<number | string>; w
   const statuses = uniqueStrings([status, ...(filter.statuses ?? [])]);
   const query = cleanOptionalString(filter.query);
   const sourceSessionId = normalizeSourceSessionID(filter.sourceSessionId);
+  if (filter.source === "github") conditions.push("(exists(select 1 from external_links l where l.issue_id=issues.id and l.source='github') or exists(select 1 from tracker_issue_links t where t.issue_id=issues.id and t.provider='github') or exists(select 1 from github_issue_cases c where c.issue_id=issues.id))");
   addFilter(conditions, args, "project_id = ?", projectId);
   if (statuses.length > 0) {
     conditions.push(`status in (${statuses.map(() => "?").join(", ")})`);

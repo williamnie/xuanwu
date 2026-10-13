@@ -1,3 +1,4 @@
+import { resolveProductPage } from "../pages/assistantModules.js";
 import { buildPiChatProjectSuggestions } from '../pages/piChatComposer.js';
 
 export const GLOBAL_COMPOSER_PERMISSION_MODES = [
@@ -9,13 +10,13 @@ const PAGE_LABELS = {
   'ask-xuanwu': 'Ask Xuanwu',
   automations: 'Automations',
   analytics: '统计分析',
-  'command-center': '工作台',
+  inbox: '待处理',
   handoffs: 'Handoffs',
   issues: 'Work',
   projects: 'Projects',
   runs: 'Runs',
   settings: 'Settings',
-  work: 'Work',
+  tasks: '任务',
 };
 
 const MAX_WORK_SUGGESTIONS = 16;
@@ -26,19 +27,19 @@ export function isGlobalAskComposerVisible(page, pageContext = null) {
 }
 
 export function buildGlobalComposerPageReference(route = {}, works = []) {
-  const pageId = clean(route.currentPage) || 'command-center';
-  const live = route.pageContext?.page_id === pageId ? route.pageContext : {};
+  const pageId = resolveProductPage(clean(route.currentPage) || 'inbox');
+  const live = resolveProductPage(route.pageContext?.page_id) === pageId ? route.pageContext : {};
   const issueId = positiveInteger(route.selectedIssueId);
   const issueWorkId = issueId ? `xw:work:issues:${issueId}` : '';
-  const workId = clean(live.work_id) || issueWorkId;
+  const workId = clean(live.work_id) || clean(route.selectedWorkId) || issueWorkId;
   const work = workItems(works).find(item => item.id === workId);
   const projectId = clean(live.project_id)
     || clean(work?.owner?.project_id)
-    || (pageId === 'issues' ? clean(route.filterProject) : '');
+    || (['issues', 'tasks'].includes(pageId) ? clean(route.filterProject) : '');
   const runId = clean(live.run_id) || (pageId === 'runs' ? clean(route.selectedRunId) : '');
   const sessionId = clean(live.session_id) || (pageId === 'runs' ? clean(route.selectedSessionId) : '');
   const handoffId = clean(live.handoff_id)
-    || (pageId === 'handoffs' || pageId === 'work' ? clean(route.selectedHandoffId) : '');
+    || (pageId === 'handoffs' || pageId === 'tasks' ? clean(route.selectedHandoffId) : '');
   const routeRef = routeReference({ handoffId, issueId, pageId, projectId, runId, sessionId, workId });
 
   return {

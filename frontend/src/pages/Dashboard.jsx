@@ -16,9 +16,11 @@ export default function Dashboard({ navigateTo, onCreate }) {
   const [glance,setGlance] = useState({ active: [], completed_today: [], error: '', loading: true });
   useEffect(()=>{
     let active=true;
-    const load=()=>commandCenterApi.getTaskGlance().then(data=>{if(active)setGlance({...data,error:'',loading:false});}).catch(error=>{if(active)setGlance(current=>({...current,error:error.message,loading:false}));});
+    let pending=false;
+    const controller=new AbortController();
+    const load=()=>{ if(pending)return; pending=true; return commandCenterApi.getTaskGlance({signal:controller.signal}).then(data=>{if(active)setGlance({...data,error:'',loading:false});}).catch(error=>{if(active)setGlance(current=>({...current,error:error.message,loading:false}));}).finally(()=>{pending=false;});};
     load();const interval=setInterval(()=>{if(document.visibilityState==='visible')load();},30000);
-    return()=>{active=false;clearInterval(interval);};
+    return()=>{active=false;controller.abort();clearInterval(interval);};
   },[]);
   return <div className="dashboard-page">
     <header className="dashboard-intro"><div><span className="dashboard-eyebrow">INBOX</span><h1>{t('nav.commandCenter')}</h1></div></header>

@@ -1,3 +1,4 @@
+import FeishuSourceDiscovery from "./FeishuSourceDiscovery.jsx";
 import { connectorsApi } from '../api/connectors.js';
 import { useEffect, useState } from 'react';
 import { Bot, CheckCircle2, KeyRound } from 'lucide-react';
@@ -39,13 +40,14 @@ function useFeishuSettings() {
 
   const loadSettings = () => loadFeishuSettings(setRemote, setForm, setError, setLoading);
   const updateField = (key, value) => setForm((current) => ({ ...current, [key]: value }));
-  const handleSubmit = (event) => saveFeishuSettings(event, { form, setError, setForm, setRemote, setSaving });
+  const handleSubmit = (event) => saveFeishuSettings(event, { form, remote, setError, setForm, setRemote, setSaving });
 
   useEffect(() => {
     loadSettings();
   }, []);
 
-  return { error, form, handleSubmit, loading, remote, saving, updateField };
+  const onAuthorized = data => { setRemote(data); setForm(formFromRemote(data)); };
+  return { error, form, handleSubmit, loading, remote, saving, updateField, onAuthorized };
 }
 
 function PanelHeader({ enabled, status }) {
@@ -74,14 +76,15 @@ function StatusPill({ enabled, status }) {
   );
 }
 
-function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit }) {
+function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit, onAuthorized }) {
   if (loading) return <PanelLoader label="玄武正在读取飞书配置…" />;
   return (
-    <form className="feishu-settings__form" onSubmit={handleSubmit}><fieldset className="connection-form-fields" disabled={saving}>
+    <form className="feishu-settings__form" onSubmit={handleSubmit}><fieldset className="connection-form-fields" disabled={saving || !remote}>
       <div className="feishu-settings__field-grid">
         <TextField label="App ID" value={form.app_id} onChange={(value) => updateField('app_id', value)} placeholder="cli_xxx" />
         <SecretField configured={remote?.app_secret_configured} label="App Secret" value={form.app_secret} onChange={(value) => updateField('app_secret', value)} />
       </div>
+      <FeishuSourceDiscovery remote={remote} dirty={JSON.stringify(form) !== JSON.stringify(formFromRemote(remote))} onAuthorized={onAuthorized}/>
       <h3>允许的来源与通知目标</h3><p>只有允许的群和用户可以触发任务；默认目标用于发送通知。</p>
       <div className="feishu-settings__field-grid">
         <TextField label="Allowed Chat IDs" value={form.allowed_chat_ids} onChange={(value) => updateField('allowed_chat_ids', value)} placeholder="oc_xxx, oc_yyy" />
@@ -160,7 +163,7 @@ function Footer({ remote, saving }) {
       <div className={`feishu-settings__footer-status${missing.length ? ' is-warning' : ''}`}>
         {missing.length ? `缺少：${missing.join(', ')}` : <><CheckCircle2 size={14} /> 飞书必填凭据已配置</>}
       </div>
-      <button className="btn btn-primary" disabled={saving}>{saving ? '保存中...' : '保存飞书 Bot'}</button>
+      <button className="btn btn-primary" disabled={saving || !remote}>{saving ? '保存中...' : '保存飞书 Bot'}</button>
     </div>
   );
 }
@@ -184,7 +187,7 @@ async function saveFeishuSettings(event, state) {
   state.setSaving(true);
   state.setError('');
   try {
-    const data = await connectorsApi.updateFeishuSettings(payloadFromForm(state.form));
+    const data = await connectorsApi.updateFeishuSettings({ ...payloadFromForm(state.form), ...(state.remote?.revision ? { expected_revision: state.remote.revision } : {}) });
     state.setRemote(data);
     state.setForm(formFromRemote(data));
     message.success('飞书 Bot 配置已保存');

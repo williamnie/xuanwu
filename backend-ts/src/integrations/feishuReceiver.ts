@@ -143,7 +143,7 @@ export function createFeishuReceiverManager(options: FeishuReceiverManagerOption
         rawPayloadRef: rawRef,
         transport: "websocket"
       });
-      await options.agentBridge?.handle({ event: normalized, ingest: result });
+      if (!result.discovery) await options.agentBridge?.handle({ event: normalized, ingest: result });
     } catch (error) {
       fail(error);
       publishFeishuAudit(receiverContext(config), {

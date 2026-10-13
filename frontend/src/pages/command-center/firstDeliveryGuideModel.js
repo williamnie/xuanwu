@@ -119,3 +119,20 @@ export function sampleWorkPayload(projectID, now = new Date().toISOString(), non
     type: 'engineering_task',
   };
 }
+
+
+export function firstDeliveryGuideSteps(state) {
+  const checks = Object.fromEntries(state.steps.map(step => [step.id, step.complete]));
+  return [
+    { id: 'connections', label: '连接编程工具和玄武助手', complete: checks.runtime && checks['code-agent'] && checks.supervisor },
+    { id: 'project', label: '添加项目', complete: checks.project },
+    { id: 'delivery', label: '完成第一个任务', complete: checks.delivery },
+  ];
+}
+export function savedSupervisorConfigured(supervisor, settings, oauth) {
+  const agent = supervisor?.agent || supervisor;
+  if (!agent?.model_id || !agent?.model_provider || !agent.enabled) return false;
+  if (agent.model_provider === 'openai-codex') return oauth?.pi_oauth?.configured === true;
+  const provider = settings?.providers?.find(item => item.id === agent.model_provider);
+  return Boolean(provider?.base_url && provider?.api && provider?.api_key_configured);
+}

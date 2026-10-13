@@ -1,3 +1,4 @@
+import { redactSensitiveText } from "../util/redact.ts";
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getProject, ProjectNotFoundError } from "../db/repositories/projects.ts";
@@ -60,6 +61,12 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
   router.get("/api/works/summary", (request) => workResponse(() => summaryResponse(readDatabase, request)));
   router.get("/api/works", (request) => workResponse(() => listResponse(readDatabase, request, context)));
   router.get("/api/works/board", (request) => workResponse(() => boardResponse(readDatabase, request)));
+  router.get("/api/works/creation-result", request => workResponse(() => {
+    const eventID = new URL(request.url).searchParams.get("event_id") || "";
+    if (!eventID || eventID.length > 500) throw workError(400, "invalid_event_id", "event_id is required");
+    const row = readDatabase.sqlite.query<{issue_id:number},[string]>(`select issue_id from issue_events where type='issue.created' and json_valid(payload) and json_extract(payload,'$.event_id')=? order by id asc limit 1`).get(eventID);
+    return row ? { status: "created", work: getIssueBackedWork(readDatabase, `xw:work:issues:${row.issue_id}`) } : { status: "not_found", work: null };
+  }));
   router.get("/api/works/:id", (request) => workResponse(() => detailResponse(readDatabase, request, context)));
   router.get("/api/works/:id/timeline", (request) => (
     workResponse(() => timelineResponse(readDatabase, request))
@@ -262,6 +269,8 @@ function listResponse(db: RunnerDatabase, request: Request, context: ReadApiCont
   const statuses = enumParams(params, "status", WORK_STATUSES);
   const types = enumParams(params, "type", WORK_TYPES);
   const query = optionalString(params.get("q")).toLowerCase();
+  const source = optionalString(params.get("source"));
+  if (source && source !== "github") throw workError(400, "invalid_source", "source must be github");
   const sort = enumParam(
     params.get("sort"),
     ["created_at", "status", "title", "updated_at"] as const,
@@ -274,7 +283,7 @@ function listResponse(db: RunnerDatabase, request: Request, context: ReadApiCont
     throw workError(400, "cursor_sort_unsupported", "cursor only supports updated_at desc");
   }
   const page = pageInput(params);
-  const fingerprint = workFilterFingerprint({ projectID, query, statuses, types });
+  const fingerprint = workFilterFingerprint({ projectID, query, statuses, types, source });
   const cursor = cursorText ? decodeWorkCursor(cursorText, fingerprint) : undefined;
   const typeMatches = types.length === 0 || types.includes("engineering_task");
   const filter = {
@@ -283,6 +292,7 @@ function listResponse(db: RunnerDatabase, request: Request, context: ReadApiCont
     limit: cursor ? page.page_size + 1 : page.page_size,
     offset: cursor ? 0 : (page.page - 1) * page.page_size,
     projectId: projectID,
+    ...(source ? { source: source as "github" } : {}),
     query,
     sort,
     sortOrder: order,
@@ -300,7 +310,7 @@ function listResponse(db: RunnerDatabase, request: Request, context: ReadApiCont
   const hasMore = cursor ? loaded.length > page.page_size : page.page * page.page_size < total;
   const last = items.at(-1);
   return pagedItemsResponse(params.get("include_diagnostics") === "1" ? workDiagnostics(db, items, context) : items, total, page, {
-    filters: { project_id: projectID, q: query, status: statuses, type: types },
+    filters: { project_id: projectID, q: query, status: statuses, type: types, source },
     has_more: hasMore,
     next_cursor: hasMore && last ? encodeWorkCursor({
       filter_fingerprint: fingerprint,
@@ -330,10 +340,18 @@ export function workDiagnostics(db: RunnerDatabase, works: WorkLedgerEntry[], co
     const ids = new Set(works.filter(work => work.owner.project_id === projectID).map(work => workIDToIssueID(work.id)));
     projects.set(projectID, { project: getProject(db, projectID), dependencies: readProjectIssueDependencies(db, projectID, ids) });
   }
+  const githubByIssue = new Map<number, Array<Record<string, unknown>>>();
+  const ids = works.map(work => workIDToIssueID(work.id));
+  if (ids.length) {
+    const marks=ids.map(()=>"?").join(",");
+    const rows=db.sqlite.query<Record<string,unknown>,number[]>(`select l.issue_id as work_issue_id,l.relationship as work_stage,c.repository,c.issue_number,c.stage as current_stage,c.external_state,c.pull_request_number,c.last_error from external_links l left join github_issue_cases c on c.issue_node_id=l.external_id where l.source='github' and l.issue_id in (${marks})
+      union all select c.issue_id as work_issue_id,'' as work_stage,c.repository,c.issue_number,c.stage as current_stage,c.external_state,c.pull_request_number,c.last_error from github_issue_cases c where c.issue_id in (${marks}) and not exists(select 1 from external_links l where l.source='github' and l.issue_id=c.issue_id and l.external_id=c.issue_node_id)`).all(...ids,...ids);
+    for (const row of rows) {const id=Number(row.work_issue_id);const entries=githubByIssue.get(id)||[];entries.push({ ...row, last_error: redactSensitiveText(String(row.last_error || "")) });githubByIssue.set(id,entries);}
+  }
   return works.map(work => {
     const facts = projects.get(work.owner.project_id);
     const agent = agents.find(agent => agent.id === work.effective_provider);
-    return { ...work, scheduling: {
+    return { ...work, github_context: githubByIssue.get(workIDToIssueID(work.id)) || [], scheduling: {
       contract: "xuanwu.work-scheduling-facts.v1", authority: "read-only-facts", complete: false,
       dependency: facts?.dependencies.get(workIDToIssueID(work.id)) ?? null,
       project: { auto_run: facts?.project?.auto_run ?? 0, hold: facts?.project?.hold ?? null },
@@ -552,9 +570,11 @@ function workFilterFingerprint(input: {
   query: string;
   statuses: string[];
   types: string[];
+  source?: string;
 }): string {
   return createHash("sha256").update(JSON.stringify({
     project_id: input.projectID,
+    ...(input.source ? { source: input.source } : {}),
     q: input.query,
     status: [...input.statuses].sort(),
     type: [...input.types].sort()

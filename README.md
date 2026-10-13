@@ -25,6 +25,11 @@ and brings you back only when human judgment is needed.
 > modification, and redistribution are permitted subject to the license terms.
 > See [License](#license).
 
+
+The Web UI has three primary entries: Needs you, Tasks, and Chat. Tasks default to a paged list with a board option and an Automations subview. New tasks remain in Triage unless you explicitly select “Add to execution queue”; project holds and scheduling gates still apply. Batch creation previews explicit separators (`---` outside code fences), tracks each result, and reconciles unknown results before retrying.
+
+Settings are grouped into Projects, AI connections, Notifications & connections, General, and Advanced. First setup combines coding tools and the assistant, then adds a project and completes a read-only task. Assistant login remains independent of Codex login. Feishu source discovery uses a two-minute challenge and explicit allowlist authorization; it does not open inbound access. Existing Work, Issue, Run, Session, Handoff, and settings links remain compatible with the new `inbox` and `tasks` routes.
+
 ## The simplest way to use Xuanwu
 
 Turn what you would normally tell Codex into issues. Once the list is ready, say:

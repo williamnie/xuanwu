@@ -124,7 +124,9 @@ describe("read API route contracts", () => {
   test("locks Command Center read and audited Attention command contracts", () => {
     expect(captureRoutes(registerCommandCenterRoutes)).toEqual([
       "GET /api/command-center/attention/:id",
+      "GET /api/command-center/inbox",
       "GET /api/command-center/summary",
+      "GET /api/command-center/task-glance",
       "POST /api/command-center/attention/:id/actions/:action"
     ]);
     expect(COMMAND_CENTER_SUMMARY_CONTRACT).toBe("xw.command-center.summary.v1");
@@ -197,6 +199,7 @@ describe("read API route contracts", () => {
         "GET /api/issues/:id/runs",
         "GET /api/projects",
         "GET /api/projects/:id",
+        "GET /api/projects/validate-path",
         "GET /api/system/delivery-effectiveness",
         "PATCH /api/issues/:id",
         "PATCH /api/projects/:id",
@@ -219,10 +222,12 @@ describe("read API route contracts", () => {
         "GET /api/works/:id",
         "GET /api/works/:id/timeline",
         "GET /api/works/board",
+        "GET /api/works/creation-result",
         "GET /api/works/summary",
         "PATCH /api/works/:id",
         "POST /api/works",
         "POST /api/works/:id/actions/:action",
+        "POST /api/works/:id/queue-state",
         "PUT /api/works/:id/readiness-requirements",
       ]
     `);

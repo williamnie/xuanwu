@@ -8,9 +8,9 @@ const dashboardSource = readFileSync(new URL('./Dashboard.jsx', import.meta.url)
 const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
 const projectsSource = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
 const runsSource = readFileSync(new URL('./Runs.jsx', import.meta.url), 'utf8');
-const activeWorkSource = readFileSync(new URL('./command-center/ActiveWorkSection.jsx', import.meta.url), 'utf8');
+const activeWorkSource = dashboardSource;
 const attentionSource = readFileSync(new URL('./command-center/AttentionSection.jsx', import.meta.url), 'utf8');
-const recentDeliveriesSource = readFileSync(new URL('./command-center/RecentDeliveriesSection.jsx', import.meta.url), 'utf8');
+const recentDeliveriesSource = dashboardSource;
 const firstDeliverySource = readFileSync(new URL('./command-center/FirstDeliveryGuide.jsx', import.meta.url), 'utf8');
 const usageSource = readFileSync(new URL('../components/CodexUsagePanel.jsx', import.meta.url), 'utf8');
 
@@ -70,8 +70,8 @@ test('Runs coalesces lifecycle refreshes, aborts stale reads, and loads detail o
 test('Dashboard trusts bounded summaries instead of hydrating every card detail', () => {
   assert.doesNotMatch(activeWorkSource, /hydrateRunDetails/);
   assert.doesNotMatch(recentDeliveriesSource, /hydrateDeliveryStatuses|handoffsApi\.getHandoff/);
-  assert.match(recentDeliveriesSource, /const RECENT_DELIVERY_LIMIT = 5/);
-  assert.match(recentDeliveriesSource, /useEffect\(\(\) => \{\s*load\(\)/);
+  assert.match(recentDeliveriesSource, /getTaskGlance/);
+  assert.match(recentDeliveriesSource, /useEffect/);
   assert.doesNotMatch(recentDeliveriesSource, /setVisible|加载最近交付/);
   assert.match(usageSource, /getProviderUsage\(\{ compact: true, refresh: true \}\)/);
   assert.match(usageSource, /Promise\.all\(/);
@@ -88,7 +88,9 @@ test('first delivery onboarding uses bounded Work and Evidence reads', () => {
 });
 
 test('Dashboard request cleanup releases the active request before aborting it', () => {
-  for (const source of [activeWorkSource, attentionSource, recentDeliveriesSource, firstDeliverySource]) {
+  assert.match(dashboardSource, /new AbortController\(\)/);
+  assert.match(dashboardSource, /controller\.abort\(\)/);
+  for (const source of [attentionSource, firstDeliverySource]) {
     assert.match(
       source,
       /const activeRequest = requestRef\.current;\s*requestRef\.current = null;\s*activeRequest\?\.controller\.abort\(\);/,

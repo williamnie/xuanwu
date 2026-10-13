@@ -1,3 +1,4 @@
+import { providerAuthenticationText, providerRuntimeText } from "./providerAvailabilityModel.js";
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, CircleAlert, Monitor, Power, RefreshCw, Terminal } from 'lucide-react';
 import { systemApi } from '../api/system.js';
@@ -107,6 +108,7 @@ function CodeAgentRow({ agent, busy, onSelectCodexBackend, onToggle, runnerSetti
           <span className={available ? 'available' : ''}>{status}</span>
         </div>
         <p>{AGENT_DESCRIPTIONS[agent.id] || agent.id}</p>
+        {agent.id === "claude" && agent.runtime && <small>{providerRuntimeText(agent.runtime)} · {providerAuthenticationText({ ...agent.runtime, id: agent.id })}</small>}
         {agent.enabled && !available && agent.readiness_reason ? <small>{agent.readiness_reason}</small> : null}
         {agent.id === 'qoder' ? <QoderDiagnostics runtime={agent.runtime} /> : null}
         {agent.id === 'codex' ? (

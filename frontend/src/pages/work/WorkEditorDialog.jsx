@@ -5,6 +5,7 @@ import { projectsApi } from '../../api/projects.js';
 import { systemApi } from '../../api/system.js';
 import { message } from '../../store/toastStore.js';
 import { useI18n } from '../../i18n/context.js';
+import BatchWorkCreator from './BatchWorkCreator.jsx';
 import PromptEditor from '../../components/editor/PromptEditor.jsx';
 import AgentProfileSelectOptions from '../../components/AgentProfileSelectOptions.jsx';
 import ModalOverlay from '../../components/ModalOverlay.jsx';
@@ -16,6 +17,8 @@ import { availableAgentProfiles, codeAgentAvailable, effectiveProjectProvider } 
 export default function WorkEditorDialog({ mode, onClose, onSaved, projects, work, initialProject = '' }) {
   const { t } = useI18n();
   const editing = mode === 'edit';
+  const [batch, setBatch] = useState(false);
+  const [batchVisited, setBatchVisited] = useState(false);
   const [draft, setDraft] = useState(() => editorDraft(work, projects, initialProject));
   const createAudit = useRef(workEditorAudit('create'));
   const [error, setError] = useState('');
@@ -116,6 +119,7 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
           <button aria-label={t('editor.close')} disabled={saving} onClick={onClose} type="button"><X size={18} /></button>
         </header>
         <form onSubmit={submit}>
+          {!editing && <div className="batch-work-actions"><button className="btn btn-secondary" aria-pressed={!batch} disabled={saving} onClick={() => setBatch(false)} type="button">单个任务</button><button className="btn btn-secondary" aria-pressed={batch} disabled={saving} onClick={() => { setBatchVisited(true); setBatch(true); }} type="button">批量创建</button></div>}
           {error ? <div className="work-dialog-error" role="alert">{error}</div> : null}
           {!editing ? (
             <div className="work-dialog-grid">
@@ -135,7 +139,7 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
               <span>{t('editor.revision', { revision: work.revision })}</span>
             </div>
           )}
-          <div className="work-dialog-field">
+          {!batch && <div className="work-dialog-field">
             <span>{t('work.goal')}</span>
             <PromptEditor
               minHeight={150}
@@ -144,7 +148,7 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
               value={draft.goal}
               variant="composer"
             />
-          </div>
+          </div>}
           <SettingsDisclosure title="更多选项">
           <label>
             <span>{t('editor.title')} <small>（可选）</small></span>
@@ -170,13 +174,14 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
             <small>将使用：{effectivePreview.provider || '项目工具'} · {effectivePreview.model || '跟随编程工具'}（{effectivePreview.source === 'work' ? '任务指定' : '来自项目设置'}）</small>
           </label>
           </SettingsDisclosure>
-          <footer>
+          {batchVisited && <div hidden={!batch}><BatchWorkCreator auditFactory={() => workEditorAudit("create")} canSubmit={Boolean(draft.project_id) && selectedCodeAgentAvailable} payload={{ project_id: draft.project_id, status: draft.status, agent_profile_id: draft.agent_profile_id, type: "engineering_task" }} onBusy={setSaving} onDone={() => onSaved()} /></div>}
+          {!batch && <footer>
             <button className="work-action-secondary" disabled={saving} onClick={onClose} type="button">{t('work.cancel')}</button>
             <button className="work-action-primary" disabled={saving} type="submit">
               {editing ? <Pencil size={15} /> : <CheckCircle2 size={15} />}
               {saving ? t('editor.saving') : editing ? t('editor.saveChanges') : t('editor.createAction')}
             </button>
-          </footer>
+          </footer>}
         </form>
       </div>
     </ModalOverlay>

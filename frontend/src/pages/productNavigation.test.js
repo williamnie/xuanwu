@@ -15,8 +15,8 @@ const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
 const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
 
 const EXPECTED_PAGES = [
-  'command-center',
-  'work',
+  'inbox',
+  'tasks',
   'ask-xuanwu',
   'analytics',
   'settings',
@@ -37,33 +37,36 @@ test('product navigation has one ordered Xuanwu identity and centralized labels'
 });
 
 test('feature availability hides Work when its existing compatibility flag is disabled', () => {
-  assert.deepEqual(productNavigationItems({ workBoardEnabled: false }).map(item => item.page), EXPECTED_PAGES.filter(page => page !== 'work'));
-  assert.equal(resolveProductPage('work', { workBoardEnabled: false }), 'issues');
-  assert.equal(resolveProductPage('work', { workBoardEnabled: true }), 'work');
+  assert.deepEqual(productNavigationItems({ workBoardEnabled: false }).map(item => item.page), EXPECTED_PAGES.filter(page => page !== 'tasks'));
+  assert.equal(resolveProductPage('tasks', { workBoardEnabled: false }), 'issues');
+  assert.equal(resolveProductPage('tasks', { workBoardEnabled: true }), 'tasks');
 });
 
 test('legacy page ids redirect into canonical product routes without replacing hidden detail routes', () => {
   assert.deepEqual(PRODUCT_COMPAT_ROUTE_REDIRECTS, {
-    dashboard: 'command-center',
+    dashboard: 'inbox',
+    'command-center': 'inbox',
+    work: 'tasks',
+    automations: 'tasks',
     'pi-chat': 'ask-xuanwu',
-    issues: 'work',
+    issues: 'tasks',
     sessions: 'runs',
-    cron: 'automations',
-    'pi-automations': 'automations',
-    'pi-approvals': 'command-center',
-    'attention-inbox': 'command-center',
-    'pi-inbox': 'command-center',
+    cron: 'tasks',
+    'pi-automations': 'tasks',
+    'pi-approvals': 'inbox',
+    'attention-inbox': 'inbox',
+    'pi-inbox': 'inbox',
     projects: 'settings',
   });
   for (const [legacyPage, canonicalPage] of Object.entries(PRODUCT_COMPAT_ROUTE_REDIRECTS)) {
     assert.equal(resolveProductPage(legacyPage), canonicalPage);
   }
-  assert.equal(resolveProductPage('issues'), 'work');
-  assert.equal(resolveProductPage('attention-inbox'), 'command-center');
-  assert.equal(resolveProductPage('pi-inbox'), 'command-center');
+  assert.equal(resolveProductPage('issues'), 'tasks');
+  assert.equal(resolveProductPage('attention-inbox'), 'inbox');
+  assert.equal(resolveProductPage('pi-inbox'), 'inbox');
   assert.equal(resolveProductPage('projects'), 'settings');
-  assert.equal(productNavPageForRoute('issues'), 'work');
-  assert.equal(productNavPageForRoute('pi-inbox'), 'command-center');
+  assert.equal(productNavPageForRoute('issues'), 'tasks');
+  assert.equal(productNavPageForRoute('pi-inbox'), 'inbox');
   assert.equal(productNavPageForRoute('pi-memory'), 'settings');
   assert.equal(productNavPageForRoute('projects'), 'settings');
   assert.equal(resolveProductPage('handoffs'), 'handoffs');
@@ -77,7 +80,7 @@ test('App routes canonical pages to the currently verified compatibility surface
   assert.match(appSource, /resolveProductPage\(page, \{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
   assert.match(appSource, /recordLegacyRoute\(\{ family: page, target: resolvedPage \}\)/);
   assert.match(appSource, /workIdFromIssueId\(issueId\)/);
-  assert.match(appSource, /currentPage === 'command-center'[\s\S]*<Dashboard navigateTo=\{navigateTo\} onCreate=\{openTaskEditor\} \/>/);
+  assert.match(appSource, /currentPage === 'inbox'[\s\S]*<Dashboard navigateTo=\{navigateTo\} onCreate=\{openTaskEditor\} \/>/);
   assert.match(appSource, /currentPage === 'ask-xuanwu'[\s\S]*<PiChat[\s\S]*initialConversationId=\{selectedPiConversationId\}[\s\S]*onConversationChange=\{rememberPiConversation\}/);
   assert.match(appSource, /currentPage === 'automations'[\s\S]*<Automations \/>/);
   assert.doesNotMatch(appSource, /pages\/Connections|currentPage === 'connections'/);
@@ -99,7 +102,7 @@ test('retired Inbox and Settings placeholders have no remaining frontend consume
   const workDetailSource = readFileSync(new URL('./WorkDetail.jsx', import.meta.url), 'utf8');
   const assistantApiSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
   assert.doesNotMatch(sectionsSource, /SettingsPlaceholderPanel|AssistantSettingsPlaceholders/);
-  assert.doesNotMatch(workDetailSource, /navigateTo\('command-center'\)/);
+  assert.doesNotMatch(workDetailSource, /navigateTo\('inbox'\)/);
   assert.doesNotMatch(workDetailSource, /navigateTo\('attention-inbox'\)/);
   for (const retiredMutation of [
     'updatePiAttentionItem',

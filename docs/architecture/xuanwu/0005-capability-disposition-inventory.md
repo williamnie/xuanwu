@@ -423,9 +423,23 @@ GET /api/issues/:id/runs
 
 </details>
 
+
+2026-10-13 前端精简新增的接口仍使用原 authority：
+
+| 接口 | 用途与副作用 |
+|---|---|
+| `GET /api/command-center/inbox`、`GET /api/command-center/task-glance` | 完整请求分页、当日完成事件投影；只读，不建审批状态表 |
+| `GET /api/works/creation-result` | 按原创建审计 event_id 核对结果；只读 |
+| `POST /api/works/:id/queue-state` | Issue adapter 内有限队列状态变更；expected_revision、审计和重放门禁 |
+| `GET /api/projects/validate-path` | 只读检查目录和 Git 身份，不导入项目 |
+| `POST /api/integrations/feishu/source-discovery`、`GET /api/integrations/feishu/source-discovery/:id` | 有界易失挑战和候选来源，不改变入站允许名单 |
+| `POST /api/integrations/feishu/source-discovery/:id/authorize` | 校验候选和配置 revision；沿已有配置保存路径追加一个选中的来源范围 |
+
+设置新增 ConnectionSettingsList、ExecutionPresetsPanel、FeishuSourceDiscovery，分别归属 capability-policy；PersonaSettingsPanel 归属 assistant-runtime。它们复用原配置域，不拥有独立公共页面路由。执行清单已同步这些组件与新 canonical route ID。
+
 ## 6. 页面清单
 
-前端当前是内存 `currentPage` 路由，不是 URL router。`page_ids` 是用户可达 surface identity；每个生产 JSX 组件在可执行清单中恰好归属一个 surface。
+前端通过 URL hash 序列化 `currentPage`、对象 ID 和筛选状态，并同步后退/前进。`page_ids` 是用户可达 surface identity；每个生产 JSX 组件在可执行清单中恰好归属一个 surface。
 
 | surface | page ids | 结论 | 目标 | source files |
 | --- | --- | --- | --- | --- |
@@ -439,7 +453,7 @@ GET /api/issues/:id/runs
 | `system-observability` | `dashboard` | **keep** | Local runtime observability/control | `Dashboard.jsx` |
 | `work-ledger` | `issues`, `issue-detail`, `work-board`, `work-detail` | **keep** | Work ledger compatibility API | `IssueCard.jsx`, `IssueCardMoreActions.jsx`, `IssueDetail.jsx`, `Issues.jsx`, `IssueSupervisorPanel.jsx`, `WorkBoard.jsx`, `WorkDetail.jsx` |
 
-页面迁移规则：`Issues`/`IssueDetail` 保留为 Work feature flag 的 rollback surface；`Sessions` 归入 Run drill-down，不创建独立 Run ledger；`cron`/`pi-automations` page id 统一投影到 `Automations`；`pi-inbox`/`attention-inbox` page id 统一投影到 Command Center。兼容 page id 不再拥有独立 JSX/CSS。
+页面迁移规则：`Issues`/`IssueDetail` 保留为 Work feature flag 的 rollback surface；`Sessions` 归入 Run drill-down，不创建独立 Run ledger；`cron`/`pi-automations` page id 统一投影到 `Automations`；`pi-inbox`/`attention-inbox` page id 统一投影到 `inbox`；`command-center` 和 `work` 分别兼容到 `inbox` 与 `tasks`。兼容 page id 不再拥有独立 JSX/CSS。
 
 ## 7. 后台调度器清单
 

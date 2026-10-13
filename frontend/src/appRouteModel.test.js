@@ -9,7 +9,7 @@ test('defaults to Dashboard only when the URL has no valid app route', () => {
 
 test('round-trips product pages and their selected entity parameters', () => {
   const routes = [
-    { currentPage: 'work', selectedWorkId: 'xw:work:issues:917' },
+    { currentPage: 'tasks', selectedWorkId: 'xw:work:issues:917' },
     { currentPage: 'runs', selectedRunId: 'xw:run:issue_runs:issue-917-attempt-2' },
     { currentPage: 'runs', selectedSessionId: '019fc000-1111-7222-8333-123456789abc' },
     { currentPage: 'ask-xuanwu', selectedPiConversationId: 'pi:conversation/917' },
@@ -31,16 +31,16 @@ test('retired Connections route is not routable and Settings sections are canoni
 
 test('keeps existing Handoff deep links compatible', () => {
   const route = {
-    currentPage: 'work',
+    currentPage: 'tasks',
     selectedHandoffId: 'xw:handoff:derived:917',
     selectedWorkId: 'xw:work:issues:917',
   };
   const hash = appHashForRoute(route);
 
-  assert.equal(hash, '#/work/xw%3Awork%3Aissues%3A917/delivery/xw%3Ahandoff%3Aderived%3A917');
+  assert.equal(hash, '#/tasks/xw%3Awork%3Aissues%3A917/delivery/xw%3Ahandoff%3Aderived%3A917');
   assert.deepEqual(appRouteFromHash(hash), {
     ...DEFAULT_APP_ROUTE,
-    currentPage: 'work',
+    currentPage: 'tasks',
     selectedHandoffId: route.selectedHandoffId,
     selectedWorkId: route.selectedWorkId,
   });
@@ -49,7 +49,8 @@ test('keeps existing Handoff deep links compatible', () => {
 test('keeps existing plain Work deep links compatible', () => {
   assert.deepEqual(appRouteFromHash('#/work/xw%3Awork%3Aissues%3A917'), {
     ...DEFAULT_APP_ROUTE,
-    currentPage: 'work',
+    currentPage: 'tasks',
+    focusFilter: 'active',
     selectedWorkId: 'xw:work:issues:917',
   });
 });
@@ -67,7 +68,8 @@ test('preserves legacy route redirects and issue filters when Work board is disa
   );
   assert.deepEqual(appRouteFromHash('#/issues?issueId=42'), {
     ...DEFAULT_APP_ROUTE,
-    currentPage: 'work',
+    currentPage: 'tasks',
+    focusFilter: 'active',
     selectedWorkId: 'xw:work:issues:42',
   });
   assert.deepEqual(appRouteFromHash('#/sessions?sessionId=provider-session'), {

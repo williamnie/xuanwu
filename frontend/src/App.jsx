@@ -71,21 +71,21 @@ const PROJECT_RECONCILE_EVENT_TYPES = new Set([
 const PAGE_DATA_SLICES = {
   analytics: ['workSummary'],
   automations: ['projects'],
-  'command-center': ['projects', 'workSummary'],
+  'inbox': ['projects', 'workSummary'],
   issues: ['projects', 'workSummary'],
   settings: ['projects', 'workSummary'],
-  work: ['projects', 'workSummary'],
+  tasks: ['projects', 'workSummary'],
   handoffs: ['projects'],
 };
 
 const MOBILE_PAGE_TITLE_KEYS = {
   'ask-xuanwu': 'nav.askXuanwu',
   automations: 'nav.automations',
-  'command-center': 'nav.commandCenter',
+  'inbox': 'nav.commandCenter',
   analytics: 'nav.analytics',
   runs: 'nav.runs',
   settings: 'nav.settings',
-  work: 'nav.work',
+  tasks: 'nav.work',
 };
 
 function getReconcileSlices(currentPage, selectedIssueId) {
@@ -150,6 +150,7 @@ export default function App() {
     selectedHandoffId,
     selectedPiConversationId,
     settingsSection,
+    taskQuery, taskSource, taskView, taskSubview,
     pageContext,
     filterProject,
     focusFilter,
@@ -277,19 +278,19 @@ export default function App() {
     if ((page === 'issues' || page === 'sessions') && resolvedPage !== page && !suppressLegacyWarning) {
       compatibilityApi.recordLegacyRoute({ family: page, target: resolvedPage }).catch(() => {});
       toast.warning(
-        `${page === 'issues' ? 'Issues' : 'Sessions'} 旧入口已迁移到 ${resolvedPage === 'work' ? 'Work' : 'Runs'}；compat v1 保留至 v0.3.x。`,
+        `${page === 'issues' ? 'Issues' : 'Sessions'} 旧入口已迁移到 ${resolvedPage === 'tasks' ? 'Work' : 'Runs'}；compat v1 保留至 v0.3.x。`,
         6000,
       );
     }
-    const targetHandoffId = resolvedPage === 'handoffs' || resolvedPage === 'work' ? handoffId || '' : '';
+    const targetHandoffId = resolvedPage === 'handoffs' || resolvedPage === 'tasks' ? handoffId || '' : '';
     const targetIssueId = resolvedPage === 'issues'
-      ? page === 'work' ? issueIdFromWorkId(issueId) : issueId
+      ? ['work', 'tasks'].includes(page) ? issueIdFromWorkId(issueId) : issueId
       : null;
-    const targetWorkId = resolvedPage === 'work'
+    const targetWorkId = resolvedPage === 'tasks'
       ? page === 'issues' ? workIdFromIssueId(issueId) : String(issueId || '')
       : '';
     const compatSessionRoute = resolvedPage === 'runs' && (page === 'sessions' || Boolean(internalProviderSessionId));
-    const targetRunId = resolvedPage === 'work' ? String(navigationOptions.runId || '') : resolvedPage === 'runs' && !compatSessionRoute ? sessionId || '' : '';
+    const targetRunId = resolvedPage === 'tasks' ? String(navigationOptions.runId || '') : resolvedPage === 'runs' && !compatSessionRoute ? sessionId || '' : '';
     const targetSessionId = resolvedPage === 'runs' && compatSessionRoute
       ? internalProviderSessionId || sessionId || ''
       : '';
@@ -305,6 +306,10 @@ export default function App() {
       selectedSessionId: targetSessionId,
       selectedWorkId: targetWorkId,
       settingsSection: targetSettingsSection,
+      filterProject: navigationOptions.project ?? filterProject,
+      focusFilter: navigationOptions.focus ?? (currentPage === 'tasks' ? focusFilter : 'active'),
+      taskQuery, taskSource, taskView,
+      taskSubview: ["automations", "cron", "pi-automations"].includes(page) ? "automations" : "tasks",
     };
     startPageTransition(() => updateAppState(draft => {
       if (draft.currentPage !== resolvedPage) {
@@ -316,17 +321,18 @@ export default function App() {
       if (draft.selectedWorkId !== targetWorkId) {
         draft.selectedWorkId = targetWorkId;
       }
-      if (resolvedPage === 'runs' || resolvedPage === 'work') {
+      if (resolvedPage === 'runs' || resolvedPage === 'tasks') {
         draft.selectedRunId = targetRunId;
         draft.selectedSessionId = targetSessionId;
       }
+      draft.filterProject = targetRoute.filterProject; draft.focusFilter = targetRoute.focusFilter; draft.taskSubview = targetRoute.taskSubview;
       draft.settingsSection = targetSettingsSection;
       draft.selectedHandoffId = targetHandoffId;
       draft.pageContext = null;
     }));
     setMobileSidebarOpen(false);
     writeBrowserRoute(targetRoute);
-  }, [selectedPiConversationId, updateAppState, writeBrowserRoute]);
+  }, [selectedPiConversationId, updateAppState, writeBrowserRoute, filterProject, focusFilter, taskQuery, taskSource, taskView, currentPage]);
 
   // 目标页面提交后回到页首，避免继承上一页的长内容滚动位置。
   useLayoutEffect(() => {
@@ -388,6 +394,7 @@ export default function App() {
         draft.selectedSessionId = route.selectedSessionId;
         draft.settingsSection = route.settingsSection;
         draft.selectedWorkId = route.selectedWorkId;
+        draft.taskQuery = route.taskQuery; draft.taskSource = route.taskSource; draft.taskView = route.taskView; draft.taskSubview = route.taskSubview;
         draft.pageContext = null;
       }));
       setMobileSidebarOpen(false);
@@ -529,13 +536,13 @@ export default function App() {
   const completeFirstRunOnboarding = () => {
     writeFirstRunOnboardingState('completed');
     setFirstRunOnboarding('hidden');
-    navigateTo('command-center');
+    navigateTo('inbox');
   };
 
   const skipFirstRunOnboarding = () => {
     writeFirstRunOnboardingState('dismissed');
     setFirstRunOnboarding('hidden');
-    navigateTo('command-center');
+    navigateTo('inbox');
   };
 
   const assistantModule = assistantModuleForPage(currentPage);
@@ -635,11 +642,11 @@ export default function App() {
           </div>
         ) : (
           <Suspense fallback={<PageLoadingFallback />}>
-            {currentPage === 'command-center' ? (
+            {currentPage === 'inbox' ? (
               <Dashboard navigateTo={navigateTo} onCreate={openTaskEditor} />
             ) : currentPage === 'analytics' ? (
               <Analytics />
-            ) : currentPage === 'work' ? (
+            ) : currentPage === 'tasks' ? (
               <WorkBoard
                 navigateTo={navigateTo}
                 onPageContextChange={setPageContext}
@@ -647,6 +654,12 @@ export default function App() {
                 selectedWorkId={selectedWorkId}
                 initialRunId={selectedRunId}
                 initialProject={filterProject}
+                routeFilters={{ focus: focusFilter, query: taskQuery, source: taskSource, view: taskView, subview: taskSubview }}
+                onRouteFiltersChange={patch => {
+                  const route = { ...appState, currentPage: 'tasks', ...patch };
+                  updateAppState(draft => Object.assign(draft, patch));
+                  writeBrowserRoute(route);
+                }}
                 onCreate={openTaskEditor}
               />
             ) : currentPage === 'handoffs' ? (

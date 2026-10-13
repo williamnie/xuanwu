@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { startFeishuDiscovery, readFeishuDiscovery, consumeFeishuDiscovery } from "../integrations/feishuSourceDiscovery.ts";
 import { dirname } from "node:path";
 import type { RunnerConfig } from "../config/env.ts";
 import { localSettingsPath, readLocalSettingsFile, updateLocalSettingsFile } from "../config/localSettings.ts";
@@ -37,13 +39,49 @@ type LocalFeishuSettings = {
 export function registerFeishuSettingsRoutes(router: Router, context: FeishuSettingsContext): void {
   const activeContext = { ...context, secrets: context.secrets ?? createDatabaseSecretService(context.database) };
   router.get("/api/integrations/feishu/settings", () => json(publicFeishuSettings(currentConfig(activeContext), settingsPath(activeContext))));
+  // 同一设置域的保存/授权串行化，revision 在队列内核对，防止异步写入覆盖。
+  let pending = Promise.resolve();
+  const serialize = <T>(operation: () => Promise<T>): Promise<T> => {
+    const result = pending.then(operation);
+    pending = result.then(() => undefined, () => undefined);
+    return result;
+  };
   router.put("/api/integrations/feishu/settings", async (request) => {
-    return json(await saveFeishuSettings(activeContext, await objectBody(request)));
+    const body = await objectBody(request);
+    return json(await serialize(() => saveFeishuSettings(activeContext, body)));
+  });
+  router.post("/api/integrations/feishu/source-discovery", () => {
+    if (!feishuConnectorStatus(currentConfig(activeContext)).enabled) throw new HttpError(409, "请先保存飞书应用凭据");
+    return json(startFeishuDiscovery(context.database, Date.now(), feishuSettingsRevision(currentConfig(activeContext))));
+  });
+  router.get("/api/integrations/feishu/source-discovery/:id", (request) => {
+    const session = readFeishuDiscovery(context.database, discoveryID(request));
+    if (!session) throw new HttpError(410, "来源发现已过期，请重新开始");
+    return json(session);
+  });
+  router.post("/api/integrations/feishu/source-discovery/:id/authorize", async (request) => {
+    const body = await objectBody(request);
+    return json(await serialize(async () => {
+      const session = readFeishuDiscovery(context.database, discoveryID(request));
+      if (!session) throw new HttpError(410, "来源发现已过期，请重新开始");
+      if (session.consumed) throw new HttpError(409, "该来源发现已处理，请重新核对配置");
+      const candidate = session.candidates.find(item => item.id === body.candidate_id);
+      if (!candidate || !["chat", "user"].includes(String(body.scope))) throw new HttpError(400, "请选择已发现的来源和授权范围");
+      if (session.config_revision !== feishuSettingsRevision(currentConfig(activeContext)) || body.expected_revision !== feishuSettingsRevision(currentConfig(activeContext))) throw new HttpError(409, "飞书配置已更新，请重新读取并核对");
+      const config = currentConfig(activeContext);
+      const patch = body.scope === "chat"
+        ? { allowed_chat_ids: [...new Set([...config.allowedChatIds, candidate.chat_id])] }
+        : { allowed_user_ids: [...new Set([...config.allowedUserIds, candidate.user_id])] };
+      const saved = await saveFeishuSettings(activeContext, { ...patch, expected_revision: body.expected_revision });
+      consumeFeishuDiscovery(context.database, discoveryID(request));
+      return saved;
+    }));
   });
 }
 
 async function saveFeishuSettings(context: FeishuSettingsContext, body: Record<string, unknown>) {
   const path = settingsPath(context);
+  if (hasOwn(body, "expected_revision") && body.expected_revision !== feishuSettingsRevision(currentConfig(context))) throw new HttpError(409, "飞书配置已更新，请重新读取并核对");
   const current = localSettingsFromConfig(currentConfig(context));
   const nextLocal = normalizeFeishuSettings(body, current);
   const persisted = await persistedFeishuSettings(path, nextLocal, body, context.secrets!);
@@ -121,6 +159,7 @@ function recordFeishuSettingsAudit(database: RunnerDatabase, body: Record<string
 function publicFeishuSettings(config: FeishuConnectorConfig, path: string): Record<string, unknown> {
   const status = feishuConnectorStatus(config);
   return {
+    revision: feishuSettingsRevision(config),
     allowed_chat_ids: config.allowedChatIds,
     allowed_user_ids: config.allowedUserIds,
     app_id: config.appId,
@@ -223,4 +262,12 @@ function mappingTarget(item: FeishuProjectMapping): string {
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+export function feishuSettingsRevision(config: FeishuConnectorConfig): string {
+  return createHash("sha256").update(JSON.stringify(localSettingsFromConfig(config))).digest("hex");
+}
+
+function discoveryID(request: Request): string {
+  return decodeURIComponent(new URL(request.url).pathname.split("/")[5] || "");
 }

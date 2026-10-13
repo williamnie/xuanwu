@@ -10,7 +10,7 @@ import {
 
 const HANDOFF_ID = 'xw:handoff:derived:697%40abc123';
 const WORK_ID = 'xw:work:issues:697';
-const styles = readFileSync(new URL('./RecentDeliveriesSection.css', import.meta.url), 'utf8');
+const detailSource = readFileSync(new URL('../work/WorkDeliveryView.jsx', import.meta.url), 'utf8');
 
 test('Recent Deliveries presents every Handoff mode with its authoritative refs', () => {
   const modes = [
@@ -80,31 +80,21 @@ test('open actions accept only the returned matching Handoff link and HTTP(S) UR
   })).externalHref, '');
 });
 
-test('Dashboard trusts the aggregate Handoff status without per-card hydration or a write path', () => {
-  const page = readFileSync(new URL('./RecentDeliveriesSection.jsx', import.meta.url), 'utf8');
+test('compact Dashboard uses completion facts and exact delivery lives in task detail', () => {
   const dashboard = readFileSync(new URL('../Dashboard.jsx', import.meta.url), 'utf8');
-  assert.match(page, /sections: \['recent_deliveries'\]/);
-  assert.doesNotMatch(page, /handoffsApi\.getHandoff\(item\.id\)/);
-  assert.match(page, /event\.type !== 'handoff\.notification'/);
-  assert.match(page, /REFRESH_INTERVAL_MS = 30_000/);
-  assert.match(page, /navigator\.clipboard\.writeText/);
-  assert.doesNotMatch(page, /history\?\.replaceState/);
-  assert.match(page, /navigateTo\?\.\(route\.page, route\.workId \|\| item\.work_id, '', route\.handoffId\)/);
-  assert.doesNotMatch(page, /createHandoff|updateHandoff|controlWork|controlRun/);
   assert.match(dashboard, /completed_today/);
   assert.match(dashboard, /getTaskGlance/);
-  assert.doesNotMatch(dashboard, /createHandoff|updateHandoff/);
+  assert.doesNotMatch(dashboard, /handoffsApi\.getHandoff|createHandoff|updateHandoff/);
+  assert.match(detailSource, /recentDeliveryDetailRoute/);
+  assert.match(detailSource, /route\.workId !== work\.id/);
+  assert.match(detailSource, /response\?\.handoff\?\.work_id !== work\.id/);
+  assert.match(detailSource, /navigator\.clipboard\.writeText/);
 });
 
-test('Recent Deliveries keeps expanded cards inside a keyboard-scrollable region', () => {
-  const page = readFileSync(new URL('./RecentDeliveriesSection.jsx', import.meta.url), 'utf8');
-  const listRule = styles.match(/\.recent-deliveries-list\s*\{([^}]*)\}/)?.[1] || '';
-  assert.match(page, /aria-label="最近交付列表"/);
-  assert.match(page, /role="region"/);
-  assert.match(page, /tabIndex=\{0\}/);
-  assert.match(listRule, /max-height:\s*min\(68vh, 640px\)/);
-  assert.match(listRule, /overflow-y:\s*auto/);
-  assert.match(listRule, /overscroll-behavior:\s*contain/);
+test('delivery history is keyboard focusable and every version remains selectable', () => {
+  assert.match(detailSource, /className="work-delivery-history" aria-label=\{t\("delivery\.history"\)\} tabIndex=\{0\}/);
+  assert.match(detailSource, /handoffs\.map/);
+  assert.match(detailSource, /selectHandoff\(item\.id\)/);
 });
 
 function item(overrides = {}) {

@@ -1,10 +1,10 @@
 import { request } from './base.js';
 
 export const commandCenterApi = {
-  getTaskGlance: () => {
+  getTaskGlance: (options = {}) => {
     const start = new Date();start.setHours(0,0,0,0);const end = new Date(start);end.setDate(end.getDate()+1);
     const params = new URLSearchParams({ day_start: start.toISOString(), day_end: end.toISOString() });
-    return request(`/api/command-center/task-glance?${params}`);
+    return request(`/api/command-center/task-glance?${params}`, options);
   },
   getInbox: ({ cursor = '', pageSize = 50, workId = '' } = {}, options = {}) => {
     const params = new URLSearchParams({ page_size: String(pageSize) });

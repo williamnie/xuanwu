@@ -1,3 +1,4 @@
+import { validateProjectPath } from "./projectPathValidation.ts";
 import type { IssueActionOptions } from "../db/repositories/issueActions.ts";
 import type { ListIssueEventsOptions } from "../db/repositories/issueEvents.ts";
 import type { IssueFilter } from "../db/repositories/issues.ts";
@@ -32,6 +33,7 @@ function registerIssuesPageAuxRoutes(router: Router, handlers: ReadApiDomainHand
 
 function registerProjectRoutes(router: Router, handlers: ReadApiDomainHandlers, readHandlers = handlers): void {
   router.get("/api/projects", () => json(readHandlers.projects.list()));
+  router.get("/api/projects/validate-path", async request => json(await validateProjectPath(new URL(request.url).searchParams.get("path") || "")));
   router.get("/api/projects/:id", (request) => readResponse(() => readHandlers.projects.read(projectID(request))));
   router.post("/api/projects", async (request) => {
     const body = await parseObjectBody(request);
