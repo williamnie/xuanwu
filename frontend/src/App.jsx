@@ -561,7 +561,7 @@ export default function App() {
   return (
     <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileSidebarOpen ? 'mobile-sidebar-open' : ''} ${currentPage === 'runs' || currentPage === 'ask-xuanwu' ? 'in-sessions-page' : ''} ${currentPage === 'runs' ? 'runs-page' : ''} ${currentPage === 'ask-xuanwu' ? 'ask-xuanwu-page' : ''}`}>
       <ToastContainer />
-      <ReleaseUpdateDialog onOpenSettings={() => navigateTo('settings', null, '', '', { settingsSection: 'general' })} />
+      <ReleaseUpdateDialog onOpenSettings={() => navigateTo('settings', null, '', '', { settingsSection: 'preferences' })} />
       <header className="mobile-app-header" inert={mobileSidebarOpen ? true : undefined}>
         <button
           aria-controls="app-sidebar"
@@ -670,7 +670,7 @@ export default function App() {
                 <Automations />
               </div>
             ) : currentPage === 'settings' ? (
-              <Settings initialTab={settingsSection || 'general'} navigateTo={navigateTo} onSectionChange={navigateToSettingsSection} />
+              <Settings initialTab={settingsSection || 'general'} navigateTo={navigateTo} onSectionChange={navigateToSettingsSection} theme={theme} toggleTheme={toggleTheme} />
             ) : (
               <Dashboard navigateTo={navigateTo} />
             )}

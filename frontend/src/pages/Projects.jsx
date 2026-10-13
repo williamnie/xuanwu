@@ -159,15 +159,11 @@ export default function Projects() {
   return (
     <section className="glass-card settings-project-panel">
       <div className="settings-project-panel-header">
-        <div>
-          <div className="settings-entry-eyebrow">项目级设置</div>
-          <h2>项目管理</h2>
-          <p>添加工作目录、查看项目状态和调整执行配置。启用自动执行后，玄武会处理项目中的待办任务。</p>
-        </div>
+        <p className="settings-project-panel-note">开启自动执行后，玄武会依次处理项目中排队的任务。“从 Codex 导入”会读取本机 Codex 工作区，已存在的项目会被开启自动执行。</p>
         <div className="settings-project-panel-actions">
           <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing} type="button">
             <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? '正在同步...' : '同步 Codex 项目'}
+            {syncing ? '正在导入…' : '从 Codex 导入'}
           </button>
           <button className="btn btn-primary" onClick={handleOpenCreateModal} type="button">
             <FolderPlus size={18} /> 添加项目

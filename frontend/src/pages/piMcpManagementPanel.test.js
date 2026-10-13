@@ -7,9 +7,8 @@ const panelSource = readFileSync(new URL('./PiMcpManagementPanel.jsx', import.me
 const settingsSectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
 const connectorsSource = readFileSync(new URL('../api/connectors.js', import.meta.url), 'utf8');
 
-test('Supervisor Settings exposes MCP discovery and enablement management without secret echo', () => {
-  assert.match(settingsSectionsSource, /<PiMcpManagementPanel embedded \/>/);
-  assert.match(settingsSectionsSource, /工具与 MCP/);
+test('Advanced skills & tools exposes MCP discovery and enablement management without secret echo', () => {
+  assert.match(settingsSectionsSource, /skills: <><SkillsRuntimePanel \/><PiMcpManagementPanel embedded \/><\/>/);
   assert.match(panelSource, /Detected MCP servers/);
   assert.match(panelSource, /Manual MCP servers/);
   assert.match(panelSource, /Capabilities/);

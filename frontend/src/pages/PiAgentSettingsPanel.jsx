@@ -1,23 +1,22 @@
-import { ArrowRight, Bot, CheckCircle2, CircleDashed, Eye, KeyRound, Loader2, PlugZap, RefreshCw, Save, Sparkles, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, CircleDashed, KeyRound, Loader2, PlugZap, RefreshCw, Save, Sparkles, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { usePiAgentSettingsState } from './piAgentSettingsState';
 import './PiAgentSettingsPanel.css';
 
-export default function PiAgentSettingsPanel({ onOpenCodeAgents }) {
+export default function PiAgentSettingsPanel() {
   const state = usePiAgentSettingsState();
   return (
     <section className="supervisor-settings-panel">
       <PanelHeader loading={state.loading} onRefresh={state.loadSettings} />
-      {state.loading ? <PanelLoader label="正在读取玄武助手配置…" /> : <SupervisorSettingsForm onOpenCodeAgents={onOpenCodeAgents} state={state} />}
+      {state.loading ? <PanelLoader label="正在读取玄武助手配置…" /> : <SupervisorSettingsForm state={state} />}
     </section>
   );
 }
 
-function SupervisorSettingsForm({ onOpenCodeAgents, state }) {
+function SupervisorSettingsForm({ state }) {
   return (
     <>
-      <SupervisorScopeNote onOpenCodeAgents={onOpenCodeAgents} />
       <SupervisorReadiness state={state} />
       <ConfigurationStage
         description="填写模型服务提供的 API 地址和 Key，或使用账号快捷登录。获取并选择模型后，保存为默认模型。"
@@ -34,23 +33,6 @@ function SupervisorSettingsForm({ onOpenCodeAgents, state }) {
         <SupervisorBehaviorSettings state={state} />
       </ConfigurationStage>
     </>
-  );
-}
-
-function SupervisorScopeNote({ onOpenCodeAgents }) {
-  return (
-    <aside className="supervisor-scope-note">
-      <div className="supervisor-scope-copy">
-        <span>MODEL RUNTIME</span>
-        <strong>为玄武助手选择理解和处理任务的模型</strong>
-        <p>负责写代码的 Codex / Claude Code 使用本机登录状态，可在“编程工具”中单独检查。</p>
-      </div>
-      {onOpenCodeAgents ? (
-        <button className="btn btn-secondary supervisor-code-agents-link" onClick={onOpenCodeAgents} type="button">
-          查看编程工具 <ArrowRight size={14} />
-        </button>
-      ) : null}
-    </aside>
   );
 }
 
@@ -362,11 +344,13 @@ function SupervisorBehaviorSettings({ state }) {
     <>
       <AppliedModelSummary state={state} />
       <SupervisorSettingsGrid state={state} />
-      <Field label="运行指令">
-        <textarea className="form-control" rows={4} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
-      </Field>
+      <details className="persona-settings-disclosure supervisor-more-options">
+        <summary><span><strong>更多选项</strong><small>给玄武的长期说明</small></span></summary>
+        <Field label="给玄武的长期说明">
+          <textarea className="form-control" rows={4} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
+        </Field>
+      </details>
       <ChatPersonaSettings state={state} />
-      <PromptSummaryDebug state={state} />
       <SupervisorEnableField form={state.form} updateField={state.updateField} />
       <SaveRow onSave={state.handleAgentSave} saving={state.saving} />
     </>
@@ -385,11 +369,7 @@ function AppliedModelSummary({ state }) {
 function PanelHeader({ loading, onRefresh }) {
   return (
     <div className="supervisor-settings-header">
-      <div>
-        <span className="settings-entry-eyebrow"><Bot size={13} /> XUANWU / MODEL RUNTIME</span>
-        <h2>Xuanwu Supervisor</h2>
-        <p>连接玄武助手使用的模型，设置它如何思考、处理任务和回复。</p>
-      </div>
+      <h3>玄武助手</h3>
       <button className="btn btn-secondary" onClick={onRefresh} disabled={loading} type="button">
         <RefreshCw size={14} className={loading ? 'spin-animation' : ''} /> 刷新
       </button>
@@ -538,31 +518,6 @@ function PersonaConflictNotice({ state }) {
   );
 }
 
-function PromptSummaryDebug({ state }) {
-  const summary = state.promptSummary?.runtime_prompt_summary;
-  return (
-    <details className="prompt-debug-disclosure">
-      <summary><Eye size={16} /><span><strong>查看生效指令</strong><small>检查当前生效的配置摘要，不回显 API key/token 或表达风格原文</small></span></summary>
-      <div className="prompt-debug-content">
-        <div className="prompt-debug-heading">
-          <div><strong>当前生效 Prompt 摘要</strong><p>只显示自定义 instructions 与 Persona 安全摘要。</p></div>
-          <button className="btn btn-secondary" onClick={state.loadPromptSummary} disabled={state.promptSummaryLoading} type="button">{state.promptSummaryLoading ? <Loader2 size={14} className="spin-animation" /> : <Eye size={14} />} 查看摘要</button>
-        </div>
-        {summary ? (
-          <div className="prompt-debug-summary">
-            <span>Custom instructions: {summary.custom_instructions_configured ? `${summary.custom_instructions_chars} chars` : '未配置'}</span>
-            <span>Prompt profiles：{summary.profiles?.join(' / ')}</span>
-            <span>表达 Persona：{summary.persona_enabled ? `已启用 · ${summary.persona_chars} chars · revision ${summary.persona_revision}` : `未启用 · revision ${summary.persona_revision}`}</span>
-            <span>Persona 生效范围：{summary.persona_profiles?.join(' / ') || 'chat'} · language_mode={summary.language_mode}</span>
-            <span>注入位置：{summary.injected_after}</span><span>优先级：{summary.conflict_policy}</span>
-            {summary.custom_instructions_preview ? <code>{summary.custom_instructions_preview}</code> : null}
-          </div>
-        ) : null}
-      </div>
-    </details>
-  );
-}
-
 function SupervisorEnableField({ form, updateField }) {
   return <label className="supervisor-enable-field"><input type="checkbox" checked={form.enabled} onChange={(event) => updateField('enabled', event.target.checked)} /> 启用玄武助手</label>;
 }
@@ -571,7 +526,7 @@ function SaveRow({ onSave, saving }) {
   return (
     <div className="supervisor-save-row">
       <button className="btn btn-primary" onClick={onSave} disabled={saving} type="button">{saving ? <Loader2 size={14} className="spin-animation" /> : <Save size={14} />} 保存运行偏好</button>
-      <span>保存名称、思考强度、运行指令与表达风格，不会改写上方连接凭据。</span>
+      <span>保存名称、思考强度、长期说明与表达风格，不会改写上方连接凭据。</span>
     </div>
   );
 }

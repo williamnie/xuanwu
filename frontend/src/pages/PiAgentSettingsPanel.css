@@ -6,12 +6,18 @@
 }
 
 .supervisor-settings-header {
-  align-items: flex-end;
-  border-bottom: 1px solid var(--text-primary);
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   gap: 20px;
   justify-content: space-between;
-  padding: 2px 0 15px;
+  padding: 2px 0 12px;
+}
+
+.supervisor-settings-header h3 {
+  font-size: 1rem;
+  font-weight: 650;
+  margin: 0;
 }
 
 .supervisor-settings-header .settings-entry-eyebrow {
@@ -22,19 +28,6 @@
   font-size: 0.64rem;
   gap: 6px;
   letter-spacing: 0.1em;
-}
-
-.supervisor-settings-header h2 {
-  font-size: 1.55rem;
-  letter-spacing: -0.035em;
-  margin: 7px 0 0;
-}
-
-.supervisor-settings-header p {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  margin: 5px 0 0;
 }
 
 .supervisor-scope-note {

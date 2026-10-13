@@ -46,9 +46,9 @@ function PanelHeader({ loading, onRefresh }) {
   return (
     <div className="activity-head">
       <div>
-        <p className="activity-eyebrow"><Activity size={14} /> Activity Timeline</p>
-        <h2>Raw → Intake → Action trace</h2>
-        <p>串联 raw event、context bundle、intake run、inbox item、domain skill、proposal、policy 与 issue/reply。</p>
+        <p className="activity-eyebrow"><Activity size={14} /> PROCESSING</p>
+        <h2>处理记录</h2>
+        <p>一条外部消息从收到、识别，到变成任务或动作的完整过程。</p>
       </div>
       <button className="btn btn-secondary" disabled={loading} onClick={onRefresh} type="button">
         <RefreshCw size={15} className={loading ? 'spin-animation' : ''} /> 刷新

@@ -1,67 +1,70 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  SETTINGS_ADVANCED_TABS,
-  SETTINGS_PRIMARY_TABS,
-  SETTINGS_NAVIGATION_GROUPS,
+  SETTINGS_ADVANCED_SECTIONS,
+  SETTINGS_SECTIONS,
+  advancedSectionCopy,
   settingsSectionCopy,
   resolveSettingsRoute,
   settingsRouteId,
 } from './settingsNavigation.js';
 
-test('Settings exposes runtime configuration tabs and keeps diagnostics in Advanced', () => {
-  assert.deepEqual(SETTINGS_PRIMARY_TABS.map(tab => tab.label), [
-    'Projects',
-    'Xuanwu Supervisor',
-    'Code Agents',
-    'Integrations',
-    'Permissions',
-    'Notifications',
-  ]);
-  assert.deepEqual(SETTINGS_ADVANCED_TABS.map(tab => tab.id), [
-    'diagnostics',
-    'skills',
-    'memory',
-    'activity',
-    'policies',
-  ]);
+test('Settings has five sections and Advanced is one page of collapsible parts', () => {
+  assert.deepEqual(SETTINGS_SECTIONS.map(section => section.id), ['general', 'ai', 'notifications', 'preferences', 'advanced']);
+  assert.deepEqual(SETTINGS_ADVANCED_SECTIONS.map(section => section.id), ['diagnostics', 'security', 'skills', 'memory', 'activity']);
 });
 
-test('Every settings section has a visible purpose in both languages and exactly one navigation group', () => {
-  const sections = [...SETTINGS_PRIMARY_TABS, ...SETTINGS_ADVANCED_TABS];
-  const groupedIds = SETTINGS_NAVIGATION_GROUPS.flatMap(group => group.tabs);
-  assert.equal(new Set(groupedIds).size, groupedIds.length);
-  assert.deepEqual([...groupedIds].sort(), sections.map(section => section.id).sort());
-  for (const section of sections) {
+test('Every section and advanced part has a visible purpose in both languages', () => {
+  for (const { id } of SETTINGS_SECTIONS) {
     for (const language of ['zh-CN', 'en-US']) {
-      const copy = settingsSectionCopy(section.id, language);
-      assert.ok(copy.title && copy.description && copy.hint, `${section.id} ${language}`);
-      if (language === 'zh-CN') assert.match(copy.title, /[\u4e00-\u9fff]/);
+      const copy = settingsSectionCopy(id, language);
+      assert.ok(copy.title && copy.description && copy.hint, `${id} ${language}`);
+      if (language === 'zh-CN') assert.match(copy.title, /[一-鿿]/);
     }
+  }
+  for (const { id } of SETTINGS_ADVANCED_SECTIONS) {
+    for (const language of ['zh-CN', 'en-US']) {
+      const copy = advancedSectionCopy(id, language);
+      assert.ok(copy.title && copy.hint, `${id} ${language}`);
+    }
+  }
+  assert.match(settingsSectionCopy('ai').description, /玄武助手未连接时，任务能执行，但无法自动验收/);
+});
+
+test('Legacy section values, bare or advanced-prefixed, land in the new location', () => {
+  const cases = {
+    general: { tab: 'general', section: '' },
+    supervisor: { tab: 'ai', section: '' },
+    'code-agents': { tab: 'ai', section: '' },
+    notifications: { tab: 'notifications', section: '' },
+    integrations: { tab: 'notifications', section: '' },
+    permissions: { tab: 'advanced', section: 'security' },
+    policies: { tab: 'advanced', section: 'security' },
+    'advanced:policies': { tab: 'advanced', section: 'security' },
+    diagnostics: { tab: 'advanced', section: 'diagnostics' },
+    'advanced:diagnostics': { tab: 'advanced', section: 'diagnostics' },
+    skills: { tab: 'advanced', section: 'skills' },
+    'advanced:skills': { tab: 'advanced', section: 'skills' },
+    memory: { tab: 'advanced', section: 'memory' },
+    'advanced:memory': { tab: 'advanced', section: 'memory' },
+    activity: { tab: 'advanced', section: 'activity' },
+    'advanced:activity': { tab: 'advanced', section: 'activity' },
+  };
+  for (const [value, expected] of Object.entries(cases)) {
+    assert.deepEqual(resolveSettingsRoute(value), expected, value);
   }
 });
 
-test('Settings accepts only current configuration sections', () => {
-  assert.deepEqual(resolveSettingsRoute('supervisor'), { tier: 'primary', tab: 'supervisor' });
-  assert.deepEqual(resolveSettingsRoute('code-agents'), { tier: 'primary', tab: 'code-agents' });
-  assert.deepEqual(resolveSettingsRoute('integrations'), { tier: 'primary', tab: 'integrations' });
-  assert.deepEqual(resolveSettingsRoute('assistant'), { tier: 'primary', tab: 'general' });
-  assert.deepEqual(resolveSettingsRoute('runner-brain'), { tier: 'primary', tab: 'general' });
-  assert.deepEqual(resolveSettingsRoute('connections'), { tier: 'primary', tab: 'general' });
-  assert.deepEqual(resolveSettingsRoute('connectors'), { tier: 'primary', tab: 'general' });
-  assert.deepEqual(resolveSettingsRoute('advanced:model-runtime'), { tier: 'primary', tab: 'general' });
-  assert.deepEqual(resolveSettingsRoute('skills'), { tier: 'advanced', tab: 'skills' });
-  assert.deepEqual(resolveSettingsRoute('automations'), { tier: 'primary', tab: 'general' });
-  assert.deepEqual(resolveSettingsRoute('approvals'), { tier: 'primary', tab: 'general' });
-  assert.deepEqual(resolveSettingsRoute('memory'), { tier: 'advanced', tab: 'memory' });
-  assert.deepEqual(resolveSettingsRoute('activity'), { tier: 'advanced', tab: 'activity' });
-  assert.deepEqual(resolveSettingsRoute('policies'), { tier: 'advanced', tab: 'policies' });
+test('Unknown or retired sections fail safe to Projects', () => {
+  for (const value of ['unknown', 'assistant', 'runner-brain', 'connections', 'connectors', 'advanced:model-runtime', 'automations', 'approvals', '']) {
+    assert.deepEqual(resolveSettingsRoute(value), { tab: 'general', section: '' }, value);
+  }
 });
 
-test('Settings canonical routes round-trip and unknown routes fail safe to Projects', () => {
-  const advanced = resolveSettingsRoute('advanced:diagnostics');
-  assert.deepEqual(advanced, { tier: 'advanced', tab: 'diagnostics' });
-  assert.equal(settingsRouteId(advanced), 'advanced:diagnostics');
-  assert.equal(settingsRouteId(resolveSettingsRoute('notifications')), 'notifications');
-  assert.deepEqual(resolveSettingsRoute('unknown'), { tier: 'primary', tab: 'general' });
+test('Settings routes round-trip', () => {
+  assert.equal(settingsRouteId(resolveSettingsRoute('advanced:diagnostics')), 'advanced:diagnostics');
+  assert.equal(settingsRouteId(resolveSettingsRoute('permissions')), 'advanced:security');
+  assert.equal(settingsRouteId(resolveSettingsRoute('advanced')), 'advanced');
+  assert.equal(settingsRouteId(resolveSettingsRoute('preferences')), 'preferences');
+  assert.equal(settingsRouteId(resolveSettingsRoute('supervisor')), 'ai');
 });

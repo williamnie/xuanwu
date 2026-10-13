@@ -2,20 +2,17 @@ import { systemApi } from '../api/system.js';
 import { useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { message } from '../store/toastStore';
-import { SETTINGS_NAVIGATION_GROUPS, resolveSettingsRoute, settingsSectionCopy } from './settingsNavigation';
+import { SETTINGS_SECTIONS, resolveSettingsRoute, settingsSectionCopy } from './settingsNavigation';
 import { useI18n } from '../i18n/context.js';
 
 export function SettingsHeader({ title = 'Settings' }) {
-  const { language, t } = useI18n();
+  const { t } = useI18n();
   return (
     <header className="settings-header">
       <div className="settings-title-row">
         <div>
           <div className="settings-eyebrow">SETTINGS</div>
           <h1>{title === 'Settings' ? t('settings.title') : title}</h1>
-          <p>{language === 'en-US'
-            ? 'Set up your projects, assistant, and notifications. Start with the section you need.'
-            : '管理项目、助手和通知，从你需要调整的设置开始。'}</p>
         </div>
       </div>
     </header>
@@ -29,35 +26,28 @@ export function SettingsNavigation({ onRouteChange, route }) {
   return (
     <>
       <nav className="settings-directory" aria-label={label}>
-        {SETTINGS_NAVIGATION_GROUPS.map((group) => (
-          <div className="settings-directory-group" key={group.id}>
-            <h2>{group.label[locale]}</h2>
-            {group.tabs.map((tab) => {
-              const copy = settingsSectionCopy(tab, locale);
-              return (
-                <button
-                  aria-current={route.tab === tab ? 'page' : undefined}
-                  className={`settings-directory-link${route.tab === tab ? ' active' : ''}`}
-                  key={tab}
-                  onClick={() => onRouteChange(resolveSettingsRoute(tab))}
-                  type="button"
-                >
-                  <span>{copy.title}</span>
-                  <small>{copy.hint}</small>
-                </button>
-              );
-            })}
-          </div>
-        ))}
+        <div className="settings-directory-group">
+          {SETTINGS_SECTIONS.map(({ id }) => {
+            const copy = settingsSectionCopy(id, locale);
+            return (
+              <button
+                aria-current={route.tab === id ? 'page' : undefined}
+                className={`settings-directory-link${route.tab === id ? ' active' : ''}`}
+                key={id}
+                onClick={() => onRouteChange(resolveSettingsRoute(id))}
+                type="button"
+              >
+                <span>{copy.title}</span>
+                <small>{copy.hint}</small>
+              </button>
+            );
+          })}
+        </div>
       </nav>
       <label className="settings-mobile-directory">
         <span>{label}</span>
         <select value={route.tab} onChange={(event) => onRouteChange(resolveSettingsRoute(event.target.value))}>
-          {SETTINGS_NAVIGATION_GROUPS.map((group) => (
-            <optgroup key={group.id} label={group.label[locale]}>
-              {group.tabs.map((tab) => <option key={tab} value={tab}>{settingsSectionCopy(tab, locale).title}</option>)}
-            </optgroup>
-          ))}
+          {SETTINGS_SECTIONS.map(({ id }) => <option key={id} value={id}>{settingsSectionCopy(id, locale).title}</option>)}
         </select>
       </label>
     </>

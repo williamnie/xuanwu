@@ -17,10 +17,10 @@ test('PI memory panel exposes automatic reusable memory management without a rev
   assert.doesNotMatch(clientSource, /promote:\s*\(id\)/);
   assert.match(clientSource, /disable:\s*\(id\)/);
   assert.match(clientSource, /update:\s*\(id, updates\)/);
-  assert.match(panelSource, /Supervisor Memory/);
-  assert.match(panelSource, /PI 自动记住可复用的偏好、决策、工作方法、Bug 根因、修复方式和验证经验/);
-  assert.match(panelSource, /当前 Work \/ Run \/ Issue 状态永远以实时查询为准/);
-  assert.match(panelSource, /相同 memory_key 会更新而不是重复追加/);
+  assert.match(panelSource, /玄武的记忆/);
+  assert.match(panelSource, /玄武会记住可复用的偏好、决策、工作方法、问题根因、修复方式和验证经验/);
+  assert.match(panelSource, /任务和执行的当前状态始终以实时数据为准/);
+  assert.match(panelSource, /同一条记忆会更新而不是重复追加/);
   assert.match(panelSource, /记忆自动生效，不需要逐条人工审核/);
   assert.match(panelSource, /memory_key/);
   assert.match(panelSource, /occurrence_count/);

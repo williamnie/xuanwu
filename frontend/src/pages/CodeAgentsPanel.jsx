@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, CircleAlert, Monitor, Power, RefreshCw, Terminal } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CircleAlert, Monitor, Power, RefreshCw, Save, Terminal } from 'lucide-react';
 import { systemApi } from '../api/system.js';
 import { message } from '../store/toastStore.js';
 import { codexBackendChoices, codexBackendUpdatePayload } from '../utils/codexBackends.js';
@@ -63,14 +63,32 @@ export default function CodeAgentsPanel() {
     }
   };
 
+  // 只提交两个命令字段；后端按字段合并，运行方式与并发数保持不变。
+  const saveCodexCommands = async (commands) => {
+    setBusyAgentID('codex-backend');
+    setState(current => ({ ...current, error: '' }));
+    try {
+      const runnerSettings = await systemApi.updateRunnerSettings({
+        codex_app_command: commands.app,
+        codex_cli_command: commands.cli,
+      });
+      setState(current => ({ ...current, runnerSettings }));
+      if (runnerSettings?.runtime_apply?.codexTransport === 'deferred_active_sessions') {
+        message.warning('已保存；当前有运行中的 Codex 会话，结束后再保存一次或重启服务后生效');
+      } else {
+        message.success('Codex 命令已保存');
+      }
+    } catch (error) {
+      setState(current => ({ ...current, error: error.message || '保存 Codex 命令失败' }));
+    } finally {
+      setBusyAgentID('');
+    }
+  };
+
   return (
     <section className="code-agents-panel">
       <header className="code-agents-header">
-        <div>
-          <span className="code-agents-kicker"><Terminal size={14} /> Execution runtimes</span>
-          <h2>编程工具</h2>
-          <p>检测本机可用的编程工具。启用并就绪后，可在创建工作项、配置项目或执行方案时选择。</p>
-        </div>
+        <h3>编程工具</h3>
         <button className="btn btn-secondary" disabled={state.loading || Boolean(busyAgentID)} onClick={() => load(true)} type="button">
           <RefreshCw className={state.loading ? 'spin-animation' : ''} size={15} /> 重新检测
         </button>
@@ -83,6 +101,7 @@ export default function CodeAgentsPanel() {
             agent={agent}
             busy={busyAgentID === agent.id || (agent.id === 'codex' && busyAgentID === 'codex-backend')}
             key={agent.id}
+            onSaveCodexCommands={saveCodexCommands}
             onSelectCodexBackend={selectCodexBackend}
             onToggle={toggle}
             runnerSettings={state.runnerSettings}
@@ -94,7 +113,7 @@ export default function CodeAgentsPanel() {
   );
 }
 
-function CodeAgentRow({ agent, busy, onSelectCodexBackend, onToggle, runnerSettings }) {
+function CodeAgentRow({ agent, busy, onSaveCodexCommands, onSelectCodexBackend, onToggle, runnerSettings }) {
   const available = agent.enabled && agent.submittable;
   const status = agent.enabled ? (available ? '可用' : '未就绪') : '已停用';
   return (
@@ -111,7 +130,10 @@ function CodeAgentRow({ agent, busy, onSelectCodexBackend, onToggle, runnerSetti
         {agent.enabled && !available && agent.readiness_reason ? <small>{agent.readiness_reason}</small> : null}
         {agent.id === 'qoder' ? <QoderDiagnostics runtime={agent.runtime} /> : null}
         {agent.id === 'codex' ? (
-          <CodexBackendSelector busy={busy || !agent.enabled} onSelect={onSelectCodexBackend} settings={runnerSettings} />
+          <>
+            <CodexBackendSelector busy={busy || !agent.enabled} onSelect={onSelectCodexBackend} settings={runnerSettings} />
+            <CodexRuntimeDetails busy={busy} onSave={onSaveCodexCommands} settings={runnerSettings} />
+          </>
         ) : null}
       </div>
       <button
@@ -173,7 +195,50 @@ function CodexBackendSelector({ busy, onSelect, settings }) {
           </button>
         ))}
       </div>
-      <p className="codex-backend-note">每次只能选择一种默认运行方式。如果所选方式不可用，任务会提示错误，不会自动改用另一种。</p>
+      <p className="codex-backend-note">切换只影响新的任务和会话，已有会话不迁移；所选方式不可用时任务会报错，不会自动改用另一种。</p>
+    </div>
+  );
+}
+
+function CodexRuntimeDetails({ busy, onSave, settings }) {
+  const [draft, setDraft] = useState({ app: '', cli: '' });
+  useEffect(() => {
+    setDraft({ app: settings?.codex_app_command || '', cli: settings?.codex_cli_command || '' });
+  }, [settings?.codex_app_command, settings?.codex_cli_command]);
+  if (!settings) return null;
+  const appStatus = settings.codex_app_status;
+  const appSelected = settings.codex_server_mode === 'app';
+  const changed = draft.app !== (settings.codex_app_command || '') || draft.cli !== (settings.codex_cli_command || '');
+  return (
+    <div className="codex-runtime-details">
+      <div className="codex-runtime-fact">
+        <span>当前生效命令</span>
+        <code>{settings.codex_effective_command || '—'}</code>
+      </div>
+      {settings.codex_cli_status ? (
+        <div className="codex-runtime-fact">
+          <span>CLI 检测</span>
+          <strong className={settings.codex_cli_status.available ? 'ready' : ''}>{settings.codex_cli_status.available ? '可用' : '未找到'}</strong>
+          <small>{[settings.codex_cli_status.version, settings.codex_cli_status.path || settings.codex_cli_status.error].filter(Boolean).join(' · ')}</small>
+        </div>
+      ) : null}
+      {appStatus ? (
+        <div className="codex-runtime-fact">
+          <span>App 检测</span>
+          <strong className={appStatus.installed ? 'ready' : ''}>{appStatus.installed ? '已安装' : '未找到'} · {appStatus.running ? '正在运行' : '未运行'}</strong>
+          {appSelected && !appStatus.running ? (
+            <small className="warning"><AlertTriangle size={12} /> 已选择 App：关闭 Codex App 或集成不可用时，新任务会失败。</small>
+          ) : null}
+        </div>
+      ) : null}
+      <details className="codex-runtime-more">
+        <summary>更多选项</summary>
+        <form onSubmit={(event) => { event.preventDefault(); onSave(draft); }}>
+          <label><span>CLI server command</span><input className="form-control" disabled={busy} onChange={event => setDraft(current => ({ ...current, cli: event.target.value }))} value={draft.cli} /></label>
+          <label><span>App server command</span><input className="form-control" disabled={busy} onChange={event => setDraft(current => ({ ...current, app: event.target.value }))} value={draft.app} /></label>
+          <div><button className="btn btn-secondary" disabled={busy || !changed} type="submit"><Save size={14} /> 保存命令</button></div>
+        </form>
+      </details>
     </div>
   );
 }

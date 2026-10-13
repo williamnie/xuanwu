@@ -13,10 +13,10 @@ export default function PiMemoryPanel() {
     <section className="glass-card pi-memory-panel">
       <div className="pi-memory-panel__header">
         <div>
-          <h2 className="pi-memory-panel__heading">Supervisor Memory</h2>
+          <h2 className="pi-memory-panel__heading">玄武的记忆</h2>
           <p className="pi-memory-panel__description">
-            PI 自动记住可复用的偏好、决策、工作方法、Bug 根因、修复方式和验证经验；相同 memory_key 会更新而不是重复追加。
-            当前 Work / Run / Issue 状态永远以实时查询为准，不保存为记忆。
+            玄武会记住可复用的偏好、决策、工作方法、问题根因、修复方式和验证经验；同一条记忆会更新而不是重复追加。
+            任务和执行的当前状态始终以实时数据为准，不会保存为记忆。
           </p>
         </div>
         <button className="btn btn-secondary" onClick={state.load} disabled={state.loading}>

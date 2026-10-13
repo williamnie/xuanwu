@@ -27,71 +27,60 @@ const appStylesSource = readFileSync(new URL('../index.css', import.meta.url), '
 const piAgentSource = readFileSync(new URL('./PiAgentSettingsPanel.jsx', import.meta.url), 'utf8');
 const runtimeDiagnosticsSource = readFileSync(new URL('../utils/runtimeDiagnostics.js', import.meta.url), 'utf8');
 
-test('Settings renders behavior sections and gates internal panels behind Advanced', () => {
+test('Settings renders five sections and keeps internal panels inside Advanced', () => {
   assert.match(settingsSource, /initialTab = 'general'/);
   assert.match(settingsSource, /resolveSettingsRoute\(initialTab\)/);
-  for (const tab of ['general', 'supervisor', 'code-agents', 'integrations', 'permissions', 'notifications']) {
+  for (const tab of ['general', 'ai', 'notifications', 'preferences', 'advanced']) {
     assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
   }
-  for (const tab of ['diagnostics', 'skills', 'memory', 'activity', 'policies']) {
-    assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
+  assert.match(sectionsSource, /SETTINGS_ADVANCED_SECTIONS\.map/);
+  for (const section of ['diagnostics', 'security', 'skills', 'memory', 'activity']) {
+    assert.match(sectionsSource, new RegExp(`${section}: <`));
   }
-  assert.match(sectionsSource, /tier === 'advanced'/);
-  assert.match(chromeSource, /SETTINGS_NAVIGATION_GROUPS/);
+  assert.match(chromeSource, /SETTINGS_SECTIONS\.map/);
   assert.match(chromeSource, /settings-directory/);
-  assert.match(chromeSource, /aria-current=\{route\.tab === tab \? 'page' : undefined\}/);
+  assert.match(chromeSource, /aria-current=\{route\.tab === id \? 'page' : undefined\}/);
   assert.match(chromeSource, /<select value=\{route\.tab\}/);
-  assert.match(chromeSource, /<optgroup/);
   assert.doesNotMatch(chromeSource, /settings-advanced-gate|toggleAdvanced|role="tab"|role="tablist"/);
   assert.match(stylesSource, /\.settings-workspace \{[\s\S]*?grid-template-columns: 208px minmax\(0, 1fr\);/);
   assert.match(stylesSource, /\.settings-directory-link \{[\s\S]*?border-radius: var\(--button-radius\);/);
   assert.doesNotMatch(settingsSource, /CronTasksPanel/);
-  assert.doesNotMatch(chromeSource, /Cron 任务已在侧边栏/);
-  assert.match(settingsNavigationSource, /id: 'supervisor'/);
-  assert.match(settingsNavigationSource, /id: 'code-agents'/);
-  assert.match(settingsNavigationSource, /id: 'integrations'/);
   assert.doesNotMatch(settingsNavigationSource, /id: 'connections'/);
 });
 
-test('Settings primary IA owns the complete project list and editor flow', () => {
+test('Settings Projects owns the complete project list and editor flow; preferences hold language, theme and updates', () => {
   assert.match(chromeSource, /title = 'Settings'/);
   assert.match(chromeSource, /settings-eyebrow">SETTINGS/);
-  assert.match(sectionsSource, /<Projects \/>/);
+  assert.match(sectionsSource, /activeTab === 'general' && <Projects \/>/);
   assert.doesNotMatch(sectionsSource, /ProjectSettingsEditor|selectProjects|settings-project-select/);
   assert.match(projectsSource, /projects\.map\(proj =>/);
   assert.match(projectsSource, /handleOpenCreateModal/);
   assert.match(projectsSource, /handleOpenEditModal/);
   assert.match(projectsSource, /handleSyncCodexProjects/);
+  assert.match(projectsSource, /已存在的项目会被开启自动执行/);
   assert.match(projectsSource, /handleDelete/);
   assert.match(projectsSource, /<ProjectSettingsEditor/);
   assert.match(projectSettingsEditorSource, /projectsApi\.updateProject\(projectID, payload\)/);
-  assert.match(sectionsSource, /LanguageAndVersionCard|settings-language-bar/);
+  const preferences = sectionsSource.slice(sectionsSource.indexOf('function PreferencesTab'), sectionsSource.indexOf('function LanguageCard'));
+  assert.match(preferences, /<LanguageCard \/>/);
+  assert.match(preferences, /<ThemeCard theme=\{theme\} toggleTheme=\{toggleTheme\} \/>/);
+  assert.match(preferences, /<ReleaseUpdatePanel \/>/);
   assert.match(sectionsSource, /settings-version-inline/);
   assert.match(sectionsSource, /APP_VERSION/);
-  assert.doesNotMatch(sectionsSource, /glass-card settings-language/);
   assert.match(stylesSource, /\.settings-language-bar \{[\s\S]*?min-height: 44px;/);
   assert.match(stylesSource, /\.settings-page \.glass-card \{\s*border-radius: var\(--radius-xs\);/);
   assert.doesNotMatch(sidebarSource, /sidebar-language-row|APP_VERSION|sidebar-version/);
-  assert.match(settingsNavigationSource, /Permissions/);
-  assert.match(settingsNavigationSource, /Notifications/);
-  assert.match(settingsNavigationSource, /Xuanwu Supervisor/);
-  assert.match(settingsNavigationSource, /Code Agents/);
-  assert.match(settingsNavigationSource, /Integrations/);
-  assert.match(sectionsSource, /PiAgentSettingsPanel/);
-  assert.match(sectionsSource, /CodeAgentsPanel/);
-  assert.match(sectionsSource, /ConnectorDiagnosticsPanel/);
-  assert.match(sectionsSource, /FeishuSettingsPanel/);
-  assert.match(sectionsSource, /PiMcpManagementPanel/);
+  for (const panel of ['PiAgentSettingsPanel', 'CodeAgentsPanel', 'ConnectorDiagnosticsPanel', 'FeishuSettingsPanel', 'PiMcpManagementPanel', 'SkillsRuntimePanel', 'PiMemoryPanel', 'ActivityTimelinePanel', 'SourcePoliciesPanel', 'PermissionsSettingsPanel', 'NotificationSettingsPanel']) {
+    assert.match(sectionsSource, new RegExp(`<${panel}`), panel);
+  }
+  assert.doesNotMatch(sectionsSource, /ProviderAvailabilityPanel/);
+  assert.equal(existsSync(new URL('./ProviderAvailabilityPanel.jsx', import.meta.url)), false);
   assert.match(piAgentSource, /SupervisorSettingsForm/);
   assert.match(piAgentSource, /<ApiConnectionFlow state=\{state\} \/>/);
   assert.match(piAgentSource, /<ApiTypeField state=\{state\} \/>/);
   assert.match(piAgentSource, /<ProviderSummary providers=\{state\.providers\} \/>/);
   assert.equal(existsSync(placeholderPath), false);
   assert.doesNotMatch(sectionsSource, /SettingsPlaceholderPanel|placeholder/i);
-  assert.match(sectionsSource, /SkillsRuntimePanel/);
-  assert.match(sectionsSource, /PiMemoryPanel/);
-  assert.match(sectionsSource, /ActivityTimelinePanel/);
-  assert.match(sectionsSource, /SourcePoliciesPanel/);
 });
 
 test('Settings content stays anchored and maintenance is outside everyday project setup', () => {
@@ -102,11 +91,12 @@ test('Settings content stays anchored and maintenance is outside everyday projec
   assert.match(stylesSource, /scrollbar-gutter: stable/);
   assert.match(stylesSource, /@media \(max-width: 760px\)/);
   assert.match(stylesSource, /\.settings-directory-link:focus-visible/);
-  const general = sectionsSource.slice(sectionsSource.indexOf('function GeneralSettingsTab'), sectionsSource.indexOf('function LanguageAndVersionCard'));
-  assert.match(general, /<Projects \/>/);
-  assert.doesNotMatch(general, /ReleaseUpdatePanel|RuntimeStatusPanel|RestartAction/);
-  const diagnostics = sectionsSource.slice(sectionsSource.indexOf('function AdvancedDiagnosticsSettingsTab'));
-  assert.match(diagnostics, /<ReleaseUpdatePanel \/>/);
+  const diagnostics = sectionsSource.slice(sectionsSource.indexOf('function AdvancedDiagnostics('));
+  assert.match(diagnostics, /<RuntimeStatusPanel \/>/);
+  assert.match(diagnostics, /<RunnerSettingsPanel \/>/);
+  assert.match(diagnostics, /<RemoteAccessTokenPanel \/>/);
+  assert.match(diagnostics, /<RestartAction \/>/);
+  assert.doesNotMatch(diagnostics, /ReleaseUpdatePanel/);
 });
 
 test('Connection setup loads only visited platforms and keeps their drafts mounted between switches', () => {
@@ -120,17 +110,22 @@ test('Connection setup loads only visited platforms and keeps their drafts mount
   assert.match(sectionsSource, /hidden=\{channel !== 'telegram'\}><TelegramSettingsPanel/);
   assert.match(sectionsSource, /hidden=\{channel !== 'health'\}><ConnectorDiagnosticsPanel/);
   assert.match(sectionsSource, /aria-pressed=\{channel === id\}/);
-  assert.match(sectionsSource, /const \[toolsVisited, setToolsVisited\] = useState\(false\)/);
-  assert.match(sectionsSource, /if \(event\.currentTarget\.open\) setToolsVisited\(true\)/);
-  assert.match(sectionsSource, /toolsVisited && <div className="settings-disclosure-content">/);
-  assert.doesNotMatch(sectionsSource, /setToolsVisited\(false\)/);
 });
 
-test('Supervisor Settings keeps provider, behavior and MCP on one page with separate authorities', () => {
-  assert.match(sectionsSource, /function SupervisorSettingsTab/);
-  assert.match(sectionsSource, /<PiAgentSettingsPanel onOpenCodeAgents=/);
-  assert.match(sectionsSource, /<PiMcpManagementPanel embedded \/>/);
-  assert.match(sectionsSource, /工具与 MCP/);
+test('Advanced sections mount on first open, stay mounted when collapsed, and deep links open the target only', () => {
+  assert.match(sectionsSource, /useState\(\(\) => new Set\(section \? \[section\] : \[\]\)\)/);
+  assert.match(sectionsSource, /if \(!event\.currentTarget\.open\) return;/);
+  assert.match(sectionsSource, /visited\.has\(id\) \? <div className="settings-disclosure-content settings-advanced-body">/);
+  assert.match(sectionsSource, /element\.open = true;/);
+  assert.match(sectionsSource, /scrollIntoView/);
+  assert.doesNotMatch(sectionsSource, /visited\.delete|setVisited\(new Set\(\)\)/);
+});
+
+test('AI connections keep coding tools and the assistant on one page; MCP moves to Advanced skills', () => {
+  const ai = sectionsSource.slice(sectionsSource.indexOf('function AiConnectionsTab'), sectionsSource.indexOf('function NotificationsTab'));
+  assert.match(ai, /<CodeAgentsPanel \/>/);
+  assert.match(ai, /<PiAgentSettingsPanel \/>/);
+  assert.match(sectionsSource, /skills: <><SkillsRuntimePanel \/><PiMcpManagementPanel embedded \/><\/>/);
   assert.match(piAgentSource, /连接助手模型/);
   assert.match(piAgentSource, /助手偏好/);
   assert.match(piAgentSource, /handleConnectionApply/);
@@ -143,30 +138,27 @@ test('Supervisor Settings keeps provider, behavior and MCP on one page with sepa
   assert.match(piAgentSource, /<ProviderSummary/);
 });
 
-test('advanced Diagnostics exposes process-group memory freshness, roles, P95, and budget state', () => {
-  assert.match(settingsSource, /status\.process_group_memory/);
-  assert.match(settingsSource, /Runner process-group memory/);
-  assert.match(settingsSource, /memory\.freshness/);
-  assert.match(settingsSource, /memory\.roles/);
-  assert.match(settingsSource, /Top PID by macOS ps RSS/);
-  assert.match(settingsSource, /Budget measurement/);
-  assert.match(settingsSource, /Agentic in-flight/);
-  assert.match(settingsSource, /idle grace/);
-  assert.match(settingsSource, /Physical footprint/);
-  assert.match(settingsSource, /physical_memory_probe/);
-  assert.match(settingsSource, /measurement_source/);
-  assert.match(settingsSource, /array buffers/);
-  assert.match(settingsSource, /rss_p95_bytes/);
-  assert.match(settingsSource, /no auto-restart/);
+test('Advanced maintenance shows one health line and leaves process detail to the diagnostics bundle', () => {
+  assert.match(settingsSource, /function RuntimeHealthLine/);
+  assert.match(settingsSource, /status\.health\?\.reasons/);
+  assert.match(settingsSource, /复制诊断摘要/);
+  assert.match(settingsSource, /下载诊断包/);
+  assert.match(settingsSource, /systemApi\.getRuntimeDoctor\(\)/);
+  assert.match(settingsSource, /<SecurityWarnings/);
+  assert.match(settingsSource, /<RuntimeLogsPanel/);
+  assert.doesNotMatch(settingsSource, /process_group_memory|Top PID by macOS ps RSS|rss_p95_bytes/);
+  assert.match(runtimeDiagnosticsSource, /doctor/);
 });
 
-test('advanced Diagnostics distinguishes the project manager from the independent Guardian supervisor', () => {
-  assert.match(settingsSource, /PI project manager/);
-  assert.match(settingsSource, /Guardian supervisor/);
-  assert.match(settingsSource, /manager_active_projects/);
-  assert.match(settingsSource, /supervisor_active_projects/);
-  assert.match(settingsSource, /independent of project manager/);
-  assert.match(settingsSource, /does not decompose or replan Work/);
+test('Advanced maintenance keeps concurrency, remote access and restart, and Codex run mode lives only in AI connections', () => {
+  const runnerSource = readFileSync(new URL('./RunnerSettingsPanel.jsx', import.meta.url), 'utf8');
+  const codeAgentsSource = readFileSync(new URL('./CodeAgentsPanel.jsx', import.meta.url), 'utf8');
+  assert.match(runnerSource, /updateRunnerSettings\(\{ max_parallel_projects: Number\(draft\) \}\)/);
+  assert.doesNotMatch(runnerSource, /codex_server_mode|首次使用启动器|install-release\.sh/);
+  assert.match(codeAgentsSource, /codexBackendUpdatePayload\(mode\)/);
+  assert.match(codeAgentsSource, /codex_effective_command/);
+  assert.match(codeAgentsSource, /codex_cli_command: commands\.cli/);
+  assert.match(codeAgentsSource, /codex_app_command: commands\.app/);
 });
 
 test('Xuanwu product sidebar removes the PI section and keeps internal config behind Settings', () => {
@@ -203,11 +195,11 @@ test('Xuanwu product sidebar removes the PI section and keeps internal config be
   assert.doesNotMatch(appSource, /from '\.\/pages\/AssistantModulePage'/);
 });
 
-test('Settings restart action lives in Advanced Diagnostics', () => {
+test('Settings restart action lives in Advanced maintenance', () => {
   assert.match(chromeSource, /settings-danger-button/);
   assert.match(chromeSource, /settings-restart-confirm/);
   assert.match(chromeSource, /export function RestartAction/);
-  assert.match(sectionsSource, /AdvancedDiagnosticsSettingsTab/);
+  assert.match(sectionsSource, /function AdvancedDiagnostics\(/);
   assert.match(sectionsSource, /<RestartAction \/>/);
   assert.ok(stylesSource.includes('.settings-danger-button'));
   assert.ok(stylesSource.includes('var(--error)'));
@@ -294,7 +286,7 @@ test('Skills refresh preserves detail state and tolerates an absent detail cache
 test('Activity tab shows traceable redacted timeline from API', () => {
   assert.match(sectionsSource, /ActivityTimelinePanel/);
   assert.match(assistantApiSource, /getPiActivityTimeline/);
-  assert.match(activityTimelineSource, /Raw → Intake → Action trace/);
+  assert.match(activityTimelineSource, /<h2>处理记录<\/h2>/);
   assert.match(activityTimelineSource, /source/);
   assert.match(activityTimelineSource, /conversationId/);
   assert.match(activityTimelineSource, /proposalId/);

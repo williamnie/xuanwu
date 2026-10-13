@@ -12,11 +12,8 @@ test('Settings exposes Runner global concurrency controls backed by runner setti
   assert.match(sectionsSource, /RunnerSettingsPanel/);
   assert.match(sectionsSource, /<RunnerSettingsPanel \/>/);
   assert.match(panelSource, /max_parallel_projects/);
-  assert.match(panelSource, /codex_server_mode/);
-  assert.match(panelSource, /codex_app_command/);
-  assert.match(panelSource, /codex_cli_status/);
-  assert.match(panelSource, /首次使用启动器/);
-  assert.match(panelSource, /Codex App/);
+  // Codex 运行方式与命令只在 AI 连接 → Codex 一处配置；这里只提交并发数，避免两处表单互相覆盖。
+  assert.doesNotMatch(panelSource, /codex_server_mode|codex_app_command|codex_cli_command|首次使用启动器/);
   assert.match(panelSource, /systemApi\.getRunnerSettings/);
   assert.match(panelSource, /systemApi\.updateRunnerSettings/);
   assert.match(systemSource, /getRunnerSettings:/);

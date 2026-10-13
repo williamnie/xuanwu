@@ -1044,3 +1044,15 @@
     min-width: 680px;
   }
 }
+
+.runtime-status__health { display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; margin: 0; padding: 0; }
+.runtime-status__health li { align-items: center; color: var(--text-secondary); display: inline-flex; font-size: 0.74rem; gap: 6px; }
+.runtime-status__health strong { color: var(--text-primary); font-weight: 650; }
+.runtime-status__reasons { border-left: 2px solid var(--warning); color: var(--text-secondary); font-size: 0.72rem; margin: 0; padding: 4px 0 4px 26px; }
+.runtime-status__logs { margin-top: 12px; }
+.settings-advanced-sections { display: flex; flex-direction: column; }
+.settings-advanced-sections .settings-disclosure + .settings-disclosure { border-top: 0; }
+.settings-advanced-sections .settings-disclosure > summary strong { font-weight: 700; }
+.settings-advanced-body { display: grid; gap: 16px; }
+.settings-preferences { display: grid; gap: 16px; }
+.settings-theme-options { display: inline-flex; }

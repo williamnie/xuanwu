@@ -7,11 +7,11 @@ const panelStylesSource = readFileSync(new URL('./PiAgentSettingsPanel.css', imp
 const stateSource = readFileSync(new URL('./piAgentSettingsState.js', import.meta.url), 'utf8');
 const assistantSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
 
-test('Xuanwu Supervisor Settings exposes runtime prompt summary debug without secret echo', () => {
-  assert.match(panelSource, /当前生效 Prompt 摘要/);
-  assert.match(panelSource, /不回显 API key\/token/);
-  assert.match(panelSource, /Custom instructions:/);
-  assert.match(panelSource, /state\.loadPromptSummary/);
+test('Supervisor settings drop the read-only prompt summary and keep instructions under more options', () => {
+  assert.doesNotMatch(panelSource, /当前生效 Prompt 摘要|PromptSummaryDebug|state\.loadPromptSummary/);
+  assert.match(panelSource, /<strong>更多选项<\/strong>/);
+  assert.match(panelSource, /给玄武的长期说明/);
+  assert.match(panelSource, /state\.updateField\('instructions', event\.target\.value\)/);
   assert.match(stateSource, /loadPiPromptSummary/);
   assert.match(assistantSource, /getPiSupervisorRuntimePrompt:/);
   assert.match(assistantSource, /\/api\/pi\/supervisor\/runtime-prompt/);
@@ -111,7 +111,7 @@ test('saved Supervisor connections can be deleted with in-app confirmation and a
 test('Supervisor behavior applies the model selected above without duplicating model controls or rewriting credentials', () => {
   assert.match(panelSource, /title="助手偏好"/);
   assert.match(panelSource, /<SupervisorBehaviorSettings state=\{state\} \/>/);
-  assert.match(panelSource, /连接玄武助手使用的模型，设置它如何思考、处理任务和回复/);
+  assert.match(panelSource, /<h3>玄武助手<\/h3>/);
   assert.match(panelSource, /当前默认模型/);
   assert.doesNotMatch(panelSource, /label="Model Provider"|label="Model ID"/);
   assert.match(panelSource, /state\.handleAgentSave/);
@@ -142,7 +142,6 @@ test('Supervisor settings no longer expose multi-agent or internal provider cont
   assert.doesNotMatch(panelSource, /Provider ID|User-Agent|高级设置/);
   assert.doesNotMatch(panelSource, /PI Assistant/);
   assert.doesNotMatch(panelSource, /Runner Brain/);
-  assert.match(panelSource, /Xuanwu Supervisor/);
   assert.doesNotMatch(panelSource, /label="Agent ID"/);
   assert.doesNotMatch(panelSource, /Runner Agent Settings/);
   assert.doesNotMatch(stateSource, /assistantApi\.createPiAgent/);
@@ -152,9 +151,7 @@ test('Supervisor settings no longer expose multi-agent or internal provider cont
 });
 
 test('Supervisor settings distinguishes model credentials from Codex and Claude Code login state', () => {
-  assert.match(panelSource, /为玄武助手选择理解和处理任务的模型/);
-  assert.match(panelSource, /负责写代码的 Codex \/ Claude Code 使用本机登录状态/);
-  assert.match(panelSource, /查看编程工具/);
+  assert.doesNotMatch(panelSource, /MODEL RUNTIME/);
   assert.match(panelSource, /助手快捷登录目前支持 Codex \/ ChatGPT/);
   assert.match(panelSource, /Claude Code 的本机登录请前往“编程工具”检查/);
   assert.match(panelSource, /Base URL \/ API Path/);

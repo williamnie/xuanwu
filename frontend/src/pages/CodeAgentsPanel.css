@@ -1,11 +1,11 @@
 .code-agents-panel {
   background: var(--bg-primary);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 22px;
+  padding: 18px;
 }
 
 .code-agents-header {
@@ -15,28 +15,14 @@
   justify-content: space-between;
 }
 
-.code-agents-kicker {
+.code-agents-header {
   align-items: center;
-  color: var(--primary);
-  display: inline-flex;
-  font-size: 0.72rem;
-  font-weight: 800;
-  gap: 6px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
-.code-agents-header h2 {
-  font-size: 1.35rem;
-  margin: 5px 0 0;
-}
-
-.code-agents-header p {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  line-height: 1.55;
-  margin: 7px 0 0;
-  max-width: 760px;
+.code-agents-header h3 {
+  font-size: 1rem;
+  font-weight: 650;
+  margin: 0;
 }
 
 .code-agents-error {
@@ -244,3 +230,17 @@
     grid-template-columns: 1fr;
   }
 }
+
+.codex-runtime-details { border-top: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding-top: 12px; }
+.codex-runtime-fact { align-items: baseline; display: flex; flex-wrap: wrap; font-size: 0.72rem; gap: 4px 10px; }
+.codex-runtime-fact > span { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.1em; min-width: 86px; text-transform: uppercase; }
+.codex-runtime-fact code { color: var(--text-secondary); font-size: 0.68rem; overflow-wrap: anywhere; }
+.codex-runtime-fact strong { color: var(--warning); font-weight: 650; }
+.codex-runtime-fact strong.ready { color: var(--success); }
+.codex-runtime-fact small { color: var(--text-muted); flex-basis: 100%; padding-left: 96px; }
+.codex-runtime-fact small.warning { align-items: center; color: var(--warning); display: inline-flex; gap: 4px; }
+.codex-runtime-more > summary { color: var(--text-secondary); cursor: pointer; font-size: 0.72rem; font-weight: 700; }
+.codex-runtime-more form { display: grid; gap: 10px; padding-top: 10px; }
+.codex-runtime-more label { display: grid; gap: 4px; }
+.codex-runtime-more label > span { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+@media (max-width: 760px) { .codex-runtime-fact small { padding-left: 0; } }

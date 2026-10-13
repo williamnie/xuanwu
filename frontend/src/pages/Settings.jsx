@@ -1,7 +1,7 @@
 import { systemApi } from '../api/system.js';
 import { connectorsApi } from '../api/connectors.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AlertTriangle, Copy, Download, RefreshCw, ServerCog } from 'lucide-react';
+import { AlertTriangle, Copy, Download, RefreshCw } from 'lucide-react';
 import { message } from '../store/toastStore';
 import RuntimeLogsPanel from '../components/RuntimeLogsPanel';
 import { PanelLoader } from '../components/TurtleLoader';
@@ -13,7 +13,7 @@ import { SettingsHeader, SettingsNavigation, SettingsSectionIntro } from './Sett
 import { resolveSettingsRoute, settingsRouteId } from './settingsNavigation';
 import './Settings.css';
 
-export default function Settings({ initialTab = 'general', navigateTo, onSectionChange, pageTitle }) {
+export default function Settings({ initialTab = 'general', navigateTo, onSectionChange, pageTitle, theme, toggleTheme }) {
   const [route, setRoute] = useState(() => resolveSettingsRoute(initialTab));
   const contentRef = useRef(null);
 
@@ -37,7 +37,15 @@ export default function Settings({ initialTab = 'general', navigateTo, onSection
         <SettingsNavigation onRouteChange={handleRouteChange} route={route} />
         <section className="settings-tab-content" aria-labelledby="settings-section-title" ref={contentRef}>
           <SettingsSectionIntro route={route} />
-          <SettingsTabContent activeTab={route.tab} tier={route.tier} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />
+          <SettingsTabContent
+            activeTab={route.tab}
+            advancedSection={route.section}
+            navigateTo={navigateTo}
+            onAdvancedSectionChange={section => handleRouteChange({ tab: 'advanced', section })}
+            RuntimeStatusPanel={RuntimeStatusPanel}
+            theme={theme}
+            toggleTheme={toggleTheme}
+          />
         </section>
       </div>
     </div>
@@ -69,14 +77,7 @@ function RuntimeStatusPanel() {
   return (
     <section className="glass-card runtime-status">
       <div className="runtime-status__header">
-        <div>
-          <h2 className="runtime-status__heading">
-            <ServerCog size={18} color="var(--primary)" /> Runtime Status
-          </h2>
-          <p className="runtime-status__description">
-            只读状态检查，不启动新的 Codex 深度探针。
-          </p>
-        </div>
+        <RuntimeHealthLine loading={loading} status={status} />
         <div className="runtime-status__actions">
           <button className="btn btn-secondary" onClick={handleCopyDoctor} disabled={doctorLoading}>
             <Copy size={15} />
@@ -93,8 +94,13 @@ function RuntimeStatusPanel() {
         </div>
       </div>
       {error && <div className="runtime-status__error">{error}</div>}
-      {!error && <RuntimeStatusBody status={status} loading={loading} />}
-      <RuntimeLogsPanel logs={logs} loading={logsLoading} error={logsError} onCopy={handleCopyLogs} />
+      {!error && <RuntimeStatusBody status={status} />}
+      <details className="settings-disclosure runtime-status__logs">
+        <summary><strong>运行日志</strong></summary>
+        <div className="settings-disclosure-content">
+          <RuntimeLogsPanel logs={logs} loading={logsLoading} error={logsError} onCopy={handleCopyLogs} />
+        </div>
+      </details>
     </section>
   );
 }
@@ -196,129 +202,40 @@ function downloadText(filename, text) {
   URL.revokeObjectURL(url);
 }
 
-function RuntimeStatusBody({ status, loading }) {
-  if (loading && !status) {
-    return <PanelLoader label="正在确认 Runtime 状态…" />;
-  }
-  if (!status) {
-    return <div className="runtime-status__empty">暂无状态数据</div>;
-  }
-  const rows = [
-    ['API', status.service?.alive ? 'alive' : 'down', status.service?.alive],
-    ['DB', status.db?.ok ? 'ok' : status.db?.error || 'error', status.db?.ok],
-    ['Health reasons', `${status.health?.state || 'unknown'} · ${(status.health?.reasons || []).length} reasons`, status.health?.state === 'healthy'],
-    ['Observability', `${status.observability?.dimensions?.work?.total || 0} Work / ${status.observability?.dimensions?.run?.total || 0} Run / ${status.observability?.cost?.usage?.total_tokens || 0} tokens`, true],
-    ['Codex server', `${status.codex?.server_mode || 'cli'} · ${status.codex?.command || 'missing'}`, status.codex?.command_ok],
-    ['Auth enabled', status.config?.auth_enabled ? 'enabled' : 'disabled', !status.config?.auth_enabled],
-    ['Runner loops', `${status.runner?.running_loops || 0} running / ${status.runner?.in_progress_issues || 0} in progress / max ${status.runner?.max_parallel_projects || 1}`, true],
-    ['PI project manager', managerModeSummary(status.pi_guardian?.runtime_modes), Number(status.pi_guardian?.runtime_modes?.manager_active_projects || 0) > 0],
-    ['Guardian supervisor', supervisorModeSummary(status.pi_guardian?.runtime_modes), Number(status.pi_guardian?.runtime_modes?.supervisor_active_projects || 0) > 0],
-    ['Process-group memory', processGroupMemorySummary(status.process_group_memory), memoryBudgetOk(status.process_group_memory)],
+// 只保留一行健康摘要；10 项状态卡与进程组内存明细都在诊断包（/api/system/doctor）里，排查时下载即可。
+function RuntimeHealthLine({ loading, status }) {
+  if (loading && !status) return <PanelLoader label="正在确认服务状态…" />;
+  if (!status) return <div className="runtime-status__empty">暂无状态数据</div>;
+  const reasons = status.health?.reasons || [];
+  const items = [
+    ['API', status.service?.alive],
+    ['数据库', status.db?.ok],
+    ['编程工具', !reasons.some(reason => String(reason.code || '').startsWith('provider_'))],
   ];
   return (
-    <div className="runtime-status__body">
-      <VersionSummaryCard summary={buildVersionSummary(APP_VERSION, status)} />
-      <SecurityWarnings warnings={status.security?.warnings || []} />
-      <div className="runtime-status__grid">
-        {rows.map(([label, value, ok]) => (
-          <div className="runtime-status__card" key={label}>
-            <div className="runtime-status__card-label">{label}</div>
-            <div className="runtime-status__card-value">
-              <span className={`status-dot runtime-status__dot ${ok ? 'active' : 'idle'}`}></span>
-              {value}
-            </div>
-          </div>
-        ))}
-      </div>
-      <ProcessGroupMemoryStatus memory={status.process_group_memory} />
-    </div>
+    <ul className="runtime-status__health" aria-label="服务健康摘要">
+      {items.map(([label, ok]) => (
+        <li key={label}>
+          <span className={`status-dot runtime-status__dot ${ok ? 'active' : 'idle'}`}></span>
+          {label} <strong>{ok ? '正常' : '需检查'}</strong>
+        </li>
+      ))}
+      <li>后台循环 <strong>{status.runner?.running_issues || 0} 个执行中 · 并发上限 {status.runner?.max_parallel_projects || 1}</strong></li>
+    </ul>
   );
 }
 
-function managerModeSummary(modes) {
-  const active = Number(modes?.manager_active_projects || 0);
-  const disabled = Number(modes?.manager_disabled_projects || 0);
-  return active > 0
-    ? `${active} active / ${disabled} disabled`
-    : `disabled · Guardian does not decompose or replan Work`;
-}
-
-function supervisorModeSummary(modes) {
-  const active = Number(modes?.supervisor_active_projects || 0);
-  return `${active} active · independent of project manager`;
-}
-
-function ProcessGroupMemoryStatus({ memory }) {
-  if (!memory || memory.freshness?.status === 'unavailable') return null;
-  const roles = Array.isArray(memory.roles) ? memory.roles : [];
-  const top = Array.isArray(memory.top_by_rss) ? memory.top_by_rss.slice(0, 5) : [];
-  const measurementSource = memory.budget?.measurement_source || memory.measurement?.source || 'unknown';
-  const measuredGroup = memory.budget?.measured_group_bytes;
-  const measuredMain = memory.budget?.measured_main_bytes;
+function RuntimeStatusBody({ status }) {
+  if (!status) return null;
+  const version = buildVersionSummary(APP_VERSION, status);
+  const reasons = status.health?.reasons || [];
   return (
-    <div className="runtime-status__card">
-      <div className="runtime-status__split-row">
-        <strong>Runner process-group memory</strong>
-        <span className="runtime-status__meta">
-          sampled {formatMemorySampleTime(memory.sampled_at)} · {memory.freshness?.status || 'unknown'} · no auto-restart
-        </span>
-      </div>
-      <div className="runtime-status__meta runtime-status__meta--spaced">
-        Budget measurement {measurementSource} · group {formatMiB(measuredGroup)} · main {formatMiB(measuredMain)} · probe {memory.measurement?.physical_memory_probe || 'unknown'}
-      </div>
-      <div className="runtime-status__meta runtime-status__meta--compact">
-        Activity {memory.activity?.status || 'unknown'} · issue runs {memory.activity?.issue_runs || 0} · Agentic in-flight {memory.activity?.agentic_in_flight || 0} · idle grace {formatDurationMs(memory.activity?.idle_grace_ms)}
-      </div>
-      <div className="runtime-status__meta runtime-status__meta--compact">
-        Physical footprint {formatMiB(memory.aggregate?.footprint_bytes)} · RSS {formatMiB(memory.aggregate?.rss_bytes)} · RSS P95 {formatMiB(memory.aggregate?.rss_p95_bytes)} · main heap {formatMiB(memory.main?.heap_used_bytes)} · external {formatMiB(memory.main?.external_bytes)} · array buffers {formatMiB(memory.main?.array_buffers_bytes)}
-      </div>
-      <div className="runtime-status__role-list">
-        {roles.map(role => (
-          <div className="runtime-status__split-row runtime-status__role" key={role.role}>
-            <span>{role.role} · {role.process_count || 0} PID</span>
-            <strong>{formatMiB(role.rss_bytes)}</strong>
-          </div>
-        ))}
-      </div>
-      {top.length > 0 && (
-        <div className="runtime-status__process-list">
-          <span className="runtime-status__card-label">Top PID by macOS ps RSS</span>
-          {top.map(process => (
-            <div className="runtime-status__split-row runtime-status__process" key={`${process.pid}-${process.started_at}`}>
-              <span>PID {process.pid} · {process.role} · {process.owner}</span>
-              <strong>{formatMiB(process.rss_bytes)}</strong>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="runtime-status__body">
+      {reasons.length ? <ul className="runtime-status__reasons">{reasons.map(reason => <li key={`${reason.code}:${reason.source_ref}`}>{reason.message || reason.code}</li>)}</ul> : null}
+      <SecurityWarnings warnings={status.security?.warnings || []} />
+      {version.ok ? null : <VersionSummaryCard summary={version} />}
     </div>
   );
-}
-
-function processGroupMemorySummary(memory) {
-  if (!memory || memory.freshness?.status === 'unavailable') return 'unavailable';
-  const source = memory.budget?.measurement_source || memory.measurement?.source || 'unknown';
-  return `${memory.phase || 'unknown'} · ${source} ${formatMiB(memory.budget?.measured_group_bytes)} · RSS P95 ${formatMiB(memory.aggregate?.rss_p95_bytes)} · ${memory.budget?.status || 'unknown'}`;
-}
-
-function memoryBudgetOk(memory) {
-  return memory?.budget?.status === 'within_budget';
-}
-
-function formatMiB(bytes) {
-  if (!Number.isFinite(Number(bytes))) return 'n/a';
-  return `${(Number(bytes) / (1024 * 1024)).toFixed(1)} MiB`;
-}
-
-function formatMemorySampleTime(value) {
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleTimeString() : 'unknown';
-}
-
-function formatDurationMs(value) {
-  const milliseconds = Number(value);
-  if (!Number.isFinite(milliseconds) || milliseconds < 0) return 'n/a';
-  return `${(milliseconds / 1000).toFixed(0)}s`;
 }
 
 function SecurityWarnings({ warnings }) {
