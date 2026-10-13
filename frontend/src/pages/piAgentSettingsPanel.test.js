@@ -44,7 +44,7 @@ test('Xuanwu Supervisor Settings exposes OpenAI Codex OAuth as an optional short
   assert.match(panelSource, /openai-codex-responses/);
   assert.match(panelSource, /startPiCodexOAuthLogin/);
   assert.match(panelSource, /等待浏览器完成授权；再次登录会生成新的授权地址/);
-  assert.match(panelSource, /已连接，重新授权失败/);
+  assert.match(panelSource, /授权失败，可在“更多”中重新授权/);
   assert.match(panelSource, /status\?\.message/);
   assert.match(stateSource, /copyPiCodexOAuthUrl/);
   assert.doesNotMatch(stateSource, /openOAuthUrl\\(result\\.auth_url\\)/);
@@ -67,7 +67,7 @@ test('Supervisor page uses one flat API-first connection console with discovered
   assert.match(panelSource, /title="连接助手模型"/);
   assert.match(panelSource, /<ProviderConnectionSettings state=\{state\} \/>/);
   assert.match(panelSource, /API 连接/);
-  assert.match(panelSource, /OAuth 快捷登录/);
+  assert.match(panelSource, /用 Codex \/ ChatGPT 账号登录/);
   assert.match(panelSource, /API 协议/);
   assert.match(panelSource, /API 地址/);
   assert.match(panelSource, /API Key/);
@@ -164,4 +164,19 @@ test('Supervisor settings relies on migrated canonical data instead of UI compat
   assert.match(stateSource, /说人话/);
   assert.doesNotMatch(stateSource, /Engineering Chief of Staff/);
   assert.match(stateSource, /normalizedSupervisorName\(supervisor\.name\)/);
+});
+
+
+test('connection choices reuse radio cards, OAuth secondary actions are disclosed, and status stays separate', () => {
+  assert.match(panelSource, /settings-notification-modes provider-mode-tabs/);
+  assert.match(panelSource, /className="settings-notification-mode"/);
+  assert.match(panelSource, /name="assistant-connection-mode"/);
+  assert.match(panelSource, /<details className="settings-disclosure supervisor-oauth-more">/);
+  assert.match(panelSource, /'Signed in' : '已登录'/);
+  assert.match(panelSource, /'Authorization' : '授权'/);
+  assert.match(panelSource, /'Tested and available' : '已测试可用'/);
+  assert.match(panelSource, /piConnectionStatus\(state\)/);
+  assert.match(stateSource, /if \(key === 'modelId'\) invalidateConnectionTest\(\)/);
+  assert.match(panelStylesSource, /@media \(max-width: 760px\)[\s\S]*?\.provider-mode-tabs \{ grid-template-columns: 1fr;/);
+  assert.match(panelStylesSource, /\.provider-connection-summary \{[^}]*background: var\(--surface-raised\)/);
 });

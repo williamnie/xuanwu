@@ -250,46 +250,26 @@
 }
 
 .provider-mode-tabs {
-  border-bottom: 1px solid var(--text-primary);
-  display: flex;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.provider-mode-tabs button {
-  background: transparent;
-  border: 0;
-  border-right: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 0.67rem;
-  font-weight: 800;
-  min-height: 36px;
-  padding: 0 14px;
-  text-transform: uppercase;
+.provider-mode-tabs .settings-notification-mode {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
 }
 
-.provider-mode-tabs button span {
-  color: var(--text-muted);
-  font-size: 0.55rem;
-  margin-right: 7px;
+.provider-mode-tabs .settings-notification-mode > label:first-child {
+  padding: 16px;
+  width: 100%;
 }
 
-.provider-mode-tabs button.active {
-  background: var(--brand-ink);
-  color: white;
+.provider-mode-tabs .settings-notification-mode:has(input:checked) {
+  border-color: var(--primary);
 }
 
-.provider-mode-tabs button.active span {
-  color: var(--brand-mint);
-}
-
-[data-theme="dark"] .provider-mode-tabs button.active {
-  background: var(--brand-mint);
-  color: var(--brand-north);
-}
-
-[data-theme="dark"] .provider-mode-tabs button.active span {
-  color: var(--brand-north);
-}
+.supervisor-oauth-controls { display: grid; gap: 8px; min-width: 0; }
+.supervisor-oauth-more code { color: var(--text-muted); display: block; font-size: 0.66rem; overflow-wrap: anywhere; }
 
 .provider-flow-section {
   padding: 20px 0 0;
@@ -513,9 +493,9 @@
 }
 
 .provider-progress-step.ready > span {
-  background: var(--brand-ink);
-  border-color: var(--brand-ink);
-  color: white;
+  background: var(--surface-raised);
+  border-color: var(--border-color);
+  color: var(--success);
 }
 
 .provider-progress-step > div {
@@ -535,16 +515,16 @@
 }
 
 .provider-connection-summary {
-  background: var(--brand-north);
-  border: 1px solid var(--brand-ink);
-  color: white;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
   font-family: var(--font-mono);
   margin-top: 16px;
-  padding: 11px;
+  padding: 12px;
 }
 
 .provider-connection-summary > span {
-  color: var(--brand-mint);
+  color: var(--text-muted);
   font-size: 0.56rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -569,11 +549,11 @@
 }
 
 .provider-connection-summary dt {
-  color: color-mix(in srgb, white 55%, transparent);
+  color: var(--text-secondary);
 }
 
 .provider-connection-summary dd {
-  color: white;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -946,10 +926,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .provider-mode-tabs button {
-    flex: 1;
-    padding-inline: 8px;
-  }
 
   .provider-model-row {
     grid-template-columns: 1fr;
@@ -968,4 +944,8 @@
   .provider-connection-summary {
     max-width: none;
   }
+}
+
+@media (max-width: 760px) {
+  .provider-mode-tabs { grid-template-columns: 1fr; }
 }

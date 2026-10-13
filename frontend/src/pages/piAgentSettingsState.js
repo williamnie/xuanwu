@@ -70,6 +70,7 @@ export function usePiAgentSettingsState() {
   const loadPromptSummary = () => loadPiPromptSummary(setPromptSummary, setPromptSummaryLoading);
   const updateField = (key, value) => {
     if (key === 'instructions' || key.startsWith('persona')) setPromptSummary(null);
+    if (key === 'modelId') invalidateConnectionTest();
     if (CONNECTION_FIELDS.has(key)) {
       invalidateConnectionTest();
       setModelDiscovery({ busy: false, providerId: '', result: null });
@@ -156,7 +157,10 @@ export function usePiAgentSettingsState() {
   };
   const copyPiCodexOAuthUrl = () => copyOAuthUrl(oauthStatus?.auth_url);
   const openPiCodexOAuthUrl = () => openOAuthUrl(oauthStatus?.auth_url);
-  const logoutPiCodexOAuth = () => logoutPiOAuth(setOauthBusy, setOauthStatus);
+  const logoutPiCodexOAuth = () => {
+    invalidateConnectionTest();
+    return logoutPiOAuth(setOauthBusy, setOauthStatus);
+  };
 
   useEffect(() => {
     loadSettings();

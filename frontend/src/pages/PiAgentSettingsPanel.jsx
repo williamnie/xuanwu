@@ -1,5 +1,7 @@
 import { CheckCircle2, CircleDashed, KeyRound, Loader2, PlugZap, RefreshCw, Save, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
+import { useI18n } from '../i18n/context.js';
+import { piConnectionStatus } from './piConnectionStatus.js';
 import { PanelLoader } from '../components/TurtleLoader';
 import { usePiAgentSettingsState } from './piAgentSettingsState';
 import './PiAgentSettingsPanel.css';
@@ -147,11 +149,24 @@ function SavedConnectionPicker({ state }) {
 }
 
 function ConnectionModeTabs({ oauthMode, state }) {
+  const { language } = useI18n();
+  const english = language === 'en-US';
   return (
-    <nav className="provider-mode-tabs" aria-label="连接方式">
-      <button aria-pressed={!oauthMode} className={!oauthMode ? 'active' : ''} onClick={state.selectApiMode} type="button"><span>API</span> API 连接</button>
-      <button aria-pressed={oauthMode} className={oauthMode ? 'active' : ''} onClick={state.selectOAuthMode} type="button"><span>OA</span> OAuth 快捷登录</button>
-    </nav>
+    <fieldset className="settings-notification-modes provider-mode-tabs">
+      <legend>{english ? 'Connection method' : '连接方式'}</legend>
+      <div className="settings-notification-mode">
+        <label>
+          <input checked={!oauthMode} name="assistant-connection-mode" onChange={state.selectApiMode} type="radio" />
+          <span><strong>{english ? 'API connection' : 'API 连接'}</strong><small>{english ? 'Enter the API URL and key.' : '填写 API 地址和 Key。'}</small></span>
+        </label>
+      </div>
+      <div className="settings-notification-mode">
+        <label>
+          <input checked={oauthMode} name="assistant-connection-mode" onChange={state.selectOAuthMode} type="radio" />
+          <span><strong>{english ? 'Sign in with Codex / ChatGPT' : '用 Codex / ChatGPT 账号登录'}</strong><small>{english ? 'Authorize the assistant with your account.' : '使用账号为玄武助手授权。'}</small></span>
+        </label>
+      </div>
+    </fieldset>
   );
 }
 
@@ -280,26 +295,29 @@ function ConnectionResult({ state }) {
 }
 
 function ConnectionProgress({ oauthMode, state }) {
-  const credentialReady = oauthMode
-    ? Boolean(state.oauthStatus?.pi_oauth?.configured)
-    : Boolean(state.form.baseUrl.trim() && (state.form.apiKey.trim() || state.selectedProvider?.api_key_configured));
-  const modelReady = Boolean(state.form.modelId.trim());
-  const applied = Boolean(state.selectedProvider?.models?.includes(state.form.modelId));
+  const { language } = useI18n();
+  const english = language === 'en-US';
+  const status = piConnectionStatus(state);
+  const modelStatus = {
+    untested: english ? 'Not tested' : '未测试',
+    passed: english ? 'Tested and available' : '已测试可用',
+    failed: english ? 'Test failed' : '测试失败',
+    testing: english ? 'Testing…' : '测试中…',
+  }[status.model];
   return (
     <aside className="provider-progress-rail">
-      <span className="provider-console-label">配置进度</span>
-      <div className="provider-progress-list">
-        <ProgressStep index="1" label="连接凭据" ready={credentialReady} value={oauthMode ? 'Codex OAuth 快捷登录' : '协议、API 地址与 Key'} />
-        <ProgressStep index="2" label="选择模型" ready={modelReady} value="远端目录或手动填写" />
-        <ProgressStep index="3" label="保存为默认" ready={applied} value="应用到玄武助手" />
+      <span className="provider-console-label">{english ? 'Connection status' : '连接状态'}</span>
+      <div className="provider-progress-list" role="status">
+        <ProgressStep index="1" label={english ? 'Authorization' : '授权'} ready={status.authorized} value={status.authorized ? (english ? 'Authorized' : '已授权') : (english ? 'Not authorized' : '未授权')} />
+        <ProgressStep index="2" label={english ? 'Model' : '模型'} ready={status.model === 'passed'} value={modelStatus} />
       </div>
       <div className="provider-connection-summary">
-        <span>连接摘要</span>
+        <span>{english ? 'Selected connection' : '当前连接'}</span>
         <dl>
-          <div><dt>认证</dt><dd>{oauthMode ? 'Codex OAuth' : 'API Key'}</dd></div>
-          <div><dt>协议</dt><dd>{state.form.api}</dd></div>
-          <div><dt>地址</dt><dd>{oauthMode ? 'OAuth 自动配置' : connectionTarget(state.form.baseUrl)}</dd></div>
-          <div><dt>模型</dt><dd>{state.form.modelId || '待选择'}</dd></div>
+          <div><dt>{english ? 'Auth' : '认证'}</dt><dd>{oauthMode ? 'Codex OAuth' : 'API Key'}</dd></div>
+          <div><dt>{english ? 'API' : '协议'}</dt><dd>{state.form.api}</dd></div>
+          <div><dt>{english ? 'URL' : '地址'}</dt><dd>{oauthMode ? (english ? 'Configured by OAuth' : 'OAuth 自动配置') : connectionTarget(state.form.baseUrl)}</dd></div>
+          <div><dt>{english ? 'Model' : '模型'}</dt><dd>{state.form.modelId || (english ? 'Choose a model' : '待选择')}</dd></div>
         </dl>
       </div>
     </aside>
@@ -439,33 +457,43 @@ function CodexOAuthPanel({ state }) {
 }
 
 function OAuthButtons({ state }) {
+  const { language } = useI18n();
+  const english = language === 'en-US';
+  const configured = Boolean(state.oauthStatus?.pi_oauth?.configured);
+  const pending = state.oauthStatus?.status === 'pending' && state.oauthStatus?.auth_url;
   return (
-    <div className="supervisor-oauth-actions">
-      <button className="btn btn-primary" onClick={state.startPiCodexOAuthLogin} disabled={state.oauthBusy} type="button">
-        {state.oauthBusy ? <Loader2 size={14} className="spin-animation" /> : <KeyRound size={14} />} {state.oauthStatus?.pi_oauth?.configured ? '重新授权' : '登录 Codex'}
+    <div className="supervisor-oauth-controls">
+      <button className="btn btn-primary" onClick={pending ? state.openPiCodexOAuthUrl : state.startPiCodexOAuthLogin} disabled={state.oauthBusy || configured} type="button">
+        {state.oauthBusy ? <Loader2 size={14} className="spin-animation" /> : <KeyRound size={14} />} {configured ? (english ? 'Signed in' : '已登录') : (english ? 'Sign in' : '登录')}
       </button>
-      <button className="btn btn-secondary" onClick={state.copyPiCodexOAuthUrl} disabled={!state.oauthStatus?.auth_url} type="button">复制登录地址</button>
-      <button className="btn btn-secondary" onClick={state.openPiCodexOAuthUrl} disabled={!state.oauthStatus?.auth_url} type="button">打开授权页</button>
-      <button aria-label="刷新 OAuth 状态" className="btn btn-secondary supervisor-oauth-refresh" onClick={state.loadOAuthStatus} disabled={state.oauthBusy} title="刷新 OAuth 状态" type="button"><RefreshCw size={14} /></button>
-      <button className="btn btn-secondary" onClick={state.logoutPiCodexOAuth} disabled={state.oauthBusy || !state.oauthStatus?.pi_oauth?.configured} type="button">退出 OAuth</button>
+      <details className="settings-disclosure supervisor-oauth-more">
+        <summary>{english ? 'More' : '更多'}</summary>
+        <div className="supervisor-oauth-actions">
+          <button className="btn btn-secondary" onClick={state.startPiCodexOAuthLogin} disabled={state.oauthBusy} type="button">{english ? 'Authorize again' : '重新授权'}</button>
+          <button className="btn btn-secondary" onClick={state.copyPiCodexOAuthUrl} disabled={!state.oauthStatus?.auth_url} type="button">{english ? 'Copy sign-in URL' : '复制登录地址'}</button>
+          <button className="btn btn-secondary" onClick={state.openPiCodexOAuthUrl} disabled={!state.oauthStatus?.auth_url} type="button">{english ? 'Open authorization page' : '打开授权页'}</button>
+          <button className="btn btn-secondary" onClick={state.loadOAuthStatus} disabled={state.oauthBusy} type="button"><RefreshCw size={14} />{english ? 'Refresh status' : '刷新 OAuth 状态'}</button>
+          <button className="btn btn-secondary" onClick={state.logoutPiCodexOAuth} disabled={state.oauthBusy || !configured} type="button">{english ? 'Revoke authorization' : '撤销授权'}</button>
+        </div>
+        {state.oauthStatus?.auth_url ? <code>{state.oauthStatus.auth_url}</code> : null}
+      </details>
     </div>
   );
 }
 
 function OAuthStatusLine({ status }) {
+  const { language } = useI18n();
+  const english = language === 'en-US';
   const lifecycle = status?.status || status?.pi_oauth?.status || 'idle';
   const configured = Boolean(status?.pi_oauth?.configured);
-  const label = configured
-    ? lifecycle === 'error' ? '已连接，重新授权失败' : '已连接'
-    : lifecycle === 'pending' ? '等待授权'
-      : lifecycle === 'error' ? '授权失败'
-        : '未连接';
-  const detail = status?.message || (lifecycle === 'pending' ? '等待浏览器完成授权；再次登录会生成新的授权地址。' : '');
+  const label = configured ? (english ? 'Authorized' : '已授权') : (english ? 'Not authorized' : '未授权');
+  const detail = status?.message || (lifecycle === 'pending'
+    ? (english ? 'Finish authorization in the browser; signing in again creates a new URL.' : '等待浏览器完成授权；再次登录会生成新的授权地址。')
+    : lifecycle === 'error' ? (english ? 'Authorization failed. Try again from More.' : '授权失败，可在“更多”中重新授权。') : '');
   return (
     <div className="supervisor-oauth-status">
-      <span><i className={configured ? 'ready' : lifecycle} />玄武助手 OAuth：{label}</span>
+      <span><i className={configured ? 'ready' : lifecycle} />{english ? 'Authorization' : '授权'}：{label}</span>
       {detail ? <span className={lifecycle === 'error' ? 'oauth-error' : ''}>{detail}</span> : null}
-      {status?.auth_url ? <code>{status.auth_url}</code> : null}
     </div>
   );
 }
