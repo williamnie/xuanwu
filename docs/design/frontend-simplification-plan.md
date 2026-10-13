@@ -472,6 +472,33 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 6. 未触及组件内的硬编码旧术语（随各组件改动逐步替换）。
 7. D 阶段（批量创建、3 步引导、路由改名、飞书来源发现、来源筛选）仍依赖 8.2 的后端合同。
 
+### 8.1.2 交接给其他 Agent（Codex / agy）的约束
+
+上面 1–6 项可以交给其他 Agent 继续做，第 7 项不行（要先有后端合同）。交接时把本节原样附上。
+
+**建议顺序**：先做 3、4、6 三个小项，再做 5，最后做 1、2。每项单独提交，不要合并成一个大提交。
+
+**工作方式**
+- 在 `feat/frontend-simplification-v2` 上继续，不新建 worktree（见 AGENTS.md），不推送，除非用户要求。
+- 动 UI 前完整阅读 `docs/design-system/README.md` 与 `spec.md`；只用既有令牌和组件。
+- 每项完成后运行：`cd frontend && bun test --timeout 60000 && npm run lint && npm run build`，并检查浅色 / 深色和 760px 以下布局。
+
+**不能改坏的部分（上一轮被改坏过）**
+- 任务详情“过程”段：`work/WorkRunProcess.jsx` 复用完整的 `RunDetail` 和 `RunContextBar`，默认展开、执行中自动刷新（Q9）。不得改成摘要、不得默认折叠、不得删掉实时会话 / 日志 / 原始事件。
+- “执行记录”保留在左侧导航；不自动跳转；`#/work?workId=&runId=` 深链保持可用。
+- 任务列表行动作和看板拖拽共用 `work/workActions.js` 一张动作表，不要各写一套。
+- 设置的旧 section 映射在 `settingsNavigation.js`，新增“高级 → 执行预设”时同时加映射和测试，旧链接不能失效。
+- 只改界面，不改后端接口语义：Plugin 意图删 UI 但保存时原样带回原值；Runner 设置只 PUT 改动的字段；玄武助手设置的 persona 由 `PersonaSettingsPanel` 单独保存，别的面板不得带 persona 字段。
+- 删除面板前先确认功能有新的落脚点，不能“删掉即精简”。
+
+**各项要点**
+1. 项目编辑器：入口在项目设置的编辑对话框；执行预设移走后，项目编辑器里只留一行“使用的执行预设：xxx · 在高级里修改”。
+2. 外部连接：当前在 `AssistantSettingsSections.jsx` 的 NotificationsTab 里的 4 个子 Tab；改成列表 + 抽屉时，GitHub 抽屉直接复用现有 `GitHubSettingsPanel`（含“测试 / 保存并生效”状态机，勿重写）。
+3. 安全与权限：只删能力标识代码列，权限判断逻辑不动。
+4. 处理记录：ID 过滤收进 `<details>`“按 ID 查找”，有值时默认展开。
+5. 玄武助手：授权状态和模型测试状态分两行显示，不要合成一个“已连接”。
+6. 旧术语：对照 B0 的术语表（工作项→任务、证据→验证结果、PI / Supervisor→玄武助手、Provider→编程工具），只改用户可见文案，不改代码标识符、API 字段和 route ID。
+
 ### 8.2 需要新增或确认的后端合同
 
 | 需求 | 现状（Codex 第二轮核实） | 结论 |
