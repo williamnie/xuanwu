@@ -829,6 +829,12 @@
 .settings-permission-row:first-child { border-top: 0; }
 .settings-permission-row code { overflow-wrap: anywhere; }
 
+.settings-connector-permissions .settings-permission-row {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.7fr) minmax(0, 0.9fr);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .settings-permission-header {
   background: var(--bg-secondary);
   color: var(--text-muted);

@@ -240,6 +240,10 @@ test('Permissions projects live connector capabilities and preserves determinist
   assert.match(sectionsSource, /PermissionsSettingsPanel/);
   assert.match(permissionsSettingsSource, /connectorsApi\.getPiConnectors\(\)/);
   assert.match(permissionsSettingsSource, /外部连接权限/);
+  assert.match(permissionsSettingsSource, /labels=\{\['连接', '方向', '授权'\]\}/);
+  assert.doesNotMatch(permissionsSettingsSource, /能力标识|<code>\{row\.capabilityID\}<\/code>/);
+  assert.match(permissionsSettingsSource, /title=\{row\.capabilityID\}/);
+  assert.match(stylesSource, /\.settings-connector-permissions \.settings-permission-row\s*\{[^}]*grid-template-columns:[^;]*;[^}]*min-width: 0;/);
   assert.match(permissionsSettingsSource, /操作与审批规则/);
   assert.match(permissionsSettingsSource, /审批决定和执行结果都会保留记录/);
   assert.match(permissionsSettingsSource, /批准后也不能超出项目允许的权限范围/);

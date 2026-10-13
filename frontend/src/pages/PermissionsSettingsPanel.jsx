@@ -48,12 +48,11 @@ function ConnectorPermissionMatrix({ rows }) {
     <div className="settings-matrix-block">
       <div className="settings-block-title">连接能力</div>
       {rows.length === 0 ? <div className="settings-empty-state">当前没有可显示的连接能力。可前往外部连接检查配置。</div> : (
-        <div className="settings-permission-table" role="table" aria-label="外部连接权限">
-          <MatrixHeader labels={['连接', '能力标识', '方向', '授权']} />
+        <div className="settings-permission-table settings-connector-permissions" role="table" aria-label="外部连接权限">
+          <MatrixHeader labels={['连接', '方向', '授权']} />
           {rows.map(row => (
-            <div className="settings-permission-row" role="row" key={`${row.connectorID}:${row.capabilityID}`}>
+            <div className="settings-permission-row" role="row" key={`${row.connectorID}:${row.capabilityID}`} title={row.capabilityID}>
               <span>{row.connectorLabel}</span>
-              <code>{row.capabilityID}</code>
               <span>{row.direction}</span>
               <strong className={row.authorization === 'required' ? 'is-warning' : ''}>{row.authorization}</strong>
             </div>
