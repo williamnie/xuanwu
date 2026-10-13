@@ -1,8 +1,8 @@
 export const PRODUCT_TERMS = Object.freeze({
   product: '玄武',
   productLatin: 'Xuanwu',
-  supervisor: 'Xuanwu Supervisor',
-  supervisorShort: 'Supervisor',
+  supervisor: 'Xuanwu assistant',
+  supervisorShort: 'Xuanwu assistant',
   runner: 'Runner',
   runtimeId: 'xuanwu',
 });

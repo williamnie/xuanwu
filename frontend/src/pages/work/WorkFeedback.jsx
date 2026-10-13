@@ -6,8 +6,8 @@ export default function WorkFeedback({ feedback }) {
   const english = language === 'en-US';
   if (!feedback) return null;
   const labels = english
-    ? { received: 'Received · awaiting PI processing', executing: 'In progress', completed: 'Completed · does not imply deployed', needs_input: 'More input needed', failed: 'Processing failed · awaiting PI', cancelled: 'Cancelled' }
-    : { received: '已收到 · 等待 PI 处理', executing: '执行中', completed: '完成 · 不代表已上线', needs_input: '需补充', failed: '处理失败 · 等待 PI 处理', cancelled: '已取消' };
+    ? { received: 'Received · awaiting Xuanwu assistant processing', executing: 'In progress', completed: 'Completed · does not imply deployed', needs_input: 'More input needed', failed: 'Processing failed · awaiting Xuanwu assistant', cancelled: 'Cancelled' }
+    : { received: '已收到 · 等待玄武助手处理', executing: '执行中', completed: '完成 · 不代表已上线', needs_input: '需补充', failed: '处理失败 · 等待玄武助手处理', cancelled: '已取消' };
   return <section className="work-feedback" aria-label={english ? 'Feedback progress' : '反馈处理进度'}>
     <header><span>FEEDBACK</span><strong role="status" data-status={feedback.status}>{labels[feedback.status] || (english ? 'Unknown' : '状态未知')}</strong></header>
     <p><strong>{english ? 'Original question' : '原问题'}：</strong>{feedback.question}</p>

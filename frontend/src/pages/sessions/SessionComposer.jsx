@@ -25,7 +25,7 @@ export default function SessionComposer({
   running,
   interruptState,
   selectedId,
-  placeholder = "给当前 Provider session 发送消息...",
+  placeholder = "给当前编程工具 session 发送消息...",
   queuedMessages = [],
   followMode = true,
   onFollowModeChange = null,
@@ -352,15 +352,15 @@ function visibleEffortOptions(model, selectedValue, provider) {
 }
 
 function modelHint(loading, error) {
-  if (loading) return '正在读取 Provider 模型列表';
+  if (loading) return '正在读取编程工具模型列表';
   if (error) return `模型列表暂未加载：${error}`;
   return '模型';
 }
 
 function modelPlaceholder(loading, _error, model) {
   if (loading) return '读取模型';
-  if (!model) return 'Provider 默认';
-  return compactModelName(modelLabel(model)) || 'Provider 默认';
+  if (!model) return '编程工具默认';
+  return compactModelName(modelLabel(model)) || '编程工具默认';
 }
 
 function modelDisplayLabel(value, effectiveModel, models) {

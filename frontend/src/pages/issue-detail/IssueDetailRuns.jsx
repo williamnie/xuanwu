@@ -63,7 +63,7 @@ function IssueRunCard({ issue, project, profiles, run, isLatest, navigateTo, onC
       </div>
 
       <RunField label="Run ID" value={run.id} mono />
-      <RunField label="Provider" value={providerLabel(run.provider)} />
+      <RunField label="Coding tool" value={providerLabel(run.provider)} />
       <RunField label="Speed" value={serviceTierRunLabel(run)} />
       <RunField label="Agent Profile" value={issueRunProfileLabel(run, project, profiles)} />
       <RunField label="选择原因" value={runSelectionReasonLabel(run.selection_reason)} />
@@ -105,7 +105,7 @@ function runCopyText(run, sessionRef, sessionId, turnId) {
     `Run ID: ${run.id || ''}`,
     `Attempt: ${run.attempt || '?'}`,
     `Status: ${run.status || 'unknown'}`,
-    `Provider: ${providerLabel(run.provider)}`,
+    `Coding tool: ${providerLabel(run.provider)}`,
     `Speed: ${serviceTierRunLabel(run)}`,
     `Agent Profile: ${run.agent_profile_id || 'none'}`,
     `Selection: ${run.selection_reason || 'none'}`,

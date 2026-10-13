@@ -61,7 +61,7 @@ export function executionPolicyPresets(catalog, providerId, currentPolicy = null
       ...preset,
       value: `${preset.access}|${preset.approval}`,
       disabled: !supported,
-      reason: declaration?.reason || (!supported ? '当前 Provider/transport 不支持该组合' : ''),
+      reason: declaration?.reason || (!supported ? '当前编程工具/transport 不支持该组合' : ''),
     };
   });
   const current = currentPolicy ? executionPolicyValue(currentPolicy) : '';
@@ -75,7 +75,7 @@ export function executionPolicyPresets(catalog, providerId, currentPolicy = null
       value: current,
       disabled: false,
       historical: true,
-      reason: '历史值会保留，修改前请确认当前 Provider 支持情况',
+      reason: '历史值会保留，修改前请确认当前编程工具支持情况',
     });
   }
   return includeInherit ? [{ id: 'inherit', label: '沿用项目设置', value: '', disabled: false }, ...options] : options;
@@ -96,7 +96,7 @@ export function isolationLabel(catalog, providerId) {
   const isolation = entry?.execution_policy?.isolation || 'none';
   return ({
     'os-sandbox': 'OS sandbox',
-    'tool-policy': 'Provider 工具策略',
+    'tool-policy': '编程工具工具策略',
     'tool-selection': '工具选择限制',
     none: '无额外隔离',
   })[isolation] || isolation;

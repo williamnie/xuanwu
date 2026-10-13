@@ -4,7 +4,7 @@ export const GITHUB_OPERATIONS = [
   ['allowPullRequest', '允许创建 PR', '修复验证通过后可以推送分支并创建 PR。'],
   ['closeOnMerge', '合并并通过 CI 后关单', '只在 PR 已被合并且 CI 通过后关闭 Issue。'],
 ];
-export const githubPhaseLabel = value => ({ intake: '已接收', investigate: '调查', repair: '修复', needs_user: '求助 · 等待回答', review: 'PR · 等待评审', resolved: '已交付', paused: '暂停' })[value] || value || '未知';
+export const githubPhaseLabel = value => ({ intake: '已接收', investigate: '调查', repair: '修复', needs_user: '待你处理', review: 'PR · 等待评审', resolved: '已交付', paused: '暂停' })[value] || value || '未知';
 export const githubConnectionLabel = value => ({
   connected: '连接正常，仓库和标签可读取', permission_denied: '权限不足，请检查仓库访问及所选操作权限',
   authentication_failed: '认证失败，请检查现有凭据', credential_unavailable: '凭据不可用，请检查引用或本机认证',

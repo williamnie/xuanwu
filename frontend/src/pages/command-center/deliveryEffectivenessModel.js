@@ -41,6 +41,6 @@ export function overheadFacts(data) {
     { label: '记忆注入 / 自报引用', value: `${data.memory?.injected_works ?? '未知'} / ${data.memory?.cited_works ?? '未知'}`, detail: '有记录的任务数；有效复用未知' },
     { label: '注入 token 估算', value: data.memory?.injection_estimated_token_count ?? '未知', detail: '字符估算，仅含有数值的记录，不是账单 token' },
     { label: '复盘已知成本小计', value: reflection?.known_cost_usd == null ? '未知' : `USD ${reflection.known_cost_usd.toFixed(4)}`, detail: `${reflection?.cost_known_attempts ?? '未知'}/${reflection?.recorded_attempts ?? '未知'} 条有金额；${reflection?.partial_attempts ?? '未知'} 条部分回执；SDK 估算` },
-    { label: 'Supervisor 总成本', value: '未知', detail: '当前仅覆盖已记录复盘，其余开销尚未覆盖' },
+    { label: '玄武助手总成本', value: '未知', detail: '当前仅覆盖已记录复盘，其余开销尚未覆盖' },
   ];
 }

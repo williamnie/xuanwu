@@ -40,10 +40,10 @@ function SupervisorReadiness({ state }) {
   const connectionSaved = Boolean(state.selectedProvider);
   const modelSelected = Boolean(state.form.modelId.trim());
   return (
-    <div className="supervisor-readiness" aria-label="Supervisor readiness">
+    <div className="supervisor-readiness" aria-label="Xuanwu assistant readiness">
       <ReadinessItem label="Connection" ready={connectionSaved} value={connectionSaved ? connectionApiLabel(state.form.api) : '待配置'} />
       <ReadinessItem label="Model" ready={modelSelected} value={modelSelected ? state.form.modelId : '待选择'} />
-      <ReadinessItem label="Supervisor" ready={state.form.enabled} value={state.form.enabled ? '已启用' : '已停用'} />
+      <ReadinessItem label="玄武助手" ready={state.form.enabled} value={state.form.enabled ? '已启用' : '已停用'} />
     </div>
   );
 }
@@ -125,7 +125,7 @@ function SavedConnectionPicker({ state }) {
         <div aria-labelledby="provider-delete-confirm-title" className="provider-delete-confirm" role="alertdialog">
           <div>
             <strong id="provider-delete-confirm-title">删除 {connectionDisplayName(provider)}？</strong>
-            <span>{provider.id === 'openai-codex' ? '将同时移除 Supervisor OAuth 授权凭据。' : '将同时撤销为此连接保存的 API Key。'}</span>
+            <span>{provider.id === 'openai-codex' ? '将同时移除玄武助手的 OAuth 授权。' : '将同时撤销为此连接保存的 API Key。'}</span>
           </div>
           <div>
             <button className="btn btn-secondary" disabled={deleting} onClick={() => setConfirmingDelete(false)} type="button">取消</button>
@@ -463,7 +463,7 @@ function OAuthStatusLine({ status }) {
   const detail = status?.message || (lifecycle === 'pending' ? '等待浏览器完成授权；再次登录会生成新的授权地址。' : '');
   return (
     <div className="supervisor-oauth-status">
-      <span><i className={configured ? 'ready' : lifecycle} />Supervisor OAuth：{label}</span>
+      <span><i className={configured ? 'ready' : lifecycle} />玄武助手 OAuth：{label}</span>
       {detail ? <span className={lifecycle === 'error' ? 'oauth-error' : ''}>{detail}</span> : null}
       {status?.auth_url ? <code>{status.auth_url}</code> : null}
     </div>

@@ -107,7 +107,7 @@ function IssueRunMetadata({ issue, run }) {
   const runtimeTitle = runTooltipText({ attempt, runStatus, provider, speed, sessionId, turnId, exitText });
   const items = [
     { label: 'Run', value: `#${attempt} · ${runStatus}`, className: `run-status ${runStatus}` },
-    { label: 'Provider', value: provider },
+    { label: 'Coding tool', value: provider },
     { label: 'Speed', value: speed },
     { label: 'Session', value: shortId(sessionId), mono: true, hidden: !sessionId },
     { label: 'Turn', value: shortId(turnId), mono: true, hidden: !turnId },
@@ -141,7 +141,7 @@ function runTooltipText({ attempt, runStatus, provider, speed, sessionId, turnId
   return [
     `Run #${attempt}`,
     `Status: ${runStatus}`,
-    `Provider: ${provider}`,
+    `Coding tool: ${provider}`,
     `Speed: ${speed}`,
     `Session: ${sessionId || '暂无'}`,
     `Turn: ${turnId || '暂无'}`,

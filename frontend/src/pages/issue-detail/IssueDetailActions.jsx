@@ -85,7 +85,7 @@ export function IssueManualControls({ issue, onMarkStatus }) {
           <h2><UserCheck size={17} /> 人工状态干预</h2>
         </div>
       </div>
-      <p>仅在运行态未正确回写时使用。此操作会直接改 Issue 状态，不会补造 Run 或验证证据。</p>
+      <p>仅在运行态未正确回写时使用。此操作会直接改 Issue 状态，不会补造 Run 或验证结果。</p>
       <div>
         <button className="btn btn-secondary btn-success" type="button" disabled={issue.status === 'done'} onClick={() => onMarkStatus('done')}>
           <CheckCircle size={14} /> 标记 Done

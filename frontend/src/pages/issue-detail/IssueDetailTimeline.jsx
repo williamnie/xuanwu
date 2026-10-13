@@ -95,7 +95,7 @@ export function IssueActivityTimeline({ events }) {
         <div>
           <span className="issue-section-eyebrow">Audit trail</span>
           <h2><Activity size={17} /> 活动记录</h2>
-          <p>状态、内部备注和系统事件按时间汇总；Provider 输出已独立到“日志”。</p>
+          <p>状态、内部备注和系统事件按时间汇总；编程工具输出已独立到“日志”。</p>
         </div>
       </div>
 
@@ -165,7 +165,7 @@ function activityEventView(event) {
   if (event.type === 'issue.human_review_response_applied.v1') {
     return {
       title: `人工回答 → ${payload.action || 'answered'}`,
-      detail: payload.comment || 'PI 将读取这次回答并继续判断。',
+      detail: payload.comment || '玄武助手将读取这次回答并继续判断。',
       icon: <UserCheck size={14} />,
       tone: 'verification',
     };
@@ -245,7 +245,7 @@ export function IssueLogTimeline({
       <div className="issue-tab-panel-header">
         <div>
           <span className="issue-section-eyebrow">Lazy loaded · {LOG_PAGE_SIZE} / page</span>
-          <h2><Terminal size={17} /> Provider 运行日志</h2>
+          <h2><Terminal size={17} /> 编程工具运行日志</h2>
           <p>仅在打开本页签时读取最新日志；历史内容按需向前加载。</p>
         </div>
         <div className="issue-log-actions">
@@ -275,7 +275,7 @@ export function IssueLogTimeline({
           onScroll={updateTerminalFollowState}
         >
           <div className="terminal-runtime-strip">
-            <span>Provider <strong>{runtimeProvider}</strong></span>
+            <span>Coding tool <strong>{runtimeProvider}</strong></span>
             <span>Session <strong>{runtimeIdentity.sessionId || '暂无'}</strong></span>
             <span>Turn <strong>{runtimeIdentity.turnId || '暂无'}</strong></span>
             <span>Path <strong>{project?.cwd || '加载中'}</strong></span>

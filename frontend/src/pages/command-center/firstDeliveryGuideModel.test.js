@@ -28,7 +28,7 @@ test('clean state requires an explicit ready Code Agent selection before Supervi
   const selectedAgent = firstDeliveryState({ codeAgents: readyCodeAgents, doctor: readyDoctor, selectedCodeAgentID: 'codex' });
   assert.equal(selectedAgent.currentStep, 2);
   assert.equal(selectedAgent.selectedCodeAgent.id, 'codex');
-  assert.match(firstDeliveryRecovery(selectedAgent, readyDoctor), /Supervisor/);
+  assert.match(firstDeliveryRecovery(selectedAgent, readyDoctor), /玄武助手/);
 
   const state = firstDeliveryState({ codeAgents: readyCodeAgents, connectionTest: { ok: true }, doctor: readyDoctor, selectedCodeAgentID: 'codex' });
   assert.equal(state.currentStep, 3);

@@ -25,7 +25,7 @@ export default function EvidencePanel({
   issueId = '',
   runId = '',
   sessionRef = '',
-  title = '验证证据',
+  title = '验证结果',
   workId = '',
 }) {
   const filters = useMemo(() => ({ issueId, limit: PAGE_SIZE, runId, sessionRef, workId }), [issueId, runId, sessionRef, workId]);
@@ -183,7 +183,7 @@ function verificationGapTitle(reason) {
     not_executed: '验证尚未执行',
     run_mismatch: 'Evidence 与当前 Run 不匹配',
     stale: 'Evidence 已过期',
-  }[reason] || '暂无结构化证据';
+  }[reason] || '暂无结构化验证结果';
 }
 
 function EvidenceRow({ active, item, onOpen }) {

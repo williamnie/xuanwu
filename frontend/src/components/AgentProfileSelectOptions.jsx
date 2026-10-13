@@ -15,7 +15,7 @@ export default function AgentProfileSelectOptions({ catalog, profiles, selectedP
         <optgroup key={group.provider} label={group.label}>
           {group.profiles.map(profile => (
             <option key={profile.id} value={profile.id}>
-              {profile.name} · {profile.model || 'Provider 默认模型'}
+              {profile.name} · {profile.model || '编程工具默认模型'}
             </option>
           ))}
         </optgroup>

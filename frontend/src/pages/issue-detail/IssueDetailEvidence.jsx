@@ -67,7 +67,7 @@ function IssueMetadataPanel({
         <MetadataRow label="当前状态" value={String(issue.status || 'unknown').toUpperCase()} />
         <MetadataRow label="尝试次数" value={`${issue.attempt_count || 0} 次`} />
         <MetadataRow label="优先级" value={issuePriorityLabel(issue.priority)} />
-        <MetadataRow label="Provider" value={runtimeProvider} />
+        <MetadataRow label="Coding tool" value={runtimeProvider} />
         <MetadataRow label="Agent Profile" value={profileSummary} />
         <MetadataRow label="Session ID" value={runtimeIdentity.sessionId || '未分配'} mono />
         <MetadataRow label="Turn ID" value={runtimeIdentity.turnId || '暂无'} mono />

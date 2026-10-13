@@ -128,7 +128,7 @@ export function deliveryEvidenceRows(detail, evidence = [], language = 'zh-CN') 
       kind: item?.kind || evidenceKindFromID(id),
       loaded: Boolean(item),
       status: item?.status || 'linked',
-      summary: item?.decisive_summary || (language === 'en-US' ? 'Evidence is linked; its detailed summary has not loaded.' : '证据已关联；详细摘要尚未加载。'),
+      summary: item?.decisive_summary || (language === 'en-US' ? 'Checks are linked; its detailed summary has not loaded.' : '验证结果已关联；详细摘要尚未加载。'),
       observedAt: item?.observed_at || item?.completed_at || '',
     };
   });
@@ -188,14 +188,14 @@ function nextDeliveryAction({ failedEvidence, unpassedEvidence, highRiskCount, l
   if (highRiskCount > 0) return english ? 'Inspect high-risk attribution issues' : '检查高风险归因问题';
   if (failedEvidence > 0) return english ? 'Resolve failed checks' : '处理未通过的验证';
   if (unpassedEvidence > 0) return english ? 'Complete pending or blocked checks' : '补齐等待中或受阻的验证';
-  if (missingEvidence > 0 || linkedCount === 0) return english ? 'Load or complete verification evidence' : '读取或补齐验证证据';
+  if (missingEvidence > 0 || linkedCount === 0) return english ? 'Load or complete verification checks' : '读取或补齐验证结果';
   if (reviewState === 'changes_requested') return english ? 'Address the review feedback' : '处理评审提出的修改要求';
   if (reviewState === 'pending') return english ? 'Review this delivery' : '完成交付评审';
   if (pendingActions.length > 0) {
     const action = (english ? ACTION_LABELS_EN : ACTION_LABELS)[pendingActions[0]?.action] || pendingActions[0]?.action || (english ? 'delivery action' : '交付操作');
     return english ? `Wait to ${action}` : `等待${action}`;
   }
-  if (work?.status === 'needs_user') return english ? 'Answer the PI question' : '处理 PI 提出的明确问题';
+  if (work?.status === 'needs_user') return english ? 'Answer the Xuanwu assistant question' : '处理玄武助手提出的明确问题';
   if (!['ready', 'delivered'].includes(status)) return english ? 'Complete the delivery check' : '完成交付检查';
   return english ? 'No further action' : '无需额外操作';
 }
@@ -240,9 +240,9 @@ function deliveryUnverified(detail, evidence, language) {
   const milestones = deliveryMilestones(detail, evidence, language);
   return [
     ...rows.filter(row => row.status !== 'passed').map(row => !row.loaded
-      ? (english ? `Evidence not loaded: ${row.id}` : `证据尚未加载：${row.id}`)
+      ? (english ? `Checks not loaded: ${row.id}` : `验证结果尚未加载：${row.id}`)
       : `${row.kind} · ${row.status}：${row.summary}`),
-    ...(rows.length === 0 ? [english ? 'No verification evidence linked.' : '尚未关联验证证据。'] : []),
+    ...(rows.length === 0 ? [english ? 'No verification checks linked.' : '尚未关联验证结果。'] : []),
     english ? 'This credential does not provide CI or merge results.' : '当前凭证未提供 CI、合并结果。',
     ...(milestones.find(row => row.key === 'deploy')?.status !== 'succeeded'
       ? [english ? 'Deployment is not confirmed.' : '部署尚未确认。'] : []),

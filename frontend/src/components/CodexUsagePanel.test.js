@@ -25,7 +25,7 @@ test('refresh icon visibly spins while usage is loading', () => {
 });
 
 test('dashboard keeps PI total separate and removes seven-day charts', () => {
-  assert.match(source, /PI 今日总消耗/);
-  assert.match(source, /Runner PI 会话/);
+  assert.match(source, /玄武助手今日总消耗/);
+  assert.match(source, /Runner 玄武助手会话/);
   assert.doesNotMatch(source, /最近 7 天|DailyBars|UsageBar/);
 });

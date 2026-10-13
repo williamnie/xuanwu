@@ -5,10 +5,10 @@ const ACTIVE_WORK_STATUSES = new Set(['todo', 'in_progress', 'needs_user']);
 const PHASE_META = {
   queued: { label: '排队中', tone: 'queued' },
   starting: { label: '启动中', tone: 'running' },
-  running: { label: '运行中', tone: 'running' },
+  running: { label: '执行中', tone: 'running' },
   waiting_approval: { label: '等待审批', tone: 'waiting' },
   recovering: { label: '恢复中', tone: 'recovering' },
-  pi_deciding: { label: 'PI 判断中', tone: 'verifying' },
+  pi_deciding: { label: '玄武助手判断中', tone: 'verifying' },
   succeeded: { label: '已完成', tone: 'succeeded' },
   failed: { label: '失败', tone: 'failed' },
   cancelled: { label: '已停止', tone: 'cancelled' },
@@ -91,7 +91,7 @@ export function formatRelativeTime(value, now = new Date()) {
 
 function progressFallback(phase) {
   if (phase === 'queued') return '等待 Runner 领取';
-  if (phase === 'pi_deciding') return 'PI 正在读取 Session 并决定后续';
+  if (phase === 'pi_deciding') return '玄武助手正在读取 Session 并决定后续';
   if (phase === 'recovering') return '正在恢复执行';
   if (phase === 'waiting_approval') return '等待确定性权限门禁';
   return '等待 provider 进展事件';

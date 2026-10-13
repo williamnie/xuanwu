@@ -93,7 +93,7 @@ test('planned push is never presented as successful and missing evidence needs a
   const view = workDeliveryView({ detail });
   assert.equal(view.milestones.find(item => item.key === 'push').status, 'pending');
   assert.doesNotMatch(view.deliverySummary, /已推送/);
-  assert.equal(view.nextAction, '读取或补齐验证证据');
+  assert.equal(view.nextAction, '读取或补齐验证结果');
   detail.delivery_status.actions = [{ action: 'push', source_ref: 'push:1', current_status: 'failed' }];
   assert.equal(workDeliveryView({ detail }).milestones.find(item => item.key === 'push').status, 'failed');
 });

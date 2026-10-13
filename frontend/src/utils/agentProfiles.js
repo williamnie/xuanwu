@@ -99,7 +99,7 @@ export function runSelectionReasonLabel(reason) {
     case 'project_default':
       return 'Project default';
     case 'provider_default':
-      return 'Provider default';
+      return 'Coding tool default';
     default:
       return reason || '未记录';
   }

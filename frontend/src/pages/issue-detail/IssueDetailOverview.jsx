@@ -1,6 +1,7 @@
 import { Activity, AlertTriangle, ExternalLink, FileText, Pencil } from 'lucide-react';
 import MarkdownPreview from '../../components/editor/MarkdownPreview';
 import { canEditIssue } from '../../utils/issueEdit';
+import { useI18n } from '../../i18n/context.js';
 import {
   formatRelativeTime,
   issueSourceSessionRef,
@@ -17,6 +18,7 @@ export default function IssueDetailOverview({
   navigateTo,
   onEdit,
 }) {
+  const { t } = useI18n();
   const issueBody = String(issue.description || '').trim();
   return (
     <>
@@ -33,7 +35,7 @@ export default function IssueDetailOverview({
           </div>
           <span className={`status-badge ${issue.status} issue-detail-status`}>
             {issue.status === 'in_progress' && !latestRun?.ended_at && <span className="status-dot running" />}
-            {issue.status === 'in_progress' && latestRun?.ended_at ? 'PI 判断中' : issue.status}
+            {issue.status === 'in_progress' && latestRun?.ended_at ? '玄武助手判断中' : t(`status.${issue.status}`)}
           </span>
         </div>
       </header>
@@ -118,8 +120,8 @@ export function IssueStatusAlerts({ issue, executionSummary, onShowRuns, onShowL
         <div className="issue-inline-alert warning" role="status">
           <Activity size={17} />
           <div>
-            <strong>PI 正在读取执行上下文</strong>
-            <p>Provider Turn 已结束，但 Issue 仍保持 in_progress 和项目锁；PI 决定完成、继续、重试或 needs_user 后才会进入下一项。</p>
+            <strong>玄武助手正在读取执行上下文</strong>
+            <p>编程工具 Turn 已结束，但 Issue 仍保持 in_progress 和项目锁；玄武助手决定完成、继续、重试或 needs_user 后才会进入下一项。</p>
           </div>
           <button type="button" onClick={onShowRuns}>查看最新 Run</button>
         </div>
@@ -169,7 +171,7 @@ function IssueExecutionOverview({ issue, latestRun, summary, sessionRef, navigat
           </strong>
         </div>
         <div className={`issue-verification-fact ${summary.piDecision.state}`}>
-          <span>PI 状态</span>
+          <span>玄武助手状态</span>
           <strong>{summary.piDecision.label}</strong>
           <p>{summary.piDecision.detail}</p>
         </div>

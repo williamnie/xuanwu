@@ -19,7 +19,7 @@ export default function IssueDetailDecision({ evidence, decision, onAccept, onRe
       </h3>
       <p className="issue-detail-decision__description">
         {humanOwned
-          ? 'PI 无法自主决定下面的产品、范围或风险取舍，请明确审批；技术验证仍由 PI 负责。'
+          ? '玄武助手无法自主决定下面的产品、范围或风险取舍，请明确审批；技术验证仍由玄武助手负责。'
           : piState.detail}
       </p>
       {humanOwned && (
@@ -34,10 +34,10 @@ export default function IssueDetailDecision({ evidence, decision, onAccept, onRe
       )}
       {humanOwned && <div className="issue-detail-decision__actions">
         <button className="btn btn-secondary btn-success" onClick={onAccept}>
-          <CheckCircle size={14} /> 同意，交给 PI 继续判断
+          <CheckCircle size={14} /> 同意，交给玄武助手继续判断
         </button>
         <button className="btn btn-secondary btn-danger" onClick={onReject}>
-          <XCircle size={14} /> 不同意，交给 PI 处理
+          <XCircle size={14} /> 不同意，交给玄武助手处理
         </button>
         <button className="btn btn-secondary" onClick={onRequestChanges}>
           <MessageCircle size={14} /> 输入调整意见并继续同一 Session
@@ -51,37 +51,37 @@ function piDecisionCopy(decision) {
   const error = decision?.activity?.error;
   if (decision?.phase === 'pi_deciding') {
     return {
-      detail: 'PI 正在读取 Provider Session、最近命令和工作区事实，并自主作出结论。',
-      title: 'PI 正在自主验收',
+      detail: '玄武助手正在读取编程工具 Session、最近命令和工作区事实，并自主作出结论。',
+      title: '玄武助手正在自主验收',
     };
   }
   if (decision?.phase === 'pi_continuing') {
     return {
-      detail: 'PI 正在同一个 Session 的新 Run/Turn 中按意见调整并重新验证。',
-      title: 'PI 正在按意见调整',
+      detail: '玄武助手正在同一个 Session 的新 Run/Turn 中按意见调整并重新验证。',
+      title: '玄武助手正在按意见调整',
     };
   }
   if (decision?.phase === 'pi_error') {
     return {
-      detail: error ? `PI 验收启动失败：${error}` : 'PI 验收启动失败，系统会重试；需要人类决策时会明确通知。',
-      title: 'PI 验收遇到问题',
+      detail: error ? `玄武助手验收启动失败：${error}` : '玄武助手验收启动失败，系统会重试；需要人类决策时会明确通知。',
+      title: '玄武助手验收遇到问题',
     };
   }
   if (decision?.phase === 'pi_waiting') {
     return {
-      detail: 'PI 尚未作出最终判断；Issue 会保持运行中，不会让下一个同项目 Issue 抢跑。',
-      title: '等待 PI 判断',
+      detail: '玄武助手尚未作出最终判断；Issue 会保持运行中，不会让下一个同项目 Issue 抢跑。',
+      title: '等待玄武助手判断',
     };
   }
   return {
-    detail: 'PI 验收任务已进入队列；开始运行后这里会显示真实进度。',
-    title: 'PI 验收已排队',
+    detail: '玄武助手验收任务已进入队列；开始运行后这里会显示真实进度。',
+    title: '玄武助手验收已排队',
   };
 }
 
 export function HumanReviewResponseModal({ action, draft, request, submitting, onDraftChange, onCancel, onConfirm }) {
   const rejecting = action === 'reject';
-  const title = rejecting ? '不同意 PI 建议' : action === 'accept' ? '同意 PI 建议' : '提出调整意见';
+  const title = rejecting ? '不同意玄武助手建议' : action === 'accept' ? '同意玄武助手建议' : '提出调整意见';
   const commentRequired = action !== 'accept';
   return (
     <ModalOverlay>
@@ -98,7 +98,7 @@ export function HumanReviewResponseModal({ action, draft, request, submitting, o
         </div>
         <p><strong>你正在审批：</strong>{request?.question}</p>
         <p>{action === 'request_changes'
-          ? '意见会原样发回同一个 Provider Session，在新的 Run/Turn 中调整并重新验证。'
+          ? '意见会原样发回同一个编程工具 Session，在新的 Run/Turn 中调整并重新验证。'
           : '结论会写入活动记录，并作为后续状态的人工依据。'}</p>
         <textarea
           className="form-control"

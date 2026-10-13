@@ -59,7 +59,7 @@ test('Dashboard Attention has grouped cards, canonical source links, empty state
   assert.match(page, /Gate layer/);
   assert.match(page, /Reason code/);
   assert.match(page, /formatGateScope/);
-  assert.match(page, /Provider Policy · Agent 工具权限/);
+  assert.match(page, /编程工具 Policy · Agent 工具权限/);
   assert.match(page, /Completion Gate · 完成验收/);
   assert.match(page, /disabled=\{Boolean\(submitting\) \|\| !canApprove\}/);
   assert.match(page, /已推送飞书，页面仅保留/);

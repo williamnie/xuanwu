@@ -17,7 +17,7 @@ export function decisiveEvidence(items = []) {
 }
 
 export function decisiveEvidenceText(item) {
-  if (!item) return '暂无结构化验证证据。';
+  if (!item) return '暂无结构化验证结果。';
   const prefix = item.status === 'failed' || item.status === 'blocked' ? '未通过：' : '';
   return `${prefix}${item.decisive_summary || '未提供决定性摘要'}`;
 }

@@ -6,7 +6,7 @@ export default function PiChatComposerMeta({ project, supervisor }) {
   const model = supervisorModelLabel(supervisor);
   return (
     <div className="pi-chat-runtime-controls" aria-label={t('chat.context.label')}>
-      <RuntimePill icon={<Sparkles size={13} />} label="π · PI 直连" />
+      <RuntimePill icon={<Sparkles size={13} />} label="π · 玄武助手直连" />
       {model && <RuntimePill icon={<Cpu size={13} />} label={model} />}
       {supervisor?.thinking_level && <RuntimePill icon={<Brain size={13} />} label={thinkingLabel(supervisor.thinking_level)} />}
       {project && (

@@ -47,7 +47,7 @@ function usePiMemoryPanel() {
       setDrafts(Object.fromEntries(list.map((item) => [item.id, draftFromItem(item)])));
       setError('');
     } catch (err) {
-      setError(err.message || '读取 Supervisor memory 失败');
+      setError(err.message || '读取玄武助手 memory 失败');
     } finally {
       setLoading(false);
     }
@@ -57,11 +57,11 @@ function usePiMemoryPanel() {
     setBusy('new:create');
     try {
       await piMemoryApi.create({ ...newDraft, disabled: 0 });
-      message.success('Supervisor memory 已添加');
+      message.success('玄武助手 memory 已添加');
       setNewDraft(defaultNewDraft());
       await load();
     } catch (err) {
-      message.error(err.message || '添加 Supervisor memory 失败');
+      message.error(err.message || '添加玄武助手 memory 失败');
     } finally {
       setBusy('');
     }
@@ -70,10 +70,10 @@ function usePiMemoryPanel() {
     setBusy(`${item.id}:${name}`);
     try {
       await runMemoryAction(item, name, drafts[item.id] || {});
-      message.success('Supervisor memory 已更新');
+      message.success('玄武助手 memory 已更新');
       await load();
     } catch (err) {
-      message.error(err.message || '更新 Supervisor memory 失败');
+      message.error(err.message || '更新玄武助手 memory 失败');
     } finally {
       setBusy('');
     }

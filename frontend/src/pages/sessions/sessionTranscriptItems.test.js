@@ -53,7 +53,7 @@ test('normalized subagent, permission, and provider-native fallback items remain
     body: 'review complete',
   });
   assert.equal(toolDisplayForItem({ type: 'permission', text: 'Bash denied' }).title, 'Permission');
-  assert.equal(toolDisplayForItem({ type: 'qoderNative', text: '{"future":true}' }).title, 'Provider event');
+  assert.equal(toolDisplayForItem({ type: 'qoderNative', text: '{"future":true}' }).title, 'Coding tool event');
 });
 
 test('opaque MCP provider events stay counted but are not exposed as detail cards', () => {

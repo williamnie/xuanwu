@@ -14,7 +14,7 @@ test('Work and Run surfaces share the user-readable Evidence panel', () => {
 
 test('Evidence panel has bounded list, empty/error states, artifact access and raw drill-down', () => {
   assert.match(panel, /const PAGE_SIZE = 5/);
-  assert.match(panel, /暂无结构化证据/);
+  assert.match(panel, /暂无结构化验证结果/);
   assert.match(panel, /role="alert"/);
   assert.match(panel, /downloadArtifact/);
   assert.match(panel, /Raw \/ advanced/);

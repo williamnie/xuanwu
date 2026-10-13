@@ -20,8 +20,8 @@ const ALERT_TYPE_DISPLAYS = {
     title: '飞书通知发送队列积压',
   },
   scheduler_stalled: {
-    message: 'Supervisor 自动调度心跳已超时，自动巡检和恢复可能暂停。请确认 scheduler 进程仍在运行，必要时重启 Runner 服务。',
-    title: 'Supervisor 自动调度心跳停滞',
+    message: '玄武助手自动调度心跳已超时，自动巡检和恢复可能暂停。请确认 scheduler 进程仍在运行，必要时重启 Runner 服务。',
+    title: '玄武助手自动调度心跳停滞',
   },
 };
 
@@ -59,7 +59,7 @@ export function buildGuardianAlertDisplay(alert = {}) {
     requiresUser,
     severityLabel,
     title: display.title,
-    userAction: requiresUser ? '请按提示检查对应配置或服务；恢复后告警会自动归档。' : '当前无需操作，PI 会继续处理。',
+    userAction: requiresUser ? '请按提示检查对应配置或服务；恢复后告警会自动归档。' : '当前无需操作，玄武助手会继续处理。',
   };
 }
 

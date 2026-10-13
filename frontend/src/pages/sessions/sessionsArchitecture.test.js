@@ -48,7 +48,7 @@ test('local portal persistence selectors and reference search effects live below
 });
 
 test('shared session composer copy remains provider neutral', () => {
-  assert.match(composerSource, /给当前 Provider session 发送消息/);
-  assert.match(composerSource, /Provider 默认/);
+  assert.match(composerSource, /给当前编程工具 session 发送消息/);
+  assert.match(composerSource, /编程工具默认/);
   assert.doesNotMatch(composerSource, /当前 Codex session|Codex 默认|真实 Codex 模型列表/);
 });

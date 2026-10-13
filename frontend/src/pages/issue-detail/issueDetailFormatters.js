@@ -87,10 +87,10 @@ export function issueStatusDescription(status, latestRun = null) {
     case 'triage': return '待梳理任务说明，尚未进入 runner 队列。';
     case 'todo': return '已进入执行队列，等待 runner claim。';
     case 'in_progress': return latestRun?.ended_at
-      ? 'Provider Turn 已结束，PI 正在读取 Session 上下文并决定后续。'
-      : 'Provider 正在执行，实时交互请进入 Session。';
-    case 'needs_user': return 'PI 已确认存在必须由用户决定的问题，项目保持锁定。';
-    case 'done': return '任务已结束；请结合 Run 与结构化验证证据判断结果。';
+      ? '编程工具 Turn 已结束，玄武助手正在读取 Session 上下文并决定后续。'
+      : '编程工具正在执行，实时交互请进入 Session。';
+    case 'needs_user': return '玄武助手已确认存在必须由用户决定的问题，项目保持锁定。';
+    case 'done': return '任务已结束；请结合 Run 与结构化验证结果判断结果。';
     case 'failed': return '最近一次执行失败，可从日志或 Session 定位退出原因。';
     case 'cancelled': return '任务已取消，可在确认上下文后重新执行。';
     default: return '查看活动记录和运行信息确认当前状态。';

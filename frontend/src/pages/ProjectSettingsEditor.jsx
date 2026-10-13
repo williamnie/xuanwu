@@ -55,7 +55,7 @@ function buildProviderModelOptions(provider, models, ...selectedValues) {
     pushOption(DEFAULT_CODEX_MODEL, '系统默认模型');
   } else {
     seen.add('');
-    options.push({ value: '', label: 'Provider 默认模型' });
+    options.push({ value: '', label: '编程工具默认模型' });
   }
   const liveModels = Array.isArray(models) ? models.filter(model => !model?.hidden) : [];
   liveModels.forEach(model => pushOption(model?.id || model?.model, model?.displayName || model?.name || model?.id || model?.model));
@@ -138,7 +138,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
     } catch (error) {
       updateUi(draft => {
         draft.codexModels = [];
-        draft.codexModelsError = error.message || '读取 Provider 模型列表失败';
+        draft.codexModelsError = error.message || '读取编程工具模型列表失败';
       });
     } finally {
       updateUi(draft => {
@@ -172,7 +172,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
     } catch (error) {
       updateUi(draft => {
         draft.providerCatalog = [];
-        draft.providerCatalogError = error.message || '读取 Provider 列表失败';
+        draft.providerCatalogError = error.message || '读取编程工具列表失败';
         draft.providerCatalogLoading = false;
       });
     }
@@ -263,7 +263,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
         project_id: projectID,
         policy: executionPolicyPayload(ui.formExecutionPolicy),
       });
-      if (preview?.supported === false) throw new Error(preview.reason || '当前 Provider 不支持所选执行策略');
+      if (preview?.supported === false) throw new Error(preview.reason || '当前编程工具不支持所选执行策略');
       const saved = mode === 'create'
         ? await projectsApi.createProject({ id: projectIdFromPath(ui.formCwd), ...payload })
         : await projectsApi.updateProject(projectID, payload);
@@ -303,7 +303,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
           project_id: projectID,
           policy: payload.execution_policy,
         });
-        if (preview?.supported === false) throw new Error(preview.reason || '当前 Provider 不支持所选 Profile 执行策略');
+        if (preview?.supported === false) throw new Error(preview.reason || '当前编程工具不支持所选 Profile 执行策略');
       }
       const saved = existing
         ? await projectsApi.updateAgentProfile(payload.id, payload)
@@ -352,7 +352,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
         {mode === 'create' ? (
           <details className="project-settings-advanced">
             <summary>高级运行配置（可选）</summary>
-            <p>不确定时无需修改。默认使用无人值守开发策略，允许当前 Provider 使用本机开发能力且不逐次等待确认。</p>
+            <p>不确定时无需修改。默认使用无人值守开发策略，允许当前编程工具使用本机开发能力且不逐次等待确认。</p>
             <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setProjectRuntimeField} providerOptions={providerOptions} ui={ui} />
           </details>
         ) : (
@@ -378,7 +378,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
                 loading={ui.profilesLoading}
                 modelOptions={modelOptions}
                 models={ui.codexModels}
-                modelsError={ui.codexModelsError || (ui.profileForm.provider !== ui.formProvider ? '当前 Profile 使用其他 Provider' : '')}
+                modelsError={ui.codexModelsError || (ui.profileForm.provider !== ui.formProvider ? '当前 Profile 使用其他编程工具' : '')}
                 modelsLoading={ui.codexModelsLoading}
                 onEdit={profile => updateUi(draft => { draft.profileForm = normalizeAgentProfileForm(profile); draft.profileError = ''; })}
                 onFieldChange={setProfileFormField}
@@ -450,7 +450,7 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
           <label>默认模型</label>
           {ui.formProvider === 'qoder' || ui.codexModelsError ? (
             <>
-              <input className="form-control" list="project-provider-model-suggestions" onChange={event => onFieldChange('formModel', event.target.value)} placeholder="Provider 默认，或手动填写 model ID" value={ui.formModel} />
+              <input className="form-control" list="project-provider-model-suggestions" onChange={event => onFieldChange('formModel', event.target.value)} placeholder="编程工具默认，或手动填写 model ID" value={ui.formModel} />
               <datalist id="project-provider-model-suggestions">
                 {modelOptions.filter(option => option.value).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </datalist>
@@ -462,12 +462,12 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
           )}
           <span className="project-settings-hint">
             {ui.codexModelsLoading
-                ? '正在读取 Provider 模型列表…'
+                ? '正在读取编程工具模型列表…'
               : ui.codexModelsError
                 ? `远端 model API 读取失败，已启用手填：${ui.codexModelsError}`
                 : ui.formProvider === 'qoder' && ui.codexModels.some(model => model?.verified === false)
                   ? 'Qoder 账号发现不可用；候选仅是静态建议，当前值保留为未验证手工 model ID。'
-                  : '模型列表来自当前 Provider。'}
+                  : '模型列表来自当前编程工具。'}
           </span>
         </div>
         {ui.formProvider !== 'qoder' ? <div className="form-group">
@@ -531,7 +531,7 @@ function AgentProfileManager({ profiles, loading, form, error, modelOptions, mod
             </label>
             <label className="form-group">默认模型
               {form.provider === 'qoder' || modelsError ? (
-                <input className="form-control" list="profile-provider-model-suggestions" placeholder="Provider 默认，或手动填写 model ID" value={form.model} onChange={event => onFieldChange('model', event.target.value)} />
+                <input className="form-control" list="profile-provider-model-suggestions" placeholder="编程工具默认，或手动填写 model ID" value={form.model} onChange={event => onFieldChange('model', event.target.value)} />
               ) : (
                 <select className="form-control" disabled={modelsLoading} value={form.model} onChange={event => onFieldChange('model', event.target.value)}>
                   {modelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}

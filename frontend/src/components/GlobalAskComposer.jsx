@@ -104,10 +104,10 @@ export default function GlobalAskComposer({
       await assistantApi.sendPiConversationMessage(conversation.id, submission.message);
       setPrompt('');
       setReferences([pageReference]);
-      message.success('已发送给 Xuanwu Supervisor');
+      message.success('已发送给玄武助手');
       onConversationReady?.(conversation.id);
     } catch (error) {
-      message.error(error.message || '发送 Supervisor 消息失败');
+      message.error(error.message || '发送玄武助手消息失败');
     } finally {
       setSending(false);
     }
@@ -135,7 +135,7 @@ export default function GlobalAskComposer({
               <span className="global-ask-composer-mark"><MessageCircleMore size={15} /></span>
               <span>
                 <strong>{PRODUCT_NAV_LABELS.askXuanwu}</strong>
-                <small>{prompt.trim() ? 'Draft retained across pages' : 'Context-aware Supervisor'}</small>
+                <small>{prompt.trim() ? 'Draft retained across pages' : 'Context-aware Xuanwu assistant'}</small>
               </span>
             </button>
             <button
@@ -210,11 +210,11 @@ function GlobalComposerControls({
         <Paperclip size={13} />
         <span>{attached ? (contextCurrent ? '页面已附加' : '更新页面') : '附加页面'}</span>
       </button>
-      <label className="session-composer-select permission" title="Supervisor 权限模式；确定性门禁仍是最终 authority">
+      <label className="session-composer-select permission" title="玄武助手权限模式；确定性门禁仍是最终 authority">
         <ShieldCheck size={14} />
         <span className="session-composer-select-value">{selected.label}</span>
         <select
-          aria-label="Supervisor 权限模式"
+          aria-label="玄武助手权限模式"
           onChange={event => onPermissionModeChange(event.target.value)}
           value={selected.value}
         >

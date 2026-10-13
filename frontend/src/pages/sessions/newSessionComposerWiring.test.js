@@ -55,7 +55,7 @@ test('new session model field only exposes the selected Code Agent model choices
 
 test('new session provider selector hides unavailable providers', () => {
   assert.match(newSessionSource, /selectedProviderAvailable/);
-  assert.match(newSessionSource, /选择可用 Provider/);
+  assert.match(newSessionSource, /选择可用编程工具/);
   assert.doesNotMatch(newSessionSource, /（未就绪）/);
 });
 

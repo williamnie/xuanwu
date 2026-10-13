@@ -13,7 +13,7 @@ function state() {
 function render(value) { return renderToStaticMarkup(<GitHubSettingsView state={value} dispatch={() => {}} onRefresh={() => {}} onAction={() => {}} />); }
 test('settings component renders saved/pending, references and all Case phases with separate Work and PR facts', () => {
   const html = render(state());
-  for (const text of ['已保存 · 未生效', '调查', '修复', '求助 · 等待回答', 'PR · 等待评审', '标签不匹配', 'Work #23 · done', 'PR #7', 'env://FIXTURE_TOKEN', '不授予自动合并和部署权限', '查看当前生效规则']) expect(html).toContain(text);
+  for (const text of ['已保存 · 未生效', '调查', '修复', '待你处理', 'PR · 等待评审', '标签不匹配', 'Work #23 · done', 'PR #7', 'env://FIXTURE_TOKEN', '不授予自动合并和部署权限', '查看当前生效规则']) expect(html).toContain(text);
   expect(html).not.toContain('type="password"');
   expect(html).not.toContain('allowMerge');
 });

@@ -33,7 +33,7 @@ export default function CodexUsagePanel() {
       setState(prev => ({
         ...prev,
         loading: false,
-        error: err.message || '读取 Provider 用量失败',
+        error: err.message || '读取编程工具用量失败',
       }));
     }
   }, []);
@@ -73,12 +73,12 @@ function UsageHeader({ data, loading, onProviderChange, onRefresh, providers, se
     <header className="codex-usage-header">
       <div>
         <h3><Zap size={18} /> AI 用量</h3>
-        <p>展示当前启用 Provider 的今日用量、账户额度与 PI 消耗。</p>
+        <p>展示当前启用编程工具的今日用量、账户额度与玄武助手消耗。</p>
       </div>
       <div className="codex-usage-actions">
         {providers.length > 1 ? (
           <label className="codex-provider-select">
-            <span className="codex-visually-hidden">当前 Provider</span>
+            <span className="codex-visually-hidden">当前编程工具</span>
             <select value={selectedProvider?.id || ''} onChange={(event) => onProviderChange(event.target.value)}>
               {providers.map(provider => <option key={provider.id} value={provider.id}>{provider.label || provider.id}</option>)}
             </select>
@@ -96,10 +96,10 @@ function UsageHeader({ data, loading, onProviderChange, onRefresh, providers, se
 
 function UsageContent({ data, loading, piUsage, provider }) {
   if (loading && !data) {
-    return <div className="codex-usage-loading">正在读取 Provider 用量…</div>;
+    return <div className="codex-usage-loading">正在读取编程工具用量…</div>;
   }
-  if (!provider) return <div className="codex-usage-empty">当前没有可展示的 Provider，请先完成 Provider 配置。</div>;
-  if (!data) return <div className="codex-usage-empty">当前 Provider 暂无用量数据。</div>;
+  if (!provider) return <div className="codex-usage-empty">当前没有可展示的编程工具，请先完成编程工具配置。</div>;
+  if (!data) return <div className="codex-usage-empty">当前编程工具暂无用量数据。</div>;
   return (
     <div className="codex-usage-content">
       <ProviderUsageRow data={data} provider={provider} />
@@ -170,8 +170,8 @@ function PiTodayUsage({ data }) {
     : formatTokens(data?.summary?.today?.total_tokens || 0);
   return (
     <div className="codex-today-usage">
-      <div><span>PI 今日总消耗</span><strong>{piToday}</strong></div>
-      <p>数据范围：Runner PI 会话</p>
+      <div><span>玄武助手今日总消耗</span><strong>{piToday}</strong></div>
+      <p>数据范围：Runner 玄武助手会话</p>
     </div>
   );
 }

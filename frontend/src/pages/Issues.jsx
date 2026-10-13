@@ -537,7 +537,7 @@ export default function Issues({
                   disabled={agentProfilesLoading}
                 >
                   <option disabled={!inheritedProviderAvailable} value="">
-                    {inheritedProviderAvailable ? '继承项目默认 Provider' : '请选择可用 Code Agent'}
+                    {inheritedProviderAvailable ? '继承项目默认编程工具' : '请选择可用 Code Agent'}
                   </option>
                   <AgentProfileSelectOptions
                     catalog={providerCatalog}
@@ -546,7 +546,7 @@ export default function Issues({
                   />
                 </select>
                 <span className="issues-page__field-help">
-                  可为单个工作项显式选择 Code Agent；未选择时沿用项目默认配置。
+                  可为单个任务显式选择 Code Agent；未选择时沿用项目默认配置。
                 </span>
               </div>
 

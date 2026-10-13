@@ -103,7 +103,7 @@ test('saved Supervisor connections can be deleted with in-app confirmation and a
   assert.match(panelSource, /className="provider-delete-confirm"/);
   assert.match(panelSource, /role="alertdialog"/);
   assert.match(panelSource, /provider\.in_use \? '默认连接' : '删除连接'/);
-  assert.match(panelSource, /将同时移除 Supervisor OAuth 授权凭据/);
+  assert.match(panelSource, /将同时移除玄武助手的 OAuth 授权/);
   assert.match(panelSource, /将同时撤销为此连接保存的 API Key/);
   assert.match(panelStylesSource, /\.provider-delete-confirm-button\s*\{[\s\S]*?background:\s*var\(--error\)/);
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);

@@ -444,7 +444,7 @@ export default function Sessions({
       const requestSessionKey = eventKey || eventSessionKeyFromPayload(request) || selectedIdRef.current;
       setApprovalQueue((current) => enqueueApprovalNotice(current, { request, sessionId: requestSessionKey }));
       if (requestSessionKey && requestSessionKey !== selectedIdRef.current) {
-        toast.info('Provider 正在等待审批，切回对应 session 后可处理。');
+        toast.info('编程工具正在等待审批，切回对应 session 后可处理。');
       }
     }
     if (event.method === 'approval/resolved') {
@@ -791,7 +791,7 @@ export default function Sessions({
       id: sessionSettings.provider,
       ready: false,
       available: false,
-      readiness_reason: 'Provider readiness status is unavailable',
+      readiness_reason: 'Coding tool readiness status is unavailable',
     };
     const guard = canCreateSession({
       projectId,
@@ -827,7 +827,7 @@ export default function Sessions({
       }, promptReferences));
       const newSessionId = sessionIDFromCreateResult(result);
       const createdSession = sessionFromCreateResult(result, selectedProject);
-      if (!newSessionId || !createdSession) throw new Error('Provider session 创建成功，但响应缺少有效 session ref');
+      if (!newSessionId || !createdSession) throw new Error('编程工具 session 创建成功，但响应缺少有效 session ref');
       addOptimisticUserMessage(newSessionId, prompt.trim());
       setSelectedId(newSessionId);
       setSessionRunning(Boolean(result.turn_id || result.provider_turn_id));

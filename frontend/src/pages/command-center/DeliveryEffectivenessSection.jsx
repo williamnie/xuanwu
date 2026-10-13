@@ -87,7 +87,7 @@ export default function DeliveryEffectivenessSection() {
           <FactList facts={[...recoveryFacts(snapshot), ...overheadFacts(snapshot)]} />
         </details>
         <details className="delivery-disclosure"><summary>任务明细与审计引用 · {snapshot.samples.length} 个</summary>
-          <p>查看每个任务的运行、验证证据和数据缺失情况。</p>
+          <p>查看每个任务的运行、验证结果和数据缺失情况。</p>
           {snapshot.samples.length ? snapshot.samples.map(sample => <details className="delivery-sample" key={sample.work_id}>
             <summary>{sample.work_id} · {projects.find(project => project.id === sample.project_id)?.name || sample.project_id} · {sample.delivered ? '验证通过' : '交付未确认'} · {sample.limited_sources.length ? '部分数据' : '已读取有界来源'}</summary>
             <p>{sample.status} · {sample.ended_at} · {sample.run_count ?? '未知'} 次执行 · {sample.asked_for_help === null ? '求助记录读取受限' : sample.asked_for_help ? '有求助记录' : '无求助记录，人工介入未知'}</p>
@@ -100,9 +100,9 @@ export default function DeliveryEffectivenessSection() {
         </details>
         <details className="delivery-disclosure"><summary>这些数字怎么算？</summary>
           <p>本页按任务编号倒序扫描，日期按最新 Run 结束时间筛选。这里展示当前持久化事实，不是历史时点快照。对比项目时，请使用相同日期范围并核对数据覆盖；跨页不会自动累计。</p>
-          <p>“交付验证通过”表示任务已完成，对应最新执行的交付记录齐全、验证证据通过且必需交付动作成功，不代表人工验收或上线。“请求协助”指审批请求或需用户处理的通知；无求助记录不代表没有人工操作。</p>
+          <p>“交付验证通过”表示任务已完成，对应最新执行的交付记录齐全、验证结果通过且必需交付动作成功，不代表人工验收或上线。“请求协助”指审批请求或需用户处理的通知；无求助记录不代表没有人工操作。</p>
           <p>执行间隔与审批时长可能重叠，不相加为总等待，不推算节省时长。执行金额要求每次执行都有金额；缺失、读取受限或同任务币种冲突均为未知。</p>
-          <p>复盘金额是 SDK 估算的已知小计，可能只有部分回执；Supervisor 总成本仍未知。记忆注入 token 是字符估算，不是账单；单次任务成功不能证明记忆收益。</p>
+          <p>复盘金额是 SDK 估算的已知小计，可能只有部分回执；玄武助手总成本仍未知。记忆注入 token 是字符估算，不是账单；单次任务成功不能证明记忆收益。</p>
           <p>本页 {snapshot.data_coverage.limited_works} 个任务读取受限；交付可检查 {snapshot.data_coverage.delivery_known_works}/{snapshot.sampled_works}；完成任务成本已知 {snapshot.cost.known_works}/{snapshot.completed_works}；记忆有审计 {snapshot.memory.audit_covered_works}/{snapshot.sampled_works}。缺失记录保持未知。</p>
           <p>更新于 {new Date(snapshot.generated_at).toLocaleString()} · 每页最多 {snapshot.sample_limit} 个样本 · 日期范围最多 90 天。</p>
         </details>

@@ -37,9 +37,9 @@ export default function WorkDeliveryEvidence({ id, workId }) {
 
   return <div className="work-delivery-evidence-detail">
     <code>{id}</code>
-    <button aria-expanded={open} onClick={() => setOpen(value => !value)} type="button">{open ? (english ? 'Hide evidence' : '收起证据') : (english ? 'View evidence' : '查看证据')}</button>
+    <button aria-expanded={open} onClick={() => setOpen(value => !value)} type="button">{open ? (english ? 'Hide checks' : '收起验证结果') : (english ? 'View checks' : '查看验证结果')}</button>
     {open ? <div>
-      {error ? <p role="alert">{error} <button onClick={() => setRetry(value => value + 1)} type="button">{english ? 'Retry' : '重试'}</button></p> : !detail ? <p role="status">{english ? 'Loading evidence…' : '正在读取证据…'}</p> : null}
+      {error ? <p role="alert">{error} <button onClick={() => setRetry(value => value + 1)} type="button">{english ? 'Retry' : '重试'}</button></p> : !detail ? <p role="status">{english ? 'Loading checks…' : '正在读取验证结果…'}</p> : null}
       {detail ? <>
         <p>{detail.evidence.status} · {detail.evidence.decisive_output?.summary}</p>
         {Number.isInteger(detail.evidence.decisive_output?.exit_code) ? <p>Exit code: {detail.evidence.decisive_output.exit_code}</p> : null}

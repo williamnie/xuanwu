@@ -97,7 +97,7 @@ export const PI_ASSISTANT_CONFIG_MODULES = [
     tab: 'memory',
     label: 'Memory',
     title: 'Memory',
-    description: '查看、编辑、禁用或忘记 Supervisor 自动维护的可复用记忆。'
+    description: '查看、编辑、禁用或忘记玄武助手自动维护的可复用记忆。'
   },
   {
     page: 'pi-activity',

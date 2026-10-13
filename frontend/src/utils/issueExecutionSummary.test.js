@@ -9,7 +9,7 @@ test('does not infer semantic completion from Provider log text', () => {
   });
 
   assert.equal(summary.piDecision.state, 'missing');
-  assert.equal(summary.piDecision.label, 'Provider 正在执行');
+  assert.equal(summary.piDecision.label, '编程工具正在执行');
 });
 
 test('shows PI ownership after a Provider Turn ends', () => {
@@ -19,8 +19,8 @@ test('shows PI ownership after a Provider Turn ends', () => {
   });
 
   assert.equal(summary.awaitingPi, true);
-  assert.equal(summary.piDecision.label, '等待 PI 判断');
-  assert.match(summary.nextAction, /PI 正在读取 Session/);
+  assert.equal(summary.piDecision.label, '等待玄武助手判断');
+  assert.match(summary.nextAction, /玄武助手正在读取 Session/);
   assert.equal(summary.statusConflict, false);
 });
 
@@ -43,5 +43,5 @@ test('renders explicit PI decision projection instead of workflow Evidence gates
   });
 
   assert.equal(summary.piDecision.state, 'recorded');
-  assert.equal(summary.piDecision.label, 'PI 已要求继续');
+  assert.equal(summary.piDecision.label, '玄武助手已要求继续');
 });

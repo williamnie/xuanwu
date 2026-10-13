@@ -6,7 +6,7 @@ import { connectorPermissionRows } from './settingsProductModels.js';
 
 const RISK_MATRIX = [
   { family: '可信只读操作', gate: '直接执行', risk: 'read_only', scope: '无需授权' },
-  { family: '修改工作项、运行、证据或交付记录', gate: '需要确认', risk: 'internal_write', scope: '当前仅批准一次' },
+  { family: '修改任务、运行、验证结果或交付记录', gate: '需要确认', risk: 'internal_write', scope: '当前仅批准一次' },
   { family: '编程工具执行命令或操作文件', gate: '需要确认', risk: 'internal_write', scope: '当前仅批准一次' },
   { family: 'Git push、创建 PR、部署或其他外部修改', gate: '需要确认', risk: 'external_write', scope: '仅批准一次' },
   { family: '破坏性命令、force push、提权或密钥访问', gate: '确定性拒绝', risk: 'dangerous', scope: 'AI 无法自行放行' },

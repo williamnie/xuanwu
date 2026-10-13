@@ -279,7 +279,7 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
           <div>
             <span className="first-delivery-kicker">FIRST SETUP</span>
             <h2 id="first-delivery-title">{state.completed ? '玄武可以开始工作了' : '先完成一次配置'}</h2>
-            <p>配好 Code Agent、Supervisor 和项目，之后就可以直接把 Issue 交给玄武。</p>
+            <p>配好 Code Agent、玄武助手和项目，之后就可以直接把 Issue 交给玄武。</p>
           </div>
         </div>
         <button className="first-delivery-refresh" disabled={loading || Boolean(busy)} onClick={load} type="button">
@@ -317,7 +317,7 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
               />
             </ActionCard>
           ) : !steps.supervisor.complete ? (
-            <ActionCard description="只展示两类兼容 API 与 Codex OAuth；其他协议保留在高级设置。" title="连接 Supervisor" wide>
+            <ActionCard description="只展示两类兼容 API 与 Codex OAuth；其他协议保留在高级设置。" title="连接玄武助手" wide>
               <OnboardingSupervisorConnection onComplete={load} />
             </ActionCard>
           ) : !steps.project.complete ? (

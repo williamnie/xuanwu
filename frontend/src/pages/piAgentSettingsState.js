@@ -117,7 +117,7 @@ export function usePiAgentSettingsState() {
   const selectApiMode = () => selectApiProtocol(form.api === 'openai-codex-responses' ? 'openai-responses' : form.api);
   const selectOAuthMode = () => {
     const preset = providerCatalog.presets.find((item) => item.auth === 'oauth');
-    if (!preset) return message.error('当前版本没有可用的 Supervisor OAuth 登录');
+    if (!preset) return message.error('当前版本没有可用的玄武助手 OAuth 登录');
     selectProviderPreset(preset);
   };
   const discoverModels = () => discoverPiModels(form, setModelDiscovery);
@@ -233,7 +233,7 @@ function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, s
       setPromptSummary(null);
       void discoverPiModels(nextForm, setModelDiscovery);
     })
-    .catch((err) => message.error(err.message || '读取 Supervisor 设置失败'))
+    .catch((err) => message.error(err.message || '读取玄武助手设置失败'))
     .finally(() => setLoading(false));
 }
 
@@ -359,9 +359,9 @@ async function logoutPiOAuth(setOauthBusy, setOauthStatus) {
   setOauthBusy(true);
   try {
     setOauthStatus(await assistantApi.logoutPiCodexOAuth());
-    message.success('已退出 Supervisor Codex OAuth');
+    message.success('已退出玄武助手 Codex OAuth');
   } catch (err) {
-    message.error(err.message || '退出 Supervisor Codex OAuth 失败');
+    message.error(err.message || '退出玄武助手 Codex OAuth 失败');
   } finally {
     setOauthBusy(false);
   }
@@ -394,7 +394,7 @@ async function savePiConnectionAndSupervisor({ form, setForm, setPersonaConflict
     await saveSupervisor(supervisorPayload(form));
     setPersonaConflictDraft(null);
     setPromptSummary(null);
-    message.success('模型连接已保存并设为 Supervisor 默认模型');
+    message.success('模型连接已保存并设为玄武助手默认模型');
     await refreshAfterSave(setProviders, setForm);
     return true;
   } catch (err) {
@@ -405,7 +405,7 @@ async function savePiConnectionAndSupervisor({ form, setForm, setPersonaConflict
       return false;
     }
     message.error(connectionSaved
-      ? '连接参数已保存，但设置 Supervisor 默认模型失败，请重试'
+      ? '连接参数已保存，但设置玄武助手默认模型失败，请重试'
       : err.message || '保存模型连接失败');
     return false;
   } finally {
@@ -420,7 +420,7 @@ async function savePiSupervisorSettings({ form, providers, setForm, setPersonaCo
     await ensureSelectedProviderModel(form, providers);
     await saveSupervisor(supervisorPayload(form));
     setPersonaConflictDraft(null);
-    message.success('Supervisor 行为设置已保存');
+    message.success('玄武助手行为设置已保存');
     setPromptSummary(null);
     await refreshAfterSave(setProviders, setForm);
   } catch (err) {
@@ -430,7 +430,7 @@ async function savePiSupervisorSettings({ form, providers, setForm, setPersonaCo
       message.error('表达 Persona 已被其他修改更新；已重新加载最新 revision，并保留本地草稿供你合并');
       return;
     }
-    message.error(err.message || '保存 Supervisor 行为设置失败');
+    message.error(err.message || '保存玄武助手行为设置失败');
   } finally {
     setSaving(false);
   }

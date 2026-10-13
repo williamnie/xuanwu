@@ -44,7 +44,7 @@ test('issue detail exposes Supervisor panel without native browser dialogs', () 
   assert.match(dataSource, /workApi\.getIssueSupervisor\(issueId\)/);
   assert.match(evidenceSource, /import IssueSupervisorPanel from '\.\.\/IssueSupervisorPanel'/);
   assert.match(evidenceSource, /<IssueSupervisorPanel supervisor=\{supervisor\} \/>/);
-  assert.match(panelSource, /> Supervisor</);
+  assert.match(panelSource, /> Xuanwu assistant</);
   assert.match(panelSource, /retry-after wait/);
   assert.match(panelSource, /Recovery history/);
   assert.doesNotMatch(`${source}\n${dataSource}\n${evidenceSource}\n${panelSource}`, /window\.alert|window\.confirm|window\.prompt/);

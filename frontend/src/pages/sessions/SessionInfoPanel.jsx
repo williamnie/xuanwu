@@ -19,7 +19,7 @@ export function SessionInfoPopover({ session, provider, sessionId, model, naviga
         <div className="session-info-section">
           <span className="session-info-section-title">Session</span>
           <InfoRow label="ID" value={<code>{displayValue(sessionId)}</code>} />
-          <InfoRow label="Provider" value={displayValue(provider)} />
+          <InfoRow label="Coding tool" value={displayValue(provider)} />
           <InfoRow label="Model" value={displayValue(model, '未提供')} />
           {versions.map((item) => <InfoRow key={item.label} label={item.label} value={item.value} />)}
         </div>
@@ -181,7 +181,7 @@ function formatCredit(value) {
 
 function versionSummary(session) {
   return [
-    { label: 'Provider version', value: session?.provider_version },
+    { label: 'Coding tool version', value: session?.provider_version },
     { label: 'SDK version', value: session?.sdk_version },
     { label: 'CLI version', value: session?.cli_version },
     { label: 'Protocol', value: session?.protocol_version },

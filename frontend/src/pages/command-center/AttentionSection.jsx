@@ -251,7 +251,7 @@ function ApprovalDetail({ approval, onClose, onResolve, submitting }) {
           <p>{gate.user_action || '核对当前状态和审计记录后再决定。'}</p>
           {target.actions?.length ? <div className="proposal-actions-list">{target.actions.map(action => <div className="proposal-action-row" key={action.id}><strong>{action.type}</strong><small>{action.risk} · {action.status}</small><span>{action.summary}</span></div>)}</div> : null}
           {actionable ? <footer>
-            <span>{gate.user_action || 'Provider 执行权限、Action Gate、MCP 策略与完成门禁分别裁决，不会互相提升权限。'}</span>
+            <span>{gate.user_action || '编程工具执行权限、Action Gate、MCP 策略与完成门禁分别裁决，不会互相提升权限。'}</span>
             <button disabled={Boolean(submitting)} onClick={() => onResolve('reject', target)} type="button"><ShieldX size={14} />拒绝</button>
             {target.kind === 'pi_action' && target.action_type === 'mcp.tool.call' && target.project_id ? <button disabled={Boolean(submitting) || !canApprove} onClick={() => onResolve('approve_always', target)} type="button"><ShieldCheck size={14} />当前项目始终允许</button> : null}
             <button className="approve" disabled={Boolean(submitting) || !canApprove} onClick={() => onResolve('approve', target)} type="button"><ShieldCheck size={14} />批准一次</button>
@@ -269,7 +269,7 @@ function gateLayerLabel(layer) {
     action_gate: 'Action Gate · 业务动作',
     completion_gate: 'Completion Gate · 完成验收',
     mcp_policy: 'MCP Policy · 外部能力',
-    provider_execution_policy: 'Provider Policy · Agent 工具权限',
+    provider_execution_policy: '编程工具 Policy · Agent 工具权限',
     source_policy: 'Source Policy · 来源动作',
   })[layer] || layer || '未声明';
 }
@@ -279,9 +279,9 @@ function authorizationSourceLabel(source) {
     current_runner_chat_turn: '当前对话明确授权',
     deterministic_policy: '确定性策略',
     human_approval: '人工审批',
-    provider_callback: 'Provider 回调',
+    provider_callback: '编程工具回调',
     source_policy: '来源策略',
-    supervisor_policy: 'Supervisor 策略',
+    supervisor_policy: '玄武助手策略',
   })[source] || source || '未声明';
 }
 

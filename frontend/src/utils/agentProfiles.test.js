@@ -56,7 +56,7 @@ test('summarizes configured and missing agent profiles honestly', () => {
 test('labels run dispatcher metadata compactly', () => {
   assert.equal(runSelectionReasonLabel('issue_override'), 'Issue override');
   assert.equal(runSelectionReasonLabel('project_default'), 'Project default');
-  assert.equal(runSelectionReasonLabel('provider_default'), 'Provider default');
+  assert.equal(runSelectionReasonLabel('provider_default'), 'Coding tool default');
   assert.equal(runCapabilitySummary({ capability_summary: 'issue_execution,sessions' }), 'issue_execution, sessions');
   assert.equal(runCapabilitySummary({ capabilities: ['issue_execution'] }), 'issue_execution');
   assert.equal(runCapabilitySummary({}), '未记录');

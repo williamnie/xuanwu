@@ -221,7 +221,7 @@ export default function SessionTranscript({
     <div className="session-detail-body">
       <div className="session-runtime-header">
         <div className="session-runtime-meta">
-          <span>Provider: {provider}</span>
+          <span>Coding tool: {provider}</span>
           <code title={providerSessionId}>{providerSessionId}</code>
         </div>
         <RuntimeStatusPill running={working} pendingApproval={pendingApproval} />

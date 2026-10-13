@@ -48,7 +48,7 @@ export default function NewSessionWorkspace({
     <div className="new-session-container animate-fade-in">
       <div className="new-session-center-card">
         <header className="new-session-head">
-          <span className="new-session-kicker">New Provider Session</span>
+          <span className="new-session-kicker">New Coding tool Session</span>
           <h1 className="new-session-title">
             我们应该在 <em>{selectedProject?.name || '当前工作区'}</em> 中构建什么？
           </h1>
@@ -121,14 +121,14 @@ export default function NewSessionWorkspace({
 
           <div className="bottom-tag-select">
             <SlidersHorizontal size={13} />
-            <span>Provider: {selectedProviderAvailable ? projectProviderLabel(sessionSettings.provider) : '未选择'}</span>
+            <span>Coding tool: {selectedProviderAvailable ? projectProviderLabel(sessionSettings.provider) : '未选择'}</span>
             <select value={selectedProviderAvailable ? sessionSettings.provider : ''} onChange={(event) => handleSettingChange('provider', event.target.value)}>
-              {!selectedProviderAvailable ? <option disabled value="">选择可用 Provider</option> : null}
+              {!selectedProviderAvailable ? <option disabled value="">选择可用编程工具</option> : null}
               {providerOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
             </select>
           </div>
 
-          <div className="bottom-tag-select" title="Provider 声明的隔离能力">
+          <div className="bottom-tag-select" title="编程工具声明的隔离能力">
             <SlidersHorizontal size={13} />
             <span>{isolationLabel(providerCatalog, sessionSettings.provider)}</span>
           </div>

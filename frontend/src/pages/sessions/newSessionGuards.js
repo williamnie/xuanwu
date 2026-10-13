@@ -12,7 +12,7 @@ export function canCreateSession({ projectId, cwd, prompt, selectedProject, prov
     return { ok: false, reason: 'missing_project', message: PROJECT_REQUIRED_MESSAGE };
   }
   if (providerStatus && (providerStatus.ready === false || providerStatus.available === false)) {
-    return { ok: false, reason: 'provider_not_ready', message: providerStatus.readiness_reason || `${providerId || 'Provider'} 尚未就绪` };
+    return { ok: false, reason: 'provider_not_ready', message: providerStatus.readiness_reason || `${providerId || 'Coding tool'} 尚未就绪` };
   }
   const statusCapabilities = Array.isArray(providerStatus?.capabilities) ? providerStatus.capabilities : null;
   if ((statusCapabilities && !statusCapabilities.includes('sessions')) || (!statusCapabilities && selectedProject && !providerSupportsSessions(selectedProject))) {

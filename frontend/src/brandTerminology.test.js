@@ -30,8 +30,8 @@ test('canonical product, Supervisor, and Runner terms stay fixed', () => {
   assert.deepEqual(PRODUCT_TERMS, {
     product: '玄武',
     productLatin: 'Xuanwu',
-    supervisor: 'Xuanwu Supervisor',
-    supervisorShort: 'Supervisor',
+    supervisor: 'Xuanwu assistant',
+    supervisorShort: 'Xuanwu assistant',
     runner: 'Runner',
     runtimeId: 'xuanwu',
   });

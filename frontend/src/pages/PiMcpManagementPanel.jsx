@@ -58,7 +58,7 @@ function PanelHeader({ embedded, loading, onRefresh, onScan, scanning }) {
           <PlugZap size={18} color="var(--primary)" /> MCP discovery & access
         </Heading>
         <p className="pi-mcp-panel__description">
-          发现不等于启用；Supervisor 只会使用你显式启用的 server 和 capability，secret/env/header 始终显示为 {redactedText}。
+          发现不等于启用；玄武助手只会使用你显式启用的 server 和 capability，secret/env/header 始终显示为 {redactedText}。
         </p>
       </div>
       <div className="pi-mcp-panel__actions">
@@ -128,7 +128,7 @@ function ServerCard({ server, showForget, state }) {
           </select>
         </label>
         <button className="btn btn-secondary" onClick={() => state.introspectServer(server)} type="button">Inspect server capabilities</button>
-        <button className="btn btn-secondary" onClick={() => state.toggleServer(server)} type="button">{server.enabled ? 'Disable server' : 'Enable for Supervisor'}</button>
+        <button className="btn btn-secondary" onClick={() => state.toggleServer(server)} type="button">{server.enabled ? 'Disable server' : 'Enable for Xuanwu assistant'}</button>
         {showForget && !server.enabled && <button className="btn btn-secondary" onClick={() => state.forgetServer(server)} type="button">Forget</button>}
       </div>
     </div>

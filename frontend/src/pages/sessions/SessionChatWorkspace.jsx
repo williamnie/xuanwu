@@ -67,7 +67,7 @@ export default function SessionChatWorkspace({
           </div>
         ) : selectedSession ? (
           <>
-            {detailError ? <div className="session-detail-error" role="alert">Provider session 刷新失败：{detailError}</div> : null}
+            {detailError ? <div className="session-detail-error" role="alert">编程工具 session 刷新失败：{detailError}</div> : null}
             <SessionTranscript
               session={selectedSession}
               project={selectedSessionProject}
@@ -84,7 +84,7 @@ export default function SessionChatWorkspace({
           </>
         ) : detailError ? (
           <div className="session-detail-error session-detail-error-empty" role="alert">
-            Provider session 无法加载：{detailError}
+            编程工具 session 无法加载：{detailError}
           </div>
         ) : (
           <div className="session-empty">选择一个 provider session 查看历史，或创建新 session。</div>

@@ -132,7 +132,7 @@ export default function useIssueDetailActions({
         review_request_id: issue?.decision?.request?.id,
         review_revision: issue?.decision?.request?.revision,
       });
-      message.success('回答已提交，PI 将继续判断');
+      message.success('回答已提交，玄武助手将继续判断');
       setHumanReviewAction('');
       setHumanReviewDraft('');
       loadIssueData();

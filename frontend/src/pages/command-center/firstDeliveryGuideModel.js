@@ -69,7 +69,7 @@ export function firstDeliveryRecovery(state, doctor) {
     return `尚未选择已启用且就绪的 Code Agent（已发现：${discovered}）。在当前步骤选择 Codex CLI / Codex App 或其他可用执行器。`;
   }
   if (!state.steps[2].complete) {
-    return 'Code Agent 已选定，但当前浏览器会话还没有成功的 Supervisor 连接测试。在当前步骤完成 API 或 Codex OAuth 连接并保存；无需进入 Advanced。';
+    return 'Code Agent 已选定，但当前浏览器会话还没有成功的玄武助手连接测试。在当前步骤完成 API 或 Codex OAuth 连接并保存；无需进入 Advanced。';
   }
   if (!state.steps[3].complete) {
     return '还没有项目。输入一个已存在的本地仓库绝对路径；创建失败时保留原路径，修正后可直接重试。';

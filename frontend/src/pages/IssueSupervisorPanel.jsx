@@ -12,7 +12,7 @@ export default function IssueSupervisorPanel({ supervisor }) {
     <section className="glass-card issue-supervisor-panel">
       <div className="issue-supervisor-header">
         <div>
-          <h3><Bot size={18} color="var(--primary)" /> Supervisor</h3>
+          <h3><Bot size={18} color="var(--primary)" /> Xuanwu assistant</h3>
           <p>只读展示最近一次 supervisor 判断、等待窗口和恢复审计；不触发恢复动作。</p>
         </div>
         <span className={`triage-readiness-badge ${supervisorBadgeClass(latest.diagnosis_code, decision.decision)}`}>
@@ -41,7 +41,7 @@ function RetryAfterCard({ retry }) {
       <strong>429 / retry-after wait</strong>
       <span>{retry.remaining_seconds > 0 ? `${formatDuration(retry.remaining_seconds)} 后可恢复` : '等待窗口已到，可重新评估'}</span>
       <code>{retry.at}</code>
-      <p>来源证据：{retry.source || 'unknown'}{retry.reason ? ` · ${retry.reason}` : ''}</p>
+      <p>来源验证结果：{retry.source || 'unknown'}{retry.reason ? ` · ${retry.reason}` : ''}</p>
     </div>
   );
 }

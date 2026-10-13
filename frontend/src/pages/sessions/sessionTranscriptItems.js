@@ -127,7 +127,7 @@ function toolTypeLabel(type) {
     web_search_call: 'Web search',
     image_generation_call: 'Image generation',
     permission: 'Permission',
-    qoderNative: 'Provider event',
+    qoderNative: 'Coding tool event',
     subagent: 'Subagent',
   };
   return labels[type] || type || '事件详情';

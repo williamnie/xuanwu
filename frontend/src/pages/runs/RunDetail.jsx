@@ -30,10 +30,10 @@ import {
 } from './runDetailModel.js';
 
 const DETAIL_SECTIONS = [
-  { id: 'provider', icon: Terminal, label: 'Provider' },
+  { id: 'provider', icon: Terminal, label: 'Coding tool' },
   { id: 'summary', icon: Activity, label: 'Summary' },
   { id: 'logs', icon: FileText, label: 'Logs' },
-  { id: 'evidence', icon: FileCheck2, label: 'Evidence' },
+  { id: 'evidence', icon: FileCheck2, label: 'Checks' },
   { id: 'advanced', icon: ListTree, label: 'Advanced' },
 ];
 
@@ -108,7 +108,7 @@ export default function RunDetail({ navigateTo, run }) {
         ) : null}
         {activeSection === 'summary' ? <RunSummary attempt={selectedAttempt} run={run} /> : null}
         {activeSection === 'logs' ? <RunLogs attempt={selectedAttempt} issueId={issueId} run={run} /> : null}
-        {activeSection === 'evidence' ? <EvidencePanel runId={run.id} title="Run Evidence" /> : null}
+        {activeSection === 'evidence' ? <EvidencePanel runId={run.id} title="Run checks" /> : null}
         {activeSection === 'advanced' ? <RunAdvanced issueId={issueId} run={run} /> : null}
       </main>
     </div>
@@ -130,11 +130,11 @@ function ProviderSessionDrillDown({ attempt, navigateTo, run, sessionRef }) {
   return (
     <section className="run-provider-drilldown">
       <header>
-        <div><Terminal size={15} /><strong>{attempt?.provider_ref?.provider || run.provider || 'Provider'} session</strong></div>
+        <div><Terminal size={15} /><strong>{attempt?.provider_ref?.provider || run.provider || 'Coding tool'} session</strong></div>
         <span>当前 Attempt 的实际执行记录</span>
       </header>
       <div className="run-provider-attempt-facts">
-        <div className="run-provider-fact"><small>Provider</small><strong>{attempt?.provider_ref?.provider || 'unknown'}</strong></div>
+        <div className="run-provider-fact"><small>Coding tool</small><strong>{attempt?.provider_ref?.provider || 'unknown'}</strong></div>
         <div className="run-provider-fact"><small>Status</small><strong data-status={attempt?.status || 'unknown'}>{attempt?.status || 'unknown'}</strong></div>
         <div className="run-provider-fact"><small>Tokens</small><strong>{cost.total}</strong></div>
         <div className="run-provider-fact"><small>Cost</small><strong>{cost.money}</strong></div>
@@ -161,7 +161,7 @@ class ProviderTranscriptBoundary extends Component {
   }
 
   static getDerivedStateFromError(error) {
-    return { error: error?.message || 'Provider transcript failed to render' };
+    return { error: error?.message || 'Coding tool transcript failed to render' };
   }
 
   componentDidUpdate(previousProps) {
@@ -245,7 +245,7 @@ function AttemptSummary({ attempt }) {
         <div><dt>Sequence</dt><dd>{attempt.sequence}</dd></div>
         <div><dt>Kind</dt><dd>{attempt.kind || 'unknown'}</dd></div>
         <div><dt>Status</dt><dd data-status={attempt.status}>{attempt.status || 'unknown'}</dd></div>
-        <div><dt>Provider</dt><dd>{attempt.provider_ref?.provider || 'unknown'}</dd></div>
+        <div><dt>Coding tool</dt><dd>{attempt.provider_ref?.provider || 'unknown'}</dd></div>
         <div><dt>Started</dt><dd>{formatTime(attempt.started_at)}</dd></div>
         <div><dt>Duration</dt><dd>{durationText(attempt.started_at, attempt.ended_at)}</dd></div>
       </dl>

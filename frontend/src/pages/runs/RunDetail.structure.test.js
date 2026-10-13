@@ -12,10 +12,10 @@ const chatSource = readFileSync(new URL('../sessions/SessionChatWorkspace.jsx', 
 const infoSource = readFileSync(new URL('../sessions/SessionInfoPanel.jsx', import.meta.url), 'utf8');
 
 test('Run Detail puts Provider first and hides a single Attempt selector', () => {
-  for (const label of ['Provider', 'Summary', 'Logs', 'Evidence', 'Advanced']) {
+  for (const label of ['Coding tool', 'Summary', 'Logs', 'Checks', 'Advanced']) {
     assert.match(detailSource, new RegExp(`label: '${label}'`));
   }
-  assert.ok(detailSource.indexOf("label: 'Provider'") < detailSource.indexOf("label: 'Summary'"));
+  assert.ok(detailSource.indexOf("label: 'Coding tool'") < detailSource.indexOf("label: 'Summary'"));
   assert.doesNotMatch(detailSource, /label: 'Approvals'/);
   assert.match(detailSource, /aria-label="Run attempts"/);
   assert.match(detailSource, /attempts\.length > 1/);
@@ -41,7 +41,7 @@ test('provider observation is an embedded primary tab without duplicate Evidence
 
 test('embedded provider transcript exposes read failures and provider-neutral version/usage extensions', () => {
   assert.match(sessionsSource, /setDetailError\(message\)/);
-  assert.match(chatSource, /Provider session 无法加载/);
+  assert.match(chatSource, /编程工具 session 无法加载/);
   assert.match(chatSource, /role="alert"/);
   for (const field of ['provider_version', 'sdk_version', 'cli_version', 'protocol_version']) {
     assert.match(infoSource, new RegExp(field));

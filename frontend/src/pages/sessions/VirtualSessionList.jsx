@@ -277,7 +277,7 @@ export default function VirtualSessionList({
               {!isCollapsed && (
                 <div className="project-group-sessions animate-slide-down">
                   {isUnsupported ? (
-                    <div className="project-group-empty unsupported">Provider 不支持 Sessions</div>
+                    <div className="project-group-empty unsupported">编程工具不支持 Sessions</div>
                   ) : hasSessions ? (
                     visibleSessions.map((session) => (
                       <SessionItem
