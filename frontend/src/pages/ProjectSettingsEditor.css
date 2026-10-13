@@ -23,6 +23,10 @@
   margin-top: 6px;
 }
 
+.project-settings-hint a {
+  color: var(--primary);
+}
+
 .project-settings-loading-hint {
   align-items: center;
   display: flex;
@@ -177,22 +181,6 @@
   padding-top: 12px;
 }
 
-.project-profile-settings[open] {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.project-profile-settings > .form-group,
-.project-profile-settings > .project-profile-manager {
-  margin-left: 16px;
-  margin-right: 16px;
-}
-
-.project-profile-settings > .project-profile-manager {
-  margin-bottom: 16px;
-}
-
 .project-profile-overrides > .form-group,
 .project-profile-overrides > .project-settings-grid {
   margin-left: 16px;
@@ -297,7 +285,7 @@
   padding: 6px 10px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .project-settings-grid {
     grid-template-columns: 1fr;
   }
@@ -306,4 +294,14 @@
     align-items: stretch;
     flex-direction: column;
   }
+}
+
+.project-settings-advanced:lang(en) > summary::after,
+.project-profile-overrides:lang(en) > summary::after {
+  content: 'Defaults are fine';
+}
+
+.project-settings-advanced[open]:lang(en) > summary::after,
+.project-profile-overrides[open]:lang(en) > summary::after {
+  content: 'Expanded';
 }

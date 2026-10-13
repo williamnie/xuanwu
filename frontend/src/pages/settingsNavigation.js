@@ -13,6 +13,7 @@ export const SETTINGS_ADVANCED_SECTIONS = Object.freeze([
   { id: 'security' },
   { id: 'skills' },
   { id: 'memory' },
+  { id: 'presets' },
   { id: 'activity' },
 ]);
 
@@ -26,6 +27,7 @@ const LEGACY_SECTION_ROUTES = Object.freeze({
   diagnostics: { tab: 'advanced', section: 'diagnostics' },
   skills: { tab: 'advanced', section: 'skills' },
   memory: { tab: 'advanced', section: 'memory' },
+  presets: { tab: 'advanced', section: 'presets' },
   activity: { tab: 'advanced', section: 'activity' },
 });
 
@@ -52,6 +54,7 @@ const ADVANCED_SECTION_COPY = {
     security: { title: '安全与权限', hint: '连接能力、操作审批与来源策略' },
     skills: { title: '技能与工具', hint: '技能库、MCP 服务器与技能运行记录' },
     memory: { title: '记忆', hint: '玄武记住的信息及其来源' },
+    presets: { title: '执行预设', hint: '可复用的执行偏好与项目默认预设' },
     activity: { title: '处理记录', hint: '一条消息如何变成任务或动作' },
   },
   'en-US': {
@@ -59,6 +62,7 @@ const ADVANCED_SECTION_COPY = {
     security: { title: 'Security & permissions', hint: 'Connection capabilities, approvals and source policies' },
     skills: { title: 'Skills & tools', hint: 'Skill library, MCP servers and skill runs' },
     memory: { title: 'Memory', hint: 'What Xuanwu remembers and where it came from' },
+    presets: { title: 'Execution presets', hint: 'Reusable execution preferences and project defaults' },
     activity: { title: 'Processing history', hint: 'How a message became a task or action' },
   },
 };

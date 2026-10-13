@@ -70,3 +70,16 @@ test('normalizes editable profile form defaults', () => {
   assert.equal(agentProfilePayload({ name: 'Pi review', provider: 'pi-coding-agent', model: '' }).model, '');
   assert.equal(normalizeAgentProfileForm({ provider: 'claude', model: 'codex-default' }).model, '');
 });
+
+
+test('editing visible preset fields preserves hidden plugin intents exactly', () => {
+  for (const original of [' [ "legacy.plugin", "legacy.plugin" ]\n', 'legacy,unknown-format', '', null, ['keep', 'keep']]) {
+    const form = normalizeAgentProfileForm({ id: 'existing', name: 'Before', plugin_intents: original });
+    const payload = agentProfilePayload({ ...form, name: 'After', skill_intents: 'browser' });
+    assert.deepEqual(form.plugin_intents, original);
+    assert.deepEqual(payload.plugin_intents, original);
+    assert.equal(payload.skill_intents, '["browser"]');
+    assert.equal(payload.name, 'After');
+  }
+  assert.equal(agentProfilePayload({ name: 'New preset' }).plugin_intents, '[]');
+});

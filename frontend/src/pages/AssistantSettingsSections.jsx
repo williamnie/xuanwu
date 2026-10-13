@@ -7,6 +7,7 @@ import ReleaseUpdatePanel from './ReleaseUpdatePanel';
 import SkillsRuntimePanel from './SkillsRuntimePanel';
 import SourcePoliciesPanel from './SourcePoliciesPanel';
 import Projects from './Projects';
+import ExecutionPresetsPanel from './ExecutionPresetsPanel';
 import RemoteAccessTokenPanel from './RemoteAccessTokenPanel';
 import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import PersonaSettingsPanel from './PersonaSettingsPanel';
@@ -198,6 +199,7 @@ function AdvancedSettingsTab({ navigateTo, onSectionChange, RuntimeStatusPanel, 
     security: <><PermissionsSettingsPanel navigateTo={navigateTo} /><SourcePoliciesPanel /></>,
     skills: <><SkillsRuntimePanel /><PiMcpManagementPanel embedded /></>,
     memory: <PiMemoryPanel />,
+    presets: <ExecutionPresetsPanel />,
     activity: <ActivityTimelinePanel navigateTo={navigateTo} />,
   };
 

@@ -4,6 +4,8 @@ import test from 'node:test';
 
 const source = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
 const editorSource = readFileSync(new URL('./ProjectSettingsEditor.jsx', import.meta.url), 'utf8');
+const presetsSource = readFileSync(new URL('./ExecutionPresetsPanel.jsx', import.meta.url), 'utf8');
+const managerSource = readFileSync(new URL('./AgentProfileManager.jsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('./Projects.css', import.meta.url), 'utf8');
 
 function ruleFor(selector) {
@@ -105,15 +107,16 @@ test('project config modal reads Provider catalog and models from generic APIs',
   assert.match(editorSource, /systemApi\.getProviders\(\)/);
   assert.match(editorSource, /systemApi\.getProviderModels\(provider\)/);
   assert.match(editorSource, /providerOptionsFromCatalog\(ui\.providerCatalog\)/);
-  assert.match(editorSource, /buildProviderModelOptions\(ui\.formProvider, ui\.codexModels, ui\.formModel, ui\.profileForm\.model\)/);
+  assert.match(editorSource, /buildProviderModelOptions\(ui\.formProvider, ui\.codexModels, \[ui\.formModel\], language\)/);
   assert.match(editorSource, /modelOptions\.map\(option =>/);
-  assert.match(editorSource, /远端 model API 读取失败，已启用手填/);
-  assert.match(editorSource, /手动填写 model ID/);
+  assert.match(editorSource, /模型列表读取失败，已保留当前值/);
+  assert.match(editorSource, /<select aria-label=\{english \? 'Default model' : '默认模型'\}/);
+  assert.doesNotMatch(editorSource, /<input[^>]*formModel/);
   assert.match(editorSource, /executionPolicyPresets\(ui\.providerCatalog, ui\.formProvider/);
   assert.match(editorSource, /isolationLabel\(ui\.providerCatalog, ui\.formProvider\)/);
   assert.match(editorSource, /低权限仍会启动；越权操作会被拒绝/);
   assert.match(editorSource, /resolveProviderExecutionPolicy/);
-  assert.match(editorSource, /静态建议，当前值保留为未验证手工 model ID/);
+  assert.match(editorSource, /静态建议，已保留当前自定义值/);
   assert.doesNotMatch(editorSource, /FALLBACK_CODEX_MODEL_OPTIONS/);
   assert.doesNotMatch(editorSource, /CODEX_MODEL_OPTIONS\.some\(option => option\.value === model\)/);
 });
@@ -121,12 +124,12 @@ test('project config modal reads Provider catalog and models from generic APIs',
 test('project config modal shows provider loading and failure states instead of a blank engine field', () => {
   assert.match(editorSource, /providerCatalogLoading: true/);
   assert.match(editorSource, /aria-busy=\{ui\.providerCatalogLoading\}/);
-  assert.match(editorSource, /正在读取可用执行引擎…/);
+  assert.match(editorSource, /正在读取可用编程工具…/);
   assert.match(editorSource, /正在读取已启用且可用的 Code Agent…/);
-  assert.match(editorSource, /读取执行引擎失败：\$\{ui\.providerCatalogError\}/);
+  assert.match(editorSource, /读取编程工具失败：\$\{ui\.providerCatalogError\}/);
   assert.match(editorSource, /!providerReady && !historicalProviderPreserved/);
   assert.match(editorSource, /codeAgentLabel\(ui\.formProvider, ui\.providerCatalog\).*（不可用）/);
-  assert.match(editorSource, /<AgentProfileSelectOptions/);
+  assert.match(presetsSource, /<AgentProfileSelectOptions/);
 
   const editorCss = readFileSync(new URL('./ProjectSettingsEditor.css', import.meta.url), 'utf8');
   assert.match(editorCss, /\.project-settings-loading-hint::before\s*\{[\s\S]*?animation:\s*xuanwu-spin/);
@@ -138,6 +141,11 @@ test('new project form defaults to one required field and keeps optional control
   assert.match(editorSource, /mode === 'create'[\s\S]*<details className="project-settings-advanced">/);
   assert.match(editorSource, /高级运行配置（可选）/);
   assert.match(editorSource, /mode === 'edit'[\s\S]*loadAgentProfiles\(\)/);
-  assert.match(editorSource, /Agent Profile（可选）/);
-  assert.match(editorSource, /Profile 覆盖项（高级）/);
+  assert.doesNotMatch(editorSource, /<AgentProfileManager|<AgentProfileSelectOptions/);
+  assert.match(editorSource, /href="#\/settings\?section=advanced:presets"/);
+  assert.match(editorSource, /在 高级 → 执行预设 中修改/);
+  assert.match(editorSource, /更多选项/);
+  assert.match(managerSource, /<details className="project-profile-overrides">[\s\S]*?更多选项[\s\S]*?推理深度[\s\S]*?执行速度/);
+  assert.match(managerSource, /Skill 意图/);
+  assert.doesNotMatch(managerSource, /Plugin 意图|onFieldChange\('plugin_intents'/);
 });

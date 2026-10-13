@@ -11,7 +11,7 @@ import {
 
 test('Settings has five sections and Advanced is one page of collapsible parts', () => {
   assert.deepEqual(SETTINGS_SECTIONS.map(section => section.id), ['general', 'ai', 'notifications', 'preferences', 'advanced']);
-  assert.deepEqual(SETTINGS_ADVANCED_SECTIONS.map(section => section.id), ['diagnostics', 'security', 'skills', 'memory', 'activity']);
+  assert.deepEqual(SETTINGS_ADVANCED_SECTIONS.map(section => section.id), ['diagnostics', 'security', 'skills', 'memory', 'presets', 'activity']);
 });
 
 test('Every section and advanced part has a visible purpose in both languages', () => {
@@ -47,6 +47,8 @@ test('Legacy section values, bare or advanced-prefixed, land in the new location
     'advanced:skills': { tab: 'advanced', section: 'skills' },
     memory: { tab: 'advanced', section: 'memory' },
     'advanced:memory': { tab: 'advanced', section: 'memory' },
+    presets: { tab: 'advanced', section: 'presets' },
+    'advanced:presets': { tab: 'advanced', section: 'presets' },
     activity: { tab: 'advanced', section: 'activity' },
     'advanced:activity': { tab: 'advanced', section: 'activity' },
   };
@@ -62,6 +64,7 @@ test('Unknown or retired sections fail safe to Projects', () => {
 });
 
 test('Settings routes round-trip', () => {
+  assert.equal(settingsRouteId(resolveSettingsRoute('advanced:presets')), 'advanced:presets');
   assert.equal(settingsRouteId(resolveSettingsRoute('advanced:diagnostics')), 'advanced:diagnostics');
   assert.equal(settingsRouteId(resolveSettingsRoute('permissions')), 'advanced:security');
   assert.equal(settingsRouteId(resolveSettingsRoute('advanced')), 'advanced');
