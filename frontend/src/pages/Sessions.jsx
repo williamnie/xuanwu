@@ -79,6 +79,7 @@ export default function Sessions({
   autoSelectFirstSession = true,
   navigateTo,
   observationNotice = '',
+  readOnly = false,
   selectedSessionId = '',
   showEvidence = true,
   showSidebar = true,
@@ -895,6 +896,7 @@ export default function Sessions({
         loading={loading && sessions.length === 0}
         activeView={activeView}
         chatProps={{
+          readOnly,
           detailLoading,
           detailError,
           hasOlderTurns: Boolean(turnCursor),

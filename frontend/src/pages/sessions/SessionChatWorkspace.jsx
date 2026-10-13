@@ -8,6 +8,7 @@ import { addSessionReference, removeSessionReference } from './sessionReferences
 import { clearSessionCommandState, createSessionCommandState } from './sessionCommands';
 
 export default function SessionChatWorkspace({
+  readOnly = false,
   detailLoading,
   detailError,
   hasOlderTurns,
@@ -70,6 +71,7 @@ export default function SessionChatWorkspace({
             {detailError ? <div className="session-detail-error" role="alert">Provider session 刷新失败：{detailError}</div> : null}
             <SessionTranscript
               session={selectedSession}
+              readOnly={readOnly}
               project={selectedSessionProject}
               liveEvents={liveEvents}
               hasOlderTurns={hasOlderTurns}
@@ -95,7 +97,7 @@ export default function SessionChatWorkspace({
         {observationNotice ? (
           <div className="session-read-only-notice"><Eye size={13} />{observationNotice}</div>
         ) : null}
-        <div className="client-chat-composer-section">
+        {!readOnly && <div className="client-chat-composer-section">
             <ApprovalDialog
               request={approvalRequest}
               submitting={approvalSubmitting}
@@ -143,7 +145,7 @@ export default function SessionChatWorkspace({
             onCancelQueuedMessage={cancelQueuedMessage}
             onRetryQueuedMessage={retryQueuedMessage}
             />
-        </div>
+        </div>}
       </div>
     </div>
   );

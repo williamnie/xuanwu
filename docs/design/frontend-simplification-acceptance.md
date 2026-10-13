@@ -35,3 +35,25 @@ B0 结果：导航/品牌/侧栏样式 13 项通过，Bun 翻译资源 3 项通�
 B1 结果：相关导航、结构、样式、项目表单、预设往返与Codex模式测试41项通过；全前端ESLint与构建通过。Chromium实测高级首次进入未请求子面板，展开维护仅请求status/token/runner/connectors，未请求技能或记忆、未预取日志；并发草稿“3”经收起重开、切换项目再回高级仍保留。刷新 `section=advanced:memory` 只展开记忆，未请求维护接口；11个旧section及前缀兼容有合同测试。明暗主题1280/980/760/680截图均无横向溢出并目检。新增执行预设入口并从项目编辑移走管理表单，项目只保留选择器；Plugin隐藏值回归通过。
 
 B1 后端回归：runnerSettingsApi / codeAgentsApi 验证原保存、并发范围、Codex transport应用与工具开关合同；结果见后续记录。表达风格仍原地折叠，共用原handleAgentSave，C2再移到通用；外部连接仍保留原子Tab。
+
+## C1 验收表与新增合同（实施前）
+
+| 检查 | 边界和用例 |
+|---|---|
+| 入口 | 默认任务列表/可切换看板；任务/自动化子视图；详情现在怎样/结果/默认收起过程；替代可用后移除原一级入口 |
+| 读取 | `/api/works`服务端项目/状态/搜索分页；可选`include_diagnostics=1`按分页项目分组只读投影依赖、暂停和工具状态；详情同事实。无需N+1HTTP或写readiness取数 |
+| 新写合同 | `POST /api/works/:id/queue-state`只接受status=triage/todo、audit和expected_revision；只允许triage→todo、todo→triage、failed→triage，与原拖拽相同；Issue仍唯一authority，原PATCH白名单不扩大 |
+| 既有写入 | enqueue/retry/cancel统一现有Work action并携带revision/audit；列表逐项对照workDropOperation；危险动作确认 |
+| 隐藏字段 | 创建默认triage；标题/预设更多选项；不可用旧选择无损；项目上下文、单项目和上次项目 |
+| 错误/空/部分 | 列表页失败不空态；分页失败保留已加载；事实不足不承诺可调度；请求冲突刷新；执行/结果分别提示缺失 |
+| 深链 | B/C保持原route ID；Run可确定work_id时到详情；未知或无所属只读退路；Handoff保留 |
+| Run/Attempt | 每次执行独立加载详情；每次尝试独立请求transcript/run_id+attempt_id和验证结果，保留选择，不以session全部历史替代 |
+| 主题/断点 | 明暗、980/760/680；列表与三段详情、创建弹窗 |
+
+队列状态新命令的设计原因：旧Issue PATCH没有Work revision保护，不能拿它假装与现有版本化Work action等价。该专用命令不允许直接转到done/failed/needs_user或修改运行中的任务，不扩大自动权限。只读诊断声明为事实投影，不把readiness=not_required或effective_provider当成可调度保证。
+
+C1 结果：全前端670项通过；Work/Run/Evidence HTTP共27项，Issue adapter/依赖队列/迁移共16项通过（43项）；全前端ESLint和生产构建通过。TypeScript5.9.3全仓库153条诊断与9acf05d6临时只读源码快照逐条归一化对比一致，无新增；不把该基线噪音称为typecheck通过。
+
+真实Chromium：列表服务端状态筛选、三段详情、Ctrl+K共用创建、单项目隐藏选择器、默认入队不勾选；创建请求明确status=triage+稳定audit.event_id，成功跳新任务。工具门禁最初正确拦住缺少issueExecution能力的fixture，补齐fixture后同一用例通过。过程关闭时验收仍在首段；展开执行默认第2次尝试，切换第1次只显示旧尝试文本且新文本消失，请求带对应attempt_id；收起重开保留选择。详情、列表、创建弹窗浅/深1280/980/760/680实测截图并目检，无横向溢出。对比发现旧详情的大渐变卡和嵌套色块与设计合同冲突，已统一为透明段落细线+标准请求卡，并重拍复核。
+
+完整前端套件暴露10项仍断言旧UI的测试；已将其改成验证新的入口、隐藏UI但保留API、唯一状态所有者及权限/凭据边界，原业务合同断言保留，全套复验通过。未访问真实生产任务、未发送审批或创建真实任务。

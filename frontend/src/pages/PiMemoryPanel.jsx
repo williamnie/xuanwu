@@ -17,6 +17,7 @@ export default function PiMemoryPanel() {
           {state.loading ? <Loader2 size={15} className="spin-animation" /> : null} 刷新
         </button>
       </div>
+      <p>记忆只保存可复用的偏好、决策与经验，当前任务状态以实时查询为准。相同 memory_key 会更新而不是重复追加。</p>
       <MemorySummary activeCount={activeCount} disabledCount={disabledCount} recent={recent} />
       <MemoryCreateForm state={state} />
       {state.error && <div className="pi-memory-panel__error">{state.error}</div>}

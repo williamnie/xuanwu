@@ -7,9 +7,9 @@ const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
 const model = readFileSync(new URL('./workDetailModel.js', import.meta.url), 'utf8');
 
 test('Work Detail keeps overview, delivery and activity together and loads Activity only on demand', () => {
-  assert.match(detail, /t\('work\.overview'\)/);
-  assert.match(detail, /t\('work\.delivery'\).*overview\.handoffs\.length/);
-  assert.match(detail, /t\('work\.activity'\)/);
+  assert.match(detail, /title="现在怎样"/);
+  assert.match(detail, /title="结果"/);
+  assert.match(detail, /<summary>过程<\/summary>/);
   assert.match(detail, /workApi\.getWork\(workId\)/);
   assert.match(detail, /workApi\.getWorkTimeline/);
   assert.match(detail, /runsApi\.getRuns/);
@@ -17,13 +17,15 @@ test('Work Detail keeps overview, delivery and activity together and loads Activ
   assert.match(detail, /handoffsApi\.getHandoffs/);
   assert.match(detail, /<WorkDeliveryView/);
   assert.doesNotMatch(detail, /navigateTo\('handoffs'/);
-  assert.match(detail, /activeView === 'activity' && !activityLoaded/);
+  assert.match(detail, /processVisited && !activityLoaded/);
   assert.doesNotMatch(detail, /getWorkRelations|readiness|relationship|guardianAlerts|compatibility/);
   assert.doesNotMatch(detail, /<EvidencePanel/);
 });
 
 test('Work Board stays board-only and opens canonical Work Detail', () => {
-  assert.doesNotMatch(board, /onViewChange|WorkList|work-view-toggle/);
+  assert.match(board, /useState\('list'\)/);
+  assert.match(board, /<TaskList/);
+  assert.match(board, /<Automations\//);
   assert.match(board, /WORK_BOARD_STATUSES\.map\(status =>/);
   assert.match(board, /navigateTo\('work', work\.id\)/);
   assert.doesNotMatch(board, /navigateTo\('issues', issueId\)/);

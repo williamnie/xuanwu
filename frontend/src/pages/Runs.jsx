@@ -8,6 +8,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { eventsApi } from '../api/events.js';
+import { WORK_BOARD_ENABLED, workIdFromIssueId } from './workBoardModel.js';
 import { runsApi } from '../api/runs.js';
 import TurtleLoader from '../components/TurtleLoader';
 import { message as toast } from '../store/toastStore';
@@ -166,7 +167,10 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
     setDetailLoading(true);
     runsApi.getRun(activeRunId, { signal: controller.signal })
       .then(response => {
-        if (active) setRunDetail(response?.run || null);
+        if (!active) return;
+        const run = response?.run || null;
+        setRunDetail(run);
+        if (WORK_BOARD_ENABLED && selectedRunId && run?.work_id) navigateTo('work', run.work_id, '', '', { runId: run.id });
       })
       .catch(detailError => {
         if (active && detailError?.name !== 'AbortError') toast.error(detailError.message || '读取 Run 详情失败');
@@ -178,7 +182,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
       active = false;
       controller.abort();
     };
-  }, [activeRunId, surface]);
+  }, [activeRunId, surface, selectedRunId, navigateTo]);
 
   const selectRun = useCallback((id) => {
     setSurface('run');
@@ -205,6 +209,16 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
       interaction_surface: surface !== 'run' ? 'provider-session' : '',
     });
   }, [activeRunId, onPageContextChange, providerSessionRef, runDetail, selectedSessionId, surface]);
+
+  useEffect(() => {
+    if (!WORK_BOARD_ENABLED || !selectedSessionId || selectedRunId) return;
+    let active = true;
+    runsApi.getSession(selectedSessionId).then(session => {
+      const workId = workIdFromIssueId(session?.issue_id);
+      if (active && workId) navigateTo('work', workId);
+    }).catch(() => { /* 不猜归属，保留只读执行记录退路。 */ });
+    return () => { active = false; };
+  }, [selectedSessionId, selectedRunId, navigateTo]);
 
   return (
     <section className="runs-page-shell">
@@ -234,7 +248,9 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
             navigateTo={navigateTo}
             selectedSessionId={selectedSessionId}
             showEvidence={false}
-            showSidebar
+            readOnly
+            observationNotice="未找到所属任务，仅提供只读执行记录。"
+            showSidebar={false}
           />
         </div>
       ) : surface === 'new-session' ? (
@@ -274,7 +290,7 @@ function RunContextBar({ navigateTo, onRunChanged, run }) {
   const [pendingAction, setPendingAction] = useState('');
   const [resumePrompt, setResumePrompt] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const actions = runAvailableActions(run);
+  const actions = run.work_id ? runAvailableActions(run) : {};
   const issueId = runIssueId(run);
 
   const controlRun = async (action) => {

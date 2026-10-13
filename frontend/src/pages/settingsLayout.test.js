@@ -173,7 +173,7 @@ test('Xuanwu product sidebar removes the PI section and keeps internal config be
   }
   assert.match(modulesSource, /'pi-automations': 'automations'/);
   assert.match(modulesSource, /'pi-approvals': 'command-center'/);
-  for (const route of ['command-center', 'ask-xuanwu', 'work', 'runs', 'automations', 'settings']) {
+  for (const route of ['command-center', 'ask-xuanwu', 'work', 'settings']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
   assert.doesNotMatch(modulesSource, /page: 'projects'/);

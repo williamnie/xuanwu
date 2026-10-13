@@ -1,8 +1,8 @@
-export function editorDraft(work, projects) {
+export function editorDraft(work, projects, projectId = '') {
   return {
     agent_profile_id: work?.agent_profile_id || '',
     goal: work?.goal || '',
-    project_id: work?.owner?.project_id || projects[0]?.id || '',
+    project_id: work?.owner?.project_id || (projects.some(project => project.id === projectId) ? projectId : projects[0]?.id) || '',
     status: 'triage',
     title: work?.title || '',
   };

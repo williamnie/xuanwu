@@ -193,3 +193,16 @@
 .work-delivery-milestones [data-status="succeeded"] strong { color: var(--success); }
 .work-delivery-milestones [data-status="failed"] strong { color: var(--error); }
 @media (max-width: 760px) { .work-delivery-milestones > div { flex-basis: calc(50% - 12px); } }
+
+.work-process-disclosure, .work-run-disclosure { border-top: 1px solid var(--border-color); padding: 16px 0; }
+.work-process-disclosure > summary, .work-run-disclosure > summary, .work-provider-profile-panel > summary { cursor: pointer; color: var(--text-primary); font-size: 0.88rem; }
+.work-detail-more { position: relative; }
+.work-detail-more > summary { padding: 8px; cursor: pointer; }
+.work-detail-more > div { position: absolute; right: 0; z-index: 10; padding: 8px; min-width: 140px; background: var(--surface-overlay); border: 1px solid var(--border-color); display: grid; gap: 4px; }
+.task-run-process { min-width: 0; padding: 16px 0; }
+.task-run-process .session-detail-body { min-height: 200px; max-height: 600px; }
+
+/* 三段详情使用细线分隔，请求卡复用标准表面，避免卡片套卡片。 */
+.work-detail-page .work-detail-hero { background: transparent; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; padding: 16px 0; }
+.work-detail-page .work-detail-panel { background: transparent; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; padding: 16px 0; }
+.work-detail-page .work-human-review-card { background: var(--surface-raised); border: 1px solid var(--border-color); border-radius: var(--radius-md); }

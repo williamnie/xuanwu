@@ -271,6 +271,29 @@ export function updateIssueBackedWork(
   return attachShadow(db, write, command.audit, command.shadow_mode);
 }
 
+/** 列表与看板的队列状态调整，保留 Issue authority 与乐观锁、审计幂等。 */
+export function moveIssueWorkQueueState(db: RunnerDatabase, command: {
+  audit: WorkTransitionAudit; expected_revision: number; status: "triage" | "todo"; work_id: string;
+}): IssueWorkMutationResult {
+  const fingerprint = createHash("sha256").update(stableJson({ operation: "queue-state", ...command })).digest("hex");
+  const issueID = workIDToIssueID(command.work_id);
+  const result = db.transaction((): AdapterWriteOutcome => {
+    const replay = replayAdapterWrite(db, issueID, command.audit.event_id, fingerprint);
+    if (replay) return replay;
+    const before = mustGetIssueWork(db, issueID);
+    const allowed = (before.status === "triage" && command.status === "todo") ||
+      ((before.status === "todo" || before.status === "failed") && command.status === "triage");
+    const violations = [...auditViolations(command.audit), ...revisionViolations(command.expected_revision, before.revision)];
+    if (!allowed) violations.push("queue-state transition is not allowed");
+    if (violations.length) return rejectAdapterWrite(db, issueID, before, command.audit, fingerprint, "queue-state", violations, { status: command.status });
+    updateIssue(db, issueID, { status: command.status });
+    const after = mustGetIssueWork(db, issueID);
+    recordAdapterWrite(db, issueID, command.audit, fingerprint, "queue-state", "applied", [], before, after, { status: command.status });
+    return { applied: true, audit_event_id: command.audit.event_id, violations: [], work: after };
+  }).immediate();
+  return attachShadow(db, result, command.audit);
+}
+
 export function applyIssueWorkAction(
   db: RunnerDatabase,
   command: IssueWorkActionCommand

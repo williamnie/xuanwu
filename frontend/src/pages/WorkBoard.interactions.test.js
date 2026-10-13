@@ -13,10 +13,10 @@ test('new Work goal uses the image-capable prompt composer', () => {
   assert.match(css, /\.work-dialog-field \.prompt-editor-shell\.composer/);
 });
 
-test('new Work makes the title optional and calls the executor choice Code Agent', () => {
+test('Task creation folds optional title and preset while preserving old selections', () => {
   assert.match(editorDialog, /<span>\{t\('editor\.title'\)\} <small>（可选）<\/small><\/span>/);
   assert.doesNotMatch(editorDialog, /onChange=\{event => setField\('title', event\.target\.value\)\} required/);
-  assert.match(editorDialog, /<span>Code Agent<\/span>/);
+  assert.match(editorDialog, /<span>执行预设<\/span>/);
   assert.match(editorDialog, /<AgentProfileSelectOptions/);
   assert.match(editorDialog, /draft\.agent_profile_id === \(work\?\.agent_profile_id \|\| ''\)/);
 });
@@ -25,11 +25,13 @@ test('Work Board cards restore drag and drop through guarded Issue actions', () 
   assert.match(board, /draggable=\{!moving\}/);
   assert.match(board, /onDrop=\{event => onDrop\(event, status\)\}/);
   assert.match(board, /workDropOperation\(work\.status, targetStatus\)/);
-  assert.match(board, /operation === 'enqueue'[\s\S]*workApi\.enqueueIssue\(issueId\)/);
-  assert.match(board, /operation === 'retry'[\s\S]*workApi\.retryIssue\(issueId\)/);
-  assert.match(board, /operation === 'cancel'[\s\S]*workApi\.cancelIssue\(issueId\)/);
-  assert.match(board, /workApi\.updateIssue\(issueId, \{ status: targetStatus \}\)/);
-  assert.match(board, /该状态由执行或验收流程推进，不能手动拖入/);
+  const actions = readFileSync(new URL('./work/workActions.js', import.meta.url), 'utf8');
+  assert.match(board, /executeWorkMove\(work, targetStatus\)/);
+  assert.match(actions, /workApi\.controlWork\(work\.id, operation, payload\)/);
+  assert.match(actions, /workApi\.setQueueState\(work\.id, \{ \.\.\.payload, status: target \}\)/);
+  assert.match(actions, /buildWorkActionPayload\(work, operation\)/);
+  assert.match(actions, /operation === 'blocked'/);
+  assert.doesNotMatch(board, /workApi\.(enqueueIssue|retryIssue|cancelIssue|updateIssue)\(/);
 });
 
 test('Work Board keeps the viewport fixed and scrolls each lane independently', () => {

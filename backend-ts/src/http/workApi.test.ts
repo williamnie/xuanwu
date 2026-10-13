@@ -25,6 +25,49 @@ afterEach(async () => {
 });
 
 describe("Work HTTP API", () => {
+  test("queue-state keeps revision, audit idempotency and lifecycle boundaries", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issue = createIssue(db, { project_id: "demo", status: "triage", title: "Queue" });
+      const work = getIssueAsWork(db, issue.id)!;
+      const handle = createRequestHandler(createDefaultRouter({ database: db }), AUTH_TOKEN);
+      const path = `/api/works/${encodeURIComponent(work.id)}/queue-state`;
+      const payload = { audit: audit("queue-confirm", "user"), expected_revision: work.revision, status: "todo" };
+      const saved = await handle(authenticatedJsonRequest(path, "POST", payload));
+      expect(saved.status).toBe(200);
+      expect((await body(saved)).work).toMatchObject({ status: "todo" });
+      const events = rowCount(db, "issue_events");
+      const replay = await handle(authenticatedJsonRequest(path, "POST", payload));
+      expect(replay.status).toBe(200);
+      expect(rowCount(db, "issue_events")).toBe(events);
+      const conflict = await handle(authenticatedJsonRequest(path, "POST", { ...payload, audit: audit("queue-stale", "user"), status: "triage" }));
+      expect(conflict.status).toBe(409);
+      expect(getIssue(db, issue.id)?.status).toBe("todo");
+      expect((await handle(authenticatedJsonRequest(path, "POST", { ...payload, status: "done" }))).status).toBe(400);
+      const current = getIssueAsWork(db, issue.id)!;
+      const deferred = await handle(authenticatedJsonRequest(path, "POST", { audit: audit("queue-defer", "user"), expected_revision: current.revision, status: "triage" }));
+      expect(deferred.status).toBe(200);
+      const running = createIssue(db, { project_id: "demo", status: "in_progress", title: "Running" });
+      const runningWork = getIssueAsWork(db, running.id)!;
+      expect((await handle(authenticatedJsonRequest(`/api/works/${encodeURIComponent(runningWork.id)}/queue-state`, "POST", { audit: audit("queue-running", "user"), expected_revision: runningWork.revision, status: "triage" }))).status).toBe(409);
+    } finally { db.close(); }
+  });
+  test("paged scheduling diagnostics are read-only facts and preserve unknown tool state", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issue = createIssue(db, { project_id: "demo", status: "todo", title: "Facts" });
+      const router = createDefaultRouter({ database: db });
+      const before = rowCount(db, "issue_events");
+      const result = await body(await router.handle(new Request(`${BASE_URL}/api/works?page_size=1&include_diagnostics=1`)));
+      expect(result.items).toHaveLength(1);
+      expect((result.items as Record<string, unknown>[])[0]?.scheduling).toMatchObject({ contract: "xuanwu.work-scheduling-facts.v1", complete: false, tool: { state: "unknown", submittable: null }, dependency: { ready: true } });
+      const detail = await body(await router.handle(new Request(`${BASE_URL}/api/works/${encodeURIComponent(issueIDToWorkID(issue.id))}`)));
+      expect((detail.work as Record<string, unknown>).scheduling).toBeDefined();
+      expect(rowCount(db, "issue_events")).toBe(before);
+    } finally { db.close(); }
+  });
   test("atomically materializes structured dependencies before a todo Work can be scheduled", async () => {
     const db = await openFixtureDatabase();
     try {

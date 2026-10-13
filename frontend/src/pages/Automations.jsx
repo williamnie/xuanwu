@@ -122,7 +122,7 @@ export default function Automations() {
         <p>{t('automations.description')}</p>
       </div>
       <div className="automations-hero-actions">
-        <button className="btn btn-secondary" disabled={state.loading} onClick={() => loadList()} type="button"><RefreshCw className={state.loading ? 'is-spinning' : ''} size={15} />{t('automations.refresh')}</button>
+        <button className="btn btn-secondary" aria-label={t('automations.refresh')} disabled={state.loading} onClick={() => loadList()} type="button"><RefreshCw className={state.loading ? 'is-spinning' : ''} size={14} /></button>
         <button className="btn btn-primary" onClick={startCreate} type="button"><Plus size={15} />{t('automations.create')}</button>
       </div>
     </header>
@@ -141,8 +141,10 @@ function AutomationFilters({ filters, projects, setFilters }) {
   const update = (key, value) => setFilters(current => ({ ...current, [key]: value }));
   return <section className="automations-filters" aria-label={t('automations.filters')}>
     <label className="automation-search"><Search size={14} /><input aria-label={t('automations.search')} onChange={event => update('query', event.target.value)} placeholder={t('automations.searchPlaceholder')} value={filters.query} /></label>
+    <details className="automation-extra-filters"><summary>筛选</summary>
     <label><Filter size={13} /><select aria-label={t('automations.statusFilter')} onChange={event => update('status', event.target.value)} value={filters.status}><option value="">{t('automations.allStatuses')}</option>{AUTOMATION_STATUSES.map(item => <option key={item} value={item}>{t(`automations.status.${item}`)}</option>)}</select></label>
     <label><CalendarClock size={13} /><select aria-label={t('automations.triggerFilter')} onChange={event => update('triggerType', event.target.value)} value={filters.triggerType}><option value="">{t('automations.allTriggers')}</option>{AUTOMATION_TRIGGERS.map(item => <option key={item} value={item}>{t(`automations.trigger.${item}`)}</option>)}</select></label>
+    </details>
     <label><Bot size={13} /><select aria-label={t('automations.projectFilter')} onChange={event => update('projectId', event.target.value)} value={filters.projectId}><option value="">{t('automations.allProjects')}</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}</select></label>
   </section>;
 }

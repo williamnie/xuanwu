@@ -1,0 +1,24 @@
+.task-list-page { min-width: 0; }
+.task-list-toolbar, .task-list-filters, .task-list-search, .task-list-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.task-list-toolbar { padding: 16px 0; }
+.task-list-filters { margin-right: auto; }
+.task-list-filters [aria-pressed="true"] { background: var(--button-primary-bg); color: var(--button-primary-fg); }
+.task-list-search { padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+.task-list-search > select { width: auto; max-width: 260px; }
+.task-list-search label { display: flex; align-items: center; gap: 8px; flex: 1; }
+.task-list-row { display: flex; align-items: center; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--border-color); }
+.task-list-row:hover { background: var(--nav-hover); }
+.task-list-title { display: flex; flex-direction: column; text-align: left; gap: 6px; flex: 1; min-width: 0; color: var(--text-primary); background: transparent; border: 0; cursor: pointer; }
+.task-list-title strong { font-size: 0.88rem; font-weight: 600; }
+.task-list-title small, .task-list-row time { font-family: var(--font-mono); color: var(--text-muted); font-size: 0.66rem; }
+.task-list-title span { font-size: 0.78rem; color: var(--text-secondary); overflow-wrap: anywhere; }
+.task-list-actions details { position: relative; }
+.task-list-actions summary { padding: 8px; cursor: pointer; }
+.task-list-actions details > div { position: absolute; right: 0; min-width: 120px; z-index: 10; background: var(--surface-overlay); border: 1px solid var(--border-color); display: grid; gap: 4px; padding: 8px; }
+.task-list-empty { padding: 32px; text-align: center; color: var(--text-muted); }
+.task-list-row .status-dot { background: var(--text-muted); }
+.task-list-row [data-status="in_progress"] { background: var(--info); }
+.task-list-row [data-status="failed"] { background: var(--error); }
+.task-list-row [data-status="done"] { background: var(--success); }
+@media (max-width: 760px) { .task-list-row { flex-wrap: wrap; } .task-list-row time { margin-left: 20px; } .task-list-search > select { max-width: 100%; } }
+@media (max-width: 680px) { .task-list-search { display: grid; grid-template-columns: minmax(0,1fr); } }

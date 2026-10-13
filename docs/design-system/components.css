@@ -317,3 +317,7 @@
 .settings-disclosure { border-top: 1px solid var(--border-color); }
 .settings-disclosure > summary { padding: 16px 0; cursor: pointer; color: var(--text-primary); }
 .settings-disclosure-content { padding: 0 0 16px; }
+.task-list-row { display: flex; align-items: center; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--border-color); }
+.task-list-row:hover { background: var(--nav-hover); }
+
+.work-human-review-card, .inbox-request-card { background: var(--surface-raised); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; }

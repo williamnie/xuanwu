@@ -15,7 +15,10 @@ test('Runs is the canonical page while old Sessions navigation remains a deep-li
   assert.match(appSource, /resolveProductPage\(page, \{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
   assert.match(appSource, /const compatSessionRoute = resolvedPage === 'runs' && \(page === 'sessions'/);
   assert.match(appSource, /currentPage === 'runs'/);
-  assert.match(modulesSource, /page: 'runs',[\s\S]*label: PRODUCT_NAV_LABELS\.runs/);
+  assert.doesNotMatch(modulesSource, /page: 'runs',/);
+  assert.match(modulesSource, /sessions: 'runs'/);
+  assert.match(pageSource, /run\?\.work_id\) navigateTo\('work'/);
+  assert.match(pageSource, /readOnly/);
   assert.match(sidebarSource, /aria-label=\{navLabel\(item\)\}/);
   assert.doesNotMatch(sidebarSource, /aria-label="Sessions"/);
 });

@@ -70,7 +70,8 @@ export function readIssueDependency(
  */
 export function readProjectIssueDependencies(
   db: RunnerDatabase,
-  projectID: string
+  projectID: string,
+  requestedIssueIDs?: ReadonlySet<number>
 ): Map<number, IssueDependencyDiagnostic> {
   const cleanProjectID = projectID.trim();
   if (!cleanProjectID) return new Map();
@@ -79,7 +80,7 @@ export function readProjectIssueDependencies(
       dependency_declaration_error from issues where project_id=? order by id`
   ).all(cleanProjectID);
   const graph = dependencyGraph(db, cleanProjectID, issues);
-  return new Map(issues.map((issue) => [issue.id, evaluateIssueDependency(graph, issue)]));
+  return new Map(issues.filter(issue => !requestedIssueIDs || requestedIssueIDs.has(issue.id)).map((issue) => [issue.id, evaluateIssueDependency(graph, issue)]));
 }
 
 function dependencyGraph(db: RunnerDatabase, projectID: string, issues: IssueRow[]): DependencyGraph {

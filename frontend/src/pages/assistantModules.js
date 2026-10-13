@@ -24,20 +24,6 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
     availability: 'compatibility',
   },
   {
-    page: 'runs',
-    label: PRODUCT_NAV_LABELS.runs,
-    icon: 'runs',
-    placement: 'primary',
-    availability: 'compatibility',
-  },
-  {
-    page: 'automations',
-    label: PRODUCT_NAV_LABELS.automations,
-    icon: 'automations',
-    placement: 'primary',
-    availability: 'compatibility',
-  },
-  {
     page: 'analytics',
     label: PRODUCT_NAV_LABELS.analytics,
     icon: 'analytics',
@@ -79,6 +65,7 @@ export function resolveProductPage(page, { workBoardEnabled = true } = {}) {
 export function productNavPageForRoute(page) {
   const resolvedPage = PRODUCT_COMPAT_ROUTE_REDIRECTS[page] || page;
   if (isAssistantModulePage(resolvedPage)) return 'settings';
+  if (resolvedPage === 'runs' || resolvedPage === 'automations') return 'work';
   return resolvedPage;
 }
 

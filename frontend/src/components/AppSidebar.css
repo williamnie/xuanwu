@@ -44,3 +44,7 @@
 .sidebar-more > button { position: absolute; bottom: 100%; left: 0; min-width: 120px; background: var(--surface-overlay); border: 1px solid var(--border-color); }
 
 .sidebar-footer-actions .sidebar-more > button { width: 120px; min-width: 120px; max-width: none; justify-content: flex-start; white-space: nowrap; }
+
+.sidebar-new-task { display: flex; align-items: center; gap: 6px; width: 100%; padding: 10px 12px; border: 0; border-radius: var(--button-radius); background: linear-gradient(135deg, var(--primary), var(--primary-hover)); color: var(--button-primary-fg); font-size: 0.78rem; cursor: pointer; margin-bottom: 12px; }
+.sidebar-new-task small { margin-left: auto; font-family: var(--font-mono); font-size: 0.56rem; }
+.sidebar-collapsed .sidebar-new-task span, .sidebar-collapsed .sidebar-new-task small { display: none; }

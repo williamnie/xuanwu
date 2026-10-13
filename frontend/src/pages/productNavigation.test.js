@@ -18,8 +18,6 @@ const EXPECTED_PAGES = [
   'command-center',
   'work',
   'ask-xuanwu',
-  'runs',
-  'automations',
   'analytics',
   'settings',
 ];
@@ -28,7 +26,7 @@ test('product navigation has one ordered Xuanwu identity and centralized labels'
   assert.deepEqual(PRODUCT_NAV_ITEMS.map(item => item.page), EXPECTED_PAGES);
   assert.deepEqual(
     PRODUCT_NAV_ITEMS.map(item => item.label),
-    Object.values(PRODUCT_NAV_LABELS).filter(label => label !== PRODUCT_NAV_LABELS.projects),
+    [PRODUCT_NAV_LABELS.commandCenter, PRODUCT_NAV_LABELS.work, PRODUCT_NAV_LABELS.askXuanwu, PRODUCT_NAV_LABELS.analytics, PRODUCT_NAV_LABELS.settings],
   );
   assert.equal(new Set(PRODUCT_NAV_ITEMS.map(item => item.page)).size, PRODUCT_NAV_ITEMS.length);
   assert.equal(new Set(PRODUCT_NAV_ITEMS.map(item => item.label)).size, PRODUCT_NAV_ITEMS.length);

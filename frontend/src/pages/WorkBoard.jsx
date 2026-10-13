@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -28,6 +28,9 @@ import {
   workNeedsAttention,
 } from './workBoardModel.js';
 import './WorkBoard.css';
+import TaskList from './work/TaskList.jsx';
+const Automations = lazy(() => import('./Automations.jsx'));
+import { executeWorkMove } from './work/workActions.js';
 import { useI18n } from '../i18n/context.js';
 
 const STATUS_META = {
@@ -54,7 +57,21 @@ const OPERATIONAL_STATUSES = ['triage', 'todo', 'in_progress', 'needs_user', 'fa
 const HISTORY_STATUSES = ['done', 'cancelled'];
 const BOARD_RECONCILE_EVENT_TYPES = new Set(['issue.created', 'issue.deleted', 'issue.status_changed', 'issue.updated']);
 
-export default function WorkBoard({ navigateTo, onPageContextChange, selectedHandoffId = '', selectedWorkId = '' }) {
+export default function WorkBoard(props) {
+  const projects = useDataStore(selectProjects);
+  const [view, setView] = useState('list');
+  const [subview, setSubview] = useState('tasks');
+  if (props.selectedWorkId) return <WorkDetail navigateTo={props.navigateTo} onPageContextChange={props.onPageContextChange} projects={projects} selectedHandoffId={props.selectedHandoffId} workId={props.selectedWorkId} initialRunId={props.initialRunId} />;
+  return <div className="task-workspace">
+    <header className="task-workspace-header"><h1>任务</h1><nav aria-label="任务子视图">
+      <button className="btn btn-secondary" aria-pressed={subview==='tasks'} onClick={()=>setSubview('tasks')} type="button">任务</button>
+      <button className="btn btn-secondary" aria-pressed={subview==='automations'} onClick={()=>setSubview('automations')} type="button">自动化</button>
+    </nav>{subview==='tasks'&&<button className="btn btn-secondary" onClick={()=>setView(current=>current==='list'?'board':'list')} type="button">{view==='list'?'切换看板':'切换列表'}</button>}</header>
+    {subview==='automations'?<Automations/>:view==='list'?<TaskList navigateTo={props.navigateTo} initialProject={props.initialProject} onPageContextChange={props.onPageContextChange} onCreate={props.onCreate}/>:<WorkKanban {...props}/>}
+  </div>;
+}
+
+function WorkKanban({ navigateTo, onPageContextChange, onCreate, selectedHandoffId = '', selectedWorkId = '' }) {
   const { t } = useI18n();
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
@@ -352,7 +369,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
         filteredCount={filteredWorks.length}
         loadedCount={works.length}
         refreshing={refreshing}
-        onCreate={() => setDialog({ mode: 'create' })}
+        onCreate={() => onCreate(filters.project)}
         onQueryChange={query => setFilters({ ...EMPTY_FILTERS, query })}
         onRefresh={refresh}
         query={filters.query}
@@ -428,7 +445,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
   );
 }
 
-function WorkBoardHeader({ filteredCount, loadedCount, refreshing, onCreate, onQueryChange, onRefresh, query, total }) {
+function WorkBoardHeader({ refreshing, onCreate, onQueryChange, onRefresh, query }) {
   const { t } = useI18n();
   return (
     <header className="work-ledger-header">
@@ -436,7 +453,6 @@ function WorkBoardHeader({ filteredCount, loadedCount, refreshing, onCreate, onQ
         <div className="work-ledger-kicker"><BriefcaseBusiness size={14} /> {t('board.ledger')}</div>
         <div className="work-ledger-heading-row">
           <h1>{t('work.board')}</h1>
-          <span>{filteredCount === loadedCount ? t('board.count', { loaded: loadedCount, total }) : t('board.filteredCount', { filtered: filteredCount, loaded: loadedCount, total })}</span>
         </div>
       </div>
       <div className="work-ledger-actions">
@@ -450,8 +466,8 @@ function WorkBoardHeader({ filteredCount, loadedCount, refreshing, onCreate, onQ
             value={query}
           />
         </label>
-        <button aria-busy={refreshing} className="work-action-secondary" disabled={refreshing} onClick={onRefresh} type="button">
-          <RefreshCw className={refreshing ? 'animate-spin' : ''} size={14} /> {t('work.refresh')}
+        <button aria-label={t('work.refresh')} aria-busy={refreshing} className="work-action-secondary" disabled={refreshing} onClick={onRefresh} type="button">
+          <RefreshCw className={refreshing ? 'animate-spin' : ''} size={14} />
         </button>
         <button className="work-action-primary" onClick={onCreate} type="button">
           <Plus size={16} /> {t('board.newWork')}
@@ -673,17 +689,7 @@ function dragPayload(value) {
 }
 
 async function moveWorkAfterDrop(work, targetStatus) {
-  const issueId = issueIdFromWorkId(work.id);
-  if (!issueId) throw new Error('当前 Work 没有可写的 Issue authority');
-  const operation = workDropOperation(work.status, targetStatus);
-  if (operation === 'none') return { operation, status: work.status };
-  if (operation === 'blocked') throw new Error('该状态由执行或验收流程推进，不能手动拖入');
-  let result;
-  if (operation === 'enqueue') result = await workApi.enqueueIssue(issueId);
-  else if (operation === 'retry') result = await workApi.retryIssue(issueId);
-  else if (operation === 'cancel') result = await workApi.cancelIssue(issueId);
-  else result = await workApi.updateIssue(issueId, { status: targetStatus });
-  return { operation, status: result?.status || targetStatus };
+  return executeWorkMove(work, targetStatus);
 }
 
 function workColumnDropState(draggingWork, draggedOverStatus, status) {

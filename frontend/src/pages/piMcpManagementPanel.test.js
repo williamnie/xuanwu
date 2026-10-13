@@ -9,7 +9,8 @@ const connectorsSource = readFileSync(new URL('../api/connectors.js', import.met
 
 test('Supervisor Settings exposes MCP discovery and enablement management without secret echo', () => {
   assert.match(settingsSectionsSource, /<PiMcpManagementPanel embedded \/>/);
-  assert.match(settingsSectionsSource, /工具与 MCP/);
+  assert.match(settingsSectionsSource, /\['skills', <><SkillsRuntimePanel \/><PiMcpManagementPanel/);
+  assert.match(settingsSectionsSource, /selected=\{section === id\}/);
   assert.match(panelSource, /Detected MCP servers/);
   assert.match(panelSource, /Manual MCP servers/);
   assert.match(panelSource, /Capabilities/);

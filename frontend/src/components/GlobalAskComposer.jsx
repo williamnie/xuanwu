@@ -2,7 +2,6 @@ import { ChevronDown, ChevronUp, MessageCircleMore, Minimize2, Paperclip, Shield
 import { useEffect, useMemo, useState } from 'react';
 import { assistantApi } from '../api/assistant.js';
 import { workApi } from '../api/work.js';
-import { PRODUCT_NAV_LABELS } from '../brand.js';
 import SessionComposer from '../pages/sessions/SessionComposer.jsx';
 import { selectProjects, useDataStore } from '../store/dataStore.js';
 import { message } from '../store/toastStore.js';
@@ -134,7 +133,7 @@ export default function GlobalAskComposer({
             <button className="global-ask-composer-brand" onClick={onOpenAskXuanwu} type="button">
               <span className="global-ask-composer-mark"><MessageCircleMore size={15} /></span>
               <span>
-                <strong>{PRODUCT_NAV_LABELS.askXuanwu}</strong>
+                <strong>{'提问'}</strong>
                 <small>{prompt.trim() ? 'Draft retained across pages' : 'Context-aware Supervisor'}</small>
               </span>
             </button>
@@ -180,7 +179,7 @@ export default function GlobalAskComposer({
         >
           <span className="global-ask-composer-mark"><MessageCircleMore size={15} /></span>
           <span className="global-ask-composer-launcher-copy">
-            <strong>{PRODUCT_NAV_LABELS.askXuanwu}</strong>
+            <strong>{'提问'}</strong>
             <small>{prompt.trim() ? '草稿已保留' : '随时提问'}</small>
           </span>
           <ChevronUp aria-hidden="true" size={15} />

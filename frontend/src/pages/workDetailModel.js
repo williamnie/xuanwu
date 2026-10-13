@@ -1,6 +1,4 @@
-const STARTABLE_STATUSES = new Set(['triage']);
-const CANCELLABLE_STATUSES = new Set(['triage', 'todo', 'in_progress', 'needs_user', 'failed']);
-const RETRYABLE_STATUSES = new Set(['failed']);
+import { workStatusActions } from './work/workActions.js';
 
 export const WORK_TIMELINE_KINDS = [
   'work_event',
@@ -12,14 +10,15 @@ export const WORK_TIMELINE_KINDS = [
 ];
 
 export function workAvailableActions(status, decision = null) {
+  const actions = workStatusActions(status);
   return {
-    cancel: CANCELLABLE_STATUSES.has(status),
+    cancel: actions.some(action => action.operation === 'cancel'),
     edit: status !== 'in_progress',
-    retry: RETRYABLE_STATUSES.has(status),
+    retry: actions.some(action => action.operation === 'retry'),
     review: status === 'needs_user'
       && decision?.owner === 'human'
       && decision?.request?.status === 'open',
-    start: STARTABLE_STATUSES.has(status),
+    start: actions.some(action => action.operation === 'enqueue'),
   };
 }
 

@@ -128,6 +128,7 @@ function filesFromFileChangeTool(tool) {
 
 export default function SessionTranscript({
   session,
+  readOnly = false,
   project,
   liveEvents,
   optimisticUserMessages,
@@ -225,7 +226,7 @@ export default function SessionTranscript({
           <code title={providerSessionId}>{providerSessionId}</code>
         </div>
         <RuntimeStatusPill running={working} pendingApproval={pendingApproval} />
-        <div className="session-runtime-actions">
+        {!readOnly && <div className="session-runtime-actions">
           <div className="session-export-actions">
             {codexAppUrl ? (
               <button type="button" onClick={openCodexApp} title="在 Codex App 中打开当前 Session">
@@ -252,7 +253,7 @@ export default function SessionTranscript({
             model={model}
             navigateTo={navigateTo}
           />
-        </div>
+        </div>}
       </div>
       <SessionCommandReplay history={session?.command_history || []} navigateTo={navigateTo} />
       <div className="session-transcript" ref={scrollRef} onScroll={handleScroll}>

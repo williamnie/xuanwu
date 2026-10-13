@@ -148,6 +148,7 @@ function ProviderSessionDrillDown({ attempt, navigateTo, run, sessionRef }) {
           selectedSessionId={sessionRef}
           showEvidence={false}
           showSidebar={false}
+          readOnly
         />
       </ProviderTranscriptBoundary>
     </section>

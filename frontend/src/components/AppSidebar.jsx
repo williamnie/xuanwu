@@ -8,6 +8,7 @@ import {
   Moon,
   MoreHorizontal,
   Settings,
+  Plus,
   Sun,
   LayoutDashboard,
   X,
@@ -55,6 +56,7 @@ export default function AppSidebar({
   filterProject,
   focusFilter,
   handleOpenNewIssue,
+  onCreateTask,
   navigateTo,
   setFilterProject,
   setFocusFilter,
@@ -106,6 +108,7 @@ export default function AppSidebar({
       </div>
 
 
+      <button className="sidebar-new-task" onClick={() => { onCreateTask(); closeMobileDrawer(); }} type="button"><Plus size={14} /><span>新建任务</span><small>⌘/Ctrl K</small></button>
       <div className="sidebar-nav-group">
         {primaryNavItems.map((item) => (
           <button

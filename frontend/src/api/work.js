@@ -8,13 +8,14 @@ function appendMany(params, key, values) {
   items.forEach(value => params.append(key, value));
 }
 
-function workListParams({ cursor = '', order = 'desc', page = 1, pageSize = WORK_PAGE_SIZE, projectId = '', query = '', sort = 'updated_at', statuses = [], types = [] } = {}) {
+function workListParams({ includeDiagnostics = false, cursor = '', order = 'desc', page = 1, pageSize = WORK_PAGE_SIZE, projectId = '', query = '', sort = 'updated_at', statuses = [], types = [] } = {}) {
   const params = new URLSearchParams({
     order,
     page: String(page),
     page_size: String(pageSize),
     sort,
   });
+  if (includeDiagnostics) params.set('include_diagnostics', '1');
   if (projectId) params.set('project_id', projectId);
   if (query) params.set('q', query);
   if (cursor) params.set('cursor', cursor);
@@ -75,6 +76,8 @@ export const workApi = {
     method: 'PATCH',
     body: JSON.stringify(updates),
   }),
+
+  setQueueState: (id, payload) => request(`/api/works/${encodeURIComponent(id)}/queue-state`, { method: 'POST', body: JSON.stringify(payload) }),
 
   controlWork: (id, action, payload) => request(`/api/works/${encodeURIComponent(id)}/actions/${action}`, {
     method: 'POST',

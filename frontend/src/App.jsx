@@ -40,6 +40,7 @@ import { useI18n } from './i18n/context.js';
 // 页面仅在用户实际访问时下载，避免 Dashboard 首屏载入编辑器和会话历史等重型依赖。
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Analytics = lazy(() => import('./pages/Analytics'));
+const WorkEditorDialog = lazy(() => import('./pages/work/WorkEditorDialog.jsx'));
 const WorkBoard = lazy(() => import('./pages/WorkBoard'));
 const Issues = lazy(() => import('./pages/Issues'));
 const IssueDetail = lazy(() => import('./pages/IssueDetail'));
@@ -130,6 +131,7 @@ export default function App() {
     // 远程访问 token 第一阶段：本地保存后才发起 API 请求
     authReady: Boolean(getAuthToken()),
   }));
+  const [taskProject, setTaskProject] = useState(null);
   const [firstRunOnboarding, setFirstRunOnboarding] = useState(() => readFirstRunOnboardingState() || 'pending');
 
   const backendOnline = useDataStore(selectBackendOnline);
@@ -174,6 +176,20 @@ export default function App() {
         throw err;
       });
   }, [updateAppState]);
+
+  const openTaskEditor = useCallback((projectId = '') => {
+    setTaskProject(projectId || filterProject || pageContext?.project_id || localStorage.getItem('xuanwu-last-task-project') || '');
+    setMobileSidebarOpen(false);
+  }, [filterProject, pageContext]);
+  useEffect(() => {
+    const handleTaskShortcut = event => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && authReady) {
+        event.preventDefault(); openTaskEditor();
+      }
+    };
+    window.addEventListener('keydown', handleTaskShortcut);
+    return () => window.removeEventListener('keydown', handleTaskShortcut);
+  }, [authReady, openTaskEditor]);
 
   const writeBrowserRoute = useCallback((route, { replace = false } = {}) => {
     if (!globalThis.history || !globalThis.location) return;
@@ -272,7 +288,7 @@ export default function App() {
       ? page === 'issues' ? workIdFromIssueId(issueId) : String(issueId || '')
       : '';
     const compatSessionRoute = resolvedPage === 'runs' && (page === 'sessions' || Boolean(internalProviderSessionId));
-    const targetRunId = resolvedPage === 'runs' && !compatSessionRoute ? sessionId || '' : '';
+    const targetRunId = resolvedPage === 'work' ? String(navigationOptions.runId || '') : resolvedPage === 'runs' && !compatSessionRoute ? sessionId || '' : '';
     const targetSessionId = resolvedPage === 'runs' && compatSessionRoute
       ? internalProviderSessionId || sessionId || ''
       : '';
@@ -299,7 +315,7 @@ export default function App() {
       if (draft.selectedWorkId !== targetWorkId) {
         draft.selectedWorkId = targetWorkId;
       }
-      if (resolvedPage === 'runs') {
+      if (resolvedPage === 'runs' || resolvedPage === 'work') {
         draft.selectedRunId = targetRunId;
         draft.selectedSessionId = targetSessionId;
       }
@@ -594,6 +610,7 @@ export default function App() {
         currentPage={currentPage}
         filterProject={filterProject}
         focusFilter={focusFilter}
+        onCreateTask={openTaskEditor}
         handleOpenNewIssue={handleOpenNewIssue}
         navigateTo={navigateTo}
         setFilterProject={setFilterProject}
@@ -627,6 +644,9 @@ export default function App() {
                 onPageContextChange={setPageContext}
                 selectedHandoffId={selectedHandoffId}
                 selectedWorkId={selectedWorkId}
+                initialRunId={selectedRunId}
+                initialProject={filterProject}
+                onCreate={openTaskEditor}
               />
             ) : currentPage === 'handoffs' ? (
               <Handoffs selectedHandoffId={selectedHandoffId} />
@@ -669,6 +689,14 @@ export default function App() {
           </Suspense>
         )}
       </main>
+      <Suspense fallback={null}>
+        {taskProject !== null && <WorkEditorDialog mode="create" initialProject={taskProject} projects={projects} onClose={() => setTaskProject(null)} onSaved={work => {
+          setTaskProject(null);
+          if (work?.owner?.project_id) localStorage.setItem('xuanwu-last-task-project', work.owner.project_id);
+          refreshData(['workSummary']);
+          if (work?.id) navigateTo('work', work.id);
+        }} />}
+      </Suspense>
       <Suspense fallback={null}>
         <GlobalAskComposer
           currentPage={currentPage}

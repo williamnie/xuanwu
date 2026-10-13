@@ -4,7 +4,6 @@ import WorkFeedback from './work/WorkFeedback.jsx';
 import {
   AlertTriangle,
   ArrowLeft,
-  ArrowUpRight,
   CheckCircle2,
   CircleDot,
   LoaderCircle,
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react';
 import { evidenceApi } from '../api/evidence.js';
 import { handoffsApi } from '../api/handoffs.js';
+import { eventsApi } from '../api/events.js';
 import { runsApi } from '../api/runs.js';
 import { workApi } from '../api/work.js';
 import MarkdownPreview from '../components/editor/MarkdownPreview.jsx';
@@ -25,8 +25,8 @@ import { message } from '../store/toastStore.js';
 import WorkEditorDialog from './work/WorkEditorDialog.jsx';
 import { workProfileSummary } from './work/workProfileRouting.js';
 import WorkDeliveryView from './work/WorkDeliveryView.jsx';
-import { handoffHref } from './handoffPageModel.js';
-import { issueIdFromWorkId } from './workBoardModel.js';
+import TaskRunProcess from './work/TaskRunProcess.jsx';
+import { workBlockReason } from './work/workActions.js';
 import {
   WORK_TIMELINE_KINDS,
   buildWorkActionPayload,
@@ -40,7 +40,7 @@ import { useI18n } from '../i18n/context.js';
 const EMPTY_OVERVIEW = { evidence: [], handoffs: [], runs: [] };
 const DEFAULT_ACCEPTANCE_ID = 'issue-delivery';
 
-export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChanged, projects = [], selectedHandoffId = '', workId }) {
+export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChanged, projects = [], selectedHandoffId = '', initialRunId = '', workId }) {
   const { language, t } = useI18n();
   const detailRequest = useRef(0);
   const overviewRequest = useRef(0);
@@ -51,7 +51,11 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   const [timeline, setTimeline] = useState([]);
   const [timelineCursor, setTimelineCursor] = useState('');
   const [timelineKind, setTimelineKind] = useState('');
-  const [activeView, setActiveView] = useState(selectedHandoffId ? 'delivery' : 'overview');
+  const [processVisited, setProcessVisited] = useState(Boolean(initialRunId));
+  const [runsTotal, setRunsTotal] = useState(0);
+  const [runsPage, setRunsPage] = useState(1);
+  const [runsMore, setRunsMore] = useState(false);
+  const [resultCursors, setResultCursors] = useState({ evidence: '', handoffs: '' });
   const [activeDeliveryId, setActiveDeliveryId] = useState(selectedHandoffId);
   const [loading, setLoading] = useState(true);
   const [overviewLoading, setOverviewLoading] = useState(true);
@@ -96,6 +100,10 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       evidence: fulfilledItems(evidenceResult),
       handoffs: fulfilledItems(handoffsResult),
     });
+    setRunsTotal(runsResult.status === 'fulfilled' ? Number(runsResult.value.total || fulfilledItems(runsResult).length) : 0);
+    setRunsMore(runsResult.status === 'fulfilled' && Number(runsResult.value.total || 0) > fulfilledItems(runsResult).length);
+    setRunsPage(1);
+    setResultCursors({ evidence: evidenceResult.status === 'fulfilled' ? evidenceResult.value.next_cursor || '' : '', handoffs: handoffsResult.status === 'fulfilled' ? handoffsResult.value.next_cursor || '' : '' });
     setOverviewErrors(settledErrors(results, ['runs', 'evidence', 'handoffs']));
     setOverviewLoading(false);
   }, [workId]);
@@ -126,7 +134,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     setTimelineCursor('');
     setTimelineKind('');
     setActivityLoaded(false);
-    setActiveView(selectedHandoffId ? 'delivery' : 'overview');
+    setProcessVisited(Boolean(initialRunId));
+    setRunsPage(1);
     setActiveDeliveryId(selectedHandoffId);
     setEditorOpen(false);
     setPendingAction('');
@@ -135,14 +144,13 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     setReviewComment('');
     loadDetail();
     loadOverview();
-  }, [loadDetail, loadOverview, selectedHandoffId]);
+  }, [loadDetail, loadOverview, selectedHandoffId, initialRunId]);
 
   useEffect(() => {
-    if (activeView === 'activity' && !activityLoaded && !activityLoading) loadActivity();
-  }, [activeView, activityLoaded, activityLoading, loadActivity]);
+    if (processVisited && !activityLoaded && !activityLoading) loadActivity();
+  }, [processVisited, activityLoaded, activityLoading, loadActivity]);
 
   const work = detail?.work || null;
-  const issueId = issueIdFromWorkId(work?.id);
   const projectName = projects.find(project => project.id === work?.owner?.project_id)?.name || work?.owner?.project_id || 'Unscoped';
   const decision = detail?.decision || null;
   const availableActions = workAvailableActions(work?.status, decision);
@@ -173,11 +181,19 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       page_id: 'work',
       project_id: work.owner?.project_id || '',
       work_id: work.id,
-      ...(activeView === 'delivery' && activeDeliveryId
+      ...(activeDeliveryId
         ? { handoff_id: activeDeliveryId }
         : {}),
     });
-  }, [activeDeliveryId, activeView, onPageContextChange, work]);
+  }, [activeDeliveryId, onPageContextChange, work]);
+
+  useEffect(() => {
+    let timer = 0;
+    const refresh = () => { if (timer) return;timer = setTimeout(() => { timer = 0;loadDetail({ silent: true });loadOverview(); }, 300); };
+    const unsubscribe = eventsApi.subscribeToEvents(event => { if (String(event.type).startsWith('issue.')) refresh(); });
+    const interval = setInterval(() => { if (document.visibilityState === 'visible' && work?.status === 'in_progress') refresh(); }, 5000);
+    return () => { clearTimeout(timer);clearInterval(interval);unsubscribe(); };
+  }, [loadDetail, loadOverview, work?.status]);
 
   const refreshAll = async () => {
     setRefreshing(true);
@@ -250,17 +266,22 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
 
   const latestRun = overview.runs[0];
   const profileSummary = workProfileSummary(work, latestRun);
-  const latestHandoff = overview.handoffs[0];
-  const passedEvidence = overview.evidence.filter(item => item.status === 'passed').length;
-  const failedEvidence = overview.evidence.filter(item => item.status === 'failed').length;
-  const selectView = (view) => {
-    setActiveView(view);
-    if (typeof window === 'undefined') return;
-    if (view === 'delivery' && latestHandoff) {
-      window.history.replaceState(null, '', handoffHref(activeDeliveryId || latestHandoff.id, work.id));
-    } else if (window.location.hash.startsWith('#/work/')) {
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
-    }
+  const loadEarlierResult = async kind => {
+    try {
+      const response = kind === 'evidence'
+        ? await evidenceApi.listEvidence({ cursor: resultCursors.evidence, limit: 20, workId })
+        : await handoffsApi.getHandoffs({ cursor: resultCursors.handoffs, limit: 10, workId });
+      setOverview(current => ({ ...current, [kind]: [...current[kind], ...(response.items || [])] }));
+      setResultCursors(current => ({ ...current, [kind]: response.next_cursor || '' }));
+    } catch (error) { message.error(error.message || '读取更早结果失败'); }
+  };
+  const loadEarlierRuns = async () => {
+    try {
+      const result = await runsApi.getRuns({ page: runsPage + 1, pageSize: 10, workId });
+      setOverview(current => ({ ...current, runs: [...current.runs, ...(result.items || [])] }));
+      setRunsPage(current => current + 1);
+      setRunsMore((runsPage + 1) * 10 < Number(result.total || 0));
+    } catch (error) { message.error(error.message || '读取更早执行失败'); }
   };
 
   return (
@@ -268,148 +289,70 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       <div className="work-detail-toolbar">
         <button className="work-detail-back" onClick={() => navigateTo('work')} type="button"><ArrowLeft size={15} /> {t('work.board')}</button>
         <div className="work-detail-actions">
-          {availableActions.edit ? <button onClick={() => setEditorOpen(true)} type="button"><Pencil size={14} /> {t('work.edit')}</button> : null}
+
           {availableActions.start ? <button className="primary" disabled={submitting} onClick={() => submitAction('enqueue')} type="button"><Play size={14} /> {t('work.start')}</button> : null}
-          {availableActions.retry ? <button className="primary" disabled={submitting} onClick={() => submitAction('retry')} type="button"><RotateCw size={14} /> {t('work.retry')}</button> : null}
-          {availableActions.cancel ? <button className="danger" disabled={submitting} onClick={() => setPendingAction('cancel')} type="button"><Square size={13} /> {t('work.cancel')}</button> : null}
+          {availableActions.retry ? <button className="primary" disabled={submitting} onClick={() => work.status === 'in_progress' ? setPendingAction('retry') : submitAction('retry')} type="button"><RotateCw size={14} /> {t('work.retry')}</button> : null}
+          <details className="work-detail-more"><summary>更多</summary><div>
+            {availableActions.edit && <button onClick={() => setEditorOpen(true)} type="button"><Pencil size={14}/>编辑</button>}
+            {availableActions.cancel && <button className="danger" disabled={submitting} onClick={() => setPendingAction('cancel')} type="button"><Square size={13}/>取消</button>}
+            <button onClick={() => navigator.clipboard.writeText(work.id).then(() => message.success('任务 ID 已复制')).catch(error => message.error(error.message))} type="button">复制任务 ID</button>
+          </div></details>
           <button disabled={refreshing} onClick={refreshAll} type="button"><RefreshCw className={refreshing ? 'is-spinning' : ''} size={14} /> {t('work.refresh')}</button>
         </div>
       </div>
 
       <header className="work-detail-hero">
         <div className="work-detail-hero-main">
-          <div className="work-detail-eyebrow"><CircleDot size={13} /> Work</div>
+          <div className="work-detail-eyebrow">TASK</div>
           <div className="work-detail-title-row">
             <span className="work-detail-status" data-status={work.status}>{t(`status.${work.status}`)}</span>
             <h1>{work.title}</h1>
           </div>
           <div className="work-detail-meta"><span>{projectName}</span><span>{t('work.updated', { time: formatTime(work.updated_at, language) })}</span></div>
         </div>
-        <div className="work-detail-identity"><span>WORK ID</span><code>{work.id}</code>{issueId ? <span>Issue #{issueId}</span> : null}</div>
+
       </header>
 
-      <nav className="work-detail-view-tabs" aria-label={t('work.detailViews')}>
-        <button aria-current={activeView === 'overview' ? 'page' : undefined} onClick={() => selectView('overview')} type="button">{t('work.overview')}</button>
-        <button aria-current={activeView === 'delivery' ? 'page' : undefined} onClick={() => selectView('delivery')} type="button">{t('work.delivery')} {overview.handoffs.length > 0 ? `(${overview.handoffs.length})` : ''}</button>
-        <button aria-current={activeView === 'activity' ? 'page' : undefined} onClick={() => selectView('activity')} type="button">{t('work.activity')}</button>
-      </nav>
-
-      {pendingAction ? <InlineConfirmation busy={submitting} onCancel={() => setPendingAction('')} onConfirm={() => submitAction(pendingAction)} /> : null}
-
-      {activeView === 'overview' ? (
-        <div className="work-overview-layout">
-          <section className="work-detail-panel work-detail-goal">
-            <SectionHeading eyebrow={t('work.task')} title={t('work.goal')} />
-            <MarkdownPreview text={work.goal || t('work.noGoal')} />
+      {pendingAction ? <InlineConfirmation action={pendingAction} busy={submitting} onCancel={() => setPendingAction('')} onConfirm={() => submitAction(pendingAction)} /> : null}
+      <section className="work-detail-panel work-current-state">
+        <SectionHeading eyebrow="NOW" title="现在怎样" />
+        {workBlockReason(work, projects.find(project => project.id === work.owner?.project_id)) && <p role="status">{workBlockReason(work, projects.find(project => project.id === work.owner?.project_id))}</p>}
+        <WorkStateSummary status={work.status} decision={decision} />
+        <WorkFeedback feedback={detail?.feedback} />
+        {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={selectReview} request={decision.request} /> : null}
+        <details className="work-custom-acceptance"><summary>任务描述</summary><MarkdownPreview text={work.goal || t('work.noGoal')} /></details>
+        {customAcceptance.length > 0 && <details className="work-custom-acceptance"><summary>{t('work.acceptanceCriteria')}</summary><ul>{customAcceptance.map(criterion => <li key={criterion.id}>{criterion.description}</li>)}</ul></details>}
+      </section>
+      {(overview.handoffs.length > 0 || overview.evidence.length > 0 || overviewErrors.evidence || overviewErrors.handoffs) && <section className="work-detail-panel work-delivery-panel">
+        <SectionHeading eyebrow="RESULT" title="结果" />
+        <WorkDeliveryView evidence={overview.evidence} handoffs={overview.handoffs} loading={overviewLoading} loadError={overviewErrors.evidence || overviewErrors.handoffs} onRefresh={refreshAll} onSelectionChange={setActiveDeliveryId} selectedHandoffId={activeDeliveryId} work={work} />
+        {Object.entries(resultCursors).map(([kind,cursor]) => cursor && <button className="btn btn-secondary" key={kind} onClick={() => loadEarlierResult(kind)} type="button">{kind === 'evidence' ? '更早验证结果' : '更早交付结果'}</button>)}
+      </section>}
+      <details className="work-process-disclosure" open={initialRunId ? true : undefined} onToggle={event => { if (event.currentTarget.open) setProcessVisited(true); }}>
+        <summary>过程</summary>
+        {processVisited && <div>
+          <ResourceError error={overviewErrors.runs} />
+          {overview.runs.map((run, index) => <details className="work-run-disclosure" key={run.id} open={run.id === initialRunId ? true : undefined}><summary>第 {Number(run.sequence || runsTotal - index)} 次执行 · {run.status}</summary><LazyTaskRun run={run} projects={projects} navigateTo={navigateTo} workId={workId} /></details>)}
+          {initialRunId && !overview.runs.some(run => run.id === initialRunId) && <details className="work-run-disclosure" open><summary>指定执行</summary><LazyTaskRun run={{ id: initialRunId }} projects={projects} navigateTo={navigateTo} workId={workId} /></details>}
+          {runsMore && <button className="btn btn-secondary" onClick={loadEarlierRuns} type="button">更早执行</button>}
+          {!overview.runs.length && <EmptySection text={t('work.noRun')} />}
+          <details className="work-provider-profile-panel"><summary>执行配置</summary>
+            <dl className="work-provider-profile-facts"><div><dt>执行预设</dt><dd>{profileSummary.effectiveProfile}</dd></div><div><dt>编程工具</dt><dd>{profileSummary.effectiveProvider}</dd></div><div><dt>模型</dt><dd>{profileSummary.effectiveModel}</dd></div><div><dt>来源</dt><dd>{profileSummary.source === 'work' ? '任务指定' : '项目默认'}</dd></div><div><dt>最近实际工具</dt><dd>{profileSummary.runProvider}</dd></div></dl>
+          </details>
+          <section className="work-activity-panel"><SectionHeading eyebrow="HISTORY" title="活动时间线" />
+            <div className="work-timeline-filters" role="group" aria-label={t('work.activityKind')}><button aria-pressed={!timelineKind} onClick={() => setTimelineKind('')} type="button">全部</button>{WORK_TIMELINE_KINDS.map(kind => <button aria-pressed={timelineKind === kind} key={kind} onClick={() => setTimelineKind(kind)} type="button">{t(`timeline.${kind}`)}</button>)}</div>
+            <ResourceError error={overviewErrors.timeline} />
+            {activityLoading && !activityLoaded && <p role="status">正在读取活动…</p>}
+            <div className="work-timeline-list">{visibleTimeline.map(item => <article key={item.id}><span className="work-timeline-marker" data-kind={item.kind}/><div><strong>{item.title}</strong><p>{item.summary}</p><span>{formatTime(item.occurred_at, language)}</span></div></article>)}</div>
+            {timelineCursor && <button className="work-timeline-more" disabled={timelineLoadingMore} onClick={loadMoreTimeline} type="button">更早活动</button>}
           </section>
-
-          <div className="work-overview-grid">
-            <section className="work-detail-panel">
-              <SectionHeading eyebrow={t('work.current')} title={t('work.nextStep')} />
-              <WorkStateSummary status={work.status} decision={decision} />
-              <WorkFeedback feedback={detail?.feedback} />
-              {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={selectReview} request={decision.request} /> : null}
-            </section>
-
-            <section className="work-detail-panel">
-              <SectionHeading eyebrow={overviewLoading ? t('work.loading') : t('work.runsCount', { count: overview.runs.length })} title={t('work.latestRun')} />
-              <ResourceError error={overviewErrors.runs} />
-              {latestRun ? <LatestRunCard navigateTo={navigateTo} run={latestRun} /> : <EmptySection text={t('work.noRun')} />}
-            </section>
-
-            <section className="work-detail-panel work-provider-profile-panel">
-              <SectionHeading eyebrow="Execution routing" title="Agent Profile / Provider" />
-              <dl className="work-provider-profile-facts">
-                <div><dt>Work selection</dt><dd>{profileSummary.selection}</dd></div>
-                <div><dt>Effective profile</dt><dd>{profileSummary.effectiveProfile}</dd></div>
-                <div><dt>Effective provider</dt><dd>{profileSummary.effectiveProvider}</dd></div>
-                <div><dt>Effective model</dt><dd>{profileSummary.effectiveModel}</dd></div>
-                <div><dt>Selection source</dt><dd>{profileSummary.source}</dd></div>
-                <div><dt>Latest Run actual provider</dt><dd>{profileSummary.runProvider}</dd></div>
-              </dl>
-            </section>
-
-            <section className="work-detail-panel">
-              <SectionHeading eyebrow={t('work.piDecision')} title={t('work.delivery')} />
-              <ResourceError error={overviewErrors.evidence || overviewErrors.handoffs} />
-              <div className="work-delivery-facts">
-                <span><strong>{passedEvidence}</strong> {t('work.passedEvidence')}</span>
-                <span className={failedEvidence ? 'failed' : ''}><strong>{failedEvidence}</strong> {t('work.failedEvidence')}</span>
-              </div>
-              {latestHandoff
-                ? <LatestHandoffCard handoff={latestHandoff} onOpen={() => selectView('delivery')} />
-                : <EmptySection text={handoffEmptyText(work)} />}
-            </section>
-          </div>
-
-          {customAcceptance.length ? (
-            <details className="work-custom-acceptance">
-              <summary>{t('work.acceptanceCriteria')} ({customAcceptance.length})</summary>
-              <ul>{customAcceptance.map(criterion => <li key={criterion.id}>{criterion.description}</li>)}</ul>
-            </details>
-          ) : null}
-        </div>
-      ) : activeView === 'delivery' ? (
-        <section className="work-detail-panel work-delivery-panel">
-          <WorkFeedback feedback={detail?.feedback} />
-          {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={selectReview} request={decision.request} /> : null}
-          <WorkDeliveryView
-            evidence={overview.evidence}
-            handoffs={overview.handoffs}
-            loading={overviewLoading}
-            loadError={overviewErrors.evidence || overviewErrors.handoffs}
-            onRefresh={refreshAll}
-            onSelectionChange={setActiveDeliveryId}
-            selectedHandoffId={activeDeliveryId}
-            work={work}
-          />
-        </section>
-      ) : (
-        <section className="work-detail-panel work-activity-panel">
-          <SectionHeading eyebrow={t('work.boundedHistory')} title={t('work.activity')} />
-          <div className="work-timeline-filters" role="group" aria-label={t('work.activityKind')}>
-            <button aria-pressed={!timelineKind} onClick={() => setTimelineKind('')} type="button">{t('work.all')}</button>
-            {WORK_TIMELINE_KINDS.map(kind => <button aria-pressed={timelineKind === kind} key={kind} onClick={() => setTimelineKind(kind)} type="button">{t(`timeline.${kind}`)}</button>)}
-          </div>
-          <ResourceError error={overviewErrors.timeline} />
-          {activityLoading && !activityLoaded ? <div className="work-activity-loading"><LoaderCircle className="is-spinning" size={18} /> {t('work.loadingActivity')}</div> : null}
-          {!activityLoading && visibleTimeline.length === 0 ? <EmptySection text={timelineKind ? t('work.noMatchingActivity') : t('work.noActivity')} /> : null}
-          <div className="work-timeline-list">
-            {visibleTimeline.map(item => (
-              <article key={item.id}>
-                <span className="work-timeline-marker" data-kind={item.kind} />
-                <div><div><strong>{item.title}</strong><em>{item.status}</em></div><p>{item.summary}</p><span>{t(`timeline.${item.kind}`)} · {formatTime(item.occurred_at, language)}</span></div>
-              </article>
-            ))}
-          </div>
-          {timelineCursor ? <button className="work-timeline-more" disabled={timelineLoadingMore} onClick={loadMoreTimeline} type="button">{timelineLoadingMore ? <LoaderCircle className="is-spinning" size={14} /> : null}{timelineLoadingMore ? t('work.loadingEarlier') : t('work.loadEarlier')}</button> : null}
-        </section>
-      )}
+        </div>}
+      </details>
 
       {editorOpen ? <WorkEditorDialog mode="edit" onClose={() => setEditorOpen(false)} onSaved={async () => { setEditorOpen(false); await refreshAll(); onWorkChanged?.(); }} projects={projects} work={work} /> : null}
       {reviewAction ? <ReviewDialog action={reviewAction} busy={submitting} comment={reviewComment} onCancel={() => { setReviewAction(''); setReviewComment(''); }} onChange={setReviewComment} onConfirm={submitReview} request={reviewRequest} /> : null}
     </section>
   );
-}
-
-function LatestRunCard({ navigateTo, run }) {
-  const { language, t } = useI18n();
-  return <article className="work-latest-run"><div><em data-status={run.status}>{t(`status.${run.status}`)}</em><span>{run.provider || 'unknown'} · {formatTime(run.started_at, language)}</span></div><strong>{run.progress?.latest?.summary || run.terminal?.reason || t('work.noProgress')}</strong><button onClick={() => navigateTo('runs', null, run.id)} type="button">{t('work.openRun')} <ArrowUpRight size={12} /></button></article>;
-}
-
-function LatestHandoffCard({ handoff, onOpen }) {
-  const { t } = useI18n();
-  const status = handoff.delivery_status?.overall || handoff.status;
-  const mode = {
-    branch_commit: t('work.handoff.localCommit'),
-    deploy: t('work.handoff.deploy'),
-    draft_pr: t('work.handoff.draftPr'),
-    local_changes: t('work.handoff.localChanges'),
-    push: t('work.handoff.push'),
-    ready_pr: t('work.handoff.readyPr'),
-    release: t('work.handoff.release'),
-  }[handoff.delivery?.mode] || handoff.delivery?.mode || t('work.handoff.credential');
-  return <article className="work-latest-handoff"><div><strong>{mode}</strong><em data-status={status}>{status === 'ready' ? t('work.handoff.ready') : status}</em></div><p>{t('work.handoff.summary', { files: handoff.changed_file_count, evidence: handoff.evidence_count, risks: handoff.risk_count })}</p><button onClick={onOpen} type="button">{t('work.handoff.open')} <ArrowUpRight size={12} /></button></article>;
 }
 
 function WorkStateSummary({ status, decision }) {
@@ -466,19 +409,19 @@ function HumanReviewCard({ disabled, onSelect, request }) {
   return <article className="work-human-review-card">
     <span>{t('work.youAreApproving')}</span>
     <h3>{request.question}</h3>
-    <p className="work-review-request-ref"><code>{request.id} · v{request.revision}</code>{request.origin_run_id ? ` · ${request.origin_run_id}` : ''}</p>
+
     {request.recommendation ? <p><strong>{t('work.piRecommendation')}：</strong>{request.recommendation}</p> : null}
     {request.acceptance_summary?.length ? <div><strong>{t('work.acceptanceIncludes')}</strong><ul>{request.acceptance_summary.map(item => <li key={item}>{item}</li>)}</ul></div> : null}
     {request.excluded_scope?.length ? <div><strong>{t('work.notIncluded')}</strong><ul>{request.excluded_scope.map(item => <li key={item}>{item}</li>)}</ul></div> : null}
     {request.evidence_refs?.length ? <details><summary>{t('work.reviewEvidence')}</summary><ul>{request.evidence_refs.map(item => <li key={item}><code>{item}</code></li>)}</ul></details> : null}
     {request.consequences ? <p><strong>{t('work.approvalConsequences')}：</strong>{request.consequences}</p> : null}
-    <div className="work-review-actions"><button disabled={disabled} onClick={() => onSelect('accept')} type="button"><CheckCircle2 size={14} /> {copy.accept}</button><button disabled={disabled} onClick={() => onSelect('request_changes')} type="button"><RefreshCw size={14} /> {t('work.changes')}</button><button className="danger" disabled={disabled} onClick={() => onSelect('reject')} type="button"><XCircle size={14} /> {t('work.reject')}</button></div>
+    <div className="work-review-actions"><button disabled={disabled} onClick={() => onSelect('accept')} type="button"><CheckCircle2 size={14} /> {copy.accept}</button>{request.kind !== 'risk_acceptance' && <button disabled={disabled} onClick={() => onSelect('request_changes')} type="button"><RefreshCw size={14} /> {t('work.changes')}</button>}{request.kind !== 'acceptance' && <button className="danger" disabled={disabled} onClick={() => onSelect('reject')} type="button"><XCircle size={14} /> {t('work.reject')}</button>}</div>
   </article>;
 }
 
-function InlineConfirmation({ busy, onCancel, onConfirm }) {
+function InlineConfirmation({ action, busy, onCancel, onConfirm }) {
   const { t } = useI18n();
-  return <div className="work-inline-confirm" role="alertdialog" aria-label={t('work.confirmCancel')}><AlertTriangle size={18} /><div><strong>{t('work.confirmCancel')}</strong><span>{t('work.cancelAudit')}</span></div><button disabled={busy} onClick={onCancel} type="button">{t('work.keep')}</button><button className="danger" disabled={busy} onClick={onConfirm} type="button">{busy ? t('work.submitting') : t('work.confirmCancelAction')}</button></div>;
+  return <div className="work-inline-confirm" role="alertdialog" aria-label={action === 'retry' ? '确认重试任务？' : t('work.confirmCancel')}><AlertTriangle size={18} /><div><strong>{action === 'retry' ? '确认重试任务？' : t('work.confirmCancel')}</strong><span>{action === 'retry' ? '将中断当前执行并重新排队。' : t('work.cancelAudit')}</span></div><button disabled={busy} onClick={onCancel} type="button">{t('work.keep')}</button><button className="danger" disabled={busy} onClick={onConfirm} type="button">{busy ? t('work.submitting') : action === 'retry' ? '确认重试' : t('work.confirmCancelAction')}</button></div>;
 }
 
 function ReviewDialog({ action, busy, comment, onCancel, onChange, onConfirm, request }) {
@@ -510,7 +453,14 @@ function formatTime(value, language) {
   return Number.isFinite(date.getTime()) ? date.toLocaleString(language) : value;
 }
 
-function handoffEmptyText(work) {
-  void work;
-  return '暂无可选交付记录；Handoff 不参与 Issue 完成判断。';
+function LazyTaskRun({ run, projects, navigateTo, workId }) {
+  const [visited, setVisited] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const details = ref.current?.parentElement;
+    const onToggle = () => { if (details?.open) setVisited(true); };
+    details?.addEventListener('toggle', onToggle);onToggle();
+    return () => details?.removeEventListener('toggle', onToggle);
+  }, []);
+  return <div ref={ref}>{visited && <TaskRunProcess runId={run.id} expectedWorkId={workId} project={projects.find(project=>project.id===run.project_id)} navigateTo={navigateTo}/>}</div>;
 }

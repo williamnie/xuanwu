@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Pencil, X } from 'lucide-react';
 import { workApi } from '../../api/work.js';
 import { projectsApi } from '../../api/projects.js';
@@ -8,13 +8,15 @@ import { useI18n } from '../../i18n/context.js';
 import PromptEditor from '../../components/editor/PromptEditor.jsx';
 import AgentProfileSelectOptions from '../../components/AgentProfileSelectOptions.jsx';
 import ModalOverlay from '../../components/ModalOverlay.jsx';
+import SettingsDisclosure from '../../components/SettingsDisclosure.jsx';
 import { editorDraft, effectiveProfilePreview } from './workProfileRouting.js';
 import { availableAgentProfiles, codeAgentAvailable, effectiveProjectProvider } from '../../utils/codeAgents.js';
 
-export default function WorkEditorDialog({ mode, onClose, onSaved, projects, work }) {
+export default function WorkEditorDialog({ mode, onClose, onSaved, projects, work, initialProject = '' }) {
   const { t } = useI18n();
   const editing = mode === 'edit';
-  const [draft, setDraft] = useState(() => editorDraft(work, projects));
+  const [draft, setDraft] = useState(() => editorDraft(work, projects, initialProject));
+  const createAudit = useRef(workEditorAudit('create'));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [profiles, setProfiles] = useState([]);
@@ -69,7 +71,7 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
     setSaving(true);
     setError('');
     try {
-      const audit = workEditorAudit(editing ? 'edit' : 'create');
+      const audit = editing ? workEditorAudit('edit') : createAudit.current;
       const agentProfilePatch = !editing || draft.agent_profile_id !== (work?.agent_profile_id || '')
         ? { agent_profile_id: draft.agent_profile_id }
         : {};
@@ -91,7 +93,9 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
           ...(title ? { title } : {}),
           type: 'engineering_task',
         });
-      message.success(t(editing ? 'editor.updated' : 'editor.created'));
+      const createdWork = response?.work;
+      const reason = createdWork?.scheduling?.dependency?.waiting_reason || (selectedProject?.hold ? '项目已暂停，恢复后开始' : selectedProject?.auto_run === 0 && draft.status === 'todo' ? '项目未开启自动执行' : '');
+      message.success(`${t(editing ? 'editor.updated' : 'editor.created')}${reason ? `；${reason}` : ''}`);
       onSaved(response?.work || null);
     } catch (saveError) {
       setError(saveError.message || t('editor.saveFailed'));
@@ -104,9 +108,8 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
       <div aria-labelledby="work-dialog-title" aria-modal="true" className="work-dialog" role="dialog">
         <header>
           <div>
-            <span>{t(editing ? 'editor.authoritativeEdit' : 'editor.auditedCreate')}</span>
             <h2 id="work-dialog-title">{t(editing ? 'editor.edit' : 'editor.create')}</h2>
-            <p>{t(editing ? 'editor.editDescription' : 'editor.createDescription')}</p>
+            <p>描述要做的事，默认保存为待确认。</p>
           </div>
           <button aria-label={t('editor.close')} disabled={saving} onClick={onClose} type="button"><X size={18} /></button>
         </header>
@@ -114,20 +117,14 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
           {error ? <div className="work-dialog-error" role="alert">{error}</div> : null}
           {!editing ? (
             <div className="work-dialog-grid">
-              <label>
+              {projects.length !== 1 && <label>
                 <span>{t('nav.projects')}</span>
                 <select className="form-control" onChange={event => setField('project_id', event.target.value)} required value={draft.project_id}>
                   <option value="">{t('editor.selectProject')}</option>
                   {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
                 </select>
-              </label>
-              <label>
-                <span>{t('editor.initialStatus')}</span>
-                <select className="form-control" onChange={event => setField('status', event.target.value)} value={draft.status}>
-                  <option value="triage">{t('status.triage')}</option>
-                  <option value="todo">{t('status.todo')}</option>
-                </select>
-              </label>
+              </label>}
+              <label><input type="checkbox" checked={draft.status === 'todo'} onChange={event => setField('status', event.target.checked ? 'todo' : 'triage')} /> 加入执行队列</label>
             </div>
           ) : (
             <div className="work-dialog-contract">
@@ -136,10 +133,6 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
               <span>{t('editor.revision', { revision: work.revision })}</span>
             </div>
           )}
-          <label>
-            <span>{t('editor.title')} <small>（可选）</small></span>
-            <input className="form-control" maxLength={180} onChange={event => setField('title', event.target.value)} placeholder="留空时根据问题首行生成" value={draft.title} />
-          </label>
           <div className="work-dialog-field">
             <span>{t('work.goal')}</span>
             <PromptEditor
@@ -150,8 +143,13 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
               variant="composer"
             />
           </div>
+          <SettingsDisclosure title="更多选项">
           <label>
-            <span>Code Agent</span>
+            <span>{t('editor.title')} <small>（可选）</small></span>
+            <input className="form-control" maxLength={180} onChange={event => setField('title', event.target.value)} placeholder="留空时根据问题首行生成" value={draft.title} />
+          </label>
+          <label>
+            <span>执行预设</span>
             <select
               className="form-control"
               disabled={profilesLoading || (editing && work.status === 'in_progress')}
@@ -159,7 +157,7 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
               value={draft.agent_profile_id}
             >
               <option disabled={!inheritedProviderAvailable} value="">
-                {inheritedProviderAvailable ? '继承项目默认' : '请选择可用 Code Agent'}
+                {inheritedProviderAvailable ? '跟随项目设置' : '请选择可用预设'}
               </option>
               <AgentProfileSelectOptions
                 catalog={providerCatalog}
@@ -167,11 +165,9 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
                 selectedProfileID={draft.agent_profile_id}
               />
             </select>
-            <small>
-              Effective: {effectivePreview.name || 'Project provider'} · {effectivePreview.provider || 'unknown'} · {effectivePreview.model || 'default'}
-              {effectivePreview.source === 'project_default' ? '（继承）' : effectivePreview.source === 'work' ? '（Work 显式）' : ''}
-            </small>
+            <small>将使用：{effectivePreview.provider || '项目工具'} · {effectivePreview.model || '跟随编程工具'}（{effectivePreview.source === 'work' ? '任务指定' : '来自项目设置'}）</small>
           </label>
+          </SettingsDisclosure>
           <footer>
             <button className="work-action-secondary" disabled={saving} onClick={onClose} type="button">{t('work.cancel')}</button>
             <button className="work-action-primary" disabled={saving} type="submit">

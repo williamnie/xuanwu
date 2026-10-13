@@ -9,7 +9,7 @@ test('product decisions and risk authorization do not present themselves as deli
   assert.match(workHumanReviewCopy('decision', t).detail, /不表示修复已经完成/);
   assert.equal(workHumanReviewCopy('risk_acceptance', t).accept, '授权并继续');
   assert.match(workHumanReviewCopy('risk_acceptance', t).detail, /仅授权上方明确列出的操作/);
-  assert.equal(workHumanReviewCopy('acceptance', t).accept, '接受交付');
+  assert.equal(workHumanReviewCopy('acceptance', t).accept, '验收交付');
   assert.match(workHumanReviewCopy('acceptance', t).detail, /按交付规则更新任务和关联平台状态/);
 });
 

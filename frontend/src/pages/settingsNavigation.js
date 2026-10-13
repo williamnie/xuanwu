@@ -18,7 +18,7 @@ export const SETTINGS_NAVIGATION_GROUPS = Object.freeze([
 ]);
 const COPY = {
   general: ['项目', 'Projects', '管理项目与执行默认值', 'Manage projects and execution defaults'],
-  ai: ['AI 连接', 'AI connections', '编程工具负责写代码，玄武助手负责理解、验收和对话。助手未连接时任务能执行，但无法自动验收。', 'Coding tools execute tasks; the assistant understands, checks, and discusses results. Tasks can execute without the assistant, but cannot be accepted automatically.'],
+  ai: ['AI 连接', 'AI connections', '编程工具负责写代码，玄武助手负责理解、验收和对话。助手未连接时任务能执行，但无法自动验收。助手登录与编程工具登录是独立凭据。', 'Coding tools execute tasks; the assistant understands, checks, and discusses results. Tasks can execute without the assistant, but cannot be accepted automatically.'],
   connections: ['通知与外部连接', 'Notifications & connections', '选择消息频率并管理外部平台', 'Choose notification frequency and manage platforms'],
   preferences: ['通用', 'General', '语言、主题、表达风格与版本', 'Language, theme, reply style, and version'],
   advanced: ['高级', 'Advanced', '需要时展开相应配置，已打开的草稿会保留', 'Open a section when needed; drafts remain when collapsed'],

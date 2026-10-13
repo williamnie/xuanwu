@@ -9,6 +9,7 @@ import {
   createIssueBackedWork,
   getIssueBackedWork,
   listIssueBackedWorks,
+  moveIssueWorkQueueState,
   updateIssueBackedWork,
   workIDToIssueID,
   type IssueWorkAction,
@@ -30,6 +31,8 @@ import {
   type ReadinessRequirement,
   type ReadinessRequirementDeclaration
 } from "../domain/readiness/contracts.ts";
+import { readProjectIssueDependencies } from "../domain/work/issueDependency.ts";
+import { managedCodeAgentCatalog } from "../providers/core/codeAgentDirectory.ts";
 import { startProjectLoop } from "../runner/projectLoopManager.ts";
 import { json } from "./errors.ts";
 import {
@@ -55,12 +58,23 @@ type PageInput = {
 export function registerWorkRoutes(router: Router, context: ReadApiContext): void {
   const readDatabase = context.readDatabase ?? context.database;
   router.get("/api/works/summary", (request) => workResponse(() => summaryResponse(readDatabase, request)));
-  router.get("/api/works", (request) => workResponse(() => listResponse(readDatabase, request)));
+  router.get("/api/works", (request) => workResponse(() => listResponse(readDatabase, request, context)));
   router.get("/api/works/board", (request) => workResponse(() => boardResponse(readDatabase, request)));
-  router.get("/api/works/:id", (request) => workResponse(() => detailResponse(readDatabase, request)));
+  router.get("/api/works/:id", (request) => workResponse(() => detailResponse(readDatabase, request, context)));
   router.get("/api/works/:id/timeline", (request) => (
     workResponse(() => timelineResponse(readDatabase, request))
   ));
+  router.post("/api/works/:id/queue-state", async request => workResponse(async () => {
+    const work = requireWork(context.database, workID(request));
+    const body = await objectBody(request);
+    assertKeys(body, ["audit", "expected_revision", "status"]);
+    if (body.status !== "triage" && body.status !== "todo") throw workError(400, "invalid_request", "queue-state status must be triage or todo");
+    const result = moveIssueWorkQueueState(context.database, {
+      work_id: work.id, status: body.status, expected_revision: revisionInput(body.expected_revision), audit: auditInput(body.audit)
+    });
+    if (result.applied) kickProject(context, result.work);
+    return mutationResponse(result);
+  }));
   router.put("/api/works/:id/readiness-requirements", async (request) => workResponse(async () => {
     const work = requireWork(context.database, workID(request));
     const body = await objectBody(request);
@@ -241,7 +255,7 @@ function summaryResponse(db: RunnerDatabase, request: Request): Record<string, u
   }
 }
 
-function listResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
+function listResponse(db: RunnerDatabase, request: Request, context: ReadApiContext): Record<string, unknown> {
   const params = new URL(request.url).searchParams;
   const projectID = optionalString(params.get("project_id"));
   if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
@@ -285,7 +299,7 @@ function listResponse(db: RunnerDatabase, request: Request): Record<string, unkn
   const items = cursor ? loaded.slice(0, page.page_size) : loaded;
   const hasMore = cursor ? loaded.length > page.page_size : page.page * page.page_size < total;
   const last = items.at(-1);
-  return pagedItemsResponse(items, total, page, {
+  return pagedItemsResponse(params.get("include_diagnostics") === "1" ? workDiagnostics(db, items, context) : items, total, page, {
     filters: { project_id: projectID, q: query, status: statuses, type: types },
     has_more: hasMore,
     next_cursor: hasMore && last ? encodeWorkCursor({
@@ -298,14 +312,34 @@ function listResponse(db: RunnerDatabase, request: Request): Record<string, unkn
   });
 }
 
-function detailResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
+function detailResponse(db: RunnerDatabase, request: Request, context: ReadApiContext): Record<string, unknown> {
   const work = requireWork(db, workID(request));
   const decision = readIssueDecisionProjection(db, workIDToIssueID(work.id));
   return {
     decision,
     feedback: readHumanFeedback(db, workIDToIssueID(work.id), decision),
-    work
+    work: workDiagnostics(db, [work], context)[0]
   };
+}
+
+// 每页按项目建立一次依赖图，只评估本页任务；不逐行请求或扫描全部项目。
+function workDiagnostics(db: RunnerDatabase, works: WorkLedgerEntry[], context: ReadApiContext): Array<WorkLedgerEntry & { scheduling: Record<string, unknown> }> {
+  const projects = new Map<string, { project: ReturnType<typeof getProject>; dependencies: ReturnType<typeof readProjectIssueDependencies> }>();
+  const agents = context.providersRegistry ? managedCodeAgentCatalog(context.providersRegistry) : [];
+  for (const projectID of new Set(works.map(work => work.owner.project_id))) {
+    const ids = new Set(works.filter(work => work.owner.project_id === projectID).map(work => workIDToIssueID(work.id)));
+    projects.set(projectID, { project: getProject(db, projectID), dependencies: readProjectIssueDependencies(db, projectID, ids) });
+  }
+  return works.map(work => {
+    const facts = projects.get(work.owner.project_id);
+    const agent = agents.find(agent => agent.id === work.effective_provider);
+    return { ...work, scheduling: {
+      contract: "xuanwu.work-scheduling-facts.v1", authority: "read-only-facts", complete: false,
+      dependency: facts?.dependencies.get(workIDToIssueID(work.id)) ?? null,
+      project: { auto_run: facts?.project?.auto_run ?? 0, hold: facts?.project?.hold ?? null },
+      tool: agent ? { id: agent.id, state: agent.state, submittable: agent.submittable, readiness_reason: agent.readiness_reason } : { id: work.effective_provider, state: "unknown", submittable: null, readiness_reason: "" }
+    } };
+  });
 }
 
 function readinessDeclaration(

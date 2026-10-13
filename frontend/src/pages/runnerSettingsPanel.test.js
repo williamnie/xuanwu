@@ -12,11 +12,13 @@ test('Settings exposes Runner global concurrency controls backed by runner setti
   assert.match(sectionsSource, /RunnerSettingsPanel/);
   assert.match(sectionsSource, /<RunnerSettingsPanel \/>/);
   assert.match(panelSource, /max_parallel_projects/);
-  assert.match(panelSource, /codex_server_mode/);
-  assert.match(panelSource, /codex_app_command/);
-  assert.match(panelSource, /codex_cli_status/);
-  assert.match(panelSource, /首次使用启动器/);
-  assert.match(panelSource, /Codex App/);
+  const tools = readFileSync(new URL('./CodeAgentsPanel.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(panelSource, /codex_server_mode|codex_app_command|首次使用启动器/);
+  assert.match(tools, /codexBackendUpdatePayload/);
+  assert.match(tools, /codex_app_command/);
+  assert.match(tools, /codex_effective_command/);
+  assert.match(tools, /Codex App/);
+  assert.match(panelSource, /updateRunnerSettings\(\{ max_parallel_projects:/);
   assert.match(panelSource, /systemApi\.getRunnerSettings/);
   assert.match(panelSource, /systemApi\.updateRunnerSettings/);
   assert.match(systemSource, /getRunnerSettings:/);
