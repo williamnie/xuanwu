@@ -31,6 +31,7 @@ test('Work detail distinguishes effective selection from latest Run actual provi
     effectiveProvider: 'claude',
     effectiveModel: 'claude-sonnet',
     source: 'work',
+    sourceLabel: '任务指定',
     runProvider: 'codex',
   });
 });
@@ -40,5 +41,5 @@ test('Work detail renders an empty provider-scoped model as provider default', (
     agent_profile_id: 'pi-local',
     effective_provider: 'pi-coding-agent',
     effective_agent_profile: { id: 'pi-local', name: 'Pi Local', model: '', source: 'work' },
-  }, { provider: 'pi-coding-agent' }).effectiveModel, 'provider default');
+  }, { provider: 'pi-coding-agent' }).effectiveModel, '编程工具默认');
 });

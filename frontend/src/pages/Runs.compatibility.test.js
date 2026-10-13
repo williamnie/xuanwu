@@ -43,9 +43,11 @@ test('Runs list reconciles every five seconds', () => {
 });
 
 test('Run controls remain audited without exposing migration internals in the product UI', () => {
-  assert.match(pageSource, /runsApi\.controlRun\(run\.id, action, buildRunControlPayload/);
-  assert.match(pageSource, /actions\.interrupt/);
-  assert.match(pageSource, /actions\.resume/);
-  assert.match(pageSource, /actions\.retry/);
+  const controlSource = readFileSync(new URL('./runs/RunContextBar.jsx', import.meta.url), 'utf8');
+  assert.match(pageSource, /<RunContextBar/);
+  assert.match(controlSource, /runsApi\.controlRun\(run\.id, action, buildRunControlPayload/);
+  assert.match(controlSource, /actions\.interrupt/);
+  assert.match(controlSource, /actions\.resume/);
+  assert.match(controlSource, /actions\.retry/);
   assert.doesNotMatch(pageSource, /兼容与迁移|Run source of truth:|最终删除门禁|setCompatibility/);
 });

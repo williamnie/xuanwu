@@ -65,6 +65,7 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
     if (requestedPage === 'issues' && !route.selectedWorkId) {
       route.selectedWorkId = workIdFromIssueParam(params);
     }
+    if (route.selectedWorkId) route.selectedRunId = routeParam(params, 'runId');
   }
   if (currentPage === 'issues') {
     route.selectedIssueId = requestedPage === 'work'
@@ -97,7 +98,11 @@ export function appHashForRoute(route) {
   }
 
   const params = new URLSearchParams();
-  if (page === 'work' && workId) params.set('workId', workId);
+  if (page === 'work' && workId) {
+    params.set('workId', workId);
+    const runId = cleanRouteValue(route?.selectedRunId);
+    if (runId) params.set('runId', runId);
+  }
   if (page === 'issues') {
     if (positiveInteger(route?.selectedIssueId)) params.set('issueId', String(route.selectedIssueId));
     const project = cleanRouteValue(route?.filterProject);

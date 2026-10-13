@@ -167,17 +167,17 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
      - 每条验证结果属于哪一次执行、来源、时间，是否已过期。
      - 交付的各个阶段分开显示：执行成功、验证通过、PR 已创建、已合并、已部署。
    - 改动的文件、PR 链接、玄武的总结。
-3. **过程**（默认折叠）
-   - 第 N 次执行的列表。展开一次执行后，有多次尝试时可以选“第 M 次尝试”（沿用 `pages/runs/RunDetail.jsx:42–95` 的尝试选择），下面是该次尝试的执行记录（复用 `pages/sessions/SessionTranscript.jsx`）。
+3. **过程**（默认展开，见 Q9）
+   - 第 N 次执行的列表，默认选中最新一次（或深链 `runId` 指定的那次）。选中的执行**直接复用执行记录页的完整视图**（`pages/runs/RunContextBar.jsx` + `pages/runs/RunDetail.jsx`）：实时执行会话（可继续交互）、进展摘要与阶段时间线、日志、验证结果、原始事件，以及尝试切换；不另写只读的简化版。
    - 执行记录和验证结果按 `run_id` + `attempt_id` 关联（`runApi.ts:150–167`），不能只按会话 ID 取全部历史：同一个会话可能跨多次执行，否则会把前一次失败的记录或测试结果显示到当前执行下。
    - 活动时间线。
    - **执行配置**（再折叠一层）：原“Agent Profile / Provider”事实条，字段改为中文：使用的编程工具、模型、来源（任务指定 / 项目默认）、实际执行时使用的工具。
 
 **删除**：页头的 `WORK ID` 标识块（移到“…”菜单）。
 
-### 5.6 运行记录页
+### 5.6 执行记录页
 
-从一级导航移除。`pages/Runs.jsx` 作为任务详情“过程”段的数据来源；全局列表移到 设置 → 高级 → 运行维护 → “全部执行记录”，供排查使用。不属于任何任务的执行记录、深链解析失败的执行记录，都在这里以只读方式查看。
+**保留在一级导航**（改名“执行记录”，见 Q9）。执行详情顶部提供“所属任务”链接（`#/work?workId=…&runId=…`，打开任务并选中这次执行），**不自动跳转**。不属于任何任务的执行记录、独立 provider session 也在这里查看。
 
 ### 5.7 首次引导：6 步 → 3 步
 
@@ -447,7 +447,7 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 |---|---|---|---|
 | **B0：术语与导航显示名** | 统一术语（第 4 节）；一级导航只改显示名和顺序，**不移除任何入口**；“统计”移到底部 | `i18n/translations.js`、`brand.js`、`pages/assistantModules.js`、`components/AppSidebar.jsx` | 不改 route ID；“运行记录”“自动化”暂时仍在导航中，等 C1 提供替代入口后再移除。需同步更新 `productNavigation.test.js`、`brandTerminology.test.js` |
 | **B1：设置整理** | 设置导航 11 → 5、删除重复标题、低频字段收起；Codex 运行方式只留一处；删除 Provider Settings 卡片和安装教程；版本升级移到通用；旧 `section` 值（裸值和 `advanced:`）集中在 `settingsNavigation.js` 映射，进入后展开目标节 | `settingsNavigation.js`、`AssistantSettingsSections.jsx`、`Settings.jsx`、`SettingsChrome.jsx`、`CodeAgentsPanel.jsx`、`RunnerSettingsPanel.jsx` | 不改 route ID、字段名、默认值和默认状态，不移除任何可操作功能；折叠区首次展开才挂载；**表达风格原地收起，不跨分区移动**；外部连接仍用现有子 Tab，抽屉改造放到 C2 |
-| **C1：任务列表与详情** | 任务列表默认视图（使用 `/api/works` 的服务端筛选和分页）；列表行提供与看板拖拽等价的明确操作：`availableActions` 不是后端字段，现有 `workAvailableActions`（`workDetailModel.js:14–23`）只覆盖 failed→retry、triage→start，而看板 `workDropOperation`（`workBoardModel.js:78–93`）还有 in_progress→todo 重试、triage/todo→enqueue 等，需先逐项核对并统一成一张动作表，危险或低频动作放进“更多”，仍走原动作和 revision 校验；自动化作为任务页子视图；详情三段式，保留 Run / Attempt 选择；单条创建复用 `WorkEditorDialog`（带当前项目，保留预设继承、不可用旧值和 audit 幂等）；执行记录深链用 `work_id` 跳任务，旧会话只有确定关联时才跳转。完成后从一级导航移除“运行记录”“自动化” | `WorkBoard.jsx`、`WorkDetail.jsx`、`work/*`、`runs/*`、`Automations.jsx`、`assistantModules.js` | 仍用 `work` 等现有路由；不发布“来源：GitHub”筛选；阻塞原因只显示接口已提供的信息（如项目暂停），依赖未就绪等原因按 8.2 的现有接口关联显示；新建任务默认保持“待确认”（Q8） |
+| **C1：任务列表与详情** | 任务列表默认视图（使用 `/api/works` 的服务端筛选和分页）；列表行提供与看板拖拽等价的明确操作：`availableActions` 不是后端字段，现有 `workAvailableActions`（`workDetailModel.js:14–23`）只覆盖 failed→retry、triage→start，而看板 `workDropOperation`（`workBoardModel.js:78–93`）还有 in_progress→todo 重试、triage/todo→enqueue 等，需先逐项核对并统一成一张动作表，危险或低频动作放进“更多”，仍走原动作和 revision 校验；自动化作为任务页子视图；详情三段式，保留 Run / Attempt 选择；单条创建复用 `WorkEditorDialog`（带当前项目，保留预设继承、不可用旧值和 audit 幂等）；执行记录页提供“所属任务”链接（不自动跳转）。完成后从一级导航移除“自动化”；“执行记录”保留（Q9） | `WorkBoard.jsx`、`WorkDetail.jsx`、`work/*`、`runs/*`、`Automations.jsx`、`assistantModules.js` | 仍用 `work` 等现有路由；不发布“来源：GitHub”筛选；阻塞原因只显示接口已提供的信息（如项目暂停），依赖未就绪等原因按 8.2 的现有接口关联显示；新建任务默认保持“待确认”（Q8） |
 | **C2：待处理与集成流程** | 先做“请求类型 → 读取 → 提交”的适配矩阵（第 5.3 节），人工审核与 Attention 分别处理；首页先用现有 Attention 数据上线部分卡片，保留原入口并标明范围；GitHub 抽屉与“保存并生效”状态机；通知规则操作重排；表达风格移到通用（拆分保存或共用状态所有者） | `Dashboard.jsx`、`command-center/*`、`GitHubSettingsPanel.jsx`、`NotificationSettingsPanel.jsx`、`PiAgentSettingsPanel.jsx` | 完整的“待我处理”首页以 8.2 的聚合方案为前提；不扩展任何权限默认值；不新造第二套审批状态 |
 | **D：新能力** | 批量创建；3 步引导；路由改名（`inbox` / `tasks`）及路由状态合同测试；飞书来源发现向导；来源筛选 | 各自单列 API、迁移和失败恢复方案 | 依赖 8.2 的后端合同 |
 
@@ -483,6 +483,7 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 |---|---|---|
 | Q4 | 低频、只读的功能是否保留？ | 不需要给用户看的可以删除。判断标准：没有可操作按钮、不影响执行行为、且信息在别处可得或对用户无意义。按此删除：Plugin 意图、助手生效配置摘要、通知历史规则列表、IM channel 注册表、运行状态明细卡（数据在诊断包中）、能力标识代码列。保留：Skill 意图（影响预设匹配）、当前通知规则的停用操作、技能运行记录（排查自定义技能）、处理记录、来源策略与审批规则（安全透明） |
 | Q8 | 新建任务默认值 | 保持“待确认”（`triage`），不自动加入执行队列 |
+| Q9 | 执行过程的可见性 | 第一版精简实现把执行过程折叠成只读记录、并把运行记录页自动跳回任务，用户反馈“看不到任务的执行情况”。决定：任务详情“过程”默认展开并复用完整执行视图；“执行记录”保留在一级导航，不自动跳转 |
 
 ## 10. 效果衡量
 

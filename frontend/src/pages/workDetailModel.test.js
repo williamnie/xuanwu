@@ -6,6 +6,7 @@ import {
   filterTimelineItems,
   mergeTimelinePages,
   workAvailableActions,
+  workBlockReason,
 } from './workDetailModel.js';
 
 test('Work actions follow the shared state transition surface', () => {
@@ -58,3 +59,13 @@ test('timeline pagination stays deduplicated and filterable', () => {
 function timeline(id, occurredAt, kind) {
   return { id, kind, occurred_at: occurredAt };
 }
+
+test('Work block reason only reports facts the project API provides', () => {
+  const queued = { status: 'todo' };
+  assert.equal(workBlockReason(queued, null), '');
+  assert.equal(workBlockReason(queued, { auto_run: 1 }), '');
+  assert.match(workBlockReason(queued, { auto_run: 0 }), /未开启自动执行/);
+  assert.match(workBlockReason(queued, { auto_run: 1, hold: { reason: 'usage_limit' } }), /项目已暂停（用量\/限额）/);
+  assert.equal(workBlockReason({ status: 'triage' }, { auto_run: 0 }), '');
+  assert.equal(workBlockReason({ status: 'in_progress' }, { auto_run: 1, hold: { reason: 'x' } }), '');
+});

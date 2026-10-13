@@ -66,8 +66,8 @@ export default function RunSidebar({
                 onClick={() => onSelectRun(run.id)}
                 type="button"
               >
-                <span className="run-sidebar-title">{run.work_title || 'Untitled Work'}</span>
-                <span className="run-sidebar-work"><BriefcaseBusiness size={11} /> Work #{workNumber(run.work_id)}</span>
+                <span className="run-sidebar-title">{run.work_title || '未命名任务'}</span>
+                <span className="run-sidebar-work"><BriefcaseBusiness size={11} /> 任务 #{workNumber(run.work_id)}</span>
                 <span className="run-sidebar-meta">
                   <span className={`run-status-dot ${run.status || 'unknown'}`} />
                   {runStatusLabel(run.status)} · {providerLabel(run.provider)} · Attempt {run.attempt_count || run.sequence || 0}

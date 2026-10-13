@@ -4,9 +4,9 @@ import WorkFeedback from './work/WorkFeedback.jsx';
 import {
   AlertTriangle,
   ArrowLeft,
-  ArrowUpRight,
   CheckCircle2,
   CircleDot,
+  Copy,
   LoaderCircle,
   Pencil,
   Play,
@@ -17,15 +17,14 @@ import {
 } from 'lucide-react';
 import { evidenceApi } from '../api/evidence.js';
 import { handoffsApi } from '../api/handoffs.js';
-import { runsApi } from '../api/runs.js';
 import { workApi } from '../api/work.js';
 import MarkdownPreview from '../components/editor/MarkdownPreview.jsx';
 import ModalOverlay from '../components/ModalOverlay.jsx';
 import { message } from '../store/toastStore.js';
 import WorkEditorDialog from './work/WorkEditorDialog.jsx';
+import WorkRunProcess from './work/WorkRunProcess.jsx';
 import { workProfileSummary } from './work/workProfileRouting.js';
 import WorkDeliveryView from './work/WorkDeliveryView.jsx';
-import { handoffHref } from './handoffPageModel.js';
 import { issueIdFromWorkId } from './workBoardModel.js';
 import {
   WORK_TIMELINE_KINDS,
@@ -33,28 +32,34 @@ import {
   filterTimelineItems,
   mergeTimelinePages,
   workAvailableActions,
+  workBlockReason,
 } from './workDetailModel.js';
 import './WorkDetail.css';
 import { useI18n } from '../i18n/context.js';
 
-const EMPTY_OVERVIEW = { evidence: [], handoffs: [], runs: [] };
+const EMPTY_RESULTS = { evidence: [], handoffs: [] };
 const DEFAULT_ACCEPTANCE_ID = 'issue-delivery';
+const NOT_STARTED_STATUSES = new Set(['triage', 'todo']);
 
-export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChanged, projects = [], selectedHandoffId = '', workId }) {
+// 任务详情单页三段式：现在怎样 → 结果 → 过程（每次执行的完整记录）。
+export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChanged, projects = [], selectedHandoffId = '', selectedRunId = '', workId }) {
   const { language, t } = useI18n();
   const detailRequest = useRef(0);
-  const overviewRequest = useRef(0);
+  const resultsRequest = useRef(0);
   const activityRequest = useRef(0);
+  const resultsRef = useRef(null);
   const [detail, setDetail] = useState(null);
-  const [overview, setOverview] = useState(EMPTY_OVERVIEW);
-  const [overviewErrors, setOverviewErrors] = useState({});
+  const [results, setResults] = useState(EMPTY_RESULTS);
+  const [resultErrors, setResultErrors] = useState({});
+  const [latestRun, setLatestRun] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [timelineCursor, setTimelineCursor] = useState('');
   const [timelineKind, setTimelineKind] = useState('');
-  const [activeView, setActiveView] = useState(selectedHandoffId ? 'delivery' : 'overview');
+  const [timelineError, setTimelineError] = useState('');
+  const [activityOpen, setActivityOpen] = useState(false);
   const [activeDeliveryId, setActiveDeliveryId] = useState(selectedHandoffId);
   const [loading, setLoading] = useState(true);
-  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [resultsLoading, setResultsLoading] = useState(true);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityLoaded, setActivityLoaded] = useState(false);
   const [timelineLoadingMore, setTimelineLoadingMore] = useState(false);
@@ -65,6 +70,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   const [reviewRequest, setReviewRequest] = useState(null);
   const [reviewComment, setReviewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [processToken, setProcessToken] = useState(0);
   const [error, setError] = useState('');
 
   const loadDetail = useCallback(async ({ silent = false } = {}) => {
@@ -81,23 +87,21 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     }
   }, [t, workId]);
 
-  const loadOverview = useCallback(async () => {
-    const version = ++overviewRequest.current;
-    setOverviewLoading(true);
-    const results = await Promise.allSettled([
-      runsApi.getRuns({ page: 1, pageSize: 10, workId }),
+  const loadResults = useCallback(async () => {
+    const version = ++resultsRequest.current;
+    setResultsLoading(true);
+    const settled = await Promise.allSettled([
       evidenceApi.listEvidence({ limit: 20, workId }),
       handoffsApi.getHandoffs({ limit: 10, workId }),
     ]);
-    if (version !== overviewRequest.current) return;
-    const [runsResult, evidenceResult, handoffsResult] = results;
-    setOverview({
-      runs: fulfilledItems(runsResult),
+    if (version !== resultsRequest.current) return;
+    const [evidenceResult, handoffsResult] = settled;
+    setResults({
       evidence: fulfilledItems(evidenceResult),
       handoffs: fulfilledItems(handoffsResult),
     });
-    setOverviewErrors(settledErrors(results, ['runs', 'evidence', 'handoffs']));
-    setOverviewLoading(false);
+    setResultErrors(settledErrors(settled, ['evidence', 'handoffs']));
+    setResultsLoading(false);
   }, [workId]);
 
   const loadActivity = useCallback(async () => {
@@ -108,11 +112,10 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       if (version !== activityRequest.current) return;
       setTimeline(response?.items || []);
       setTimelineCursor(response?.next_cursor || '');
+      setTimelineError('');
       setActivityLoaded(true);
     } catch (loadError) {
-      if (version === activityRequest.current) {
-        setOverviewErrors(current => ({ ...current, timeline: loadError.message || t('work.loadActivityFailed') }));
-      }
+      if (version === activityRequest.current) setTimelineError(loadError.message || t('work.loadActivityFailed'));
     } finally {
       if (version === activityRequest.current) setActivityLoading(false);
     }
@@ -120,13 +123,15 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
 
   useEffect(() => {
     setDetail(null);
-    setOverview(EMPTY_OVERVIEW);
-    setOverviewErrors({});
+    setResults(EMPTY_RESULTS);
+    setResultErrors({});
+    setLatestRun(null);
     setTimeline([]);
     setTimelineCursor('');
     setTimelineKind('');
+    setTimelineError('');
+    setActivityOpen(false);
     setActivityLoaded(false);
-    setActiveView(selectedHandoffId ? 'delivery' : 'overview');
     setActiveDeliveryId(selectedHandoffId);
     setEditorOpen(false);
     setPendingAction('');
@@ -134,28 +139,31 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     setReviewRequest(null);
     setReviewComment('');
     loadDetail();
-    loadOverview();
-  }, [loadDetail, loadOverview, selectedHandoffId]);
+    loadResults();
+  }, [loadDetail, loadResults, selectedHandoffId]);
 
   useEffect(() => {
-    if (activeView === 'activity' && !activityLoaded && !activityLoading) loadActivity();
-  }, [activeView, activityLoaded, activityLoading, loadActivity]);
+    if (activityOpen && !activityLoaded && !activityLoading) loadActivity();
+  }, [activityOpen, activityLoaded, activityLoading, loadActivity]);
 
   const work = detail?.work || null;
   const issueId = issueIdFromWorkId(work?.id);
-  const projectName = projects.find(project => project.id === work?.owner?.project_id)?.name || work?.owner?.project_id || 'Unscoped';
+  const project = projects.find(item => item.id === work?.owner?.project_id) || null;
+  const projectName = project?.name || work?.owner?.project_id || 'Unscoped';
   const decision = detail?.decision || null;
   const availableActions = workAvailableActions(work?.status, decision);
+  const blockReason = workBlockReason(work, project);
   const feedbackPending = ['received', 'executing'].includes(detail?.feedback?.status);
+  const workRunning = work?.status === 'in_progress';
   useEffect(() => {
-    if (!feedbackPending || reviewAction) return undefined;
+    if ((!feedbackPending && !workRunning) || reviewAction) return undefined;
     const timer = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       void loadDetail({ silent: true });
-      void loadOverview();
+      void loadResults();
     }, 10000);
     return () => window.clearInterval(timer);
-  }, [feedbackPending, loadDetail, loadOverview, reviewAction]);
+  }, [feedbackPending, loadDetail, loadResults, reviewAction, workRunning]);
   const visibleTimeline = useMemo(() => filterTimelineItems(timeline, timelineKind), [timeline, timelineKind]);
   const customAcceptance = useMemo(
     () => (work?.acceptance?.criteria || []).filter(criterion => criterion.id !== DEFAULT_ACCEPTANCE_ID),
@@ -164,8 +172,13 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
 
   useEffect(() => {
     setActiveDeliveryId(current => selectedHandoffId
-      || (overview.handoffs.some(item => item.id === current) ? current : overview.handoffs[0]?.id || ''));
-  }, [overview.handoffs, selectedHandoffId]);
+      || (results.handoffs.some(item => item.id === current) ? current : results.handoffs[0]?.id || ''));
+  }, [results.handoffs, selectedHandoffId]);
+
+  // 交付深链直接定位到“结果”段。
+  useEffect(() => {
+    if (selectedHandoffId && !resultsLoading && work) resultsRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [resultsLoading, selectedHandoffId, work]);
 
   useEffect(() => {
     if (!work) return;
@@ -173,15 +186,14 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       page_id: 'work',
       project_id: work.owner?.project_id || '',
       work_id: work.id,
-      ...(activeView === 'delivery' && activeDeliveryId
-        ? { handoff_id: activeDeliveryId }
-        : {}),
+      ...(activeDeliveryId ? { handoff_id: activeDeliveryId } : {}),
     });
-  }, [activeDeliveryId, activeView, onPageContextChange, work]);
+  }, [activeDeliveryId, onPageContextChange, work]);
 
   const refreshAll = async () => {
     setRefreshing(true);
-    await Promise.all([loadDetail({ silent: true }), loadOverview(), ...(activityLoaded ? [loadActivity()] : [])]);
+    setProcessToken(value => value + 1);
+    await Promise.all([loadDetail({ silent: true }), loadResults(), ...(activityLoaded ? [loadActivity()] : [])]);
     setRefreshing(false);
   };
 
@@ -192,9 +204,9 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       const response = await workApi.getWorkTimeline(workId, { cursor: timelineCursor, limit: 60 });
       setTimeline(current => mergeTimelinePages(current, response?.items || []));
       setTimelineCursor(response?.next_cursor || '');
-      setOverviewErrors(current => ({ ...current, timeline: '' }));
-    } catch (timelineError) {
-      setOverviewErrors(current => ({ ...current, timeline: timelineError.message || t('work.loadMoreActivityFailed') }));
+      setTimelineError('');
+    } catch (timelineLoadError) {
+      setTimelineError(timelineLoadError.message || t('work.loadMoreActivityFailed'));
     } finally {
       setTimelineLoadingMore(false);
     }
@@ -245,135 +257,112 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     setReviewAction(action);
   };
 
+  const copyWorkId = async () => {
+    try {
+      await navigator.clipboard.writeText(work.id);
+      message.success(t('work.idCopied'));
+    } catch (copyError) {
+      message.error(copyError.message || t('work.copyFailed'));
+    }
+  };
+
+  const handleLatestRunChange = useCallback(run => setLatestRun(run), []);
+
   if (loading && !work) return <WorkDetailLoading />;
   if (error || !work) return <WorkDetailFailure error={error} navigateTo={navigateTo} />;
 
-  const latestRun = overview.runs[0];
   const profileSummary = workProfileSummary(work, latestRun);
-  const latestHandoff = overview.handoffs[0];
-  const passedEvidence = overview.evidence.filter(item => item.status === 'passed').length;
-  const failedEvidence = overview.evidence.filter(item => item.status === 'failed').length;
-  const selectView = (view) => {
-    setActiveView(view);
-    if (typeof window === 'undefined') return;
-    if (view === 'delivery' && latestHandoff) {
-      window.history.replaceState(null, '', handoffHref(activeDeliveryId || latestHandoff.id, work.id));
-    } else if (window.location.hash.startsWith('#/work/')) {
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
-    }
-  };
+  const hasResults = results.handoffs.length > 0 || results.evidence.length > 0 || resultErrors.evidence || resultErrors.handoffs;
 
   return (
     <section className="work-detail-page animate-fade-in">
       <div className="work-detail-toolbar">
-        <button className="work-detail-back" onClick={() => navigateTo('work')} type="button"><ArrowLeft size={15} /> {t('work.board')}</button>
+        <button className="work-detail-back" onClick={() => navigateTo('work')} type="button"><ArrowLeft size={15} /> {t('work.backToBoard')}</button>
         <div className="work-detail-actions">
-          {availableActions.edit ? <button onClick={() => setEditorOpen(true)} type="button"><Pencil size={14} /> {t('work.edit')}</button> : null}
           {availableActions.start ? <button className="primary" disabled={submitting} onClick={() => submitAction('enqueue')} type="button"><Play size={14} /> {t('work.start')}</button> : null}
           {availableActions.retry ? <button className="primary" disabled={submitting} onClick={() => submitAction('retry')} type="button"><RotateCw size={14} /> {t('work.retry')}</button> : null}
+          {availableActions.edit ? <button onClick={() => setEditorOpen(true)} type="button"><Pencil size={14} /> {t('work.edit')}</button> : null}
           {availableActions.cancel ? <button className="danger" disabled={submitting} onClick={() => setPendingAction('cancel')} type="button"><Square size={13} /> {t('work.cancel')}</button> : null}
-          <button disabled={refreshing} onClick={refreshAll} type="button"><RefreshCw className={refreshing ? 'is-spinning' : ''} size={14} /> {t('work.refresh')}</button>
+          <button aria-label={t('work.copyId')} className="icon" onClick={copyWorkId} title={t('work.copyId')} type="button"><Copy size={14} /></button>
+          <button aria-label={t('work.refresh')} className="icon" disabled={refreshing} onClick={refreshAll} title={t('work.refresh')} type="button"><RefreshCw className={refreshing ? 'is-spinning' : ''} size={14} /></button>
         </div>
       </div>
 
       <header className="work-detail-hero">
-        <div className="work-detail-hero-main">
-          <div className="work-detail-eyebrow"><CircleDot size={13} /> Work</div>
-          <div className="work-detail-title-row">
-            <span className="work-detail-status" data-status={work.status}>{t(`status.${work.status}`)}</span>
-            <h1>{work.title}</h1>
-          </div>
-          <div className="work-detail-meta"><span>{projectName}</span><span>{t('work.updated', { time: formatTime(work.updated_at, language) })}</span></div>
+        <div className="work-detail-eyebrow"><CircleDot size={13} /> TASK{issueId ? ` #${issueId}` : ''}</div>
+        <div className="work-detail-title-row">
+          <span className="work-detail-status" data-status={work.status}>{t(`status.${work.status}`)}</span>
+          <h1>{work.title}</h1>
         </div>
-        <div className="work-detail-identity"><span>WORK ID</span><code>{work.id}</code>{issueId ? <span>Issue #{issueId}</span> : null}</div>
+        <div className="work-detail-meta"><span>{projectName}</span><span>{t('work.updated', { time: formatTime(work.updated_at, language) })}</span></div>
       </header>
-
-      <nav className="work-detail-view-tabs" aria-label={t('work.detailViews')}>
-        <button aria-current={activeView === 'overview' ? 'page' : undefined} onClick={() => selectView('overview')} type="button">{t('work.overview')}</button>
-        <button aria-current={activeView === 'delivery' ? 'page' : undefined} onClick={() => selectView('delivery')} type="button">{t('work.delivery')} {overview.handoffs.length > 0 ? `(${overview.handoffs.length})` : ''}</button>
-        <button aria-current={activeView === 'activity' ? 'page' : undefined} onClick={() => selectView('activity')} type="button">{t('work.activity')}</button>
-      </nav>
 
       {pendingAction ? <InlineConfirmation busy={submitting} onCancel={() => setPendingAction('')} onConfirm={() => submitAction(pendingAction)} /> : null}
 
-      {activeView === 'overview' ? (
-        <div className="work-overview-layout">
-          <section className="work-detail-panel work-detail-goal">
-            <SectionHeading eyebrow={t('work.task')} title={t('work.goal')} />
-            <MarkdownPreview text={work.goal || t('work.noGoal')} />
-          </section>
+      <section className="work-detail-panel">
+        <SectionHeading eyebrow="NOW" title={t('work.sectionNow')} />
+        {blockReason ? <div className="work-block-reason" role="status"><AlertTriangle size={14} /> {blockReason}</div> : null}
+        <WorkStateSummary status={work.status} decision={decision} />
+        <WorkFeedback feedback={detail?.feedback} />
+        {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={selectReview} request={decision.request} /> : null}
+        <details className="work-detail-disclosure" open={NOT_STARTED_STATUSES.has(work.status) || undefined}>
+          <summary>{t('work.taskDescription')}</summary>
+          <MarkdownPreview text={work.goal || t('work.noGoal')} />
+        </details>
+        {customAcceptance.length ? (
+          <details className="work-detail-disclosure">
+            <summary>{t('work.acceptanceCriteria')} ({customAcceptance.length})</summary>
+            <ul>{customAcceptance.map(criterion => <li key={criterion.id}>{criterion.description}</li>)}</ul>
+          </details>
+        ) : null}
+      </section>
 
-          <div className="work-overview-grid">
-            <section className="work-detail-panel">
-              <SectionHeading eyebrow={t('work.current')} title={t('work.nextStep')} />
-              <WorkStateSummary status={work.status} decision={decision} />
-              <WorkFeedback feedback={detail?.feedback} />
-              {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={selectReview} request={decision.request} /> : null}
-            </section>
-
-            <section className="work-detail-panel">
-              <SectionHeading eyebrow={overviewLoading ? t('work.loading') : t('work.runsCount', { count: overview.runs.length })} title={t('work.latestRun')} />
-              <ResourceError error={overviewErrors.runs} />
-              {latestRun ? <LatestRunCard navigateTo={navigateTo} run={latestRun} /> : <EmptySection text={t('work.noRun')} />}
-            </section>
-
-            <section className="work-detail-panel work-provider-profile-panel">
-              <SectionHeading eyebrow="Execution routing" title="Agent Profile / Provider" />
-              <dl className="work-provider-profile-facts">
-                <div><dt>Work selection</dt><dd>{profileSummary.selection}</dd></div>
-                <div><dt>Effective profile</dt><dd>{profileSummary.effectiveProfile}</dd></div>
-                <div><dt>Effective provider</dt><dd>{profileSummary.effectiveProvider}</dd></div>
-                <div><dt>Effective model</dt><dd>{profileSummary.effectiveModel}</dd></div>
-                <div><dt>Selection source</dt><dd>{profileSummary.source}</dd></div>
-                <div><dt>Latest Run actual provider</dt><dd>{profileSummary.runProvider}</dd></div>
-              </dl>
-            </section>
-
-            <section className="work-detail-panel">
-              <SectionHeading eyebrow={t('work.piDecision')} title={t('work.delivery')} />
-              <ResourceError error={overviewErrors.evidence || overviewErrors.handoffs} />
-              <div className="work-delivery-facts">
-                <span><strong>{passedEvidence}</strong> {t('work.passedEvidence')}</span>
-                <span className={failedEvidence ? 'failed' : ''}><strong>{failedEvidence}</strong> {t('work.failedEvidence')}</span>
-              </div>
-              {latestHandoff
-                ? <LatestHandoffCard handoff={latestHandoff} onOpen={() => selectView('delivery')} />
-                : <EmptySection text={handoffEmptyText(work)} />}
-            </section>
-          </div>
-
-          {customAcceptance.length ? (
-            <details className="work-custom-acceptance">
-              <summary>{t('work.acceptanceCriteria')} ({customAcceptance.length})</summary>
-              <ul>{customAcceptance.map(criterion => <li key={criterion.id}>{criterion.description}</li>)}</ul>
-            </details>
-          ) : null}
-        </div>
-      ) : activeView === 'delivery' ? (
-        <section className="work-detail-panel work-delivery-panel">
-          <WorkFeedback feedback={detail?.feedback} />
-          {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={selectReview} request={decision.request} /> : null}
+      {hasResults ? (
+        <section className="work-detail-panel work-delivery-panel" ref={resultsRef}>
+          <div className="work-delivery-panel-heading"><SectionHeading eyebrow="RESULT" title={t('work.sectionResult')} /></div>
           <WorkDeliveryView
-            evidence={overview.evidence}
-            handoffs={overview.handoffs}
-            loading={overviewLoading}
-            loadError={overviewErrors.evidence || overviewErrors.handoffs}
+            evidence={results.evidence}
+            handoffs={results.handoffs}
+            loading={resultsLoading}
+            loadError={resultErrors.evidence || resultErrors.handoffs}
             onRefresh={refreshAll}
             onSelectionChange={setActiveDeliveryId}
             selectedHandoffId={activeDeliveryId}
             work={work}
           />
         </section>
-      ) : (
-        <section className="work-detail-panel work-activity-panel">
-          <SectionHeading eyebrow={t('work.boundedHistory')} title={t('work.activity')} />
+      ) : null}
+
+      <section className="work-detail-panel work-process-panel">
+        <SectionHeading eyebrow="PROCESS" title={t('work.sectionProcess')} />
+        <WorkRunProcess
+          allowRunRetry={!availableActions.retry}
+          navigateTo={navigateTo}
+          onLatestRunChange={handleLatestRunChange}
+          onRunsChanged={() => { void loadDetail({ silent: true }); onWorkChanged?.(); }}
+          refreshToken={processToken}
+          selectedRunId={selectedRunId}
+          workId={workId}
+        />
+        <details className="work-detail-disclosure">
+          <summary>{t('work.executionConfig')}</summary>
+          <dl className="work-provider-profile-facts">
+            <div><dt>{t('work.profile.preset')}</dt><dd>{profileSummary.effectiveProfile}</dd></div>
+            <div><dt>{t('work.profile.provider')}</dt><dd>{profileSummary.effectiveProvider}</dd></div>
+            <div><dt>{t('work.profile.model')}</dt><dd>{profileSummary.effectiveModel}</dd></div>
+            <div><dt>{t('work.profile.source')}</dt><dd>{profileSummary.sourceLabel}</dd></div>
+            <div><dt>{t('work.profile.actual')}</dt><dd>{profileSummary.runProvider}</dd></div>
+          </dl>
+        </details>
+        <details className="work-detail-disclosure" onToggle={event => setActivityOpen(event.currentTarget.open)}>
+          <summary>{t('work.activity')}</summary>
           <div className="work-timeline-filters" role="group" aria-label={t('work.activityKind')}>
             <button aria-pressed={!timelineKind} onClick={() => setTimelineKind('')} type="button">{t('work.all')}</button>
             {WORK_TIMELINE_KINDS.map(kind => <button aria-pressed={timelineKind === kind} key={kind} onClick={() => setTimelineKind(kind)} type="button">{t(`timeline.${kind}`)}</button>)}
           </div>
-          <ResourceError error={overviewErrors.timeline} />
+          <ResourceError error={timelineError} />
           {activityLoading && !activityLoaded ? <div className="work-activity-loading"><LoaderCircle className="is-spinning" size={18} /> {t('work.loadingActivity')}</div> : null}
-          {!activityLoading && visibleTimeline.length === 0 ? <EmptySection text={timelineKind ? t('work.noMatchingActivity') : t('work.noActivity')} /> : null}
+          {activityLoaded && !activityLoading && visibleTimeline.length === 0 ? <EmptySection text={timelineKind ? t('work.noMatchingActivity') : t('work.noActivity')} /> : null}
           <div className="work-timeline-list">
             {visibleTimeline.map(item => (
               <article key={item.id}>
@@ -383,33 +372,13 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
             ))}
           </div>
           {timelineCursor ? <button className="work-timeline-more" disabled={timelineLoadingMore} onClick={loadMoreTimeline} type="button">{timelineLoadingMore ? <LoaderCircle className="is-spinning" size={14} /> : null}{timelineLoadingMore ? t('work.loadingEarlier') : t('work.loadEarlier')}</button> : null}
-        </section>
-      )}
+        </details>
+      </section>
 
       {editorOpen ? <WorkEditorDialog mode="edit" onClose={() => setEditorOpen(false)} onSaved={async () => { setEditorOpen(false); await refreshAll(); onWorkChanged?.(); }} projects={projects} work={work} /> : null}
       {reviewAction ? <ReviewDialog action={reviewAction} busy={submitting} comment={reviewComment} onCancel={() => { setReviewAction(''); setReviewComment(''); }} onChange={setReviewComment} onConfirm={submitReview} request={reviewRequest} /> : null}
     </section>
   );
-}
-
-function LatestRunCard({ navigateTo, run }) {
-  const { language, t } = useI18n();
-  return <article className="work-latest-run"><div><em data-status={run.status}>{t(`status.${run.status}`)}</em><span>{run.provider || 'unknown'} · {formatTime(run.started_at, language)}</span></div><strong>{run.progress?.latest?.summary || run.terminal?.reason || t('work.noProgress')}</strong><button onClick={() => navigateTo('runs', null, run.id)} type="button">{t('work.openRun')} <ArrowUpRight size={12} /></button></article>;
-}
-
-function LatestHandoffCard({ handoff, onOpen }) {
-  const { t } = useI18n();
-  const status = handoff.delivery_status?.overall || handoff.status;
-  const mode = {
-    branch_commit: t('work.handoff.localCommit'),
-    deploy: t('work.handoff.deploy'),
-    draft_pr: t('work.handoff.draftPr'),
-    local_changes: t('work.handoff.localChanges'),
-    push: t('work.handoff.push'),
-    ready_pr: t('work.handoff.readyPr'),
-    release: t('work.handoff.release'),
-  }[handoff.delivery?.mode] || handoff.delivery?.mode || t('work.handoff.credential');
-  return <article className="work-latest-handoff"><div><strong>{mode}</strong><em data-status={status}>{status === 'ready' ? t('work.handoff.ready') : status}</em></div><p>{t('work.handoff.summary', { files: handoff.changed_file_count, evidence: handoff.evidence_count, risks: handoff.risk_count })}</p><button onClick={onOpen} type="button">{t('work.handoff.open')} <ArrowUpRight size={12} /></button></article>;
 }
 
 function WorkStateSummary({ status, decision }) {
@@ -508,9 +477,4 @@ function formatTime(value, language) {
   if (!value) return '—';
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date.toLocaleString(language) : value;
-}
-
-function handoffEmptyText(work) {
-  void work;
-  return '暂无可选交付记录；Handoff 不参与 Issue 完成判断。';
 }

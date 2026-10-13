@@ -5,21 +5,35 @@ import test from 'node:test';
 const detail = readFileSync(new URL('./WorkDetail.jsx', import.meta.url), 'utf8');
 const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
 const model = readFileSync(new URL('./workDetailModel.js', import.meta.url), 'utf8');
+const process = readFileSync(new URL('./work/WorkRunProcess.jsx', import.meta.url), 'utf8');
+const runsPage = readFileSync(new URL('./Runs.jsx', import.meta.url), 'utf8');
 
-test('Work Detail keeps overview, delivery and activity together and loads Activity only on demand', () => {
-  assert.match(detail, /t\('work\.overview'\)/);
-  assert.match(detail, /t\('work\.delivery'\).*overview\.handoffs\.length/);
-  assert.match(detail, /t\('work\.activity'\)/);
+test('Work Detail is one page: now, result and the full per-run process', () => {
+  assert.match(detail, /t\('work\.sectionNow'\)/);
+  assert.match(detail, /t\('work\.sectionResult'\)/);
+  assert.match(detail, /t\('work\.sectionProcess'\)/);
+  assert.doesNotMatch(detail, /work-detail-view-tabs|activeView/);
   assert.match(detail, /workApi\.getWork\(workId\)/);
   assert.match(detail, /workApi\.getWorkTimeline/);
-  assert.match(detail, /runsApi\.getRuns/);
   assert.match(detail, /evidenceApi\.listEvidence/);
   assert.match(detail, /handoffsApi\.getHandoffs/);
   assert.match(detail, /<WorkDeliveryView/);
+  assert.match(detail, /<WorkRunProcess/);
+  assert.match(detail, /selectedRunId=\{selectedRunId\}/);
   assert.doesNotMatch(detail, /navigateTo\('handoffs'/);
-  assert.match(detail, /activeView === 'activity' && !activityLoaded/);
+  assert.match(detail, /activityOpen && !activityLoaded/);
   assert.doesNotMatch(detail, /getWorkRelations|readiness|relationship|guardianAlerts|compatibility/);
   assert.doesNotMatch(detail, /<EvidencePanel/);
+});
+
+test('Task process reuses the complete Run view instead of a reduced transcript', () => {
+  assert.match(process, /runsApi\.getRuns\(\{ page: 1, pageSize: RUN_PAGE_SIZE, workId \}\)/);
+  assert.match(process, /runsApi\.getRun\(runId\)/);
+  assert.match(process, /<RunContextBar/);
+  assert.match(process, /<RunDetail navigateTo=\{navigateTo\} run=\{run\} \/>/);
+  assert.match(process, /RUN_REFRESH_EVENT_TYPES\.has/);
+  assert.doesNotMatch(process, /readOnly|running=\{false\}|liveEvents=\{\[\]\}/);
+  assert.doesNotMatch(runsPage, /navigateTo\('work', run\.work_id/);
 });
 
 test('Work Board stays board-only and opens canonical Work Detail', () => {
@@ -32,6 +46,7 @@ test('Work Board stays board-only and opens canonical Work Detail', () => {
   assert.doesNotMatch(board, /Issue #\$\{issueId\} authority/);
   assert.match(board, /<WorkDetail/);
   assert.match(board, /selectedHandoffId=\{selectedHandoffId\}/);
+  assert.match(board, /selectedRunId=\{selectedRunId\}/);
   assert.doesNotMatch(board, /relations=|work-relation-row|indexRelationsByWork/);
 });
 

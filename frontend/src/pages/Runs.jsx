@@ -1,38 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  AlertTriangle,
-  ArrowUpRight,
-  CircleStop,
-  History,
-  Play,
-  RotateCcw,
-} from 'lucide-react';
+import { AlertTriangle, History } from 'lucide-react';
 import { eventsApi } from '../api/events.js';
 import { runsApi } from '../api/runs.js';
 import TurtleLoader from '../components/TurtleLoader';
 import { message as toast } from '../store/toastStore';
 import Sessions from './Sessions.jsx';
+import RunContextBar from './runs/RunContextBar.jsx';
 import RunDetail from './runs/RunDetail.jsx';
 import RunSidebar from './runs/RunSidebar.jsx';
 import {
-  buildRunControlPayload,
+  RUN_REFRESH_EVENT_TYPES,
   mergeRunPages,
-  runAvailableActions,
-  runIssueId,
   runProviderSessionRef,
-  runStatusLabel,
 } from './runs/runPageModel.js';
 import './runs/Runs.css';
 
 const RUN_PAGE_SIZE = 30;
 const RUN_RECONCILE_INTERVAL_MS = 5_000;
-const RUN_REFRESH_EVENT_TYPES = new Set([
-  'issue.runtime_updated',
-  'issue.status_changed',
-  'run.lifecycle.intent.v1',
-  'run.lifecycle.outcome.v1',
-  'run.lifecycle.run_materialized.v1',
-]);
 
 export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextChange, selectedRunId = '', selectedSessionId = '' }) {
   const [runs, setRuns] = useState([]);
@@ -46,6 +30,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
   const [activeRunId, setActiveRunId] = useState(selectedRunId);
   const [runDetail, setRunDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailReloadToken, setDetailReloadToken] = useState(0);
   const listRequest = useRef(null);
   const listController = useRef(null);
   const loadMoreController = useRef(null);
@@ -138,6 +123,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
       timer = window.setTimeout(() => {
         timer = 0;
         loadFirstPage({ silent: true });
+        setDetailReloadToken(value => value + 1);
       }, 250);
     });
     return () => {
@@ -178,7 +164,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
       active = false;
       controller.abort();
     };
-  }, [activeRunId, surface]);
+  }, [activeRunId, detailReloadToken, surface]);
 
   const selectRun = useCallback((id) => {
     setSurface('run');
@@ -270,97 +256,6 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
   );
 }
 
-function RunContextBar({ navigateTo, onRunChanged, run }) {
-  const [pendingAction, setPendingAction] = useState('');
-  const [resumePrompt, setResumePrompt] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const actions = runAvailableActions(run);
-  const issueId = runIssueId(run);
-
-  const controlRun = async (action) => {
-    if (submitting || (action === 'resume' && !resumePrompt.trim())) return;
-    setSubmitting(true);
-    try {
-      const eventId = `runs-ui:${action}:${randomEventId()}`;
-      const response = await runsApi.controlRun(run.id, action, buildRunControlPayload(run, action, {
-        eventId,
-        prompt: resumePrompt,
-      }));
-      onRunChanged(response.run);
-      setPendingAction('');
-      setResumePrompt('');
-      toast.success(action === 'interrupt' ? 'Run 中断已审计提交' : action === 'resume' ? 'Run 已恢复' : 'Run 重试已请求');
-    } catch (controlError) {
-      toast.error(controlError.message || `Run ${action} 失败`);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="run-context-bar">
-      <div className="run-context-main">
-        <div className="run-context-title-row">
-          <span className={`run-context-status ${run.status || 'unknown'}`}>{runStatusLabel(run.status)}</span>
-          <strong>{run.work_title || 'Untitled Work'}</strong>
-          {issueId ? (
-            <button className="run-work-link" onClick={() => navigateTo?.('issues', issueId)} type="button">
-              Work #{issueId} <ArrowUpRight size={12} />
-            </button>
-          ) : null}
-        </div>
-        <div className="run-context-meta">
-          <span>{run.provider || 'unknown'} provider</span>
-          <span>Run {run.sequence || '?'}</span>
-          <span>Attempt {run.progress?.attempt_sequence || run.attempt_count || '?'}</span>
-          <span>Phase {run.progress?.provider_phase || run.progress?.phase || 'unknown'}</span>
-          {run.progress?.stalled?.detected ? <span className="run-context-warning">Stalled</span> : null}
-        </div>
-      </div>
-
-      <div className="run-context-actions">
-        {actions.interrupt ? (
-          <button onClick={() => setPendingAction('interrupt')} type="button"><CircleStop size={13} /> 中断</button>
-        ) : null}
-        {actions.resume ? (
-          <button onClick={() => setPendingAction('resume')} type="button"><Play size={13} /> 继续</button>
-        ) : null}
-        {actions.retry ? (
-          <button onClick={() => setPendingAction('retry')} type="button"><RotateCcw size={13} /> 重试</button>
-        ) : null}
-      </div>
-
-      {pendingAction ? (
-        <div className="run-control-confirm" role="group" aria-label={`确认 ${pendingAction}`}>
-          {pendingAction === 'resume' ? (
-            <textarea
-              autoFocus
-              onChange={event => setResumePrompt(event.target.value)}
-              placeholder="输入继续本 Run 的指令"
-              rows={2}
-              value={resumePrompt}
-            />
-          ) : (
-            <span>确认{pendingAction === 'interrupt' ? '中断当前 Attempt' : '请求新的 Run'}？操作会写入 lifecycle audit。</span>
-          )}
-          <div>
-            <button disabled={submitting} onClick={() => setPendingAction('')} type="button">取消</button>
-            <button
-              className="run-control-primary"
-              disabled={submitting || (pendingAction === 'resume' && !resumePrompt.trim())}
-              onClick={() => controlRun(pendingAction)}
-              type="button"
-            >
-              {submitting ? '提交中…' : '确认提交'}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-    </div>
-  );
-}
-
 function NewProviderSessionNotice() {
   return (
     <div className="run-surface-notice">
@@ -379,8 +274,4 @@ function RunLoadError({ error, onRetry }) {
       <button onClick={onRetry} type="button">重试</button>
     </div>
   );
-}
-
-function randomEventId() {
-  return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }

@@ -87,3 +87,12 @@ test('prefers runId over sessionId when both are present', () => {
     },
   );
 });
+
+test('Work deep links can select one Run without leaving Work Detail', () => {
+  const route = appRouteFromHash('#/work?workId=xw%3Awork%3Aissues%3A2&runId=xw%3Arun%3Aissue_runs%3Aissue-2-attempt-1');
+  assert.equal(route.currentPage, 'work');
+  assert.equal(route.selectedWorkId, 'xw:work:issues:2');
+  assert.equal(route.selectedRunId, 'xw:run:issue_runs:issue-2-attempt-1');
+  assert.equal(appHashForRoute(route), '#/work?workId=xw%3Awork%3Aissues%3A2&runId=xw%3Arun%3Aissue_runs%3Aissue-2-attempt-1');
+  assert.equal(appRouteFromHash('#/work?runId=orphan').selectedRunId, '');
+});

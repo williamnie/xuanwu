@@ -1,5 +1,13 @@
 const TERMINAL_RUN_STATUSES = new Set(['succeeded', 'failed', 'cancelled']);
 
+export const RUN_REFRESH_EVENT_TYPES = new Set([
+  'issue.runtime_updated',
+  'issue.status_changed',
+  'run.lifecycle.intent.v1',
+  'run.lifecycle.outcome.v1',
+  'run.lifecycle.run_materialized.v1',
+]);
+
 export function resolveRunsPage(page) {
   return page === 'sessions' ? 'runs' : page;
 }
@@ -64,12 +72,12 @@ export function buildRunControlPayload(run, action, {
 
 export function runStatusLabel(status) {
   return ({
-    cancelled: 'Cancelled',
-    failed: 'Failed',
-    recovering: 'Recovering',
-    running: 'Running',
-    succeeded: 'Succeeded',
-  })[status] || 'Unknown';
+    cancelled: '已取消',
+    failed: '失败',
+    recovering: '恢复中',
+    running: '执行中',
+    succeeded: '成功',
+  })[status] || '未知';
 }
 
 function text(value) {

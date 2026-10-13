@@ -272,7 +272,9 @@ export default function App() {
       ? page === 'issues' ? workIdFromIssueId(issueId) : String(issueId || '')
       : '';
     const compatSessionRoute = resolvedPage === 'runs' && (page === 'sessions' || Boolean(internalProviderSessionId));
-    const targetRunId = resolvedPage === 'runs' && !compatSessionRoute ? sessionId || '' : '';
+    const targetRunId = resolvedPage === 'runs' && !compatSessionRoute
+      ? sessionId || ''
+      : resolvedPage === 'work' && targetWorkId ? String(navigationOptions?.runId || '').trim() : '';
     const targetSessionId = resolvedPage === 'runs' && compatSessionRoute
       ? internalProviderSessionId || sessionId || ''
       : '';
@@ -303,6 +305,7 @@ export default function App() {
         draft.selectedRunId = targetRunId;
         draft.selectedSessionId = targetSessionId;
       }
+      if (resolvedPage === 'work') draft.selectedRunId = targetRunId;
       draft.settingsSection = targetSettingsSection;
       draft.selectedHandoffId = targetHandoffId;
       draft.pageContext = null;
@@ -626,6 +629,7 @@ export default function App() {
                 navigateTo={navigateTo}
                 onPageContextChange={setPageContext}
                 selectedHandoffId={selectedHandoffId}
+                selectedRunId={selectedRunId}
                 selectedWorkId={selectedWorkId}
               />
             ) : currentPage === 'handoffs' ? (

@@ -22,14 +22,23 @@ export function effectiveProfilePreview(explicitProfileId, project, profiles) {
   };
 }
 
+const PROFILE_SOURCE_LABELS = {
+  project_default: '项目默认预设',
+  project_provider: '项目默认编程工具',
+  strategy: '自动匹配的预设',
+  work: '任务指定',
+};
+
 export function workProfileSummary(work, latestRun) {
   const effective = work?.effective_agent_profile || {};
+  const source = effective.source || 'project_provider';
   return {
-    selection: work?.agent_profile_id || '继承项目默认',
-    effectiveProfile: effective.name || effective.id || 'Project provider fallback',
+    selection: work?.agent_profile_id || '跟随项目设置',
+    effectiveProfile: effective.name || effective.id || '不使用预设',
     effectiveProvider: work?.effective_provider || effective.provider || 'unknown',
-    effectiveModel: effective.model || 'provider default',
-    source: effective.source || 'project_provider',
-    runProvider: latestRun?.provider || 'No Run yet',
+    effectiveModel: effective.model || '编程工具默认',
+    source,
+    sourceLabel: PROFILE_SOURCE_LABELS[source] || source,
+    runProvider: latestRun?.provider || '尚未执行',
   };
 }

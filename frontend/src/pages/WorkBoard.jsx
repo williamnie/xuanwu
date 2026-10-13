@@ -54,7 +54,7 @@ const OPERATIONAL_STATUSES = ['triage', 'todo', 'in_progress', 'needs_user', 'fa
 const HISTORY_STATUSES = ['done', 'cancelled'];
 const BOARD_RECONCILE_EVENT_TYPES = new Set(['issue.created', 'issue.deleted', 'issue.status_changed', 'issue.updated']);
 
-export default function WorkBoard({ navigateTo, onPageContextChange, selectedHandoffId = '', selectedWorkId = '' }) {
+export default function WorkBoard({ navigateTo, onPageContextChange, selectedHandoffId = '', selectedRunId = '', selectedWorkId = '' }) {
   const { t } = useI18n();
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
@@ -341,6 +341,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
         onWorkChanged={refresh}
         projects={projects}
         selectedHandoffId={selectedHandoffId}
+        selectedRunId={selectedRunId}
         workId={selectedWorkId}
       />
     );
