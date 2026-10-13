@@ -1,11 +1,24 @@
-export function editorDraft(work, projects) {
+export const LAST_TASK_PROJECT_KEY = 'xuanwu-last-task-project';
+
+// 新建时项目取：打开时的上下文项目 → 上次使用的项目 → 第一个项目；编辑时始终沿用任务原项目。
+export function editorDraft(work, projects, { initialProject = '', lastProject = '' } = {}) {
+  const known = id => Boolean(id) && projects.some(project => project.id === id);
+  const projectId = work?.owner?.project_id
+    || (known(initialProject) ? initialProject : known(lastProject) ? lastProject : projects[0]?.id || '');
   return {
     agent_profile_id: work?.agent_profile_id || '',
     goal: work?.goal || '',
-    project_id: work?.owner?.project_id || projects[0]?.id || '',
+    project_id: projectId,
     status: 'triage',
     title: work?.title || '',
   };
+}
+
+export function profilePreviewText(preview) {
+  const tool = preview.provider || '编程工具';
+  const model = preview.model || '默认模型';
+  const source = preview.source === 'work' ? '来自所选预设' : preview.source === 'project_default' ? '来自项目默认预设' : '来自项目设置';
+  return `将使用：${tool} · ${model}（${source}）`;
 }
 
 export function effectiveProfilePreview(explicitProfileId, project, profiles) {

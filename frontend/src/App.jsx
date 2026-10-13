@@ -41,6 +41,7 @@ import { useI18n } from './i18n/context.js';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const WorkBoard = lazy(() => import('./pages/WorkBoard'));
+const TaskSubviewTabs = lazy(() => import('./pages/work/TaskSubviewTabs.jsx'));
 const Issues = lazy(() => import('./pages/Issues'));
 const IssueDetail = lazy(() => import('./pages/IssueDetail'));
 const Runs = lazy(() => import('./pages/Runs'));
@@ -664,7 +665,10 @@ export default function App() {
             ) : isAssistantModulePage(currentPage) ? (
               <Settings initialTab={assistantModule?.tab} navigateTo={navigateTo} onSectionChange={navigateToSettingsSection} />
             ) : currentPage === 'automations' ? (
-              <Automations />
+              <div className="automations-subview-shell">
+                <TaskSubviewTabs active="automations" navigateTo={navigateTo} />
+                <Automations />
+              </div>
             ) : currentPage === 'settings' ? (
               <Settings initialTab={settingsSection || 'general'} navigateTo={navigateTo} onSectionChange={navigateToSettingsSection} />
             ) : (

@@ -1,0 +1,31 @@
+/* spec 5.3 Tabs：通栏细线条，active 实底 */
+.task-subview-tabs {
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 0 0 8px;
+  scrollbar-width: none;
+}
+.task-subview-tabs::-webkit-scrollbar { display: none; }
+.task-subview-tabs button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 650;
+  gap: 6px;
+  letter-spacing: 0.045em;
+  padding: 6px 12px;
+  text-transform: uppercase;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.task-subview-tabs button:hover { background: var(--nav-hover); color: var(--text-primary); }
+.task-subview-tabs button[aria-current='page'] { background: var(--button-primary-bg); color: var(--button-primary-fg); }
+.task-subview-tabs button span { font-family: var(--font-mono); font-size: 0.6rem; opacity: 0.8; }
+.automations-subview-shell { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding-top: 16px; }

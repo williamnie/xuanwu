@@ -326,6 +326,27 @@
 .work-evidence-dialog > header p { color: var(--text-muted); font-size: 0.72rem; margin: 0; }
 .work-evidence-dialog > header button { background: transparent; border: 0; color: var(--text-muted); padding: 5px; }
 
+.work-list-scroll { flex: 1; min-height: 0; overflow: auto; padding: 14px 2px 24px; }
+.work-board-page.is-list .work-ledger-header { border-bottom: 0; padding-bottom: 6px; }
+.work-board-page > .task-subview-tabs { margin-bottom: 12px; }
+.work-action-icon { padding: 0; width: var(--button-height); }
+.work-header-project { font-size: 0.74rem; max-width: 180px; }
+.work-view-toggle { border: 1px solid var(--border-color); display: inline-flex; flex-shrink: 0; }
+.work-view-toggle button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  display: inline-flex;
+  justify-content: center;
+  min-height: calc(var(--button-height) - 2px);
+  transition: background-color 140ms ease, color 140ms ease;
+  width: var(--button-height);
+}
+.work-view-toggle button + button { border-left: 1px solid var(--border-color); }
+.work-view-toggle button:hover { background: var(--nav-hover); color: var(--text-primary); }
+.work-view-toggle button[aria-pressed='true'] { background: var(--nav-active); color: var(--primary); }
+
 .is-spinning { animation: work-spin 0.9s linear infinite; }
 @keyframes work-spin { to { transform: rotate(360deg); } }
 
@@ -340,5 +361,16 @@
 @media (max-width: 460px) {
   .work-ledger-actions { flex-wrap: wrap; }
   .work-header-search { flex-basis: 100%; }
-  .work-ledger-actions > button { flex: 1; }
+  .work-ledger-actions > .work-action-primary { flex: 1; }
 }
+
+.work-dialog .work-dialog-check { align-items: flex-start; cursor: pointer; flex-direction: row; gap: 10px; }
+.work-dialog-check input { accent-color: var(--primary); margin-top: 2px; }
+.work-dialog-check > span { display: flex; flex-direction: column; gap: 3px; }
+.work-dialog-check strong { color: var(--text-primary); font-size: 0.78rem; font-weight: 650; letter-spacing: 0; text-transform: none; }
+.work-dialog-check small { color: var(--text-muted); font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0; line-height: 1.5; text-transform: none; }
+.work-dialog-more { border-top: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 12px; padding-top: 10px; }
+.work-dialog-more > summary { color: var(--text-secondary); cursor: pointer; font-size: 0.74rem; font-weight: 700; }
+.work-dialog-more[open] { gap: 12px; }
+.work-dialog-more[open] > summary { margin-bottom: 12px; }
+.work-dialog-preview { color: var(--text-muted); font-size: 0.7rem; margin: 0; }

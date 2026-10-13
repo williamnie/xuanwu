@@ -3,6 +3,8 @@ import {
   AlertTriangle,
   ArrowUpRight,
   BriefcaseBusiness,
+  Columns3,
+  List,
   Pencil,
   Plus,
   RefreshCw,
@@ -17,7 +19,10 @@ import ModalOverlay from '../components/ModalOverlay.jsx';
 import { selectProjects, selectWorkSummary, useDataStore } from '../store/dataStore';
 import { message } from '../store/toastStore.js';
 import WorkDetail from './WorkDetail.jsx';
+import TaskList from './work/TaskList.jsx';
+import TaskSubviewTabs from './work/TaskSubviewTabs.jsx';
 import WorkEditorDialog from './work/WorkEditorDialog.jsx';
+import { executeWorkMove } from './work/workActions.js';
 import {
   filterWorkBoardItems,
   groupWorksByStatus,
@@ -54,20 +59,123 @@ const OPERATIONAL_STATUSES = ['triage', 'todo', 'in_progress', 'needs_user', 'fa
 const HISTORY_STATUSES = ['done', 'cancelled'];
 const BOARD_RECONCILE_EVENT_TYPES = new Set(['issue.created', 'issue.deleted', 'issue.status_changed', 'issue.updated']);
 
+const TASK_VIEW_STORAGE_KEY = 'xuanwu-task-view';
+
+// 任务页：默认列表视图，看板保留为可切换视图；两者共享搜索、项目筛选和同一套创建/编辑对话框。
 export default function WorkBoard({ navigateTo, onPageContextChange, selectedHandoffId = '', selectedRunId = '', selectedWorkId = '' }) {
+  const projects = useDataStore(selectProjects);
+  const workSummary = useDataStore(selectWorkSummary);
+  const [view, setView] = useState(readTaskView);
+  const [scope, setScope] = useState('active');
+  const [query, setQuery] = useState('');
+  const [projectId, setProjectId] = useState('');
+  const [dialog, setDialog] = useState(null);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const refresh = useCallback(() => setRefreshToken(value => value + 1), []);
+
+  useEffect(() => {
+    if (selectedWorkId) return;
+    onPageContextChange?.({ page_id: 'work', project_id: projectId });
+  }, [onPageContextChange, projectId, selectedWorkId]);
+
+  const changeView = (next) => {
+    setView(next);
+    try { localStorage.setItem(TASK_VIEW_STORAGE_KEY, next); } catch { /* 仅为个人偏好，存储不可用时忽略。 */ }
+  };
+
+  if (selectedWorkId) {
+    return (
+      <WorkDetail
+        navigateTo={navigateTo}
+        onPageContextChange={onPageContextChange}
+        onWorkChanged={refresh}
+        projects={projects}
+        selectedHandoffId={selectedHandoffId}
+        selectedRunId={selectedRunId}
+        workId={selectedWorkId}
+      />
+    );
+  }
+
+  const counts = projectId
+    ? workSummary.project_counts?.find(item => item.project_id === projectId)?.counts || {}
+    : workSummary.counts || {};
+
+  return (
+    <section className={`work-board-page is-${view}`}>
+      <TaskSubviewTabs active="work" navigateTo={navigateTo} />
+      <WorkBoardHeader
+        onCreate={() => setDialog({ mode: 'create' })}
+        onProjectChange={setProjectId}
+        onQueryChange={setQuery}
+        onRefresh={refresh}
+        onViewChange={changeView}
+        projectId={projectId}
+        projects={projects}
+        query={query}
+        view={view}
+      />
+      {view === 'list' ? (
+        <div className="work-list-scroll">
+          <TaskList
+            counts={counts}
+            navigateTo={navigateTo}
+            onCreate={() => setDialog({ mode: 'create' })}
+            onEdit={work => setDialog({ mode: 'edit', work })}
+            onScopeChange={setScope}
+            projectId={projectId}
+            projects={projects}
+            query={query}
+            refreshToken={refreshToken}
+            scope={scope}
+          />
+        </div>
+      ) : (
+        <WorkKanban
+          navigateTo={navigateTo}
+          onEdit={work => setDialog({ mode: 'edit', work })}
+          projectId={projectId}
+          query={query}
+          refreshToken={refreshToken}
+        />
+      )}
+      {dialog ? (
+        <WorkEditorDialog
+          initialProject={dialog.mode === 'create' ? projectId : undefined}
+          mode={dialog.mode}
+          onClose={() => setDialog(null)}
+          onSaved={() => {
+            setDialog(null);
+            refresh();
+          }}
+          projects={projects}
+          work={dialog.work}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function readTaskView() {
+  try {
+    return localStorage.getItem(TASK_VIEW_STORAGE_KEY) === 'board' ? 'board' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
+function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken }) {
   const { t } = useI18n();
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
+  const selectedWorkId = '';
   const [works, setWorks] = useState([]);
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [dialog, setDialog] = useState(null);
+  const filters = useMemo(() => ({ ...EMPTY_FILTERS, project: projectId, query }), [projectId, query]);
   const [evidenceWork, setEvidenceWork] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [loadingMoreStatus, setLoadingMoreStatus] = useState('');
   const [error, setError] = useState('');
   const [lanePages, setLanePages] = useState({});
-  const [totalWorks, setTotalWorks] = useState(0);
   const [draggingWork, setDraggingWork] = useState(null);
   const [draggedOverStatus, setDraggedOverStatus] = useState('');
   const [movingWorkId, setMovingWorkId] = useState('');
@@ -96,7 +204,6 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
 
     const controller = new AbortController();
     boardController.current = controller;
-    setRefreshing(true);
     const pending = workApi.getWorkBoard({ statuses: OPERATIONAL_STATUSES }, { signal: controller.signal });
     boardRequest.current = pending;
     try {
@@ -104,14 +211,12 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
       const snapshot = normalizeBoardSnapshot(boardResponse, workSummaryRef.current);
       setWorks(current => mergeOperationalSnapshot(current, snapshot.items));
       setLanePages(current => mergeRefreshedLanePages(current, snapshot.lanePages));
-      setTotalWorks(snapshot.total);
       setError('');
     } catch (loadError) {
       if (!silent && loadError?.name !== 'AbortError') setError(loadError.message || t('board.loadFailed'));
     } finally {
       if (boardRequest.current === pending) {
         boardRequest.current = null;
-        setRefreshing(false);
         if (!silent) setLoading(false);
       }
       if (boardController.current === controller) boardController.current = null;
@@ -121,7 +226,6 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
 
   useEffect(() => {
     workSummaryRef.current = workSummary;
-    setTotalWorks(workSummary.counts?.total || 0);
     setLanePages(current => ({
       ...current,
       ...Object.fromEntries(HISTORY_STATUSES.map(status => [status, {
@@ -201,7 +305,6 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
       setWorks(current => mergeWorks(current, response?.items || []));
       const nextLane = normalizeLanePage(response, lane.pageSize, 'loaded');
       setLanePages(current => ({ ...current, [status]: nextLane }));
-      setTotalWorks(current => current - lane.total + nextLane.total);
     } catch (loadError) {
       if (loadError?.name !== 'AbortError') message.error(loadError.message || t('board.loadMoreFailed'));
     } finally {
@@ -258,17 +361,18 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
     [filters, works],
   );
   const groupedWorks = useMemo(() => groupWorksByStatus(filteredWorks), [filteredWorks]);
-  useEffect(() => {
-    if (selectedWorkId) return;
-    onPageContextChange?.({
-      page_id: 'work',
-      project_id: '',
-    });
-  }, [onPageContextChange, selectedWorkId]);
-
-  const refresh = () => {
+  const refresh = useCallback(() => {
     void loadBoard();
-  };
+  }, [loadBoard]);
+
+  const firstRefresh = useRef(true);
+  useEffect(() => {
+    if (firstRefresh.current) {
+      firstRefresh.current = false;
+      return;
+    }
+    refresh();
+  }, [refresh, refreshToken]);
 
   const handleDragStart = (event, work) => {
     if (event.target instanceof Element && event.target.closest('button')) {
@@ -312,7 +416,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
 
     setMovingWorkId(work.id);
     try {
-      const result = await moveWorkAfterDrop(work, targetStatus);
+      const result = await executeWorkMove(work, targetStatus);
       const actualStatus = result?.status || targetStatus;
       const targetLabel = t(`status.${targetStatus}`);
       const actualLabel = t(`status.${actualStatus}`);
@@ -333,33 +437,8 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
     }
   };
 
-  if (selectedWorkId) {
-    return (
-      <WorkDetail
-        navigateTo={navigateTo}
-        onPageContextChange={onPageContextChange}
-        onWorkChanged={refresh}
-        projects={projects}
-        selectedHandoffId={selectedHandoffId}
-        selectedRunId={selectedRunId}
-        workId={selectedWorkId}
-      />
-    );
-  }
-
   return (
-    <section className="work-board-page">
-      <WorkBoardHeader
-        filteredCount={filteredWorks.length}
-        loadedCount={works.length}
-        refreshing={refreshing}
-        onCreate={() => setDialog({ mode: 'create' })}
-        onQueryChange={query => setFilters({ ...EMPTY_FILTERS, query })}
-        onRefresh={refresh}
-        query={filters.query}
-        total={workSummary.counts?.total ?? totalWorks}
-      />
-
+    <>
       {error ? (
         <div className="work-board-error" role="alert">
           <AlertTriangle size={18} />
@@ -386,7 +465,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
                   loadingMore={loadingMoreStatus === status}
                   loadState={lane?.loadState || 'loaded'}
                   navigateTo={navigateTo}
-                  onEdit={work => setDialog({ mode: 'edit', work })}
+                  onEdit={onEdit}
                   onEvidence={setEvidenceWork}
                   onLoadMore={loadMore}
                   onVisible={loadHistory}
@@ -409,27 +488,14 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
         </div>
       )}
 
-      {dialog ? (
-        <WorkEditorDialog
-          mode={dialog.mode}
-          onClose={() => setDialog(null)}
-          onSaved={() => {
-            setDialog(null);
-            refresh();
-          }}
-          projects={projects}
-          work={dialog.work}
-        />
-      ) : null}
-
       {evidenceWork ? (
         <WorkEvidenceDialog onClose={() => setEvidenceWork(null)} work={evidenceWork} />
       ) : null}
-    </section>
+    </>
   );
 }
 
-function WorkBoardHeader({ filteredCount, loadedCount, refreshing, onCreate, onQueryChange, onRefresh, query, total }) {
+function WorkBoardHeader({ onCreate, onProjectChange, onQueryChange, onRefresh, onViewChange, projectId, projects, query, view }) {
   const { t } = useI18n();
   return (
     <header className="work-ledger-header">
@@ -437,7 +503,6 @@ function WorkBoardHeader({ filteredCount, loadedCount, refreshing, onCreate, onQ
         <div className="work-ledger-kicker"><BriefcaseBusiness size={14} /> {t('board.ledger')}</div>
         <div className="work-ledger-heading-row">
           <h1>{t('work.board')}</h1>
-          <span>{filteredCount === loadedCount ? t('board.count', { loaded: loadedCount, total }) : t('board.filteredCount', { filtered: filteredCount, loaded: loadedCount, total })}</span>
         </div>
       </div>
       <div className="work-ledger-actions">
@@ -451,8 +516,18 @@ function WorkBoardHeader({ filteredCount, loadedCount, refreshing, onCreate, onQ
             value={query}
           />
         </label>
-        <button aria-busy={refreshing} className="work-action-secondary" disabled={refreshing} onClick={onRefresh} type="button">
-          <RefreshCw className={refreshing ? 'animate-spin' : ''} size={14} /> {t('work.refresh')}
+        {projects.length > 1 ? (
+          <select aria-label="按项目筛选" className="form-control work-header-project" onChange={event => onProjectChange(event.target.value)} value={projectId}>
+            <option value="">全部项目</option>
+            {projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}
+          </select>
+        ) : null}
+        <div className="work-view-toggle" role="group" aria-label="视图">
+          <button aria-label="列表视图" aria-pressed={view === 'list'} onClick={() => onViewChange('list')} title="列表" type="button"><List size={14} /></button>
+          <button aria-label="看板视图" aria-pressed={view === 'board'} onClick={() => onViewChange('board')} title="看板" type="button"><Columns3 size={14} /></button>
+        </div>
+        <button aria-label={t('work.refresh')} className="work-action-secondary work-action-icon" onClick={onRefresh} title={t('work.refresh')} type="button">
+          <RefreshCw size={14} />
         </button>
         <button className="work-action-primary" onClick={onCreate} type="button">
           <Plus size={16} /> {t('board.newWork')}
@@ -542,19 +617,19 @@ function WorkColumn({
 
 function WorkColumnEmpty({ loadState, onRetry }) {
   if (loadState === 'not_loaded') {
-    return <div className="work-column-empty">滚动到此列后加载历史工作项</div>;
+    return <div className="work-column-empty">滚动到此列后加载历史任务</div>;
   }
   if (loadState === 'loading') {
-    return <div className="work-column-empty">正在加载历史工作项…</div>;
+    return <div className="work-column-empty">正在加载历史任务…</div>;
   }
   if (loadState === 'error') {
     return (
       <button className="work-column-load-more" onClick={onRetry} type="button">
-        历史工作项加载失败，重试
+        历史任务加载失败，重试
       </button>
     );
   }
-  return <div className="work-column-empty">此列暂无工作项</div>;
+  return <div className="work-column-empty">此列暂无任务</div>;
 }
 
 function mergeWorks(current, incoming) {
@@ -671,20 +746,6 @@ function dragPayload(value) {
   } catch {
     return null;
   }
-}
-
-async function moveWorkAfterDrop(work, targetStatus) {
-  const issueId = issueIdFromWorkId(work.id);
-  if (!issueId) throw new Error('当前 Work 没有可写的 Issue authority');
-  const operation = workDropOperation(work.status, targetStatus);
-  if (operation === 'none') return { operation, status: work.status };
-  if (operation === 'blocked') throw new Error('该状态由执行或验收流程推进，不能手动拖入');
-  let result;
-  if (operation === 'enqueue') result = await workApi.enqueueIssue(issueId);
-  else if (operation === 'retry') result = await workApi.retryIssue(issueId);
-  else if (operation === 'cancel') result = await workApi.cancelIssue(issueId);
-  else result = await workApi.updateIssue(issueId, { status: targetStatus });
-  return { operation, status: result?.status || targetStatus };
 }
 
 function workColumnDropState(draggingWork, draggedOverStatus, status) {

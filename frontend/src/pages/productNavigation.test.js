@@ -35,6 +35,9 @@ test('product navigation has one ordered Xuanwu identity and centralized labels'
   assert.deepEqual(new Set(PRODUCT_NAV_ITEMS.map(item => item.availability)), new Set(['available', 'compatibility']));
   assert.equal(PRODUCT_NAV_ITEMS.find(item => item.page === 'settings')?.placement, 'footer');
   assert.equal(PRODUCT_NAV_ITEMS.find(item => item.page === 'analytics')?.placement, 'footer');
+  assert.equal(PRODUCT_NAV_ITEMS.find(item => item.page === 'automations')?.placement, 'subview');
+  assert.equal(productNavPageForRoute('automations'), 'work');
+  assert.equal(productNavPageForRoute('cron'), 'work');
   assert.doesNotMatch(sidebarSource, /PI_ASSISTANT_NAV_ITEMS|PRODUCT_TERMS\.supervisor|pi-assistant-nav/);
 });
 
@@ -81,7 +84,7 @@ test('App routes canonical pages to the currently verified compatibility surface
   assert.match(appSource, /workIdFromIssueId\(issueId\)/);
   assert.match(appSource, /currentPage === 'command-center'[\s\S]*<Dashboard navigateTo=\{navigateTo\} \/>/);
   assert.match(appSource, /currentPage === 'ask-xuanwu'[\s\S]*<PiChat[\s\S]*initialConversationId=\{selectedPiConversationId\}[\s\S]*onConversationChange=\{rememberPiConversation\}/);
-  assert.match(appSource, /currentPage === 'automations'[\s\S]*<Automations \/>/);
+  assert.match(appSource, /currentPage === 'automations'[\s\S]*<TaskSubviewTabs active="automations"[\s\S]*<Automations \/>/);
   assert.doesNotMatch(appSource, /pages\/Connections|currentPage === 'connections'/);
   assert.match(appSource, /currentPage === 'settings'[\s\S]*settingsSection \|\| 'general'/);
   assert.doesNotMatch(appSource, /currentPage === 'projects'|<Projects/);

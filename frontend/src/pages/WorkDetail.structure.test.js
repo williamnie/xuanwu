@@ -36,8 +36,8 @@ test('Task process reuses the complete Run view instead of a reduced transcript'
   assert.doesNotMatch(runsPage, /navigateTo\('work', run\.work_id/);
 });
 
-test('Work Board stays board-only and opens canonical Work Detail', () => {
-  assert.doesNotMatch(board, /onViewChange|WorkList|work-view-toggle/);
+test('Task page lists and boards tasks and opens canonical Work Detail', () => {
+  assert.match(board, /onViewChange/);
   assert.match(board, /WORK_BOARD_STATUSES\.map\(status =>/);
   assert.match(board, /navigateTo\('work', work\.id\)/);
   assert.doesNotMatch(board, /navigateTo\('issues', issueId\)/);

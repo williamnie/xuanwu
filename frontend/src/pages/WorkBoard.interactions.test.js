@@ -6,6 +6,7 @@ const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('./WorkBoard.css', import.meta.url), 'utf8');
 const composerCss = readFileSync(new URL('../components/GlobalAskComposer.css', import.meta.url), 'utf8');
 const editorDialog = readFileSync(new URL('./work/WorkEditorDialog.jsx', import.meta.url), 'utf8');
+const actions = readFileSync(new URL('./work/workActions.js', import.meta.url), 'utf8');
 
 test('new Work goal uses the image-capable prompt composer', () => {
   assert.match(editorDialog, /<PromptEditor[\s\S]*onChange=\{value => setField\('goal', value\)\}[\s\S]*variant="composer"/);
@@ -13,10 +14,12 @@ test('new Work goal uses the image-capable prompt composer', () => {
   assert.match(css, /\.work-dialog-field \.prompt-editor-shell\.composer/);
 });
 
-test('new Work makes the title optional and calls the executor choice Code Agent', () => {
+test('new task keeps the title optional and calls the executor choice a preset', () => {
   assert.match(editorDialog, /<span>\{t\('editor\.title'\)\} <small>（可选）<\/small><\/span>/);
-  assert.doesNotMatch(editorDialog, /onChange=\{event => setField\('title', event\.target\.value\)\} required/);
-  assert.match(editorDialog, /<span>Code Agent<\/span>/);
+  assert.doesNotMatch(editorDialog, /onChange=\{event => onChange\(event\.target\.value\)\} required/);
+  assert.match(editorDialog, /<span>\{t\('work\.profile\.preset'\)\}<\/span>/);
+  assert.match(editorDialog, /setField\('status', event\.target\.checked \? 'todo' : 'triage'\)/);
+  assert.doesNotMatch(editorDialog, /Effective:|Work 显式/);
   assert.match(editorDialog, /<AgentProfileSelectOptions/);
   assert.match(editorDialog, /draft\.agent_profile_id === \(work\?\.agent_profile_id \|\| ''\)/);
 });
@@ -25,11 +28,13 @@ test('Work Board cards restore drag and drop through guarded Issue actions', () 
   assert.match(board, /draggable=\{!moving\}/);
   assert.match(board, /onDrop=\{event => onDrop\(event, status\)\}/);
   assert.match(board, /workDropOperation\(work\.status, targetStatus\)/);
-  assert.match(board, /operation === 'enqueue'[\s\S]*workApi\.enqueueIssue\(issueId\)/);
-  assert.match(board, /operation === 'retry'[\s\S]*workApi\.retryIssue\(issueId\)/);
-  assert.match(board, /operation === 'cancel'[\s\S]*workApi\.cancelIssue\(issueId\)/);
-  assert.match(board, /workApi\.updateIssue\(issueId, \{ status: targetStatus \}\)/);
-  assert.match(board, /该状态由执行或验收流程推进，不能手动拖入/);
+  assert.match(board, /executeWorkMove\(work, targetStatus\)/);
+  assert.match(actions, /workDropOperation\(work\.status, targetStatus\)/);
+  assert.match(actions, /operation === 'enqueue'[\s\S]*workApi\.enqueueIssue\(issueId\)/);
+  assert.match(actions, /operation === 'retry'[\s\S]*workApi\.retryIssue\(issueId\)/);
+  assert.match(actions, /operation === 'cancel'[\s\S]*workApi\.cancelIssue\(issueId\)/);
+  assert.match(actions, /workApi\.updateIssue\(issueId, \{ status: targetStatus \}\)/);
+  assert.match(board, /t\('board\.dropBlocked'\)/);
 });
 
 test('Work Board keeps the viewport fixed and scrolls each lane independently', () => {
@@ -51,8 +56,8 @@ test('Work Board opens from one grouped snapshot and loads only the scrolled lan
   assert.match(board, /HISTORY_STATUSES\.includes\(status\)/);
   assert.match(board, /normalizeLanePage\([^\n]+, response\?\.page_size \|\| 20, 'not_loaded'\)/);
   assert.match(board, /IntersectionObserver/);
-  assert.match(board, /loadState === 'not_loaded'[\s\S]*滚动到此列后加载历史工作项/);
-  assert.match(board, /loadState === 'error'[\s\S]*历史工作项加载失败，重试/);
+  assert.match(board, /loadState === 'not_loaded'[\s\S]*滚动到此列后加载历史任务/);
+  assert.match(board, /loadState === 'error'[\s\S]*历史任务加载失败，重试/);
 });
 
 test('Work Board silently refreshes every five seconds without overlapping requests', () => {
@@ -73,10 +78,13 @@ test('Work Board avoids learned intrinsic card heights that move the lane scroll
   assert.match(css, /\.work-column-stack\s*\{[\s\S]*scrollbar-gutter:\s*stable;/);
 });
 
-test('Work Board keeps search in the header, exposes board only, and does not lose height to the global composer', () => {
+test('Task page keeps search in the header, defaults to the list and keeps the board one click away', () => {
   assert.doesNotMatch(board, /work-ledger-stats|CompatibilityNotice/);
   assert.match(board, /className="work-header-search"/);
   assert.match(board, /aria-label=\{t\('board\.search'\)\}/);
-  assert.doesNotMatch(board, /WorkFilters|WorkList|onViewChange|work-filter-toggle/);
+  assert.match(board, /localStorage\.getItem\(TASK_VIEW_STORAGE_KEY\) === 'board' \? 'board' : 'list'/);
+  assert.match(board, /view === 'list' \? \([\s\S]*<TaskList[\s\S]*<WorkKanban/);
+  assert.match(board, /<TaskSubviewTabs active="work"/);
+  assert.doesNotMatch(board, /board\.count|board\.filteredCount/);
   assert.doesNotMatch(composerCss, /\.main-content\.has-global-ask-composer\s*\{/);
 });

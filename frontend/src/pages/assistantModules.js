@@ -27,7 +27,8 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
     page: 'automations',
     label: PRODUCT_NAV_LABELS.automations,
     icon: 'automations',
-    placement: 'primary',
+    placement: 'subview',
+    parent: 'work',
     availability: 'compatibility',
   },
   {
@@ -79,7 +80,8 @@ export function resolveProductPage(page, { workBoardEnabled = true } = {}) {
 export function productNavPageForRoute(page) {
   const resolvedPage = PRODUCT_COMPAT_ROUTE_REDIRECTS[page] || page;
   if (isAssistantModulePage(resolvedPage)) return 'settings';
-  return resolvedPage;
+  // 子视图（如自动化）在侧栏中高亮所属的一级页面。
+  return PRODUCT_NAV_ITEMS.find(item => item.page === resolvedPage && item.placement === 'subview')?.parent || resolvedPage;
 }
 
 export const PI_ASSISTANT_CONFIG_MODULES = [
