@@ -15,3 +15,10 @@ test("path validation distinguishes nonexistent/file/directory/Git without shell
   expect((await validateProjectPath(`${root}/$(touch unwanted)`)).exists).toBe(false);
  } finally {rmSync(root,{recursive:true,force:true});}
 });
+
+test("Git ownership and availability failures do not claim the directory is not a repository", async () => {
+ const {projectGitFailureReason}=await import("./projectPathValidation.ts");
+ expect(projectGitFailureReason({stderr:"fatal: detected dubious ownership; safe.directory"})).toContain("Git 拒绝读取");
+ expect(projectGitFailureReason({code:"ENOENT"})).toContain("Git 不可用");
+ expect(projectGitFailureReason({stderr:"fatal: not a git repository"})).toBe("这个目录不是 Git 仓库");
+});

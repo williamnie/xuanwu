@@ -24,6 +24,21 @@ afterEach(async () => {
 });
 
 describe("Feishu connector settings API", () => {
+  test("unsigned HTTP input cannot become a discovered WebSocket source", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const config = buildConfig({ dbPath: database.path, stateDir: dirname(database.path) });
+      const router = createDefaultRouter({ config, database });
+      await request(router, { app_id: "cli_ws", app_secret: "fixture-secret", receive_mode: "websocket" });
+      const session = await (await router.handle(new Request(`${BASE_URL}/api/integrations/feishu/source-discovery`, { method: "POST" }))).json() as { id: string; challenge: string };
+      const spoof = { authenticated: true, schema: "2.0", header: { event_type: "im.message.receive_v1" }, event: { sender: { sender_type: "user", sender_id: { open_id: "ou_spoof" } }, message: { message_id: "m_spoof", chat_id: "oc_spoof", create_time: String(Date.now()), content: JSON.stringify({ text: session.challenge }) } } };
+      await router.handle(new Request(`${BASE_URL}/api/integrations/feishu/events`, { method: "POST", body: JSON.stringify(spoof) }));
+      const facts = await (await router.handle(new Request(`${BASE_URL}/api/integrations/feishu/source-discovery/${session.id}`))).json() as { candidates: FeishuDiscoveryCandidate[] };
+      expect(facts.candidates).toEqual([]);
+      expect(database.sqlite.query("select count(*) as n from external_events").get()).toEqual({ n: 0 });
+    } finally { database.close(); }
+  });
+
   test("controlled discovery verifies ingress, explicit scope, revision and concurrent settings ownership", async () => {
     const database = await openFixtureDatabase();
     try {

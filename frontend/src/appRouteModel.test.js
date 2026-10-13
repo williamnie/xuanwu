@@ -50,7 +50,7 @@ test('keeps existing plain Work deep links compatible', () => {
   assert.deepEqual(appRouteFromHash('#/work/xw%3Awork%3Aissues%3A917'), {
     ...DEFAULT_APP_ROUTE,
     currentPage: 'tasks',
-    focusFilter: 'active',
+    focusFilter: 'all',
     selectedWorkId: 'xw:work:issues:917',
   });
 });
@@ -69,7 +69,7 @@ test('preserves legacy route redirects and issue filters when Work board is disa
   assert.deepEqual(appRouteFromHash('#/issues?issueId=42'), {
     ...DEFAULT_APP_ROUTE,
     currentPage: 'tasks',
-    focusFilter: 'active',
+    focusFilter: 'all',
     selectedWorkId: 'xw:work:issues:42',
   });
   assert.deepEqual(appRouteFromHash('#/sessions?sessionId=provider-session'), {

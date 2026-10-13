@@ -139,6 +139,7 @@ async function acceptMessageEvent(
   try {
     const event = normalizeFeishuMessageEvent(body, { rawEventRef: rawRef });
     const ingest = ingestFeishuMessageEvent(body, context, {
+      authenticated: Boolean(context.config.verificationToken || context.config.encryptKey),
       encrypted,
       rawPayloadRef: rawRef,
       transport: "callback"

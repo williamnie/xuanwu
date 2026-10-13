@@ -68,7 +68,7 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
     route.selectedWorkId = pathEntity || routeParam(params, 'workId');
     route.selectedRunId = routeParam(params, 'runId');
     route.filterProject = routeParam(params, 'project');
-    route.focusFilter = params.has('focus') ? focusFilterParam(params) : 'active';
+    route.focusFilter = params.has('focus') ? focusFilterParam(params) : requestedPage === 'tasks' ? 'active' : 'all';
     route.taskQuery = routeParam(params, 'query');
     route.taskSource = routeParam(params, 'source') === 'github' ? 'github' : '';
     route.taskView = routeParam(params, 'view') === 'board' ? 'board' : 'list';
@@ -110,7 +110,7 @@ export function appHashForRoute(route) {
   const params = new URLSearchParams();
   if (page === 'tasks') { if (workId) params.set('workId', workId); if (route.selectedRunId) params.set('runId', route.selectedRunId); if (route.filterProject) params.set('project', route.filterProject); }
   if (page === 'tasks') {
-    if (FOCUS_FILTERS.has(route.focusFilter) && route.focusFilter !== 'all') params.set('focus', route.focusFilter);
+    params.set('focus', FOCUS_FILTERS.has(route.focusFilter) ? route.focusFilter : 'active');
     if (route.taskQuery) params.set('query', route.taskQuery);
     if (route.taskSource === 'github') params.set('source', route.taskSource);
     if (route.taskView === 'board') params.set('view', 'board');

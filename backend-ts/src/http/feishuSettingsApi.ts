@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { startFeishuDiscovery, readFeishuDiscovery, consumeFeishuDiscovery } from "../integrations/feishuSourceDiscovery.ts";
 import { dirname } from "node:path";
 import type { RunnerConfig } from "../config/env.ts";
@@ -264,8 +264,10 @@ function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
 
+// 服务端进程私有随机密钥避免对公开字段与秘密提供离线校验 oracle。
+const revisionKey = randomBytes(32);
 export function feishuSettingsRevision(config: FeishuConnectorConfig): string {
-  return createHash("sha256").update(JSON.stringify(localSettingsFromConfig(config))).digest("hex");
+  return createHmac("sha256", revisionKey).update(JSON.stringify(localSettingsFromConfig(config))).digest("hex");
 }
 
 function discoveryID(request: Request): string {

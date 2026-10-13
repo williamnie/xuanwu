@@ -17,6 +17,16 @@ export async function validateProjectPath(value: string): Promise<{ path: string
   try {
     const { stdout } = await execFileAsync("git", ["-C", path, "rev-parse", "--is-inside-work-tree"], { encoding: "utf8", timeout: 5000, maxBuffer: 4096 });
     result.is_git_repository = stdout.trim() === "true";
-  } catch { return { ...result, reason: "这个目录不是 Git 仓库" }; }
+  } catch (error) { return { ...result, reason: projectGitFailureReason(error) }; }
   return result;
+}
+
+
+export function projectGitFailureReason(error: unknown): string {
+  const failure = error as { code?: string | number; stderr?: string; killed?: boolean };
+  if (/dubious ownership|safe\.directory/i.test(failure.stderr || "")) return "Git 拒绝读取目录，请在运行机器上核对目录归属或 safe.directory 配置";
+  if (/not a git repository/i.test(failure.stderr || "")) return "这个目录不是 Git 仓库";
+  if (failure.code === "ENOENT") return "Git 不可用，暂时无法检查仓库";
+  if (failure.killed || failure.code === "ETIMEDOUT") return "Git 检查超时，请重试";
+  return "无法确认 Git 仓库身份，请检查运行机器的 Git 配置与访问权限";
 }

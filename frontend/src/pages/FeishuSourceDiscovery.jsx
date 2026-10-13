@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { connectorsApi } from '../api/connectors.js';
-export default function FeishuSourceDiscovery({ remote, dirty, onAuthorized }) {
+export default function FeishuSourceDiscovery({ remote, dirty, onAuthorized, onBusy }) {
   const [session, setSession] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const operate = async operation => {
-    setBusy(true); setError('');
-    try { await operation(); } catch (failure) { setError(failure.message || '来源发现失败'); } finally { setBusy(false); }
+    setBusy(true); onBusy?.(true); setError('');
+    try { await operation(); } catch (failure) { setError(failure.message || '来源发现失败'); } finally { setBusy(false); onBusy?.(false); }
   };
   const authorize = (candidate, scope) => operate(async () => {
     const next = await connectorsApi.authorizeFeishuSource(session.id, { candidate_id: candidate.id, scope, expected_revision: remote.revision });

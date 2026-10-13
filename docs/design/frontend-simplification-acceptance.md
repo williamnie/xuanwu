@@ -107,3 +107,25 @@ D 结果：新来源筛选由同一数据库谓词完成计数/分页/游标，�
 最终自查补回已关联任务的 Run 中断/继续/重试入口：位于过程的“执行操作”，复用既有 RunContextBar、run/attempt revision 和审计接口；历史 Attempt 或没有确定归属时保持只读。Run 切换立即清空旧记录并使旧请求失效。最终评审按精确分支与 commit 进行，由 Claude 自行 fetch/diff；不传输整份代码。
 
 最终前端 692 项（172 文件）通过，lint/build 再次通过。浏览器补验：旧 Attempt 不出现执行操作；当前 Attempt 的中断请求提交 run revision=9、attempt revision=7 与新审计 ID，返回后显示审计已提交。第一次 control fixture 漏了 API 的 actions 路径段，修正精确路径并刷新后原用例通过。
+
+
+## 最终 Claude 评审及修复
+
+Claude 在 hermes 只读 fetch/show/diff 评审了 `7f11f96b`，没有修改工作区、没有运行测试。发现 3 个需修复项，另有 4 个低风险观察和 1 个方案层面差异。
+
+| 项目 | 处理和证据 |
+|---|---|
+| 1：all 链接丢失，旧 work 默认变 active | tasks 显式写 focus；旧 work/issue 无 focus 保持 all，新 tasks 默认 active。合同测试及 Chromium 复制/刷新、旧默认值复验通过 |
+| 2：日志刷新覆盖后续页、全量读取过频 | 仅订阅状态/审核事件，2 秒合并；追加页与正在加载时标记更新；定时刷新只作用于未追加页的空闲列表。相同保护应用任务列表。真实 EventSource fixture 发出 40 条 issue.log 与状态事件，两处 105 行均保留；追加两页只发两次读取，显式刷新后才重置 |
+| 3：无盐秘密摘要公开 | 使用服务端进程私有 randomBytes(32) 密钥进行 HMAC，不公开密钥；同一进程 revision 稳定，秘密变化仍触发版本冲突。进程重启时旧 revision 失效，需重新读取；发现会话本身也是易失状态 |
+| 4：时间格式混用 | 排序和同 key 新旧比较先将 SQLite UTC 与 ISO 时区时间转换为 epoch；UTC/offset 混用测试通过 |
+| 5：Run 失败/无 Attempt 保持 loading | 响应不匹配、读取错误、无尝试均结束加载；Chromium 500/空尝试用例不再出现持续 spinner |
+| 6：单 Attention 查询仍做完整来源读取 | 低风险性能观察已记录；本次保留完整 alias/authority 解析，避免引入定点查询漏项。减少自动全量查询触发后，不再随 provider 日志反复扫描；大历史下定点查询优化另行处理 |
+| 7：Git 归属错误误报非仓库 | 区分 dubious ownership/safe.directory、Git 不可用、超时、非仓库与未知检查失败；定向测试通过 |
+| 8：部分 HumanReview kind 的按钮少于底层三种动作 | 按已确认方案 5.3 的每种请求按钮保持实现；底层 API 未收窄。评审确认属于方案差异，非本轮阻塞，未自行改变产品决定 |
+
+修复后前端 695 项通过，后端相关 32 项通过；lint/build/仓库卫生通过，TS 153 条基线诊断无新增。所有浏览器请求仍为隔离 fixture，没有向在线服务提交业务操作。修复 commit 推送后，仅发送 commit/diff 引用给原 Claude 会话复核。
+
+补充传输边界：只有接收器的已认证 WebSocket 消息，或已通过 token/签名校验的 HTTP 回调，能捕获发现候选。长连接配置下空 token 的 HTTP 请求不能冒充 WebSocket（包括伪造 authenticated=true）；挑战消息仍不入普通消息库。发现/授权请求期间禁用同一配置表单，防止响应覆盖中途编辑。新增安全用例及全部飞书相关 171 项通过。
+
+修复版最终完整后端 2783 项（486 文件、6 snapshots）通过；前端 695 项（173 文件）与 lint/build 通过。Golden Journeys、仓库卫生、diff check 通过；TS 153 条诊断与原基线一致。浏览器延迟授权用例确认写入期间表单不可编辑、返回后恢复，避免覆盖中途草稿。

@@ -34,3 +34,11 @@ test('conversation and bare/prefixed settings links survive serialization', () =
     assert.deepEqual(appRouteFromHash(appHashForRoute(route)), route);
   }
 });
+
+test('all survives serialization while legacy work links without focus keep their original default', () => {
+  const all=appRouteFromHash('#/tasks?project=demo&focus=all&source=github');
+  assert.match(appHashForRoute(all),/focus=all/);
+  assert.deepEqual(appRouteFromHash(appHashForRoute(all)),all);
+  assert.equal(appRouteFromHash('#/work?project=demo').focusFilter,'all');
+  assert.equal(appRouteFromHash('#/tasks?project=demo').focusFilter,'active');
+});

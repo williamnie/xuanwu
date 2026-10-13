@@ -32,7 +32,7 @@ export function captureFeishuDiscovery(database: RunnerDatabase, event: FeishuNo
     if (!duplicate && session.candidates.length < 10) session.candidates.push({ id: crypto.randomUUID(), chat_id: event.chat_id, chat_type: event.chat_type, user_id: event.sender.open_id, message_id: event.message_id });
     return true;
   }
-  return /^xuanwu-connect-[0-9a-f-]{36}$/.test(event.text.replace(/@_user_\d+/g, "").trim());
+  return isFeishuDiscoveryChallenge(event);
 }
 export function consumeFeishuDiscovery(database: RunnerDatabase, id: string): void {
   const session = store(database, Date.now()).get(id);
@@ -40,4 +40,8 @@ export function consumeFeishuDiscovery(database: RunnerDatabase, id: string): vo
 }
 function publicSession(session: Session) {
   return { config_revision: session.config_revision, id: session.id, challenge: session.challenge, expires_at: session.expires_at, candidates: session.candidates.map(item => ({ ...item })), consumed: session.consumed };
+}
+
+export function isFeishuDiscoveryChallenge(event: FeishuNormalizedMessageEvent): boolean {
+  return /^xuanwu-connect-[0-9a-f-]{36}$/.test(event.text.replace(/@_user_\d+/g, "").trim());
 }

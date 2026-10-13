@@ -140,6 +140,7 @@ export function createFeishuReceiverManager(options: FeishuReceiverManagerOption
     try {
       const normalized = normalizeFeishuMessageEvent(event, { rawEventRef: rawRef });
       const result = ingestFeishuMessageEvent(event, receiverContext(config), {
+        authenticated: true,
         rawPayloadRef: rawRef,
         transport: "websocket"
       });

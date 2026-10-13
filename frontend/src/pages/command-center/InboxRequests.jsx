@@ -1,3 +1,4 @@
+import { inboxRefreshDecision } from "./inboxRefreshModel.js";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { commandCenterApi } from '../../api/commandCenter.js';
@@ -13,24 +14,47 @@ import './InboxRequests.css';
 const LegacyAttention = lazy(() => import('./AttentionSection.jsx'));
 
 export default function InboxRequests({ navigateTo, onCreate, workId = '', embedded = false }) {
-  const [state,setState] = useState({ items: [], loading: true, error: '', next: '', complete: false, unsupported: false });
+  const [state,setState] = useState({ items: [], loading: true, error: '', next: '', complete: false, unsupported: false, updated: false });
   const request = useRef(null);
+  const refreshState = useRef({loading:false,paged:false});
+  const eventVersion = useRef(0);
   const load = useCallback(async (cursor = '') => {
+    refreshState.current.loading = true;
+    if (cursor) refreshState.current.paged = true;
+    const version = eventVersion.current;
     request.current?.abort(); const controller = new AbortController();request.current = controller;
     setState(current=>({...current,loading:true,error:''}));
     try {
       const result = await commandCenterApi.getInbox({cursor,workId}, {signal:controller.signal});
       if(controller.signal.aborted)return;
       if(result.complete !== true) throw new Error('完整待处理数据暂不可用，当前结果不能代表全部事项');
-      setState(current=>({items:cursor?mergeInboxPages(current.items,result.items||[]):result.items||[],loading:false,error:'',next:result.next_cursor||'',complete:true,unsupported:false}));
+      if (!cursor) refreshState.current.paged = false;
+      setState(current=>({updated:(cursor && current.updated) || eventVersion.current !== version,items:cursor?mergeInboxPages(current.items,result.items||[]):result.items||[],loading:false,error:'',next:result.next_cursor||'',complete:true,unsupported:false}));
     } catch(error){if(!controller.signal.aborted)setState(current=>({...current,loading:false,error:error.message,complete:false,unsupported:error.status===404}));}
+    finally { if (request.current === controller) refreshState.current.loading = false; }
   },[workId]);
-  useEffect(()=>{load();return()=>request.current?.abort();},[load]);
-  useEffect(()=>{let timer=0;const refresh=()=>{if(!timer)timer=setTimeout(()=>{timer=0;load();},300);};const unsubscribe=eventsApi.subscribeToEvents(event=>{if(/^(issue\.|approval\.|pi\.)/.test(event.type))refresh();});const interval=setInterval(()=>{if(document.visibilityState==='visible')load();},30000);return()=>{unsubscribe();clearTimeout(timer);clearInterval(interval);};},[load]);
+  useEffect(()=>{refreshState.current={loading:false,paged:false};load();return()=>request.current?.abort();},[load]);
+  useEffect(()=>{
+    let timer=0;
+    const notify=()=>setState(current=>({...current,updated:true}));
+    const unsubscribe=eventsApi.subscribeToEvents(event=>{
+      const decision=inboxRefreshDecision(event.type,refreshState.current);
+      if(decision==='ignore')return;
+      eventVersion.current += 1;
+      if(decision==='notify'){notify();return;}
+      if(!timer)timer=setTimeout(()=>{
+        timer=0;
+        if(refreshState.current.loading||refreshState.current.paged)notify();else load();
+      },2000);
+    });
+    const interval=setInterval(()=>{if(document.visibilityState==='visible'&&!refreshState.current.loading&&!refreshState.current.paged)load();},30000);
+    return()=>{unsubscribe();clearTimeout(timer);clearInterval(interval);};
+  },[load]);
   const items=embedded?state.items.filter(item=>item.source==='attention'):state.items;
-  if(embedded && !state.error && !state.loading && !items.length && !state.next) return null;
+  if(embedded && !state.error && !state.loading && !items.length && !state.next && !state.updated) return null;
   return <section className="inbox-requests" aria-busy={state.loading}>
     {!embedded&&<header><h2>待你处理</h2><button className="btn btn-secondary" aria-label="刷新待处理请求" disabled={state.loading} onClick={()=>load()} type="button"><RefreshCw size={14}/></button></header>}
+    {state.updated&&<p role="status">有更新，当前已加载的请求保持不变。<button className="btn btn-secondary" disabled={state.loading} onClick={()=>load()} type="button">刷新待处理列表</button></p>}
     {state.error&&<p role="alert">{state.error}<button className="btn btn-secondary" onClick={()=>load()} type="button">刷新核对</button></p>}
     {state.loading&&!items.length&&<p role="status">正在读取待处理请求…</p>}
     {!state.loading&&!state.error&&state.complete&&!items.length&&!state.next&&!embedded&&<div className="inbox-empty"><p>没有需要你处理的事</p><button className="btn btn-secondary" onClick={onCreate} type="button">新建任务</button></div>}

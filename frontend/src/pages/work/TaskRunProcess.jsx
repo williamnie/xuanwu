@@ -21,8 +21,8 @@ export default function TaskRunProcess({ runId, expectedWorkId, project, navigat
     requestVersion.current += 1;
     setRun(null); setAttemptId("");
     setState({ messages: [], evidence: [], cursor: "", evidenceCursor: "", loading: true, error: "" });
-    runsApi.getRun(runId, { signal: controller.signal }).then(result => { if (controller.signal.aborted) return; if (expectedWorkId && result.run?.work_id !== expectedWorkId) { setRunError('这次执行不属于当前任务');return; } setRun(result.run); setRunError(''); })
-      .catch(error => { if (!controller.signal.aborted) setRunError(error.message || '读取执行失败'); });
+    runsApi.getRun(runId, { signal: controller.signal }).then(result => { if (controller.signal.aborted) return; if (result.run?.id !== runId || (expectedWorkId && result.run?.work_id !== expectedWorkId)) { setRunError('这次执行不属于当前任务或响应不完整');setState(current => ({...current,loading:false}));return; } setRun(result.run); setRunError('');if (!result.run.attempts?.length) setState(current => ({...current,loading:false})); })
+      .catch(error => { if (!controller.signal.aborted) { setRunError(error.message || '读取执行失败');setState(current => ({...current,loading:false})); } });
     return () => controller.abort();
   }, [runId, expectedWorkId]);
   useEffect(() => {
@@ -70,7 +70,7 @@ export default function TaskRunProcess({ runId, expectedWorkId, project, navigat
     {run?.attempts?.length > 1 && <label>尝试<select className="form-control" aria-label="选择尝试" value={attempt?.id || ''} onChange={event => setAttemptId(event.target.value)}>{run.attempts.map(item => <option key={item.id} value={item.id}>第 {item.sequence} 次尝试 · {item.status}</option>)}</select></label>}
     {state.error && <p role="alert">部分记录暂不可用：{state.error}</p>}
     {state.loading && !state.messages.length && <p role="status">正在读取此尝试的记录…</p>}
-    {!state.loading && !state.messages.length && <p>此尝试尚无已保存的执行记录。</p>}
+    {!runError && !state.loading && !state.messages.length && <p>此尝试尚无已保存的执行记录。</p>}
     <p>以下为此执行和尝试已保存的回复记录。</p>
     {state.messages.length > 0 && <SessionTranscript session={session} project={project} navigateTo={navigateTo} liveEvents={[]} optimisticUserMessages={[]} running={false} sending={false} readOnly hasOlderTurns={Boolean(state.cursor)} loadOlderTurns={loadOlder} turnsLoading={state.loading} />}
     {state.evidenceCursor && <button className="btn btn-secondary" onClick={loadEarlierEvidence} type="button">更早验证结果</button>}

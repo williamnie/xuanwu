@@ -1,3 +1,4 @@
+import { isInboxStateEvent } from "../command-center/inboxRefreshModel.js";
 import { formatRelativeTime } from "../command-center/activeWorkModel.js";
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshCw, Search, Plus } from 'lucide-react';
@@ -31,22 +32,33 @@ export default function TaskList({ navigateTo, initialProject = '', onPageContex
   const [pending, setPending] = useState(null);
   const [busy, setBusy] = useState('');
   const request = useRef(null);
+  const refreshState = useRef({paged:false,loading:false});
   const { scope, project, query, source } = filters;
   const load = useCallback(async (cursor = '', page = 1) => {
+    refreshState.current.loading=true;
+    if (cursor || page > 1) refreshState.current.paged=true;
     request.current?.abort();
     const controller = new AbortController();request.current = controller;
     setState(current => ({ ...current, loading: true, error: '' }));
     try {
       const result = await workApi.getWorks({ cursor, page, projectId: project, query, source, statuses: TASK_FILTERS[scope], includeDiagnostics: true }, { signal: controller.signal });
       if (controller.signal.aborted) return;
-      setState(current => ({ items: cursor || page > 1 ? [...current.items, ...(result.items || [])] : result.items || [], loading: false, error: '', next: result.next_cursor || '', page: result.page || page, more: result.has_more === true }));
+      if (!cursor && page === 1) refreshState.current.paged=false;
+      setState(current => ({ updated:cursor || page > 1 ? current.updated : false,items: cursor || page > 1 ? [...current.items, ...(result.items || [])] : result.items || [], loading: false, error: '', next: result.next_cursor || '', page: result.page || page, more: result.has_more === true }));
     } catch (error) { if (!controller.signal.aborted) setState(current => ({ ...current, loading: false, error: error.message || '读取任务失败' })); }
+    finally { if(request.current===controller)refreshState.current.loading=false; }
   }, [project, query, scope, source]);
   useEffect(() => { load(); return () => request.current?.abort(); }, [load]);
   useEffect(() => {
-    const unsubscribe = eventsApi.subscribeToEvents(event => { if (String(event.type).startsWith('issue.') && !request.current?.signal.aborted) load(); });
-    const interval = setInterval(() => { if (document.visibilityState === 'visible') load(); }, 30000);
-    return () => { unsubscribe(); clearInterval(interval); };
+    let timer=0;
+    const notify=()=>setState(current=>({...current,updated:true}));
+    const unsubscribe=eventsApi.subscribeToEvents(event=>{
+      if(!isInboxStateEvent(event.type))return;
+      if(refreshState.current.paged||refreshState.current.loading){notify();return;}
+      if(!timer)timer=setTimeout(()=>{timer=0;if(refreshState.current.paged||refreshState.current.loading)notify();else load();},2000);
+    });
+    const interval=setInterval(()=>{if(document.visibilityState==='visible'&&!refreshState.current.paged&&!refreshState.current.loading)load();},30000);
+    return()=>{unsubscribe();clearTimeout(timer);clearInterval(interval);};
   }, [load]);
   useEffect(() => { onPageContextChange?.({ page_id: 'tasks', project_id: project }); }, [onPageContextChange, project]);
   const perform = async (work, target) => {
@@ -66,6 +78,7 @@ export default function TaskList({ navigateTo, initialProject = '', onPageContex
       <select className="form-control" aria-label="按来源筛选" value={source} onChange={event=>setFilters(current=>({...current,source:event.target.value}))}><option value="">全部来源</option><option value="github">GitHub</option></select>
       <label><Search size={14}/><input className="form-control" aria-label="搜索任务" placeholder="搜索任务" value={query} onChange={event=>setFilters(current=>({...current,query:event.target.value}))}/></label>
     </div>
+    {state.updated && <p role="status">任务有更新，已加载的列表保持不变。<button className="btn btn-secondary" disabled={state.loading} onClick={()=>load()} type="button">刷新任务列表</button></p>}
     {state.error && <div role="alert">{state.error}<button className="btn btn-secondary" onClick={()=>load()} type="button">重试</button></div>}
     {state.loading && !state.items.length && <p role="status">正在读取任务…</p>}
     {!state.error && !state.loading && !state.items.length && <div className="task-list-empty"><p>这里还没有任务</p><button className="btn btn-secondary" onClick={()=>onCreate(project)} type="button">新建任务</button></div>}

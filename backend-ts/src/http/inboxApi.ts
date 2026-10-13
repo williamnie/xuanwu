@@ -54,7 +54,7 @@ export function readCompleteInbox(db: RunnerDatabase, request: Request, projecti
   const add = (seed: Seed) => {
     if (workId && seed.work_id !== workId && !seed.work_ids?.includes(workId)) return;
     const current = byKey.get(seed.key);
-    if (!current || current.updated_at < seed.updated_at) byKey.set(seed.key, seed);
+    if (!current || inboxTimestamp(current.updated_at) < inboxTimestamp(seed.updated_at)) byKey.set(seed.key, seed);
   };
   for (const item of listPersistedAttention(db, { complete: true })) {
     if (!["open","waiting"].includes(item.status)) continue;
@@ -97,7 +97,7 @@ export function readCompleteInbox(db: RunnerDatabase, request: Request, projecti
     const source = issue.status === "failed" ? "failed_work" : "assistant_waiting";
     add({ key: `${source}:${issue.id}`, source, work_id: issueIDToWorkID(issue.id), issue_id: issue.id, failure_reason: redactAuditText(issue.error || ''), updated_at: issue.updated_at, revision: 0 });
   }
-  const seeds = [...byKey.values()].sort((a,b) => b.updated_at.localeCompare(a.updated_at) || a.key.localeCompare(b.key));
+  const seeds = [...byKey.values()].sort((a,b) => inboxTimestamp(b.updated_at) - inboxTimestamp(a.updated_at) || a.key.localeCompare(b.key));
   const fingerprint = createHash("sha256").update(JSON.stringify({ workId, seeds: seeds.map(seed => [seed.key, seed.updated_at, seed.revision]) })).digest("hex");
   const offset = parseCursor(params.get("cursor") || "", fingerprint);
   const selected = seeds.slice(offset, offset + pageSize);
@@ -146,4 +146,12 @@ function proposalWorkIDs(db: RunnerDatabase, id: string): string[] {
     if (action.type.startsWith("issue.") && typeof payload.issue_id === "number" && Number.isSafeInteger(payload.issue_id) && payload.issue_id > 0) ids.add(issueIDToWorkID(payload.issue_id));
   }
   return [...ids].sort();
+}
+
+
+export function inboxTimestamp(value: string): number {
+  // SQLite legacy UTC 时间与带时区的 ISO 时间先对齐，再排序。
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value) ? `${value.replace(" ", "T")}Z` : value;
+  const timestamp = Date.parse(normalized);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
