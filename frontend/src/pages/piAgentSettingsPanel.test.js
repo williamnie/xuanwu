@@ -18,22 +18,23 @@ test('Supervisor settings drop the read-only prompt summary and keep instruction
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
 });
 
-test('Xuanwu Supervisor Settings exposes revisioned presentation-only Persona controls', () => {
-  assert.match(panelSource, /对话与通知表达风格/);
-  assert.match(panelSource, /调整回复和通知的措辞/);
-  assert.match(panelSource, /不改变通知是否发送/);
-  assert.match(panelSource, /personaPersonality/);
-  assert.match(panelSource, /personaCommunicationStyle/);
-  assert.match(panelSource, /personaVerbosity/);
-  assert.match(panelSource, /personaLanguageMode/);
-  assert.match(panelSource, /生效范围：对话回复与通知内容/);
-  assert.match(stateSource, /expected_revision: form\.personaRevision/);
-  assert.match(stateSource, /err\?\.status === 409/);
-  assert.match(stateSource, /保留本地草稿供你合并/);
-  assert.match(panelSource, /配置已被更新/);
-  assert.match(panelSource, /恢复本地草稿/);
-  assert.match(panelSource, /使用服务器版本/);
-  assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
+test('Persona is edited in General by its own panel with its own revisioned save', () => {
+  const personaSource = readFileSync(new URL('./PersonaSettingsPanel.jsx', import.meta.url), 'utf8');
+  const personaModel = readFileSync(new URL('./personaSettingsModel.js', import.meta.url), 'utf8');
+  const sections = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
+  assert.match(sections, /<PersonaSettingsPanel \/>/);
+  assert.match(personaSource, /对话与通知的表达风格/);
+  assert.match(personaSource, /不改变通知是否发送/);
+  assert.match(personaSource, /assistantApi\.updatePiSupervisor\(personaPatchPayload\(form\)\)/);
+  assert.match(personaModel, /expected_revision: form\.revision/);
+  assert.match(personaSource, /saveError\?\.status === 409/);
+  assert.match(personaSource, /配置已被更新/);
+  assert.match(personaSource, /恢复本地草稿/);
+  assert.match(personaSource, /使用最新版本/);
+  assert.doesNotMatch(personaSource, /window\.confirm|window\.alert/);
+  // 助手面板不再编辑 persona，因此它的保存不会带上 persona、也不会覆盖“通用”里的草稿。
+  assert.doesNotMatch(panelSource, /ChatPersonaSettings|personaPersonality/);
+  assert.match(stateSource, /form\.personaDirty \? \{ persona:/);
 });
 
 test('Xuanwu Supervisor Settings exposes OpenAI Codex OAuth as an optional shortcut', () => {

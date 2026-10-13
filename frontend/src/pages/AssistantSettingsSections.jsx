@@ -9,6 +9,7 @@ import SourcePoliciesPanel from './SourcePoliciesPanel';
 import Projects from './Projects';
 import RemoteAccessTokenPanel from './RemoteAccessTokenPanel';
 import PiAgentSettingsPanel from './PiAgentSettingsPanel';
+import PersonaSettingsPanel from './PersonaSettingsPanel';
 import PiMcpManagementPanel from './PiMcpManagementPanel';
 import CodeAgentsPanel from './CodeAgentsPanel';
 import ConnectorDiagnosticsPanel from './ConnectorDiagnosticsPanel';
@@ -44,7 +45,7 @@ export default function SettingsTabContent({ activeTab, advancedSection, navigat
   );
 }
 
-// 编程工具与玄武助手合并为一个分区；表达风格仍与助手偏好共用一次保存，B1 先原地收起。
+// 编程工具与玄武助手合并为一个分区；表达风格已移到“通用”，由独立面板单独保存。
 function AiConnectionsTab() {
   return (
     <div className="settings-ai-page">
@@ -102,6 +103,7 @@ function PreferencesTab({ theme, toggleTheme }) {
     <div className="settings-preferences">
       <LanguageCard />
       <ThemeCard theme={theme} toggleTheme={toggleTheme} />
+      <PersonaSettingsPanel />
       <ReleaseUpdatePanel />
     </div>
   );

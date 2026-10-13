@@ -1071,3 +1071,7 @@
 .settings-notification-legacy { border-left: 2px solid var(--warning); color: var(--text-secondary); font-size: 0.72rem; margin: 0; padding: 2px 8px; }
 .settings-notify-more > summary { color: var(--text-secondary); cursor: pointer; font-size: 0.74rem; font-weight: 700; }
 .settings-notify-more[open] > summary { margin-bottom: 10px; }
+.persona-settings-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); display: grid; gap: 12px; padding: 18px; }
+.persona-settings-panel .settings-product-header h3 { align-items: center; display: inline-flex; gap: 6px; }
+.persona-save-row { align-items: center; display: flex; gap: 12px; justify-content: flex-end; }
+.persona-save-row > span { color: var(--text-muted); font-size: 0.72rem; }

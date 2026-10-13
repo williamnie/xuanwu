@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleDashed, KeyRound, Loader2, PlugZap, RefreshCw, Save, Sparkles, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, CircleDashed, KeyRound, Loader2, PlugZap, RefreshCw, Save, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { usePiAgentSettingsState } from './piAgentSettingsState';
@@ -350,7 +350,6 @@ function SupervisorBehaviorSettings({ state }) {
           <textarea className="form-control" rows={4} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
         </Field>
       </details>
-      <ChatPersonaSettings state={state} />
       <SupervisorEnableField form={state.form} updateField={state.updateField} />
       <SaveRow onSave={state.handleAgentSave} saving={state.saving} />
     </>
@@ -485,39 +484,6 @@ function ProviderSummary({ providers }) {
   );
 }
 
-function ChatPersonaSettings({ state }) {
-  const form = state.form;
-  return (
-    <details className="persona-settings-disclosure">
-      <summary><Sparkles size={16} /><span><strong>对话与通知表达风格</strong><small>调整回复和通知的措辞 · 配置版本 {form.personaRevision}</small></span></summary>
-      <div className="persona-settings-content">
-        <p className="persona-boundary-notice">这里只控制对话和通知的最终措辞，不改变通知是否发送，也不改变权限、审批、工具调用、工作项状态和完成判定。</p>
-        {state.personaConflictDraft ? <PersonaConflictNotice state={state} /> : null}
-        <label className="persona-enable-field"><input type="checkbox" checked={form.personaEnabled} onChange={(event) => state.updateField('personaEnabled', event.target.checked)} />启用自定义表达风格（默认关闭）</label>
-        <Field label={`性格描述 · ${form.personaPersonality.length}/1000`}><textarea className="form-control" maxLength={1000} rows={3} value={form.personaPersonality} onChange={(event) => state.updateField('personaPersonality', event.target.value)} /></Field>
-        <Field label={`沟通风格 · ${form.personaCommunicationStyle.length}/2000`}><textarea className="form-control" maxLength={2000} rows={4} value={form.personaCommunicationStyle} onChange={(event) => state.updateField('personaCommunicationStyle', event.target.value)} /></Field>
-        <div className="persona-select-grid">
-          <Field label="回复长度"><select className="form-control" value={form.personaVerbosity} onChange={(event) => state.updateField('personaVerbosity', event.target.value)}><option value="adaptive">自适应</option><option value="concise">简短</option><option value="detailed">详细</option></select></Field>
-          <Field label="语言"><select className="form-control" value={form.personaLanguageMode} onChange={(event) => state.updateField('personaLanguageMode', event.target.value)}><option value="system">跟随系统</option><option value="follow_user">跟随当前用户消息</option></select></Field>
-        </div>
-        <span className="persona-profile-badge">生效范围：对话回复与通知内容</span>
-      </div>
-    </details>
-  );
-}
-
-function PersonaConflictNotice({ state }) {
-  const draft = state.personaConflictDraft;
-  return (
-    <div className="persona-conflict-notice" role="status">
-      <strong>配置已被更新</strong>
-      <span>表单已显示服务器最新配置；下面保留了本地草稿，请比较后选择是否恢复并继续编辑。</span>
-      <details><summary>查看本地草稿</summary><pre>{JSON.stringify({ enabled: draft.personaEnabled, personality: draft.personaPersonality, communication_style: draft.personaCommunicationStyle, verbosity: draft.personaVerbosity, language_mode: draft.personaLanguageMode }, null, 2)}</pre></details>
-      <div><button className="btn btn-secondary" onClick={state.restorePersonaConflictDraft} type="button">恢复本地草稿</button><button className="btn btn-secondary" onClick={state.dismissPersonaConflictDraft} type="button">使用服务器版本</button></div>
-    </div>
-  );
-}
-
 function SupervisorEnableField({ form, updateField }) {
   return <label className="supervisor-enable-field"><input type="checkbox" checked={form.enabled} onChange={(event) => updateField('enabled', event.target.checked)} /> 启用玄武助手</label>;
 }
@@ -526,7 +492,7 @@ function SaveRow({ onSave, saving }) {
   return (
     <div className="supervisor-save-row">
       <button className="btn btn-primary" onClick={onSave} disabled={saving} type="button">{saving ? <Loader2 size={14} className="spin-animation" /> : <Save size={14} />} 保存运行偏好</button>
-      <span>保存名称、思考强度、长期说明与表达风格，不会改写上方连接凭据。</span>
+      <span>保存名称、思考强度与长期说明，不会改写上方连接凭据；表达风格在“通用”中单独保存。</span>
     </div>
   );
 }
