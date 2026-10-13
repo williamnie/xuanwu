@@ -1,6 +1,8 @@
 export const GITHUB_OPERATIONS = [
-  ['autoEnqueue', '自动排队调查'], ['allowFix', '允许修复'],
-  ['allowPullRequest', '允许创建 PR'], ['closeOnMerge', '合并并通过 CI 后关单'],
+  ['autoEnqueue', '自动排队调查', '带接管标签的 Issue 会自动创建调查任务并排队。'],
+  ['allowFix', '允许修复', '调查后可以在本地修改代码并验证。'],
+  ['allowPullRequest', '允许创建 PR', '修复验证通过后可以推送分支并创建 PR。'],
+  ['closeOnMerge', '合并并通过 CI 后关单', '只在 PR 已被合并且 CI 通过后关闭 Issue。'],
 ];
 export const githubPhaseLabel = value => ({ intake: '已接收', investigate: '调查', repair: '修复', needs_user: '求助 · 等待回答', review: 'PR · 等待评审', resolved: '已交付', paused: '暂停' })[value] || value || '未知';
 export const githubConnectionLabel = value => ({
@@ -15,7 +17,7 @@ export function newGitHubRepository(projectId = '') {
   return { repository: '', projectId, intakeLabel: 'xuanwu', autoEnqueue: false, allowFix: false, allowPullRequest: false, closeOnMerge: false, baseBranch: '', ciFailureMode: 'repair', ciFailureReason: '' };
 }
 export function initialGitHubSettings() {
-  return { remote: null, draft: null, revision: '', busy: false, operation: '', error: '', notice: '', testResult: null, conflict: false, conflictNeedsRefresh: false };
+  return { remote: null, draft: null, revision: '', busy: false, operation: '', error: '', notice: '', testResult: null, conflict: false, conflictNeedsRefresh: false, savedRevision: '', applyPending: '' };
 }
 export function githubDraftDirty(state) { return Boolean(state.remote && JSON.stringify(state.draft) !== JSON.stringify(state.remote.settings)); }
 export function githubSettingsReducer(state, action) {
@@ -25,11 +27,14 @@ export function githubSettingsReducer(state, action) {
       const preserve = githubDraftDirty(state);
       return { ...state, busy: false, remote: action.remote,
         draft: preserve ? state.draft : structuredClone(action.remote.settings), revision: preserve ? state.revision : action.remote.revision,
-        conflict: preserve && state.revision !== action.remote.revision, conflictNeedsRefresh: false, notice: preserve ? '状态已刷新，本地草稿已保留。' : '' };
+        conflict: preserve && state.revision !== action.remote.revision, conflictNeedsRefresh: false, notice: preserve ? '状态已刷新，本地草稿已保留。' : '',
+        savedRevision: action.remote.application?.status === 'pending' ? action.remote.revision : state.savedRevision,
+        applyPending: action.remote.application?.status === 'applied' ? '' : state.applyPending };
     }
     case 'edit': return { ...state, draft: action.draft, error: '', notice: '', testResult: null };
-    case 'saved': return { ...state, busy: false, remote: action.remote, draft: structuredClone(action.remote.settings), revision: action.remote.revision, conflict: false, notice: '配置已保存，请核对生效状态。' };
-    case 'applied': return { ...state, busy: false, remote: action.remote, notice: '已应用保存版本，后续轮询使用新规则。' };
+    case 'saved': return { ...state, busy: action.keepBusy === true, remote: action.remote, draft: structuredClone(action.remote.settings), revision: action.remote.revision, savedRevision: action.remote.revision, applyPending: '', conflict: false, notice: action.keepBusy ? '' : '配置已保存，请核对生效状态。' };
+    case 'applied': return { ...state, busy: false, remote: action.remote, applyPending: '', notice: '已保存并生效，之后的轮询使用新规则。' };
+    case 'apply-pending': return { ...state, busy: false, remote: action.remote || state.remote, applyPending: action.reason, error: '', notice: '' };
     case 'tested': return { ...state, busy: false, testResult: action.result };
     case 'error': return { ...state, busy: false, error: action.message, remote: action.remote || state.remote,
       conflict: state.conflict || action.status === 409,

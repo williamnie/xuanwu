@@ -64,3 +64,10 @@
   .github-settings__fields { grid-template-columns: minmax(0, 1fr); }
   .github-settings__actions { align-items: flex-start; }
 }
+
+.github-settings__auth-line { color: var(--text-secondary); font-size: 0.74rem; }
+.github-settings__more > summary { color: var(--text-secondary); cursor: pointer; font-size: 0.74rem; font-weight: 700; }
+.github-settings__more[open] > summary { margin-bottom: 10px; }
+.github-settings__pending { border-left: 2px solid var(--warning); color: var(--text-secondary); font-size: 0.74rem; padding: 4px 10px; }
+.github-settings__operations .github-settings__check > span { display: flex; flex-direction: column; gap: 2px; }
+.github-settings__operations .github-settings__check small { color: var(--text-muted); font-size: 0.68rem; font-weight: 400; }

@@ -26,7 +26,18 @@ test('component displays actionable failures and prevents applying dirty drafts 
   expect(render(value)).toMatch(/<fieldset[^>]*disabled=""/);
   value.busy = false; value.conflict = false;
   value.draft = { ...settings, enabled: false };
-  expect(render(value)).toMatch(/<button[^>]*disabled=""[^>]*>应用配置/);
+  // 草稿有修改时只能“保存并生效”，不能单独重试生效旧版本。
+  expect(render(value)).not.toContain('>重试生效</button>');
+  expect(render(value)).toContain('保存并生效');
+});
+test('a saved-but-not-applied version can be retried only while it is still current', () => {
+  const value = state();
+  value.remote = { ...value.remote, application: { ...value.remote.application, status: 'pending' } };
+  value.savedRevision = value.remote.revision; value.applyPending = 'reload_failed';
+  expect(render(value)).toContain('>重试生效</button>');
+  expect(render(value)).toContain('已保存，待生效');
+  value.savedRevision = 'someone-else';
+  expect(render(value)).not.toContain('>重试生效</button>');
 });
 test('connection failures stay visible and write authorization remains unverified', () => {
   const value = state();

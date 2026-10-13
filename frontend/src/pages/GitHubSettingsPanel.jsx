@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { githubSettingsApi } from '../api/githubSettings.js';
+import { APPLY_PENDING_COPY, canRetryApply, classifyApplyError, resolveUncertainApply } from './githubSaveApply.js';
 import { GITHUB_OPERATIONS, githubApplicationLabel, githubConnectionLabel, githubDraftDirty, githubIntakeLabel, githubPhaseLabel, githubSettingsReducer, initialGitHubSettings, newGitHubRepository } from './githubSettingsModel.js';
 import './GitHubSettingsPanel.css';
 
@@ -29,9 +30,19 @@ export default function GitHubSettingsPanel() {
     const current = ++sequence.current;
     dispatch({ type: 'start', operation });
     try {
-      const response = operation === 'save' ? await githubSettingsApi.save(state.revision, state.draft)
-        : operation === 'apply' ? await githubSettingsApi.reload(state.remote.revision) : await githubSettingsApi.test(state.draft);
-      if (current === sequence.current) dispatch(operation === 'test' ? { type: 'tested', result: response } : { type: operation === 'save' ? 'saved' : 'applied', remote: response });
+      if (operation === 'test') {
+        const result = await githubSettingsApi.test(state.draft);
+        if (current === sequence.current) dispatch({ type: 'tested', result });
+        return;
+      }
+      let savedRevision = state.savedRevision;
+      if (operation === 'save-apply') {
+        const saved = await githubSettingsApi.save(state.revision, state.draft);
+        if (current !== sequence.current) return;
+        dispatch({ type: 'saved', remote: saved, keepBusy: true });
+        savedRevision = saved.revision;
+      }
+      await applySaved(savedRevision, current);
     } catch (error) {
       let remote;
       if (error.status === 409) {
@@ -40,8 +51,29 @@ export default function GitHubSettingsPanel() {
       if (current === sequence.current) dispatch({ type: 'error', message: error.message || '操作失败，请重试。', status: error.status, remote });
     } finally { inFlight.current = false; }
   }
+  // 只用“自己保存的那个 revision”调用应用；冲突时不拿新读到的 revision 自动重试。
+  async function applySaved(savedRevision, current) {
+    try {
+      const applied = await githubSettingsApi.reload(savedRevision);
+      if (current === sequence.current) dispatch({ type: 'applied', remote: applied });
+    } catch (error) {
+      const kind = classifyApplyError(error);
+      if (kind === 'config_conflict' || kind === 'failed') throw error;
+      let remote;
+      try { remote = await githubSettingsApi.get(); } catch { /* 读不到最新状态时按未确认处理。 */ }
+      if (current !== sequence.current) return;
+      if (kind === 'unconfirmed') {
+        const resolved = resolveUncertainApply(remote, savedRevision);
+        if (resolved === 'applied') return dispatch({ type: 'applied', remote });
+        if (resolved === 'config_conflict') return dispatch({ type: 'error', message: '配置已变化，请重新核对。', status: 409, remote });
+      }
+      dispatch({ type: 'apply-pending', reason: kind, remote });
+    }
+  }
   return <GitHubSettingsView state={state} dispatch={dispatch} onRefresh={() => load()} onAction={action} />;
 }
+
+const GITHUB_AUTH_LABELS = { connector: '复用 GitHub 连接器凭据', 'gh-cli': '使用本机 gh 认证', 'github-app': 'GitHub App 凭据引用' };
 
 export function GitHubSettingsView({ state, dispatch, onRefresh, onAction }) {
   const { remote, draft, busy } = state;
@@ -63,30 +95,35 @@ export function GitHubSettingsView({ state, dispatch, onRefresh, onAction }) {
         </div>
         {remote.runtime.last_error && <p className="github-settings__error">最近轮询异常：{remote.runtime.last_error}</p>}
         <p>{remote.permissions.note}</p>
-        <form onSubmit={event => { event.preventDefault(); onAction('save'); }}>
+        <form onSubmit={event => { event.preventDefault(); onAction('save-apply'); }}>
           <fieldset className="github-settings__form" disabled={busy}>
             <legend className="sr-only">仓库接管配置</legend>
             <label className="github-settings__check"><input type="checkbox" checked={draft.enabled} onChange={event => edit({ enabled: event.target.checked })} />启用仓库接管</label>
-            <div className="github-settings__fields">
-              <label>认证方式<select className="form-control" value={draft.auth.mode} onChange={event => edit({ auth: { ...draft.auth, mode: event.target.value } })}><option value="connector">复用 GitHub 连接器凭据</option><option value="gh-cli">本机 gh 认证</option><option value="github-app">GitHub App 凭据引用</option></select></label>
-              <label>轮询间隔（秒）<input className="form-control" type="number" min="15" max="3600" step="1" required value={draft.pollIntervalSeconds} onChange={event => edit({ pollIntervalSeconds: Number(event.target.value) })} /></label>
-            </div>
-            <p>复用已有凭据，不输入或复制 token。当前引用：{remote.credential.reference || '未配置'}。认证变更需保存并应用。</p>
-            {draft.auth.mode === 'github-app' && <div className="github-settings__fields">{[['appId', 'App ID'], ['installationId', 'Installation ID'], ['privateKeyRef', '私钥引用（secret:// 或 env://）']].map(([key, title]) => <label key={key}>{title}<input className="form-control" required value={draft.auth[key]} onChange={event => edit({ auth: { ...draft.auth, [key]: event.target.value } })} /></label>)}</div>}
             {draft.repositories.map((repository, index) => <RepositoryEditor key={index} repository={repository} index={index} projects={remote.projects}
               onChange={patch => edit({ repositories: draft.repositories.map((item, i) => i === index ? { ...item, ...patch } : item) })}
               onRemove={() => edit({ repositories: draft.repositories.filter((_, i) => i !== index) })} />)}
             <div><button className="btn btn-secondary" type="button" disabled={draft.repositories.length >= 32} onClick={() => edit({ repositories: [...draft.repositories, newGitHubRepository(remote.projects[0]?.id)] })}>添加仓库</button></div>
-            <p>保存只写入配置；点击“应用配置”后，后续轮询按新规则处理。移除映射或停用不会取消已有 Work；标签撤回需由仍启用的轮询观察。连接测试只读当前草稿，不保存、不触发同步。</p>
+            <p className="github-settings__auth-line">认证：{GITHUB_AUTH_LABELS[draft.auth.mode] || draft.auth.mode}{remote.credential.reference ? ` · ${remote.credential.reference}` : ''}</p>
+            <details className="github-settings__more">
+              <summary>更多选项</summary>
+              <div className="github-settings__fields">
+                <label>认证方式<select className="form-control" value={draft.auth.mode} onChange={event => edit({ auth: { ...draft.auth, mode: event.target.value } })}>{Object.entries(GITHUB_AUTH_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                <label>轮询间隔（秒）<input className="form-control" type="number" min="15" max="3600" step="1" required value={draft.pollIntervalSeconds} onChange={event => edit({ pollIntervalSeconds: Number(event.target.value) })} /></label>
+              </div>
+              <p>复用已有凭据，不输入或复制 token。</p>
+              {draft.auth.mode === 'github-app' && <div className="github-settings__fields">{[['appId', 'App ID'], ['installationId', 'Installation ID'], ['privateKeyRef', '私钥引用（secret:// 或 env://）']].map(([key, title]) => <label key={key}>{title}<input className="form-control" required value={draft.auth[key]} onChange={event => edit({ auth: { ...draft.auth, [key]: event.target.value } })} /></label>)}</div>}
+            </details>
+            <p>生效后，之后的轮询使用新规则。停用或移除映射不会自动取消已有任务；标签撤回或 Issue 关闭可能中断对应任务。</p>
             <div className="github-settings__actions">
-              <span>{dirty ? '有未保存的修改' : '草稿与保存版本一致'}</span>
-              <button className="btn btn-secondary" type="button" disabled={!draft.repositories.length} aria-busy={busy && state.operation === 'test'} onClick={() => onAction('test')}>测试连接</button>
-              <button className="btn btn-primary" type="submit" disabled={state.conflict} aria-busy={busy && state.operation === 'save'}>保存配置</button>
-              <button className="btn btn-secondary" type="button" disabled={dirty || state.conflict || remote.application.status !== 'pending'} onClick={() => onAction('apply')}>应用配置</button>
+              <span>{dirty ? '有未保存的修改' : state.applyPending ? '已保存 · 未生效' : remote.application.status === 'applied' ? '已生效' : githubApplicationLabel(remote.application.status)}</span>
+              <button className="btn btn-secondary" type="button" disabled={!draft.repositories.length} aria-busy={busy && state.operation === 'test'} onClick={() => onAction('test')}>测试</button>
+              {canRetryApply(state, dirty) ? <button className="btn btn-secondary" type="button" onClick={() => onAction('apply')}>重试生效</button> : null}
+              <button className="btn btn-primary" type="submit" disabled={state.conflict || (!dirty && !state.applyPending && remote.application.status === 'applied')} aria-busy={busy && state.operation === 'save-apply'}>保存并生效</button>
             </div>
           </fieldset>
         </form>
-        {state.conflict && <div className="github-settings__conflict" role="status"><p>配置冲突或应用失败；草稿已保留。{state.conflictNeedsRefresh ? '请先刷新状态，读取最新保存版本。' : '已读取最新保存版本，请核对后选择。'}</p>
+        {state.applyPending ? <p className="github-settings__pending" role="status">{APPLY_PENDING_COPY[state.applyPending]}</p> : null}
+        {state.conflict && <div className="github-settings__conflict" role="status"><p>配置已变化，请重新核对；草稿已保留，暂时不能一键生效。{state.conflictNeedsRefresh ? '请先刷新状态，读取最新保存版本。' : '已读取最新保存版本，请核对后选择。'}</p>
           <details><summary>{state.conflictNeedsRefresh ? '查看上次读取的保存版本' : '查看最新保存版本'}</summary><pre>{JSON.stringify(remote.settings, null, 2)}</pre></details>
           <div className="github-settings__actions"><button className="btn btn-secondary" disabled={busy || state.conflictNeedsRefresh} onClick={() => dispatch({ type: 'use-server' })}>使用保存版本</button><button className="btn btn-secondary" disabled={busy || state.conflictNeedsRefresh} onClick={() => dispatch({ type: 'rebase' })}>保留草稿重试</button></div>
         </div>}
@@ -96,7 +133,7 @@ export function GitHubSettingsView({ state, dispatch, onRefresh, onAction }) {
           <p>测试仅验证读取连接与标签；评论、代码推送和 PR 写权限尚未验证，仍需既有授权与执行门禁。</p>
         </div>}
         {remote.application.status === 'pending' && <details><summary>查看当前生效规则</summary><pre>{JSON.stringify(remote.application.active_settings, null, 2)}</pre></details>}
-        <CaseStatus repositories={remote.repositories} />
+        <details className="github-settings__more"><summary>接管记录</summary><CaseStatus repositories={remote.repositories} /></details>
       </>}
     </section>
   );
@@ -109,11 +146,10 @@ function RepositoryEditor({ repository, index, projects, onChange, onRemove }) {
       <label>仓库（owner/repository）<input className="form-control" required value={repository.repository} onChange={event => onChange({ repository: event.target.value })} /></label>
       <label>关联项目<select className="form-control" required value={repository.projectId} onChange={event => onChange({ projectId: event.target.value })}><option value="">选择已有项目</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name} · {project.id}</option>)}</select></label>
       <label>接管标签<input className="form-control" required maxLength={50} value={repository.intakeLabel} onChange={event => onChange({ intakeLabel: event.target.value })} /></label>
-      <label>目标分支（留空使用默认分支）<input className="form-control" value={repository.baseBranch} onChange={event => onChange({ baseBranch: event.target.value })} /></label>
     </div>
-    <div className="github-settings__operations">{GITHUB_OPERATIONS.map(([key, title]) => <label className="github-settings__check" key={key}><input type="checkbox" checked={repository[key]} onChange={event => onChange({ [key]: event.target.checked })} />{title}</label>)}</div>
-    <p>新仓库的自动操作默认关闭。关单只作用于已合并且通过 CI 的 PR，不会自动合并或部署。</p>
-    <details><summary>CI 失败处理</summary><div className="github-settings__fields"><label>处理方式<select className="form-control" value={repository.ciFailureMode} onChange={event => onChange({ ciFailureMode: event.target.value })}><option value="repair">诊断并修复本任务回归</option><option value="report_only">只报告外部限制</option></select></label><label>外部限制原因<input className="form-control" maxLength={500} required={repository.ciFailureMode === 'report_only'} value={repository.ciFailureReason} onChange={event => onChange({ ciFailureReason: event.target.value })} /></label></div></details>
+    <div className="github-settings__operations">{GITHUB_OPERATIONS.map(([key, title, hint]) => <label className="github-settings__check" key={key}><input type="checkbox" checked={repository[key]} onChange={event => onChange({ [key]: event.target.checked })} /><span>{title}<small>{hint}</small></span></label>)}</div>
+    <p>新仓库的这些开关默认全部关闭。任何开关都不会自动合并或部署。</p>
+    <details><summary>更多选项</summary><div className="github-settings__fields"><label>目标分支（留空使用默认分支）<input className="form-control" value={repository.baseBranch} onChange={event => onChange({ baseBranch: event.target.value })} /></label><label>CI 失败时<select className="form-control" value={repository.ciFailureMode} onChange={event => onChange({ ciFailureMode: event.target.value })}><option value="repair">诊断并修复本任务回归</option><option value="report_only">只报告外部限制</option></select></label><label>外部限制原因<input className="form-control" maxLength={500} required={repository.ciFailureMode === 'report_only'} value={repository.ciFailureReason} onChange={event => onChange({ ciFailureReason: event.target.value })} /></label></div></details>
     <div><button className="btn btn-secondary" type="button" onClick={onRemove}>移除映射</button></div>
   </fieldset>;
 }

@@ -1056,3 +1056,6 @@
 .settings-advanced-body { display: grid; gap: 16px; }
 .settings-preferences { display: grid; gap: 16px; }
 .settings-theme-options { display: inline-flex; }
+.settings-subsection-title { border-top: 1px solid var(--border-color); font-size: 1rem; font-weight: 650; margin: 24px 0 10px; padding-top: 18px; }
+.settings-notifications-page, .settings-ai-page { display: grid; gap: 16px; }
+.settings-notifications-page > .settings-subsection-title { margin-bottom: -6px; }
