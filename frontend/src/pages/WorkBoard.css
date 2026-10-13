@@ -63,6 +63,7 @@
 }
 
 .work-ledger-actions { justify-content: flex-end; min-width: 0; }
+.work-ledger-actions > button { white-space: nowrap; }
 
 .work-header-search {
   align-items: center;

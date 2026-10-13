@@ -9,13 +9,6 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
     availability: 'compatibility',
   },
   {
-    page: 'ask-xuanwu',
-    label: PRODUCT_NAV_LABELS.askXuanwu,
-    icon: 'ask-xuanwu',
-    placement: 'primary',
-    availability: 'compatibility',
-  },
-  {
     page: 'work',
     label: PRODUCT_NAV_LABELS.work,
     icon: 'work',
@@ -38,10 +31,17 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
     availability: 'compatibility',
   },
   {
+    page: 'ask-xuanwu',
+    label: PRODUCT_NAV_LABELS.askXuanwu,
+    icon: 'ask-xuanwu',
+    placement: 'primary',
+    availability: 'compatibility',
+  },
+  {
     page: 'analytics',
     label: PRODUCT_NAV_LABELS.analytics,
     icon: 'analytics',
-    placement: 'primary',
+    placement: 'footer',
     availability: 'available',
   },
   {

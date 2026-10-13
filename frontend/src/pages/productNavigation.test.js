@@ -16,10 +16,10 @@ const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', impor
 
 const EXPECTED_PAGES = [
   'command-center',
-  'ask-xuanwu',
   'work',
   'runs',
   'automations',
+  'ask-xuanwu',
   'analytics',
   'settings',
 ];
@@ -34,6 +34,7 @@ test('product navigation has one ordered Xuanwu identity and centralized labels'
   assert.equal(new Set(PRODUCT_NAV_ITEMS.map(item => item.label)).size, PRODUCT_NAV_ITEMS.length);
   assert.deepEqual(new Set(PRODUCT_NAV_ITEMS.map(item => item.availability)), new Set(['available', 'compatibility']));
   assert.equal(PRODUCT_NAV_ITEMS.find(item => item.page === 'settings')?.placement, 'footer');
+  assert.equal(PRODUCT_NAV_ITEMS.find(item => item.page === 'analytics')?.placement, 'footer');
   assert.doesNotMatch(sidebarSource, /PI_ASSISTANT_NAV_ITEMS|PRODUCT_TERMS\.supervisor|pi-assistant-nav/);
 });
 
