@@ -1,10 +1,10 @@
 import { assistantApi } from '../api/assistant.js';
 import { connectorsApi } from '../api/connectors.js';
 import { useCallback, useEffect, useState } from 'react';
-import { BellRing, CheckCircle2, RefreshCw, Save, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, RefreshCw, Save, ShieldAlert } from 'lucide-react';
 import { message } from '../store/toastStore';
 import { PanelLoader } from '../components/TurtleLoader';
-import { buildNotificationPreferencePayload } from './settingsProductModels.js';
+import { buildNotificationPreferencePayload, notificationModeChoice, notificationModeValue } from './settingsProductModels.js';
 
 const NOTIFY_OPTIONS = [
   ['needs_user', '需要你处理'],
@@ -24,7 +24,7 @@ export default function NotificationSettingsPanel() {
       {state.loading && state.preferences.length === 0
         ? <PanelLoader label="正在读取通知偏好…" />
         : <NotificationForm state={state} />}
-      <PreferenceHistory disabling={state.disabling} onDisable={state.disable} preferences={state.preferences} />
+      <ActivePreference disabling={state.disabling} onDisable={state.disable} preferences={state.preferences} />
     </section>
   );
 }
@@ -80,43 +80,62 @@ function useNotificationSettings() {
 function NotificationHeader({ loading, onRefresh }) {
   return (
     <div className="settings-product-header">
-      <div>
-        <h2><BellRing size={18} color="var(--primary)" /> 通知渠道与偏好</h2>
-        <p>选择普通消息的通知方式，并查看通知渠道是否已连接。保存为全局偏好，历史设置会保留在下方。</p>
-      </div>
-      <button className="btn btn-secondary" disabled={loading} onClick={onRefresh} type="button">
-        <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />刷新
+      <h3>通知</h3>
+      <button aria-label="刷新通知设置" className="btn btn-secondary" disabled={loading} onClick={onRefresh} type="button">
+        <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
       </button>
     </div>
   );
 }
 
+const MODE_CHOICES = [
+  ['timely', '及时', '普通消息立即发送'],
+  ['digest', '汇总', '合并普通消息定期发送'],
+  ['quiet', '安静', '普通消息静默或延后'],
+];
+
 function NotificationForm({ state }) {
+  const choice = notificationModeChoice(state.form.mode);
+  const choose = (next, includeProgress = state.form.mode === 'verbose') => {
+    state.updateField('mode', notificationModeValue(next, { currentMode: state.form.mode, includeProgress }));
+  };
   return (
     <form className="settings-notification-form" onSubmit={state.save}>
       <div className="settings-notification-grid">
-        <label className="form-group">
-          <span>通知方式</span>
-          <select className="form-control" value={state.form.mode} onChange={event => state.updateField('mode', event.target.value)}>
-            <option value="normal">及时通知 · 普通消息立即发送</option>
-            <option value="digest">汇总通知 · 合并普通消息</option>
-            <option value="quiet">安静模式 · 普通消息静默或延后</option>
-            <option value="verbose">详细通知 · 接收更多普通消息</option>
-          </select>
-        </label>
+        <fieldset className="settings-notification-modes">
+          <legend>通知方式</legend>
+          {MODE_CHOICES.map(([id, title, hint]) => (
+            <div className="settings-notification-mode" key={id}>
+              <label>
+                <input checked={choice === id} name="notification-mode" onChange={() => choose(id)} type="radio" />
+                <span><strong>{title}</strong><small>{hint}</small></span>
+              </label>
+              {id === 'timely' && choice === 'timely' ? (
+                <label className="settings-notification-progress">
+                  <input checked={state.form.mode === 'verbose'} onChange={event => choose('timely', event.target.checked)} type="checkbox" />
+                  也通知普通进展
+                </label>
+              ) : null}
+            </div>
+          ))}
+          {choice === 'legacy' ? <p className="settings-notification-legacy">当前使用旧设置“{state.form.mode}”，改选后才会替换。</p> : null}
+        </fieldset>
         <NotificationChannels connectors={state.connectors} />
       </div>
-      <fieldset className="settings-notify-options">
-        <legend>额外立即通知</legend>
-        {NOTIFY_OPTIONS.map(([token, label]) => (
-          <label key={token}>
-            <input checked={state.form.notifyOn.includes(token)} onChange={() => state.toggleNotifyOn(token)} type="checkbox" />
-            <span>{label}<code>{token}</code></span>
-          </label>
-        ))}
-      </fieldset>
-      <div className="settings-notification-safety"><ShieldAlert size={15} /> <strong>重要提醒：</strong>紧急事项、需要你处理的操作、预算耗尽和有安全风险的外部操作，仍可能立即通知。通知偏好不能关闭审批或解除执行限制。</div>
-      <button className="btn btn-primary" disabled={state.saving} type="submit"><Save size={15} />{state.saving ? '保存中…' : '保存通知偏好'}</button>
+      <details className="settings-notify-more">
+        <summary>更多选项</summary>
+        <fieldset className="settings-notify-options">
+          <legend>额外立即通知</legend>
+          {NOTIFY_OPTIONS.map(([token, label]) => (
+            <label key={token}>
+              <input checked={state.form.notifyOn.includes(token)} onChange={() => state.toggleNotifyOn(token)} type="checkbox" />
+              <span>{label}</span>
+            </label>
+          ))}
+        </fieldset>
+      </details>
+      <div className="settings-notification-safety"><ShieldAlert size={15} /> 需要你处理的事不受普通消息频率设置限制；渠道不可用或发送失败时，会在外部连接里显示。这里是全局设置，项目、会话等更细的规则可能优先。</div>
+      <button className="btn btn-primary" disabled={state.saving} type="submit"><Save size={15} />{state.saving ? '保存中…' : '保存'}</button>
     </form>
   );
 }
@@ -131,31 +150,28 @@ function NotificationChannels({ connectors }) {
         const ready = channel.status === 'configured';
         return <label key={channel.id}>
           <span className={`status-dot ${ready ? 'active' : 'idle'}`} />
-          {channel.id === 'feishu' ? '飞书' : 'Telegram'} <small>{ready ? '已连接' : '未连接或连接异常，请前往设置 → 外部连接检查'}</small>
+          {channel.id === 'feishu' ? '飞书' : 'Telegram'} <small>{ready ? '已连接' : '未连接或连接异常，见下方外部连接'}</small>
         </label>;
       })}
     </div>
   );
 }
 
-function PreferenceHistory({ disabling, onDisable, preferences }) {
-  if (preferences.length === 0) return <div className="settings-empty-state">尚未自定义通知偏好，当前使用系统默认设置。</div>;
+// 只显示当前生效的自定义设置，并保留“停用（恢复默认）”；历史版本列表不再展示。
+function ActivePreference({ disabling, onDisable, preferences }) {
+  const active = preferences.find(item => item.status === 'active');
+  if (!active) return <div className="settings-empty-state">当前使用系统默认设置。</div>;
   return (
-    <div className="settings-preference-history">
-      <div className="settings-block-title">保存记录</div>
-      {preferences.slice(0, 8).map(preference => (
-        <div className="settings-preference-row" key={preference.id}>
-          <div>
-            <strong>{preference.mode} · v{preference.version}</strong>
-            <span>{preference.status} · 渠道：{channelText(preference)} · 更新于 {formatTime(preference.updated_at)}</span>
-          </div>
-          {preference.status === 'active' && !preference.admin_enforced && (
-            <button className="btn btn-secondary" disabled={disabling === preference.id} onClick={() => onDisable(preference)} type="button">
-              {disabling === preference.id ? '禁用中…' : '禁用'}
-            </button>
-          )}
-        </div>
-      ))}
+    <div className="settings-preference-row">
+      <div>
+        <strong>当前使用自定义设置</strong>
+        <span>渠道：{channelText(active)} · 更新于 {formatTime(active.updated_at)}{active.admin_enforced ? ' · 由管理员设置' : ''}</span>
+      </div>
+      {!active.admin_enforced && (
+        <button className="btn btn-secondary" disabled={disabling === active.id} onClick={() => onDisable(active)} type="button">
+          {disabling === active.id ? '处理中…' : '停用并恢复默认'}
+        </button>
+      )}
     </div>
   );
 }
@@ -179,7 +195,7 @@ async function disablePreference(preference, load, setDisabling, setError) {
   setDisabling(preference.id);
   try {
     await assistantApi.disablePiGuardianPreference(preference.id);
-    message.success('通知偏好已停用，保存记录仍可查看');
+    message.success('已恢复默认通知设置');
     setError('');
     await load();
   } catch (error) {

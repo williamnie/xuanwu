@@ -256,7 +256,11 @@ test('Notifications edits the existing versioned preference authority and shows 
   assert.match(notificationSettingsSource, /assistantApi\.createPiGuardianPreference/);
   assert.match(notificationSettingsSource, /assistantApi\.disablePiGuardianPreference/);
   assert.match(notificationSettingsSource, /connectorsApi\.getPiConnectors/);
-  assert.match(notificationSettingsSource, /保存记录/);
+  // 历史版本列表删除；当前生效的自定义设置保留“停用并恢复默认”（方案 6.4 ③ 通知）。
+  assert.doesNotMatch(notificationSettingsSource, /保存记录|PreferenceHistory/);
+  assert.match(notificationSettingsSource, /停用并恢复默认/);
+  assert.match(notificationSettingsSource, /active\.admin_enforced/);
+  assert.match(notificationSettingsSource, /notificationModeValue\(/);
   assert.match(settingsProductModelsSource, /source_message_id: 'settings:notifications'/);
   assert.match(settingsProductModelsSource, /digest_policy: form\.digestPolicy/);
   assert.doesNotMatch(notificationSettingsSource, /window\.confirm|window\.alert/);

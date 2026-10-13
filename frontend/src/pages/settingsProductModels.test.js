@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildNotificationPreferencePayload,
+  notificationModeChoice,
+  notificationModeValue,
   configureGuide,
   connectorPermissionRows,
 } from './settingsProductModels.js';
@@ -42,4 +44,16 @@ test('notification settings write one global preference without replacing channe
     scope: 'global',
     source_message_id: 'settings:notifications',
   });
+});
+
+test('notification modes show three choices but still write the original values', () => {
+  assert.equal(notificationModeChoice('normal'), 'timely');
+  assert.equal(notificationModeChoice('verbose'), 'timely');
+  assert.equal(notificationModeChoice('digest'), 'digest');
+  assert.equal(notificationModeChoice('quiet'), 'quiet');
+  assert.equal(notificationModeChoice('custom-old'), 'legacy');
+  assert.equal(notificationModeValue('timely'), 'normal');
+  assert.equal(notificationModeValue('timely', { includeProgress: true }), 'verbose');
+  assert.equal(notificationModeValue('digest', { includeProgress: true }), 'digest');
+  assert.equal(notificationModeValue('legacy', { currentMode: 'custom-old' }), 'custom-old');
 });

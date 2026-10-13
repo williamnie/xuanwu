@@ -1059,3 +1059,15 @@
 .settings-subsection-title { border-top: 1px solid var(--border-color); font-size: 1rem; font-weight: 650; margin: 24px 0 10px; padding-top: 18px; }
 .settings-notifications-page, .settings-ai-page { display: grid; gap: 16px; }
 .settings-notifications-page > .settings-subsection-title { margin-bottom: -6px; }
+.settings-product-header h3 { font-size: 1rem; font-weight: 650; margin: 0; }
+.settings-notification-modes { border: 0; display: grid; gap: 8px; margin: 0; padding: 0; }
+.settings-notification-modes legend, .settings-notify-options legend { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.1em; margin-bottom: 6px; text-transform: uppercase; }
+.settings-notification-mode { display: grid; gap: 6px; }
+.settings-notification-mode > label:first-child { align-items: flex-start; cursor: pointer; display: flex; gap: 8px; }
+.settings-notification-mode > label:first-child > span { display: flex; flex-direction: column; gap: 2px; }
+.settings-notification-modes strong { font-size: 0.8rem; font-weight: 650; }
+.settings-notification-modes small { color: var(--text-muted); font-size: 0.7rem; }
+.settings-notification-progress { align-items: center; color: var(--text-secondary); display: flex; font-size: 0.74rem; gap: 8px; padding-left: 22px; }
+.settings-notification-legacy { border-left: 2px solid var(--warning); color: var(--text-secondary); font-size: 0.72rem; margin: 0; padding: 2px 8px; }
+.settings-notify-more > summary { color: var(--text-secondary); cursor: pointer; font-size: 0.74rem; font-weight: 700; }
+.settings-notify-more[open] > summary { margin-bottom: 10px; }

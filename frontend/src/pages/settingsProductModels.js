@@ -1,3 +1,17 @@
+// 通知方式主选项只有“及时 / 汇总 / 安静”；“详细”显示为“及时”下的开关，提交时仍写原来的 normal / verbose。
+// 未知的旧值原样保留，直到用户主动改选。
+const NOTIFICATION_CHOICES = { digest: 'digest', normal: 'timely', quiet: 'quiet', verbose: 'timely' };
+
+export function notificationModeChoice(mode) {
+  return NOTIFICATION_CHOICES[mode] || 'legacy';
+}
+
+export function notificationModeValue(choice, { currentMode = 'normal', includeProgress = false } = {}) {
+  if (choice === 'timely') return includeProgress ? 'verbose' : 'normal';
+  if (choice === 'digest' || choice === 'quiet') return choice;
+  return currentMode;
+}
+
 export function buildNotificationPreferencePayload(form) {
   return {
     digest_policy: form.digestPolicy || {},
