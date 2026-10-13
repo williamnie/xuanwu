@@ -4,6 +4,7 @@ import { systemApi } from '../api/system.js';
 import { message } from '../store/toastStore.js';
 import { codexBackendChoices, codexBackendUpdatePayload } from '../utils/codexBackends.js';
 import './CodeAgentsPanel.css';
+import SettingsDisclosure from '../components/SettingsDisclosure.jsx';
 
 const AGENT_DESCRIPTIONS = Object.freeze({
   codex: 'Codex CLI / Codex App 执行器',
@@ -64,12 +65,10 @@ export default function CodeAgentsPanel() {
   };
 
   return (
-    <section className="code-agents-panel">
+    <section className="code-agents-panel" id="settings-code-agents">
       <header className="code-agents-header">
         <div>
-          <span className="code-agents-kicker"><Terminal size={14} /> Execution runtimes</span>
-          <h2>编程工具</h2>
-          <p>检测本机可用的编程工具。启用并就绪后，可在创建工作项、配置项目或执行方案时选择。</p>
+          <h3>编程工具</h3>
         </div>
         <button className="btn btn-secondary" disabled={state.loading || Boolean(busyAgentID)} onClick={() => load(true)} type="button">
           <RefreshCw className={state.loading ? 'spin-animation' : ''} size={15} /> 重新检测
@@ -146,6 +145,7 @@ function QoderDiagnostics({ runtime }) {
 function CodexBackendSelector({ busy, onSelect, settings }) {
   const choices = codexBackendChoices(settings || {});
   return (
+    <SettingsDisclosure title="Codex 运行方式">
     <div className="codex-backend-selector">
       <div className="codex-backend-heading">
         <strong>Codex 运行方式</strong>
@@ -173,7 +173,28 @@ function CodexBackendSelector({ busy, onSelect, settings }) {
           </button>
         ))}
       </div>
+      <p>当前生效命令：<code>{settings?.codex_effective_command || '尚未检测'}</code></p>
+      {settings && <CodexCommandSettings settings={settings} />}
       <p className="codex-backend-note">每次只能选择一种默认运行方式。如果所选方式不可用，任务会提示错误，不会自动改用另一种。</p>
     </div>
+    </SettingsDisclosure>
   );
+}
+
+function CodexCommandSettings({ settings }) {
+  const [draft, setDraft] = useState({ codex_cli_command: settings.codex_cli_command || '', codex_app_command: settings.codex_app_command || '' });
+  const [state, setState] = useState({ busy: false, error: '' });
+  const save = async () => {
+    setState({ busy: true, error: '' });
+    try {
+      const result = await systemApi.updateRunnerSettings(draft);
+      setState({ busy: false, error: '' });
+      message.success(result.runtime_apply?.codexTransport === 'deferred_active_sessions' ? '已保存，当前会话结束后需再次应用或重启服务' : '命令已保存');
+    } catch (error) { setState({ busy: false, error: error.message }); }
+  };
+  return <SettingsDisclosure title="更多选项">
+    {['codex_cli_command', 'codex_app_command'].map(name => <label className="form-group" key={name}><span>{name === 'codex_cli_command' ? 'CLI server command' : 'App server command'}</span><input className="form-control" value={draft[name]} disabled={state.busy} onChange={event => setDraft(current => ({ ...current, [name]: event.target.value }))} /></label>)}
+    {state.error && <p role="alert">{state.error}</p>}
+    <button className="btn btn-secondary" onClick={save} disabled={state.busy} type="button">保存命令</button>
+  </SettingsDisclosure>;
 }

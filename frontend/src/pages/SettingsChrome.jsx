@@ -6,16 +6,14 @@ import { SETTINGS_NAVIGATION_GROUPS, resolveSettingsRoute, settingsSectionCopy }
 import { useI18n } from '../i18n/context.js';
 
 export function SettingsHeader({ title = 'Settings' }) {
-  const { language, t } = useI18n();
+  const { t } = useI18n();
   return (
     <header className="settings-header">
       <div className="settings-title-row">
         <div>
           <div className="settings-eyebrow">SETTINGS</div>
           <h1>{title === 'Settings' ? t('settings.title') : title}</h1>
-          <p>{language === 'en-US'
-            ? 'Set up your projects, assistant, and notifications. Start with the section you need.'
-            : '管理项目、助手和通知，从你需要调整的设置开始。'}</p>
+
         </div>
       </div>
     </header>

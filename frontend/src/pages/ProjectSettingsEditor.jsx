@@ -3,11 +3,7 @@ import { useImmer } from 'use-immer';
 import { systemApi } from '../api/system.js';
 import { projectsApi } from '../api/projects.js';
 import { message } from '../store/toastStore.js';
-import {
-  agentProfilePayload,
-  emptyAgentProfileForm,
-  normalizeAgentProfileForm,
-} from '../utils/agentProfiles.js';
+
 import { serviceTierOptions } from '../utils/serviceTier.js';
 import { availableAgentProfiles, codeAgentLabel } from '../utils/codeAgents.js';
 import { providerOptionsFromCatalog } from './sessions/sessionOptions.js';
@@ -21,6 +17,7 @@ import {
   projectExecutionPolicy,
 } from '../utils/executionPolicy.js';
 import './ProjectSettingsEditor.css';
+import SettingsDisclosure from '../components/SettingsDisclosure.jsx';
 
 const DEFAULT_PROJECT_NAME = 'project';
 const DEFAULT_CODEX_MODEL = 'codex-default';
@@ -55,7 +52,7 @@ function buildProviderModelOptions(provider, models, ...selectedValues) {
     pushOption(DEFAULT_CODEX_MODEL, '系统默认模型');
   } else {
     seen.add('');
-    options.push({ value: '', label: 'Provider 默认模型' });
+    options.push({ value: '', label: '跟随编程工具' });
   }
   const liveModels = Array.isArray(models) ? models.filter(model => !model?.hidden) : [];
   liveModels.forEach(model => pushOption(model?.id || model?.model, model?.displayName || model?.name || model?.id || model?.model));
@@ -89,7 +86,6 @@ function initialEditorState(project) {
     codexModelsLoading: false,
     formError: '',
     profileError: '',
-    profileForm: emptyAgentProfileForm(),
     profiles: [],
     profilesLoading: false,
     providerCatalog: [],
@@ -180,7 +176,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
 
   useEffect(() => {
     loadProviderCatalog();
-    if (mode === 'edit') loadAgentProfiles();
+    loadAgentProfiles();
   }, [loadAgentProfiles, loadProviderCatalog, loadProviderModels, mode, project?.provider]);
 
   useEffect(() => {
@@ -209,15 +205,6 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
     loadProviderModels(value);
   };
 
-  const setProfileFormField = (field, value) => {
-    updateUi(draft => {
-      draft.profileForm[field] = value;
-      if (field === 'provider') {
-        draft.profileForm.model = normalizeProviderModel(value, '');
-      }
-    });
-  };
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!ui.formCwd.trim()) {
@@ -229,14 +216,14 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
     const providerChanged = ui.formProvider !== (project?.provider || DEFAULT_PROVIDER);
     if (!providerOptions.some(option => option.value === ui.formProvider) && (mode === 'create' || providerChanged)) {
       updateUi(draft => {
-        draft.formError = '请选择当前已启用且可用的 Code Agent';
+        draft.formError = '请选择当前已启用且可用的 编程工具';
       });
       return;
     }
     const profileChanged = ui.formAgentProfileId !== (project?.default_agent_profile_id || '');
     if (ui.formAgentProfileId && !availableProfiles.some(profile => profile.id === ui.formAgentProfileId) && profileChanged) {
       updateUi(draft => {
-        draft.formError = '项目默认 Profile 的 Code Agent 当前不可用，请改选可用 Profile 或清除默认 Profile';
+        draft.formError = '执行预设 的 编程工具 当前不可用，请改选可用 Profile 或清除默认 Profile';
       });
       return;
     }
@@ -280,50 +267,10 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
     }
   };
 
-  const handleProfileSubmit = async (event) => {
-    event?.preventDefault?.();
-    const payload = agentProfilePayload(ui.profileForm);
-    if (!payload.name) {
-      updateUi(draft => {
-        draft.profileError = 'Profile 名称不能为空';
-      });
-      return;
-    }
-    const existing = ui.profiles.find(profile => profile.id === payload.id);
-    const historicalProviderPreserved = existing?.provider === payload.provider;
-    if (!providerOptions.some(option => option.value === payload.provider) && !historicalProviderPreserved) {
-      updateUi(draft => {
-        draft.profileError = 'Profile 必须选择当前已启用且可用的 Code Agent';
-      });
-      return;
-    }
-    try {
-      if (payload.execution_policy && Object.keys(payload.execution_policy).length > 0) {
-        const preview = await systemApi.resolveProviderExecutionPolicy(payload.provider, {
-          project_id: projectID,
-          policy: payload.execution_policy,
-        });
-        if (preview?.supported === false) throw new Error(preview.reason || '当前 Provider 不支持所选 Profile 执行策略');
-      }
-      const saved = existing
-        ? await projectsApi.updateAgentProfile(payload.id, payload)
-        : await projectsApi.createAgentProfile(payload);
-      updateUi(draft => {
-        draft.profileForm = emptyAgentProfileForm();
-        draft.formAgentProfileId = saved.id;
-      });
-      await loadAgentProfiles();
-    } catch (error) {
-      updateUi(draft => {
-        draft.profileError = error.message || '保存 Agent Profile 失败';
-      });
-    }
-  };
-
   const discoveredProviderOptions = providerOptionsFromCatalog(ui.providerCatalog);
   const providerOptions = discoveredProviderOptions;
   const availableProfiles = availableAgentProfiles(ui.profiles, ui.providerCatalog);
-  const modelOptions = buildProviderModelOptions(ui.formProvider, ui.codexModels, ui.formModel, ui.profileForm.model);
+  const modelOptions = buildProviderModelOptions(ui.formProvider, ui.codexModels, ui.formModel);
   const modal = layout === 'modal';
   const providerReady = providerOptions.some(option => option.value === ui.formProvider);
   const historicalProviderPreserved = mode === 'edit' && ui.formProvider === (project?.provider || DEFAULT_PROVIDER);
@@ -349,48 +296,14 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
           </span>
         </div>
 
-        {mode === 'create' ? (
-          <details className="project-settings-advanced">
-            <summary>高级运行配置（可选）</summary>
-            <p>不确定时无需修改。默认使用无人值守开发策略，允许当前 Provider 使用本机开发能力且不逐次等待确认。</p>
-            <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setProjectRuntimeField} providerOptions={providerOptions} ui={ui} />
-          </details>
-        ) : (
-          <>
-            <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setProjectRuntimeField} providerOptions={providerOptions} ui={ui} />
-            <details className="project-settings-advanced project-profile-settings">
-              <summary>Agent Profile（可选）</summary>
-              <p>只有需要复用一组模型、权限或指令预设时才配置；普通项目可以完全忽略。</p>
-              <div className="form-group">
-                <label>项目默认 Profile</label>
-                <select className="form-control" onChange={event => setFormField('formAgentProfileId', event.target.value)} value={ui.formAgentProfileId}>
-                  <option value="">不使用 Profile（沿用项目运行配置）</option>
-                  <AgentProfileSelectOptions
-                    catalog={ui.providerCatalog}
-                    profiles={ui.profiles}
-                    selectedProfileID={ui.formAgentProfileId}
-                  />
-                </select>
-              </div>
-              <AgentProfileManager
-                error={ui.profileError}
-                form={ui.profileForm}
-                loading={ui.profilesLoading}
-                modelOptions={modelOptions}
-                models={ui.codexModels}
-                modelsError={ui.codexModelsError || (ui.profileForm.provider !== ui.formProvider ? '当前 Profile 使用其他 Provider' : '')}
-                modelsLoading={ui.codexModelsLoading}
-                onEdit={profile => updateUi(draft => { draft.profileForm = normalizeAgentProfileForm(profile); draft.profileError = ''; })}
-                onFieldChange={setProfileFormField}
-                onReset={() => updateUi(draft => { draft.profileForm = emptyAgentProfileForm(); draft.profileError = ''; })}
-                onSubmit={handleProfileSubmit}
-                providerOptions={providerOptions}
-                providerCatalog={ui.providerCatalog}
-                profiles={ui.profiles}
-              />
-            </details>
-          </>
-        )}
+        <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setProjectRuntimeField} providerOptions={providerOptions} ui={ui} />
+        <div className="form-group">
+          <label>执行预设</label>
+          <select className="form-control" onChange={event => setFormField('formAgentProfileId', event.target.value)} value={ui.formAgentProfileId}>
+            <option value="">不使用（沿用项目运行配置）</option>
+            <AgentProfileSelectOptions catalog={ui.providerCatalog} profiles={ui.profiles} selectedProfileID={ui.formAgentProfileId} />
+          </select>
+        </div>
       </div>
 
       <div className={modal ? 'project-config-modal-footer' : 'project-settings-editor-footer'}>
@@ -412,7 +325,7 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
   return (
     <div className="project-runtime-fields">
       <div className="form-group">
-        <label>执行引擎</label>
+        <label>编程工具</label>
         <select
           aria-busy={ui.providerCatalogLoading}
           className={`form-control${ui.providerCatalogLoading ? ' project-settings-control-loading' : ''}`}
@@ -420,9 +333,9 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
           onChange={event => onFieldChange('formProvider', event.target.value)}
           value={ui.formProvider}
         >
-          {ui.providerCatalogLoading && <option value="">正在读取可用执行引擎…</option>}
-          {!ui.providerCatalogLoading && ui.providerCatalogError && <option value="">执行引擎加载失败</option>}
-          {!ui.providerCatalogLoading && !ui.providerCatalogError && providerOptions.length === 0 && <option value="">暂无可用执行引擎</option>}
+          {ui.providerCatalogLoading && <option value="">正在读取可用编程工具…</option>}
+          {!ui.providerCatalogLoading && ui.providerCatalogError && <option value="">编程工具加载失败</option>}
+          {!ui.providerCatalogLoading && !ui.providerCatalogError && providerOptions.length === 0 && <option value="">暂无可用编程工具</option>}
           {!ui.providerCatalogLoading && !ui.providerCatalogError && ui.formProvider && !providerReady && (
             <option disabled value={ui.formProvider}>{codeAgentLabel(ui.formProvider, ui.providerCatalog)}（不可用）</option>
           )}
@@ -436,11 +349,11 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
           role="status"
         >
           {ui.providerCatalogLoading
-            ? '正在读取已启用且可用的 Code Agent…'
+            ? '正在读取已启用且可用的 编程工具…'
             : ui.providerCatalogError
-              ? `读取执行引擎失败：${ui.providerCatalogError}`
+              ? `读取编程工具失败：${ui.providerCatalogError}`
               : !providerReady
-                ? '项目原执行引擎当前不可用，请从可用列表中重新选择。'
+                ? '项目原编程工具当前不可用，请从可用列表中重新选择。'
                 : '决定由哪个执行器处理项目；通常保持 Codex。'}
         </span>
       </div>
@@ -470,13 +383,7 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
                   : '模型列表来自当前 Provider。'}
           </span>
         </div>
-        {ui.formProvider !== 'qoder' ? <div className="form-group">
-          <label>执行速度</label>
-          <select className="form-control" onChange={event => onFieldChange('formServiceTier', event.target.value)} value={ui.formServiceTier}>
-            {serviceTierOptions(ui.formServiceTier).map(option => <option key={option.value || 'standard'} value={option.value}>{option.label}</option>)}
-          </select>
-          <span className="project-settings-hint">标准速度适合大多数项目。</span>
-        </div> : null}
+
       </div>
 
       <div className="form-group">
@@ -491,24 +398,33 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
           <div className="project-settings-permission-notice" role="status">任务可能等待审批或因当前权限不足而无法完成，但不会仅因选择低权限而拒绝启动。</div>
         ) : null}
       </div>
+      <SettingsDisclosure title="更多选项">
+        {ui.formProvider !== 'qoder' ? <div className="form-group">
+          <label>执行速度</label>
+          <select className="form-control" onChange={event => onFieldChange('formServiceTier', event.target.value)} value={ui.formServiceTier}>
+            {serviceTierOptions(ui.formServiceTier).map(option => <option key={option.value || 'standard'} value={option.value}>{option.label}</option>)}
+          </select>
+          <span className="project-settings-hint">标准速度适合大多数项目。</span>
+        </div> : null}
+      </SettingsDisclosure>
     </div>
   );
 }
 
-function AgentProfileManager({ profiles, loading, form, error, modelOptions, models, modelsError, modelsLoading, onFieldChange, onSubmit, onEdit, onReset, providerCatalog, providerOptions }) {
+export function AgentProfileManager({ profiles, loading, form, error, modelOptions, models, modelsError, modelsLoading, onFieldChange, onSubmit, onEdit, onReset, providerCatalog, providerOptions }) {
   const providerReady = providerOptions.some(option => option.value === form.provider);
   const profilePolicyOptions = executionPolicyPresets(providerCatalog, form.provider, form.execution_policy, true);
   const profilePolicyValue = form.execution_policy ? executionPolicyValue(form.execution_policy) : '';
   return (
     <div className="project-profile-manager">
       <div>
-        <div className="project-profile-title">Profile 预设</div>
+        <div className="project-profile-title">执行预设</div>
         <p className="project-profile-copy">给可复用的执行偏好起个名字。Profile 不会安装插件，也不会扩大项目权限。</p>
       </div>
       {error && <div className="project-profile-error">{error}</div>}
       <div className="project-profile-fields">
         <div className="form-group">
-          <label>Profile 名称</label>
+          <label>预设名称</label>
           <input className="form-control" placeholder="例如：前端日常开发" value={form.name} onChange={event => onFieldChange('name', event.target.value)} />
         </div>
         <div className="form-group">
@@ -516,14 +432,14 @@ function AgentProfileManager({ profiles, loading, form, error, modelOptions, mod
           <textarea className="form-control" rows={3} placeholder="例如：优先运行前端测试，保持最小改动" value={form.default_instructions} onChange={event => onFieldChange('default_instructions', event.target.value)} />
         </div>
         <details className="project-profile-overrides">
-          <summary>Profile 覆盖项（高级）</summary>
-          <p>只有这个 Profile 需要覆盖项目默认值时才填写。</p>
+          <summary>更多选项</summary>
+          <p>只有这个预设需要覆盖项目默认值时才填写。</p>
           <div className="form-group">
             <label>Profile ID</label>
             <input className="form-control" placeholder="留空时根据名称自动生成" value={form.id} onChange={event => onFieldChange('id', event.target.value)} />
           </div>
           <div className="project-settings-grid project-profile-grid">
-            <label className="form-group">执行引擎
+            <label className="form-group">编程工具
               <select className="form-control" value={form.provider} onChange={event => onFieldChange('provider', event.target.value)}>
                 {!providerReady && form.provider ? <option disabled value={form.provider}>{codeAgentLabel(form.provider, providerCatalog)}（不可用）</option> : null}
                 {providerOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -561,14 +477,12 @@ function AgentProfileManager({ profiles, loading, form, error, modelOptions, mod
             <label className="form-group">Skill 意图（可选）
               <input className="form-control" placeholder="多个值用逗号分隔" value={form.skill_intents} onChange={event => onFieldChange('skill_intents', event.target.value)} />
             </label>
-            <label className="form-group">Plugin 意图（可选）
-              <input className="form-control" placeholder="多个值用逗号分隔" value={form.plugin_intents} onChange={event => onFieldChange('plugin_intents', event.target.value)} />
-            </label>
+
           </div>
         </details>
         <div className="project-profile-actions">
-          <span>{loading ? '正在加载 Profile…' : `已有 ${profiles.length} 个 Profile`}</span>
-          <div><button type="button" className="btn btn-secondary" onClick={onReset}>清空</button><button type="button" className="btn btn-secondary" onClick={onSubmit}>保存 Profile</button></div>
+          <span>{loading ? '正在加载预设…' : `已有 ${profiles.length} 个预设`}</span>
+          <div><button type="button" className="btn btn-secondary" onClick={onReset}>清空</button><button type="button" className="btn btn-secondary" onClick={onSubmit}>保存预设</button></div>
         </div>
       </div>
       {profiles.length > 0 && <div className="project-profile-list">{profiles.map(profile => <button key={profile.id} type="button" className="kanban-card-action-btn" onClick={() => onEdit(profile)}>{profile.name} · {profile.id}</button>)}</div>}

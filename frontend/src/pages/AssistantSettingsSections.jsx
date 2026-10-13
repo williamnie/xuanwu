@@ -1,6 +1,5 @@
 import PiMemoryPanel from './PiMemoryPanel';
 import ActivityTimelinePanel from './ActivityTimelinePanel';
-import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
 import PermissionsSettingsPanel from './PermissionsSettingsPanel';
 import NotificationSettingsPanel from './NotificationSettingsPanel';
 import RunnerSettingsPanel from './RunnerSettingsPanel';
@@ -8,6 +7,7 @@ import ReleaseUpdatePanel from './ReleaseUpdatePanel';
 import SkillsRuntimePanel from './SkillsRuntimePanel';
 import SourcePoliciesPanel from './SourcePoliciesPanel';
 import Projects from './Projects';
+import ExecutionPresetsPanel from './ExecutionPresetsPanel.jsx';
 import RemoteAccessTokenPanel from './RemoteAccessTokenPanel';
 import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import PiMcpManagementPanel from './PiMcpManagementPanel';
@@ -16,47 +16,31 @@ import ConnectorDiagnosticsPanel from './ConnectorDiagnosticsPanel';
 import FeishuSettingsPanel from './FeishuSettingsPanel';
 import TelegramSettingsPanel from './TelegramSettingsPanel';
 import GitHubSettingsPanel from './GitHubSettingsPanel';
-import ImChannelRegistryPanel from './ImChannelRegistryPanel';
 import { RestartAction } from './SettingsChrome';
 import { Languages } from 'lucide-react';
 import { useState } from 'react';
+import SettingsDisclosure from '../components/SettingsDisclosure.jsx';
+import { settingsSectionCopy } from './settingsNavigation.js';
 import { useI18n } from '../i18n/context.js';
 import { translate } from '../i18n/translations.js';
 import { message } from '../store/toastStore.js';
 import { APP_VERSION } from '../version.js';
 
-export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navigateTo, tier }) {
-  if (tier === 'advanced') {
-    return <AdvancedSettingsTab activeTab={activeTab} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />;
-  }
-  return (
-    <>
-      {activeTab === 'general' && <GeneralSettingsTab />}
-      {activeTab === 'supervisor' && <SupervisorSettingsTab navigateTo={navigateTo} />}
-      {activeTab === 'code-agents' && <CodeAgentsPanel />}
-      {activeTab === 'integrations' && <IntegrationsSettingsTab />}
-      {activeTab === 'permissions' && <PermissionsSettingsTab navigateTo={navigateTo} />}
-      {activeTab === 'notifications' && <NotificationsSettingsTab />}
-    </>
-  );
+export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navigateTo, section, theme, toggleTheme }) {
+  const [visited, setVisited] = useState([activeTab]);
+  if (!visited.includes(activeTab)) setVisited([...visited, activeTab]);
+  const visibleTabs = visited.includes(activeTab) ? visited : [...visited, activeTab];
+  return visibleTabs.map(tab => <div key={tab} hidden={activeTab !== tab}>
+    {tab === 'general' && <GeneralSettingsTab />}
+    {tab === 'ai' && <><CodeAgentsPanel /><SupervisorSettingsTab navigateTo={navigateTo} /></>}
+    {tab === 'connections' && <><NotificationsSettingsTab /><IntegrationsSettingsTab /></>}
+    {tab === 'preferences' && <><LanguageAndVersionCard /><button className="btn btn-secondary" onClick={toggleTheme} type="button">{theme === 'dark' ? '切换浅色主题' : '切换深色主题'}</button><ReleaseUpdatePanel /></>}
+    {tab === 'advanced' && <AdvancedSettingsTab section={section} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />}
+  </div>);
 }
 
 function SupervisorSettingsTab({ navigateTo }) {
-  const { language } = useI18n();
-  const [toolsVisited, setToolsVisited] = useState(false);
-  const english = language === 'en-US';
-  return (
-    <div className="settings-supervisor-page">
-      <PiAgentSettingsPanel onOpenCodeAgents={() => navigateTo('settings', null, '', '', { settingsSection: 'code-agents' })} />
-      <details className="settings-disclosure" onToggle={(event) => { if (event.currentTarget.open) setToolsVisited(true); }}>
-        <summary>
-          <strong>{english ? 'Tools & MCP' : '工具与 MCP'}</strong>
-          <span>{english ? 'Connect external tools when your assistant needs them.' : '需要让助手调用外部工具时，再展开配置。'}</span>
-        </summary>
-        {toolsVisited && <div className="settings-disclosure-content"><PiMcpManagementPanel embedded /></div>}
-      </details>
-    </div>
-  );
+  return <div className="settings-supervisor-page" id="settings-supervisor"><PiAgentSettingsPanel onOpenCodeAgents={() => navigateTo('settings', null, '', '', { settingsSection: 'code-agents' })} /></div>;
 }
 
 function IntegrationsSettingsTab() {
@@ -75,7 +59,7 @@ function IntegrationsSettingsTab() {
     ['health', english ? 'Connection health' : '连接检查', english ? 'Status and troubleshooting' : '查看状态与排查问题'],
   ];
   return (
-    <div className="settings-integrations-page">
+    <div className="settings-integrations-page" id="settings-integrations">
       <div className="settings-channel-navigation" aria-label={english ? 'Choose a platform' : '选择连接平台'} role="group">
         {channels.map(([id, title, description]) => (
           <button aria-pressed={channel === id} className={channel === id ? 'active' : ''} key={id} onClick={() => selectChannel(id)} type="button">
@@ -86,7 +70,7 @@ function IntegrationsSettingsTab() {
       {visitedChannels.includes('github') && <div hidden={channel !== 'github'}><GitHubSettingsPanel /></div>}
       {visitedChannels.includes('feishu') && <div hidden={channel !== 'feishu'}><FeishuSettingsPanel /></div>}
       {visitedChannels.includes('telegram') && <div hidden={channel !== 'telegram'}><TelegramSettingsPanel /></div>}
-      {visitedChannels.includes('health') && <div className="settings-connection-health" hidden={channel !== 'health'}><ConnectorDiagnosticsPanel /><ImChannelRegistryPanel /></div>}
+      {visitedChannels.includes('health') && <div className="settings-connection-health" hidden={channel !== 'health'}><ConnectorDiagnosticsPanel /></div>}
     </div>
   );
 }
@@ -94,7 +78,6 @@ function IntegrationsSettingsTab() {
 function GeneralSettingsTab() {
   return (
     <>
-      <LanguageAndVersionCard />
       <Projects />
     </>
   );
@@ -147,46 +130,26 @@ function PermissionsSettingsTab({ navigateTo }) {
 }
 
 function NotificationsSettingsTab() {
-  return <NotificationSettingsPanel />;
+  return <div id="settings-notifications"><NotificationSettingsPanel /></div>;
 }
 
-function AdvancedSettingsTab({ activeTab, RuntimeStatusPanel, navigateTo }) {
-  return (
-    <>
-      {activeTab === 'diagnostics' && <AdvancedDiagnosticsSettingsTab RuntimeStatusPanel={RuntimeStatusPanel} />}
-      {activeTab === 'skills' && <AdvancedSkillsSettingsTab />}
-      {activeTab === 'memory' && <MemorySettingsTab />}
-      {activeTab === 'activity' && <ActivityTimelinePanel navigateTo={navigateTo} />}
-      {activeTab === 'policies' && <SourcePoliciesPanel />}
-    </>
-  );
+function AdvancedSettingsTab({ section, RuntimeStatusPanel, navigateTo }) {
+  const { language } = useI18n();
+  const sections = [
+    ['diagnostics', <AdvancedDiagnosticsSettingsTab RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />],
+    ['permissions', <><PermissionsSettingsTab navigateTo={navigateTo} /><SourcePoliciesPanel /></>],
+    ['skills', <><SkillsRuntimePanel /><PiMcpManagementPanel embedded /></>],
+    ['memory', <PiMemoryPanel />],
+    ['presets', <ExecutionPresetsPanel />],
+    ['activity', <ActivityTimelinePanel navigateTo={navigateTo} />],
+  ];
+  return sections.map(([id, content]) => <SettingsDisclosure id={`settings-${id}`} key={id} selected={section === id} title={settingsSectionCopy(id, language).title}>{content}</SettingsDisclosure>);
 }
 
-function AdvancedDiagnosticsSettingsTab({ RuntimeStatusPanel }) {
+function AdvancedDiagnosticsSettingsTab({ RuntimeStatusPanel, navigateTo }) {
   const { t } = useI18n();
-  return (
-    <>
-      <ReleaseUpdatePanel />
-      <RuntimeStatusPanel />
-      <RemoteAccessTokenPanel />
-      <RunnerSettingsPanel />
-      <ProviderAvailabilityPanel />
-      <section className="glass-card settings-advanced-danger-zone">
-        <div>
-          <div className="settings-entry-eyebrow">{t('settings.advancedDiagnostics')}</div>
-          <h2>{t('settings.serviceLifecycle')}</h2>
-          <p>{t('settings.restartDescription')}</p>
-        </div>
-        <RestartAction />
-      </section>
-    </>
-  );
-}
-
-function AdvancedSkillsSettingsTab() {
-  return <SkillsRuntimePanel />;
-}
-
-function MemorySettingsTab() {
-  return <PiMemoryPanel />;
+  return <><RuntimeStatusPanel /><RemoteAccessTokenPanel /><RunnerSettingsPanel /><ConnectorDiagnosticsPanel />
+    <button className="btn btn-secondary" onClick={() => navigateTo('runs')} type="button">全部执行记录</button>
+    <section className="glass-card settings-advanced-danger-zone"><div><h3>{t('settings.serviceLifecycle')}</h3></div><RestartAction /></section>
+  </>;
 }

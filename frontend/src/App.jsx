@@ -662,7 +662,7 @@ export default function App() {
             ) : currentPage === 'automations' ? (
               <Automations />
             ) : currentPage === 'settings' ? (
-              <Settings initialTab={settingsSection || 'general'} navigateTo={navigateTo} onSectionChange={navigateToSettingsSection} />
+              <Settings initialTab={settingsSection || 'general'} navigateTo={navigateTo} onSectionChange={navigateToSettingsSection} theme={theme} toggleTheme={toggleTheme} />
             ) : (
               <Dashboard navigateTo={navigateTo} />
             )}

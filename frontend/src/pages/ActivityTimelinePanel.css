@@ -278,3 +278,6 @@
     grid-template-columns: 22px minmax(0, 1fr);
   }
 }
+
+.activity-id-filters { grid-column: 1 / -1; }
+.activity-id-filters label { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }

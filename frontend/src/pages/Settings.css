@@ -1044,3 +1044,8 @@
     min-width: 680px;
   }
 }
+
+.runtime-status__health-line { display: flex; flex-wrap: wrap; gap: 12px; font-family: var(--font-mono); font-size: 0.72rem; }
+.settings-permission-table:not(.settings-risk-table) .settings-permission-row { grid-template-columns: minmax(120px, 1fr) minmax(80px, 1fr) minmax(80px, 1fr); }
+
+.execution-presets-panel { min-width: 0; margin: 0; padding: 0; border: 0; }

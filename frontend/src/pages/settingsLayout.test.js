@@ -30,13 +30,14 @@ const runtimeDiagnosticsSource = readFileSync(new URL('../utils/runtimeDiagnosti
 test('Settings renders behavior sections and gates internal panels behind Advanced', () => {
   assert.match(settingsSource, /initialTab = 'general'/);
   assert.match(settingsSource, /resolveSettingsRoute\(initialTab\)/);
-  for (const tab of ['general', 'supervisor', 'code-agents', 'integrations', 'permissions', 'notifications']) {
-    assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
+  for (const tab of ['general', 'ai', 'connections', 'preferences', 'advanced']) {
+    assert.match(sectionsSource, new RegExp(`tab === '${tab}'`));
   }
-  for (const tab of ['diagnostics', 'skills', 'memory', 'activity', 'policies']) {
-    assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
+  for (const tab of ['diagnostics', 'permissions', 'skills', 'memory', 'presets', 'activity']) {
+    assert.match(sectionsSource, new RegExp(`\\['${tab}',`));
   }
-  assert.match(sectionsSource, /tier === 'advanced'/);
+  assert.match(sectionsSource, /<SettingsDisclosure/);
+  assert.match(sectionsSource, /selected=\{section === id\}/);
   assert.match(chromeSource, /SETTINGS_NAVIGATION_GROUPS/);
   assert.match(chromeSource, /settings-directory/);
   assert.match(chromeSource, /aria-current=\{route\.tab === tab \? 'page' : undefined\}/);
@@ -47,10 +48,10 @@ test('Settings renders behavior sections and gates internal panels behind Advanc
   assert.match(stylesSource, /\.settings-directory-link \{[\s\S]*?border-radius: var\(--button-radius\);/);
   assert.doesNotMatch(settingsSource, /CronTasksPanel/);
   assert.doesNotMatch(chromeSource, /Cron 任务已在侧边栏/);
-  assert.match(settingsNavigationSource, /id: 'supervisor'/);
-  assert.match(settingsNavigationSource, /id: 'code-agents'/);
-  assert.match(settingsNavigationSource, /id: 'integrations'/);
-  assert.doesNotMatch(settingsNavigationSource, /id: 'connections'/);
+  assert.match(settingsNavigationSource, /supervisor: \['ai', 'supervisor'\]/);
+  assert.match(settingsNavigationSource, /'code-agents': \['ai', 'code-agents'\]/);
+  assert.match(settingsNavigationSource, /integrations: \['connections', 'integrations'\]/);
+  assert.match(settingsNavigationSource, /id: 'connections'/);
 });
 
 test('Settings primary IA owns the complete project list and editor flow', () => {
@@ -72,11 +73,11 @@ test('Settings primary IA owns the complete project list and editor flow', () =>
   assert.match(stylesSource, /\.settings-language-bar \{[\s\S]*?min-height: 44px;/);
   assert.match(stylesSource, /\.settings-page \.glass-card \{\s*border-radius: var\(--radius-xs\);/);
   assert.doesNotMatch(sidebarSource, /sidebar-language-row|APP_VERSION|sidebar-version/);
-  assert.match(settingsNavigationSource, /Permissions/);
+  assert.match(settingsNavigationSource, /permissions/);
   assert.match(settingsNavigationSource, /Notifications/);
-  assert.match(settingsNavigationSource, /Xuanwu Supervisor/);
-  assert.match(settingsNavigationSource, /Code Agents/);
-  assert.match(settingsNavigationSource, /Integrations/);
+  assert.match(settingsNavigationSource, /AI connections/);
+  assert.match(settingsNavigationSource, /编程工具/);
+  assert.match(settingsNavigationSource, /connections/);
   assert.match(sectionsSource, /PiAgentSettingsPanel/);
   assert.match(sectionsSource, /CodeAgentsPanel/);
   assert.match(sectionsSource, /ConnectorDiagnosticsPanel/);
@@ -106,7 +107,8 @@ test('Settings content stays anchored and maintenance is outside everyday projec
   assert.match(general, /<Projects \/>/);
   assert.doesNotMatch(general, /ReleaseUpdatePanel|RuntimeStatusPanel|RestartAction/);
   const diagnostics = sectionsSource.slice(sectionsSource.indexOf('function AdvancedDiagnosticsSettingsTab'));
-  assert.match(diagnostics, /<ReleaseUpdatePanel \/>/);
+  assert.doesNotMatch(diagnostics, /<ReleaseUpdatePanel \/>/);
+  assert.match(sectionsSource, /tab === 'preferences'[\s\S]*?<ReleaseUpdatePanel \/>/);
 });
 
 test('Connection setup loads only visited platforms and keeps their drafts mounted between switches', () => {
@@ -120,17 +122,17 @@ test('Connection setup loads only visited platforms and keeps their drafts mount
   assert.match(sectionsSource, /hidden=\{channel !== 'telegram'\}><TelegramSettingsPanel/);
   assert.match(sectionsSource, /hidden=\{channel !== 'health'\}><ConnectorDiagnosticsPanel/);
   assert.match(sectionsSource, /aria-pressed=\{channel === id\}/);
-  assert.match(sectionsSource, /const \[toolsVisited, setToolsVisited\] = useState\(false\)/);
-  assert.match(sectionsSource, /if \(event\.currentTarget\.open\) setToolsVisited\(true\)/);
-  assert.match(sectionsSource, /toolsVisited && <div className="settings-disclosure-content">/);
-  assert.doesNotMatch(sectionsSource, /setToolsVisited\(false\)/);
+  const disclosure = readFileSync(new URL('../components/SettingsDisclosure.jsx', import.meta.url), 'utf8');
+  assert.match(disclosure, /state\.visited \? <div/);
+  assert.match(disclosure, /visited: current\.visited \|\| open/);
+  assert.match(sectionsSource, /hidden=\{activeTab !== tab\}/);
 });
 
-test('Supervisor Settings keeps provider, behavior and MCP on one page with separate authorities', () => {
+test('AI and advanced settings keep provider, behavior and MCP on their own authorities', () => {
   assert.match(sectionsSource, /function SupervisorSettingsTab/);
   assert.match(sectionsSource, /<PiAgentSettingsPanel onOpenCodeAgents=/);
   assert.match(sectionsSource, /<PiMcpManagementPanel embedded \/>/);
-  assert.match(sectionsSource, /工具与 MCP/);
+  assert.match(sectionsSource, /\['skills', <><SkillsRuntimePanel \/><PiMcpManagementPanel/);
   assert.match(piAgentSource, /连接助手模型/);
   assert.match(piAgentSource, /助手偏好/);
   assert.match(piAgentSource, /handleConnectionApply/);
@@ -143,30 +145,24 @@ test('Supervisor Settings keeps provider, behavior and MCP on one page with sepa
   assert.match(piAgentSource, /<ProviderSummary/);
 });
 
-test('advanced Diagnostics exposes process-group memory freshness, roles, P95, and budget state', () => {
-  assert.match(settingsSource, /status\.process_group_memory/);
-  assert.match(settingsSource, /Runner process-group memory/);
-  assert.match(settingsSource, /memory\.freshness/);
-  assert.match(settingsSource, /memory\.roles/);
-  assert.match(settingsSource, /Top PID by macOS ps RSS/);
-  assert.match(settingsSource, /Budget measurement/);
-  assert.match(settingsSource, /Agentic in-flight/);
-  assert.match(settingsSource, /idle grace/);
-  assert.match(settingsSource, /Physical footprint/);
-  assert.match(settingsSource, /physical_memory_probe/);
-  assert.match(settingsSource, /measurement_source/);
-  assert.match(settingsSource, /array buffers/);
-  assert.match(settingsSource, /rss_p95_bytes/);
-  assert.match(settingsSource, /no auto-restart/);
+test('Maintenance summarizes health while preserving complete diagnostic exports', () => {
+  assert.doesNotMatch(settingsSource, /ProcessGroupMemoryStatus|Top PID by macOS ps RSS|runtime-status__grid/);
+  for (const label of ['API', '数据库', '编程工具', '后台循环']) assert.ok(settingsSource.includes(label));
+  assert.match(settingsSource, /buildRuntimeDiagnosticsBundle\(\{ connectors, doctor, logs \}\)/);
+  assert.match(runtimeDiagnosticsSource, /doctor/);
+  assert.match(settingsSource, /systemApi\.getRuntimeDoctor\(\)/);
 });
 
-test('advanced Diagnostics distinguishes the project manager from the independent Guardian supervisor', () => {
-  assert.match(settingsSource, /PI project manager/);
-  assert.match(settingsSource, /Guardian supervisor/);
-  assert.match(settingsSource, /manager_active_projects/);
-  assert.match(settingsSource, /supervisor_active_projects/);
-  assert.match(settingsSource, /independent of project manager/);
-  assert.match(settingsSource, /does not decompose or replan Work/);
+test('Codex settings and maintenance save independent fields without stale round-trip', () => {
+  const runner = readFileSync(new URL('./RunnerSettingsPanel.jsx', import.meta.url), 'utf8');
+  const tools = readFileSync(new URL('./CodeAgentsPanel.jsx', import.meta.url), 'utf8');
+  assert.match(runner, /updateRunnerSettings\(\{ max_parallel_projects: Number\(state\.draft\) \}\)/);
+  assert.doesNotMatch(runner, /codex_server_mode|FirstUseLauncher|codex_cli_command/);
+  assert.match(tools, /codexBackendUpdatePayload\(mode\)/);
+  assert.match(tools, /codex_cli_command: settings\.codex_cli_command/);
+  assert.match(tools, /codex_app_command: settings\.codex_app_command/);
+  assert.match(tools, /codex_effective_command/);
+  assert.match(settingsSource, /if \(logsVisited\) loadLogs/);
 });
 
 test('Xuanwu product sidebar removes the PI section and keeps internal config behind Settings', () => {
@@ -294,7 +290,8 @@ test('Skills refresh preserves detail state and tolerates an absent detail cache
 test('Activity tab shows traceable redacted timeline from API', () => {
   assert.match(sectionsSource, /ActivityTimelinePanel/);
   assert.match(assistantApiSource, /getPiActivityTimeline/);
-  assert.match(activityTimelineSource, /Raw → Intake → Action trace/);
+  assert.doesNotMatch(activityTimelineSource, /Raw → Intake → Action trace/);
+  assert.match(activityTimelineSource, /按 ID 查找/);
   assert.match(activityTimelineSource, /source/);
   assert.match(activityTimelineSource, /conversationId/);
   assert.match(activityTimelineSource, /proposalId/);

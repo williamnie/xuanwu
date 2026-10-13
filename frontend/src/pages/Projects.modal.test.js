@@ -46,7 +46,7 @@ test('project modal is viewport-centered and uses a custom compact disclosure', 
   assert.match(css, /\.project-config-modal-create\s*\{[\s\S]*?max-width:\s*640px/);
   assert.match(css, /\.project-modal-overlay\s*\{[\s\S]*?padding:\s*24px/);
   assert.match(ruleFor('.project-modal-overlay'), /backdrop-filter:\s*none/);
-  assert.match(editorSource, /<details className="project-settings-advanced">/);
+  assert.match(editorSource, /<SettingsDisclosure title="更多选项">/);
   assert.match(readFileSync(new URL('./ProjectSettingsEditor.css', import.meta.url), 'utf8'), /summary:focus-visible[\s\S]*?box-shadow:\s*inset 3px 0 0 var\(--primary\)/);
 });
 
@@ -105,7 +105,7 @@ test('project config modal reads Provider catalog and models from generic APIs',
   assert.match(editorSource, /systemApi\.getProviders\(\)/);
   assert.match(editorSource, /systemApi\.getProviderModels\(provider\)/);
   assert.match(editorSource, /providerOptionsFromCatalog\(ui\.providerCatalog\)/);
-  assert.match(editorSource, /buildProviderModelOptions\(ui\.formProvider, ui\.codexModels, ui\.formModel, ui\.profileForm\.model\)/);
+  assert.match(editorSource, /buildProviderModelOptions\(ui\.formProvider, ui\.codexModels, ui\.formModel\)/);
   assert.match(editorSource, /modelOptions\.map\(option =>/);
   assert.match(editorSource, /远端 model API 读取失败，已启用手填/);
   assert.match(editorSource, /手动填写 model ID/);
@@ -121,9 +121,9 @@ test('project config modal reads Provider catalog and models from generic APIs',
 test('project config modal shows provider loading and failure states instead of a blank engine field', () => {
   assert.match(editorSource, /providerCatalogLoading: true/);
   assert.match(editorSource, /aria-busy=\{ui\.providerCatalogLoading\}/);
-  assert.match(editorSource, /正在读取可用执行引擎…/);
-  assert.match(editorSource, /正在读取已启用且可用的 Code Agent…/);
-  assert.match(editorSource, /读取执行引擎失败：\$\{ui\.providerCatalogError\}/);
+  assert.match(editorSource, /正在读取可用编程工具…/);
+  assert.match(editorSource, /正在读取已启用且可用的 编程工具…/);
+  assert.match(editorSource, /读取编程工具失败：\$\{ui\.providerCatalogError\}/);
   assert.match(editorSource, /!providerReady && !historicalProviderPreserved/);
   assert.match(editorSource, /codeAgentLabel\(ui\.formProvider, ui\.providerCatalog\).*（不可用）/);
   assert.match(editorSource, /<AgentProfileSelectOptions/);
@@ -135,9 +135,10 @@ test('project config modal shows provider loading and failure states instead of 
 
 test('new project form defaults to one required field and keeps optional controls collapsed', () => {
   assert.match(editorSource, /<label>项目路径 \*<\/label>/);
-  assert.match(editorSource, /mode === 'create'[\s\S]*<details className="project-settings-advanced">/);
-  assert.match(editorSource, /高级运行配置（可选）/);
-  assert.match(editorSource, /mode === 'edit'[\s\S]*loadAgentProfiles\(\)/);
-  assert.match(editorSource, /Agent Profile（可选）/);
-  assert.match(editorSource, /Profile 覆盖项（高级）/);
+  assert.match(editorSource, /<ProjectRuntimeFields/);
+  assert.match(editorSource, /<SettingsDisclosure title="更多选项">[\s\S]*?执行速度/);
+  assert.match(editorSource, /更多选项/);
+  assert.match(editorSource, /loadAgentProfiles\(\)/);
+  assert.match(editorSource, /执行预设/);
+  assert.match(editorSource, /更多选项/);
 });

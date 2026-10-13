@@ -159,11 +159,7 @@ export default function Projects() {
   return (
     <section className="glass-card settings-project-panel">
       <div className="settings-project-panel-header">
-        <div>
-          <div className="settings-entry-eyebrow">项目级设置</div>
-          <h2>项目管理</h2>
-          <p>添加工作目录、查看项目状态和调整执行配置。启用自动执行后，玄武会处理项目中的待办任务。</p>
-        </div>
+
         <div className="settings-project-panel-actions">
           <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing} type="button">
             <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />

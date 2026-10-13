@@ -227,6 +227,10 @@
 
 ---
 
+### 5.10 设置折叠区
+
+复用 `settings-disclosure` 的细线、直角控件和标准文字。首次展开才挂载内容，收起后保留草稿；深链打开并定位目标节。
+
 ## 6. 动画规范
 
 **原则：只有状态变化和 hover/focus 配动效，时长 120–180ms，仅作用于 `opacity / transform / background-color / border-color`。**

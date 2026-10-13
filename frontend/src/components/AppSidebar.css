@@ -42,3 +42,5 @@
 .sidebar-more > summary { list-style: none; cursor: pointer; }
 .sidebar-more > summary::-webkit-details-marker { display: none; }
 .sidebar-more > button { position: absolute; bottom: 100%; left: 0; min-width: 120px; background: var(--surface-overlay); border: 1px solid var(--border-color); }
+
+.sidebar-footer-actions .sidebar-more > button { width: 120px; min-width: 120px; max-width: none; justify-content: flex-start; white-space: nowrap; }

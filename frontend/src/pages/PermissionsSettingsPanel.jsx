@@ -1,6 +1,6 @@
 import { connectorsApi } from '../api/connectors.js';
 import { useEffect, useState } from 'react';
-import { AlertTriangle, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { connectorPermissionRows } from './settingsProductModels.js';
 
@@ -32,10 +32,7 @@ export default function PermissionsSettingsPanel({ navigateTo }) {
 function PanelHeader({ loading, onRefresh }) {
   return (
     <div className="settings-product-header">
-      <div>
-        <h2><ShieldCheck size={18} color="var(--primary)" /> 执行权限</h2>
-        <p>查看各连接能执行的操作，以及哪些操作需要你确认。实际执行仍受项目规则和审批限制。</p>
-      </div>
+
       <button className="btn btn-secondary" disabled={loading} onClick={onRefresh} type="button">
         <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />刷新
       </button>
@@ -49,11 +46,10 @@ function ConnectorPermissionMatrix({ rows }) {
       <div className="settings-block-title">连接能力</div>
       {rows.length === 0 ? <div className="settings-empty-state">当前没有可显示的连接能力。可前往外部连接检查配置。</div> : (
         <div className="settings-permission-table" role="table" aria-label="外部连接权限">
-          <MatrixHeader labels={['连接', '能力标识', '方向', '授权']} />
+          <MatrixHeader labels={['连接', '方向', '授权']} />
           {rows.map(row => (
             <div className="settings-permission-row" role="row" key={`${row.connectorID}:${row.capabilityID}`}>
               <span>{row.connectorLabel}</span>
-              <code>{row.capabilityID}</code>
               <span>{row.direction}</span>
               <strong className={row.authorization === 'required' ? 'is-warning' : ''}>{row.authorization}</strong>
             </div>

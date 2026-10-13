@@ -312,3 +312,8 @@
   .ds-composer textarea { padding-inline: 14px; }
   .ds-composer-foot { flex-wrap: wrap; padding-inline: 12px; }
 }
+
+/* 设置折叠区：按需挂载，收起保留状态。 */
+.settings-disclosure { border-top: 1px solid var(--border-color); }
+.settings-disclosure > summary { padding: 16px 0; cursor: pointer; color: var(--text-primary); }
+.settings-disclosure-content { padding: 0 0 16px; }

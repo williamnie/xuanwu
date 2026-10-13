@@ -1,6 +1,6 @@
 import { assistantApi } from '../api/assistant.js';
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Link2, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Link2, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
 import {
@@ -45,11 +45,7 @@ export default function ActivityTimelinePanel({ navigateTo }) {
 function PanelHeader({ loading, onRefresh }) {
   return (
     <div className="activity-head">
-      <div>
-        <p className="activity-eyebrow"><Activity size={14} /> Activity Timeline</p>
-        <h2>Raw → Intake → Action trace</h2>
-        <p>串联 raw event、context bundle、intake run、inbox item、domain skill、proposal、policy 与 issue/reply。</p>
-      </div>
+
       <button className="btn btn-secondary" disabled={loading} onClick={onRefresh} type="button">
         <RefreshCw size={15} className={loading ? 'spin-animation' : ''} /> 刷新
       </button>
@@ -62,10 +58,12 @@ function FilterForm({ filters, onChange, onReset, onSubmit, options }) {
   return (
     <form className="activity-filter" onSubmit={onSubmit}>
       <label>Source<input value={filters.source} onChange={update('source')} placeholder="fixture-cli" /></label>
+      <details className="settings-disclosure activity-id-filters"><summary>按 ID 查找</summary>
       <label>Conversation<input value={filters.conversationId} onChange={update('conversationId')} placeholder="conversation id" /></label>
       <label>Inbox item<input value={filters.inboxItemId} onChange={update('inboxItemId')} placeholder="123" /></label>
       <label>Proposal<input value={filters.proposalId} onChange={update('proposalId')} placeholder="proposal id" /></label>
       <label>Issue<input value={filters.issueId} onChange={update('issueId')} placeholder="602" /></label>
+      </details>
       <label>Since<input value={filters.since} onChange={update('since')} placeholder="2026-07-06T00:00:00Z" /></label>
       <label>Until<input value={filters.until} onChange={update('until')} placeholder="2026-07-07T00:00:00Z" /></label>
       <AuditSelect label="Stage" onChange={update('stage')} options={options.stages} value={filters.stage} />

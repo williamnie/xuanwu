@@ -81,7 +81,7 @@ function NotificationHeader({ loading, onRefresh }) {
   return (
     <div className="settings-product-header">
       <div>
-        <h2><BellRing size={18} color="var(--primary)" /> 通知渠道与偏好</h2>
+        <h3><BellRing size={14} /> 消息通知</h3>
         <p>选择普通消息的通知方式，并查看通知渠道是否已连接。保存为全局偏好，历史设置会保留在下方。</p>
       </div>
       <button className="btn btn-secondary" disabled={loading} onClick={onRefresh} type="button">

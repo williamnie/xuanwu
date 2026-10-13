@@ -70,3 +70,11 @@ test('normalizes editable profile form defaults', () => {
   assert.equal(agentProfilePayload({ name: 'Pi review', provider: 'pi-coding-agent', model: '' }).model, '');
   assert.equal(normalizeAgentProfileForm({ provider: 'claude', model: 'codex-default' }).model, '');
 });
+
+
+test('hidden Plugin intents retain their exact stored representation when another field is saved', () => {
+  for (const plugin_intents of ['[ "old", "duplicate", "old" ]', 'legacy, text', '', ['old', 'old']]) {
+    const form = normalizeAgentProfileForm({ name: 'Existing', plugin_intents });
+    assert.deepEqual(agentProfilePayload({ ...form, name: 'Renamed' }).plugin_intents, plugin_intents);
+  }
+});

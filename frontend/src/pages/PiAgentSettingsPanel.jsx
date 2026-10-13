@@ -1,8 +1,9 @@
-import { ArrowRight, Bot, CheckCircle2, CircleDashed, Eye, KeyRound, Loader2, PlugZap, RefreshCw, Save, Sparkles, Trash2, XCircle } from 'lucide-react';
+import { Bot, CheckCircle2, CircleDashed, KeyRound, Loader2, PlugZap, RefreshCw, Save, Sparkles, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { usePiAgentSettingsState } from './piAgentSettingsState';
 import './PiAgentSettingsPanel.css';
+import SettingsDisclosure from '../components/SettingsDisclosure.jsx';
 
 export default function PiAgentSettingsPanel({ onOpenCodeAgents }) {
   const state = usePiAgentSettingsState();
@@ -17,7 +18,7 @@ export default function PiAgentSettingsPanel({ onOpenCodeAgents }) {
 function SupervisorSettingsForm({ onOpenCodeAgents, state }) {
   return (
     <>
-      <SupervisorScopeNote onOpenCodeAgents={onOpenCodeAgents} />
+      {onOpenCodeAgents && <button className="btn btn-secondary" onClick={onOpenCodeAgents} type="button">查看编程工具</button>}
       <SupervisorReadiness state={state} />
       <ConfigurationStage
         description="填写模型服务提供的 API 地址和 Key，或使用账号快捷登录。获取并选择模型后，保存为默认模型。"
@@ -34,23 +35,6 @@ function SupervisorSettingsForm({ onOpenCodeAgents, state }) {
         <SupervisorBehaviorSettings state={state} />
       </ConfigurationStage>
     </>
-  );
-}
-
-function SupervisorScopeNote({ onOpenCodeAgents }) {
-  return (
-    <aside className="supervisor-scope-note">
-      <div className="supervisor-scope-copy">
-        <span>MODEL RUNTIME</span>
-        <strong>为玄武助手选择理解和处理任务的模型</strong>
-        <p>负责写代码的 Codex / Claude Code 使用本机登录状态，可在“编程工具”中单独检查。</p>
-      </div>
-      {onOpenCodeAgents ? (
-        <button className="btn btn-secondary supervisor-code-agents-link" onClick={onOpenCodeAgents} type="button">
-          查看编程工具 <ArrowRight size={14} />
-        </button>
-      ) : null}
-    </aside>
   );
 }
 
@@ -360,25 +344,15 @@ function connectionDisplayName(provider) {
 function SupervisorBehaviorSettings({ state }) {
   return (
     <>
-      <AppliedModelSummary state={state} />
       <SupervisorSettingsGrid state={state} />
-      <Field label="运行指令">
+      <SettingsDisclosure title="更多选项"><Field label="给玄武的长期说明">
         <textarea className="form-control" rows={4} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
       </Field>
+      </SettingsDisclosure>
       <ChatPersonaSettings state={state} />
-      <PromptSummaryDebug state={state} />
       <SupervisorEnableField form={state.form} updateField={state.updateField} />
       <SaveRow onSave={state.handleAgentSave} saving={state.saving} />
     </>
-  );
-}
-
-function AppliedModelSummary({ state }) {
-  return (
-    <div className="supervisor-applied-model">
-      <span><small>当前默认模型</small><strong>{connectionApiLabel(state.form.api)} · {state.form.modelId}</strong></span>
-      <em>在上方连接区修改</em>
-    </div>
   );
 }
 
@@ -386,9 +360,7 @@ function PanelHeader({ loading, onRefresh }) {
   return (
     <div className="supervisor-settings-header">
       <div>
-        <span className="settings-entry-eyebrow"><Bot size={13} /> XUANWU / MODEL RUNTIME</span>
-        <h2>Xuanwu Supervisor</h2>
-        <p>连接玄武助手使用的模型，设置它如何思考、处理任务和回复。</p>
+        <h3><Bot size={14} /> 玄武助手</h3>
       </div>
       <button className="btn btn-secondary" onClick={onRefresh} disabled={loading} type="button">
         <RefreshCw size={14} className={loading ? 'spin-animation' : ''} /> 刷新
@@ -507,10 +479,11 @@ function ProviderSummary({ providers }) {
 
 function ChatPersonaSettings({ state }) {
   const form = state.form;
+  const [visited, setVisited] = useState(false);
   return (
-    <details className="persona-settings-disclosure">
+    <details className="persona-settings-disclosure" onToggle={event => { if (event.currentTarget.open) setVisited(true); }}>
       <summary><Sparkles size={16} /><span><strong>对话与通知表达风格</strong><small>调整回复和通知的措辞 · 配置版本 {form.personaRevision}</small></span></summary>
-      <div className="persona-settings-content">
+      {visited && <div className="persona-settings-content">
         <p className="persona-boundary-notice">这里只控制对话和通知的最终措辞，不改变通知是否发送，也不改变权限、审批、工具调用、工作项状态和完成判定。</p>
         {state.personaConflictDraft ? <PersonaConflictNotice state={state} /> : null}
         <label className="persona-enable-field"><input type="checkbox" checked={form.personaEnabled} onChange={(event) => state.updateField('personaEnabled', event.target.checked)} />启用自定义表达风格（默认关闭）</label>
@@ -521,7 +494,7 @@ function ChatPersonaSettings({ state }) {
           <Field label="语言"><select className="form-control" value={form.personaLanguageMode} onChange={(event) => state.updateField('personaLanguageMode', event.target.value)}><option value="system">跟随系统</option><option value="follow_user">跟随当前用户消息</option></select></Field>
         </div>
         <span className="persona-profile-badge">生效范围：对话回复与通知内容</span>
-      </div>
+      </div>}
     </details>
   );
 }
@@ -535,31 +508,6 @@ function PersonaConflictNotice({ state }) {
       <details><summary>查看本地草稿</summary><pre>{JSON.stringify({ enabled: draft.personaEnabled, personality: draft.personaPersonality, communication_style: draft.personaCommunicationStyle, verbosity: draft.personaVerbosity, language_mode: draft.personaLanguageMode }, null, 2)}</pre></details>
       <div><button className="btn btn-secondary" onClick={state.restorePersonaConflictDraft} type="button">恢复本地草稿</button><button className="btn btn-secondary" onClick={state.dismissPersonaConflictDraft} type="button">使用服务器版本</button></div>
     </div>
-  );
-}
-
-function PromptSummaryDebug({ state }) {
-  const summary = state.promptSummary?.runtime_prompt_summary;
-  return (
-    <details className="prompt-debug-disclosure">
-      <summary><Eye size={16} /><span><strong>查看生效指令</strong><small>检查当前生效的配置摘要，不回显 API key/token 或表达风格原文</small></span></summary>
-      <div className="prompt-debug-content">
-        <div className="prompt-debug-heading">
-          <div><strong>当前生效 Prompt 摘要</strong><p>只显示自定义 instructions 与 Persona 安全摘要。</p></div>
-          <button className="btn btn-secondary" onClick={state.loadPromptSummary} disabled={state.promptSummaryLoading} type="button">{state.promptSummaryLoading ? <Loader2 size={14} className="spin-animation" /> : <Eye size={14} />} 查看摘要</button>
-        </div>
-        {summary ? (
-          <div className="prompt-debug-summary">
-            <span>Custom instructions: {summary.custom_instructions_configured ? `${summary.custom_instructions_chars} chars` : '未配置'}</span>
-            <span>Prompt profiles：{summary.profiles?.join(' / ')}</span>
-            <span>表达 Persona：{summary.persona_enabled ? `已启用 · ${summary.persona_chars} chars · revision ${summary.persona_revision}` : `未启用 · revision ${summary.persona_revision}`}</span>
-            <span>Persona 生效范围：{summary.persona_profiles?.join(' / ') || 'chat'} · language_mode={summary.language_mode}</span>
-            <span>注入位置：{summary.injected_after}</span><span>优先级：{summary.conflict_policy}</span>
-            {summary.custom_instructions_preview ? <code>{summary.custom_instructions_preview}</code> : null}
-          </div>
-        ) : null}
-      </div>
-    </details>
   );
 }
 
