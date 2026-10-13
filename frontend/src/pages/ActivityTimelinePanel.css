@@ -71,6 +71,11 @@
   min-width: 0;
 }
 
+.activity-id-filters {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
 .activity-filter input,
 .activity-filter select {
   background: var(--bg-secondary);

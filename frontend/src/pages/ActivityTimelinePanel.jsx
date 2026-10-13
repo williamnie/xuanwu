@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, Link2, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
+import { useI18n } from '../i18n/context.js';
 import {
+  ACTIVITY_ID_FILTER_KEYS,
   DEFAULT_ACTIVITY_FILTERS,
   activityAuditFilterOptions,
   cleanActivityFilters,
@@ -58,19 +60,28 @@ function PanelHeader({ loading, onRefresh }) {
 }
 
 function FilterForm({ filters, onChange, onReset, onSubmit, options }) {
+  const { language } = useI18n();
+  const english = language === 'en-US';
+  const idFilterCount = ACTIVITY_ID_FILTER_KEYS.filter(key => String(filters[key] || '').trim()).length;
+  const hasIdFilter = idFilterCount > 0;
+  const idLabels = { conversationId: english ? 'Conversation ID' : '对话 ID', inboxItemId: english ? 'Inbox item ID' : '收件 ID', proposalId: english ? 'Proposal ID' : '提案 ID', issueId: english ? 'Task ID' : '任务 ID' };
   const update = (field) => (event) => onChange((current) => ({ ...current, [field]: event.target.value }));
   return (
     <form className="activity-filter" onSubmit={onSubmit}>
       <label>Source<input value={filters.source} onChange={update('source')} placeholder="fixture-cli" /></label>
-      <label>Conversation<input value={filters.conversationId} onChange={update('conversationId')} placeholder="conversation id" /></label>
-      <label>Inbox item<input value={filters.inboxItemId} onChange={update('inboxItemId')} placeholder="123" /></label>
-      <label>Proposal<input value={filters.proposalId} onChange={update('proposalId')} placeholder="proposal id" /></label>
-      <label>Issue<input value={filters.issueId} onChange={update('issueId')} placeholder="602" /></label>
       <label>Since<input value={filters.since} onChange={update('since')} placeholder="2026-07-06T00:00:00Z" /></label>
       <label>Until<input value={filters.until} onChange={update('until')} placeholder="2026-07-07T00:00:00Z" /></label>
       <AuditSelect label="Stage" onChange={update('stage')} options={options.stages} value={filters.stage} />
       <AuditSelect label="Status" onChange={update('status')} options={options.statuses} value={filters.status} />
       <AuditSelect label="Decision" onChange={update('decision')} options={options.decisions} value={filters.decision} />
+      <details className="settings-disclosure activity-id-filters" open={hasIdFilter}>
+        <summary>{english ? 'Find by ID' : '按 ID 查找'}{hasIdFilter ? ` (${idFilterCount})` : ''}</summary>
+        <div className="settings-disclosure-content activity-filter">
+          {ACTIVITY_ID_FILTER_KEYS.map(key => (
+            <label key={key}>{idLabels[key] || key}<input value={filters[key]} onChange={update(key)} /></label>
+          ))}
+        </div>
+      </details>
       <button className="btn btn-secondary" type="submit"><Search size={15} /> 查询</button>
       <button className="btn btn-secondary" onClick={onReset} type="button">重置</button>
     </form>

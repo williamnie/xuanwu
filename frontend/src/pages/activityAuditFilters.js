@@ -12,6 +12,8 @@ export const DEFAULT_ACTIVITY_FILTERS = Object.freeze({
   until: '',
 });
 
+export const ACTIVITY_ID_FILTER_KEYS = Object.freeze(Object.keys(DEFAULT_ACTIVITY_FILTERS).filter(key => key.endsWith('Id')));
+
 export function filterActivityAuditItems(items = [], filters = {}) {
   const stage = clean(filters.stage);
   const status = clean(filters.status);
