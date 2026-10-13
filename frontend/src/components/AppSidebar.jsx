@@ -49,6 +49,15 @@ const NAV_TRANSLATION_KEYS = {
   settings: 'nav.settings',
 };
 
+const NAV_CODE_PREFIX = {
+  'command-center': '01',
+  'ask-xuanwu': '02',
+  work: '03',
+  runs: '04',
+  automations: '05',
+  analytics: '06',
+};
+
 export default function AppSidebar({
   currentPage,
   filterProject,
@@ -115,7 +124,7 @@ export default function AppSidebar({
               closeMobileDrawer();
             }}
           >
-            <NavIconLabel Icon={NAV_ICONS[item.icon]} label={navLabel(item)} />
+            <NavIconLabel Icon={NAV_ICONS[item.icon]} label={navLabel(item)} code={NAV_CODE_PREFIX[item.page]} />
             <ProductNavBadge active={activeNavPage === item.page} page={item.page} />
           </button>
         ))}
@@ -141,7 +150,7 @@ export default function AppSidebar({
           {footerNavItems.map((item) => (
             <button
               aria-label={navLabel(item)}
-              className={`nav-item nav-item-secondary ${activeNavPage === item.page ? 'active' : ''}`}
+              className={`nav-item nav-item-secondary nav-item-${item.page} ${activeNavPage === item.page ? 'active' : ''}`}
               key={item.page}
               onClick={() => {
                 navigateTo(item.page);
@@ -170,9 +179,10 @@ function FooterIcon({ Icon }) {
   return <Icon aria-hidden="true" size={17} />;
 }
 
-function NavIconLabel({ Icon, label }) {
+function NavIconLabel({ Icon, label, code }) {
   return (
     <span className="nav-item-main">
+      {code ? <span className="nav-item-code">{code}</span> : null}
       <Icon size={16} />
       <span className="nav-label">{label}</span>
     </span>
@@ -186,7 +196,7 @@ function ApiStatus() {
   return (
     <span className={`api-status ${connectionState}`}>
       <span className="api-status-dot" />
-      {label}
+      <span className="api-status-tag">[{label}]</span>
     </span>
   );
 }
@@ -199,7 +209,8 @@ function ProductNavBadge({ active, page }) {
 function AutomationCountBadge({ active }) {
   const automations = useDataStore(selectAutomations);
   const activeCount = automations.filter(item => item.status === 'active').length;
-  const label = activeCount > 0 ? activeCount : automations.length;
+  const rawCount = activeCount > 0 ? activeCount : automations.length;
+  const label = `[${String(rawCount).padStart(2, '0')}]`;
 
   return (
     <span className={`nav-badge${active ? ' is-active' : ''}`}>

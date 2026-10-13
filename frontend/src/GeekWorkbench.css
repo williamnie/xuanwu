@@ -45,16 +45,33 @@
   --bg-sidebar: var(--bg-secondary);
   --surface-tint: var(--primary-glow);
   --panel-gradient: var(--bg-card);
-  --sidebar-gradient: color-mix(in srgb, var(--bg-primary) 86%, transparent);
-  --canvas-gradient: var(--bg-primary);
+  --sidebar-gradient: #070709;
+  --canvas-gradient: #070709;
   --button-secondary-bg: transparent;
-  --button-secondary-hover: var(--nav-hover);
+  --button-secondary-hover: rgba(255, 255, 255, 0.05);
   --button-border: var(--border-color);
+}
+
+/* E2B 32px 细腻技术网格底纹 */
+.bg-grid-tech {
+  background-size: 32px 32px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
 }
 
 html, body, #root { min-height: 100%; }
 body { background: var(--canvas-gradient); font-family: var(--font-sans); }
 body::before { display: none; }
+
+[data-theme="dark"] body,
+[data-theme="dark"] .main-content {
+  background-color: var(--bg-primary);
+  background-size: 32px 32px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
 
 h1, h2, h3, h4 {
   font-family: var(--font-display);
@@ -68,12 +85,27 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   outline: 2px solid color-mix(in srgb, var(--primary) 68%, white);
   outline-offset: 2px;
 }
-::selection { background: color-mix(in srgb, var(--primary-strong) 42%, transparent); color: var(--text-primary); }
-::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 52%, transparent); border-radius: var(--radius-sm); }
+::selection { background: color-mix(in srgb, var(--primary) 42%, transparent); color: var(--text-primary); }
+
+/* 暗黑极细半透明滚动条 */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-xs);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
 
 .main-content { padding: 0 28px 30px; }
 .sidebar {
-  background: var(--sidebar-gradient);
+  background: var(--bg-primary);
   backdrop-filter: saturate(140%) blur(12px);
   border-right-color: var(--border-color);
   box-shadow: none;
@@ -175,6 +207,86 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .modal-content { border-radius: var(--radius-md); }
 .status-badge, .triage-readiness-badge { border-radius: var(--radius-xs); font-family: var(--font-mono); letter-spacing: 0.035em; }
 .terminal-view { background: var(--terminal-bg); border: 1px solid var(--terminal-border); border-radius: var(--radius-md); box-shadow: none; color: var(--terminal-text); }
+
+/* E2B 沙盒控制台视窗 (Sandbox Console Windows) */
+.e2b-terminal-window {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.e2b-terminal-window:hover {
+  border-color: var(--border-color-hover);
+}
+
+.e2b-window-header {
+  align-items: center;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: 12px;
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.e2b-window-dots {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.e2b-window-dots .e2b-dot {
+  border-radius: 50%;
+  height: 8px;
+  width: 8px;
+}
+
+.e2b-window-dots .e2b-dot.red { background: #ef4444; }
+.e2b-window-dots .e2b-dot.yellow { background: #f59e0b; }
+.e2b-window-dots .e2b-dot.green { background: #10b981; }
+
+.e2b-window-title {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+}
+
+.e2b-window-tag {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.e2b-window-meta {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.e2b-meta-code {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+[data-theme="dark"] .btn-primary {
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.25);
+}
+
+[data-theme="dark"] .btn-primary:hover:not(:disabled) {
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.45);
+}
 
 .guardian-alert-banner { border-radius: var(--radius-md); }
 .guardian-alert-icon { border-radius: var(--radius-sm); }

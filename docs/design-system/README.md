@@ -12,13 +12,19 @@
 | `components.css` | 规范内全部标准组件的参考实现 |
 | `examples/index.html` | 组件总览（厨房水槽页），浏览器直接打开即可预览 |
 | `examples/chat.html` | 完整页面示例：对话工作台 |
-| `$xuanwu-ui` | 全局个人 Skill，只有显式调用时才加载；详细规范仍以本目录为项目内权威来源 |
+| `skills/xuanwu-ui/` | **设计规范 Skill 源文件**（`$xuanwu-ui`），支持跨 Agent 调用的即插即用指令与规范 |
 
-## Codex 使用方式
+## Agent / Codex / Claude 使用方式
 
 本仓库的 `AGENTS.md` 已要求所有前端任务先读取本目录。需要主动启用全局 Skill 时使用：
 
 > `$xuanwu-ui 按玄武设计规范实现或改造当前前端，并完成明暗主题与响应式验收。`
+
+安装 Skill 到本地 Agents 环境（Codex / Claude / ~/.agents）：
+
+```bash
+./scripts/install-agent-skill.sh all
+```
 
 全局 Skill 默认关闭隐式调用，不会把玄武风格自动应用到其他项目。
 

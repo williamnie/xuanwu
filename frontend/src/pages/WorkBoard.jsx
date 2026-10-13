@@ -103,7 +103,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedHan
     : workSummary.counts || {};
 
   return (
-    <section className={`work-board-page is-${view}`}>
+    <section className={`work-board-page bg-grid-tech is-${view}`}>
       <TaskSubviewTabs active="work" navigateTo={navigateTo} />
       <WorkBoardHeader
         onCreate={() => setDialog({ mode: 'create' })}
@@ -501,7 +501,11 @@ function WorkBoardHeader({ onCreate, onProjectChange, onQueryChange, onRefresh, 
   return (
     <header className="work-ledger-header">
       <div className="work-ledger-title">
-        <div className="work-ledger-kicker"><BriefcaseBusiness size={14} /> {t('board.ledger')}</div>
+        <div className="work-ledger-kicker font-mono">
+          <BriefcaseBusiness size={14} />
+          <span>03 WORK_LEDGER</span>
+          <span className="text-zinc-500">[BOARD: ACTIVE_TASKS]</span>
+        </div>
         <div className="work-ledger-heading-row">
           <h1>{t('work.board')}</h1>
         </div>

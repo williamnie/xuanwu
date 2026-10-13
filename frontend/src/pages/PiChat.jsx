@@ -52,7 +52,7 @@ export default function PiChat({ navigateTo, initialConversationId = '', onConve
 
 function PiChatLayout({ navigateTo, state }) {
   return (
-    <div className="pi-chat-page animate-fade-in">
+    <div className="pi-chat-page bg-grid-tech animate-fade-in">
       <PiChatSidebar navigateTo={navigateTo} state={state} />
       <section className="pi-chat-shell">
         <PiChatMain navigateTo={navigateTo} state={state} />
@@ -176,7 +176,7 @@ function ChatHeader({ state }) {
       title={t('chat.copyConversationDebugHint')}
     >
       <div className="pi-chat-title-group">
-        <span>{PRODUCT_TERMS.productLatin} · Xuanwu assistant</span>
+        <span className="font-mono">02 ASK_XUANWU · {PRODUCT_TERMS.productLatin} · Xuanwu assistant</span>
         <strong>{title}</strong>
       </div>
       <div className="pi-chat-header-actions">

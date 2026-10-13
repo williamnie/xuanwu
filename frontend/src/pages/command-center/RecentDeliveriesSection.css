@@ -1,4 +1,16 @@
 .recent-deliveries-section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.recent-deliveries-section.e2b-terminal-window {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+  gap: 10px;
+}
+.recent-deliveries-section.e2b-terminal-window > .recent-deliveries-header {
+  padding: 14px 14px 4px;
+}
+.recent-deliveries-section.e2b-terminal-window > .recent-deliveries-state {
+  margin: 0 14px 14px;
+}
 .recent-deliveries-header { align-items: flex-start; display: flex; gap: 18px; justify-content: space-between; }
 .recent-deliveries-kicker { align-items: center; color: var(--success); display: flex; font-family: var(--font-mono); font-size: 0.68rem; font-weight: 750; gap: 7px; letter-spacing: 0.1em; margin-bottom: 5px; text-transform: uppercase; }
 .recent-deliveries-header h3 { font-size: 1.2rem; margin: 0; }
@@ -11,7 +23,7 @@
 .recent-deliveries-freshness { align-items: center; border: 1px solid currentColor; display: inline-flex; font-size: 0.68rem; gap: 5px; min-height: 28px; padding: 0 8px; }
 .recent-deliveries-freshness.stale { background: var(--warning-bg); color: var(--warning); }
 
-.recent-deliveries-list { display: flex; flex-direction: column; gap: 10px; max-height: min(68vh, 640px); min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; scrollbar-gutter: stable; }
+.recent-deliveries-list { display: flex; flex-direction: column; gap: 10px; max-height: min(68vh, 640px); min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 14px 14px; padding-right: 4px; scrollbar-gutter: stable; }
 .recent-deliveries-list:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .recent-delivery-card { background: var(--panel-gradient); border: 1px solid var(--border-color); border-left: 3px solid var(--text-muted); border-radius: var(--radius-xs); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 15px 16px 12px; }
 .recent-delivery-card.green { border-left-color: var(--success); }

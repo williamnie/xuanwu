@@ -118,7 +118,20 @@ export default function AttentionSection() {
   };
 
   return (
-    <section className="attention-section" aria-busy={loading}>
+    <section className="attention-section e2b-terminal-window" aria-busy={loading}>
+      <div className="e2b-window-header">
+        <div className="e2b-window-dots">
+          <span className="e2b-dot red" />
+          <span className="e2b-dot yellow" />
+          <span className="e2b-dot green" />
+        </div>
+        <div className="e2b-window-title">
+          <span className="e2b-window-tag">02 ATTENTION_MONITOR</span>
+        </div>
+        <div className="e2b-window-meta">
+          <span className="e2b-meta-code font-mono">[LOG: AUDIT_TRAIL]</span>
+        </div>
+      </div>
       <header className="attention-section-header">
         <div>
           <div className="attention-section-kicker"><BellRing size={15} /> APPROVALS</div>

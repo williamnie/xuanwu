@@ -71,12 +71,23 @@ export default function TaskRequestsSection({ navigateTo, onCreate }) {
   };
 
   return (
-    <section className="task-requests" aria-busy={state.loading}>
-      <header className="task-requests-header">
-        <h2>待你处理</h2>
-        <button aria-label="刷新待处理任务" className="task-requests-refresh" disabled={state.loading} onClick={() => load()} type="button">
-          <RefreshCw className={state.loading ? 'is-spinning' : ''} size={14} />
-        </button>
+    <section className="task-requests e2b-terminal-window" aria-busy={state.loading}>
+      <header className="task-requests-header e2b-window-header">
+        <div className="e2b-window-dots">
+          <span className="e2b-dot red" />
+          <span className="e2b-dot yellow" />
+          <span className="e2b-dot green" />
+        </div>
+        <div className="e2b-window-title">
+          <span className="e2b-window-tag">01 TASK_REQUESTS</span>
+          <h2>待你处理</h2>
+        </div>
+        <div className="e2b-window-meta">
+          <span className="e2b-meta-code font-mono">[QUEUE: REVIEW_RETRY]</span>
+          <button aria-label="刷新待处理任务" className="task-requests-refresh" disabled={state.loading} onClick={() => load()} type="button">
+            <RefreshCw className={state.loading ? 'is-spinning' : ''} size={14} />
+          </button>
+        </div>
       </header>
 
       {state.error ? (

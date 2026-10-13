@@ -193,7 +193,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
   }, [activeRunId, onPageContextChange, providerSessionRef, runDetail, selectedSessionId, surface]);
 
   return (
-    <section className="runs-page-shell">
+    <section className="runs-page-shell bg-grid-tech">
       {surface === 'run' ? (
         <RunSidebar
           hasMore={hasMore}

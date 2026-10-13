@@ -25,8 +25,8 @@ test('runtime imports the canonical design tokens for both themes', () => {
   assert.match(foundationCss, /@import\s+['"]\.\.\/\.\.\/docs\/design-system\/tokens\.css['"]/);
   assert.match(designTokensCss, /:root\s*\{[\s\S]*--bg-primary:\s*#f3efe5/);
   assert.match(designTokensCss, /:root\s*\{[\s\S]*--bg-card:\s*rgba\(255,\s*253,\s*247,\s*0\.88\)/);
-  assert.match(designTokensCss, /\[data-theme='dark'\]\s*\{[\s\S]*--bg-primary:\s*#070a0a/);
-  assert.match(designTokensCss, /\[data-theme='dark'\]\s*\{[\s\S]*--text-primary:\s*#e2e7e4/);
+  assert.match(designTokensCss, /\[data-theme='dark'\]\s*\{[\s\S]*--bg-primary:\s*#(?:070709|070a0a)/);
+  assert.match(designTokensCss, /\[data-theme='dark'\]\s*\{[\s\S]*--text-primary:\s*#(?:ffffff|e2e7e4)/);
   assert.match(designTokensCss, /--font-display:\s*'Inter'/);
   assert.match(designTokensCss, /--font-mono:\s*'JetBrains Mono'/);
   assert.match(designTokensCss, /--radius-lg:\s*10px/);

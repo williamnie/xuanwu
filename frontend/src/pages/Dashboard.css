@@ -1,8 +1,121 @@
-.dashboard-page { display: flex; flex-direction: column; min-width: 0; }
+.dashboard-page { display: flex; flex-direction: column; min-width: 0; gap: 20px; }
 .dashboard-intro { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 0 0; }
-.dashboard-eyebrow { color: var(--text-muted); font-family: var(--font-mono); font-size: .56rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-.dashboard-intro h1 { font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 650; letter-spacing: -.02em; margin: 6px 0; }
-.dashboard-intro p { color: var(--text-secondary); font-size: .88rem; margin: 0; line-height: 1.6; }
+.dashboard-intro-titlegroup { display: flex; flex-direction: column; gap: 2px; }
+.dashboard-eyebrow-row { align-items: center; display: flex; gap: 8px; }
+.dashboard-eyebrow { color: var(--text-muted); font-family: var(--font-mono); font-size: .58rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.dashboard-env-tag { background: var(--success-bg); border: 1px solid rgba(16, 185, 129, 0.28); color: var(--success); font-size: .56rem; font-weight: 700; letter-spacing: .06em; padding: 1px 6px; border-radius: var(--radius-xs); }
+.dashboard-intro h1 { font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 650; letter-spacing: -.02em; margin: 4px 0 2px; color: var(--text-primary); }
+.dashboard-subline { color: var(--text-muted); font-size: .62rem; letter-spacing: .08em; margin: 0; text-transform: uppercase; }
+
+/* E2B HUD 数据监测条 (HUD Telemetry Strip) */
+.dashboard-hud-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard-hud-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 14px;
+  position: relative;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.dashboard-hud-card:hover {
+  border-color: var(--border-color-hover);
+  background: var(--bg-card-hover);
+}
+
+.dashboard-hud-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.dashboard-hud-label {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.60rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dashboard-hud-status {
+  border-radius: 50%;
+  height: 6px;
+  width: 6px;
+}
+
+.dashboard-hud-status.status-amber {
+  background: var(--warning);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+}
+
+.dashboard-hud-status.status-accent {
+  background: var(--primary);
+  box-shadow: 0 0 6px rgba(0, 229, 255, 0.6);
+}
+
+.dashboard-hud-status.status-info {
+  background: var(--info);
+  box-shadow: 0 0 6px rgba(6, 182, 212, 0.4);
+}
+
+.dashboard-hud-status.status-success {
+  background: var(--success);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.dashboard-hud-status.status-muted {
+  background: var(--text-faint);
+}
+
+.dashboard-hud-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.dashboard-hud-unit {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 400;
+  margin-left: 2px;
+}
+
+.dashboard-hud-bar {
+  background: var(--control-bg);
+  border-radius: 1px;
+  height: 2px;
+  margin-top: 4px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.dashboard-hud-progress {
+  border-radius: 1px;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.dashboard-hud-card.hud-warning .dashboard-hud-progress { background: var(--warning); width: 75%; }
+.dashboard-hud-card.hud-accent .dashboard-hud-progress { background: var(--primary); width: 60%; }
+.dashboard-hud-card.hud-info .dashboard-hud-progress { background: var(--info); width: 45%; }
+.dashboard-hud-card.hud-success .dashboard-hud-progress { background: var(--success); width: 90%; }
+.dashboard-hud-card.hud-muted .dashboard-hud-progress { background: var(--border-color); width: 15%; }
+
 .dashboard-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 16px 0; border-block: 1px solid var(--border-color); }
 .dashboard-facts > div { padding: 0 20px; border-right: 1px solid var(--border-light); }
 .dashboard-facts > div:first-child { padding-left: 0; }
@@ -22,11 +135,18 @@
 .dashboard-operations > summary { color: var(--text-secondary); cursor: pointer; font-size: .72rem; }
 .dashboard-operations[open] > summary { margin-bottom: 12px; }
 .dashboard-page .attention-state, .dashboard-page .active-work-state, .dashboard-page .recent-deliveries-state { background: transparent; border-style: solid; border-color: var(--border-light); }
-@media (max-width: 980px) { .dashboard-work-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 980px) {
+  .dashboard-work-grid { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-hud-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 @media (max-width: 760px) {
   .dashboard-intro { align-items: flex-start; flex-direction: column; padding-top: 16px; }
+  .dashboard-hud-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 0; }
   .dashboard-facts > div:nth-child(3) { padding-left: 0; }
   .dashboard-facts > div:nth-child(2) { border: 0; }
   .dashboard-connection-error { flex-wrap: wrap; }
+}
+@media (max-width: 480px) {
+  .dashboard-hud-strip { grid-template-columns: 1fr; }
 }

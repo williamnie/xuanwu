@@ -78,47 +78,75 @@
   --terminal-muted: #5b665f;
   --terminal-success: #4ade80;
   --terminal-error: #f87171;
+  /* E2B 极客云沙盒扩展令牌 (Geek & Cloud Sandbox Tokens) */
+  --bg-obsidian: #070709;
+  --bg-surface: #0a0a0e;
+  --bg-header: #0d0e12;
+  --bg-inset: #060608;
+  --accent-e2b: #00e5ff;
+  --accent-e2b-hover: #33ebff;
+  --glow-e2b: 0 0 15px rgba(0, 229, 255, 0.25);
+  --border-crisp: rgba(255, 255, 255, 0.08);
+  --border-crisp-hover: rgba(255, 255, 255, 0.16);
 }
 
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg-primary: #070a0a;
-  --bg-secondary: #0c100f;
-  --bg-card: rgba(19, 24, 22, 0.9);
-  --bg-card-hover: rgba(37, 45, 41, 0.75);
-  --surface-raised: #101514;
-  --surface-overlay: #131816;
-  --control-bg: #131816;
-  --nav-hover: rgba(186, 255, 63, 0.06);
-  --nav-active: linear-gradient(90deg, rgba(186, 255, 63, 0.14), rgba(186, 255, 63, 0.06));
+  /* E2B 极客黑曜石暗黑 (Obsidian Dark) 主题 */
+  --bg-primary: #070709;
+  --bg-secondary: #0a0a0e;
+  --bg-card: #0a0a0e;
+  --bg-card-hover: rgba(255, 255, 255, 0.04);
+  --surface-raised: #0d0e12;
+  --surface-overlay: #0d0e12;
+  --control-bg: #060608;
+  --nav-hover: rgba(255, 255, 255, 0.05);
+  --nav-active: linear-gradient(90deg, rgba(0, 229, 255, 0.14), rgba(0, 229, 255, 0.03));
 
-  --text-primary: #e2e7e4;
-  --text-secondary: #a4aca6;
-  --text-muted: #646b66;
-  --text-faint: #464c48;
+  --text-primary: #ffffff;
+  --text-secondary: #d4d4d8;
+  --text-muted: #71717a;
+  --text-faint: #52525b;
 
-  --primary: #baff3f;
-  --primary-hover: #cdff70;
-  --primary-glow: rgba(186, 255, 63, 0.12);
+  --primary: #00e5ff;
+  --primary-hover: #33ebff;
+  --primary-glow: rgba(0, 229, 255, 0.25);
 
-  --success: #4ade80;
-  --success-bg: rgba(74, 222, 128, 0.12);
-  --warning: #fbbf24;
-  --warning-bg: rgba(251, 191, 36, 0.1);
-  --error: #f87171;
-  --error-bg: rgba(248, 113, 113, 0.12);
-  --info: #38bdf8;
-  --info-bg: rgba(56, 189, 248, 0.12);
-  --info-glow: rgba(56, 189, 248, 0.3);
+  --success: #10b981;
+  --success-bg: rgba(16, 185, 129, 0.12);
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.12);
+  --error: #ef4444;
+  --error-bg: rgba(239, 68, 68, 0.12);
+  --info: #06b6d4;
+  --info-bg: rgba(6, 182, 212, 0.12);
+  --info-glow: rgba(6, 182, 212, 0.3);
 
-  --button-primary-bg: #baff3f;
-  --button-primary-fg: #0a0d0c;
+  --button-primary-bg: #00e5ff;
+  --button-primary-fg: #070709;
 
-  --border-color: #222826;
-  --border-light: #181d1b;
-  --border-color-hover: #3a423e;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.04);
+  --border-color-hover: rgba(255, 255, 255, 0.16);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 12px 32px -18px rgba(0, 0, 0, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 0 15px rgba(0, 229, 255, 0.25);
+
+  --terminal-bg: #060608;
+  --terminal-border: rgba(255, 255, 255, 0.08);
+  --terminal-text: #e4e4e7;
+  --terminal-muted: #71717a;
+  --terminal-success: #10b981;
+  --terminal-error: #ef4444;
+
+  --bg-obsidian: #070709;
+  --bg-surface: #0a0a0e;
+  --bg-header: #0d0e12;
+  --bg-inset: #060608;
+  --accent-e2b: #00e5ff;
+  --accent-e2b-hover: #33ebff;
+  --glow-e2b: 0 0 15px rgba(0, 229, 255, 0.25);
+  --border-crisp: rgba(255, 255, 255, 0.08);
+  --border-crisp-hover: rgba(255, 255, 255, 0.16);
 }

@@ -2,42 +2,50 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SOURCE_DIR="$ROOT_DIR/skills/xuanwu"
 TARGET="${1:-}"
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/install-agent-skill.sh <codex|claude|all>
+Usage: ./scripts/install-agent-skill.sh <codex|claude|agents|all>
 
-Install the Xuanwu issue-management skill for Codex, Claude Code, or both.
+Install Xuanwu agent skills (xuanwu issue runner and xuanwu-ui design system)
+for Codex, Claude Code, ~/.agents/skills, or all of them.
 EOF
 }
 
-if [[ ! -f "$SOURCE_DIR/SKILL.md" ]]; then
-  echo "missing skill source: $SOURCE_DIR/SKILL.md" >&2
-  exit 1
-fi
-
-install_skill() {
+install_all_skills() {
   local agent="$1"
   local skills_dir="$2"
-  local target_dir="$skills_dir/xuanwu"
 
-  mkdir -p "$target_dir"
-  cp -R "$SOURCE_DIR/." "$target_dir/"
-  echo "Installed Xuanwu skill for $agent to $target_dir"
+  for skill in xuanwu xuanwu-ui; do
+    local src="$ROOT_DIR/skills/$skill"
+    if [[ -d "$src" && -f "$src/SKILL.md" ]]; then
+      local target_dir="$skills_dir/$skill"
+      mkdir -p "$target_dir"
+      cp -R "$src/." "$target_dir/"
+      if [[ "$skill" == "xuanwu" ]]; then
+        echo "Installed Xuanwu skill for $agent to $target_dir"
+      else
+        echo "Installed Xuanwu UI skill for $agent to $target_dir"
+      fi
+    fi
+  done
 }
 
 case "$TARGET" in
   codex)
-    install_skill "Codex" "${XUANWU_CODEX_SKILLS_DIR:-${CODEX_HOME:-$HOME/.codex}/skills}"
+    install_all_skills "Codex" "${XUANWU_CODEX_SKILLS_DIR:-${CODEX_HOME:-$HOME/.codex}/skills}"
     ;;
   claude)
-    install_skill "Claude Code" "${XUANWU_CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+    install_all_skills "Claude Code" "${XUANWU_CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+    ;;
+  agents)
+    install_all_skills "Agents" "${XUANWU_AGENTS_SKILLS_DIR:-$HOME/.agents/skills}"
     ;;
   all)
-    install_skill "Codex" "${XUANWU_CODEX_SKILLS_DIR:-${CODEX_HOME:-$HOME/.codex}/skills}"
-    install_skill "Claude Code" "${XUANWU_CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+    install_all_skills "Codex" "${XUANWU_CODEX_SKILLS_DIR:-${CODEX_HOME:-$HOME/.codex}/skills}"
+    install_all_skills "Claude Code" "${XUANWU_CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+    install_all_skills "Agents" "${XUANWU_AGENTS_SKILLS_DIR:-$HOME/.agents/skills}"
     ;;
   *)
     usage >&2

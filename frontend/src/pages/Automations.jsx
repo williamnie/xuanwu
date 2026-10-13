@@ -115,9 +115,14 @@ export default function Automations() {
     } finally { setSubmitting(''); }
   };
 
-  return <div className="automations-page animate-fade-in">
+  return <div className="automations-page bg-grid-tech animate-fade-in">
     <header className="automations-hero">
-      <div><span className="automations-kicker"><Bot size={15} /> {t('automations.kicker')}</span>
+      <div>
+        <div className="automations-kicker font-mono">
+          <Bot size={15} />
+          <span>05 AUTOMATION_LOOPS</span>
+          <span className="text-zinc-500">[DISPATCH: CRON_EVENTS]</span>
+        </div>
         <h1>{t('nav.automations')}</h1>
         <p>{t('automations.description')}</p>
       </div>

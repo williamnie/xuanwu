@@ -5,6 +5,25 @@
   min-width: 0;
 }
 
+.active-work-section.e2b-terminal-window {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+  gap: 10px;
+}
+
+.active-work-section.e2b-terminal-window .active-work-header {
+  padding: 14px 14px 4px;
+}
+
+.active-work-section.e2b-terminal-window .active-work-list {
+  padding: 0 14px 14px;
+}
+
+.active-work-section.e2b-terminal-window .active-work-state {
+  margin: 0 14px 14px;
+}
+
 .active-work-header {
   align-items: flex-start;
   display: flex;

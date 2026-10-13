@@ -134,7 +134,7 @@ export default function NewSessionWorkspace({
           </div>
         </div>
 
-        <p className="new-session-starters-label">// 快捷开始</p>
+        <p className="new-session-starters-label">快捷开始</p>
         <div className="new-session-starters">
           {NEW_SESSION_STARTERS.map((starter) => (
             <button key={starter.title} onClick={() => setPrompt(starter.prompt)} type="button">

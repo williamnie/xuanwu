@@ -333,3 +333,28 @@
   .ds-request-card { grid-template-columns: 7px minmax(0, 1fr); }
   .ds-request-card .actions { grid-column: 2; justify-content: flex-start; }
 }
+
+/* ---------- 极客科技网格与沙盒视窗 (E2B Geek & Sandbox) ---------- */
+.bg-grid-tech {
+  background-size: 32px 32px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+.e2b-terminal-window {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.e2b-terminal-header {
+  align-items: center;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+}
+

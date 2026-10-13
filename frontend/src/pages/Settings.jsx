@@ -31,7 +31,7 @@ export default function Settings({ initialTab = 'general', navigateTo, onSection
   };
 
   return (
-    <div className="settings-page">
+    <div className="settings-page bg-grid-tech">
       <SettingsHeader title={pageTitle} />
       <div className="settings-workspace">
         <SettingsNavigation onRouteChange={handleRouteChange} route={route} />

@@ -110,7 +110,20 @@ export default function RecentDeliveriesSection({ limit = RECENT_DELIVERY_LIMIT,
   };
 
   return (
-    <section className="recent-deliveries-section" aria-busy={loading}>
+    <section className="recent-deliveries-section e2b-terminal-window" aria-busy={loading}>
+      <div className="e2b-window-header">
+        <div className="e2b-window-dots">
+          <span className="e2b-dot red" />
+          <span className="e2b-dot yellow" />
+          <span className="e2b-dot green" />
+        </div>
+        <div className="e2b-window-title">
+          <span className="e2b-window-tag">04 DELIVERED_ARTIFACTS</span>
+        </div>
+        <div className="e2b-window-meta">
+          <span className="e2b-meta-code font-mono">[STATUS: VERIFIED]</span>
+        </div>
+      </div>
       <header className="recent-deliveries-header">
         <div>
           <div className="recent-deliveries-kicker"><PackageCheck size={15} /> DELIVERED</div>

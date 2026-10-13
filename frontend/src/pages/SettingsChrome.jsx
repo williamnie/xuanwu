@@ -11,7 +11,7 @@ export function SettingsHeader({ title = 'Settings' }) {
     <header className="settings-header">
       <div className="settings-title-row">
         <div>
-          <div className="settings-eyebrow">SETTINGS</div>
+          <div className="settings-eyebrow">SETTINGS · [SYS: PREFERENCES]</div>
           <h1>{title === 'Settings' ? t('settings.title') : title}</h1>
         </div>
       </div>

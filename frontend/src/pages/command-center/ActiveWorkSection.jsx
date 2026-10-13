@@ -140,7 +140,20 @@ export default function ActiveWorkSection({ limit = 10, navigateTo, projects = [
   };
 
   return (
-    <section className="active-work-section" aria-busy={loading}>
+    <section className="active-work-section e2b-terminal-window" aria-busy={loading}>
+      <div className="e2b-window-header">
+        <div className="e2b-window-dots">
+          <span className="e2b-dot red" />
+          <span className="e2b-dot yellow" />
+          <span className="e2b-dot green" />
+        </div>
+        <div className="e2b-window-title">
+          <span className="e2b-window-tag">03 RUNTIME_PROCESSES</span>
+        </div>
+        <div className="e2b-window-meta">
+          <span className="e2b-meta-code font-mono">[LIMIT: {limit}]</span>
+        </div>
+      </div>
       <header className="active-work-header">
         <div>
           <div className="active-work-kicker"><Clock3 size={15} /> RUNNING</div>

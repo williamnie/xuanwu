@@ -122,8 +122,8 @@ export default function App() {
     prefilledStatus: 'triage',
     newIssueSource: null,
 
-    // 主题状态 (默认亮色以匹配截图，支持一键切换)
-    theme: localStorage.getItem('codex-theme') || 'light',
+    // 主题状态（默认 E2B 极客暗黑主题，支持一键切换）
+    theme: localStorage.getItem('codex-theme') || 'dark',
 
     // 侧边栏折叠状态
     sidebarCollapsed: localStorage.getItem('codex-sidebar-collapsed') === 'true',
