@@ -80,7 +80,7 @@ test('Handoff stays available for audit while normal delivery lives inside Work 
   assert.match(client, /request\(`\/api\/handoffs\?/);
   assert.match(client, /request\(`\/api\/handoffs\/\$\{encodeURIComponent\(id\)\}`/);
   assert.match(workDetail, /<WorkDeliveryView/);
-  assert.match(workDetail, /t\('work\.sectionResult'\)/);
+  assert.match(workDetail, /hidden=\{activeTab !== 'result'\}/);
   assert.doesNotMatch(workDetail, /navigateTo\('handoffs'/);
   assert.match(page, /Handoff 审计/);
   assert.match(page, /打开所属 Issue 交付/);

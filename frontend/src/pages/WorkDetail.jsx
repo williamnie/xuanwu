@@ -20,15 +20,17 @@ import { workApi } from '../api/work.js';
 import MarkdownPreview from '../components/editor/MarkdownPreview.jsx';
 import { message } from '../store/toastStore.js';
 import WorkEditorDialog from './work/WorkEditorDialog.jsx';
-import WorkRunProcess from './work/WorkRunProcess.jsx';
+import WorkRunList from './work/WorkRunList.jsx';
 import { HumanReviewCard } from './work/HumanReview.jsx';
 import { useHumanReview } from './work/useHumanReview.jsx';
 import { workProfileSummary } from './work/workProfileRouting.js';
 import WorkDeliveryView from './work/WorkDeliveryView.jsx';
 import { issueIdFromWorkId } from './workBoardModel.js';
 import {
+  WORK_DETAIL_TABS,
   WORK_TIMELINE_KINDS,
   buildWorkActionPayload,
+  defaultWorkDetailTab,
   filterTimelineItems,
   mergeTimelinePages,
   workAvailableActions,
@@ -39,15 +41,13 @@ import { useI18n } from '../i18n/context.js';
 
 const EMPTY_RESULTS = { evidence: [], handoffs: [] };
 const DEFAULT_ACCEPTANCE_ID = 'issue-delivery';
-const NOT_STARTED_STATUSES = new Set(['triage', 'todo']);
 
-// 任务详情单页三段式：现在怎样 → 结果 → 过程（每次执行的完整记录）。
+// 任务详情：页头和“现在怎样”常驻；结果 / 任务描述 / 执行 / 活动放进 Tab，默认 Tab 按深链和状态选择。
 export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChanged, projects = [], selectedHandoffId = '', selectedRunId = '', workId }) {
   const { language, t } = useI18n();
   const detailRequest = useRef(0);
   const resultsRequest = useRef(0);
   const activityRequest = useRef(0);
-  const resultsRef = useRef(null);
   const [detail, setDetail] = useState(null);
   const [results, setResults] = useState(EMPTY_RESULTS);
   const [resultErrors, setResultErrors] = useState({});
@@ -56,7 +56,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   const [timelineCursor, setTimelineCursor] = useState('');
   const [timelineKind, setTimelineKind] = useState('');
   const [timelineError, setTimelineError] = useState('');
-  const [activityOpen, setActivityOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('');
+  const [runCount, setRunCount] = useState(null);
   const [activeDeliveryId, setActiveDeliveryId] = useState(selectedHandoffId);
   const [loading, setLoading] = useState(true);
   const [resultsLoading, setResultsLoading] = useState(true);
@@ -127,7 +128,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     setTimelineCursor('');
     setTimelineKind('');
     setTimelineError('');
-    setActivityOpen(false);
+    setActiveTab('');
+    setRunCount(null);
     setActivityLoaded(false);
     setActiveDeliveryId(selectedHandoffId);
     setEditorOpen(false);
@@ -137,8 +139,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   }, [loadDetail, loadResults, selectedHandoffId]);
 
   useEffect(() => {
-    if (activityOpen && !activityLoaded && !activityLoading) loadActivity();
-  }, [activityOpen, activityLoaded, activityLoading, loadActivity]);
+    if (activeTab === 'activity' && !activityLoaded && !activityLoading) loadActivity();
+  }, [activeTab, activityLoaded, activityLoading, loadActivity]);
 
   const work = detail?.work || null;
   const issueId = issueIdFromWorkId(work?.id);
@@ -169,10 +171,16 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       || (results.handoffs.some(item => item.id === current) ? current : results.handoffs[0]?.id || ''));
   }, [results.handoffs, selectedHandoffId]);
 
-  // 交付深链直接定位到“结果”段。
+  // 首次拿到任务时选默认 Tab；之后状态刷新不抢走用户手动选的 Tab。
+  const workStatus = work?.status || '';
   useEffect(() => {
-    if (selectedHandoffId && !resultsLoading && work) resultsRef.current?.scrollIntoView?.({ block: 'start' });
-  }, [resultsLoading, selectedHandoffId, work]);
+    if (workStatus) setActiveTab(current => current || defaultWorkDetailTab(workStatus, { selectedHandoffId, selectedRunId }));
+  }, [selectedHandoffId, selectedRunId, workStatus]);
+
+  // 从执行记录页“所属任务”回来时，同一任务也切到执行并高亮那一次。
+  useEffect(() => {
+    if (selectedRunId) setActiveTab('runs');
+  }, [selectedRunId]);
 
   useEffect(() => {
     if (!work) return;
@@ -232,6 +240,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   };
 
   const handleLatestRunChange = useCallback(run => setLatestRun(run), []);
+  const handleRunTotalChange = useCallback(total => setRunCount(total), []);
   const review = useHumanReview({ onSubmitted: async () => { await refreshAll(); onWorkChanged?.(); } });
 
   if (loading && !work) return <WorkDetailLoading />;
@@ -239,6 +248,12 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
 
   const profileSummary = workProfileSummary(work, latestRun);
   const hasResults = results.handoffs.length > 0 || results.evidence.length > 0 || resultErrors.evidence || resultErrors.handoffs;
+  const tabBadges = {
+    activity: '',
+    description: customAcceptance.length ? String(customAcceptance.length) : '',
+    result: results.handoffs.length ? String(results.handoffs.length) : '',
+    runs: runCount ? String(runCount) : '',
+  };
 
   return (
     <section className="work-detail-page animate-fade-in">
@@ -271,57 +286,74 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
         <WorkStateSummary status={work.status} decision={decision} />
         <WorkFeedback feedback={detail?.feedback} />
         {availableActions.review ? <HumanReviewCard disabled={submitting || review.submitting} onSelect={action => review.select(work, decision.request, action)} request={decision.request} /> : null}
-        <details className="work-detail-disclosure" open={NOT_STARTED_STATUSES.has(work.status) || undefined}>
-          <summary>{t('work.taskDescription')}</summary>
-          <MarkdownPreview text={work.goal || t('work.noGoal')} />
-        </details>
-        {customAcceptance.length ? (
-          <details className="work-detail-disclosure">
-            <summary>{t('work.acceptanceCriteria')} ({customAcceptance.length})</summary>
-            <ul>{customAcceptance.map(criterion => <li key={criterion.id}>{criterion.description}</li>)}</ul>
-          </details>
-        ) : null}
       </section>
 
-      {hasResults ? (
-        <section className="work-detail-panel work-delivery-panel" ref={resultsRef}>
-          <div className="work-delivery-panel-heading"><SectionHeading eyebrow="RESULT" title={t('work.sectionResult')} /></div>
-          <WorkDeliveryView
-            evidence={results.evidence}
-            handoffs={results.handoffs}
-            loading={resultsLoading}
-            loadError={resultErrors.evidence || resultErrors.handoffs}
-            onRefresh={refreshAll}
-            onSelectionChange={setActiveDeliveryId}
-            selectedHandoffId={activeDeliveryId}
-            work={work}
-          />
-        </section>
-      ) : null}
+      <section className="work-detail-panel work-detail-tabs-panel">
+        <div aria-label={t('work.detailTabs')} className="work-detail-tabs" role="tablist">
+          {WORK_DETAIL_TABS.map(tab => (
+            <button
+              aria-controls={`work-detail-tab-${tab}`}
+              aria-selected={activeTab === tab}
+              id={`work-detail-tabbtn-${tab}`}
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              role="tab"
+              type="button"
+            >
+              {t(`work.tab.${tab}`)}{tabBadges[tab] ? <span>{tabBadges[tab]}</span> : null}
+            </button>
+          ))}
+        </div>
 
-      <section className="work-detail-panel work-process-panel">
-        <SectionHeading eyebrow="PROCESS" title={t('work.sectionProcess')} />
-        <WorkRunProcess
-          allowRunRetry={!availableActions.retry}
-          navigateTo={navigateTo}
-          onLatestRunChange={handleLatestRunChange}
-          onRunsChanged={() => { void loadDetail({ silent: true }); onWorkChanged?.(); }}
-          refreshToken={processToken}
-          selectedRunId={selectedRunId}
-          workId={workId}
-        />
-        <details className="work-detail-disclosure">
-          <summary>{t('work.executionConfig')}</summary>
-          <dl className="work-provider-profile-facts">
-            <div><dt>{t('work.profile.preset')}</dt><dd>{profileSummary.effectiveProfile}</dd></div>
-            <div><dt>{t('work.profile.provider')}</dt><dd>{profileSummary.effectiveProvider}</dd></div>
-            <div><dt>{t('work.profile.model')}</dt><dd>{profileSummary.effectiveModel}</dd></div>
-            <div><dt>{t('work.profile.source')}</dt><dd>{profileSummary.sourceLabel}</dd></div>
-            <div><dt>{t('work.profile.actual')}</dt><dd>{profileSummary.runProvider}</dd></div>
-          </dl>
-        </details>
-        <details className="work-detail-disclosure" onToggle={event => setActivityOpen(event.currentTarget.open)}>
-          <summary>{t('work.activity')}</summary>
+        <div aria-labelledby="work-detail-tabbtn-result" className="work-detail-tabpanel work-detail-tabpanel-result" hidden={activeTab !== 'result'} id="work-detail-tab-result" role="tabpanel">
+          {hasResults ? (
+            <WorkDeliveryView
+              evidence={results.evidence}
+              handoffs={results.handoffs}
+              loading={resultsLoading}
+              loadError={resultErrors.evidence || resultErrors.handoffs}
+              onRefresh={refreshAll}
+              onSelectionChange={setActiveDeliveryId}
+              selectedHandoffId={activeDeliveryId}
+              work={work}
+            />
+          ) : resultsLoading ? (
+            <div className="work-section-empty"><LoaderCircle className="is-spinning" size={16} /><span>{t('work.loadingResult')}</span></div>
+          ) : <EmptySection text={t('work.noResult')} />}
+        </div>
+
+        <div aria-labelledby="work-detail-tabbtn-description" className="work-detail-tabpanel" hidden={activeTab !== 'description'} id="work-detail-tab-description" role="tabpanel">
+          <div className="work-detail-description"><MarkdownPreview text={work.goal || t('work.noGoal')} /></div>
+          {customAcceptance.length ? (
+            <div className="work-detail-acceptance">
+              <h3>{t('work.acceptanceCriteria')}</h3>
+              <ul>{customAcceptance.map(criterion => <li key={criterion.id}>{criterion.description}</li>)}</ul>
+            </div>
+          ) : null}
+        </div>
+
+        <div aria-labelledby="work-detail-tabbtn-runs" className="work-detail-tabpanel" hidden={activeTab !== 'runs'} id="work-detail-tab-runs" role="tabpanel">
+          <WorkRunList
+            navigateTo={navigateTo}
+            onLatestRunChange={handleLatestRunChange}
+            onTotalChange={handleRunTotalChange}
+            refreshToken={processToken}
+            selectedRunId={selectedRunId}
+            workId={workId}
+          />
+          <details className="work-detail-disclosure">
+            <summary>{t('work.executionConfig')}</summary>
+            <dl className="work-provider-profile-facts">
+              <div><dt>{t('work.profile.preset')}</dt><dd>{profileSummary.effectiveProfile}</dd></div>
+              <div><dt>{t('work.profile.provider')}</dt><dd>{profileSummary.effectiveProvider}</dd></div>
+              <div><dt>{t('work.profile.model')}</dt><dd>{profileSummary.effectiveModel}</dd></div>
+              <div><dt>{t('work.profile.source')}</dt><dd>{profileSummary.sourceLabel}</dd></div>
+              <div><dt>{t('work.profile.actual')}</dt><dd>{profileSummary.runProvider}</dd></div>
+            </dl>
+          </details>
+        </div>
+
+        <div aria-labelledby="work-detail-tabbtn-activity" className="work-detail-tabpanel" hidden={activeTab !== 'activity'} id="work-detail-tab-activity" role="tabpanel">
           <div className="work-timeline-filters" role="group" aria-label={t('work.activityKind')}>
             <button aria-pressed={!timelineKind} onClick={() => setTimelineKind('')} type="button">{t('work.all')}</button>
             {WORK_TIMELINE_KINDS.map(kind => <button aria-pressed={timelineKind === kind} key={kind} onClick={() => setTimelineKind(kind)} type="button">{t(`timeline.${kind}`)}</button>)}
@@ -338,7 +370,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
             ))}
           </div>
           {timelineCursor ? <button className="work-timeline-more" disabled={timelineLoadingMore} onClick={loadMoreTimeline} type="button">{timelineLoadingMore ? <LoaderCircle className="is-spinning" size={14} /> : null}{timelineLoadingMore ? t('work.loadingEarlier') : t('work.loadEarlier')}</button> : null}
-        </details>
+        </div>
       </section>
 
       {editorOpen ? <WorkEditorDialog mode="edit" onClose={() => setEditorOpen(false)} onSaved={async () => { setEditorOpen(false); await refreshAll(); onWorkChanged?.(); }} projects={projects} work={work} /> : null}

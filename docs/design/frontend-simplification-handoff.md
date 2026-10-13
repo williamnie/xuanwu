@@ -1,6 +1,6 @@
 # 前端精简：剩余事项交接说明
 
-> 背景与完整方案见 `docs/design/frontend-simplification-plan.md`（尤其 5.x、6.4、8.1.1、8.1.2、9.1 Q9）。
+> 背景与完整方案见 `docs/design/frontend-simplification-plan.md`（尤其 5.x、6.4、8.1.1、8.1.2、9.1 Q9、Q10）。
 > 本文是给接手 Agent 的执行说明：每项写清范围、涉及文件、验收标准和不能动的部分。
 
 ## 0. 开工前必读
@@ -20,7 +20,7 @@
 
 ## 1. 绝对不能改坏的部分（上一轮就坏在这里）
 
-1. 任务详情“过程”段 `frontend/src/pages/work/WorkRunProcess.jsx`：复用完整的 `RunDetail` + `RunContextBar`，**默认展开**，执行中每 5 秒刷新并响应事件。不得改成摘要、不得默认折叠、不得去掉实时会话 / 日志 / 原始事件 / 尝试切换。
+1. 任务详情“过程”段 `frontend/src/pages/work/WorkRunList.jsx`：只列出每次执行，每行跳到执行记录页并定位到该执行（plan Q10）。完整过程（实时会话 / 日志 / 原始事件 / 尝试切换）只在执行记录页看，不要再嵌回任务详情。
 2. 左侧导航保留“执行记录”（route `runs`）；执行详情不自动跳转；`#/work?workId=&runId=` 深链可用。
 3. 任务列表行按钮和看板拖拽共用 `frontend/src/pages/work/workActions.js`。
 4. 设置路由映射在 `frontend/src/pages/settingsNavigation.js`。旧 section（`supervisor`、`code-agents`、`integrations`、`permissions`、`policies`、`diagnostics`、`skills`、`memory`、`activity`）必须继续落到正确位置。

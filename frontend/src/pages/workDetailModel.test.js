@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   buildWorkActionPayload,
+  defaultWorkDetailTab,
   filterTimelineItems,
   mergeTimelinePages,
   workAvailableActions,
@@ -68,4 +69,13 @@ test('Work block reason only reports facts the project API provides', () => {
   assert.match(workBlockReason(queued, { auto_run: 1, hold: { reason: 'usage_limit' } }), /项目已暂停（用量\/限额）/);
   assert.equal(workBlockReason({ status: 'triage' }, { auto_run: 0 }), '');
   assert.equal(workBlockReason({ status: 'in_progress' }, { auto_run: 1, hold: { reason: 'x' } }), '');
+});
+
+test('Work Detail opens the tab that matches the deep link, then the task state', () => {
+  assert.equal(defaultWorkDetailTab('done', { selectedHandoffId: 'handoff:1', selectedRunId: 'run:1' }), 'result');
+  assert.equal(defaultWorkDetailTab('done', { selectedRunId: 'run:1' }), 'runs');
+  assert.equal(defaultWorkDetailTab('triage'), 'description');
+  assert.equal(defaultWorkDetailTab('todo'), 'description');
+  assert.equal(defaultWorkDetailTab('in_progress'), 'runs');
+  for (const status of ['done', 'failed', 'needs_user', 'cancelled']) assert.equal(defaultWorkDetailTab(status), 'result');
 });

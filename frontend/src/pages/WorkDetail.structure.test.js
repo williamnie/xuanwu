@@ -5,36 +5,40 @@ import test from 'node:test';
 const detail = readFileSync(new URL('./WorkDetail.jsx', import.meta.url), 'utf8');
 const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
 const model = readFileSync(new URL('./workDetailModel.js', import.meta.url), 'utf8');
-const process = readFileSync(new URL('./work/WorkRunProcess.jsx', import.meta.url), 'utf8');
+const runList = readFileSync(new URL('./work/WorkRunList.jsx', import.meta.url), 'utf8');
 const runsPage = readFileSync(new URL('./Runs.jsx', import.meta.url), 'utf8');
 const reviewCard = readFileSync(new URL('./work/HumanReview.jsx', import.meta.url), 'utf8');
 const reviewHook = readFileSync(new URL('./work/useHumanReview.jsx', import.meta.url), 'utf8');
 
-test('Work Detail is one page: now, result and the full per-run process', () => {
+test('Work Detail keeps Now above the tabs and puts result, description, runs and activity into tabs', () => {
   assert.match(detail, /t\('work\.sectionNow'\)/);
-  assert.match(detail, /t\('work\.sectionResult'\)/);
-  assert.match(detail, /t\('work\.sectionProcess'\)/);
+  assert.match(detail, /WORK_DETAIL_TABS\.map\(tab =>/);
+  assert.match(detail, /role="tablist"/);
+  assert.match(detail, /defaultWorkDetailTab\(workStatus, \{ selectedHandoffId, selectedRunId \}\)/);
+  const nowIndex = detail.indexOf("t('work.sectionNow')");
+  const tabsIndex = detail.indexOf('role="tablist"');
+  assert.ok(nowIndex > 0 && nowIndex < tabsIndex);
+  assert.ok(detail.indexOf('<HumanReviewCard') < tabsIndex, 'pending review must stay outside the tabs');
   assert.doesNotMatch(detail, /work-detail-view-tabs|activeView/);
   assert.match(detail, /workApi\.getWork\(workId\)/);
   assert.match(detail, /workApi\.getWorkTimeline/);
   assert.match(detail, /evidenceApi\.listEvidence/);
   assert.match(detail, /handoffsApi\.getHandoffs/);
   assert.match(detail, /<WorkDeliveryView/);
-  assert.match(detail, /<WorkRunProcess/);
+  assert.match(detail, /<WorkRunList/);
   assert.match(detail, /selectedRunId=\{selectedRunId\}/);
   assert.doesNotMatch(detail, /navigateTo\('handoffs'/);
-  assert.match(detail, /activityOpen && !activityLoaded/);
+  assert.match(detail, /activeTab === 'activity' && !activityLoaded/);
   assert.doesNotMatch(detail, /getWorkRelations|readiness|relationship|guardianAlerts|compatibility/);
   assert.doesNotMatch(detail, /<EvidencePanel/);
 });
 
-test('Task process reuses the complete Run view instead of a reduced transcript', () => {
-  assert.match(process, /runsApi\.getRuns\(\{ page: 1, pageSize: RUN_PAGE_SIZE, workId \}\)/);
-  assert.match(process, /runsApi\.getRun\(runId\)/);
-  assert.match(process, /<RunContextBar/);
-  assert.match(process, /<RunDetail navigateTo=\{navigateTo\} run=\{run\} \/>/);
-  assert.match(process, /RUN_REFRESH_EVENT_TYPES\.has/);
-  assert.doesNotMatch(process, /readOnly|running=\{false\}|liveEvents=\{\[\]\}/);
+test('Task process lists runs and opens each one on the Runs page instead of embedding it', () => {
+  assert.match(runList, /runsApi\.getRuns\(\{ page: 1, pageSize: RUN_PAGE_SIZE, workId \}\)/);
+  assert.match(runList, /navigateTo\?\.\('runs', null, run\.id\)/);
+  assert.match(runList, /RUN_REFRESH_EVENT_TYPES\.has/);
+  assert.doesNotMatch(runList, /<RunContextBar|<RunDetail|runsApi\.getRun\(/);
+  assert.doesNotMatch(detail, /<RunContextBar|<RunDetail/);
   assert.doesNotMatch(runsPage, /navigateTo\('work', run\.work_id/);
 });
 

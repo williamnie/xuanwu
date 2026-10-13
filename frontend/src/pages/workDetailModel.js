@@ -25,6 +25,17 @@ export function workAvailableActions(status, decision = null) {
   };
 }
 
+export const WORK_DETAIL_TABS = ['result', 'description', 'runs', 'activity'];
+
+// 打开任务时默认看哪个 Tab：深链优先，其余按状态选用户此刻最关心的内容。
+export function defaultWorkDetailTab(status, { selectedHandoffId = '', selectedRunId = '' } = {}) {
+  if (selectedHandoffId) return 'result';
+  if (selectedRunId) return 'runs';
+  if (status === 'triage' || status === 'todo') return 'description';
+  if (status === 'in_progress') return 'runs';
+  return 'result';
+}
+
 // 只说明接口已提供、能可靠关联的阻塞事实；依赖与调度诊断尚无投影，不猜测。
 export function workBlockReason(work, project) {
   if (!work || !project || !['todo', 'triage'].includes(work.status)) return '';
