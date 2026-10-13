@@ -1,21 +1,21 @@
 export const PRODUCT_TERMS = Object.freeze({
   product: '玄武',
   productLatin: 'Xuanwu',
-  supervisor: 'Xuanwu Supervisor',
-  supervisorShort: 'Supervisor',
+  supervisor: '玄武助手',
+  supervisorShort: '玄武助手',
   runner: 'Runner',
   runtimeId: 'xuanwu',
 });
 
 export const PRODUCT_NAV_LABELS = Object.freeze({
-  commandCenter: '工作台',
-  askXuanwu: 'Ask Xuanwu',
-  work: 'Work',
-  runs: 'Runs',
-  automations: 'Automations',
-  analytics: '统计分析',
+  commandCenter: '待我处理',
+  work: '任务',
+  askXuanwu: '对话',
+  runs: '执行记录',
+  automations: '自动化',
+  analytics: '统计',
   projects: 'Projects',
-  settings: 'Settings',
+  settings: '设置',
 });
 
 export const BRAND = Object.freeze({

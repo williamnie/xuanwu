@@ -6,6 +6,7 @@ import {
   Layers,
   MessageSquare,
   Moon,
+  MoreHorizontal,
   Settings,
   Sun,
   LayoutDashboard,
@@ -71,6 +72,7 @@ export default function AppSidebar({
   const navItems = productNavigationItems({ workBoardEnabled: WORK_BOARD_ENABLED });
   const primaryNavItems = navItems.filter(item => item.placement === 'primary');
   const footerNavItems = navItems.filter(item => item.placement === 'footer');
+  const moreNavItems = navItems.filter(item => item.placement === 'more');
   const navLabel = (item) => t(NAV_TRANSLATION_KEYS[item.page] || item.label);
   const closeMobileDrawer = () => {
     if (isMobileViewport) onMobileClose?.();
@@ -138,6 +140,10 @@ export default function AppSidebar({
 
       <div className="sidebar-footer">
         <div className="sidebar-footer-actions">
+          <details className="sidebar-more">
+            <summary className="nav-item nav-item-secondary" aria-label={t('nav.more')} title={t('nav.more')}><FooterIcon Icon={MoreHorizontal} /></summary>
+            {moreNavItems.map(item => <button className="nav-item nav-item-secondary" key={item.page} onClick={() => { navigateTo(item.page); closeMobileDrawer(); }} type="button"><FooterIcon Icon={NAV_ICONS[item.icon]} /><span>{navLabel(item)}</span></button>)}
+          </details>
           {footerNavItems.map((item) => (
             <button
               aria-label={navLabel(item)}

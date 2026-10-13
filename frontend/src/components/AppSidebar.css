@@ -37,3 +37,8 @@
 
 .sidebar-footer-actions .nav-item:has(.sidebar-footer-label) { flex-basis: auto; width: auto; padding: 0 10px; gap: 6px; }
 .sidebar-footer-label { font-size: .78rem; }
+
+.sidebar-more { position: relative; }
+.sidebar-more > summary { list-style: none; cursor: pointer; }
+.sidebar-more > summary::-webkit-details-marker { display: none; }
+.sidebar-more > button { position: absolute; bottom: 100%; left: 0; min-width: 120px; background: var(--surface-overlay); border: 1px solid var(--border-color); }

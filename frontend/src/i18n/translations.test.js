@@ -8,8 +8,8 @@ describe('frontend i18n resources', () => {
   });
 
   test('translates navigation and interpolated Work labels', () => {
-    expect(translate('zh-CN', 'nav.commandCenter')).toBe('工作台');
-    expect(translate('en-US', 'nav.commandCenter')).toBe('Dashboard');
+    expect(translate('zh-CN', 'nav.commandCenter')).toBe('待我处理');
+    expect(translate('en-US', 'nav.commandCenter')).toBe('Needs you');
     expect(translate('zh-CN', 'work.runsCount', { count: 3 })).toBe('3 次运行');
   });
 
