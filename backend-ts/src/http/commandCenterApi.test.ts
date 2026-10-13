@@ -12,6 +12,8 @@ import {
   createPiApprovalRequest,
   upsertPiGuardianAlert
 } from "../db/repositories/pi.ts";
+import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
+import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import {
   projectPendingCompactEventSummaries,
@@ -40,6 +42,65 @@ afterEach(async () => {
 });
 
 describe("Command Center aggregate API", () => {
+  test("complete inbox pages beyond the summary action window and combines independent request authorities", async () => {
+    const db = await fixtureDatabase();
+    try {
+      for (let index=0;index<32;index++) {
+        createPiAction(db,{id:`old-action-${index}`,idempotency_key:`old-action-${index}`,action_type:"assistant.tool.call",payload_json:"{}",project_id:"demo",rationale:`Pending action ${index}`,requires_confirmation:1,risk_level:"medium",gate_decision:"ask",status:"pending"});
+      }
+      db.sqlite.run("update pi_actions set updated_at='2020-01-01T00:00:00.000Z', created_at='2020-01-01T00:00:00.000Z'");
+      const first = createIssue(db,{project_id:"demo",status:"needs_user",title:"Review A"});
+      const review = createHumanReviewRequest(db,first.id,{kind:"decision",question:"Choose the scope",recommendation:"Keep it narrow"});
+      const failed = createIssue(db,{project_id:"demo",status:"failed",title:"Retry this task"});
+      db.sqlite.run("update issues set error=? where id=?", ["Expected failure",failed.id]);
+      createIssue(db,{project_id:"demo",status:"needs_user",title:"Assistant is preparing"});
+      const itemID = insertAttention(db);
+      createActionProposal(db,{id:"standalone-proposal",skill_run_id:"fixture",source_item_ids:[`attention_inbox_item:${itemID}`],summary:"One proposal from several views",status:"proposed",actions:[{type:"no_action",payload:{reason:"duplicate"},requires_approval:false,risk:"low"}]});
+      const router = createDefaultRouter({database:db});
+      const count = () => db.sqlite.query<{count:number},[]>("select count(*) as count from issue_events").get()!.count;
+      const before = count();
+      const all: Array<Record<string, any>> = [];let cursor="";
+      do {
+        const response = await router.handle(new Request(`${BASE_URL}/api/command-center/inbox?page_size=7${cursor?`&cursor=${cursor}`:""}`));
+        expect(response.status).toBe(200);const page = await response.json() as Record<string,any>;
+        expect(page.complete).toBe(true);expect(page.items.length).toBeLessThanOrEqual(7);all.push(...page.items);cursor=page.next_cursor;
+      } while(cursor);
+      expect(all.filter(item=>item.decision?.kind==="pi_action")).toHaveLength(32);
+      expect(all.filter(item=>item.decision?.ref==="proposal:standalone-proposal")).toHaveLength(1);
+      expect(all.find(item=>item.source==="human_review")?.request).toMatchObject({id:review.id,revision:review.revision,kind:"decision"});
+      expect(all.find(item=>item.source==="failed_work")?.failure_reason).toBe("Expected failure");expect(all.some(item=>item.source==="assistant_waiting")).toBe(true);
+      expect(new Set(all.map(item=>item.key)).size).toBe(all.length);expect(count()).toBe(before);
+      const oldest=all.find(item=>item.decision?.ref==="pi_action:old-action-0")!;
+      const detail=await router.handle(new Request(`${BASE_URL}/api/command-center/attention/${encodeURIComponent(oldest.attention_id)}`));expect(detail.status).toBe(200);
+      const scoped=await (await router.handle(new Request(`${BASE_URL}/api/command-center/inbox?work_id=${encodeURIComponent(issueIDToWorkID(first.id))}`))).json() as Record<string,any>;
+      expect(scoped.items).toHaveLength(1);expect(scoped.items[0].request.id).toBe(review.id);
+    } finally {db.close();}
+  });
+  test("inbox pagination reports a changed snapshot and reads more than the legacy inbox limit", async () => {
+    const db=await fixtureDatabase();
+    try {
+      for(let index=0;index<115;index++)insertAttention(db);
+      const router=createDefaultRouter({database:db});
+      const first=await (await router.handle(new Request(`${BASE_URL}/api/command-center/inbox?page_size=100`))).json() as Record<string,any>;
+      expect(first.total).toBe(115);expect(first.items).toHaveLength(100);expect(first.has_more).toBe(true);
+      const second=await (await router.handle(new Request(`${BASE_URL}/api/command-center/inbox?page_size=100&cursor=${first.next_cursor}`))).json() as Record<string,any>;expect(second.items).toHaveLength(15);
+      insertAttention(db);
+      expect((await router.handle(new Request(`${BASE_URL}/api/command-center/inbox?cursor=${first.next_cursor}`))).status).toBe(409);
+      expect((await router.handle(new Request(`${BASE_URL}/api/command-center/inbox?page_size=101`))).status).toBe(400);
+      expect((await router.handle(new Request(`${BASE_URL}/api/command-center/inbox?cursor=bad`))).status).toBe(400);
+    } finally {db.close();}
+  });
+  test("today completion uses the actual done transition in the client day range",async()=>{
+    const db=await fixtureDatabase();try{
+      const issue=createIssue(db,{project_id:"demo",status:"done",title:"Completed yesterday"});
+      recordIssueEvent(db,issue.id,"issue.status_changed",{status:"done"});
+      db.sqlite.run("update issue_events set created_at=? where issue_id=? and type='issue.status_changed'", ["2026-10-12T17:00:00.000Z",issue.id]);
+      const router=createDefaultRouter({database:db});
+      const current=await(await router.handle(new Request(`${BASE_URL}/api/command-center/task-glance?day_start=2026-10-12T16:00:00.000Z&day_end=2026-10-13T16:00:00.000Z`))).json() as Record<string,any>;
+      expect(current.completed_today).toHaveLength(1);expect(current.completed_today[0].work.id).toBe(issueIDToWorkID(issue.id));
+      const previous=await(await router.handle(new Request(`${BASE_URL}/api/command-center/task-glance?day_start=2026-10-11T16:00:00.000Z&day_end=2026-10-12T16:00:00.000Z`))).json() as Record<string,any>;expect(previous.completed_today).toHaveLength(0);
+    }finally{db.close();}
+  });
   test("returns the versioned four-section summary with bounded items, counts, freshness, and links", async () => {
     const db = await fixtureDatabase();
     try {

@@ -1,10 +1,13 @@
+import { parseDomainID } from "../../xuanwu/coreDomainContracts.ts";
 import type { RunnerDatabase } from "../../db/database.ts";
 import {
   listAttentionInboxItems,
+  listAllAttentionInboxItems,
 } from "../../db/repositories/intakeRuns.ts";
 import {
   listActionProposals,
   listRecentAttentionPiActions,
+  listPendingAttentionPiActions,
   listPiApprovalRequests,
   listPiGuardianAlerts
 } from "../../db/repositories/pi.ts";
@@ -33,7 +36,7 @@ type AttentionCommandEvent = {
   snoozed_until?: string;
 };
 
-type PersistedAttentionOptions = { actionLimit?: number; now?: Date };
+type PersistedAttentionOptions = { complete?: boolean; actionLimit?: number; now?: Date };
 const ATTENTION_ACTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_ATTENTION_ACTION_LIMIT = 25;
 
@@ -47,7 +50,8 @@ export function listPersistedAttention(
 }
 
 export function getPersistedAttention(db: RunnerDatabase, id: string): AttentionRecord | null {
-  return listPersistedAttention(db).find((record) => record.id === id) ?? null;
+  const parsed = parseDomainID(id);
+  return listPersistedAttention(db, { complete: true }).find(record => record.id === id || (parsed?.kind === "attention" && record.source_refs.some(source => source.authority === parsed.authority && source.local_id === parsed.local_id))) ?? null;
 }
 
 export function persistAttentionCommand(
@@ -74,7 +78,7 @@ export function persistAttentionCommand(
 
 function attentionCandidates(db: RunnerDatabase, options: PersistedAttentionOptions) {
   const proposalRefs = proposalRefsByInboxID(db);
-  const inbox = listAttentionInboxItems(db).map((item) => {
+  const inbox = (options.complete ? listAllAttentionInboxItems(db) : listAttentionInboxItems(db)).map((item) => {
     const candidate = attentionFromInboxItem(item);
     return {
       ...candidate,
@@ -84,12 +88,19 @@ function attentionCandidates(db: RunnerDatabase, options: PersistedAttentionOpti
   const guardian = listPiGuardianAlerts(db).map(attentionFromGuardianAlert);
   const approvals = listPiApprovalRequests(db).map(attentionFromApprovalRequest);
   const now = options.now ?? new Date();
-  const actions = listRecentAttentionPiActions(db, {
+  const actions = (options.complete ? listPendingAttentionPiActions(db) : listRecentAttentionPiActions(db, {
     limit: options.actionLimit ?? DEFAULT_ATTENTION_ACTION_LIMIT,
     updatedAfter: new Date(now.getTime() - ATTENTION_ACTION_WINDOW_MS).toISOString()
-  })
+  }))
     .map((action) => attentionFromPiAction(action, proposalRefsFromAction(action)));
-  return [...inbox, ...guardian, ...approvals, ...actions];
+  const proposals = options.complete ? listActionProposals(db).map(proposal => ({
+    created_at: proposal.created_at, updated_at: proposal.updated_at, evidence_refs: proposal.evidence_refs,
+    next_action: "review and decide the proposal", owner: { control_plane_id: "local" as const, kind: "control_plane" as const },
+    reason_code: "source_proposal_approval_required", related_refs: [`proposal:${proposal.id}`], required_actor: "approver",
+    severity: "medium" as const, status: proposal.status === "proposed" ? "waiting" as const : "resolved" as const, summary: proposal.summary, type: "approval_required" as const,
+    source_ref: { authority: "pi_action_proposals" as const, correlation_refs: [], local_id: proposal.id, resolution: proposal.status === "proposed" ? "active" as const : "resolved" as const, source_state: proposal.status }
+  })) : [];
+  return [...inbox, ...guardian, ...approvals, ...actions, ...proposals];
 }
 
 function proposalRefsByInboxID(db: RunnerDatabase): Map<number, string[]> {

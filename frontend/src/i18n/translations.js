@@ -576,7 +576,7 @@ const EN_US = Object.freeze({
   'work.loadFailed': 'Failed to load Task details', 'work.loadActivityFailed': 'Failed to load Activity',
   'work.loadMoreActivityFailed': 'Failed to load more Activity', 'work.enqueued': 'Task is queued',
   'work.requeued': 'Task is queued again', 'work.cancelled': 'Task was cancelled',
-  'work.actionFailed': 'Task action failed', 'work.reviewSubmitted': 'Response recorded; processing will continue',
+  'work.actionFailed': 'Task action failed', 'work.reviewSubmitted': 'Response recorded; check the next state',
   'work.reviewFailed': 'Task review failed',
   'work.state.cancelledTitle': 'Cancelled', 'work.state.cancelledDetail': 'No automatic action is pending.',
   'work.state.doneTitle': 'Completed', 'work.state.doneDetail': 'Execution is complete. See Delivery for the credential and actual delivery level.',

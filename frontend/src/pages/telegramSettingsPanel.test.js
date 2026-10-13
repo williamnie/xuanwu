@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const panelSource = readFileSync(new URL('./TelegramSettingsPanel.jsx', import.meta.url), 'utf8');
-const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
+const sectionsSource = readFileSync(new URL('./ConnectionSettingsList.jsx', import.meta.url), 'utf8');
 const connectorsSource = readFileSync(new URL('../api/connectors.js', import.meta.url), 'utf8');
 
 test('Telegram settings are wired into integrations without secret readback', () => {
-  assert.match(sectionsSource, /<TelegramSettingsPanel \/>/);
+  assert.match(sectionsSource, /<TelegramSettingsPanel\/>/);
   assert.match(connectorsSource, /\/api\/integrations\/telegram\/settings/);
   assert.match(connectorsSource, /\/api\/integrations\/telegram\/test-connection/);
   assert.match(connectorsSource, /\/api\/integrations\/telegram\/discover-source/);

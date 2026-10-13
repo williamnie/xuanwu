@@ -91,7 +91,9 @@ test('Dashboard trusts the aggregate Handoff status without per-card hydration o
   assert.doesNotMatch(page, /history\?\.replaceState/);
   assert.match(page, /navigateTo\?\.\(route\.page, route\.workId \|\| item\.work_id, '', route\.handoffId\)/);
   assert.doesNotMatch(page, /createHandoff|updateHandoff|controlWork|controlRun/);
-  assert.match(dashboard, /<RecentDeliveriesSection navigateTo=\{navigateTo\} projects=\{projects\} \/>/);
+  assert.match(dashboard, /completed_today/);
+  assert.match(dashboard, /getTaskGlance/);
+  assert.doesNotMatch(dashboard, /createHandoff|updateHandoff/);
 });
 
 test('Recent Deliveries keeps expanded cards inside a keyboard-scrollable region', () => {

@@ -67,5 +67,9 @@ test('Dashboard Attention has grouped cards, canonical source links, empty state
   assert.match(page, /待处理事项类型/);
   assert.match(api, /\/api\/command-center\/attention\/\$\{encodeURIComponent\(id\)\}\/actions/);
   assert.doesNotMatch(api, /\/api\/pi\/approval-requests/);
-  assert.match(dashboard, /<AttentionSection \/>/);
+  assert.match(dashboard, /<InboxRequests/);
+  const inbox = readFileSync(new URL('./InboxRequests.jsx', import.meta.url), 'utf8');
+  assert.match(inbox, /<LegacyAttention/);
+  assert.match(inbox, /state\.unsupported/);
+  assert.match(inbox, /最多 25 项/);
 });

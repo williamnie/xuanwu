@@ -11,14 +11,13 @@ export const WORK_TIMELINE_KINDS = [
 
 export function workAvailableActions(status, decision = null) {
   const actions = workStatusActions(status);
+  const reviewing = decision?.owner === 'human' && decision?.request?.status === 'open';
   return {
     cancel: actions.some(action => action.operation === 'cancel'),
     edit: status !== 'in_progress',
-    retry: actions.some(action => action.operation === 'retry'),
-    review: status === 'needs_user'
-      && decision?.owner === 'human'
-      && decision?.request?.status === 'open',
-    start: actions.some(action => action.operation === 'enqueue'),
+    retry: !reviewing && actions.some(action => action.operation === 'retry'),
+    review: reviewing,
+    start: !reviewing && actions.some(action => action.operation === 'enqueue'),
   };
 }
 

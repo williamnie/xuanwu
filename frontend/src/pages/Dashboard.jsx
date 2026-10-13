@@ -1,61 +1,34 @@
-import { AlertTriangle, ArrowRight, MessageSquare } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
+import { commandCenterApi } from '../api/commandCenter.js';
 import RuntimeHealthStrip from '../components/RuntimeHealthStrip';
-import ActiveWorkSection from './command-center/ActiveWorkSection.jsx';
-import AttentionSection from './command-center/AttentionSection.jsx';
-import RecentDeliveriesSection from './command-center/RecentDeliveriesSection.jsx';
-import { selectBackendOnline, selectProjects, selectRefreshData, selectWorkSummary, useDataStore } from '../store/dataStore';
+import InboxRequests from './command-center/InboxRequests.jsx';
+import { selectBackendOnline, selectProjects, selectRefreshData, useDataStore } from '../store/dataStore';
+import { workBlockReason } from './work/workActions.js';
 import { useI18n } from '../i18n/context.js';
 import './Dashboard.css';
 
-export default function Dashboard({ navigateTo }) {
+export default function Dashboard({ navigateTo, onCreate }) {
   const { t } = useI18n();
   const projects = useDataStore(selectProjects);
-  const workSummary = useDataStore(selectWorkSummary);
   const backendOnline = useDataStore(selectBackendOnline);
   const refreshData = useDataStore(selectRefreshData);
-  const counts = workSummary.counts;
-  const openSettings = section => navigateTo('settings', null, '', '', { settingsSection: section });
-
-  return (
-    <div className="dashboard-page">
-      <header className="dashboard-intro">
-        <div>
-          <span className="dashboard-eyebrow">WORKSPACE</span>
-          <h1>{t('nav.commandCenter')}</h1>
-          <p>先处理需要你决定的事，再看工作进展。</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => navigateTo('ask-xuanwu')} type="button">
-          <MessageSquare size={14} /> 交给玄武
-        </button>
-      </header>
-
-      {!backendOnline && (
-        <div className="dashboard-connection-error" role="alert">
-          <AlertTriangle size={16} />
-          <div><strong>暂时无法连接玄武</strong><p>当前内容可能不是最新状态，恢复连接后可继续查看。</p></div>
-          <button className="btn btn-secondary" onClick={() => refreshData(['projects', 'workSummary'])} type="button">重试连接</button>
-        </div>
-      )}
-      <RuntimeHealthStrip backendOnline={backendOnline} navigateTo={navigateTo} />
-
-      <dl className="dashboard-facts" aria-label="工作概况">
-        <div><dt>已接入项目</dt><dd>{projects.length}</dd></div>
-        <div><dt>等待执行</dt><dd>{counts.todo}</dd></div>
-        <div><dt>正在执行</dt><dd>{counts.in_progress}</dd></div>
-        <div><dt>累计完成</dt><dd>{counts.done}</dd></div>
-      </dl>
-
-      <AttentionSection />
-      <div className="dashboard-work-grid">
-        <ActiveWorkSection navigateTo={navigateTo} projects={projects} />
-        <RecentDeliveriesSection navigateTo={navigateTo} projects={projects} />
-      </div>
-      <nav className="dashboard-links" aria-label="更多工作入口">
-        <button onClick={() => navigateTo('work')} type="button">查看全部工作 <ArrowRight size={14} /></button>
-        <button onClick={() => navigateTo('analytics')} type="button">查看统计分析 <ArrowRight size={14} /></button>
-        <button onClick={() => openSettings('general')} type="button">管理项目 <ArrowRight size={14} /></button>
-        <button onClick={() => openSettings('advanced:activity')} type="button">查看活动记录 <ArrowRight size={14} /></button>
-      </nav>
+  const [glance,setGlance] = useState({ active: [], completed_today: [], error: '', loading: true });
+  useEffect(()=>{
+    let active=true;
+    const load=()=>commandCenterApi.getTaskGlance().then(data=>{if(active)setGlance({...data,error:'',loading:false});}).catch(error=>{if(active)setGlance(current=>({...current,error:error.message,loading:false}));});
+    load();const interval=setInterval(()=>{if(document.visibilityState==='visible')load();},30000);
+    return()=>{active=false;clearInterval(interval);};
+  },[]);
+  return <div className="dashboard-page">
+    <header className="dashboard-intro"><div><span className="dashboard-eyebrow">INBOX</span><h1>{t('nav.commandCenter')}</h1></div></header>
+    {!backendOnline&&<div className="dashboard-connection-error" role="alert"><AlertTriangle size={16}/><p>当前状态可能不是最新，请恢复连接后核对。</p><button className="btn btn-secondary" onClick={()=>refreshData(['projects','workSummary'])} type="button">重试连接</button></div>}
+    <RuntimeHealthStrip backendOnline={backendOnline} navigateTo={navigateTo}/>
+    <InboxRequests navigateTo={navigateTo} onCreate={onCreate}/>
+    {glance.error&&<p role="alert">进展暂不可用：{glance.error}</p>}
+    <div className="dashboard-work-grid">
+      <section className="dashboard-compact-tasks"><header><h2>执行中</h2><button className="btn btn-secondary" onClick={()=>navigateTo('work')} type="button">查看全部</button></header>{glance.loading?<p role="status">正在读取进展…</p>:(glance.active||[]).map(work=><button className="dashboard-task-row" key={work.id} onClick={()=>navigateTo('work',work.id)} type="button"><strong>{work.title}</strong><span>{workBlockReason(work,projects.find(project=>project.id===work.owner?.project_id))||t(`status.${work.status}`)}</span></button>)}{!glance.loading&&!glance.error&&!glance.active?.length&&<p>暂时没有执行中的任务</p>}</section>
+      <section className="dashboard-compact-tasks"><header><h2>今天完成</h2></header>{(glance.completed_today||[]).map(({work,completed_at})=>work&&<button className="dashboard-task-row" key={work.id} onClick={()=>navigateTo('work',work.id)} type="button"><strong>{work.title}</strong><time>{new Date(completed_at).toLocaleTimeString()}</time></button>)}{!glance.loading&&!glance.error&&!glance.completed_today?.length&&<p>暂无可确认的今日完成记录</p>}{glance.completion_time_unknown>0&&<p>部分历史任务没有完成时间，可在任务页查看。</p>}</section>
     </div>
-  );
+  </div>;
 }

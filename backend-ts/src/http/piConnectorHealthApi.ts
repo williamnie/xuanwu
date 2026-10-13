@@ -1,3 +1,4 @@
+import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
@@ -35,7 +36,17 @@ export function registerPiConnectorHealthRoutes(router: Router, context: PiConne
 
 async function connectorHealthResponse(context: PiConnectorHealthContext): Promise<Response> {
   const report = await connectorReport(context, true);
-  return json(report);
+  const deliveries = context.database.sqlite.query<{ target_channel: string; state: string; error: string; updated_at: string }, []>(`select target_channel,state,error,updated_at from (
+    select target_channel,state,error,updated_at,row_number() over(partition by target_channel order by updated_at desc,id desc) as row_number from pi_notification_intents where target_channel in ('feishu','telegram')
+  ) where row_number=1`).all();
+  const byChannel = new Map(deliveries.map(row => [row.target_channel,row]));
+  const connectors = (Array.isArray(report.connectors) ? report.connectors : []) as Array<Record<string, unknown>>;
+  return json({ ...report, connectors: connectors.map(connector => {
+    const delivery = byChannel.get(String(connector.id || ""));
+    if (!delivery) return connector;
+    const failed = delivery.state === "failed" || (delivery.error !== "" && !["sent","suppressed"].includes(delivery.state));
+    return { ...connector, notification: { state: delivery.state, updated_at: delivery.updated_at, error: failed ? { code: "notification_delivery_failed", message: redactAuditText(delivery.error || "最近一次发送未成功") } : null } };
+  }) });
 }
 
 async function connectorDiagnosticResponse(context: PiConnectorHealthContext): Promise<Response> {

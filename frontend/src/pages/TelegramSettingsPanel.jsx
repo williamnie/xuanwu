@@ -1,3 +1,5 @@
+import { selectProjects, useDataStore } from '../store/dataStore.js';
+import ProjectMappingsEditor from '../components/ProjectMappingsEditor.jsx';
 import { useEffect, useState } from 'react';
 import { Bot, CheckCircle2, KeyRound, MessageCircle, ScanSearch, TestTube2 } from 'lucide-react';
 import { connectorsApi } from '../api/connectors.js';
@@ -72,13 +74,15 @@ function useTelegramSettings() {
 }
 
 function TelegramForm({ state }) {
+  const projects = useDataStore(selectProjects);
+  const sources = [...new Set([...state.form.allowed_chat_ids.split(/[\s,]+/).filter(id=>/^-?[1-9]\d*$/.test(id)).map(id=>`chat:${id}`), ...state.form.allowed_user_ids.split(/[\s,]+/).filter(id=>/^[1-9]\d*$/.test(id)).map(id=>`user:${id}`)])];
   const missing = telegramMissingRequired(state.remote);
   const configuredLabel = state.remote?.enabled
     ? 'Telegram 必填凭据已配置'
     : 'Telegram 配置完整，当前未启用';
   const canDiscover = Boolean(state.form.bot_token.trim() || state.remote?.bot_token_configured);
   return (
-    <form className="feishu-settings__form" onSubmit={state.save}>
+    <form className="feishu-settings__form" onSubmit={state.save}><fieldset className="connection-form-fields" disabled={state.saving}>
       <div className="telegram-onboarding">
         <div className="telegram-onboarding__title"><KeyRound aria-hidden="true" size={15} /> 首次接入只需 Bot Token</div>
         <ol className="telegram-onboarding__steps">
@@ -104,8 +108,9 @@ function TelegramForm({ state }) {
         </button>
       </div>
       {state.discovery ? <TelegramDiscoveryResult discovery={state.discovery} form={state.form} onChoose={state.chooseSource} /> : null}
+      <ProjectMappingsEditor value={state.form.project_mappings} onChange={value=>state.update('project_mappings',value)} sources={sources} projects={projects}/>
       <details className="telegram-advanced">
-        <summary>安全与高级设置 <span>自动识别后会填入，可按需调整</span></summary>
+        <summary>更多选项 <span>自动识别后会填入，可按需调整</span></summary>
         <div className="telegram-advanced__body">
           <div className="feishu-settings__field-grid">
             <TextField label="Allowed Chat IDs" value={state.form.allowed_chat_ids} onChange={value => state.update('allowed_chat_ids', value)} placeholder="自动识别后填入" />
@@ -136,7 +141,7 @@ function TelegramForm({ state }) {
           <button className="btn btn-primary" disabled={!state.remote || state.saving} type="submit">{state.saving ? '保存中…' : '保存 Telegram Bot'}</button>
         </div>
       </div>
-    </form>
+    </fieldset></form>
   );
 }
 

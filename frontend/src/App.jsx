@@ -184,6 +184,7 @@ export default function App() {
   useEffect(() => {
     const handleTaskShortcut = event => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && authReady) {
+        if ([...document.querySelectorAll('[role="dialog"]')].some(dialog => dialog.getClientRects().length > 0)) return;
         event.preventDefault(); openTaskEditor();
       }
     };
@@ -635,7 +636,7 @@ export default function App() {
         ) : (
           <Suspense fallback={<PageLoadingFallback />}>
             {currentPage === 'command-center' ? (
-              <Dashboard navigateTo={navigateTo} />
+              <Dashboard navigateTo={navigateTo} onCreate={openTaskEditor} />
             ) : currentPage === 'analytics' ? (
               <Analytics />
             ) : currentPage === 'work' ? (
@@ -684,7 +685,7 @@ export default function App() {
             ) : currentPage === 'settings' ? (
               <Settings initialTab={settingsSection || 'general'} navigateTo={navigateTo} onSectionChange={navigateToSettingsSection} theme={theme} toggleTheme={toggleTheme} />
             ) : (
-              <Dashboard navigateTo={navigateTo} />
+              <Dashboard navigateTo={navigateTo} onCreate={openTaskEditor} />
             )}
           </Suspense>
         )}

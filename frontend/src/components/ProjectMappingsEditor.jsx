@@ -1,0 +1,10 @@
+import { useState } from 'react';
+import { projectMappingRows, updateProjectMapping, removeProjectMapping, appendProjectMapping } from '../pages/projectMappingsModel.js';
+
+export default function ProjectMappingsEditor({value,onChange,sources,projects}){
+  const [source,setSource]=useState('');const [project,setProject]=useState('');const rows=projectMappingRows(value);
+  const canonical = source => /^(?:chat|user):/.test(source) ? source : `chat:${source}`;
+  const sourceSelect=(current,change)=><select className="form-control" aria-label="选择来源" value={current} onChange={event=>change(event.target.value)}><option value="">选择来源</option>{current&&!sources.includes(current)&&<option disabled value={current}>{current}（当前来源）</option>}{sources.map(id=><option value={id} key={id}>{id}</option>)}</select>;
+  const projectSelect=(current,change)=><select className="form-control" aria-label="选择关联项目" value={current} onChange={event=>change(event.target.value)}><option value="">选择项目</option>{current&&!projects.some(item=>item.id===current)&&<option disabled value={current}>{current}（项目不可用）</option>}{projects.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select>;
+  return <section className="project-mappings-editor"><h3>来源 → 项目</h3>{rows.map(row=><div className="project-mapping-row" key={row.start}>{sourceSelect(row.source,source=>onChange(updateProjectMapping(value,row,{source})))}{projectSelect(row.project,project=>onChange(updateProjectMapping(value,row,{project})))}<button className="btn btn-secondary" onClick={()=>onChange(removeProjectMapping(value,row))} type="button">移除</button></div>)}<div className="project-mapping-row">{sourceSelect(source,setSource)}{projectSelect(project,setProject)}<button className="btn btn-secondary" disabled={!source||!project} onClick={()=>{const existing=rows.find(row=>canonical(row.source)===canonical(source));onChange(existing?updateProjectMapping(value,existing,{project}):appendProjectMapping(value,source,project));setSource('');setProject('');}} type="button">添加映射</button></div>{!sources.length&&<p>自动识别来源后可选择，也可以在更多选项中手动填写。</p>}</section>;
+}

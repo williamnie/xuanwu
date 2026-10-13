@@ -17,6 +17,7 @@ import {
   projectExecutionPolicy,
 } from '../utils/executionPolicy.js';
 import './ProjectSettingsEditor.css';
+import SkillIntentPicker from '../components/SkillIntentPicker.jsx';
 import SettingsDisclosure from '../components/SettingsDisclosure.jsx';
 
 const DEFAULT_PROJECT_NAME = 'project';
@@ -419,7 +420,7 @@ export function AgentProfileManager({ profiles, loading, form, error, modelOptio
     <div className="project-profile-manager">
       <div>
         <div className="project-profile-title">执行预设</div>
-        <p className="project-profile-copy">给可复用的执行偏好起个名字。Profile 不会安装插件，也不会扩大项目权限。</p>
+        <p className="project-profile-copy">给可复用的执行偏好起个名字，预设不会扩大项目权限。</p>
       </div>
       {error && <div className="project-profile-error">{error}</div>}
       <div className="project-profile-fields">
@@ -431,8 +432,7 @@ export function AgentProfileManager({ profiles, loading, form, error, modelOptio
           <label>默认指令（可选）</label>
           <textarea className="form-control" rows={3} placeholder="例如：优先运行前端测试，保持最小改动" value={form.default_instructions} onChange={event => onFieldChange('default_instructions', event.target.value)} />
         </div>
-        <details className="project-profile-overrides">
-          <summary>更多选项</summary>
+        <SettingsDisclosure title="更多选项">
           <p>只有这个预设需要覆盖项目默认值时才填写。</p>
           <div className="form-group">
             <label>Profile ID</label>
@@ -474,12 +474,10 @@ export function AgentProfileManager({ profiles, loading, form, error, modelOptio
             </label>
           </div>
           <div className="project-settings-grid project-profile-grid">
-            <label className="form-group">Skill 意图（可选）
-              <input className="form-control" placeholder="多个值用逗号分隔" value={form.skill_intents} onChange={event => onFieldChange('skill_intents', event.target.value)} />
-            </label>
+            <div className="form-group"><span>Skill 意图（可选）</span><SkillIntentPicker value={form.skill_intents} onChange={value => onFieldChange('skill_intents', value)} /></div>
 
           </div>
-        </details>
+        </SettingsDisclosure>
         <div className="project-profile-actions">
           <span>{loading ? '正在加载预设…' : `已有 ${profiles.length} 个预设`}</span>
           <div><button type="button" className="btn btn-secondary" onClick={onReset}>清空</button><button type="button" className="btn btn-secondary" onClick={onSubmit}>保存预设</button></div>

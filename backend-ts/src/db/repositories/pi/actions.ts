@@ -173,6 +173,12 @@ export function listRecentAttentionPiActions(
   `).all(updatedAfter, limit).map(mapPiAction);
 }
 
+/** 完整收件箱只读来源，无最近25项或7天窗口。 */
+export function listPendingAttentionPiActions(db: RunnerDatabase): PiAction[] {
+  return db.sqlite.query<Record<string, unknown>, []>(`select ${COLUMNS} from ${TABLE} indexed by idx_pi_actions_attention_recent
+    where status in ('candidate', 'pending', 'approved', 'changes_requested', 'snoozed') order by updated_at desc, id desc`).all().map(mapPiAction);
+}
+
 export function listPendingPiActionNotifications(
   db: RunnerDatabase,
   createdAfter: string

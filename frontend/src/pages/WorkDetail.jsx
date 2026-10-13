@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { workHumanReviewCopy } from './workHumanReviewCopy';
+import InboxRequests from './command-center/InboxRequests.jsx';
 import WorkFeedback from './work/WorkFeedback.jsx';
 import {
   AlertTriangle,
@@ -233,8 +234,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   };
 
   const submitReview = async () => {
-    const comment = reviewComment.trim();
-    if (!work || submitting || ((reviewAction === 'reject' || reviewAction === 'request_changes') && !comment)) return;
+    const comment = reviewComment;
+    if (!work || submitting || ((reviewAction === 'reject' || reviewAction === 'request_changes') && !comment.trim())) return;
     setSubmitting(true);
     try {
       await workApi.answerWorkHumanReview(work.id, {
@@ -319,6 +320,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
         {workBlockReason(work, projects.find(project => project.id === work.owner?.project_id)) && <p role="status">{workBlockReason(work, projects.find(project => project.id === work.owner?.project_id))}</p>}
         <WorkStateSummary status={work.status} decision={decision} />
         <WorkFeedback feedback={detail?.feedback} />
+        <InboxRequests embedded workId={workId} navigateTo={navigateTo} />
         {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={selectReview} request={decision.request} /> : null}
         <details className="work-custom-acceptance"><summary>任务描述</summary><MarkdownPreview text={work.goal || t('work.noGoal')} /></details>
         {customAcceptance.length > 0 && <details className="work-custom-acceptance"><summary>{t('work.acceptanceCriteria')}</summary><ul>{customAcceptance.map(criterion => <li key={criterion.id}>{criterion.description}</li>)}</ul></details>}

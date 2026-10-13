@@ -1,3 +1,4 @@
+import { registerInboxRoute } from "./inboxApi.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { readWorkSummary } from "../db/repositories/workSummary.ts";
 import {
@@ -125,6 +126,7 @@ export function registerCommandCenterRoutes(
   context: ReadApiContext,
   options: CommandCenterRouteOptions = {}
 ): void {
+  registerInboxRoute(router, context, { attention: attentionSummary, decisions: attentionDecisionDetails, visible: (db, item) => attentionIsVisible(item, new Date()) && attentionHandling(db, item, new Date()) === "user_action_required" });
   const readDatabase = context.readDatabase ?? context.database;
   router.get("/api/command-center/summary", (request) => commandCenterResponse(() => (
     buildCommandCenterSummary({ ...context, database: readDatabase }, request, options)
@@ -675,7 +677,7 @@ async function attentionCommandResponse(context: ReadApiContext, request: Reques
   }
 }
 
-function attentionDecisionDetails(db: RunnerDatabase, attention: AttentionRecord): Array<Record<string, unknown>> {
+export function attentionDecisionDetails(db: RunnerDatabase, attention: AttentionRecord): Array<Record<string, unknown>> {
   const details: Array<Record<string, unknown>> = [];
   for (const source of attention.source_refs) {
     if (source.authority === "pi_approval_requests") {

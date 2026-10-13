@@ -14,12 +14,13 @@ test('analytics can be opened, bookmarked and restored without falling back to h
 
 test('home prioritizes action and progress without querying diagnostic or usage feeds', () => {
   const home = read('./Dashboard.jsx');
-  assert.match(home, /<AttentionSection/);
-  assert.match(home, /<ActiveWorkSection/);
-  assert.match(home, /<RecentDeliveriesSection/);
+  assert.match(home, /<InboxRequests/);
+  assert.match(home, /commandCenterApi\.getTaskGlance\(\)/);
+  assert.match(home, /completed_today/);
+  assert.match(home, /glance\.active/);
   assert.doesNotMatch(home, /DeliveryEffectivenessSection|CodexUsagePanel|eventsApi|JSON\.stringify/);
-  assert.ok(home.indexOf('<AttentionSection') < home.indexOf('<ActiveWorkSection'));
-  assert.match(home, /advanced:activity/);
+  assert.ok(home.indexOf('<InboxRequests') < home.indexOf('dashboard-work-grid'));
+  assert.doesNotMatch(home, /dashboard-facts|dashboard-links|交给玄武/);
 });
 
 test('page changes keep the revealed Suspense content and do not replay entry motion', () => {

@@ -165,6 +165,11 @@ export function listAttentionInboxItems(
   ).all(...query.args).map(mapItem);
 }
 
+/** 完整收件箱投影专用，不使用原最近列表的100项上限。 */
+export function listAllAttentionInboxItems(db: RunnerDatabase): AttentionInboxItemRecord[] {
+  return db.sqlite.query<Record<string, unknown>, []>(`select ${ITEM_COLUMNS} from attention_inbox_items order by created_at desc, id desc`).all().map(mapItem);
+}
+
 export function countAttentionInboxItems(
   db: RunnerDatabase,
   filter: Omit<AttentionInboxItemFilter, "limit"> = {}

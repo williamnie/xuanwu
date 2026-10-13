@@ -5,6 +5,7 @@ import test from 'node:test';
 const settingsSource = readFileSync(new URL('./Settings.jsx', import.meta.url), 'utf8');
 const chromeSource = readFileSync(new URL('./SettingsChrome.jsx', import.meta.url), 'utf8');
 const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
+const connectionsSource = readFileSync(new URL('./ConnectionSettingsList.jsx', import.meta.url), 'utf8');
 const settingsNavigationSource = readFileSync(new URL('./settingsNavigation.js', import.meta.url), 'utf8');
 const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
 const placeholderPath = new URL('./AssistantSettingsPlaceholders.jsx', import.meta.url);
@@ -81,12 +82,13 @@ test('Settings primary IA owns the complete project list and editor flow', () =>
   assert.match(sectionsSource, /PiAgentSettingsPanel/);
   assert.match(sectionsSource, /CodeAgentsPanel/);
   assert.match(sectionsSource, /ConnectorDiagnosticsPanel/);
-  assert.match(sectionsSource, /FeishuSettingsPanel/);
+  assert.match(connectionsSource, /FeishuSettingsPanel/);
   assert.match(sectionsSource, /PiMcpManagementPanel/);
   assert.match(piAgentSource, /SupervisorSettingsForm/);
   assert.match(piAgentSource, /<ApiConnectionFlow state=\{state\} \/>/);
   assert.match(piAgentSource, /<ApiTypeField state=\{state\} \/>/);
-  assert.match(piAgentSource, /<ProviderSummary providers=\{state\.providers\} \/>/);
+  assert.doesNotMatch(piAgentSource, /ProviderSummary|ConnectionProgress/);
+  assert.match(piAgentSource, /MODEL TEST/);
   assert.equal(existsSync(placeholderPath), false);
   assert.doesNotMatch(sectionsSource, /SettingsPlaceholderPanel|placeholder/i);
   assert.match(sectionsSource, /SkillsRuntimePanel/);
@@ -112,16 +114,12 @@ test('Settings content stays anchored and maintenance is outside everyday projec
 });
 
 test('Connection setup loads only visited platforms and keeps their drafts mounted between switches', () => {
-  assert.match(sectionsSource, /const \[visitedChannels, setVisitedChannels\] = useState\(\['github'\]\)/);
-  assert.match(sectionsSource, /visited\.includes\(nextChannel\) \? visited : \[\.\.\.visited, nextChannel\]/);
-  for (const channel of ['github', 'feishu', 'telegram', 'health']) {
-    assert.match(sectionsSource, new RegExp(`visitedChannels\\.includes\\('${channel}'\\) && <div`));
-  }
-  assert.match(sectionsSource, /hidden=\{channel !== 'github'\}><GitHubSettingsPanel/);
-  assert.match(sectionsSource, /hidden=\{channel !== 'feishu'\}><FeishuSettingsPanel/);
-  assert.match(sectionsSource, /hidden=\{channel !== 'telegram'\}><TelegramSettingsPanel/);
-  assert.match(sectionsSource, /hidden=\{channel !== 'health'\}><ConnectorDiagnosticsPanel/);
-  assert.match(sectionsSource, /aria-pressed=\{channel === id\}/);
+  assert.match(connectionsSource, /const \[visited,setVisited\]=useState\(\[\]\)/);
+  assert.match(connectionsSource, /current\.includes\(id\)\?current:\[\.\.\.current,id\]/);
+  assert.match(connectionsSource, /visited\.map\(id=><SettingsDrawer/);
+  assert.match(connectionsSource, /open=\{active&&channel===id\}/);
+  for (const panel of ['GitHubSettingsPanel','FeishuSettingsPanel','TelegramSettingsPanel']) assert.match(connectionsSource,new RegExp(`<${panel}\\/>`));
+  assert.match(connectionsSource, /setChannel\(''\)/);
   const disclosure = readFileSync(new URL('../components/SettingsDisclosure.jsx', import.meta.url), 'utf8');
   assert.match(disclosure, /state\.visited \? <div/);
   assert.match(disclosure, /visited: current\.visited \|\| open/);
@@ -142,7 +140,7 @@ test('AI and advanced settings keep provider, behavior and MCP on their own auth
   assert.match(piAgentSource, /<ModelSelection state=\{state\} \/>/);
   assert.doesNotMatch(piAgentSource, /AdvancedProviderGrid|ProviderCredentialFields|Provider ID|User-Agent/);
   assert.doesNotMatch(sectionsSource, /ApiTypeField|ProviderCredentialFields/);
-  assert.match(piAgentSource, /<ProviderSummary/);
+  assert.match(piAgentSource, /state\.providers\.length > 1/);
 });
 
 test('Maintenance summarizes health while preserving complete diagnostic exports', () => {
@@ -225,7 +223,7 @@ test('Settings owns provider, Code Agent, integration and MCP management', () =>
   assert.match(sectionsSource, /CodeAgentsPanel/);
   assert.match(sectionsSource, /PiAgentSettingsPanel/);
   assert.match(sectionsSource, /ConnectorDiagnosticsPanel/);
-  assert.match(sectionsSource, /FeishuSettingsPanel/);
+  assert.match(connectionsSource, /FeishuSettingsPanel/);
   assert.match(sectionsSource, /PiMcpManagementPanel/);
   assert.match(connectorsApiSource, /getPiConnectors:\s*\(\)\s*=>\s*request\('\/api\/pi\/connectors'\)/);
   assert.match(connectorsApiSource, /testPiConnector/);
@@ -259,8 +257,9 @@ test('Notifications edits the existing versioned preference authority and shows 
   assert.match(notificationSettingsSource, /assistantApi\.getPiGuardianPreferences/);
   assert.match(notificationSettingsSource, /assistantApi\.createPiGuardianPreference/);
   assert.match(notificationSettingsSource, /assistantApi\.disablePiGuardianPreference/);
-  assert.match(notificationSettingsSource, /connectorsApi\.getPiConnectors/);
-  assert.match(notificationSettingsSource, /保存记录/);
+  assert.match(connectionsSource, /connectorsApi\.getPiConnectors/);
+  assert.match(notificationSettingsSource, /当前规则/);
+  assert.match(notificationSettingsSource, /preferences\.filter\(preference => preference\.status === 'active'\)/);
   assert.match(settingsProductModelsSource, /source_message_id: 'settings:notifications'/);
   assert.match(settingsProductModelsSource, /digest_policy: form\.digestPolicy/);
   assert.doesNotMatch(notificationSettingsSource, /window\.confirm|window\.alert/);

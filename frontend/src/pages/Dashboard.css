@@ -30,3 +30,10 @@
   .dashboard-facts > div:nth-child(2) { border: 0; }
   .dashboard-connection-error { flex-wrap: wrap; }
 }
+.dashboard-compact-tasks { min-width: 0; border-top: 1px solid var(--border-color); padding-top: 16px; }
+.dashboard-compact-tasks > header { display: flex; align-items: center; justify-content: space-between; }
+.dashboard-compact-tasks h2 { font-size: 1rem; }
+.dashboard-task-row { display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; padding: 12px 0; border: 0; border-bottom: 1px solid var(--border-light); background: transparent; color: var(--text-primary); cursor: pointer; }
+.dashboard-task-row:hover { background: var(--nav-hover); }
+.dashboard-task-row strong { font-size: 0.88rem; font-weight: 600; }
+.dashboard-task-row span, .dashboard-task-row time { color: var(--text-muted); font-size: 0.66rem; font-family: var(--font-mono); }

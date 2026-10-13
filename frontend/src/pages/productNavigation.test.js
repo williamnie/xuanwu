@@ -77,7 +77,7 @@ test('App routes canonical pages to the currently verified compatibility surface
   assert.match(appSource, /resolveProductPage\(page, \{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
   assert.match(appSource, /recordLegacyRoute\(\{ family: page, target: resolvedPage \}\)/);
   assert.match(appSource, /workIdFromIssueId\(issueId\)/);
-  assert.match(appSource, /currentPage === 'command-center'[\s\S]*<Dashboard navigateTo=\{navigateTo\} \/>/);
+  assert.match(appSource, /currentPage === 'command-center'[\s\S]*<Dashboard navigateTo=\{navigateTo\} onCreate=\{openTaskEditor\} \/>/);
   assert.match(appSource, /currentPage === 'ask-xuanwu'[\s\S]*<PiChat[\s\S]*initialConversationId=\{selectedPiConversationId\}[\s\S]*onConversationChange=\{rememberPiConversation\}/);
   assert.match(appSource, /currentPage === 'automations'[\s\S]*<Automations \/>/);
   assert.doesNotMatch(appSource, /pages\/Connections|currentPage === 'connections'/);

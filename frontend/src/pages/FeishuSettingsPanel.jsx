@@ -4,6 +4,7 @@ import { Bot, CheckCircle2, KeyRound } from 'lucide-react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
 import './FeishuSettingsPanel.css';
+import SettingsDisclosure from '../components/SettingsDisclosure.jsx';
 
 const DEFAULT_FORM = {
   allowed_chat_ids: '',
@@ -76,22 +77,25 @@ function StatusPill({ enabled, status }) {
 function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit }) {
   if (loading) return <PanelLoader label="玄武正在读取飞书配置…" />;
   return (
-    <form className="feishu-settings__form" onSubmit={handleSubmit}>
-      <ReceiveModeHint callbackPath={remote?.callback_path} receiveMode={form.receive_mode} settingsFile={remote?.settings_file} />
-      <ReceiveModeField value={form.receive_mode} onChange={(value) => updateField('receive_mode', value)} />
+    <form className="feishu-settings__form" onSubmit={handleSubmit}><fieldset className="connection-form-fields" disabled={saving}>
       <div className="feishu-settings__field-grid">
         <TextField label="App ID" value={form.app_id} onChange={(value) => updateField('app_id', value)} placeholder="cli_xxx" />
         <SecretField configured={remote?.app_secret_configured} label="App Secret" value={form.app_secret} onChange={(value) => updateField('app_secret', value)} />
-        <SecretField configured={remote?.verification_token_configured} label="Verification Token" optional value={form.verification_token} onChange={(value) => updateField('verification_token', value)} />
-        <SecretField configured={remote?.encrypt_key_configured} label="Encrypt Key" optional value={form.encrypt_key} onChange={(value) => updateField('encrypt_key', value)} />
+      </div>
+      <h3>允许的来源与通知目标</h3><p>只有允许的群和用户可以触发任务；默认目标用于发送通知。</p>
+      <div className="feishu-settings__field-grid">
         <TextField label="Allowed Chat IDs" value={form.allowed_chat_ids} onChange={(value) => updateField('allowed_chat_ids', value)} placeholder="oc_xxx, oc_yyy" />
         <TextField label="Allowed User IDs" value={form.allowed_user_ids} onChange={(value) => updateField('allowed_user_ids', value)} placeholder="ou_xxx, ou_yyy" />
         <TextField label="Default Chat ID" value={form.default_chat_id} onChange={(value) => updateField('default_chat_id', value)} placeholder="oc_xxx" />
         <TextField label="Default User ID" value={form.default_user_id} onChange={(value) => updateField('default_user_id', value)} placeholder="ou_xxx" />
       </div>
-      <TextAreaField label="Project Mappings" value={form.project_mappings} onChange={(value) => updateField('project_mappings', value)} placeholder="chat:oc_xxx=xuanwu,user:ou_xxx=xuanwu" />
+      <TextAreaField label="项目映射（来源 → 项目）" value={form.project_mappings} onChange={(value) => updateField('project_mappings', value)} placeholder="chat:oc_xxx=xuanwu,user:ou_xxx=xuanwu" />
+      <SettingsDisclosure title="更多选项"><ReceiveModeHint callbackPath={remote?.callback_path} receiveMode={form.receive_mode} settingsFile={remote?.settings_file}/><ReceiveModeField value={form.receive_mode} onChange={value=>updateField('receive_mode',value)}/><div className="feishu-settings__field-grid">
+        <SecretField configured={remote?.verification_token_configured} label="Verification Token" optional value={form.verification_token} onChange={(value) => updateField('verification_token', value)} />
+        <SecretField configured={remote?.encrypt_key_configured} label="Encrypt Key" optional value={form.encrypt_key} onChange={(value) => updateField('encrypt_key', value)} />
+      </div></SettingsDisclosure>
       <Footer remote={remote} saving={saving} />
-    </form>
+    </fieldset></form>
   );
 }
 

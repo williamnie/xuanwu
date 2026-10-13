@@ -323,7 +323,7 @@ function detailResponse(db: RunnerDatabase, request: Request, context: ReadApiCo
 }
 
 // 每页按项目建立一次依赖图，只评估本页任务；不逐行请求或扫描全部项目。
-function workDiagnostics(db: RunnerDatabase, works: WorkLedgerEntry[], context: ReadApiContext): Array<WorkLedgerEntry & { scheduling: Record<string, unknown> }> {
+export function workDiagnostics(db: RunnerDatabase, works: WorkLedgerEntry[], context: ReadApiContext): Array<WorkLedgerEntry & { scheduling: Record<string, unknown> }> {
   const projects = new Map<string, { project: ReturnType<typeof getProject>; dependencies: ReturnType<typeof readProjectIssueDependencies> }>();
   const agents = context.providersRegistry ? managedCodeAgentCatalog(context.providersRegistry) : [];
   for (const projectID of new Set(works.map(work => work.owner.project_id))) {

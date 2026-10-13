@@ -221,10 +221,12 @@ export function readIssueDecisionProjection(
 }
 
 function humanReviewRequests(db: RunnerDatabase, issueID: number): HumanReviewRequest[] {
-  const events = listIssueEvents(db, issueID, {
-    limit: 500,
-    types: Object.values(HUMAN_REVIEW_EVENT_TYPES)
-  });
+  const types = Object.values(HUMAN_REVIEW_EVENT_TYPES);
+  const events = db.sqlite.query<{ type: string; payload: string; created_at: string }, Array<number | string>>(`select type, payload, created_at from issue_events where issue_id=? and type in (${types.map(() => "?").join(",")}) order by id asc`).all(issueID, ...types);
+  return projectHumanReviewEvents(events);
+}
+
+function projectHumanReviewEvents(events: Array<{ type: string; payload: string; created_at: string }>): HumanReviewRequest[] {
   const requests = new Map<string, HumanReviewRequest>();
   for (const event of events) {
     const payload = objectPayload(event.payload);
@@ -252,6 +254,18 @@ function humanReviewRequests(db: RunnerDatabase, issueID: number): HumanReviewRe
     if (event.type === HUMAN_REVIEW_EVENT_TYPES.revisionResumeFailed) current.status = "changes_requested";
   }
   return [...requests.values()].sort((a, b) => a.revision - b.revision);
+}
+
+/** 一次读取当前任务的审核事件，复用同一请求投影，避免逐任务HTTP或另建审批状态。 */
+export function listOpenHumanReviewRequests(db: RunnerDatabase): Array<{ request: HumanReviewRequest; project_id: string; title: string; updated_at: string }> {
+  const types = Object.values(HUMAN_REVIEW_EVENT_TYPES);
+  const events = db.sqlite.query<{ issue_id: number; type: string; payload: string; created_at: string; project_id: string; title: string; updated_at: string }, string[]>(`select e.issue_id, e.type, e.payload, e.created_at, i.project_id, i.title, i.updated_at from issue_events e join issues i on i.id=e.issue_id where i.status not in ('done','failed','cancelled') and e.type in (${types.map(() => "?").join(",")}) order by e.issue_id asc, e.id asc`).all(...types);
+  const grouped = new Map<number, typeof events>();
+  for (const event of events) { const group = grouped.get(event.issue_id) ?? [];group.push(event);grouped.set(event.issue_id, group); }
+  return [...grouped.values()].flatMap(group => {
+    const request = projectHumanReviewEvents(group).at(-1);
+    return request?.status === "open" ? [{ request, project_id: group[0]!.project_id, title: group[0]!.title, updated_at: group[0]!.updated_at }] : [];
+  });
 }
 
 export function repairRedundantAcceptedHumanReview(

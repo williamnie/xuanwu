@@ -9,6 +9,7 @@ import PromptEditor from '../../components/editor/PromptEditor.jsx';
 import AgentProfileSelectOptions from '../../components/AgentProfileSelectOptions.jsx';
 import ModalOverlay from '../../components/ModalOverlay.jsx';
 import SettingsDisclosure from '../../components/SettingsDisclosure.jsx';
+import '../WorkBoard.css';
 import { editorDraft, effectiveProfilePreview } from './workProfileRouting.js';
 import { availableAgentProfiles, codeAgentAvailable, effectiveProjectProvider } from '../../utils/codeAgents.js';
 
@@ -94,9 +95,10 @@ export default function WorkEditorDialog({ mode, onClose, onSaved, projects, wor
           type: 'engineering_task',
         });
       const createdWork = response?.work;
-      const reason = createdWork?.scheduling?.dependency?.waiting_reason || (selectedProject?.hold ? '项目已暂停，恢复后开始' : selectedProject?.auto_run === 0 && draft.status === 'todo' ? '项目未开启自动执行' : '');
+      if (!createdWork?.id) throw new Error('创建结果尚未确认，请核对后再重试');
+      const reason = createdWork.status === 'todo' ? selectedProject?.hold ? '项目已暂停' : selectedProject?.auto_run === 0 ? '项目未开启自动执行' : '已加入执行队列' : '';
       message.success(`${t(editing ? 'editor.updated' : 'editor.created')}${reason ? `；${reason}` : ''}`);
-      onSaved(response?.work || null);
+      onSaved(createdWork);
     } catch (saveError) {
       setError(saveError.message || t('editor.saveFailed'));
       setSaving(false);

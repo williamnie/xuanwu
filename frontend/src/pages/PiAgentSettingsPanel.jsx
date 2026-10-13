@@ -10,7 +10,8 @@ export default function PiAgentSettingsPanel({ onOpenCodeAgents }) {
   return (
     <section className="supervisor-settings-panel">
       <PanelHeader loading={state.loading} onRefresh={state.loadSettings} />
-      {state.loading ? <PanelLoader label="正在读取玄武助手配置…" /> : <SupervisorSettingsForm onOpenCodeAgents={onOpenCodeAgents} state={state} />}
+      {state.loadError && <p role="alert">{state.loadError}</p>}
+      {state.loading ? <PanelLoader label="正在读取玄武助手配置…" /> : state.settingsLoaded ? <fieldset className="connection-form-fields" disabled={state.saving}><SupervisorSettingsForm onOpenCodeAgents={onOpenCodeAgents} state={state} /></fieldset> : null}
     </section>
   );
 }
@@ -28,7 +29,7 @@ function SupervisorSettingsForm({ onOpenCodeAgents, state }) {
         <ProviderConnectionSettings state={state} />
       </ConfigurationStage>
       <ConfigurationStage
-        description="设置玄武的名称、思考强度、工作指令，以及对话和通知的表达方式。"
+        description="设置玄武的名称、思考强度和长期说明。"
         index="02"
         title="助手偏好"
       >
@@ -39,15 +40,14 @@ function SupervisorSettingsForm({ onOpenCodeAgents, state }) {
 }
 
 function SupervisorReadiness({ state }) {
-  const connectionSaved = Boolean(state.selectedProvider);
-  const modelSelected = Boolean(state.form.modelId.trim());
-  return (
-    <div className="supervisor-readiness" aria-label="Supervisor readiness">
-      <ReadinessItem label="Connection" ready={connectionSaved} value={connectionSaved ? connectionApiLabel(state.form.api) : '待配置'} />
-      <ReadinessItem label="Model" ready={modelSelected} value={modelSelected ? state.form.modelId : '待选择'} />
-      <ReadinessItem label="Supervisor" ready={state.form.enabled} value={state.form.enabled ? '已启用' : '已停用'} />
-    </div>
-  );
+  const oauth = state.form.api === 'openai-codex-responses';
+  const authorized = oauth ? Boolean(state.oauthStatus?.pi_oauth?.configured) : Boolean(state.selectedProvider?.api_key_configured);
+  const tested = state.connectionTest?.result?.ok === true;
+  const testLabel = tested ? '所选模型已通过连接测试' : state.connectionTest?.result ? '测试失败' : '未测试';
+  return <div className="supervisor-readiness" aria-label="助手连接状态">
+    <ReadinessItem label={oauth ? 'AUTHORIZATION' : 'CREDENTIAL'} ready={authorized} value={oauth ? authorized ? '已授权' : '未授权' : authorized ? '凭据已保存' : '未保存凭据'} />
+    <ReadinessItem label="MODEL TEST" ready={tested} value={testLabel} />
+  </div>;
 }
 
 function ReadinessItem({ label, ready, value }) {
@@ -82,9 +82,7 @@ function ProviderConnectionSettings({ state }) {
         <ModelSelection state={state} />
         <ConnectionResult state={state} />
         <ConnectionActions state={state} />
-        <ProviderSummary providers={state.providers} />
       </div>
-      <ConnectionProgress oauthMode={oauthMode} state={state} />
     </div>
   );
 }
@@ -98,8 +96,8 @@ function SavedConnectionPicker({ state }) {
       <div className="provider-connection-toolbar">
         <span className="provider-console-label">CONNECTION</span>
         <div className="provider-connection-picker">
-          <label>
-            <span>已有连接</span>
+          {state.providers.length > 1 ? <label>
+            <span>切换连接</span>
             <select
               aria-label="已有连接"
               className="form-control"
@@ -109,7 +107,8 @@ function SavedConnectionPicker({ state }) {
               <option value="">＋ 新建连接</option>
               {state.providers.map((item) => <option key={item.id} value={item.id}>{connectionDisplayName(item)}</option>)}
             </select>
-          </label>
+          </label> : <span>{provider ? connectionDisplayName(provider) : '新建连接'}</span>}
+          <button className="btn btn-secondary" disabled={state.saving} onClick={state.startNewApiConnection} type="button">新建连接</button>
           {provider ? (
             <button
               className="btn btn-secondary provider-delete-trigger"
@@ -281,52 +280,6 @@ function ConnectionResult({ state }) {
   );
 }
 
-function ConnectionProgress({ oauthMode, state }) {
-  const credentialReady = oauthMode
-    ? Boolean(state.oauthStatus?.pi_oauth?.configured)
-    : Boolean(state.form.baseUrl.trim() && (state.form.apiKey.trim() || state.selectedProvider?.api_key_configured));
-  const modelReady = Boolean(state.form.modelId.trim());
-  const applied = Boolean(state.selectedProvider?.models?.includes(state.form.modelId));
-  return (
-    <aside className="provider-progress-rail">
-      <span className="provider-console-label">配置进度</span>
-      <div className="provider-progress-list">
-        <ProgressStep index="1" label="连接凭据" ready={credentialReady} value={oauthMode ? 'Codex OAuth 快捷登录' : '协议、API 地址与 Key'} />
-        <ProgressStep index="2" label="选择模型" ready={modelReady} value="远端目录或手动填写" />
-        <ProgressStep index="3" label="保存为默认" ready={applied} value="应用到玄武助手" />
-      </div>
-      <div className="provider-connection-summary">
-        <span>连接摘要</span>
-        <dl>
-          <div><dt>认证</dt><dd>{oauthMode ? 'Codex OAuth' : 'API Key'}</dd></div>
-          <div><dt>协议</dt><dd>{state.form.api}</dd></div>
-          <div><dt>地址</dt><dd>{oauthMode ? 'OAuth 自动配置' : connectionTarget(state.form.baseUrl)}</dd></div>
-          <div><dt>模型</dt><dd>{state.form.modelId || '待选择'}</dd></div>
-        </dl>
-      </div>
-    </aside>
-  );
-}
-
-function ProgressStep({ index, label, ready, value }) {
-  return (
-    <div className={`provider-progress-step ${ready ? 'ready' : ''}`}>
-      <span>{ready ? '✓' : index}</span>
-      <div><strong>{label}</strong><small>{value}</small></div>
-    </div>
-  );
-}
-
-function connectionTarget(value) {
-  if (!value) return '待填写';
-  try {
-    const url = new URL(value);
-    return `${url.host}${url.pathname === '/' ? '' : url.pathname}`;
-  } catch {
-    return value;
-  }
-}
-
 function connectionApiLabel(api) {
   if (api === 'openai-codex-responses') return 'ChatGPT OAuth';
   if (api === 'openai-responses') return 'OpenAI Responses';
@@ -349,7 +302,6 @@ function SupervisorBehaviorSettings({ state }) {
         <textarea className="form-control" rows={4} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
       </Field>
       </SettingsDisclosure>
-      <ChatPersonaSettings state={state} />
       <SupervisorEnableField form={state.form} updateField={state.updateField} />
       <SaveRow onSave={state.handleAgentSave} saving={state.saving} />
     </>
@@ -435,12 +387,14 @@ function OAuthButtons({ state }) {
   return (
     <div className="supervisor-oauth-actions">
       <button className="btn btn-primary" onClick={state.startPiCodexOAuthLogin} disabled={state.oauthBusy} type="button">
-        {state.oauthBusy ? <Loader2 size={14} className="spin-animation" /> : <KeyRound size={14} />} {state.oauthStatus?.pi_oauth?.configured ? '重新授权' : '登录 Codex'}
+        {state.oauthBusy ? <Loader2 size={14} className="spin-animation" /> : <KeyRound size={14} />} {state.oauthStatus?.pi_oauth?.configured ? '重新登录' : '登录'}
       </button>
+      <details className="supervisor-oauth-more"><summary>更多</summary>
       <button className="btn btn-secondary" onClick={state.copyPiCodexOAuthUrl} disabled={!state.oauthStatus?.auth_url} type="button">复制登录地址</button>
       <button className="btn btn-secondary" onClick={state.openPiCodexOAuthUrl} disabled={!state.oauthStatus?.auth_url} type="button">打开授权页</button>
       <button aria-label="刷新 OAuth 状态" className="btn btn-secondary supervisor-oauth-refresh" onClick={state.loadOAuthStatus} disabled={state.oauthBusy} title="刷新 OAuth 状态" type="button"><RefreshCw size={14} /></button>
       <button className="btn btn-secondary" onClick={state.logoutPiCodexOAuth} disabled={state.oauthBusy || !state.oauthStatus?.pi_oauth?.configured} type="button">退出 OAuth</button>
+      </details>
     </div>
   );
 }
@@ -463,39 +417,26 @@ function OAuthStatusLine({ status }) {
   );
 }
 
-function ProviderSummary({ providers }) {
-  if (providers.length === 0) return null;
-  return (
-    <details className="provider-saved-connections">
-      <summary>已保存连接 <span>{providers.length}</span></summary>
-      <div>
-        {providers.map((provider) => (
-          <span key={provider.id}><KeyRound size={11} color={provider.api_key_configured ? 'var(--success)' : 'var(--text-muted)'} />{connectionDisplayName(provider)}</span>
-        ))}
-      </div>
-    </details>
-  );
-}
-
-function ChatPersonaSettings({ state }) {
+export function ChatPersonaSettings({ state }) {
   const form = state.form;
-  const [visited, setVisited] = useState(false);
   return (
-    <details className="persona-settings-disclosure" onToggle={event => { if (event.currentTarget.open) setVisited(true); }}>
-      <summary><Sparkles size={16} /><span><strong>对话与通知表达风格</strong><small>调整回复和通知的措辞 · 配置版本 {form.personaRevision}</small></span></summary>
-      {visited && <div className="persona-settings-content">
+    <section className="persona-settings-disclosure">
+      <span><Sparkles size={14} /> 对话与通知表达风格 · 调整回复和通知的措辞 · 配置版本 {form.personaRevision}</span>
+      <div className="persona-settings-content">
         <p className="persona-boundary-notice">这里只控制对话和通知的最终措辞，不改变通知是否发送，也不改变权限、审批、工具调用、工作项状态和完成判定。</p>
         {state.personaConflictDraft ? <PersonaConflictNotice state={state} /> : null}
         <label className="persona-enable-field"><input type="checkbox" checked={form.personaEnabled} onChange={(event) => state.updateField('personaEnabled', event.target.checked)} />启用自定义表达风格（默认关闭）</label>
-        <Field label={`性格描述 · ${form.personaPersonality.length}/1000`}><textarea className="form-control" maxLength={1000} rows={3} value={form.personaPersonality} onChange={(event) => state.updateField('personaPersonality', event.target.value)} /></Field>
-        <Field label={`沟通风格 · ${form.personaCommunicationStyle.length}/2000`}><textarea className="form-control" maxLength={2000} rows={4} value={form.personaCommunicationStyle} onChange={(event) => state.updateField('personaCommunicationStyle', event.target.value)} /></Field>
         <div className="persona-select-grid">
           <Field label="回复长度"><select className="form-control" value={form.personaVerbosity} onChange={(event) => state.updateField('personaVerbosity', event.target.value)}><option value="adaptive">自适应</option><option value="concise">简短</option><option value="detailed">详细</option></select></Field>
           <Field label="语言"><select className="form-control" value={form.personaLanguageMode} onChange={(event) => state.updateField('personaLanguageMode', event.target.value)}><option value="system">跟随系统</option><option value="follow_user">跟随当前用户消息</option></select></Field>
         </div>
+        <SettingsDisclosure title="更多选项">
+        <Field label={`性格描述 · ${form.personaPersonality.length}/1000`}><textarea className="form-control" maxLength={1000} rows={3} value={form.personaPersonality} onChange={(event) => state.updateField('personaPersonality', event.target.value)} /></Field>
+        <Field label={`沟通风格 · ${form.personaCommunicationStyle.length}/2000`}><textarea className="form-control" maxLength={2000} rows={4} value={form.personaCommunicationStyle} onChange={(event) => state.updateField('personaCommunicationStyle', event.target.value)} /></Field>
+        </SettingsDisclosure>
         <span className="persona-profile-badge">生效范围：对话回复与通知内容</span>
-      </div>}
-    </details>
+      </div>
+    </section>
   );
 }
 
@@ -506,7 +447,7 @@ function PersonaConflictNotice({ state }) {
       <strong>配置已被更新</strong>
       <span>表单已显示服务器最新配置；下面保留了本地草稿，请比较后选择是否恢复并继续编辑。</span>
       <details><summary>查看本地草稿</summary><pre>{JSON.stringify({ enabled: draft.personaEnabled, personality: draft.personaPersonality, communication_style: draft.personaCommunicationStyle, verbosity: draft.personaVerbosity, language_mode: draft.personaLanguageMode }, null, 2)}</pre></details>
-      <div><button className="btn btn-secondary" onClick={state.restorePersonaConflictDraft} type="button">恢复本地草稿</button><button className="btn btn-secondary" onClick={state.dismissPersonaConflictDraft} type="button">使用服务器版本</button></div>
+      <div><button className="btn btn-secondary" disabled={state.personaConflictNeedsRefresh} onClick={state.restorePersonaConflictDraft} type="button">恢复本地草稿</button><button className="btn btn-secondary" disabled={state.personaConflictNeedsRefresh} onClick={state.dismissPersonaConflictDraft} type="button">使用服务器版本</button></div>
     </div>
   );
 }
@@ -519,7 +460,7 @@ function SaveRow({ onSave, saving }) {
   return (
     <div className="supervisor-save-row">
       <button className="btn btn-primary" onClick={onSave} disabled={saving} type="button">{saving ? <Loader2 size={14} className="spin-animation" /> : <Save size={14} />} 保存运行偏好</button>
-      <span>保存名称、思考强度、运行指令与表达风格，不会改写上方连接凭据。</span>
+      <span>保存名称、思考强度与长期说明，不会改写上方连接凭据；表达风格在通用中单独保存。</span>
     </div>
   );
 }

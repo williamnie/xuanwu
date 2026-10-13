@@ -5,6 +5,7 @@ import test from 'node:test';
 const panelSource = readFileSync(new URL('./PiAgentSettingsPanel.jsx', import.meta.url), 'utf8');
 const panelStylesSource = readFileSync(new URL('./PiAgentSettingsPanel.css', import.meta.url), 'utf8');
 const stateSource = readFileSync(new URL('./piAgentSettingsState.js', import.meta.url), 'utf8');
+const personaSource = readFileSync(new URL('./PersonaSettingsPanel.jsx', import.meta.url), 'utf8');
 const assistantSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
 
 test('Assistant settings remove redundant prompt summary UI while preserving read API', () => {
@@ -27,8 +28,8 @@ test('Xuanwu Supervisor Settings exposes revisioned presentation-only Persona co
   assert.match(panelSource, /personaLanguageMode/);
   assert.match(panelSource, /生效范围：对话回复与通知内容/);
   assert.match(stateSource, /expected_revision: form\.personaRevision/);
-  assert.match(stateSource, /err\?\.status === 409/);
-  assert.match(stateSource, /保留本地草稿供你合并/);
+  assert.match(personaSource, /error\.status===409/);
+  assert.match(personaSource, /setConflict\(form\)/);
   assert.match(panelSource, /配置已被更新/);
   assert.match(panelSource, /恢复本地草稿/);
   assert.match(panelSource, /使用服务器版本/);
@@ -36,7 +37,7 @@ test('Xuanwu Supervisor Settings exposes revisioned presentation-only Persona co
 });
 
 test('Xuanwu Supervisor Settings exposes OpenAI Codex OAuth as an optional shortcut', () => {
-  assert.match(panelSource, /Codex OAuth/);
+  assert.match(panelSource, /Codex \/ ChatGPT OAuth/);
   assert.match(panelSource, /复制登录地址/);
   assert.match(panelSource, /state\.oauthStatus\?\.auth_url/);
   assert.match(panelSource, /openai-codex-responses/);
@@ -90,7 +91,7 @@ test('Supervisor page uses one flat API-first connection console with discovered
   const agentSaveStart = stateSource.indexOf('async function savePiSupervisorSettings');
   const connectionSaveSource = stateSource.slice(connectionSaveStart, agentSaveStart);
   assert.match(connectionSaveSource, /updatePiProviderSettings/);
-  assert.match(connectionSaveSource, /saveSupervisor\(supervisorPayload\(form\)\)/);
+  assert.match(connectionSaveSource, /saveSupervisor\(connectionSelectionPayload\(form\)\)/);
 });
 
 test('saved Supervisor connections can be deleted with in-app confirmation and active-connection protection', () => {
@@ -119,9 +120,9 @@ test('Supervisor behavior applies the model selected above without duplicating m
   const agentSaveStart = stateSource.indexOf('async function savePiSupervisorSettings');
   const nextFunction = stateSource.indexOf('async function saveSupervisor', agentSaveStart);
   const agentSaveSource = stateSource.slice(agentSaveStart, nextFunction);
-  assert.match(agentSaveSource, /ensureSelectedProviderModel\(form, providers\)/);
-  assert.match(agentSaveSource, /saveSupervisor\(supervisorPayload\(form\)\)/);
-  assert.match(stateSource, /configured\?\.models\?\.includes\(modelID\)/);
+  assert.match(agentSaveSource, /saveSupervisor\(runtimePreferencePayload\(form\)\)/);
+  assert.doesNotMatch(agentSaveSource, /updatePiProviderSettings/);
+  assert.match(stateSource, /instructions: current\.instructions/);
   assert.match(stateSource, /updatePiProviderSettings\(providerID, providerPayload\(form\)\)/);
   assert.match(panelSource, /不会改写上方连接凭据/);
 });

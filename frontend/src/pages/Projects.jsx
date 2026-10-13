@@ -3,8 +3,7 @@ import { useImmer } from 'use-immer';
 import './Projects.css';
 import { message } from '../store/toastStore';
 import {
-  selectBackendOnline,
-  selectProjects,
+    selectProjects,
   selectRefreshData,
   selectWorkSummary,
   useDataStore,
@@ -33,7 +32,6 @@ function compactPath(cwd = '') {
 export default function Projects() {
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
-  const backendOnline = useDataStore(selectBackendOnline);
   const refreshData = useDataStore(selectRefreshData);
   const [ui, updateUi] = useImmer({
     syncing: false,
@@ -80,7 +78,7 @@ export default function Projects() {
       await refreshData(['projects', 'workSummary']);
     } catch (err) {
       updateUi(draft => {
-        draft.syncResult = { error: err.message || '同步 Codex 项目失败' };
+        draft.syncResult = { error: err.message || '从 Codex 导入失败' };
       });
     } finally {
       updateUi(draft => {
@@ -163,7 +161,7 @@ export default function Projects() {
         <div className="settings-project-panel-actions">
           <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing} type="button">
             <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? '正在同步...' : '同步 Codex 项目'}
+            {syncing ? '正在同步...' : '从 Codex 导入'}
           </button>
           <button className="btn btn-primary" onClick={handleOpenCreateModal} type="button">
             <FolderPlus size={18} /> 添加项目
@@ -171,17 +169,8 @@ export default function Projects() {
         </div>
       </div>
 
+      <p className="project-settings-hint">从 Codex 导入会对已存在的项目开启自动执行。</p>
       <div className="settings-project-panel-body">
-        {!backendOnline && (
-          <div className="glass-card projects-notice is-error">
-            <AlertCircle className="projects-notice-icon" color="var(--error)" size={24} />
-            <div>
-              <h4 className="projects-notice-title">API 连接错误</h4>
-              <p className="projects-notice-copy">加载数据失败，请检查当前 Runner 后端服务连接。</p>
-            </div>
-          </div>
-        )}
-
         {syncResult && (
           <div className={`glass-card projects-notice ${syncResult.error ? 'is-error' : 'is-success'}`}>
             {syncResult.error ? (
@@ -198,6 +187,7 @@ export default function Projects() {
               ) : (
                 <>
                   <p className="projects-notice-copy">
+                    {(syncResult.summary?.created || 0) + (syncResult.summary?.existing || 0) + (syncResult.summary?.skipped || 0) === 0 ? '本机未发现 Codex 工作区。' : ''}
                     新增 {syncResult.summary?.created || 0} 个，已存在 {syncResult.summary?.existing || 0} 个，
                     跳过 {syncResult.summary?.skipped || 0} 个。来源：{syncResult.source}
                   </p>
@@ -215,9 +205,9 @@ export default function Projects() {
         {/* 项目网格卡片 */}
         {projects.length === 0 ? (
           <div className="glass-card projects-empty">
-            <Folder className="projects-empty-icon" size={48} color="var(--text-muted)" />
+            <Folder className="projects-empty-icon" size={34} color="var(--text-muted)" />
             <div>
-              <h3 className="projects-empty-title">暂无监控项目</h3>
+              <h3 className="projects-empty-title">还没有项目</h3>
               <p className="projects-empty-copy">添加本地项目路径，或从已有 Codex 项目中同步。</p>
             </div>
             <button className="btn btn-primary projects-empty-primary" onClick={handleOpenCreateModal}>
@@ -225,18 +215,13 @@ export default function Projects() {
             </button>
             <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing}>
               <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-              {syncing ? '正在同步...' : '从 Codex 同步'}
+              {syncing ? '正在同步...' : '从 Codex 导入'}
             </button>
           </div>
         ) : (
           <div className="grid-cols-3 projects-grid">
             {projects.map(proj => {
-              const counts = workSummary.project_counts?.find(item => item.project_id === proj.id)?.counts || {};
-              const doneCount = counts.done || 0;
-              const failedCount = counts.failed || 0;
-              const activeCount = counts.in_progress || 0;
-              const todoCount = counts.todo || 0;
-
+              const activeCount = workSummary.project_counts?.find(item => item.project_id === proj.id)?.counts?.in_progress || 0;
               const isHeld = Boolean(proj.hold);
               const isLoopActive = !isHeld && (proj.loop_status === 'running' || proj.auto_run === 1);
 
@@ -262,30 +247,13 @@ export default function Projects() {
                     <div className="project-status-pill">
                       <span className={`status-dot ${activeCount > 0 ? 'running' : isLoopActive ? 'active' : 'idle'}`}></span>
                       <span>
-                        {isHeld ? 'Hold' : activeCount > 0 ? '运行中' : isLoopActive ? '监听中' : '已暂停'}
+                        {isHeld ? '项目已暂停' : activeCount > 0 ? '执行中' : proj.auto_run === 1 ? '自动执行已开启' : '未启用自动执行'}
                       </span>
                     </div>
                   </div>
 
                   {/* 队列看板 */}
-                  <div className="project-card-stats">
-                    <div className="project-card-stat">
-                      <span>待执行</span>
-                      <strong className="count-todo">{todoCount}</strong>
-                    </div>
-                    <div className="project-card-stat">
-                      <span>运行中</span>
-                      <strong className="count-active">{activeCount}</strong>
-                    </div>
-                    <div className="project-card-stat">
-                      <span>已完成</span>
-                      <strong className="count-done">{doneCount}</strong>
-                    </div>
-                    <div className="project-card-stat">
-                      <span>失败</span>
-                      <strong className="count-failed">{failedCount}</strong>
-                    </div>
-                  </div>
+                  <a className="btn btn-secondary" href={`#/work?project=${encodeURIComponent(proj.id)}`}>查看任务</a>
 
                   <ProjectHoldNotice
                     hold={proj.hold}

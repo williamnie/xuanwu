@@ -347,3 +347,6 @@
 .task-workspace-header h1 { font-size: clamp(1.4rem, 3vw, 2rem); margin-right: auto; }
 .task-workspace-header nav { display: flex; gap: 6px; }
 @media (max-width: 760px) { .task-workspace { display: flex; flex-direction: column; min-height: 0; padding: 12px; } }
+
+.work-dialog-overlay { backdrop-filter: none; }
+.work-dialog-grid label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; gap: 8px; }

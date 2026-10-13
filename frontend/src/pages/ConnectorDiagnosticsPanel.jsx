@@ -8,12 +8,13 @@ import './ConnectorDiagnosticsPanel.css';
 
 const CONNECTOR_STATUSES = ['configured', 'disabled', 'misconfigured', 'error'];
 
-export default function ConnectorDiagnosticsPanel() {
+export default function ConnectorDiagnosticsPanel({ connectorPrefix = '' }) {
   const [state, setState] = useState({ busy: '', configure: '', data: null, error: '', loading: true, notice: '', revoke: '' });
 
   useEffect(() => { loadConnectors(setState); }, []);
 
-  const connectors = state.data?.connectors || [];
+  const allConnectors = state.data?.connectors || [];
+  const connectors = connectorPrefix ? allConnectors.filter(connector => connector.id === connectorPrefix || connector.id.startsWith(`${connectorPrefix}-`)) : allConnectors;
   return (
     <section className="glass-card connector-diagnostics">
       <PanelHeader loading={state.loading} onRefresh={() => loadConnectors(setState)} />

@@ -976,3 +976,11 @@
     max-width: none;
   }
 }
+
+.supervisor-oauth-more { position: relative; }
+.supervisor-oauth-more > summary { cursor: pointer; padding: 8px; }
+.supervisor-oauth-more[open] { display: grid; gap: 8px; }
+
+.connection-form-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+
+.provider-console { grid-template-columns: minmax(0, 1fr); }

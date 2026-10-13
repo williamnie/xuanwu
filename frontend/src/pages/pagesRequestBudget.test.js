@@ -33,9 +33,11 @@ test('issue detail excludes logs from initial reads and loads a bounded log page
   assert.match(issueDetailDataSource, /activeTab !== 'logs'/);
 });
 
-test('dashboard links to activity on demand without hydrating the raw event feed', () => {
+test('home reads complete requests and compact task progress without hydrating raw logs', () => {
   assert.doesNotMatch(dashboardSource, /eventsApi|subscribeToEvents/);
-  assert.match(dashboardSource, /advanced:activity/);
+  assert.match(dashboardSource, /<InboxRequests/);
+  assert.match(dashboardSource, /getTaskGlance/);
+  assert.doesNotMatch(dashboardSource, /getRuntimeDoctor|getRuntimeLogs/);
 });
 
 test('selected issue detail does not reconcile the global issue list', () => {

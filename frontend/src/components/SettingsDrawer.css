@@ -1,0 +1,6 @@
+.settings-drawer-backdrop { position: fixed; inset: 0; z-index: 1000; background: color-mix(in srgb, var(--text-primary) 30%, transparent); }
+.settings-drawer-backdrop[hidden] { display: none; }
+.settings-drawer { position: fixed; top: 0; right: 0; width: 480px; height: 100%; background: var(--surface-overlay); border-left: 1px solid var(--border-color); padding: 20px; overflow-y: auto; overscroll-behavior: contain; }
+.settings-drawer > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px; }
+.settings-drawer > header h2 { font-size: 1.2rem; }
+@media (max-width: 760px) { .settings-drawer { width: 100%; padding: 12px; } }

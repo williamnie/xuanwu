@@ -29,6 +29,7 @@ const CONNECTION_FIELDS = new Set(['api', 'apiKey', 'baseUrl', 'modelProvider', 
 
 export function usePiAgentSettingsState() {
   const connectionAttemptRef = useRef(0);
+  const protocolExplicit = useRef(false);
   const [connectionTest, setConnectionTest] = useState({ busy: false, providerId: '', result: null });
   const [deletingProviderId, setDeletingProviderId] = useState('');
   const [modelDiscovery, setModelDiscovery] = useState({ busy: false, providerId: '', result: null });
@@ -36,6 +37,8 @@ export function usePiAgentSettingsState() {
   const [providerCatalog, setProviderCatalog] = useState({ presets: [] });
   const [form, setForm] = useState(DEFAULT_PI_AGENT_FORM);
   const [loading, setLoading] = useState(true);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthStatus, setOauthStatus] = useState(null);
   const [promptSummary, setPromptSummary] = useState(null);
@@ -63,13 +66,15 @@ export function usePiAgentSettingsState() {
   }, []);
   const loadSettings = useCallback(() => {
     invalidateConnectionTest();
-    loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery);
+    loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery, setSettingsLoaded, setLoadError);
     loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
   }, [invalidateConnectionTest]);
   const loadOAuthStatus = () => loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
   const loadPromptSummary = () => loadPiPromptSummary(setPromptSummary, setPromptSummaryLoading);
   const updateField = (key, value) => {
+    const inferred = key === 'baseUrl' && !selectedProvider && !protocolExplicit.current ? inferApiProtocol(value,providerCatalog.presets) : '';
     if (key === 'instructions' || key.startsWith('persona')) setPromptSummary(null);
+    if (key === 'modelId') invalidateConnectionTest();
     if (CONNECTION_FIELDS.has(key)) {
       invalidateConnectionTest();
       setModelDiscovery({ busy: false, providerId: '', result: null });
@@ -77,6 +82,7 @@ export function usePiAgentSettingsState() {
     setForm((current) => ({
       ...current,
       [key]: value,
+      ...(inferred ? { api: inferred } : {}),
       ...(key.startsWith('persona') && key !== 'personaRevision' && key !== 'personaDirty' ? { personaDirty: true } : {})
     }));
   };
@@ -95,12 +101,14 @@ export function usePiAgentSettingsState() {
     };
     setForm(next);
   };
-  const selectApiProtocol = (api) => {
+  const selectApiProtocol = (api, explicit = true) => {
+    protocolExplicit.current = explicit;
     invalidateConnectionTest();
     setModelDiscovery({ busy: false, providerId: '', result: null });
     setForm(connectionFormForApi(api, form, providers, providerCatalog.presets));
   };
   const startNewApiConnection = () => {
+    protocolExplicit.current = false;
     const api = form.api === 'openai-codex-responses' ? 'openai-responses' : form.api;
     invalidateConnectionTest();
     setModelDiscovery({ busy: false, providerId: '', result: null });
@@ -114,7 +122,7 @@ export function usePiAgentSettingsState() {
       userAgent: ''
     }));
   };
-  const selectApiMode = () => selectApiProtocol(form.api === 'openai-codex-responses' ? 'openai-responses' : form.api);
+  const selectApiMode = () => selectApiProtocol(form.api === 'openai-codex-responses' ? 'openai-responses' : form.api, false);
   const selectOAuthMode = () => {
     const preset = providerCatalog.presets.find((item) => item.auth === 'oauth');
     if (!preset) return message.error('当前版本没有可用的 Supervisor OAuth 登录');
@@ -169,7 +177,7 @@ export function usePiAgentSettingsState() {
     return watchPiOAuthStatus({ readStatus: assistantApi.getPiCodexOAuthStatus, onStatus: setOauthStatus });
   }, [oauthBusy, oauthLifecycle, oauthStartedAt]);
 
-  return { connectionTest, deletingProviderId, form, loading, modelDiscovery, modelOptions, modelSelectAvailable, oauthBusy, oauthStatus, personaConflictDraft, promptSummary, promptSummaryLoading, providerCatalog, providers, saving, selectedPreset, selectedProvider,
+  return { settingsLoaded, loadError, connectionTest, deletingProviderId, form, loading, modelDiscovery, modelOptions, modelSelectAvailable, oauthBusy, oauthStatus, personaConflictDraft, promptSummary, promptSummaryLoading, providerCatalog, providers, saving, selectedPreset, selectedProvider,
     copyPiCodexOAuthUrl, deleteProviderConnection, dismissPersonaConflictDraft, discoverModels, handleAgentSave, handleConnectionApply, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, restorePersonaConflictDraft, selectApiMode, selectApiProtocol, selectModelProvider, selectOAuthMode, selectProviderPreset, startNewApiConnection, startPiCodexOAuthLogin, testConnection, updateField };
 }
 
@@ -221,11 +229,13 @@ function defaultBaseURL(api) {
   return 'https://api.openai.com/v1';
 }
 
-function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery) {
+function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery, setSettingsLoaded, setLoadError) {
   setLoading(true);
   Promise.all([assistantApi.getPiSupervisor(), assistantApi.getPiProviderSettings(), assistantApi.getPiProviderCatalog()])
     .then(([supervisor, providerSettings, providerCatalog]) => {
-      const nextProviders = providerSettings?.providers || [];
+      if (!supervisor || !Array.isArray(providerSettings?.providers) || !Array.isArray(providerCatalog?.presets)) throw new Error('助手配置响应不完整');
+      const nextProviders = providerSettings.providers;
+      setSettingsLoaded(true);setLoadError('');
       setProviders(nextProviders);
       setProviderCatalog({ presets: providerCatalog?.presets || [] });
       const nextForm = formFromState(supervisor, nextProviders);
@@ -233,7 +243,7 @@ function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, s
       setPromptSummary(null);
       void discoverPiModels(nextForm, setModelDiscovery);
     })
-    .catch((err) => message.error(err.message || '读取 Supervisor 设置失败'))
+    .catch((err) => { setLoadError(err.message || '读取助手配置失败');message.error(err.message || '读取助手配置失败'); })
     .finally(() => setLoading(false));
 }
 
@@ -391,19 +401,13 @@ async function savePiConnectionAndSupervisor({ form, setForm, setPersonaConflict
     const providerID = form.modelProvider.trim();
     await assistantApi.updatePiProviderSettings(providerID, providerPayload(form));
     connectionSaved = true;
-    await saveSupervisor(supervisorPayload(form));
+    await saveSupervisor(connectionSelectionPayload(form));
     setPersonaConflictDraft(null);
     setPromptSummary(null);
     message.success('模型连接已保存并设为 Supervisor 默认模型');
     await refreshAfterSave(setProviders, setForm);
     return true;
   } catch (err) {
-    if (err?.status === 409) {
-      setPersonaConflictDraft(personaDraft(form));
-      await refreshAfterSave(setProviders, setForm);
-      message.error('连接已保存，但表达 Persona revision 已变化；已保留本地草稿，请处理冲突后再保存运行偏好');
-      return false;
-    }
     message.error(connectionSaved
       ? '连接参数已保存，但设置 Supervisor 默认模型失败，请重试'
       : err.message || '保存模型连接失败');
@@ -413,30 +417,31 @@ async function savePiConnectionAndSupervisor({ form, setForm, setPersonaConflict
   }
 }
 
-async function savePiSupervisorSettings({ form, providers, setForm, setPersonaConflictDraft, setPromptSummary, setProviders, setSaving }) {
-  if (!isValidAgentForm(form)) return;
+async function savePiSupervisorSettings({ form, providers, setForm, setPersonaConflictDraft, setPromptSummary, setSaving }) {
   setSaving(true);
   try {
-    await ensureSelectedProviderModel(form, providers);
-    await saveSupervisor(supervisorPayload(form));
-    setPersonaConflictDraft(null);
-    message.success('Supervisor 行为设置已保存');
-    setPromptSummary(null);
-    await refreshAfterSave(setProviders, setForm);
-  } catch (err) {
-    if (err?.status === 409) {
-      setPersonaConflictDraft(personaDraft(form));
-      await refreshAfterSave(setProviders, setForm);
-      message.error('表达 Persona 已被其他修改更新；已重新加载最新 revision，并保留本地草稿供你合并');
-      return;
-    }
-    message.error(err.message || '保存 Supervisor 行为设置失败');
-  } finally {
-    setSaving(false);
-  }
+    const saved = await saveSupervisor(runtimePreferencePayload(form));
+    const normalized = formFromState(saved, providers);
+    setForm(current => {
+      const next = { ...current };
+      for (const key of ['agentName','thinkingLevel','instructions','enabled']) if (current[key] === form[key]) next[key] = normalized[key];
+      return next;
+    });
+    setPersonaConflictDraft(null);setPromptSummary(null);
+    message.success('助手运行偏好已保存');
+  } catch (error) { message.error(error.message || '保存助手运行偏好失败'); }
+  finally { setSaving(false); }
 }
 
-function personaDraft(form) {
+export function connectionSelectionPayload(form) {
+  return { model_provider: form.modelProvider.trim(), model_id: form.modelId.trim() };
+}
+
+export function runtimePreferencePayload(form) {
+  return { name: form.agentName.trim() || DEFAULT_PI_AGENT_FORM.agentName, thinking_level: form.thinkingLevel, instructions: form.instructions, enabled: form.enabled };
+}
+
+export function personaDraft(form) {
   return {
     personaCommunicationStyle: form.personaCommunicationStyle,
     personaEnabled: form.personaEnabled,
@@ -444,14 +449,6 @@ function personaDraft(form) {
     personaPersonality: form.personaPersonality,
     personaVerbosity: form.personaVerbosity
   };
-}
-
-async function ensureSelectedProviderModel(form, providers) {
-  const providerID = form.modelProvider.trim();
-  const modelID = form.modelId.trim();
-  const configured = providers.find((provider) => provider.id === providerID);
-  if (configured?.models?.includes(modelID)) return;
-  await assistantApi.updatePiProviderSettings(providerID, providerPayload(form));
 }
 
 async function saveSupervisor(payload) {
@@ -462,18 +459,12 @@ async function refreshAfterSave(setProviders, setForm) {
   const [supervisor, providerSettings] = await Promise.all([assistantApi.getPiSupervisor(), assistantApi.getPiProviderSettings()]);
   const nextProviders = providerSettings?.providers || [];
   setProviders(nextProviders);
-  setForm({ ...formFromState(supervisor, nextProviders), apiKey: '' });
+  setForm(current => ({ ...formFromState(supervisor, nextProviders), apiKey: '', agentName: current.agentName, thinkingLevel: current.thinkingLevel, instructions: current.instructions, enabled: current.enabled }));
 }
 
 function isValidForm(form) {
   if (form.modelProvider.trim() && form.modelId.trim() && form.api.trim()) return true;
   message.error('API 协议和模型不能为空');
-  return false;
-}
-
-function isValidAgentForm(form) {
-  if (form.modelProvider.trim() && form.modelId.trim()) return true;
-  message.error('请先在上方选择默认模型');
   return false;
 }
 
@@ -487,7 +478,7 @@ function providerPayload(form) {
   };
 }
 
-function supervisorPayload(form) {
+export function supervisorPayload(form) {
   return {
     name: form.agentName.trim() || DEFAULT_PI_AGENT_FORM.agentName,
     model_provider: form.modelProvider.trim(),
@@ -506,7 +497,7 @@ function supervisorPayload(form) {
   };
 }
 
-function formFromState(supervisor, providers) {
+export function formFromState(supervisor, providers) {
   if (!supervisor) return DEFAULT_PI_AGENT_FORM;
   const provider = providers.find((item) => item.id === supervisor.model_provider);
   return {
@@ -566,4 +557,8 @@ function normalizedSupervisorName(name) {
   const value = String(name || '').trim();
   if (!value) return DEFAULT_PI_AGENT_FORM.agentName;
   return name;
+}
+
+export function inferApiProtocol(address, presets = []) {
+  try { const url = new URL(address);const preset = presets.find(preset => { try { return new URL(preset.base_url).host === url.host; } catch { return false; } });return preset && preset.auth !== 'oauth' ? preset.api || '' : ''; } catch { return ''; }
 }

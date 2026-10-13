@@ -37,6 +37,7 @@ export const ATTENTION_SOURCE_AUTHORITIES = [
   "pi_guardian_alerts",
   "pi_approval_requests",
   "pi_actions",
+  "pi_action_proposals",
   "issues"
 ] as const;
 export type AttentionSourceAuthority = typeof ATTENTION_SOURCE_AUTHORITIES[number];

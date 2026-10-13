@@ -8,6 +8,7 @@ import { message } from '../store/toastStore.js';
 
 export default function ExecutionPresetsPanel() {
   const [state, setState] = useState({ profiles: [], catalog: [], loading: true, saving: false, error: '' });
+  const [editingID, setEditingID] = useState('');
   const [form, setForm] = useState(emptyAgentProfileForm);
   const [models, setModels] = useState({ data: [], error: '', loading: false });
   const load = async () => {
@@ -34,7 +35,8 @@ export default function ExecutionPresetsPanel() {
     if (state.saving) return;
     const payload = agentProfilePayload(form);
     if (!payload.name) { setState(current => ({ ...current, error: '请填写预设名称' })); return; }
-    const existing = state.profiles.find(profile => profile.id === payload.id);
+    const existing = editingID === payload.id ? state.profiles.find(profile => profile.id === editingID) : null;
+    if (!existing && state.profiles.some(profile => profile.id === payload.id)) { setState(current => ({ ...current, error: '这个预设 ID 已存在，请选择列表中的预设编辑，或填写新的 ID' }));return; }
     if (!providerOptionsFromCatalog(state.catalog).some(option => option.value === payload.provider) && existing?.provider !== payload.provider) {
       setState(current => ({ ...current, error: '请选择已就绪的编程工具' })); return;
     }
@@ -46,6 +48,8 @@ export default function ExecutionPresetsPanel() {
       }
       if (existing) await projectsApi.updateAgentProfile(payload.id, payload);
       else await projectsApi.createAgentProfile(payload);
+      setEditingID(payload.id);
+      setForm(current => ({ ...current, id: payload.id }));
       message.success('执行预设已保存');
       await load();
     } catch (error) { setState(current => ({ ...current, error: error.message })); }
@@ -53,7 +57,7 @@ export default function ExecutionPresetsPanel() {
   };
   const modelOptions = [{ value: form.provider === 'codex' ? 'codex-default' : '', label: '跟随编程工具' }, ...models.data.map(model => ({ value: model.id || model.model, label: model.displayName || model.id || model.model }))];
   if (form.model && !modelOptions.some(option => option.value === form.model)) modelOptions.push({ value: form.model, label: `${form.model}（当前选择）` });
-  return <fieldset disabled={state.saving} className="execution-presets-panel">
-    <AgentProfileManager profiles={state.profiles} loading={state.loading} form={form} error={state.error} modelOptions={modelOptions} models={models.data} modelsError={models.error} modelsLoading={models.loading} onFieldChange={onFieldChange} onSubmit={save} onEdit={profile => setForm(normalizeAgentProfileForm(profile))} onReset={() => setForm(emptyAgentProfileForm())} providerCatalog={state.catalog} providerOptions={providerOptionsFromCatalog(state.catalog)} />
+  return <fieldset disabled={state.saving || state.loading} className="execution-presets-panel">
+    <AgentProfileManager profiles={state.profiles} loading={state.loading} form={form} error={state.error} modelOptions={modelOptions} models={models.data} modelsError={models.error} modelsLoading={models.loading} onFieldChange={onFieldChange} onSubmit={save} onEdit={profile => { setEditingID(profile.id);setForm(normalizeAgentProfileForm(profile)); }} onReset={() => {setEditingID('');setForm(emptyAgentProfileForm());}} providerCatalog={state.catalog} providerOptions={providerOptionsFromCatalog(state.catalog)} />
   </fieldset>;
 }

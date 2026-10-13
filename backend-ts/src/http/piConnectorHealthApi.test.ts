@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { createPiNotificationIntent } from "../db/repositories/pi.ts";
 import { createDefaultRouter } from "./server.ts";
 import { createDatabaseSecretService } from "../security/secrets/service.ts";
 
@@ -24,6 +25,16 @@ afterEach(async () => {
 });
 
 describe("PI connector health API", () => {
+  test("projects the latest notification delivery failure without returning recipient or secret values",async()=>{
+    const {db}=await openFixtureRuntime();try{
+      createPiNotificationIntent(db,{id:"delivery-failure",idempotency_key:"delivery-failure",source_event_id:"fixture-event",target_channel:"feishu",target_chat_id:"private-recipient",kind:"needs_user",state:"failed",summary:"Failed to send",error:"Authorization: Bearer fixture-alert-secret"});
+      const router=createDefaultRouter({config:buildConfig({stateDir:dirname(db.path)}),database:db});
+      const response=await router.handle(new Request(`${BASE_URL}/api/pi/connectors`));
+      const body=await response.json() as Record<string,any>;
+      expect(body.connectors.find((item:Record<string,any>)=>item.id==="feishu").notification).toMatchObject({state:"failed",error:{code:"notification_delivery_failed"}});
+      expect(JSON.stringify(body)).not.toContain("private-recipient");expect(JSON.stringify(body)).not.toContain("fixture-alert-secret");
+    }finally{db.close();}
+  });
   test("reports configured CLI connector health without leaking secret output", async () => {
     const { db, dir } = await openFixtureRuntime();
     process.env[FIXTURE_TOKEN] = "super-secret-token";

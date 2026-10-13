@@ -67,7 +67,8 @@ test('project deletion uses an in-app confirmation instead of a browser dialog',
 test('project cards keep operational information and edit locally inside Settings', () => {
   assert.match(source, /className="glass-card project-card"/);
   assert.match(source, /className="project-status-pill"/);
-  assert.match(source, /className="project-card-stats"/);
+  assert.doesNotMatch(source, /className="project-card-stats"/);
+  assert.match(source, /href=\{`#\/work\?project=\$\{encodeURIComponent\(proj\.id\)\}`\}/);
   assert.match(source, /aria-label={`编辑 \${proj\.name} 配置`}/);
   assert.match(source, /handleOpenEditModal\(proj\)/);
   assert.match(source, /mode=\{modalMode\}/);
