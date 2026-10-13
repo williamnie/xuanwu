@@ -62,11 +62,12 @@ const BOARD_RECONCILE_EVENT_TYPES = new Set(['issue.created', 'issue.deleted', '
 const TASK_VIEW_STORAGE_KEY = 'xuanwu-task-view';
 
 // 任务页：默认列表视图，看板保留为可切换视图；两者共享搜索、项目筛选和同一套创建/编辑对话框。
-export default function WorkBoard({ navigateTo, onPageContextChange, selectedHandoffId = '', selectedRunId = '', selectedWorkId = '' }) {
+export default function WorkBoard({ navigateTo, onPageContextChange, selectedHandoffId = '', selectedRunId = '', selectedWorkId = '', taskScope = '' }) {
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
   const [view, setView] = useState(readTaskView);
-  const [scope, setScope] = useState('active');
+  const [scope, setScope] = useState(taskScope || 'active');
+  useEffect(() => { if (taskScope) setScope(taskScope); }, [taskScope]);
   const [query, setQuery] = useState('');
   const [projectId, setProjectId] = useState('');
   const [dialog, setDialog] = useState(null);

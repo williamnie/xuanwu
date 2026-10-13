@@ -222,6 +222,25 @@
 .ds-panel-head strong { font-size: 0.84rem; font-weight: 650; }
 .ds-panel-body { padding: 14px 16px; }
 
+/* ---------- 待处理卡片（首页“待你处理”：凸起小面 + 状态点 + 右侧操作） ---------- */
+.ds-request-card {
+  align-items: flex-start;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 4px 12px;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  padding: 12px 14px;
+}
+.ds-request-card > .dot { background: var(--warning); border-radius: 50%; height: 7px; margin-top: 6px; width: 7px; }
+.ds-request-card[data-tone='error'] > .dot { background: var(--error); }
+.ds-request-card[data-tone='idle'] > .dot { background: var(--text-faint); }
+.ds-request-card .kind { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.56rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.ds-request-card .title { color: var(--text-primary); font-size: 0.82rem; font-weight: 600; }
+.ds-request-card .detail { color: var(--text-secondary); font-size: 0.72rem; line-height: 1.5; }
+.ds-request-card .actions { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+
 /* ---------- 消息气泡（lg 圆角是气泡专属） ---------- */
 .ds-bubble { border-radius: var(--radius-lg); max-width: 80%; padding: 14px 16px; }
 .ds-bubble--user { align-self: flex-end; background: var(--primary-glow); border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent); }
@@ -311,4 +330,6 @@
   .ds-bubble { max-width: 92%; }
   .ds-composer textarea { padding-inline: 14px; }
   .ds-composer-foot { flex-wrap: wrap; padding-inline: 12px; }
+  .ds-request-card { grid-template-columns: 7px minmax(0, 1fr); }
+  .ds-request-card .actions { grid-column: 2; justify-content: flex-start; }
 }

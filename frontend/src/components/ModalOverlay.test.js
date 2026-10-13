@@ -9,7 +9,7 @@ const consumers = [
   '../pages/Issues.jsx',
   '../pages/Projects.jsx',
   '../pages/WorkBoard.jsx',
-  '../pages/WorkDetail.jsx',
+  '../pages/work/HumanReview.jsx',
   '../pages/issue-detail/IssueDetailActions.jsx',
   '../pages/issue-detail/IssueDetailDecision.jsx',
   '../pages/work/WorkEditorDialog.jsx',

@@ -41,9 +41,10 @@ test('Dashboard Attention has grouped cards, canonical source links, empty state
   assert.match(page, /groupAttentionByPriority/);
   assert.match(page, /controlAttention/);
   assert.match(page, /await load\(\{ silent: true \}\)/);
-  assert.match(page, /当前没有需要你介入的事项/);
-  assert.match(page, /需要你处理/);
-  assert.match(page, /PI 自动运维/);
+  assert.match(page, /当前没有待审批或系统事项/);
+  assert.match(page, /审批与系统事项/);
+  assert.match(page, /最多显示 25 条/);
+  assert.match(page, /玄武自动运维/);
   assert.match(page, /需要你做什么/);
   assert.match(page, /我知道了，不再显示/);
   assert.match(page, /最近已恢复/);

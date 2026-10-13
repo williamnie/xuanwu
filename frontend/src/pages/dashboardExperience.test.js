@@ -14,12 +14,16 @@ test('analytics can be opened, bookmarked and restored without falling back to h
 
 test('home prioritizes action and progress without querying diagnostic or usage feeds', () => {
   const home = read('./Dashboard.jsx');
+  assert.match(home, /<TaskRequestsSection/);
   assert.match(home, /<AttentionSection/);
   assert.match(home, /<ActiveWorkSection/);
   assert.match(home, /<RecentDeliveriesSection/);
   assert.doesNotMatch(home, /DeliveryEffectivenessSection|CodexUsagePanel|eventsApi|JSON\.stringify/);
+  assert.ok(home.indexOf('<TaskRequestsSection') < home.indexOf('<AttentionSection'));
   assert.ok(home.indexOf('<AttentionSection') < home.indexOf('<ActiveWorkSection'));
-  assert.match(home, /advanced:activity/);
+  // 方案 5.3：删除顶部 4 个统计数字和底部 4 个跳转链接；“交给玄武”改为新建任务。
+  assert.doesNotMatch(home, /dashboard-facts|dashboard-links|交给玄武/);
+  assert.match(home, /<WorkEditorDialog/);
 });
 
 test('page changes keep the revealed Suspense content and do not replay entry motion', () => {

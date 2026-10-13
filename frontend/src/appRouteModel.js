@@ -7,6 +7,7 @@ import {
 import { handoffHref, handoffRouteFromHash } from './pages/handoffPageModel.js';
 
 const FOCUS_FILTERS = new Set(['all', 'triage', 'active', 'failed', 'archive']);
+const TASK_SCOPES = new Set(['active', 'attention', 'done', 'all']);
 const ROUTABLE_PAGES = new Set([
   ...PRODUCT_NAV_ITEMS.map((item) => item.page),
   ...PI_ASSISTANT_MODULES.map((item) => item.page),
@@ -27,6 +28,7 @@ export const DEFAULT_APP_ROUTE = Object.freeze({
   selectedSessionId: '',
   selectedWorkId: '',
   settingsSection: '',
+  taskScope: '',
 });
 
 export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
@@ -66,6 +68,7 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
       route.selectedWorkId = workIdFromIssueParam(params);
     }
     if (route.selectedWorkId) route.selectedRunId = routeParam(params, 'runId');
+    else route.taskScope = TASK_SCOPES.has(routeParam(params, 'scope')) ? routeParam(params, 'scope') : '';
   }
   if (currentPage === 'issues') {
     route.selectedIssueId = requestedPage === 'work'
@@ -102,6 +105,8 @@ export function appHashForRoute(route) {
     params.set('workId', workId);
     const runId = cleanRouteValue(route?.selectedRunId);
     if (runId) params.set('runId', runId);
+  } else if (page === 'work' && TASK_SCOPES.has(route?.taskScope)) {
+    params.set('scope', route.taskScope);
   }
   if (page === 'issues') {
     if (positiveInteger(route?.selectedIssueId)) params.set('issueId', String(route.selectedIssueId));

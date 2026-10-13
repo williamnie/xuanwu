@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { translate } from '../i18n/translations.js';
-import { workHumanReviewCopy } from './workHumanReviewCopy.js';
+import { workHumanReviewActions, workHumanReviewCopy } from './workHumanReviewCopy.js';
 
 test('product decisions and risk authorization do not present themselves as delivery acceptance', () => {
   const t = key => translate('zh-CN', key);
@@ -18,4 +18,10 @@ test('English review actions preserve the same three meanings', () => {
   assert.equal(workHumanReviewCopy('decision', t).accept, 'Confirm and continue');
   assert.equal(workHumanReviewCopy('risk_acceptance', t).accept, 'Authorize and continue');
   assert.equal(workHumanReviewCopy('acceptance', t).accept, 'Accept delivery');
+});
+
+test('each review request kind offers only the responses the plan allows', () => {
+  assert.deepEqual(workHumanReviewActions('decision'), ['accept', 'request_changes', 'reject']);
+  assert.deepEqual(workHumanReviewActions('acceptance'), ['accept', 'request_changes']);
+  assert.deepEqual(workHumanReviewActions('risk_acceptance'), ['accept', 'reject']);
 });

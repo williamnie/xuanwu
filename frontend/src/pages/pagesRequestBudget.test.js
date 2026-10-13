@@ -33,9 +33,8 @@ test('issue detail excludes logs from initial reads and loads a bounded log page
   assert.match(issueDetailDataSource, /activeTab !== 'logs'/);
 });
 
-test('dashboard links to activity on demand without hydrating the raw event feed', () => {
-  assert.doesNotMatch(dashboardSource, /eventsApi|subscribeToEvents/);
-  assert.match(dashboardSource, /advanced:activity/);
+test('dashboard does not hydrate the raw event feed', () => {
+  assert.doesNotMatch(dashboardSource, /eventsApi|subscribeToEvents|activityTimeline/);
 });
 
 test('selected issue detail does not reconcile the global issue list', () => {

@@ -13,16 +13,16 @@ import {
   RefreshCw,
   RotateCw,
   Square,
-  XCircle,
 } from 'lucide-react';
 import { evidenceApi } from '../api/evidence.js';
 import { handoffsApi } from '../api/handoffs.js';
 import { workApi } from '../api/work.js';
 import MarkdownPreview from '../components/editor/MarkdownPreview.jsx';
-import ModalOverlay from '../components/ModalOverlay.jsx';
 import { message } from '../store/toastStore.js';
 import WorkEditorDialog from './work/WorkEditorDialog.jsx';
 import WorkRunProcess from './work/WorkRunProcess.jsx';
+import { HumanReviewCard } from './work/HumanReview.jsx';
+import { useHumanReview } from './work/useHumanReview.jsx';
 import { workProfileSummary } from './work/workProfileRouting.js';
 import WorkDeliveryView from './work/WorkDeliveryView.jsx';
 import { issueIdFromWorkId } from './workBoardModel.js';
@@ -66,9 +66,6 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   const [refreshing, setRefreshing] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState('');
-  const [reviewAction, setReviewAction] = useState('');
-  const [reviewRequest, setReviewRequest] = useState(null);
-  const [reviewComment, setReviewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [processToken, setProcessToken] = useState(0);
   const [error, setError] = useState('');
@@ -135,9 +132,6 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     setActiveDeliveryId(selectedHandoffId);
     setEditorOpen(false);
     setPendingAction('');
-    setReviewAction('');
-    setReviewRequest(null);
-    setReviewComment('');
     loadDetail();
     loadResults();
   }, [loadDetail, loadResults, selectedHandoffId]);
@@ -156,14 +150,14 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   const feedbackPending = ['received', 'executing'].includes(detail?.feedback?.status);
   const workRunning = work?.status === 'in_progress';
   useEffect(() => {
-    if ((!feedbackPending && !workRunning) || reviewAction) return undefined;
+    if (!feedbackPending && !workRunning) return undefined;
     const timer = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       void loadDetail({ silent: true });
       void loadResults();
     }, 10000);
     return () => window.clearInterval(timer);
-  }, [feedbackPending, loadDetail, loadResults, reviewAction, workRunning]);
+  }, [feedbackPending, loadDetail, loadResults, workRunning]);
   const visibleTimeline = useMemo(() => filterTimelineItems(timeline, timelineKind), [timeline, timelineKind]);
   const customAcceptance = useMemo(
     () => (work?.acceptance?.criteria || []).filter(criterion => criterion.id !== DEFAULT_ACCEPTANCE_ID),
@@ -228,35 +222,6 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
     }
   };
 
-  const submitReview = async () => {
-    const comment = reviewComment.trim();
-    if (!work || submitting || ((reviewAction === 'reject' || reviewAction === 'request_changes') && !comment)) return;
-    setSubmitting(true);
-    try {
-      await workApi.answerWorkHumanReview(work.id, {
-        action: reviewAction,
-        comment,
-        review_request_id: reviewRequest?.id,
-        review_revision: reviewRequest?.revision,
-      });
-      message.success(t('work.reviewSubmitted'));
-      setReviewAction('');
-      setReviewComment('');
-      await refreshAll();
-      onWorkChanged?.();
-    } catch (reviewError) {
-      message.error(reviewError.message || t('work.reviewFailed'));
-      if (reviewError.status === 409) { setReviewAction(''); await refreshAll(); }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const selectReview = (action) => {
-    setReviewRequest(decision?.request || null);
-    setReviewAction(action);
-  };
-
   const copyWorkId = async () => {
     try {
       await navigator.clipboard.writeText(work.id);
@@ -267,6 +232,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   };
 
   const handleLatestRunChange = useCallback(run => setLatestRun(run), []);
+  const review = useHumanReview({ onSubmitted: async () => { await refreshAll(); onWorkChanged?.(); } });
 
   if (loading && !work) return <WorkDetailLoading />;
   if (error || !work) return <WorkDetailFailure error={error} navigateTo={navigateTo} />;
@@ -304,7 +270,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
         {blockReason ? <div className="work-block-reason" role="status"><AlertTriangle size={14} /> {blockReason}</div> : null}
         <WorkStateSummary status={work.status} decision={decision} />
         <WorkFeedback feedback={detail?.feedback} />
-        {availableActions.review ? <HumanReviewCard disabled={submitting} onSelect={selectReview} request={decision.request} /> : null}
+        {availableActions.review ? <HumanReviewCard disabled={submitting || review.submitting} onSelect={action => review.select(work, decision.request, action)} request={decision.request} /> : null}
         <details className="work-detail-disclosure" open={NOT_STARTED_STATUSES.has(work.status) || undefined}>
           <summary>{t('work.taskDescription')}</summary>
           <MarkdownPreview text={work.goal || t('work.noGoal')} />
@@ -376,7 +342,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       </section>
 
       {editorOpen ? <WorkEditorDialog mode="edit" onClose={() => setEditorOpen(false)} onSaved={async () => { setEditorOpen(false); await refreshAll(); onWorkChanged?.(); }} projects={projects} work={work} /> : null}
-      {reviewAction ? <ReviewDialog action={reviewAction} busy={submitting} comment={reviewComment} onCancel={() => { setReviewAction(''); setReviewComment(''); }} onChange={setReviewComment} onConfirm={submitReview} request={reviewRequest} /> : null}
+      {review.dialog}
     </section>
   );
 }
@@ -429,32 +395,9 @@ function ResourceError({ error }) {
   return error ? <div className="work-resource-error" role="alert"><AlertTriangle size={14} /> {error}</div> : null;
 }
 
-function HumanReviewCard({ disabled, onSelect, request }) {
-  const { t } = useI18n();
-  const copy = workHumanReviewCopy(request.kind, t);
-  return <article className="work-human-review-card">
-    <span>{t('work.youAreApproving')}</span>
-    <h3>{request.question}</h3>
-    <p className="work-review-request-ref"><code>{request.id} · v{request.revision}</code>{request.origin_run_id ? ` · ${request.origin_run_id}` : ''}</p>
-    {request.recommendation ? <p><strong>{t('work.piRecommendation')}：</strong>{request.recommendation}</p> : null}
-    {request.acceptance_summary?.length ? <div><strong>{t('work.acceptanceIncludes')}</strong><ul>{request.acceptance_summary.map(item => <li key={item}>{item}</li>)}</ul></div> : null}
-    {request.excluded_scope?.length ? <div><strong>{t('work.notIncluded')}</strong><ul>{request.excluded_scope.map(item => <li key={item}>{item}</li>)}</ul></div> : null}
-    {request.evidence_refs?.length ? <details><summary>{t('work.reviewEvidence')}</summary><ul>{request.evidence_refs.map(item => <li key={item}><code>{item}</code></li>)}</ul></details> : null}
-    {request.consequences ? <p><strong>{t('work.approvalConsequences')}：</strong>{request.consequences}</p> : null}
-    <div className="work-review-actions"><button disabled={disabled} onClick={() => onSelect('accept')} type="button"><CheckCircle2 size={14} /> {copy.accept}</button><button disabled={disabled} onClick={() => onSelect('request_changes')} type="button"><RefreshCw size={14} /> {t('work.changes')}</button><button className="danger" disabled={disabled} onClick={() => onSelect('reject')} type="button"><XCircle size={14} /> {t('work.reject')}</button></div>
-  </article>;
-}
-
 function InlineConfirmation({ busy, onCancel, onConfirm }) {
   const { t } = useI18n();
   return <div className="work-inline-confirm" role="alertdialog" aria-label={t('work.confirmCancel')}><AlertTriangle size={18} /><div><strong>{t('work.confirmCancel')}</strong><span>{t('work.cancelAudit')}</span></div><button disabled={busy} onClick={onCancel} type="button">{t('work.keep')}</button><button className="danger" disabled={busy} onClick={onConfirm} type="button">{busy ? t('work.submitting') : t('work.confirmCancelAction')}</button></div>;
-}
-
-function ReviewDialog({ action, busy, comment, onCancel, onChange, onConfirm, request }) {
-  const { t } = useI18n();
-  const copy = workHumanReviewCopy(request?.kind, t);
-  const commentRequired = action === 'reject' || action === 'request_changes';
-  return <ModalOverlay className="work-dialog-overlay"><form className="work-review-dialog" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}><span>{t('work.reviewGate')}</span><h2>{reviewTitle(action, t, copy)}</h2><p className="work-review-question">{request?.question}</p><p>{action === 'request_changes' ? t('work.reviewRevisionFlow') : action === 'accept' ? copy.detail : t('work.reviewAudit')}</p><label><span>{t(commentRequired ? 'work.reviewNoteRequired' : 'work.reviewNoteOptional')}</span><textarea autoFocus={commentRequired} className="form-control" onChange={event => onChange(event.target.value)} placeholder={action === 'request_changes' ? t('work.reviewChangesPlaceholder') : ''} rows={5} value={comment} /></label><div><button disabled={busy} onClick={onCancel} type="button">{t('work.cancel')}</button><button className={action === 'reject' ? 'danger' : 'primary'} disabled={busy || (commentRequired && !comment.trim())} type="submit">{busy ? t('work.submitting') : action === 'request_changes' ? t('work.submitChangesAndContinue') : action === 'accept' ? copy.accept : t('work.submitReview')}</button></div></form></ModalOverlay>;
 }
 
 function fulfilledItems(result) {
@@ -465,12 +408,6 @@ function fulfilledItems(result) {
 
 function settledErrors(results, keys) {
   return Object.fromEntries(results.flatMap((result, index) => result.status === 'rejected' ? [[keys[index], result.reason?.message || `Failed to load ${keys[index]}`]] : []));
-}
-
-function reviewTitle(action, t, copy) {
-  if (action === 'accept') return copy.title;
-  if (action === 'reject') return copy.reject;
-  return t('work.requestChanges');
 }
 
 function formatTime(value, language) {

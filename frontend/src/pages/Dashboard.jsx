@@ -1,31 +1,32 @@
-import { AlertTriangle, ArrowRight, MessageSquare } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, Plus } from 'lucide-react';
 import RuntimeHealthStrip from '../components/RuntimeHealthStrip';
 import ActiveWorkSection from './command-center/ActiveWorkSection.jsx';
 import AttentionSection from './command-center/AttentionSection.jsx';
 import RecentDeliveriesSection from './command-center/RecentDeliveriesSection.jsx';
-import { selectBackendOnline, selectProjects, selectRefreshData, selectWorkSummary, useDataStore } from '../store/dataStore';
+import TaskRequestsSection from './command-center/TaskRequestsSection.jsx';
+import WorkEditorDialog from './work/WorkEditorDialog.jsx';
+import { selectBackendOnline, selectProjects, selectRefreshData, useDataStore } from '../store/dataStore';
 import { useI18n } from '../i18n/context.js';
 import './Dashboard.css';
 
+// 首页“待我处理”（方案 5.3）：先放需要你决定的事，再看执行中与最近完成。
 export default function Dashboard({ navigateTo }) {
   const { t } = useI18n();
   const projects = useDataStore(selectProjects);
-  const workSummary = useDataStore(selectWorkSummary);
   const backendOnline = useDataStore(selectBackendOnline);
   const refreshData = useDataStore(selectRefreshData);
-  const counts = workSummary.counts;
-  const openSettings = section => navigateTo('settings', null, '', '', { settingsSection: section });
+  const [creating, setCreating] = useState(false);
 
   return (
     <div className="dashboard-page">
       <header className="dashboard-intro">
         <div>
-          <span className="dashboard-eyebrow">WORKSPACE</span>
+          <span className="dashboard-eyebrow">INBOX</span>
           <h1>{t('nav.commandCenter')}</h1>
-          <p>先处理需要你决定的事，再看工作进展。</p>
         </div>
-        <button className="btn btn-primary" onClick={() => navigateTo('ask-xuanwu')} type="button">
-          <MessageSquare size={14} /> 交给玄武
+        <button className="btn btn-primary" onClick={() => setCreating(true)} type="button">
+          <Plus size={14} /> {t('board.newWork')}
         </button>
       </header>
 
@@ -38,24 +39,25 @@ export default function Dashboard({ navigateTo }) {
       )}
       <RuntimeHealthStrip backendOnline={backendOnline} navigateTo={navigateTo} />
 
-      <dl className="dashboard-facts" aria-label="工作概况">
-        <div><dt>已接入项目</dt><dd>{projects.length}</dd></div>
-        <div><dt>等待执行</dt><dd>{counts.todo}</dd></div>
-        <div><dt>正在执行</dt><dd>{counts.in_progress}</dd></div>
-        <div><dt>累计完成</dt><dd>{counts.done}</dd></div>
-      </dl>
-
+      <TaskRequestsSection navigateTo={navigateTo} onCreate={() => setCreating(true)} />
       <AttentionSection />
       <div className="dashboard-work-grid">
-        <ActiveWorkSection navigateTo={navigateTo} projects={projects} />
-        <RecentDeliveriesSection navigateTo={navigateTo} projects={projects} />
+        <ActiveWorkSection limit={5} navigateTo={navigateTo} projects={projects} />
+        <RecentDeliveriesSection limit={5} navigateTo={navigateTo} projects={projects} />
       </div>
-      <nav className="dashboard-links" aria-label="更多工作入口">
-        <button onClick={() => navigateTo('work')} type="button">查看全部工作 <ArrowRight size={14} /></button>
-        <button onClick={() => navigateTo('analytics')} type="button">查看统计分析 <ArrowRight size={14} /></button>
-        <button onClick={() => openSettings('general')} type="button">管理项目 <ArrowRight size={14} /></button>
-        <button onClick={() => openSettings('advanced:activity')} type="button">查看活动记录 <ArrowRight size={14} /></button>
-      </nav>
+
+      {creating ? (
+        <WorkEditorDialog
+          mode="create"
+          onClose={() => setCreating(false)}
+          onSaved={(work) => {
+            setCreating(false);
+            refreshData(['workSummary']);
+            if (work?.id) navigateTo('work', work.id);
+          }}
+          projects={projects}
+        />
+      ) : null}
     </div>
   );
 }

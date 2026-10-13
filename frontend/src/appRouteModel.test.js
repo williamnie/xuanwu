@@ -96,3 +96,10 @@ test('Work deep links can select one Run without leaving Work Detail', () => {
   assert.equal(appHashForRoute(route), '#/work?workId=xw%3Awork%3Aissues%3A2&runId=xw%3Arun%3Aissue_runs%3Aissue-2-attempt-1');
   assert.equal(appRouteFromHash('#/work?runId=orphan').selectedRunId, '');
 });
+
+test('Task list links can open a specific scope', () => {
+  assert.equal(appRouteFromHash('#/work?scope=attention').taskScope, 'attention');
+  assert.equal(appRouteFromHash('#/work?scope=bogus').taskScope, '');
+  assert.equal(appHashForRoute({ currentPage: 'work', taskScope: 'attention' }), '#/work?scope=attention');
+  assert.equal(appHashForRoute({ currentPage: 'work', selectedWorkId: 'xw:work:issues:1', taskScope: 'attention' }), '#/work?workId=xw%3Awork%3Aissues%3A1');
+});

@@ -1,3 +1,4 @@
+import '../WorkBoard.css';
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Pencil, X } from 'lucide-react';
 import { workApi } from '../../api/work.js';

@@ -101,7 +101,9 @@ test('Dashboard reads aggregate facts and writes only through Work and Run contr
   const pageSource = readFileSync(new URL('./ActiveWorkSection.jsx', import.meta.url), 'utf8');
   assert.match(apiSource, /\/api\/command-center\/summary/);
   assert.match(pageSource, /sections: \['active_work'\]/);
-  assert.match(pageSource, /navigateTo\?\.\('work', item\.id\)/);
+  assert.match(pageSource, /navigateTo\?\.\('work', item\.id, '', '', item\.latest_run\?\.id \? \{ runId: item\.latest_run\.id \} : \{\}\)/);
+  assert.doesNotMatch(pageSource, /navigateTo\?\.\('runs'/);
+  assert.doesNotMatch(pageSource, /source of truth|最终删除门禁/);
   assert.match(pageSource, /runsApi\.getRun/);
   assert.match(pageSource, /runsApi\.controlRun/);
   assert.match(pageSource, /freshness\?\.is_stale/);

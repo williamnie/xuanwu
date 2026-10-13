@@ -149,6 +149,7 @@ export default function App() {
     selectedHandoffId,
     selectedPiConversationId,
     settingsSection,
+    taskScope,
     pageContext,
     filterProject,
     focusFilter,
@@ -291,6 +292,7 @@ export default function App() {
       selectedSessionId: targetSessionId,
       selectedWorkId: targetWorkId,
       settingsSection: targetSettingsSection,
+      taskScope: resolvedPage === 'work' && !targetWorkId ? String(navigationOptions?.scope || '') : '',
     };
     startPageTransition(() => updateAppState(draft => {
       if (draft.currentPage !== resolvedPage) {
@@ -306,7 +308,10 @@ export default function App() {
         draft.selectedRunId = targetRunId;
         draft.selectedSessionId = targetSessionId;
       }
-      if (resolvedPage === 'work') draft.selectedRunId = targetRunId;
+      if (resolvedPage === 'work') {
+        draft.selectedRunId = targetRunId;
+        draft.taskScope = targetRoute.taskScope;
+      }
       draft.settingsSection = targetSettingsSection;
       draft.selectedHandoffId = targetHandoffId;
       draft.pageContext = null;
@@ -375,6 +380,7 @@ export default function App() {
         draft.selectedSessionId = route.selectedSessionId;
         draft.settingsSection = route.settingsSection;
         draft.selectedWorkId = route.selectedWorkId;
+        draft.taskScope = route.taskScope;
         draft.pageContext = null;
       }));
       setMobileSidebarOpen(false);
@@ -632,6 +638,7 @@ export default function App() {
                 selectedHandoffId={selectedHandoffId}
                 selectedRunId={selectedRunId}
                 selectedWorkId={selectedWorkId}
+                taskScope={taskScope}
               />
             ) : currentPage === 'handoffs' ? (
               <Handoffs selectedHandoffId={selectedHandoffId} />

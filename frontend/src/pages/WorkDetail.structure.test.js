@@ -7,6 +7,8 @@ const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
 const model = readFileSync(new URL('./workDetailModel.js', import.meta.url), 'utf8');
 const process = readFileSync(new URL('./work/WorkRunProcess.jsx', import.meta.url), 'utf8');
 const runsPage = readFileSync(new URL('./Runs.jsx', import.meta.url), 'utf8');
+const reviewCard = readFileSync(new URL('./work/HumanReview.jsx', import.meta.url), 'utf8');
+const reviewHook = readFileSync(new URL('./work/useHumanReview.jsx', import.meta.url), 'utf8');
 
 test('Work Detail is one page: now, result and the full per-run process', () => {
   assert.match(detail, /t\('work\.sectionNow'\)/);
@@ -52,25 +54,25 @@ test('Task page lists and boards tasks and opens canonical Work Detail', () => {
 
 test('Work Detail mutations use audited Work controls and the explicit human-review response', () => {
   assert.match(detail, /workApi\.controlWork\(work\.id, action, buildWorkActionPayload\(work, action\)\)/);
-  assert.match(detail, /workApi\.answerWorkHumanReview\(work\.id/);
+  assert.match(reviewHook, /workApi\.answerWorkHumanReview\(work\.id/);
+  assert.match(detail, /useHumanReview\(/);
   assert.match(model, /expected_revision/);
   assert.doesNotMatch(detail, /window\.(alert|confirm)/);
 });
 
 test('Work Detail only exposes review for an explicit request and closes request-changes through the same Session', () => {
   assert.match(model, /decision\?\.owner === 'human'/);
-  assert.match(detail, /你正在审批|work\.youAreApproving/);
+  assert.match(detail, /<HumanReviewCard/);
+  assert.match(reviewCard, /workHumanReviewActions\(request\.kind\)/);
   assert.match(detail, /decision\?\.phase === 'pi_deciding'/);
   assert.match(detail, /decision\?\.phase === 'pi_waiting'/);
   assert.match(detail, /decision\?\.phase === 'pi_error'/);
   assert.match(detail, /decision\?\.activity\?\.error/);
-  assert.match(detail, /review_request_id/);
-  assert.match(detail, /review_revision/);
-  assert.match(detail, /submitChangesAndContinue/);
-  assert.match(detail, /reviewRevisionFlow/);
-  assert.match(detail, /review_request_id: reviewRequest\?\.id/);
-  assert.match(detail, /review_revision: reviewRequest\?\.revision/);
-  assert.match(detail, /request=\{reviewRequest\}/);
-  assert.match(detail, /reviewError\.status === 409/);
+  assert.match(reviewCard, /submitChangesAndContinue/);
+  assert.match(reviewCard, /reviewRevisionFlow/);
+  assert.match(reviewHook, /review_request_id: request\?\.id/);
+  assert.match(reviewHook, /review_revision: request\?\.revision/);
+  assert.match(reviewHook, /request=\{pending\.request\}/);
+  assert.match(reviewHook, /reviewError\.status === 409/);
   assert.match(detail, /<WorkFeedback feedback=\{detail\?\.feedback\}/);
 });

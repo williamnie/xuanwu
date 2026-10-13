@@ -32,7 +32,7 @@ const REFRESH_EVENT_TYPES = new Set([
   'run.lifecycle.run_materialized.v1',
 ]);
 
-export default function ActiveWorkSection({ navigateTo, projects = [] }) {
+export default function ActiveWorkSection({ limit = 10, navigateTo, projects = [] }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -48,7 +48,7 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
     if (!silent) setLoading(true);
     const controller = new AbortController();
     const promise = commandCenterApi.getSummary(
-      { limit: 10, sections: ['active_work'] },
+      { limit, sections: ['active_work'] },
       { signal: controller.signal },
     );
     requestRef.current = { controller, promise };
@@ -66,7 +66,7 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
       if (requestRef.current?.promise === promise) requestRef.current = null;
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [limit]);
 
   useEffect(() => {
     load();
@@ -103,12 +103,9 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
   );
   const items = summary?.section?.items || [];
 
+  // 打开任务详情并选中正在进行的那次执行，执行过程就在任务的“过程”段里。
   const openWork = (item) => {
-    if (item.latest_run?.id) {
-      navigateTo?.('runs', null, item.latest_run.id);
-      return;
-    }
-    navigateTo?.('work', item.id);
+    navigateTo?.('work', item.id, '', '', item.latest_run?.id ? { runId: item.latest_run.id } : {});
   };
 
   const submitAction = async () => {
@@ -120,7 +117,7 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
       if (pending.action === 'pause') {
         const detail = await loadRunDetail(item.latest_run?.id);
         if (!activeWorkCanPause(item, detail)) {
-          throw new Error('当前 Run 没有可暂停的活动 provider turn，请打开 Run 查看最新状态');
+          throw new Error('这次执行当前没有可暂停的步骤，请打开任务查看最新状态');
         }
         const nonce = randomEventId();
         await runsApi.controlRun(item.latest_run.id, 'interrupt', buildRunControlPayload(detail, 'interrupt', {
@@ -128,10 +125,10 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
           eventId: `command-center:pause:${nonce}`,
           reasonPrefix: 'Dashboard Active Work',
         }));
-        toast.success('Run 暂停已审计提交');
+        toast.success('已请求暂停这次执行');
       } else {
         await workApi.controlWork(item.id, 'cancel', buildActiveWorkActionPayload(item, 'cancel'));
-        toast.success('Work 停止已审计提交');
+        toast.success('已请求取消任务');
       }
       setPending(null);
       await load({ silent: true });
@@ -146,9 +143,8 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
     <section className="active-work-section" aria-busy={loading}>
       <header className="active-work-header">
         <div>
-          <div className="active-work-kicker"><Clock3 size={15} /> Active Work</div>
-          <h3>进行中的工作</h3>
-          <p>查看正在执行、排队和验证的任务。</p>
+          <div className="active-work-kicker"><Clock3 size={15} /> RUNNING</div>
+          <h3>执行中</h3>
         </div>
         <div className="active-work-header-actions">
           {summary?.section?.freshness?.is_stale ? (
@@ -175,8 +171,8 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
       ) : items.length === 0 ? (
         <div className="active-work-state empty">
           <Clock3 size={22} />
-          <strong>当前没有进行中的工作</strong>
-          <span>把任务交给玄武后，可以在这里跟进。</span>
+          <strong>当前没有执行中的任务</strong>
+          <span>任务开始执行后，可以在这里跟进进展。</span>
         </div>
       ) : (
         <div className="active-work-list">
@@ -212,7 +208,7 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
                     <button
                       disabled={Boolean(detail) && !activeWorkCanPause(item, detail)}
                       onClick={() => setPending({ action: 'pause', id: item.id })}
-                      title={Boolean(detail) && !activeWorkCanPause(item, detail) ? '当前 Run 没有活动 provider turn' : '暂停当前 Run Attempt'}
+                      title={Boolean(detail) && !activeWorkCanPause(item, detail) ? '这次执行当前没有可暂停的步骤' : '暂停这次执行'}
                       type="button"
                     >
                       <Pause size={13} /> 暂停
@@ -229,7 +225,7 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
                 </div>
                 {confirmation ? (
                   <div className="active-work-confirm" role="group" aria-label={`确认${confirmation === 'pause' ? '暂停' : '停止'} Work`}>
-                    <span>{confirmation === 'pause' ? '暂停当前 Run Attempt？可在 Runs 中继续或重试。' : '停止整个 Work？此操作会取消其执行队列。'}</span>
+                    <span>{confirmation === 'pause' ? '暂停这次执行？之后可在任务的“过程”中继续或重试。' : '取消整个任务？会停止当前执行并移出执行队列。'}</span>
                     <div>
                       <button disabled={submitting} onClick={() => setPending(null)} type="button">取消</button>
                       <button className="confirm" disabled={submitting} onClick={submitAction} type="button">
@@ -243,16 +239,10 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
           })}
         </div>
       )}
-
-      {summary?.compatibility ? (
-        <details className="active-work-compatibility">
-          <summary>数据来源与迁移</summary>
-          <span>Work source of truth: {summary.compatibility.work_read_authority}</span>
-          <span>Run source of truth: {summary.compatibility.run_read_authority}</span>
-          <span>双写：{summary.compatibility.dual_write}；双读：{summary.compatibility.dual_read}</span>
-          <span>回滚：{summary.compatibility.rollback}</span>
-          <span>最终删除门禁：{summary.compatibility.final_removal_gate}</span>
-        </details>
+      {(summary?.section?.counts?.total || 0) > items.length ? (
+        <button className="active-work-more" onClick={() => navigateTo?.('work', null, '', '', { scope: 'active' })} type="button">
+          查看全部 {summary.section.counts.total} 个 <ArrowUpRight size={13} />
+        </button>
       ) : null}
     </section>
   );

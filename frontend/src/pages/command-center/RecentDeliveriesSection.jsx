@@ -20,7 +20,7 @@ import './RecentDeliveriesSection.css';
 const RECENT_DELIVERY_LIMIT = 5;
 const REFRESH_INTERVAL_MS = 30_000;
 
-export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
+export default function RecentDeliveriesSection({ limit = RECENT_DELIVERY_LIMIT, navigateTo, projects = [] }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -31,7 +31,7 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
     if (!silent) setLoading(true);
     const controller = new AbortController();
     const promise = commandCenterApi.getSummary({
-      limit: RECENT_DELIVERY_LIMIT,
+      limit,
       sections: ['recent_deliveries'],
     }, { signal: controller.signal });
     requestRef.current = { controller, promise };
@@ -54,7 +54,7 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
       if (requestRef.current?.promise === promise) requestRef.current = null;
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [limit]);
 
   useEffect(() => {
     load();
@@ -113,9 +113,8 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
     <section className="recent-deliveries-section" aria-busy={loading}>
       <header className="recent-deliveries-header">
         <div>
-          <div className="recent-deliveries-kicker"><PackageCheck size={15} /> Recent Deliveries</div>
-          <h3>最近交付</h3>
-          <p>查看做了什么、验证结果和需要你处理的事项。</p>
+          <div className="recent-deliveries-kicker"><PackageCheck size={15} /> DELIVERED</div>
+          <h3>最近完成</h3>
         </div>
         <div className="recent-deliveries-header-actions">
           {summary?.section?.freshness?.is_stale || summary?.detailFailures > 0 ? (
@@ -146,7 +145,7 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
           <PackageCheck size={24} />
           <strong>还没有交付记录</strong>
           <span>任务产生交付结果后，会显示内容摘要与验证状态。</span>
-          <button onClick={() => navigateTo?.('work')} type="button">查看全部工作</button>
+          <button onClick={() => navigateTo?.('work', null, '', '', { scope: 'done' })} type="button">查看已完成的任务</button>
         </div>
       ) : (
         <div aria-label="最近交付列表" className="recent-deliveries-list" role="region" tabIndex={0}>
@@ -216,15 +215,6 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
         </div>
       )}
 
-      {summary?.compatibility ? (
-        <details className="recent-deliveries-compatibility">
-          <summary>数据来源与迁移</summary>
-          <span>Handoff source of truth: {summary.compatibility.handoff_read_authority}</span>
-          <span>双写：{summary.compatibility.dual_write}；双读：{summary.compatibility.dual_read}</span>
-          <span>回滚：{summary.compatibility.rollback}</span>
-          <span>最终删除门禁：{summary.compatibility.final_removal_gate}</span>
-        </details>
-      ) : null}
     </section>
   );
 }
