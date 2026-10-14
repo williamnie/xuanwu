@@ -72,10 +72,10 @@ export default function Dashboard({ navigateTo }) {
             <div className="dashboard-hud-progress" />
           </div>
         </div>
-        <div className="dashboard-hud-card hud-info">
+        <div className="dashboard-hud-card hud-neutral">
           <div className="dashboard-hud-header">
             <span className="dashboard-hud-label">03 任务队列</span>
-            <span className="dashboard-hud-status status-info" />
+            <span className="dashboard-hud-status status-muted" />
           </div>
           <div className="dashboard-hud-value">{queued}</div>
           <div className="dashboard-hud-bar">

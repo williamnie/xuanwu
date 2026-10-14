@@ -136,8 +136,8 @@
 
 .run-status-dot.running,
 .run-status-dot.recovering {
-  background: var(--primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+  background: var(--info);
+  box-shadow: 0 0 0 3px var(--info-glow);
 }
 
 .run-status-dot.succeeded { background: var(--success); }
@@ -203,7 +203,7 @@
 }
 
 .run-context-status.running,
-.run-context-status.recovering { color: var(--primary); }
+.run-context-status.recovering { color: var(--info); }
 .run-context-status.failed { color: var(--error); }
 .run-context-status.succeeded { color: var(--success); }
 
@@ -425,8 +425,8 @@
 .run-attempt-tabs button[data-status='running'] i,
 .run-attempt-tabs button[data-status='created'] i {
   animation: run-attempt-pulse 1.4s ease-in-out infinite;
-  background: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-glow);
+  background: var(--info);
+  box-shadow: 0 0 0 3px var(--info-glow);
 }
 @keyframes run-attempt-pulse {
   0%, 100% { opacity: .45; }
@@ -545,10 +545,10 @@
 }
 
 .run-timeline-marker {
-  background: var(--primary);
+  background: var(--info);
   border: 3px solid var(--bg-card);
   border-radius: 50%;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 45%, var(--border-color));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--info) 45%, var(--border-color));
   height: 10px;
   margin-top: 3px;
   position: relative;

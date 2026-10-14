@@ -248,15 +248,15 @@
 }
 
 .runtime-status-pill.running {
-  border-color: rgba(14, 165, 233, 0.22);
-  color: var(--primary);
-  background: var(--primary-glow);
+  border-color: color-mix(in srgb, var(--info) 30%, transparent);
+  color: var(--info);
+  background: var(--info-bg);
 }
 
 .runtime-status-pill.approval {
-  border-color: rgba(249, 115, 22, 0.24);
-  color: #ea580c;
-  background: rgba(249, 115, 22, 0.09);
+  border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+  color: var(--warning);
+  background: var(--warning-bg);
 }
 
 .session-source-issue-button {
@@ -628,9 +628,9 @@
 }
 
 .live-activity-banner.error {
-  border-color: rgba(239, 68, 68, 0.22);
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.08);
+  border-color: color-mix(in srgb, var(--error) 22%, transparent);
+  color: var(--error);
+  background: var(--error-bg);
 }
 
 /* Chat bubble styling 极简无框设计 */
@@ -1134,13 +1134,13 @@
 }
 
 .diff-badge.added {
-  background: rgba(16, 185, 129, 0.08);
-  color: #10b981;
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .diff-badge.removed {
-  background: rgba(239, 68, 68, 0.08);
-  color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .diff-file-body {
@@ -1161,15 +1161,15 @@
 }
 
 .diff-line.added {
-  background: rgba(16, 185, 129, 0.05);
-  color: #10b981;
-  border-left-color: #10b981;
+  background: var(--success-bg);
+  color: var(--success);
+  border-left-color: var(--success);
 }
 
 .diff-line.removed {
-  background: rgba(239, 68, 68, 0.05);
-  color: #ef4444;
-  border-left-color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
+  border-left-color: var(--error);
 }
 
 .diff-line.meta {

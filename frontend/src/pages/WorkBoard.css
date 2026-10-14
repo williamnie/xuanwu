@@ -154,8 +154,8 @@
 }
 
 .work-column {
-  background: color-mix(in srgb, var(--bg-secondary) 62%, transparent);
-  border: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
@@ -179,7 +179,8 @@
 
 .work-column-header {
   align-items: center;
-  border-bottom: 1px solid var(--border-light);
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-color);
   display: grid;
   gap: 8px;
   grid-template-columns: auto 1fr auto;
@@ -217,7 +218,7 @@
 
 .work-card {
   background: var(--bg-card);
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
   contain: layout paint style;
@@ -255,9 +256,32 @@
 .work-card-footer button:last-child { justify-content: flex-end; }
 .work-card-footer .work-issue-link { color: var(--primary); }
 .work-card-footer .work-detail-link { color: var(--info); }
-.work-card-footer .work-evidence-link { color: var(--success); }
-.work-column-empty { border: 1px dashed var(--border-color); border-radius: var(--radius-sm); color: var(--text-muted); font-family: var(--font-mono); font-size: 0.66rem; padding: 24px 12px; text-align: center; }
-.work-board-loading { align-items: center; background: color-mix(in srgb, var(--bg-primary) 72%, transparent); display: flex; font-family: var(--font-mono); inset: 0; justify-content: center; position: absolute; }
+.work-column-empty {
+  align-items: center;
+  background: color-mix(in srgb, var(--surface-raised) 45%, transparent);
+  border: 1px solid var(--border-color-hover);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  display: flex;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  justify-content: center;
+  letter-spacing: 0.04em;
+  min-height: 84px;
+  padding: 24px 12px;
+  text-align: center;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.work-board-loading {
+  align-items: center;
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
+  display: flex;
+  font-family: var(--font-mono);
+  inset: 0;
+  justify-content: center;
+  position: absolute;
+}
 
 .work-column-load-more {
   align-self: center;

@@ -234,14 +234,14 @@
 .issues-page { padding-top: 2px; }
 .kanban-board { gap: 12px; padding-top: 2px; }
 .kanban-column, [data-theme="dark"] .kanban-column {
-  background: color-mix(in srgb, var(--bg-card) 54%, transparent);
+  background: var(--bg-secondary);
   border-color: var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   min-width: 272px;
 }
 .kanban-column-header {
-  background: color-mix(in srgb, var(--bg-secondary) 58%, transparent);
-  border-bottom-color: var(--border-light);
+  background: var(--surface-raised);
+  border-bottom-color: var(--border-color);
   font-family: var(--font-mono);
   font-size: 0.75rem;
   letter-spacing: 0.065em;
@@ -493,13 +493,13 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 
 /* E2B Geek Dark Mode Page Refinements */
 [data-theme="dark"] .work-column {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-crisp);
-  border-radius: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
 }
 [data-theme="dark"] .work-column-header {
-  background: var(--bg-header);
-  border-bottom: 1px solid var(--border-crisp);
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-color);
 }
 [data-theme="dark"] .work-card {
   background: var(--bg-inset);
@@ -509,7 +509,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 }
 [data-theme="dark"] .work-card:hover {
   border-color: var(--border-crisp-hover);
-  box-shadow: 0 0 12px rgba(0, 229, 255, 0.08);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--primary) 8%, transparent);
 }
 [data-theme="dark"] .work-header-search {
   background: var(--bg-inset);
@@ -517,7 +517,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 }
 [data-theme="dark"] .work-header-search:focus-within {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.25);
+  box-shadow: 0 0 0 2px var(--primary-glow);
 }
 
 [data-theme="dark"] .pi-chat-main-header {
@@ -535,7 +535,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 }
 [data-theme="dark"] .pi-chat-starters button:hover {
   border-color: var(--primary);
-  box-shadow: 0 0 10px rgba(0, 229, 255, 0.15);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 [data-theme="dark"] .pi-chat-bubble.user {
   background: var(--bg-surface);
@@ -549,7 +549,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 }
 [data-theme="dark"] .run-sidebar-row.active {
   background: var(--bg-surface);
-  border-color: rgba(0, 229, 255, 0.28);
+  border-color: color-mix(in srgb, var(--primary) 28%, transparent);
   box-shadow: inset 2px 0 0 var(--primary);
 }
 
@@ -576,7 +576,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 }
 [data-theme="dark"] .automation-filters label:focus-within {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.25);
+  box-shadow: 0 0 0 2px var(--primary-glow);
 }
 [data-theme="dark"] .automation-row.active {
   background: var(--bg-inset);
@@ -599,8 +599,8 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
   border-right-color: var(--border-crisp);
 }
 [data-theme="dark"] .settings-directory-link.active {
-  background: linear-gradient(90deg, rgba(0, 229, 255, 0.12) 0%, rgba(0, 229, 255, 0.02) 100%);
-  border-color: rgba(0, 229, 255, 0.28);
+  background: var(--nav-active);
+  border-color: color-mix(in srgb, var(--primary) 28%, transparent);
   color: var(--primary);
 }
 

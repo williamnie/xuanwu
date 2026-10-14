@@ -29,12 +29,12 @@
   padding: 6px 12px;
 }
 
-.kanban-column-dot.is-triage { background: #fbbf24; }
-.kanban-column-dot.is-todo { background: #64748b; }
-.kanban-column-dot.is-in_progress { background: #3b82f6; }
-.kanban-column-dot.is-failed { background: #ef4444; }
-.kanban-column-dot.is-done { background: #10b981; }
-.kanban-column-dot.is-cancelled { background: #ef4444; }
+.kanban-column-dot.is-triage { background: var(--warning); }
+.kanban-column-dot.is-todo { background: var(--text-faint); }
+.kanban-column-dot.is-in_progress { background: var(--info); }
+.kanban-column-dot.is-failed { background: var(--error); }
+.kanban-column-dot.is-done { background: var(--success); }
+.kanban-column-dot.is-cancelled { background: var(--error); }
 
 .issues-page__create-modal {
   max-width: 760px;

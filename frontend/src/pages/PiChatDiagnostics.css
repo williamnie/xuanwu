@@ -34,8 +34,8 @@
 }
 
 .pi-chat-status-summary[data-tone="running"] .pi-chat-status-dot {
-  background: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-glow);
+  background: var(--info);
+  box-shadow: 0 0 0 3px var(--info-glow);
 }
 
 .pi-chat-status-summary[data-tone="error"] .pi-chat-status-dot {

@@ -56,22 +56,22 @@
 
 .dashboard-hud-status.status-amber {
   background: var(--warning);
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 6px var(--warning-glow);
 }
 
 .dashboard-hud-status.status-accent {
-  background: var(--primary);
-  box-shadow: 0 0 6px rgba(0, 229, 255, 0.6);
+  background: var(--info);
+  box-shadow: 0 0 6px var(--info-glow);
 }
 
 .dashboard-hud-status.status-info {
   background: var(--info);
-  box-shadow: 0 0 6px rgba(6, 182, 212, 0.4);
+  box-shadow: 0 0 6px var(--info-glow);
 }
 
 .dashboard-hud-status.status-success {
   background: var(--success);
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 6px var(--success-glow);
 }
 
 .dashboard-hud-status.status-muted {
@@ -111,10 +111,11 @@
 }
 
 .dashboard-hud-card.hud-warning .dashboard-hud-progress { background: var(--warning); width: 75%; }
-.dashboard-hud-card.hud-accent .dashboard-hud-progress { background: var(--primary); width: 60%; }
+.dashboard-hud-card.hud-accent .dashboard-hud-progress { background: var(--info); width: 60%; }
 .dashboard-hud-card.hud-info .dashboard-hud-progress { background: var(--info); width: 45%; }
 .dashboard-hud-card.hud-success .dashboard-hud-progress { background: var(--success); width: 90%; }
-.dashboard-hud-card.hud-muted .dashboard-hud-progress { background: var(--border-color); width: 15%; }
+.dashboard-hud-card.hud-neutral .dashboard-hud-progress { background: var(--border-color-hover); width: 45%; }
+.dashboard-hud-card.hud-muted .dashboard-hud-progress { background: var(--border-color-hover); width: 15%; }
 
 .dashboard-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 16px 0; border-block: 1px solid var(--border-color); }
 .dashboard-facts > div { padding: 0 20px; border-right: 1px solid var(--border-light); }

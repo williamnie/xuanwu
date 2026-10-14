@@ -23,8 +23,8 @@ test('geek workbench styles load after the legacy app stylesheet', () => {
 
 test('runtime imports the canonical design tokens for both themes', () => {
   assert.match(foundationCss, /@import\s+['"]\.\.\/\.\.\/docs\/design-system\/tokens\.css['"]/);
-  assert.match(designTokensCss, /:root\s*\{[\s\S]*--bg-primary:\s*#f3efe5/);
-  assert.match(designTokensCss, /:root\s*\{[\s\S]*--bg-card:\s*rgba\(255,\s*253,\s*247,\s*0\.88\)/);
+  assert.match(designTokensCss, /:root\s*\{[\s\S]*--bg-primary:\s*#f6f5f2/);
+  assert.match(designTokensCss, /:root\s*\{[\s\S]*--bg-card:\s*#ffffff/);
   assert.match(designTokensCss, /\[data-theme='dark'\]\s*\{[\s\S]*--bg-primary:\s*#(?:070709|070a0a)/);
   assert.match(designTokensCss, /\[data-theme='dark'\]\s*\{[\s\S]*--text-primary:\s*#(?:ffffff|e2e7e4)/);
   assert.match(designTokensCss, /--font-display:\s*'Inter'/);
@@ -37,6 +37,74 @@ test('runtime imports the canonical design tokens for both themes', () => {
   assert.match(designTokensCss, /--page-gutter:\s*clamp\(18px,\s*3vw,\s*24px\)/);
   assert.match(foundationCss, /--sessions-transcript-max-width:\s*var\(--sessions-message-max-width\)/);
   assert.match(foundationCss, /\.status-badge,[^{]*\{[^}]*border-radius:\s*var\(--radius-xs\)/);
+});
+
+test('primary colors in light and dark themes belong to the vibrant orange family and contrast with info colors', () => {
+  const lightPrimaryMatch = designTokensCss.match(/:root\s*\{[\s\S]*?--primary:\s*(#[0-9a-fA-F]{6})/);
+  const darkPrimaryMatch = designTokensCss.match(/\[data-theme='dark'\]\s*\{[\s\S]*?--primary:\s*(#[0-9a-fA-F]{6})/);
+  const lightInfoMatch = designTokensCss.match(/:root\s*\{[\s\S]*?--info:\s*(#[0-9a-fA-F]{6})/);
+  const darkInfoMatch = designTokensCss.match(/\[data-theme='dark'\]\s*\{[\s\S]*?--info:\s*(#[0-9a-fA-F]{6})/);
+
+  assert.ok(lightPrimaryMatch, 'light --primary should be defined');
+  assert.ok(darkPrimaryMatch, 'dark --primary should be defined');
+  assert.ok(lightInfoMatch, 'light --info should be defined');
+  assert.ok(darkInfoMatch, 'dark --info should be defined');
+
+  const lightPrimary = lightPrimaryMatch[1].toLowerCase();
+  const darkPrimary = darkPrimaryMatch[1].toLowerCase();
+  const lightInfo = lightInfoMatch[1].toLowerCase();
+  const darkInfo = darkInfoMatch[1].toLowerCase();
+
+  // Primary colors should be distinct from info colors
+  assert.notEqual(lightPrimary, lightInfo, 'light --primary must differ from --info');
+  assert.notEqual(darkPrimary, darkInfo, 'dark --primary must differ from --info');
+
+  const getHue = (hex) => {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = (num >> 16) / 255;
+    const g = ((num >> 8) & 255) / 255;
+    const b = (num & 255) / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const d = max - min;
+    if (d === 0) return 0;
+    let h;
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h = Math.round(h * 60);
+    if (h < 0) h += 360;
+    return h;
+  };
+
+  const lightPrimaryHue = getHue(lightPrimary);
+  const darkPrimaryHue = getHue(darkPrimary);
+
+  // Both should be in the orange hue spectrum (10° - 35°)
+  assert.ok(
+    lightPrimaryHue >= 10 && lightPrimaryHue <= 35,
+    `light --primary hue (${lightPrimaryHue}°) should be in orange spectrum (10°-35°)`
+  );
+  assert.ok(
+    darkPrimaryHue >= 10 && darkPrimaryHue <= 35,
+    `dark --primary hue (${darkPrimaryHue}°) should be in orange spectrum (10°-35°)`
+  );
+  // Equal or within 10 degrees of each other
+  assert.ok(
+    Math.abs(lightPrimaryHue - darkPrimaryHue) <= 10,
+    `light (${lightPrimaryHue}°) and dark (${darkPrimaryHue}°) primary hues should be in the same orange color family`
+  );
+
+  // Dark mode features the classic Teal & Orange aesthetic
+  assert.equal(lightPrimary, '#ff5722');
+  assert.equal(darkPrimary, '#ff5722');
+  assert.equal(darkInfo, '#00e5ff', 'dark --info should be ice cyan #00e5ff for teal & orange contrast');
+});
+
+test('terminal window decorative dots use neutral color and do not contain hardcoded red/yellow/green', () => {
+  assert.match(foundationCss, /\.e2b-window-dots\s*\.e2b-dot\s*\{[^}]*background:\s*var\(--border-color-hover\)/);
+  assert.doesNotMatch(foundationCss, /\.e2b-dot\.(?:red|yellow|green)/);
+  assert.doesNotMatch(foundationCss, /\.e2b-window-dots[^}]*#(?:ef4444|f59e0b|10b981)/);
 });
 
 test('buttons use the flat E2B-inspired control language', () => {

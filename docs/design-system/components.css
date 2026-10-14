@@ -66,7 +66,7 @@
 .ds-btn--new {
   background: linear-gradient(135deg, var(--primary), var(--primary-hover));
   border: 0;
-  color: var(--button-primary-bg);
+  color: var(--button-primary-fg);
   font-weight: 700;
 }
 
@@ -338,8 +338,9 @@
 .bg-grid-tech {
   background-size: 32px 32px;
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    linear-gradient(to right, var(--grid-tech-line, rgba(15, 23, 42, 0.038)) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-tech-line, rgba(15, 23, 42, 0.038)) 1px, transparent 1px);
+  background-position: -1px -1px;
 }
 
 .e2b-terminal-window {

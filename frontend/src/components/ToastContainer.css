@@ -95,16 +95,16 @@
 
 /* 针对不同类型的轻微底部分类色条或细边高亮 */
 .codex-toast-item.success {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid var(--success);
 }
 .codex-toast-item.error {
-  border-left: 3px solid #ef4444;
+  border-left: 3px solid var(--error);
 }
 .codex-toast-item.warning {
-  border-left: 3px solid #f59e0b;
+  border-left: 3px solid var(--warning);
 }
 .codex-toast-item.info {
-  border-left: 3px solid #3b82f6;
+  border-left: 3px solid var(--info);
 }
 
 @keyframes toastSlideIn {
@@ -117,7 +117,7 @@
     transform: translateY(0) scale(1);
   }
 }
-.codex-toast-icon.is-success { color: #10b981; }
-.codex-toast-icon.is-error { color: #ef4444; }
-.codex-toast-icon.is-warning { color: #f59e0b; }
-.codex-toast-icon.is-info { color: #3b82f6; }
+.codex-toast-icon.is-success { color: var(--success); }
+.codex-toast-icon.is-error { color: var(--error); }
+.codex-toast-icon.is-warning { color: var(--warning); }
+.codex-toast-icon.is-info { color: var(--info); }

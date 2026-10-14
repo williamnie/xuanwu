@@ -10,8 +10,8 @@
 
 系统同时提供两种主题，共享**同一套几何与排版骨架**，只切换配色：
 
-- **简洁（LIGHT）**：米白纸面 `#f3efe5` + 墨绿强调 `#5b820a`。安静、留白、像一份排版良好的技术文档。
-- **极客（DARK，E2B 风格）**：黑曜石深黑 `#070709` + 电光赛博青强调 `#00e5ff` + 终端视窗 `#0a0a0e`/`#0d0e12`。单像素微边框、HUD 监控质感、等宽字体微标签。
+- **简洁（LIGHT，温润纸感暖灰 · Warm Paper / Claude 风格）**：温润象牙米灰 `#f6f5f2` 搭配 32px 细腻暖灰微网格 + 纯白卡片 `#ffffff` + 暖米灰底栏/看板 `#edebe6` + 活力亮橙强调 `#ff5722`。彻底剥离冰蓝冷感，温和柔润、长时间看屏防疲劳，与活力亮橙天然协调。
+- **极客（DARK，E2B 风格 · 赛博熔岩与冰蓝冷暖撞色）**：黑曜石深黑 `#070709` + 赛博熔岩橙强调 `#ff5722` + 冰蓝运行态 `#00e5ff` + 终端视窗 `#0a0a0e`/`#0d0e12`。单像素微边框、HUD 监控质感、经典 Teal & Orange 冷暖撞色美学。
 
 无论哪个主题，以下五条不可违背：
 
@@ -31,52 +31,52 @@
 
 | 令牌 | 简洁（LIGHT） | 极客（DARK / E2B） | 用途 |
 |---|---|---|---|
-| `--bg-primary` | `#f3efe5` | `#070709` | 页面底层（黑曜石暗黑画布） |
-| `--bg-secondary` | `#ece6d8` | `#0a0a0e` | 二级视窗卡片底色 |
-| `--bg-card` | `rgba(255,253,247,.88)` | `#0a0a0e` | 卡片/面板底 |
-| `--surface-raised` | `#faf7ee` | `#0d0e12` | 卡片/视窗顶栏 (Header Bar) |
-| `--surface-overlay` | `#fffdf7` | `#0d0e12` | 下拉、浮层 |
-| `--control-bg` | `#fffdf7` | `#060608` | 输入深坑 (Input Inset / Code) |
-| `--nav-hover` | 主色 4% 透明 | `rgba(255,255,255,0.05)` | 列表 hover |
-| `--nav-active` | 主色 8% 渐变 | `rgba(0,229,255,0.14)` 渐变 | 列表 active |
+| `--bg-primary` | `#f6f5f2` | `#070709` | 页面底层（温润暖纸白画布 / 黑曜石暗黑画布） |
+| `--bg-secondary` | `#edebe6` | `#0a0a0e` | 二级视窗、侧边栏与看板列底色 |
+| `--bg-card` | `#ffffff` | `#0a0a0e` | 卡片/面板底 |
+| `--surface-raised` | `#faf9f7` | `#0d0e12` | 卡片/视窗顶栏 (Header Bar) |
+| `--surface-overlay` | `#ffffff` | `#0d0e12` | 下拉、浮层 |
+| `--control-bg` | `#ffffff` | `#060608` | 输入深坑 (Input Inset / Code) |
+| `--nav-hover` | `rgba(255, 87, 34, 0.05)` | `rgba(255, 87, 34, 0.08)` | 列表 hover |
+| `--nav-active` | `rgba(255, 87, 34, 0.1)` | `linear-gradient(90deg, rgba(255, 87, 34, 0.18), rgba(255, 87, 34, 0.04))` | 列表 active |
 
 ### 1.2 文字
 
 | 令牌 | 简洁 | 极客 (E2B) | 用途 |
 |---|---|---|---|
-| `--text-primary` | `#171a18` | `#ffffff` | 强强调、纯白正文 |
-| `--text-secondary` | `#454c46` | `#d4d4d8` | 主正文、次级说明 |
-| `--text-muted` | `#79807a` | `#71717a` | 微标签、占位、时间戳 |
-| `--text-faint` | `#9aa099` | `#52525b` | 弱化代码注释、最弱提示 |
+| `--text-primary` | `#1c1917` | `#ffffff` | 强强调、纯白正文 |
+| `--text-secondary` | `#44403c` | `#d4d4d8` | 主正文、次级说明 |
+| `--text-muted` | `#78716c` | `#8b8b94` | 微标签、占位、时间戳 |
+| `--text-faint` | `#a8a29e` | `#6b6b74` | 弱化代码注释、最弱提示 |
 
 ### 1.3 强调与功能色
 
 | 令牌 | 简洁 | 极客 (E2B) | 用途 |
 |---|---|---|---|
-| `--primary` | `#5b820a` | `#00e5ff` | **唯一品牌强调 (电光赛博青)** |
-| `--primary-hover` | `#6e9a10` | `#33ebff` | hover |
-| `--primary-glow` | 墨绿 10% | `rgba(0, 229, 255, 0.25)` | 强调微光 (0 0 15px) |
+| `--primary` | `#ff5722` | `#ff5722` | **唯一品牌强调 (活力亮橙 / 赛博熔岩橙)** |
+| `--primary-hover` | `#f4511e` | `#ff7043` | hover |
+| `--primary-glow` | `rgba(255, 87, 34, 0.25)` | `rgba(255, 87, 34, 0.35)` | 强调微光 (0 0 15px) |
 | `--success` | `#15803d` | `#10b981` | 成功/在线 |
-| `--warning` | `#b45309` | `#f59e0b` | 警告/中断 |
+| `--warning` | `#b45309` | `#fbbf24` | 警告/中断 (深色采用明亮金黄避开橙色) |
 | `--error` | `#b91c1c` | `#ef4444` | 失败/危险 |
-| `--info` | `#0369a1` | `#06b6d4` | 运行中/信息 |
+| `--info` | `#2563eb` | `#00e5ff` | 运行中/信息 (深色采用冰青色形成冷暖撞色) |
 
 ### 1.4 主按钮（品牌按钮）
 
 | 令牌 | 简洁 | 极客 (E2B) |
 |---|---|---|
-| `--button-primary-bg` | `#0a0d0c`（近黑） | `#00e5ff`（电光青） |
-| `--button-primary-fg` | `#f2f5f0`（米白） | `#070709`（深黑） |
+| `--button-primary-bg` | `#ff5722`（高能橙） | `#ff5722`（熔岩橙） |
+| `--button-primary-fg` | `#ffffff`（纯白字） | `#070709`（深黑） |
 
-> 浅色主题下主按钮是**黑底白字**；深色主题下是**青底黑字**，配备 `0 0 15px rgba(0, 229, 255, 0.25)` 科技微光。
+> 浅色主题下主按钮是**橙底白字**；深色主题下是**橙底黑字**，配备 `0 0 15px rgba(255, 87, 34, 0.35)` 熔岩科技微光。
 
 ### 1.5 边框
 
 | 令牌 | 简洁 | 极客 (E2B) | 用途 |
 |---|---|---|---|
-| `--border-color` | `#d9d2c0` | `rgba(255, 255, 255, 0.08)` | 标准 1px 单像素细线 |
-| `--border-light` | `#e5dfcd` | `rgba(255, 255, 255, 0.04)` | 更弱的分割线 |
-| `--border-color-hover` | `#a9a189` | `rgba(255, 255, 255, 0.16)` | hover 悬浮加亮边框 |
+| `--border-color` | `#e3ded5` | `rgba(255, 255, 255, 0.08)` | 标准 1px 单像素细线 |
+| `--border-light` | `#ece9e2` | `rgba(255, 255, 255, 0.04)` | 更弱的分割线 |
+| `--border-color-hover` | `#cfc8be` | `rgba(255, 255, 255, 0.16)` | hover 悬浮加亮边框 |
 
 ---
 
@@ -158,16 +158,22 @@
 
 ### 4.2 极客微网格底纹 (.bg-grid-tech)
 
-全站主要工作区背景注入 32px 细腻微网格，呈现云原生沙盒基础设施质感：
+全站主要工作区背景注入 32px 细腻微网格，呈现云原生沙盒基础设施质感（浅色使用 `rgba(15, 23, 42, 0.038)`，深色使用 `rgba(255, 255, 255, 0.03)`，通过 `--grid-tech-line` 驱动）：
 
 ```css
 .bg-grid-tech {
   background-size: 32px 32px;
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    linear-gradient(to right, var(--grid-tech-line, rgba(15, 23, 42, 0.038)) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-tech-line, rgba(15, 23, 42, 0.038)) 1px, transparent 1px);
+  background-position: -1px -1px;
 }
 ```
+
+> **对齐合同与重影规约**：
+> - 网格必须通过 `background-position: -1px -1px` 裁切边缘起始线，首条竖线距侧边栏/容器外框严格保持完整的 32px，杜绝与容器 1px 边框形成重叠或紧邻的双线；
+> - 侧边栏为纯净独立基座，采用实体底色（`var(--bg-sidebar)`），不透底纹；
+> - 主工作区 `.main-content` 统一承载网格，内嵌页面组件无需重复绘制，防止内外层错位叠印。
 
 ### 4.3 紧凑侧边栏防溢出布局规约
 
@@ -186,7 +192,7 @@
 
 所有核心面板、编辑器、数据卡片建议封装在沙盒控制台视窗容器中：
 - 容器底色 `--bg-secondary`（`#0a0a0e`），单像素微边框 `1px solid var(--border-color)`，微圆角 `var(--radius-sm)`（4px）。
-- 顶部常驻 Header Bar：底色 `--surface-raised`（`#0d0e12`），左侧包含 3 个微型指示圆点（红/黄/绿），右侧配等宽大写元数据标签（如 `SANDBOX: ACTIVE · PID: 12048`）。
+- 顶部常驻 Header Bar：底色 `--surface-raised`（`#0d0e12`），左侧包含 3 个微型指示圆点（中性色，使用 `--border-color-hover`），右侧配等宽大写元数据标签（如 `SANDBOX: ACTIVE · PID: 12048`）。
 
 ### 5.1 按钮
 
@@ -222,7 +228,7 @@
 
 ### 5.5 状态标记（Pill / Dot）
 
-- **status-dot**：`7×7` 圆点（唯一允许 `border-radius: 50%` 的元素），配 mono `0.62rem` 大写文字；运行中给 1.4s 脉冲 + `0 0 0 3px var(--primary-glow)` 光晕。
+- **status-dot**：`7×7` 圆点（唯一允许 `border-radius: 50%` 的元素），配 mono `0.62rem` 大写文字；运行中给 1.4s 脉冲 + `0 0 0 3px var(--info-glow)` 光晕。
 - **status-pill**：`var(--radius-xs)`、mono 大写、`0.56rem`、带 1px 同色透明边与 8% 同色底；运行中脉冲的是 dot 不是整个 pill。
 - 状态色映射：`running/created → info`、`succeeded → success`、`failed → error`、`interrupted → warning`、`idle → muted`。
 

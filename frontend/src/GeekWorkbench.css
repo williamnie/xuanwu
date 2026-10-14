@@ -52,26 +52,27 @@
   --button-border: var(--border-color);
 }
 
-/* E2B 32px 细腻技术网格底纹 */
-.bg-grid-tech {
+/* E2B 32px 细腻技术网格底纹：位移 -1px 裁切边缘线，首线距边框正好 32px，杜绝双竖线与重影 */
+.bg-grid-tech,
+.main-content {
   background-size: 32px 32px;
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    linear-gradient(to right, var(--grid-tech-line, rgba(15, 23, 42, 0.038)) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-tech-line, rgba(15, 23, 42, 0.038)) 1px, transparent 1px);
+  background-position: -1px -1px;
+}
+
+/* 页面内嵌容器无需重复绘制网格，由 .main-content 全局连续承载 */
+.main-content .bg-grid-tech {
+  background-image: none;
 }
 
 html, body, #root { min-height: 100%; }
-body { background: var(--canvas-gradient); font-family: var(--font-sans); }
-body::before { display: none; }
-
-[data-theme="dark"] body,
-[data-theme="dark"] .main-content {
+body {
   background-color: var(--bg-primary);
-  background-size: 32px 32px;
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  font-family: var(--font-sans);
 }
+body::before { display: none; }
 
 h1, h2, h3, h4 {
   font-family: var(--font-display);
@@ -105,9 +106,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 
 .main-content { padding: 0 28px 30px; }
 .sidebar {
-  background: var(--bg-primary);
-  backdrop-filter: saturate(140%) blur(12px);
-  border-right-color: var(--border-color);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
   box-shadow: none;
   padding: 16px 11px;
 }
@@ -240,14 +240,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 
 .e2b-window-dots .e2b-dot {
+  background: var(--border-color-hover);
   border-radius: 50%;
   height: 8px;
   width: 8px;
 }
-
-.e2b-window-dots .e2b-dot.red { background: #ef4444; }
-.e2b-window-dots .e2b-dot.yellow { background: #f59e0b; }
-.e2b-window-dots .e2b-dot.green { background: #10b981; }
 
 .e2b-window-title {
   align-items: center;
@@ -281,11 +278,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 
 [data-theme="dark"] .btn-primary {
-  box-shadow: 0 0 15px rgba(0, 229, 255, 0.25);
+  box-shadow: 0 0 15px var(--primary-glow);
 }
 
 [data-theme="dark"] .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 0 20px rgba(0, 229, 255, 0.45);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--primary) 45%, transparent);
 }
 
 .guardian-alert-banner { border-radius: var(--radius-md); }
