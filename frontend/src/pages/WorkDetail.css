@@ -183,7 +183,8 @@
 .work-detail-tabs::-webkit-scrollbar { display: none; }
 .work-detail-tabs button { align-items: center; background: transparent; border: 0; border-radius: var(--radius-xs); color: var(--text-muted); cursor: pointer; display: inline-flex; flex-shrink: 0; font-size: .68rem; font-weight: 650; gap: 6px; letter-spacing: .045em; padding: 6px 12px; text-transform: uppercase; transition: background-color 140ms ease, color 140ms ease; }
 .work-detail-tabs button:hover { background: var(--nav-hover); color: var(--text-primary); }
-.work-detail-tabs button[aria-selected='true'] { background: var(--button-primary-bg); color: var(--button-primary-fg); }
+.work-detail-tabs button[aria-selected='true'] { background: var(--bg-card); color: var(--text-primary); position: relative; }
+.work-detail-tabs button[aria-selected='true']::after { background: var(--primary); bottom: 0; content: ''; height: 2px; left: 0; position: absolute; right: 0; }
 .work-detail-tabs button span { font-family: var(--font-mono); font-size: .6rem; opacity: .8; }
 .work-detail-tabpanel { min-width: 0; padding: 18px; }
 .work-detail-tabpanel[hidden] { display: none; }

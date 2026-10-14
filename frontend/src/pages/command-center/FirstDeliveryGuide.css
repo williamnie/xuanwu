@@ -165,7 +165,8 @@
 }
 .first-delivery-mode-tabs button { border-right: 1px solid var(--border-color); }
 .first-delivery-mode-tabs button span { color: var(--text-muted); font-size: .54rem; margin-right: 6px; }
-.first-delivery-mode-tabs button.active { background: var(--button-primary-bg); color: var(--button-primary-fg); }
+.first-delivery-mode-tabs button.active { background: var(--bg-card); color: var(--text-primary); position: relative; }
+.first-delivery-mode-tabs button.active::after { background: var(--primary); bottom: 0; content: ''; height: 2px; left: 0; position: absolute; right: 0; }
 .first-delivery-mode-tabs button.active span { color: inherit; }
 
 .first-delivery-connection-flow { border-bottom: 1px solid var(--border-light); display: grid; gap: 12px; padding: 16px 0; }

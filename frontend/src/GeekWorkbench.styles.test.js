@@ -39,11 +39,12 @@ test('runtime imports the canonical design tokens for both themes', () => {
   assert.match(foundationCss, /\.status-badge,[^{]*\{[^}]*border-radius:\s*var\(--radius-xs\)/);
 });
 
-test('primary colors in light and dark themes belong to the vibrant orange family and contrast with info colors', () => {
+test('primary colors in light and dark themes belong to the Xuanwu teal family and contrast with info and warning colors', () => {
   const lightPrimaryMatch = designTokensCss.match(/:root\s*\{[\s\S]*?--primary:\s*(#[0-9a-fA-F]{6})/);
   const darkPrimaryMatch = designTokensCss.match(/\[data-theme='dark'\]\s*\{[\s\S]*?--primary:\s*(#[0-9a-fA-F]{6})/);
   const lightInfoMatch = designTokensCss.match(/:root\s*\{[\s\S]*?--info:\s*(#[0-9a-fA-F]{6})/);
   const darkInfoMatch = designTokensCss.match(/\[data-theme='dark'\]\s*\{[\s\S]*?--info:\s*(#[0-9a-fA-F]{6})/);
+  const lightWarningMatch = designTokensCss.match(/:root\s*\{[\s\S]*?--warning:\s*(#[0-9a-fA-F]{6})/);
 
   assert.ok(lightPrimaryMatch, 'light --primary should be defined');
   assert.ok(darkPrimaryMatch, 'dark --primary should be defined');
@@ -80,25 +81,23 @@ test('primary colors in light and dark themes belong to the vibrant orange famil
   const lightPrimaryHue = getHue(lightPrimary);
   const darkPrimaryHue = getHue(darkPrimary);
 
-  // Both should be in the orange hue spectrum (10° - 35°)
+  // Both should match the teal turtle logo (160° - 185°)
   assert.ok(
-    lightPrimaryHue >= 10 && lightPrimaryHue <= 35,
-    `light --primary hue (${lightPrimaryHue}°) should be in orange spectrum (10°-35°)`
+    lightPrimaryHue >= 160 && lightPrimaryHue <= 185,
+    `light --primary hue (${lightPrimaryHue}°) should be in teal spectrum (160°-185°)`
   );
   assert.ok(
-    darkPrimaryHue >= 10 && darkPrimaryHue <= 35,
-    `dark --primary hue (${darkPrimaryHue}°) should be in orange spectrum (10°-35°)`
-  );
-  // Equal or within 10 degrees of each other
-  assert.ok(
-    Math.abs(lightPrimaryHue - darkPrimaryHue) <= 10,
-    `light (${lightPrimaryHue}°) and dark (${darkPrimaryHue}°) primary hues should be in the same orange color family`
+    darkPrimaryHue >= 160 && darkPrimaryHue <= 185,
+    `dark --primary hue (${darkPrimaryHue}°) should be in teal spectrum (160°-185°)`
   );
 
-  // Dark mode features the classic Teal & Orange aesthetic
-  assert.equal(lightPrimary, '#ff5722');
-  assert.equal(darkPrimary, '#ff5722');
-  assert.equal(darkInfo, '#00e5ff', 'dark --info should be ice cyan #00e5ff for teal & orange contrast');
+  // Running state must read as a different hue from the brand teal
+  assert.ok(Math.abs(getHue(darkInfo) - darkPrimaryHue) >= 30, 'dark --info must not collide with teal --primary');
+  // Warning must not drift back into the orange brand range
+  assert.ok(getHue(lightWarningMatch[1]) >= 32, 'light --warning should be amber-yellow, not orange');
+
+  assert.equal(lightPrimary, '#0f766e');
+  assert.equal(darkPrimary, '#2dd4bf');
 });
 
 test('terminal window decorative dots use neutral color and do not contain hardcoded red/yellow/green', () => {
@@ -154,4 +153,16 @@ test('low-frequency global panels use the same visual system without owning Sess
   assert.match(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-size:\s*0\.56rem/);
   assert.doesNotMatch(piChatCss, /\.pi-chat-runtime-pill[^}]*border-radius:\s*999px/);
   assert.doesNotMatch(pagesCss, /\.(?:sessions-client|client-chat|new-session|session-list-filter|session-info)/);
+});
+
+test('active navigation and tabs use a thin primary indicator instead of brand fills or glows', () => {
+  const sidebarCss = readFileSync(new URL('./components/AppSidebar.css', import.meta.url), 'utf8');
+  const workDetailCss = readFileSync(new URL('./pages/WorkDetail.css', import.meta.url), 'utf8');
+
+  assert.match(foundationCss, /\.nav-item\.active,[^{]*\{[^}]*color:\s*var\(--text-primary\)/);
+  assert.doesNotMatch(sidebarCss, /\.nav-item\.active[^{]*\{[^}]*0 0 \d+px/);
+  assert.doesNotMatch(foundationCss, /\.btn-primary[^{]*\{[^}]*box-shadow:\s*0 0 \d+px/);
+  assert.match(workDetailCss, /\.work-detail-tabs button\[aria-selected='true'\]::after\s*\{[^}]*background:\s*var\(--primary\)/);
+  assert.doesNotMatch(workDetailCss, /\.work-detail-tabs button\[aria-selected='true'\]\s*\{[^}]*--button-primary-bg/);
+  assert.match(workBoardCss, /\.work-ledger-kicker\s*\{[^}]*color:\s*var\(--text-muted\)/);
 });

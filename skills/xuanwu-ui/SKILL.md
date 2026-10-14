@@ -1,12 +1,12 @@
 ---
 name: xuanwu-ui
-description: 玄武前端极客设计系统规范（E2B 风格与电光赛博青）。用于玄武系统或需要 E2B 极客科技风的前端 UI 重构、新页面开发、组件设计及视觉验收。包含黑曜石暗黑底色、电光赛博青强调、单像素微边框、利落微圆角、纯净等宽无斜杠编号、HUD 监控与终端沙盒视窗组件规范。
+description: 玄武前端极客设计系统规范（E2B 风格与电光墨青）。用于玄武系统或需要 E2B 极客科技风的前端 UI 重构、新页面开发、组件设计及视觉验收。包含黑曜石暗黑底色、电光墨青强调、单像素微边框、利落微圆角、纯净等宽无斜杠编号、HUD 监控与终端沙盒视窗组件规范。
 ---
 
 # 玄武前端极客设计系统规范（Xuanwu Geek UI & Design System）
 
 > **设计哲学**：
-> **黑曜石深黑底色 · 电光赛博青单点强调 · 单像素微边框 · 纯净等宽无斜杠编号 · HUD 数据监控 · 沙盒终端视窗质感。**
+> **黑曜石深黑底色 · 电光墨青单点强调 · 单像素微边框 · 纯净等宽无斜杠编号 · HUD 数据监控 · 沙盒终端视窗质感。**
 > 
 > 任何「大圆角、胶囊按钮、粗实线边框、大面积花哨渐变、厚重投影、白底弹窗」在本规范下**一律禁止**。
 
@@ -25,7 +25,7 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
 ## 1. 核心设计准则 (Core Principles)
 
 1. **黑曜石暗黑底色 (Obsidian Dark)**：主视口背景必须深邃沉浸（`#070709`），视窗与卡片采用二级暗黑色（`#0a0a0e`），顶栏与浮层为 `#0d0e12`，输入区与代码区下沉为深坑 `#060608`。
-2. **唯一品牌强调色 (Cyber Orange `#ff5722`)**：除状态语义外，全局所有激活指示条、聚焦高亮、主按钮、光晕投影均统一使用活力亮橙/赛博熔岩橙，并与冰蓝运行态（`#00e5ff`）构成经典 Teal & Orange 极客撞色，克制且极具科技辨识度。
+2. **唯一品牌强调色 (Xuanwu Teal：深色 `#2dd4bf` / 浅色 `#0f766e`)**：与青色玄武 Logo 同色系。只有主按钮使用主色实底；激活导航、Tab、视图切换只用主色细指示线或下划线，文字保持主文字色；聚焦用 `0 0 0 3px` 浅环。全系统不加外发光。运行态使用冷蓝（深色 `#60a5fa` / 浅色 `#2563eb`），与主色区分。
 3. **单像素微透明线 (1px Crisp Border)**：所有视窗容器、卡片、输入框、分割线均使用单像素微透明线（普通 `rgba(255, 255, 255, 0.08)` / 悬浮 `rgba(255, 255, 255, 0.16)`），杜绝任何粗实线或彩色厚边框。
 4. **纯净等宽控制台编号 (Pure Monospace Naming)**：
    - 字体强制使用 JetBrains Mono 等宽字体。
@@ -55,8 +55,8 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
 | 二级视窗 (`--bg-secondary` / `--bg-card`) | `#0a0a0e` | `#edebe6` / `#ffffff` | `bg-[#0a0a0e]` | 内容面板、代码编辑器外框、侧边栏、看板列 |
 | 视窗顶栏 (`--surface-raised`) | `#0d0e12` | `#faf9f7` | `bg-[#0d0e12]` | 终端视窗 Header、表格表头、浮层菜单 |
 | 输入深坑 (`--control-bg`) | `#060608` | `#ffffff` | `bg-[#060608]` | 表单 Input、Textarea、代码 pre 区域 |
-| 品牌强调 (`--primary`) | `#ff5722` (赛博熔岩橙) | `#ff5722` (活力亮橙) | `text-[#ff5722]`, `bg-[#ff5722]` | 主操作按钮、聚焦边框、激活导航指示条 |
-| 强调微光 (`--primary-glow`) | `rgba(255, 87, 34, 0.35)` | `rgba(255, 87, 34, 0.25)` | `shadow-[0_0_15px_rgba(255,87,34,0.35)]` | 强调按钮悬浮、激活微光外发光 |
+| 品牌强调 (`--primary`) | `#2dd4bf` (电光墨青) | `#0f766e` (玄武墨青) | `text-[#2dd4bf]`, `bg-[#2dd4bf]` | 主操作按钮、聚焦边框、激活导航指示条 |
+| 强调浅底 (`--primary-glow`) | `rgba(45, 212, 191, 0.14)` | `rgba(15, 118, 110, 0.12)` | `ring-[3px] ring-[#2dd4bf]/15` | 聚焦环、头像浅底；不做外发光 |
 | 主边框 (`--border-color`) | `rgba(255, 255, 255, 0.08)` | `#e3ded5` | `border-white/[0.08]` | 极细 1px 单像素线，杜绝粗实线 |
 | 弱边框 (`--border-light`) | `rgba(255, 255, 255, 0.04)` | `#ece9e2` | `border-white/[0.04]` | 更弱的次级内部线条 |
 | 悬浮边框 (`--border-color-hover`)| `rgba(255, 255, 255, 0.16)` | `#cfc8be` | `border-white/[0.16]` | 卡片、按钮 hover 悬浮高亮边框 |
@@ -65,9 +65,9 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
 | 辅助弱化 (`--text-muted`) | `#8b8b94` | `#78716c` | `text-zinc-400` | 等宽微标签、时间戳、占位符 |
 | 最弱文本 (`--text-faint`) | `#6b6b74` | `#a8a29e` | `text-zinc-500` | 弱化代码注释、最弱元数据 |
 | 成功状态 (`--success`) | `#10b981` (翡翠绿) | `#15803d` | `text-emerald-500` | 运行正常、已完成、健康脉冲 |
-| 警告状态 (`--warning`) | `#fbbf24` (明亮金黄) | `#b45309` | `text-amber-400` | 待人工审核、警告、中断 |
+| 警告状态 (`--warning`) | `#fbbf24` (明亮金黄) | `#a16207` (琥珀黄) | `text-amber-400` | 待人工审核、警告、中断 |
 | 失败状态 (`--error`) | `#ef4444` (猩红) | `#b91c1c` | `text-red-500` | 运行异常、阻断、报错 |
-| 运行状态 (`--info`) | `#00e5ff` (赛博冰青) | `#2563eb` (明蓝) | `text-cyan-400` | 运行中、任务派遣、调度事件（冷暖撞色） |
+| 运行状态 (`--info`) | `#60a5fa` (冷蓝) | `#2563eb` (明蓝) | `text-blue-400` | 运行中、任务派遣、调度事件（与墨青主色区分） |
 
 ### 2.2 材质与微网格 CSS
 
@@ -93,7 +93,7 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 87, 34, 0.45);
+  background: rgba(255, 255, 255, 0.24);
 }
 ```
 
@@ -174,13 +174,13 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
 ### 5.2 主按钮与次级按钮 (Buttons)
 
 ```jsx
-{/* 主操作按钮：橙底黑字 + 直角 + 科技微光 */}
-<button className="h-8 px-4 rounded-[2px] bg-[#ff5722] text-[#070709] font-mono text-xs font-bold uppercase tracking-wider transition-all duration-150 hover:bg-[#ff7043] hover:shadow-[0_0_15px_rgba(255,87,34,0.35)] active:translate-y-px">
+{/* 主操作按钮：墨青底黑字 + 直角，无外发光 */}
+<button className="h-8 px-4 rounded-[2px] bg-[#2dd4bf] text-[#070709] font-mono text-xs font-bold uppercase tracking-wider transition-all duration-150 hover:bg-[#5eead4] active:translate-y-px">
   EXECUTE_RUN
 </button>
 
-{/* 次级/幽灵按钮：深黑底 + 1px 单像素线 + 活力橙微字 */}
-<button className="h-8 px-3 rounded-[2px] bg-[#0a0a0e] border border-white/[0.08] text-zinc-300 font-mono text-xs transition-all duration-150 hover:border-white/[0.2] hover:text-[#ff5722]">
+{/* 次级/幽灵按钮：深黑底 + 1px 单像素线，hover 提亮文字 */}
+<button className="h-8 px-3 rounded-[2px] bg-[#0a0a0e] border border-white/[0.08] text-zinc-300 font-mono text-xs transition-all duration-150 hover:border-white/[0.2] hover:text-white">
   EXPORT_LOGS
 </button>
 ```
@@ -191,7 +191,7 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
 <input 
   type="text" 
   placeholder="Filter by issue key or query..."
-  className="h-8 w-full px-3 rounded-[2px] bg-[#060608] border border-white/[0.08] text-zinc-200 placeholder-zinc-600 font-mono text-xs transition-all duration-150 focus:outline-none focus:border-[#ff5722] focus:shadow-[0_0_12px_rgba(255,87,34,0.25)]"
+  className="h-8 w-full px-3 rounded-[2px] bg-[#060608] border border-white/[0.08] text-zinc-200 placeholder-zinc-600 font-mono text-xs transition-all duration-150 focus:outline-none focus:border-[#2dd4bf] focus:shadow-[0_0_0_3px_rgba(45,212,191,0.14)]"
 />
 ```
 
@@ -201,12 +201,12 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
 <div className="bg-[#0a0a0e] border border-white/[0.08] p-3 rounded-[3px]">
   <div className="flex items-center justify-between mb-1">
     <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">02 运行中任务</span>
-    <span className="font-mono text-[11px] text-[#00e5ff]">RUNNING</span>
+    <span className="font-mono text-[11px] text-[#60a5fa]">RUNNING</span>
   </div>
   <div className="font-mono text-2xl font-bold text-white mb-2">03</div>
   {/* 极细指标进度槽 */}
   <div className="w-full h-1 bg-[#060608] rounded-[1px] overflow-hidden">
-    <div className="h-full bg-[#00e5ff] rounded-[1px]" style={{ width: '45%' }} />
+    <div className="h-full bg-[#60a5fa] rounded-[1px]" style={{ width: '45%' }} />
   </div>
 </div>
 ```
@@ -219,18 +219,18 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
 {/* 底部控制区：第 1 行全宽统计分析，第 2 行设置 + 主题 */}
 <div className="p-2 border-t border-white/[0.08] flex flex-col gap-1">
   {/* 第 1 行：统计分析独占全宽 */}
-  <a href="/analytics" className="h-8 flex items-center gap-2 px-2.5 rounded-[2px] text-zinc-300 hover:bg-white/[0.05] hover:text-[#ff5722] font-mono text-xs">
+  <a href="/analytics" className="h-8 flex items-center gap-2 px-2.5 rounded-[2px] text-zinc-300 hover:bg-white/[0.05] hover:text-white font-mono text-xs">
     <BarChart3 className="w-3.5 h-3.5 shrink-0" />
     <span className="truncate">06 分析</span>
   </a>
 
   {/* 第 2 行：设置（flex-1 伸缩）+ 主题切换按钮（紧凑方块 32x32） */}
   <div className="flex items-center gap-1">
-    <a href="/settings" className="flex-1 min-w-0 h-8 flex items-center gap-2 px-2.5 rounded-[2px] text-zinc-300 hover:bg-white/[0.05] hover:text-[#ff5722] font-mono text-xs overflow-hidden">
+    <a href="/settings" className="flex-1 min-w-0 h-8 flex items-center gap-2 px-2.5 rounded-[2px] text-zinc-300 hover:bg-white/[0.05] hover:text-white font-mono text-xs overflow-hidden">
       <Settings className="w-3.5 h-3.5 shrink-0" />
       <span className="truncate">设置</span>
     </a>
-    <button className="w-8 h-8 shrink-0 flex items-center justify-center rounded-[2px] border border-white/[0.08] bg-[#060608] text-zinc-400 hover:text-[#ff5722] hover:border-white/[0.2]">
+    <button className="w-8 h-8 shrink-0 flex items-center justify-center rounded-[2px] border border-white/[0.08] bg-[#060608] text-zinc-400 hover:text-white hover:border-white/[0.2]">
       <Sun className="w-3.5 h-3.5" />
     </button>
   </div>
@@ -246,7 +246,7 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
 1. ❌ **严禁在标题或导航编号中使用 `//` 双斜杠**（必须是纯净等宽 `01 看板`、`01 COMMAND_CENTER`）。
 2. ❌ **严禁使用 `rounded-xl` / `rounded-2xl` 或大胶囊按钮**（圆角上限 4px，气泡上限 10px）。
 3. ❌ **严禁使用厚重渐变大色块或白底弹窗**（弹窗与卡片必须是 `#0a0a0e` 搭配单像素线）。
-4. ❌ **严禁自行发明新主题色**（全局主强调色严格收敛为活力亮橙/赛博熔岩橙 `#ff5722`）。
+4. ❌ **严禁自行发明新主题色**（全局主强调色严格收敛为玄武墨青：深色 `#2dd4bf` / 浅色 `#0f766e`）。
 5. ❌ **严禁粗实线边框**（边框必须为 `1px` 微透明 `border-white/[0.08]`）。
 6. ❌ **严禁 Emoji 作为业务图标**（强制使用 Lucide 线性图标，stroke-width 2）。
 7. ❌ **严禁侧边栏底部多按钮单行强行并排导致溢出**。
@@ -258,13 +258,13 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
 当需要让其他 Agent（Codex / Claude Code / Cursor）协助改造新功能或新项目时，可直接发送以下 Prompt：
 
 ```markdown
-请帮我把当前页面/组件重构为《玄武极客设计系统规范（E2B 风格与活力亮橙）》：
+请帮我把当前页面/组件重构为《玄武极客设计系统规范（E2B 风格与玄武墨青）》：
 
 1. 色彩与材质：
    - 画布底层背景：黑曜石深黑 `#070709`（添加 32px 网格类 `.bg-grid-tech`）；
    - 二级卡片与面板：`#0a0a0e`，卡片顶栏：`#0d0e12`，输入区深坑：`#060608`；
-   - 唯一品牌强调色：活力亮橙/赛博熔岩橙 `#ff5722`，微光投影 `0 0 15px rgba(255, 87, 34, 0.35)`；
-   - 运行中状态色：冰青色 `#00e5ff`（Teal & Orange 冷暖撞色美学）；
+   - 唯一品牌强调色：电光墨青 `#2dd4bf`（浅色 `#0f766e`），只用于主按钮实底与激活指示线，不加外发光；
+   - 运行中状态色：冷蓝 `#60a5fa`（浅色 `#2563eb`），与主色区分；
    - 边框与线条：极细单像素线 `border-white/[0.08]`，悬浮 `border-white/[0.16]`。
 
 2. 几何与排版：
@@ -274,7 +274,7 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
 
 3. 组件特征：
    - 卡片采用沙盒控制台视窗结构，顶部包含 Header Bar 与指示点；
-   - 输入框底色为 `#060608`，聚焦时亮橙 1px 细线边框与微光；
+   - 输入框底色为 `#060608`，聚焦时墨青 1px 细线边框与 3px 浅环；
    - 指标卡采用 HUD 大数字 + 细进度槽。
 
 4. 约束：

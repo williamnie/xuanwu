@@ -133,10 +133,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .nav-item:hover, [data-theme="dark"] .nav-item:hover { background: var(--nav-hover); color: var(--text-primary); }
 .nav-item.active, [data-theme="dark"] .nav-item.active {
   background: var(--nav-active);
-  border-color: color-mix(in srgb, var(--primary) 20%, transparent);
+  border-color: transparent;
   box-shadow: none;
-  color: var(--primary);
+  color: var(--text-primary);
 }
+.nav-item.active svg { color: var(--primary); }
 .nav-item.active::before { background: var(--primary); border-radius: var(--radius-xs); content: ''; height: 22px; left: -12px; position: absolute; top: 9px; width: 3px; }
 .nav-label { font-size: 0.84rem; font-weight: 600; }
 .nav-badge { background: color-mix(in srgb, var(--text-muted) 13%, transparent); border-radius: var(--radius-xs); font-family: var(--font-mono); }
@@ -275,14 +276,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-}
-
-[data-theme="dark"] .btn-primary {
-  box-shadow: 0 0 15px var(--primary-glow);
-}
-
-[data-theme="dark"] .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 0 20px color-mix(in srgb, var(--primary) 45%, transparent);
 }
 
 .guardian-alert-banner { border-radius: var(--radius-md); }

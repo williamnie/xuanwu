@@ -509,7 +509,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 }
 [data-theme="dark"] .work-card:hover {
   border-color: var(--border-crisp-hover);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--primary) 8%, transparent);
+  box-shadow: none;
 }
 [data-theme="dark"] .work-header-search {
   background: var(--bg-inset);
@@ -535,7 +535,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 }
 [data-theme="dark"] .pi-chat-starters button:hover {
   border-color: var(--primary);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--primary) 15%, transparent);
+  box-shadow: none;
 }
 [data-theme="dark"] .pi-chat-bubble.user {
   background: var(--bg-surface);

@@ -58,15 +58,14 @@
 
 [data-theme='dark'] .sidebar .nav-item.active {
   background: var(--nav-active);
-  border-color: color-mix(in srgb, var(--primary) 28%, transparent);
-  box-shadow: 0 0 15px color-mix(in srgb, var(--primary) 12%, transparent);
-  color: var(--primary);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-primary);
 }
 
 [data-theme='dark'] .sidebar .nav-item.active::before {
   background: var(--primary);
   border-radius: 1px;
-  box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 50%, transparent);
   content: '';
   height: 20px;
   left: -8px;

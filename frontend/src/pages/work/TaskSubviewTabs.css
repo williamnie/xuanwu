@@ -26,6 +26,7 @@
   transition: background-color 140ms ease, color 140ms ease;
 }
 .task-subview-tabs button:hover { background: var(--nav-hover); color: var(--text-primary); }
-.task-subview-tabs button[aria-current='page'] { background: var(--button-primary-bg); color: var(--button-primary-fg); }
+.task-subview-tabs button[aria-current='page'] { background: var(--bg-card); color: var(--text-primary); position: relative; }
+.task-subview-tabs button[aria-current='page']::after { background: var(--primary); bottom: 0; content: ''; height: 2px; left: 0; position: absolute; right: 0; }
 .task-subview-tabs button span { font-family: var(--font-mono); font-size: 0.6rem; opacity: 0.8; }
 .automations-subview-shell { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding-top: 16px; }

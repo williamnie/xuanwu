@@ -103,8 +103,8 @@
 
 .global-ask-composer-launcher {
   align-items: center;
-  background: color-mix(in srgb, var(--bg-card) 96%, var(--brand-mint));
-  border: 1px solid color-mix(in srgb, var(--border-color) 78%, var(--primary));
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: 0 10px 30px rgba(8, 45, 40, 0.14), 0 2px 8px rgba(8, 45, 40, 0.06);
   color: var(--text-primary);

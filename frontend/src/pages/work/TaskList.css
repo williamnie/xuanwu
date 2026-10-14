@@ -21,7 +21,8 @@
   transition: background-color 140ms ease, color 140ms ease;
 }
 .task-list-scopes button:hover { background: var(--nav-hover); color: var(--text-primary); }
-.task-list-scopes button[aria-pressed='true'] { background: var(--button-primary-bg); color: var(--button-primary-fg); }
+.task-list-scopes button[aria-pressed='true'] { background: var(--bg-card); color: var(--text-primary); position: relative; }
+.task-list-scopes button[aria-pressed='true']::after { background: var(--primary); bottom: 0; content: ''; height: 2px; left: 0; position: absolute; right: 0; }
 .task-list-scopes button span { font-family: var(--font-mono); font-size: 0.6rem; opacity: 0.8; }
 
 .task-list-rows {
