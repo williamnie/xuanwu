@@ -51,9 +51,9 @@ const NAV_TRANSLATION_KEYS = {
 
 const NAV_CODE_PREFIX = {
   'command-center': '01',
-  'ask-xuanwu': '02',
-  work: '03',
-  runs: '04',
+  work: '02',
+  runs: '03',
+  'ask-xuanwu': '04',
   automations: '05',
   analytics: '06',
 };

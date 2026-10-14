@@ -176,7 +176,7 @@ function ChatHeader({ state }) {
       title={t('chat.copyConversationDebugHint')}
     >
       <div className="pi-chat-title-group">
-        <span className="font-mono">02 ASK_XUANWU · {PRODUCT_TERMS.productLatin} · Xuanwu assistant</span>
+        <span className="font-mono">04 ASK_XUANWU · {PRODUCT_TERMS.productLatin} · Xuanwu assistant</span>
         <strong>{title}</strong>
       </div>
       <div className="pi-chat-header-actions">

@@ -39,6 +39,35 @@ test('product navigation has one ordered Xuanwu identity and centralized labels'
   assert.equal(productNavPageForRoute('automations'), 'work');
   assert.equal(productNavPageForRoute('cron'), 'work');
   assert.doesNotMatch(sidebarSource, /PI_ASSISTANT_NAV_ITEMS|PRODUCT_TERMS\.supervisor|pi-assistant-nav/);
+
+  const primaryPages = PRODUCT_NAV_ITEMS.filter(item => item.placement === 'primary').map(item => item.page);
+  const codePrefixMatch = sidebarSource.match(/const NAV_CODE_PREFIX = \{([\s\S]*?)\};/);
+  assert.ok(codePrefixMatch, 'NAV_CODE_PREFIX must exist in AppSidebar.jsx');
+  const codePrefixMap = Object.fromEntries(
+    Array.from(codePrefixMatch[1].matchAll(/['"]?([a-zA-Z0-9-]+)['"]?:\s*['"](\d+)['"]/g), ([, page, code]) => [page, code])
+  );
+  primaryPages.forEach((page, index) => {
+    const expectedCode = String(index + 1).padStart(2, '0');
+    assert.equal(
+      codePrefixMap[page],
+      expectedCode,
+      `Primary nav item "${page}" at index ${index} should have code prefix "${expectedCode}", but got "${codePrefixMap[page]}"`
+    );
+  });
+
+  const dashboardSource = readFileSync(new URL('./Dashboard.jsx', import.meta.url), 'utf8');
+  const workBoardSource = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
+  const runSidebarSource = readFileSync(new URL('./runs/RunSidebar.jsx', import.meta.url), 'utf8');
+  const piChatSource = readFileSync(new URL('./PiChat.jsx', import.meta.url), 'utf8');
+  const automationsSource = readFileSync(new URL('./Automations.jsx', import.meta.url), 'utf8');
+  const analyticsSource = readFileSync(new URL('./Analytics.jsx', import.meta.url), 'utf8');
+
+  assert.match(dashboardSource, /01 COMMAND_CENTER/);
+  assert.match(workBoardSource, /02 WORK_LEDGER/);
+  assert.match(runSidebarSource, /03 RUN_INSPECTOR/);
+  assert.match(piChatSource, /04 ASK_XUANWU/);
+  assert.match(automationsSource, /05 AUTOMATION_LOOPS/);
+  assert.match(analyticsSource, /06 TELEMETRY_ANALYTICS/);
 });
 
 test('feature availability hides Work when its existing compatibility flag is disabled', () => {

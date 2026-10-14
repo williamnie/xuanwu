@@ -44,7 +44,7 @@ export default function RunSidebar({
 
       <div className="runs-sidebar-heading">
         <div>
-          <span className="sidebar-section-title font-mono">04 RUN_INSPECTOR</span>
+          <span className="sidebar-section-title font-mono">03 RUN_INSPECTOR</span>
           <small className="font-mono text-zinc-500">[TELEMETRY: RUNTIME]</small>
         </div>
         <button aria-busy={refreshing} aria-label="刷新 Runs" className="runs-sidebar-refresh" disabled={refreshing} onClick={onRefresh} type="button">

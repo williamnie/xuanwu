@@ -29,7 +29,7 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
 3. **单像素微透明线 (1px Crisp Border)**：所有视窗容器、卡片、输入框、分割线均使用单像素微透明线（普通 `rgba(255, 255, 255, 0.08)` / 悬浮 `rgba(255, 255, 255, 0.16)`），杜绝任何粗实线或彩色厚边框。
 4. **纯净等宽控制台编号 (Pure Monospace Naming)**：
    - 字体强制使用 JetBrains Mono 等宽字体。
-   - 编号前缀采用**纯净无斜杠**排版规范：使用 `01 COMMAND_CENTER`、`02 ASK_XUANWU`、`01 看板`、`02 提问`。
+   - 编号前缀采用**纯净无斜杠**排版规范：使用 `01 COMMAND_CENTER`、`02 WORK_LEDGER`、`03 RUN_INSPECTOR`、`04 ASK_XUANWU`。
    - **严格禁止出现 `//` 双斜杠**（例如严禁 `01 // 看板` 或 `02 // 提问`）。
 5. **利落微圆角几何 (Sharp & Micro-Radius)**：
    - 按钮一律直角（`0px`）或 2px 微圆角；
@@ -126,12 +126,12 @@ $xuanwu-ui 请遵循玄武极客设计系统规范，改造当前页面/组件�
 ```text
 规范命名示范：
 ✅ 01 看板
-✅ 02 提问
-✅ 03 任务
+✅ 02 任务
+✅ 03 记录
 ✅ 01 COMMAND_CENTER
-✅ 02 ASK_XUANWU · Xuanwu assistant
-✅ 03 WORK_LEDGER [BOARD: ACTIVE_TASKS]
-✅ 04 RUN_INSPECTOR [TELEMETRY: RUNTIME]
+✅ 02 WORK_LEDGER [BOARD: ACTIVE_TASKS]
+✅ 03 RUN_INSPECTOR [TELEMETRY: RUNTIME]
+✅ 04 ASK_XUANWU · Xuanwu assistant
 ✅ 05 AUTOMATION_LOOPS [DISPATCH: CRON_EVENTS]
 ✅ 06 TELEMETRY_ANALYTICS [METRICS: EVALUATION]
 ✅ SETTINGS · [SYS: PREFERENCES]
