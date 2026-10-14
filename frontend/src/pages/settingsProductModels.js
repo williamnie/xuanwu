@@ -35,10 +35,18 @@ export function connectorPermissionRows(connectors) {
   ));
 }
 
-export function configureGuide(connector) {
+export function configureGuide(connector, language = 'zh-CN') {
   const id = String(connector?.id || '');
   const refs = (connector?.secret_refs || []).map(item => item.ref).filter(Boolean).join(' · ');
-  if (id === 'feishu') return { title: '飞书连接配置', body: '使用本页下方现有飞书表单保存 App、接收模式与 allowlist；secret 明文不会从 API 读回。', refs };
+  const english = language === 'en-US';
+  if (id === 'feishu') return {
+    title: english ? 'Feishu connection settings' : '飞书连接配置',
+    body: english ? 'Open the Feishu settings drawer under External connections to configure credentials, event subscriptions and notification targets. Saved secrets are never read back.' : '在外部连接中打开飞书设置抽屉，配置应用凭据、事件订阅与通知目标；已保存的密钥不会从 API 读回。', refs,
+  };
+  if (id === 'telegram') return {
+    title: english ? 'Telegram connection settings' : 'Telegram 连接配置',
+    body: english ? 'Open the Telegram settings drawer under External connections to configure the bot, allowed sources and project mappings. Saved secrets are never read back.' : '在外部连接中打开 Telegram 设置抽屉，配置 Bot、安全来源与项目映射；已保存的密钥不会从 API 读回。', refs,
+  };
   if (id === 'webhook') return { title: 'Webhook 签名配置', body: '通过当前 runtime 声明的 signing secret ref 配置；重载服务后再运行只读测试。', refs };
   if (id.endsWith('-events')) return { title: 'Git provider 配置', body: 'Git 事件连接复用现有 GitHub/GitLab provider credential 与 repository mapping，不在 Integrations 创建第二份 token。', refs };
   if (id.endsWith('-issues')) return { title: 'Tracker provider 配置', body: 'Tracker 复用对应 provider credential、mapping 与 Issue authority；Linear 未配置时保持 disabled。', refs };

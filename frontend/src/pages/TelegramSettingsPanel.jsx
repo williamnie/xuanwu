@@ -3,6 +3,7 @@ import { Bot, CheckCircle2, KeyRound, MessageCircle, ScanSearch, TestTube2 } fro
 import { connectorsApi } from '../api/connectors.js';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
+import TelegramProjectMappings from './TelegramProjectMappings';
 import './FeishuSettingsPanel.css';
 import './TelegramSettingsPanel.css';
 
@@ -114,10 +115,7 @@ function TelegramForm({ state }) {
             <NumberField label="Poll Timeout (1–50s)" max={50} min={1} value={state.form.poll_timeout_seconds} onChange={value => state.update('poll_timeout_seconds', value)} />
             <NumberField label="getMe Cache TTL (30–3600s)" max={3600} min={30} value={state.form.get_me_cache_ttl_seconds} onChange={value => state.update('get_me_cache_ttl_seconds', value)} />
           </div>
-          <label className="form-group feishu-settings__field">
-            <span>Project Mappings</span>
-            <textarea className="form-control" rows={2} value={state.form.project_mappings} onChange={event => state.update('project_mappings', event.target.value)} placeholder="chat:-100123=xuanwu,user:123456=xuanwu" />
-          </label>
+          <TelegramProjectMappings value={state.form.project_mappings} onChange={value => state.update('project_mappings', value)} />
           <div className="feishu-settings__hint-copy">Bot API 使用 long polling，无需公网回调地址。群内首次识别请发送 mention、command 或回复 Bot；BotFather privacy mode 仍决定 Telegram 是否投递普通群消息。配置文件：<code>{state.remote?.settings_file || 'runner-settings.local.json'}</code></div>
         </div>
       </details>

@@ -7,7 +7,7 @@ const tokens = readFileSync(new URL('../../../docs/design-system/tokens.css', im
 const aliases = readFileSync(new URL('../GeekWorkbench.css', import.meta.url), 'utf8');
 
 test('Settings shares theme tokens and keeps square controls without page-entry motion', () => {
-  assert.doesNotMatch(styles, /#[a-f0-9]{3,8}\b|rgba?\(|backdrop-filter|linear-gradient|var\(--radius-(?:lg|xl)\)/i);
+  assert.doesNotMatch(styles, /#[a-f0-9]{3,8}\b|rgba?\(|backdrop-filter:\s*(?!\s*none\b)\S|linear-gradient|var\(--radius-(?:lg|xl)\)/i);
   assert.doesNotMatch(styles, /(?:^|[;\n])\s*transform:/i);
   for (const [, token] of styles.matchAll(/var\((--[\w-]+)\)/g)) {
     assert.ok(`${tokens}\n${aliases}`.includes(`${token}:`), `Undefined settings token ${token}`);

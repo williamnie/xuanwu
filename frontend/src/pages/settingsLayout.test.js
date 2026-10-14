@@ -99,17 +99,16 @@ test('Settings content stays anchored and maintenance is outside everyday projec
   assert.doesNotMatch(diagnostics, /ReleaseUpdatePanel/);
 });
 
-test('Connection setup loads only visited platforms and keeps their drafts mounted between switches', () => {
-  assert.match(sectionsSource, /const \[visitedChannels, setVisitedChannels\] = useState\(\['github'\]\)/);
-  assert.match(sectionsSource, /visited\.includes\(nextChannel\) \? visited : \[\.\.\.visited, nextChannel\]/);
-  for (const channel of ['github', 'feishu', 'telegram', 'health']) {
-    assert.match(sectionsSource, new RegExp(`visitedChannels\\.includes\\('${channel}'\\) && <div`));
+test('Connection setup mounts only visited drawers and keeps drafts when closed', () => {
+  assert.match(sectionsSource, /useState\(\(\) => channel \? \[channel\] : \[\]\)/);
+  assert.match(sectionsSource, /visited\.includes\(channel\) \? visited : \[\.\.\.visited, channel\]/);
+  assert.match(sectionsSource, /<IntegrationSettingsDrawer onClose=\{closeDrawer\} open=\{Boolean\(channel\)\}/);
+  for (const channel of ['github', 'feishu', 'telegram']) {
+    assert.ok(sectionsSource.includes(`visitedChannels.includes('${channel}') && <div hidden={channel !== '${channel}'}`));
   }
-  assert.match(sectionsSource, /hidden=\{channel !== 'github'\}><GitHubSettingsPanel/);
-  assert.match(sectionsSource, /hidden=\{channel !== 'feishu'\}><FeishuSettingsPanel/);
-  assert.match(sectionsSource, /hidden=\{channel !== 'telegram'\}><TelegramSettingsPanel/);
-  assert.match(sectionsSource, /hidden=\{channel !== 'health'\}><ConnectorDiagnosticsPanel/);
-  assert.match(sectionsSource, /aria-pressed=\{channel === id\}/);
+  assert.doesNotMatch(sectionsSource, /visitedChannels\.includes\('health'\)|settings-channel-navigation|ImChannelRegistryPanel/);
+  const diagnostics = sectionsSource.slice(sectionsSource.indexOf('function AdvancedDiagnostics('));
+  assert.match(diagnostics, /<ConnectorDiagnosticsPanel \/>/);
 });
 
 test('Advanced sections mount on first open, stay mounted when collapsed, and deep links open the target only', () => {

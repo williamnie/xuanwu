@@ -113,7 +113,7 @@
 
 .settings-directory-link:focus-visible,
 .settings-mobile-directory select:focus-visible,
-.settings-channel-navigation button:focus-visible,
+.settings-connection-row button:focus-visible,
 .settings-language-options button:focus-visible,
 .settings-disclosure summary:focus-visible {
   outline: 2px solid var(--primary);
@@ -168,6 +168,34 @@
   display: grid;
   gap: 20px;
   min-width: 0;
+}
+
+.settings-connection-list { list-style: none; margin: 0; padding: 0; }
+.settings-connection-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--border-color); }
+.settings-connection-row > div { min-width: 0; }
+.settings-connection-row strong { font-size: 0.78rem; }
+.settings-connection-row p { color: var(--text-secondary); font-size: 0.72rem; margin: 4px 0 0; }
+.settings-connection-states { display: grid; gap: 6px; color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; overflow-wrap: anywhere; }
+.settings-connection-states strong { font-size: inherit; }
+.settings-connection-states .is-unknown { color: var(--text-muted); }
+.settings-integrations-page > a { color: var(--text-secondary); font-size: 0.72rem; }
+.modal-overlay.settings-connection-overlay { justify-content: flex-end; padding: 0; backdrop-filter: none; }
+.settings-connection-overlay.is-closed { display: none; }
+.modal-content.settings-connection-drawer { display: flex; flex-direction: column; width: min(780px, 100%); max-width: none; height: 100%; height: 100dvh; min-height: 0; margin: 0; padding: 0; background: var(--surface-overlay); border-radius: var(--button-radius); box-shadow: none; }
+.settings-connection-drawer-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 12px; padding: 16px; border-bottom: 1px solid var(--border-color); }
+.settings-connection-drawer-header h2 { margin: 0; font-size: 1rem; }
+.settings-connection-drawer-body { min-height: 0; overflow-y: auto; padding: 16px; }
+.settings-connection-drawer-body > [hidden] { display: none; }
+.settings-connection-drawer-body .glass-card,
+.settings-connection-drawer-body .github-settings { border: 0; border-radius: var(--radius-xs); box-shadow: none; background: transparent; padding: 0; }
+
+@media (max-width: 760px) {
+  .settings-connection-row { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
+  .settings-connection-states { grid-column: 1 / -1; grid-row: 2; }
+  .settings-connection-row > button { grid-column: 2; grid-row: 1; }
+  .modal-content.settings-connection-drawer { width: 100%; border: 0; }
+  .settings-connection-drawer-header,
+  .settings-connection-drawer-body { padding: 12px; }
 }
 
 .settings-section-intro {
@@ -266,42 +294,6 @@
   padding: 16px 0;
 }
 
-.settings-channel-navigation {
-  border-bottom: 1px solid var(--border-color);
-  display: grid;
-  gap: 4px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding-bottom: 12px;
-}
-
-.settings-channel-navigation button {
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--button-radius);
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: grid;
-  gap: 6px;
-  padding: 12px;
-  text-align: left;
-  transition: background-color 140ms ease, border-color 140ms ease;
-}
-
-.settings-channel-navigation button:hover {
-  background: var(--nav-hover);
-}
-
-.settings-channel-navigation button.active {
-  background: var(--bg-secondary);
-  border-color: var(--border-color);
-  color: var(--text-primary);
-}
-
-.settings-channel-navigation strong { font-size: 0.78rem; }
-.settings-channel-navigation span { color: var(--text-secondary); font-size: 0.66rem; line-height: 1.5; }
-
-.settings-integrations-page > [hidden] { display: none; }
-.settings-connection-health:not([hidden]) { display: grid; gap: 20px; }
 .settings-page .settings-project-panel-header { flex-wrap: wrap; }
 .settings-page .settings-project-panel-actions { justify-content: flex-start; }
 .settings-page .projects-grid { grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
@@ -309,7 +301,6 @@
 @media (max-width: 980px) {
   .settings-workspace { gap: 16px; grid-template-columns: 184px minmax(0, 1fr); }
   .settings-directory { padding-right: 12px; }
-  .settings-channel-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {

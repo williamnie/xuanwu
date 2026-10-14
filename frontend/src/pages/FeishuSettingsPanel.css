@@ -59,16 +59,32 @@
   gap: 14px;
 }
 
+.feishu-settings__group {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.feishu-settings__group > legend {
+  border: 0;
+  margin: 0;
+  padding: 0 8px 0 0;
+}
+
 .feishu-settings__field-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
 }
 
 .feishu-settings__hint {
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xs);
   padding: 12px;
 }
 

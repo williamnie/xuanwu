@@ -4,6 +4,7 @@ import { Cable, RefreshCw, Settings2, ShieldX, TestTube2 } from 'lucide-react';
 import { message } from '../store/toastStore';
 import { PanelLoader } from '../components/TurtleLoader';
 import { configureGuide } from './settingsProductModels.js';
+import { useI18n } from '../i18n/context.js';
 import './ConnectorDiagnosticsPanel.css';
 
 const CONNECTOR_STATUSES = ['configured', 'disabled', 'misconfigured', 'error'];
@@ -135,14 +136,16 @@ function ConnectorCard({ connector, onConfigure, onRevoke, onTest, state }) {
 }
 
 function ConnectorConfigureGuide({ connector }) {
-  const guide = configureGuide(connector);
+  const { language } = useI18n();
+  const english = language === 'en-US';
+  const guide = configureGuide(connector, language);
   return (
     <div className="connector-diagnostics__guide">
       <strong>{guide.title}</strong>
       <span className="connector-diagnostics__muted">{guide.body}</span>
       {guide.refs && <code className="connector-diagnostics__refs">{guide.refs}</code>}
-      {connector.id === 'feishu' && <button className="btn btn-secondary" onClick={() => document.getElementById('feishu-connection-settings')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} type="button">前往飞书配置</button>}
-      {connector.id === 'telegram' && <button className="btn btn-secondary" onClick={() => document.getElementById('telegram-connection-settings')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} type="button">前往 Telegram 配置</button>}
+      {connector.id === 'feishu' && <a className="btn btn-secondary" href="#/settings?section=integrations&channel=feishu">{english ? 'Open Feishu settings' : '前往飞书配置'}</a>}
+      {connector.id === 'telegram' && <a className="btn btn-secondary" href="#/settings?section=integrations&channel=telegram">{english ? 'Open Telegram settings' : '前往 Telegram 配置'}</a>}
     </div>
   );
 }

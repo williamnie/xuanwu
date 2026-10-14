@@ -28,3 +28,17 @@ test('Settings Integrations exposes a Feishu bot configuration panel backed by i
   assert.match(connectorsSource, /\/api\/integrations\/feishu\/settings/);
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
 });
+
+test('Feishu keeps every field within the three explained groups in both languages', () => {
+  for (const label of ['应用凭据', 'App credentials', '事件订阅', 'Event subscription', '通知目标', 'Notification targets']) assert.ok(panelSource.includes(label), label);
+  assert.equal((panelSource.match(/<FieldGroup title=/g) || []).length, 3);
+  assert.equal((panelSource.match(/description=\{english \?/g) || []).length, 3);
+  const credentials = panelSource.slice(panelSource.indexOf('<FieldGroup title='), panelSource.indexOf('</FieldGroup>'));
+  assert.match(credentials, /App ID/);
+  assert.match(credentials, /App Secret/);
+  const events = panelSource.slice(panelSource.indexOf("'Event subscription'"), panelSource.indexOf("'Notification targets'"));
+  for (const field of ['receive_mode', 'verification_token', 'encrypt_key', 'allowed_chat_ids', 'allowed_user_ids', 'project_mappings']) assert.ok(events.includes(field), field);
+  const targets = panelSource.slice(panelSource.indexOf("'Notification targets'"), panelSource.indexOf('<Footer remote='));
+  assert.match(targets, /default_chat_id/);
+  assert.match(targets, /default_user_id/);
+});

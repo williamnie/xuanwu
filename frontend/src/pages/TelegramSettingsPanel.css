@@ -230,7 +230,14 @@
   line-height: 1.5;
 }
 
+.telegram-project-mappings { display: grid; gap: 12px; min-width: 0; }
+.telegram-project-mapping { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; }
+.telegram-project-mapping label { display: grid; gap: 6px; min-width: 0; }
+.telegram-project-mapping input,
+.telegram-project-mapping select { min-width: 0; }
+
 @media (max-width: 760px) {
+  .telegram-project-mapping { grid-template-columns: minmax(0, 1fr); }
   .telegram-onboarding__steps,
   .telegram-onboarding__primary-fields {
     grid-template-columns: 1fr;

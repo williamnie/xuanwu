@@ -17,11 +17,14 @@ import ConnectorDiagnosticsPanel from './ConnectorDiagnosticsPanel';
 import FeishuSettingsPanel from './FeishuSettingsPanel';
 import TelegramSettingsPanel from './TelegramSettingsPanel';
 import GitHubSettingsPanel from './GitHubSettingsPanel';
-import ImChannelRegistryPanel from './ImChannelRegistryPanel';
+import IntegrationConnectionList from './IntegrationConnectionList';
+import IntegrationSettingsDrawer from './IntegrationSettingsDrawer';
+import { integrationChannelFromHash, loadConnectionStatus } from './integrationConnections.js';
+import { connectorsApi } from '../api/connectors.js';
 import { RestartAction } from './SettingsChrome';
 import { SETTINGS_ADVANCED_SECTIONS, advancedSectionCopy } from './settingsNavigation';
 import { Languages, Moon, Sun } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n/context.js';
 import { translate } from '../i18n/translations.js';
 import { message } from '../store/toastStore.js';
@@ -69,32 +72,47 @@ function NotificationsTab() {
 
 function IntegrationsSettingsTab() {
   const { language } = useI18n();
-  const [channel, setChannel] = useState('github');
-  const [visitedChannels, setVisitedChannels] = useState(['github']);
+  const [channel, setChannel] = useState(() => integrationChannelFromHash(globalThis.location?.hash));
+  const [visitedChannels, setVisitedChannels] = useState(() => channel ? [channel] : []);
+  const [connectors, setConnectors] = useState([]);
+  const [channels, setChannels] = useState([]);
   const english = language === 'en-US';
-  const selectChannel = (nextChannel) => {
+  useEffect(() => {
+    const syncChannel = () => setChannel(integrationChannelFromHash(globalThis.location?.hash));
+    window.addEventListener('hashchange', syncChannel);
+    window.addEventListener('popstate', syncChannel);
+    return () => {
+      window.removeEventListener('hashchange', syncChannel);
+      window.removeEventListener('popstate', syncChannel);
+    };
+  }, []);
+  useEffect(() => {
+    if (channel) setVisitedChannels(visited => visited.includes(channel) ? visited : [...visited, channel]);
+    let active = true;
+    loadConnectionStatus(connectorsApi, data => active && setConnectors(data), data => active && setChannels(data));
+    return () => { active = false; };
+  }, [channel]);
+  const selectChannel = useCallback(nextChannel => {
     setChannel(nextChannel);
-    setVisitedChannels((visited) => visited.includes(nextChannel) ? visited : [...visited, nextChannel]);
-  };
-  const channels = [
-    ['github', 'GitHub', english ? 'Repositories and issues' : '代码仓库与议题'],
-    ['feishu', english ? 'Feishu' : '飞书', english ? 'Messages and notifications' : '消息与通知'],
-    ['telegram', 'Telegram', english ? 'Messages and notifications' : '消息与通知'],
-    ['health', english ? 'Connection health' : '连接检查', english ? 'Status and troubleshooting' : '查看状态与排查问题'],
-  ];
+    const url = new URL(window.location.href);
+    const [path, query] = url.hash.split('?');
+    const params = new URLSearchParams(query);
+    if (nextChannel) params.set('channel', nextChannel);
+    else params.delete('channel');
+    url.hash = `${path}?${params}`;
+    window.history.replaceState(null, '', url);
+  }, []);
+  const closeDrawer = useCallback(() => selectChannel(''), [selectChannel]);
+  const title = channel === 'feishu' ? (english ? 'Feishu' : '飞书') : channel === 'telegram' ? 'Telegram' : 'GitHub';
   return (
     <div className="settings-integrations-page">
-      <div className="settings-channel-navigation" aria-label={english ? 'Choose a platform' : '选择连接平台'} role="group">
-        {channels.map(([id, title, description]) => (
-          <button aria-pressed={channel === id} className={channel === id ? 'active' : ''} key={id} onClick={() => selectChannel(id)} type="button">
-            <strong>{title}</strong><span>{description}</span>
-          </button>
-        ))}
-      </div>
-      {visitedChannels.includes('github') && <div hidden={channel !== 'github'}><GitHubSettingsPanel /></div>}
-      {visitedChannels.includes('feishu') && <div hidden={channel !== 'feishu'}><FeishuSettingsPanel /></div>}
-      {visitedChannels.includes('telegram') && <div hidden={channel !== 'telegram'}><TelegramSettingsPanel /></div>}
-      {visitedChannels.includes('health') && <div className="settings-connection-health" hidden={channel !== 'health'}><ConnectorDiagnosticsPanel /><ImChannelRegistryPanel /></div>}
+      <IntegrationConnectionList channels={channels} connectors={connectors} onConfigure={selectChannel} />
+      <a href="#/settings?section=advanced:diagnostics">{english ? 'Full diagnostics in Advanced → Maintenance' : '完整诊断：高级 → 运行维护'}</a>
+      <IntegrationSettingsDrawer onClose={closeDrawer} open={Boolean(channel)} title={title}>
+        {visitedChannels.includes('github') && <div hidden={channel !== 'github'}><GitHubSettingsPanel /></div>}
+        {visitedChannels.includes('feishu') && <div hidden={channel !== 'feishu'}><FeishuSettingsPanel /></div>}
+        {visitedChannels.includes('telegram') && <div hidden={channel !== 'telegram'}><TelegramSettingsPanel /></div>}
+      </IntegrationSettingsDrawer>
     </div>
   );
 }
@@ -233,6 +251,7 @@ function AdvancedDiagnostics({ RuntimeStatusPanel }) {
   return (
     <>
       <RuntimeStatusPanel />
+      <ConnectorDiagnosticsPanel />
       <RunnerSettingsPanel />
       <RemoteAccessTokenPanel />
       <section className="glass-card settings-advanced-danger-zone">
