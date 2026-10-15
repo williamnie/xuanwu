@@ -128,9 +128,8 @@
 }
 
 .feishu-discovery__source {
-  align-items: start;
   border-bottom: 1px solid var(--border-light);
-  display: flex;
+  display: grid;
   gap: var(--space-2);
   padding: var(--space-3) 0;
 }
@@ -141,4 +140,20 @@
   gap: var(--space-1);
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.feishu-discovery__choices {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.feishu-discovery__choice {
+  align-items: start;
+  display: flex;
+  font-size: var(--text-2xs);
+  gap: var(--space-2);
+}
+
+.feishu-discovery__scope {
+  display: block;
 }

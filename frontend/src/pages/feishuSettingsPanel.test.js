@@ -61,7 +61,7 @@ test('Feishu discovery sends no draft settings and leaves saving as a separate a
   const discovery = panelSource.slice(panelSource.indexOf('const discover = async'), panelSource.indexOf('const chooseSource ='));
   assert.match(discovery, /connectorsApi\.discoverFeishuSource\(\)/);
   assert.doesNotMatch(discovery, /setForm|updateFeishuSettings/);
-  assert.match(panelSource, /const chooseSource = source => setForm\(current => appendFeishuSource\(current, source\)\)/);
+  assert.match(panelSource, /const chooseSource = \(source, choice\) => setForm\(current => appendFeishuSource\(current, source, choice\)\)/);
   assert.match(panelSource, /type="checkbox"/);
   assert.match(panelSource, /className="btn btn-secondary"[^>]*onClick=\{discover\} type="button"/);
   for (const key of ['sourceHistory', 'sourceSaveHint', 'noSources', 'private', 'group', 'userId', 'chatId']) {
@@ -69,4 +69,20 @@ test('Feishu discovery sends no draft settings and leaves saving as a separate a
     assert.notEqual(translate('zh-CN', id), id);
     assert.notEqual(translate('en-US', id), id);
   }
+});
+
+test('Feishu renders independent grant choices and explains whole-group and empty-user permissions in both languages', () => {
+  assert.match(panelSource, /feishuSourceChoices\(source\)\.map\(choice/);
+  assert.match(panelSource, /feishuSourceIncluded\(form, source, choice\)/);
+  assert.match(panelSource, /chooseSource\(source, choice\)/);
+  assert.match(panelSource, /choice === 'user' \? 'feishu.allowUser' : 'feishu.allowGroup'/);
+  assert.match(panelSource, /choice === 'chat' \? <span[^>]*>\{t\('feishu.groupScopeHint'\)\}/);
+  assert.match(panelSource, /feishuUsersEmpty\(form\) \? <p[^>]*role="note">\{t\('feishu.emptyUsersHint'\)\}/);
+  for (const key of ['allowUser', 'allowGroup', 'groupScopeHint', 'emptyUsersHint']) {
+    const id = `feishu.${key}`;
+    assert.notEqual(translate('zh-CN', id), id);
+    assert.notEqual(translate('en-US', id), id);
+  }
+  assert.equal(translate('zh-CN', 'feishu.groupScopeHint'), '群内所有成员的消息都会交给玄武处理');
+  assert.equal(translate('zh-CN', 'feishu.emptyUsersHint'), '用户名单为空时，所有人都能操作审批卡片；加入第一个用户后，只有名单内的用户可以操作');
 });

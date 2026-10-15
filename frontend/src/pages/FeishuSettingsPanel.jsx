@@ -4,7 +4,7 @@ import { Bot, CheckCircle2, KeyRound, ScanSearch } from 'lucide-react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
 import { useI18n } from '../i18n/context.js';
-import { appendFeishuSource, feishuSourceIncluded } from './feishuSourceModel.js';
+import { appendFeishuSource, feishuSourceChoices, feishuSourceIncluded, feishuUsersEmpty } from './feishuSourceModel.js';
 import './FeishuSettingsPanel.css';
 
 const DEFAULT_FORM = {
@@ -57,7 +57,7 @@ function useFeishuSettings() {
       setDiscovering(false);
     }
   };
-  const chooseSource = source => setForm(current => appendFeishuSource(current, source));
+  const chooseSource = (source, choice) => setForm(current => appendFeishuSource(current, source, choice));
 
   useEffect(() => {
     loadSettings();
@@ -93,7 +93,7 @@ function StatusPill({ enabled, status }) {
 }
 
 function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit, discover, discovering, discovery, discoveryError, chooseSource }) {
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const english = language === 'en-US';
   if (loading) return <PanelLoader label="玄武正在读取飞书配置…" />;
   return (
@@ -114,6 +114,7 @@ function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit
           <TextField label="Allowed Chat IDs" value={form.allowed_chat_ids} onChange={(value) => updateField('allowed_chat_ids', value)} placeholder="oc_xxx, oc_yyy" />
           <TextField label="Allowed User IDs" value={form.allowed_user_ids} onChange={(value) => updateField('allowed_user_ids', value)} placeholder="ou_xxx, ou_yyy" />
         </div>
+        {feishuUsersEmpty(form) ? <p className="feishu-settings__description" role="note">{t('feishu.emptyUsersHint')}</p> : null}
         <TextAreaField label="Project Mappings" value={form.project_mappings} onChange={(value) => updateField('project_mappings', value)} placeholder="chat:oc_xxx=xuanwu,user:ou_xxx=xuanwu" />
       </FieldGroup>
       <FieldGroup title={english ? 'Notification targets' : '通知目标'} description={english ? 'Choose the default chat or user for outgoing notifications.' : '设置发送通知时默认使用的群聊或用户。'}>
@@ -143,18 +144,31 @@ function SourceDiscovery({ form, remote, saving, discover, discovering, discover
       <div aria-live="polite" aria-busy={discovering}>
         {discovery?.sources?.length === 0 ? <p className="feishu-settings__description">{t('feishu.noSources')}</p> : null}
         {(discovery?.sources || []).map(source => {
-          const included = feishuSourceIncluded(form, source);
           const kind = source.chat_type === 'direct' ? 'feishu.private' : source.chat_type === 'group' ? 'feishu.group' : 'feishu.unknown';
           return (
-            <label className="feishu-discovery__source" key={`${source.chat_id}:${source.user_id}`}>
-              <input checked={included} disabled={included || saving || discovering} onChange={event => { if (event.target.checked) chooseSource(source); }} type="checkbox" />
+            <div className="feishu-discovery__source" key={`${source.chat_id}:${source.user_id}`}>
               <span className="feishu-discovery__details">
-                <span className="ds-mono-label">{t(kind)} · {t(included ? 'feishu.sourceAdded' : 'feishu.sourceAdd')}</span>
+                <span className="ds-mono-label">{t(kind)}</span>
                 <span><span className="ds-mono-label">{t('feishu.userId')}</span> <code>{source.user_id}</code></span>
                 <span><span className="ds-mono-label">{t('feishu.chatId')}</span> <code>{source.chat_id}</code></span>
                 <span><span className="ds-mono-label">{t('feishu.lastReceived')}</span> <time dateTime={source.observed_at}>{source.observed_at ? new Date(source.observed_at).toLocaleString(language) : '—'}</time></span>
               </span>
-            </label>
+              <div className="feishu-discovery__choices">
+                {feishuSourceChoices(source).map(choice => {
+                  const included = feishuSourceIncluded(form, source, choice);
+                  const label = choice === 'direct' ? 'feishu.sourceAdd' : choice === 'user' ? 'feishu.allowUser' : 'feishu.allowGroup';
+                  return (
+                    <label className="feishu-discovery__choice" key={choice}>
+                      <input checked={included} disabled={included || saving || discovering} onChange={event => { if (event.target.checked) chooseSource(source, choice); }} type="checkbox" />
+                      <span>
+                        <span className="ds-mono-label">{t(label)}{included ? ` · ${t('feishu.sourceAdded')}` : ''}</span>
+                        {choice === 'chat' ? <span className="feishu-discovery__scope feishu-settings__description">{t('feishu.groupScopeHint')}</span> : null}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </div>
