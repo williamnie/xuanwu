@@ -46,7 +46,7 @@ test('project modal is viewport-centered and uses a custom compact disclosure', 
   assert.match(source, /import ModalOverlay from '\.\.\/components\/ModalOverlay\.jsx'/);
   assert.equal(source.match(/<ModalOverlay className="project-modal-overlay">/g)?.length, 2);
   assert.match(css, /\.project-config-modal-create\s*\{[\s\S]*?max-width:\s*640px/);
-  assert.match(css, /\.project-modal-overlay\s*\{[\s\S]*?padding:\s*24px/);
+  assert.match(css, /\.project-modal-overlay\s*\{[\s\S]*?padding:\s*var\(--space-6\)/);
   assert.match(ruleFor('.project-modal-overlay'), /backdrop-filter:\s*none/);
   assert.match(editorSource, /<details className="project-settings-advanced">/);
   assert.match(readFileSync(new URL('./ProjectSettingsEditor.css', import.meta.url), 'utf8'), /summary:focus-visible[\s\S]*?box-shadow:\s*inset 3px 0 0 var\(--primary\)/);
@@ -85,8 +85,8 @@ test('project cards keep operational information and edit locally inside Setting
   assert.doesNotMatch(css, /\.project-card-meta/);
 
   const cardRule = ruleFor('.project-card');
-  assert.match(cardRule, /gap:\s*10px/);
-  assert.match(cardRule, /padding:\s*12px/);
+  assert.match(cardRule, /gap:\s*var\(--space-2-5\)/);
+  assert.match(cardRule, /padding:\s*var\(--space-3\)/);
 
   const footerRule = ruleFor('.project-card-footer');
   assert.match(footerRule, /display:\s*flex/);
@@ -95,7 +95,7 @@ test('project cards keep operational information and edit locally inside Setting
 
 test('project card actions share one compact control height', () => {
   const actionsRule = ruleFor('.project-card-actions');
-  assert.match(actionsRule, /--project-card-control-height:\s*32px/);
+  assert.match(actionsRule, /--project-card-control-height:\s*var\(--button-height\)/);
   assert.match(actionsRule, /align-items:\s*center/);
 
   const buttonRule = ruleFor('.project-card-actions .btn');

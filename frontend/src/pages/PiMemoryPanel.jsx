@@ -173,20 +173,20 @@ function MemoryCard({ item, state }) {
         <button className="btn btn-secondary" onClick={() => state.action(item, 'forget')} disabled={Boolean(state.busy)}><Trash2 size={14} />忘记</button>
       </div>
       <small className="pi-memory-panel__meta">
-        source={item.source_type || '-'}:{item.source_id || '-'} · evidence={citationText(item)} · last_seen={item.last_seen_at || item.updated_at}
+        <span className="pi-memory-panel__meta-label">source</span>={item.source_type || '-'}:{item.source_id || '-'} · <span className="pi-memory-panel__meta-label">evidence</span>={citationText(item)} · <span className="pi-memory-panel__meta-label">last_seen</span>={item.last_seen_at || item.updated_at}
       </small>
     </article>
   );
 }
 
 function SmallInput({ label, onChange, value }) {
-  return <label className="pi-memory-panel__small-field">{label}<input className="form-control pi-memory-panel__small-control" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return <label className="pi-memory-panel__small-field"><span className="pi-memory-panel__field-label">{label}</span><input className="form-control pi-memory-panel__small-control" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function SmallSelect({ label, onChange, value, values }) {
   return (
     <label className="pi-memory-panel__small-field">
-      {label}
+      <span className="pi-memory-panel__field-label">{label}</span>
       <select className="form-control pi-memory-panel__small-control" value={value} onChange={(event) => onChange(event.target.value)}>
         {values.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
       </select>

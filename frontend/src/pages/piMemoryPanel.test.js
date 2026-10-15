@@ -38,3 +38,16 @@ test('PI memory panel exposes automatic reusable memory management without a rev
   assert.doesNotMatch(panelSource, /window\.confirm/);
   assert.doesNotMatch(panelSource, /window\.alert/);
 });
+
+
+test('memory field captions are separate from editable values and metadata payloads', () => {
+  const metadataCss = readFileSync(new URL('../components/Metadata.css', import.meta.url), 'utf8');
+  assert.equal([...panelSource.matchAll(/<span className="pi-memory-panel__field-label">\{label\}<\/span>/g)].length, 2);
+  assert.match(panelSource, /<input className="form-control pi-memory-panel__small-control" value=\{value\}/);
+  assert.match(panelSource, /<select className="form-control pi-memory-panel__small-control" value=\{value\}/);
+  assert.match(panelSource, /<option key=\{entry\} value=\{entry\}>\{entry\}<\/option>/);
+  assert.match(metadataCss, /\.pi-memory-panel__field-label,/);
+  assert.match(metadataCss, /\.pi-memory-panel__meta-label,/);
+  assert.doesNotMatch(metadataCss, /\.pi-memory-panel__(?:small-field|small-control|meta)[,{]/);
+  assert.match(panelSource, /<span className="pi-memory-panel__meta-label">source<\/span>=\{item.source_type/);
+});

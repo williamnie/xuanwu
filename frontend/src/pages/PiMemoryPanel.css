@@ -1,7 +1,7 @@
 .pi-memory-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-3);
 }
 
 .pi-memory-panel__header,
@@ -18,35 +18,35 @@
 }
 
 .pi-memory-panel__header {
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .pi-memory-panel__heading {
-  font-size: 1.1rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
 }
 
 .pi-memory-panel__description {
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--text-md);
   line-height: 1.55;
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 .pi-memory-panel__error {
   color: var(--error);
-  font-size: 0.86rem;
+  font-size: var(--text-base);
 }
 
 .pi-memory-panel__summary {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .pi-memory-panel__summary-copy {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--text-md);
   grid-column: 1 / -1;
   line-height: 1.55;
   margin: 0;
@@ -57,54 +57,54 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  padding: 10px;
+  padding: var(--space-2-5);
 }
 
 .pi-memory-panel__summary-label {
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
 .pi-memory-panel__summary-value {
   color: var(--text-primary);
-  font-size: 0.98rem;
+  font-size: var(--text-xl);
 }
 
 .pi-memory-panel__card {
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .pi-memory-panel__form-title {
-  font-size: 0.94rem;
-  margin-bottom: 8px;
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-2);
 }
 
 .pi-memory-panel__controls {
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
+  gap: var(--space-2);
+  margin-top: var(--space-2-5);
 }
 
 .pi-memory-panel__empty {
   color: var(--text-muted);
-  font-size: 0.86rem;
+  font-size: var(--text-base);
 }
 
 .pi-memory-panel__list {
   display: grid;
-  gap: 10px;
+  gap: var(--space-2-5);
 }
 
 .pi-memory-panel__card-header {
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 .pi-memory-panel__state {
   color: var(--success);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   font-weight: 700;
 }
 
@@ -115,10 +115,16 @@
 }
 
 .pi-memory-panel__small-field {
-  font-size: 0.78rem;
-  gap: 6px;
+  font-size: var(--text-md);
+  gap: var(--space-1-5);
 }
 
 .pi-memory-panel__small-control {
   width: 170px;
+}
+
+/* Apply the metadata role to field captions, preserving editable values. */
+.pi-memory-panel__field-label {
+  font-size: var(--text-2xs);
+  font-weight: 700;
 }

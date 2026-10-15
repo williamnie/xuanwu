@@ -1,6 +1,6 @@
 .skills-runtime-panel {
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .skills-runtime-head,
@@ -9,7 +9,7 @@
 .skills-run-links {
   align-items: center;
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   justify-content: space-between;
 }
 
@@ -18,7 +18,7 @@
 .skills-run-history h4 {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 0;
 }
 
@@ -26,9 +26,9 @@
 .skills-runtime-title p,
 .skills-runtime-error {
   color: var(--text-muted);
-  font-size: 0.84rem;
+  font-size: var(--text-base);
   line-height: 1.5;
-  margin: 4px 0 0;
+  margin: var(--space-1) 0 0;
 }
 
 .skills-runtime-error {
@@ -37,7 +37,7 @@
 
 .skills-runtime-grid {
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
   grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
 }
 
@@ -52,8 +52,8 @@
 .skills-runtime-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px;
+  gap: var(--space-2);
+  padding: var(--space-2-5);
 }
 
 .skills-runtime-list button {
@@ -63,8 +63,8 @@
   color: var(--text-primary);
   cursor: pointer;
   display: grid;
-  gap: 4px;
-  padding: 10px;
+  gap: var(--space-1);
+  padding: var(--space-2-5);
   text-align: left;
 }
 
@@ -80,13 +80,13 @@
 }
 
 .skills-runtime-list button strong {
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
 .skills-runtime-head h2,
 .skills-runtime-title h3 {
-  font-size: 1.1rem;
+  font-size: var(--text-2xl);
 }
 
 .skills-runtime-list,
@@ -100,7 +100,7 @@
 .skills-run-row small {
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   font-weight: 750;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -110,8 +110,8 @@
 .skills-runtime-meta,
 .skills-run-history {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: var(--space-3);
+  padding: var(--space-3-5);
 }
 
 .skills-runtime-meta {
@@ -126,12 +126,12 @@
   color: var(--text-secondary);
   display: inline-flex;
   font-family: var(--font-mono);
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   font-style: normal;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   width: fit-content;
 }
 
@@ -150,14 +150,14 @@
 
 .skills-chip-block {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .skills-chip-block > div,
 .skills-run-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   justify-content: flex-start;
 }
 
@@ -165,16 +165,16 @@
   background: transparent;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-xs);
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .skills-run-controls label {
   color: var(--text-muted);
   display: grid;
   flex: 1;
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   font-weight: 800;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 
 .skills-run-controls input {
@@ -183,12 +183,12 @@
   border-radius: var(--radius-md);
   color: var(--text-primary);
   min-height: 34px;
-  padding: 0 10px;
+  padding: 0 var(--space-2-5);
 }
 
 .skills-schema,
 .skills-run-row {
-  padding: 10px 12px;
+  padding: var(--space-2-5) var(--space-3);
 }
 
 .skills-schema summary,
@@ -201,42 +201,42 @@
   background: var(--bg-card);
   border-radius: var(--radius-xs);
   color: var(--text-secondary);
-  font-size: 0.78rem;
-  margin: 10px 0 0;
+  font-size: var(--text-md);
+  margin: var(--space-2-5) 0 0;
   max-height: 260px;
   overflow: auto;
-  padding: 12px;
+  padding: var(--space-3);
   white-space: pre-wrap;
 }
 
 .skills-run-row summary {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .skills-run-links a {
   color: var(--primary);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   font-weight: 800;
-  margin-top: 10px;
+  margin-top: var(--space-2-5);
 }
 
 .skills-runtime-empty {
   border: 1px dashed var(--border-color);
   border-radius: var(--radius-xs);
   color: var(--text-muted);
-  padding: 18px;
+  padding: var(--space-4-5);
 }
 
 .skills-runtime-empty.compact {
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 @media (max-width: 760px) {
   .skills-runtime-panel,
   .skills-runtime-detail {
-    padding: 12px;
+    padding: var(--space-3);
   }
 
   .skills-runtime-grid,

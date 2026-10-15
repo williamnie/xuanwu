@@ -1,18 +1,18 @@
 .runner-settings {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .runner-settings__error {
   color: var(--error);
-  font-size: 0.86rem;
+  font-size: var(--text-base);
 }
 
 .runner-settings__header {
   align-items: center;
   display: flex;
-  gap: 16px;
+  gap: var(--space-4);
   justify-content: space-between;
 }
 
@@ -20,18 +20,18 @@
 .runner-settings__strong-row {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .runner-settings__heading {
-  font-size: 1.1rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
 }
 
 .runner-settings__description {
   color: var(--text-muted);
-  font-size: 0.82rem;
-  margin-top: 4px;
+  font-size: var(--text-md);
+  margin-top: var(--space-1);
 }
 
 .runner-settings__launcher {
@@ -39,8 +39,8 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: var(--space-3);
+  padding: var(--space-3);
 }
 
 .runner-settings__strong,
@@ -51,7 +51,7 @@
 .runner-settings__launcher-grid,
 .runner-settings__server-grid {
   display: grid;
-  gap: 10px;
+  gap: var(--space-2-5);
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
 
@@ -59,30 +59,30 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   display: grid;
-  gap: 8px;
-  padding: 12px;
+  gap: var(--space-2);
+  padding: var(--space-3);
 }
 
 .runner-settings__muted-copy {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   line-height: 1.5;
 }
 
 .runner-settings__command {
   color: var(--text-secondary);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
 .runner-settings__form {
   display: grid;
-  gap: 14px;
+  gap: var(--space-3);
 }
 
 .runner-settings__field {
   display: grid;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 
 .runner-settings__label {
@@ -91,13 +91,13 @@
 
 .runner-settings__help {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--text-md);
   line-height: 1.6;
 }
 
 .runner-settings__selector {
   display: grid;
-  gap: 10px;
+  gap: var(--space-2-5);
 }
 
 .runner-settings__server-grid {
@@ -109,7 +109,7 @@
   border-color: var(--border-light);
   height: auto;
   justify-content: flex-start;
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .runner-settings__server-option.is-active {
@@ -119,14 +119,14 @@
 
 .runner-settings__server-option-copy {
   display: grid;
-  gap: 5px;
+  gap: var(--space-1);
   text-align: left;
 }
 
 .runner-settings__option-description,
 .runner-settings__field-label {
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: var(--text-md);
 }
 
 .runner-settings__option-description {
@@ -141,9 +141,9 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  font-size: 0.8rem;
+  font-size: var(--text-md);
   line-height: 1.6;
-  padding: 10px;
+  padding: var(--space-2-5);
 }
 
 .runner-settings__status.is-success {

@@ -62,7 +62,25 @@
     "pages/work/TaskList.css",
     "pages/work/TaskSubviewTabs.css",
     "pages/work/WorkDeliveryEvidence.css",
-    "pages/work/WorkFeedback.css"
+    "pages/work/WorkFeedback.css",
+    "pages/ActivityTimelinePanel.css",
+    "pages/CodeAgentsPanel.css",
+    "pages/ConnectorDiagnosticsPanel.css",
+    "pages/FeishuSettingsPanel.css",
+    "pages/GitHubSettingsPanel.css",
+    "pages/JevSkillSettings.css",
+    "pages/PiAgentSettingsPanel.css",
+    "pages/PiMcpManagementPanel.css",
+    "pages/PiMemoryPanel.css",
+    "pages/ProjectSettingsEditor.css",
+    "pages/Projects.css",
+    "pages/ReleaseUpdatePanel.css",
+    "pages/RunnerSettingsPanel.css",
+    "pages/Settings.css",
+    "pages/SkillLibraryPanel.css",
+    "pages/SkillsRuntimePanel.css",
+    "pages/SourcePoliciesPanel.css",
+    "pages/TelegramSettingsPanel.css"
   ],
   "panelPadding": [
     {
@@ -90,12 +108,6 @@
       "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
     },
     {
-      "file": "GeekWorkbench.css",
-      "selector": ".page-intro",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
       "file": "GeekWorkbenchPages.css",
       "selector": ".dashboard-stat-card",
       "property": "padding",
@@ -104,12 +116,6 @@
     {
       "file": "GeekWorkbenchPages.css",
       "selector": ".dashboard-events-card",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "GeekWorkbenchPages.css",
-      "selector": ".dashboard-stat-card",
       "property": "padding",
       "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
     },
@@ -610,6 +616,72 @@
       "selector": ".work-human-review-card.is-compact",
       "property": "padding",
       "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/ActivityTimelinePanel.css",
+      "selector": ".activity-empty",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset."
+    },
+    {
+      "file": "pages/CodeAgentsPanel.css",
+      "selector": ".code-agents-panel",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset."
+    },
+    {
+      "file": "pages/ConnectorDiagnosticsPanel.css",
+      "selector": ".connector-diagnostics__card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".provider-model-section",
+      "property": "padding-top",
+      "reason": "Spec 4: 14 / 18px panel or page inset."
+    },
+    {
+      "file": "pages/Projects.css",
+      "selector": ".project-config-modal-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset."
+    },
+    {
+      "file": "pages/Projects.css",
+      "selector": ".project-delete-modal-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset."
+    },
+    {
+      "file": "pages/Projects.css",
+      "selector": ".project-delete-modal-actions",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset."
+    },
+    {
+      "file": "pages/Settings.css",
+      "selector": ".settings-subsection-title",
+      "property": "padding-top",
+      "reason": "Spec 4: 14 / 18px panel or page inset."
+    },
+    {
+      "file": "pages/Settings.css",
+      "selector": ".persona-settings-panel",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset."
+    },
+    {
+      "file": "pages/SkillsRuntimePanel.css",
+      "selector": ".skills-runtime-detail, .skills-runtime-meta, .skills-run-history",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset."
+    },
+    {
+      "file": "pages/SkillsRuntimePanel.css",
+      "selector": ".skills-runtime-empty",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset."
     }
   ],
   "structuralValues": [
@@ -661,6 +733,27 @@
       "property": "padding-right",
       "value": "58px",
       "reason": "Spec 4 structural geometry: reserve existing 58px for the absolutely positioned password visibility action and text clearance; not general spacing."
+    },
+    {
+      "file": "pages/CodeAgentsPanel.css",
+      "selector": ".codex-runtime-fact small",
+      "property": "padding-left",
+      "value": "calc(86px + var(--space-2-5))",
+      "reason": "Spec 4 structural geometry: preserve alignment with the existing 86px runtime fact label column plus its 10px gap."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".provider-key-control .form-control",
+      "property": "padding-right",
+      "value": "64px",
+      "reason": "Spec 4 structural geometry: preserve the existing password visibility action and text clearance, not general spacing."
+    },
+    {
+      "file": "index.css",
+      "selector": ".app-container.sidebar-collapsed .main-content",
+      "property": "padding-left",
+      "value": "calc(var(--button-height) + var(--space-4) * 2)",
+      "reason": "Spec 4 structural geometry: existing 32px menu toggle plus its 16px left offset and 16px content clearance."
     }
   ],
   "microSpacing": [
@@ -1370,6 +1463,181 @@
       "property": "gap",
       "context": "compact-list",
       "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "pages/ActivityTimelinePanel.css",
+      "selector": ".activity-stage",
+      "property": "padding",
+      "reason": "Spec 4.0.1: badge / status label / chip inset.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/Projects.css",
+      "selector": ".project-status-pill",
+      "property": "padding-top",
+      "reason": "Spec 4.0.1: badge / status label / chip inset.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/CodeAgentsPanel.css",
+      "selector": ".codex-backend-heading",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/ConnectorDiagnosticsPanel.css",
+      "selector": ".connector-diagnostics__card-subtitle",
+      "property": "margin-top",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/GitHubSettingsPanel.css",
+      "selector": ".github-settings__operations .github-settings__check > span",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".supervisor-scope-copy",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".supervisor-readiness-item > span",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".supervisor-configuration-stage .settings-stage-header p",
+      "property": "margin-top",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".provider-delete-confirm > div:first-child",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".provider-flow-heading p",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".provider-model-heading > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".provider-progress-step > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".supervisor-oauth-heading p",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".provider-saved-connections > summary span",
+      "property": "padding",
+      "context": "badge-inset",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: badge / compact shortcut label inset."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".supervisor-applied-model > span",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".persona-settings-disclosure > summary span, .prompt-debug-disclosure > summary span",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiAgentSettingsPanel.css",
+      "selector": ".prompt-debug-heading p",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/Projects.css",
+      "selector": ".project-card-title code",
+      "property": "margin-top",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/Projects.css",
+      "selector": ".project-delete-modal-eyebrow",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/ReleaseUpdatePanel.css",
+      "selector": ".settings-release-update__header h2",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/Settings.css",
+      "selector": ".settings-advanced-danger-zone h2",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/Settings.css",
+      "selector": ".remote-token-header h2",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/Settings.css",
+      "selector": ".settings-notification-mode > label:first-child > span",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/TelegramSettingsPanel.css",
+      "selector": ".telegram-discovery-toolbar > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/TelegramSettingsPanel.css",
+      "selector": ".telegram-source > span:first-child",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
     }
   ]
 }

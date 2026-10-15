@@ -1,7 +1,7 @@
 .pi-mcp-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .pi-mcp-panel__header,
@@ -9,28 +9,28 @@
   align-items: flex-start;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
   justify-content: space-between;
 }
 
 .pi-mcp-panel__heading {
   align-items: center;
   display: flex;
-  font-size: 1.1rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .pi-mcp-panel__description {
   color: var(--text-muted);
-  font-size: 0.82rem;
-  margin-top: 4px;
+  font-size: var(--text-md);
+  margin-top: var(--space-1);
 }
 
 .pi-mcp-panel__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .pi-mcp-panel__notice,
@@ -38,13 +38,13 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .pi-mcp-panel__notice-copy {
   color: var(--text-muted);
-  font-size: 0.8rem;
-  margin-top: 6px;
+  font-size: var(--text-md);
+  margin-top: var(--space-1-5);
 }
 
 .pi-mcp-panel__notice-copy.is-error {
@@ -54,31 +54,31 @@
 .pi-mcp-panel__source-grid,
 .pi-mcp-panel__form-grid {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .pi-mcp-panel__mini-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px;
+  gap: var(--space-1);
+  padding: var(--space-2-5);
 }
 
 .pi-mcp-panel__muted {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   overflow-wrap: anywhere;
 }
 
 .pi-mcp-panel__section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-2-5);
 }
 
 .pi-mcp-panel__section-title {
-  font-size: 0.95rem;
+  font-size: var(--text-lg);
   font-weight: 800;
   margin: 0;
 }
@@ -87,7 +87,7 @@
   align-items: center;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .pi-mcp-panel__row-main {
@@ -98,19 +98,19 @@
   align-items: center;
   color: var(--text-muted);
   display: flex;
-  font-size: 0.78rem;
-  gap: 6px;
+  font-size: var(--text-md);
+  gap: var(--space-1-5);
   overflow-wrap: anywhere;
 }
 
 .pi-mcp-panel__form-grid {
-  gap: 10px;
+  gap: var(--space-2-5);
 }
 
 .pi-mcp-panel__capability-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .pi-mcp-panel__diagnostics {

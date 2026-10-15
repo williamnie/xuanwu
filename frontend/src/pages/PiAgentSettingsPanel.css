@@ -1,7 +1,7 @@
 .supervisor-settings-panel {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--space-4);
   min-width: 0;
 }
 
@@ -9,13 +9,13 @@
   align-items: center;
   border-bottom: 1px solid var(--border-color);
   display: flex;
-  gap: 20px;
+  gap: var(--space-5);
   justify-content: space-between;
-  padding: 2px 0 12px;
+  padding: var(--space-1) 0 var(--space-3);
 }
 
 .supervisor-settings-header h3 {
-  font-size: 1rem;
+  font-size: var(--text-xl);
   font-weight: 650;
   margin: 0;
 }
@@ -24,8 +24,8 @@
   align-items: center;
   color: var(--primary);
   display: inline-flex;
-  font-size: 0.64rem;
-  gap: 6px;
+  font-size: var(--text-2xs);
+  gap: var(--space-1-5);
 }
 
 .supervisor-scope-note {
@@ -33,37 +33,37 @@
   border-bottom: 1px solid var(--border-color);
   border-top: 1px solid var(--border-color);
   display: flex;
-  gap: 18px;
+  gap: var(--space-4);
   justify-content: space-between;
-  padding: 10px 0;
+  padding: var(--space-2-5) 0;
 }
 
 .supervisor-scope-copy {
   display: grid;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 .supervisor-scope-copy > span {
   color: var(--primary);
   font-family: var(--font-mono);
-  font-size: 0.61rem;
+  font-size: var(--text-2xs);
   font-weight: 800;
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 .provider-console-label {
   color: var(--primary);
-  font-size: 0.61rem;
+  font-size: var(--text-2xs);
   font-weight: 800;
 }
 
 .supervisor-scope-copy strong {
   color: var(--text-primary);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
 }
 
 .supervisor-scope-copy p {
   color: var(--text-muted);
-  font-size: 0.69rem;
+  font-size: var(--text-xs);
   line-height: 1.45;
   margin: 0;
 }
@@ -84,13 +84,13 @@
   border-right: 1px solid var(--border-color);
   color: var(--text-muted);
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
-  padding: 8px 10px 8px 0;
+  padding: var(--space-2) var(--space-2-5) var(--space-2) 0;
 }
 
 .supervisor-readiness-item + .supervisor-readiness-item {
-  padding-left: 12px;
+  padding-left: var(--space-3);
 }
 
 .supervisor-readiness-item:last-child {
@@ -103,21 +103,21 @@
 
 .supervisor-readiness-item > span {
   display: grid;
-  gap: 1px;
+  gap: var(--space-0-5);
   min-width: 0;
 }
 
 .supervisor-readiness-item small {
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 0.58rem;
+  font-size: var(--text-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .supervisor-readiness-item strong {
   color: var(--text-primary);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -128,8 +128,8 @@
   border: 0;
   border-bottom: 1px solid var(--text-primary);
   border-radius: 0;
-  gap: 14px;
-  padding: 0 0 20px;
+  gap: var(--space-3);
+  padding: 0 0 var(--space-5);
 }
 
 .supervisor-configuration-stage .settings-stage-header {
@@ -140,18 +140,18 @@
 
 .supervisor-configuration-stage .settings-stage-header > span {
   border-radius: 0;
-  font-size: 0.62rem;
+  font-size: var(--text-2xs);
   height: 26px;
   width: 28px;
 }
 
 .supervisor-configuration-stage .settings-stage-header h3 {
-  font-size: 0.85rem;
+  font-size: var(--text-base);
 }
 
 .supervisor-configuration-stage .settings-stage-header p {
-  font-size: 0.69rem;
-  margin-top: 2px;
+  font-size: var(--text-xs);
+  margin-top: var(--space-0-5);
 }
 
 .provider-console {
@@ -163,14 +163,14 @@
 
 .provider-console-main {
   min-width: 0;
-  padding-right: 24px;
+  padding-right: var(--space-6);
 }
 
 .provider-connection-toolbar {
   align-items: center;
   border-bottom: 1px solid var(--border-color);
   display: flex;
-  gap: 18px;
+  gap: var(--space-4);
   justify-content: space-between;
   min-height: 46px;
 }
@@ -178,18 +178,18 @@
 .provider-connection-picker {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .provider-connection-picker > label {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .provider-connection-picker > label > span {
   color: var(--text-muted);
-  font-size: 0.61rem;
+  font-size: var(--text-2xs);
 }
 
 .provider-connection-toolbar .form-control {
@@ -213,29 +213,29 @@
   border-bottom: 1px solid var(--border-color);
   border-left: 2px solid var(--error);
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   grid-template-columns: minmax(0, 1fr) auto;
-  padding: 9px 10px;
+  padding: var(--space-2) var(--space-2-5);
 }
 
 .provider-delete-confirm > div {
   display: flex;
-  gap: 7px;
+  gap: var(--space-1-5);
 }
 
 .provider-delete-confirm > div:first-child {
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 
 .provider-delete-confirm strong {
   color: var(--text-primary);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
 }
 
 .provider-delete-confirm span {
   color: var(--text-muted);
-  font-size: 0.62rem;
+  font-size: var(--text-2xs);
 }
 
 .provider-delete-confirm-button {
@@ -258,7 +258,7 @@
 }
 
 .provider-mode-tabs .settings-notification-mode > label:first-child {
-  padding: 16px;
+  padding: var(--space-4);
   width: 100%;
 }
 
@@ -266,11 +266,11 @@
   border-color: var(--primary);
 }
 
-.supervisor-oauth-controls { display: grid; gap: 8px; min-width: 0; }
-.supervisor-oauth-more code { color: var(--text-muted); display: block; font-size: 0.66rem; overflow-wrap: anywhere; }
+.supervisor-oauth-controls { display: grid; gap: var(--space-2); min-width: 0; }
+.supervisor-oauth-more code { color: var(--text-muted); display: block; font-size: var(--text-xs); overflow-wrap: anywhere; }
 
 .provider-flow-section {
-  padding: 20px 0 0;
+  padding: var(--space-5) 0 0;
 }
 
 .provider-flow-heading,
@@ -282,25 +282,25 @@
 .supervisor-save-row {
   align-items: center;
   display: flex;
-  gap: 16px;
+  gap: var(--space-4);
   justify-content: space-between;
 }
 
 .provider-flow-heading {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .provider-flow-heading h4 {
   color: var(--text-primary);
-  font-size: 0.98rem;
+  font-size: var(--text-xl);
   letter-spacing: -0.02em;
   margin: 0;
 }
 
 .provider-flow-heading p {
   color: var(--text-muted);
-  font-size: 0.69rem;
-  margin: 3px 0 0;
+  font-size: var(--text-xs);
+  margin: var(--space-0-5) 0 0;
 }
 
 .provider-flow-heading > span {
@@ -308,16 +308,16 @@
   color: var(--primary);
   flex: 0 0 auto;
   font-family: var(--font-mono);
-  font-size: 0.57rem;
+  font-size: var(--text-2xs);
   font-weight: 800;
-  padding: 4px 6px;
+  padding: var(--space-1) var(--space-1-5);
   text-transform: uppercase;
 }
 
 .provider-credential-grid,
 .supervisor-behavior-grid {
   display: grid;
-  gap: 13px 12px;
+  gap: var(--space-3) var(--space-3);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -327,7 +327,7 @@
 
 .supervisor-form-field {
   display: grid;
-  gap: 5px;
+  gap: var(--space-1);
   margin: 0;
   min-width: 0;
 }
@@ -336,20 +336,20 @@
   align-items: center;
   color: var(--text-primary);
   display: flex;
-  font-size: 0.68rem;
+  font-size: var(--text-xs);
   font-weight: 800;
   justify-content: space-between;
 }
 
 .supervisor-field-label small {
   color: var(--text-muted);
-  font-size: 0.56rem;
+  font-size: var(--text-2xs);
   font-weight: 500;
 }
 
 .supervisor-settings-panel .form-control {
   border-radius: 0;
-  font-size: 0.73rem;
+  font-size: var(--text-sm);
 }
 
 .provider-console .form-control {
@@ -377,8 +377,8 @@
   bottom: 1px;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 0.58rem;
-  padding: 0 10px;
+  font-size: var(--text-2xs);
+  padding: 0 var(--space-2-5);
   position: absolute;
   right: 1px;
   top: 1px;
@@ -387,32 +387,32 @@
 
 .provider-model-section {
   border-top: 1px solid var(--border-color);
-  margin-top: 20px;
-  padding-top: 14px;
+  margin-top: var(--space-5);
+  padding-top: var(--space-3-5);
 }
 
 .provider-model-heading {
-  margin-bottom: 10px;
+  margin-bottom: var(--space-2-5);
 }
 
 .provider-model-heading > div {
   display: grid;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 
 .provider-model-heading strong {
   color: var(--text-primary);
-  font-size: 0.73rem;
+  font-size: var(--text-sm);
 }
 
 .provider-model-heading span {
   color: var(--text-muted);
-  font-size: 0.61rem;
+  font-size: var(--text-2xs);
 }
 
 .provider-model-row {
   display: grid;
-  gap: 9px;
+  gap: var(--space-2);
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
@@ -420,10 +420,10 @@
   align-items: center;
   border-left: 2px solid currentColor;
   display: flex;
-  font-size: 0.67rem;
-  gap: 7px;
-  margin-top: 10px;
-  padding: 7px 9px;
+  font-size: var(--text-xs);
+  gap: var(--space-1-5);
+  margin-top: var(--space-2-5);
+  padding: var(--space-1-5) var(--space-2);
 }
 
 .provider-test-result.success {
@@ -438,13 +438,13 @@
 
 .provider-connection-actions {
   border-top: 1px solid var(--border-color);
-  margin-top: 18px;
-  padding: 12px 0;
+  margin-top: var(--space-4);
+  padding: var(--space-3) 0;
 }
 
 .provider-connection-actions p {
   color: var(--text-muted);
-  font-size: 0.62rem;
+  font-size: var(--text-2xs);
   line-height: 1.45;
   margin: 0;
   max-width: 500px;
@@ -455,17 +455,17 @@
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: var(--space-1-5);
 }
 
 .provider-progress-rail {
   border-left: 1px solid var(--border-color);
-  padding: 18px 0 18px 18px;
+  padding: var(--space-4) 0 var(--space-4) var(--space-4);
 }
 
 .provider-progress-list {
   border-top: 1px solid var(--border-color);
-  margin-top: 13px;
+  margin-top: var(--space-3);
 }
 
 .provider-progress-step {
@@ -473,9 +473,9 @@
   border-bottom: 1px solid var(--border-color);
   color: var(--text-muted);
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   grid-template-columns: 19px 1fr;
-  padding: 10px 0;
+  padding: var(--space-2-5) 0;
 }
 
 .provider-progress-step > span {
@@ -483,7 +483,7 @@
   border: 1px solid var(--border-color);
   display: inline-flex;
   font-family: var(--font-mono);
-  font-size: 0.55rem;
+  font-size: var(--text-2xs);
   height: 19px;
   justify-content: center;
   width: 19px;
@@ -497,17 +497,17 @@
 
 .provider-progress-step > div {
   display: grid;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 
 .provider-progress-step strong {
   color: var(--text-primary);
-  font-size: 0.67rem;
+  font-size: var(--text-xs);
 }
 
 .provider-progress-step small {
   color: var(--text-muted);
-  font-size: 0.56rem;
+  font-size: var(--text-2xs);
   line-height: 1.35;
 }
 
@@ -516,32 +516,32 @@
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   font-family: var(--font-mono);
-  margin-top: 16px;
-  padding: 12px;
+  margin-top: var(--space-4);
+  padding: var(--space-3);
 }
 
 .provider-connection-summary > span {
   color: var(--text-muted);
-  font-size: 0.56rem;
+  font-size: var(--text-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .provider-connection-summary dl {
   display: grid;
-  gap: 7px;
-  margin: 10px 0 0;
+  gap: var(--space-1-5);
+  margin: var(--space-2-5) 0 0;
 }
 
 .provider-connection-summary dl > div {
   display: grid;
-  gap: 6px;
+  gap: var(--space-1-5);
   grid-template-columns: 38px minmax(0, 1fr);
 }
 
 .provider-connection-summary dt,
 .provider-connection-summary dd {
-  font-size: 0.55rem;
+  font-size: var(--text-2xs);
   margin: 0;
 }
 
@@ -559,19 +559,19 @@
 .supervisor-oauth-panel {
   border-left: 2px solid var(--brand-mint);
   display: grid;
-  gap: 9px;
-  padding: 10px 0 10px 11px;
+  gap: var(--space-2);
+  padding: var(--space-2-5) 0 var(--space-2-5) var(--space-2-5);
 }
 
 .supervisor-oauth-heading strong {
   color: var(--text-primary);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
 }
 
 .supervisor-oauth-heading p {
   color: var(--text-muted);
-  font-size: 0.61rem;
-  margin: 2px 0 0;
+  font-size: var(--text-2xs);
+  margin: var(--space-0-5) 0 0;
 }
 
 .supervisor-oauth-status {
@@ -579,14 +579,14 @@
   color: var(--text-secondary);
   display: flex;
   flex-wrap: wrap;
-  font-size: 0.63rem;
-  gap: 7px 12px;
+  font-size: var(--text-2xs);
+  gap: var(--space-1-5) var(--space-3);
 }
 
 .supervisor-oauth-status span {
   align-items: center;
   display: inline-flex;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 
 .supervisor-oauth-status i {
@@ -614,22 +614,22 @@
 .supervisor-oauth-status code {
   color: var(--text-muted);
   flex-basis: 100%;
-  font-size: 0.58rem;
+  font-size: var(--text-2xs);
   word-break: break-all;
 }
 
 .supervisor-oauth-note {
   border-left: 2px solid var(--warning);
   color: var(--text-muted);
-  font-size: 0.61rem;
+  font-size: var(--text-2xs);
   line-height: 1.5;
-  margin: 9px 0 0;
-  padding: 6px 9px;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-1-5) var(--space-2);
 }
 
 .supervisor-oauth-refresh {
   min-width: 34px;
-  padding-inline: 8px;
+  padding-inline: var(--space-2);
 }
 
 .provider-saved-connections,
@@ -637,7 +637,7 @@
 .prompt-debug-disclosure {
   border-bottom: 1px solid var(--border-color);
   border-top: 1px solid var(--border-color);
-  margin-top: 1px;
+  margin-top: var(--space-1);
 }
 
 .provider-saved-connections > summary,
@@ -647,11 +647,11 @@
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
-  font-size: 0.68rem;
-  gap: 9px;
+  font-size: var(--text-xs);
+  gap: var(--space-2);
   list-style: none;
   min-height: 36px;
-  padding: 7px 0;
+  padding: var(--space-1-5) 0;
 }
 
 .provider-saved-connections > summary::after,
@@ -672,17 +672,17 @@
 .provider-saved-connections > summary span {
   border: 1px solid var(--border-color);
   font-family: var(--font-mono);
-  font-size: 0.55rem;
-  margin-left: 3px;
-  padding: 1px 5px;
+  font-size: var(--text-2xs);
+  margin-left: var(--space-1);
+  padding: var(--space-0-5) var(--space-1);
 }
 
 .provider-saved-connections > div {
   border-top: 1px solid var(--border-color);
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  padding: 9px 0;
+  gap: var(--space-1-5);
+  padding: var(--space-2) 0;
 }
 
 .provider-saved-connections > div > span {
@@ -691,68 +691,68 @@
   color: var(--text-muted);
   display: inline-flex;
   font-family: var(--font-mono);
-  font-size: 0.59rem;
-  gap: 6px;
-  padding: 4px 7px;
+  font-size: var(--text-2xs);
+  gap: var(--space-1-5);
+  padding: var(--space-1) var(--space-1-5);
 }
 
 .supervisor-applied-model {
   border-bottom: 1px solid var(--border-color);
   border-top: 1px solid var(--border-color);
-  padding: 9px 0;
+  padding: var(--space-2) 0;
 }
 
 .supervisor-applied-model > span {
   display: grid;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 
 .supervisor-applied-model small,
 .supervisor-applied-model em {
   color: var(--text-muted);
-  font-size: 0.62rem;
+  font-size: var(--text-2xs);
   font-style: normal;
 }
 
 .supervisor-applied-model strong {
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
 }
 
 .persona-settings-disclosure > summary span,
 .prompt-debug-disclosure > summary span {
   display: grid;
-  gap: 1px;
+  gap: var(--space-0-5);
 }
 
 .persona-settings-disclosure > summary strong,
 .prompt-debug-disclosure > summary strong,
 .prompt-debug-heading strong {
   color: var(--text-primary);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
 }
 
 .persona-settings-disclosure > summary small,
 .prompt-debug-disclosure > summary small {
   color: var(--text-muted);
-  font-size: 0.61rem;
+  font-size: var(--text-2xs);
 }
 
 .persona-settings-content,
 .prompt-debug-content {
   border-top: 1px solid var(--border-color);
   display: grid;
-  gap: 12px;
-  padding: 12px 0;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
 }
 
 .persona-boundary-notice {
   border-left: 2px solid var(--primary);
   color: var(--text-secondary);
-  font-size: 0.67rem;
+  font-size: var(--text-xs);
   margin: 0;
-  padding: 7px 9px;
+  padding: var(--space-1-5) var(--space-2);
 }
 
 .persona-enable-field,
@@ -760,28 +760,28 @@
   align-items: center;
   color: var(--text-secondary);
   display: flex;
-  font-size: 0.72rem;
-  gap: 8px;
+  font-size: var(--text-sm);
+  gap: var(--space-2);
 }
 
 .persona-select-grid {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .persona-profile-badge {
   color: var(--text-muted);
-  font-size: 0.62rem;
+  font-size: var(--text-2xs);
 }
 
 .persona-conflict-notice {
   border-left: 2px solid var(--warning);
   color: var(--text-secondary);
   display: grid;
-  font-size: 0.67rem;
-  gap: 7px;
-  padding: 8px 10px;
+  font-size: var(--text-xs);
+  gap: var(--space-1-5);
+  padding: var(--space-2) var(--space-2-5);
 }
 
 .persona-conflict-notice > strong {
@@ -801,20 +801,20 @@
 .persona-conflict-notice > div {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: var(--space-1-5);
 }
 
 .prompt-debug-heading p {
   color: var(--text-muted);
-  font-size: 0.61rem;
-  margin: 2px 0 0;
+  font-size: var(--text-2xs);
+  margin: var(--space-0-5) 0 0;
 }
 
 .prompt-debug-summary {
   color: var(--text-secondary);
   display: grid;
-  font-size: 0.65rem;
-  gap: 4px;
+  font-size: var(--text-xs);
+  gap: var(--space-1);
 }
 
 .prompt-debug-summary code {
@@ -824,12 +824,12 @@
 
 .supervisor-save-row {
   border-top: 1px solid var(--border-color);
-  padding-top: 12px;
+  padding-top: var(--space-3);
 }
 
 .supervisor-save-row span {
   color: var(--text-muted);
-  font-size: 0.64rem;
+  font-size: var(--text-2xs);
 }
 
 @media (max-width: 900px) {
@@ -844,7 +844,7 @@
   .provider-progress-rail {
     border-left: 0;
     border-top: 1px solid var(--border-color);
-    padding: 14px 0;
+    padding: var(--space-3) 0;
   }
 
   .provider-progress-list {
@@ -854,7 +854,7 @@
 
   .provider-progress-step {
     border-right: 1px solid var(--border-color);
-    padding-right: 10px;
+    padding-right: var(--space-2-5);
   }
 
   .provider-progress-step:last-child {
@@ -897,8 +897,8 @@
   .provider-connection-toolbar {
     align-items: stretch;
     flex-direction: column;
-    gap: 7px;
-    padding: 9px 0;
+    gap: var(--space-1-5);
+    padding: var(--space-2) 0;
   }
 
   .provider-connection-picker,

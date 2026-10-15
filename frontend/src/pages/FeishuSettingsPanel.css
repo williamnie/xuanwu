@@ -1,12 +1,12 @@
 .feishu-settings {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .feishu-settings__error {
   color: var(--error);
-  font-size: 0.82rem;
+  font-size: var(--text-md);
 }
 
 .feishu-settings__header,
@@ -25,27 +25,27 @@
 
 .feishu-settings__header {
   align-items: flex-start;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .feishu-settings__heading {
-  font-size: 1.1rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .feishu-settings__description {
   color: var(--text-muted);
-  font-size: 0.82rem;
-  margin-top: 4px;
+  font-size: var(--text-md);
+  margin-top: var(--space-1);
 }
 
 .feishu-settings__status {
   border: 1px solid var(--border-light);
   border-radius: var(--radius-xs);
-  font-size: 0.76rem;
-  gap: 6px;
-  padding: 6px 10px;
+  font-size: var(--text-md);
+  gap: var(--space-1-5);
+  padding: var(--space-1-5) var(--space-2-5);
 }
 
 .feishu-settings__status-dot {
@@ -56,15 +56,15 @@
 .feishu-settings__form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-3);
 }
 
 .feishu-settings__group {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
   margin: 0;
-  padding: 12px 0 0;
+  padding: var(--space-3) 0 0;
   border: 0;
   border-top: 1px solid var(--border-color);
 }
@@ -72,12 +72,12 @@
 .feishu-settings__group > legend {
   border: 0;
   margin: 0;
-  padding: 0 8px 0 0;
+  padding: 0 var(--space-2) 0 0;
 }
 
 .feishu-settings__field-grid {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
 }
 
@@ -85,18 +85,18 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-xs);
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .feishu-settings__hint-title {
   font-weight: 700;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .feishu-settings__hint-copy {
   color: var(--text-muted);
-  font-size: 0.78rem;
-  margin-top: 6px;
+  font-size: var(--text-md);
+  margin-top: var(--space-1-5);
   overflow-wrap: anywhere;
 }
 
@@ -111,11 +111,11 @@
 
 .feishu-settings__footer {
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .feishu-settings__footer-status {
-  font-size: 0.78rem;
+  font-size: var(--text-md);
 }
 
 .feishu-settings__footer-status.is-warning {

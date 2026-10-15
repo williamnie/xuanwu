@@ -1,13 +1,13 @@
 .jev-settings,
 .jev-settings__form {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
 }
 
 .jev-settings {
   border-top: 1px solid var(--border-color);
-  padding-top: 16px;
+  padding-top: var(--space-4);
 }
 
 .jev-settings__heading,
@@ -16,13 +16,13 @@
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   justify-content: space-between;
 }
 
 .jev-settings h4 {
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: var(--text-xl);
   font-weight: 650;
   margin: 0;
 }
@@ -35,13 +35,13 @@
 .jev-settings__hint,
 .jev-settings__availability p {
   color: var(--text-secondary);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
 .jev-settings__availability {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .jev-settings__facts {
@@ -53,9 +53,9 @@
 .jev-settings__facts > div {
   border-right: 1px solid var(--border-light);
   display: grid;
-  gap: 4px;
-  padding: 8px 16px 8px 0;
-  margin-right: 16px;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4) var(--space-2) 0;
+  margin-right: var(--space-4);
 }
 
 .jev-settings__facts > div:last-child {
@@ -69,7 +69,7 @@
 .jev-settings__test-result small {
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   font-weight: 750;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -78,7 +78,7 @@
 .jev-settings__facts strong {
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
 }
 
 .jev-settings__facts [data-status='ready'],
@@ -96,16 +96,16 @@
 
 .jev-settings__fields {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .jev-settings__field {
   color: var(--text-secondary);
   display: grid;
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   font-weight: 600;
-  gap: 6px;
+  gap: var(--space-1-5);
   min-width: 0;
 }
 
@@ -115,10 +115,10 @@
   border-radius: var(--radius-xs);
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: 0.84rem;
+  font-size: var(--text-base);
   min-height: var(--button-height);
   min-width: 0;
-  padding: 6px 8px;
+  padding: var(--space-1-5) var(--space-2);
   width: 100%;
 }
 
@@ -126,8 +126,8 @@
   align-items: center;
   color: var(--text-secondary);
   display: inline-flex;
-  font-size: 0.78rem;
-  gap: 8px;
+  font-size: var(--text-md);
+  gap: var(--space-2);
 }
 
 .jev-settings__check input {
@@ -145,44 +145,44 @@
 
 .jev-settings__scopes legend {
   color: var(--text-secondary);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   font-weight: 600;
-  padding: 0 0 8px;
+  padding: 0 0 var(--space-2);
 }
 
 .jev-settings__scopes > div {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 16px;
+  gap: var(--space-3) var(--space-4);
 }
 
 .jev-settings__key,
 .jev-settings__history {
   border-top: 1px solid var(--border-light);
   display: grid;
-  gap: 8px;
-  padding-top: 12px;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
 }
 
 .jev-settings__advanced summary {
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 0.78rem;
-  padding: 4px 0;
+  font-size: var(--text-md);
+  padding: var(--space-1) 0;
 }
 
 .jev-settings__advanced .jev-settings__fields {
-  padding-top: 8px;
+  padding-top: var(--space-2);
 }
 
 .jev-settings__actions {
   border-top: 1px solid var(--border-light);
-  padding-top: 12px;
+  padding-top: var(--space-3);
 }
 
 .jev-settings__error,
 .jev-settings__notice {
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   line-height: 1.5;
 }
 
@@ -194,10 +194,10 @@
   border-left: 2px solid var(--border-color);
   color: var(--text-secondary);
   display: grid;
-  font-size: 0.78rem;
-  gap: 6px;
+  font-size: var(--text-md);
+  gap: var(--space-1-5);
   overflow-wrap: anywhere;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
 }
 
 .jev-settings__history ol {
@@ -209,28 +209,28 @@
 .jev-settings__history li {
   border-top: 1px solid var(--border-light);
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
   overflow-wrap: anywhere;
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 
 .jev-settings__history li > div {
   align-items: baseline;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   justify-content: space-between;
 }
 
 .jev-settings__history strong {
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
 }
 
 .jev-settings__history p {
   color: var(--text-secondary);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
 }
 
 @media (max-width: 760px) {

@@ -6,12 +6,12 @@
 }
 
 .connector-diagnostics {
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .connector-diagnostics__error {
   color: var(--error);
-  font-size: 0.86rem;
+  font-size: var(--text-base);
 }
 
 .connector-diagnostics__header,
@@ -30,29 +30,29 @@
 }
 
 .connector-diagnostics__header {
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .connector-diagnostics__heading {
-  font-size: 1.1rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .connector-diagnostics__description {
   color: var(--text-muted);
-  font-size: 0.82rem;
-  margin-top: 4px;
+  font-size: var(--text-md);
+  margin-top: var(--space-1);
 }
 
 .connector-diagnostics__empty {
   color: var(--text-muted);
-  font-size: 0.86rem;
+  font-size: var(--text-base);
 }
 
 .connector-diagnostics__body,
 .connector-diagnostics__grid {
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .connector-diagnostics__grid {
@@ -63,7 +63,7 @@
 .connector-diagnostics__summary,
 .connector-diagnostics__actions {
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .connector-diagnostics__badge {
@@ -71,9 +71,9 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-xs);
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: var(--text-md);
   font-weight: 800;
-  padding: 6px 10px;
+  padding: var(--space-1-5) var(--space-2-5);
 }
 
 .connector-diagnostics__badge.is-configured {
@@ -96,12 +96,12 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  gap: 10px;
-  padding: 14px;
+  gap: var(--space-2-5);
+  padding: var(--space-3-5);
 }
 
 .connector-diagnostics__card-header {
-  gap: 10px;
+  gap: var(--space-2-5);
 }
 
 .connector-diagnostics__card-title,
@@ -111,13 +111,13 @@
 
 .connector-diagnostics__card-subtitle {
   color: var(--text-muted);
-  font-size: 0.74rem;
-  margin-top: 2px;
+  font-size: var(--text-sm);
+  margin-top: var(--space-0-5);
 }
 
 .connector-diagnostics__status {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
 }
 
 .connector-diagnostics__guide {
@@ -125,10 +125,10 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   display: grid;
-  font-size: 0.78rem;
-  gap: 7px;
+  font-size: var(--text-md);
+  gap: var(--space-1-5);
   line-height: 1.5;
-  padding: 10px;
+  padding: var(--space-2-5);
 }
 
 .connector-diagnostics__muted,
@@ -141,16 +141,16 @@
 }
 
 .connector-diagnostics__meta {
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .connector-diagnostics__meta-label {
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
 }
 
 .connector-diagnostics__meta-value {
-  font-size: 0.84rem;
-  gap: 8px;
+  font-size: var(--text-base);
+  gap: var(--space-2);
   overflow-wrap: anywhere;
 }
 

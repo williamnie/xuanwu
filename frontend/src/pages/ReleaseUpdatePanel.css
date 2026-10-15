@@ -3,8 +3,8 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   display: grid;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--space-4);
+  padding: var(--space-4);
 }
 
 .settings-release-update__header,
@@ -15,7 +15,7 @@
 .settings-release-update__running {
   align-items: center;
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .settings-release-update__header {
@@ -25,9 +25,9 @@
 .settings-release-update__header h2 {
   align-items: center;
   display: flex;
-  font-size: 1.1rem;
-  gap: 8px;
-  margin: 2px 0 4px;
+  font-size: var(--text-2xl);
+  gap: var(--space-2);
+  margin: var(--space-0-5) 0 var(--space-1);
 }
 
 .settings-release-update__header p,
@@ -37,7 +37,7 @@
 .settings-release-update__result span,
 .settings-release-update__running span {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   line-height: 1.5;
 }
 
@@ -45,7 +45,7 @@
 .settings-release-update__fact span {
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 0.56rem;
+  font-size: var(--text-2xs);
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -60,19 +60,19 @@
 
 .settings-release-update__fact {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 140px;
-  padding: 10px 16px 10px 0;
+  padding: var(--space-2-5) var(--space-4) var(--space-2-5) 0;
 }
 
 .settings-release-update__fact + .settings-release-update__fact {
   border-left: 1px solid var(--border-light);
-  padding-left: 16px;
+  padding-left: var(--space-4);
 }
 
 .settings-release-update__fact strong {
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
 }
 
 .settings-release-update__fact.is-success strong,
@@ -101,34 +101,34 @@
 .settings-release-update__result > div,
 .settings-release-update__running > div {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .settings-release-update__confirm {
   border-left: 2px solid var(--warning);
-  padding-left: 12px;
+  padding-left: var(--space-3);
 }
 
 .settings-release-update__actions {
   display: flex !important;
   flex-shrink: 0;
-  gap: 8px !important;
+  gap: var(--space-2) !important;
 }
 
 .settings-release-update__error {
-  font-size: 0.78rem;
+  font-size: var(--text-md);
 }
 
 .settings-release-update__loading {
   align-items: center;
   color: var(--text-muted);
   display: flex;
-  font-size: 0.78rem;
+  font-size: var(--text-md);
 }
 
 @media (max-width: 760px) {
   .settings-release-update {
-    padding: 12px;
+    padding: var(--space-3);
   }
 
   .settings-release-update__header,

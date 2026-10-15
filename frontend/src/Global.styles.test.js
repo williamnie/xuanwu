@@ -310,6 +310,7 @@ test('migrated styles use scale tokens and scoped structural exceptions', () => 
     const raw = readFileSync(new URL(file, root), 'utf8');
     scaleSources[file] = uncomment(file.endsWith('.html') ? [...raw.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(match => match[1]).join('\n') : raw);
   }
+  assert.deepEqual(typescaleContract.migratedFiles.filter(file => !file.startsWith('../../docs/')).sort(), Object.keys(styles).sort(), 'every frontend stylesheet participates in the scale contract');
   const seenTiny = new Set();
   const seenPanel = new Set();
   const seenStructural = new Set();
@@ -320,7 +321,16 @@ test('migrated styles use scale tokens and scoped structural exceptions', () => 
       for (const [, property, raw] of body.matchAll(/(?<![-\w])(font-size|(?:padding|margin)(?:-[\w-]+)?|(?:column-|row-)?gap)\s*:\s*([^;]+)(?:;|$)/g)) {
         const value = normalize(raw).replace(/ !important$/, '');
         const key = keyOf({ file, selector, property });
-        if (/[\d.]+(?:px|r?em|[sdl]?v[wh]|ch|ex|pt)\b/.test(value)) {
+        for (const [, token] of value.matchAll(/var\((--[\w-]+)\)/g)) {
+          const tiers = property === 'font-size'
+            ? /^--text-(?:2xs|xs|sm|md|base|lg|xl|2xl|3xl|4xl|page)$/
+            : /^--(?:space-(?:0-5|1|1-5|2|2-5|3|3-5|4|4-5|5|6|8)|page-gutter|sessions-page-gutter|sidebar-width|button-height|project-modal-inline-padding)$/;
+          assert.match(token, tiers, `${key}: unknown scale alias ${token}`);
+          if (token === '--sidebar-width') assert.equal(key, 'index.css: .main-content: margin-left');
+          if (token === '--button-height') assert.ok(typescaleContract.structuralValues.some(row => keyOf(row) === key && row.value === value), `${key}: control dimension used as arbitrary spacing`);
+        }
+        const withoutNegation = value.replace(/calc\(var\(--space-[\w-]+\) \* -1\)/g, '0');
+        if (/[\d.]+(?:px|r?em|[sdl]?v[wh]|ch|ex|pt)\b/.test(value) || withoutNegation.includes('calc(')) {
           const allowed = typescaleContract.structuralValues.find(row => keyOf(row) === key && row.value === value);
           assert.ok(allowed?.reason, `${key}: unreviewed literal ${value}`);
           seenStructural.add(`${key}: ${value}`);
@@ -353,4 +363,18 @@ test('migrated styles use scale tokens and scoped structural exceptions', () => 
   for (const row of typescaleContract.structuralValues) assert.ok(seenStructural.has(`${keyOf(row)}: ${row.value}`), `stale structural exception ${keyOf(row)}`);
   for (const row of typescaleContract.microSpacing) assert.ok(seenTiny.has(keyOf(row)), `stale micro spacing ${keyOf(row)}`);
   for (const row of typescaleContract.panelPadding) assert.ok(seenPanel.has(keyOf(row)), `stale panel inset ${keyOf(row)}`);
+});
+
+
+test('component aliases and font shorthands cannot hide literal scale values', () => {
+  const canonicalNames = new Set([...tokens.matchAll(/(--[\w-]+):/g)].map(match => match[1]));
+  for (const [file, css] of Object.entries(styles)) {
+    for (const [, name, value] of css.matchAll(/(--[\w-]+):\s*([^;]+);/g)) {
+      const target = value.trim().match(/^var\((--[\w-]+)\)$/)?.[1];
+      assert.ok(canonicalNames.has(target), `${file}: ${name} must alias a canonical token`);
+    }
+    for (const [, value] of css.matchAll(/(?<![-\w])font:\s*([^;]+);/g)) {
+      assert.equal(value.trim(), 'inherit', `${file}: use explicit font-family and font-size tokens`);
+    }
+  }
 });
