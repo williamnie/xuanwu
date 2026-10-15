@@ -278,7 +278,7 @@ export default function Projects() {
                   <div className="project-card-footer">
                     <a
                       className="project-card-tasks-link"
-                      href={appHashForRoute({ currentPage: 'work', filterProject: proj.id, taskScope: 'all' })}
+                      href={appHashForRoute({ currentPage: 'tasks', filterProject: proj.id, taskScope: 'all' })}
                     >
                       {t('projects.viewTasks')} <ArrowUpRight size={13} />
                     </a>

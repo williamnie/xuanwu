@@ -3,7 +3,7 @@ export const FIRST_RUN_ONBOARDING_KEY = 'xuanwu-first-run-onboarding-v1';
 const STORED_STATES = new Set(['active', 'completed', 'dismissed']);
 
 export function isFirstDeliveryDetailRoute(currentPage, selectedWorkId, firstDeliveryWorkId) {
-  return currentPage === 'work' && Boolean(firstDeliveryWorkId) && selectedWorkId === firstDeliveryWorkId;
+  return (currentPage === 'work' || currentPage === 'tasks') && Boolean(firstDeliveryWorkId) && selectedWorkId === firstDeliveryWorkId;
 }
 
 export function readFirstRunOnboardingState(storage = globalThis.localStorage) {

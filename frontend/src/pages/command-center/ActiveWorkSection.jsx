@@ -105,7 +105,7 @@ export default function ActiveWorkSection({ limit = 10, navigateTo, projects = [
 
   // 打开任务详情并选中正在进行的那次执行，执行过程就在任务的“过程”段里。
   const openWork = (item) => {
-    navigateTo?.('work', item.id, '', '', item.latest_run?.id ? { runId: item.latest_run.id } : {});
+    navigateTo?.('tasks', item.id, '', '', item.latest_run?.id ? { runId: item.latest_run.id } : {});
   };
 
   const submitAction = async () => {
@@ -253,7 +253,7 @@ export default function ActiveWorkSection({ limit = 10, navigateTo, projects = [
         </div>
       )}
       {(summary?.section?.counts?.total || 0) > items.length ? (
-        <button className="active-work-more" onClick={() => navigateTo?.('work', null, '', '', { scope: 'active' })} type="button">
+        <button className="active-work-more" onClick={() => navigateTo?.('tasks', null, '', '', { scope: 'active' })} type="button">
           查看全部 {summary.section.counts.total} 个 <ArrowUpRight size={13} />
         </button>
       ) : null}

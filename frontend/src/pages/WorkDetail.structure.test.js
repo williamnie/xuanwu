@@ -39,13 +39,13 @@ test('Task process lists runs and opens each one on the Runs page instead of emb
   assert.match(runList, /RUN_REFRESH_EVENT_TYPES\.has/);
   assert.doesNotMatch(runList, /<RunContextBar|<RunDetail|runsApi\.getRun\(/);
   assert.doesNotMatch(detail, /<RunContextBar|<RunDetail/);
-  assert.doesNotMatch(runsPage, /navigateTo\('work', run\.work_id/);
+  assert.doesNotMatch(runsPage, /navigateTo\('tasks', run\.work_id/);
 });
 
 test('Task page lists and boards tasks and opens canonical Work Detail', () => {
   assert.match(board, /onViewChange/);
   assert.match(board, /WORK_BOARD_STATUSES\.map\(status =>/);
-  assert.match(board, /navigateTo\('work', work\.id\)/);
+  assert.match(board, /navigateTo\('tasks', work\.id\)/);
   assert.doesNotMatch(board, /navigateTo\('issues', issueId\)/);
   assert.match(board, /work-card-identity/);
   assert.match(board, /`Issue #\$\{issueId\}`/);

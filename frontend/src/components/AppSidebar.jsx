@@ -40,9 +40,9 @@ const NAV_ICONS = {
 };
 
 const NAV_TRANSLATION_KEYS = {
-  'command-center': 'nav.commandCenter',
+  'inbox': 'nav.commandCenter',
   'ask-xuanwu': 'nav.askXuanwu',
-  work: 'nav.work',
+  tasks: 'nav.work',
   runs: 'nav.runs',
   automations: 'nav.automations',
   analytics: 'nav.analytics',
@@ -50,8 +50,8 @@ const NAV_TRANSLATION_KEYS = {
 };
 
 const NAV_CODE_PREFIX = {
-  'command-center': '01',
-  work: '02',
+  'inbox': '01',
+  tasks: '02',
   runs: '03',
   'ask-xuanwu': '04',
   automations: '05',

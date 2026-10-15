@@ -1,3 +1,5 @@
+import { PRODUCT_ROUTE_ALIASES } from './assistantModules.js';
+
 export const WORK_BOARD_STATUSES = [
   'triage',
   'todo',
@@ -28,7 +30,8 @@ export function workBoardEnabled(env = {}) {
 export const WORK_BOARD_ENABLED = workBoardEnabled(import.meta.env);
 
 export function resolveWorkBoardPage(page, enabled = WORK_BOARD_ENABLED) {
-  return page === 'work' && !enabled ? 'issues' : page;
+  const canonicalPage = PRODUCT_ROUTE_ALIASES[page] || page;
+  return canonicalPage === 'tasks' && !enabled ? 'issues' : canonicalPage;
 }
 
 export function issueIdFromWorkId(workId) {

@@ -95,7 +95,7 @@ function AuditBoundary({ navigateTo }) {
         <p>需要你确认的操作会显示在工作台。审批决定和执行结果都会保留记录，批准后也不能超出项目允许的权限范围。</p>
       </div>
       <div className="settings-authority-actions">
-        <button className="btn btn-secondary" onClick={() => navigateTo?.('command-center')} type="button">查看待处理审批</button>
+        <button className="btn btn-secondary" onClick={() => navigateTo?.('inbox')} type="button">查看待处理审批</button>
         <button className="btn btn-secondary" onClick={() => navigateTo?.('pi-activity')} type="button">查看活动记录</button>
       </div>
     </div>

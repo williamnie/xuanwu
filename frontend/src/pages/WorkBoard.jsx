@@ -75,7 +75,7 @@ export default function WorkBoard({ filterProject: projectId = '', onProjectChan
 
   useEffect(() => {
     if (selectedWorkId) return;
-    onPageContextChange?.({ page_id: 'work', project_id: projectId });
+    onPageContextChange?.({ page_id: 'tasks', project_id: projectId });
   }, [onPageContextChange, projectId, selectedWorkId]);
 
   const changeView = (next) => {
@@ -103,7 +103,7 @@ export default function WorkBoard({ filterProject: projectId = '', onProjectChan
 
   return (
     <section className={`work-board-page bg-grid-tech is-${view}`}>
-      <TaskSubviewTabs active="work" navigateTo={navigateTo} />
+      <TaskSubviewTabs active="tasks" navigateTo={navigateTo} />
       <WorkBoardHeader
         onCreate={() => setDialog({ mode: 'create' })}
         onProjectChange={onProjectChange}
@@ -733,7 +733,7 @@ function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit
       <p>{work.goal}</p>
       <div className="work-card-project">{projectName}</div>
       <div className="work-card-footer">
-        <button className="work-detail-link" onClick={() => navigateTo('work', work.id)} type="button">
+        <button className="work-detail-link" onClick={() => navigateTo('tasks', work.id)} type="button">
           {t('board.open')} <ArrowUpRight size={13} />
         </button>
         <button onClick={() => onEdit(work)} type="button"><Pencil size={13} /> {t('work.edit')}</button>

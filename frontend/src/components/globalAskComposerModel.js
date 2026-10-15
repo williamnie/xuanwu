@@ -10,12 +10,14 @@ const PAGE_LABELS = {
   automations: 'Automations',
   analytics: '统计分析',
   'command-center': '工作台',
+  inbox: '工作台',
   handoffs: 'Handoffs',
   issues: 'Work',
   projects: 'Projects',
   runs: 'Runs',
   settings: 'Settings',
   work: 'Work',
+  tasks: 'Work',
 };
 
 const MAX_WORK_SUGGESTIONS = 16;
@@ -26,7 +28,7 @@ export function isGlobalAskComposerVisible(page, pageContext = null) {
 }
 
 export function buildGlobalComposerPageReference(route = {}, works = []) {
-  const pageId = clean(route.currentPage) || 'command-center';
+  const pageId = clean(route.currentPage) || 'inbox';
   const live = route.pageContext?.page_id === pageId ? route.pageContext : {};
   const issueId = positiveInteger(route.selectedIssueId);
   const issueWorkId = issueId ? `xw:work:issues:${issueId}` : '';
@@ -38,7 +40,7 @@ export function buildGlobalComposerPageReference(route = {}, works = []) {
   const runId = clean(live.run_id) || (pageId === 'runs' ? clean(route.selectedRunId) : '');
   const sessionId = clean(live.session_id) || (pageId === 'runs' ? clean(route.selectedSessionId) : '');
   const handoffId = clean(live.handoff_id)
-    || (pageId === 'handoffs' || pageId === 'work' ? clean(route.selectedHandoffId) : '');
+    || (pageId === 'handoffs' || pageId === 'work' || pageId === 'tasks' ? clean(route.selectedHandoffId) : '');
   const routeRef = routeReference({ handoffId, issueId, pageId, projectId, runId, sessionId, workId });
 
   return {

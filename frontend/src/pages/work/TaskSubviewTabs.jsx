@@ -7,7 +7,7 @@ export default function TaskSubviewTabs({ active, navigateTo }) {
   const activeAutomations = automations.filter(item => item.status === 'active').length;
   return (
     <nav aria-label="任务子视图" className="task-subview-tabs">
-      <button aria-current={active === 'work' ? 'page' : undefined} onClick={() => navigateTo('work')} type="button">任务</button>
+      <button aria-current={active === 'tasks' ? 'page' : undefined} onClick={() => navigateTo('tasks')} type="button">任务</button>
       <button aria-current={active === 'automations' ? 'page' : undefined} onClick={() => navigateTo('automations')} type="button">
         自动化{automations.length ? <span>{activeAutomations || automations.length}</span> : null}
       </button>

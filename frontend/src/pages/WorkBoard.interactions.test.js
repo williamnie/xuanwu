@@ -84,7 +84,7 @@ test('Task page keeps search in the header, defaults to the list and keeps the b
   assert.match(board, /aria-label=\{t\('board\.search'\)\}/);
   assert.match(board, /localStorage\.getItem\(TASK_VIEW_STORAGE_KEY\) === 'board' \? 'board' : 'list'/);
   assert.match(board, /view === 'list' \? \([\s\S]*<TaskList[\s\S]*<WorkKanban/);
-  assert.match(board, /<TaskSubviewTabs active="work"/);
+  assert.match(board, /<TaskSubviewTabs active="tasks"/);
   assert.doesNotMatch(board, /board\.count|board\.filteredCount/);
   assert.doesNotMatch(composerCss, /\.main-content\.has-global-ask-composer\s*\{/);
 });

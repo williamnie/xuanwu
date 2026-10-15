@@ -169,8 +169,8 @@ test('Chat removes the Advanced gate and exposes direct Debug copying', () => {
 test('Chat renders user status, canonical Work links, and actionable empty and error states', () => {
   assert.match(pageSource, /piChatStatusSummary\(\{[\s\S]*conversation: state\.selectedConversation,[\s\S]*transcript: state\.transcript/);
   assert.match(pageSource, /piChatWorkLinks\(transcript\)/);
-  assert.match(pageSource, /navigateTo\('work', work\.id\)/);
-  assert.match(pageSource, /navigateTo\('work'\)/);
+  assert.match(pageSource, /navigateTo\('tasks', work\.id\)/);
+  assert.match(pageSource, /navigateTo\('tasks'\)/);
   assert.match(pageSource, /t\('chat\.unavailable'\)/);
   assert.match(pageSource, /onClick=\{onRetry\}/);
   assert.match(pageSource, /t\('chat\.start'\)/);

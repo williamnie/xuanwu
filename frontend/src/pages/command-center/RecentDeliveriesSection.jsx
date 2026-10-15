@@ -158,7 +158,7 @@ export default function RecentDeliveriesSection({ limit = RECENT_DELIVERY_LIMIT,
           <PackageCheck size={16} />
           <strong>还没有交付记录</strong>
           <span>任务产生交付结果后，会显示内容摘要与验证状态。</span>
-          <button onClick={() => navigateTo?.('work', null, '', '', { scope: 'done' })} type="button">查看已完成的任务</button>
+          <button onClick={() => navigateTo?.('tasks', null, '', '', { scope: 'done' })} type="button">查看已完成的任务</button>
         </div>
       ) : (
         <div aria-label="最近交付列表" className="recent-deliveries-list" role="region" tabIndex={0}>

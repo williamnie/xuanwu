@@ -106,7 +106,7 @@ export default function TaskRequestsSection({ navigateTo, onCreate }) {
             <li key={card.key}>
               {card.kind === 'review' ? (
                 <div className="task-request-review">
-                  <button className="task-request-title" onClick={() => navigateTo('work', card.work.id)} type="button">{card.work.title} <ArrowRight size={13} /></button>
+                  <button className="task-request-title" onClick={() => navigateTo('tasks', card.work.id)} type="button">{card.work.title} <ArrowRight size={13} /></button>
                   <HumanReviewCard compact disabled={review.submitting} onSelect={action => review.select(card.work, card.request, action)} request={card.request} />
                 </div>
               ) : (
@@ -119,7 +119,7 @@ export default function TaskRequestsSection({ navigateTo, onCreate }) {
                   </div>
                   <div className="actions">
                     {card.kind === 'failed' ? <button className="btn btn-secondary" disabled={Boolean(busyId)} onClick={() => retry(card.work)} type="button">{busyId === card.work.id ? '提交中…' : '重试'}</button> : null}
-                    <button className="btn btn-secondary" onClick={() => navigateTo('work', card.work.id)} type="button">查看</button>
+                    <button className="btn btn-secondary" onClick={() => navigateTo('tasks', card.work.id)} type="button">查看</button>
                   </div>
                 </article>
               )}
@@ -128,7 +128,7 @@ export default function TaskRequestsSection({ navigateTo, onCreate }) {
         </ul>
       )}
       {state.hidden > 0 ? (
-        <button className="task-requests-more" onClick={() => navigateTo('work', null, '', '', { scope: 'attention' })} type="button">
+        <button className="task-requests-more" onClick={() => navigateTo('tasks', null, '', '', { scope: 'attention' })} type="button">
           还有 {state.hidden} 个任务等你处理，在任务页查看 <ArrowRight size={13} />
         </button>
       ) : null}

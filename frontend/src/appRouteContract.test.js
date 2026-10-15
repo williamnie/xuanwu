@@ -7,7 +7,7 @@ import { resolveSettingsRoute } from './pages/settingsNavigation.js';
 
 // Frozen before D4: only append new canonical IDs here; keep all legacy inputs
 // and object/state assertions below unchanged throughout the migration.
-const PAGE_IDS = { inbox: ['command-center'], tasks: ['work'] };
+const PAGE_IDS = { inbox: ['command-center', 'inbox'], tasks: ['work', 'tasks'] };
 const workId = 'xw:work:issues:42';
 const handoffId = 'xw:handoff:derived:42';
 const runId = 'xw:run:issue_runs:issue-42-attempt-2';

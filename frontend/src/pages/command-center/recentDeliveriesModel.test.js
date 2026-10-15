@@ -73,7 +73,7 @@ test('detail refresh replaces aggregate status without replacing API-owned links
 
 test('open actions accept only the returned matching Handoff link and HTTP(S) URL', () => {
   const valid = item();
-  assert.deepEqual(recentDeliveryDetailRoute(valid), { handoffId: HANDOFF_ID, page: 'work', workId: WORK_ID });
+  assert.deepEqual(recentDeliveryDetailRoute(valid), { handoffId: HANDOFF_ID, page: 'tasks', workId: WORK_ID });
   assert.equal(recentDeliveryDetailRoute(item({ links: { view: '#/handoffs/xw%3Ahandoff%3Aderived%3Aother' } })), null);
   assert.equal(recentDeliveryView(item({
     delivery: { mode: 'ready_pr', ...prDelivery(), url: 'javascript:alert(1)' },

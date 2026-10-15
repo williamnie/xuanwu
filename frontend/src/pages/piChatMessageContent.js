@@ -110,6 +110,9 @@ function pageLabel(pageId) {
     runs: 'Runs',
     sessions: 'Sessions',
     work: 'Work',
+    tasks: 'Work',
+    'command-center': '工作台',
+    inbox: '工作台',
   };
   return labels[pageId] || pageId || '当前页面';
 }

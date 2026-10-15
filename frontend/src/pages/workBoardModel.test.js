@@ -113,11 +113,11 @@ test('Work stays primary while Issues route redirects and compatibility APIs kee
   const client = readFileSync(new URL('../api/work.js', import.meta.url), 'utf8');
 
   assert.match(app, /lazy\(\(\) => import\('\.\/pages\/WorkBoard'\)\)/);
-  assert.match(app, /currentPage === 'work'/);
+  assert.match(app, /currentPage === 'tasks'/);
   assert.match(app, /selectedWorkId=\{selectedWorkId\}/);
   assert.match(app, /resolveProductPage/);
   assert.match(sidebar, /productNavigationItems/);
-  assert.match(navigation, /issues:\s*'work'/);
+  assert.match(navigation, /issues:\s*'tasks'/);
   assert.doesNotMatch(sidebar, /aria-label="Issues"/);
   assert.match(client, /request\('\/api\/works'/);
   assert.match(client, /request\(`\/api\/works\/\$\{encodeURIComponent\(id\)\}`/);

@@ -185,7 +185,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   useEffect(() => {
     if (!work) return;
     onPageContextChange?.({
-      page_id: 'work',
+      page_id: 'tasks',
       project_id: work.owner?.project_id || '',
       work_id: work.id,
       ...(activeDeliveryId ? { handoff_id: activeDeliveryId } : {}),
@@ -258,7 +258,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   return (
     <section className="work-detail-page animate-fade-in">
       <div className="work-detail-toolbar">
-        <button className="work-detail-back" onClick={() => navigateTo('work')} type="button"><ArrowLeft size={15} /> {t('work.backToBoard')}</button>
+        <button className="work-detail-back" onClick={() => navigateTo('tasks')} type="button"><ArrowLeft size={15} /> {t('work.backToBoard')}</button>
         <div className="work-detail-actions">
           {availableActions.start ? <button className="primary" disabled={submitting} onClick={() => submitAction('enqueue')} type="button"><Play size={14} /> {t('work.start')}</button> : null}
           {availableActions.retry ? <button className="primary" disabled={submitting} onClick={() => submitAction('retry')} type="button"><RotateCw size={14} /> {t('work.retry')}</button> : null}
@@ -412,7 +412,7 @@ function WorkDetailLoading() {
 
 function WorkDetailFailure({ error, navigateTo }) {
   const { t } = useI18n();
-  return <section className="work-detail-failure" role="alert"><AlertTriangle size={16} /><div><strong>{t('work.detailUnavailable')}</strong><span>{error || t('work.notFound')}</span></div><button onClick={() => navigateTo('work')} type="button"><ArrowLeft size={14} /> {t('work.backToBoard')}</button></section>;
+  return <section className="work-detail-failure" role="alert"><AlertTriangle size={16} /><div><strong>{t('work.detailUnavailable')}</strong><span>{error || t('work.notFound')}</span></div><button onClick={() => navigateTo('tasks')} type="button"><ArrowLeft size={14} /> {t('work.backToBoard')}</button></section>;
 }
 
 function SectionHeading({ eyebrow, title }) {

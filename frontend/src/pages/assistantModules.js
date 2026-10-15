@@ -2,14 +2,14 @@ import { PRODUCT_NAV_LABELS } from '../brand.js';
 
 export const PRODUCT_NAV_ITEMS = Object.freeze([
   {
-    page: 'command-center',
+    page: 'inbox',
     label: PRODUCT_NAV_LABELS.commandCenter,
     icon: 'command-center',
     placement: 'primary',
     availability: 'compatibility',
   },
   {
-    page: 'work',
+    page: 'tasks',
     label: PRODUCT_NAV_LABELS.work,
     icon: 'work',
     placement: 'primary',
@@ -28,7 +28,7 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
     label: PRODUCT_NAV_LABELS.automations,
     icon: 'automations',
     placement: 'subview',
-    parent: 'work',
+    parent: 'tasks',
     availability: 'compatibility',
   },
   {
@@ -54,16 +54,22 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
   },
 ]);
 
+export const PRODUCT_ROUTE_ALIASES = Object.freeze({
+  'command-center': 'inbox',
+  work: 'tasks',
+});
+
 export const PRODUCT_COMPAT_ROUTE_REDIRECTS = Object.freeze({
-  dashboard: 'command-center',
+  ...PRODUCT_ROUTE_ALIASES,
+  dashboard: 'inbox',
   'pi-chat': 'ask-xuanwu',
-  issues: 'work',
+  issues: 'tasks',
   sessions: 'runs',
   cron: 'automations',
   'pi-automations': 'automations',
-  'pi-approvals': 'command-center',
-  'attention-inbox': 'command-center',
-  'pi-inbox': 'command-center',
+  'pi-approvals': 'inbox',
+  'attention-inbox': 'inbox',
+  'pi-inbox': 'inbox',
   projects: 'settings',
 });
 
@@ -73,7 +79,7 @@ export function productNavigationItems({ workBoardEnabled = true } = {}) {
 
 export function resolveProductPage(page, { workBoardEnabled = true } = {}) {
   const resolvedPage = PRODUCT_COMPAT_ROUTE_REDIRECTS[page] || page;
-  if (resolvedPage === 'work' && !workBoardEnabled) return 'issues';
+  if (resolvedPage === 'tasks' && !workBoardEnabled) return 'issues';
   return resolvedPage;
 }
 

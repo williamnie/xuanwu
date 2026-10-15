@@ -118,7 +118,7 @@ export default function Dashboard({ navigateTo }) {
           onSaved={(work) => {
             setCreating(false);
             refreshData(['workSummary']);
-            if (work?.id) navigateTo('work', work.id);
+            if (work?.id) navigateTo('tasks', work.id);
           }}
           projects={projects}
         />

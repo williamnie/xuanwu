@@ -74,21 +74,21 @@ const PROJECT_RECONCILE_EVENT_TYPES = new Set([
 const PAGE_DATA_SLICES = {
   analytics: ['workSummary'],
   automations: ['projects'],
-  'command-center': ['projects', 'workSummary'],
+  'inbox': ['projects', 'workSummary'],
   issues: ['projects', 'workSummary'],
   settings: ['projects', 'workSummary'],
-  work: ['projects', 'workSummary'],
+  tasks: ['projects', 'workSummary'],
   handoffs: ['projects'],
 };
 
 const MOBILE_PAGE_TITLE_KEYS = {
   'ask-xuanwu': 'nav.askXuanwu',
   automations: 'nav.automations',
-  'command-center': 'nav.commandCenter',
+  'inbox': 'nav.commandCenter',
   analytics: 'nav.analytics',
   runs: 'nav.runs',
   settings: 'nav.settings',
-  work: 'nav.work',
+  tasks: 'nav.work',
 };
 
 function getReconcileSlices(currentPage, selectedIssueId) {
@@ -225,7 +225,7 @@ export default function App() {
         draft.filterProject = value;
       }
     });
-    if (currentPage === 'issues' || currentPage === 'work') {
+    if (currentPage === 'issues' || currentPage === 'tasks') {
       writeBrowserRoute({
         currentPage,
         filterProject: value,
@@ -241,12 +241,12 @@ export default function App() {
 
   const setTaskSource = useCallback((value) => {
     updateAppState(draft => { draft.taskSource = value; });
-    writeBrowserRoute({ currentPage: 'work', filterProject, taskScope, taskSource: value });
+    writeBrowserRoute({ currentPage: 'tasks', filterProject, taskScope, taskSource: value });
   }, [filterProject, taskScope, updateAppState, writeBrowserRoute]);
 
   const setTaskScope = useCallback((value) => {
     updateAppState(draft => { draft.taskScope = value; });
-    writeBrowserRoute({ currentPage: 'work', filterProject, taskScope: value, taskSource });
+    writeBrowserRoute({ currentPage: 'tasks', filterProject, taskScope: value, taskSource });
   }, [filterProject, taskSource, updateAppState, writeBrowserRoute]);
 
   const setTheme = useCallback((nextTheme) => {
@@ -282,21 +282,21 @@ export default function App() {
     if ((page === 'issues' || page === 'sessions') && resolvedPage !== page && !suppressLegacyWarning) {
       compatibilityApi.recordLegacyRoute({ family: page, target: resolvedPage }).catch(() => {});
       toast.warning(
-        `${page === 'issues' ? 'Issues' : 'Sessions'} 旧入口已迁移到 ${resolvedPage === 'work' ? 'Work' : 'Runs'}；compat v1 保留至 v0.3.x。`,
+        `${page === 'issues' ? 'Issues' : 'Sessions'} 旧入口已迁移到 ${resolvedPage === 'tasks' ? 'Work' : 'Runs'}；compat v1 保留至 v0.3.x。`,
         6000,
       );
     }
-    const targetHandoffId = resolvedPage === 'handoffs' || resolvedPage === 'work' ? handoffId || '' : '';
+    const targetHandoffId = resolvedPage === 'handoffs' || resolvedPage === 'tasks' ? handoffId || '' : '';
     const targetIssueId = resolvedPage === 'issues'
-      ? page === 'work' ? issueIdFromWorkId(issueId) : issueId
+      ? page === 'work' || page === 'tasks' ? issueIdFromWorkId(issueId) : issueId
       : null;
-    const targetWorkId = resolvedPage === 'work'
+    const targetWorkId = resolvedPage === 'tasks'
       ? page === 'issues' ? workIdFromIssueId(issueId) : String(issueId || '')
       : '';
     const compatSessionRoute = resolvedPage === 'runs' && (page === 'sessions' || Boolean(internalProviderSessionId));
     const targetRunId = resolvedPage === 'runs' && !compatSessionRoute
       ? sessionId || ''
-      : resolvedPage === 'work' && targetWorkId ? String(navigationOptions?.runId || '').trim() : '';
+      : resolvedPage === 'tasks' && targetWorkId ? String(navigationOptions?.runId || '').trim() : '';
     const targetSessionId = resolvedPage === 'runs' && compatSessionRoute
       ? internalProviderSessionId || sessionId || ''
       : '';
@@ -313,8 +313,8 @@ export default function App() {
       selectedSessionId: targetSessionId,
       selectedWorkId: targetWorkId,
       settingsSection: targetSettingsSection,
-      taskSource: resolvedPage === 'work' ? String(navigationOptions?.source || '') : '',
-      taskScope: resolvedPage === 'work' && !targetWorkId ? String(navigationOptions?.scope || '') : '',
+      taskSource: resolvedPage === 'tasks' ? String(navigationOptions?.source || '') : '',
+      taskScope: resolvedPage === 'tasks' && !targetWorkId ? String(navigationOptions?.scope || '') : '',
     };
     startPageTransition(() => updateAppState(draft => {
       if (draft.currentPage !== resolvedPage) {
@@ -330,7 +330,7 @@ export default function App() {
         draft.selectedRunId = targetRunId;
         draft.selectedSessionId = targetSessionId;
       }
-      if (resolvedPage === 'work') {
+      if (resolvedPage === 'tasks') {
         draft.selectedRunId = targetRunId;
         draft.taskScope = targetRoute.taskScope;
         draft.taskSource = targetRoute.taskSource;
@@ -547,13 +547,13 @@ export default function App() {
   const completeFirstRunOnboarding = () => {
     writeFirstRunOnboardingState('completed');
     setFirstRunOnboarding('hidden');
-    navigateTo('command-center');
+    navigateTo('inbox');
   };
 
   const skipFirstRunOnboarding = () => {
     writeFirstRunOnboardingState('dismissed');
     setFirstRunOnboarding('hidden');
-    navigateTo('command-center');
+    navigateTo('inbox');
   };
 
   const assistantModule = assistantModuleForPage(currentPage);
@@ -584,8 +584,8 @@ export default function App() {
             onOpenWork={workId => {
               setFirstDeliveryWorkId(workId);
               // Make browser Back return to the guide, even if setup started on a deep link.
-              writeBrowserRoute({ currentPage: 'command-center' }, { replace: true });
-              navigateTo('work', workId);
+              writeBrowserRoute({ currentPage: 'inbox' }, { replace: true });
+              navigateTo('tasks', workId);
             }}
             onComplete={completeFirstRunOnboarding}
             onSkip={skipFirstRunOnboarding}
@@ -653,7 +653,7 @@ export default function App() {
 
       {/* 右侧主工作区 */}
       <main className="main-content" ref={mainContentRef} aria-busy={pagePending} inert={isMobileViewport && mobileSidebarOpen ? true : undefined}>
-        {firstDeliveryDetailOpen ? <div className="first-delivery-return"><button className="btn btn-secondary" onClick={() => navigateTo('command-center')} type="button">返回引导</button><span>查看首次任务进度后，返回引导确认交付结果。</span></div> : null}
+        {firstDeliveryDetailOpen ? <div className="first-delivery-return"><button className="btn btn-secondary" onClick={() => navigateTo('inbox')} type="button">返回引导</button><span>查看首次任务进度后，返回引导确认交付结果。</span></div> : null}
         {pagePending ? <span className="page-navigation-status" role="status">正在打开页面…</span> : null}
         <GuardianAlertBanner />
         {loading ? (
@@ -662,11 +662,11 @@ export default function App() {
           </div>
         ) : (
           <Suspense fallback={<PageLoadingFallback />}>
-            {currentPage === 'command-center' ? (
+            {currentPage === 'inbox' ? (
               <Dashboard navigateTo={navigateTo} />
             ) : currentPage === 'analytics' ? (
               <Analytics />
-            ) : currentPage === 'work' ? (
+            ) : currentPage === 'tasks' ? (
               <WorkBoard
                 filterProject={filterProject}
                 onProjectChange={setFilterProject}

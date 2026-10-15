@@ -67,8 +67,8 @@ test('starting opens the created task without completing or dismissing setup, an
   assert.match(guideSource, /onOpenWork\(targetWorkRef.current\)/);
   assert.match(appSource, /isFirstDeliveryDetailRoute\(currentPage, selectedWorkId, firstDeliveryWorkId\)/);
   assert.match(appSource, /const shouldShowOnboarding = !firstDeliveryDetailOpen/);
-  assert.match(appSource, /writeBrowserRoute\(\{ currentPage: 'command-center' \}, \{ replace: true \}\);\s*navigateTo\('work', workId\)/);
-  assert.match(appSource, /navigateTo\('command-center'\)[^\n]*返回引导/);
+  assert.match(appSource, /writeBrowserRoute\(\{ currentPage: 'inbox' \}, \{ replace: true \}\);\s*navigateTo\('tasks', workId\)/);
+  assert.match(appSource, /navigateTo\('inbox'\)[^\n]*返回引导/);
   const openHandler = appSource.match(/onOpenWork=\{workId => \{([\s\S]*?)\}\}/)?.[1];
   assert.ok(openHandler);
   assert.doesNotMatch(openHandler, /writeFirstRunOnboardingState|skipFirstRun|completeFirstRun/);

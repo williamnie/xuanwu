@@ -45,7 +45,7 @@ export default function RunContextBar({ allowRetry = true, navigateTo, onRunChan
           <span className={`run-context-status ${run.status || 'unknown'}`}>{runStatusLabel(run.status)}</span>
           <strong>{showWorkLink ? run.work_title || '未命名任务' : `第 ${run.sequence || '?'} 次执行`}</strong>
           {showWorkLink && run.work_id ? (
-            <button className="run-work-link" onClick={() => navigateTo?.('work', run.work_id, '', '', { runId: run.id })} type="button">
+            <button className="run-work-link" onClick={() => navigateTo?.('tasks', run.work_id, '', '', { runId: run.id })} type="button">
               所属任务{issueId ? ` #${issueId}` : ''} <ArrowUpRight size={13} />
             </button>
           ) : null}

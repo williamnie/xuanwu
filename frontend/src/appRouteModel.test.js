@@ -19,8 +19,8 @@ test('round-trips product pages and their selected entity parameters', () => {
 
   for (const route of routes) {
     const parsed = appRouteFromHash(appHashForRoute(route));
-    assert.equal(parsed.currentPage, route.currentPage);
-    for (const [key, value] of Object.entries(route)) assert.equal(parsed[key], value);
+    assert.equal(parsed.currentPage, route.currentPage === 'work' ? 'tasks' : route.currentPage);
+    for (const [key, value] of Object.entries(route)) assert.equal(parsed[key], key === 'currentPage' && value === 'work' ? 'tasks' : value);
   }
 });
 
@@ -37,10 +37,10 @@ test('keeps existing Handoff deep links compatible', () => {
   };
   const hash = appHashForRoute(route);
 
-  assert.equal(hash, '#/work/xw%3Awork%3Aissues%3A917/delivery/xw%3Ahandoff%3Aderived%3A917');
+  assert.equal(hash, '#/tasks/xw%3Awork%3Aissues%3A917/delivery/xw%3Ahandoff%3Aderived%3A917');
   assert.deepEqual(appRouteFromHash(hash), {
     ...DEFAULT_APP_ROUTE,
-    currentPage: 'work',
+    currentPage: 'tasks',
     selectedHandoffId: route.selectedHandoffId,
     selectedWorkId: route.selectedWorkId,
   });
@@ -49,7 +49,7 @@ test('keeps existing Handoff deep links compatible', () => {
 test('keeps existing plain Work deep links compatible', () => {
   assert.deepEqual(appRouteFromHash('#/work/xw%3Awork%3Aissues%3A917'), {
     ...DEFAULT_APP_ROUTE,
-    currentPage: 'work',
+    currentPage: 'tasks',
     selectedWorkId: 'xw:work:issues:917',
   });
 });
@@ -67,7 +67,7 @@ test('preserves legacy route redirects and issue filters when Work board is disa
   );
   assert.deepEqual(appRouteFromHash('#/issues?issueId=42'), {
     ...DEFAULT_APP_ROUTE,
-    currentPage: 'work',
+    currentPage: 'tasks',
     selectedWorkId: 'xw:work:issues:42',
   });
   assert.deepEqual(appRouteFromHash('#/sessions?sessionId=provider-session'), {
@@ -90,17 +90,17 @@ test('prefers runId over sessionId when both are present', () => {
 
 test('Work deep links can select one Run without leaving Work Detail', () => {
   const route = appRouteFromHash('#/work?workId=xw%3Awork%3Aissues%3A2&runId=xw%3Arun%3Aissue_runs%3Aissue-2-attempt-1');
-  assert.equal(route.currentPage, 'work');
+  assert.equal(route.currentPage, 'tasks');
   assert.equal(route.selectedWorkId, 'xw:work:issues:2');
   assert.equal(route.selectedRunId, 'xw:run:issue_runs:issue-2-attempt-1');
-  assert.equal(appHashForRoute(route), '#/work?workId=xw%3Awork%3Aissues%3A2&runId=xw%3Arun%3Aissue_runs%3Aissue-2-attempt-1');
+  assert.equal(appHashForRoute(route), '#/tasks?workId=xw%3Awork%3Aissues%3A2&runId=xw%3Arun%3Aissue_runs%3Aissue-2-attempt-1');
   assert.equal(appRouteFromHash('#/work?runId=orphan').selectedRunId, '');
 });
 
 test('Task source links round-trip with scopes and projects and remain isolated from other pages', () => {
   for (const source of ['github', 'manual', '']) {
     const route = { ...DEFAULT_APP_ROUTE, currentPage: 'work', taskScope: 'attention', taskSource: source, filterProject: 'demo / one' };
-    assert.deepEqual(appRouteFromHash(appHashForRoute(route)), route);
+    assert.deepEqual(appRouteFromHash(appHashForRoute(route)), { ...route, currentPage: 'tasks' });
     assert.equal(appRouteFromHash(appHashForRoute(route)).taskSource, source);
   }
   assert.equal(appRouteFromHash('#/work?source=other').taskSource, '');
@@ -114,8 +114,8 @@ test('Task source links round-trip with scopes and projects and remain isolated 
 test('Task list links can open a specific scope', () => {
   assert.equal(appRouteFromHash('#/work?scope=attention').taskScope, 'attention');
   assert.equal(appRouteFromHash('#/work?scope=bogus').taskScope, '');
-  assert.equal(appHashForRoute({ currentPage: 'work', taskScope: 'attention' }), '#/work?scope=attention');
-  assert.equal(appHashForRoute({ currentPage: 'work', selectedWorkId: 'xw:work:issues:1', taskScope: 'attention' }), '#/work?workId=xw%3Awork%3Aissues%3A1');
+  assert.equal(appHashForRoute({ currentPage: 'work', taskScope: 'attention' }), '#/tasks?scope=attention');
+  assert.equal(appHashForRoute({ currentPage: 'work', selectedWorkId: 'xw:work:issues:1', taskScope: 'attention' }), '#/tasks?workId=xw%3Awork%3Aissues%3A1');
 });
 
 
@@ -126,6 +126,6 @@ test('project task links round-trip encoded filters with scopes and legacy redir
   assert.equal(parsed.taskScope, 'all');
   assert.equal(appRouteFromHash('#/issues?project=demo').filterProject, 'demo');
   assert.equal(appRouteFromHash('#/work?project=').filterProject, '');
-  assert.equal(appHashForRoute({ ...route, filterProject: '' }), '#/work?scope=all');
+  assert.equal(appHashForRoute({ ...route, filterProject: '' }), '#/tasks?scope=all');
   assert.equal(appRouteFromHash('#/settings?project=demo').filterProject, '');
 });

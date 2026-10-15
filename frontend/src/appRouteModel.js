@@ -2,6 +2,7 @@ import {
   PI_ASSISTANT_MODULES,
   PRODUCT_COMPAT_ROUTE_REDIRECTS,
   PRODUCT_NAV_ITEMS,
+  PRODUCT_ROUTE_ALIASES,
   resolveProductPage,
 } from './pages/assistantModules.js';
 import { handoffHref, handoffRouteFromHash } from './pages/handoffPageModel.js';
@@ -19,7 +20,7 @@ const ROUTABLE_PAGES = new Set([
 ]);
 
 export const DEFAULT_APP_ROUTE = Object.freeze({
-  currentPage: 'command-center',
+  currentPage: 'inbox',
   filterProject: '',
   focusFilter: 'all',
   selectedHandoffId: '',
@@ -64,7 +65,7 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
     currentPage,
   };
 
-  if (currentPage === 'work') {
+  if (currentPage === 'tasks') {
     route.filterProject = routeParam(params, 'project');
     route.taskSource = TASK_SOURCES.has(routeParam(params, 'source')) ? routeParam(params, 'source') : '';
     route.selectedWorkId = pathEntity || routeParam(params, 'workId');
@@ -75,7 +76,7 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
     else route.taskScope = TASK_SCOPES.has(routeParam(params, 'scope')) ? routeParam(params, 'scope') : '';
   }
   if (currentPage === 'issues') {
-    route.selectedIssueId = requestedPage === 'work'
+    route.selectedIssueId = (requestedPage === 'work' || requestedPage === 'tasks')
       ? issueIdFromWorkRoute(pathEntity || routeParam(params, 'workId'))
       : positiveIntegerParam(params, 'issueId');
     route.filterProject = routeParam(params, 'project');
@@ -96,23 +97,24 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
 }
 
 export function appHashForRoute(route) {
-  const page = ROUTABLE_PAGES.has(route?.currentPage) ? route.currentPage : DEFAULT_APP_ROUTE.currentPage;
+  const requestedPage = PRODUCT_ROUTE_ALIASES[route?.currentPage] || route?.currentPage;
+  const page = ROUTABLE_PAGES.has(requestedPage) ? requestedPage : DEFAULT_APP_ROUTE.currentPage;
   const handoffId = cleanRouteValue(route?.selectedHandoffId);
   const workId = cleanRouteValue(route?.selectedWorkId);
 
-  if (handoffId && (page === 'handoffs' || page === 'work')) {
-    return handoffHref(handoffId, page === 'work' ? workId : '');
+  if (handoffId && (page === 'handoffs' || page === 'tasks')) {
+    return handoffHref(handoffId, page === 'tasks' ? workId : '');
   }
 
   const params = new URLSearchParams();
-  if (page === 'work' && workId) {
+  if (page === 'tasks' && workId) {
     params.set('workId', workId);
     const runId = cleanRouteValue(route?.selectedRunId);
     if (runId) params.set('runId', runId);
-  } else if (page === 'work' && TASK_SCOPES.has(route?.taskScope)) {
+  } else if (page === 'tasks' && TASK_SCOPES.has(route?.taskScope)) {
     params.set('scope', route.taskScope);
   }
-  if (page === 'work') {
+  if (page === 'tasks') {
     if (TASK_SOURCES.has(route?.taskSource)) params.set('source', route.taskSource);
     const project = cleanRouteValue(route?.filterProject);
     if (project) params.set('project', project);

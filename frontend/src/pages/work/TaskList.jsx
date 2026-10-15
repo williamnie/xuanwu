@@ -173,7 +173,7 @@ export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, pr
             const canEdit = work.status !== 'in_progress';
             return (
               <li className={`task-list-row${expanded ? ' is-expanded' : ''}`} key={work.id}>
-                <button className="task-list-main" onClick={() => navigateTo('work', work.id)} type="button">
+                <button className="task-list-main" onClick={() => navigateTo('tasks', work.id)} type="button">
                   <span className="task-list-dot" data-status={work.status} />
                   <span className="task-list-text">
                     <strong>{work.title}</strong>
@@ -187,7 +187,7 @@ export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, pr
                 </button>
                 <div className="task-list-actions">
                   {work.status === 'needs_user' ? (
-                    <button className="btn btn-secondary btn-sm" onClick={() => navigateTo('work', work.id)} type="button">去处理</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => navigateTo('tasks', work.id)} type="button">去处理</button>
                   ) : primary ? (
                     <button className="btn btn-secondary btn-sm" disabled={Boolean(busyId)} onClick={() => request(work, primary)} type="button">{primary.label}</button>
                   ) : null}

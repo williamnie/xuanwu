@@ -70,7 +70,7 @@ test('project cards keep operational information and edit locally inside Setting
   assert.match(source, /className="glass-card project-card"/);
   assert.match(source, /className="project-status-pill"/);
   assert.doesNotMatch(source, /project-card-stats|count-todo|count-done|count-failed/);
-  assert.match(source, /href=\{appHashForRoute\(\{ currentPage: 'work', filterProject: proj\.id, taskScope: 'all' \}\)\}/);
+  assert.match(source, /href=\{appHashForRoute\(\{ currentPage: 'tasks', filterProject: proj\.id, taskScope: 'all' \}\)\}/);
   assert.match(source, /t\('projects\.viewTasks'\)/);
   assert.match(source, /const activeCount = counts\.in_progress/);
   assert.match(source, /deleteProjectIssueCount/);
