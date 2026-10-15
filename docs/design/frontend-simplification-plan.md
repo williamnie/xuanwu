@@ -633,6 +633,33 @@ E2 刷新复核修正（2026-10-15，本次提交；追加提交，不改写 `65
 
 E 阶段沿用 D 阶段的约束：不改认证、端口、权限默认值和已有接口语义；真实页面只浏览，需要展示审批 / 失败 / 已失效等状态时用不提交的临时前端夹具；新接口用临时数据库和后端测试验证。
 
+### 8.5 F 阶段合同（2026-10-15）
+
+补齐 8.2 剩余两个缺口，F1 → F2 依次实施，各自先做实施前核实（不符先回报），再单独提交。约束同 D / E 阶段。
+
+#### F1 玄武助手复用 Codex 登录
+
+**现状（待核实）**：玄武助手凭据由 `@earendil-works/pi-coding-agent` 存在 `<数据目录>/pi-runtime/agent/auth.json`（`piOAuthApi.ts` `piAuthPath`），运行时由 `ModelRuntime.create({ authPath })` 读取，创建点至少有 `http/piRuntime.ts`、`http/piOAuthApi.ts`、`pi/sessionTitleGenerator.ts`。Codex CLI 凭据在 `$CODEX_HOME/auth.json`，`codexLoginStatus` 只读其是否存在。`ModelRuntime.create` 支持传入 `credentials: CredentialStore`（read / list / modify / delete），`xuanwu/memoryReplayRuntime.ts` 已有只读适配的先例。
+
+**核心风险**：OpenAI 的 refresh token 会轮换。把 Codex 的凭据复制给玄武助手、两边各自刷新，先刷新的一方会让另一方的 refresh token 失效，可能把用户的 Codex 登录弄坏。因此：
+
+| 规则 | 合同 |
+|---|---|
+| 单一刷新方 | 复用模式下 **Codex 是唯一的刷新方**。玄武只读 `$CODEX_HOME/auth.json`，不写、不复制、不把 refresh token 交给 pi 的刷新流程。需要刷新时（`CredentialStore.modify` 或 access token 已过期），通过 Xuanwu 已管理的 Codex app-server 的现有账户接口请求 Codex 自己刷新，然后重新读文件；无此接口或调用失败时返回明确的“需要在 Codex 中重新登录 / 稍后重试”，不得自行刷新。同一进程内刷新请求单飞（single-flight） |
+| 显式选择 | 玄武助手的凭据来源新增 `codex_login`，与现有 `stored`（独立登录）并列，保存在现有玄武助手设置里。**默认值不变**：已有用户不自动切换；未配置的新用户在引导中，若 Codex 登录可用，以“使用 Codex 的登录”为主选项，仍需点击确认才写入。切换来源不删除已存的独立登录凭据 |
+| 统一选择点 | 所有 `ModelRuntime.create` 创建点通过同一个函数取得凭据来源（`stored` 用现有 authPath，`codex_login` 用只读适配器），不允许某个创建点绕过 |
+| 支持范围 | 仅 ChatGPT 登录（`tokens.access_token` 存在且映射到 pi 的 openai-codex OAuth 凭据结构）；Codex 使用 API key 模式时显示“不支持复用，请用独立登录”。文件缺失、损坏、账号不一致等返回分类状态 |
+| 不泄露 | 状态接口只返回 `source`、`configured`、`auth_mode`、`expires_at`（可选）、分类错误；不返回任何 token、account 原始 JSON 或文件内容；日志和审计同样不含 token |
+| 状态 | 现有 OAuth 状态接口扩展 `credential_source` 与复用模式下的可用性；AI 连接中“授权”一行显示“使用 Codex 的登录 · 可用 / 需要在 Codex 中重新登录”，模型测试一行不变（交接 D 的两行规则） |
+
+前端：AI 连接 → 玄武助手连接方式加“使用 Codex 的登录”（Codex 登录可用时可选）；首次引导第 1 步同样提供。复用模式下隐藏独立登录的登录 / 退出按钮，改为“改用独立登录”。
+
+验收：后端测试使用临时 `CODEX_HOME` 与假的 app-server 账户接口，覆盖：读取映射、过期触发 Codex 刷新并重读、刷新单飞、刷新失败分类、API key 模式不支持、文件缺失 / 损坏、所有创建点走同一选择函数、`$CODEX_HOME/auth.json` 字节不变且未被写入、`pi-runtime/agent/auth.json` 未被写入、状态与日志不含 token、默认来源不变。真实环境不得用用户的 Codex 凭据发起模型请求或刷新；真实页面只看状态显示，不点保存。
+
+#### F2 任务卡住原因
+
+合同在 F1 完成后补写（需先核实调度器的冷却、项目并发、工作区占用等事实来源）。
+
 ## 9. 待确认事项
 
 ### 9.1 已由评审回答
