@@ -1,3 +1,6 @@
+import { CodexLoginReuse } from '../PiAgentSettingsPanel.jsx';
+import { credentialReady as oauthCredentialReady, sourceForForm, sourceMatches } from '../piCredentialSource.js';
+import { useI18n } from '../../i18n/context.js';
 import { CheckCircle2, Copy, ExternalLink, KeyRound, Loader2, RefreshCw, Save, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { usePiAgentSettingsState } from '../piAgentSettingsState.js';
@@ -5,16 +8,18 @@ import { usePiAgentSettingsState } from '../piAgentSettingsState.js';
 const OPENAI_PROTOCOLS = new Set(['openai-responses', 'openai-completions']);
 
 export default function OnboardingSupervisorConnection({ onComplete }) {
-  const state = usePiAgentSettingsState();
+  const state = usePiAgentSettingsState({ onboarding: true });
+  const { t } = useI18n();
+  const reuse = sourceForForm(state.form) === 'codex_login';
   const [keyVisible, setKeyVisible] = useState(false);
   const oauthMode = state.form.api === 'openai-codex-responses';
   const openAICompatible = OPENAI_PROTOCOLS.has(state.form.api);
   const apiSupported = openAICompatible || state.form.api === 'anthropic';
-  const activeTest = state.connectionTest.providerId === state.form.modelProvider
+  const activeTest = state.connectionTest.providerId === state.form.modelProvider && sourceMatches(state.form, state.connectionTest)
     ? state.connectionTest
     : null;
   const tested = activeTest?.result?.ok === true;
-  const oauthConfigured = Boolean(state.oauthStatus?.pi_oauth?.configured);
+  const oauthConfigured = oauthCredentialReady(state.form, state.oauthStatus);
   const credentialReady = oauthMode
     ? oauthConfigured
     : Boolean(apiSupported && state.form.baseUrl.trim() && (state.form.apiKey.trim() || state.selectedProvider?.api_key_configured));
@@ -31,11 +36,12 @@ export default function OnboardingSupervisorConnection({ onComplete }) {
     <div className="first-delivery-supervisor">
       <nav aria-label="玄武助手连接方式" className="first-delivery-mode-tabs">
         <button aria-pressed={!oauthMode} className={!oauthMode ? 'active' : ''} onClick={state.selectApiMode} type="button"><span>API</span> API 连接</button>
-        <button aria-pressed={oauthMode} className={oauthMode ? 'active' : ''} onClick={state.selectOAuthMode} type="button"><span>OA</span> Codex / ChatGPT OAuth</button>
+        <button aria-pressed={oauthMode && !reuse} className={oauthMode && !reuse ? 'active' : ''} onClick={state.selectOAuthMode} type="button"><span>OA</span> Codex / ChatGPT OAuth</button>
+        <button aria-pressed={reuse} className={reuse ? 'active' : ''} disabled={!state.oauthStatus?.codex_login?.available && !reuse} onClick={state.selectCodexLogin} type="button"><span>CL</span>{t('credential.reuse')}</button>
       </nav>
 
       {oauthMode ? (
-        <OAuthFlow configured={oauthConfigured} state={state} />
+        reuse ? <CodexLoginReuse state={state} /> : <OAuthFlow configured={oauthConfigured} state={state} />
       ) : (
         <ApiFlow apiSupported={apiSupported} keyVisible={keyVisible} openAICompatible={openAICompatible} setKeyVisible={setKeyVisible} state={state} />
       )}
@@ -57,7 +63,7 @@ export default function OnboardingSupervisorConnection({ onComplete }) {
       {activeTest?.result ? <ConnectionResult result={activeTest.result} /> : null}
 
       <footer className="first-delivery-connection-actions">
-        <p>玄武助手需要单独连接；不会读取或回显 Codex CLI token。</p>
+        <p>{t('credential.onboardingNote')}</p>
         <div>
           <button className="btn btn-secondary" disabled={!credentialReady || activeTest?.busy} onClick={state.testConnection} type="button">
             {activeTest?.busy ? <Loader2 className="spin-animation" size={14} /> : <RefreshCw size={14} />} 测试连接

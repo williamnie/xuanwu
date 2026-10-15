@@ -17,7 +17,7 @@ async function checkSavedConnection(api) {
   const oauth = supervisor.model_provider === 'openai-codex' || provider?.api === 'openai-codex-responses';
   if (oauth) {
     const status = await api.getPiCodexOAuthStatus();
-    if (!status?.pi_oauth?.configured) return null;
+    if (supervisor.credential_source === 'codex_login' ? !status?.codex_login?.available : !status?.pi_oauth?.configured) return null;
   } else if (!provider?.base_url || !provider.api_key_configured) return null;
   return api.testPiProviderConnection(supervisor.model_provider, {
     api: oauth ? 'openai-codex-responses' : provider.api,

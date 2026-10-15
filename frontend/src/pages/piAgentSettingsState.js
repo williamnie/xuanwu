@@ -1,3 +1,4 @@
+import { credentialReady, credentialSourcePayload, recommendCodexLogin, sourceForForm, sourceMatches } from './piCredentialSource.js';
 import { assistantApi } from '../api/assistant.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PRODUCT_TERMS } from '../brand';
@@ -10,6 +11,7 @@ export const DEFAULT_PI_AGENT_FORM = {
   api: 'openai-responses',
   apiKey: '',
   baseUrl: 'https://api.openai.com/v1',
+  credentialSource: 'stored',
   enabled: true,
   instructions: '先回答用户真正关心的问题，再补必要理由；说人话，避免不必要的内部术语和流程播报。',
   modelId: 'gpt-5.4',
@@ -25,9 +27,9 @@ export const DEFAULT_PI_AGENT_FORM = {
   userAgent: ''
 };
 
-const CONNECTION_FIELDS = new Set(['api', 'apiKey', 'baseUrl', 'modelProvider', 'userAgent']);
+const CONNECTION_FIELDS = new Set(['api', 'apiKey', 'baseUrl', 'modelProvider', 'userAgent', 'credentialSource']);
 
-export function usePiAgentSettingsState() {
+export function usePiAgentSettingsState({ onboarding = false } = {}) {
   const connectionAttemptRef = useRef(0);
   const [connectionTest, setConnectionTest] = useState({ busy: false, providerId: '', result: null });
   const [deletingProviderId, setDeletingProviderId] = useState('');
@@ -54,7 +56,7 @@ export function usePiAgentSettingsState() {
     () => providerModelOptions(form, modelDiscovery),
     [form, modelDiscovery]
   );
-  const modelSelectAvailable = modelDiscovery.providerId === form.modelProvider && modelDiscovery.result?.ok === true;
+  const modelSelectAvailable = modelDiscovery.providerId === form.modelProvider && sourceMatches(form, modelDiscovery) && modelDiscovery.result?.ok === true;
 
   const invalidateConnectionTest = useCallback(() => {
     connectionAttemptRef.current += 1;
@@ -63,9 +65,9 @@ export function usePiAgentSettingsState() {
   }, []);
   const loadSettings = useCallback(() => {
     invalidateConnectionTest();
-    loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery);
-    loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
-  }, [invalidateConnectionTest]);
+    const attempt = connectionAttemptRef.current;
+    loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery, setOauthStatus, onboarding, () => connectionAttemptRef.current === attempt);
+  }, [invalidateConnectionTest, onboarding]);
   const loadOAuthStatus = () => loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
   const loadPromptSummary = () => loadPiPromptSummary(setPromptSummary, setPromptSummaryLoading);
   const updateField = (key, value) => {
@@ -83,6 +85,7 @@ export function usePiAgentSettingsState() {
   };
   const selectProviderPreset = (preset) => {
     invalidateConnectionTest();
+    setModelDiscovery({ busy: false, providerId: '', result: null });
     const configured = providers.find((provider) => provider.id === preset.id);
     const next = {
       ...form,
@@ -92,7 +95,8 @@ export function usePiAgentSettingsState() {
       modelId: form.modelProvider === preset.id
         ? form.modelId
         : configured?.models?.[0] || preset.recommended_model,
-      modelProvider: preset.id
+      modelProvider: preset.id,
+      credentialSource: 'stored'
     };
     setForm(next);
   };
@@ -121,7 +125,17 @@ export function usePiAgentSettingsState() {
     if (!preset) return message.error('当前版本没有可用的玄武助手 OAuth 登录');
     selectProviderPreset(preset);
   };
-  const discoverModels = () => discoverPiModels(form, setModelDiscovery);
+  const selectCodexLogin = () => {
+    if (!oauthStatus?.codex_login?.available) return;
+    invalidateConnectionTest();
+    setModelDiscovery({ busy: false, providerId: '', result: null });
+    setForm(current => codexLoginForm(current));
+  };
+  const discoverModels = () => {
+    invalidateConnectionTest();
+    const attempt = connectionAttemptRef.current;
+    return discoverPiModels(form, setModelDiscovery, () => connectionAttemptRef.current === attempt, true);
+  };
   const deleteProviderConnection = (providerId) => {
     invalidateConnectionTest();
     return deletePiProviderConnection({
@@ -135,8 +149,14 @@ export function usePiAgentSettingsState() {
       setProviders
     });
   };
-  const handleConnectionApply = () => savePiConnectionAndSupervisor({ form, setForm, setPersonaConflictDraft, setPromptSummary, setProviders, setSaving });
-  const handleAgentSave = () => savePiSupervisorSettings({ form, providers, setForm, setPersonaConflictDraft, setPromptSummary, setProviders, setSaving });
+  const handleConnectionApply = () => {
+    if (form.api === 'openai-codex-responses' && !credentialReady(form, oauthStatus)) return Promise.resolve(false);
+    return savePiConnectionAndSupervisor({ form, setForm, setPersonaConflictDraft, setPromptSummary, setProviders, setSaving });
+  };
+  const handleAgentSave = () => {
+    if (form.api === 'openai-codex-responses' && !credentialReady(form, oauthStatus)) return Promise.resolve(false);
+    return savePiSupervisorSettings({ form, providers, setForm, setPersonaConflictDraft, setPromptSummary, setProviders, setSaving });
+  };
   const restorePersonaConflictDraft = () => {
     if (!personaConflictDraft) return;
     setForm((current) => ({ ...current, ...personaConflictDraft, personaDirty: true }));
@@ -145,7 +165,8 @@ export function usePiAgentSettingsState() {
   const dismissPersonaConflictDraft = () => setPersonaConflictDraft(null);
   const selectModelProvider = (providerId) => {
     invalidateConnectionTest();
-    return selectConfiguredProvider(providerId, form, providers, providerCatalog.presets, setForm, setConnectionTest, setModelDiscovery);
+    const attempt = connectionAttemptRef.current;
+    return selectConfiguredProvider(providerId, form, providers, providerCatalog.presets, setForm, setConnectionTest, setModelDiscovery, () => connectionAttemptRef.current === attempt);
   };
   const testConnection = () => {
     const attempt = ++connectionAttemptRef.current;
@@ -174,7 +195,7 @@ export function usePiAgentSettingsState() {
   }, [oauthBusy, oauthLifecycle, oauthStartedAt]);
 
   return { connectionTest, deletingProviderId, form, loading, modelDiscovery, modelOptions, modelSelectAvailable, oauthBusy, oauthStatus, personaConflictDraft, promptSummary, promptSummaryLoading, providerCatalog, providers, saving, selectedPreset, selectedProvider,
-    copyPiCodexOAuthUrl, deleteProviderConnection, dismissPersonaConflictDraft, discoverModels, handleAgentSave, handleConnectionApply, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, restorePersonaConflictDraft, selectApiMode, selectApiProtocol, selectModelProvider, selectOAuthMode, selectProviderPreset, startNewApiConnection, startPiCodexOAuthLogin, testConnection, updateField };
+    copyPiCodexOAuthUrl, deleteProviderConnection, dismissPersonaConflictDraft, discoverModels, handleAgentSave, handleConnectionApply, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, restorePersonaConflictDraft, selectApiMode, selectApiProtocol, selectModelProvider, selectOAuthMode, selectCodexLogin, selectProviderPreset, startNewApiConnection, startPiCodexOAuthLogin, testConnection, updateField };
 }
 
 function connectionFormForApi(api, form, providers, presets) {
@@ -225,33 +246,40 @@ function defaultBaseURL(api) {
   return 'https://api.openai.com/v1';
 }
 
-function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery) {
+function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery, setOauthStatus, onboarding, isCurrent) {
   setLoading(true);
-  Promise.all([assistantApi.getPiSupervisor(), assistantApi.getPiProviderSettings(), assistantApi.getPiProviderCatalog()])
-    .then(([supervisor, providerSettings, providerCatalog]) => {
+  Promise.all([assistantApi.getPiSupervisor(), assistantApi.getPiProviderSettings(), assistantApi.getPiProviderCatalog(), assistantApi.getPiCodexOAuthStatus()])
+    .then(([supervisor, providerSettings, providerCatalog, oauthStatus]) => {
+      if (!isCurrent()) return;
+      setOauthStatus(oauthStatus);
       const nextProviders = providerSettings?.providers || [];
       setProviders(nextProviders);
       setProviderCatalog({ presets: providerCatalog?.presets || [] });
-      const nextForm = formFromState(supervisor, nextProviders);
+      const savedForm = formFromState(supervisor, nextProviders);
+      const nextForm = onboarding && recommendCodexLogin(supervisor, nextProviders, oauthStatus) ? codexLoginForm(savedForm) : savedForm;
       setForm(nextForm);
       setPromptSummary(null);
-      void discoverPiModels(nextForm, setModelDiscovery);
+      if (nextForm === savedForm && sourceForForm(nextForm) !== 'codex_login') void discoverPiModels(nextForm, setModelDiscovery, isCurrent);
     })
     .catch((err) => message.error(err.message || '读取玄武助手设置失败'))
     .finally(() => setLoading(false));
 }
 
-async function discoverPiModels(form, setModelDiscovery) {
+async function discoverPiModels(form, setModelDiscovery, isCurrent = () => true, explicit = false) {
   const providerId = form.modelProvider.trim();
   if (!providerId) return;
-  setModelDiscovery({ busy: true, providerId, result: null });
+  const credentialSource = sourceForForm(form);
+  setModelDiscovery({ busy: true, providerId, credentialSource, result: null });
   try {
-    const result = await assistantApi.getPiProviderModels(providerId, providerPayload(form));
-    setModelDiscovery((current) => current.providerId === providerId ? { busy: false, providerId, result } : current);
+    const result = await assistantApi.getPiProviderModels(providerId, { ...providerPayload(form), ...(explicit ? credentialSourcePayload(form) : {}) });
+    if (!isCurrent()) return;
+    setModelDiscovery((current) => current.providerId === providerId && current.credentialSource === credentialSource ? { busy: false, providerId, credentialSource, result } : current);
   } catch (err) {
-    setModelDiscovery((current) => current.providerId === providerId ? {
+    if (!isCurrent()) return;
+    setModelDiscovery((current) => current.providerId === providerId && current.credentialSource === credentialSource ? {
       busy: false,
       providerId,
+      credentialSource,
       result: { error: 'request_failed', message: err.message || '读取远端模型列表失败', models: [], ok: false, status: 'failed' }
     } : current);
   }
@@ -260,21 +288,22 @@ async function discoverPiModels(form, setModelDiscovery) {
 async function testPiConnection(form, setConnectionTest, setModelDiscovery, isCurrent = () => true) {
   const providerId = form.modelProvider.trim();
   if (!providerId) return message.error('请先选择 provider');
-  setConnectionTest({ busy: true, providerId, result: null });
+  const credentialSource = sourceForForm(form);
+  setConnectionTest({ busy: true, providerId, credentialSource, result: null });
   try {
-    const result = await assistantApi.testPiProviderConnection(providerId, providerPayload(form));
+    const result = await assistantApi.testPiProviderConnection(providerId, { ...providerPayload(form), ...credentialSourcePayload(form) });
     if (!isCurrent()) return null;
     recordFirstDeliveryConnectionTest(result);
-    setConnectionTest({ busy: false, providerId, result });
-    setModelDiscovery({ busy: false, providerId, result });
+    setConnectionTest({ busy: false, providerId, credentialSource, result });
+    setModelDiscovery({ busy: false, providerId, credentialSource, result });
     if (result.ok) message.success(result.message || '模型连接成功');
     else message.error(result.message || '模型连接失败');
     return result;
   } catch (err) {
     if (!isCurrent()) return null;
     clearFirstDeliveryConnectionTest();
-    setConnectionTest({ busy: false, providerId, result: { error: 'request_failed', message: err.message || '模型连接失败', ok: false, status: 'failed' } });
-    setModelDiscovery({ busy: false, providerId, result: { error: 'request_failed', message: err.message || '读取远端模型列表失败', models: [], ok: false, status: 'failed' } });
+    setConnectionTest({ busy: false, providerId, credentialSource, result: { error: 'request_failed', message: err.message || '模型连接失败', ok: false, status: 'failed' } });
+    setModelDiscovery({ busy: false, providerId, credentialSource, result: { error: 'request_failed', message: err.message || '读取远端模型列表失败', models: [], ok: false, status: 'failed' } });
     message.error(err.message || '模型连接失败');
     return null;
   }
@@ -325,7 +354,7 @@ async function startPiOAuthLogin(setForm, setOauthBusy, setOauthStatus) {
   setOauthBusy(true);
   try {
     const result = await assistantApi.startPiCodexOAuthLogin();
-    setOauthStatus(result);
+    setOauthStatus(current => ({ ...current, ...result }));
     applyCodexOAuthPreset(setForm);
     message.success('已生成 Codex OAuth 登录地址，请复制到已登录 ChatGPT 的浏览器打开');
   } catch (err) {
@@ -355,14 +384,16 @@ function applyCodexOAuthPreset(setForm) {
     apiKey: '',
     baseUrl: '',
     modelId: current.modelId || 'gpt-5.4',
-    modelProvider: 'openai-codex'
+    modelProvider: 'openai-codex',
+    credentialSource: 'stored'
   }));
 }
 
 async function logoutPiOAuth(setOauthBusy, setOauthStatus) {
   setOauthBusy(true);
   try {
-    setOauthStatus(await assistantApi.logoutPiCodexOAuth());
+    const result = await assistantApi.logoutPiCodexOAuth();
+    setOauthStatus(current => ({ ...current, ...result }));
     message.success('已退出玄武助手 Codex OAuth');
   } catch (err) {
     message.error(err.message || '退出玄武助手 Codex OAuth 失败');
@@ -493,6 +524,7 @@ function providerPayload(form) {
 
 function supervisorPayload(form) {
   return {
+    credential_source: sourceForForm(form),
     name: form.agentName.trim() || DEFAULT_PI_AGENT_FORM.agentName,
     model_provider: form.modelProvider.trim(),
     model_id: form.modelId.trim(),
@@ -515,8 +547,9 @@ function formFromState(supervisor, providers) {
   const provider = providers.find((item) => item.id === supervisor.model_provider);
   return {
     ...DEFAULT_PI_AGENT_FORM,
+    credentialSource: supervisor.credential_source || 'stored',
     agentName: normalizedSupervisorName(supervisor.name),
-    api: provider?.api || DEFAULT_PI_AGENT_FORM.api,
+    api: provider?.api || (supervisor.model_provider === 'openai-codex' ? 'openai-codex-responses' : DEFAULT_PI_AGENT_FORM.api),
     apiKey: '',
     baseUrl: provider?.base_url || DEFAULT_PI_AGENT_FORM.baseUrl,
     enabled: supervisor.enabled === 1,
@@ -535,7 +568,7 @@ function formFromState(supervisor, providers) {
   };
 }
 
-function selectConfiguredProvider(providerId, form, providers, presets, setForm, setConnectionTest, setModelDiscovery) {
+function selectConfiguredProvider(providerId, form, providers, presets, setForm, setConnectionTest, setModelDiscovery, isCurrent) {
   const configured = providers.find((provider) => provider.id === providerId);
   const preset = presets.find((item) => item.id === providerId);
   const next = {
@@ -550,11 +583,11 @@ function selectConfiguredProvider(providerId, form, providers, presets, setForm,
   clearFirstDeliveryConnectionTest();
   setConnectionTest({ busy: false, providerId: '', result: null });
   setForm(next);
-  void discoverPiModels(next, setModelDiscovery);
+  if (sourceForForm(next) !== 'codex_login') void discoverPiModels(next, setModelDiscovery, isCurrent);
 }
 
 function providerModelOptions(form, modelDiscovery) {
-  const discovered = modelDiscovery.providerId === form.modelProvider && modelDiscovery.result?.ok
+  const discovered = modelDiscovery.providerId === form.modelProvider && sourceMatches(form, modelDiscovery) && modelDiscovery.result?.ok
     ? modelDiscovery.result.models || []
     : [];
   return [...new Set([form.modelId, ...discovered].filter(Boolean))];
@@ -570,4 +603,9 @@ function normalizedSupervisorName(name) {
   const value = String(name || '').trim();
   if (!value) return DEFAULT_PI_AGENT_FORM.agentName;
   return name;
+}
+
+function codexLoginForm(form) {
+  return { ...form, api: 'openai-codex-responses', apiKey: '', baseUrl: '',
+    credentialSource: 'codex_login', modelProvider: 'openai-codex' };
 }

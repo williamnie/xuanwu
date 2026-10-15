@@ -1,3 +1,4 @@
+import { codexLoginMessage, credentialReady, sourceForForm, sourceMatches } from './piCredentialSource.js';
 import { CheckCircle2, CircleDashed, KeyRound, Loader2, PlugZap, RefreshCw, Save, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { useI18n } from '../i18n/context.js';
@@ -149,8 +150,9 @@ function SavedConnectionPicker({ state }) {
 }
 
 function ConnectionModeTabs({ oauthMode, state }) {
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const english = language === 'en-US';
+  const reuse = oauthMode && sourceForForm(state.form) === 'codex_login';
   return (
     <fieldset className="settings-notification-modes provider-mode-tabs">
       <legend>{english ? 'Connection method' : '连接方式'}</legend>
@@ -162,8 +164,14 @@ function ConnectionModeTabs({ oauthMode, state }) {
       </div>
       <div className="settings-notification-mode">
         <label>
-          <input checked={oauthMode} name="assistant-connection-mode" onChange={state.selectOAuthMode} type="radio" />
+          <input checked={oauthMode && !reuse} name="assistant-connection-mode" onChange={state.selectOAuthMode} type="radio" />
           <span><strong>{english ? 'Sign in with Codex / ChatGPT' : '用 Codex / ChatGPT 账号登录'}</strong><small>{english ? 'Authorize the assistant with your account.' : '使用账号为玄武助手授权。'}</small></span>
+        </label>
+      </div>
+      <div className="settings-notification-mode">
+        <label>
+          <input checked={reuse} disabled={!state.oauthStatus?.codex_login?.available && !reuse} name="assistant-connection-mode" onChange={state.selectCodexLogin} type="radio" />
+          <span><strong>{t('credential.reuse')}</strong><small>{t(codexLoginMessage(state.oauthStatus?.codex_login))}</small></span>
         </label>
       </div>
     </fieldset>
@@ -204,6 +212,7 @@ function ApiKeyField({ configured, state }) {
 }
 
 function OAuthConnectionFlow({ state }) {
+  if (sourceForForm(state.form) === 'codex_login') return <CodexLoginReuse state={state} />;
   return (
     <section className="provider-flow-section">
       <FlowHeading badge="可选捷径" description="OAuth 只替代 API 地址和 Key；登录后仍要获取并选择模型。" title="用现有账号快捷登录" />
@@ -275,7 +284,7 @@ function ConnectionActions({ state }) {
         <button className="btn btn-secondary" disabled={busy} onClick={state.testConnection} type="button">
           {busy ? <Loader2 size={14} className="spin-animation" /> : <PlugZap size={14} />} 测试连接
         </button>
-        <button className="btn btn-primary" disabled={state.saving} onClick={state.handleConnectionApply} type="button">
+        <button className="btn btn-primary" disabled={state.saving || (state.form.api === 'openai-codex-responses' && !credentialReady(state.form, state.oauthStatus))} onClick={state.handleConnectionApply} type="button">
           {state.saving ? <Loader2 size={14} className="spin-animation" /> : <Save size={14} />} 保存并设为默认
         </button>
       </div>
@@ -285,7 +294,7 @@ function ConnectionActions({ state }) {
 
 function ConnectionResult({ state }) {
   const test = state.connectionTest;
-  if (test.providerId !== state.form.modelProvider || !test.result) return null;
+  if (test.providerId !== state.form.modelProvider || !sourceMatches(state.form, test) || !test.result) return null;
   return (
     <div className={`provider-test-result ${test.result.ok ? 'success' : 'error'}`} role="status">
       {test.result.ok ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
@@ -295,7 +304,8 @@ function ConnectionResult({ state }) {
 }
 
 function ConnectionProgress({ oauthMode, state }) {
-  const { language } = useI18n();
+  const { language, t } = useI18n();
+  const reuse = oauthMode && sourceForForm(state.form) === 'codex_login';
   const english = language === 'en-US';
   const status = piConnectionStatus(state);
   const modelStatus = {
@@ -308,13 +318,13 @@ function ConnectionProgress({ oauthMode, state }) {
     <aside className="provider-progress-rail">
       <span className="provider-console-label">{english ? 'Connection status' : '连接状态'}</span>
       <div className="provider-progress-list" role="status">
-        <ProgressStep index="1" label={english ? 'Authorization' : '授权'} ready={status.authorized} value={status.authorized ? (english ? 'Authorized' : '已授权') : (english ? 'Not authorized' : '未授权')} />
+        <ProgressStep index="1" label={english ? 'Authorization' : '授权'} ready={status.authorized} value={reuse ? t('credential.authorization', { status: t(codexLoginMessage(state.oauthStatus?.codex_login)) }) : status.authorized ? (english ? 'Authorized' : '已授权') : (english ? 'Not authorized' : '未授权')} />
         <ProgressStep index="2" label={english ? 'Model' : '模型'} ready={status.model === 'passed'} value={modelStatus} />
       </div>
       <div className="provider-connection-summary">
         <span>{english ? 'Selected connection' : '当前连接'}</span>
         <dl>
-          <div><dt>{english ? 'Auth' : '认证'}</dt><dd>{oauthMode ? 'Codex OAuth' : 'API Key'}</dd></div>
+          <div><dt>{english ? 'Auth' : '认证'}</dt><dd>{reuse ? t('credential.reuse') : oauthMode ? 'Codex OAuth' : 'API Key'}</dd></div>
           <div><dt>{english ? 'API' : '协议'}</dt><dd>{state.form.api}</dd></div>
           <div><dt>{english ? 'URL' : '地址'}</dt><dd>{oauthMode ? (english ? 'Configured by OAuth' : 'OAuth 自动配置') : connectionTarget(state.form.baseUrl)}</dd></div>
           <div><dt>{english ? 'Model' : '模型'}</dt><dd>{state.form.modelId || (english ? 'Choose a model' : '待选择')}</dd></div>
@@ -369,7 +379,7 @@ function SupervisorBehaviorSettings({ state }) {
         </Field>
       </details>
       <SupervisorEnableField form={state.form} updateField={state.updateField} />
-      <SaveRow onSave={state.handleAgentSave} saving={state.saving} />
+      <SaveRow onSave={state.handleAgentSave} saving={state.saving} disabled={state.form.api === 'openai-codex-responses' && !credentialReady(state.form, state.oauthStatus)} />
     </>
   );
 }
@@ -516,11 +526,29 @@ function SupervisorEnableField({ form, updateField }) {
   return <label className="supervisor-enable-field"><input type="checkbox" checked={form.enabled} onChange={(event) => updateField('enabled', event.target.checked)} /> 启用玄武助手</label>;
 }
 
-function SaveRow({ onSave, saving }) {
+function SaveRow({ onSave, saving, disabled }) {
   return (
     <div className="supervisor-save-row">
-      <button className="btn btn-secondary" onClick={onSave} disabled={saving} type="button">{saving ? <Loader2 size={14} className="spin-animation" /> : <Save size={14} />} 保存运行偏好</button>
+      <button className="btn btn-secondary" onClick={onSave} disabled={saving || disabled} type="button">{saving ? <Loader2 size={14} className="spin-animation" /> : <Save size={14} />} 保存运行偏好</button>
       <span>保存名称、思考强度与长期说明，不会改写上方连接凭据；表达风格在“通用”中单独保存。</span>
     </div>
+  );
+}
+
+export function CodexLoginReuse({ state }) {
+  const { t } = useI18n();
+  const status = state.oauthStatus?.codex_login;
+  return (
+    <section className="supervisor-oauth-panel">
+      <div className="supervisor-oauth-heading">
+        <div><strong>{t('credential.reuse')}</strong><p>{t('credential.reuseHint')}</p></div>
+      </div>
+      <p className="supervisor-oauth-status" role="status">{t('credential.authorization', { status: t(codexLoginMessage(status)) })}</p>
+      <div className="supervisor-oauth-controls">
+        <button className="btn btn-secondary" disabled={state.oauthBusy} onClick={state.loadOAuthStatus} type="button"><RefreshCw size={14} />{t('credential.refreshStatus')}</button>
+        <button className="btn btn-secondary" onClick={state.selectOAuthMode} type="button">{t('credential.switchStored')}</button>
+      </div>
+      <p className="supervisor-oauth-status">{t('credential.switchHint')}</p>
+    </section>
   );
 }

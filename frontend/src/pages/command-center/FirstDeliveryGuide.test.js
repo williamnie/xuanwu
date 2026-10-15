@@ -42,7 +42,7 @@ test('onboarding Supervisor keeps only compatible API families and PI Codex OAut
   assert.match(connectorSource, /openai-responses/);
   assert.match(connectorSource, /openai-completions/);
   assert.doesNotMatch(connectorSource, /GOOGLE GEMINI|GEMINI API/);
-  assert.match(connectorSource, /不会读取或回显 Codex CLI token/);
+  assert.match(connectorSource, /credential\.onboardingNote/);
 });
 
 test('Supervisor connection mutations invalidate stale successful tests before save', () => {

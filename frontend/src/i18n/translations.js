@@ -3,6 +3,21 @@ export const SUPPORTED_LANGUAGES = Object.freeze(['zh-CN', 'en-US']);
 export const LANGUAGE_STORAGE_KEY = 'xuanwu-language';
 
 const ZH_CN = Object.freeze({
+  "credential.reuse": "使用 Codex 的登录",
+  "credential.reuseHint": "复用本机登录，由 Codex 管理续期；保存后生效。",
+  "credential.available": "可用",
+  "credential.loginRequired": "需要在 Codex 中重新登录",
+  "credential.unsupported": "此 Codex 登录不支持复用，请用独立登录",
+  "credential.providerUnavailable": "Codex 编程工具未启用或账户接口不可用",
+  "credential.homeMismatch": "Codex 登录目录与编程工具不一致",
+  "credential.retry": "Codex 登录续期失败，请稍后重试",
+  "credential.switchStored": "改用独立登录",
+  "credential.switchHint": "先完成独立登录，再保存连接；原有登录会保留。",
+  "credential.independent": "独立登录",
+  "credential.refreshStatus": "刷新登录状态",
+  "credential.onboardingNote": "凭据来源只在保存后生效；测试只使用本次选择，不修改已保存的连接。",
+  "credential.authorization": "使用 Codex 的登录 · {status}",
+
   'inbox.details': '查看详情',
   'inbox.sourceFacts': '查看来源事实',
   'inbox.sent': '已推送通知，也可在这里处理。',
@@ -588,6 +603,21 @@ const ZH_CN = Object.freeze({
 });
 
 const EN_US = Object.freeze({
+  "credential.reuse": "Use Codex sign-in",
+  "credential.reuseHint": "Reuse the local sign-in. Codex manages renewal; save to apply.",
+  "credential.available": "Available",
+  "credential.loginRequired": "Sign in again in Codex",
+  "credential.unsupported": "This Codex sign-in cannot be reused. Use an independent sign-in.",
+  "credential.providerUnavailable": "The Codex coding tool is disabled or its account API is unavailable.",
+  "credential.homeMismatch": "The Codex sign-in directory differs from the coding tool directory.",
+  "credential.retry": "Codex could not renew the sign-in. Try again later.",
+  "credential.switchStored": "Use independent sign-in",
+  "credential.switchHint": "Complete the independent sign-in, then save. Your other sign-in is retained.",
+  "credential.independent": "Independent sign-in",
+  "credential.refreshStatus": "Refresh sign-in status",
+  "credential.onboardingNote": "The credential source is applied only when saved. Testing uses this selection without changing your saved connection.",
+  "credential.authorization": "Using Codex sign-in · {status}",
+
   'inbox.details': 'Show details',
   'inbox.sourceFacts': 'View source facts',
   'inbox.sent': 'Notification sent; you can also respond here.',

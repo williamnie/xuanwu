@@ -69,3 +69,17 @@ test('Codex import failures explain missing, unreadable and malformed local work
   assert.match(codexImportFailure(new Error('JSON Parse error')), /记录无法读取/);
   assert.match(codexImportFailure(new Error('unavailable')), /稍后重试/);
 });
+
+test('saved reuse source tests once using persisted selection, while an unsaved recommendation never auto-tests', async () => {
+  const { api, calls } = fixture({
+    getPiSupervisor: async () => ({ enabled: 1, model_provider: 'openai-codex', model_id: 'model', credential_source: 'codex_login' }),
+    getPiCodexOAuthStatus: async () => ({ pi_oauth: { configured: false }, codex_login: { available: true } }),
+  });
+  const check = createFirstDeliveryConnectionCheck(api);
+  await Promise.all([check(), check()]);
+  assert.equal(calls.length, 1);
+  assert.equal(Object.hasOwn(calls[0][1], 'credential_source'), false);
+  api.getPiSupervisor = async () => ({ enabled: 1, model_provider: 'openai-codex', model_id: 'model', credential_source: 'stored' });
+  assert.equal(await createFirstDeliveryConnectionCheck(api)(), null);
+  assert.equal(calls.length, 1);
+});
