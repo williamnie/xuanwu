@@ -36,9 +36,11 @@ function browserHistory(initialHash) {
     startPageTransition: callback => callback(), updateAppState: callback => callback(state),
     setMobileSidebarOpen: () => {},
   };
+  // eslint-disable-next-line no-regex-spaces -- Match the frozen source indentation literally.
   const effect = appSource.match(/useEffect\(\(\) => \{\n    if \(!globalThis.addEventListener\)([\s\S]*?)\n  \}, \[updateAppState\]\);/);
   assert.ok(effect, 'browser history must keep the live App synchronization effect');
   runInNewContext(`(() => { if (!globalThis.addEventListener)${effect[1]} })()`, context);
+  // eslint-disable-next-line no-regex-spaces -- Match the frozen source indentation literally.
   const writer = appSource.match(/const writeBrowserRoute = useCallback\(\((route, \{ replace = false \} = \{\})\) => \{([\s\S]*?)\n  \}, \[\]\);/);
   assert.ok(writer, 'history writes must use the live App callback');
   const write = runInNewContext(`(${writer[1]}) => {${writer[2]}\n}`, context);
@@ -120,6 +122,7 @@ test('D4 baseline 3: conversation, project/source/scope and flag-off issue filte
 
 test('D4 baseline 4: bare and advanced settings links expand and scroll to the same section', () => {
   const source = readFileSync(new URL('./pages/AssistantSettingsSections.jsx', import.meta.url), 'utf8');
+  // eslint-disable-next-line no-regex-spaces -- Match the frozen source indentation literally.
   const effect = source.match(/useEffect\(\(\) => \{\n    if \(!section\)([\s\S]*?)\n  \}, \[section\]\);/);
   assert.ok(effect, 'settings must keep its live deep-link expansion effect');
   for (const value of ['diagnostics', 'advanced:diagnostics']) {
