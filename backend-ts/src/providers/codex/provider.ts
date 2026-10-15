@@ -1,3 +1,5 @@
+import { effectiveCodexHome } from "../../config/codexServer.ts";
+import { CodexLoginError } from "../../pi/codexLoginCredentials.ts";
 import { CodexAdapter } from "./adapter.ts";
 import { localImageInput, textInput } from "./threadLifecycle.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
@@ -34,6 +36,7 @@ const DEFAULT_DEVELOPER_INSTRUCTIONS = [
 
 type CodexIssueAdapter = {
   initialize(): Promise<CodexInitializeResult>;
+  refreshAccount?(): Promise<void>;
   listThreads(input?: Parameters<CodexAdapter["listThreads"]>[0]): Promise<Awaited<ReturnType<CodexAdapter["listThreads"]>>>;
   listThreadTurns(threadID: string, input?: Parameters<CodexAdapter["listThreadTurns"]>[1]): Promise<Awaited<ReturnType<CodexAdapter["listThreadTurns"]>>>;
   readThread(threadID: string, input?: Parameters<CodexAdapter["readThread"]>[1]): Promise<ThreadSummary>;
@@ -70,6 +73,8 @@ class CodexEventHub implements CodexEventSource {
 }
 
 export class CodexExecutorProvider implements ExecutorProvider {
+  private accountRefresh?: Promise<void>;
+  readonly codexCredentialHome?: string;
   private readonly threadNaming: CodexThreadNaming;
   readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"] as const;
   readonly id = PROVIDER_CODEX;
@@ -79,13 +84,26 @@ export class CodexExecutorProvider implements ExecutorProvider {
     private readonly developerInstructions = DEFAULT_DEVELOPER_INSTRUCTIONS,
     private readonly eventSource?: CodexEventSource,
     private readonly runtimeControl?: CodexRuntimeControl,
-    generateTitle?: CodexThreadTitleGenerator
+    generateTitle?: CodexThreadTitleGenerator,
+    credentialHome?: string
   ) {
+    this.codexCredentialHome = credentialHome;
     this.threadNaming = new CodexThreadNaming(adapter, {
       generate: generateTitle,
       acquire: (owner) => this.acquire(owner),
       subscribe: eventSource ? (handler) => eventSource.subscribe(handler) : undefined
     });
+  }
+
+  async refreshCodexLogin(): Promise<void> {
+    if (!this.adapter.refreshAccount) throw new CodexLoginError("codex_account_unavailable");
+    this.accountRefresh ??= this.adapter.refreshAccount().catch(error => {
+      const text = error instanceof Error ? error.message : "";
+      throw new CodexLoginError(/method not found|unknown method|not supported|-32601/i.test(text)
+        ? "codex_account_unavailable" : text === "codex_login_unsupported" ? text : "codex_login_refresh_failed");
+    });
+    const pending = this.accountRefresh;
+    try { await pending; } finally { if (this.accountRefresh === pending) this.accountRefresh = undefined; }
   }
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
@@ -330,7 +348,7 @@ export function createCodexExecutorProvider(
     onEvent: publish,
     ownershipFile: options.ownershipFile
   });
-  return new CodexExecutorProvider(new CodexAdapter(transport), DEFAULT_DEVELOPER_INSTRUCTIONS, events, transport, options.generateTitle);
+  return new CodexExecutorProvider(new CodexAdapter(transport), DEFAULT_DEVELOPER_INSTRUCTIONS, events, transport, options.generateTitle, effectiveCodexHome(config));
 }
 
 export function codexProviderAppEvent(event: ProviderEvent): AppEvent {

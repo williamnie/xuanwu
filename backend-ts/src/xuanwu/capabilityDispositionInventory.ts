@@ -903,6 +903,7 @@ export const PAGE_SURFACES = [
 ] as const;
 
 export const SCHEDULER_DISPOSITIONS = [
+  { id: "codex-login-maintenance", disposition: "keep", target: "Core-owned Codex login freshness; workers remain read-only", entrypoint: "startCodexLoginMaintenance", source_file: "backend-ts/src/pi/codexLoginMaintenance.ts" },
   { id: "startup-recovery", disposition: "keep", target: "Run recovery", entrypoint: "recoverInProgressIssues", source_file: "backend-ts/src/runtime/core.ts" },
   { id: "project-execution-loop", disposition: "keep", target: "Work queue to ordered Run attempts", entrypoint: "startProjectLoop / runProjectLoopOnce", source_file: "backend-ts/src/runner/projectLoopManager.ts" },
   { id: "auto-manage-timer", disposition: "keep", target: "Single local scheduler infrastructure", entrypoint: "createPiAutoManageScheduler", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
@@ -918,6 +919,10 @@ export const SCHEDULER_DISPOSITIONS = [
 ] as const;
 
 export const PI_MODULE_FAMILIES = [
+  {
+    id: "assistant-credentials", disposition: "keep", target: "Assistant credential source and Codex-owned refresh", source_of_truth: "pi_agents.credential_source; independent Pi store or read-only effective CODEX_HOME",
+    source_files: ["backend-ts/src/pi/codexLoginCredentials.ts", "backend-ts/src/pi/codexLoginMaintenance.ts", "backend-ts/src/pi/piModelRuntime.ts"]
+  },
   {
     id: "action-permission-gate", disposition: "keep", target: "Deterministic permission and external-effect gate", source_of_truth: "Action Proposal/Approval plus pi_action_events",
     source_files: ["backend-ts/src/pi/actionAudit.ts", "backend-ts/src/pi/actionContracts.ts", "backend-ts/src/pi/actionEngine.ts", "backend-ts/src/pi/actionEnvelope.ts", "backend-ts/src/pi/actionFreshness.ts", "backend-ts/src/pi/actionGate.ts", "backend-ts/src/pi/actionGateDiagnostic.ts", "backend-ts/src/pi/actionGateRecovery.ts", "backend-ts/src/pi/actionRecordMetadata.ts", "backend-ts/src/pi/approvalFastAudit.ts", "backend-ts/src/pi/approvalFastPolicy.ts", "backend-ts/src/pi/approvalGrantScope.ts", "backend-ts/src/pi/approvalPolicyCache.ts", "backend-ts/src/pi/approvalRequestParser.ts", "backend-ts/src/pi/approvalSafetyPolicy.ts", "backend-ts/src/pi/authorizationScope.ts", "backend-ts/src/pi/nonIssueProposalActions.ts", "backend-ts/src/pi/runnerChatAuthorization.ts", "backend-ts/src/pi/sourcePermissionPolicy.ts", "backend-ts/src/pi/stalePendingActions.ts"]

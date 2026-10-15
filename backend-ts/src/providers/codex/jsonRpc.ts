@@ -1,3 +1,4 @@
+import { effectiveCodexHome } from "../../config/codexServer.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import type { ApprovalDecision, ProviderEvent } from "../types.ts";
@@ -105,7 +106,7 @@ export class CodexStdioJsonRpcTransport {
     const spawned = this.processFactory()({
       command: splitCommand(this.config.command),
       cwd: this.config.cwd.trim() || undefined,
-      env: managedExecutionEnvironment({ ...Bun.env, ...this.config.env })
+      env: managedExecutionEnvironment({ ...Bun.env, ...this.config.env, CODEX_HOME: effectiveCodexHome(this.config) })
     });
     this.process = spawned;
     try {

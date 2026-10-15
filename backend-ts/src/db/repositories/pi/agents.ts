@@ -13,6 +13,7 @@ import {
 export type PiAgent = {
   id: string; name: string; provider: string; model_provider: string; model_id: string;
   thinking_level: string; cwd_policy: string; tools_json: string; instructions: string;
+  credential_source: "stored" | "codex_login";
   enabled: number; created_at: string; updated_at: string;
 };
 
@@ -20,10 +21,10 @@ export type PiAgentInput = PatchInput<PiAgent>;
 
 const TABLE = "pi_agents";
 const COLUMNS = `id, name, provider, model_provider, model_id, thinking_level,
-  cwd_policy, tools_json, instructions, enabled, created_at, updated_at`;
+  cwd_policy, tools_json, instructions, enabled, credential_source, created_at, updated_at`;
 const UPDATE_COLUMNS = [
   "name", "provider", "model_provider", "model_id", "thinking_level",
-  "cwd_policy", "tools_json", "instructions", "enabled"
+  "cwd_policy", "tools_json", "instructions", "enabled", "credential_source"
 ] as const;
 
 export function updatePiSupervisor(db: RunnerDatabase, input: PiAgentInput): PiAgent {
@@ -46,6 +47,7 @@ function mustGetPiAgent(db: RunnerDatabase, id: string): PiAgent {
 }
 
 function normalizePatch(input: PiAgentInput): PiAgentInput {
+  if (input.credential_source !== undefined && !["stored", "codex_login"].includes(input.credential_source)) throw new Error("credential_source must be stored or codex_login");
   return { ...input, tools_json: input.tools_json === undefined ? undefined : jsonText(input.tools_json, "[]") };
 }
 
@@ -57,6 +59,7 @@ function mapPiAgent(row: Record<string, unknown>): PiAgent {
     thinking_level: requiredString(row.thinking_level, "pi_agents.thinking_level"),
     cwd_policy: requiredString(row.cwd_policy, "pi_agents.cwd_policy"),
     tools_json: optionalString(row.tools_json), instructions: optionalString(row.instructions),
+    credential_source: row.credential_source === "codex_login" ? "codex_login" : "stored",
     enabled: integerValue(row.enabled, "pi_agents.enabled"),
     created_at: requiredString(row.created_at, "pi_agents.created_at"),
     updated_at: requiredString(row.updated_at, "pi_agents.updated_at")

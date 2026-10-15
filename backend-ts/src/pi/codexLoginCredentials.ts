@@ -1,0 +1,162 @@
+import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import type { CredentialStore, OAuthCredential } from "@earendil-works/pi-ai";
+
+export const CODEX_REFRESH_THRESHOLD_MS = 30 * 60_000;
+export const CODEX_REFRESH_INTERVAL_MS = 10 * 60_000;
+export class CodexLoginError extends Error {
+  constructor(readonly code: string) { super(code); this.name = "CodexLoginError"; }
+}
+export type CodexLoginBinding = {
+  home: string;
+  managedHome: string;
+  unavailable?: string;
+  /** Identity of the existing managed transport, never a new app-server. */
+  key: object;
+  refresh?: () => Promise<void>;
+};
+type Snapshot = { credential?: OAuthCredential; account?: string; configured: boolean; auth_mode: string; error?: string };
+const flights = new WeakMap<object, Promise<void>>();
+const claimKey = "https://api.openai.com/auth";
+
+function object(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+function string(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
+function claims(token: string): Record<string, unknown> {
+  try { return object(JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8"))); }
+  catch { return {}; }
+}
+
+/** Pure read. Neither the raw object nor a refresh/id token leaves this function. */
+function readLogin(home: string): Snapshot {
+  let raw: Record<string, unknown>;
+  try { raw = object(JSON.parse(readFileSync(join(home, "auth.json"), "utf8"))); }
+  catch (error) {
+    return { configured: false, auth_mode: "", error: (error as { code?: string }).code === "ENOENT" ? "codex_login_missing" : "invalid_auth_json" };
+  }
+  const tokens = object(raw.tokens);
+  const access = string(tokens.access_token);
+  const rawMode = string(raw.auth_mode) || (access ? "chatgpt" : string(raw.OPENAI_API_KEY) ? "apikey" : "");
+  const mode = ["chatgpt", "apikey", "chatgptAuthTokens"].includes(rawMode) ? rawMode : "";
+  const base = { configured: Boolean(access || string(raw.OPENAI_API_KEY)), auth_mode: mode };
+  if (mode !== "chatgpt") return { ...base, error: "codex_login_unsupported" };
+  if (!access) return { ...base, error: "codex_login_missing" };
+  const payload = claims(access);
+  const account = string(object(payload[claimKey]).chatgpt_account_id);
+  const fileAccount = string(tokens.account_id);
+  const idAccount = string(object(claims(string(tokens.id_token))[claimKey]).chatgpt_account_id);
+  if (!account) return { ...base, error: "codex_login_invalid_token" };
+  if ((fileAccount && account !== fileAccount) || (idAccount && account !== idAccount)) return { ...base, error: "codex_login_account_mismatch" };
+  const expires = typeof payload.exp === "number" ? payload.exp * 1000 : NaN;
+  if (!Number.isSafeInteger(expires) || expires <= 0 || expires > 8.64e15) return { ...base, error: "codex_login_invalid_token" };
+  return { ...base, account, credential: { type: "oauth", access, refresh: "", expires, accountId: account } };
+}
+
+export function createCodexLoginService(options: {
+  role: "core" | "worker" | "replay";
+  binding: () => CodexLoginBinding;
+  now?: () => number;
+}) {
+  const now = options.now ?? Date.now;
+  let failure: { key: object; code: string; access?: string } | undefined;
+  function binding() {
+    const value = options.binding();
+    if (resolve(value.home) !== resolve(value.managedHome)) return { ...value, unavailable: "codex_login_home_mismatch" };
+    return value;
+  }
+  function checked(value: CodexLoginBinding) {
+    if (value.unavailable) throw new CodexLoginError(value.unavailable);
+    const snapshot = readLogin(value.home);
+    if (snapshot.error || !snapshot.credential) throw new CodexLoginError(snapshot.error ?? "codex_login_missing");
+    return snapshot as Snapshot & { credential: OAuthCredential; account: string };
+  }
+  async function refresh(value: CodexLoginBinding, account: string) {
+    if (options.role !== "core") throw new CodexLoginError("codex_login_expired");
+    if (!value.refresh) throw new CodexLoginError("codex_account_unavailable");
+    let pending = flights.get(value.key);
+    if (!pending) {
+      pending = Promise.resolve().then(value.refresh);
+      flights.set(value.key, pending);
+    }
+    try {
+      await pending;
+      const currentBinding = binding();
+      if (currentBinding.key !== value.key || resolve(currentBinding.home) !== resolve(value.home)) throw new CodexLoginError("codex_login_home_mismatch");
+      const result = checked(currentBinding);
+      if (result.account !== account) throw new CodexLoginError("codex_login_account_mismatch");
+      if (result.credential.expires <= now()) throw new CodexLoginError("codex_login_expired");
+      failure = undefined;
+      return result.credential;
+    } catch (error) {
+      // Never retain the provider error/cause: it may contain credentials or account data.
+      const code = error instanceof CodexLoginError ? error.code : "codex_login_refresh_failed";
+      failure = { key: value.key, code, access: readLogin(value.home).credential?.access };
+      throw new CodexLoginError(code);
+    } finally {
+      if (flights.get(value.key) === pending) flights.delete(value.key);
+    }
+  }
+  async function read(refreshSoon: boolean) {
+    const value = binding();
+    const snapshot = checked(value);
+    if (refreshSoon && options.role === "core" && snapshot.credential.expires - now() < CODEX_REFRESH_THRESHOLD_MS) {
+      return refresh(value, snapshot.account);
+    }
+    if (snapshot.credential.expires <= now()) {
+      if (options.role === "core") return refresh(value, snapshot.account);
+      throw new CodexLoginError("codex_login_expired");
+    }
+    return snapshot.credential;
+  }
+  const credentials: CredentialStore = {
+    async read(id) { return id === "openai-codex" ? read(true) : undefined; },
+    async list() { return status().available ? [{ providerId: "openai-codex", type: "oauth" }] : []; },
+    // Deliberately NEVER execute fn. pi performs its own refresh inside that callback.
+    async modify(id, _fn, options) {
+      options?.signal?.throwIfAborted();
+      if (id !== "openai-codex") throw new CodexLoginError("codex_login_read_only");
+      return read(false);
+    },
+    async delete() { throw new CodexLoginError("codex_login_read_only"); }
+  };
+  function status() {
+    const value = binding();
+    const snapshot = readLogin(value.home);
+    const error = value.unavailable || snapshot.error
+      || (failure?.key === value.key && failure.access === snapshot.credential?.access ? failure.code : undefined)
+      || (snapshot.credential && snapshot.credential.expires <= now() ? "codex_login_expired" : undefined);
+    return {
+      source: "codex_login" as const,
+      configured: snapshot.configured,
+      auth_mode: snapshot.auth_mode,
+      path: join(value.home, "auth.json"),
+      storage: "file" as const,
+      available: Boolean(snapshot.credential && !error),
+      ...(snapshot.credential ? { expires_at: new Date(snapshot.credential.expires).toISOString() } : {}),
+      ...(error ? { error } : {})
+    };
+  }
+  const readOnlyCredentials: CredentialStore = {
+    ...credentials,
+    async read(id) {
+      if (id !== "openai-codex") return undefined;
+      const result = checked(binding()).credential;
+      if (result.expires <= now()) throw new CodexLoginError("codex_login_expired");
+      return result;
+    },
+    async modify(id) { return readOnlyCredentials.read(id); }
+  };
+  return { credentials, readOnlyCredentials, status, maintain: () => read(true) };
+}
+export type CodexLoginService = ReturnType<typeof createCodexLoginService>;
+
+export function codexLoginFailureCode(error: unknown): string {
+  if (error instanceof CodexLoginError) return error.code;
+  // SDK wraps store errors; match only our fixed vocabulary, never return raw text/cause.
+  const message = error instanceof Error ? error.message : "";
+  const codes = ["codex_login_missing", "invalid_auth_json", "codex_login_unsupported", "codex_login_invalid_token",
+    "codex_login_account_mismatch", "codex_login_home_mismatch", "codex_login_expired", "codex_account_unavailable",
+    "codex_provider_disabled", "codex_provider_unavailable", "codex_login_refresh_failed"];
+  return codes.find(code => message.includes(code)) ?? "codex_login_refresh_failed";
+}

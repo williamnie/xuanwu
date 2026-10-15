@@ -1,3 +1,4 @@
+import { createPiModelRuntime } from "../pi/piModelRuntime.ts";
 import {
   type AgentSession,
   type ResourceLoader,
@@ -172,7 +173,8 @@ function summarizeText(text: string): string {
 async function createSmokeSdk(config: SmokeConfig, runtime: SmokeRuntime) {
   const settingsManager = runtime.pi.SettingsManager.inMemory({ sessionDir: config.sessionDir });
   const sessionManager = runtime.pi.SessionManager.create(config.cwd, config.sessionDir);
-  const modelRuntime = await runtime.pi.ModelRuntime.create({
+  const modelRuntime = await createPiModelRuntime(runtime.pi, {
+    mode: "smoke",
     authPath: config.authPath,
     modelsPath: null,
     refreshOnCreate: false

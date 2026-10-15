@@ -110,7 +110,7 @@ describe("Xuanwu capability disposition inventory", () => {
     );
     const inventoriedPi: string[] = PI_MODULE_FAMILIES.flatMap((family) => [...family.source_files]).sort();
     expect(inventoriedPi).toEqual(piFiles);
-    expect(inventoriedPi).toHaveLength(173);
+    expect(inventoriedPi).toHaveLength(176);
     expect(unique(inventoriedPi)).toHaveLength(inventoriedPi.length);
   });
 
@@ -130,7 +130,7 @@ describe("Xuanwu capability disposition inventory", () => {
   });
 
   test("keeps schedulers mapped and gives every delete item reproducible evidence and gates", () => {
-    expect(SCHEDULER_DISPOSITIONS).toHaveLength(12);
+    expect(SCHEDULER_DISPOSITIONS).toHaveLength(13);
     for (const scheduler of SCHEDULER_DISPOSITIONS) {
       expect(readFileSync(resolve(REPO_ROOT, scheduler.source_file), "utf8")).toContain(
         scheduler.entrypoint.split(" + ")[0].split(" / ")[0]

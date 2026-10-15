@@ -1,5 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { codexLoginService, createPiModelRuntime, selectedCredentialSource, type CredentialSource } from "../pi/piModelRuntime.ts";
 import { dirname, join } from "node:path";
 import type { OAuthAuthInfo, OAuthCredentials, OAuthPrompt } from "@earendil-works/pi-ai";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -18,7 +17,7 @@ export type PiOpenAICodexOAuthLogin = (
   callbacks: PiOAuthLoginCallbacks,
   signal?: AbortSignal
 ) => Promise<OAuthCredentials>;
-export type PiOpenAICodexModelDiscovery = (database: RunnerDatabase, signal?: AbortSignal) => Promise<string[]>;
+export type PiOpenAICodexModelDiscovery = (database: RunnerDatabase, signal?: AbortSignal, source?: CredentialSource) => Promise<string[]>;
 type PiOAuthContext = {
   database: RunnerDatabase;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
@@ -107,7 +106,7 @@ async function defaultOpenAICodexLogin(
   state: LoginState,
   signal?: AbortSignal
 ): Promise<OAuthCredentials> {
-  const runtime = await createPiModelRuntime(db, signal);
+  const runtime = await createOAuthRuntime(db, signal, undefined, "stored");
   state.phase = "provider_login";
   const credential = await runtime.login(OPENAI_CODEX_PROVIDER, "oauth", {
     signal,
@@ -182,7 +181,7 @@ export async function removePiOpenAICodexOAuthCredential(db: RunnerDatabase): Pr
   loginStates.delete(authPath);
   const configured = await hasStoredPiCredential(piAuthPath(db));
   if (configured) {
-    const runtime = await createPiModelRuntime(db);
+    const runtime = await createOAuthRuntime(db, undefined, undefined, "stored");
     await runtime.logout(OPENAI_CODEX_PROVIDER);
   }
   if (configured) recordOAuthAudit(db, "provider_oauth_logged_out", "succeeded");
@@ -191,18 +190,20 @@ export async function removePiOpenAICodexOAuthCredential(db: RunnerDatabase): Pr
 
 async function logoutOpenAICodex(db: RunnerDatabase) {
   await removePiOpenAICodexOAuthCredential(db);
-  return await oauthStatus(db);
+  return await oauthStatus(db, false);
 }
 
-export async function isPiOpenAICodexOAuthConfigured(db: RunnerDatabase): Promise<boolean> {
+export async function isPiOpenAICodexOAuthConfigured(db: RunnerDatabase, source?: CredentialSource): Promise<boolean> {
+  if (selectedCredentialSource(db, source) === "codex_login") return codexLoginService(db).status().configured;
   return await hasStoredPiCredential(piAuthPath(db));
 }
 
 export async function discoverPiOpenAICodexModels(
   db: RunnerDatabase,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  source?: CredentialSource
 ): Promise<string[]> {
-  const runtime = await createPiModelRuntime(db, signal);
+  const runtime = await createOAuthRuntime(db, signal, source);
   const result = await runtime.refresh({
     allowNetwork: true,
     force: true,
@@ -216,14 +217,15 @@ export async function discoverPiOpenAICodexModels(
   return [...new Set(models.map((model) => model.id).filter(Boolean))];
 }
 
-async function oauthStatus(db: RunnerDatabase) {
+async function oauthStatus(db: RunnerDatabase, readCodex = true) {
   const authPath = piAuthPath(db);
   const configured = await hasStoredPiCredential(authPath);
   const state = loginStates.get(authPath);
   const base = {
     provider: OPENAI_CODEX_PROVIDER,
+    credential_source: selectedCredentialSource(db),
     pi_oauth: { configured, source: configured ? "stored" : "none", status: state?.status ?? "idle" },
-    codex_login: codexLoginStatus()
+    ...(readCodex ? { codex_login: codexLoginService(db).status() } : {})
   };
   if (!state) return base;
   return {
@@ -244,31 +246,11 @@ async function hasStoredPiCredential(authPath: string): Promise<boolean> {
 
 async function loginResponse(db: RunnerDatabase, state: LoginState) {
   return {
-    ...await oauthStatus(db),
+    ...await oauthStatus(db, false),
     auth_url: state.authUrl ?? "",
     instructions: state.instructions ?? "",
     status: state.status
   };
-}
-
-function codexLoginStatus() {
-  const path = join(codexHome(), "auth.json");
-  if (!existsSync(path)) return { configured: false, path, storage: "file" };
-  return codexAuthFromFile(path);
-}
-
-function codexAuthFromFile(path: string) {
-  try {
-    const raw = JSON.parse(readFileSync(path, "utf8"));
-    return { auth_mode: cleanString(raw.auth_mode), configured: hasCodexCredential(raw), path, storage: "file" };
-  } catch {
-    return { configured: false, error: "invalid_auth_json", path, storage: "file" };
-  }
-}
-
-function hasCodexCredential(raw: Record<string, unknown>): boolean {
-  const tokens = isObject(raw.tokens) ? raw.tokens : {};
-  return cleanString(tokens.access_token) !== "" || cleanString(raw.OPENAI_API_KEY) !== "";
 }
 
 function pendingState(timeoutMs: number): LoginState {
@@ -295,13 +277,14 @@ function piModelsPath(db: RunnerDatabase): string {
   return join(dirname(db.path), "pi-runtime", "agent", "models.json");
 }
 
-async function createPiModelRuntime(db: RunnerDatabase, signal?: AbortSignal) {
-  const [{ registerBunOAuthFlows }, { ModelRuntime }] = await Promise.all([
+async function createOAuthRuntime(db: RunnerDatabase, signal?: AbortSignal, source?: CredentialSource, mode: "assistant" | "stored" = "assistant") {
+  const [{ registerBunOAuthFlows }, sdk] = await Promise.all([
     import("@earendil-works/pi-ai/bun-oauth"),
     import("@earendil-works/pi-coding-agent")
   ]);
   registerBunOAuthFlows();
-  return await ModelRuntime.create({
+  return await createPiModelRuntime(sdk, {
+    database: db, source, mode,
     authPath: piAuthPath(db),
     modelsPath: piModelsPath(db),
     refreshOnCreate: false,
@@ -350,18 +333,6 @@ function withRunnerOAuthOriginator(info: OAuthAuthInfo): OAuthAuthInfo {
   } catch {
     return info;
   }
-}
-
-function codexHome(): string {
-  return cleanString(process.env.CODEX_HOME) || join(homedir(), ".codex");
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function recordOAuthAudit(db: RunnerDatabase, eventType: string, status: string, error = "", state?: LoginState, diagnostic?: PiOAuthFailureDiagnostic): void {

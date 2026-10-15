@@ -1,3 +1,4 @@
+import { startCodexLoginMaintenance } from "../pi/codexLoginMaintenance.ts";
 import { startMemoryReflectionWorker } from "../agentic/memoryReflectionWorker.ts";
 import { startAgenticServer } from "../agentic/server.ts";
 import { bunBuildInfo } from "../buildInfo.ts";
@@ -14,6 +15,9 @@ export async function startAgenticRuntime(args: string[]): Promise<void> {
     stateDir: config.stateDir,
     writerBusyTimeoutMs: 5_000
   });
+  const stopCodexLogin = startCodexLoginMaintenance(database, config);
+  process.once("SIGTERM", stopCodexLogin);
+  process.once("SIGINT", stopCodexLogin);
   const reconciliation = reconcileStaleManagerCycleConversations(database);
   const server = await startAgenticServer(config, database);
   const stopReflectionWorker = startMemoryReflectionWorker(database);

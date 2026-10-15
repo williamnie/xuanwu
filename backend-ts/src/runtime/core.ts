@@ -1,3 +1,4 @@
+import { startCodexLoginMaintenance } from "../pi/codexLoginMaintenance.ts";
 import { join } from "node:path";
 import { createHttpAgenticWorkerClient } from "../agentic/client.ts";
 import type { AgenticWorkerClient } from "../agentic/protocol.ts";
@@ -111,6 +112,9 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
       }));
     }
   }
+  const stopCodexLoginMaintenance = startCodexLoginMaintenance(database, config, providersRegistry);
+  process.once("SIGTERM", stopCodexLoginMaintenance);
+  process.once("SIGINT", stopCodexLoginMaintenance);
   const providers = providersRegistry.readyProviders();
   const runtimeStartedAt = new Date().toISOString();
   const providerRuntime = () => {

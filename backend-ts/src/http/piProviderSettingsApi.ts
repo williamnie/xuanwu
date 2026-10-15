@@ -1,3 +1,5 @@
+import { credentialSource, selectedCredentialSource, type CredentialSource } from "../pi/piModelRuntime.ts";
+import { codexLoginFailureCode } from "../pi/codexLoginCredentials.ts";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getModel, getModels, getProviders, type KnownProvider, type Model } from "@earendil-works/pi-ai/compat";
@@ -229,17 +231,24 @@ async function discoverProviderModels(
   current?: ProviderConfig,
   preset?: ProviderPreset
 ): Promise<ProviderConnectionResult> {
+  let source: CredentialSource | undefined;
+  try { if (body.credential_source !== undefined) source = credentialSource(body.credential_source); }
+  catch { throw new HttpError(400, "credential_source must be stored or codex_login"); }
+  if (source === "codex_login" && (id !== "openai-codex" || Object.entries(body).some(([key, value]) =>
+    key !== "credential_source" && /token|secret|credential|api.?key/i.test(key) && value !== "" && value !== undefined))) {
+    throw new HttpError(400, "codex_login accepts a source selection, not credentials");
+  }
   const config = current ? undefined : await readModelsConfig(modelsPath(context.database));
   const activeCurrent = current ?? config?.providers[id] ?? {};
   const activePreset = preset ?? PROVIDER_PRESETS.find((item) => item.id === id);
   if ((activePreset?.auth ?? "api_key") === "oauth") {
-    return await oauthModelDiscoveryResult(context, id);
+    return await oauthModelDiscoveryResult(context, id, source);
   }
   return await probeApiKeyProvider(id, body, activeCurrent, activePreset, context.secrets!);
 }
 
-async function oauthModelDiscoveryResult(context: PiProviderSettingsContext, id: string): Promise<ProviderConnectionResult> {
-  const configured = id === "openai-codex" && await isPiOpenAICodexOAuthConfigured(context.database);
+async function oauthModelDiscoveryResult(context: PiProviderSettingsContext, id: string, source?: CredentialSource): Promise<ProviderConnectionResult> {
+  const configured = id === "openai-codex" && await isPiOpenAICodexOAuthConfigured(context.database, source);
   const failure = (error: string, message: string): ProviderConnectionResult => ({
     auth: "oauth",
     checked_at: new Date().toISOString(),
@@ -250,10 +259,12 @@ async function oauthModelDiscoveryResult(context: PiProviderSettingsContext, id:
     provider_id: id,
     status: "failed"
   });
-  if (!configured) return failure("oauth_not_configured", "请先完成 Codex OAuth 登录");
+  if (!configured) return selectedCredentialSource(context.database, source) === "codex_login"
+    ? failure("codex_login_missing", "未找到可复用的 Codex 登录，请先在 Codex 中登录")
+    : failure("oauth_not_configured", "请先完成 Codex OAuth 登录");
   try {
     const discover = context.piOpenAICodexModelDiscovery ?? discoverPiOpenAICodexModels;
-    const models = modelIDsFromPayload(await discover(context.database));
+    const models = modelIDsFromPayload(await discover(context.database, undefined, source));
     if (models.length === 0) return failure("model_list_empty", "Codex model API 未返回可用模型");
     return {
       auth: "oauth",
@@ -264,7 +275,10 @@ async function oauthModelDiscoveryResult(context: PiProviderSettingsContext, id:
       provider_id: id,
       status: "connected"
     };
-  } catch {
+  } catch (error) {
+    if (selectedCredentialSource(context.database, source) === "codex_login") {
+      return failure(codexLoginFailureCode(error), "Codex 登录暂不可用，请在 Codex 中重新登录或稍后重试");
+    }
     return failure("model_api_failed", "Codex model API 请求失败");
   }
 }

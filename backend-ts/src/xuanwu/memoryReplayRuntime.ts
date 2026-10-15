@@ -1,3 +1,4 @@
+import { createPiModelRuntime } from "../pi/piModelRuntime.ts";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
@@ -61,12 +62,15 @@ export async function liveReplayDriver(sourceState: string, runtimeRoot: string,
   finally { source.close(); }
   if (!agent?.enabled) throw new Error("needs_user: configured Pi Supervisor unavailable");
   const sdk = await loadSmokeRuntime(resolveDefaultRepoRoot());
-  const runtime = await sdk.pi.ModelRuntime.create({
-    credentials: readOnlyReplayCredentials(sdk, paths.authPath, agent.model_provider),
+  const runtime = await createPiModelRuntime(sdk.pi, {
+    mode: "replay", database: source, source: agent.credential_source,
+    replayCredentials: readOnlyReplayCredentials(sdk, paths.authPath, agent.model_provider),
     modelsPath: paths.modelsPath, modelsStorePath: join(runtimeRoot, "catalog.json"),
     refreshOnCreate: false, allowModelNetwork: false, signal: budget.controller.signal
   });
-  await installPiProviderSecretOverride(runtime, paths.modelsPath, sourceState, agent.model_provider);
+  if (agent.credential_source !== "codex_login" || agent.model_provider !== "openai-codex") {
+    await installPiProviderSecretOverride(runtime, paths.modelsPath, sourceState, agent.model_provider);
+  }
   // 仅解析现有鉴权；不启动交互登录。失败不会退回 fixture。
   if (!await runtime.getAuth(agent.model_provider, { signal: budget.controller.signal })) throw new Error("needs_user: Pi credentials unavailable");
   const model = resolvePiModel({ find: (provider, id) => runtime.getModel(provider, id) }, agent);

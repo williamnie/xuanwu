@@ -109,6 +109,12 @@ export class CodexAdapter {
     }));
   }
 
+  async refreshAccount(): Promise<void> {
+    await this.initialize();
+    const result = await this.rpc.request("account/read", { refreshToken: true }) as { account?: { type?: string } };
+    if (result?.account?.type !== "chatgpt") throw new Error("codex_login_unsupported");
+  }
+
   async listModels(input: ModelListInput = {}): Promise<ModelListResult> {
     const params = { includeHidden: input.includeHidden === true };
     return normalizeModelListResult(await this.rpc.request("model/list", params));

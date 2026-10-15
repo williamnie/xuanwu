@@ -459,7 +459,8 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 | E1 | 完成（`8f5ee682`） | 四来源完整只读聚合、live keyset、单源失败隔离及既有投影等价性；后端 2807、前端 788；5000 / 50000 非活跃档中位 90.24 / 175.51ms，未加迁移，详见 8.4 |
 | E 单条解析优化 | 完成（`0b8758dc`） | seed + related + 目标载体快路径，未命中保留完整解析；50000 非活跃档详情 / acknowledge 中位 114.86 / 227.70ms；后端 2808，详见 8.4 |
 | E2 | 完成（`6554a610`，刷新修正见下一行） | 首页四来源单一列表、游标追加、独立动作与来源失败提示；500ms 事件防抖、AbortController 与代次检查丢弃旧页；前端 795，浅深 × 980 / 760 / 680，详见 8.4 |
-| E2 刷新修正 | 完成（本次提交） | 集合事件白名单、500ms 固定窗口与尾随补读；自动 / 提交后刷新保留已加载条数，最多 50 条一批串行补读并原子更新；仅首次 / 手动刷新显示 loading，前端 800 项通过 |
+| E2 刷新修正 | 完成（`8d2e12a4`） | 集合事件白名单、500ms 固定窗口与尾随补读；自动 / 提交后刷新保留已加载条数，最多 50 条一批串行补读并原子更新；仅首次 / 手动刷新显示 loading，前端 800 项通过 |
+| F1 后端 | 完成（本次提交） | Codex 只读凭据源、core 30 分钟阈值 / 10 分钟保鲜、worker 分类失败、stored 独立登录与迁移；后端 2827，详见 8.5 |
 
 交接 A–F 已全部提交，以下为完成记录，不再作为待办：
 
@@ -639,22 +640,27 @@ E 阶段沿用 D 阶段的约束：不改认证、端口、权限默认值和已
 
 #### F1 玄武助手复用 Codex 登录
 
-**现状（待核实）**：玄武助手凭据由 `@earendil-works/pi-coding-agent` 存在 `<数据目录>/pi-runtime/agent/auth.json`（`piOAuthApi.ts` `piAuthPath`），运行时由 `ModelRuntime.create({ authPath })` 读取，创建点至少有 `http/piRuntime.ts`、`http/piOAuthApi.ts`、`pi/sessionTitleGenerator.ts`。Codex CLI 凭据在 `$CODEX_HOME/auth.json`，`codexLoginStatus` 只读其是否存在。`ModelRuntime.create` 支持传入 `credentials: CredentialStore`（read / list / modify / delete），`xuanwu/memoryReplayRuntime.ts` 已有只读适配的先例。
+**实施前已核实**：玄武助手凭据存于 `<数据目录>/pi-runtime/agent/auth.json`；原有 `ModelRuntime.create` 创建点为 `http/piRuntime.ts`、`http/piOAuthApi.ts`、`pi/sessionTitleGenerator.ts`，另有只读记忆回放和隔离 smoke 工具。原 `codexLoginStatus` 会解析 `$CODEX_HOME/auth.json`，检查 access token 或 API key 是否存在，API key 也会得到 configured；并非仅检查文件存在。pi 0.87.1 支持自定义 `CredentialStore`，请求鉴权在到期前 5 分钟通过 `modify` 回调刷新，目录发现也有刷新路径；不能仅禁止最终写入。
 
-**核心风险**：OpenAI 的 refresh token 会轮换。把 Codex 的凭据复制给玄武助手、两边各自刷新，先刷新的一方会让另一方的 refresh token 失效，可能把用户的 Codex 登录弄坏。因此：
+**核心边界**：Codex 是唯一刷新方。玄武不复制 refresh token、不执行 pi 的刷新回调、不写 Codex 或独立 OAuth 的凭据文件。2026-10-15 根据实施前核实确认：
 
 | 规则 | 合同 |
 |---|---|
-| 单一刷新方 | 复用模式下 **Codex 是唯一的刷新方**。玄武只读 `$CODEX_HOME/auth.json`，不写、不复制、不把 refresh token 交给 pi 的刷新流程。需要刷新时（`CredentialStore.modify` 或 access token 已过期），通过 Xuanwu 已管理的 Codex app-server 的现有账户接口请求 Codex 自己刷新，然后重新读文件；无此接口或调用失败时返回明确的“需要在 Codex 中重新登录 / 稍后重试”，不得自行刷新。同一进程内刷新请求单飞（single-flight） |
-| 显式选择 | 玄武助手的凭据来源新增 `codex_login`，与现有 `stored`（独立登录）并列，保存在现有玄武助手设置里。**默认值不变**：已有用户不自动切换；未配置的新用户在引导中，若 Codex 登录可用，以“使用 Codex 的登录”为主选项，仍需点击确认才写入。切换来源不删除已存的独立登录凭据 |
-| 统一选择点 | 所有 `ModelRuntime.create` 创建点通过同一个函数取得凭据来源（`stored` 用现有 authPath，`codex_login` 用只读适配器），不允许某个创建点绕过 |
-| 支持范围 | 仅 ChatGPT 登录（`tokens.access_token` 存在且映射到 pi 的 openai-codex OAuth 凭据结构）；Codex 使用 API key 模式时显示“不支持复用，请用独立登录”。文件缺失、损坏、账号不一致等返回分类状态 |
-| 不泄露 | 状态接口只返回 `source`、`configured`、`auth_mode`、`expires_at`（可选）、分类错误；不返回任何 token、account 原始 JSON 或文件内容；日志和审计同样不含 token |
-| 状态 | 现有 OAuth 状态接口扩展 `credential_source` 与复用模式下的可用性；AI 连接中“授权”一行显示“使用 Codex 的登录 · 可用 / 需要在 Codex 中重新登录”，模型测试一行不变（交接 D 的两行规则） |
+| core 保鲜 / worker 只读 | core 在助手取凭据时检查，且每 10 分钟后台检查已选择 `codex_login` 的登录；access token 剩余不足 30 分钟，调用现有 managed Codex app-server 的 `account/read {refreshToken:true}`，同一 transport 单飞，随后重读并核实真实 expiry 与账号。worker 不增加内部刷新接口，不自行刷新；过期返回 `codex_login_expired` |
+| modify 边界 | 永远不执行 pi 的 fn。先重读，仍有效就返回；过期则 core 请求 Codex 刷新并重读，worker / replay 直接分类失败。不得伪造 expiry。状态 GET 只读，不能触发保鲜 |
+| home 与可用性 | 读文件与 managed provider 使用 `codexServer.ts` 中同一 effective home 解析函数，包含 App paths.codexHome / 默认 home 和显式 provider env。provider 禁用、无账户接口、home 不一致均不可用，不自动启用编程工具 |
+| 显式选择与持久化 | `pi_agents.credential_source` 新列，仅 `stored` / `codex_login`，migration 默认 stored；沿用 supervisor GET/PATCH。已有用户不自动切换；新用户可本地推荐 Codex 登录，确认保存才落库；切源不删除独立凭据 |
+| 统一选择点 | 所有应用 ModelRuntime 创建点走同一工厂。stored 使用原 authPath，codex_login 使用只读适配器；replay 禁刷新、smoke 隔离 faux 身份为显式模式。独立 login/logout 始终显式使用 stored store，不查询或改写 CODEX_HOME；其响应不重新读取 Codex 状态，状态刷新由独立 GET 完成 |
+| 支持范围 | 仅文件中的 ChatGPT 托管登录。access token 映射到 pi access；JWT exp 秒转 expires 毫秒，refresh 留空，不传 refresh/id token。账号声明与文件 account_id 必须一致；API key 模式、缺文件、损坏、无有效 exp/账号、账号不一致均返回分类状态 |
+| 模型测试 / 发现 | 允许 body 中的单次 credential_source 枚举覆盖，无凭据、无持久化；只由用户主动测试/发现使用。解决引导先测试后保存的顺序，未保存的新推荐不自动发模型请求；不传此字段时沿用已保存来源 |
+| 状态与不泄露 | OAuth 状态增加 credential_source；codex_login 投影仅 source、configured、available、auth_mode、expires_at（可选）、分类错误，保留旧 path/storage。无 token、email、account_id 原值或原始 account JSON；日志/审计同样无凭据。授权与模型测试维持独立两行 |
+| 前端 | AI 连接与首次引导提供“使用 Codex 的登录”；仅可用时可选。复用模式隐藏独立登录/退出按钮，提供“改用独立登录”：先完成独立登录，再确认切源；不删除另一来源 |
 
-前端：AI 连接 → 玄武助手连接方式加“使用 Codex 的登录”（Codex 登录可用时可选）；首次引导第 1 步同样提供。复用模式下隐藏独立登录的登录 / 退出按钮，改为“改用独立登录”。
+边界说明：30 分钟阈值与 10 分钟间隔不能保证机器休眠、core 停机、持续网络失败或撤销登录期间的 token 始终有效；worker 按分类错误进入现有失败/重试路径。不得为消除这类窗口让 worker 自行刷新或增加内部接口。
 
-验收：后端测试使用临时 `CODEX_HOME` 与假的 app-server 账户接口，覆盖：读取映射、过期触发 Codex 刷新并重读、刷新单飞、刷新失败分类、API key 模式不支持、文件缺失 / 损坏、所有创建点走同一选择函数、`$CODEX_HOME/auth.json` 字节不变且未被写入、`pi-runtime/agent/auth.json` 未被写入、状态与日志不含 token、默认来源不变。真实环境不得用用户的 Codex 凭据发起模型请求或刷新；真实页面只看状态显示，不点保存。
+验收：使用临时 CODEX_HOME、临时数据目录、假的 app-server 账户接口，覆盖映射、30 分钟阈值 / 10 分钟调度、单飞、worker 到期、home 不一致、所有创建点、枚举与默认值、单次测试来源不持久化、独立 login/logout 不触及 Codex。普通读取/状态/失败路径 auth.json 字节不变；刷新测试仅允许假 Codex 轮换临时文件，玄武适配器不写。前端浅/深 × 980/760/680 离线组件夹具；不使用真实凭据发模型请求/刷新，不点真实保存。
+
+F1 后端验收记录（2026-10-15，本次后端提交）：后端全量 **2827 pass / 0 fail**（490 files，6 snapshots）；新增 19 项凭据 / 选择器 / 调度 / HTTP 边界测试，迁移和能力清单同步。前端全量 **806 pass / 0 fail**，lint / build / diff 检查通过。全部凭据测试使用临时 CODEX_HOME / 数据目录及假账户接口，未读取真实凭据、未发真实模型或续期请求。状态 GET 不刷新；独立 login/logout 不经过复用适配器，也不查询 Codex 文件；失效后由外部换发的登录可经只读状态检查恢复可用。证据 `/tmp/xuanwu-f1/RESULT.md`、`backend-full-final.log`、`backend-targeted-final.log`。前端接入随后单独提交。
 
 #### F2 任务卡住原因
 

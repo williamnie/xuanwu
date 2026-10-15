@@ -1,3 +1,4 @@
+import { createPiModelRuntime, selectedCredentialSource } from "./piModelRuntime.ts";
 import { dirname } from "node:path";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
@@ -38,10 +39,13 @@ export async function generateSessionTitle(db: RunnerDatabase, input: CodexThrea
   const { piRuntimePaths, resolvePiModel } = await import("../http/piRuntime.ts");
   signal.throwIfAborted();
   const paths = piRuntimePaths(db);
-  const runtime = await sdk.pi.ModelRuntime.create({
+  const runtime = await createPiModelRuntime(sdk.pi, {
+    database: db,
     authPath: paths.authPath, modelsPath: paths.modelsPath, refreshOnCreate: false, signal
   });
-  await installPiProviderSecretOverride(runtime, paths.modelsPath, dirname(db.path), agent.model_provider);
+  if (selectedCredentialSource(db) !== "codex_login" || agent.model_provider !== "openai-codex") {
+    await installPiProviderSecretOverride(runtime, paths.modelsPath, dirname(db.path), agent.model_provider);
+  }
   signal.throwIfAborted();
   const model = resolvePiModel({ find: (provider, id) => runtime.getModel(provider, id) }, agent);
   const response = await runtime.completeSimple(model, {

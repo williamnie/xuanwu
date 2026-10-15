@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 
 export const CODEX_SERVER_MODES = ["cli", "app"] as const;
 export type CodexServerMode = typeof CODEX_SERVER_MODES[number];
@@ -139,7 +139,7 @@ function defaultNodeModuleDirs(resourcesPath: string): string[] {
   return [`${resourcesPath}/cua_node/lib/node_modules`];
 }
 
-function defaultCodexHome(): string {
+export function defaultCodexHome(): string {
   return Bun.env.CODEX_HOME?.trim() || `${Bun.env.HOME || ""}/.codex`;
 }
 
@@ -188,4 +188,11 @@ function processAlive(pid: number): boolean {
   } catch {
     return existsSync(`/proc/${pid}`);
   }
+}
+
+/** Shared by the managed transport and the assistant credential reader. */
+export function effectiveCodexHome(config?: { env?: Record<string, string>; cwd?: string }): string {
+  const env = { ...Bun.env, ...config?.env };
+  const home = env.CODEX_HOME?.trim() || (env.HOME ? join(env.HOME, ".codex") : defaultCodexHome());
+  return resolve(config?.cwd?.trim() || process.cwd(), home);
 }

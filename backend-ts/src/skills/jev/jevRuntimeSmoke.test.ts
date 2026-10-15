@@ -67,7 +67,7 @@ async function fixture(outcome: "advisory" | "timeout" = "advisory"): Promise<Fi
   const agent: PiAgent = {
     id: "runner-default", name: "Jev SDK smoke", provider: "pi-sdk", model_provider: FAUX_PROVIDER,
     model_id: "faux-1", thinking_level: "off", cwd_policy: "project", tools_json: "[]", instructions: "", enabled: 1,
-    created_at: "2026-09-28", updated_at: "2026-09-28"
+    credential_source: "stored", created_at: "2026-09-28", updated_at: "2026-09-28"
   };
   return { root, packageRoot, stateDir, db, project: getProject(db, "demo")!, agent };
 }

@@ -1,3 +1,4 @@
+import { createPiModelRuntime, piCredentialPaths, selectedCredentialSource } from "../pi/piModelRuntime.ts";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { getModel, getProviders, type KnownProvider, type Model } from "@earendil-works/pi-ai/compat";
@@ -169,13 +170,16 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   await mkdir(dirname(paths.authPath), { recursive: true });
   await mkdir(context.sessionDir, { recursive: true });
 
-  const modelRuntime = await sdk.pi.ModelRuntime.create({
+  const modelRuntime = await createPiModelRuntime(sdk.pi, {
+    database: db,
     authPath: paths.authPath,
     modelsPath: paths.modelsPath,
     refreshOnCreate: false
   });
   const cleanupRuntimeProvider = ensureRuntimeProvider(sdk, modelRuntime, input.agent);
-  await installPiProviderSecretOverride(modelRuntime, paths.modelsPath, dirname(db.path), input.agent.model_provider);
+  if (selectedCredentialSource(db) !== "codex_login" || input.agent.model_provider !== "openai-codex") {
+    await installPiProviderSecretOverride(modelRuntime, paths.modelsPath, dirname(db.path), input.agent.model_provider);
+  }
   const settingsManager = sdk.pi.SettingsManager.create(context.cwd, paths.agentDir);
   const model = resolvePiModel({ find: (provider, modelID) => modelRuntime.getModel(provider, modelID) }, input.agent);
   const compactionSettings = piRuntimeCompactionSettings(model);
@@ -336,15 +340,7 @@ export async function ensurePiSessionFile(session: {
   }
 }
 
-export function piRuntimePaths(db: RunnerDatabase) {
-  const stateDir = dirname(db.path);
-  const agentDir = join(stateDir, PI_RUNTIME_ROOT, PI_AGENT_DIR);
-  return {
-    agentDir,
-    authPath: join(agentDir, "auth.json"),
-    modelsPath: join(agentDir, "models.json")
-  };
-}
+export const piRuntimePaths = piCredentialPaths;
 
 function runtimeContext(db: RunnerDatabase, project: Project | undefined) {
   if (project) return {
