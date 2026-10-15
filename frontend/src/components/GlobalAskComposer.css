@@ -15,6 +15,13 @@
   left: 64px;
 }
 
+/* Let page and dialog composers own the input area. Keep the global draft mounted;
+   its own editor is outside these scopes, so expanding it never hides itself. */
+.main-content:has(.prompt-editor-shell.composer) ~ .global-ask-composer-shell,
+body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-shell {
+  display: none;
+}
+
 .global-ask-composer-card {
   background: var(--bg-card);
   border: 1px solid color-mix(in srgb, var(--border-color) 78%, var(--primary));

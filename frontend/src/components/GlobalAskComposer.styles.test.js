@@ -34,3 +34,12 @@ test('global composer starts as a compact launcher and expands as an overlay wit
   assert.doesNotMatch(css, /\.main-content\.has-global-ask-composer\s*\{/);
   assert.doesNotMatch(css, /padding-bottom:\s*(?:190|176|88|72)px/);
 });
+
+test('page and portal dialog composers hide the global overlay without matching its own editor', () => {
+  assert.match(css, /\.main-content:has\(\.prompt-editor-shell\.composer\) ~ \.global-ask-composer-shell,\s*body:has\(> \.modal-overlay \.prompt-editor-shell\.composer\) \.global-ask-composer-shell\s*\{\s*display:\s*none;/);
+  assert.doesNotMatch(css, /(?:body|\.app-container):has\(\.prompt-editor-shell\.composer\)/);
+  const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  assert.match(app, /<main className="main-content"[\s\S]*?<\/main>[\s\S]*?<GlobalAskComposer/);
+  const editor = readFileSync(new URL('./editor/PromptEditor.jsx', import.meta.url), 'utf8');
+  assert.match(editor, /prompt-editor-shell \$\{isComposer \? 'composer' : ''\}/);
+});
