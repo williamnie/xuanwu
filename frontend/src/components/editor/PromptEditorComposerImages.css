@@ -10,10 +10,10 @@
   width: 92px;
   height: 76px;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: var(--radius-lg);
-  background: #f8fafc;
-  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
 }
 
 .prompt-image-attachment-card img {
@@ -21,15 +21,15 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  background: #eef2f7;
+  background: var(--bg-secondary);
 }
 
 .prompt-image-attachment-name {
   position: absolute;
   inset: auto 0 0;
-  padding: 14px 7px 6px;
-  background: linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.72));
-  color: #fff;
+  padding: 4px 6px;
+  background: var(--surface-overlay);
+  color: var(--text-primary);
   font-size: 0.68rem;
   font-weight: 650;
   overflow: hidden;
@@ -44,19 +44,19 @@
   right: 5px;
   width: 21px;
   height: 21px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-xs);
-  background: rgba(255, 255, 255, 0.92);
-  color: #334155;
+  background: var(--surface-overlay);
+  color: var(--text-secondary);
   display: inline-grid;
   place-items: center;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+  box-shadow: none;
 }
 
 .prompt-image-attachment-remove:hover {
-  background: #fff;
-  color: #0f172a;
+  background: var(--bg-card);
+  color: var(--text-primary);
 }
 
 .prompt-image-attachment-state {
@@ -66,33 +66,12 @@
   gap: 4px;
   width: 100%;
   height: 100%;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.65rem;
   font-weight: 650;
 }
 
 .prompt-image-attachment-state.error {
-  color: #dc2626;
-  background: #fff7f7;
-}
-
-[data-theme="dark"] .prompt-image-attachment-card {
-  border-color: rgba(148, 163, 184, 0.28);
-  background: #111827;
-  box-shadow: none;
-}
-
-[data-theme="dark"] .prompt-image-attachment-name {
-  color: #fff;
-}
-
-[data-theme="dark"] .prompt-image-attachment-remove {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(15, 23, 42, 0.85);
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .prompt-image-attachment-state.error {
-  color: #fca5a5;
-  background: rgba(127, 29, 29, 0.18);
+  color: var(--error);
+  background: var(--bg-card)7f7;
 }

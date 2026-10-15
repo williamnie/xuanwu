@@ -140,8 +140,6 @@ test('code-split Work styles preserve the canonical button and panel geometry', 
 
 test('low-frequency global panels use the same visual system without owning Sessions page styles', () => {
   for (const selector of [
-    '.prompt-suggestion-menu',
-    '.prompt-image-attachment-card',
     '.codex-toast-item',
   ]) {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -153,6 +151,12 @@ test('low-frequency global panels use the same visual system without owning Sess
     assert.ok(!pagesCss.includes(`.${selector}`), `${selector} must be owned by its component`);
   }
   assert.doesNotMatch(pagesCss, /\.session-command-chip/);
+  assert.doesNotMatch(pagesCss, /\.prompt-/);
+  for (const [file, selector] of [['PromptEditorSuggestions', 'prompt-suggestion-menu'], ['PromptEditorComposerImages', 'prompt-image-attachment-card']]) {
+    const css = readFileSync(new URL(`./components/editor/${file}.css`, import.meta.url), 'utf8');
+    assert.ok(css.includes(`.${selector}`));
+    assert.doesNotMatch(css, /\[data-theme=/);
+  }
   assert.match(pagesCss, /\.proposal-action-row\s*\{\s*border-radius:\s*var\(--radius-md\)/);
   assert.match(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-family:\s*var\(--font-mono\)/);
   assert.match(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-size:\s*0\.56rem/);

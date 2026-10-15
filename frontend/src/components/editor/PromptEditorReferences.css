@@ -76,15 +76,11 @@
 
 .prompt-reference-remove:hover,
 .prompt-reference-remove:focus-visible {
-  background: rgba(15, 23, 42, 0.1);
+  background: color-mix(in srgb, currentColor 11%, transparent);
   outline: none;
   opacity: 1;
 }
 
-[data-theme="dark"] .prompt-reference-remove:hover,
-[data-theme="dark"] .prompt-reference-remove:focus-visible {
-  background: rgba(255, 255, 255, 0.12);
-}
 
 @media (max-width: 760px) {
   .prompt-reference-area {

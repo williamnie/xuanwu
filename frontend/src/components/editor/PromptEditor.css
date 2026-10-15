@@ -15,12 +15,12 @@
 
 .prompt-editor-shell.focused {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-glow);
+  box-shadow: 0 0 0 3px var(--primary-glow);
 }
 
 .prompt-editor-shell.composer.focused {
-  border-color: color-mix(in srgb, var(--primary) 55%, var(--border-color));
-  box-shadow: 0 0 0 1px var(--primary-glow), var(--shadow-lg);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
 }
 
 .prompt-toolbar {
@@ -29,7 +29,7 @@
   gap: 4px;
   padding: 7px;
   border-bottom: 1px solid var(--border-color);
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--surface-raised);
 }
 
 .prompt-tool {
@@ -52,7 +52,7 @@
 .prompt-tool.active {
   color: var(--primary);
   background: var(--primary-glow);
-  border-color: rgba(14, 165, 233, 0.18);
+  border-color: color-mix(in srgb, var(--primary) 18%, transparent);
 }
 
 .prompt-tool:disabled {
@@ -71,7 +71,7 @@
 
 .prompt-editor-content.composer {
   padding: 14px 16px 6px;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   line-height: 1.6;
   max-height: min(36vh, 320px);
   color: var(--text-primary);
@@ -162,8 +162,8 @@
 
 .prompt-editor-content pre,
 .markdown-preview pre {
-  background: rgba(15, 23, 42, 0.92);
-  color: #e2e8f0;
+  background: var(--terminal-bg);
+  color: var(--terminal-text);
   border-radius: var(--radius-md);
   padding: 10px 12px;
   overflow-x: auto;
@@ -177,7 +177,7 @@
 
 .prompt-editor-content :not(pre) > code,
 .markdown-preview :not(pre) > code {
-  background: rgba(148, 163, 184, 0.16);
+  background: var(--nav-active);
   color: var(--text-primary);
   border-radius: var(--radius-xs);
   padding: 1px 4px;
