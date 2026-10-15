@@ -39,12 +39,13 @@ function SupervisorSettingsForm({ state }) {
   );
 }
 
-function SupervisorReadiness({ state }) {
+export function SupervisorReadiness({ state }) {
+  const { t } = useI18n();
   const connectionSaved = Boolean(state.selectedProvider);
   const modelSelected = Boolean(state.form.modelId.trim());
   return (
     <div className="supervisor-readiness" aria-label="Xuanwu assistant readiness">
-      <ReadinessItem label="Connection" ready={connectionSaved} value={connectionSaved ? connectionApiLabel(state.form.api) : '待配置'} />
+      <ReadinessItem label="Connection" ready={connectionSaved} value={sourceForForm(state.form) === 'codex_login' ? t('credential.reuse') : connectionSaved ? connectionApiLabel(state.form.api) : '待配置'} />
       <ReadinessItem label="Model" ready={modelSelected} value={modelSelected ? state.form.modelId : '待选择'} />
       <ReadinessItem label="玄武助手" ready={state.form.enabled} value={state.form.enabled ? '已启用' : '已停用'} />
     </div>
@@ -165,13 +166,13 @@ function ConnectionModeTabs({ oauthMode, state }) {
       <div className="settings-notification-mode">
         <label>
           <input checked={oauthMode && !reuse} name="assistant-connection-mode" onChange={state.selectOAuthMode} type="radio" />
-          <span><strong>{english ? 'Sign in with Codex / ChatGPT' : '用 Codex / ChatGPT 账号登录'}</strong><small>{english ? 'Authorize the assistant with your account.' : '使用账号为玄武助手授权。'}</small></span>
+          <span><strong>{t('credential.storedLogin')}</strong><small>{t('credential.storedHint')}</small></span>
         </label>
       </div>
       <div className="settings-notification-mode">
         <label>
           <input checked={reuse} disabled={!state.oauthStatus?.codex_login?.available && !reuse} name="assistant-connection-mode" onChange={state.selectCodexLogin} type="radio" />
-          <span><strong>{t('credential.reuse')}</strong><small>{t(codexLoginMessage(state.oauthStatus?.codex_login))}</small></span>
+          <span><strong>{t('credential.reuse')}</strong><small>{t('credential.reuseHint')}</small><small>{t(codexLoginMessage(state.oauthStatus?.codex_login))}</small></span>
         </label>
       </div>
     </fieldset>
@@ -212,10 +213,11 @@ function ApiKeyField({ configured, state }) {
 }
 
 function OAuthConnectionFlow({ state }) {
+  const { t } = useI18n();
   if (sourceForForm(state.form) === 'codex_login') return <CodexLoginReuse state={state} />;
   return (
     <section className="provider-flow-section">
-      <FlowHeading badge="可选捷径" description="OAuth 只替代 API 地址和 Key；登录后仍要获取并选择模型。" title="用现有账号快捷登录" />
+      <FlowHeading badge="可选捷径" description={t('credential.storedHint')} title={t('credential.storedLogin')} />
       <CodexOAuthPanel state={state} />
       <p className="supervisor-oauth-note">助手快捷登录目前支持 Codex / ChatGPT。Claude Code 的本机登录请前往“编程工具”检查。</p>
     </section>
@@ -454,11 +456,12 @@ function ThinkingField({ form, updateField }) {
 }
 
 function CodexOAuthPanel({ state }) {
+  const { t } = useI18n();
   const status = state.oauthStatus;
   return (
     <div className="supervisor-oauth-panel">
       <div className="supervisor-oauth-heading">
-        <div><strong>Codex / ChatGPT OAuth</strong><p>授权成功后自动配置认证，不读取或回显 token。</p></div>
+        <div><strong>{t('credential.storedLogin')}</strong><p>{t('credential.storedHint')}</p></div>
         <OAuthButtons state={state} />
       </div>
       <OAuthStatusLine status={status} />

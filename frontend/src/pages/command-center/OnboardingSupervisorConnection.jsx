@@ -36,7 +36,7 @@ export default function OnboardingSupervisorConnection({ onComplete }) {
     <div className="first-delivery-supervisor">
       <nav aria-label="玄武助手连接方式" className="first-delivery-mode-tabs">
         <button aria-pressed={!oauthMode} className={!oauthMode ? 'active' : ''} onClick={state.selectApiMode} type="button"><span>API</span> API 连接</button>
-        <button aria-pressed={oauthMode && !reuse} className={oauthMode && !reuse ? 'active' : ''} onClick={state.selectOAuthMode} type="button"><span>OA</span> Codex / ChatGPT OAuth</button>
+        <button aria-pressed={oauthMode && !reuse} className={oauthMode && !reuse ? 'active' : ''} onClick={state.selectOAuthMode} type="button"><span>OA</span>{t('credential.storedLogin')}</button>
         <button aria-pressed={reuse} className={reuse ? 'active' : ''} disabled={!state.oauthStatus?.codex_login?.available && !reuse} onClick={state.selectCodexLogin} type="button"><span>CL</span>{t('credential.reuse')}</button>
       </nav>
 
@@ -123,13 +123,14 @@ function ApiFlow({ apiSupported, keyVisible, openAICompatible, setKeyVisible, st
 }
 
 function OAuthFlow({ configured, state }) {
+  const { t } = useI18n();
   const status = state.oauthStatus;
   const lifecycle = status?.status || status?.pi_oauth?.status || 'idle';
   const label = configured ? '已授权' : lifecycle === 'pending' ? '等待授权' : lifecycle === 'error' ? '授权失败' : '未授权';
   return (
     <section className="first-delivery-connection-flow first-delivery-oauth-flow">
       <div className="first-delivery-oauth-heading">
-        <div><strong>使用现有 ChatGPT 账号登录</strong><p>玄武会生成一次性地址，授权仅用于玄武助手连接。</p></div>
+        <div><strong>{t('credential.storedLogin')}</strong><p>{t('credential.storedHint')}</p></div>
         <span className={configured ? 'ready' : lifecycle}>{label}</span>
       </div>
       {status?.message ? <p className={lifecycle === 'error' ? 'oauth-error' : ''}>{status.message}</p> : null}

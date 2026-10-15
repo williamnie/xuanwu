@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { CodexLoginReuse } from './PiAgentSettingsPanel.jsx';
+import { CodexLoginReuse, SupervisorReadiness } from './PiAgentSettingsPanel.jsx';
 import { credentialReady, credentialSourcePayload, recommendCodexLogin, sourceForForm, sourceMatches, codexLoginMessage } from './piCredentialSource.js';
 import { piConnectionStatus } from './piConnectionStatus.js';
 import { translate } from '../i18n/translations.js';
@@ -63,4 +63,18 @@ test('runtime form writes source only when saved, and guards delayed discovery/t
   assert.match(discovery, /if \(!isCurrent\(\)\) return/);
   assert.match(discovery, /explicit \? credentialSourcePayload\(form\)/);
   assert.match(discovery, /credentialSourcePayload\(form\)/);
+});
+
+test('independent and shared sign-in have distinct bilingual copy and the connection summary names reuse', () => {
+  for (const language of ['zh-CN', 'en-US']) {
+    const t = (key, variables) => translate(language, key, variables);
+    assert.notEqual(t('credential.storedLogin'), t('credential.reuse'));
+    assert.match(t('credential.storedHint'), language === 'zh-CN' ? /单独授权，与 Codex 互不影响/ : /separately, independently of Codex/);
+    assert.match(t('credential.reuseHint'), language === 'zh-CN' ? /与 Codex 共用登录，由 Codex 负责续期/ : /Share the Codex sign-in.*Codex handles renewal/);
+    const render = currentForm => renderToStaticMarkup(<I18nContext.Provider value={{ t }}><SupervisorReadiness state={{ form: currentForm, selectedProvider: { id: 'openai-codex' } }} /></I18nContext.Provider>);
+    const shared = render(form);
+    assert.ok(shared.includes(t('credential.reuse')));
+    assert.doesNotMatch(shared, /ChatGPT OAuth/);
+    assert.match(render({ ...form, credentialSource: 'stored' }), /ChatGPT OAuth/);
+  }
 });

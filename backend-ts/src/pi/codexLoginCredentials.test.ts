@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ModelRuntime, readStoredCredential } from "@earendil-works/pi-coding-agent";
-import { createCodexLoginService, CODEX_REFRESH_THRESHOLD_MS } from "./codexLoginCredentials.ts";
+import { createCodexLoginService, CODEX_REFRESH_THRESHOLD_MS, CODEX_REFRESH_BACKOFF_MS } from "./codexLoginCredentials.ts";
 import { createPiModelRuntime, registerCodexLoginService } from "./piModelRuntime.ts";
 import { openDatabase } from "../db/database.ts";
 import { getPiSupervisor, updatePiSupervisor } from "../db/repositories/pi.ts";
@@ -57,6 +57,46 @@ test("core does not refresh at or above the threshold and status never refreshes
   const f=fixture("core",Math.ceil(now/1000)*1000+CODEX_REFRESH_THRESHOLD_MS);
   await f.service.maintain(); expect(f.calls()).toBe(0);
   f.write(now-1000); expect(f.service.status().error).toBe("codex_login_expired"); expect(f.calls()).toBe(0);
+});
+
+test("unchanged refresh backs off across readers for five minutes, but expiry immediately retries", async () => {
+  const start=Math.floor(now/1000)*1000;
+  const f=fixture("core",start+7*60_000);let clock=start;let calls=0;
+  f.binding.refresh=async()=>{calls++;};
+  const readers=Array.from({length:2},()=>createCodexLoginService({role:"core",binding:()=>f.binding,now:()=>clock}));
+  const before=readFileSync(f.path,"utf8");
+  for(let i=0;i<10;i++) await readers[i%2].credentials.read("openai-codex");
+  expect(calls).toBe(1);
+  clock=start+CODEX_REFRESH_BACKOFF_MS-1;
+  await readers[1].maintain();expect(calls).toBe(1);
+  clock++;await readers[1].maintain();expect(calls).toBe(2);
+  clock=start+7*60_000;
+  await expect(readers[0].credentials.read("openai-codex")).rejects.toThrow("codex_login_expired");
+  expect(calls).toBe(3);expect(readFileSync(f.path,"utf8")).toBe(before);
+});
+
+test("failed refresh retains a classified error during backoff, retries after five minutes or expiry", async () => {
+  const start=Math.floor(now/1000)*1000;
+  const f=fixture("core",start+7*60_000);let clock=start;let calls=0;
+  f.binding.refresh=async()=>{calls++;throw new Error("synthetic private provider error");};
+  const service=createCodexLoginService({role:"core",binding:()=>f.binding,now:()=>clock});
+  const before=readFileSync(f.path,"utf8");
+  for(let i=0;i<10;i++) await expect(service.credentials.read("openai-codex")).rejects.toThrow("codex_login_refresh_failed");
+  expect(calls).toBe(1);
+  clock=start+CODEX_REFRESH_BACKOFF_MS;
+  await expect(service.maintain()).rejects.toThrow("codex_login_refresh_failed");expect(calls).toBe(2);
+  clock=start+7*60_000;
+  await expect(service.credentials.modify("openai-codex",async()=>{throw new Error("pi callback must not run");})).rejects.toThrow("codex_login_refresh_failed");
+  expect(calls).toBe(3);expect(readFileSync(f.path,"utf8")).toBe(before);
+});
+
+test("external token rotation and a replacement transport do not inherit stale backoff", async () => {
+  const f=fixture("core",now+10*60_000);let calls=0;
+  f.binding.refresh=async()=>{calls++;};
+  await f.service.maintain();expect(calls).toBe(1);
+  f.write(now+11*60_000);
+  await f.service.maintain();expect(calls).toBe(2);
+  f.binding.key={};await f.service.maintain();expect(calls).toBe(3);
 });
 
 test("worker modify rereads externally refreshed credentials, never executes pi callback or refreshes", async () => {

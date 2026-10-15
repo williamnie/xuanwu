@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { translate } from '../i18n/translations.js';
 
 const panelSource = readFileSync(new URL('./PiAgentSettingsPanel.jsx', import.meta.url), 'utf8');
 const panelStylesSource = readFileSync(new URL('./PiAgentSettingsPanel.css', import.meta.url), 'utf8');
@@ -48,7 +49,8 @@ test('Xuanwu Supervisor Settings exposes OpenAI Codex OAuth as an optional short
   assert.match(panelSource, /status\?\.message/);
   assert.match(stateSource, /copyPiCodexOAuthUrl/);
   assert.doesNotMatch(stateSource, /openOAuthUrl\\(result\\.auth_url\\)/);
-  assert.match(panelSource, /OAuth 只替代 API 地址和 Key/);
+  assert.match(panelSource, /description=\{t\('credential.storedHint'\)\}/);
+  assert.equal(translate('zh-CN', 'credential.storedHint'), '为玄武助手单独授权，与 Codex 互不影响');
   assert.doesNotMatch(panelSource, /User-Agent|Provider ID/);
   assert.match(stateSource, /getPiCodexOAuthStatus/);
   assert.match(stateSource, /startPiCodexOAuthLogin/);
@@ -67,7 +69,8 @@ test('Supervisor page uses one flat API-first connection console with discovered
   assert.match(panelSource, /title="连接助手模型"/);
   assert.match(panelSource, /<ProviderConnectionSettings state=\{state\} \/>/);
   assert.match(panelSource, /API 连接/);
-  assert.match(panelSource, /用 Codex \/ ChatGPT 账号登录/);
+  assert.match(panelSource, /t\('credential.storedLogin'\)/);
+  assert.equal(translate('zh-CN', 'credential.storedLogin'), '单独登录 ChatGPT 账号');
   assert.match(panelSource, /API 协议/);
   assert.match(panelSource, /API 地址/);
   assert.match(panelSource, /API Key/);

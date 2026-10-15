@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { translate } from '../../i18n/translations.js';
 
 const guideSource = readFileSync(new URL('./FirstDeliveryGuide.jsx', import.meta.url), 'utf8');
 const connectorSource = readFileSync(new URL('./OnboardingSupervisorConnection.jsx', import.meta.url), 'utf8');
@@ -38,7 +39,8 @@ test('first delivery owns a standalone first-run page and starts the selected pr
 test('onboarding Supervisor keeps only compatible API families and PI Codex OAuth at the first level', () => {
   assert.match(connectorSource, /OPENAI-COMPATIBLE API/);
   assert.match(connectorSource, /ANTHROPIC-COMPATIBLE API/);
-  assert.match(connectorSource, /Codex \/ ChatGPT OAuth/);
+  assert.match(connectorSource, /t\('credential.storedLogin'\)/);
+  assert.equal(translate('zh-CN', 'credential.storedLogin'), '单独登录 ChatGPT 账号');
   assert.match(connectorSource, /openai-responses/);
   assert.match(connectorSource, /openai-completions/);
   assert.doesNotMatch(connectorSource, /GOOGLE GEMINI|GEMINI API/);

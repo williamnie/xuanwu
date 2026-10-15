@@ -4,6 +4,7 @@ import type { CredentialStore, OAuthCredential } from "@earendil-works/pi-ai";
 
 export const CODEX_REFRESH_THRESHOLD_MS = 30 * 60_000;
 export const CODEX_REFRESH_INTERVAL_MS = 10 * 60_000;
+export const CODEX_REFRESH_BACKOFF_MS = 5 * 60_000;
 export class CodexLoginError extends Error {
   constructor(readonly code: string) { super(code); this.name = "CodexLoginError"; }
 }
@@ -17,6 +18,7 @@ export type CodexLoginBinding = {
 };
 type Snapshot = { credential?: OAuthCredential; account?: string; configured: boolean; auth_mode: string; error?: string };
 const flights = new WeakMap<object, Promise<void>>();
+const refreshBackoffs = new WeakMap<object, { home: string; access: string; retryAt: number; error?: string }>();
 const claimKey = "https://api.openai.com/auth";
 
 function object(value: unknown): Record<string, unknown> {
@@ -71,7 +73,7 @@ export function createCodexLoginService(options: {
     if (snapshot.error || !snapshot.credential) throw new CodexLoginError(snapshot.error ?? "codex_login_missing");
     return snapshot as Snapshot & { credential: OAuthCredential; account: string };
   }
-  async function refresh(value: CodexLoginBinding, account: string) {
+  async function refresh(value: CodexLoginBinding, previous: OAuthCredential) {
     if (options.role !== "core") throw new CodexLoginError("codex_login_expired");
     if (!value.refresh) throw new CodexLoginError("codex_account_unavailable");
     let pending = flights.get(value.key);
@@ -84,13 +86,17 @@ export function createCodexLoginService(options: {
       const currentBinding = binding();
       if (currentBinding.key !== value.key || resolve(currentBinding.home) !== resolve(value.home)) throw new CodexLoginError("codex_login_home_mismatch");
       const result = checked(currentBinding);
-      if (result.account !== account) throw new CodexLoginError("codex_login_account_mismatch");
+      if (result.account !== previous.accountId) throw new CodexLoginError("codex_login_account_mismatch");
       if (result.credential.expires <= now()) throw new CodexLoginError("codex_login_expired");
+      if (result.credential.access === previous.access) {
+        refreshBackoffs.set(value.key, { home: resolve(value.home), access: previous.access, retryAt: now() + CODEX_REFRESH_BACKOFF_MS });
+      } else refreshBackoffs.delete(value.key);
       failure = undefined;
       return result.credential;
     } catch (error) {
       // Never retain the provider error/cause: it may contain credentials or account data.
       const code = error instanceof CodexLoginError ? error.code : "codex_login_refresh_failed";
+      refreshBackoffs.set(value.key, { home: resolve(value.home), access: previous.access, retryAt: now() + CODEX_REFRESH_BACKOFF_MS, error: code });
       failure = { key: value.key, code, access: readLogin(value.home).credential?.access };
       throw new CodexLoginError(code);
     } finally {
@@ -100,12 +106,18 @@ export function createCodexLoginService(options: {
   async function read(refreshSoon: boolean) {
     const value = binding();
     const snapshot = checked(value);
-    if (refreshSoon && options.role === "core" && snapshot.credential.expires - now() < CODEX_REFRESH_THRESHOLD_MS) {
-      return refresh(value, snapshot.account);
-    }
+    // Expiry always bypasses backoff, including modify's mandatory reread path.
     if (snapshot.credential.expires <= now()) {
-      if (options.role === "core") return refresh(value, snapshot.account);
+      if (options.role === "core") return refresh(value, snapshot.credential);
       throw new CodexLoginError("codex_login_expired");
+    }
+    if (refreshSoon && options.role === "core" && snapshot.credential.expires - now() < CODEX_REFRESH_THRESHOLD_MS) {
+      const backoff = refreshBackoffs.get(value.key);
+      if (backoff?.home === resolve(value.home) && backoff.access === snapshot.credential.access && now() < backoff.retryAt) {
+        if (backoff.error) throw new CodexLoginError(backoff.error);
+        return snapshot.credential;
+      }
+      return refresh(value, snapshot.credential);
     }
     return snapshot.credential;
   }

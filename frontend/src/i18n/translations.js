@@ -4,7 +4,9 @@ export const LANGUAGE_STORAGE_KEY = 'xuanwu-language';
 
 const ZH_CN = Object.freeze({
   "credential.reuse": "使用 Codex 的登录",
-  "credential.reuseHint": "复用本机登录，由 Codex 管理续期；保存后生效。",
+  "credential.reuseHint": "与 Codex 共用登录，由 Codex 负责续期；保存后生效。",
+  "credential.storedLogin": "单独登录 ChatGPT 账号",
+  "credential.storedHint": "为玄武助手单独授权，与 Codex 互不影响",
   "credential.available": "可用",
   "credential.loginRequired": "需要在 Codex 中重新登录",
   "credential.unsupported": "此 Codex 登录不支持复用，请用独立登录",
@@ -604,7 +606,9 @@ const ZH_CN = Object.freeze({
 
 const EN_US = Object.freeze({
   "credential.reuse": "Use Codex sign-in",
-  "credential.reuseHint": "Reuse the local sign-in. Codex manages renewal; save to apply.",
+  "credential.reuseHint": "Share the Codex sign-in. Codex handles renewal; save to apply.",
+  "credential.storedLogin": "Sign in to ChatGPT separately",
+  "credential.storedHint": "Authorize Xuanwu separately, independently of Codex.",
   "credential.available": "Available",
   "credential.loginRequired": "Sign in again in Codex",
   "credential.unsupported": "This Codex sign-in cannot be reused. Use an independent sign-in.",
