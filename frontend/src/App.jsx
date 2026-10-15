@@ -34,6 +34,7 @@ import { message as toast } from './store/toastStore';
 import AuthGate from './components/AuthGate';
 import { issueIdFromWorkId, workIdFromIssueId, WORK_BOARD_ENABLED } from './pages/workBoardModel.js';
 import { appHashForRoute, appRouteFromHash } from './appRouteModel.js';
+import { watchCanonicalAppHash } from './appRouteCanonicalization.js';
 import './App.css';
 import './GeekWorkbench.css';
 import './GeekWorkbenchPages.css';
@@ -137,6 +138,7 @@ export default function App() {
   const [firstRunOnboarding, setFirstRunOnboarding] = useState(() => readFirstRunOnboardingState() || 'pending');
   const [firstDeliveryWorkId, setFirstDeliveryWorkId] = useState('');
   const [checkFirstDeliveryConnection] = useState(() => createFirstDeliveryConnectionCheck(assistantApi));
+  useLayoutEffect(() => watchCanonicalAppHash(), []);
 
   const backendOnline = useDataStore(selectBackendOnline);
   const loading = useDataStore(selectLoading);
