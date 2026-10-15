@@ -112,6 +112,7 @@
   --sessions-page-gutter: var(--page-gutter);
   --sessions-composer-radius: var(--radius-lg);
   --transition-speed: 160ms;
+  --mobile-app-header-height: calc(48px + env(safe-area-inset-top));
 
   /* E2B 极客云沙盒扩展令牌 (Geek & Cloud Sandbox Tokens) */
   --bg-obsidian: #070709;

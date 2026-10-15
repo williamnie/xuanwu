@@ -1312,10 +1312,6 @@ input:checked + .slider:before {
 }
 
 @media (max-width: 760px) {
-  :root {
-    --mobile-app-header-height: calc(48px + env(safe-area-inset-top));
-  }
-
   .app-container {
     flex-direction: column;
     min-height: 100dvh;

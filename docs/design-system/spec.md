@@ -132,6 +132,7 @@
 | `--sessions-page-gutter` | `var(--page-gutter)` | `var(--page-gutter)` |
 | `--sessions-composer-radius` | `var(--radius-lg)` | `var(--radius-lg)` |
 | `--transition-speed` | `160ms` | `160ms` |
+| `--mobile-app-header-height` | `calc(48px + env(safe-area-inset-top))` | 同浅色 |
 | `--bg-obsidian` | `#070709` | `#070709` |
 | `--bg-surface` | `#0a0a0e` | `#0a0a0e` |
 | `--bg-header` | `#0d0e12` | `#0d0e12` |
