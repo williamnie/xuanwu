@@ -84,6 +84,35 @@
   --terminal-muted: #5b665f;
   --terminal-success: #4ade80;
   --terminal-error: #f87171;
+  --terminal-info: #60a5fa;
+  --terminal-warning: #fbbf24;
+
+  /* 运行时兼容别名：只引用规范语义令牌，不覆盖主题值。 */
+  --font-sans: var(--font-display);
+  --bg-sidebar: var(--bg-secondary);
+  --bg-terminal: var(--terminal-bg);
+  --surface-tint: var(--primary-glow);
+  --panel-gradient: var(--bg-card);
+  --brand-ink: var(--text-primary);
+  --brand-mint: var(--primary-hover);
+  --brand-shell: var(--primary-glow);
+  --primary-strong: var(--primary-hover);
+  --primary-ink: var(--button-primary-fg);
+  --primary-gradient: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  --message-user: var(--primary-glow);
+  --message-user-border: color-mix(in srgb, var(--primary) 20%, var(--border-color));
+  --triage: var(--warning);
+  --button-primary-hover: var(--primary-hover);
+  --button-secondary-bg: transparent;
+  --button-secondary-hover: var(--nav-hover);
+  --button-border: var(--border-color);
+  --sidebar-width: 232px;
+  --sessions-transcript-max-width: var(--sessions-message-max-width);
+  --sessions-composer-max-width: var(--composer-max-width);
+  --sessions-page-gutter: var(--page-gutter);
+  --sessions-composer-radius: var(--radius-lg);
+  --transition-speed: 160ms;
+
   /* E2B 极客云沙盒扩展令牌 (Geek & Cloud Sandbox Tokens) */
   --bg-obsidian: #070709;
   --bg-surface: #0a0a0e;
@@ -122,11 +151,13 @@
   --primary-glow: rgba(45, 212, 191, 0.14);
 
   --success: #10b981;
+  --success-glow: rgba(16, 185, 129, 0.25);
   --success-bg: rgba(16, 185, 129, 0.12);
   --warning: #fbbf24;
   --warning-bg: rgba(251, 191, 36, 0.12);
   --warning-glow: rgba(251, 191, 36, 0.3);
   --error: #ef4444;
+  --error-glow: rgba(239, 68, 68, 0.25);
   --error-bg: rgba(239, 68, 68, 0.12);
   --info: #60a5fa;
   --info-bg: rgba(96, 165, 250, 0.12);

@@ -5,7 +5,6 @@ import test from 'node:test';
 const sessionsCss = readFileSync(new URL('./Sessions.css', import.meta.url), 'utf8');
 const clientCss = readFileSync(new URL('./SessionsClient.css', import.meta.url), 'utf8');
 const composerCss = readFileSync(new URL('./SessionComposer.css', import.meta.url), 'utf8');
-const foundationCss = readFileSync(new URL('../../GeekWorkbench.css', import.meta.url), 'utf8');
 const designTokensCss = readFileSync(new URL('../../../../docs/design-system/tokens.css', import.meta.url), 'utf8');
 const globalCss = [
   readFileSync(new URL('../../index.css', import.meta.url), 'utf8'),
@@ -38,7 +37,7 @@ test('Sessions design tokens have one global source of truth and local consumers
     '--sessions-page-gutter',
     '--sessions-composer-radius',
   ]) {
-    assert.equal((foundationCss.match(new RegExp(`${token}:`, 'g')) || []).length, 1, token);
+    assert.equal((designTokensCss.match(new RegExp(`${token}:`, 'g')) || []).length, 1, token);
   }
 
   assert.match(sessionsCss, /var\(--sessions-transcript-max-width\)/);

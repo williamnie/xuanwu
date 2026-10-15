@@ -5,7 +5,7 @@ import test from 'node:test';
 const files = ['SessionsClient', 'Sessions', 'ApprovalDialog', 'SessionCommandPanel', 'SessionComposer'];
 const styles = Object.fromEntries(files.map(name => [name, readFileSync(new URL(`./${name}.css`, import.meta.url), 'utf8')]));
 const sourceRoot = new URL('../../', import.meta.url);
-const runtimeTokens = readFileSync(new URL('../../index.css', import.meta.url), 'utf8');
+const runtimeStyles = readFileSync(new URL('../../index.css', import.meta.url), 'utf8');
 const canonicalTokens = readFileSync(new URL('../../../../docs/design-system/tokens.css', import.meta.url), 'utf8');
 const spec = readFileSync(new URL('../../../../docs/design-system/spec.md', import.meta.url), 'utf8');
 const uncomment = css => css.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -50,10 +50,12 @@ test('retired aliases have no CSS definitions or references anywhere in the fron
   }
 });
 
-test('runtime and canonical radius and shadow values match the documented contract', () => {
+test('runtime imports canonical radius and shadow values from the documented contract', () => {
+  assert.match(runtimeStyles, /@import ['"]\.\.\/\.\.\/docs\/design-system\/tokens\.css['"]/);
+  assert.doesNotMatch(runtimeStyles, /--(?:radius-\w+|shadow-\w+):/);
   for (const name of ['button-radius', 'radius-xs', 'radius-sm', 'radius-md', 'radius-lg', 'shadow-sm', 'shadow-lg']) {
     const values = css => [...css.matchAll(new RegExp(`--${name}:\\s*([^;]+);`, 'g'))].map(match => match[1]);
-    assert.deepEqual(values(runtimeTokens), values(canonicalTokens), name);
+    assert.ok(values(canonicalTokens).length, name);
     assert.ok(spec.includes(`\`--${name}\``), `${name} must be documented`);
   }
 });

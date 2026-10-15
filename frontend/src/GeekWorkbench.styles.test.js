@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const appSource = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8');
+const indexCss = readFileSync(new URL('./index.css', import.meta.url), 'utf8');
 const foundationCss = readFileSync(new URL('./GeekWorkbench.css', import.meta.url), 'utf8');
 const pagesCss = readFileSync(new URL('./GeekWorkbenchPages.css', import.meta.url), 'utf8');
 const piChatCss = readFileSync(new URL('./pages/PiChat.css', import.meta.url), 'utf8');
@@ -22,7 +23,7 @@ test('geek workbench styles load after the legacy app stylesheet', () => {
 });
 
 test('runtime imports the canonical design tokens for both themes', () => {
-  assert.match(foundationCss, /@import\s+['"]\.\.\/\.\.\/docs\/design-system\/tokens\.css['"]/);
+  assert.match(indexCss, /@import\s+['"]\.\.\/\.\.\/docs\/design-system\/tokens\.css['"]/);
   assert.match(designTokensCss, /:root\s*\{[\s\S]*--bg-primary:\s*#f6f5f2/);
   assert.match(designTokensCss, /:root\s*\{[\s\S]*--bg-card:\s*#ffffff/);
   assert.match(designTokensCss, /\[data-theme='dark'\]\s*\{[\s\S]*--bg-primary:\s*#(?:070709|070a0a)/);
@@ -35,7 +36,7 @@ test('runtime imports the canonical design tokens for both themes', () => {
   assert.match(designTokensCss, /--sessions-message-max-width:\s*1120px/);
   assert.match(designTokensCss, /--composer-max-width:\s*780px/);
   assert.match(designTokensCss, /--page-gutter:\s*clamp\(18px,\s*3vw,\s*24px\)/);
-  assert.match(foundationCss, /--sessions-transcript-max-width:\s*var\(--sessions-message-max-width\)/);
+  assert.match(designTokensCss, /--sessions-transcript-max-width:\s*var\(--sessions-message-max-width\)/);
   assert.match(foundationCss, /\.status-badge,[^{]*\{[^}]*border-radius:\s*var\(--radius-xs\)/);
 });
 

@@ -29,7 +29,7 @@ test('sidebar and auth gate use Xuanwu brand instead of hardcoded xiaobei badge'
 });
 
 test('brand visual system includes Xuanwu CSS and favicon title metadata', () => {
-  assert.match(cssSource, /--brand-jade/);
+  assert.match(cssSource, /var\(--primary\)/);
   assert.match(cssSource, /\.brand-mark-icon/);
   assert.match(cssSource, /\.turtle-logo-img/);
   assert.match(cssSource, /background:\s*transparent/);

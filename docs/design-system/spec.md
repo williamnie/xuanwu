@@ -80,6 +80,71 @@
 
 ---
 
+### 1.6 补充令牌与运行时兼容别名
+
+`frontend/src/index.css` 直接导入本目录的 `tokens.css`，不得复制主题令牌块；工作台样式不得重新定义同名令牌。下面的兼容别名保留旧组件的调用名称，值仍由规范语义令牌驱动，不代表额外视觉档位。`--primary-gradient` 只供 5.4 的新建入口按钮使用；`*-glow` 仅用于浅底/聚焦环，不能产生模糊外发光。
+
+| 令牌 | 简洁（LIGHT） | 极客（DARK） |
+|---|---|---|
+| `--bg-card-hover` | `#faf9f7` | `rgba(255, 255, 255, 0.04)` |
+| `--success-bg` | `rgba(21, 128, 61, 0.08)` | `rgba(16, 185, 129, 0.12)` |
+| `--success-glow` | `rgba(21, 128, 61, 0.25)` | `rgba(16, 185, 129, 0.25)` |
+| `--warning-bg` | `rgba(161, 98, 7, 0.08)` | `rgba(251, 191, 36, 0.12)` |
+| `--warning-glow` | `rgba(161, 98, 7, 0.22)` | `rgba(251, 191, 36, 0.3)` |
+| `--error-bg` | `rgba(185, 28, 28, 0.07)` | `rgba(239, 68, 68, 0.12)` |
+| `--error-glow` | `rgba(185, 28, 28, 0.25)` | `rgba(239, 68, 68, 0.25)` |
+| `--info-bg` | `rgba(37, 99, 235, 0.08)` | `rgba(96, 165, 250, 0.12)` |
+| `--info-glow` | `rgba(37, 99, 235, 0.25)` | `rgba(96, 165, 250, 0.3)` |
+| `--button-height` | `32px` | `32px` |
+| `--content-max-width` | `900px` | `900px` |
+| `--sessions-message-max-width` | `1120px` | `1120px` |
+| `--composer-max-width` | `780px` | `780px` |
+| `--page-gutter` | `clamp(18px, 3vw, 24px)` | `clamp(18px, 3vw, 24px)` |
+| `--terminal-bg` | `#0d1210` | `#060608` |
+| `--terminal-border` | `rgba(255, 255, 255, 0.08)` | `rgba(255, 255, 255, 0.08)` |
+| `--terminal-text` | `#c6d0c9` | `#e4e4e7` |
+| `--terminal-muted` | `#5b665f` | `#71717a` |
+| `--terminal-success` | `#4ade80` | `#10b981` |
+| `--terminal-error` | `#f87171` | `#ef4444` |
+| `--terminal-info` | `#60a5fa` | `#60a5fa` |
+| `--terminal-warning` | `#fbbf24` | `#fbbf24` |
+| `--font-sans` | `var(--font-display)` | `var(--font-display)` |
+| `--bg-sidebar` | `var(--bg-secondary)` | `var(--bg-secondary)` |
+| `--bg-terminal` | `var(--terminal-bg)` | `var(--terminal-bg)` |
+| `--surface-tint` | `var(--primary-glow)` | `var(--primary-glow)` |
+| `--panel-gradient` | `var(--bg-card)` | `var(--bg-card)` |
+| `--brand-ink` | `var(--text-primary)` | `var(--text-primary)` |
+| `--brand-mint` | `var(--primary-hover)` | `var(--primary-hover)` |
+| `--brand-shell` | `var(--primary-glow)` | `var(--primary-glow)` |
+| `--primary-strong` | `var(--primary-hover)` | `var(--primary-hover)` |
+| `--primary-ink` | `var(--button-primary-fg)` | `var(--button-primary-fg)` |
+| `--primary-gradient` | `linear-gradient(135deg, var(--primary), var(--primary-hover))` | `linear-gradient(135deg, var(--primary), var(--primary-hover))` |
+| `--message-user` | `var(--primary-glow)` | `var(--primary-glow)` |
+| `--message-user-border` | `color-mix(in srgb, var(--primary) 20%, var(--border-color))` | `color-mix(in srgb, var(--primary) 20%, var(--border-color))` |
+| `--triage` | `var(--warning)` | `var(--warning)` |
+| `--button-primary-hover` | `var(--primary-hover)` | `var(--primary-hover)` |
+| `--button-secondary-bg` | `transparent` | `transparent` |
+| `--button-secondary-hover` | `var(--nav-hover)` | `var(--nav-hover)` |
+| `--button-border` | `var(--border-color)` | `var(--border-color)` |
+| `--sidebar-width` | `232px` | `232px` |
+| `--sessions-transcript-max-width` | `var(--sessions-message-max-width)` | `var(--sessions-message-max-width)` |
+| `--sessions-composer-max-width` | `var(--composer-max-width)` | `var(--composer-max-width)` |
+| `--sessions-page-gutter` | `var(--page-gutter)` | `var(--page-gutter)` |
+| `--sessions-composer-radius` | `var(--radius-lg)` | `var(--radius-lg)` |
+| `--transition-speed` | `160ms` | `160ms` |
+| `--bg-obsidian` | `#070709` | `#070709` |
+| `--bg-surface` | `#0a0a0e` | `#0a0a0e` |
+| `--bg-header` | `#0d0e12` | `#0d0e12` |
+| `--bg-inset` | `#060608` | `#060608` |
+| `--accent-e2b` | `#0f766e` | `#2dd4bf` |
+| `--accent-e2b-hover` | `#115e59` | `#5eead4` |
+| `--glow-e2b` | `none` | `none` |
+| `--border-crisp` | `rgba(255, 255, 255, 0.08)` | `rgba(255, 255, 255, 0.08)` |
+| `--border-crisp-hover` | `rgba(255, 255, 255, 0.16)` | `rgba(255, 255, 255, 0.16)` |
+| `--grid-tech-line` | `rgba(68, 64, 60, 0.04)` | `rgba(255, 255, 255, 0.03)` |
+
+---
+
 ## 2. 圆角令牌
 
 **只允许以下五档，禁止其他值。**
@@ -103,7 +168,7 @@
 | 令牌 | 值 | 用途 |
 |---|---|---|
 | `--font-display` | `'Inter', -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif` | 标题、正文、按钮 |
-| `--font-mono` | `'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace` | **微标签、徽标、元数据、代码、数字、状态** |
+| `--font-mono` | `'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace` | **微标签、徽标、元数据、代码、数字、状态** |
 
 ### 3.2 字阶（只许用这几档）
 
@@ -163,14 +228,14 @@
 
 ### 4.2 极客微网格底纹 (.bg-grid-tech)
 
-全站主要工作区背景注入 32px 细腻微网格，呈现云原生沙盒基础设施质感（浅色使用 `rgba(15, 23, 42, 0.038)`，深色使用 `rgba(255, 255, 255, 0.03)`，通过 `--grid-tech-line` 驱动）：
+全站主要工作区背景注入 32px 细腻微网格，呈现云原生沙盒基础设施质感（浅色使用 `rgba(68, 64, 60, 0.04)`，深色使用 `rgba(255, 255, 255, 0.03)`，通过 `--grid-tech-line` 驱动）：
 
 ```css
 .bg-grid-tech {
   background-size: 32px 32px;
   background-image:
-    linear-gradient(to right, var(--grid-tech-line, rgba(15, 23, 42, 0.038)) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-tech-line, rgba(15, 23, 42, 0.038)) 1px, transparent 1px);
+    linear-gradient(to right, var(--grid-tech-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-tech-line) 1px, transparent 1px);
   background-position: -1px -1px;
 }
 ```
