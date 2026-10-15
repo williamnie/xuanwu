@@ -24,10 +24,8 @@
   align-items: center;
   color: var(--primary);
   display: inline-flex;
-  font-family: var(--font-mono);
   font-size: 0.64rem;
   gap: 6px;
-  letter-spacing: 0.1em;
 }
 
 .supervisor-scope-note {
@@ -191,10 +189,7 @@
 
 .provider-connection-picker > label > span {
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: 0.61rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .provider-connection-toolbar .form-control {

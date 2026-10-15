@@ -12,7 +12,7 @@
 .work-review-dialog p { color: var(--text-secondary); font-size: .72rem; }
 .work-review-dialog .work-review-question { background: var(--bg-secondary); border-left: 3px solid var(--primary); color: var(--text-primary); font-size: .78rem; font-weight: 750; line-height: 1.55; padding: 10px 12px; }
 .work-review-dialog label { display: flex; flex-direction: column; gap: 6px; }
-.work-review-dialog label > span { color: var(--text-muted); font-family: var(--font-mono); font-size: .6rem; }
+.work-review-dialog label > span { color: var(--text-muted); font-size: .6rem; }
 .work-review-dialog > div { display: flex; gap: 8px; justify-content: flex-end; }
 .work-review-dialog textarea { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font: inherit; padding: 10px; resize: vertical; }
 .work-review-actions, .work-review-actions button { align-items: center; display: flex; }

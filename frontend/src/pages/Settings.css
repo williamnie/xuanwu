@@ -33,11 +33,8 @@
 
 .settings-page .settings-eyebrow {
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: 0.56rem;
   font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
 }
 
 .settings-workspace {

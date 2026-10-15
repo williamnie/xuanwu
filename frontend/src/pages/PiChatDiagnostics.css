@@ -51,9 +51,7 @@
 .pi-chat-main-header .pi-chat-status-copy > span,
 .pi-chat-main-header .pi-chat-status-copy > small {
   font-size: 0.68rem;
-  letter-spacing: 0;
   line-height: 1.2;
-  text-transform: none;
 }
 
 .pi-chat-main-header .pi-chat-status-copy > span {
