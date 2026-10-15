@@ -88,7 +88,11 @@ describe("Xuanwu capability disposition inventory", () => {
   });
 
   test("assigns every production page component and PI module exactly once", () => {
-    const pageFiles = productionFiles("frontend/src/pages", (name) => name.endsWith(".jsx"));
+    // JSX rendering tests are colocated with pages, just like the PI/HTTP tests below.
+    const pageFiles = productionFiles(
+      "frontend/src/pages",
+      (name) => name.endsWith(".jsx") && !name.endsWith(".test.jsx")
+    );
     const inventoriedPages: string[] = PAGE_SURFACES.flatMap((surface) => [...surface.source_files]).sort();
     expect(inventoriedPages).toEqual(pageFiles);
     expect(unique(inventoriedPages)).toHaveLength(inventoriedPages.length);
@@ -104,6 +108,21 @@ describe("Xuanwu capability disposition inventory", () => {
     expect(inventoriedPi).toEqual(piFiles);
     expect(inventoriedPi).toHaveLength(173);
     expect(unique(inventoriedPi)).toHaveLength(inventoriedPi.length);
+  });
+
+  test("maps extracted settings components to their capability authorities", () => {
+    const ownerOf = (name: string) => PAGE_SURFACES
+      .filter((surface) => (surface.source_files as readonly string[]).includes(`frontend/src/pages/${name}.jsx`))
+      .map((surface) => surface.id);
+
+    expect(ownerOf("PersonaSettingsPanel")).toEqual(["assistant-runtime"]);
+    for (const name of ["AgentProfileManager", "ExecutionPresetsPanel"]) {
+      expect(ownerOf(name)).toEqual(["project-scope"]);
+    }
+    for (const name of ["FeishuSettingsPanel", "GitHubSettingsPanel", "IntegrationConnectionList",
+      "IntegrationSettingsDrawer", "TelegramProjectMappings", "TelegramSettingsPanel"]) {
+      expect(ownerOf(name)).toEqual(["integration-intake-delivery"]);
+    }
   });
 
   test("keeps schedulers mapped and gives every delete item reproducible evidence and gates", () => {

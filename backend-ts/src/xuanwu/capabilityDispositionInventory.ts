@@ -848,7 +848,7 @@ export const PAGE_SURFACES = [
   {
     id: "assistant-runtime", disposition: "keep", target: "Operator conversation and supporting memory/config",
     page_ids: ["pi-chat", "pi-overview", "pi-memory"],
-    source_files: ["frontend/src/pages/PiAgentSettingsPanel.jsx", "frontend/src/pages/PiChat.jsx", "frontend/src/pages/PiChatComposerMeta.jsx", "frontend/src/pages/PiMemoryPanel.jsx"]
+    source_files: ["frontend/src/pages/PersonaSettingsPanel.jsx", "frontend/src/pages/PiAgentSettingsPanel.jsx", "frontend/src/pages/PiChat.jsx", "frontend/src/pages/PiChatComposerMeta.jsx", "frontend/src/pages/PiMemoryPanel.jsx"]
   },
   {
     id: "attention", disposition: "merge", target: "Attention projections with deterministic resolution gates",
@@ -863,8 +863,8 @@ export const PAGE_SURFACES = [
   {
     id: "capability-policy", disposition: "keep", target: "Capability registry and deterministic permission policy",
     page_ids: ["settings", "pi-connectors", "pi-skills", "pi-policies"],
-    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/CodeAgentsPanel.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx",
-      "frontend/src/pages/GitHubSettingsPanel.jsx", "frontend/src/pages/ImChannelRegistryPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RemoteAccessTokenPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/OnboardingPage.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SkillLibraryPanel.jsx", "frontend/src/pages/JevSkillSettings.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx", "frontend/src/pages/TelegramSettingsPanel.jsx"]
+    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/CodeAgentsPanel.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx",
+      "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/RemoteAccessTokenPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/OnboardingPage.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SkillLibraryPanel.jsx", "frontend/src/pages/JevSkillSettings.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx"]
   },
   {
     id: "evidence-handoff", disposition: "merge", target: "Evidence/Handoff read models and audited action requests",
@@ -872,9 +872,16 @@ export const PAGE_SURFACES = [
     source_files: ["frontend/src/pages/ActivityTimelinePanel.jsx", "frontend/src/pages/Handoffs.jsx"]
   },
   {
+    // Settings hosts these adapters, but their authority is external intake/delivery.
+    id: "integration-intake-delivery", disposition: "keep", target: "Audited intake and external delivery adapters",
+    page_ids: [],
+    source_files: ["frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/GitHubSettingsPanel.jsx", "frontend/src/pages/IntegrationConnectionList.jsx", "frontend/src/pages/IntegrationSettingsDrawer.jsx", "frontend/src/pages/TelegramProjectMappings.jsx", "frontend/src/pages/TelegramSettingsPanel.jsx"]
+  },
+  {
     id: "project-scope", disposition: "keep", target: "Project/local control-plane scope",
     page_ids: ["projects"],
-    source_files: ["frontend/src/pages/ProjectHoldNotice.jsx", "frontend/src/pages/ProjectSettingsEditor.jsx", "frontend/src/pages/Projects.jsx"]
+    // Execution presets manage /api/agent-profiles and project default assignments.
+    source_files: ["frontend/src/pages/AgentProfileManager.jsx", "frontend/src/pages/ExecutionPresetsPanel.jsx", "frontend/src/pages/ProjectHoldNotice.jsx", "frontend/src/pages/ProjectSettingsEditor.jsx", "frontend/src/pages/Projects.jsx"]
   },
   {
     id: "run-session-drilldown", disposition: "merge", target: "Run with provider Session drill-down",
