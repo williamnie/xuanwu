@@ -544,7 +544,7 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 | 项 | 前端 | 后端合同 | 失败与边界 |
 |---|---|---|---|
 | **D1 3 步引导**（5.7） | `FirstDeliveryGuide` 改为 3 步：准备 AI / 选项目文件夹 / 开始第一个任务。运行环境检查放后台，只有失败时插入一步并给出可复制的修复命令。编程工具：自动预选已就绪的一个（项目已有 provider 且就绪时优先，否则 Codex，否则第一个），**预选只改本地状态**，绑定项目仍走现有显式写入。玄武助手：已配置时自动跑一次现有连接测试，通过即跳过；未配置或失败时在同一步内完成连接。第 2 步实时校验路径；“从 Codex 导入”为次要入口，按钮旁写明会对已有项目开启自动执行。第 3 步预填只读示例任务，点“开始”后进入该任务详情页实时查看，完成条件不变 | 新增只读 `GET /api/projects/path-check?cwd=<绝对路径>`：返回 `exists`、`directory`、`git_repo`、`suggested_id`、`existing_project_id`（cwd 已注册时）。不创建、不写库、不写审计；只做 stat 与 `.git` 检测，不执行 git 命令；拒绝相对路径 | 自动连接测试会产生一条现有的 `provider_connection_tested` 审计，只在页面加载时跑一次，不轮询。文案用 4 节术语，不出现 `Evidence`、`authority`、`Work`、`xuanwu doctor` 等词（修复命令本身除外，放在可复制代码块里）。“稍后设置”和 `firstRunOnboarding` 状态机不变 |
-| **D2 任务来源筛选**（5.4） | 任务页筛选加“来源：全部 / GitHub / 手动”；与状态、项目、搜索组合；写进路由参数（如 `source=github`），刷新和复制链接保持 | `GET /api/works` 与 `GET /api/works/board` 支持 `source=github\|manual`。GitHub 来源包括当前 `github_issue_cases.issue_id` 指针，以及 `external_links` 中 `source=github`、`external_type=github_issue`、`external_id` 指向 case 的历史任务；共用 SQL 条件，计数、分页和列表游标指纹一致。未知值、显式空值和重复 source 返回 400；不传 source 保持原有行为 | 不按 provenance `kind` 判断；不做 N+1 |
+| **D2 任务来源筛选**（5.4） | 任务页筛选加“来源：全部 / GitHub / 手动”；与状态、项目、搜索组合；写进路由参数（如 `source=github`），刷新和复制链接保持 | `GET /api/works` 与 `GET /api/works/board` 支持 `source=github\|manual`。GitHub 来源包括当前 `github_issue_cases.issue_id` 指针，以及 `external_links` 中 `source=github`、`external_type=github_issue`、`external_id` 指向 case 的历史任务；共用 SQL 条件，计数、分页和列表游标指纹一致。未知值、显式空值和重复 source 返回 400；不传 source 表示全部来源。列表与看板的 q 独立生效，不依赖 source | 不按 provenance `kind` 判断；不做 N+1 |
 | **D3 飞书来源发现**（6.4） | 飞书抽屉加“识别来源”：列出最近给机器人发过消息的会话 / 用户，用户勾选后填入现有允许名单字段，仍需点现有“保存”才生效 | 新增 `POST /api/integrations/feishu/discover-source`，形状对齐 Telegram 的 `discover-source`：只读最近已入库的飞书事件（含因不在允许名单被拒的事件，若当前未入库则先回报，不擅自改变入库策略），返回去重后的候选；**不修改允许名单、不发消息、不回显凭据** | 未配置或凭据无效返回 400；无候选时提示“先在飞书里给机器人发一条消息再识别” |
 | **D4 路由改名**（5.1） | canonical route：`command-center` → `inbox`，`work` → `tasks`；旧 ID 全部重定向到新 ID 并保留查询参数 | 无 | 先写路由状态合同测试覆盖 5.1 列出的 5 类情况，再改名；不能只改 `PRODUCT_COMPAT_ROUTE_REDIRECTS`。旧书签、通知里的链接、后端生成的深链（先搜后端是否拼接前端 hash 路由）都必须继续可用 |
 
@@ -557,9 +557,11 @@ D1 两处边界已经确认：导入入口始终显示，点击后反馈读取�
 
 D2 验收记录（2026-10-15，本次提交）：`GET /api/works` 与 `/api/works/board` 共用 `buildIssueWhere` 的来源条件；当前 case 指针与 `external_links` 历史绑定均计为 GitHub，其余为手动。每轮的 `github.work_bound.v1` 事件可辅助审计，`tracker_issue_links` / `sync_outbox` 不作为来源全集。复用 `idx_github_issue_cases_work`、`idx_external_links_issue` 与 case 主键；查询计划验证历史链接按任务 ID 查找，无新增迁移或逐行查询。
 
-来源与状态、项目、关键词组合；来源进入列表游标指纹，切换来源时拒绝旧游标。看板首屏仍用单次聚合请求，来源筛选时带项目和关键词，后续 / 历史列使用相同条件；未选来源的请求和旧游标兼容行为不变。列表仅为当前选中的范围显示筛选后的服务端计数，其他范围与未加载历史列不展示未筛选的全局数量。来源和任务状态范围写入路由，刷新、复制链接、前进 / 后退可恢复；筛选变化重新建立分页状态，迟到响应不能混入新来源。
+来源与状态、项目、关键词组合；来源进入列表游标指纹，切换来源时拒绝旧游标。看板首屏仍用单次聚合请求，来源筛选时带项目和关键词，后续 / 历史列使用相同条件；前端未选来源时仍不向看板发送关键词，默认请求和旧游标兼容行为不变；看板接口收到关键词时始终过滤，不依赖是否指定来源。列表仅为当前选中的范围显示筛选后的服务端计数，其他范围与未加载历史列不展示未筛选的全局数量。来源和任务状态范围写入路由，刷新、复制链接、前进 / 后退可恢复；筛选变化重新建立分页状态，迟到响应不能混入新来源。
 
 前端 **767 pass / 0 fail**，lint / build 通过；后端完整 `bun test` **2782 pass / 0 fail**（485 files），来源 / 路由 / 能力清单专项 **25 pass / 0 fail**；`git diff --check` 通过。后端来源场景使用临时数据库，覆盖三轮 case 任务、仅当前绑定、重复 / 无关链接、组合过滤、偏移 / 游标、未知来源、读库只读限制和查询计划。页面证据在 `/tmp/xuanwu-d2/`：`real-*` 为真实页面布局，`fixture-*` 为真实 App 组件配临时 API 夹具，覆盖 GitHub / 手动来源、列表与看板分页、组合筛选与路由恢复；浅 / 深 × 980 / 760 / 680。夹具不提交，不触发真实写入，不读取或导出 token / 请求头；复用既有服务，不改端口。
+
+D2 复核修正（2026-10-15）：看板接口的关键词 `q` 独立于 `source` 生效，与列表一致；前端发送条件保持不变。新增无来源关键词测试，覆盖手动 / GitHub 任务命中、各列计数与列表一致，以及无匹配时返回空列。后端相关专项 **36 pass / 0 fail**（4 files），前端 **767 pass / 0 fail**；`git diff --check` 通过。
 
 ## 9. 待确认事项
 

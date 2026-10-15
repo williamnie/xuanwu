@@ -186,7 +186,7 @@ function validateWorkExecutionSelection(
 function boardResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
   const params = new URL(request.url).searchParams;
   const source = workSourceParam(params);
-  const query = source ? optionalString(params.get("q")).toLowerCase() : "";
+  const query = optionalString(params.get("q")).toLowerCase();
   const projectID = optionalString(params.get("project_id"));
   if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
   const pageSize = positiveIntegerParam(params.get("page_size"), "page_size", 20, MAX_PAGE_SIZE);

@@ -73,8 +73,25 @@ test("Work board shares source, project and keyword conditions with list totals 
   }
   const all = await f.get("", "/api/works/board");
   expect(Object.values(all.body.lanes).reduce((sum: number, lane: any) => sum + lane.total, 0)).toBe(5);
-  expect((await f.get("q=no-match", "/api/works/board")).body).toEqual(all.body);
+  const noMatch = await f.get("q=no-match", "/api/works/board");
+  expect(noMatch.status).toBe(200);
+  for (const lane of Object.values(noMatch.body.lanes)) expect(lane).toMatchObject({ items: [], total: 0 });
   for (const value of ["", "other", "github&source=manual"]) expect((await f.get(`source=${value}`, "/api/works/board")).status).toBe(400);
+});
+
+test("Work board applies keywords without a source filter, matching list rows and totals", async () => {
+  const f = await fixture();
+  for (const [query, expectedID] of [["manual", f.manual], ["existing", f.bound]] as const) {
+    const board = await f.get(`q=${query}`, "/api/works/board");
+    expect(board.status).toBe(200);
+    expect(Object.values(board.body.lanes).flatMap((lane: any) => ids(lane))).toEqual([expectedID]);
+    for (const [status, lane] of Object.entries(board.body.lanes) as [string, any][]) {
+      const list = await f.get(`q=${query}&status=${status}`);
+      expect(list.status).toBe(200);
+      expect(ids(lane)).toEqual(ids(list.body));
+      expect(lane.total).toBe(list.body.total);
+    }
+  }
 });
 
 test("Work source includes current and historical case tasks once, with all others manual", async () => {
