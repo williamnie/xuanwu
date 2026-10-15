@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   FIRST_RUN_ONBOARDING_KEY,
+  isFirstDeliveryDetailRoute,
   readFirstRunOnboardingState,
   resolveFirstRunOnboarding,
   writeFirstRunOnboardingState,
@@ -18,6 +19,16 @@ function memoryStorage(initial = {}) {
 test('a pristine installation opens onboarding while existing users stay in the app', () => {
   assert.equal(resolveFirstRunOnboarding('', 0), 'active');
   assert.equal(resolveFirstRunOnboarding('', 3), 'hidden');
+});
+
+test('active setup permits only its own task detail; other routes and returning home restore the guide', () => {
+  const first = 'xw:work:issues:1';
+  assert.equal(isFirstDeliveryDetailRoute('work', first, first), true);
+  assert.equal(isFirstDeliveryDetailRoute('work', 'xw:work:issues:2', first), false);
+  assert.equal(isFirstDeliveryDetailRoute('work', first, ''), false);
+  assert.equal(isFirstDeliveryDetailRoute('settings', first, first), false);
+  assert.equal(isFirstDeliveryDetailRoute('command-center', '', first), false);
+  assert.equal(resolveFirstRunOnboarding('active', 1), 'active');
 });
 
 test('active onboarding survives a reload after its first Work is created', () => {

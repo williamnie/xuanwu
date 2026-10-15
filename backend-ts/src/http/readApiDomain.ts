@@ -38,6 +38,7 @@ import {
 } from "../domain/review/humanReview.ts";
 import { requestPiAcceptanceCycle } from "../runner/piAcceptanceCoordinator.ts";
 import { publishPiNeedsUserNotification } from "../notifications/piNotifier.ts";
+import { checkProjectPath } from "./projectPathCheck.ts";
 
 export type IssueListFilter = {
   projectId: string;
@@ -106,6 +107,7 @@ export function createReadApiDomainHandlers(context: ReadApiContext) {
       )
     },
     projects: {
+      checkPath: (cwd: string | null) => checkProjectPath(context.database, cwd),
       create: (body: Record<string, unknown>) => {
         validateAgentProfileReference(context.database, body, "default_agent_profile_id");
         return createAutomaticallyManagedProject(context.database, body);

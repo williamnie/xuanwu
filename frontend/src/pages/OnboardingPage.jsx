@@ -3,7 +3,7 @@ import BrandMark from '../components/BrandMark.jsx';
 import FirstDeliveryGuide from './command-center/FirstDeliveryGuide.jsx';
 import './OnboardingPage.css';
 
-export default function OnboardingPage({ onComplete, onSkip, projects, theme, toggleTheme }) {
+export default function OnboardingPage({ checkSavedConnection, onComplete, onOpenWork, onSkip, projects, theme, toggleTheme }) {
   return (
     <div className="onboarding-page-shell">
       <header className="onboarding-page-topbar">
@@ -23,18 +23,18 @@ export default function OnboardingPage({ onComplete, onSkip, projects, theme, to
         <section className="onboarding-page-intro" aria-labelledby="onboarding-page-title">
           <div>
             <span>THE SIMPLEST WAY TO USE XUANWU</span>
-            <h1 id="onboarding-page-title">把 Issue 列好，剩下的交给玄武</h1>
+            <h1 id="onboarding-page-title">把任务交给玄武，从第一次交付开始</h1>
             <p>你说“现在开始，你自己看着做”。玄武会自己推进；卡住时来问你，你回一句，它继续。</p>
-            <blockquote>“我列了 10 个 Issue 在玄武里。现在启动这 10 个，你自己看着做。”</blockquote>
+            <blockquote>“帮我只读检查这个项目，告诉我验证结果和下一步建议。”</blockquote>
           </div>
           <dl>
-            <div><dt>你来做</dt><dd>列 ISSUE</dd></div>
+            <div><dt>你来做</dt><dd>提任务</dd></div>
             <div><dt>玄武来做</dt><dd>自己推进</dd></div>
             <div><dt>卡住以后</dt><dd>来问你</dd></div>
           </dl>
         </section>
 
-        <FirstDeliveryGuide onComplete={onComplete} projects={projects} />
+        <FirstDeliveryGuide checkSavedConnection={checkSavedConnection} onComplete={onComplete} onOpenWork={onOpenWork} projects={projects} />
       </main>
 
       <footer className="onboarding-page-footer"><span>XUANWU · APACHE-2.0</span><span>FIRST DELIVERY ONBOARDING</span></footer>

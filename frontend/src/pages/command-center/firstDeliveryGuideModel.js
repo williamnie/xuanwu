@@ -1,6 +1,6 @@
 export const FIRST_DELIVERY_TITLE = '玄武首次交付：只读项目体检';
 
-export function firstDeliveryState({ codeAgents = [], connectionTest = null, doctor, evidence = [], handoffs = [], projects = [], selectedCodeAgentID = '', targetWorkID = '', works = [] } = {}) {
+export function firstDeliveryState({ codeAgents = [], connectionTest = null, doctor, evidence = [], handoffs = [], projects = [], selectedCodeAgentID = '', projectConfirmed = false, targetWorkID = '', works = [] } = {}) {
   const runtimeReady = Boolean(doctor?.service?.alive && doctor?.db?.ok);
   const availableCodeAgents = (Array.isArray(codeAgents) ? codeAgents : [])
     .filter(agent => agent?.enabled !== false && agent?.submittable === true);
@@ -33,25 +33,19 @@ export function firstDeliveryState({ codeAgents = [], connectionTest = null, doc
   const codeAgentReady = Boolean(selectedCodeAgent || deliveryReady);
   const supervisorReady = connectionTest?.ok === true;
 
+  const steps = [
+    ...(doctor && !runtimeReady ? [{ id: 'runtime', complete: false, label: '修复运行环境' }] : []),
+    { id: 'ai', complete: (codeAgentReady && supervisorReady) || deliveryReady, label: '准备 AI' },
+    { id: 'project', complete: (projects.length > 0 && projectConfirmed) || Boolean(targetWork), label: '选项目文件夹' },
+    { id: 'work', complete: deliveryReady, label: '开始第一个任务' },
+  ];
   return {
     availableCodeAgents,
     codeAgentReady,
     completed: deliveryReady,
-    currentStep: deliveryReady ? 6
-      : !runtimeReady ? 0
-        : !codeAgentReady ? 1
-          : !supervisorReady ? 2
-            : projects.length === 0 ? 3
-              : !targetWork ? 4
-                : 5,
-    steps: [
-      { id: 'runtime', complete: runtimeReady, label: '玄武可以运行' },
-      { id: 'code-agent', complete: codeAgentReady, label: '选择谁来做' },
-      { id: 'supervisor', complete: supervisorReady, label: '配置玄武' },
-      { id: 'project', complete: projects.length > 0, label: '告诉玄武项目在哪' },
-      { id: 'work', complete: Boolean(targetWork), label: '启动第一个 Issue' },
-      { id: 'delivery', complete: deliveryReady, label: '看到执行结果' },
-    ],
+    currentStep: deliveryReady ? steps.length : Math.max(0, steps.findIndex(step => !step.complete)),
+    steps,
+    runtimeReady,
     supervisorReady,
     selectedCodeAgent,
     targetEvidence,
@@ -60,34 +54,23 @@ export function firstDeliveryState({ codeAgents = [], connectionTest = null, doc
   };
 }
 
-export function firstDeliveryRecovery(state, doctor) {
-  if (!state.steps[0].complete) {
-    return '运行环境未就绪。先执行 `xuanwu doctor` 和 `./scripts/daemon.sh doctor`；修复 API/DB 后回到 Dashboard 点击“重新检查”。';
-  }
-  if (!state.steps[1].complete) {
-    const discovered = (doctor?.providers || []).map(provider => provider?.label || provider?.id).filter(Boolean).join(' / ') || 'Codex';
-    return `尚未选择已启用且就绪的 Code Agent（已发现：${discovered}）。在当前步骤选择 Codex CLI / Codex App 或其他可用执行器。`;
-  }
-  if (!state.steps[2].complete) {
-    return 'Code Agent 已选定，但当前浏览器会话还没有成功的玄武助手连接测试。在当前步骤完成 API 或 Codex OAuth 连接并保存；无需进入 Advanced。';
-  }
-  if (!state.steps[3].complete) {
-    return '还没有项目。输入一个已存在的本地仓库绝对路径；创建失败时保留原路径，修正后可直接重试。';
-  }
-  if (!state.steps[4].complete) {
-    return '创建只读示例 Work。操作会先检查 Issue-backed Work authority；请求超时后必须先“重新检查”，确认未落库后才可再创建。';
-  }
-  const workID = state.targetWork?.id || '<work-id>';
-  if (state.targetWork?.status === 'failed') {
-    return `Work ${workID} 执行失败。如需查看 Runs 详情，点击右上角“稍后设置”进入指挥中心；修复 Agent/权限后使用既有 Retry，不要新建重复 Work。`;
-  }
-  if (state.targetWork?.status !== 'done') {
-    return `Work ${workID} 尚未完成。先点击“刷新交付状态”；若仍无进展，可稍后进入指挥中心，从 Runs 查看当前 Run。`;
-  }
-  if (state.targetEvidence.length === 0) {
-    return `Work ${workID} 已结束但没有 passed Evidence。重试时要求 Agent 直接执行一条最小只读验证命令，不得用文本结论代替 Evidence。`;
-  }
-  return `任务 ${workID} 已有验证结果，还缺交付凭证。点击“完成交付检查”即可在本页整理；如果检查未通过，点击“让玄武协助”继续处理。`;
+export function preselectedCodeAgentID(agents, project, selectedID = '') {
+  const ready = agents.filter(agent => agent.enabled !== false && agent.submittable === true);
+  return [selectedID, project?.provider, 'codex', ready[0]?.id].find(id => ready.some(agent => agent.id === id)) || '';
+}
+
+export const RUNTIME_REPAIR_COMMAND = './scripts/daemon.sh doctor\n./scripts/daemon.sh restart\nxuanwu doctor';
+
+export function firstDeliveryRecovery(state) {
+  if (!state.runtimeReady) return '运行环境检查未通过。可在运行玄武的机器上执行下方命令重启服务并检查；如果数据库仍异常，请按诊断结果修复后点击“重新检查”。';
+  if (!state.codeAgentReady) return '还没有可用的编程工具。选择已就绪的工具，或完成本机工具安装与登录后重新发现。';
+  if (!state.supervisorReady) return '玄武助手负责执行后的自动验收。请在这一步测试连接并保存，连接成功后继续。';
+  if (!state.steps.find(step => step.id === 'project').complete) return '选择已有项目，或输入本地仓库绝对路径。路径检查通过后再添加；失败时会保留输入。';
+  if (!state.targetWork) return '开始后会创建只读示例任务并进入详情页。请求超时后请先“重新检查”，避免重复创建。';
+  if (state.targetWork.status === 'failed') return '示例任务没有通过验证，请进入任务详情查看原因，点“重试”让玄武再试一次，不要新建重复任务。';
+  if (state.targetWork.status !== 'done') return '示例任务还在执行中。进入任务详情实时查看进度，也可以回到这里刷新交付状态。';
+  if (state.targetEvidence.length === 0) return '示例任务已结束，但还没有通过的验证结果。请在任务详情中重试，让编程工具实际执行只读验证。';
+  return '任务已有验证结果，还缺交付结果。点击“完成交付检查”即可在本页整理；如果检查未通过，点击“让玄武协助”继续处理。';
 }
 
 export function onboardingProjectID(cwd) {
@@ -107,11 +90,11 @@ export function sampleWorkPayload(projectID, now = new Date().toISOString(), non
     },
     goal: [
       '在 10 分钟内完成首次可审查交付。',
-      "1. 首先直接执行 `printf 'Hello Xuanwu\\n'`，将 exact stdout `Hello Xuanwu` 作为第一条 passed Evidence。",
+      "1. 首先直接执行 `printf 'Hello Xuanwu\\n'`，将 exact stdout `Hello Xuanwu` 作为第一条通过的验证结果。",
       '2. 随后只读检查项目 README、manifest 和当前 Git 状态；不修改文件。',
-      '3. 再选择一条最小、只读的项目验证命令并直接执行，使结果成为后续 Evidence。',
+      '3. 再选择一条最小、只读的项目验证命令并直接执行，使结果成为后续验证结果。',
       '4. 汇报项目用途、可用的验证入口、一个风险和建议下一步。',
-      '5. 通过现有确定性完成门禁结束 Work；不 commit、push、deploy 或写入外部系统。',
+      '5. 通过现有确定性完成门禁结束任务；不 commit、push、deploy 或写入外部系统。',
     ].join('\n'),
     project_id: projectID,
     status: 'todo',

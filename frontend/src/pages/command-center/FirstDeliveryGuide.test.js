@@ -15,9 +15,9 @@ const supervisorStateSource = readFileSync(new URL('../piAgentSettingsState.js',
 test('first delivery owns a standalone first-run page and starts the selected project loop', () => {
   assert.match(onboardingPageSource, /<FirstDeliveryGuide/);
   assert.match(onboardingPageSource, /稍后设置/);
-  assert.match(onboardingPageSource, /把 Issue 列好，剩下的交给玄武/);
-  assert.match(onboardingPageSource, /现在启动这 10 个，你自己看着做/);
-  assert.doesNotMatch(onboardingPageSource, /Evidence|Handoff/);
+  assert.match(onboardingPageSource, /把任务交给玄武，从第一次交付开始/);
+  assert.match(onboardingPageSource, /帮我只读检查这个项目/);
+  assert.doesNotMatch(onboardingPageSource, /Evidence|Handoff|Issue/);
   assert.doesNotMatch(dashboardSource, /FirstDeliveryGuide/);
   assert.match(appSource, /resolveFirstRunOnboarding/);
   assert.match(appSource, /shouldShowOnboarding/);
@@ -28,7 +28,7 @@ test('first delivery owns a standalone first-run page and starts the selected pr
   assert.match(guideSource, /OnboardingSupervisorConnection/);
   assert.match(guideSource, /selectedCodeAgentID/);
   assert.match(guideSource, /provider: state\.selectedCodeAgent\.id|const provider = state\.selectedCodeAgent\.id/);
-  assert.match(guideSource, /projectsApi\.updateProject\(selectedProject\.id/);
+  assert.match(guideSource, /projectsApi\.updateProject\(project\.id/);
   assert.match(guideSource, /firstDeliveryApi\.startProjectLoop\(project\.id\)/);
   assert.doesNotMatch(guideSource, /settingsSection|Settings2/);
   assert.doesNotMatch(projectsApiSource, /startProjectLoop|stopProjectLoop/);
@@ -50,4 +50,35 @@ test('Supervisor connection mutations invalidate stale successful tests before s
   assert.match(supervisorStateSource, /if \(!isCurrent\(\)\) return null/);
   assert.match(supervisorStateSource, /if \(CONNECTION_FIELDS\.has\(key\)\) \{\s*invalidateConnectionTest\(\)/);
   assert.match(supervisorStateSource, /await refreshAfterSave\(setProviders, setForm\);\s*return true/);
+});
+
+test('path checking cancels stale requests and import is an explicit secondary action with disclosed effects', () => {
+  assert.match(guideSource, /projectsApi\.checkPath\(path, \{ signal: controller.signal \}\)/);
+  assert.match(guideSource, /if \(!controller.signal.aborted\) setPathCheck/);
+  assert.match(guideSource, /window.clearTimeout\(timer\); controller.abort\(\)/);
+  assert.match(guideSource, /pathCheck.path === cwd.trim\(\)/);
+  assert.match(guideSource, /disabled=\{Boolean\(busy\) \|\| !validPath\}/);
+  assert.match(guideSource, /className="btn btn-secondary"[^>]*onClick=\{importCodex\}/);
+  assert.match(guideSource, /会对已有项目开启自动执行/);
+  assert.match(projectsApiSource, /checkPath:[\s\S]*?\/api\/projects\/path-check\?/);
+});
+
+test('starting opens the created task without completing or dismissing setup, and Back returns to the guide', () => {
+  assert.match(guideSource, /onOpenWork\(targetWorkRef.current\)/);
+  assert.match(appSource, /isFirstDeliveryDetailRoute\(currentPage, selectedWorkId, firstDeliveryWorkId\)/);
+  assert.match(appSource, /const shouldShowOnboarding = !firstDeliveryDetailOpen/);
+  assert.match(appSource, /writeBrowserRoute\(\{ currentPage: 'command-center' \}, \{ replace: true \}\);\s*navigateTo\('work', workId\)/);
+  assert.match(appSource, /navigateTo\('command-center'\)[^\n]*返回引导/);
+  const openHandler = appSource.match(/onOpenWork=\{workId => \{([\s\S]*?)\}\}/)?.[1];
+  assert.ok(openHandler);
+  assert.doesNotMatch(openHandler, /writeFirstRunOnboardingState|skipFirstRun|completeFirstRun/);
+});
+
+test('tool preselection never binds a project and failed runtime checks survive other status failures', () => {
+  const selection = guideSource.slice(guideSource.indexOf('const selectCodeAgent ='), guideSource.indexOf('const discoverCodeAgents ='));
+  assert.match(selection, /setSelectedCodeAgentID\(agent.id\)/);
+  assert.doesNotMatch(selection, /projectsApi\./);
+  assert.match(guideSource, /preselectedCodeAgentID\(snapshot.codeAgents, selectedProject, selectedCodeAgentID\)/);
+  assert.match(guideSource, /getRuntimeDoctor\(\)[\s\S]*?\.catch\([\s\S]*?\.then\(doctor => \{[\s\S]*?setSnapshot\(current => \(\{ \.\.\.current, doctor \}\)\)/);
+  assert.match(guideSource, /state.runtimeReady && steps.ai.complete && \['done', 'failed', 'needs_user'\]/);
 });

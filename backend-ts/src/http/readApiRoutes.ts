@@ -32,6 +32,7 @@ function registerIssuesPageAuxRoutes(router: Router, handlers: ReadApiDomainHand
 
 function registerProjectRoutes(router: Router, handlers: ReadApiDomainHandlers, readHandlers = handlers): void {
   router.get("/api/projects", () => json(readHandlers.projects.list()));
+  router.get("/api/projects/path-check", async request => json(await readHandlers.projects.checkPath(new URL(request.url).searchParams.get("cwd"))));
   router.get("/api/projects/:id", (request) => readResponse(() => readHandlers.projects.read(projectID(request))));
   router.post("/api/projects", async (request) => {
     const body = await parseObjectBody(request);

@@ -5,6 +5,8 @@ import {
   firstDeliveryRecovery,
   firstDeliveryState,
   onboardingProjectID,
+  preselectedCodeAgentID,
+  RUNTIME_REPAIR_COMMAND,
   sampleWorkPayload,
 } from './firstDeliveryGuideModel.js';
 
@@ -15,25 +17,46 @@ const readyDoctor = {
 };
 const readyCodeAgents = [{ enabled: true, id: 'codex', submittable: true }];
 
-test('clean state requires an explicit ready Code Agent selection before Supervisor setup', () => {
+test('three steps merge tool and assistant readiness and only insert failed runtime checks', () => {
   const waiting = firstDeliveryState({ doctor: readyDoctor });
-  assert.equal(waiting.currentStep, 1);
-  assert.deepEqual(waiting.steps.map(step => step.complete), [true, false, false, false, false, false]);
-  assert.match(firstDeliveryRecovery(waiting, readyDoctor), /Code Agent/);
-
-  const supervisorWaiting = firstDeliveryState({ codeAgents: readyCodeAgents, doctor: readyDoctor });
-  assert.equal(supervisorWaiting.currentStep, 1);
-  assert.match(firstDeliveryRecovery(supervisorWaiting, readyDoctor), /Code Agent/);
-
+  assert.equal(waiting.currentStep, 0);
+  assert.deepEqual(waiting.steps.map(step => step.label), ['准备 AI', '选项目文件夹', '开始第一个任务']);
+  assert.deepEqual(waiting.steps.map(step => step.complete), [false, false, false]);
+  assert.match(firstDeliveryRecovery(waiting), /编程工具/);
   const selectedAgent = firstDeliveryState({ codeAgents: readyCodeAgents, doctor: readyDoctor, selectedCodeAgentID: 'codex' });
-  assert.equal(selectedAgent.currentStep, 2);
+  assert.equal(selectedAgent.currentStep, 0);
   assert.equal(selectedAgent.selectedCodeAgent.id, 'codex');
-  assert.match(firstDeliveryRecovery(selectedAgent, readyDoctor), /玄武助手/);
-
+  assert.match(firstDeliveryRecovery(selectedAgent), /玄武助手/);
   const state = firstDeliveryState({ codeAgents: readyCodeAgents, connectionTest: { ok: true }, doctor: readyDoctor, selectedCodeAgentID: 'codex' });
-  assert.equal(state.currentStep, 3);
-  assert.deepEqual(state.steps.map(step => step.complete), [true, true, true, false, false, false]);
-  assert.match(firstDeliveryRecovery(state, readyDoctor), /绝对路径/);
+  assert.equal(state.currentStep, 1);
+  assert.deepEqual(state.steps.map(step => step.complete), [true, false, false]);
+  assert.match(firstDeliveryRecovery(state), /绝对路径/);
+  const failed = firstDeliveryState({ doctor: { service: { alive: true }, db: { ok: false } } });
+  assert.equal(failed.steps.length, 4);
+  assert.equal(failed.steps[0].id, 'runtime');
+  assert.equal(firstDeliveryState().steps.length, 3);
+  assert.doesNotMatch(firstDeliveryRecovery(failed), /xuanwu doctor|API|DB|Dashboard/);
+  assert.match(RUNTIME_REPAIR_COMMAND, /xuanwu doctor/);
+});
+
+test('preselection prefers a ready project provider, then Codex, then the first ready tool without mutation', () => {
+  const agents = [{ id: 'claude', enabled: true, submittable: true }, ...readyCodeAgents, { id: 'disabled', enabled: false, submittable: true }];
+  const before = JSON.stringify(agents);
+  assert.equal(preselectedCodeAgentID(agents, { provider: 'claude' }), 'claude');
+  assert.equal(preselectedCodeAgentID(agents, { provider: 'missing' }), 'codex');
+  assert.equal(preselectedCodeAgentID(agents.slice(0, 1), null), 'claude');
+  assert.equal(preselectedCodeAgentID(agents, null, 'claude'), 'claude');
+  assert.equal(preselectedCodeAgentID([agents[2]], null), '');
+  assert.equal(JSON.stringify(agents), before);
+});
+
+test('project confirmation precedes starting a task, and starting alone does not complete setup', () => {
+  const input = { doctor: readyDoctor, codeAgents: readyCodeAgents, selectedCodeAgentID: 'codex', connectionTest: { ok: true }, projects: [{ id: 'demo' }] };
+  assert.equal(firstDeliveryState(input).currentStep, 1);
+  assert.equal(firstDeliveryState({ ...input, projectConfirmed: true }).currentStep, 2);
+  const started = firstDeliveryState({ ...input, works: [{ id: 'first', status: 'in_progress' }] });
+  assert.equal(started.currentStep, 2);
+  assert.equal(started.completed, false);
 });
 
 test('success requires done Work plus passed Evidence and Handoff for the same Work', () => {
@@ -48,7 +71,7 @@ test('success requires done Work plus passed Evidence and Handoff for the same W
     works: [work],
   });
   assert.equal(state.completed, true);
-  assert.deepEqual(state.steps.map(step => step.complete), [true, true, true, true, true, true]);
+  assert.deepEqual(state.steps.map(step => step.complete), [true, true, true]);
 
   const wrongWork = firstDeliveryState({
     codeAgents: readyCodeAgents,
@@ -69,8 +92,8 @@ test('sample mutation is uniquely audited and strictly read-only', () => {
   assert.equal(first.status, 'todo');
   assert.match(first.goal, /不修改文件/);
   assert.ok(first.goal.indexOf("printf 'Hello Xuanwu\\n'") < first.goal.indexOf('README'));
-  assert.match(first.goal, /第一条 passed Evidence/);
-  assert.match(first.goal, /Evidence/);
+  assert.match(first.goal, /第一条通过的验证结果/);
+  assert.match(first.goal, /后续验证结果/);
   assert.equal(onboardingProjectID('/tmp/My Demo/'), 'my-demo');
 });
 
@@ -80,8 +103,8 @@ test('recovery keeps a failed or partially delivered Work on its existing author
     selectedCodeAgentID: 'codex',
     works: [{ id: 'xw:work:issues:4', status: 'failed', title: FIRST_DELIVERY_TITLE }],
   });
-  assert.match(firstDeliveryRecovery(failed, readyDoctor), /Retry/);
-  assert.match(firstDeliveryRecovery(failed, readyDoctor), /不要新建重复 Work/);
+  assert.match(firstDeliveryRecovery(failed, readyDoctor), /重试/);
+  assert.match(firstDeliveryRecovery(failed, readyDoctor), /不要新建重复任务/);
 
   const evidenceOnly = firstDeliveryState({
     codeAgents: readyCodeAgents, connectionTest: { ok: true }, doctor: readyDoctor,

@@ -123,7 +123,7 @@ function isCodexWorktree(cwd: string): boolean {
   return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`);
 }
 
-function nextProjectID(name: string, cwd: string, used: Set<string>): string {
+export function nextProjectID(name: string, cwd: string, used: Set<string>): string {
   const base = projectIDBase(name);
   if (!used.has(base)) return base;
   const withHash = `${base}-${createHash("sha1").update(cwd).digest("hex").slice(0, HASH_LENGTH)}`;

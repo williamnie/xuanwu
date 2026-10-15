@@ -25,7 +25,9 @@ import {
   useDataStore,
 } from './store/dataStore';
 import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
-import { readFirstRunOnboardingState, resolveFirstRunOnboarding, writeFirstRunOnboardingState } from './utils/firstRunOnboarding.js';
+import { isFirstDeliveryDetailRoute, readFirstRunOnboardingState, resolveFirstRunOnboarding, writeFirstRunOnboardingState } from './utils/firstRunOnboarding.js';
+import { assistantApi } from './api/assistant.js';
+import { createFirstDeliveryConnectionCheck } from './pages/command-center/firstDeliverySetup.js';
 import { Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
 import { message as toast } from './store/toastStore';
@@ -133,6 +135,8 @@ export default function App() {
     authReady: Boolean(getAuthToken()),
   }));
   const [firstRunOnboarding, setFirstRunOnboarding] = useState(() => readFirstRunOnboardingState() || 'pending');
+  const [firstDeliveryWorkId, setFirstDeliveryWorkId] = useState('');
+  const [checkFirstDeliveryConnection] = useState(() => createFirstDeliveryConnectionCheck(assistantApi));
 
   const backendOnline = useDataStore(selectBackendOnline);
   const loading = useDataStore(selectLoading);
@@ -551,14 +555,23 @@ export default function App() {
     );
   }
 
-  const shouldShowOnboarding = firstRunOnboarding === 'active'
-    || (firstRunOnboarding === 'pending' && !loading && backendOnline && workSummary.counts.total === 0);
+  const firstDeliveryDetailOpen = firstRunOnboarding === 'active'
+    && isFirstDeliveryDetailRoute(currentPage, selectedWorkId, firstDeliveryWorkId);
+  const shouldShowOnboarding = !firstDeliveryDetailOpen && (firstRunOnboarding === 'active'
+    || (firstRunOnboarding === 'pending' && !loading && backendOnline && workSummary.counts.total === 0));
   if (shouldShowOnboarding) {
     return (
       <>
         <ToastContainer />
         <Suspense fallback={<PageLoadingFallback />}>
           <OnboardingPage
+            checkSavedConnection={checkFirstDeliveryConnection}
+            onOpenWork={workId => {
+              setFirstDeliveryWorkId(workId);
+              // Make browser Back return to the guide, even if setup started on a deep link.
+              writeBrowserRoute({ currentPage: 'command-center' }, { replace: true });
+              navigateTo('work', workId);
+            }}
             onComplete={completeFirstRunOnboarding}
             onSkip={skipFirstRunOnboarding}
             projects={projects}
@@ -625,6 +638,7 @@ export default function App() {
 
       {/* 右侧主工作区 */}
       <main className="main-content" ref={mainContentRef} aria-busy={pagePending} inert={isMobileViewport && mobileSidebarOpen ? true : undefined}>
+        {firstDeliveryDetailOpen ? <div className="first-delivery-return"><button className="btn btn-secondary" onClick={() => navigateTo('command-center')} type="button">返回引导</button><span>查看首次任务进度后，返回引导确认交付结果。</span></div> : null}
         {pagePending ? <span className="page-navigation-status" role="status">正在打开页面…</span> : null}
         <GuardianAlertBanner />
         {loading ? (

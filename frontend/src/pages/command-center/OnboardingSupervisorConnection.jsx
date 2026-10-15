@@ -57,7 +57,7 @@ export default function OnboardingSupervisorConnection({ onComplete }) {
       {activeTest?.result ? <ConnectionResult result={activeTest.result} /> : null}
 
       <footer className="first-delivery-connection-actions">
-        <p>OAuth 使用独立玄武助手 runtime 凭据；不会读取或回显 Codex CLI token。</p>
+        <p>玄武助手需要单独连接；不会读取或回显 Codex CLI token。</p>
         <div>
           <button className="btn btn-secondary" disabled={!credentialReady || activeTest?.busy} onClick={state.testConnection} type="button">
             {activeTest?.busy ? <Loader2 className="spin-animation" size={14} /> : <RefreshCw size={14} />} 测试连接
@@ -123,7 +123,7 @@ function OAuthFlow({ configured, state }) {
   return (
     <section className="first-delivery-connection-flow first-delivery-oauth-flow">
       <div className="first-delivery-oauth-heading">
-        <div><strong>使用现有 ChatGPT 账号登录</strong><p>玄武会生成一次性地址，并将凭据写入独立的玄武助手 runtime authority。</p></div>
+        <div><strong>使用现有 ChatGPT 账号登录</strong><p>玄武会生成一次性地址，授权仅用于玄武助手连接。</p></div>
         <span className={configured ? 'ready' : lifecycle}>{label}</span>
       </div>
       {status?.message ? <p className={lifecycle === 'error' ? 'oauth-error' : ''}>{status.message}</p> : null}
