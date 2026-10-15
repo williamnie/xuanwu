@@ -641,6 +641,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/integrations/feishu/events", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/integrations/feishu/settings", family: "integration-intake-delivery" },
   { method: "PUT", path: "/api/integrations/feishu/settings", family: "integration-intake-delivery" },
+  { method: "POST", path: "/api/integrations/feishu/discover-source", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/integrations/im/channels", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/integrations/telegram/settings", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/integrations/telegram/discover-source", family: "integration-intake-delivery" },

@@ -19,6 +19,11 @@ export const connectorsApi = {
 
   getFeishuSettings: () => request('/api/integrations/feishu/settings'),
 
+  discoverFeishuSource: () => request('/api/integrations/feishu/discover-source', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
   updateFeishuSettings: (settings) => request('/api/integrations/feishu/settings', {
     method: 'PUT',
     body: JSON.stringify(settings),

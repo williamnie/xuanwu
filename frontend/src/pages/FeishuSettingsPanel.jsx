@@ -1,9 +1,10 @@
 import { connectorsApi } from '../api/connectors.js';
 import { useEffect, useState } from 'react';
-import { Bot, CheckCircle2, KeyRound } from 'lucide-react';
+import { Bot, CheckCircle2, KeyRound, ScanSearch } from 'lucide-react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
 import { useI18n } from '../i18n/context.js';
+import { appendFeishuSource, feishuSourceIncluded } from './feishuSourceModel.js';
 import './FeishuSettingsPanel.css';
 
 const DEFAULT_FORM = {
@@ -31,21 +32,38 @@ export default function FeishuSettingsPanel() {
 }
 
 function useFeishuSettings() {
+  const { t } = useI18n();
   const [error, setError] = useState('');
   const [form, setForm] = useState(DEFAULT_FORM);
   const [loading, setLoading] = useState(true);
   const [remote, setRemote] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [discovery, setDiscovery] = useState(null);
+  const [discoveryError, setDiscoveryError] = useState('');
 
   const loadSettings = () => loadFeishuSettings(setRemote, setForm, setError, setLoading);
   const updateField = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const handleSubmit = (event) => saveFeishuSettings(event, { form, setError, setForm, setRemote, setSaving });
+  const discover = async () => {
+    setDiscovering(true);
+    setDiscovery(null);
+    setDiscoveryError('');
+    try {
+      setDiscovery(await connectorsApi.discoverFeishuSource());
+    } catch (error) {
+      setDiscoveryError(error.message || t('feishu.discoveryFailed'));
+    } finally {
+      setDiscovering(false);
+    }
+  };
+  const chooseSource = source => setForm(current => appendFeishuSource(current, source));
 
   useEffect(() => {
     loadSettings();
   }, []);
 
-  return { error, form, handleSubmit, loading, remote, saving, updateField };
+  return { error, form, handleSubmit, loading, remote, saving, updateField, discover, discovering, discovery, discoveryError, chooseSource };
 }
 
 function PanelHeader({ enabled, status }) {
@@ -74,7 +92,7 @@ function StatusPill({ enabled, status }) {
   );
 }
 
-function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit }) {
+function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit, discover, discovering, discovery, discoveryError, chooseSource }) {
   const { language } = useI18n();
   const english = language === 'en-US';
   if (loading) return <PanelLoader label="玄武正在读取飞书配置…" />;
@@ -89,6 +107,7 @@ function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit
       <FieldGroup title={english ? 'Event subscription' : '事件订阅'} description={english ? 'Choose how events arrive and which chats and users may trigger tasks.' : '选择事件接收方式，并限制可触发任务的群聊与用户。'}>
         <ReceiveModeHint callbackPath={remote?.callback_path} receiveMode={form.receive_mode} settingsFile={remote?.settings_file} />
         <ReceiveModeField value={form.receive_mode} onChange={(value) => updateField('receive_mode', value)} />
+        <SourceDiscovery {...{ form, remote, saving, discover, discovering, discovery, discoveryError, chooseSource }} />
         <div className="feishu-settings__field-grid">
           <SecretField configured={remote?.verification_token_configured} label="Verification Token" optional value={form.verification_token} onChange={(value) => updateField('verification_token', value)} />
           <SecretField configured={remote?.encrypt_key_configured} label="Encrypt Key" optional value={form.encrypt_key} onChange={(value) => updateField('encrypt_key', value)} />
@@ -105,6 +124,41 @@ function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit
       </FieldGroup>
       <Footer remote={remote} saving={saving} />
     </form>
+  );
+}
+
+function SourceDiscovery({ form, remote, saving, discover, discovering, discovery, discoveryError, chooseSource }) {
+  const { language, t } = useI18n();
+  return (
+    <div className="feishu-discovery">
+      <div className="feishu-settings__footer">
+        <span className="ds-mono-label">{t('feishu.sources')}</span>
+        <button className="btn btn-secondary" disabled={!remote?.enabled || saving || discovering} onClick={discover} type="button">
+          <ScanSearch aria-hidden="true" size={14} />{t(discovering ? 'feishu.discovering' : 'feishu.discover')}
+        </button>
+      </div>
+      <p className="feishu-settings__description">{t('feishu.sourceHistory')}</p>
+      <p className="feishu-settings__description">{t('feishu.sourceSaveHint')}</p>
+      {discoveryError ? <p className="feishu-settings__error" role="alert">{discoveryError}</p> : null}
+      <div aria-live="polite" aria-busy={discovering}>
+        {discovery?.sources?.length === 0 ? <p className="feishu-settings__description">{t('feishu.noSources')}</p> : null}
+        {(discovery?.sources || []).map(source => {
+          const included = feishuSourceIncluded(form, source);
+          const kind = source.chat_type === 'direct' ? 'feishu.private' : source.chat_type === 'group' ? 'feishu.group' : 'feishu.unknown';
+          return (
+            <label className="feishu-discovery__source" key={`${source.chat_id}:${source.user_id}`}>
+              <input checked={included} disabled={included || saving || discovering} onChange={event => { if (event.target.checked) chooseSource(source); }} type="checkbox" />
+              <span className="feishu-discovery__details">
+                <span className="ds-mono-label">{t(kind)} · {t(included ? 'feishu.sourceAdded' : 'feishu.sourceAdd')}</span>
+                <span><span className="ds-mono-label">{t('feishu.userId')}</span> <code>{source.user_id}</code></span>
+                <span><span className="ds-mono-label">{t('feishu.chatId')}</span> <code>{source.chat_id}</code></span>
+                <span><span className="ds-mono-label">{t('feishu.lastReceived')}</span> <time dateTime={source.observed_at}>{source.observed_at ? new Date(source.observed_at).toLocaleString(language) : '—'}</time></span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

@@ -121,3 +121,24 @@
 .feishu-settings__footer-status.is-warning {
   color: var(--warning);
 }
+
+.feishu-discovery {
+  border-top: 1px solid var(--border-light);
+  padding-top: var(--space-3);
+}
+
+.feishu-discovery__source {
+  align-items: start;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+}
+
+.feishu-discovery__details {
+  display: grid;
+  font-size: var(--text-md);
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

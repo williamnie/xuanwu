@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { connectorsApi } from '../api/connectors.js';
+import { translate } from '../i18n/translations.js';
 
 const panelSource = readFileSync(new URL('./FeishuSettingsPanel.jsx', import.meta.url), 'utf8');
 const settingsSectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
@@ -41,4 +43,30 @@ test('Feishu keeps every field within the three explained groups in both languag
   const targets = panelSource.slice(panelSource.indexOf("'Notification targets'"), panelSource.indexOf('<Footer remote='));
   assert.match(targets, /default_chat_id/);
   assert.match(targets, /default_user_id/);
+});
+
+test('Feishu discovery sends no draft settings and leaves saving as a separate action', async () => {
+  const previousFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, method: init.method, body: JSON.parse(init.body) });
+    return new Response(JSON.stringify({ ok: true, sources: [] }), { headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    await connectorsApi.discoverFeishuSource({ app_secret: 'unsaved' });
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].url, /\/api\/integrations\/feishu\/discover-source$/);
+    assert.deepEqual(calls[0], { url: calls[0].url, method: 'POST', body: {} });
+  } finally { globalThis.fetch = previousFetch; }
+  const discovery = panelSource.slice(panelSource.indexOf('const discover = async'), panelSource.indexOf('const chooseSource ='));
+  assert.match(discovery, /connectorsApi\.discoverFeishuSource\(\)/);
+  assert.doesNotMatch(discovery, /setForm|updateFeishuSettings/);
+  assert.match(panelSource, /const chooseSource = source => setForm\(current => appendFeishuSource\(current, source\)\)/);
+  assert.match(panelSource, /type="checkbox"/);
+  assert.match(panelSource, /className="btn btn-secondary"[^>]*onClick=\{discover\} type="button"/);
+  for (const key of ['sourceHistory', 'sourceSaveHint', 'noSources', 'private', 'group', 'userId', 'chatId']) {
+    const id = `feishu.${key}`;
+    assert.notEqual(translate('zh-CN', id), id);
+    assert.notEqual(translate('en-US', id), id);
+  }
 });

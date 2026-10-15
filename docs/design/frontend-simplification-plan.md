@@ -495,7 +495,7 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 尚未完成：
 
 1. **完整待处理聚合**：现有首页保留已明确的来源范围；完整分页、人工审核 / 失败任务合并去重等仍需 8.2 的只读聚合合同，不能把当前部分聚合宣称为全部待处理事项。
-2. **D 阶段剩余新能力**：飞书来源发现、路由改名，合同见 8.3；D1 三步引导与 D2 任务来源筛选已完成；批量创建不进 Web UI（Q12）。D 阶段与已完成的“交接任务 D”不是同一事项。
+2. **D 阶段剩余新能力**：路由改名，合同见 8.3；D1 三步引导、D2 任务来源筛选与 D3 飞书来源发现已完成；批量创建不进 Web UI（Q12）。D 阶段与已完成的“交接任务 D”不是同一事项。
 
 ### 8.1.2 交接给其他 Agent（Codex / agy）的约束
 
@@ -532,7 +532,7 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 | 首页完整的待处理聚合 | Attention 汇总只聚合 inbox、守护告警、执行工具审批、助手动作（`attention/persistence.ts:75–92`），不含任务的人工审核请求；默认 10 条、最多 25 条，无完整分页；助手动作只读 7 天窗口 | **有缺口**。需要只读聚合 + 完整分页（或等价方案），合并人工审核请求和失败任务，按原始 ref 去重；写操作仍走各自原接口，不新造审批状态表 |
 | 任务列表分页 | `GET /api/works` 已支持项目、状态、类型、关键字、排序、分页和游标（`workApi.ts:244–296`） | **已支持**，C1 直接使用 |
 | 任务按来源（GitHub）筛选 | D2 已支持：一个 GitHub case 可对应多轮任务，`github_issue_cases.issue_id` 仅指向当前任务；每轮调查 / 修复的历史绑定保存在 `external_links`。`tracker_issue_links` 只首次建立，`sync_outbox` 是出站操作记录 | **已补齐**。列表 / 看板以当前 case 指针或指向该 case 的历史链接判定 GitHub 来源；其他任务均为手动。共用 SQL `exists` 条件，计数、分页和游标指纹一致；不按 provenance 判断 |
-| 飞书来源自动识别 | 只有 Telegram 有 `discover-source` 接口 | **有缺口**。需受控的来源发现与授权接口，不放开允许名单 |
+| 飞书来源自动识别 | D3 已支持 `POST /api/integrations/feishu/discover-source`。未命中关注策略的消息仍以 ignored 入库；现有归一化不保留姓名 / 群名，也不可靠区分历史应用 | **已补齐**。仅校验已保存凭据后读取本机最近 200 条事件，不改入库策略；候选只含用户 / 会话 ID、类型、空显示名和最近时间，勾选追加到表单，保存后才生效；界面明确历史应用范围 |
 | 玄武助手复用 Codex 登录 | 两份凭据分开存储（`piOAuthApi.ts:219–226、291`） | **有缺口**。需凭据复用与刷新合同；不做则引导中保留独立登录 |
 | “从 Codex 导入”的只读可用性检测 | 只有有副作用的 `POST /api/projects/sync/codex` | **可选增强**。没有时按钮始终显示，点击后给出明确结果 |
 | 任务阻塞原因 | `/api/works` 列表和详情**没有**依赖/调度阻塞投影；`effective_provider` 只是选择结果，不代表可运行。可以可靠关联的现有事实：① 依赖诊断——`GET /api/issues`、`/api/issues/:id` 返回 `dependency`（`ready` / `reason` / `waiting_reason` / `root_blockers` 等，`domain/work/issueDependency.ts:12–35`）；② 工具就绪——`GET /api/code-agents` 返回 `state` / `submittable` / `readiness_reason`；③ 项目暂停——`/api/projects` 的 `hold` | **部分已有**。C1 只显示上述可关联的事实，其余不编造原因；不得为取数调用 `PUT /api/works/:id/readiness-requirements`（带审计的写接口），也不逐行 N+1 查询。缺口命名为“分页任务行的统一调度/依赖诊断投影”（含执行工具冷却、项目并发、工作区占用等） |
@@ -545,7 +545,7 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 |---|---|---|---|
 | **D1 3 步引导**（5.7） | `FirstDeliveryGuide` 改为 3 步：准备 AI / 选项目文件夹 / 开始第一个任务。运行环境检查放后台，只有失败时插入一步并给出可复制的修复命令。编程工具：自动预选已就绪的一个（项目已有 provider 且就绪时优先，否则 Codex，否则第一个），**预选只改本地状态**，绑定项目仍走现有显式写入。玄武助手：已配置时自动跑一次现有连接测试，通过即跳过；未配置或失败时在同一步内完成连接。第 2 步实时校验路径；“从 Codex 导入”为次要入口，按钮旁写明会对已有项目开启自动执行。第 3 步预填只读示例任务，点“开始”后进入该任务详情页实时查看，完成条件不变 | 新增只读 `GET /api/projects/path-check?cwd=<绝对路径>`：返回 `exists`、`directory`、`git_repo`、`suggested_id`、`existing_project_id`（cwd 已注册时）。不创建、不写库、不写审计；只做 stat 与 `.git` 检测，不执行 git 命令；拒绝相对路径 | 自动连接测试会产生一条现有的 `provider_connection_tested` 审计，只在页面加载时跑一次，不轮询。文案用 4 节术语，不出现 `Evidence`、`authority`、`Work`、`xuanwu doctor` 等词（修复命令本身除外，放在可复制代码块里）。“稍后设置”和 `firstRunOnboarding` 状态机不变 |
 | **D2 任务来源筛选**（5.4） | 任务页筛选加“来源：全部 / GitHub / 手动”；与状态、项目、搜索组合；写进路由参数（如 `source=github`），刷新和复制链接保持 | `GET /api/works` 与 `GET /api/works/board` 支持 `source=github\|manual`。GitHub 来源包括当前 `github_issue_cases.issue_id` 指针，以及 `external_links` 中 `source=github`、`external_type=github_issue`、`external_id` 指向 case 的历史任务；共用 SQL 条件，计数、分页和列表游标指纹一致。未知值、显式空值和重复 source 返回 400；不传 source 表示全部来源。列表与看板的 q 独立生效，不依赖 source | 不按 provenance `kind` 判断；不做 N+1 |
-| **D3 飞书来源发现**（6.4） | 飞书抽屉加“识别来源”：列出最近给机器人发过消息的会话 / 用户，用户勾选后填入现有允许名单字段，仍需点现有“保存”才生效 | 新增 `POST /api/integrations/feishu/discover-source`，形状对齐 Telegram 的 `discover-source`：只读最近已入库的飞书事件（含因不在允许名单被拒的事件，若当前未入库则先回报，不擅自改变入库策略），返回去重后的候选；**不修改允许名单、不发消息、不回显凭据** | 未配置或凭据无效返回 400；无候选时提示“先在飞书里给机器人发一条消息再识别” |
+| **D3 飞书来源发现**（6.4） | 飞书抽屉加次要按钮“识别来源”；候选显示用户 ID / 会话 ID、私聊 / 群聊、最近时间，显示名为空时不猜测。勾选只去重追加 allowed_chat_ids / allowed_user_ids，不覆盖已有值或修改 default_* / project_mappings；仍需点现有“保存”。明确“来自本机最近收到的飞书消息，可能包含以前配置的应用” | `POST /api/integrations/feishu/discover-source` 只接受空对象，不接受草稿凭据。只用已保存的应用配置，调用现有认证路径校验，校验入口只返回 ok / 错误类别，不返回凭据；通过后只读最近 200 条 source=feishu 的事件（包含 ignored），仅 sender.kind=user，按 (chat_id, open_id 优先否则 sender.id) 去重、每组取最近时间；候选不返回正文 / 原始事件 / 凭据，不写库、不写设置、不发消息、不改变接收策略 | 缺配置 / 凭据无效 400；网络失败 / 10 秒超时 502。无候选时提示“先在飞书里给机器人发一条消息再识别”。现有事件无可靠 app_id 归属，不宣称仅当前应用，不额外调用姓名或消息 API |
 | **D4 路由改名**（5.1） | canonical route：`command-center` → `inbox`，`work` → `tasks`；旧 ID 全部重定向到新 ID 并保留查询参数 | 无 | 先写路由状态合同测试覆盖 5.1 列出的 5 类情况，再改名；不能只改 `PRODUCT_COMPAT_ROUTE_REDIRECTS`。旧书签、通知里的链接、后端生成的深链（先搜后端是否拼接前端 hash 路由）都必须继续可用 |
 
 
@@ -562,6 +562,10 @@ D2 验收记录（2026-10-15，本次提交）：`GET /api/works` 与 `/api/work
 前端 **767 pass / 0 fail**，lint / build 通过；后端完整 `bun test` **2782 pass / 0 fail**（485 files），来源 / 路由 / 能力清单专项 **25 pass / 0 fail**；`git diff --check` 通过。后端来源场景使用临时数据库，覆盖三轮 case 任务、仅当前绑定、重复 / 无关链接、组合过滤、偏移 / 游标、未知来源、读库只读限制和查询计划。页面证据在 `/tmp/xuanwu-d2/`：`real-*` 为真实页面布局，`fixture-*` 为真实 App 组件配临时 API 夹具，覆盖 GitHub / 手动来源、列表与看板分页、组合筛选与路由恢复；浅 / 深 × 980 / 760 / 680。夹具不提交，不触发真实写入，不读取或导出 token / 请求头；复用既有服务，不改端口。
 
 D2 复核修正（2026-10-15）：看板接口的关键词 `q` 独立于 `source` 生效，与列表一致；前端发送条件保持不变。新增无来源关键词测试，覆盖手动 / GitHub 任务命中、各列计数与列表一致，以及无匹配时返回空列。后端相关专项 **36 pass / 0 fail**（4 files），前端 **767 pass / 0 fail**；`git diff --check` 通过。
+
+D3 验收记录（2026-10-15，本次提交）：按实施前核实与确认的合同完成。后端完整 `bun test` **2792 pass / 0 fail**（486 files）；新增 6 个来源接口测试与 3 个凭据校验测试，覆盖 ignored 来源、200 条窗口、去重 / 最新时间、机器人排除、空名称、安全投影、保存配置字节不变、数据库 query-only、校验先于历史读取、400 / 502 / 超时；前端 **769 pass / 0 fail**（180 files），lint / build / `git diff --check` 通过。
+
+页面证据 `/tmp/xuanwu-d3/`：真实未配置飞书抽屉与临时 API 夹具分别覆盖浅 / 深 × 980 / 760 / 680（12 张矩阵截图）；另有勾选前、空结果、凭据 / 网络 / 超时错误、加载态及英文候选截图，共 19 张。`selection-regression.json` 验证识别不自动改表单、勾选去重追加且保留 default_* / project_mappings；错误 / 加载 / 英文另有 JSON 证据。临时夹具已移出仓库，未保存配置、执行任务或发送消息；复用既有服务，恢复原主题，只关闭本次两个浏览器标签页。新接口用临时数据库和模拟认证验证，真实页面不冒充真实飞书认证端到端。历史应用与缺少真实姓名 / 群名的边界已明确告知，不修改已有接收权限策略。
 
 ## 9. 待确认事项
 

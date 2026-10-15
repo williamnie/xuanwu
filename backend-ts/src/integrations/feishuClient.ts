@@ -16,6 +16,7 @@ export type FeishuMessageClient = {
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 type ClientOptions = { baseUrl?: string; config: FeishuConnectorConfig; fetch?: FetchLike; now?: () => Date };
 type TokenCache = { expiresAtMs: number; token: string };
+export type FeishuCredentialCheck = { ok: true } | { ok: false; kind: "auth" | "network" | "timeout" };
 type ErrorKind = "auth" | "permanent" | "rate_limited" | "temporary";
 type FeishuApiBody = Record<string, unknown>;
 
@@ -40,6 +41,12 @@ export function createFeishuMessageClient(options: ClientOptions): FeishuMessage
   return new DefaultFeishuMessageClient(options);
 }
 
+// A separate, fresh client validates saved credentials without sending a message
+// or exposing the access credential (including through upstream error text).
+export function validateFeishuCredentials(options: ClientOptions & { timeoutMs?: number }): Promise<FeishuCredentialCheck> {
+  return new DefaultFeishuMessageClient(options).validateCredentials(options.timeoutMs);
+}
+
 class DefaultFeishuMessageClient implements FeishuMessageClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
@@ -50,6 +57,20 @@ class DefaultFeishuMessageClient implements FeishuMessageClient {
     this.baseUrl = cleanBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
     this.fetchImpl = options.fetch ?? fetch;
     this.now = options.now ?? (() => new Date());
+  }
+
+  async validateCredentials(timeoutMs = 10_000): Promise<FeishuCredentialCheck> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      await this.tenantAccessToken(controller.signal);
+      return { ok: true };
+    } catch (error) {
+      if (controller.signal.aborted) return { ok: false, kind: "timeout" };
+      return { ok: false, kind: error instanceof FeishuClientError && ["auth", "permanent"].includes(error.kind) ? "auth" : "network" };
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async sendTextMessage(input: FeishuTextMessageInput): Promise<FeishuTextMessageResult> {
@@ -91,24 +112,25 @@ class DefaultFeishuMessageClient implements FeishuMessageClient {
     return { messageId };
   }
 
-  private async tenantAccessToken(): Promise<string> {
+  private async tenantAccessToken(signal?: AbortSignal): Promise<string> {
     if (this.tokenCache && this.tokenCache.expiresAtMs > this.now().getTime() + TOKEN_REFRESH_SKEW_MS) return this.tokenCache.token;
     const appId = requireText(this.options.config.appId, "FEISHU_APP_ID");
     const appSecret = requireText(this.options.config.appSecret, "FEISHU_APP_SECRET");
-    const response = await this.postJson("/open-apis/auth/v3/tenant_access_token/internal", { app_id: appId, app_secret: appSecret });
+    const response = await this.postJson("/open-apis/auth/v3/tenant_access_token/internal", { app_id: appId, app_secret: appSecret }, {}, signal);
     const token = requireText(response.body.tenant_access_token, "tenant_access_token");
     const expireSeconds = positiveNumber(response.body.expire) || 7200;
     this.tokenCache = { expiresAtMs: this.now().getTime() + expireSeconds * 1000, token };
     return token;
   }
 
-  private async postJson(path: string, body: FeishuApiBody, headers: Record<string, string> = {}) {
+  private async postJson(path: string, body: FeishuApiBody, headers: Record<string, string> = {}, signal?: AbortSignal) {
     let response: Response;
     try {
       response = await this.fetchImpl(`${this.baseUrl}${path}`, {
         body: JSON.stringify(body),
         headers: { "content-type": "application/json; charset=utf-8", ...headers },
-        method: "POST"
+        method: "POST",
+        ...(signal ? { signal } : {})
       });
     } catch (error) {
       throw new FeishuClientError(`Feishu request failed: ${safeError(error, this.options.config)}`, { kind: "temporary" });

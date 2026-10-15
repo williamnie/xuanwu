@@ -1,6 +1,43 @@
 import { describe, expect, test } from "bun:test";
 import { buildFeishuConnectorConfig } from "./feishu.ts";
-import { FeishuClientError, createFeishuMessageClient } from "./feishuClient.ts";
+import { FeishuClientError, createFeishuMessageClient, validateFeishuCredentials } from "./feishuClient.ts";
+
+describe("Feishu read-only credential validation", () => {
+  test("only authenticates and never exposes the access credential or sends a message", async () => {
+    const calls: string[] = [];
+    const result = await validateFeishuCredentials({ config: config(), fetch: async (url) => {
+      calls.push(String(url));
+      return jsonResponse({ code: 0, tenant_access_token: "private-credential-value", expire: 7200 });
+    } });
+    expect(result).toEqual({ ok: true });
+    expect(calls).toEqual(["https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"]);
+  });
+
+  test("returns only error categories for missing, invalid and unavailable credentials", async () => {
+    let calls = 0;
+    expect(await validateFeishuCredentials({ config: buildFeishuConnectorConfig(), fetch: async () => {
+      calls += 1;
+      throw new Error("should not fetch");
+    } })).toEqual({ ok: false, kind: "auth" });
+    expect(calls).toBe(0);
+    expect(await validateFeishuCredentials({ config: config(), fetch: async () =>
+      jsonResponse({ code: 10014, msg: "app-secret-value private-credential-value" })
+    })).toEqual({ ok: false, kind: "auth" });
+    expect(await validateFeishuCredentials({ config: config(), fetch: async () => { throw new Error("app-secret-value private-credential-value"); } }))
+      .toEqual({ ok: false, kind: "network" });
+    expect(await validateFeishuCredentials({ config: config(), fetch: async () => jsonResponse({ msg: "unavailable" }, 503) }))
+      .toEqual({ ok: false, kind: "network" });
+  });
+
+  test("aborts a timed-out authentication request without exposing upstream details", async () => {
+    let aborted = false;
+    const result = await validateFeishuCredentials({ config: config(), timeoutMs: 5, fetch: async (_url, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => { aborted = true; reject(new Error("private-credential-value")); }, { once: true });
+    }) });
+    expect(result).toEqual({ ok: false, kind: "timeout" });
+    expect(aborted).toBe(true);
+  });
+});
 
 describe("Feishu message client", () => {
   test("fetches and caches tenant access token before sending text", async () => {

@@ -10,6 +10,8 @@ import {
   type FeishuReceiveMode
 } from "../integrations/feishu.ts";
 import { cleanString, splitList } from "../integrations/feishuShared.ts";
+import { validateFeishuCredentials, type FeishuCredentialCheck } from "../integrations/feishuClient.ts";
+import { recentFeishuSources } from "../integrations/feishuSourceDiscovery.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
@@ -20,6 +22,7 @@ type FeishuSettingsContext = {
   database: RunnerDatabase;
   onConfigChanged?: (config: FeishuConnectorConfig) => Promise<void> | void;
   secrets?: SecretService;
+  validateCredentials?: (config: FeishuConnectorConfig) => Promise<FeishuCredentialCheck>;
 };
 type LocalFeishuSettings = {
   allowedChatIds: string[];
@@ -39,6 +42,20 @@ export function registerFeishuSettingsRoutes(router: Router, context: FeishuSett
   router.get("/api/integrations/feishu/settings", () => json(publicFeishuSettings(currentConfig(activeContext), settingsPath(activeContext))));
   router.put("/api/integrations/feishu/settings", async (request) => {
     return json(await saveFeishuSettings(activeContext, await objectBody(request)));
+  });
+  router.post("/api/integrations/feishu/discover-source", async (request) => {
+    const body = await parseJsonBody(request);
+    if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length > 0) {
+      throw new HttpError(400, "来源识别仅使用已保存的配置，不接受请求参数");
+    }
+    const config = currentConfig(activeContext);
+    if (!feishuConnectorStatus(config).enabled) throw new HttpError(400, "请先保存完整的飞书应用配置");
+    const checked = await (activeContext.validateCredentials ?? ((config) => validateFeishuCredentials({ config })))(config);
+    if (!checked.ok) {
+      if (checked.kind === "auth") throw new HttpError(400, "飞书应用凭据无效，请检查已保存的配置");
+      throw new HttpError(502, checked.kind === "timeout" ? "飞书凭据校验超时，请稍后重试" : "无法连接飞书校验凭据，请稍后重试");
+    }
+    return json({ ok: true, sources: recentFeishuSources(activeContext.database) });
   });
 }
 
