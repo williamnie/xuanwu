@@ -139,15 +139,19 @@ test('code-split Work styles preserve the canonical button and panel geometry', 
 
 test('low-frequency global panels use the same visual system without owning Sessions page styles', () => {
   for (const selector of [
-    '.approval-card',
     '.prompt-suggestion-menu',
     '.prompt-image-attachment-card',
-    '.session-command-panel',
     '.codex-toast-item',
   ]) {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     assert.match(pagesCss, new RegExp(escaped));
   }
+  for (const [file, selector] of [['ApprovalDialog', 'approval-card'], ['SessionCommandPanel', 'session-command-panel']]) {
+    const componentCss = readFileSync(new URL(`./pages/sessions/${file}.css`, import.meta.url), 'utf8');
+    assert.ok(componentCss.includes(`.${selector}`));
+    assert.ok(!pagesCss.includes(`.${selector}`), `${selector} must be owned by its component`);
+  }
+  assert.doesNotMatch(pagesCss, /\.session-command-chip/);
   assert.match(pagesCss, /\.proposal-action-row\s*\{\s*border-radius:\s*var\(--radius-md\)/);
   assert.match(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-family:\s*var\(--font-mono\)/);
   assert.match(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-size:\s*0\.56rem/);

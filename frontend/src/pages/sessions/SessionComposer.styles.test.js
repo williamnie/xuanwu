@@ -43,9 +43,10 @@ test('session send clears the draft while the provider request is pending', () =
 test('running stop action is visibly distinct from disabled sending spinner', () => {
   const stopRule = ruleFor('.session-composer-circle.stop');
   assert.match(source, /className="session-composer-circle stop"/);
-  assert.match(stopRule, /animation:\s*composer-stop-pulse/);
+  assert.doesNotMatch(stopRule, /animation:/);
   assert.match(stopRule, /background:\s*var\(--error\)/);
-  assert.match(css, /@keyframes composer-stop-pulse/);
+  assert.match(stopRule, /color:\s*var\(--button-primary-fg\)/);
+  assert.doesNotMatch(css, /@keyframes composer-stop-pulse/);
 });
 
 

@@ -395,52 +395,6 @@
   border-color: var(--border-color);
   color: var(--text-secondary);
 }
-
-.approval-card,
-[data-theme="dark"] .approval-card {
-  background: var(--panel-gradient);
-  border-color: var(--border-color);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-}
-.approval-header h3,
-[data-theme="dark"] .approval-header h3,
-.approval-command pre,
-[data-theme="dark"] .approval-command pre { color: var(--text-primary); }
-.approval-header p { color: var(--text-muted); }
-.approval-reason,
-.approval-command,
-.approval-paths,
-.approval-meta,
-[data-theme="dark"] .approval-reason,
-[data-theme="dark"] .approval-command,
-[data-theme="dark"] .approval-paths,
-[data-theme="dark"] .approval-meta {
-  background: var(--bg-secondary);
-  border-color: var(--border-light);
-  border-radius: var(--radius-md);
-}
-.approval-mark { background: var(--warning-bg); border-radius: var(--radius-md); color: var(--warning); }
-.approval-paths code,
-.approval-meta code { color: var(--text-secondary); }
-.approval-btn { border-radius: var(--button-radius); box-shadow: none; letter-spacing: 0.025em; text-transform: uppercase; }
-.approval-btn.primary { background: var(--button-primary-bg); border-color: var(--button-primary-bg); color: var(--button-primary-fg); }
-.approval-btn.secondary { background: var(--warning-bg); border-color: color-mix(in srgb, var(--warning) 24%, var(--border-color)); color: var(--warning); }
-.approval-btn.ghost { border-color: var(--border-color); color: var(--text-secondary); }
-
-.session-command-panel {
-  background: color-mix(in srgb, var(--info) 7%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--info) 24%, var(--border-color));
-  border-radius: var(--radius-md);
-}
-.session-command-panel.danger {
-  background: color-mix(in srgb, var(--warning) 8%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--warning) 28%, var(--border-color));
-}
-.session-command-icon { background: var(--info-bg); color: var(--info); }
-.session-command-chip,
-.session-command-cancel { background: var(--bg-secondary); }
-.session-command-execute { background: var(--button-primary-bg); color: var(--button-primary-fg); }
 .session-command-history { background: var(--surface-tint); border-color: var(--border-light); border-radius: var(--radius-md); }
 .session-command-history-card { background: var(--surface-raised); border-radius: var(--radius-sm); }
 
@@ -466,7 +420,6 @@
 button:not(.composer-circle-submit):not(.session-composer-circle),
 .btn,
 .approval-btn,
-.session-command-chip,
 .session-command-cancel,
 .session-command-execute {
   border-radius: var(--button-radius) !important;

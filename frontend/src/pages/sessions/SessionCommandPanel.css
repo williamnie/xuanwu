@@ -3,15 +3,10 @@
   gap: 12px;
   justify-content: space-between;
   padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--primary-glow), var(--bg-secondary));
   color: var(--text-primary);
-}
-
-.session-command-panel.danger {
-  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
-  background: linear-gradient(135deg, var(--warning-bg), var(--bg-secondary));
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
 }
 
 .session-command-main {
@@ -60,45 +55,55 @@
 
 .session-command-chip {
   padding: 3px 8px;
-  background: var(--nav-hover);
   color: var(--text-secondary);
-  font-size: 0.74rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 24%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
+  overflow-wrap: anywhere;
 }
 
 .session-command-chip.warning {
   color: var(--warning);
   background: var(--warning-bg);
+  border-color: color-mix(in srgb, var(--warning) 24%, transparent);
 }
 
 .session-command-actions {
   gap: 8px;
-  align-self: start;
   flex-shrink: 0;
+  align-self: stretch;
 }
 
 .session-command-actions button {
-  border: 0;
-  border-radius: var(--radius-xs);
-  padding: 7px 11px;
-  font-size: 0.76rem;
   cursor: pointer;
+  height: var(--button-height);
+  border: 1px solid transparent;
+  border-radius: var(--button-radius);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 0 12px;
 }
 
-.session-command-cancel {
+.session-command-actions .session-command-cancel {
   display: inline-flex;
   gap: 4px;
   align-items: center;
-  background: var(--nav-hover);
   color: var(--text-secondary);
+  background: transparent;
+  border-color: var(--border-color);
 }
 
 .session-command-execute {
   display: inline-flex;
   gap: 5px;
   align-items: center;
-  background: var(--primary);
   color: var(--button-primary-fg);
+  background: var(--button-primary-bg);
 }
 
 .session-command-actions button:disabled {
@@ -115,15 +120,25 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  padding: 8px 10px;
-  border-radius: var(--radius-md);
-  background: var(--success-bg);
   color: var(--text-secondary);
   font-size: 0.78rem;
+  padding: 8px 0 0;
+  border-radius: 0;
+  border-top: 1px solid var(--border-light);
+  background: transparent;
 }
 
 .session-command-result strong {
-  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--success);
+  border: 1px solid color-mix(in srgb, var(--success) 24%, transparent);
+  border-radius: var(--radius-xs);
+  background: var(--success-bg);
+  padding: 4px 6px;
 }
 
 @media (max-width: 760px) {
@@ -133,3 +148,9 @@
     align-items: stretch;
   }
 }
+
+.session-command-title-row strong { font-size: 0.95rem; }
+
+.session-command-cancel:hover:not(:disabled) { background: var(--nav-hover); border-color: var(--border-color-hover); }
+
+.session-command-execute:hover:not(:disabled) { background: var(--primary-hover); }

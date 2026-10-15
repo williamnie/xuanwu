@@ -118,7 +118,6 @@
 }
 
 .session-composer-circle.stop {
-  animation: composer-stop-pulse 1.5s ease-in-out infinite;
   background: var(--error);
   border-color: var(--error);
   color: var(--button-primary-fg);
@@ -127,23 +126,11 @@
 .session-composer-circle.stop:hover:not(:disabled) {
   background: var(--error);
   border-color: var(--error);
-  filter: brightness(1.08);
 }
 
 .session-composer-circle.stop:disabled {
   animation: none;
   opacity: 0.55;
-}
-
-@keyframes composer-stop-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 2px var(--error-glow);
-  }
-
-  50% {
-    box-shadow: 0 0 0 5px var(--error-bg);
-  }
 }
 
 /* 运行中发送行为开关 */
@@ -219,9 +206,9 @@
 .session-message-queue-badge {
   color: var(--info);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -274,14 +261,15 @@
   gap: 7px;
   margin-bottom: 8px;
   border: 1px solid color-mix(in srgb, var(--info) 24%, transparent);
-  border-radius: var(--radius-sm);
   padding: 6px 10px;
   background: var(--info-bg);
   color: var(--info);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: var(--radius-xs);
 }
 
 .session-interrupt-status.success {

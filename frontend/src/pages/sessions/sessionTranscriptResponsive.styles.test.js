@@ -89,7 +89,7 @@ test('provider transcript restores the design message anatomy and square tool su
   assert.match(toolTriggerRule, /width:\s*100%/);
   assert.match(toolTextRule, /text-overflow:\s*ellipsis/);
   assert.match(toolTextRule, /white-space:\s*nowrap/);
-  assert.match(terminalRule, /background:\s*var\(--bg-terminal\)/);
+  assert.match(terminalRule, /background:\s*var\(--terminal-bg\)/);
   assert.match(terminalRule, /max-width:\s*none/);
 });
 
