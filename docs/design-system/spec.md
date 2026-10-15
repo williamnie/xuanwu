@@ -402,30 +402,35 @@
 提交前端改动前逐条自查：
 
 - [ ] 所有颜色/圆角/字号/间距均来自 `tokens.css` 变量，无硬编码。
-- [ ] 按钮直角；组件圆角 ≤ 6px（气泡/输入器 10px）；无胶囊。
+- [x] 按钮直角；组件圆角 ≤ 6px（气泡/输入器 10px）；无胶囊。
 - [ ] 所有标签/徽标/元数据为 mono + 大写 + 宽字距。
 - [ ] 页面只有一处主色实底强调；主按钮浅主题墨青底白字、深主题电光墨青底黑字；无外发光。
 - [x] 区块分割用 1px 细线，没有色块堆叠。
-- [ ] 动效 ≤180ms 且仅 opacity/transform/颜色；loading 用转圈或脉冲点。
-- [ ] 图标全部 lucide、stroke 2、规范尺寸。
-- [ ] 明暗两主题均目检通过（对照 `examples/index.html`）。
+- [x] 动效 ≤180ms 且仅 opacity/transform/颜色；loading 用转圈或脉冲点。
+- [x] 图标全部 lucide、stroke 2、规范尺寸。
+- [x] 明暗两主题均目检通过（对照 `examples/index.html`）。
 - [x] 移动端 760px 下单列、几何语言不变。
 
 
 ### 11.1 验收证据与保留项（2026-10-14）
 
-以上保留原验收条文，不因测试覆盖有限而降低要求。当前自动检查为 `Global.styles.test.js`、`Sessions.styles.test.js` 及组件样式 / 交互测试；第三轮完整前端测试 735 pass / 0 fail，lint、build 和 `git diff --check` 通过。
+当前为 **6/9**，保留原验收条文，不因覆盖有限而降低要求。第四轮完整前端测试 **742 pass / 0 fail**（177 个文件），lint、build、`git diff --check` 通过。自动合同由 `Global.styles.test.js`、`Global.inlineStyles.test.js`、`Sessions.styles.test.js` 与组件测试共同覆盖。
 
-已勾选的细线分割与 760px 布局，依据会话 / 终端 / 审批 / 命令面板、任务列表 / 看板 / 详情、项目、编辑器 / Toast 的两轮截图，以及本轮项目和输入器真实页面截图。全局样式测试同时禁止渐变卡片、硬编码 CSS 颜色、>10px 圆角和未列明的圆形例外。证据目录：`/tmp/xuanwu-session-styles/`、`/tmp/xuanwu-global-styles/`、`/tmp/xuanwu-round3/`。
-
-第三轮 `projects-*`、`filtered-tasks-*`、`session-*`、`run-conversation-*`、`settings-composer-*` 各覆盖 light / dark × 980 / 760；对应 `.txt` 保存布局与发送按钮命中检测。全局浮窗在页面输入器出现时让位，在任务与设置页仍可展开，草稿跨页保留；这些通过项不等于以下全站条款全部满足。
-
-| 未勾选条款 | 当前证据及缺口 |
+| 已验收条款 | 证据 |
 |---|---|
-| 颜色 / 圆角 / 字号 / 间距全部来自变量 | CSS 颜色与令牌来源一致性已通过全局测试，但字号与间距仍大量使用数值，未满足本条“均来自变量”的完整要求；JSX 内联样式也未做全量合同扫描 |
-| 按钮直角、非气泡 / 输入器组件 ≤6px | 测试已约束最大 10px 与圆形白名单，但 `PiMemoryPanel.css` 的记忆卡和 `CodeAgentsPanel.css` 的工具选择器仍引用 `--radius-lg`；尚未完成非输入器 10px 用法核查 |
-| 所有标签 / 徽标 / 元数据 mono + 大写 + 宽字距 | 会话微标签已有样式断言；项目状态等组件仍有普通字体 / 大小写元数据，尚无全站逐项证明 |
-| 一个视口仅一处主色实底强调 | 主按钮双主题配色与无模糊外发光已验证；执行记录选中的 Coding Tool Tab 与发送按钮仍同时使用主色实底，不能勾选整条 |
-| 动效 ≤180ms 且仅规定属性 | 全局浮窗仍有 `left 0.3s` 过渡，其他组件尚未全量核查；不修改本条或第 6 节允许的场景定义来凑通过 |
-| 图标全部 lucide、stroke 2、规范尺寸 | 本轮新增链接使用 lucide 13px；已有项目操作图标仍有 `stroke-width: 2.25`，全站尺寸与描边未完整验证 |
-| 双主题目检通过并对照 examples/index.html | 真实页面浅深主题在 980 / 760 均已检查；参考页第 203 行 textarea 的 placeholder 缺少闭合引号 / 起始标签结束符，后续 footer 和主题脚本被解析进 textarea，完整组件对照尚未完成。现场证据：`/tmp/xuanwu-round3/spec-example-composer-malformed.png`、`spec-example-limitation.txt` |
+| 圆角与按钮几何 | 非气泡 / 输入器的 `--radius-lg` 已迁移到 `--radius-md`；数值圆角只保留 0 与明确圆形例外；全局测试精确限制 6 组大圆角选择器，圆形白名单不可隐式扩展。真实页面可见按钮圆角检测通过 |
+| 细线分割 | 延续前三轮证据；本轮任务、运行、设置分区仍使用中性底和 1px 边框，测试禁止渐变卡片与外发光 |
+| 动效 | 全量 CSS 扫描只允许 ≤180ms 的 opacity / transform / 颜色过渡；删除 left / width / scale 等动效。循环动画精确白名单只含 1s spinner、1.4s running pulse；品牌加载器为静态图标加标准 spinner。参考组件入场同步为 180ms |
+| 图标 | JSX 全量检查 lucide 导入、13 / 14 / 15 / 16 / 34px 尺寸及 stroke 2；CSS 描边同查，按钮图标为 14px。真实页面检测所有可见 lucide 的计算尺寸；无彩色实心闪电 |
+| 双主题与参考页 | 示例页 textarea 和字体 URL 转义修复，html5lib 全页解析 0 错误。参考 Tab 同步中性底 + 2px 下划线；换新本地端口复核以排除浏览器旧 CSS 缓存。参考页完整 light / dark × 980 / 760 截图与真实页逐项对照 |
+| 760px 几何 | 首页、任务列表 / 看板 / 详情、执行记录 Coding Tool、会话、项目与设置各分区 light / dark × 980 / 760 检查；高级六节另行展开检查。无页面横向溢出，发送按钮命中通过；看板保留其既有容器内横向滚动 |
+
+证据目录：`/tmp/xuanwu-round4/`。`home-*`、`tasks-list-*`、`tasks-board-*`、`task-detail-*`、`run-conversation-*`、`session-*`、`projects-*`、`settings-*` 和 `global-composer-*` 含原始截图、`.txt` 布局 / 发送按钮命中、`*-audit.json` 可见主按钮 / 图标 / 圆角检测；`example-*-full.png` 是参考页全页截图，`example-html-validation.json` 是 HTML 解析结果。早期加载态截图已以加载完成截图替换；加载器本身也做了目检。没有发送消息、点击实际审批 / 命令或保存配置。
+
+| 未勾选条款 | 已完成与真实剩余 |
+|---|---|
+| 颜色 / 圆角 / 字号 / 间距全部来自变量 | 颜色与圆角已全量约束，JSX 的 7 处内联仅为动态宽高或菜单定位，按精确表达式白名单。CSS 仍有 1,062 处字号与 2,179 处间距数值声明；合法固定档也尚未满足“全部引用变量”。逐文件和值频率审计为 `numeric-audit.md` / `numeric-declarations.json`。用户已要求继续分批迁移，先确认令牌档位提案，再同步规范 / tokens / 测试 |
+| 所有标签 / 徽标 / 元数据统一排版 | 109 个字段 / 徽标 / 元数据选择器汇入 `components/Metadata.css`，统一 mono + uppercase + .08em，移除重复覆盖并增加合同测试；项目状态、任务与运行元数据、设置连接标签已补齐。高级记忆的 `pi-memory-panel__small-field` 等原生表单标签仍未全量纳入；代码载荷与可编辑值应保留原样，需要按语义逐项区分，不能用全局 `label` 大写覆盖来凑通过 |
+| 一个视口仅一处主色实底强调 | Coding Tool / 设置 / 语言 Tab 已改中性底加下划线；展开全局输入器时页面主按钮让为次按钮，Runs / Chat 的新建入口同样让位；MCP 扫描与助手运行偏好保存改次按钮。当前采集视口均 ≤1 个主色实底按钮。多高级面板同时展开、多个审核卡及部分表单有效 / OAuth 状态组合未穷尽，整条继续保留未勾 |
+
+白名单边界：大圆角仅 6 组气泡 / composer 选择器；50% 仅状态点、中性指示点、spinner 与 composer 提交钮；15 个循环动画选择器加 1 处执行摘要 spinner 时长覆盖。JSX 内联为 3 处数据进度宽度、2 处编辑器 minHeight、1 处看板列数宽度、1 处浮层坐标（定位函数也检查）。未新增 rgba / hex 颜色例外；字体 / 间距固定值不以宽泛白名单宣称完成，留待已授权的三批迁移。
