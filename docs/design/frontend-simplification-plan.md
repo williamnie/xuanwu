@@ -667,7 +667,18 @@ F1 前端验收记录（2026-10-15，本次提交）：AI 连接 / 首次引导�
 
 #### F2 任务卡住原因
 
-合同在 F1 完成后补写（需先核实调度器的冷却、项目并发、工作区占用等事实来源）。
+**现状（待核实）**：调度入口 `runner/projectLoop.ts` 的 `projectLoopDecision` 依次判断项目暂停（`projects.hold`）、未开自动执行（`projects.auto_run`）、依赖未就绪（`peekNextReadyIssue` + `domain/work/issueDependency.ts`）、编程工具不可用（`issueProviderAvailable` → provider `runtimeStatus().ready`）；只对队首任务写 `issue.runner_scope_decision` 事件。全局并发由 `projectLoopManager.ts` 的 `maxParallelProjects` 与 `countActiveExecutorWork` 控制，单项目占用见 `hasActiveExecutorWorkForProject` / `countActiveExecutorWorkForProject`。自动重试退避在 `issues.auto_retry_next_at`。工作区等待（`domain/review/workspaceWait.ts`）作用于 `needs_user` 恢复，不属于排队任务。依赖诊断已可按项目批量读取（`readProjectIssueDependencies`）。`/api/works` 列表目前没有任何调度投影。
+
+| 项 | 合同 |
+|---|---|
+| 范围 | 只对“等待执行”的任务给出投影（以核实后的状态集合为准，至少包括已入队未开始的状态），其他状态不返回该字段或为 null |
+| 字段 | `/api/works` 列表项和 `/api/works/:id` 详情新增只读 `schedule`：`{ state: "runnable" \| "waiting", reasons: [{ code, detail? }] }`。`reasons` 按调度器实际判断顺序排列，可多条。code 只取下列事实：`project_hold`、`auto_run_off`、`dependency_waiting`（附 root_blockers 的 work_id / 标题 / 状态，复用依赖诊断）、`dependency_failed` / `dependency_missing` / `dependency_cycle` / `readiness_waiting`（映射依赖诊断原 reason）、`provider_unavailable`（附 provider id 与现有 readiness 原因类别）、`retry_backoff`（附 `auto_retry_next_at`）、`project_busy`（该项目已有执行中的任务）、`capacity_full`（全局并发已满）。没有任何原因时 `state=runnable`，含义是“满足调度条件、等待调度循环”，不承诺立即开始 |
+| 同源 | 判定必须复用调度器的同一批函数或抽出的纯判定函数，不能在 API 里另写一套规则；跨模块测试断言：同一夹具下，调度器对队首任务的 `projectLoopDecision.reason` 与该任务 `schedule.reasons[0]` 一致 |
+| 性能 | 每页批量计算：项目、依赖诊断按页内涉及的项目各读一次，provider 状态读一次，全局并发计数读一次；禁止逐行查询。看板接口同样带该字段时遵循相同批量规则，报告 200 条排队任务的耗时 |
+| 只读 | 不写库、不写审计、不写 `issue.runner_scope_decision`；不调用 `PUT /api/works/:id/readiness-requirements`；不触发调度 |
+| 前端 | 任务列表行、看板卡片、任务详情常驻状态区、首页“执行中”里的排队任务显示第一条原因的短文案（如“等待依赖：xxx”“项目已暂停”“编程工具未就绪”“等待重试 · 10:32”“项目已有任务在执行”“并发已满”），详情里列出全部原因；依赖原因可点击跳到阻塞任务。替换 C1 里分散的部分事实显示，不重复显示。文案用第 4 节术语 |
+
+验收：后端测试覆盖每个 code、多原因排序、与调度器决策一致、批量查询（无逐行查询，可用查询计数断言）、query-only 无写入、能力清单 / readApiContract 快照；前端测试覆盖文案映射与点击跳转；页面检查浅 / 深 × 980 / 760 / 680，状态用临时夹具。
 
 ## 9. 待确认事项
 
