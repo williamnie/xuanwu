@@ -195,3 +195,21 @@
   animation: none;
 }
 .page-navigation-status { position: fixed; z-index: 100; top: 12px; right: 20px; padding: 8px 12px; color: var(--text-secondary); background: var(--surface-overlay); border: 1px solid var(--border-color); font-size: .72rem; pointer-events: none; }
+
+/* Spec 0 / 5.2: an open composer owns the single solid primary action.
+   The page action stays available as a secondary button while that input is shown. */
+.main-content:not(:has(.prompt-editor-shell.composer)):has(~ .global-ask-composer-shell.expanded) .btn-primary,
+.runs-page-shell:has(.prompt-editor-shell.composer) .runs-new-session-button,
+.pi-chat-page:has(.prompt-editor-shell.composer) .sidebar-shortcut-item.pi-chat-new-button {
+  background: var(--button-secondary-bg);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.main-content:not(:has(.prompt-editor-shell.composer)):has(~ .global-ask-composer-shell.expanded) .btn-primary:hover:not(:disabled),
+.runs-page-shell:has(.prompt-editor-shell.composer) .runs-new-session-button:hover,
+.pi-chat-page:has(.prompt-editor-shell.composer) .sidebar-shortcut-item.pi-chat-new-button:hover:not(:disabled) {
+  background: var(--nav-hover);
+  border-color: var(--border-color-hover);
+  color: var(--text-primary);
+}

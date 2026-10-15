@@ -276,3 +276,16 @@ test('shared metadata roles use mono, uppercase and wide tracking', () => {
     }
   }
 });
+
+test('visible composers reserve solid primary emphasis for the send action', () => {
+  const css = styles['App.css'];
+  for (const selector of [
+    '.main-content:not(:has(.prompt-editor-shell.composer)):has(~ .global-ask-composer-shell.expanded) .btn-primary',
+    '.runs-page-shell:has(.prompt-editor-shell.composer) .runs-new-session-button',
+    '.pi-chat-page:has(.prompt-editor-shell.composer) .sidebar-shortcut-item.pi-chat-new-button',
+  ]) {
+    const rule = rules(css).find(rule => rule.selector.includes(selector) && !rule.selector.includes(':hover'));
+    assert.match(rule.body, /background: var\(--button-secondary-bg\)/, selector);
+    assert.match(rule.body, /color: var\(--text-primary\)/, selector);
+  }
+});
