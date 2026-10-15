@@ -73,7 +73,7 @@
   cursor: pointer;
   text-align: left;
   border-radius: var(--radius-sm);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
   gap: 8px;
 }
 
@@ -135,7 +135,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
-  transition: all 0.15s ease;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .session-item-row:hover {
@@ -582,7 +582,7 @@
   gap: 16px;
   min-width: 0;
   max-width: 100%;
-  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: slideDown 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .turn-container.active-live {
@@ -603,6 +603,10 @@
   align-self: flex-end;
   flex-direction: row-reverse;
   max-width: min(100%, 80%);
+  background: var(--primary-glow);
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  border-radius: var(--radius-lg);
+  padding: 12px 18px;
 }
 
 .chat-bubble-container.user .chat-bubble-content {
@@ -627,8 +631,6 @@
 }
 
 .chat-bubble-avatar {
-  width: 28px;
-  height: 28px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -639,6 +641,8 @@
   box-shadow: none;
   background: var(--nav-hover);
   color: var(--text-secondary);
+  height: 26px;
+  width: 26px;
 }
 
 .chat-bubble-container.user .chat-bubble-avatar {
@@ -661,40 +665,31 @@
 }
 
 .chat-bubble-sender {
-  font-size: 0.76rem;
-  font-weight: 600;
   color: var(--text-muted);
-  letter-spacing: 0.02em;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .chat-bubble-body {
   min-width: 0;
   max-width: 100%;
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  padding: 4px 0 !important;
-  box-shadow: none !important;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 4px 0;
+  box-shadow: none;
   overflow-wrap: anywhere;
+  color: var(--text-primary);
 }
 
 .chat-bubble-container.user .chat-bubble-body {
-  background-color: var(--primary-glow) !important;
-  border-radius: var(--radius-lg) !important;
-  padding: 12px 18px !important;
-  color: var(--text-primary) !important;
-  box-shadow: none !important;
-  border: 1px solid var(--border-color) !important;
   overflow-wrap: anywhere;
   word-break: break-word;
+  padding: 0;
 }
-
-.chat-bubble-container.agent .chat-bubble-body {
-  background: transparent !important;
-  border: none !important;
-}
-
-/* Streaming Badge */
 
 .live-reasoning-card {
   max-width: 760px;
@@ -779,7 +774,7 @@
 }
 
 .session-markdown pre code {
-  background: transparent !important;
+  background: transparent;
   color: var(--terminal-text);
   padding: 0;
   font-size: 0.8rem;
@@ -810,7 +805,7 @@
   width: fit-content;
   max-width: 100%;
   gap: 12px;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
   background: var(--surface-raised);
   box-shadow: none;
 }

@@ -78,10 +78,11 @@ test('provider transcript restores the design message anatomy and square tool su
   const toolTextRule = lastRuleFor(clientCss, '.client-chat-area .tools-trigger-text');
   const terminalRule = lastRuleFor(clientCss, '.client-chat-area .terminal-window');
 
-  assert.match(userMessageRule, /background:\s*var\(--message-user\)/);
-  assert.match(userMessageRule, /border:\s*1px solid var\(--message-user-border\)/);
-  assert.match(userMessageRule, /border-radius:\s*0/);
-  assert.match(userMessageRule, /max-width:\s*min\(780px,\s*88%\)/);
+  const userSurfaceRule = ruleFor(sessionsCss, '.chat-bubble-container.user');
+  assert.match(userSurfaceRule, /background:\s*var\(--primary-glow\)/);
+  assert.match(userSurfaceRule, /border-radius:\s*var\(--radius-lg\)/);
+  assert.match(userSurfaceRule, /max-width:\s*min\(100%,\s*80%\)/);
+  assert.doesNotMatch(userMessageRule, /background:|border-radius:|max-width:/);
   assert.match(providerMessageRule, /width:\s*min\(820px,\s*96%\)/);
   assert.match(messageAvatarRule, /height:\s*26px/);
   assert.match(messageAvatarRule, /width:\s*26px/);
