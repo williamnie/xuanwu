@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ArrowUpRight, BellRing, Bot, Check, CheckCircle2, Clock3, History, MapPin, RefreshCw, ShieldCheck, ShieldX, TimerReset, Wrench, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, ArrowUpRight, Bot, Check, CheckCircle2, Clock3, History, MapPin, RefreshCw, ShieldCheck, ShieldX, TimerReset, Wrench, X } from 'lucide-react';
 import { commandCenterApi } from '../../api/commandCenter.js';
 import { eventsApi } from '../../api/events.js';
-import { message as toast } from '../../store/toastStore.js';
-import { ATTENTION_PRIORITIES, attentionActionPayload, attentionView, groupAttentionByPriority } from './attentionModel.js';
+import { useI18n } from '../../i18n/context.js';
+import { attentionView } from './attentionModel.js';
 import './AttentionSection.css';
 
 const REFRESH_INTERVAL_MS = 30_000;
@@ -12,9 +12,7 @@ export default function AttentionSection() {
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState('');
-  const [approval, setApproval] = useState({ detail: null, error: '', loading: false });
-  const [typeFilter, setTypeFilter] = useState('');
+  const { t } = useI18n();
   const requestRef = useRef(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
@@ -70,153 +68,53 @@ export default function AttentionSection() {
     };
   }, [load]);
 
-  const items = useMemo(() => summary?.section?.items || [], [summary]);
-  const filteredItems = useMemo(() => typeFilter ? items.filter(item => item.type === typeFilter) : items, [items, typeFilter]);
-  const pushedApprovals = useMemo(() => filteredItems.filter(isPushedApproval), [filteredItems]);
-  const primaryItems = useMemo(() => filteredItems.filter(item => !isPushedApproval(item)), [filteredItems]);
-  const groups = useMemo(() => groupAttentionByPriority(primaryItems), [primaryItems]);
-  const submit = async (item, action) => {
-    if (submitting) return;
-    setSubmitting(`${item.id}:${action}`);
-    try {
-      await commandCenterApi.controlAttention(item.id, action, attentionActionPayload(item, action));
-      toast.success(action === 'acknowledge' ? 'Attention 已确认并记录审计' : 'Attention 已暂停 1 小时并记录审计');
-      await load({ silent: true });
-    } catch (actionError) {
-      toast.error(actionError.message || 'Attention 操作失败');
-    } finally {
-      setSubmitting('');
-    }
-  };
-
-  const reviewApproval = async item => {
-    setApproval({ detail: null, error: '', loading: true });
-    try {
-      setApproval({ detail: await commandCenterApi.getAttention(item.id), error: '', loading: false });
-    } catch (reviewError) {
-      setApproval({ detail: null, error: reviewError.message || '读取 Approval 失败', loading: false });
-    }
-  };
-  const resolveApproval = async (decision, target) => {
-    if (!approval.detail || submitting) return;
-    setSubmitting(`${target.ref}:${decision}`);
-    try {
-      await commandCenterApi.controlAttention(approval.detail.attention.id, decision, {
-        actor: 'frontend:user',
-        decision_ref: target.ref,
-        reason: `Dashboard user ${decision}d ${target.kind}`,
-        scope: 'turn',
-      });
-      toast.success(decision === 'approve_always'
-        ? '当前项目持续授权已记录，本次动作已进入执行链'
-        : decision === 'approve' ? 'Decision 已批准并进入唯一 Action Gate 执行链' : 'Decision 已拒绝并记录审计');
-      setApproval({ detail: null, error: '', loading: false });
-      await load({ silent: true });
-    } catch (resolveError) {
-      toast.error(resolveError.message || 'Approval 操作失败');
-    } finally { setSubmitting(''); }
-  };
-
-  return (
-    <section className="attention-section e2b-terminal-window" aria-busy={loading}>
-      <div className="e2b-window-header">
-        <div className="e2b-window-dots">
-          <span className="e2b-dot red" />
-          <span className="e2b-dot yellow" />
-          <span className="e2b-dot green" />
-        </div>
-        <div className="e2b-window-title">
-          <span className="e2b-window-tag">02 ATTENTION_MONITOR</span>
-        </div>
-        <div className="e2b-window-meta">
-          <span className="e2b-meta-code font-mono">[LOG: AUDIT_TRAIL]</span>
-        </div>
-      </div>
-      <header className="attention-section-header">
-        <div>
-          <div className="attention-section-kicker"><BellRing size={15} /> APPROVALS</div>
-          <h3>审批与系统事项</h3>
-          <p>来自审批和系统告警，最多显示 25 条；任务的验收与确认在上方“待你处理”。</p>
-        </div>
-        <div className="attention-section-header-actions">
-          <select aria-label="待处理事项类型" className="attention-type-filter" onChange={event => setTypeFilter(event.target.value)} value={typeFilter}>
-            <option value="">全部类型</option><option value="approval_required">等待审批</option><option value="failure">失败</option>
-            <option value="blocker">阻塞</option><option value="input_required">等待输入</option><option value="verification_required">待验收</option><option value="connection_issue">连接异常</option>
-          </select>
-          {summary?.section?.freshness?.is_stale ? <span className="attention-freshness"><AlertTriangle size={13} /> 数据可能过期</span> : null}
-          <span className="attention-count">{summary?.section?.counts?.total ?? items.length}</span>
-          <button aria-label="刷新待处理事项" disabled={loading} onClick={() => load()} type="button"><RefreshCw className={loading ? 'is-spinning' : ''} size={15} /></button>
-        </div>
-      </header>
-
-
-      {error ? <State error={error} onRetry={() => load()} /> : loading && !summary ? <State loading /> : filteredItems.length === 0 ? <State filtered={Boolean(typeFilter)} /> : (
-        <><div className="attention-priority-groups">
-          {ATTENTION_PRIORITIES.map(priority => groups[priority].length > 0 ? (
-            <div className="attention-priority-group" data-priority={priority} key={priority}>
-              <div className="attention-priority-heading"><strong>{priority.toUpperCase()}</strong><span>{groups[priority].length} 项</span></div>
-              {groups[priority].map(item => <AttentionCard item={item} key={item.id} onReviewApproval={reviewApproval} onSubmit={submit} submitting={submitting} />)}
-            </div>
-          ) : null)}
-        </div><PushedApprovalFallback items={pushedApprovals} onReviewApproval={reviewApproval} onSubmit={submit} submitting={submitting} /></>
-      )}
-      {!error && summary ? <details className="dashboard-operations"><summary>玄武自动维护记录</summary><PiOperationsSummary operations={summary.section.operations} recentHistory={summary.section.recent_history} /></details> : null}
-      {approval.loading || approval.error || approval.detail ? <ApprovalDetail approval={approval} onClose={() => setApproval({ detail: null, error: '', loading: false })} onResolve={resolveApproval} submitting={submitting} /> : null}
-    </section>
-  );
+  return <section className="attention-section e2b-terminal-window" aria-busy={loading}>
+    <header className="attention-section-header">
+      <div><div className="attention-section-kicker"><Bot size={15} /> OPERATIONS</div><h3>{t('inbox.operations')}</h3><p>{t('inbox.operationsDetail')}</p></div>
+      <div className="attention-section-header-actions"><button aria-label={t('inbox.refreshOperations')} disabled={loading} onClick={() => load()} type="button"><RefreshCw className={loading ? 'is-spinning' : ''} size={15} /></button></div>
+    </header>
+    {error ? <State error={error} onRetry={() => load()} /> : loading && !summary ? <State loading /> : null}
+    {summary ? <PiOperationsSummary operations={summary.section.operations} recentHistory={summary.section.recent_history} /> : null}
+  </section>;
 }
 
-function isPushedApproval(item) {
-  const delivery = item?.details?.notification?.delivery;
-  return item?.type === 'approval_required' && delivery === 'sent';
-}
-
-function PushedApprovalFallback({ items, onReviewApproval, onSubmit, submitting }) {
-  if (!items.length) return null;
-  return <details className="attention-pushed-approvals">
-    <summary><ShieldCheck size={13} /> 已推送飞书，页面仅保留 {items.length} 条兜底记录</summary>
-    <div>{items.map(item => <AttentionCard item={item} key={item.id} onReviewApproval={onReviewApproval} onSubmit={onSubmit} submitting={submitting} />)}</div>
-  </details>;
-}
-
-function AttentionCard({ item, onReviewApproval, onSubmit, submitting }) {
+export function AttentionCard({ item, onReviewApproval, onSubmit, submitting }) {
+  const { t } = useI18n();
   const view = attentionView(item);
   const details = item.details || {};
   const pending = (action) => submitting === `${item.id}:${action}`;
-  return <article className={`attention-card ${view.tone}`}>
-    <div className="attention-card-topline"><span>{view.typeLabel}</span><span>{details.state_label || view.statusLabel}</span></div>
-    <strong>{details.title || item.summary}</strong>
-    <p>{details.description || view.actionLabel}</p>
-    {details.diagnostic && details.diagnostic !== details.title ? <code className="attention-card-diagnostic">{details.diagnostic}</code> : null}
-    <div className="attention-card-facts">
-      <span><MapPin size={13} />{details.location || 'Runner 系统'}</span>
-      <span><Clock3 size={13} />首次 {formatTime(details.first_seen_at || item.created_at)}</span>
-      <span><Wrench size={13} />来源 {details.component || details.source || 'Attention'}</span>
+  return <article className="ds-request-card" data-tone={item.type === 'failure' ? 'error' : 'warning'}>
+    <span className="dot" />
+    <div className="attention-request-content">
+      <div className="kind">{view.typeLabel} · {details.state_label || view.statusLabel}</div>
+      <div className="title">{details.title || item.summary}</div>
+      <div className="detail">{details.description || view.actionLabel}</div>
+      {details.notification?.delivery === 'sent' ? <div className="detail">{t('inbox.sent')}</div> : null}
+      <details className="attention-request-facts"><summary>{t('inbox.details')}</summary>
+        {details.diagnostic && details.diagnostic !== details.title ? <code className="attention-card-diagnostic">{details.diagnostic}</code> : null}
+        <div className="attention-card-facts"><span><MapPin size={13} />{details.location || 'Runner'}</span><span><Clock3 size={13} />{formatTime(details.first_seen_at || item.created_at)}</span><span><Wrench size={13} />{details.component || details.source || 'Attention'}</span></div>
+        <div className="detail">{t('inbox.nextAction')}：{details.user_action || view.actionLabel}</div>
+        {details.pi_action ? <div className="detail">{t('inbox.assistantAction')}：{details.pi_action}</div> : null}
+      </details>
     </div>
-    <div className="attention-card-next"><strong>需要你做什么</strong><span>{details.user_action || view.actionLabel}</span></div>
-    {details.pi_action ? <div className="attention-card-pi"><Bot size={14} /><span><strong>玄武已经做的：</strong>{details.pi_action}</span></div> : null}
-    <div className="attention-card-actions">
-      {view.canAcknowledge ? <button disabled={Boolean(submitting)} onClick={() => onSubmit(item, 'acknowledge')} type="button"><Check size={13} /> {pending('acknowledge') ? '提交中…' : '我知道了，不再显示'}</button> : null}
-      {view.canSnooze ? <button disabled={Boolean(submitting)} onClick={() => onSubmit(item, 'snooze')} type="button"><TimerReset size={13} /> {pending('snooze') ? '提交中…' : '稍后提醒'}</button> : null}
-      {item.type === 'approval_required' ? (
-        <button className="open" onClick={() => onReviewApproval(item)} type="button">查看审批 <ShieldCheck size={13} /></button>
-      ) : item.links?.view === '#/attention-inbox' ? (
-        <a className="open" href={item.links?.self} rel="noreferrer noopener" target="_blank">查看来源事实 <ArrowUpRight size={13} /></a>
-      ) : (
-        <a className="open" href={item.links?.self} rel="noreferrer noopener" target="_blank">打开具体来源 <ArrowUpRight size={13} /></a>
-      )}
+    <div className="actions">
+      {view.canAcknowledge ? <button className="btn btn-secondary" disabled={Boolean(submitting)} onClick={() => onSubmit(item, 'acknowledge')} type="button"><Check size={13} />{pending('acknowledge') ? t('inbox.submitting') : t('inbox.acknowledge')}</button> : null}
+      {view.canSnooze ? <button className="btn btn-secondary" disabled={Boolean(submitting)} onClick={() => onSubmit(item, 'snooze')} type="button"><TimerReset size={13} />{pending('snooze') ? t('inbox.submitting') : t('inbox.snooze')}</button> : null}
+      {item.type === 'approval_required' ? <button className="btn btn-secondary" onClick={() => onReviewApproval(item)} type="button">{t('inbox.reviewApproval')} <ShieldCheck size={13} /></button>
+        : <a className="btn btn-secondary" href={item.links?.self} rel="noreferrer noopener" target="_blank">{t('inbox.sourceFacts')} <ArrowUpRight size={13} /></a>}
     </div>
   </article>;
 }
 
 function PiOperationsSummary({ operations, recentHistory }) {
+  const { t } = useI18n();
   const summary = operations?.summary || {};
   const active = operations?.active || [];
   const history = recentHistory || [];
   return <section className="pi-operations-summary">
     <header>
       <div><Bot size={14} /><span><strong>玄武自动运维</strong><small>过去 24 小时</small></span></div>
-      <span className="pi-operations-state"><CheckCircle2 size={14} />{summary.active_user_action_required > 0 ? `${summary.active_user_action_required} 项待你处理` : '无需人工介入'}</span>
+      <span className="pi-operations-state"><CheckCircle2 size={14} />{t('inbox.operationsOnly')}</span>
     </header>
     <div className="pi-operations-metrics">
       <Metric label="发现告警" value={summary.alerts_detected} />
@@ -239,10 +137,11 @@ function formatTime(value) {
   return Number.isFinite(time) ? new Date(time).toLocaleString() : '时间未知';
 }
 
-function ApprovalDetail({ approval, onClose, onResolve, submitting }) {
+export function ApprovalDetail({ approval, onClose, onResolve, submitting }) {
+  const { t } = useI18n();
   const attention = approval.detail?.attention;
   const decisions = approval.detail?.decisions || [];
-  return <section className="approval-detail" aria-live="polite">
+  return <section className="approval-detail" aria-live="polite" aria-label={t('inbox.reviewApproval')} role="dialog" aria-modal="true">
     <header><div><span><ShieldCheck size={14} /> Approval detail</span><h3>{attention?.summary || '审批请求'}</h3></div><button aria-label="关闭审批详情" onClick={onClose} type="button"><X size={16} /></button></header>
     {approval.loading ? <div className="approval-detail-state"><RefreshCw className="is-spinning" size={16} />正在读取审批事实…</div> : approval.error ? <div className="approval-detail-state error"><AlertTriangle size={16} />{approval.error}</div> : <>
       {decisions.map(target => {
@@ -314,8 +213,9 @@ function formatGateExpiry(value) {
   return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : '无独立期限';
 }
 
-function State({ error = '', filtered = false, loading = false, onRetry }) {
-  if (error) return <div className="attention-state error" role="alert"><AlertTriangle size={16} /><span>{error}</span><button onClick={onRetry} type="button">重试</button></div>;
-  if (loading) return <div className="attention-state"><RefreshCw className="is-spinning" size={16} /><strong>正在读取待处理事项…</strong></div>;
-  return <div className="attention-state"><CheckCircle2 size={16} /><strong>{filtered ? '当前筛选下没有事项' : '当前没有待审批或系统事项'}</strong><span>{filtered ? '选择其他类型查看。' : '需要审批的操作和系统告警会出现在这里。'}</span></div>;
+function State({ error = '', loading = false, onRetry }) {
+  const { t } = useI18n();
+  if (error) return <div className="attention-state error" role="alert"><AlertTriangle size={16} /><span>{error}</span><button onClick={onRetry} type="button">{t('inbox.retry')}</button></div>;
+  if (loading) return <div className="attention-state"><RefreshCw className="is-spinning" size={16} /><strong>{t('inbox.loadingOperations')}</strong></div>;
+  return null;
 }

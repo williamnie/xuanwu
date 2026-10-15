@@ -18,10 +18,11 @@ export default function Dashboard({ navigateTo }) {
   const refreshData = useDataStore(selectRefreshData);
   const workSummary = useDataStore(selectWorkSummary);
   const [creating, setCreating] = useState(false);
+  const [inboxSummary, setInboxSummary] = useState(null);
 
   const counts = workSummary?.counts || {};
   const activeLoops = projects.filter(p => p.loop_status === 'running' || p.auto_run === 1).length;
-  const needsAction = (counts.needs_user || 0) + (counts.failed || 0);
+  const needsAction = inboxSummary?.total;
   const running = counts.in_progress || 0;
   const queued = counts.todo || 0;
   const delivered = counts.history || 0;
@@ -57,7 +58,7 @@ export default function Dashboard({ navigateTo }) {
             <span className="dashboard-hud-label">01 待你处理</span>
             <span className={`dashboard-hud-status ${needsAction > 0 ? 'status-amber' : 'status-muted'}`} />
           </div>
-          <div className="dashboard-hud-value">{needsAction}</div>
+          <div className="dashboard-hud-value">{needsAction == null ? '—' : inboxSummary.complete ? needsAction : t('inbox.partialTotal', { count: needsAction })}</div>
           <div className="dashboard-hud-bar">
             <div className="dashboard-hud-progress" />
           </div>
@@ -104,7 +105,7 @@ export default function Dashboard({ navigateTo }) {
         </div>
       </div>
 
-      <TaskRequestsSection navigateTo={navigateTo} onCreate={() => setCreating(true)} />
+      <TaskRequestsSection onSummaryChange={setInboxSummary} navigateTo={navigateTo} onCreate={() => setCreating(true)} />
       <AttentionSection />
       <div className="dashboard-work-grid">
         <ActiveWorkSection limit={5} navigateTo={navigateTo} projects={projects} />

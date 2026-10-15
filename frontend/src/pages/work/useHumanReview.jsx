@@ -6,7 +6,7 @@ import { ReviewDialog } from './HumanReview.jsx';
 
 // 任务人工审核在任务详情和首页共用：同一张卡片、同一个对话框、同一条提交路径
 // （POST human-review-response，携带 review_request_id + review_revision）。
-export function useHumanReview({ onSubmitted } = {}) {
+export function useHumanReview({ onSubmitted, classifyError } = {}) {
   const { t } = useI18n();
   const [pending, setPending] = useState(null);
   const [comment, setComment] = useState('');
@@ -36,8 +36,12 @@ export function useHumanReview({ onSubmitted } = {}) {
       cancel();
       await onSubmitted?.(work);
     } catch (reviewError) {
-      message.error(reviewError.status === 409 ? t('work.reviewStale') : reviewError.message || t('work.reviewFailed'));
-      if (reviewError.status === 409) {
+      const failure = classifyError?.(reviewError) || {
+        invalidated: reviewError.status === 409,
+        message: reviewError.status === 409 ? t('work.reviewStale') : reviewError.message || t('work.reviewFailed'),
+      };
+      message.error(failure.message);
+      if (failure.invalidated) {
         cancel();
         await onSubmitted?.(work);
       }

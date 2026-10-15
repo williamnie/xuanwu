@@ -1,6 +1,11 @@
 import { request } from './base.js';
 
 export const commandCenterApi = {
+  getInbox: ({ limit = 20, cursor } = {}, options = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return request(`/api/command-center/inbox?${params.toString()}`, options);
+  },
   getSummary: ({ limit = 10, sections = [] } = {}, options = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (sections.length > 0) params.set('sections', sections.join(','));
@@ -10,5 +15,5 @@ export const commandCenterApi = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
-  getAttention: (id) => request(`/api/command-center/attention/${encodeURIComponent(id)}`),
+  getAttention: (id, options = {}) => request(`/api/command-center/attention/${encodeURIComponent(id)}`, options),
 };
