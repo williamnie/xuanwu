@@ -3,15 +3,15 @@
   gap: 12px;
   justify-content: space-between;
   padding: 12px;
-  border: 1px solid rgba(59, 130, 246, 0.24);
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(15, 23, 42, 0.03));
+  background: linear-gradient(135deg, var(--primary-glow), var(--bg-secondary));
   color: var(--text-primary);
 }
 
 .session-command-panel.danger {
-  border-color: rgba(245, 158, 11, 0.35);
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.03));
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+  background: linear-gradient(135deg, var(--warning-bg), var(--bg-secondary));
 }
 
 .session-command-main {
@@ -49,8 +49,8 @@
   justify-content: center;
   width: 26px;
   height: 26px;
-  background: rgba(59, 130, 246, 0.14);
-  color: #2563eb;
+  background: var(--primary-glow);
+  color: var(--primary);
 }
 
 .session-command-chips {
@@ -60,15 +60,15 @@
 
 .session-command-chip {
   padding: 3px 8px;
-  background: rgba(15, 23, 42, 0.06);
+  background: var(--nav-hover);
   color: var(--text-secondary);
   font-size: 0.74rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .session-command-chip.warning {
-  color: #b45309;
-  background: rgba(245, 158, 11, 0.16);
+  color: var(--warning);
+  background: var(--warning-bg);
 }
 
 .session-command-actions {
@@ -89,7 +89,7 @@
   display: inline-flex;
   gap: 4px;
   align-items: center;
-  background: rgba(15, 23, 42, 0.06);
+  background: var(--nav-hover);
   color: var(--text-secondary);
 }
 
@@ -98,7 +98,7 @@
   gap: 5px;
   align-items: center;
   background: var(--primary);
-  color: #fff;
+  color: var(--button-primary-fg);
 }
 
 .session-command-actions button:disabled {
@@ -107,7 +107,7 @@
 }
 
 .session-command-error {
-  color: #dc2626;
+  color: var(--error);
   font-size: 0.78rem;
 }
 
@@ -117,7 +117,7 @@
   gap: 2px;
   padding: 8px 10px;
   border-radius: var(--radius-md);
-  background: rgba(16, 185, 129, 0.11);
+  background: var(--success-bg);
   color: var(--text-secondary);
   font-size: 0.78rem;
 }

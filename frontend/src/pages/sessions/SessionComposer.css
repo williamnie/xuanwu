@@ -121,7 +121,7 @@
   animation: composer-stop-pulse 1.5s ease-in-out infinite;
   background: var(--error);
   border-color: var(--error);
-  color: #fff;
+  color: var(--button-primary-fg);
 }
 
 .session-composer-circle.stop:hover:not(:disabled) {
@@ -133,10 +133,6 @@
 .session-composer-circle.stop:disabled {
   animation: none;
   opacity: 0.55;
-}
-
-[data-theme="dark"] .session-composer-circle.stop {
-  color: #25070b;
 }
 
 @keyframes composer-stop-pulse {
