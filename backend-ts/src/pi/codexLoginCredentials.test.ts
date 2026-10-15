@@ -75,19 +75,34 @@ test("unchanged refresh backs off across readers for five minutes, but expiry im
   expect(calls).toBe(3);expect(readFileSync(f.path,"utf8")).toBe(before);
 });
 
-test("failed refresh retains a classified error during backoff, retries after five minutes or expiry", async () => {
+test("failed refresh preserves valid model credentials with a status warning, retries after backoff or expiry", async () => {
   const start=Math.floor(now/1000)*1000;
   const f=fixture("core",start+7*60_000);let clock=start;let calls=0;
   f.binding.refresh=async()=>{calls++;throw new Error("synthetic private provider error");};
   const service=createCodexLoginService({role:"core",binding:()=>f.binding,now:()=>clock});
   const before=readFileSync(f.path,"utf8");
-  for(let i=0;i<10;i++) await expect(service.credentials.read("openai-codex")).rejects.toThrow("codex_login_refresh_failed");
+  for(let i=0;i<10;i++) expect((await service.credentials.read("openai-codex"))?.type).toBe("oauth");
+  expect(service.status()).toMatchObject({available:true,error:"codex_login_refresh_failed"});
+  expect(await service.credentials.list()).toEqual([{providerId:"openai-codex",type:"oauth"}]);
+  const runtime=await ModelRuntime.create({credentials:service.credentials,modelsPath:null,refreshOnCreate:false});
+  expect((await runtime.getAuth("openai-codex"))?.auth.apiKey).toBeDefined();
   expect(calls).toBe(1);
   clock=start+CODEX_REFRESH_BACKOFF_MS;
-  await expect(service.maintain()).rejects.toThrow("codex_login_refresh_failed");expect(calls).toBe(2);
+  expect((await service.maintain()).type).toBe("oauth");expect(calls).toBe(2);
   clock=start+7*60_000;
   await expect(service.credentials.modify("openai-codex",async()=>{throw new Error("pi callback must not run");})).rejects.toThrow("codex_login_refresh_failed");
-  expect(calls).toBe(3);expect(readFileSync(f.path,"utf8")).toBe(before);
+  expect(calls).toBe(3);expect(service.status().available).toBe(false);expect(readFileSync(f.path,"utf8")).toBe(before);
+});
+
+test("refresh failure cannot reuse a removed login or a changed account even before expiry", async () => {
+  const f=fixture("core",now+60_000);
+  f.binding.refresh=async()=>{rmSync(f.path);throw new Error("synthetic network failure");};
+  await expect(f.service.credentials.read("openai-codex")).rejects.toThrow("codex_login_refresh_failed");
+  expect(f.service.status().available).toBe(false);
+  f.write(now+60_000);f.binding.key={};
+  f.binding.refresh=async()=>f.write(now+3_600_000,"another-account");
+  await expect(f.service.credentials.read("openai-codex")).rejects.toThrow("codex_login_account_mismatch");
+  expect(f.service.status().available).toBe(false);
 });
 
 test("external token rotation and a replacement transport do not inherit stale backoff", async () => {

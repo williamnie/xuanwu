@@ -648,7 +648,7 @@ E 阶段沿用 D 阶段的约束：不改认证、端口、权限默认值和已
 
 | 规则 | 合同 |
 |---|---|
-| core 保鲜 / worker 只读 | core 在助手取凭据时检查，且每 10 分钟后台检查已选择 `codex_login` 的登录；access token 剩余不足 30 分钟，调用现有 managed Codex app-server 的 `account/read {refreshToken:true}`，同一 transport 单飞，随后重读并核实真实 expiry 与账号。刷新成功但 access token 未变或刷新失败时，按 transport / home / 当前 token 退避 5 分钟；非过期读取不重复 RPC，已过期立即重试，不受退避限制。worker 不增加内部刷新接口，不自行刷新；过期返回 `codex_login_expired` |
+| core 保鲜 / worker 只读 | core 在助手取凭据时检查，且每 10 分钟后台检查已选择 `codex_login` 的登录；access token 剩余不足 30 分钟，调用现有 managed Codex app-server 的 `account/read {refreshToken:true}`，同一 transport 单飞，随后重读并核实真实 expiry 与账号。刷新成功但 access token 未变或刷新失败时，按 transport / home / 当前 token 退避 5 分钟；非过期读取不重复 RPC；瞬时刷新失败时仍返回未过期且文件 / 绑定未变的凭据，status 显示分类错误，已过期立即重试并在失败时抛分类错误，不受退避限制。worker 不增加内部刷新接口，不自行刷新；过期返回 `codex_login_expired` |
 | modify 边界 | 永远不执行 pi 的 fn。先重读，仍有效就返回；过期则 core 请求 Codex 刷新并重读，worker / replay 直接分类失败。不得伪造 expiry。状态 GET 只读，不能触发保鲜 |
 | home 与可用性 | 读文件与 managed provider 使用 `codexServer.ts` 中同一 effective home 解析函数，包含 App paths.codexHome / 默认 home 和显式 provider env。provider 禁用、无账户接口、home 不一致均不可用，不自动启用编程工具 |
 | 显式选择与持久化 | `pi_agents.credential_source` 新列，仅 `stored` / `codex_login`，migration 默认 stored；沿用 supervisor GET/PATCH。已有用户不自动切换；新用户可本地推荐 Codex 登录，确认保存才落库；切源不删除独立凭据 |
@@ -667,6 +667,8 @@ F1 后端验收记录（2026-10-15，`3bf652f3`）：后端全量 **2827 pass / 
 F1 前端验收记录（2026-10-15，`238c7c1a`）：AI 连接 / 首次引导复用既有表单、状态行、按钮和令牌；已有 API / 独立 OAuth 不自动切源，首次配置只本地推荐。用户主动测试 / 获取模型才发送一次 source 覆盖；切源作废迟到结果，独立授权前不能保存切换。前端 **806 pass / 0 fail**（187 files），lint / build / diff 检查通过；后端沿用本轮完整 **2827 pass / 0 fail**。chrome-use 在 about:blank 中注入真实组件、真实状态 hook 和 CSS，API 全为内存假响应，fetch 禁用；浅/深 × 980/760/680 共 12 张主场景截图，另覆盖已有 API / 独立 OAuth、过期、API key 不支持、provider 禁用、home 不一致以及英文文案。两项交互夹具验证新用户不自动测试/保存、切源丢弃旧测试、显式发现不会留下测试 loading。无真实保存、OAuth 登录或模型请求；未启动服务。证据 `/tmp/xuanwu-f1/{RESULT.md,viewport-results.json,extra-results.json,behavior-results.json}`，截图同目录。
 
 F1 复核修正验收记录（2026-10-15，本次提交）：未换 token / 失败均退避 5 分钟，连续 10 次读取仅一次 RPC，过期绕过退避；外部换发或 transport 更换不继承旧退避。独立入口改为“单独登录 ChatGPT 账号 / 为玄武助手单独授权，与 Codex 互不影响”，复用入口说明“与 Codex 共用登录，由 Codex 负责续期”；摘要按当前表单来源显示，英文同步。后端凭据 / 数据库专项 **42 pass / 0 fail**；前端全量 **807 pass / 0 fail**，lint / build / diff 检查通过。协议的 `refreshToken:true` 请求主动刷新并走 normal refresh-token flow，不承诺每次强制换发；本轮未用真实账号验证换发。共享桌面保留给 RustDesk 实验，本次改用独立无界面的 Chrome 离线渲染真实组件：设置 / 引导 × 独立 / 复用 × 浅深 × 980/760/680 共 24 张截图，未启动服务或操作可见桌面。仅假状态，未调用真实保存 / 登录 / 模型 / 刷新。证据 `/tmp/xuanwu-f1-fix/RESULT.md`、`render-results.json` 及同目录截图。
+
+F1 有效凭据回退修正（2026-10-15，本次提交）：瞬时刷新失败或失败退避期间，尚未过期且文件 / 绑定未变的凭据仍可读取；status 保留错误，同时 available 为 true，模型目录与 SDK 鉴权可继续使用。过期、账号变化、文件移除仍分类失败。凭据 / 数据库专项 **43 pass / 0 fail**；使用临时 CODEX_HOME，无真实模型或刷新请求。证据 `/tmp/xuanwu-f1-fallback/RESULT.md`。
 
 #### F2 任务卡住原因
 

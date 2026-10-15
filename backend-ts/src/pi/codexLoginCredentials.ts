@@ -97,7 +97,14 @@ export function createCodexLoginService(options: {
       // Never retain the provider error/cause: it may contain credentials or account data.
       const code = error instanceof CodexLoginError ? error.code : "codex_login_refresh_failed";
       refreshBackoffs.set(value.key, { home: resolve(value.home), access: previous.access, retryAt: now() + CODEX_REFRESH_BACKOFF_MS, error: code });
-      failure = { key: value.key, code, access: readLogin(value.home).credential?.access };
+      const current = readLogin(value.home).credential;
+      failure = { key: value.key, code, access: current?.access };
+      // A transient refresh failure does not invalidate the still-current token.
+      // Binding/account/file changes still fail closed; never resurrect a revoked login.
+      const currentBinding = binding();
+      if (code === "codex_login_refresh_failed" && previous.expires > now()
+        && !currentBinding.unavailable && currentBinding.key === value.key
+        && resolve(currentBinding.home) === resolve(value.home) && current?.access === previous.access) return previous;
       throw new CodexLoginError(code);
     } finally {
       if (flights.get(value.key) === pending) flights.delete(value.key);
@@ -114,7 +121,8 @@ export function createCodexLoginService(options: {
     if (refreshSoon && options.role === "core" && snapshot.credential.expires - now() < CODEX_REFRESH_THRESHOLD_MS) {
       const backoff = refreshBackoffs.get(value.key);
       if (backoff?.home === resolve(value.home) && backoff.access === snapshot.credential.access && now() < backoff.retryAt) {
-        if (backoff.error) throw new CodexLoginError(backoff.error);
+        if (backoff.error && backoff.error !== "codex_login_refresh_failed") throw new CodexLoginError(backoff.error);
+        if (backoff.error) failure = { key: value.key, code: backoff.error, access: snapshot.credential.access };
         return snapshot.credential;
       }
       return refresh(value, snapshot.credential);
@@ -144,7 +152,8 @@ export function createCodexLoginService(options: {
       auth_mode: snapshot.auth_mode,
       path: join(value.home, "auth.json"),
       storage: "file" as const,
-      available: Boolean(snapshot.credential && !error),
+      available: Boolean(snapshot.credential && snapshot.credential.expires > now()
+        && (!error || error === "codex_login_refresh_failed")),
       ...(snapshot.credential ? { expires_at: new Date(snapshot.credential.expires).toISOString() } : {}),
       ...(error ? { error } : {})
     };
