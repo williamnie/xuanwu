@@ -165,6 +165,17 @@ export function listAttentionInboxItems(
   ).all(...query.args).map(mapItem);
 }
 
+// Projection reads must not inherit the legacy collection's display limit.
+// Detail resolution includes terminal carriers so their existing semantics survive.
+export function listAttentionInboxProjectionItems(
+  db: RunnerDatabase
+): AttentionInboxItemRecord[] {
+  return db.sqlite.query<Record<string, unknown>, []>(
+    `select ${ITEM_COLUMNS} from attention_inbox_items
+      order by created_at desc, id desc`
+  ).all().map(mapItem);
+}
+
 export function countAttentionInboxItems(
   db: RunnerDatabase,
   filter: Omit<AttentionInboxItemFilter, "limit"> = {}

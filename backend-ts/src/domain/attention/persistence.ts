@@ -1,9 +1,11 @@
 import type { RunnerDatabase } from "../../db/database.ts";
 import {
   listAttentionInboxItems,
+  listAttentionInboxProjectionItems,
 } from "../../db/repositories/intakeRuns.ts";
 import {
   listActionProposals,
+  listActiveAttentionPiActions,
   listRecentAttentionPiActions,
   listPiApprovalRequests,
   listPiGuardianAlerts
@@ -33,7 +35,7 @@ type AttentionCommandEvent = {
   snoozed_until?: string;
 };
 
-type PersistedAttentionOptions = { actionLimit?: number; now?: Date };
+type PersistedAttentionOptions = { actionLimit?: number; now?: Date; unbounded?: boolean };
 const ATTENTION_ACTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_ATTENTION_ACTION_LIMIT = 25;
 
@@ -47,7 +49,9 @@ export function listPersistedAttention(
 }
 
 export function getPersistedAttention(db: RunnerDatabase, id: string): AttentionRecord | null {
-  return listPersistedAttention(db).find((record) => record.id === id) ?? null;
+  // Only display bounds are removed: source terminal states, consolidation,
+  // command overlays and all downstream decision gates remain authoritative.
+  return listPersistedAttention(db, { unbounded: true }).find((record) => record.id === id) ?? null;
 }
 
 export function persistAttentionCommand(
@@ -74,7 +78,10 @@ export function persistAttentionCommand(
 
 function attentionCandidates(db: RunnerDatabase, options: PersistedAttentionOptions) {
   const proposalRefs = proposalRefsByInboxID(db);
-  const inbox = listAttentionInboxItems(db).map((item) => {
+  const inboxItems = options.unbounded
+    ? listAttentionInboxProjectionItems(db)
+    : listAttentionInboxItems(db);
+  const inbox = inboxItems.map((item) => {
     const candidate = attentionFromInboxItem(item);
     return {
       ...candidate,
@@ -84,10 +91,10 @@ function attentionCandidates(db: RunnerDatabase, options: PersistedAttentionOpti
   const guardian = listPiGuardianAlerts(db).map(attentionFromGuardianAlert);
   const approvals = listPiApprovalRequests(db).map(attentionFromApprovalRequest);
   const now = options.now ?? new Date();
-  const actions = listRecentAttentionPiActions(db, {
+  const actions = (options.unbounded ? listActiveAttentionPiActions(db) : listRecentAttentionPiActions(db, {
     limit: options.actionLimit ?? DEFAULT_ATTENTION_ACTION_LIMIT,
     updatedAfter: new Date(now.getTime() - ATTENTION_ACTION_WINDOW_MS).toISOString()
-  })
+  }))
     .map((action) => attentionFromPiAction(action, proposalRefsFromAction(action)));
   return [...inbox, ...guardian, ...approvals, ...actions];
 }
