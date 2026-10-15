@@ -289,3 +289,15 @@ test('visible composers reserve solid primary emphasis for the send action', () 
     assert.match(rule.body, /color: var\(--text-primary\)/, selector);
   }
 });
+
+
+test('accepted typography and spacing tiers are exact and theme invariant', () => {
+  const expected = {"--text-2xs": "0.6rem", "--text-xs": "0.68rem", "--text-sm": "0.72rem", "--text-md": "0.78rem", "--text-base": "0.875rem", "--text-lg": "0.95rem", "--text-xl": "1rem", "--text-2xl": "1.125rem", "--text-3xl": "1.5rem", "--text-4xl": "2rem", "--text-page": "clamp(1.4rem, 3vw, var(--text-4xl))", "--space-0-5": "2px", "--space-1": "4px", "--space-1-5": "6px", "--space-2": "8px", "--space-2-5": "10px", "--space-3": "12px", "--space-3-5": "14px", "--space-4": "16px", "--space-4-5": "18px", "--space-5": "20px", "--space-6": "24px", "--space-8": "32px"};
+  for (const [name, value] of Object.entries(expected)) {
+    const definitions = [...tokens.matchAll(new RegExp(`${name}:\\s*([^;]+);`, 'g'))];
+    assert.deepEqual(definitions.map(match => match[1].trim()), [value], name);
+  }
+  assert.match(tokens, /--button-height: 32px/);
+  assert.match(spec, /小档 28px/);
+  assert.match(spec, /2px 仅标签/);
+});

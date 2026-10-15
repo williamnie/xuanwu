@@ -182,13 +182,33 @@
 | 区块标题 | `1rem – 1.2rem` | 面板/卡片标题 |
 | 页面标题 | `1.4rem – 2rem` | `clamp(1.4rem, 3vw, 2rem)`，`font-weight 650`，`letter-spacing -0.02em` |
 
+### 3.2.1 运行时字阶令牌（2026-10-14 确认）
+
+上述语义范围收敛为下表的 10 个固定档与 1 个响应式组合。组件必须引用令牌；只迁移排版，按钮 32 / 28px 高度与 composer 0.95rem 正文不变。迁移按实际角色选择档位，不能把代码 / 图标尺寸当作页面标题。
+
+| 令牌 | 值 | 组件用途 |
+|---|---|---|
+| `--text-2xs` | `0.6rem` | 微标签、徽标、状态、Fact 标签（3.3 / 5.5 / 5.6） |
+| `--text-xs` | `0.68rem` | 辅助说明与 Tab（5.3） |
+| `--text-sm` | `0.72rem` | 辅助说明上沿、composer footer（5.2） |
+| `--text-md` | `0.78rem` | 按钮（5.1）、列表标题与 Fact 数值 |
+| `--text-base` | `0.875rem` | 正文 |
+| `--text-lg` | `0.95rem` | composer 正文（5.2），保持原值 |
+| `--text-xl` | `1rem` | 小区块标题 |
+| `--text-2xl` | `1.125rem` | 常用区块标题 |
+| `--text-3xl` | `1.5rem` | 小页面标题 |
+| `--text-4xl` | `2rem` | 页面标题上限 |
+| `--text-page` | `clamp(1.4rem, 3vw, var(--text-4xl))` | 响应式页面标题，沿用原 clamp 合同 |
+
+字阶与间距在浅深主题共享，不允许主题重定义。旧 .56 / .58 / .60 / .61 / .62 微标签归为 2xs；.68 Tab、.72 footer、.78 按钮、.95 composer 保持明确的组件合同。逐批迁移期间测试只对已迁移文件收紧，未迁移文件不能据此宣称已完成令牌化。
+
 ### 3.3 微标签范式（高频复用）
 
 ```css
 .label {
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 0.56rem;
+  font-size: var(--text-2xs);
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -201,7 +221,7 @@
 
 ## 4. 间距与布局
 
-- **基础单位 4px**：内边距/外边距只用 `4 / 6 / 8 / 10 / 12 / 16 / 20 / 24 / 32`。
+- **基础单位 4px**：内边距/外边距使用下表令牌；一般档为 `4 / 6 / 8 / 10 / 12 / 16 / 20 / 24 / 32`。2px 仅标签 / 徽标 / status-pill / chip 内边距，不能用于任意 gap、margin 或普通按钮。
 - 面板/卡片内边距：`14px – 18px`；页面级 gutter：`18px – 24px`（移动端 `12px`）。
 - 区块之间**用 1px `--border-color` 细线分割**，不用卡片套卡片。
 - 列表项之间 `gap: 4px – 6px`；面板内部元素 `gap: 8px – 12px`。
@@ -212,6 +232,25 @@
 |---|---|---|
 | `--shadow-sm` | `0 1px 2px rgba(0, 0, 0, 0.04)` | `0 1px 2px rgba(0, 0, 0, 0.5)` |
 | `--shadow-lg` | `0 12px 32px -18px rgba(0, 0, 0, 0.12)` | `0 12px 32px -18px rgba(0, 0, 0, 0.6)` |
+
+### 4.0.1 间距令牌（2026-10-14 确认）
+
+| 令牌 | 值 | 用途 |
+|---|---|---|
+| `--space-0-5` | `2px` | 仅标签 / 徽标 / status-pill / chip 内边距，精确选择器白名单 |
+| `--space-1` | `4px` | 基础间距 / 列表 gap |
+| `--space-1-5` | `6px` | 基础间距 / 列表 gap / 图标与文字 gap |
+| `--space-2` | `8px` | 基础间距 / 面板内部 gap |
+| `--space-2-5` | `10px` | 基础间距 / 面板内部 gap |
+| `--space-3` | `12px` | 基础间距 / 面板内部 gap / 移动 gutter |
+| `--space-3-5` | `14px` | 面板 / 卡片内边距，不用于任意 gap |
+| `--space-4` | `16px` | 基础间距 / 面板内边距 |
+| `--space-4-5` | `18px` | 面板内边距或页面 gutter，不用于任意 gap |
+| `--space-5` | `20px` | 基础间距 / 页面 gutter |
+| `--space-6` | `24px` | 基础间距 / 页面 gutter |
+| `--space-8` | `32px` | 基础间距 / 大区块分隔 |
+
+`--space-0-5` 的使用须在全局样式测试按文件、选择器与 padding 属性白名单登记；既有 1 / 3px 微内边距在这些角色中归为 2px。14 / 18px 也按面板 / 页面内边距语义限制。0、auto、百分比布局和结构性 calc 不是新增间距档；固定图标 / 控件的占位只能按既有组件合同组合，禁止把任意大值包装成 calc 绕过字阶与间距约束。合法固定尺寸的例外必须精确到文件 / 选择器 / 属性 / 值并说明规范出处。
 
 ### 4.1 玻璃拟态（仅限三处）
 
@@ -267,7 +306,7 @@
 
 ### 5.1 按钮
 
-- **直角**（`border-radius: var(--button-radius)` = 0），**等高 32px**（小档 28px），`font-size 0.78rem`、`font-weight 600`、`letter-spacing 0.01em`。
+- **直角**（`border-radius: var(--button-radius)` = 0），**等高 32px**（小档 28px），`font-size var(--text-md)`（0.78rem）、`font-weight 600`、`letter-spacing 0.01em`。
 - **primary**：`--button-primary-bg` / `--button-primary-fg`，hover 用 `--primary-hover` 与对应前景。**不加投影、不加渐变、不加边框。**
 - **ghost/secondary**：透明底 + `1px solid var(--border-color)`，hover 时 `background: var(--nav-hover)` + `border-color: var(--border-color-hover)`。
 - **danger**：error 色文字 + error 边框；danger-primary 才用 error 实底。
@@ -280,34 +319,34 @@
 对话/任务的输入器是系统核心组件：
 
 - 外壳：`var(--bg-card)` 底、`1px solid var(--border-color)`、`var(--radius-lg)`（输入器是除气泡外唯一允许 10px 的组件）、focus-within 时 `border-color: var(--primary)` + `box-shadow: 0 0 0 3px var(--primary-glow)`。
-- textarea：无背景无边框，`font-size 0.95rem`，`min-height` 对话页 96px、新建页 110px。
-- footer 内嵌控件（模型/策略选择）：`composer-embedded-select`——`var(--control-bg)` 底、`var(--radius-xs)`、mono `0.72rem`。
+- textarea：无背景无边框，`font-size var(--text-lg)`（0.95rem），`min-height` 对话页 96px、新建页 110px。
+- footer 内嵌控件（模型/策略选择）：`composer-embedded-select`——`var(--control-bg)` 底、`var(--radius-xs)`、mono `var(--text-sm)`。
 - 提交按钮：圆形 `34×34` 是**唯一例外**（传承自会话输入器的历史组件），实底主色，禁用态 `--bg-card-hover`。
 - 输入器上方允许有一条「运行态 pill」：`runtime-status-pill`。
 
 ### 5.3 Tabs（区块切换）
 
 - 容器：顶部细线分割的通栏条（`border-bottom: 1px solid var(--border-color)`），**不要做成漂浮的大胶囊**。
-- 按钮：`var(--radius-xs)`、大写、`letter-spacing 0.045em`、`font-size 0.68rem`；hover `var(--nav-hover)`；**active = `var(--bg-card)` 底 + 2px 主色下划线（`::after` 绘制，全局按钮禁用 box-shadow）+ `--text-primary` 文字**，不用主色实底。
+- 按钮：`var(--radius-xs)`、大写、`letter-spacing 0.045em`、`font-size var(--text-xs)`；hover `var(--nav-hover)`；**active = `var(--bg-card)` 底 + 2px 主色下划线（`::after` 绘制，全局按钮禁用 box-shadow）+ `--text-primary` 文字**，不用主色实底。
 - 列表型 Tab（如 Attempt 列表）：active 用 `inset 0 -2px 0 var(--primary)` 下划线 + `var(--bg-card)` 底。
 
 ### 5.4 侧边栏列表项
 
 - 默认透明底；hover `var(--nav-hover)`；active `var(--nav-active)` 中性底 + 3px 主色左侧指示条 + `--text-primary` 文字，图标用 `--primary`；不加主色边框与外发光。
-- 列表项内标题 `0.78rem / 600`，元数据行 mono `0.58rem` muted。
+- 列表项内标题 `var(--text-md) / 600`，元数据行 mono `var(--text-2xs)` muted。
 - 「新建」入口按钮（如 New Chat）：主色渐变底（`linear-gradient(135deg, var(--primary), var(--primary-hover))`）——**这是全系统唯一允许渐变的按钮**。
 
 ### 5.5 状态标记（Pill / Dot）
 
-- **status-dot**：`7×7` 圆点（唯一允许 `border-radius: 50%` 的元素），配 mono `0.62rem` 大写文字；运行中给 1.4s 脉冲 + `0 0 0 3px var(--info-glow)` 光晕。
-- **status-pill**：`var(--radius-xs)`、mono 大写、`0.56rem`、带 1px 同色透明边与 8% 同色底；运行中脉冲的是 dot 不是整个 pill。
+- **status-dot**：`7×7` 圆点（唯一允许 `border-radius: 50%` 的元素），配 mono `var(--text-2xs)` 大写文字；运行中给 1.4s 脉冲 + `0 0 0 3px var(--info-glow)` 光晕。
+- **status-pill**：`var(--radius-xs)`、mono 大写、`var(--text-2xs)`、带 1px 同色透明边与 8% 同色底；运行中脉冲的是 dot 不是整个 pill。
 - 状态色映射：`running/created → info`、`succeeded → success`、`failed → error`、`interrupted → warning`、`idle → muted`。
 
 ### 5.6 数据事实条（Fact Strip）
 
 键值对横排（Provider / Status / Tokens / Cost），用于详情页头部：
 
-- 每个 fact 是**纵向**结构：上 `small`（mono 大写 0.56rem muted）下 `strong`（mono `0.78rem` 主文字色）。
+- 每个 fact 是**纵向**结构：上 `small`（mono 大写 var(--text-2xs) muted）下 `strong`（mono `var(--text-md)` 主文字色）。
 - fact 之间用 `border-right: 1px solid var(--border-light)` 分隔，不用卡片包裹。
 - Status 值按状态着色。
 
@@ -315,12 +354,12 @@
 
 - 用户气泡：`--primary-glow` 底、`var(--radius-lg)`（气泡专属）、`align-self: flex-end`、最大宽 80%。
 - 助手消息：**不用气泡**——左侧 `26×26` 方形头像（`--primary-glow` 底 + 主色图标），右侧纯文本直接排在内容流里。
-- 气泡头部：头像 + mono 大写角色名（`0.6rem`）。
+- 气泡头部：头像 + mono 大写角色名（`var(--text-2xs)`）。
 - 错误/中断：`--error` 色系，左侧 error 色边条。
 
 ### 5.8 终端 / 工具输出
 
-- 终端卡：固定 `--terminal-bg` 深底、等宽字体、`var(--radius-md)`、头部一条 `mono 0.6rem` 标题栏；文本与语义色同样使用 `--terminal-*` 令牌。
+- 终端卡：固定 `--terminal-bg` 深底、等宽字体、`var(--radius-md)`、头部一条 `mono var(--text-2xs)` 标题栏；文本与语义色同样使用 `--terminal-*` 令牌。
 - 工具调用卡：`--surface-raised` 底、1px 边、`var(--radius-md)`、头部左侧 mono 图标 + 名称，右侧状态 pill；body 默认折叠。
 - 会话执行过程：实时与历史详情均默认折叠，用户展开/收起后不因新事件改变选择。实时状态与详情入口合并为一条透明底、细线分隔的摘要，只保留一个 spinner；不再叠加 working 横幅、Streaming 徽标或思考占位动效。错误与待审批直接显示在摘要中并停止转圈，错误文案允许换行，不能藏在折叠详情内。
 
@@ -330,13 +369,13 @@
 
 - `--surface-raised` 底、1px `--border-color` 边、`var(--radius-md)`；**不得**做成大面积彩色卡片。
 - 左侧 7px status-dot：待处理 `--warning`、失败 `--error`、仅告知（玄武正在整理问题）`--text-faint`。
-- 中间：mono 大写微标签（请求类型）→ `0.82rem / 600` 标题 → `0.72rem` 次级说明。
+- 中间：mono 大写微标签（请求类型）→ `var(--text-md) / 600` 标题 → `var(--text-sm)` 次级说明。
 - 右侧操作按钮组，按钮遵守 5.1；每张卡最多一个主按钮，没有可执行动作时不放按钮。
 - 760px 以下操作组换到内容下方。
 
 ### 5.9 空状态 / 加载
 
-- 空状态：居中，34px 线性图标（muted 色）+ 一句 `0.8rem` 说明 + 可选 starter 按钮组；**禁止插画、禁止大图**。
+- 空状态：居中，34px 线性图标（muted 色）+ 一句 `var(--text-md)` 说明 + 可选 starter 按钮组；**禁止插画、禁止大图**。
 - 加载：TurtleLoader（品牌）或 14px spinner + muted 文案；页面级骨架用 1px 线的浅底块，不用闪屏大色块。
 
 ---

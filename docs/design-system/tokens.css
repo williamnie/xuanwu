@@ -11,6 +11,33 @@
   --font-display: 'Inter', -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
+  /* 字阶：主题共享；组件用途见 spec 3.2。 */
+  --text-2xs: 0.6rem;
+  --text-xs: 0.68rem;
+  --text-sm: 0.72rem;
+  --text-md: 0.78rem;
+  --text-base: 0.875rem;
+  --text-lg: 0.95rem;
+  --text-xl: 1rem;
+  --text-2xl: 1.125rem;
+  --text-3xl: 1.5rem;
+  --text-4xl: 2rem;
+  --text-page: clamp(1.4rem, 3vw, var(--text-4xl));
+
+  /* 间距：2px 仅精确白名单中的标签内边距。 */
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-3-5: 14px;
+  --space-4: 16px;
+  --space-4-5: 18px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
   /* 背景 / 表面 (温润纸感暖灰 · Warm Paper / Claude 风格) */
   --bg-primary: #f6f5f2;
   --bg-secondary: #edebe6;
