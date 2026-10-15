@@ -45,7 +45,7 @@
 .pi-chat-main-header .pi-chat-status-copy {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-0-5);
 }
 
 .pi-chat-main-header .pi-chat-status-copy > span,

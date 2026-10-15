@@ -299,7 +299,7 @@ test('accepted typography and spacing tiers are exact and theme invariant', () =
   }
   assert.match(tokens, /--button-height: 32px/);
   assert.match(spec, /小档 28px/);
-  assert.match(spec, /2px 仅标签/);
+  assert.match(spec, /2px 用于微间距/);
 });
 
 const typescaleContract = JSON.parse(readFileSync(new URL('./Global.typescale-contract.json', import.meta.url), 'utf8'));
@@ -328,8 +328,18 @@ test('migrated styles use scale tokens and scoped structural exceptions', () => 
           assert.match(value, /^(?:inherit|var\(--text-(?:2xs|xs|sm|md|base|lg|xl|2xl|3xl|4xl|page)\))$/, `${key}: unknown font tier ${value}`);
         }
         if (value.includes('var(--space-0-5)')) {
-          assert.match(property, /^padding/, key);
-          assert.ok(typescaleContract.tinyPadding.some(row => keyOf(row) === key && row.reason), `${key}: unlisted 2px inset`);
+          const allowed = typescaleContract.microSpacing.find(row => keyOf(row) === key);
+          const contexts = {
+            'badge-inset': /^padding/,
+            'stacked-text': /^(?:gap|row-gap|margin(?:-top|-bottom|-block(?:-start|-end)?)?)$/,
+            'compact-list': /^(?:(?:row-|column-)?gap)$/,
+            'inline-code': /^padding(?:-top|-bottom|-block(?:-start|-end)?)?$/,
+          };
+          assert.ok(allowed?.reason && contexts[allowed.context]?.test(property), `${key}: unlisted 2px micro-spacing context`);
+          if (['stacked-text', 'inline-code'].includes(allowed.context) && /^(?:margin|padding)$/.test(property)) {
+            const slots = value.split(/\s+/);
+            assert.ok(slots.length > 1 && !slots[1].includes('--space-0-5') && !slots[3]?.includes('--space-0-5'), `${key}: micro spacing is vertical only`);
+          }
           seenTiny.add(key);
         }
         if (/var\(--space-(?:3-5|4-5)\)/.test(value)) {
@@ -341,6 +351,6 @@ test('migrated styles use scale tokens and scoped structural exceptions', () => 
     }
   }
   for (const row of typescaleContract.structuralValues) assert.ok(seenStructural.has(`${keyOf(row)}: ${row.value}`), `stale structural exception ${keyOf(row)}`);
-  for (const row of typescaleContract.tinyPadding) assert.ok(seenTiny.has(keyOf(row)), `stale 2px inset ${keyOf(row)}`);
+  for (const row of typescaleContract.microSpacing) assert.ok(seenTiny.has(keyOf(row)), `stale micro spacing ${keyOf(row)}`);
   for (const row of typescaleContract.panelPadding) assert.ok(seenPanel.has(keyOf(row)), `stale panel inset ${keyOf(row)}`);
 });

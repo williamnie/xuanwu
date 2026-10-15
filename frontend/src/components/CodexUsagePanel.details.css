@@ -20,7 +20,7 @@
   display: block;
   font-size: var(--text-sm);
   font-weight: 450;
-  margin-top: var(--space-1);
+  margin-top: var(--space-0-5);
 }
 
 .codex-usage-details > summary svg {

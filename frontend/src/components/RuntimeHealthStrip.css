@@ -24,7 +24,7 @@
 .runtime-health-alert-copy p {
   color: var(--text-muted);
   font-size: var(--text-md);
-  margin-top: var(--space-1);
+  margin-top: var(--space-0-5);
   overflow-wrap: anywhere;
 }
 

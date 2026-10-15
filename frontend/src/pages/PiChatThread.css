@@ -41,7 +41,7 @@
 .pi-chat-status-summary[data-tone="running"] .pi-chat-status-dot { animation: pi-chat-running-signal 1.4s ease-in-out infinite; background: var(--info); }
 .pi-chat-status-summary[data-tone="error"] .pi-chat-status-dot { background: var(--error); }
 .pi-chat-status-summary[data-tone="idle"] .pi-chat-status-dot { background: var(--text-muted); }
-.pi-chat-status-copy { display: flex; flex-direction: column; gap: var(--space-1); }
+.pi-chat-status-copy { display: flex; flex-direction: column; gap: var(--space-0-5); }
 .pi-chat-status-copy > span { color: var(--text-secondary); font-size: var(--text-xs); font-weight: 700; }
 .pi-chat-status-copy > small { color: var(--text-muted); font-size: var(--text-2xs); }
 

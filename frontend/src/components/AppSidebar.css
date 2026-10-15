@@ -42,7 +42,7 @@
   border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
   border-radius: var(--radius-xs);
   font-size: var(--text-xs);
-  padding: var(--space-1) var(--space-1);
+  padding: var(--space-0-5) var(--space-1);
 }
 
 .sidebar-loop-progress {
@@ -60,7 +60,7 @@
 .sidebar-focus-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-0-5);
 }
 
 .sub-filter-dot.is-triage { background: var(--warning); }

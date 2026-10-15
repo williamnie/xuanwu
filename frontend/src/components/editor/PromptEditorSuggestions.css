@@ -10,7 +10,7 @@
   bottom: calc(100% + 8px);
   z-index: 30;
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-0-5);
   max-height: 245px;
   overflow: auto;
   border: 1px solid var(--border-color);
@@ -22,7 +22,7 @@
 
 .prompt-suggestion-item {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-0-5);
   width: 100%;
   border: 0;
   border-radius: var(--radius-sm);

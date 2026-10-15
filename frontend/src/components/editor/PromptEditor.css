@@ -180,7 +180,7 @@
   background: var(--nav-active);
   color: var(--text-primary);
   border-radius: var(--radius-xs);
-  padding: var(--space-1) var(--space-1);
+  padding: var(--space-0-5) var(--space-1);
 }
 
 .prompt-editor-content img,

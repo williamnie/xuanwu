@@ -129,7 +129,7 @@
   align-items: center;
   border-bottom: 1px solid var(--border-color);
   display: flex;
-  gap: var(--space-1);
+  gap: var(--space-0-5);
   overflow-x: auto;
   padding: var(--space-2) var(--space-4);
   scrollbar-width: none;
@@ -176,7 +176,7 @@
   color: var(--text-primary);
 }
 .ds-nav-item .t { display: block; font-size: var(--text-md); font-weight: 600; }
-.ds-nav-item .m { color: var(--text-muted); display: block; font-family: var(--font-mono); font-size: var(--text-2xs); margin-top: var(--space-1); }
+.ds-nav-item .m { color: var(--text-muted); display: block; font-family: var(--font-mono); font-size: var(--text-2xs); margin-top: var(--space-0-5); }
 
 /* ---------- 数据事实条 ---------- */
 .ds-facts {
@@ -185,7 +185,7 @@
   display: flex;
   flex-wrap: wrap;
 }
-.ds-fact { border-right: 1px solid var(--border-light); display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-4); }
+.ds-fact { border-right: 1px solid var(--border-light); display: flex; flex-direction: column; gap: var(--space-0-5); padding: var(--space-2) var(--space-4); }
 .ds-fact:last-child { border-right: 0; }
 .ds-fact small {
   color: var(--text-muted);

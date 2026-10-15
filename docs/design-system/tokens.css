@@ -24,7 +24,7 @@
   --text-4xl: 2rem;
   --text-page: clamp(1.4rem, 3vw, var(--text-4xl));
 
-  /* 间距：2px 仅精确白名单中的标签内边距。 */
+  /* 间距：2px 微间距按 spec 4.0.1 的属性与语境白名单使用。 */
   --space-0-5: 2px;
   --space-1: 4px;
   --space-1-5: 6px;

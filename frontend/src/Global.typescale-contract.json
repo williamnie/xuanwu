@@ -37,104 +37,6 @@
     "../../docs/design-system/examples/index.html",
     "../../docs/design-system/examples/chat.html"
   ],
-  "tinyPadding": [
-    {
-      "file": "components/AppSidebar.css",
-      "selector": ".nav-badge",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "components/EvidencePanel.css",
-      "selector": ".evidence-status",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "components/GlobalAskComposer.css",
-      "selector": ".global-ask-composer-card .prompt-reference-chip",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "components/editor/PromptEditorReferences.css",
-      "selector": ".prompt-reference-chip",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "index.css",
-      "selector": ".api-status",
-      "property": "padding-left",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "index.css",
-      "selector": ".nav-badge",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "index.css",
-      "selector": ".kanban-card-status",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "index.css",
-      "selector": ".status-badge",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "index.css",
-      "selector": ".triage-readiness-badge",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "index.css",
-      "selector": ".kanban-card-runtime-pill",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "pages/sessions/SessionCommandPanel.css",
-      "selector": ".session-command-chip",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "pages/sessions/Sessions.css",
-      "selector": ".session-provider-pill",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "pages/sessions/Sessions.css",
-      "selector": ".diff-badge",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "../../docs/design-system/components.css",
-      "selector": ".ds-status-pill",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
-    },
-    {
-      "file": "App.css",
-      "selector": ".guardian-alert-severity",
-      "property": "padding",
-      "reason": "Spec 4.0.1: severity badge / attached-context chip inset."
-    },
-    {
-      "file": "pages/PiChatThread.css",
-      "selector": ".pi-chat-context-card-title span, .pi-chat-context-card-references span",
-      "property": "padding",
-      "reason": "Spec 4.0.1: severity badge / attached-context chip inset."
-    }
-  ],
   "panelPadding": [
     {
       "file": "GeekWorkbench.css",
@@ -485,6 +387,365 @@
       "property": "margin",
       "value": "var(--space-2) 0 var(--space-2) calc(26px + var(--space-5))",
       "reason": "Spec 5.7 26px avatar plus 20px transcript gutter."
+    }
+  ],
+  "microSpacing": [
+    {
+      "file": "components/AppSidebar.css",
+      "selector": ".nav-badge",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "components/EvidencePanel.css",
+      "selector": ".evidence-status",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "components/GlobalAskComposer.css",
+      "selector": ".global-ask-composer-card .prompt-reference-chip",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "components/editor/PromptEditorReferences.css",
+      "selector": ".prompt-reference-chip",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "index.css",
+      "selector": ".api-status",
+      "property": "padding-left",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "index.css",
+      "selector": ".nav-badge",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "index.css",
+      "selector": ".kanban-card-status",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "index.css",
+      "selector": ".status-badge",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "index.css",
+      "selector": ".triage-readiness-badge",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "index.css",
+      "selector": ".kanban-card-runtime-pill",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/sessions/SessionCommandPanel.css",
+      "selector": ".session-command-chip",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".session-provider-pill",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".diff-badge",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "../../docs/design-system/components.css",
+      "selector": ".ds-status-pill",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "App.css",
+      "selector": ".guardian-alert-severity",
+      "property": "padding",
+      "reason": "Spec 4.0.1: severity badge / attached-context chip inset.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/PiChatThread.css",
+      "selector": ".pi-chat-context-card-title span, .pi-chat-context-card-references span",
+      "property": "padding",
+      "reason": "Spec 4.0.1: severity badge / attached-context chip inset.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "GeekWorkbenchPages.css",
+      "selector": ".dashboard-alert h4",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "GeekWorkbenchPages.css",
+      "selector": ".settings-tabs",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "components/AppSidebar.css",
+      "selector": ".sidebar-new-issue-shortcut",
+      "property": "padding",
+      "context": "badge-inset",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: badge / compact shortcut label inset."
+    },
+    {
+      "file": "components/AppSidebar.css",
+      "selector": ".sidebar-focus-list",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "components/CodexUsagePanel.css",
+      "selector": ".codex-usage-header p",
+      "property": "margin-top",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "components/CodexUsagePanel.details.css",
+      "selector": ".codex-usage-details > summary small",
+      "property": "margin-top",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "components/EvidencePanel.css",
+      "selector": ".evidence-panel-header h3",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "components/EvidencePanel.css",
+      "selector": ".evidence-row-main",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "components/EvidencePanel.css",
+      "selector": ".evidence-state > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "components/RuntimeHealthStrip.css",
+      "selector": ".runtime-health-alert-copy p",
+      "property": "margin-top",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "components/editor/PromptEditor.css",
+      "selector": ".prompt-editor-content :not(pre) > code, .markdown-preview :not(pre) > code",
+      "property": "padding",
+      "context": "inline-code",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: vertical inline-code inset."
+    },
+    {
+      "file": "components/editor/PromptEditorSuggestions.css",
+      "selector": ".prompt-suggestion-menu",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "components/editor/PromptEditorSuggestions.css",
+      "selector": ".prompt-suggestion-item",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "index.css",
+      "selector": ".brand-wordmark",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "index.css",
+      "selector": ".sidebar-nav-group",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "index.css",
+      "selector": ".sidebar-project-list",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "pages/PiChatDiagnostics.css",
+      "selector": ".pi-chat-main-header .pi-chat-status-copy",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiChatSidebar.css",
+      "selector": ".pi-chat-app-sidebar-panel .sidebar-shortcut-items",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "pages/PiChatSidebar.css",
+      "selector": ".pi-chat-sidebar-heading > div:first-child",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiChatSidebar.css",
+      "selector": ".pi-chat-agent-status > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/PiChatSidebar.css",
+      "selector": ".pi-chat-conversation-list",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "pages/PiChatThread.css",
+      "selector": ".pi-chat-status-copy",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/sessions/ApprovalDialog.css",
+      "selector": ".approval-header p",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/sessions/SessionCommandPanel.css",
+      "selector": ".session-command-title-row p",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/sessions/SessionCommandPanel.css",
+      "selector": ".session-command-result",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/sessions/SessionCommandReplay.css",
+      "selector": ".session-command-history-main",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/sessions/SessionComposer.css",
+      "selector": ".session-message-queue-main",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".session-markdown code",
+      "property": "padding",
+      "context": "inline-code",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: vertical inline-code inset."
+    },
+    {
+      "file": "pages/sessions/SessionsClient.css",
+      "selector": ".sidebar-shortcut-items",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "pages/sessions/SessionsClient.css",
+      "selector": ".pinned-sessions-list",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "../../docs/design-system/components.css",
+      "selector": ".ds-tabs",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "../../docs/design-system/components.css",
+      "selector": ".ds-nav-item .m",
+      "property": "margin-top",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "../../docs/design-system/components.css",
+      "selector": ".ds-fact",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "../../docs/design-system/examples/chat.html",
+      "selector": ".topbar h1",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "../../docs/design-system/examples/chat.html",
+      "selector": ".assistant-body code",
+      "property": "padding",
+      "context": "inline-code",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: vertical inline-code inset."
     }
   ]
 }

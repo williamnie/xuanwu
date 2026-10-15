@@ -38,7 +38,7 @@
 
 .session-command-history-main {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-0-5);
   min-width: 0;
 }
 

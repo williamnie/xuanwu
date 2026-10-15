@@ -49,7 +49,7 @@
   color: var(--error);
   font-size: var(--text-base);
   font-weight: 600;
-  margin: 0 0 var(--space-1);
+  margin: 0 0 var(--space-0-5);
 }
 .dashboard-alert p {
   color: var(--text-secondary);
@@ -306,7 +306,7 @@
   font-size: var(--text-2xs);
   font-weight: 800;
 }
-.settings-tabs { border-radius: var(--radius-md); gap: var(--space-1); padding: var(--space-1); }
+.settings-tabs { border-radius: var(--radius-md); gap: var(--space-0-5); padding: var(--space-1); }
 .settings-tab { border-radius: var(--radius-sm); font-size: var(--text-sm); letter-spacing: 0.025em; text-transform: uppercase; }
 .settings-tab { position: relative; }
 .settings-tab.active, [data-theme="dark"] .settings-tab.active {

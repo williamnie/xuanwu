@@ -31,7 +31,7 @@
 }
 
 .approval-header p {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-0-5) 0 0;
   color: var(--text-muted);
   font-size: var(--text-md);
 }
