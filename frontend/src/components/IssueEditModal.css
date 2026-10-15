@@ -2,13 +2,13 @@
   max-height: calc(100vh - 48px);
   max-width: 780px;
   overflow-y: auto;
-  padding: 24px;
+  padding: var(--space-6);
 }
 
 .issue-edit-modal__form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-3);
 }
 
 .issue-edit-modal__help,
@@ -17,7 +17,7 @@
 }
 
 .issue-edit-modal__help {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 .issue-edit-modal__header,
@@ -28,17 +28,17 @@
 
 .issue-edit-modal__header {
   justify-content: space-between;
-  margin-bottom: 18px;
+  margin-bottom: var(--space-4);
 }
 
 .issue-edit-modal__title {
-  font-size: 1.12rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
 }
 
 .issue-edit-modal__description {
-  font-size: 0.78rem;
-  margin-top: 4px;
+  font-size: var(--text-md);
+  margin-top: var(--space-1);
 }
 
 .issue-edit-modal__close {
@@ -52,20 +52,20 @@
   background: var(--error-bg);
   border-radius: var(--radius-sm);
   color: var(--error);
-  font-size: 0.78rem;
-  padding: 8px 12px;
+  font-size: var(--text-md);
+  padding: var(--space-2) var(--space-3);
 }
 
 .issue-edit-modal__actions {
-  gap: 10px;
+  gap: var(--space-2-5);
   justify-content: flex-end;
-  margin-top: 10px;
+  margin-top: var(--space-2-5);
 }
 
 .issue-edit-modal__cancel {
-  padding: 6px 12px;
+  padding: var(--space-1-5) var(--space-3);
 }
 
 .issue-edit-modal__submit {
-  padding: 6px 16px;
+  padding: var(--space-1-5) var(--space-4);
 }

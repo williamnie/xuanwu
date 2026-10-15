@@ -10,21 +10,21 @@
 <link rel="stylesheet" href="../components.css">
 <style>
   body { font-family: var(--font-display); background: var(--bg-primary); color: var(--text-primary); margin: 0; }
-  .page { margin: 0 auto; max-width: 960px; padding: 32px 24px 64px; }
-  header.top { align-items: center; display: flex; justify-content: space-between; margin-bottom: 8px; }
-  header.top h1 { font-size: 1.3rem; font-weight: 650; letter-spacing: -0.02em; margin: 0; }
-  header.top p { color: var(--text-muted); font-size: 0.75rem; margin: 4px 0 0; }
-  .theme-toggle { display: flex; gap: 8px; }
-  section.block { border-top: 1px solid var(--border-color); margin-top: 28px; padding-top: 18px; }
-  section.block > h2 { font-size: 0.85rem; font-weight: 700; margin: 0 0 4px; }
-  section.block > p { color: var(--text-muted); font-size: 0.72rem; margin: 0 0 14px; }
-  .row { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
-  .swatches { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .page { margin: 0 auto; max-width: 960px; padding: var(--space-8) var(--space-6) var(--space-8); }
+  header.top { align-items: center; display: flex; justify-content: space-between; margin-bottom: var(--space-2); }
+  header.top h1 { font-size: var(--text-page); font-weight: 650; letter-spacing: -0.02em; margin: 0; }
+  header.top p { color: var(--text-muted); font-size: var(--text-sm); margin: var(--space-1) 0 0; }
+  .theme-toggle { display: flex; gap: var(--space-2); }
+  section.block { border-top: 1px solid var(--border-color); margin-top: var(--space-6); padding-top: var(--space-4-5); }
+  section.block > h2 { font-size: var(--text-base); font-weight: 700; margin: 0 0 var(--space-1); }
+  section.block > p { color: var(--text-muted); font-size: var(--text-sm); margin: 0 0 var(--space-3); }
+  .row { align-items: center; display: flex; flex-wrap: wrap; gap: var(--space-2-5); }
+  .swatches { display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
   .swatch { border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; }
   .swatch i { display: block; height: 34px; }
-  .swatch span { display: block; font-family: var(--font-mono); font-size: 0.58rem; padding: 6px 8px; }
-  .demo-thread { display: flex; flex-direction: column; gap: 18px; max-width: 720px; }
-  .demo-note { border-left: 2px solid var(--primary); color: var(--text-muted); font-size: 0.7rem; margin-top: 40px; padding: 8px 12px; }
+  .swatch span { display: block; font-family: var(--font-mono); font-size: var(--text-2xs); padding: var(--space-1-5) var(--space-2); }
+  .demo-thread { display: flex; flex-direction: column; gap: var(--space-4); max-width: 720px; }
+  .demo-note { border-left: 2px solid var(--primary); color: var(--text-muted); font-size: var(--text-xs); margin-top: var(--space-8); padding: var(--space-2) var(--space-3); }
 </style>
 </head>
 <body>

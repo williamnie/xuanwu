@@ -72,7 +72,7 @@ test('approval and command cards own neutral surfaces and compact semantic label
   for (const [name, selector] of [['ApprovalDialog', '.approval-meta span'], ['SessionCommandPanel', '.session-command-chip']]) {
     const label = rule(styles[name], selector);
     assert.match(label, /font-family:\s*var\(--font-mono\)/);
-    assert.match(label, /font-size:\s*0\.56rem/);
+    assert.match(label, /font-size:\s*var\(--text-2xs\)/);
     assert.match(label, /text-transform:\s*uppercase/);
   }
 });
@@ -82,7 +82,7 @@ test('terminal output uses the terminal palette and hides decorative traffic lig
   assert.doesNotMatch(styles.Sessions + styles.SessionsClient, /\.terminal-dots \.dot/);
   const title = rule(styles.Sessions, '.terminal-title');
   assert.match(title, /font-family:\s*var\(--font-mono\)/);
-  assert.match(title, /font-size:\s*0\.6rem/);
+  assert.match(title, /font-size:\s*var\(--text-2xs\)/);
   for (const css of [styles.Sessions, styles.SessionsClient]) {
     for (const [, , body] of css.matchAll(/([^{}]*\.terminal-[^{}]*)\{([^{}]*)\}/g)) {
       for (const [, declaration] of body.matchAll(/(?:^|\n)\s*(?:background|color|border(?:-bottom)?):\s*([^;]+);/g)) {

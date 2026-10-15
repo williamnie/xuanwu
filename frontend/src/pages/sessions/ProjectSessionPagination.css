@@ -2,16 +2,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
+  gap: var(--space-1-5);
   width: calc(100% - 10px);
   min-height: 30px;
-  margin: 4px 0 6px;
-  padding: 5px 10px;
+  margin: var(--space-1) 0 var(--space-1-5);
+  padding: var(--space-1) var(--space-2-5);
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: var(--text-md);
   cursor: pointer;
 }
 

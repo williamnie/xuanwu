@@ -39,7 +39,7 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
   display: flex;
   justify-content: space-between;
   min-height: 42px;
-  padding: 6px 10px 6px 12px;
+  padding: var(--space-1-5) var(--space-2-5) var(--space-1-5) var(--space-3);
 }
 
 .global-ask-composer-brand {
@@ -48,7 +48,7 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
   border: 0;
   color: var(--text-primary);
   display: inline-flex;
-  gap: 9px;
+  gap: var(--space-2);
   min-width: 0;
   padding: 0;
   text-align: left;
@@ -74,14 +74,14 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
 }
 
 .global-ask-composer-brand strong {
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   line-height: 1.2;
 }
 
 .global-ask-composer-brand small {
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 0.61rem;
+  font-size: var(--text-2xs);
   letter-spacing: 0.035em;
   line-height: 1.3;
 }
@@ -111,10 +111,10 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
   box-shadow: none;
   color: var(--text-primary);
   display: flex;
-  gap: 9px;
+  gap: var(--space-2);
   max-width: min(320px, 100%);
   min-height: 48px;
-  padding: 7px 10px;
+  padding: var(--space-1-5) var(--space-2-5);
   pointer-events: auto;
   text-align: left;
   width: 100%;
@@ -138,13 +138,13 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
 }
 
 .global-ask-composer-launcher strong {
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   line-height: 1.25;
 }
 
 .global-ask-composer-launcher small {
   color: var(--text-muted);
-  font-size: 0.68rem;
+  font-size: var(--text-xs);
   line-height: 1.25;
 }
 
@@ -156,11 +156,11 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
 .global-ask-composer-card .session-composer {
   background: transparent;
   border: 0;
-  padding: 8px 10px 10px;
+  padding: var(--space-2) var(--space-2-5) var(--space-2-5);
 }
 
 .global-ask-composer-card .prompt-editor-composer-stack {
-  gap: 5px;
+  gap: var(--space-1);
 }
 
 .global-ask-composer-card .prompt-editor-shell.composer {
@@ -178,14 +178,14 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
 
 .global-ask-composer-card .prompt-editor-content.composer {
   color: var(--text-primary);
-  font-size: 0.91rem;
+  font-size: var(--text-base);
   line-height: 1.45;
   min-height: 48px !important;
-  padding: 11px 13px 4px;
+  padding: var(--space-2-5) var(--space-3) var(--space-1);
 }
 
 .global-ask-composer-card .prompt-composer-footer {
-  padding: 4px 8px 7px 9px;
+  padding: var(--space-1) var(--space-2) var(--space-1-5) var(--space-2);
 }
 
 .global-composer-context-control {
@@ -195,11 +195,11 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
   border-radius: var(--radius-xs);
   color: var(--text-muted);
   display: inline-flex;
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   font-weight: 700;
-  gap: 4px;
+  gap: var(--space-1);
   height: 28px;
-  padding: 0 7px;
+  padding: 0 var(--space-1-5);
 }
 
 .global-composer-context-control:hover,
@@ -209,8 +209,8 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
 }
 
 .global-ask-composer-card .prompt-reference-chip {
-  font-size: 0.67rem;
-  padding: 3px 6px;
+  font-size: var(--text-xs);
+  padding: var(--space-0-5) var(--space-1-5);
 }
 
 .global-ask-composer-card .prompt-reference-label {
@@ -233,13 +233,13 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
   }
 
   .global-ask-composer-card .session-composer {
-    padding: 6px 7px 7px;
+    padding: var(--space-1-5) var(--space-1-5) var(--space-1-5);
   }
 
   .global-ask-composer-card .prompt-editor-content.composer {
-    font-size: 0.86rem;
+    font-size: var(--text-base);
     min-height: 44px !important;
-    padding: 9px 10px 3px;
+    padding: var(--space-2) var(--space-2-5) var(--space-1);
   }
 
   .global-ask-composer-brand small,

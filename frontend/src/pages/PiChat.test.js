@@ -87,10 +87,10 @@ test('PI Assistant chat thread uses the compact session chat surface style', () 
   const userBubbleRule = ruleFor('.pi-chat-bubble.user');
   const assistantBubbleRule = ruleFor('.pi-chat-bubble.assistant');
 
-  assert.match(threadRule, /padding:\s*26px\s+clamp\(18px,\s*5vw,\s*72px\)\s+34px/);
+  assert.match(threadRule, /padding:\s*var\(--space-6\)\s+var\(--page-gutter\)\s+var\(--space-8\)/);
   assert.match(threadRule, /overscroll-behavior:\s*contain/);
   assert.match(threadRule, /scrollbar-gutter:\s*stable/);
-  assert.match(contentRule, /gap:\s*20px/);
+  assert.match(contentRule, /gap:\s*var\(--space-5\)/);
   assert.match(contentRule, /min-height:\s*100%/);
   assert.match(bubbleRule, /overflow-wrap:\s*anywhere/);
   assert.match(bubbleRule, /max-width:\s*min\(780px,\s*88%\)/);

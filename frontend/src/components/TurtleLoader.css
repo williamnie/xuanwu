@@ -3,10 +3,10 @@
   color: var(--text-muted);
   display: inline-flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   justify-content: center;
   min-width: 210px;
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .turtle-loader-track {
@@ -58,7 +58,7 @@
 }
 
 .turtle-loader-label {
-  font-size: 0.8rem;
+  font-size: var(--text-md);
   font-weight: 680;
   letter-spacing: 0.01em;
   line-height: 1.35;
@@ -66,9 +66,9 @@
 }
 
 .turtle-loader.compact {
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
-  padding: 8px 4px;
+  padding: var(--space-2) var(--space-1);
   width: 100%;
 }
 
@@ -83,7 +83,7 @@
 }
 
 .turtle-loader.compact .turtle-loader-label {
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
 }
 
 .panel-loading-state {
@@ -94,7 +94,7 @@
   display: flex;
   justify-content: center;
   min-height: 118px;
-  padding: 8px;
+  padding: var(--space-2);
   width: 100%;
 }
 

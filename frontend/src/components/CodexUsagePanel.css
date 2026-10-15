@@ -1,23 +1,23 @@
 .codex-usage-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
   overflow: hidden;
 }
 
 .codex-usage-header {
   align-items: center;
   display: flex;
-  gap: 20px;
+  gap: var(--space-5);
   justify-content: space-between;
 }
 
 .codex-usage-header h3 {
   align-items: center;
   display: flex;
-  font-size: 1.18rem;
+  font-size: var(--text-2xl);
   font-weight: 760;
-  gap: 8px;
+  gap: var(--space-2);
   letter-spacing: -0.02em;
 }
 
@@ -25,25 +25,25 @@
 
 .codex-usage-header p {
   color: var(--text-muted);
-  font-size: 0.8rem;
-  margin-top: 3px;
+  font-size: var(--text-md);
+  margin-top: var(--space-1);
 }
 
 .codex-usage-actions {
   align-items: center;
   display: flex;
   flex: 0 0 auto;
-  gap: 10px;
+  gap: var(--space-2-5);
 }
 
 .codex-usage-actions > span:not(.codex-provider-badge) {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 .codex-usage-actions .btn {
   min-width: 86px;
-  padding: 7px 11px;
+  padding: var(--space-1-5) var(--space-2-5);
 }
 
 .codex-usage-actions .btn:disabled {
@@ -57,15 +57,15 @@
   border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border-color));
   border-radius: var(--radius-xs);
   color: var(--text-primary);
-  font-size: 0.76rem;
+  font-size: var(--text-md);
   font-weight: 700;
   min-height: 30px;
-  padding: 5px 11px;
+  padding: var(--space-1) var(--space-2-5);
 }
 
 .codex-provider-select select {
   cursor: pointer;
-  padding-right: 28px;
+  padding-right: var(--space-6);
 }
 
 .codex-visually-hidden {
@@ -81,7 +81,7 @@
 .codex-usage-content {
   display: flex;
   flex-direction: column;
-  gap: 13px;
+  gap: var(--space-3);
 }
 
 .codex-usage-loading,
@@ -90,8 +90,8 @@
   border: 1px dashed var(--border-color);
   border-radius: var(--radius-xs);
   color: var(--text-muted);
-  font-size: 0.84rem;
-  padding: 16px;
+  font-size: var(--text-base);
+  padding: var(--space-4);
 }
 
 .codex-usage-error {
@@ -106,10 +106,10 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xs);
   display: grid;
-  gap: 20px;
+  gap: var(--space-5);
   grid-template-columns: minmax(145px, 0.7fr) minmax(105px, 0.45fr) minmax(0, 2.4fr);
   min-width: 0;
-  padding: 12px 14px;
+  padding: var(--space-3) var(--space-3);
 }
 
 .codex-provider-usage-row:has(.codex-compact-metric + .codex-compact-metric) {
@@ -125,7 +125,7 @@
 }
 
 .codex-provider-identity {
-  gap: 10px;
+  gap: var(--space-2-5);
   min-width: 0;
 }
 
@@ -138,8 +138,8 @@
 .codex-provider-identity > span {
   color: var(--text-muted);
   flex: 0 0 auto;
-  font-size: 0.72rem;
-  gap: 5px;
+  font-size: var(--text-sm);
+  gap: var(--space-1);
 }
 
 .codex-provider-identity > span::before {
@@ -154,7 +154,7 @@
 .codex-provider-identity > span.is-unavailable { color: var(--warning); }
 
 .codex-compact-metric {
-  gap: 8px;
+  gap: var(--space-2);
   white-space: nowrap;
 }
 
@@ -163,18 +163,18 @@
 .codex-compact-limit small,
 .codex-no-limit {
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
 }
 
 .codex-compact-metric strong {
-  font-size: 1rem;
+  font-size: var(--text-xl);
   letter-spacing: -0.025em;
 }
 
 .codex-compact-limits {
   align-items: center;
   display: flex;
-  gap: 18px;
+  gap: var(--space-4);
   justify-content: flex-end;
   min-width: 0;
 }
@@ -183,7 +183,7 @@
   --limit-accent: var(--primary);
   display: grid;
   flex: 1 1 230px;
-  gap: 7px 9px;
+  gap: var(--space-1-5) var(--space-2);
   grid-template-columns: auto minmax(64px, 1fr) auto;
   max-width: 330px;
   min-width: 185px;
@@ -191,7 +191,7 @@
 
 .codex-compact-limit.is-warning { --limit-accent: var(--warning); }
 .codex-compact-limit.is-critical { --limit-accent: var(--error); }
-.codex-compact-limit strong { color: var(--limit-accent); font-size: 0.76rem; white-space: nowrap; }
+.codex-compact-limit strong { color: var(--limit-accent); font-size: var(--text-md); white-space: nowrap; }
 .codex-compact-limit small { grid-column: 1 / -1; text-align: right; }
 
 .codex-limit-track {
@@ -214,7 +214,7 @@
   background: color-mix(in srgb, var(--text-muted) 6%, transparent);
   border: 1px dashed var(--border-color);
   border-radius: var(--radius-xs);
-  padding: 6px 10px;
+  padding: var(--space-1-5) var(--space-2-5);
 }
 
 .codex-today-usage {
@@ -222,31 +222,31 @@
   border-bottom: 1px solid var(--border-light);
   border-top: 1px solid var(--border-light);
   display: flex;
-  gap: 20px;
+  gap: var(--space-5);
   justify-content: space-between;
-  padding: 10px 2px;
+  padding: var(--space-2-5) var(--space-1);
 }
 
 .codex-today-usage > div {
   align-items: baseline;
   display: flex;
-  gap: 9px;
+  gap: var(--space-2);
 }
 
 .codex-today-usage span {
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: var(--text-md);
   font-weight: 650;
 }
 
 .codex-today-usage strong {
-  font-size: 1.05rem;
+  font-size: var(--text-xl);
   letter-spacing: -0.03em;
 }
 
 .codex-today-usage p {
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
 }
 
 @media (max-width: 980px) {
@@ -279,7 +279,7 @@
   .codex-provider-select select { width: 100%; }
   .codex-provider-usage-row,
   .codex-provider-usage-row:has(.codex-compact-metric + .codex-compact-metric) {
-    gap: 12px;
+    gap: var(--space-3);
     grid-template-columns: 1fr;
   }
   .codex-compact-limits { align-items: stretch; flex-direction: column; grid-column: auto; }

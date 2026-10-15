@@ -26,8 +26,8 @@
 .prompt-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 7px;
+  gap: var(--space-1);
+  padding: var(--space-1-5);
   border-bottom: 1px solid var(--border-color);
   background: var(--surface-raised);
 }
@@ -39,13 +39,13 @@
   color: var(--text-secondary);
   min-width: 30px;
   height: 30px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--space-1);
   cursor: pointer;
-  font-size: 0.76rem;
+  font-size: var(--text-md);
 }
 
 .prompt-tool:hover:not(:disabled),
@@ -61,8 +61,8 @@
 }
 
 .prompt-editor-content {
-  padding: 12px 14px;
-  font-size: 0.9rem;
+  padding: var(--space-3) var(--space-3-5);
+  font-size: var(--text-base);
   line-height: 1.65;
   color: var(--text-primary);
   overflow-y: auto;
@@ -70,8 +70,8 @@
 }
 
 .prompt-editor-content.composer {
-  padding: 14px 16px 6px;
-  font-size: 0.95rem;
+  padding: var(--space-3-5) var(--space-4) var(--space-1-5);
+  font-size: var(--text-lg);
   line-height: 1.6;
   max-height: min(36vh, 320px);
   color: var(--text-primary);
@@ -98,15 +98,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 6px 10px 10px;
+  gap: var(--space-2-5);
+  padding: var(--space-1-5) var(--space-2-5) var(--space-2-5);
 }
 
 .prompt-composer-left,
 .prompt-composer-actions {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   min-width: 0;
 }
 
@@ -145,18 +145,18 @@
 
 .prompt-editor-content :where(p, ul, ol, blockquote, pre, h1, h2, h3),
 .markdown-preview :where(p, ul, ol, blockquote, pre, h1, h2, h3) {
-  margin: 0 0 0.75em;
+  margin: 0 0 var(--space-3);
 }
 
 .prompt-editor-content :where(ul, ol),
 .markdown-preview :where(ul, ol) {
-  padding-left: 1.35rem;
+  padding-left: var(--space-5);
 }
 
 .prompt-editor-content blockquote,
 .markdown-preview blockquote {
   border-left: 3px solid var(--primary);
-  padding-left: 10px;
+  padding-left: var(--space-2-5);
   color: var(--text-secondary);
 }
 
@@ -165,14 +165,14 @@
   background: var(--terminal-bg);
   color: var(--terminal-text);
   border-radius: var(--radius-md);
-  padding: 10px 12px;
+  padding: var(--space-2-5) var(--space-3);
   overflow-x: auto;
 }
 
 .prompt-editor-content code,
 .markdown-preview code {
   font-family: var(--font-mono);
-  font-size: 0.85em;
+  font-size: calc(var(--text-base) / var(--text-xl) * 1em);
 }
 
 .prompt-editor-content :not(pre) > code,
@@ -180,7 +180,7 @@
   background: var(--nav-active);
   color: var(--text-primary);
   border-radius: var(--radius-xs);
-  padding: 1px 4px;
+  padding: var(--space-1) var(--space-1);
 }
 
 .prompt-editor-content img,
@@ -190,12 +190,12 @@
   max-height: 360px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
-  margin: 10px 0;
+  margin: var(--space-2-5) 0;
   object-fit: contain;
 }
 
 .markdown-preview {
-  font-size: 0.9rem;
+  font-size: var(--text-base);
   line-height: 1.65;
   color: var(--text-secondary);
   word-break: break-word;

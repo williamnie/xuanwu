@@ -301,3 +301,46 @@ test('accepted typography and spacing tiers are exact and theme invariant', () =
   assert.match(spec, /小档 28px/);
   assert.match(spec, /2px 仅标签/);
 });
+
+const typescaleContract = JSON.parse(readFileSync(new URL('./Global.typescale-contract.json', import.meta.url), 'utf8'));
+
+test('migrated styles use scale tokens and scoped structural exceptions', () => {
+  const scaleSources = { ...styles };
+  for (const file of typescaleContract.migratedFiles.filter(file => file.startsWith('../../docs/'))) {
+    const raw = readFileSync(new URL(file, root), 'utf8');
+    scaleSources[file] = uncomment(file.endsWith('.html') ? [...raw.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(match => match[1]).join('\n') : raw);
+  }
+  const seenTiny = new Set();
+  const seenPanel = new Set();
+  const seenStructural = new Set();
+  const keyOf = row => `${row.file}: ${row.selector}: ${row.property}`;
+  for (const file of typescaleContract.migratedFiles) {
+    assert.ok(scaleSources[file] !== undefined, `missing migrated stylesheet ${file}`);
+    for (const { selector, body } of rules(scaleSources[file])) {
+      for (const [, property, raw] of body.matchAll(/(?<![-\w])(font-size|(?:padding|margin)(?:-[\w-]+)?|(?:column-|row-)?gap)\s*:\s*([^;]+)(?:;|$)/g)) {
+        const value = normalize(raw).replace(/ !important$/, '');
+        const key = keyOf({ file, selector, property });
+        if (/[\d.]+(?:px|r?em|[sdl]?v[wh]|ch|ex|pt)\b/.test(value)) {
+          const allowed = typescaleContract.structuralValues.find(row => keyOf(row) === key && row.value === value);
+          assert.ok(allowed?.reason, `${key}: unreviewed literal ${value}`);
+          seenStructural.add(`${key}: ${value}`);
+        } else if (property === 'font-size') {
+          assert.match(value, /^(?:inherit|var\(--text-(?:2xs|xs|sm|md|base|lg|xl|2xl|3xl|4xl|page)\))$/, `${key}: unknown font tier ${value}`);
+        }
+        if (value.includes('var(--space-0-5)')) {
+          assert.match(property, /^padding/, key);
+          assert.ok(typescaleContract.tinyPadding.some(row => keyOf(row) === key && row.reason), `${key}: unlisted 2px inset`);
+          seenTiny.add(key);
+        }
+        if (/var\(--space-(?:3-5|4-5)\)/.test(value)) {
+          assert.match(property, /^padding/, key);
+          assert.ok(typescaleContract.panelPadding.some(row => keyOf(row) === key && row.reason), `${key}: unlisted panel inset`);
+          seenPanel.add(key);
+        }
+      }
+    }
+  }
+  for (const row of typescaleContract.structuralValues) assert.ok(seenStructural.has(`${keyOf(row)}: ${row.value}`), `stale structural exception ${keyOf(row)}`);
+  for (const row of typescaleContract.tinyPadding) assert.ok(seenTiny.has(keyOf(row)), `stale 2px inset ${keyOf(row)}`);
+  for (const row of typescaleContract.panelPadding) assert.ok(seenPanel.has(keyOf(row)), `stale panel inset ${keyOf(row)}`);
+});

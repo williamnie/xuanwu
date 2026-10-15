@@ -1,7 +1,7 @@
 .pi-chat-header-actions {
   align-items: center;
   display: inline-flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .pi-chat-main-header .pi-chat-header-actions {
@@ -18,8 +18,8 @@
   border-radius: var(--radius-md);
   display: inline-flex;
   flex-direction: row;
-  gap: 7px;
-  padding: 6px 9px;
+  gap: var(--space-1-5);
+  padding: var(--space-1-5) var(--space-2);
 }
 
 .pi-chat-status-dot {
@@ -45,12 +45,12 @@
 .pi-chat-main-header .pi-chat-status-copy {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--space-1);
 }
 
 .pi-chat-main-header .pi-chat-status-copy > span,
 .pi-chat-main-header .pi-chat-status-copy > small {
-  font-size: 0.68rem;
+  font-size: var(--text-xs);
   line-height: 1.2;
 }
 
@@ -67,12 +67,12 @@
   color: var(--text-muted);
   cursor: pointer;
   display: inline-flex;
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   font-weight: 750;
-  gap: 5px;
+  gap: var(--space-1);
   justify-content: center;
   min-height: 30px;
-  padding: 0 9px;
+  padding: 0 var(--space-2);
 }
 
 .pi-chat-copy-button:hover:not(:disabled) {
@@ -88,7 +88,7 @@
 @media (max-width: 720px) {
   .pi-chat-main-header {
     align-items: flex-start;
-    gap: 12px;
+    gap: var(--space-3);
   }
 
   .pi-chat-main-header .pi-chat-header-actions {

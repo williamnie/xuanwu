@@ -1,24 +1,24 @@
 .session-transcript-empty-diff {
-  padding: 12px 14px;
+  padding: var(--space-3) var(--space-3-5);
 }
 
 .session-transcript-empty-diff__text {
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: var(--text-md);
   margin: 0;
   white-space: pre-wrap;
 }
 
 .session-transcript-empty-diff__placeholder {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   font-style: italic;
 }
 
 /* 合并实时状态与详情入口；覆盖会话页和嵌入 Run 页的旧工具卡表面。 */
 .session-provider-message.active-live.turn-container {
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .session-provider-message.active-live > .session-message-head {
@@ -38,12 +38,12 @@
   box-shadow: none;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   font-weight: 600;
-  gap: 8px;
+  gap: var(--space-2);
   min-height: var(--button-height);
   min-width: 0;
-  padding: 8px 0;
+  padding: var(--space-2) 0;
   text-align: left;
   transform: none;
   transition: background-color 140ms ease, border-color 140ms ease;
@@ -67,7 +67,7 @@
 
 .session-provider-message .session-execution-summary .tools-trigger-left {
   min-width: 0;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .session-provider-message .session-execution-summary .tools-trigger-text {
@@ -106,8 +106,8 @@
   color: var(--text-muted);
   display: inline-flex;
   flex: 0 0 auto;
-  font-size: 0.66rem;
-  gap: 6px;
+  font-size: var(--text-xs);
+  gap: var(--space-1-5);
   margin-left: auto;
   white-space: nowrap;
 }

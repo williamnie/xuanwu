@@ -1,0 +1,490 @@
+{
+  "migratedFiles": [
+    "App.css",
+    "GeekWorkbench.css",
+    "GeekWorkbenchPages.css",
+    "components/AppSidebar.css",
+    "components/CodexUsagePanel.css",
+    "components/CodexUsagePanel.details.css",
+    "components/EvidencePanel.css",
+    "components/GlobalAskComposer.css",
+    "components/IssueEditModal.css",
+    "components/Metadata.css",
+    "components/ReleaseUpdateDialog.css",
+    "components/RuntimeHealthStrip.css",
+    "components/RuntimeLogsPanel.css",
+    "components/ToastContainer.css",
+    "components/TurtleLoader.css",
+    "components/editor/PromptEditor.css",
+    "components/editor/PromptEditorComposerImages.css",
+    "components/editor/PromptEditorReferences.css",
+    "components/editor/PromptEditorSuggestions.css",
+    "index.css",
+    "pages/PiChat.css",
+    "pages/PiChatDiagnostics.css",
+    "pages/PiChatSidebar.css",
+    "pages/PiChatThread.css",
+    "pages/sessions/ApprovalDialog.css",
+    "pages/sessions/ProjectSessionPagination.css",
+    "pages/sessions/SessionCommandPanel.css",
+    "pages/sessions/SessionCommandReplay.css",
+    "pages/sessions/SessionComposer.css",
+    "pages/sessions/SessionSidebar.css",
+    "pages/sessions/SessionTranscript.css",
+    "pages/sessions/Sessions.css",
+    "pages/sessions/SessionsClient.css",
+    "../../docs/design-system/components.css",
+    "../../docs/design-system/examples/index.html",
+    "../../docs/design-system/examples/chat.html"
+  ],
+  "tinyPadding": [
+    {
+      "file": "components/AppSidebar.css",
+      "selector": ".nav-badge",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "components/EvidencePanel.css",
+      "selector": ".evidence-status",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "components/GlobalAskComposer.css",
+      "selector": ".global-ask-composer-card .prompt-reference-chip",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "components/editor/PromptEditorReferences.css",
+      "selector": ".prompt-reference-chip",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "index.css",
+      "selector": ".api-status",
+      "property": "padding-left",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "index.css",
+      "selector": ".nav-badge",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "index.css",
+      "selector": ".kanban-card-status",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "index.css",
+      "selector": ".status-badge",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "index.css",
+      "selector": ".triage-readiness-badge",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "index.css",
+      "selector": ".kanban-card-runtime-pill",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "pages/sessions/SessionCommandPanel.css",
+      "selector": ".session-command-chip",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".session-provider-pill",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".diff-badge",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "../../docs/design-system/components.css",
+      "selector": ".ds-status-pill",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip."
+    },
+    {
+      "file": "App.css",
+      "selector": ".guardian-alert-severity",
+      "property": "padding",
+      "reason": "Spec 4.0.1: severity badge / attached-context chip inset."
+    },
+    {
+      "file": "pages/PiChatThread.css",
+      "selector": ".pi-chat-context-card-title span, .pi-chat-context-card-references span",
+      "property": "padding",
+      "reason": "Spec 4.0.1: severity badge / attached-context chip inset."
+    }
+  ],
+  "panelPadding": [
+    {
+      "file": "GeekWorkbench.css",
+      "selector": ".sidebar-brand-row",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "GeekWorkbench.css",
+      "selector": ".page-intro",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "GeekWorkbench.css",
+      "selector": ".e2b-window-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "GeekWorkbench.css",
+      "selector": ".main-content",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "GeekWorkbench.css",
+      "selector": ".page-intro",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "GeekWorkbenchPages.css",
+      "selector": ".dashboard-stat-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "GeekWorkbenchPages.css",
+      "selector": ".dashboard-events-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "GeekWorkbenchPages.css",
+      "selector": ".dashboard-stat-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "GeekWorkbenchPages.css",
+      "selector": ".dashboard-page > .grid-cols-3 > .glass-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "GeekWorkbenchPages.css",
+      "selector": ".kanban-column-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "GeekWorkbenchPages.css",
+      "selector": ".project-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "GeekWorkbenchPages.css",
+      "selector": ".pi-chat-page",
+      "property": "padding-top",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "GeekWorkbenchPages.css",
+      "selector": ".pi-chat-composer",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "components/CodexUsagePanel.details.css",
+      "selector": ".codex-usage-details-body",
+      "property": "padding-top",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "components/CodexUsagePanel.details.css",
+      "selector": ".codex-usage-breakdown__empty",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "components/EvidencePanel.css",
+      "selector": ".evidence-panel",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "components/EvidencePanel.css",
+      "selector": ".evidence-panel.compact",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "components/editor/PromptEditor.css",
+      "selector": ".prompt-editor-content",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "components/editor/PromptEditor.css",
+      "selector": ".prompt-editor-content.composer",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "components/editor/PromptEditorComposerImages.css",
+      "selector": ".prompt-image-attachment-area",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "index.css",
+      "selector": ".sidebar",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "index.css",
+      "selector": ".kanban-column-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/PiChatThread.css",
+      "selector": ".pi-chat-bubble.user",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/PiChatThread.css",
+      "selector": ".pi-chat-bubble.error",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/PiChatThread.css",
+      "selector": ".pi-chat-main-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/PiChatThread.css",
+      "selector": ".pi-chat-thread",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/PiChatThread.css",
+      "selector": ".pi-chat-composer",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/ApprovalDialog.css",
+      "selector": ".approval-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/SessionComposer.css",
+      "selector": ".session-composer",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/SessionComposer.css",
+      "selector": ".client-chat-composer-section .prompt-editor-content.composer",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/SessionComposer.css",
+      "selector": ".new-session-composer-wrapper .prompt-editor-content.composer",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/SessionComposer.css",
+      "selector": ".client-chat-composer-section .prompt-composer-footer, .pi-chat-composer .prompt-composer-footer, .new-session-composer-wrapper .prompt-composer-footer",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/SessionTranscript.css",
+      "selector": ".session-transcript-empty-diff",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".session-list-empty-state",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".session-info-panel",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".chat-bubble-container.user",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".terminal-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".diff-file-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/SessionsClient.css",
+      "selector": ".client-chat-area .terminal-body",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/SessionsClient.css",
+      "selector": ".client-chat-area .session-transcript",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/sessions/SessionsClient.css",
+      "selector": ".client-chat-area .session-runtime-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "../../docs/design-system/components.css",
+      "selector": ".ds-panel-body",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "../../docs/design-system/components.css",
+      "selector": ".ds-request-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "../../docs/design-system/components.css",
+      "selector": ".ds-bubble",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "../../docs/design-system/components.css",
+      "selector": ".ds-terminal-body",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "../../docs/design-system/components.css",
+      "selector": ".ds-composer textarea",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "../../docs/design-system/components.css",
+      "selector": ".ds-composer-foot",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "../../docs/design-system/components.css",
+      "selector": ".ds-composer textarea",
+      "property": "padding-inline",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "../../docs/design-system/examples/index.html",
+      "selector": "section.block",
+      "property": "padding-top",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "../../docs/design-system/examples/chat.html",
+      "selector": ".sidebar",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "../../docs/design-system/examples/chat.html",
+      "selector": ".thread",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    }
+  ],
+  "structuralValues": [
+    {
+      "file": "components/editor/PromptEditor.css",
+      "selector": ".prompt-editor-content code, .markdown-preview code",
+      "property": "font-size",
+      "value": "calc(var(--text-base) / var(--text-xl) * 1em)",
+      "reason": "Preserve relative inline-code scaling; .85em -> .875em, not a fixed rem size."
+    },
+    {
+      "file": "index.css",
+      "selector": ".api-status",
+      "property": "padding-left",
+      "value": "calc(46px + var(--space-0-5))",
+      "reason": "Existing 46px brand mark plus status-label inset (spec 4 fixed control geometry / 5.4)."
+    },
+    {
+      "file": "index.css",
+      "selector": ".auth-token-input-wrap .form-control",
+      "property": "padding-right",
+      "value": "calc(36px + var(--space-2))",
+      "reason": "Existing 36px visibility control plus 8px input text clearance (spec 4 fixed control geometry)."
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".sr-only",
+      "property": "margin",
+      "value": "-1px",
+      "reason": "Accessibility clipping box: 1px screen-reader-only geometry, not visible spacing (spec 4 structural geometry)."
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".live-reasoning-card",
+      "property": "margin-left",
+      "value": "calc(26px + var(--space-5))",
+      "reason": "Spec 5.7 26px avatar plus 20px transcript gutter."
+    },
+    {
+      "file": "pages/sessions/Sessions.css",
+      "selector": ".tools-collapsible-wrapper",
+      "property": "margin",
+      "value": "var(--space-2) 0 var(--space-2) calc(26px + var(--space-5))",
+      "reason": "Spec 5.7 26px avatar plus 20px transcript gutter."
+    }
+  ]
+}

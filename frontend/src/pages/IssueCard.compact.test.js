@@ -22,11 +22,11 @@ test('issue cards render runtime data as compact metadata pills', () => {
   assert.doesNotMatch(cardSource, /kanban-card-run-grid/);
   assert.doesNotMatch(css, /\.kanban-card-run\s*\{/);
 
-  assert.match(ruleFor('.kanban-card'), /padding:\s*11px 12px/);
-  assert.match(ruleFor('.kanban-card'), /gap:\s*8px/);
+  assert.match(ruleFor('.kanban-card'), /padding:\s*var\(--space-2-5\) var\(--space-3\)/);
+  assert.match(ruleFor('.kanban-card'), /gap:\s*var\(--space-2\)/);
   assert.match(ruleFor('.kanban-card-runtime-meta'), /flex-wrap:\s*wrap/);
   assert.match(ruleFor('.kanban-card-runtime-pill'), /border-radius:\s*var\(--radius-xs\)/);
-  assert.match(ruleFor('.kanban-card-runtime-pill'), /padding:\s*2px 6px/);
+  assert.match(ruleFor('.kanban-card-runtime-pill'), /padding:\s*var\(--space-0-5\) var\(--space-1-5\)/);
 });
 
 test('issue card runtime details stay available through tooltip text', () => {

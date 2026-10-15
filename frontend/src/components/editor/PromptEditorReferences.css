@@ -1,21 +1,21 @@
 .prompt-editor-composer-stack {
   display: grid;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 
 .prompt-reference-area {
   align-items: center;
   display: flex;
-  gap: 6px;
+  gap: var(--space-1-5);
   min-width: 0;
-  padding: 0 2px;
+  padding: 0 var(--space-1);
 }
 
 .prompt-reference-chips {
   display: flex;
   flex-wrap: wrap;
   flex: 0 0 auto;
-  gap: 6px;
+  gap: var(--space-1-5);
   min-width: 0;
 }
 
@@ -23,14 +23,14 @@
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  gap: 5px;
+  gap: var(--space-1);
   border: 1px solid color-mix(in srgb, var(--info) 22%, transparent);
   border-radius: var(--radius-xs);
-  padding: 3px 7px;
+  padding: var(--space-0-5) var(--space-1-5);
   background: var(--info-bg);
   color: var(--info);
   cursor: pointer;
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   font-weight: 650;
 }
 
@@ -48,7 +48,7 @@
 
 .prompt-reference-type {
   font-family: var(--font-mono);
-  font-size: 0.66rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   opacity: 0.75;
@@ -69,7 +69,7 @@
   border-radius: var(--radius-xs);
   color: currentColor;
   cursor: pointer;
-  font-size: 0.86rem;
+  font-size: var(--text-base);
   line-height: 1;
   opacity: 0.72;
 }

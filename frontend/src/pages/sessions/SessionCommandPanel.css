@@ -1,8 +1,8 @@
 .session-command-panel {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   justify-content: space-between;
-  padding: 12px;
+  padding: var(--space-3);
   color: var(--text-primary);
   background: var(--surface-raised);
   border: 1px solid var(--border-color);
@@ -11,7 +11,7 @@
 
 .session-command-main {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -24,13 +24,13 @@
 }
 
 .session-command-title-row {
-  gap: 9px;
+  gap: var(--space-2);
 }
 
 .session-command-title-row p {
-  margin: 2px 0 0;
+  margin: var(--space-1) 0 0;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
 }
 
 .session-command-icon,
@@ -50,14 +50,14 @@
 
 .session-command-chips {
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 
 .session-command-chip {
-  padding: 3px 8px;
+  padding: var(--space-0-5) var(--space-2);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 0.56rem;
+  font-size: var(--text-2xs);
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -73,7 +73,7 @@
 }
 
 .session-command-actions {
-  gap: 8px;
+  gap: var(--space-2);
   flex-shrink: 0;
   align-self: stretch;
 }
@@ -83,15 +83,15 @@
   height: var(--button-height);
   border: 1px solid transparent;
   border-radius: var(--button-radius);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: 0.01em;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
 }
 
 .session-command-actions .session-command-cancel {
   display: inline-flex;
-  gap: 4px;
+  gap: var(--space-1);
   align-items: center;
   color: var(--text-secondary);
   background: transparent;
@@ -100,7 +100,7 @@
 
 .session-command-execute {
   display: inline-flex;
-  gap: 5px;
+  gap: var(--space-1);
   align-items: center;
   color: var(--button-primary-fg);
   background: var(--button-primary-bg);
@@ -113,16 +113,16 @@
 
 .session-command-error {
   color: var(--error);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
 }
 
 .session-command-result {
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: var(--space-1);
   color: var(--text-secondary);
-  font-size: 0.78rem;
-  padding: 8px 0 0;
+  font-size: var(--text-md);
+  padding: var(--space-2) 0 0;
   border-radius: 0;
   border-top: 1px solid var(--border-light);
   background: transparent;
@@ -130,7 +130,7 @@
 
 .session-command-result strong {
   font-family: var(--font-mono);
-  font-size: 0.56rem;
+  font-size: var(--text-2xs);
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -138,7 +138,7 @@
   border: 1px solid color-mix(in srgb, var(--success) 24%, transparent);
   border-radius: var(--radius-xs);
   background: var(--success-bg);
-  padding: 4px 6px;
+  padding: var(--space-1) var(--space-1-5);
 }
 
 @media (max-width: 760px) {
@@ -149,7 +149,7 @@
   }
 }
 
-.session-command-title-row strong { font-size: 0.95rem; }
+.session-command-title-row strong { font-size: var(--text-lg); }
 
 .session-command-cancel:hover:not(:disabled) { background: var(--nav-hover); border-color: var(--border-color-hover); }
 

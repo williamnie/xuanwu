@@ -4,27 +4,27 @@
   border-color: color-mix(in srgb, var(--warning) 30%, var(--border-color));
   border-left: 3px solid var(--warning);
   display: flex;
-  gap: 18px;
+  gap: var(--space-4);
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: var(--space-3) var(--space-4);
 }
 
 .runtime-health-alert-copy {
   align-items: center;
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
 }
 
 .runtime-health-alert-copy strong {
   display: block;
-  font-size: 0.88rem;
+  font-size: var(--text-base);
 }
 
 .runtime-health-alert-copy p {
   color: var(--text-muted);
-  font-size: 0.78rem;
-  margin-top: 2px;
+  font-size: var(--text-md);
+  margin-top: var(--space-1);
   overflow-wrap: anywhere;
 }
 
@@ -36,12 +36,12 @@
   display: inline-flex;
   flex: 0 0 auto;
   justify-content: center;
-  padding: 8px;
+  padding: var(--space-2);
 }
 
 .runtime-health-alert .btn {
   flex: 0 0 auto;
-  padding: 7px 11px;
+  padding: var(--space-1-5) var(--space-2-5);
 }
 
 @media (max-width: 720px) {

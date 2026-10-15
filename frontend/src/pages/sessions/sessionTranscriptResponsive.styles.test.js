@@ -63,10 +63,10 @@ test('client chat spacing uses viewport-aware padding instead of fixed desktop w
   const composerRule = ruleFor(clientCss, '.client-chat-composer-section');
   const userBubbleRule = ruleFor(sessionsCss, '.chat-bubble-container.user');
 
-  assert.match(transcriptRule, /padding:\s*22px\s+clamp\(16px,\s*4vw,\s*56px\)\s+28px/);
+  assert.match(transcriptRule, /padding:\s*var\(--space-5\)\s+var\(--page-gutter\)\s+var\(--space-6\)/);
   assert.match(transcriptContentRule, /max-width:\s*920px/);
-  assert.match(transcriptContentRule, /gap:\s*22px/);
-  assert.match(composerRule, /padding:\s*12px\s+var\(--sessions-page-gutter\)\s+26px/);
+  assert.match(transcriptContentRule, /gap:\s*var\(--space-5\)/);
+  assert.match(composerRule, /padding:\s*var\(--space-3\)\s+var\(--sessions-page-gutter\)\s+var\(--space-6\)/);
   assert.match(userBubbleRule, /max-width:\s*min\(100%,\s*80%\)/);
 });
 

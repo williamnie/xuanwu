@@ -18,7 +18,7 @@ test('composer image attachments render inside the editable input shell', () => 
 
   assert.match(promptEditorJsx, /const editorShell = \([\s\S]*<PromptEditorComposerImages[\s\S]*<EditorContent/);
   assert.match(areaRule, /display:\s*flex/);
-  assert.match(areaRule, /padding:\s*12px\s+14px\s+0/);
+  assert.match(areaRule, /padding:\s*var\(--space-3\)\s+var\(--space-3-5\)\s+0/);
   assert.match(cardRule, /width:\s*92px/);
   assert.match(cardRule, /height:\s*76px/);
 });

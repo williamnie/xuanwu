@@ -9,7 +9,7 @@
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: 0.88rem;
+  font-size: var(--text-base);
   line-height: 1.6;
   margin: 0;
 }
@@ -17,7 +17,7 @@
 .ds-mono-label {
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 0.56rem;
+  font-size: var(--text-2xs);
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -33,12 +33,12 @@
   cursor: pointer;
   display: inline-flex;
   font-family: var(--font-display);
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   font-weight: 600;
-  gap: 6px;
+  gap: var(--space-1-5);
   height: 32px;
   letter-spacing: 0.01em;
-  padding: 0 14px;
+  padding: 0 var(--space-3);
   transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 .ds-btn:hover {
@@ -60,7 +60,7 @@
 }
 .ds-btn--danger { border-color: color-mix(in srgb, var(--error) 45%, transparent); color: var(--error); }
 .ds-btn--danger:hover { background: var(--error-bg); border-color: var(--error); color: var(--error); }
-.ds-btn--sm { font-size: 0.7rem; height: 28px; padding: 0 10px; }
+.ds-btn--sm { font-size: var(--text-xs); height: 28px; padding: 0 var(--space-2-5); }
 
 /* 全系统唯一允许渐变的按钮：列表顶部「新建」入口 */
 .ds-btn--new {
@@ -105,11 +105,11 @@
   border-radius: var(--radius-xs);
   display: inline-flex;
   font-family: var(--font-mono);
-  font-size: 0.56rem;
+  font-size: var(--text-2xs);
   font-weight: 700;
-  gap: 5px;
+  gap: var(--space-1);
   letter-spacing: 0.1em;
-  padding: 3px 8px;
+  padding: var(--space-0-5) var(--space-2);
   text-transform: uppercase;
 }
 .ds-status-pill::before { border-radius: 50%; content: ''; height: 6px; width: 6px; }
@@ -129,9 +129,9 @@
   align-items: center;
   border-bottom: 1px solid var(--border-color);
   display: flex;
-  gap: 3px;
+  gap: var(--space-1);
   overflow-x: auto;
-  padding: 8px 18px;
+  padding: var(--space-2) var(--space-4);
   scrollbar-width: none;
 }
 .ds-tabs::-webkit-scrollbar { display: none; }
@@ -143,10 +143,10 @@
   cursor: pointer;
   flex-shrink: 0;
   font-family: var(--font-display);
-  font-size: 0.68rem;
+  font-size: var(--text-xs);
   font-weight: 650;
   letter-spacing: 0.045em;
-  padding: 6px 11px;
+  padding: var(--space-1-5) var(--space-2-5);
   text-transform: uppercase;
   transition: background-color 140ms ease, color 140ms ease;
 }
@@ -163,7 +163,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   display: block;
-  padding: 9px 10px;
+  padding: var(--space-2) var(--space-2-5);
   text-align: left;
   transition: background-color 140ms ease, border-color 140ms ease;
   width: 100%;
@@ -175,8 +175,8 @@
   box-shadow: inset 2px 0 0 var(--primary);
   color: var(--text-primary);
 }
-.ds-nav-item .t { display: block; font-size: 0.78rem; font-weight: 600; }
-.ds-nav-item .m { color: var(--text-muted); display: block; font-family: var(--font-mono); font-size: 0.58rem; margin-top: 3px; }
+.ds-nav-item .t { display: block; font-size: var(--text-md); font-weight: 600; }
+.ds-nav-item .m { color: var(--text-muted); display: block; font-family: var(--font-mono); font-size: var(--text-2xs); margin-top: var(--space-1); }
 
 /* ---------- 数据事实条 ---------- */
 .ds-facts {
@@ -185,17 +185,17 @@
   display: flex;
   flex-wrap: wrap;
 }
-.ds-fact { border-right: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 3px; padding: 9px 18px; }
+.ds-fact { border-right: 1px solid var(--border-light); display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-4); }
 .ds-fact:last-child { border-right: 0; }
 .ds-fact small {
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 0.56rem;
+  font-size: var(--text-2xs);
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.ds-fact strong { color: var(--text-primary); font-family: var(--font-mono); font-size: 0.78rem; font-weight: 700; }
+.ds-fact strong { color: var(--text-primary); font-family: var(--font-mono); font-size: var(--text-md); font-weight: 700; }
 .ds-fact strong[data-tone='running'] { color: var(--info); }
 .ds-fact strong[data-tone='ok'] { color: var(--success); }
 .ds-fact strong[data-tone='error'] { color: var(--error); }
@@ -207,9 +207,9 @@
   align-items: center;
   border-bottom: 1px solid var(--border-light);
   display: flex;
-  gap: 9px;
+  gap: var(--space-2);
   justify-content: space-between;
-  padding: 11px 16px;
+  padding: var(--space-2-5) var(--space-4);
 }
 .ds-panel-head .ic {
   align-items: center;
@@ -221,8 +221,8 @@
   justify-content: center;
   width: 25px;
 }
-.ds-panel-head strong { font-size: 0.84rem; font-weight: 650; }
-.ds-panel-body { padding: 14px 16px; }
+.ds-panel-head strong { font-size: var(--text-base); font-weight: 650; }
+.ds-panel-body { padding: var(--space-3-5) var(--space-4); }
 
 /* ---------- 待处理卡片（首页“待你处理”：凸起小面 + 状态点 + 右侧操作） ---------- */
 .ds-request-card {
@@ -231,39 +231,39 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   display: grid;
-  gap: 4px 12px;
+  gap: var(--space-1) var(--space-3);
   grid-template-columns: 7px minmax(0, 1fr) auto;
-  padding: 12px 14px;
+  padding: var(--space-3) var(--space-3-5);
 }
-.ds-request-card > .dot { background: var(--warning); border-radius: 50%; height: 7px; margin-top: 6px; width: 7px; }
+.ds-request-card > .dot { background: var(--warning); border-radius: 50%; height: 7px; margin-top: var(--space-1-5); width: 7px; }
 .ds-request-card[data-tone='error'] > .dot { background: var(--error); }
 .ds-request-card[data-tone='idle'] > .dot { background: var(--text-faint); }
-.ds-request-card .kind { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.56rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
-.ds-request-card .title { color: var(--text-primary); font-size: 0.82rem; font-weight: 600; }
-.ds-request-card .detail { color: var(--text-secondary); font-size: 0.72rem; line-height: 1.5; }
-.ds-request-card .actions { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.ds-request-card .kind { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.ds-request-card .title { color: var(--text-primary); font-size: var(--text-md); font-weight: 600; }
+.ds-request-card .detail { color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.5; }
+.ds-request-card .actions { align-items: center; display: flex; flex-wrap: wrap; gap: var(--space-1-5); justify-content: flex-end; }
 
 /* ---------- 消息气泡（lg 圆角是气泡专属） ---------- */
-.ds-bubble { border-radius: var(--radius-lg); max-width: 80%; padding: 14px 16px; }
+.ds-bubble { border-radius: var(--radius-lg); max-width: 80%; padding: var(--space-3-5) var(--space-4); }
 .ds-bubble--user { align-self: flex-end; background: var(--primary-glow); border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent); }
 .ds-bubble--error { background: var(--error-bg); border: 1px solid color-mix(in srgb, var(--error) 30%, transparent); border-left: 3px solid var(--error); }
-.ds-msg-head { align-items: center; display: flex; gap: 8px; margin-bottom: 6px; }
+.ds-msg-head { align-items: center; display: flex; gap: var(--space-2); margin-bottom: var(--space-1-5); }
 .ds-avatar {
   align-items: center; background: var(--primary-glow); color: var(--primary);
   display: inline-flex; height: 26px; justify-content: center; width: 26px; /* 方形头像 */
 }
-.ds-role { font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.ds-role { font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
 
 /* ---------- 终端输出 ---------- */
 .ds-terminal { background: var(--terminal-bg); border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden; }
 .ds-terminal-head {
   align-items: center; border-bottom: 1px solid var(--terminal-border); color: var(--terminal-muted);
-  display: flex; font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
-  gap: 8px; letter-spacing: 0.1em; padding: 7px 12px; text-transform: uppercase;
+  display: flex; font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700;
+  gap: var(--space-2); letter-spacing: 0.1em; padding: var(--space-1-5) var(--space-3); text-transform: uppercase;
 }
 .ds-terminal-body {
-  color: var(--terminal-text); font-family: var(--font-mono); font-size: 0.72rem;
-  line-height: 1.7; margin: 0; overflow-x: auto; padding: 12px 14px;
+  color: var(--terminal-text); font-family: var(--font-mono); font-size: var(--text-sm);
+  line-height: 1.7; margin: 0; overflow-x: auto; padding: var(--space-3) var(--space-3-5);
 }
 .ds-terminal-body .ok { color: var(--terminal-success); }
 .ds-terminal-body .err { color: var(--terminal-error); }
@@ -276,22 +276,22 @@
   border-radius: var(--radius-xs);
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   outline: none;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-2-5);
   transition: border-color 140ms ease;
   width: 100%;
 }
 .ds-input:focus, .ds-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
 .ds-input::placeholder, .ds-textarea::placeholder { color: var(--text-faint); }
-.ds-field-label { display: block; margin-bottom: 6px; } /* 搭配 .ds-mono-label 使用 */
+.ds-field-label { display: block; margin-bottom: var(--space-1-5); } /* 搭配 .ds-mono-label 使用 */
 
 /* 内嵌型小选择器（composer footer / 配置标签） */
 .ds-chip-select {
   align-items: center; background: var(--control-bg); border: 1px solid var(--border-color);
   border-radius: var(--radius-xs); color: var(--text-secondary); cursor: pointer;
-  display: inline-flex; font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600;
-  gap: 6px; letter-spacing: 0.02em; padding: 5px 10px; position: relative;
+  display: inline-flex; font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600;
+  gap: var(--space-1-5); letter-spacing: 0.02em; padding: var(--space-1) var(--space-2-5); position: relative;
   transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 .ds-chip-select:hover { background: var(--nav-hover); border-color: var(--border-color-hover); color: var(--text-primary); }
@@ -303,10 +303,10 @@
 .ds-composer:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
 .ds-composer textarea {
   background: transparent; border: 0; color: var(--text-primary); font-family: var(--font-display);
-  font-size: 0.95rem; line-height: 1.6; min-height: 96px; outline: none; padding: 18px 20px 8px;
-  resize: none; width: 100%;
+  font-size: var(--text-lg); line-height: 1.6; min-height: 96px; outline: none; padding: var(--space-4-5) var(--space-5) var(--space-2);
+  box-sizing: border-box; resize: none; width: 100%;
 }
-.ds-composer-foot { align-items: center; display: flex; gap: 8px; padding: 8px 14px 12px 16px; }
+.ds-composer-foot { align-items: center; display: flex; gap: var(--space-2); padding: var(--space-2) var(--space-3-5) var(--space-3) var(--space-4); }
 .ds-composer-foot .spacer { flex: 1; }
 .ds-send {
   align-items: center; background: var(--button-primary-bg); border: 0; border-radius: 50%; /* 提交钮是全系统唯一圆形 */
@@ -327,11 +327,11 @@
 }
 
 @media (max-width: 760px) {
-  .ds-tabs { padding-inline: 12px; }
-  .ds-fact { flex: 1 1 50%; padding-inline: 12px; }
+  .ds-tabs { padding-inline: var(--space-3); }
+  .ds-fact { flex: 1 1 50%; padding-inline: var(--space-3); }
   .ds-bubble { max-width: 92%; }
-  .ds-composer textarea { padding-inline: 14px; }
-  .ds-composer-foot { flex-wrap: wrap; padding-inline: 12px; }
+  .ds-composer textarea { padding-inline: var(--space-3-5); }
+  .ds-composer-foot { flex-wrap: wrap; padding-inline: var(--space-3); }
   .ds-request-card { grid-template-columns: 7px minmax(0, 1fr); }
   .ds-request-card .actions { grid-column: 2; justify-content: flex-start; }
 }
@@ -358,6 +358,6 @@
   border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
 }
 
