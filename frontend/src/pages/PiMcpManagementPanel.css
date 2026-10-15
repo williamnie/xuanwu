@@ -37,7 +37,7 @@
 .pi-mcp-panel__mini-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   padding: 12px;
 }
 
@@ -86,7 +86,7 @@
 .pi-mcp-panel__row-card {
   align-items: center;
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   padding: 12px;
 }
 

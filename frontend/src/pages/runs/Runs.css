@@ -508,7 +508,7 @@
 .run-resource-panel {
   background: color-mix(in srgb, var(--bg-card) 94%, transparent);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
 }
 
 .run-progress-timeline { padding: 14px 15px 8px; }

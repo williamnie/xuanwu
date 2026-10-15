@@ -30,7 +30,7 @@
   background: color-mix(in srgb, var(--warning) 10%, var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--warning) 36%, var(--border-color));
   border-left: 4px solid var(--warning);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   display: flex;
   gap: 12px;
@@ -59,7 +59,7 @@
   align-items: center;
   background: var(--surface-raised);
   border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   color: var(--warning);
   display: inline-flex;
   flex: 0 0 auto;
@@ -166,7 +166,7 @@
 .guardian-alert-inline-error {
   background: var(--error-bg);
   border: 1px solid color-mix(in srgb, var(--error) 24%, transparent);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   color: var(--error);
   font-size: 0.78rem;
   margin: 0;

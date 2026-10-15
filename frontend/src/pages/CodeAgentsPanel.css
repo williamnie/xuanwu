@@ -120,7 +120,7 @@
 .codex-backend-selector {
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   display: grid;
   gap: 10px;
   margin-top: 14px;
@@ -151,7 +151,7 @@
 .codex-backend-option {
   background: var(--bg-primary);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   cursor: pointer;
   display: grid;

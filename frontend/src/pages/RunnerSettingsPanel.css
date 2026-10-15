@@ -37,7 +37,7 @@
 .runner-settings__launcher {
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -57,7 +57,7 @@
 
 .runner-settings__launcher-step {
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   display: grid;
   gap: 8px;
   padding: 12px;
@@ -140,7 +140,7 @@
 .runner-settings__status {
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   font-size: 0.8rem;
   line-height: 1.6;
   padding: 10px;

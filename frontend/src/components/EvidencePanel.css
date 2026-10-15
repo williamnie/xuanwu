@@ -1,7 +1,7 @@
 .evidence-panel {
   background: color-mix(in srgb, var(--bg-card) 96%, transparent);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   gap: 10px;

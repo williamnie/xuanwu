@@ -40,6 +40,15 @@ const circles = {
   'pages/sessions/SessionsClient.css': ['.composer-circle-submit'],
 };
 
+// Spec 2 / 5.2 / 5.7: 10px belongs only to composer surfaces and user bubbles.
+const largeRadii = {
+  'components/GlobalAskComposer.css': ['.global-ask-composer-card', '.global-ask-composer-card .prompt-editor-shell.composer'],
+  'components/editor/PromptEditor.css': ['.prompt-editor-shell.composer'],
+  'pages/WorkBoard.css': ['.work-dialog-field .prompt-editor-shell.composer'],
+  'pages/sessions/Sessions.css': ['.chat-bubble-container.user'],
+  'pages/sessions/SessionComposer.css': ['.client-chat-composer-section .prompt-editor-shell.composer, .new-session-composer-wrapper .prompt-editor-shell.composer, .pi-chat-composer .prompt-editor-shell.composer'],
+};
+
 function rules(css) {
   return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
     .map(([, selector, body]) => ({ selector: normalize(selector), body }));
@@ -57,9 +66,15 @@ test('every frontend stylesheet uses canonical colors without literal fallbacks 
 
 test('all component radii stay within the contract and circular exceptions remain explicit', () => {
   const seen = new Set();
+  const seenLarge = new Set();
   for (const [file, css] of Object.entries(styles)) {
     for (const { selector, body } of rules(css)) {
       for (const [, value] of body.matchAll(/border(?:-(?:top|bottom)-(?:left|right))?-radius:\s*([^;]+);/g)) {
+        if (/var\(--(?:radius-lg|sessions-composer-radius)\)/.test(value)) {
+          assert.ok(largeRadii[file]?.includes(selector), `${file}: unlisted large radius ${selector}`);
+          seenLarge.add(`${file}: ${selector}`);
+        }
+        assert.doesNotMatch(value, /[\d.]+(?:px|rem|em)\b/, `${file}: radius must use a token`);
         for (const [, amount, unit] of value.matchAll(/([\d.]+)(px|rem|em|%)/g)) {
           if (unit === '%') {
             assert.equal(Number(amount), 50, `${file}: ${selector}`);
@@ -72,6 +87,9 @@ test('all component radii stay within the contract and circular exceptions remai
         assert.doesNotMatch(value, /var\(--(?!radius-(?:xs|sm|md|lg)\b|button-radius\b|sessions-composer-radius\b)/, file);
       }
     }
+  }
+  for (const [file, selectors] of Object.entries(largeRadii)) {
+    for (const selector of selectors) assert.ok(seenLarge.has(`${file}: ${selector}`), `stale large-radius exemption: ${file}: ${selector}`);
   }
   for (const [file, selectors] of Object.entries(circles)) {
     for (const selector of selectors) assert.ok(seen.has(`${file}: ${selector}`), `stale circle exemption: ${file}: ${selector}`);

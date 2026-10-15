@@ -368,7 +368,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 [data-theme="dark"] .work-card {
   background: var(--bg-inset);
   border: 1px solid var(--border-crisp);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   box-shadow: none;
 }
 [data-theme="dark"] .work-card:hover {
@@ -395,7 +395,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 [data-theme="dark"] .pi-chat-starters button {
   background: var(--bg-surface);
   border: 1px solid var(--border-crisp);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 [data-theme="dark"] .pi-chat-starters button:hover {
   border-color: var(--primary);
@@ -404,7 +404,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 [data-theme="dark"] .pi-chat-bubble.user {
   background: var(--bg-surface);
   border: 1px solid var(--border-crisp);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 [data-theme="dark"] .run-context-bar {
@@ -421,7 +421,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 [data-theme="dark"] .automation-detail-panel {
   background: var(--bg-surface);
   border: 1px solid var(--border-crisp);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 [data-theme="dark"] .automation-panel-title,
 [data-theme="dark"] .automation-detail-header {
@@ -431,12 +431,12 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 [data-theme="dark"] .automation-filters {
   background: var(--bg-surface);
   border-color: var(--border-crisp);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 [data-theme="dark"] .automation-filters label {
   background: var(--bg-inset);
   border-color: var(--border-crisp);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 [data-theme="dark"] .automation-filters label:focus-within {
   border-color: var(--primary);
@@ -449,7 +449,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 [data-theme="dark"] .automation-fact {
   background: var(--bg-inset);
   border-color: var(--border-crisp);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 [data-theme="dark"] .automation-editor {
   background: var(--bg-obsidian);
