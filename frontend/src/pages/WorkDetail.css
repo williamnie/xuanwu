@@ -75,7 +75,7 @@
 .work-delivery-summary-grid > div.danger { border-left-color: var(--error); }
 .work-delivery-summary-grid span { color: var(--text-muted); font-family: var(--font-mono); font-size: .55rem; letter-spacing: .06em; text-transform: uppercase; }
 .work-delivery-summary-grid strong { font-size: .76rem; line-height: 1.35; overflow-wrap: anywhere; }
-.work-delivery-conclusion { background: linear-gradient(110deg, color-mix(in srgb, var(--primary) 7%, var(--bg-card)), var(--bg-card) 58%); border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border-color)); border-radius: var(--radius-md); padding: 16px; }
+.work-delivery-conclusion { background: var(--bg-card); border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border-color)); border-radius: var(--radius-md); padding: 16px; }
 .work-delivery-conclusion > div:first-child { align-items: center; display: flex; gap: 8px; }
 .work-delivery-conclusion > div:first-child svg { color: var(--primary); }
 .work-delivery-conclusion > div:first-child strong { font-size: .82rem; }

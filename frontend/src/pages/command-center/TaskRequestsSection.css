@@ -34,7 +34,7 @@
   border-color: var(--border-color-hover);
 }
 .ds-request-card > .dot { background: var(--warning); border-radius: 50%; height: 7px; margin-top: 6px; width: 7px; }
-.ds-request-card[data-tone='error'] > .dot { background: var(--error); box-shadow: 0 0 6px rgba(239, 68, 68, 0.4); }
+.ds-request-card[data-tone='error'] > .dot { background: var(--error); box-shadow: none; }
 .ds-request-card[data-tone='idle'] > .dot { background: var(--text-faint); }
 .ds-request-card .kind { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.56rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
 .ds-request-card .title { color: var(--text-primary); font-size: 0.82rem; font-weight: 600; }

@@ -13,7 +13,7 @@
   background: var(--surface-overlay);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  box-shadow: 0 12px 32px -18px color-mix(in srgb, var(--text-primary) 24%, transparent);
+  box-shadow: var(--shadow-lg);
   display: grid;
   gap: 12px;
   max-width: 460px;

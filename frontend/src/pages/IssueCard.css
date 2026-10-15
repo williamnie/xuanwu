@@ -1,5 +1,5 @@
 .kanban-card-project-dot {
-  background: #f97316;
+  background: var(--primary);
   border-radius: 50%;
   display: inline-block;
   height: 6px;

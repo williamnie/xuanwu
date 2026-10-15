@@ -1,6 +1,6 @@
 .runtime-health-alert {
   align-items: center;
-  background: linear-gradient(100deg, var(--warning-bg), var(--bg-card) 72%);
+  background: var(--bg-card);
   border-color: color-mix(in srgb, var(--warning) 30%, var(--border-color));
   border-left: 3px solid var(--warning);
   display: flex;

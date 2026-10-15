@@ -1,12 +1,12 @@
 .issue-terminal-empty {
-  color: #565f89;
+  color: var(--terminal-muted);
   font-style: italic;
   padding: 40px 0;
   text-align: center;
 }
 
 .issue-terminal-agent-output {
-  color: #9ece6a;
+  color: var(--terminal-success);
 }
 
 .issue-terminal-command {
@@ -14,9 +14,9 @@
 }
 
 .issue-terminal-patch-header {
-  background: rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: #7aa2f7;
+  background: var(--terminal-bg);
+  border-bottom: 1px solid var(--terminal-border);
+  color: var(--terminal-info);
   font-size: 0.75rem;
   padding: 4px 8px;
 }

@@ -83,7 +83,7 @@
   padding: 11px 13px;
 }
 
-.handoff-authority-note > span { background: var(--primary); border-radius: 50%; box-shadow: 0 0 0 4px var(--primary-glow); height: 7px; width: 7px; }
+.handoff-authority-note > span { background: var(--primary); border-radius: 50%; box-shadow: none; height: 7px; width: 7px; }
 .handoff-authority-note strong { font-size: 0.74rem; }
 .handoff-authority-note p { color: var(--text-secondary); font-size: 0.7rem; margin: 0; }
 .handoff-authority-note code { color: var(--primary); font-size: 0.62rem; }
@@ -124,7 +124,7 @@
 .handoff-detail-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
 .handoff-detail-actions a { border-color: color-mix(in srgb, var(--primary) 30%, var(--border-color)); color: var(--primary); }
 
-.handoff-notice-summary { background: linear-gradient(115deg, color-mix(in srgb, var(--success) 9%, var(--bg-card)), var(--bg-card)); border: 1px solid color-mix(in srgb, var(--success) 25%, var(--border-color)); border-radius: var(--radius-md); display: grid; gap: 8px; grid-template-columns: minmax(150px, auto) 1fr auto; padding: 13px; }
+.handoff-notice-summary { background: var(--bg-card); border: 1px solid color-mix(in srgb, var(--success) 25%, var(--border-color)); border-radius: var(--radius-md); display: grid; gap: 8px; grid-template-columns: minmax(150px, auto) 1fr auto; padding: 13px; }
 .handoff-notice-summary > div { align-items: center; color: var(--success); display: flex; gap: 7px; }
 .handoff-notice-summary p { color: var(--text-secondary); font-size: 0.69rem; line-height: 1.5; margin: 0; }
 .handoff-notice-summary > span { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.56rem; grid-column: 1; text-transform: uppercase; }

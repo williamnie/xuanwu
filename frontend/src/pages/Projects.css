@@ -48,8 +48,8 @@
 
   background: var(--bg-card);
   border: 1px solid color-mix(in srgb, var(--border-color) 82%, var(--text-muted) 18%);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 24px 72px rgba(15, 24, 21, 0.2), 0 2px 8px rgba(15, 24, 21, 0.08);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   max-width: 720px;
@@ -67,7 +67,7 @@
 .project-modal-overlay {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  background: rgba(21, 28, 25, 0.34);
+  background: color-mix(in srgb, var(--terminal-bg) 34%, transparent);
   padding: 24px;
 }
 
@@ -243,7 +243,7 @@
 }
 
 .project-card-stats {
-  background: rgba(0, 0, 0, 0.035);
+  background: var(--bg-secondary);
   border-radius: var(--radius-md);
   display: grid;
   gap: 3px;
@@ -345,8 +345,8 @@
 .project-delete-modal {
   background: var(--bg-card);
   border: 1px solid color-mix(in srgb, var(--error) 22%, var(--border-color));
-  border-radius: var(--radius-lg);
-  box-shadow: 0 24px 72px rgba(15, 24, 21, 0.2), 0 2px 8px rgba(15, 24, 21, 0.08);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   max-width: 480px;
   overflow: hidden;
   padding: 0;
@@ -437,12 +437,12 @@
 .project-delete-confirm-button {
   background: var(--error);
   border: 1px solid var(--error);
-  color: white;
+  color: var(--button-primary-fg);
 }
 
 .project-delete-confirm-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--error) 88%, black);
-  border-color: color-mix(in srgb, var(--error) 88%, black);
+  background: color-mix(in srgb, var(--error) 88%, var(--terminal-bg));
+  border-color: color-mix(in srgb, var(--error) 88%, var(--terminal-bg));
 }
 
 @media (max-width: 1100px) {
@@ -526,7 +526,7 @@
 }
 
 .projects-notice.is-success {
-  background: rgba(16, 185, 129, 0.08);
+  background: var(--success-bg);
   border-left: 4px solid var(--success);
 }
 

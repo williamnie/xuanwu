@@ -18,7 +18,7 @@
 }
 
 .turtle-loader-track::before {
-  background: linear-gradient(90deg, transparent, var(--border-color) 14%, var(--border-color) 86%, transparent);
+  background: var(--border-color);
   bottom: 7px;
   content: '';
   height: 1px;
@@ -28,10 +28,10 @@
 }
 
 .turtle-loader-track::after {
-  background: linear-gradient(90deg, var(--primary), var(--brand-mint));
-  border-radius: 50%;
+  background: var(--primary);
+  border-radius: var(--radius-xs);
   bottom: 5px;
-  box-shadow: 18px 0 0 color-mix(in srgb, var(--primary) 58%, transparent), 36px 0 0 color-mix(in srgb, var(--primary) 24%, transparent);
+  box-shadow: none;
   content: '';
   height: 5px;
   left: 12px;
@@ -53,7 +53,6 @@
 .turtle-loader-image {
   animation: turtle-loader-bob 0.5s ease-in-out infinite alternate;
   display: block;
-  filter: drop-shadow(0 8px 8px rgba(15, 118, 110, 0.2));
   height: 100%;
   object-fit: contain;
   width: 100%;
@@ -93,7 +92,7 @@
   align-items: center;
   background: color-mix(in srgb, var(--bg-secondary) 74%, transparent);
   border: 1px dashed var(--border-color);
-  border-radius: var(--radius-md, 12px);
+  border-radius: var(--radius-md);
   display: flex;
   justify-content: center;
   min-height: 118px;

@@ -37,7 +37,7 @@
 }
 
 .issue-mcp-requirements__diagnostics {
-  background: rgba(245, 158, 11, 0.1);
+  background: var(--warning-bg);
   border-radius: var(--radius-md);
   color: var(--warning);
   font-size: 0.78rem;
@@ -61,7 +61,7 @@
 }
 
 .issue-mcp-requirements__capability {
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--nav-active);
   border-radius: var(--radius-sm);
   font-size: 0.72rem;
   padding: 3px 6px;

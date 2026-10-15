@@ -19,60 +19,15 @@
   opacity: 1;
 }
 
-@keyframes e2b-pulse-green {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
-    opacity: 1;
-  }
-  50% {
-    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0);
-    opacity: 0.8;
-  }
-}
-
-.api-status .api-status-dot {
-  animation: e2b-pulse-green 2.4s infinite ease-in-out;
-}
-
 .api-status-tag {
   font-family: var(--font-mono);
   letter-spacing: 0.08em;
 }
 
-[data-theme='dark'] .sidebar {
-  background: var(--bg-primary);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-}
 
-[data-theme='dark'] .sidebar .nav-item {
-  border: 1px solid transparent;
-  border-radius: var(--radius-xs);
-  transition: all 0.15s ease;
-}
 
-[data-theme='dark'] .sidebar .nav-item:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
-}
 
-[data-theme='dark'] .sidebar .nav-item.active {
-  background: var(--nav-active);
-  border-color: transparent;
-  box-shadow: none;
-  color: var(--text-primary);
-}
 
-[data-theme='dark'] .sidebar .nav-item.active::before {
-  background: var(--primary);
-  border-radius: 1px;
-  content: '';
-  height: 20px;
-  left: -8px;
-  position: absolute;
-  top: 8px;
-  width: 3px;
-}
 
 .nav-badge {
   font-family: var(--font-mono);
@@ -82,22 +37,12 @@
   border-radius: var(--radius-xs);
 }
 
-[data-theme='dark'] .nav-badge {
-  background: #0d0e12;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--text-muted);
-}
 
 .nav-badge.is-active {
   background: var(--primary-glow);
   color: var(--primary);
 }
 
-[data-theme='dark'] .nav-badge.is-active {
-  background: color-mix(in srgb, var(--primary) 16%, transparent);
-  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
-  color: var(--primary);
-}
 
 .sidebar-new-issue-shortcut {
   background: var(--success-bg);

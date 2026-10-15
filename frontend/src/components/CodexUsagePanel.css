@@ -102,9 +102,7 @@
 
 .codex-provider-usage-row {
   align-items: center;
-  background:
-    linear-gradient(100deg, color-mix(in srgb, var(--primary) 5%, transparent), transparent 34%),
-    var(--bg-secondary);
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xs);
   display: grid;

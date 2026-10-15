@@ -319,31 +319,14 @@
 }
 .activity-panel { background: var(--panel-gradient); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 20px; }
 .activity-filter input, .activity-node-body, .activity-summary, .activity-refs pre { background: var(--bg-secondary); border-color: var(--border-light); border-radius: var(--radius-md); }
-.activity-rail-dot { box-shadow: 0 0 0 4px var(--bg-card); }
+.activity-rail-dot { box-shadow: none; }
 .settings-restart-confirm { background: var(--surface-raised); border-radius: var(--radius-md); }
-
-/* Composer menus, transient panels and low-frequency session details */
-.session-command-history { background: var(--surface-tint); border-color: var(--border-light); border-radius: var(--radius-md); }
-.session-command-history-card { background: var(--surface-raised); border-radius: var(--radius-sm); }
 
 .kanban-card-more-menu {
   background: var(--surface-raised);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-lg);
 }
-.codex-toast-item,
-[data-theme="dark"] .codex-toast-item {
-  background: var(--surface-overlay);
-  border-color: var(--border-color);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  color: var(--text-primary);
-}
-.codex-toast-item.success { border-left-color: var(--success); }
-.codex-toast-item.error { border-left-color: var(--error); }
-.codex-toast-item.warning { border-left-color: var(--warning); }
-.codex-toast-item.info { border-left-color: var(--info); }
-
 /* E2B-inspired control geometry: square, flat and high-contrast. */
 button:not(.composer-circle-submit):not(.session-composer-circle),
 .btn,
@@ -398,7 +381,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 }
 [data-theme="dark"] .work-header-search:focus-within {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-glow);
+  outline: 2px solid var(--primary-glow);
 }
 
 [data-theme="dark"] .pi-chat-main-header {
@@ -457,7 +440,7 @@ button:hover:not(.composer-circle-submit):not(.session-composer-circle) { transf
 }
 [data-theme="dark"] .automation-filters label:focus-within {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-glow);
+  outline: 2px solid var(--primary-glow);
 }
 [data-theme="dark"] .automation-row.active {
   background: var(--bg-inset);

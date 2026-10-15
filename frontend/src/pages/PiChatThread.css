@@ -245,7 +245,7 @@
   align-self: flex-start;
   background: color-mix(in srgb, var(--bg-terminal) 94%, transparent);
   border: 1px solid color-mix(in srgb, var(--primary) 16%, transparent);
-  color: color-mix(in srgb, var(--text-muted) 76%, white);
+  color: color-mix(in srgb, var(--text-muted) 76%, var(--text-primary));
   display: inline-flex;
   font-family: var(--font-mono);
   font-size: .66rem;
@@ -258,7 +258,7 @@
 .pi-chat-thinking-signal {
   animation: pi-chat-running-signal 1.35s ease-in-out infinite;
   background: var(--primary-strong);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 11%, transparent);
+  box-shadow: none;
   height: 6px;
   width: 6px;
 }

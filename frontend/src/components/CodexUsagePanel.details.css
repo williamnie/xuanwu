@@ -169,7 +169,7 @@
 }
 
 .codex-usage-breakdown__bar-value {
-  background: var(--primary-gradient);
+  background: var(--primary);
   height: 100%;
 }
 

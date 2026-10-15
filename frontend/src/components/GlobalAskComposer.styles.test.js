@@ -20,8 +20,9 @@ test('global Work suggestions use one bounded page instead of a full ledger fan-
 });
 
 test('global composer remains reachable on mobile and respects safe areas', () => {
-  assert.match(css, /@media \(max-width: 768px\)/);
+  assert.match(css, /@media \(max-width: 760px\)/);
   assert.match(css, /bottom:\s*max\(8px, env\(safe-area-inset-bottom\)\)/);
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*?left:\s*12px;[\s\S]*?right:\s*12px;/);
   assert.match(css, /\.sidebar-collapsed \.global-ask-composer-shell/);
   assert.match(css, /\.global-ask-composer-launcher/);
 });

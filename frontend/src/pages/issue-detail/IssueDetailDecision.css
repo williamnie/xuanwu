@@ -5,7 +5,7 @@
 }
 
 .issue-detail-decision {
-  border-left: 4px solid #8b5cf6;
+  border-left: 4px solid var(--warning);
   gap: 12px;
 }
 
@@ -24,8 +24,8 @@
 }
 
 .issue-detail-decision__evidence {
-  background: rgba(139, 92, 246, 0.08);
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   font-size: 0.78rem;
   padding: 10px;

@@ -5,8 +5,8 @@
 .main-content {
   background-size: 32px 32px;
   background-image:
-    linear-gradient(to right, var(--grid-tech-line, rgba(15, 23, 42, 0.038)) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-tech-line, rgba(15, 23, 42, 0.038)) 1px, transparent 1px);
+    linear-gradient(to right, var(--grid-tech-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-tech-line) 1px, transparent 1px);
   background-position: -1px -1px;
 }
 
@@ -31,7 +31,7 @@ h1, h2, h3, h4 {
 code, pre, kbd, .mono { font-family: var(--font-mono); }
 button, input, textarea, select { font-family: var(--font-sans); letter-spacing: -0.005em; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--primary) 68%, white);
+  outline: 2px solid color-mix(in srgb, var(--primary) 68%, var(--bg-card));
   outline-offset: 2px;
 }
 ::selection { background: color-mix(in srgb, var(--primary) 42%, transparent); color: var(--text-primary); }
@@ -45,11 +45,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--border-color-hover);
   border-radius: var(--radius-xs);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--text-muted);
 }
 
 .main-content { padding: 0 28px 30px; }
@@ -78,8 +78,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding: 9px 10px;
   position: relative;
 }
-.nav-item:hover, [data-theme="dark"] .nav-item:hover { background: var(--nav-hover); color: var(--text-primary); }
-.nav-item.active, [data-theme="dark"] .nav-item.active {
+.nav-item:hover { background: var(--nav-hover); color: var(--text-primary); }
+.nav-item.active {
   background: var(--nav-active);
   border-color: transparent;
   box-shadow: none;

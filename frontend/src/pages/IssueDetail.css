@@ -90,16 +90,14 @@
 .issue-more-menu-popover button.danger { color: var(--error); }
 
 .issue-detail-hero {
-  background:
-    linear-gradient(112deg, color-mix(in srgb, var(--primary) 7%, transparent), transparent 56%),
-    var(--bg-card);
+  background: var(--bg-card);
   overflow: hidden;
   padding: 22px 24px 24px;
   position: relative;
 }
 
 .issue-detail-hero::after {
-  background: var(--primary-gradient);
+  background: var(--primary);
   content: '';
   height: 3px;
   left: 0;
@@ -516,15 +514,15 @@
 .issue-log-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .issue-detail-terminal { margin-top: 16px; max-height: 620px; min-height: 420px; }
 .terminal-runtime-strip {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--terminal-border);
   display: flex;
   flex-wrap: wrap;
   gap: 7px 18px;
   margin-bottom: 13px;
   padding-bottom: 10px;
 }
-.terminal-runtime-strip span { color: #6f8788; font-size: 0.67rem; min-width: 0; }
-.terminal-runtime-strip strong { color: #9fc4bf; font-weight: 600; overflow-wrap: anywhere; }
+.terminal-runtime-strip span { color: var(--terminal-muted); font-size: 0.67rem; min-width: 0; }
+.terminal-runtime-strip strong { color: var(--terminal-text); font-weight: 600; overflow-wrap: anywhere; }
 
 .issue-advanced-grid {
   align-items: start;

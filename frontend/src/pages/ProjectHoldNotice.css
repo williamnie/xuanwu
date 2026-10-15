@@ -1,6 +1,6 @@
 .project-hold-notice {
   background: var(--warning-bg);
-  border: 1px solid rgba(245, 158, 11, 0.32);
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, transparent);
   border-radius: var(--radius-md);
   color: var(--warning);
   font-size: 0.72rem;

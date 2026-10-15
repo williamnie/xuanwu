@@ -139,12 +139,9 @@ test('code-split Work styles preserve the canonical button and panel geometry', 
 });
 
 test('low-frequency global panels use the same visual system without owning Sessions page styles', () => {
-  for (const selector of [
-    '.codex-toast-item',
-  ]) {
-    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    assert.match(pagesCss, new RegExp(escaped));
-  }
+  const toastCss = readFileSync(new URL('./components/ToastContainer.css', import.meta.url), 'utf8');
+  assert.match(toastCss, /\.codex-toast-item/);
+  assert.doesNotMatch(pagesCss, /\.codex-toast-item/);
   for (const [file, selector] of [['ApprovalDialog', 'approval-card'], ['SessionCommandPanel', 'session-command-panel']]) {
     const componentCss = readFileSync(new URL(`./pages/sessions/${file}.css`, import.meta.url), 'utf8');
     assert.ok(componentCss.includes(`.${selector}`));
@@ -168,7 +165,7 @@ test('active navigation and tabs use a thin primary indicator instead of brand f
   const sidebarCss = readFileSync(new URL('./components/AppSidebar.css', import.meta.url), 'utf8');
   const workDetailCss = readFileSync(new URL('./pages/WorkDetail.css', import.meta.url), 'utf8');
 
-  assert.match(foundationCss, /\.nav-item\.active,[^{]*\{[^}]*color:\s*var\(--text-primary\)/);
+  assert.match(foundationCss, /\.nav-item\.active\s*\{[^}]*color:\s*var\(--text-primary\)/);
   assert.doesNotMatch(sidebarCss, /\.nav-item\.active[^{]*\{[^}]*0 0 \d+px/);
   assert.doesNotMatch(foundationCss, /\.btn-primary[^{]*\{[^}]*box-shadow:\s*0 0 \d+px/);
   assert.match(workDetailCss, /\.work-detail-tabs button\[aria-selected='true'\]::after\s*\{[^}]*background:\s*var\(--primary\)/);

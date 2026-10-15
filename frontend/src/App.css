@@ -57,7 +57,7 @@
 
 .guardian-alert-icon {
   align-items: center;
-  background: rgba(255, 255, 255, 0.64);
+  background: var(--surface-raised);
   border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
   border-radius: var(--radius-lg);
   color: var(--warning);
@@ -173,9 +173,6 @@
   padding: 9px 12px;
 }
 
-[data-theme="dark"] .guardian-alert-icon {
-  background: rgba(255, 255, 255, 0.06);
-}
 
 @media (max-width: 760px) {
   .in-sessions-page:not(.sidebar-collapsed) .guardian-alert-stack {
