@@ -16,11 +16,11 @@ import './TaskRequestsSection.css';
 // its original command adapter: human review, task retry, or Attention.
 export default function TaskRequestsSection({ navigateTo, onCreate, onSummaryChange }) {
   const { t } = useI18n();
-  const { state, refresh, loadMore } = useInbox();
+  const { state, refresh, refreshAutomatically, loadMore } = useInbox();
   const [busyId, setBusyId] = useState('');
   const cards = taskRequestCards(state.items, t);
-  const review = useHumanReview({ onSubmitted: refresh, classifyError: error => inboxFailure('review', error, t) });
-  const attention = useAttentionActions(refresh);
+  const review = useHumanReview({ onSubmitted: refreshAutomatically, classifyError: error => inboxFailure('review', error, t) });
+  const attention = useAttentionActions(refreshAutomatically);
   useEffect(() => {
     onSummaryChange?.(state.total === null ? null : { total: state.total, complete: state.complete && !state.error });
   }, [state.total, state.complete, state.error, onSummaryChange]);
@@ -31,11 +31,11 @@ export default function TaskRequestsSection({ navigateTo, onCreate, onSummaryCha
     try {
       await executeWorkMove(card.work, card.retry.target);
       message.success(t('work.requeued'));
-      await refresh();
+      await refreshAutomatically();
     } catch (error) {
       const failure = inboxFailure('task', error, t);
       message.error(failure.message);
-      if (failure.invalidated) await refresh();
+      if (failure.invalidated) await refreshAutomatically();
     } finally { setBusyId(''); }
   };
   const approvalOpen = attention.approval.loading || attention.approval.error || attention.approval.detail;

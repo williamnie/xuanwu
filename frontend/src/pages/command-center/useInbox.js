@@ -12,13 +12,14 @@ export function useInbox() {
     void controller.refresh();
     const unsubscribe = eventsApi.subscribeToEvents(controller.event);
     // Preserve the existing Attention freshness check, including elapsed reminders.
-    const interval = window.setInterval(controller.refresh, 30_000);
+    const interval = window.setInterval(controller.refreshAutomatically, 30_000);
     return () => {
       ref.current = null;
       unsubscribe(); window.clearInterval(interval); controller.dispose();
     };
   }, []);
   const refresh = useCallback(() => ref.current?.refresh(), []);
+  const refreshAutomatically = useCallback(() => ref.current?.refreshAutomatically(), []);
   const loadMore = useCallback(() => ref.current?.loadMore(), []);
-  return { state, refresh, loadMore };
+  return { state, refresh, refreshAutomatically, loadMore };
 }

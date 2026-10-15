@@ -1,17 +1,23 @@
 export const INBOX_SOURCES = ['human_review', 'preparing', 'failed_work', 'attention'];
 export const inboxInitialState = () => ({ items: [], total: null, counts: {}, complete: null, failedSources: [], cursor: null, error: null, loading: true, loadingMore: false });
 
+// EventBus names used by issue mutations, approvals, Attention and PI actionAudit /
+// projectFindings. Conversation chunks, memories and manager cycles do not change
+// the inbox and must not keep its refresh window open.
 export function isInboxRefreshEvent(event) {
-  return /^(issue|approval|pi|attention)\./.test(event?.type || '');
+  // Codex provider approvals are published as codex.event + method, not approval.*.
+  if (event?.type === 'codex.event') return ['approval/requested', 'approval/resolved'].includes(event.method);
+  return /^(issue\.(created|deleted|status_changed|updated)|approval\..+|attention\..+|pi\.action_.+|pi\.(needs_user|issue_ready_for_acceptance|project_blocked))$/.test(event?.type || '');
 }
 
-// One owner for pagination, invalidation and debouncing. Invalidate immediately
-// on an event, before the debounce expires, so an old page cannot append meanwhile.
 export function createInboxController({ fetchPage, onChange, setTimer = setTimeout, clearTimer = clearTimeout }) {
   let state = inboxInitialState();
   let active = null;
   let generation = 0;
   let timer = null;
+  let trailingEvent = false;
+  let autoPending = false;
+  let morePending = false;
   let disposed = false;
   const publish = patch => {
     state = { ...state, ...patch };
@@ -21,47 +27,98 @@ export function createInboxController({ fetchPage, onChange, setTimer = setTimeo
     generation += 1;
     const request = active;
     active = null;
-    request?.abort();
+    request?.controller.abort();
   };
-  const clearScheduled = () => { if (timer !== null) clearTimer(timer); timer = null; };
-  const read = async append => {
-    if (disposed || (append && (active || timer !== null || !state.cursor))) return;
-    if (!append) { clearScheduled(); invalidate(); }
+  const clearScheduled = () => { if (timer !== null) clearTimer(timer); timer = null; trailingEvent = false; };
+  const drain = () => {
+    if (disposed || active) return;
+    if (morePending) {
+      morePending = false;
+      if (state.cursor) { void read('more'); return; }
+      publish({ loadingMore: false });
+    }
+    if (autoPending) { autoPending = false; void read('auto'); }
+  };
+  const read = async kind => {
+    if (disposed) return;
     const version = generation;
-    const controller = new AbortController();
-    active = controller;
-    publish({ error: null, loading: !append, loadingMore: append });
+    const request = { controller: new AbortController(), kind };
+    active = request;
+    const current = () => !disposed && version === generation && active === request;
+    const target = kind === 'auto' ? Math.max(20, state.items.length) : 20;
+    let cursor = kind === 'more' ? state.cursor : null;
+    let items = kind === 'more' ? state.items : [];
+    let complete = kind === 'more' ? state.complete : true;
+    const failedSources = new Set(kind === 'more' ? state.failedSources : []);
+    const cursors = new Set();
+    publish({ error: null, ...(kind === 'manual' ? { loading: true } : {}), ...(kind === 'more' ? { loadingMore: true } : {}) });
     try {
-      const page = await fetchPage({ limit: 20, ...(append ? { cursor: state.cursor } : {}) }, { signal: controller.signal });
-      if (disposed || version !== generation || active !== controller) return;
-      validatePage(page);
-      const items = append ? [...new Map([...state.items, ...page.items].map(item => [item.key, item])).values()] : page.items;
-      publish({
-        items, total: page.total, counts: page.counts, cursor: page.next_cursor,
-        // A recovered later page cannot fill a missing earlier source. Keep the
-        // partial warning until a fresh first-page read succeeds.
-        complete: append ? state.complete && page.complete : page.complete,
-        failedSources: append ? [...new Set([...state.failedSources, ...page.failed_sources])] : page.failed_sources,
-      });
+      let page;
+      do {
+        const limit = kind === 'auto' ? Math.min(50, target - items.length) : 20;
+        page = await fetchPage({ limit, ...(cursor ? { cursor } : {}) }, { signal: request.controller.signal });
+        if (!current()) return;
+        validatePage(page);
+        items = [...new Map([...items, ...page.items].map(item => [item.key, item])).values()];
+        complete = complete && page.complete;
+        page.failed_sources.forEach(source => failedSources.add(source));
+        cursor = page.next_cursor;
+        if (cursor && cursors.has(cursor)) throw new Error('Repeated inbox cursor');
+        cursors.add(cursor);
+      } while (kind === 'auto' && cursor && items.length < target);
+      // Publish the refreshed range atomically: never briefly collapse a long
+      // list to page one while the remaining cursor pages are being read.
+      publish({ items, total: page.total, counts: page.counts, cursor, complete, failedSources: [...failedSources] });
     } catch (error) {
-      if (!disposed && version === generation && active === controller && error?.name !== 'AbortError') publish({ error });
+      if (current() && error?.name !== 'AbortError') publish({ error });
     } finally {
-      if (!disposed && version === generation && active === controller) {
+      if (current()) {
         active = null;
-        publish({ loading: false, loadingMore: false });
+        publish({ ...(kind === 'manual' ? { loading: false } : {}), ...(kind === 'more' ? { loadingMore: false } : {}) });
+        drain();
       }
     }
   };
+  const refreshAutomatically = () => {
+    if (disposed) return;
+    clearScheduled();
+    autoPending = true;
+    // An active refresh finishes instead of being repeatedly cancelled. Events
+    // during that read coalesce into a following read, with no parallel fetches.
+    drain();
+  };
+  const scheduleEventWindow = () => {
+    if (timer !== null) { trailingEvent = true; return; }
+    timer = setTimer(() => {
+      timer = null;
+      const followUp = trailingEvent;
+      trailingEvent = false;
+      refreshAutomatically();
+      // One trailing window covers changes coalesced into this window. Neither
+      // a burst nor a continuous stream can move the current deadline.
+      if (followUp) scheduleEventWindow();
+    }, 500);
+  };
   return {
-    refresh: () => read(false),
-    loadMore: () => read(true),
+    refresh: () => {
+      clearScheduled(); autoPending = false; morePending = false; invalidate();
+      publish({ loadingMore: false });
+      return read('manual');
+    },
+    refreshAutomatically,
+    loadMore: () => {
+      if (disposed || !state.cursor || state.loading || state.loadingMore) return;
+      if (active) { morePending = true; publish({ loadingMore: true }); return; }
+      return read('more');
+    },
     event: event => {
       if (disposed || !isInboxRefreshEvent(event)) return;
-      invalidate(); clearScheduled();
-      publish({ loading: true, loadingMore: false });
-      timer = setTimer(() => { timer = null; void read(false); }, 500);
+      // A cursor page predating an event must not append to refreshed results.
+      if (active?.kind === 'more') { invalidate(); publish({ loadingMore: false }); }
+      // Fixed window from the FIRST event: later events cannot postpone it.
+      scheduleEventWindow();
     },
-    dispose: () => { disposed = true; clearScheduled(); invalidate(); },
+    dispose: () => { disposed = true; autoPending = false; morePending = false; clearScheduled(); invalidate(); },
   };
 }
 

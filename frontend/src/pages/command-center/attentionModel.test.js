@@ -73,6 +73,11 @@ test('Dashboard separates E1 inbox commands from automatic operations without du
   assert.match(page, /disabled=\{Boolean\(submitting\) \|\| !canApprove\}/);
   assert.match(page, /notification\?\.delivery === 'sent'/);
   assert.match(refresh, /subscribeToEvents/);
+  assert.match(refresh, /setInterval\(controller\.refreshAutomatically, 30_000\)/);
+  assert.match(inbox, /onSubmitted: refreshAutomatically/);
+  assert.match(inbox, /useAttentionActions\(refreshAutomatically\)/);
+  assert.match(inbox, /await refreshAutomatically\(\)/);
+  assert.match(inbox, /onClick=\{refresh\}/);
   assert.match(api, /\/api\/command-center\/inbox/);
   assert.match(api, /\/api\/command-center\/attention\/\$\{encodeURIComponent\(id\)\}\/actions/);
   assert.doesNotMatch(api, /\/api\/pi\/approval-requests/);
