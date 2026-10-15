@@ -1,3 +1,5 @@
+import { appHashForRoute } from '../appRouteModel.js';
+import { useI18n } from '../i18n/context.js';
 import { projectsApi } from '../api/projects.js';
 import { useImmer } from 'use-immer';
 import './Projects.css';
@@ -10,6 +12,7 @@ import {
   useDataStore,
 } from '../store/dataStore';
 import { 
+  ArrowUpRight,
   FolderPlus, 
   Folder, 
   RefreshCw,
@@ -31,6 +34,7 @@ function compactPath(cwd = '') {
 }
 
 export default function Projects() {
+  const { t } = useI18n();
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
   const backendOnline = useDataStore(selectBackendOnline);
@@ -232,10 +236,7 @@ export default function Projects() {
           <div className="grid-cols-3 projects-grid">
             {projects.map(proj => {
               const counts = workSummary.project_counts?.find(item => item.project_id === proj.id)?.counts || {};
-              const doneCount = counts.done || 0;
-              const failedCount = counts.failed || 0;
               const activeCount = counts.in_progress || 0;
-              const todoCount = counts.todo || 0;
 
               const isHeld = Boolean(proj.hold);
               const isLoopActive = !isHeld && (proj.loop_status === 'running' || proj.auto_run === 1);
@@ -267,26 +268,6 @@ export default function Projects() {
                     </div>
                   </div>
 
-                  {/* 队列看板 */}
-                  <div className="project-card-stats">
-                    <div className="project-card-stat">
-                      <span>待执行</span>
-                      <strong className="count-todo">{todoCount}</strong>
-                    </div>
-                    <div className="project-card-stat">
-                      <span>运行中</span>
-                      <strong className="count-active">{activeCount}</strong>
-                    </div>
-                    <div className="project-card-stat">
-                      <span>已完成</span>
-                      <strong className="count-done">{doneCount}</strong>
-                    </div>
-                    <div className="project-card-stat">
-                      <span>失败</span>
-                      <strong className="count-failed">{failedCount}</strong>
-                    </div>
-                  </div>
-
                   <ProjectHoldNotice
                     hold={proj.hold}
                     onResume={() => handleResumeHold(proj.id)}
@@ -295,6 +276,12 @@ export default function Projects() {
 
                   {/* 项目配置操作 */}
                   <div className="project-card-footer">
+                    <a
+                      className="project-card-tasks-link"
+                      href={appHashForRoute({ currentPage: 'work', filterProject: proj.id, taskScope: 'all' })}
+                    >
+                      {t('projects.viewTasks')} <ArrowUpRight size={13} />
+                    </a>
                     <div className="project-card-actions">
                       <button
                         className="btn btn-secondary project-card-icon-btn"

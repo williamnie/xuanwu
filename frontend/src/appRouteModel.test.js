@@ -103,3 +103,15 @@ test('Task list links can open a specific scope', () => {
   assert.equal(appHashForRoute({ currentPage: 'work', taskScope: 'attention' }), '#/work?scope=attention');
   assert.equal(appHashForRoute({ currentPage: 'work', selectedWorkId: 'xw:work:issues:1', taskScope: 'attention' }), '#/work?workId=xw%3Awork%3Aissues%3A1');
 });
+
+
+test('project task links round-trip encoded filters with scopes and legacy redirects', () => {
+  const route = { currentPage: 'work', filterProject: '玄武 & demo/1', taskScope: 'all' };
+  const parsed = appRouteFromHash(appHashForRoute(route));
+  assert.equal(parsed.filterProject, route.filterProject);
+  assert.equal(parsed.taskScope, 'all');
+  assert.equal(appRouteFromHash('#/issues?project=demo').filterProject, 'demo');
+  assert.equal(appRouteFromHash('#/work?project=').filterProject, '');
+  assert.equal(appHashForRoute({ ...route, filterProject: '' }), '#/work?scope=all');
+  assert.equal(appRouteFromHash('#/settings?project=demo').filterProject, '');
+});

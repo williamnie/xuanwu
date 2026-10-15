@@ -69,7 +69,11 @@ test('project deletion uses an in-app confirmation instead of a browser dialog',
 test('project cards keep operational information and edit locally inside Settings', () => {
   assert.match(source, /className="glass-card project-card"/);
   assert.match(source, /className="project-status-pill"/);
-  assert.match(source, /className="project-card-stats"/);
+  assert.doesNotMatch(source, /project-card-stats|count-todo|count-done|count-failed/);
+  assert.match(source, /href=\{appHashForRoute\(\{ currentPage: 'work', filterProject: proj\.id, taskScope: 'all' \}\)\}/);
+  assert.match(source, /t\('projects\.viewTasks'\)/);
+  assert.match(source, /const activeCount = counts\.in_progress/);
+  assert.match(source, /deleteProjectIssueCount/);
   assert.match(source, /aria-label={`编辑 \${proj\.name} 配置`}/);
   assert.match(source, /handleOpenEditModal\(proj\)/);
   assert.match(source, /mode=\{modalMode\}/);
@@ -86,7 +90,7 @@ test('project cards keep operational information and edit locally inside Setting
 
   const footerRule = ruleFor('.project-card-footer');
   assert.match(footerRule, /display:\s*flex/);
-  assert.match(footerRule, /justify-content:\s*flex-end/);
+  assert.match(footerRule, /justify-content:\s*space-between/);
 });
 
 test('project card actions share one compact control height', () => {

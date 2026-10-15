@@ -219,15 +219,18 @@ export default function App() {
         draft.filterProject = value;
       }
     });
-    if (currentPage === 'issues') {
+    if (currentPage === 'issues' || currentPage === 'work') {
       writeBrowserRoute({
         currentPage,
         filterProject: value,
         focusFilter,
         selectedIssueId,
+        selectedWorkId,
+        selectedRunId,
+        taskScope,
       }, { replace: true });
     }
-  }, [currentPage, focusFilter, selectedIssueId, updateAppState, writeBrowserRoute]);
+  }, [currentPage, focusFilter, selectedIssueId, selectedWorkId, selectedRunId, taskScope, updateAppState, writeBrowserRoute]);
 
   const setTheme = useCallback((nextTheme) => {
     updateAppState(draft => {
@@ -285,6 +288,7 @@ export default function App() {
       : '';
     const targetRoute = {
       currentPage: resolvedPage,
+      filterProject: String(navigationOptions?.project || '').trim(),
       selectedHandoffId: targetHandoffId,
       selectedIssueId: targetIssueId,
       selectedPiConversationId: resolvedPage === 'ask-xuanwu' ? selectedPiConversationId : '',
@@ -312,6 +316,7 @@ export default function App() {
         draft.selectedRunId = targetRunId;
         draft.taskScope = targetRoute.taskScope;
       }
+      draft.filterProject = targetRoute.filterProject;
       draft.settingsSection = targetSettingsSection;
       draft.selectedHandoffId = targetHandoffId;
       draft.pageContext = null;
@@ -633,6 +638,8 @@ export default function App() {
               <Analytics />
             ) : currentPage === 'work' ? (
               <WorkBoard
+                filterProject={filterProject}
+                onProjectChange={setFilterProject}
                 navigateTo={navigateTo}
                 onPageContextChange={setPageContext}
                 selectedHandoffId={selectedHandoffId}

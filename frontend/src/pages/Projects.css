@@ -242,56 +242,32 @@
   width: 6px;
 }
 
-.project-card-stats {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  display: grid;
-  gap: 3px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding: 6px 4px;
-  text-align: center;
+.project-card-tasks-link {
+  align-items: center;
+  color: var(--text-primary);
+  display: inline-flex;
+  font-size: 0.78rem;
+  gap: 6px;
+  min-height: var(--button-height);
+  text-decoration: none;
 }
 
-.project-card-stat {
-  min-width: 0;
+.project-card-tasks-link:hover {
+  color: var(--primary-hover);
+  text-decoration: underline;
 }
 
-.project-card-stat span {
-  color: var(--text-muted);
-  display: block;
-  font-size: 0.65rem;
-  line-height: 1.1;
-}
-
-.project-card-stat strong {
-  display: block;
-  font-size: 0.88rem;
-  font-weight: 780;
-  line-height: 1.05;
-  margin-top: 2px;
-}
-
-.project-card-stat .count-todo {
-  color: var(--primary);
-}
-
-.project-card-stat .count-active {
-  color: var(--warning);
-}
-
-.project-card-stat .count-done {
-  color: var(--success);
-}
-
-.project-card-stat .count-failed {
-  color: var(--error);
+.project-card-tasks-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .project-card-footer {
   align-items: center;
   border-top: 1px solid var(--border-color);
   display: flex;
-  justify-content: flex-end;
+  gap: 12px;
+  justify-content: space-between;
   padding-top: 10px;
 }
 

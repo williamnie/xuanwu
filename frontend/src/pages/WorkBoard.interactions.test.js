@@ -88,3 +88,16 @@ test('Task page keeps search in the header, defaults to the list and keeps the b
   assert.doesNotMatch(board, /board\.count|board\.filteredCount/);
   assert.doesNotMatch(composerCss, /\.main-content\.has-global-ask-composer\s*\{/);
 });
+
+
+test('task project selection uses the URL-owned filter for both views and existing list requests', () => {
+  const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  const list = readFileSync(new URL('./work/TaskList.jsx', import.meta.url), 'utf8');
+  assert.match(app, /<WorkBoard\s+filterProject=\{filterProject\}\s+onProjectChange=\{setFilterProject\}/);
+  assert.match(board, /filterProject: projectId = ''/);
+  assert.doesNotMatch(board, /\[projectId, setProjectId\]/);
+  assert.match(board, /<WorkBoardHeader[\s\S]*?onProjectChange=\{onProjectChange\}/);
+  assert.match(board, /<TaskList[\s\S]*?projectId=\{projectId\}/);
+  assert.match(board, /<WorkKanban[\s\S]*?projectId=\{projectId\}/);
+  assert.match(list, /workApi\.getWorks\(\{\s*pageSize: PAGE_SIZE,\s*projectId,/);
+});

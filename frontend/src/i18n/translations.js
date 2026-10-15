@@ -10,6 +10,7 @@ const ZH_CN = Object.freeze({
   'nav.runs': '执行记录',
   'nav.automations': '自动化',
   'nav.projects': '项目',
+  'projects.viewTasks': '查看任务',
   'nav.settings': '设置',
   'app.loadingPage': '正在加载页面…',
   'app.wakingWorkbench': '玄武正在唤醒工作台…',
@@ -516,6 +517,7 @@ const ZH_CN = Object.freeze({
 const EN_US = Object.freeze({
   'nav.commandCenter': 'Inbox', 'nav.analytics': 'Analytics', 'nav.askXuanwu': 'Chat', 'nav.work': 'Tasks',
   'nav.runs': 'Execution logs', 'nav.automations': 'Automations', 'nav.projects': 'Projects',
+  'projects.viewTasks': 'View tasks',
   'nav.settings': 'Settings',
   'app.loadingPage': 'Loading page…', 'app.wakingWorkbench': 'Xuanwu is waking the workbench…',
   'sidebar.collapse': 'Collapse menu', 'sidebar.expand': 'Expand menu',
