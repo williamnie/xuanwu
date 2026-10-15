@@ -19,28 +19,28 @@ export default function AgentProfileManager({ profiles, loading, form, error, mo
       {error && <div className="project-profile-error">{error}</div>}
       <div className="project-profile-fields">
         <div className="form-group">
-          <label>{copy('预设名称', 'Preset name')}</label>
+          <label><span className="ds-mono-label">{copy('预设名称', 'Preset name')}</span></label>
           <input className="form-control" placeholder={copy('例如：前端日常开发', 'For example: frontend development')} value={form.name} onChange={event => onFieldChange('name', event.target.value)} />
         </div>
         <div className="form-group">
-          <label>{copy('默认指令（可选）', 'Default instructions (optional)')}</label>
+          <label><span className="ds-mono-label">{copy('默认指令（可选）', 'Default instructions (optional)')}</span></label>
           <textarea className="form-control" rows={3} placeholder={copy('例如：优先运行前端测试，保持最小改动', 'For example: run frontend tests and keep changes focused')} value={form.default_instructions} onChange={event => onFieldChange('default_instructions', event.target.value)} />
         </div>
         <details className="project-profile-overrides">
           <summary>{copy('更多选项', 'More options')}</summary>
           <p>{copy('只有这个预设需要覆盖项目默认值时才填写。', 'Only set values that should override project defaults.')}</p>
           <div className="form-group">
-            <label>{copy('预设 ID', 'Preset ID')}</label>
+            <label><span className="ds-mono-label">{copy('预设 ID', 'Preset ID')}</span></label>
             <input className="form-control" placeholder={copy('留空时根据名称自动生成', 'Leave blank to generate from the name')} value={form.id} onChange={event => onFieldChange('id', event.target.value)} />
           </div>
           <div className="project-settings-grid project-profile-grid">
-            <label className="form-group">{copy('编程工具', 'Coding tool')}
+            <label className="form-group"><span className="ds-mono-label">{copy('编程工具', 'Coding tool')}</span>
               <select className="form-control" value={form.provider} onChange={event => onFieldChange('provider', event.target.value)}>
                 {!providerReady && form.provider ? <option disabled value={form.provider}>{codeAgentLabel(form.provider, providerCatalog)}（不可用）</option> : null}
                 {providerOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
-            <label className="form-group">{copy('默认模型', 'Default model')}
+            <label className="form-group"><span className="ds-mono-label">{copy('默认模型', 'Default model')}</span>
               {form.provider === 'qoder' || modelsError ? (
                 <input className="form-control" list="profile-provider-model-suggestions" placeholder={copy('编程工具默认，或手动填写模型 ID', 'Default or custom model ID')} value={form.model} onChange={event => onFieldChange('model', event.target.value)} />
               ) : (
@@ -52,24 +52,24 @@ export default function AgentProfileManager({ profiles, loading, form, error, mo
                 {modelOptions.filter(option => option.value).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </datalist>
             </label>
-            <label className="form-group">{copy('推理深度', 'Reasoning depth')}
+            <label className="form-group"><span className="ds-mono-label">{copy('推理深度', 'Reasoning depth')}</span>
               <select className="form-control" value={form.reasoning_effort} onChange={event => onFieldChange('reasoning_effort', event.target.value)}>
                 {profileEffortOptions(form, models, language).map(option => <option key={option.value || 'default'} value={option.value}>{option.label}</option>)}
               </select>
             </label>
-            {form.provider !== 'qoder' ? <label className="form-group">{copy('执行速度', 'Execution speed')}
+            {form.provider !== 'qoder' ? <label className="form-group"><span className="ds-mono-label">{copy('执行速度', 'Execution speed')}</span>
               <select className="form-control" value={form.service_tier} onChange={event => onFieldChange('service_tier', event.target.value)}>
                 {serviceTierOptions(form.service_tier).map(option => <option key={option.value || 'standard'} value={option.value}>{option.label}</option>)}
               </select>
             </label> : null}
-            <label className="form-group">{copy('执行权限与确认', 'Permissions and confirmation')}
+            <label className="form-group"><span className="ds-mono-label">{copy('执行权限与确认', 'Permissions and confirmation')}</span>
               <select className="form-control" value={profilePolicyValue} onChange={event => onFieldChange('execution_policy', event.target.value ? policyFromValue(event.target.value) : null)}>
                 {profilePolicyOptions.map(option => <option disabled={option.disabled} key={option.id} value={option.value}>{option.label}{option.disabled ? '（当前 transport 不支持）' : ''}</option>)}
               </select>
             </label>
           </div>
           <div className="project-settings-grid project-profile-grid">
-            <label className="form-group">{copy('Skill 意图（可选）', 'Skill intents (optional)')}
+            <label className="form-group"><span className="ds-mono-label">{copy('Skill 意图（可选）', 'Skill intents (optional)')}</span>
               <input className="form-control" placeholder={copy('多个值用逗号分隔', 'Comma-separated values')} value={form.skill_intents} onChange={event => onFieldChange('skill_intents', event.target.value)} />
             </label>
           </div>

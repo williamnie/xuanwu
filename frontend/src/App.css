@@ -126,9 +126,7 @@
   color: var(--warning);
   font-size: var(--text-xs);
   font-weight: 800;
-  letter-spacing: 0.04em;
   padding: var(--space-0-5) var(--space-1-5);
-  text-transform: uppercase;
 }
 
 .guardian-alert-severity.urgent {

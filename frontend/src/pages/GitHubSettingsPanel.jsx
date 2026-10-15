@@ -107,11 +107,11 @@ export function GitHubSettingsView({ state, dispatch, onRefresh, onAction }) {
             <details className="github-settings__more">
               <summary>更多选项</summary>
               <div className="github-settings__fields">
-                <label>认证方式<select className="form-control" value={draft.auth.mode} onChange={event => edit({ auth: { ...draft.auth, mode: event.target.value } })}>{Object.entries(GITHUB_AUTH_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-                <label>轮询间隔（秒）<input className="form-control" type="number" min="15" max="3600" step="1" required value={draft.pollIntervalSeconds} onChange={event => edit({ pollIntervalSeconds: Number(event.target.value) })} /></label>
+                <label><span className="ds-mono-label">认证方式</span><select className="form-control" value={draft.auth.mode} onChange={event => edit({ auth: { ...draft.auth, mode: event.target.value } })}>{Object.entries(GITHUB_AUTH_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                <label><span className="ds-mono-label">轮询间隔（秒）</span><input className="form-control" type="number" min="15" max="3600" step="1" required value={draft.pollIntervalSeconds} onChange={event => edit({ pollIntervalSeconds: Number(event.target.value) })} /></label>
               </div>
               <p>复用已有凭据，不输入或复制 token。</p>
-              {draft.auth.mode === 'github-app' && <div className="github-settings__fields">{[['appId', 'App ID'], ['installationId', 'Installation ID'], ['privateKeyRef', '私钥引用（secret:// 或 env://）']].map(([key, title]) => <label key={key}>{title}<input className="form-control" required value={draft.auth[key]} onChange={event => edit({ auth: { ...draft.auth, [key]: event.target.value } })} /></label>)}</div>}
+              {draft.auth.mode === 'github-app' && <div className="github-settings__fields">{[['appId', 'App ID'], ['installationId', 'Installation ID'], ['privateKeyRef', '私钥引用（secret:// 或 env://）']].map(([key, title]) => <label key={key}><span className="ds-mono-label">{title}</span><input className="form-control" required value={draft.auth[key]} onChange={event => edit({ auth: { ...draft.auth, [key]: event.target.value } })} /></label>)}</div>}
             </details>
             <p>生效后，之后的轮询使用新规则。停用或移除映射不会自动取消已有任务；标签撤回或 Issue 关闭可能中断对应任务。</p>
             <div className="github-settings__actions">
@@ -143,13 +143,13 @@ function RepositoryEditor({ repository, index, projects, onChange, onRemove }) {
   return <fieldset className="github-settings__repository">
     <legend>仓库 {index + 1}</legend>
     <div className="github-settings__fields">
-      <label>仓库（owner/repository）<input className="form-control" required value={repository.repository} onChange={event => onChange({ repository: event.target.value })} /></label>
-      <label>关联项目<select className="form-control" required value={repository.projectId} onChange={event => onChange({ projectId: event.target.value })}><option value="">选择已有项目</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name} · {project.id}</option>)}</select></label>
-      <label>接管标签<input className="form-control" required maxLength={50} value={repository.intakeLabel} onChange={event => onChange({ intakeLabel: event.target.value })} /></label>
+      <label><span className="ds-mono-label">仓库（owner/repository）</span><input className="form-control" required value={repository.repository} onChange={event => onChange({ repository: event.target.value })} /></label>
+      <label><span className="ds-mono-label">关联项目</span><select className="form-control" required value={repository.projectId} onChange={event => onChange({ projectId: event.target.value })}><option value="">选择已有项目</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name} · {project.id}</option>)}</select></label>
+      <label><span className="ds-mono-label">接管标签</span><input className="form-control" required maxLength={50} value={repository.intakeLabel} onChange={event => onChange({ intakeLabel: event.target.value })} /></label>
     </div>
     <div className="github-settings__operations">{GITHUB_OPERATIONS.map(([key, title, hint]) => <label className="github-settings__check" key={key}><input type="checkbox" checked={repository[key]} onChange={event => onChange({ [key]: event.target.checked })} /><span>{title}<small>{hint}</small></span></label>)}</div>
     <p>新仓库的这些开关默认全部关闭。任何开关都不会自动合并或部署。</p>
-    <details><summary>更多选项</summary><div className="github-settings__fields"><label>目标分支（留空使用默认分支）<input className="form-control" value={repository.baseBranch} onChange={event => onChange({ baseBranch: event.target.value })} /></label><label>CI 失败时<select className="form-control" value={repository.ciFailureMode} onChange={event => onChange({ ciFailureMode: event.target.value })}><option value="repair">诊断并修复本任务回归</option><option value="report_only">只报告外部限制</option></select></label><label>外部限制原因<input className="form-control" maxLength={500} required={repository.ciFailureMode === 'report_only'} value={repository.ciFailureReason} onChange={event => onChange({ ciFailureReason: event.target.value })} /></label></div></details>
+    <details><summary>更多选项</summary><div className="github-settings__fields"><label><span className="ds-mono-label">目标分支（留空使用默认分支）</span><input className="form-control" value={repository.baseBranch} onChange={event => onChange({ baseBranch: event.target.value })} /></label><label><span className="ds-mono-label">CI 失败时</span><select className="form-control" value={repository.ciFailureMode} onChange={event => onChange({ ciFailureMode: event.target.value })}><option value="repair">诊断并修复本任务回归</option><option value="report_only">只报告外部限制</option></select></label><label><span className="ds-mono-label">外部限制原因</span><input className="form-control" maxLength={500} required={repository.ciFailureMode === 'report_only'} value={repository.ciFailureReason} onChange={event => onChange({ ciFailureReason: event.target.value })} /></label></div></details>
     <div><button className="btn btn-secondary" type="button" onClick={onRemove}>移除映射</button></div>
   </fieldset>;
 }

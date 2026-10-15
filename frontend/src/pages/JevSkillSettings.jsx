@@ -115,12 +115,12 @@ function JevForm({ state }) {
         <span>启用 Jev 辅助技能</span>
       </label>
       <div className="jev-settings__fields">
-        <label className="jev-settings__field"><span>运行模式</span>
+        <label className="jev-settings__field"><span className="ds-mono-label">运行模式</span>
           <select className="form-control" value={draft.mode} onChange={event => update({ mode: event.target.value })}>
             <option value="shadow">shadow · 仅记录</option><option value="assist">assist · 提供辅助建议</option>
           </select>
         </label>
-        <label className="jev-settings__field"><span>模型</span>
+        <label className="jev-settings__field"><span className="ds-mono-label">模型</span>
           <input className="form-control" required value={draft.model} onChange={event => update({ model: event.target.value })} spellCheck={false} />
         </label>
       </div>
@@ -139,10 +139,10 @@ function JevForm({ state }) {
       <details className="jev-settings__advanced">
         <summary>高级设置</summary>
         <div className="jev-settings__fields">
-          <label className="jev-settings__field"><span>最低置信度</span>
+          <label className="jev-settings__field"><span className="ds-mono-label">最低置信度</span>
             <input className="form-control" type="number" min="0.5" max="1" step="0.01" required value={draft.min_confidence} onChange={event => update({ min_confidence: event.target.value })} />
           </label>
-          <label className="jev-settings__field"><span>调用超时（毫秒）</span>
+          <label className="jev-settings__field"><span className="ds-mono-label">调用超时（毫秒）</span>
             <input className="form-control" type="number" min="500" max="30000" step="1" required value={draft.timeout_ms} onChange={event => update({ timeout_ms: event.target.value })} />
           </label>
         </div>
@@ -168,7 +168,7 @@ function JevForm({ state }) {
 function KeyField({ state }) {
   return (
     <div className="jev-settings__key">
-      <label className="jev-settings__field"><span>Jev API Key</span>
+      <label className="jev-settings__field"><span className="ds-mono-label">Jev API Key</span>
         <input className="form-control" type="password" autoComplete="new-password" spellCheck={false} value={state.draft.api_key} disabled={state.draft.clear_api_key} onChange={event => state.update({ api_key: event.target.value })} placeholder={state.remote.api_key_configured ? '已配置；留空保留当前凭据' : '填写新的 API Key'} />
       </label>
       <p className="jev-settings__hint">新 Key 写入密钥服务，保存后不回显。留空不会删除已有凭据。</p>

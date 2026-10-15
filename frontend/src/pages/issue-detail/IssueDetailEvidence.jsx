@@ -75,7 +75,7 @@ function IssueMetadataPanel({
         <MetadataRow label="最后更新" value={formatDateTime(issue.updated_at)} />
       </div>
       <label className="issue-service-tier-field">
-        <span>下次运行速度</span>
+        <span className="ds-mono-label">下次运行速度</span>
         <select
           className="form-control"
           value={issue.service_tier || ''}
@@ -89,7 +89,7 @@ function IssueMetadataPanel({
         <small>当前：{serviceTierLabel(issue.service_tier)}。运行中修改不会影响本轮快照。</small>
       </label>
       <label className="issue-service-tier-field">
-        <span>日志模式</span>
+        <span className="ds-mono-label">日志模式</span>
         <select
           className="form-control"
           value={issue.issue_log_mode || 'normal'}

@@ -119,7 +119,7 @@ export default function ExecutionPresetsPanel() {
         <h3 className="settings-subsection-title">{english ? 'Project preset' : '项目执行预设'}</h3>
         <p className="project-profile-copy">{english ? 'Choose which preset a project uses by default. Task overrides still take priority.' : '选择项目默认使用的预设；任务单独指定的预设仍优先。'}</p>
         <div className="project-settings-grid">
-          <label className="form-group">{english ? 'Project' : '项目'}
+          <label className="form-group"><span className="ds-mono-label">{english ? 'Project' : '项目'}</span>
             <select className="form-control" value={projectID} disabled={assignmentSaving} onChange={event => {
               const id = event.target.value;
               setProjectID(id);
@@ -130,7 +130,7 @@ export default function ExecutionPresetsPanel() {
               {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
           </label>
-          <label className="form-group">{english ? 'Execution preset' : '执行预设'}
+          <label className="form-group"><span className="ds-mono-label">{english ? 'Execution preset' : '执行预设'}</span>
             <select className="form-control" value={profileID} disabled={!project || loading || assignmentSaving} onChange={event => setProfileID(event.target.value)}>
               <option value="">{english ? 'Use project defaults' : '沿用项目设置'}</option>
               <AgentProfileSelectOptions catalog={providerCatalog} profiles={profiles} selectedProfileID={profileID} />

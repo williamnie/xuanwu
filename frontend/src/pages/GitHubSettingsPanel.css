@@ -28,7 +28,8 @@
 .github-settings h4 { margin: 0; font-size: var(--text-xl); font-weight: 650; }
 .github-settings p,
 .github-settings__actions { margin: 0; color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.6; overflow-wrap: anywhere; }
-.github-settings small,
+.github-settings__header small,
+.github-settings__facts small,
 .github-settings__case-heading span {
   color: var(--text-muted);
   font-family: var(--font-mono);

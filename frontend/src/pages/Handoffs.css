@@ -124,16 +124,16 @@
 .handoff-notice-summary { background: var(--bg-card); border: 1px solid color-mix(in srgb, var(--success) 25%, var(--border-color)); border-radius: var(--radius-md); display: grid; gap: var(--space-2); grid-template-columns: minmax(150px, auto) 1fr auto; padding: var(--space-3); }
 .handoff-notice-summary > div { align-items: center; color: var(--success); display: flex; gap: var(--space-1-5); }
 .handoff-notice-summary p { color: var(--text-secondary); font-size: var(--text-xs); line-height: 1.5; margin: 0; }
-.handoff-notice-summary > span { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); grid-column: 1; text-transform: uppercase; }
+.handoff-notice-summary > span { color: var(--text-muted); font-size: var(--text-2xs); grid-column: 1; }
 .handoff-notice-summary > strong { font-size: var(--text-sm); grid-column: 2 / -1; }
 
 .handoff-section { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: var(--space-3); }
 .handoff-section-title { align-items: baseline; display: flex; gap: var(--space-2-5); justify-content: space-between; margin-bottom: var(--space-2-5); }
 .handoff-section-title h3 { font-family: var(--font-display); font-size: var(--text-md); margin: 0; }
-.handoff-section-title span { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; }
+.handoff-section-title span { color: var(--text-muted); font-size: var(--text-2xs); }
 .handoff-ref-grid { display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .handoff-ref-card { background: var(--control-bg); border: 1px solid var(--border-light); border-radius: var(--radius-sm); display: grid; gap: var(--space-2); grid-template-columns: 1fr auto; padding: var(--space-2-5); }
-.handoff-ref-card > span { align-items: center; color: var(--text-muted); display: flex; font-size: var(--text-2xs); gap: var(--space-1); text-transform: uppercase; }
+.handoff-ref-card > span { align-items: center; color: var(--text-muted); display: flex; font-size: var(--text-2xs); gap: var(--space-1); }
 .handoff-ref-card code { font-size: var(--text-xs); grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; }
 .handoff-ref-card button { align-items: center; background: transparent; border: 0; color: var(--primary); cursor: pointer; display: flex; font-size: var(--text-2xs); gap: var(--space-1); padding: 0; }
 
@@ -146,7 +146,7 @@
 
 .handoff-diff-stats { display: grid; gap: var(--space-1-5); grid-template-columns: repeat(4, minmax(80px, 1fr)); }
 .handoff-diff-stats > div { background: var(--control-bg); border: 1px solid var(--border-light); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2); }
-.handoff-diff-stats span { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; }
+.handoff-diff-stats span { color: var(--text-muted); font-size: var(--text-2xs); }
 .handoff-diff-stats strong { font-family: var(--font-mono); font-size: var(--text-md); }
 .handoff-diff-stats .positive strong { color: var(--success); }
 .handoff-diff-stats .negative strong { color: var(--error); }
@@ -170,7 +170,7 @@
 .handoff-risk-list > div > div { display: flex; flex-direction: column; gap: var(--space-1); }
 .handoff-risk-list strong { font-size: var(--text-xs); }
 .handoff-risk-list span { color: var(--text-secondary); font-size: var(--text-2xs); line-height: 1.45; }
-.handoff-risk-list em { color: var(--warning); font-family: var(--font-mono); font-size: var(--text-2xs); font-style: normal; text-transform: uppercase; }
+.handoff-risk-list em { color: var(--warning); font-size: var(--text-2xs); font-style: normal; }
 .handoff-risk-list > div[data-severity='critical'] { background: color-mix(in srgb, var(--error) 9%, var(--control-bg)); border-color: color-mix(in srgb, var(--error) 35%, var(--border-color)); }
 .handoff-risk-list > div[data-severity='critical'] > svg,
 .handoff-risk-list > div[data-severity='critical'] em,

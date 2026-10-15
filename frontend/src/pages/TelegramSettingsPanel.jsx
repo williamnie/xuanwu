@@ -91,7 +91,7 @@ function TelegramForm({ state }) {
       <div className="telegram-onboarding__primary-fields">
         <SecretField configured={state.remote?.bot_token_configured} label="Bot Token" value={state.form.bot_token} onChange={value => state.update('bot_token', value)} />
         <label className="form-group feishu-settings__field telegram-enabled-field">
-          <span>启用 Telegram</span>
+          <span className="ds-mono-label">启用 Telegram</span>
           <input checked={state.form.enabled} onChange={event => state.update('enabled', event.target.checked)} type="checkbox" />
         </label>
       </div>
@@ -177,15 +177,15 @@ function telegramMissingRequired(remote) {
 }
 
 function TextField({ label, onChange, placeholder, value }) {
-  return <label className="form-group feishu-settings__field"><span>{label}</span><input className="form-control" value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder} /></label>;
+  return <label className="form-group feishu-settings__field"><span className="ds-mono-label">{label}</span><input className="form-control" value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder} /></label>;
 }
 
 function NumberField({ label, max, min, onChange, value }) {
-  return <label className="form-group feishu-settings__field"><span>{label}</span><input className="form-control" max={max} min={min} type="number" value={value} onChange={event => onChange(Number(event.target.value))} /></label>;
+  return <label className="form-group feishu-settings__field"><span className="ds-mono-label">{label}</span><input className="form-control" max={max} min={min} type="number" value={value} onChange={event => onChange(Number(event.target.value))} /></label>;
 }
 
 function SecretField({ configured, label, onChange, value }) {
-  return <label className="form-group feishu-settings__field"><span>{label}</span><input className="form-control" type="password" value={value} onChange={event => onChange(event.target.value)} placeholder={configured ? '已配置，留空不覆盖' : '未配置'} /></label>;
+  return <label className="form-group feishu-settings__field"><span className="ds-mono-label">{label}</span><input className="form-control" type="password" value={value} onChange={event => onChange(event.target.value)} placeholder={configured ? '已配置，留空不覆盖' : '未配置'} /></label>;
 }
 
 async function discoverSource(state) {

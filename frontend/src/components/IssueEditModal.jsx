@@ -122,7 +122,7 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
 function AgentProfileField({ catalog, inheritedProviderAvailable, loading, onChange, profiles, value }) {
   return (
     <div className="form-group">
-      <label>Code Agent</label>
+      <label><span className="ds-mono-label">Code Agent</span></label>
       <select className="form-control" disabled={loading} value={value} onChange={(event) => onChange(event.target.value)}>
         <option disabled={!inheritedProviderAvailable} value="">
           {inheritedProviderAvailable ? '继承项目默认' : '请选择可用 Code Agent'}
@@ -139,7 +139,7 @@ function AgentProfileField({ catalog, inheritedProviderAvailable, loading, onCha
 function ProjectField({ projects, value, onChange }) {
   return (
     <div className="form-group">
-      <label>关联目标项目 *</label>
+      <label><span className="ds-mono-label">关联目标项目 *</span></label>
       <select className="form-control" value={value} onChange={(event) => onChange(event.target.value)} required>
         {projects.map((project) => (
           <option key={project.id} value={project.id}>{project.name}</option>
@@ -175,7 +175,7 @@ function ModalHeader({ issue, onClose }) {
 function TitleField({ value, onChange }) {
   return (
     <div className="form-group">
-      <label>任务标题（可选，留空会从内容首行自动生成）</label>
+      <label><span className="ds-mono-label">任务标题（可选，留空会从内容首行自动生成）</span></label>
       <input
         type="text"
         className="form-control"
@@ -190,7 +190,7 @@ function TitleField({ value, onChange }) {
 function DescriptionField({ value, onChange }) {
   return (
     <div className="form-group">
-      <label>任务内容 / 需求描述 *</label>
+      <label><span className="ds-mono-label">任务内容 / 需求描述 *</span></label>
       <PromptEditor
         placeholder="更新要 Codex 执行的完整内容，例如复现路径、期望改动和验证方式..."
         value={value}
@@ -205,7 +205,7 @@ function DescriptionField({ value, onChange }) {
 function PriorityField({ value, onChange }) {
   return (
     <div className="form-group">
-      <label>任务优先级</label>
+      <label><span className="ds-mono-label">任务优先级</span></label>
       <select className="form-control" value={value} onChange={(event) => onChange(event.target.value)}>
         {PRIORITY_OPTIONS.map(option => (
           <option key={option.value} value={option.value}>{option.label}</option>

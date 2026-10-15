@@ -85,10 +85,10 @@ export default function SkillLibraryPanel() {
         </div>
       </div>
       <div className="skill-library-filters">
-        <label>作用域<select aria-label="技能作用域" value={projectId} disabled={Boolean(busy)} onChange={event => { setProjectId(event.target.value); setSelectedKey(''); setDetail(null); setError(''); setNotice(''); detailSequence.current++; }}>
+        <label><span className="ds-mono-label">作用域</span><select aria-label="技能作用域" value={projectId} disabled={Boolean(busy)} onChange={event => { setProjectId(event.target.value); setSelectedKey(''); setDetail(null); setError(''); setNotice(''); detailSequence.current++; }}>
           <option value="">整个玄武实例</option>{projects.map(project => <option value={project.id} key={project.id}>{project.name || project.id}</option>)}
         </select></label>
-        <label>查找技能<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="名称或来源" /></label>
+        <label><span className="ds-mono-label">查找技能</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="名称或来源" /></label>
       </div>
       {error && <p className="skill-library-error" role="alert">{error}</p>}
       {(busy || notice) && <p className="skill-library-notice" role="status">{busy ? <><LoaderCircle size={14} className="spin-animation" />正在{busy}…</> : <><Check size={14} />{notice}</>}</p>}
@@ -130,12 +130,12 @@ function InstallForm({ projectId, busy, onInstall }) {
   return <form className="skill-library-form" onSubmit={submit} aria-busy={busy || inspection.busy}>
     <h3>安装到{projectId ? '当前项目' : '整个玄武实例'}</h3>
     <div className="skill-library-form-fields">
-      <label>技能名称<input name="id" value={draft.id} onChange={update} required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={64} placeholder="与 SKILL.md 的 name 一致" disabled={busy || inspection.busy} /></label>
-      <label>安装来源<select name="kind" value={draft.kind} onChange={update} disabled={busy || inspection.busy}>{Object.entries(SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      {draft.kind !== 'inline' && <label className="skill-library-wide">{draft.kind === 'git' ? '仓库地址' : '本地绝对目录'}<input name="location" value={draft.location} onChange={update} required disabled={busy || inspection.busy} placeholder={draft.kind === 'git' ? 'https://github.com/owner/repository' : '/absolute/path/to/skill'} /></label>}
-      {draft.kind === 'git' && <label>分支或标签<input name="ref" value={draft.ref} onChange={update} disabled={busy || inspection.busy} placeholder="默认分支" /></label>}
-      {draft.kind !== 'inline' && <label>技能子目录<input name="subdirectory" value={draft.subdirectory} onChange={update} disabled={busy || inspection.busy} placeholder="例如 skills/my-skill（可选）" /></label>}
-      {draft.kind === 'inline' && <label className="skill-library-wide">SKILL.md 内容<textarea name="content" value={draft.content} onChange={update} required rows={10} maxLength={131072} disabled={busy || inspection.busy} placeholder={'---\nname: my-skill\ndescription: 何时使用这个技能\n---\n具体操作说明'} /></label>}
+      <label><span className="ds-mono-label">技能名称</span><input name="id" value={draft.id} onChange={update} required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={64} placeholder="与 SKILL.md 的 name 一致" disabled={busy || inspection.busy} /></label>
+      <label><span className="ds-mono-label">安装来源</span><select name="kind" value={draft.kind} onChange={update} disabled={busy || inspection.busy}>{Object.entries(SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      {draft.kind !== 'inline' && <label className="skill-library-wide"><span className="ds-mono-label">{draft.kind === 'git' ? '仓库地址' : '本地绝对目录'}</span><input name="location" value={draft.location} onChange={update} required disabled={busy || inspection.busy} placeholder={draft.kind === 'git' ? 'https://github.com/owner/repository' : '/absolute/path/to/skill'} /></label>}
+      {draft.kind === 'git' && <label><span className="ds-mono-label">分支或标签</span><input name="ref" value={draft.ref} onChange={update} disabled={busy || inspection.busy} placeholder="默认分支" /></label>}
+      {draft.kind !== 'inline' && <label><span className="ds-mono-label">技能子目录</span><input name="subdirectory" value={draft.subdirectory} onChange={update} disabled={busy || inspection.busy} placeholder="例如 skills/my-skill（可选）" /></label>}
+      {draft.kind === 'inline' && <label className="skill-library-wide"><span className="ds-mono-label">SKILL.md 内容</span><textarea name="content" value={draft.content} onChange={update} required rows={10} maxLength={131072} disabled={busy || inspection.busy} placeholder={'---\nname: my-skill\ndescription: 何时使用这个技能\n---\n具体操作说明'} /></label>}
     </div>
     <label className="skill-library-checkbox"><input type="checkbox" name="enabled" checked={draft.enabled} onChange={update} disabled={busy || inspection.busy} />安装后启用</label>
     {inspection.error && <p className="skill-library-error" role="alert">{inspection.error}</p>}
@@ -161,7 +161,7 @@ function SkillDetail({ detail, skill, busy, onManage, onVerify }) {
       <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setConfirmRemove(value => !value)}>卸载</button>
     </div>
     {confirmRemove && <div className="skill-library-confirm"><p>卸载 {skill.id} 后，新的对话任务将不再加载它。</p><div className="skill-library-actions"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => onManage(skill, 'uninstall')}>确认卸载</button><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setConfirmRemove(false)}>取消</button></div></div>}
-    {editing && <form className="skill-library-form" onSubmit={async event => { event.preventDefault(); const result = await onManage({ ...skill, revision: editRevision }, 'update', { kind: 'inline', content }); if (result) setEditing(false); }}><label>SKILL.md<textarea rows={12} value={content} onChange={event => setContent(event.target.value)} disabled={busy} required /></label><button type="submit" className="btn btn-secondary" disabled={busy}>保存新版本</button></form>}
+    {editing && <form className="skill-library-form" onSubmit={async event => { event.preventDefault(); const result = await onManage({ ...skill, revision: editRevision }, 'update', { kind: 'inline', content }); if (result) setEditing(false); }}><label><span className="ds-mono-label">SKILL.md</span><textarea rows={12} value={content} onChange={event => setContent(event.target.value)} disabled={busy} required /></label><button type="submit" className="btn btn-secondary" disabled={busy}>保存新版本</button></form>}
     {!detail ? <p role="status">正在读取详情…</p> : <>
       <div className="skill-library-verification"><h4>加载验证 · {verification.status === 'ready' ? '可用' : verification.status === 'disabled' ? '已停用' : '待处理'}</h4><p>{verification.note}</p>{verification.diagnostics.map((item, index) => <p className="skill-library-error" key={`${item.code}-${index}`}>{item.message}</p>)}{verification.scripts.length > 0 && <p>附带 {verification.scripts.length} 个脚本，可在对话中安排执行任务。</p>}</div>
       <details open className="skill-library-instructions"><summary>技能说明</summary><pre>{detail.instructions}</pre></details>

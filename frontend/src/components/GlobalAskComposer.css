@@ -80,9 +80,7 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
 
 .global-ask-composer-brand small {
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  letter-spacing: 0.035em;
   line-height: 1.3;
 }
 

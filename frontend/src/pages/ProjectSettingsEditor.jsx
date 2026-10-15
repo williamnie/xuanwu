@@ -256,7 +256,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
         {ui.formError && <div className="project-settings-error" role="alert">{ui.formError}</div>}
 
         <div className="form-group">
-          <label>项目路径 *</label>
+          <label><span className="ds-mono-label">项目路径 *</span></label>
           <input
             autoFocus={mode === 'create'}
             className="form-control"
@@ -310,7 +310,7 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
   return (
     <div className="project-runtime-fields">
       <div className="form-group">
-        <label>{english ? 'Coding tool' : '编程工具'}</label>
+        <label><span className="ds-mono-label">{english ? 'Coding tool' : '编程工具'}</span></label>
         <select
           aria-busy={ui.providerCatalogLoading}
           className={`form-control${ui.providerCatalogLoading ? ' project-settings-control-loading' : ''}`}
@@ -344,7 +344,7 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
       </div>
 
       <div className="form-group">
-        <label>{english ? 'Default model' : '默认模型'}</label>
+        <label><span className="ds-mono-label">{english ? 'Default model' : '默认模型'}</span></label>
         <select aria-label={english ? 'Default model' : '默认模型'} className="form-control" disabled={ui.codexModelsLoading} onChange={event => onFieldChange('formModel', event.target.value)} value={ui.formModel}>
           {modelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
@@ -363,7 +363,7 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
           <summary>{english ? 'More options' : '更多选项'}</summary>
           <div className="project-runtime-fields">
             <div className="form-group">
-              <label>{english ? 'Execution speed' : '执行速度'}</label>
+              <label><span className="ds-mono-label">{english ? 'Execution speed' : '执行速度'}</span></label>
               <select className="form-control" onChange={event => onFieldChange('formServiceTier', event.target.value)} value={ui.formServiceTier}>
                 {serviceTierOptions(ui.formServiceTier).map(option => <option key={option.value || 'standard'} value={option.value}>{english ? ({ '': 'Standard', priority: 'Fast' }[option.value] || option.label) : option.label}</option>)}
               </select>
@@ -374,7 +374,7 @@ function ProjectRuntimeFields({ modelOptions, onFieldChange, providerOptions, ui
       ) : null}
 
       <div className="form-group">
-        <label>执行权限与确认</label>
+        <label><span className="ds-mono-label">执行权限与确认</span></label>
         <select className="form-control" onChange={event => onFieldChange('formExecutionPolicy', policyFromValue(event.target.value))} value={policyValue}>
           {policyOptions.map(option => (
             <option disabled={option.disabled} key={option.id} value={option.value} title={option.reason}>{option.label}{option.disabled ? '（当前 transport 不支持）' : ''}</option>

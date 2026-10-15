@@ -58,7 +58,7 @@ export default function AuthGate({ onUnlock }) {
           <p className="auth-token-guide-note">如果设置了 <code>XUANWU_AUTH_TOKEN_FILE</code> 或 <code>XUANWU_STATE_DIR</code>，请以部署终端打印的实际路径为准。</p>
         </div>
         <div className="form-group auth-token-form-group">
-          <label htmlFor="runner-auth-token">Token</label>
+          <label htmlFor="runner-auth-token"><span className="ds-mono-label">Token</span></label>
           <div className="auth-token-input-wrap">
             <input
               id="runner-auth-token"

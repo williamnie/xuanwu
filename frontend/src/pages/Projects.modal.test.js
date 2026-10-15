@@ -141,7 +141,7 @@ test('project config modal shows provider loading and failure states instead of 
 });
 
 test('new project form defaults to one required field and keeps optional controls collapsed', () => {
-  assert.match(editorSource, /<label>项目路径 \*<\/label>/);
+  assert.match(editorSource, /<label><span className="ds-mono-label">项目路径 \*<\/span><\/label>/);
   assert.match(editorSource, /mode === 'create'[\s\S]*<details className="project-settings-advanced">/);
   assert.match(editorSource, /高级运行配置（可选）/);
   assert.match(editorSource, /mode === 'edit'[\s\S]*loadAgentProfiles\(\)/);

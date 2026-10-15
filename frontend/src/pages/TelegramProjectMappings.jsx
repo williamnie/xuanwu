@@ -19,10 +19,10 @@ export function TelegramProjectMappingsView({ onChange, projects, value }) {
       <p className="feishu-settings__hint-copy">{english ? 'Map each chat or user to an existing project.' : '为每个群聊或用户选择关联的已有项目。'}</p>
       {rows.map((row, index) => (
         <div className="telegram-project-mapping" key={index}>
-          <label className="form-group feishu-settings__field"><span>{english ? 'Source (chat: / user:)' : '来源（chat: / user:）'}</span>
+          <label className="form-group feishu-settings__field"><span className="ds-mono-label">{english ? 'Source (chat: / user:)' : '来源（chat: / user:）'}</span>
             <input className="form-control" required value={row.source} placeholder="chat:-100123" onChange={event => update(index, { source: event.target.value })} />
           </label>
-          <label className="form-group feishu-settings__field"><span>{english ? 'Project' : '项目'}</span>
+          <label className="form-group feishu-settings__field"><span className="ds-mono-label">{english ? 'Project' : '项目'}</span>
             <select className="form-control" required value={row.projectId} onChange={event => update(index, { projectId: event.target.value })}>
               <option value="">{english ? 'Choose a project' : '选择项目'}</option>
               {row.projectId && !projects.some(project => project.id === row.projectId) && <option value={row.projectId}>{row.projectId} · {english ? 'Current value (unavailable)' : '当前值（暂不可用）'}</option>}

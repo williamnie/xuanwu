@@ -130,7 +130,7 @@ function ManualRunControls({ form, onRun, selected, setForm }) {
   return (
     <div className="skills-run-controls">
       <label>
-        {selected.kind === 'intake' ? 'Context bundle ID' : 'Inbox item ID'}
+        <span className="ds-mono-label">{selected.kind === 'intake' ? 'Context bundle ID' : 'Inbox item ID'}</span>
         <input value={form[field]} onChange={(event) => setForm({ ...form, [field]: event.target.value })} placeholder="输入数字 ID" />
       </label>
       <button className="btn" disabled={selected.availability_status === 'blocked' || !selected.enabled || !form[field]} onClick={onRun} type="button">

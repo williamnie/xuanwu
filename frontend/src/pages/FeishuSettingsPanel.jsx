@@ -130,7 +130,7 @@ function ReceiveModeHint({ callbackPath, receiveMode, settingsFile }) {
 function ReceiveModeField({ onChange, value }) {
   return (
     <label className="form-group feishu-settings__field">
-      <span>Receive Mode</span>
+      <span className="ds-mono-label">Receive Mode</span>
       <select className="form-control" value={value || 'websocket'} onChange={(event) => onChange(event.target.value)}>
         <option value="websocket">长连接 WebSocket（推荐，无需公网域名）</option>
         <option value="callback">HTTP Callback（高级，需要 Request URL）</option>
@@ -142,7 +142,7 @@ function ReceiveModeField({ onChange, value }) {
 function TextField({ label, value, onChange, placeholder }) {
   return (
     <label className="form-group feishu-settings__field">
-      <span>{label}</span>
+      <span className="ds-mono-label">{label}</span>
       <input className="form-control" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
     </label>
   );
@@ -151,7 +151,7 @@ function TextField({ label, value, onChange, placeholder }) {
 function SecretField({ configured, label, onChange, optional = false, value }) {
   return (
     <label className="form-group feishu-settings__field">
-      <span>{label} {optional && <small className="feishu-settings__optional">(可选)</small>}</span>
+      <span className="ds-mono-label">{label} {optional && <small className="feishu-settings__optional">(可选)</small>}</span>
       <input className="form-control" type="password" value={value} onChange={(event) => onChange(event.target.value)} placeholder={configured ? '已配置，留空不覆盖' : '未配置'} />
     </label>
   );
@@ -160,7 +160,7 @@ function SecretField({ configured, label, onChange, optional = false, value }) {
 function TextAreaField({ label, onChange, placeholder, value }) {
   return (
     <label className="form-group feishu-settings__field">
-      <span>{label}</span>
+      <span className="ds-mono-label">{label}</span>
       <textarea className="form-control" rows={2} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
     </label>
   );

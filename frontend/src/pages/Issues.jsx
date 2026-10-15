@@ -507,7 +507,7 @@ export default function Issues({
                 </div>
               ) : (
                 <div className="form-group">
-                  <label>关联目标项目 *</label>
+                  <label><span className="ds-mono-label">关联目标项目 *</span></label>
                   <select
                     className="form-control"
                     value={formProjectId}
@@ -529,7 +529,7 @@ export default function Issues({
               )}
 
               <div className="form-group">
-                <label>Code Agent</label>
+                <label><span className="ds-mono-label">Code Agent</span></label>
                 <select
                   className="form-control"
                   value={formAgentProfileId}
@@ -551,7 +551,7 @@ export default function Issues({
               </div>
 
               <div className="form-group">
-                <label>任务内容 / 需求描述 *</label>
+                <label><span className="ds-mono-label">任务内容 / 需求描述 *</span></label>
                 <PromptEditor
                   placeholder="直接写要 Codex 处理的完整内容，例如复现路径、报错日志、期望改动和验证方式..."
                   value={formDescription}
@@ -562,7 +562,7 @@ export default function Issues({
               </div>
 
               <div className="form-group">
-                <label>任务优先级</label>
+                <label><span className="ds-mono-label">任务优先级</span></label>
                 <select
                   className="form-control"
                   value={formPriority}

@@ -45,7 +45,7 @@ export function SettingsNavigation({ onRouteChange, route }) {
         </div>
       </nav>
       <label className="settings-mobile-directory">
-        <span>{label}</span>
+        <span className="ds-mono-label">{label}</span>
         <select value={route.tab} onChange={(event) => onRouteChange(resolveSettingsRoute(event.target.value))}>
           {SETTINGS_SECTIONS.map(({ id }) => <option key={id} value={id}>{settingsSectionCopy(id, locale).title}</option>)}
         </select>

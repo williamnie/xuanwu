@@ -9,7 +9,7 @@ test('new Issue exposes Agent Profile provider routing and submits the selected 
   assert.match(source, /projectsApi\.getAgentProfiles\(\)/);
   assert.match(source, /systemApi\.getProviders\(\)/);
   assert.match(source, /availableAgentProfiles\(agentProfiles, providerCatalog\)/);
-  assert.match(source, /<label>Code Agent<\/label>/);
+  assert.match(source, /<label><span className="ds-mono-label">Code Agent<\/span><\/label>/);
   assert.match(source, /<AgentProfileSelectOptions/);
   assert.match(source, /agent_profile_id:\s*formAgentProfileId/);
 });

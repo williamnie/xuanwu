@@ -120,7 +120,7 @@ function ServerCard({ server, showForget, state }) {
       </div>
       <div className="pi-mcp-panel__actions">
         <label className="pi-mcp-panel__approval-field">
-          写入审批
+          <span className="ds-mono-label">写入审批</span>
           <select aria-label={`${server.name || server.id} 写入审批模式`} className="form-control" onChange={(event) => state.setApprovalMode(server, event.target.value)} value={server.approval_mode || 'dangerous_only'}>
             <option value="dangerous_only">仅高危操作询问（推荐）</option>
             <option value="every_write">每次写入都询问</option>
@@ -202,7 +202,7 @@ function Diagnostics({ diagnostics = [] }) {
 }
 
 function TextField({ label, onChange, placeholder, value }) {
-  return <label className="form-group pi-mcp-panel__field"><span>{label}</span><input className="form-control" onChange={(event) => onChange(event.target.value)} placeholder={placeholder} value={value} /></label>;
+  return <label className="form-group pi-mcp-panel__field"><span className="ds-mono-label">{label}</span><input className="form-control" onChange={(event) => onChange(event.target.value)} placeholder={placeholder} value={value} /></label>;
 }
 
 async function loadMcpState(setters) {

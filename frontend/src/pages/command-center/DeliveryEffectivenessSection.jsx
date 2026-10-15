@@ -42,14 +42,14 @@ export default function DeliveryEffectivenessSection() {
       </button>
     </header>
     <form className="delivery-filters" onSubmit={event => event.preventDefault()}>
-      <label>项目<select disabled={loading} value={shownFilters.project_id} onChange={event => changeFilters({ project_id: event.target.value })}>
+      <label><span className="ds-mono-label">项目</span><select disabled={loading} value={shownFilters.project_id} onChange={event => changeFilters({ project_id: event.target.value })}>
         <option value="">全部项目</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
       </select></label>
-      <label>任务类型<select disabled={loading} value={shownFilters.task_type} onChange={event => changeFilters({ task_type: event.target.value })}>
+      <label><span className="ds-mono-label">任务类型</span><select disabled={loading} value={shownFilters.task_type} onChange={event => changeFilters({ task_type: event.target.value })}>
         <option value="">全部类型</option>{Object.entries(TYPE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
       </select></label>
-      <label>开始日期（UTC）<input disabled={loading} type="date" max={shownFilters.to.slice(0, 10)} value={shownFilters.from.slice(0, 10)} onChange={event => { if (event.target.value) changeFilters({ from: `${event.target.value}T00:00:00.000Z` }); }} /></label>
-      <label>结束日期（UTC）<input disabled={loading} type="date" min={shownFilters.from.slice(0, 10)} value={shownFilters.to.slice(0, 10)} onChange={event => { if (event.target.value) changeFilters({ to: `${event.target.value}T23:59:59.999Z` }); }} /></label>
+      <label><span className="ds-mono-label">开始日期（UTC）</span><input disabled={loading} type="date" max={shownFilters.to.slice(0, 10)} value={shownFilters.from.slice(0, 10)} onChange={event => { if (event.target.value) changeFilters({ from: `${event.target.value}T00:00:00.000Z` }); }} /></label>
+      <label><span className="ds-mono-label">结束日期（UTC）</span><input disabled={loading} type="date" min={shownFilters.from.slice(0, 10)} value={shownFilters.to.slice(0, 10)} onChange={event => { if (event.target.value) changeFilters({ to: `${event.target.value}T23:59:59.999Z` }); }} /></label>
     </form>
     <div className="delivery-page-toolbar">
       <p>{snapshot ? <>当前显示第 {history.length + 1} 页 · {snapshot.sampled_works} 个结束任务</> : '每页最多 25 个结束任务'}</p>
@@ -74,7 +74,7 @@ export default function DeliveryEffectivenessSection() {
         <FactList facts={effectivenessFacts(snapshot)} className="delivery-overview-facts" />
         <section className="delivery-group-section" aria-labelledby="delivery-groups-title">
           <div className="delivery-section-heading"><div><h3 id="delivery-groups-title">看看哪些任务需要关注</h3><p>验证通过、重复执行和求助记录，均按当前页任务汇总。</p></div>
-            <label className="delivery-group-picker">分组方式<select value={grouping} onChange={event => setGrouping(event.target.value)}>{Object.entries(GROUP_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            <label className="delivery-group-picker"><span className="ds-mono-label">分组方式</span><select value={grouping} onChange={event => setGrouping(event.target.value)}>{Object.entries(GROUP_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
           </div>
           <GroupTable title={GROUP_LABELS[grouping]} rows={snapshot[grouping]} label={groupLabel} />
         </section>

@@ -166,13 +166,15 @@
   flex-direction: column;
   gap: var(--space-1-5);
 }
-
-.evidence-decisive-output > span,
+.evidence-decisive-output > span {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: 750;
+}
 .evidence-artifacts > span {
   color: var(--text-muted);
   font-size: var(--text-2xs);
   font-weight: 750;
-  text-transform: uppercase;
 }
 
 .evidence-decisive-output strong { font-size: var(--text-sm); overflow-wrap: anywhere; }

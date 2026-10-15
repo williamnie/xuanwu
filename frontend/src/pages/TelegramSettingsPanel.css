@@ -184,19 +184,19 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.telegram-source small,
-.telegram-source > span:last-child {
+.telegram-source small {
   color: var(--text-muted);
   font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+.telegram-source > span:last-child {
+  color: var(--text-muted);
   font-size: var(--text-2xs);
 }
 
 .telegram-source > span:last-child {
   color: var(--primary);
   font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .telegram-advanced {

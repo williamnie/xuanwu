@@ -298,11 +298,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.pi-chat-conversation small,
 .pi-chat-empty-mini {
   color: var(--text-muted);
   font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+.pi-chat-conversation small {
+  color: var(--text-muted);
   font-size: var(--text-2xs);
 }
 

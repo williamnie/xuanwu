@@ -245,7 +245,7 @@ function AutomationEditor({ editor, onCancel, onChange, onSave, projects, submit
 
 function FormSection({ children, description, index, title }) { return <section className="automation-form-section"><header><span>{index}</span><div><h3>{title}</h3><p>{description}</p></div></header><div className="automation-form-grid">{children}</div></section>; }
 
-function FormField({ children, hint, label, wide = false }) { return <label className={`automation-form-field ${wide ? 'wide' : ''}`}><span>{label}</span>{children}<small>{hint}</small></label>; }
+function FormField({ children, hint, label, wide = false }) { return <label className={`automation-form-field ${wide ? 'wide' : ''}`}><span className="ds-mono-label">{label}</span>{children}<small>{hint}</small></label>; }
 
 function AutomationState({ detail = false, error = '', loading = false, onRetry }) {
   const { t } = useI18n();

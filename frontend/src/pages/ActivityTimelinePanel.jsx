@@ -68,9 +68,9 @@ function FilterForm({ filters, onChange, onReset, onSubmit, options }) {
   const update = (field) => (event) => onChange((current) => ({ ...current, [field]: event.target.value }));
   return (
     <form className="activity-filter" onSubmit={onSubmit}>
-      <label>Source<input value={filters.source} onChange={update('source')} placeholder="fixture-cli" /></label>
-      <label>Since<input value={filters.since} onChange={update('since')} placeholder="2026-07-06T00:00:00Z" /></label>
-      <label>Until<input value={filters.until} onChange={update('until')} placeholder="2026-07-07T00:00:00Z" /></label>
+      <label><span className="ds-mono-label">Source</span><input value={filters.source} onChange={update('source')} placeholder="fixture-cli" /></label>
+      <label><span className="ds-mono-label">Since</span><input value={filters.since} onChange={update('since')} placeholder="2026-07-06T00:00:00Z" /></label>
+      <label><span className="ds-mono-label">Until</span><input value={filters.until} onChange={update('until')} placeholder="2026-07-07T00:00:00Z" /></label>
       <AuditSelect label="Stage" onChange={update('stage')} options={options.stages} value={filters.stage} />
       <AuditSelect label="Status" onChange={update('status')} options={options.statuses} value={filters.status} />
       <AuditSelect label="Decision" onChange={update('decision')} options={options.decisions} value={filters.decision} />
@@ -78,7 +78,7 @@ function FilterForm({ filters, onChange, onReset, onSubmit, options }) {
         <summary>{english ? 'Find by ID' : '按 ID 查找'}{hasIdFilter ? ` (${idFilterCount})` : ''}</summary>
         <div className="settings-disclosure-content activity-filter">
           {ACTIVITY_ID_FILTER_KEYS.map(key => (
-            <label key={key}>{idLabels[key] || key}<input value={filters[key]} onChange={update(key)} /></label>
+            <label key={key}><span className="ds-mono-label">{idLabels[key] || key}</span><input value={filters[key]} onChange={update(key)} /></label>
           ))}
         </div>
       </details>
@@ -90,7 +90,7 @@ function FilterForm({ filters, onChange, onReset, onSubmit, options }) {
 
 function AuditSelect({ label, onChange, options, value }) {
   return (
-    <label>{label}<select onChange={onChange} value={value}>
+    <label><span className="ds-mono-label">{label}</span><select onChange={onChange} value={value}>
       <option value="">All</option>
       {options.map(option => <option key={option} value={option}>{option}</option>)}
     </select></label>

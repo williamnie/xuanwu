@@ -1192,7 +1192,6 @@ input:checked + .slider:before {
   font-size: var(--text-xs);
   font-weight: 800;
   margin-bottom: var(--space-1-5);
-  text-transform: uppercase;
 }
 
 .issue-supervisor-field .mono,

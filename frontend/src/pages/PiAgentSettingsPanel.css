@@ -307,11 +307,9 @@
   border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border-color));
   color: var(--primary);
   flex: 0 0 auto;
-  font-family: var(--font-mono);
   font-size: var(--text-2xs);
   font-weight: 800;
   padding: var(--space-1) var(--space-1-5);
-  text-transform: uppercase;
 }
 
 .provider-credential-grid,
@@ -523,8 +521,6 @@
 .provider-connection-summary > span {
   color: var(--text-muted);
   font-size: var(--text-2xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .provider-connection-summary dl {

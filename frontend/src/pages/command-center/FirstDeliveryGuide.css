@@ -188,7 +188,7 @@
 
 .first-delivery-oauth-heading { align-items: flex-start; display: flex; gap: var(--space-3); justify-content: space-between; }
 .first-delivery-oauth-heading strong { color: var(--text-primary); font-size: var(--text-md); }
-.first-delivery-oauth-heading > span { border: 1px solid var(--border-color); border-radius: var(--radius-xs); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 800; padding: var(--space-0-5) var(--space-1-5); text-transform: uppercase; }
+.first-delivery-oauth-heading > span { border: 1px solid var(--border-color); border-radius: var(--radius-xs); color: var(--text-muted); font-size: var(--text-2xs); font-weight: 800; padding: var(--space-0-5) var(--space-1-5); }
 .first-delivery-oauth-heading > span.ready { border-color: color-mix(in srgb, var(--success) 36%, var(--border-color)); color: var(--success); }
 .first-delivery-oauth-heading > span.pending { border-color: color-mix(in srgb, var(--info) 36%, var(--border-color)); color: var(--info); }
 .first-delivery-oauth-flow > code { background: var(--surface-raised); border: 1px solid var(--border-light); color: var(--text-secondary); font-family: var(--font-mono); font-size: var(--text-2xs); overflow-wrap: anywhere; padding: var(--space-2); }
