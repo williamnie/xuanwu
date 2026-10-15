@@ -166,11 +166,11 @@ export default function Projects() {
         <p className="settings-project-panel-note">开启自动执行后，玄武会依次处理项目中排队的任务。“从 Codex 导入”会读取本机 Codex 工作区，已存在的项目会被开启自动执行。</p>
         <div className="settings-project-panel-actions">
           <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing} type="button">
-            <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
             {syncing ? '正在导入…' : '从 Codex 导入'}
           </button>
           <button className="btn btn-primary" onClick={handleOpenCreateModal} type="button">
-            <FolderPlus size={18} /> 添加项目
+            <FolderPlus size={16} /> 添加项目
           </button>
         </div>
       </div>
@@ -178,7 +178,7 @@ export default function Projects() {
       <div className="settings-project-panel-body">
         {!backendOnline && (
           <div className="glass-card projects-notice is-error">
-            <AlertCircle className="projects-notice-icon" color="var(--error)" size={24} />
+            <AlertCircle className="projects-notice-icon" color="var(--error)" size={16} />
             <div>
               <h4 className="projects-notice-title">API 连接错误</h4>
               <p className="projects-notice-copy">加载数据失败，请检查当前 Runner 后端服务连接。</p>
@@ -189,9 +189,9 @@ export default function Projects() {
         {syncResult && (
           <div className={`glass-card projects-notice ${syncResult.error ? 'is-error' : 'is-success'}`}>
             {syncResult.error ? (
-              <AlertCircle className="projects-notice-icon" color="var(--error)" size={22} />
+              <AlertCircle className="projects-notice-icon" color="var(--error)" size={16} />
             ) : (
-              <CheckCircle2 className="projects-notice-icon" color="var(--success)" size={22} />
+              <CheckCircle2 className="projects-notice-icon" color="var(--success)" size={16} />
             )}
             <div className="projects-notice-body">
               <h4 className="projects-notice-title">
@@ -219,7 +219,7 @@ export default function Projects() {
         {/* 项目网格卡片 */}
         {projects.length === 0 ? (
           <div className="glass-card projects-empty">
-            <Folder className="projects-empty-icon" size={48} color="var(--text-muted)" />
+            <Folder className="projects-empty-icon" size={34} color="var(--text-muted)" />
             <div>
               <h3 className="projects-empty-title">暂无监控项目</h3>
               <p className="projects-empty-copy">添加本地项目路径，或从已有 Codex 项目中同步。</p>
@@ -326,7 +326,7 @@ export default function Projects() {
                 onClick={closeModal}
                 type="button"
               >
-                <X size={20} />
+                <X size={16} />
               </button>
             </div>
             <ProjectSettingsEditor
@@ -355,7 +355,7 @@ export default function Projects() {
           >
             <div className="project-delete-modal-header">
               <div className="project-delete-modal-icon" aria-hidden="true">
-                <Trash2 size={18} />
+                <Trash2 size={16} />
               </div>
               <div>
                 <div className="project-delete-modal-eyebrow">危险操作</div>

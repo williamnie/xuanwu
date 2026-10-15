@@ -15,7 +15,7 @@ export default function IssueDetailComments({
       <div className="issue-section-heading">
         <div>
           <span className="issue-section-eyebrow">Internal only · {count} notes</span>
-          <h2><StickyNote size={17} /> 内部备注</h2>
+          <h2><StickyNote size={14} /> 内部备注</h2>
         </div>
       </div>
       <div className="issue-notes-notice">
@@ -24,7 +24,7 @@ export default function IssueDetailComments({
       </div>
       {sessionRef && (
         <button type="button" className="issue-session-link" onClick={() => navigateTo?.('sessions', null, sessionRef)}>
-          <MessageCircle size={14} /> 要和 Agent 沟通？打开 Session <ExternalLink size={12} />
+          <MessageCircle size={14} /> 要和 Agent 沟通？打开 Session <ExternalLink size={13} />
         </button>
       )}
       <form className="issue-note-form" onSubmit={onSubmit}>

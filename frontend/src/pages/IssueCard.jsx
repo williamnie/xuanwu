@@ -162,12 +162,12 @@ function IssueQuickActions({ issue, sessionRef, retrying, onOpenSession, onReque
       )}
       {sessionRef && (
         <button type="button" className="kanban-card-action-btn" onClick={(event) => onOpenSession(event, sessionRef)}>
-          <ExternalLink size={12} /> Session
+          <ExternalLink size={13} /> Session
         </button>
       )}
       {showRetry && (
         <button type="button" className="kanban-card-action-btn retry" disabled={retrying} onClick={(event) => onRetry(event, issue)}>
-          <RotateCw size={12} /> {retrying ? 'Retrying' : 'Retry'}
+          <RotateCw size={13} /> {retrying ? 'Retrying' : 'Retry'}
         </button>
       )}
       <IssueCardMoreActions
@@ -212,11 +212,11 @@ function IssueCardFooter({ issue, project, getRelativeTime }) {
       </span>
       <div className="kanban-card-footer-meta">
         <span className="kanban-card-footer-time">
-          <Clock className="kanban-card-footer-icon" size={11} />
+          <Clock className="kanban-card-footer-icon" size={13} />
           {getRelativeTime(issue.updated_at)}
         </span>
         <span className="kanban-card-loops" title="Codex 执行回合数">
-          <Link2 className="kanban-card-footer-link" size={11} />
+          <Link2 className="kanban-card-footer-link" size={13} />
           {issue.attempt_count || 1}
         </span>
       </div>

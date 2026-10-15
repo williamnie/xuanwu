@@ -24,7 +24,7 @@ export default function TelegramSettingsPanel() {
     <section className="glass-card feishu-settings" id="telegram-connection-settings">
       <div className="feishu-settings__header">
         <div>
-          <h2 className="feishu-settings__heading"><Bot aria-hidden="true" size={18} color="var(--primary)" /> Telegram Bot</h2>
+          <h2 className="feishu-settings__heading"><Bot aria-hidden="true" size={16} color="var(--primary)" /> Telegram Bot</h2>
           <p className="feishu-settings__description">通过 Bot API 长轮询接收私聊、群组与论坛 topic；allowlist 默认拒绝未授权来源。</p>
         </div>
         <span className="feishu-settings__status">

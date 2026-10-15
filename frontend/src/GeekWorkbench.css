@@ -30,6 +30,8 @@ h1, h2, h3, h4 {
 }
 code, pre, kbd, .mono { font-family: var(--font-mono); }
 button, input, textarea, select { font-family: var(--font-sans); letter-spacing: -0.005em; }
+/* Spec 5.1 / 7: button icons share the compact 14px tier. */
+button .lucide, .btn .lucide { height: 14px; width: 14px; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--primary) 68%, var(--bg-card));
   outline-offset: 2px;

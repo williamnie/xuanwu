@@ -32,10 +32,10 @@ export default function PromptEditorComposerImages({ attachments = [], onRemove 
 function AttachmentPreview({ attachment }) {
   const { error, previewSrc } = useAuthenticatedPreview(attachment.src);
   if (error) {
-    return <div className="prompt-image-attachment-state error" title={error}><ImageOff size={18} /><span>预览失败</span></div>;
+    return <div className="prompt-image-attachment-state error" title={error}><ImageOff size={16} /><span>预览失败</span></div>;
   }
   if (!previewSrc) {
-    return <div className="prompt-image-attachment-state loading"><LoaderCircle className="animate-spin" size={18} /><span>读取中</span></div>;
+    return <div className="prompt-image-attachment-state loading"><LoaderCircle className="animate-spin" size={14} /><span>读取中</span></div>;
   }
   return <img src={previewSrc} alt="" />;
 }

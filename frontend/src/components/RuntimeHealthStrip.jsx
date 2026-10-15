@@ -33,7 +33,7 @@ export default function RuntimeHealthStrip({ backendOnline, navigateTo }) {
   return (
     <section className="glass-card runtime-health-alert" role="alert">
       <div className="runtime-health-alert-copy">
-        <span className="runtime-health-alert-icon"><AlertTriangle size={18} /></span>
+        <span className="runtime-health-alert-icon"><AlertTriangle size={16} /></span>
         <div>
           <strong>运行环境需要关注</strong>
           <p>{health.reason}</p>

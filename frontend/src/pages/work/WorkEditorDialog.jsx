@@ -115,7 +115,7 @@ export default function WorkEditorDialog({ initialProject = '', mode, onClose, o
             <h2 id="work-dialog-title">{t(editing ? 'editor.edit' : 'editor.create')}</h2>
             <p>{t(editing ? 'editor.editDescription' : 'editor.createDescription')}</p>
           </div>
-          <button aria-label={t('editor.close')} disabled={saving} onClick={onClose} type="button"><X size={18} /></button>
+          <button aria-label={t('editor.close')} disabled={saving} onClick={onClose} type="button"><X size={16} /></button>
         </header>
         <form onSubmit={submit}>
           {error ? <div className="work-dialog-error" role="alert">{error}</div> : null}

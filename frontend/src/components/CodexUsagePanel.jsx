@@ -72,7 +72,7 @@ function UsageHeader({ data, loading, onProviderChange, onRefresh, providers, se
   return (
     <header className="codex-usage-header">
       <div>
-        <h3><Zap size={18} /> AI 用量</h3>
+        <h3><Zap size={16} /> AI 用量</h3>
         <p>展示当前启用编程工具的今日用量、账户额度与玄武助手消耗。</p>
       </div>
       <div className="codex-usage-actions">

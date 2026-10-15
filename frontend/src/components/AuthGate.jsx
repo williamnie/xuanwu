@@ -75,7 +75,7 @@ export default function AuthGate({ onUnlock }) {
               onClick={() => setVisible(value => !value)}
               type="button"
             >
-              {visible ? <EyeOff size={17} /> : <Eye size={17} />}
+              {visible ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
           </div>
         </div>

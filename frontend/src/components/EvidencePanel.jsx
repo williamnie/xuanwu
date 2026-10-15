@@ -128,7 +128,7 @@ export default function EvidencePanel({
         </div>
       ) : !loading && items.length === 0 ? (
         <div className="evidence-state empty">
-          <FileCheck2 size={18} />
+          <FileCheck2 size={16} />
           <div>
             <strong>{verificationGapTitle(verificationGap?.reason)}</strong>
             <span>{verificationGap?.detail || 'Agent 自述、普通评论或 Run success 不会自动算作系统证明。'}</span>

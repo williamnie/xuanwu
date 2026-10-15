@@ -351,7 +351,7 @@ function Metric({ label, value }) {
 function ResourceHeader({ eyebrow, icon: Icon, loading, onRefresh, title }) {
   return (
     <header className="run-resource-header">
-      <div><span>{eyebrow}</span><h2><Icon size={17} /> {title}</h2></div>
+      <div><span>{eyebrow}</span><h2><Icon size={14} /> {title}</h2></div>
       <button aria-label={`Refresh ${title}`} disabled={loading} onClick={onRefresh} type="button">
         <RefreshCw className={loading ? 'is-spinning' : ''} size={14} /> Refresh
       </button>
@@ -374,7 +374,7 @@ function EventPageFooter({ events }) {
 }
 
 function EmptyState({ icon: Icon, text }) {
-  return <div className="run-detail-empty"><Icon size={19} /><span>{text}</span></div>;
+  return <div className="run-detail-empty"><Icon size={16} /><span>{text}</span></div>;
 }
 
 function ErrorState({ error, onRetry }) {

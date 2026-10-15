@@ -15,7 +15,7 @@ export default function IssueDetailDecision({ evidence, decision, onAccept, onRe
   return (
     <section className="glass-card issue-detail-decision">
       <h3 className="issue-detail-decision__heading">
-        <UserCheck size={18} color="#8b5cf6" /> {humanOwned ? '需要你审批' : piState.title}
+        <UserCheck size={16} color="#8b5cf6" /> {humanOwned ? '需要你审批' : piState.title}
       </h3>
       <p className="issue-detail-decision__description">
         {humanOwned
@@ -93,7 +93,7 @@ export function HumanReviewResponseModal({ action, draft, request, submitting, o
         }}
       >
         <div className="issue-delete-modal-header">
-          <ClipboardCheck size={18} color="var(--primary)" />
+          <ClipboardCheck size={16} color="var(--primary)" />
           <h3>{title}</h3>
         </div>
         <p><strong>你正在审批：</strong>{request?.question}</p>

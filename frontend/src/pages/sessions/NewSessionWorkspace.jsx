@@ -211,7 +211,7 @@ function NewSessionComposerActions({ settings, models, modelsError, modelsLoadin
         onClick={onSubmit}
         title="发送并新建会话"
       >
-        {sending ? <Loader2 className="animate-spin" size={16} /> : <ArrowUp size={16} strokeWidth={2.4} />}
+        {sending ? <Loader2 className="animate-spin" size={16} /> : <ArrowUp size={16} strokeWidth={2} />}
       </button>
     </>
   );

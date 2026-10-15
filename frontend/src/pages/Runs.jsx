@@ -247,7 +247,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
         </div>
       ) : (
         <div className="run-provider-empty">
-          <History size={24} />
+          <History size={16} />
           <strong>{loading ? '正在读取 Runs…' : runs.length > 0 ? '选择左侧 Run 查看详情' : '暂无可显示的 Run'}</strong>
           <span>{runs.length > 0 ? '列表已就绪；详情只在选择后按需读取。' : 'Work 被 runner claim 后会生成统一 Run。'}</span>
         </div>
@@ -268,7 +268,7 @@ function NewProviderSessionNotice() {
 function RunLoadError({ error, onRetry }) {
   return (
     <div className="run-load-error" role="alert">
-      <AlertTriangle size={20} />
+      <AlertTriangle size={16} />
       <strong>Runs 暂不可用</strong>
       <span>{error}</span>
       <button onClick={onRetry} type="button">重试</button>

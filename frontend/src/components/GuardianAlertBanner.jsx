@@ -95,7 +95,7 @@ function GuardianAlertItem({ alert, acking, onAck }) {
   const display = buildGuardianAlertDisplay(alert);
   return (
     <article className={`guardian-alert-banner ${urgent ? 'urgent' : 'watch'}`}>
-      <div className="guardian-alert-icon"><ShieldAlert size={18} /></div>
+      <div className="guardian-alert-icon"><ShieldAlert size={16} /></div>
       <div className="guardian-alert-body">
         <div className="guardian-alert-title-row">
           <strong>{display.title}</strong>
@@ -118,7 +118,7 @@ function WatchdogStaleBanner({ loading, onRefresh, watchdog }) {
   const lastSeen = watchdog?.last_seen ? `最近心跳 ${formatDate(watchdog.last_seen)}` : '最近心跳缺失';
   return (
     <article className="guardian-alert-banner stale">
-      <div className="guardian-alert-icon"><TimerReset size={18} /></div>
+      <div className="guardian-alert-icon"><TimerReset size={16} /></div>
       <div className="guardian-alert-body">
         <div className="guardian-alert-title-row"><strong>Guardian 心跳已超时</strong></div>
         <p>Guardian 心跳已超过预期，自动告警可能延迟。请刷新状态；如持续出现，请检查 scheduler/watchdog 进程。</p>
@@ -135,7 +135,7 @@ function WatchdogStaleBanner({ loading, onRefresh, watchdog }) {
 function GuardianStatusError({ error, loading, onRefresh }) {
   return (
     <article className="guardian-alert-banner degraded">
-      <div className="guardian-alert-icon"><WifiOff size={18} /></div>
+      <div className="guardian-alert-icon"><WifiOff size={16} /></div>
       <div className="guardian-alert-body">
         <div className="guardian-alert-title-row"><strong>无法读取 Guardian 状态</strong></div>
         <p>页面保持可用，但告警状态可能不是最新。请检查后端连接或服务错误后重试。</p>

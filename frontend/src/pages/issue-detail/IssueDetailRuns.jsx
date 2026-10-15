@@ -14,7 +14,7 @@ export default function IssueDetailRuns({ issue, project, profiles, runs, curren
   return (
     <section className="glass-card issue-detail-runs">
       <h3 className="issue-detail-runs__heading">
-        <History size={18} color="var(--primary)" /> Runs 历史
+        <History size={16} color="var(--primary)" /> Runs 历史
       </h3>
       <p className="issue-detail-runs__description">
         当前状态是 <strong>{currentStatus}</strong>；下方按 attempt 展示每一轮独立执行记录。
@@ -81,7 +81,7 @@ function IssueRunCard({ issue, project, profiles, run, isLatest, navigateTo, onC
       <div className="issue-detail-runs__actions">
         {sessionRef && (
           <button type="button" className="kanban-card-action-btn" onClick={() => navigateTo?.('sessions', null, sessionRef)}>
-            <ExternalLink size={12} /> 打开 Session
+            <ExternalLink size={13} /> 打开 Session
           </button>
         )}
         <button type="button" className="kanban-card-action-btn" onClick={() => onCopy?.(runCopyText(run, sessionRef, sessionId, turnId))}>

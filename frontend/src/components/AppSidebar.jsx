@@ -176,7 +176,7 @@ export default function AppSidebar({
 }
 
 function FooterIcon({ Icon }) {
-  return <Icon aria-hidden="true" size={17} />;
+  return <Icon aria-hidden="true" size={14} />;
 }
 
 function NavIconLabel({ Icon, label, code }) {

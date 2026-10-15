@@ -106,7 +106,7 @@ export default function TaskRequestsSection({ navigateTo, onCreate }) {
             <li key={card.key}>
               {card.kind === 'review' ? (
                 <div className="task-request-review">
-                  <button className="task-request-title" onClick={() => navigateTo('work', card.work.id)} type="button">{card.work.title} <ArrowRight size={12} /></button>
+                  <button className="task-request-title" onClick={() => navigateTo('work', card.work.id)} type="button">{card.work.title} <ArrowRight size={13} /></button>
                   <HumanReviewCard compact disabled={review.submitting} onSelect={action => review.select(card.work, card.request, action)} request={card.request} />
                 </div>
               ) : (

@@ -1584,7 +1584,7 @@ input:checked + .slider:before {
 }
 
 .kanban-card-speed-toggle.on svg {
-  fill: currentColor;
+  fill: none;
 }
 
 .kanban-card-speed-toggle:hover:not(:disabled),

@@ -60,7 +60,7 @@ function IssueMetadataPanel({
       <div className="issue-section-heading">
         <div>
           <span className="issue-section-eyebrow">Runtime metadata</span>
-          <h2><Settings2 size={17} /> 运行元数据</h2>
+          <h2><Settings2 size={14} /> 运行元数据</h2>
         </div>
       </div>
       <div className="issue-metadata-list">

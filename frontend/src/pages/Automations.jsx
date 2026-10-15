@@ -216,7 +216,7 @@ function AutomationEditor({ editor, onCancel, onChange, onSave, projects, submit
   }, [onCancel]);
 
   return createPortal(<div className="automation-editor-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onCancel(); }} role="presentation"><section aria-label={t('automations.editorLabel')} aria-modal="true" className="automation-editor" role="dialog">
-    <header><div><span>{editor.mode === 'create' ? t('automations.createDefinition') : t('automations.editDefinition')}</span><h2>{editor.mode === 'create' ? t('automations.create') : form.name}</h2><p>{t('automations.editorIntro')}</p></div><button aria-label={t('automations.closeEditor')} onClick={onCancel} type="button"><X size={18} /></button></header>
+    <header><div><span>{editor.mode === 'create' ? t('automations.createDefinition') : t('automations.editDefinition')}</span><h2>{editor.mode === 'create' ? t('automations.create') : form.name}</h2><p>{t('automations.editorIntro')}</p></div><button aria-label={t('automations.closeEditor')} onClick={onCancel} type="button"><X size={16} /></button></header>
     <div className="automation-editor-body">
       <FormSection description={t('automations.basicDescription')} index="01" title={t('automations.basicTitle')}>
         <FormField hint={t('automations.field.nameHint')} label={t('automations.field.name')}><input autoFocus onChange={event => update('name', event.target.value)} placeholder={t('automations.field.namePlaceholder')} value={form.name} /></FormField>
@@ -249,9 +249,9 @@ function FormField({ children, hint, label, wide = false }) { return <label clas
 
 function AutomationState({ detail = false, error = '', loading = false, onRetry }) {
   const { t } = useI18n();
-  if (error) return <div className="automation-state error"><AlertTriangle size={22} /><strong>{t('automations.unavailable')}</strong><p>{error}</p><button className="btn btn-secondary" onClick={onRetry} type="button">{t('automations.retry')}</button></div>;
-  if (loading) return <div className="automation-state"><RefreshCw className="is-spinning" size={22} /><strong>{t('automations.loading')}</strong></div>;
-  return <div className="automation-state"><Bot size={24} /><strong>{detail ? t('automations.selectDetail') : t('automations.empty')}</strong><p>{detail ? t('automations.selectDetailDescription') : t('automations.emptyDescription')}</p></div>;
+  if (error) return <div className="automation-state error"><AlertTriangle size={16} /><strong>{t('automations.unavailable')}</strong><p>{error}</p><button className="btn btn-secondary" onClick={onRetry} type="button">{t('automations.retry')}</button></div>;
+  if (loading) return <div className="automation-state"><RefreshCw className="is-spinning" size={16} /><strong>{t('automations.loading')}</strong></div>;
+  return <div className="automation-state"><Bot size={16} /><strong>{detail ? t('automations.selectDetail') : t('automations.empty')}</strong><p>{detail ? t('automations.selectDetailDescription') : t('automations.emptyDescription')}</p></div>;
 }
 
 function triggerSummary(trigger, t) {

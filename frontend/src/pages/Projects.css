@@ -303,9 +303,9 @@
 
 .project-card-icon-btn svg {
   flex: 0 0 auto;
-  height: 16px;
-  stroke-width: 2.25;
-  width: 16px;
+  height: 14px;
+  stroke-width: 2;
+  width: 14px;
 }
 
 .project-card-delete-btn {

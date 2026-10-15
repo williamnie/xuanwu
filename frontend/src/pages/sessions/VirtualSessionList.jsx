@@ -63,7 +63,7 @@ const SessionItem = memo(function SessionItem({ session, active, onSelect }) {
         <span className="session-provider-pill">{provider}</span>
         {session.isRunning ? (
           <span className="session-item-loading">
-            <Loader2 size={12} />
+            <Loader2 size={14} />
           </span>
         ) : active ? (
           <span className="session-item-active-dot" />
@@ -232,7 +232,7 @@ export default function VirtualSessionList({
             <span>请换个关键词，或继续加载更多已存在的 provider sessions。</span>
             {hasMore && (
               <button type="button" className="project-group-load-more" onClick={onLoadMore} disabled={loadingMore}>
-                {loadingMore ? <Loader2 size={12} /> : null}<span>继续加载</span>
+                {loadingMore ? <Loader2 size={14} /> : null}<span>继续加载</span>
               </button>
             )}
           </div>
@@ -297,7 +297,7 @@ export default function VirtualSessionList({
                       onClick={() => handleProjectLoadMore(group)}
                       disabled={loadingMore && !moreState.canRevealLoaded}
                     >
-                      {loadingMore && !moreState.canRevealLoaded ? <Loader2 size={12} /> : null}
+                      {loadingMore && !moreState.canRevealLoaded ? <Loader2 size={14} /> : null}
                       <span>{moreState.canRevealLoaded ? `更多 ${Math.min(moreState.hiddenLoadedCount, PROJECT_SESSION_PAGE_SIZE)} 个` : '继续加载'}</span>
                     </button>
                   )}

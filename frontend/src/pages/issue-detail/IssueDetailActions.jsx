@@ -82,7 +82,7 @@ export function IssueManualControls({ issue, onMarkStatus }) {
       <div className="issue-section-heading">
         <div>
           <span className="issue-section-eyebrow">Manual override</span>
-          <h2><UserCheck size={17} /> 人工状态干预</h2>
+          <h2><UserCheck size={14} /> 人工状态干预</h2>
         </div>
       </div>
       <p>仅在运行态未正确回写时使用。此操作会直接改 Issue 状态，不会补造 Run 或验证结果。</p>
@@ -103,7 +103,7 @@ export function IssueDeleteConfirmModal({ issue, deleting, onCancel, onConfirm }
     <ModalOverlay>
       <div className="glass-card modal-content issue-delete-modal">
         <div className="issue-delete-modal-header">
-          <Trash2 size={18} color="var(--error)" />
+          <Trash2 size={16} color="var(--error)" />
           <h3>删除 Issue #{issue.id}</h3>
         </div>
         <p className="issue-delete-modal-copy">

@@ -19,7 +19,7 @@ export default function ApprovalDialog({ request, submitting, queueCount = 0, on
         aria-label={title}
       >
         <header className="approval-header">
-          <div className="approval-mark"><ShieldAlert size={19} /></div>
+          <div className="approval-mark"><ShieldAlert size={16} /></div>
           <div>
             <h3>{title}</h3>
             <p>{detail.subtitle}</p>

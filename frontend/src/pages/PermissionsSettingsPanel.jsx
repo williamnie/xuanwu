@@ -33,7 +33,7 @@ function PanelHeader({ loading, onRefresh }) {
   return (
     <div className="settings-product-header">
       <div>
-        <h2><ShieldCheck size={18} color="var(--primary)" /> 执行权限</h2>
+        <h2><ShieldCheck size={16} color="var(--primary)" /> 执行权限</h2>
         <p>查看各连接能执行的操作，以及哪些操作需要你确认。实际执行仍受项目规则和审批限制。</p>
       </div>
       <button className="btn btn-secondary" disabled={loading} onClick={onRefresh} type="button">

@@ -119,7 +119,7 @@ function CodeAgentRow({ agent, busy, onSaveCodexCommands, onSelectCodexBackend, 
   return (
     <article className="code-agent-row">
       <div className={`code-agent-status ${available ? 'available' : ''}`}>
-        {available ? <CheckCircle2 size={18} /> : <CircleAlert size={18} />}
+        {available ? <CheckCircle2 size={16} /> : <CircleAlert size={16} />}
       </div>
       <div className="code-agent-copy">
         <div className="code-agent-title">
@@ -227,7 +227,7 @@ function CodexRuntimeDetails({ busy, onSave, settings }) {
           <span>App 检测</span>
           <strong className={appStatus.installed ? 'ready' : ''}>{appStatus.installed ? '已安装' : '未找到'} · {appStatus.running ? '正在运行' : '未运行'}</strong>
           {appSelected && !appStatus.running ? (
-            <small className="warning"><AlertTriangle size={12} /> 已选择 App：关闭 Codex App 或集成不可用时，新任务会失败。</small>
+            <small className="warning"><AlertTriangle size={13} /> 已选择 App：关闭 Codex App 或集成不可用时，新任务会失败。</small>
           ) : null}
         </div>
       ) : null}

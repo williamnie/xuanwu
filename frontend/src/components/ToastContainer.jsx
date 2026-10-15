@@ -36,14 +36,14 @@ export default function ToastContainer() {
             onClick={() => removeToast(toast.id)}
           >
             <span className={`codex-toast-icon is-${toast.type || 'info'}`}>
-              <Icon size={16} strokeWidth={2.4} />
+              <Icon size={16} strokeWidth={2} />
             </span>
             <span className="codex-toast-content">{toast.content}</span>
             <button className="codex-toast-close" onClick={(e) => {
               e.stopPropagation();
               removeToast(toast.id);
             }}>
-              <X size={12} />
+              <X size={13} />
             </button>
           </div>
         );

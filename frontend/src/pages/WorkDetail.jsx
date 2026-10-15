@@ -359,7 +359,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
             {WORK_TIMELINE_KINDS.map(kind => <button aria-pressed={timelineKind === kind} key={kind} onClick={() => setTimelineKind(kind)} type="button">{t(`timeline.${kind}`)}</button>)}
           </div>
           <ResourceError error={timelineError} />
-          {activityLoading && !activityLoaded ? <div className="work-activity-loading"><LoaderCircle className="is-spinning" size={18} /> {t('work.loadingActivity')}</div> : null}
+          {activityLoading && !activityLoaded ? <div className="work-activity-loading"><LoaderCircle className="is-spinning" size={14} /> {t('work.loadingActivity')}</div> : null}
           {activityLoaded && !activityLoading && visibleTimeline.length === 0 ? <EmptySection text={timelineKind ? t('work.noMatchingActivity') : t('work.noActivity')} /> : null}
           <div className="work-timeline-list">
             {visibleTimeline.map(item => (
@@ -402,17 +402,17 @@ function WorkStateSummary({ status, decision }) {
     triage: [t('work.state.readyTitle'), t('work.state.readyDetail')],
   }[status] || [status, t('work.state.unknownDetail')];
   const Icon = status === 'failed' ? AlertTriangle : status === 'done' ? CheckCircle2 : CircleDot;
-  return <div className="work-state-summary" data-status={status}><Icon size={18} /><div><strong>{summary[0]}</strong><span>{summary[1]}</span></div></div>;
+  return <div className="work-state-summary" data-status={status}><Icon size={16} /><div><strong>{summary[0]}</strong><span>{summary[1]}</span></div></div>;
 }
 
 function WorkDetailLoading() {
   const { t } = useI18n();
-  return <div className="work-detail-loading"><LoaderCircle className="is-spinning" size={26} /><strong>{t('work.loadingDetail')}</strong></div>;
+  return <div className="work-detail-loading"><LoaderCircle className="is-spinning" size={14} /><strong>{t('work.loadingDetail')}</strong></div>;
 }
 
 function WorkDetailFailure({ error, navigateTo }) {
   const { t } = useI18n();
-  return <section className="work-detail-failure" role="alert"><AlertTriangle size={22} /><div><strong>{t('work.detailUnavailable')}</strong><span>{error || t('work.notFound')}</span></div><button onClick={() => navigateTo('work')} type="button"><ArrowLeft size={14} /> {t('work.backToBoard')}</button></section>;
+  return <section className="work-detail-failure" role="alert"><AlertTriangle size={16} /><div><strong>{t('work.detailUnavailable')}</strong><span>{error || t('work.notFound')}</span></div><button onClick={() => navigateTo('work')} type="button"><ArrowLeft size={14} /> {t('work.backToBoard')}</button></section>;
 }
 
 function SectionHeading({ eyebrow, title }) {
@@ -429,7 +429,7 @@ function ResourceError({ error }) {
 
 function InlineConfirmation({ busy, onCancel, onConfirm }) {
   const { t } = useI18n();
-  return <div className="work-inline-confirm" role="alertdialog" aria-label={t('work.confirmCancel')}><AlertTriangle size={18} /><div><strong>{t('work.confirmCancel')}</strong><span>{t('work.cancelAudit')}</span></div><button disabled={busy} onClick={onCancel} type="button">{t('work.keep')}</button><button className="danger" disabled={busy} onClick={onConfirm} type="button">{busy ? t('work.submitting') : t('work.confirmCancelAction')}</button></div>;
+  return <div className="work-inline-confirm" role="alertdialog" aria-label={t('work.confirmCancel')}><AlertTriangle size={16} /><div><strong>{t('work.confirmCancel')}</strong><span>{t('work.cancelAudit')}</span></div><button disabled={busy} onClick={onCancel} type="button">{t('work.keep')}</button><button className="danger" disabled={busy} onClick={onConfirm} type="button">{busy ? t('work.submitting') : t('work.confirmCancelAction')}</button></div>;
 }
 
 function fulfilledItems(result) {

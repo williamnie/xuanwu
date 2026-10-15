@@ -172,18 +172,18 @@ export default function ActiveWorkSection({ limit = 10, navigateTo, projects = [
 
       {error ? (
         <div className="active-work-state error" role="alert">
-          <AlertTriangle size={18} />
+          <AlertTriangle size={16} />
           <div><strong>Active Work 暂不可用</strong><span>{error}</span></div>
           <button onClick={() => load()} type="button">重试</button>
         </div>
       ) : loading && !summary ? (
         <div className="active-work-state empty">
-          <RefreshCw className="is-spinning" size={20} />
+          <RefreshCw className="is-spinning" size={16} />
           <strong>正在读取工作进展…</strong>
         </div>
       ) : items.length === 0 ? (
         <div className="active-work-state empty">
-          <Clock3 size={22} />
+          <Clock3 size={16} />
           <strong>当前没有执行中的任务</strong>
           <span>任务开始执行后，可以在这里跟进进展。</span>
         </div>
@@ -214,7 +214,7 @@ export default function ActiveWorkSection({ limit = 10, navigateTo, projects = [
                 <div className="active-work-meta">
                   <span><Clock3 size={13} /> {view.duration}</span>
                   {view.progressAt ? <span>更新于 {formatRelativeTime(view.progressAt)}</span> : null}
-                  {view.stalled ? <span className="active-work-stalled"><AlertTriangle size={12} /> {view.stalledLabel}</span> : null}
+                  {view.stalled ? <span className="active-work-stalled"><AlertTriangle size={13} /> {view.stalledLabel}</span> : null}
                 </div>
                 <div className="active-work-actions">
                   {activeWorkHasActiveRun(item) ? (
@@ -229,7 +229,7 @@ export default function ActiveWorkSection({ limit = 10, navigateTo, projects = [
                   ) : null}
                   {activeWorkCanStop(item) ? (
                     <button className="danger" onClick={() => setPending({ action: 'stop', id: item.id })} type="button">
-                      <Square size={12} /> 停止
+                      <Square size={13} /> 停止
                     </button>
                   ) : null}
                   <button className="open" onClick={() => openWork(item)} type="button">

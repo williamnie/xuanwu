@@ -55,7 +55,7 @@ function PanelHeader({ embedded, loading, onRefresh, onScan, scanning }) {
     <div className="pi-mcp-panel__header">
       <div>
         <Heading className="pi-mcp-panel__heading">
-          <PlugZap size={18} color="var(--primary)" /> MCP discovery & access
+          <PlugZap size={16} color="var(--primary)" /> MCP discovery & access
         </Heading>
         <p className="pi-mcp-panel__description">
           发现不等于启用；玄武助手只会使用你显式启用的 server 和 capability，secret/env/header 始终显示为 {redactedText}。

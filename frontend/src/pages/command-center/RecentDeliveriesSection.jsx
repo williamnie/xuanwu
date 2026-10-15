@@ -144,18 +144,18 @@ export default function RecentDeliveriesSection({ limit = RECENT_DELIVERY_LIMIT,
 
       {error ? (
         <div className="recent-deliveries-state error" role="alert">
-          <AlertTriangle size={18} />
+          <AlertTriangle size={16} />
           <div><strong>最近交付暂不可用</strong><span>{error}</span></div>
           <button onClick={() => load()} type="button">重试</button>
         </div>
       ) : loading && !summary ? (
         <div className="recent-deliveries-state empty">
-          <RefreshCw className="is-spinning" size={20} />
+          <RefreshCw className="is-spinning" size={16} />
           <strong>正在读取最近交付…</strong>
         </div>
       ) : items.length === 0 ? (
         <div className="recent-deliveries-state empty">
-          <PackageCheck size={24} />
+          <PackageCheck size={16} />
           <strong>还没有交付记录</strong>
           <span>任务产生交付结果后，会显示内容摘要与验证状态。</span>
           <button onClick={() => navigateTo?.('work', null, '', '', { scope: 'done' })} type="button">查看已完成的任务</button>
@@ -179,10 +179,10 @@ export default function RecentDeliveriesSection({ limit = RECENT_DELIVERY_LIMIT,
 
                 <div className="recent-delivery-badges">
                   <span className={view.evidencePassed ? 'evidence passed' : 'evidence'}>
-                    <CheckCircle2 size={12} /> {view.evidenceLabel}
+                    <CheckCircle2 size={13} /> {view.evidenceLabel}
                   </span>
                   <span className={view.riskCount > 0 ? 'risk active' : 'risk'}>
-                    <ShieldAlert size={12} /> {view.riskLabel}
+                    <ShieldAlert size={13} /> {view.riskLabel}
                   </span>
                 </div>
 
@@ -207,10 +207,10 @@ export default function RecentDeliveriesSection({ limit = RECENT_DELIVERY_LIMIT,
                 </details>
                 <div className="recent-delivery-actions">
                   <button onClick={() => copyRef(view.primaryRef, view.refs.at(-1)?.label || 'Handoff ID')} type="button">
-                    <Copy size={12} /> 复制引用
+                    <Copy size={13} /> 复制引用
                   </button>
                   {view.externalHref ? (
-                    <a href={view.externalHref} rel="noreferrer noopener" target="_blank"><ExternalLink size={12} /> 查看 PR</a>
+                    <a href={view.externalHref} rel="noreferrer noopener" target="_blank"><ExternalLink size={13} /> 查看 PR</a>
                   ) : null}
                   <button className="open" onClick={() => openHandoff(item)} type="button">
                     查看结果 <ArrowUpRight size={13} />
@@ -218,7 +218,7 @@ export default function RecentDeliveriesSection({ limit = RECENT_DELIVERY_LIMIT,
                 </div>
 
                 <footer>
-                  <GitCommitHorizontal size={12} />
+                  <GitCommitHorizontal size={13} />
                   <span>{formatTime(item.updated_at)}</span>
                   {item.delivery_status?.refreshed_at ? <span>状态刷新于 {formatTime(item.delivery_status.refreshed_at)}</span> : null}
                 </footer>

@@ -200,7 +200,7 @@ export default function PromptEditor({
               disabled={uploading}
               title={uploading ? '图片上传中' : '添加图片'}
             >
-              {uploading ? <ImagePlus size={16} /> : <Plus size={17} />}
+              {uploading ? <ImagePlus size={16} /> : <Plus size={14} />}
             </button>
             {footerControls}
           </div>

@@ -100,18 +100,18 @@ export default function WorkDeliveryView({
 
 
   if (loading && handoffs.length === 0) {
-    return <DeliveryState icon={<LoaderCircle className="is-spinning" size={20} />} title={t('delivery.loading')} />;
+    return <DeliveryState icon={<LoaderCircle className="is-spinning" size={14} />} title={t('delivery.loading')} />;
   }
 
   if (loadError && handoffs.length === 0) {
-    return <DeliveryState icon={<AlertTriangle size={20} />} title={t('delivery.unavailable')} detail={loadError} tone="error" />;
+    return <DeliveryState icon={<AlertTriangle size={16} />} title={t('delivery.unavailable')} detail={loadError} tone="error" />;
   }
 
   if (handoffs.length === 0) {
     const missing = workDeliveryView({ language, work });
     return (
       <DeliveryState
-        icon={<PackageCheck size={22} />}
+        icon={<PackageCheck size={16} />}
         title={missing.statusLabel}
         detail={missing.deliverySummary}
         tone={work?.status === 'done' ? 'warning' : ''}
@@ -277,7 +277,7 @@ function TechnicalRef({ label, value }) {
       message.error(t('delivery.copyFailed', { label }));
     }
   };
-  return <div><span>{label}</span><code>{value}</code><button aria-label={t('delivery.copy', { label })} onClick={copy} type="button"><Copy size={12} /></button></div>;
+  return <div><span>{label}</span><code>{value}</code><button aria-label={t('delivery.copy', { label })} onClick={copy} type="button"><Copy size={13} /></button></div>;
 }
 
 function evidenceKindLabel(kind, t) {

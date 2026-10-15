@@ -488,7 +488,7 @@ export default function Issues({
                 className="issues-page__modal-close"
                 onClick={() => setIsNewIssueOpen(false)}
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
 
@@ -626,7 +626,7 @@ function IssueDeleteConfirmModal({ issue, deleting, onCancel, onConfirm }) {
     <ModalOverlay>
       <div className="glass-card modal-content issue-delete-modal">
         <div className="issue-delete-modal-header">
-          <Trash2 size={18} color="var(--error)" />
+          <Trash2 size={16} color="var(--error)" />
           <h3>删除 Issue #{issue.id}</h3>
         </div>
         <p className="issue-delete-modal-copy">

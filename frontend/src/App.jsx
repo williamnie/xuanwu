@@ -583,7 +583,7 @@ export default function App() {
           ref={mobileMenuButtonRef}
           type="button"
         >
-          <Menu aria-hidden="true" size={18} />
+          <Menu aria-hidden="true" size={16} />
         </button>
         <span className="mobile-app-header-title">{mobilePageTitle}</span>
         <span aria-hidden="true" className="mobile-app-header-spacer" />
@@ -601,7 +601,7 @@ export default function App() {
           onClick={toggleSidebar}
           title={t('sidebar.expand')}
         >
-          <Menu size={18} />
+          <Menu size={16} />
         </button>
       )}
 

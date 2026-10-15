@@ -27,7 +27,7 @@ export default function ProjectHoldNotice({ hold, onResume, resuming }) {
           <AlertCircle size={13} /> Queue hold · {holdReasonLabel(hold.reason)}
         </strong>
         <button className="btn btn-secondary project-hold-notice__resume" onClick={onResume} disabled={resuming}>
-          <RefreshCw size={11} className={resuming ? 'animate-spin' : ''} />
+          <RefreshCw size={13} className={resuming ? 'animate-spin' : ''} />
           {resuming ? '自检中' : '恢复'}
         </button>
       </div>

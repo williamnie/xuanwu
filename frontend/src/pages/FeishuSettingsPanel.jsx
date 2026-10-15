@@ -53,7 +53,7 @@ function PanelHeader({ enabled, status }) {
     <div className="feishu-settings__header">
       <div>
         <h2 className="feishu-settings__heading">
-          <Bot size={18} color="var(--primary)" /> 飞书 Bot
+          <Bot size={16} color="var(--primary)" /> 飞书 Bot
         </h2>
         <p className="feishu-settings__description">
           默认使用飞书长连接模式，本机 runner 主动连飞书；无需公网域名或内网穿透。

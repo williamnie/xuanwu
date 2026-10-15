@@ -505,7 +505,7 @@ function ProviderSummary({ providers }) {
       <summary>已保存连接 <span>{providers.length}</span></summary>
       <div>
         {providers.map((provider) => (
-          <span key={provider.id}><KeyRound size={11} color={provider.api_key_configured ? 'var(--success)' : 'var(--text-muted)'} />{connectionDisplayName(provider)}</span>
+          <span key={provider.id}><KeyRound size={13} color={provider.api_key_configured ? 'var(--success)' : 'var(--text-muted)'} />{connectionDisplayName(provider)}</span>
         ))}
       </div>
     </details>

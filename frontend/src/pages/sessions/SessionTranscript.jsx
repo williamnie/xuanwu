@@ -229,7 +229,7 @@ export default function SessionTranscript({
           <div className="session-export-actions">
             {codexAppUrl ? (
               <button type="button" onClick={openCodexApp} title="在 Codex App 中打开当前 Session">
-                <ExternalLink size={12} />
+                <ExternalLink size={13} />
                 在 Codex App 打开
               </button>
             ) : null}

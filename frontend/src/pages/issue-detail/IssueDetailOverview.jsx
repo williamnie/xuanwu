@@ -45,11 +45,11 @@ export default function IssueDetailOverview({
           <div className="issue-section-heading">
             <div>
               <span className="issue-section-eyebrow">Task brief</span>
-              <h2><FileText size={17} /> 任务说明</h2>
+              <h2><FileText size={14} /> 任务说明</h2>
             </div>
             {canEditIssue(issue) && (
               <button className="kanban-card-action-btn" type="button" onClick={onEdit}>
-                <Pencil size={12} /> 编辑
+                <Pencil size={13} /> 编辑
               </button>
             )}
           </div>
@@ -70,7 +70,7 @@ export default function IssueDetailOverview({
                 className="kanban-card-action-btn"
                 onClick={() => navigateTo('sessions', null, issueSourceSessionRef(issue))}
               >
-                <ExternalLink size={12} /> 查看来源
+                <ExternalLink size={13} /> 查看来源
               </button>
             </div>
           )}
@@ -96,7 +96,7 @@ export function IssueStatusAlerts({ issue, executionSummary, onShowRuns, onShowL
     <>
       {dependencyBlocked && (
         <div className={`issue-inline-alert ${dependencyDanger ? 'danger' : 'warning'}`} role="status">
-          <AlertTriangle size={17} />
+          <AlertTriangle size={14} />
           <div>
             <strong>依赖等待 · {dependency.compatibility?.relation_authority || 'work_relations'}</strong>
             <p>{dependency.waiting_reason}</p>
@@ -107,7 +107,7 @@ export function IssueStatusAlerts({ issue, executionSummary, onShowRuns, onShowL
 
       {executionSummary.statusConflict && (
         <div className="issue-inline-alert warning" role="status">
-          <AlertTriangle size={17} />
+          <AlertTriangle size={14} />
           <div>
             <strong>状态需要核对</strong>
             <p>Issue 为 {issue.status}，最新 Run 为 {executionSummary.runStatus}。页面不再把历史 workflow 推断当作最终结论，请先查看 Session 或 Runs。</p>
@@ -118,7 +118,7 @@ export function IssueStatusAlerts({ issue, executionSummary, onShowRuns, onShowL
 
       {executionSummary.awaitingPi && (
         <div className="issue-inline-alert warning" role="status">
-          <Activity size={17} />
+          <Activity size={14} />
           <div>
             <strong>玄武助手正在读取执行上下文</strong>
             <p>编程工具 Turn 已结束，但 Issue 仍保持 in_progress 和项目锁；玄武助手决定完成、继续、重试或 needs_user 后才会进入下一项。</p>
@@ -129,7 +129,7 @@ export function IssueStatusAlerts({ issue, executionSummary, onShowRuns, onShowL
 
       {issue.error && (
         <div className="issue-error-card issue-inline-alert danger" role="alert">
-          <AlertTriangle size={17} />
+          <AlertTriangle size={14} />
           <div>
             <strong>执行异常</strong>
             <p className="issue-error-text">{issue.error}</p>
@@ -153,7 +153,7 @@ function IssueExecutionOverview({ issue, latestRun, summary, sessionRef, navigat
       <div className="issue-section-heading">
         <div>
           <span className="issue-section-eyebrow">Execution truth</span>
-          <h2><Activity size={17} /> 执行概览</h2>
+          <h2><Activity size={14} /> 执行概览</h2>
         </div>
         {summary.statusConflict && <span className="issue-summary-flag warning">需核对</span>}
       </div>

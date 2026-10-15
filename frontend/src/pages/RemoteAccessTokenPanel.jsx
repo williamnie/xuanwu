@@ -49,7 +49,7 @@ export default function RemoteAccessTokenPanel() {
       <div className="remote-token-header">
         <div>
           <div className="settings-entry-eyebrow">Access security</div>
-          <h2><KeyRound size={18} /> Remote access token</h2>
+          <h2><KeyRound size={16} /> Remote access token</h2>
           <p>保护 Web UI、API 和内部 Agentic Worker。token 永远不会出现在状态接口或诊断日志中。</p>
         </div>
         <TokenStatus status={status} loading={loading} />
@@ -60,7 +60,7 @@ export default function RemoteAccessTokenPanel() {
       {revealedToken ? (
         <div className="remote-token-reveal" role="status">
           <div className="remote-token-reveal-heading">
-            <div><ShieldCheck size={18} /><strong>新 token 只显示这一次</strong></div>
+            <div><ShieldCheck size={16} /><strong>新 token 只显示这一次</strong></div>
             <button className="btn btn-secondary" onClick={copy} type="button"><Copy size={15} />复制</button>
           </div>
           <code>{revealedToken}</code>
@@ -69,7 +69,7 @@ export default function RemoteAccessTokenPanel() {
         </div>
       ) : confirming ? (
         <div className="remote-token-confirm" role="alert">
-          <TriangleAlert size={20} />
+          <TriangleAlert size={16} />
           <div>
             <strong>确认轮换 Remote access token？</strong>
             <p>旧 token 会立即失效，其他浏览器和使用该 token 的 API 客户端都需要重新配置。</p>

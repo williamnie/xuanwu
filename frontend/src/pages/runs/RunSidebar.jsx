@@ -67,7 +67,7 @@ export default function RunSidebar({
                 type="button"
               >
                 <span className="run-sidebar-title">{run.work_title || '未命名任务'}</span>
-                <span className="run-sidebar-work"><BriefcaseBusiness size={11} /> 任务 #{workNumber(run.work_id)}</span>
+                <span className="run-sidebar-work"><BriefcaseBusiness size={13} /> 任务 #{workNumber(run.work_id)}</span>
                 <span className="run-sidebar-meta">
                   <span className={`run-status-dot ${run.status || 'unknown'}`} />
                   {runStatusLabel(run.status)} · {providerLabel(run.provider)} · Attempt {run.attempt_count || run.sequence || 0}
@@ -76,7 +76,7 @@ export default function RunSidebar({
             ))}
             {hasMore ? (
               <button className="runs-sidebar-load-more" disabled={loadingMore} onClick={onLoadMore} type="button">
-                {loadingMore ? <Loader2 className="is-spinning" size={12} /> : null}
+                {loadingMore ? <Loader2 className="is-spinning" size={14} /> : null}
                 继续加载
               </button>
             ) : null}

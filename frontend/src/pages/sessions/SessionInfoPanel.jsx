@@ -45,7 +45,7 @@ export function SessionInfoPopover({ session, provider, sessionId, model, naviga
                 onClick={() => navigateTo?.('issues', issue.id)}
               >
                 <span>#{issue.id} {issue.title || '未命名'}</span>
-                <ExternalLink size={12} />
+                <ExternalLink size={13} />
               </button>
             ))
           ) : (

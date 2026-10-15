@@ -166,7 +166,7 @@ function ModalHeader({ issue, onClose }) {
         </p>
       </div>
       <button className="issue-edit-modal__close" type="button" onClick={onClose}>
-        <X size={18} />
+        <X size={16} />
       </button>
     </div>
   );

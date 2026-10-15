@@ -45,7 +45,7 @@ function PanelHeader({ loading, onRefresh }) {
     <div className="connector-diagnostics__header">
       <div>
         <h2 className="connector-diagnostics__heading">
-          <Cable size={18} color="var(--primary)" /> Integration health
+          <Cable size={16} color="var(--primary)" /> Integration health
         </h2>
         <p className="connector-diagnostics__description">
           查看 Feishu、Git、Tracker、Webhook 与本地 connector 的配置健康；测试和撤销均使用现有受审计 API。

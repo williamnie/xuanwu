@@ -76,7 +76,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
     return (
       <div className="glass-card issue-detail-load-error">
         <div className="issue-detail-load-error__heading">
-          <XCircle color="var(--error)" size={24} />
+          <XCircle color="var(--error)" size={16} />
           <h3 className="issue-detail-load-error__title">任务加载失败</h3>
         </div>
         <p className="issue-detail-load-error__copy">{error || '找不到请求的 Issue 任务数据。'}</p>

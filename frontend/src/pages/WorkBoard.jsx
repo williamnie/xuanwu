@@ -441,7 +441,7 @@ function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken }) {
     <>
       {error ? (
         <div className="work-board-error" role="alert">
-          <AlertTriangle size={18} />
+          <AlertTriangle size={16} />
           <div>
             <strong>{t('board.unavailable')}</strong>
             <span>{error}</span>
@@ -706,7 +706,7 @@ function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit
           <span className="work-type-badge">{t(`workType.${work.type}`)}</span>
           <span className="work-issue-label">{issueId ? `Issue #${issueId}` : work.id}</span>
         </div>
-        {needsAttention ? <span className="work-attention-badge"><AlertTriangle size={12} /> {t('timeline.approval')}</span> : null}
+        {needsAttention ? <span className="work-attention-badge"><AlertTriangle size={13} /> {t('timeline.approval')}</span> : null}
       </div>
       <h3>{work.title}</h3>
       <p>{work.goal}</p>
@@ -735,7 +735,7 @@ function WorkEvidenceDialog({ onClose, work }) {
             <h2 id="work-evidence-title">{work.title}</h2>
             <p>{t('board.evidenceDescription')}</p>
           </div>
-          <button aria-label={t('board.closeEvidence')} onClick={onClose} type="button"><X size={18} /></button>
+          <button aria-label={t('board.closeEvidence')} onClick={onClose} type="button"><X size={16} /></button>
         </header>
         <EvidencePanel title="Work Evidence" workId={work.id} />
       </div>

@@ -80,7 +80,7 @@ export default function SessionSidebar({
                     title="取消置顶"
                     type="button"
                   >
-                    <Pin className="pinned-session-icon" size={11} fill="currentColor" />
+                    <Pin className="pinned-session-icon" size={13} fill="currentColor" />
                   </button>
                 </div>
               </button>

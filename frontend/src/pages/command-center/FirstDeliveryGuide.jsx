@@ -275,7 +275,7 @@ export default function FirstDeliveryGuide({ onComplete, projects }) {
     <section className={`first-delivery-guide ${state.completed ? 'completed' : ''}`} aria-labelledby="first-delivery-title">
       <header className="first-delivery-header">
         <div className="first-delivery-heading">
-          <span className="first-delivery-icon"><Rocket size={19} /></span>
+          <span className="first-delivery-icon"><Rocket size={16} /></span>
           <div>
             <span className="first-delivery-kicker">FIRST SETUP</span>
             <h2 id="first-delivery-title">{state.completed ? '玄武可以开始工作了' : '先完成一次配置'}</h2>

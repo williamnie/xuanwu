@@ -10,7 +10,7 @@ test('issue card actions keep details on the card click and low-risk actions inl
   assert.match(cardSource, /onClick=\{\(\) => onOpenIssue\(issue\.id\)\}/);
   assert.doesNotMatch(cardSource, /onOpenLog/);
   assert.doesNotMatch(cardSource, />\s*Logs\s*</);
-  assert.match(cardSource, /<ExternalLink size=\{12\} \/> Session/);
+  assert.match(cardSource, /<ExternalLink size=\{13\} \/> Session/);
 });
 
 test('issue card more menu owns click bubbling and contains destructive actions', () => {
@@ -47,5 +47,5 @@ test('issue card exposes speed as a compact lightning toggle', () => {
   assert.doesNotMatch(cardSource, /<select[\s\S]*serviceTierOptions/);
   assert.match(stylesSource, /\.kanban-card-speed-toggle\.off/);
   assert.match(stylesSource, /\.kanban-card-speed-toggle\.on/);
-  assert.match(stylesSource, /fill:\s*currentColor/);
+  assert.match(stylesSource, /\.kanban-card-speed-toggle\.on svg\s*\{\s*fill:\s*none/);
 });

@@ -220,11 +220,11 @@ function ChatContextBar({ navigateTo, project, transcript }) {
           <span><BriefcaseBusiness size={13} /> Work</span>
           {workLinks.map((work) => (
             <button key={work.id} onClick={() => navigateTo('work', work.id)} type="button">
-              {work.label} <ArrowUpRight size={11} />
+              {work.label} <ArrowUpRight size={13} />
             </button>
           ))}
           <button className="pi-chat-all-work-link" onClick={() => navigateTo('work')} type="button">
-            {t('chat.viewAll')} <ArrowUpRight size={11} />
+            {t('chat.viewAll')} <ArrowUpRight size={13} />
           </button>
         </span>
       )}

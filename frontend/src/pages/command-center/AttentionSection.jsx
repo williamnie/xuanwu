@@ -189,9 +189,9 @@ function AttentionCard({ item, onReviewApproval, onSubmit, submitting }) {
     <p>{details.description || view.actionLabel}</p>
     {details.diagnostic && details.diagnostic !== details.title ? <code className="attention-card-diagnostic">{details.diagnostic}</code> : null}
     <div className="attention-card-facts">
-      <span><MapPin size={12} />{details.location || 'Runner 系统'}</span>
-      <span><Clock3 size={12} />首次 {formatTime(details.first_seen_at || item.created_at)}</span>
-      <span><Wrench size={12} />来源 {details.component || details.source || 'Attention'}</span>
+      <span><MapPin size={13} />{details.location || 'Runner 系统'}</span>
+      <span><Clock3 size={13} />首次 {formatTime(details.first_seen_at || item.created_at)}</span>
+      <span><Wrench size={13} />来源 {details.component || details.source || 'Attention'}</span>
     </div>
     <div className="attention-card-next"><strong>需要你做什么</strong><span>{details.user_action || view.actionLabel}</span></div>
     {details.pi_action ? <div className="attention-card-pi"><Bot size={14} /><span><strong>玄武已经做的：</strong>{details.pi_action}</span></div> : null}
@@ -215,7 +215,7 @@ function PiOperationsSummary({ operations, recentHistory }) {
   const history = recentHistory || [];
   return <section className="pi-operations-summary">
     <header>
-      <div><Bot size={17} /><span><strong>玄武自动运维</strong><small>过去 24 小时</small></span></div>
+      <div><Bot size={14} /><span><strong>玄武自动运维</strong><small>过去 24 小时</small></span></div>
       <span className="pi-operations-state"><CheckCircle2 size={14} />{summary.active_user_action_required > 0 ? `${summary.active_user_action_required} 项待你处理` : '无需人工介入'}</span>
     </header>
     <div className="pi-operations-metrics">
@@ -244,7 +244,7 @@ function ApprovalDetail({ approval, onClose, onResolve, submitting }) {
   const decisions = approval.detail?.decisions || [];
   return <section className="approval-detail" aria-live="polite">
     <header><div><span><ShieldCheck size={14} /> Approval detail</span><h3>{attention?.summary || '审批请求'}</h3></div><button aria-label="关闭审批详情" onClick={onClose} type="button"><X size={16} /></button></header>
-    {approval.loading ? <div className="approval-detail-state"><RefreshCw className="is-spinning" size={19} />正在读取审批事实…</div> : approval.error ? <div className="approval-detail-state error"><AlertTriangle size={19} />{approval.error}</div> : <>
+    {approval.loading ? <div className="approval-detail-state"><RefreshCw className="is-spinning" size={16} />正在读取审批事实…</div> : approval.error ? <div className="approval-detail-state error"><AlertTriangle size={16} />{approval.error}</div> : <>
       {decisions.map(target => {
         const gate = target.gate || {};
         const actionable = target.status === 'pending' || target.status === 'proposed' || target.status === 'delivered' || target.status === 'resolve_failed';
@@ -315,7 +315,7 @@ function formatGateExpiry(value) {
 }
 
 function State({ error = '', filtered = false, loading = false, onRetry }) {
-  if (error) return <div className="attention-state error" role="alert"><AlertTriangle size={18} /><span>{error}</span><button onClick={onRetry} type="button">重试</button></div>;
-  if (loading) return <div className="attention-state"><RefreshCw className="is-spinning" size={20} /><strong>正在读取待处理事项…</strong></div>;
-  return <div className="attention-state"><CheckCircle2 size={22} /><strong>{filtered ? '当前筛选下没有事项' : '当前没有待审批或系统事项'}</strong><span>{filtered ? '选择其他类型查看。' : '需要审批的操作和系统告警会出现在这里。'}</span></div>;
+  if (error) return <div className="attention-state error" role="alert"><AlertTriangle size={16} /><span>{error}</span><button onClick={onRetry} type="button">重试</button></div>;
+  if (loading) return <div className="attention-state"><RefreshCw className="is-spinning" size={16} /><strong>正在读取待处理事项…</strong></div>;
+  return <div className="attention-state"><CheckCircle2 size={16} /><strong>{filtered ? '当前筛选下没有事项' : '当前没有待审批或系统事项'}</strong><span>{filtered ? '选择其他类型查看。' : '需要审批的操作和系统告警会出现在这里。'}</span></div>;
 }

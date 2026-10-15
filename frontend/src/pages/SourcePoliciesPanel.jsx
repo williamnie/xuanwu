@@ -31,7 +31,7 @@ function PanelHeader({ loading, onRefresh }) {
     <div className="source-policies__header">
       <div>
         <h2 className="source-policies__heading">
-          <ShieldCheck size={18} color="var(--primary)" /> Source Policy
+          <ShieldCheck size={16} color="var(--primary)" /> Source Policy
         </h2>
         <p className="source-policies__description">
           Source profile 作为只读 intake 默认值；Automation 使用统一权限策略。

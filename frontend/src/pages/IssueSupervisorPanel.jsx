@@ -12,7 +12,7 @@ export default function IssueSupervisorPanel({ supervisor }) {
     <section className="glass-card issue-supervisor-panel">
       <div className="issue-supervisor-header">
         <div>
-          <h3><Bot size={18} color="var(--primary)" /> Xuanwu assistant</h3>
+          <h3><Bot size={16} color="var(--primary)" /> Xuanwu assistant</h3>
           <p>只读展示最近一次 supervisor 判断、等待窗口和恢复审计；不触发恢复动作。</p>
         </div>
         <span className={`triage-readiness-badge ${supervisorBadgeClass(latest.diagnosis_code, decision.decision)}`}>

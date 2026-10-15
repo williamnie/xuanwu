@@ -291,7 +291,7 @@ function ComposerActions({
   }
   return (
     <button className="session-composer-circle" disabled={!selectedId || !canSend || sending || interrupting} title={hasQueuedMessages ? '追加到队列' : '发送'}>
-      {sending ? <Loader2 className="animate-spin" size={17} /> : <ArrowUp size={18} strokeWidth={2.4} />}
+      {sending ? <Loader2 className="animate-spin" size={14} /> : <ArrowUp size={16} strokeWidth={2} />}
     </button>
   );
 }
