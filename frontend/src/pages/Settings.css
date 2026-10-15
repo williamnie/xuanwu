@@ -557,10 +557,12 @@
   padding: 4px 11px;
 }
 
+.settings-language-options button { position: relative; }
 .settings-language-options button.active {
-  background: var(--button-primary-bg);
-  color: var(--button-primary-fg);
+  background: var(--bg-card);
+  color: var(--text-primary);
 }
+.settings-language-options button.active::after { background: var(--primary); bottom: 0; content: ''; height: 2px; left: 0; position: absolute; right: 0; }
 
 .settings-language-options button:disabled {
   cursor: wait;
@@ -724,7 +726,7 @@
 .remote-token-reveal-heading svg { color: var(--success); }
 
 .remote-token-reveal > code {
-  background: var(--button-primary-bg);
+  background: var(--terminal-bg);
   border-radius: var(--radius-md);
   color: var(--terminal-text);
   font-size: 0.82rem;

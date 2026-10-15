@@ -175,3 +175,23 @@ test('editor menus, attachments and toast own theme-neutral component surfaces',
   assert.match(composerCard.body, /overflow:\s*visible/, 'the suggestion menu must extend above the composer');
   assert.match(styles['components/GlobalAskComposer.css'], /@media \(max-width: 760px\)[\s\S]*?left:\s*12px;[\s\S]*?right:\s*12px;/);
 });
+
+
+test('selected tabs and language controls use neutral surfaces and a thin primary underline', () => {
+  const targets = {
+    'pages/runs/Runs.css': ".run-detail-section-tabs button[aria-current='page']",
+    'GeekWorkbenchPages.css': '.settings-tab.active',
+    'pages/Settings.css': '.settings-language-options button.active',
+  };
+  for (const [file, selector] of Object.entries(targets)) {
+    const rule = rules(styles[file]).find(rule => rule.selector.split(', ').includes(selector));
+    assert.match(rule.body, /background: var\(--bg-card\)/, selector);
+    assert.match(rule.body, /color: var\(--text-primary\)/, selector);
+    const underline = rules(styles[file]).find(rule => rule.selector === `${selector}::after`);
+    assert.match(underline.body, /height: 2px/, selector);
+    assert.match(underline.body, /background: var\(--primary\)/, selector);
+  }
+  const reference = readFileSync(new URL('../../docs/design-system/components.css', import.meta.url), 'utf8');
+  assert.match(reference, /\.ds-tabs button\[aria-current='page'\] \{ background: var\(--bg-card\)/);
+  assert.match(reference, /\.ds-tabs button\[aria-current='page'\]::after \{[^}]*height: 2px/);
+});

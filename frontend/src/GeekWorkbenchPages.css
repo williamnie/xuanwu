@@ -311,12 +311,14 @@
 }
 .settings-tabs { border-radius: var(--radius-md); gap: 3px; padding: 4px; }
 .settings-tab { border-radius: var(--radius-sm); font-size: 0.75rem; letter-spacing: 0.025em; text-transform: uppercase; }
+.settings-tab { position: relative; }
 .settings-tab.active, [data-theme="dark"] .settings-tab.active {
-  background: var(--button-primary-bg);
-  border-color: var(--button-primary-bg);
+  background: var(--bg-card);
+  border-color: transparent;
   box-shadow: none;
-  color: var(--button-primary-fg);
+  color: var(--text-primary);
 }
+.settings-tab.active::after { background: var(--primary); bottom: 0; content: ''; height: 2px; left: 0; position: absolute; right: 0; }
 .activity-panel { background: var(--panel-gradient); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 20px; }
 .activity-filter input, .activity-node-body, .activity-summary, .activity-refs pre { background: var(--bg-secondary); border-color: var(--border-light); border-radius: var(--radius-md); }
 .activity-rail-dot { box-shadow: none; }

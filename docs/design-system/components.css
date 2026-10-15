@@ -124,7 +124,7 @@
 
 @keyframes ds-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
 
-/* ---------- Tabs（通栏细线条，active 实底） ---------- */
+/* ---------- Tabs（通栏细线条，中性底 + 主色下划线） ---------- */
 .ds-tabs {
   align-items: center;
   border-bottom: 1px solid var(--border-color);
@@ -151,7 +151,9 @@
   transition: background-color 140ms ease, color 140ms ease;
 }
 .ds-tabs button:hover { background: var(--nav-hover); color: var(--text-primary); }
-.ds-tabs button[aria-current='page'] { background: var(--button-primary-bg); color: var(--button-primary-fg); }
+.ds-tabs button { position: relative; }
+.ds-tabs button[aria-current='page'] { background: var(--bg-card); color: var(--text-primary); }
+.ds-tabs button[aria-current='page']::after { background: var(--primary); bottom: 0; content: ''; height: 2px; left: 0; position: absolute; right: 0; }
 
 /* ---------- 侧边栏列表项 ---------- */
 .ds-nav-item {

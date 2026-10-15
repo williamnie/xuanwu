@@ -356,10 +356,20 @@
   color: var(--text-primary);
 }
 
+.run-detail-section-tabs button { position: relative; }
 .run-detail-section-tabs button[aria-current='page'] {
-  background: var(--button-primary-bg);
-  border-color: var(--button-primary-bg);
-  color: var(--button-primary-fg);
+  background: var(--bg-card);
+  border-color: transparent;
+  color: var(--text-primary);
+}
+.run-detail-section-tabs button[aria-current='page']::after {
+  background: var(--primary);
+  bottom: 0;
+  content: '';
+  height: 2px;
+  left: 0;
+  position: absolute;
+  right: 0;
 }
 
 .run-attempt-tabs {
