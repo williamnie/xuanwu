@@ -120,3 +120,11 @@ test('narrow layouts wrap header actions without stretching user bubbles to full
     assert.doesNotMatch(body, /(?:max-)?width:\s*100%/);
   }
 });
+
+test('session flex shells let long transcripts scroll while the composer stays visible', () => {
+  for (const selector of ['.active-session-shell', '.client-chat-area']) {
+    const shell = rule(styles.SessionsClient, selector);
+    assert.match(shell, /min-height:\s*0/);
+    assert.match(shell, /(?:^|\n)\s*height:\s*auto/);
+  }
+});
