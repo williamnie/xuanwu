@@ -562,6 +562,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/automations/:id/run-now", family: "automation" },
   { method: "POST", path: "/api/automations/:id/status", family: "automation" },
   { method: "GET", path: "/api/command-center/attention/:id", family: "attention" },
+  { method: "GET", path: "/api/command-center/inbox", family: "attention" },
   { method: "GET", path: "/api/command-center/summary", family: "attention" },
   { method: "POST", path: "/api/command-center/attention/:id/actions/:action", family: "attention" },
   { method: "GET", path: "/api/event-summaries", family: "system-observability" },

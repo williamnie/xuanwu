@@ -97,3 +97,34 @@ test("inbox detail removes the collection cap while preserving terminal carrier 
     expect(summary.sections.attention.counts.total).toBe(99);
   } finally { db.close(); }
 });
+
+test("merged ignored inbox and pending action preserve canonical identity and acknowledgement/snooze overlay", async () => {
+  const { db, request, action } = await fixture();
+  try {
+    const now = new Date().toISOString();
+    const bundle = createContextBundle(db, { created_by: "system", event_refs: [1], reason: "fixture", source: "fixture", trigger: "manual", window: { from: now, to: now } });
+    const run = createIntakeRun(db, { bundle_id: bundle.id, skill_id: "fixture", status: "succeeded" });
+    const inbox = createAttentionInboxItem(db, {
+      bundle_id: bundle.id, intake_run_id: run.id, evidence_refs: ["fixture:1"], primary_intent: "approval", source: "fixture",
+      title: "Fixture", summary: "Fixture", status: "ignored", schema_item: { approval_id: "merged-pending" }
+    });
+    action("merged-pending");
+    const id = `xw:attention:attention_inbox_items:${inbox.id}`;
+    const path = `attention/${encodeURIComponent(id)}`;
+    const initial = await (await request(path)).json();
+    expect(initial.attention).toMatchObject({ id, revision: 0, status: "waiting" });
+    expect(initial.attention.source_refs.map((ref: { authority: string }) => ref.authority)).toEqual(["attention_inbox_items", "pi_actions"]);
+    for (const [revision, command] of ["acknowledge", "snooze"].entries()) {
+      const result = await request(`${path}/actions/${command}`, {
+        expected_revision: revision,
+        ...(command === "snooze" ? { snoozed_until: new Date(Date.now() + 3600000).toISOString() } : {}),
+        audit: { actor: { kind: "user", id: "fixture" }, correlation_id: "fixture", event_id: `merged-${command}`, occurred_at: now, reason: "Fixture",
+          gate: { authority: "human_approval", decision: "allow", policy_ref: "fixture" } }
+      });
+      expect(result.status).toBe(200);
+      expect(await (await request(path)).json()).toMatchObject({ attention: { id, revision: revision + 1, status: command === "snooze" ? "waiting" : "acknowledged" } });
+    }
+    expect(getPiAction(db, "merged-pending")?.status).toBe("pending");
+    expect(db.sqlite.query("select count(*) as count from attention_command_events where attention_id=?").get(id)).toEqual({ count: 2 });
+  } finally { db.close(); }
+});

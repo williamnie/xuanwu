@@ -44,6 +44,7 @@ import {
   latestGuardianOperationsReport
 } from "../pi/guardianOperationsDailyReport.ts";
 import { piActionGateDiagnostic } from "../pi/actionGateDiagnostic.ts";
+import { buildCommandCenterInbox, commandCenterInboxReaders, type InboxItem, type InboxReaders } from "./commandCenterInbox.ts";
 
 export const COMMAND_CENTER_SUMMARY_CONTRACT = "xw.command-center.summary.v1" as const;
 
@@ -112,6 +113,7 @@ export type CommandCenterSectionReaders = Record<CommandCenterSectionName, Comma
 type CommandCenterRouteOptions = {
   now?: () => Date;
   readers?: Partial<CommandCenterSectionReaders>;
+  inboxReaders?: Partial<InboxReaders>;
 };
 
 const DEFAULT_LIMIT = 10;
@@ -126,6 +128,11 @@ export function registerCommandCenterRoutes(
   options: CommandCenterRouteOptions = {}
 ): void {
   const readDatabase = context.readDatabase ?? context.database;
+  router.get("/api/command-center/inbox", (request) => {
+    const now = options.now?.() ?? new Date();
+    const defaults = commandCenterInboxReaders(readDatabase, () => readInboxAttention(readDatabase, now));
+    return json(buildCommandCenterInbox(request, { ...defaults, ...options.inboxReaders }));
+  });
   router.get("/api/command-center/summary", (request) => commandCenterResponse(() => (
     buildCommandCenterSummary({ ...context, database: readDatabase }, request, options)
   )));
@@ -207,11 +214,28 @@ function attentionSection(db: RunnerDatabase, input: SectionInput): CommandCente
   };
 }
 
-function attentionIsVisible(item: AttentionRecord, now: Date): boolean {
+export function attentionIsVisible(item: AttentionRecord, now: Date): boolean {
   if (item.status !== "open" && item.status !== "waiting") return false;
   if (!item.snoozed_until) return true;
   const until = Date.parse(item.snoozed_until);
   return !Number.isFinite(until) || until <= now.getTime();
+}
+
+export function readInboxAttention(db: RunnerDatabase, now: Date): InboxItem[] {
+  return listPersistedAttention(db, { unbounded: true, visibleInboxOnly: true, now })
+    .filter(item => attentionIsVisible(item, now) && attentionHandling(db, item, now) === "user_action_required")
+    .map(item => {
+      const refs = [...item.related_refs, ...item.source_refs.flatMap(ref => ref.correlation_refs)];
+      const issue = refs.map(ref => /^issue:([1-9]\d*)$/.exec(ref)?.[1]).find(Boolean);
+      const work = refs.find(ref => /^work:xw:work:issues:[1-9]\d*$/.test(ref));
+      return {
+        key: `attention:${item.id}`, source: "attention", actionable: true,
+        occurred_at: item.updated_at, attention_id: item.id,
+        work_id: work?.slice(5) ?? (issue ? `xw:work:issues:${issue}` : null),
+        project_id: item.owner.kind === "project" ? item.owner.project_id : null,
+        attention: attentionSummary(db, item, now)
+      };
+    });
 }
 
 function activeWorkSection(db: RunnerDatabase, input: SectionInput): CommandCenterSectionPayload {
@@ -323,7 +347,7 @@ export function attentionSummary(db: RunnerDatabase, item: AttentionRecord, now 
   };
 }
 
-function attentionHandling(db: RunnerDatabase, item: AttentionRecord, now: Date): string {
+export function attentionHandling(db: RunnerDatabase, item: AttentionRecord, now: Date): string {
   return attentionDetails(db, item, now).handling as string;
 }
 

@@ -427,7 +427,7 @@ function normalizedSourceRef(ref: AttentionSourceRef): AttentionSourceRef {
   return { ...ref, correlation_refs: uniqueStrings(ref.correlation_refs) };
 }
 
-function strongestCorrelation(refs: readonly string[]): string {
+export function strongestCorrelation(refs: readonly string[]): string {
   const values = uniqueStrings(refs);
   for (const prefix of CORRELATION_STRENGTH) {
     const match = values.filter((value) => value.startsWith(prefix)).sort()[0];

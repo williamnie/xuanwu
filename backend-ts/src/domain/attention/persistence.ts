@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../../db/database.ts";
 import {
   listAttentionInboxItems,
   listAttentionInboxProjectionItems,
+  listRelatedAttentionInboxItems,
 } from "../../db/repositories/intakeRuns.ts";
 import {
   listActionProposals,
@@ -12,7 +13,9 @@ import {
 } from "../../db/repositories/pi.ts";
 import {
   applyAttentionCommand,
+  attentionDedupeKey,
   consolidateAttentionCandidates,
+  strongestCorrelation,
   type AttentionCommand,
   type AttentionRecord,
   type AttentionTransitionAudit,
@@ -35,7 +38,7 @@ type AttentionCommandEvent = {
   snoozed_until?: string;
 };
 
-type PersistedAttentionOptions = { actionLimit?: number; now?: Date; unbounded?: boolean };
+type PersistedAttentionOptions = { actionLimit?: number; now?: Date; unbounded?: boolean; visibleInboxOnly?: boolean };
 const ATTENTION_ACTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_ATTENTION_ACTION_LIMIT = 25;
 
@@ -79,15 +82,16 @@ export function persistAttentionCommand(
 function attentionCandidates(db: RunnerDatabase, options: PersistedAttentionOptions) {
   const proposalRefs = proposalRefsByInboxID(db);
   const inboxItems = options.unbounded
-    ? listAttentionInboxProjectionItems(db)
+    ? listAttentionInboxProjectionItems(db, options.visibleInboxOnly)
     : listAttentionInboxItems(db);
-  const inbox = inboxItems.map((item) => {
+  const inboxCandidate = (item: typeof inboxItems[number]) => {
     const candidate = attentionFromInboxItem(item);
     return {
       ...candidate,
       related_refs: [...(candidate.related_refs ?? []), ...(proposalRefs.get(item.id) ?? [])]
     };
-  });
+  };
+  const inbox = inboxItems.map(inboxCandidate);
   const guardian = listPiGuardianAlerts(db).map(attentionFromGuardianAlert);
   const approvals = listPiApprovalRequests(db).map(attentionFromApprovalRequest);
   const now = options.now ?? new Date();
@@ -96,7 +100,18 @@ function attentionCandidates(db: RunnerDatabase, options: PersistedAttentionOpti
     updatedAfter: new Date(now.getTime() - ATTENTION_ACTION_WINDOW_MS).toISOString()
   }))
     .map((action) => attentionFromPiAction(action, proposalRefsFromAction(action)));
-  return [...inbox, ...guardian, ...approvals, ...actions];
+  const candidates = [...inbox, ...guardian, ...approvals, ...actions];
+  if (options.visibleInboxOnly) {
+    const active = candidates.filter(item => item.source_ref.resolution === "active"
+      || item.source_ref.authority === "attention_inbox_items");
+    const keys = new Set(active.map(attentionDedupeKey));
+    const correlations = [...new Set(active.map(item => strongestCorrelation(item.source_ref.correlation_refs)).filter(Boolean))];
+    const seedIDs = new Set(inboxItems.map(item => item.id));
+    const related = listRelatedAttentionInboxItems(db, correlations).filter(item => !seedIDs.has(item.id)).map(inboxCandidate)
+      .filter(item => keys.has(attentionDedupeKey(item)));
+    candidates.push(...related);
+  }
+  return candidates;
 }
 
 function proposalRefsByInboxID(db: RunnerDatabase): Map<number, string[]> {

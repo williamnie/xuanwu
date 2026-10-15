@@ -19,6 +19,7 @@ import { registerTrackerEventRoutes } from "./trackerEventsApi.ts";
 
 import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
 import { MEMORY_DIAGNOSTICS_CONTRACT } from "./piMemoryDiagnostics.ts";
+import { COMMAND_CENTER_INBOX_CONTRACT } from "./commandCenterInbox.ts";
 
 describe("read API route contracts", () => {
   test("rejects unsupported Work source filters before reading the database", async () => {
@@ -134,10 +135,12 @@ describe("read API route contracts", () => {
   test("locks Command Center read and audited Attention command contracts", () => {
     expect(captureRoutes(registerCommandCenterRoutes)).toEqual([
       "GET /api/command-center/attention/:id",
+      "GET /api/command-center/inbox",
       "GET /api/command-center/summary",
       "POST /api/command-center/attention/:id/actions/:action"
     ]);
     expect(COMMAND_CENTER_SUMMARY_CONTRACT).toBe("xw.command-center.summary.v1");
+    expect(COMMAND_CENTER_INBOX_CONTRACT).toBe("xw.command-center.inbox.v1");
     expect(COMMAND_CENTER_COMPATIBILITY_POLICY.dual_read).toContain("none");
     expect(COMMAND_CENTER_COMPATIBILITY_POLICY.dual_write).toContain("none");
     expect(COMMAND_CENTER_COMPATIBILITY_POLICY.handoff_read_authority).toBe("issue_events:handoff.*.v1");

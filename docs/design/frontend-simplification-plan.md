@@ -452,10 +452,12 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 | B0 | 完成 | 术语与导航显示名，不改 route ID；`f7463910`，交接 C 补齐其范围内的旧术语 |
 | C1 | 完成 | 任务列表默认视图与统一动作表、看板切换、自动化子视图、新建任务表单（`2af14f00`）；详情常驻状态 + Tab（Q11）、执行只列表并跳到执行记录（Q10，取代 Q9 内嵌方案）、保留 `#/work?workId=&runId=` 深链（`1dc8f463`） |
 | B1 | 完成 | 设置 11 → 5、旧 section 映射、高级分节首次展开挂载、删除重复配置与说明、健康摘要（`f9572f68`）；项目编辑与执行预设、权限表、处理记录等交接 A–E 已交付 |
-| C2 | 现有接口支持的前端范围完成；完整待处理聚合待后端 | 首页就地处理任务人工审核与失败任务、Attention 明示范围（`f16669a7`）；GitHub 测试 / 保存并生效（`43e3dfa3`）、通知方式与当前规则（`2c106a97`）、表达风格移到通用并单独保存（`dfb458a4`）；外部连接列表与抽屉由交接 F 完成 |
+| C2 | 现有接口支持的前端范围完成；完整待处理聚合待 E2 接入 | 首页就地处理任务人工审核与失败任务、Attention 明示范围（`f16669a7`）；GitHub 测试 / 保存并生效（`43e3dfa3`）、通知方式与当前规则（`2c106a97`）、表达风格移到通用并单独保存（`dfb458a4`）；外部连接列表与抽屉由交接 F 完成 |
 | D1 | 完成（本次提交） | 三步引导、只读路径检查与后端测试；就绪工具仅本地预选，助手连接每次页面加载最多自动测一次；保留 active 状态查看示例任务，支持返回引导及浏览器后退。验收见 8.3 |
 | D4 | 完成（2026-10-15） | `f1e90820` 冻结五类路由合同并在旧代码跑通；`dd0f4343` 迁移 inbox / tasks；`feee0315` 单独修复 Handoff 查询参数；本次提交以 replaceState 保留旧链接原始查询字节。验收与只读页面证据见 8.3 |
-| E 兼容前置 | 完成（本次提交） | Attention 单条详情与动作解析去掉列表窗口 / 展示限额，原 Gate、权限、revision、审计及终态规则保留；summary 不变。后端 2796、前端 788，详见 8.4 |
+| E 兼容前置 | 完成（`1fe1093f`） | Attention 单条详情与动作解析去掉列表窗口 / 展示限额，原 Gate、权限、revision、审计及终态规则保留；summary 不变。后端 2796、前端 788，详见 8.4 |
+| E1 | 完成（本次提交） | 四来源完整只读聚合、live keyset、单源失败隔离及既有投影等价性；后端 2807、前端 788；5000 / 50000 非活跃档中位 90.24 / 175.51ms，未加迁移，详见 8.4 |
+| E2 | 待 E1 复核后实施 | 统一首页列表、分页与提交反馈；保留事件防抖，合并刷新或使旧请求失效，避免重复并发 E1 请求 |
 
 交接 A–F 已全部提交，以下为完成记录，不再作为待办：
 
@@ -496,7 +498,7 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 
 尚未完成：
 
-1. **完整待处理聚合**：现有首页保留已明确的来源范围；完整分页、人工审核 / 失败任务合并去重等仍需 8.2 的只读聚合合同，不能把当前部分聚合宣称为全部待处理事项。合同见 8.4（E 阶段），实施中。
+1. **E2 首页统一列表**：E1 完整只读聚合已实现；首页仍使用旧的部分聚合与任务卡片，不能宣称已接入全部待处理事项。E1 复核后再接入游标分页、各来源独立提交和部分失败提示；事件刷新保留防抖，并合并进行中的刷新或使旧请求失效，避免并发重复请求。合同见 8.4。
 
 D 阶段 D1–D4 已完成，验收见 8.3；批量创建不进 Web UI（Q12）。D 阶段与已完成的“交接任务 D”不是同一事项。
 
@@ -592,7 +594,22 @@ D4 验收记录（2026-10-15）：`f1e90820` 只新增冻结合同测试，在�
 | **E1 只读聚合接口** | 后端 | 新增 `GET /api/command-center/inbox?limit=&cursor=`（limit 1–50，默认 20；不接受其他参数，未知参数 400）。不写库、不写审计、不改动既有 `summary?sections=attention` 的输出与限额。条目来源四类，`key` = 来源类型 + 原始 ref：① `human_review:<request_id>`——`needs_user` 任务中 `owner=human` 且请求 `status=open`，返回请求的机器类型和现有字段（`kind` / `question` / `recommendation` / `consequences` 等，原样，不拼文案）及 `review_request_id` / `review_revision`；② `preparing:<work_id>`——`needs_user` 但没有打开的人工请求，标记 `actionable=false`；③ `failed_work:<work_id>`——`failed` 任务，`work` 字段复用 `/api/works` 列表项的同一序列化（含 `revision`），后端不新增动作投影，可用动作由前端现有 `work/workActions.js` 按该对象计算；④ `attention:<attention_id>`——`handling=user_action_required` 且可见（未暂停、open / waiting）的 Attention，沿用 `attentionSummary` 投影。本接口内 Attention 来源不受展示限额截断：助手动作不受 7 天 / 25 条限制，读取全部非终态动作（仍走该部分索引）；`attention_inbox_items` 不受默认 100 / 最大 500 截断，但只在 SQL 中读取能形成 open / waiting 的状态，不全表读入已处理或 ignored 记录。被判为 historical 的照旧隐藏。每条带关联字段 `work_id` / `attention_id` / `project_id`（可空）和 `occurred_at`：人工审核取请求创建时间，失败 / 整理中取任务 `updated_at`，Attention 取 `updated_at`。排序：可处理条目在前，`preparing` 在后；同组内按 `occurred_at` 降序、`key` 升序。游标为不透明字符串，编码最后一条的 (组, occurred_at, key) 并带合同版本；非法或版本不符的游标 400。游标是 live keyset，不承诺跨请求快照：未变化的条目跨页不重复不遗漏；翻页期间新增且排在游标之后的条目会在后续页出现，排在游标之前的由事件刷新或手动刷新第一页出现。`counts` / `total` 为当次成功读取的来源全集。响应含 `items`、`next_cursor`（无更多为 null）、`counts`（按来源计全集）、`total`、`complete`、`failed_sources` | 某个来源读取失败时其余来源照常返回，200 + `complete=false` + `failed_sources`；不得因单源失败返回空列表冒充“没有待处理”。Attention 去重严格沿用 `consolidateAttentionCandidates` 现有规则（owner + type + 最强 correlation），本轮不做 proposal 级合并（同一提案的多个 inbox 来源仍可能是多条，需另立 canonical ID 合同）；不同来源类型的条目即使关联同一任务也不合并（同一任务可同时有人工审核和告警），只通过 `work_id` 关联。人工审核投影按 `needs_user` 任务逐个在进程内重放，禁止逐行 HTTP；需给出 200 个 `needs_user` 任务的耗时测试并在验收中报告数字，过慢则先回报再改批量读取。兼容修复（单独提交，先于 E1 接口）：`getPersistedAttention` 按 ID 解析不再受列表展示窗口限制，使 E1 展示的窗口外条目能继续用原详情与动作接口；Gate、权限、revision、审计和 summary 输出不变，原先因窗口误报 404 的对象改为正常解析，需回归测试。后端测试覆盖：四类来源、排序、跨页无重复无遗漏、翻页间新增条目按 live keyset 规则出现、游标非法 / 版本不符、单源失败、8 天前的待处理助手动作可见且详情可读、超过 500 条打开的 inbox 条目全部可翻页、historical 隐藏、数据库 query-only 下无写入、能力清单 / readApiContract 快照 |
 | **E2 首页统一列表** | 前端 | 首页“待你处理”改为单一列表，数据只来自 E1，“加载更多”按游标追加；`TaskRequestsSection` 的两次 `getWorks` 和逐条 `getWork` 去掉。每类卡片保留各自的提交逻辑，不写通用批准函数：人工审核用现有 `HumanReviewCard` / `useHumanReview`（直接用 E1 返回的请求字段，提交带 `review_request_id` + `review_revision`）；失败任务用 E1 返回的 `work` 对象经现有 `workActions.js` 判断可用动作，用 `executeWorkMove` 重试；Attention 用现有确认 / 稍后提醒 / 查看审批弹窗；`preparing` 只显示“玄武正在整理问题”和打开任务。`AttentionSection` 只保留玄武处理中、运行状况与近期历史部分，不再单独列用户事项，也不重复计数。事件刷新沿用现有防抖订阅，刷新从第一页重新读 | `complete=false` 时显示哪些来源没读到并提供重试，不显示空状态；空状态仅在 `complete=true` 且 `total=0` 时显示。提交后 409 / 已失效按来源分别提示（内容已更新 / 已在别处处理 / 已过期），并只刷新列表。加载更多期间来了刷新事件时丢弃迟到的旧页。文案用第 4 节术语；浅 / 深 × 980 / 760 / 680 检查 |
 
-E 阶段兼容前置验收（2026-10-15，本次提交）：`getPersistedAttention` 使用完整来源投影，原先因窗口误报 404 的对象改为正常解析；列表 summary 仍保留 7 天 / 25 条助手动作与默认 100 条 inbox 限额。新增 4 项回归验证 8 天前和超过展示条数的 pending 详情、原 Gate 批准 / 审计、deny / 过期拒绝、revision 冲突与终态行为。专项 **13 pass / 0 fail**；后端全量 **2796 pass / 0 fail**（487 files），前端 **788 pass / 0 fail**（184 files），lint / build / `git diff --check` 通过。仅使用临时数据库；未请求真实批准或重启既有服务。证据 `/tmp/xuanwu-e1/compat-*.log`。E1 / E2 尚未完成；SQL 过滤候选可能改变合并 canonical ID 的边界已另行回报确认。
+E 阶段兼容前置验收（2026-10-15，`1fe1093f`）：`getPersistedAttention` 使用完整来源投影，原先因窗口误报 404 的对象改为正常解析；列表 summary 仍保留 7 天 / 25 条助手动作与默认 100 条 inbox 限额。新增 4 项回归验证 8 天前和超过展示条数的 pending 详情、原 Gate 批准 / 审计、deny / 过期拒绝、revision 冲突与终态行为。专项 **13 pass / 0 fail**；后端全量 **2796 pass / 0 fail**（487 files），前端 **788 pass / 0 fail**（184 files），lint / build / `git diff --check` 通过。仅使用临时数据库；未请求真实批准或重启既有服务。证据 `/tmp/xuanwu-e1/compat-*.log`。SQL 过滤候选可能改变合并 canonical ID 的边界在 E1 中按后续确认处理，见下方验收记录。
+
+E1 验收记录（2026-10-15，本次提交）：
+
+- 新增 `GET /api/command-center/inbox`，合同 `xw.command-center.inbox.v1`。四来源按合同排序 / 关联，人工审核字段原样返回，失败任务复用 Work 列表 serializer（含 revision）；按本地数据库每批 100 个任务读取以遵守既有事件批量上限，仍逐任务重放人工审核投影，无 HTTP 逐行补查。分页是 live keyset，counts / total 为当次成功读取来源的全集；单源失败保留其他来源并标记 `complete=false`。能力清单现为 290 条，readApiContract 同步锁定新路由与版本。
+- SQL 先读 `new / proposal_created / failed` 候选及命令日志指向的 inbox 载体，再按 correlation 补查关联的非活跃来源；最后仍由既有 `consolidateAttentionCandidates` 按 owner / type / 最强 correlation 合并并重放命令。命令载体读取保留了 `triaged` 事项提醒到期后恢复 waiting 的情况（含 canonical ID 在 ignored 载体上的合并组）。无关已处理 / ignored 内容不全量返回 JS，不改变终态与 historical 规则，也不做 proposal 级合并。
+- 混合夹具覆盖 600 条打开 inbox、窗口外 pending、ignored + pending 合并、确认 / 未到期与到期提醒、不同 owner / type、同 proposal 的独立来源、无关关闭来源；E1 Attention 的 `{id,status,revision,source_refs}` 与完整未裁剪投影经过原可见性 / handling 判断的结果完全一致。另验证 8 天前详情与原 canonical ID 下的确认 / 提醒，query-only 下完整接口读取、Work 列表序列化一致、同任务不同来源不合并、旧 summary 输出与限额不变。
+- 查询计划：候选读取使用 `idx_attention_inbox_items_status`；命令载体按 `idx_attention_command_events_attention` + inbox 主键读取。**关联补查为 SQL 内扫描非活跃 inbox 行，未建 correlation 索引，耗时随非活跃行数线性增长**；计划为 `SCAN i` + `json_each` 相关子查询、物化 wanted 集合及 IN / Bloom filter，匹配候选才返回 JS。助手动作沿用既有部分索引。未加 migration、未优化任务投影。后续若需要，可在 TS 写入路径维护派生检索表，复用同一提取函数，不用触发器。
+- 完整接口性能（临时库、query-only、router GET + JSON 解析，limit=20；每档首次 + 后续 11 次，均为 200 个 needs_user / 打开人工请求 + 600 条打开 inbox + 30 条 8 天前 pending 动作，total=830）：
+
+| 非活跃 inbox 行数 | 首次 | 后续中位 | 后续范围 | 已确认预算 |
+|---|---|---|---|---|
+| 5000 | 109.80ms | **90.24ms** | 85.14–93.49ms | ≤120ms，通过 |
+| 50000 | 169.61ms | **175.51ms** | 166.02–182.73ms | ≤250ms，通过 |
+
+新增性能回归用相同 5000 档夹具，后续 5 次中位断言 **≤500ms**，只防数量级退化，避免 CI 抖动误报。先前测量 89.43 / 175.83ms 与最终结果相符。专项 **34 pass / 0 fail**（5 files）；后端全量 **2807 pass / 0 fail**（489 files、6 snapshots），前端 **788 pass / 0 fail**（184 files），lint / build / `git diff --check` 通过。证据 `/tmp/xuanwu-e1/RESULT.md`、`e1-*.log`、`aggregate-final.json`（含两档查询计划与测量脚本 `aggregate-final.ts`）。所有新接口、命令与性能验证均用临时数据库，未用真实库执行审批 / 重试 / 确认，未重启 3568 / 3569 服务。E1 无前端改动，真实页面与浅 / 深响应式证据留待 E2；E2 须在 E1 复核后开始。
 
 E 阶段沿用 D 阶段的约束：不改认证、端口、权限默认值和已有接口语义；真实页面只浏览，需要展示审批 / 失败 / 已失效等状态时用不提交的临时前端夹具；新接口用临时数据库和后端测试验证。
 
