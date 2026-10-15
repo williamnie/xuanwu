@@ -519,7 +519,7 @@ function SupervisorEnableField({ form, updateField }) {
 function SaveRow({ onSave, saving }) {
   return (
     <div className="supervisor-save-row">
-      <button className="btn btn-primary" onClick={onSave} disabled={saving} type="button">{saving ? <Loader2 size={14} className="spin-animation" /> : <Save size={14} />} 保存运行偏好</button>
+      <button className="btn btn-secondary" onClick={onSave} disabled={saving} type="button">{saving ? <Loader2 size={14} className="spin-animation" /> : <Save size={14} />} 保存运行偏好</button>
       <span>保存名称、思考强度与长期说明，不会改写上方连接凭据；表达风格在“通用”中单独保存。</span>
     </div>
   );

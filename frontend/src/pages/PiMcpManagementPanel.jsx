@@ -63,7 +63,7 @@ function PanelHeader({ embedded, loading, onRefresh, onScan, scanning }) {
       </div>
       <div className="pi-mcp-panel__actions">
         <button className="btn btn-secondary" disabled={loading || scanning} onClick={onRefresh} type="button"><RefreshCw size={14} /> Refresh</button>
-        <button className="btn btn-primary" disabled={scanning} onClick={onScan} type="button">{scanning ? 'Scanning...' : 'Scan local MCP configs'}</button>
+        <button className="btn btn-secondary" disabled={scanning} onClick={onScan} type="button">{scanning ? 'Scanning...' : 'Scan local MCP configs'}</button>
       </div>
     </div>
   );

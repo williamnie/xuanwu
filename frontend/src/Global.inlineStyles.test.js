@@ -68,3 +68,9 @@ test('JSX inline styles are restricted to reviewed data-dependent geometry', () 
   assert.match(menu, /return \{ left: `\$\{position.left\}px`, top: `\$\{position.top\}px` \}/);
   assert.deepEqual([...menu.matchAll(/\b(\w+):/g)].map(match => match[1]), ['left', 'top', 'left', 'top']);
 });
+
+
+test('auxiliary settings actions do not compete with the form primary', () => {
+  assert.match(sources['pages/PiMcpManagementPanel.jsx'], /className="btn btn-secondary" disabled=\{scanning\} onClick=\{onScan\}/);
+  assert.match(sources['pages/PiAgentSettingsPanel.jsx'], /className="btn btn-secondary" onClick=\{onSave\}/);
+});
