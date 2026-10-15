@@ -107,7 +107,7 @@
 .dashboard-hud-progress {
   border-radius: var(--radius-xs);
   height: 100%;
-  transition: width 0.3s ease;
+  transition: none;
 }
 
 .dashboard-hud-card.hud-warning .dashboard-hud-progress { background: var(--warning); width: 75%; }

@@ -162,7 +162,7 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+  transition: border-color 0.16s ease, background-color 0.16s ease;
 }
 
 .work-column.is-drop-allowed {
@@ -372,7 +372,7 @@
 .work-view-toggle button[aria-pressed='true'] { background: var(--bg-card); color: var(--text-primary); position: relative; }
 .work-view-toggle button[aria-pressed='true']::after { background: var(--primary); bottom: 0; content: ''; height: 2px; left: 0; position: absolute; right: 0; }
 
-.is-spinning { animation: work-spin 0.9s linear infinite; }
+.is-spinning { animation: work-spin 1s linear infinite; }
 @keyframes work-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 720px) {

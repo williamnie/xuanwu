@@ -18,13 +18,14 @@ const circles = {
   'index.css': ['.api-status-dot', '.sub-filter-dot', '.kanban-column-dot', '.status-dot'],
   'GeekWorkbench.css': ['.e2b-window-dots .e2b-dot'],
   'GeekWorkbenchPages.css': ['.composer-circle-submit, .session-composer-circle'],
+  'components/TurtleLoader.css': ['.turtle-loader-track::after'],
   'components/CodexUsagePanel.css': ['.codex-provider-identity > span::before'],
   'pages/PiChatSidebar.css': ['.pi-chat-conversation-runtime > span'],
   'pages/Handoffs.css': ['.handoff-authority-note > span'],
   'pages/ProjectSettingsEditor.css': ['.project-settings-loading-hint::before'],
   'pages/IssueDetail.css': ['.issue-detail-tab > i', '.issue-activity-marker', '.issue-detail-loading__spinner'],
   'pages/Automations.css': ['.automation-status-dot', '.history-mark'],
-  'pages/PiChatThread.css': ['.pi-chat-status-dot'],
+  'pages/PiChatThread.css': ['.pi-chat-status-dot', '.pi-chat-thinking-signal'],
   'pages/PiChatDiagnostics.css': ['.pi-chat-status-dot'],
   'pages/WorkBoard.css': ['.work-column-marker'],
   'pages/WorkDetail.css': ['.work-timeline-marker', '.work-run-list li > i'],
@@ -194,4 +195,65 @@ test('selected tabs and language controls use neutral surfaces and a thin primar
   const reference = readFileSync(new URL('../../docs/design-system/components.css', import.meta.url), 'utf8');
   assert.match(reference, /\.ds-tabs button\[aria-current='page'\] \{ background: var\(--bg-card\)/);
   assert.match(reference, /\.ds-tabs button\[aria-current='page'\]::after \{[^}]*height: 2px/);
+});
+
+
+// Spec 5.5 / 6: the only long loops are 1s loading spinners and 1.4s running dots.
+const loopingMotion = {
+  "index.css: .animate-spin, .spin-animation": "xuanwu-spin 1s linear infinite !important",
+  "components/TurtleLoader.css: .turtle-loader-track::after": "xuanwu-spin 1s linear infinite",
+  "pages/PiChatSidebar.css: .pi-chat-conversation-runtime[data-tone=\"running\"] > span": "pi-chat-runtime-spin 1s linear infinite",
+  "pages/ProjectSettingsEditor.css: .project-settings-loading-hint::before": "xuanwu-spin 1s linear infinite",
+  "pages/IssueDetail.css: .issue-detail-loading__spinner": "spin 1s linear infinite",
+  "pages/PiChatThread.css: .pi-chat-status-summary[data-tone=\"running\"] .pi-chat-status-dot": "pi-chat-running-signal 1.4s ease-in-out infinite",
+  "pages/PiChatThread.css: .pi-chat-thinking-signal": "pi-chat-running-signal 1.4s ease-in-out infinite",
+  "pages/WorkBoard.css: .is-spinning": "work-spin 1s linear infinite",
+  "pages/WorkDetail.css: .work-run-list li[data-status='running'] > i, .work-run-list li[data-status='recovering'] > i, .work-run-list li[data-status='created'] > i": "work-run-pulse 1.4s ease-in-out infinite",
+  "pages/runs/Runs.css: .run-attempt-tabs button[data-status='running'] i, .run-attempt-tabs button[data-status='created'] i": "run-attempt-pulse 1.4s ease-in-out infinite",
+  "pages/work/TaskList.css: .task-list-dot[data-status='in_progress']": "task-list-pulse 1.4s ease-in-out infinite",
+  "pages/sessions/Sessions.css: .project-order-saving": "spin 1s linear infinite",
+  "pages/sessions/Sessions.css: .runtime-status-pill.running .runtime-status-dot": "pulse 1.4s ease-in-out infinite",
+  "pages/sessions/Sessions.css: .spin-animation": "spin 1s linear infinite",
+  "pages/sessions/Sessions.css: .session-item-loading": "spin 1s linear infinite"
+};
+
+
+test('motion stays within 180ms and loops are limited to named loading or running indicators', () => {
+  const seen = new Set();
+  for (const [file, css] of Object.entries(styles)) {
+    assert.doesNotMatch(css, /transform:\s*[^;]*scale\(/, file);
+    assert.doesNotMatch(css, /(?:transition|animation)-delay\s*:/, file);
+    for (const { selector, body } of rules(css)) {
+      const key = `${file}: ${selector}`;
+      for (const [, value] of body.matchAll(/transition:\s*([^;]+);/g)) {
+        if (value === 'none') continue;
+        for (const part of value.split(/,(?![^()]*\))/)) {
+          assert.match(part.trim(), /^(?:opacity|transform|background-color|border-color|color)\s/, key);
+          for (const [, amount, unit] of part.matchAll(/([\d.]+)(ms|s)\b/g)) {
+            assert.ok(Number(amount) * (unit === 's' ? 1000 : 1) <= 180, key);
+          }
+        }
+      }
+      for (const [, value] of body.matchAll(/animation:\s*([^;]+);/g)) {
+        if (value.startsWith('none')) continue;
+        if (value.includes('infinite')) {
+          assert.equal(value, loopingMotion[key], `unlisted looping animation ${key}`);
+          seen.add(key);
+        } else {
+          assert.match(value, /^(?:xuanwu-fade-in|toastSlideIn|clientFadeIn|slideDown)\s/, key);
+          assert.doesNotMatch(value, /alternate|infinite/, key);
+          for (const [, amount, unit] of value.matchAll(/([\d.]+)(ms|s)\b/g)) {
+            assert.ok(Number(amount) * (unit === 's' ? 1000 : 1) <= 180, key);
+          }
+        }
+      }
+      for (const [, value] of body.matchAll(/(?:transition|animation)-duration:\s*([^;]+);/g)) {
+        // Transcript spinner intentionally inherits the global 1s loading rhythm (spec 6).
+        assert.equal(file, 'pages/sessions/SessionTranscript.css');
+        assert.match(selector, /\.session-execution-summary \.spin-animation/);
+        assert.equal(value, '1s');
+      }
+    }
+  }
+  assert.deepEqual([...seen].sort(), Object.keys(loopingMotion).sort(), 'remove stale motion exceptions');
 });

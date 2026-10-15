@@ -155,7 +155,7 @@
 .guardian-alert-action:hover:not(:disabled) {
   border-color: var(--border-color-hover);
   color: var(--text-primary);
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .guardian-alert-action:disabled {

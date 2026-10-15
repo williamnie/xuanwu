@@ -27,7 +27,7 @@
   gap: 4px 12px;
   grid-template-columns: 7px minmax(0, 1fr) auto;
   padding: 10px 14px;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 .ds-request-card:hover {
   background: var(--bg-card-hover);

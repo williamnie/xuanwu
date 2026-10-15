@@ -279,7 +279,7 @@
   font-size: 0.85rem;
   outline: none;
   padding: 8px 10px;
-  transition: border-color 140ms ease, box-shadow 140ms ease;
+  transition: border-color 140ms ease;
   width: 100%;
 }
 .ds-input:focus, .ds-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
@@ -318,7 +318,7 @@
 
 /* ---------- 进入动效（首屏一次，220ms） ---------- */
 @keyframes ds-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.ds-enter { animation: ds-fade-up 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.ds-enter { animation: ds-fade-up 180ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 /* ---------- 焦点可见性 ---------- */
 :where(.ds-btn, .ds-icon-btn, .ds-tabs button, .ds-nav-item, .ds-chip-select, .ds-input, .ds-textarea):focus-visible {

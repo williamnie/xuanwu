@@ -21,9 +21,9 @@ test('shared turtle loader uses the Xuanwu running asset and exposes accessible 
   assert.match(loaderSource, /turtle-loader-track/);
 });
 
-test('turtle loader and global motion classes have real keyframe animations', () => {
-  assert.match(loaderStyles, /@keyframes turtle-loader-crawl/);
-  assert.match(loaderStyles, /@keyframes turtle-loader-bob/);
+test('turtle loader uses the standard spinner without crawling or bobbing the brand image', () => {
+  assert.match(loaderStyles, /\.turtle-loader-track::after\s*\{[^}]*animation:\s*xuanwu-spin 1s linear infinite/);
+  assert.doesNotMatch(loaderStyles, /turtle-loader-crawl|turtle-loader-bob/);
   assert.match(loaderStyles, /prefers-reduced-motion/);
   assert.match(globalStyles, /\.animate-spin/);
   assert.match(globalStyles, /\.spin-animation/);

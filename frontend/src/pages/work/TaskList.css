@@ -43,7 +43,7 @@
   gap: 4px 10px;
   grid-template-columns: minmax(0, 1fr) auto;
   padding: 4px 8px 4px 4px;
-  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  transition: background-color 140ms ease, border-color 140ms ease;
 }
 .task-list-row:hover {
   background: var(--bg-card-hover);

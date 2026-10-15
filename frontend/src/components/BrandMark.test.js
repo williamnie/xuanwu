@@ -33,7 +33,8 @@ test('brand visual system includes Xuanwu CSS and favicon title metadata', () =>
   assert.match(cssSource, /\.brand-mark-icon/);
   assert.match(cssSource, /\.turtle-logo-img/);
   assert.match(cssSource, /background:\s*transparent/);
-  assert.match(cssSource, /data-brand-state="running"/);
+  assert.match(brandSource, /turtleAssetForState\(resolvedState\)/);
+  assert.doesNotMatch(cssSource, /transform:\s*scale\(/);
   assert.match(indexHtml, /brand-turtles\/turtle-idle\.png/);
   assert.match(indexHtml, /玄武 Xuanwu · AI Engineering Control Plane/);
 });

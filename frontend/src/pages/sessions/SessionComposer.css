@@ -19,7 +19,7 @@
   background: var(--control-bg);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .session-composer-select select {
@@ -94,7 +94,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
   width: 34px;
   height: 34px;
   border-radius: 50%;

@@ -38,7 +38,7 @@
   gap: 8px !important;
 }
 .pi-chat-status-dot { background: var(--success); border-radius: 50%; height: 7px; width: 7px; }
-.pi-chat-status-summary[data-tone="running"] .pi-chat-status-dot { animation: pi-chat-running-signal 1.5s ease-in-out infinite; background: var(--info); }
+.pi-chat-status-summary[data-tone="running"] .pi-chat-status-dot { animation: pi-chat-running-signal 1.4s ease-in-out infinite; background: var(--info); }
 .pi-chat-status-summary[data-tone="error"] .pi-chat-status-dot { background: var(--error); }
 .pi-chat-status-summary[data-tone="idle"] .pi-chat-status-dot { background: var(--text-muted); }
 .pi-chat-status-copy { display: flex; flex-direction: column; gap: 1px; }
@@ -256,11 +256,12 @@
   width: fit-content;
 }
 .pi-chat-thinking-signal {
-  animation: pi-chat-running-signal 1.35s ease-in-out infinite;
-  background: var(--primary-strong);
+  animation: pi-chat-running-signal 1.4s ease-in-out infinite;
+  background: var(--info);
+  border-radius: 50%;
   box-shadow: none;
-  height: 6px;
-  width: 6px;
+  height: 7px;
+  width: 7px;
 }
 .pi-chat-thinking-kicker {
   color: var(--primary-strong);
@@ -304,8 +305,8 @@
 .pi-chat-runtime-pill.muted { color: var(--text-muted); }
 
 @keyframes pi-chat-running-signal {
-  0%, 100% { opacity: .46; transform: scale(.82); }
-  50% { opacity: 1; transform: scale(1); }
+  0%, 100% { opacity: .45; }
+  50% { opacity: 1; }
 }
 
 .pi-chat-error { color: var(--text-muted); }

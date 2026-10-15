@@ -33,7 +33,7 @@
   box-shadow: none;
   color: var(--primary-ink);
   filter: brightness(1.035);
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .runs-sidebar-heading {

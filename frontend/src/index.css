@@ -40,7 +40,7 @@ textarea:focus-visible {
 }
 
 .animate-fade-in {
-  animation: xuanwu-fade-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: xuanwu-fade-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes xuanwu-spin {
@@ -100,7 +100,7 @@ textarea:focus-visible {
   flex-direction: column;
   height: 100vh;
   overflow-y: auto;
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: none;
 }
 
 .app-loading-stage {
@@ -125,7 +125,7 @@ textarea:focus-visible {
   padding: 18px 14px;
   z-index: 100;
   overflow-y: auto;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1);
   backdrop-filter: blur(18px);
 }
 
@@ -179,26 +179,6 @@ textarea:focus-visible {
 .turtle-logo-img {
   object-fit: contain;
   user-select: none;
-}
-
-.brand-lockup[data-brand-state="running"] .turtle-logo-img {
-  transform: scale(1.08);
-}
-
-.brand-lockup[data-brand-state="speed"] .turtle-logo-img {
-  transform: scale(1.12) translateX(1px);
-}
-
-.brand-lockup[data-brand-state="guarding"] .turtle-logo-img {
-  transform: scale(1.08);
-}
-
-.brand-lockup[data-brand-state="monitor"] .turtle-logo-img {
-  transform: scale(1.06);
-}
-
-.brand-lockup[data-brand-state="sleeping"] .turtle-logo-img {
-  transform: scale(1.08);
 }
 
 .brand-lockup[data-brand-state="offline"] .turtle-logo-img {
@@ -286,7 +266,7 @@ textarea:focus-visible {
   cursor: pointer;
   z-index: 101;
   box-shadow: var(--shadow-sm);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
   backdrop-filter: blur(8px);
 }
 
@@ -307,7 +287,7 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .sidebar-collapse-btn:hover {
@@ -367,7 +347,7 @@ textarea:focus-visible {
   border: none;
   cursor: pointer;
   text-align: left;
-  transition: all 0.15s ease;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .nav-item:hover {
@@ -440,7 +420,7 @@ textarea:focus-visible {
   font-size: 0.82rem;
   cursor: pointer;
   margin-top: 4px;
-  transition: all 0.2s;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .btn-new-issue-sidebar:hover {
@@ -462,7 +442,7 @@ textarea:focus-visible {
   background: var(--success);
   height: 100%;
   border-radius: var(--radius-xs);
-  transition: width 0.3s ease;
+  transition: none;
 }
 
 .sidebar-project-list {
@@ -476,7 +456,7 @@ textarea:focus-visible {
 }
 
 .sidebar-theme-btn {
-  transition: all 0.2s ease;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .sidebar-theme-btn:hover {
@@ -641,7 +621,7 @@ textarea:focus-visible {
   justify-content: center;
   padding: 4px;
   border-radius: var(--radius-xs);
-  transition: all 0.2s;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .kanban-column-add-btn:hover {
@@ -669,7 +649,7 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: transform var(--transition-speed), border-color var(--transition-speed), box-shadow var(--transition-speed);
+  transition: transform var(--transition-speed), border-color var(--transition-speed);
 }
 
 .kanban-card:focus-visible {
@@ -754,7 +734,7 @@ textarea:focus-visible {
   font-size: 0.85rem;
   font-weight: 680;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .btn-primary {
@@ -1052,7 +1032,7 @@ textarea:focus-visible {
   right: 0;
   bottom: 0;
   background-color: var(--border-color);
-  transition: .2s;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
   border-radius: var(--radius-xs);
 }
 
@@ -1064,7 +1044,7 @@ textarea:focus-visible {
   left: 3px;
   bottom: 3px;
   background-color: var(--text-primary);
-  transition: .2s;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
   border-radius: var(--radius-xs);
 }
 
@@ -1424,7 +1404,7 @@ input:checked + .slider:before {
    ========================================================================== */
 .kanban-column {
   /* 确保过渡平滑优雅 */
-  transition: background-color var(--transition-speed), border-color var(--transition-speed), transform var(--transition-speed), box-shadow var(--transition-speed);
+  transition: background-color var(--transition-speed), border-color var(--transition-speed), transform var(--transition-speed);
 }
 
 .kanban-column.drag-over {
@@ -1584,7 +1564,7 @@ input:checked + .slider:before {
   justify-content: center;
   outline: none;
   padding: 0;
-  transition: background-color var(--transition-speed), border-color var(--transition-speed), color var(--transition-speed), box-shadow var(--transition-speed), transform var(--transition-speed);
+  transition: background-color var(--transition-speed), border-color var(--transition-speed), color var(--transition-speed), transform var(--transition-speed);
   width: 24px;
 }
 
@@ -1612,7 +1592,7 @@ input:checked + .slider:before {
   background: var(--bg-card-hover);
   border-color: var(--border-color-hover);
   color: var(--text-primary);
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .kanban-card-speed-toggle.on:hover:not(:disabled),

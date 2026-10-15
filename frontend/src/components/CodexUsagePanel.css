@@ -207,7 +207,7 @@
   display: block;
   height: 100%;
   min-width: 3px;
-  transition: width 0.3s ease;
+  transition: none;
 }
 
 .codex-no-limit {

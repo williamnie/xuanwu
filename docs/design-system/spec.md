@@ -348,7 +348,7 @@
 | 场景 | 规范 |
 |---|---|
 | hover / focus | `transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease`；**不加 transform 位移**（icon 按钮除外，可 translateY(-0.5px)） |
-| 页面/卡片进入 | `fadeUp`: `opacity 0→1, translateY(6px)→0`，`220ms cubic-bezier(.16,1,.3,1)`，仅首屏一次 |
+| 页面/卡片进入 | `fadeUp`: `opacity 0→1, translateY(6px)→0`，`180ms cubic-bezier(.16,1,.3,1)`，仅首屏一次 |
 | 状态点脉冲 | `pulse`: `opacity .45→1→.45`，`1.4s ease-in-out infinite`，仅用于 running |
 | 加载转圈 | `spin 1s linear infinite`，12–14px、2px 边框、`border-top-color: currentColor` |
 | 面板展开/折叠 | `max-height` 或 grid-rows 过渡 ≤ 200ms；**禁止** scale 缩放 |

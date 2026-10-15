@@ -34,7 +34,7 @@
 }
 
 .project-settings-loading-hint::before {
-  animation: xuanwu-spin 0.8s linear infinite;
+  animation: xuanwu-spin 1s linear infinite;
   border: 2px solid color-mix(in srgb, var(--primary) 24%, transparent);
   border-radius: 50%;
   border-top-color: var(--primary);

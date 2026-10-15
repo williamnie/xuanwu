@@ -36,7 +36,7 @@
   gap: 10px;
   padding: 8px 12px;
   text-align: left;
-  transition: all 0.15s ease;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
   width: 100%;
 }
 
@@ -271,7 +271,7 @@
 .pi-chat-conversation-runtime[data-tone="running"] { color: var(--text-muted); }
 
 .pi-chat-conversation-runtime[data-tone="running"] > span {
-  animation: pi-chat-runtime-spin .72s linear infinite;
+  animation: pi-chat-runtime-spin 1s linear infinite;
   background: transparent;
   border: 1.5px solid color-mix(in srgb, currentColor 34%, transparent);
   border-right-color: currentColor;
