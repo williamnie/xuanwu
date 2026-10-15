@@ -7,7 +7,7 @@ import { createContextBundle } from "../db/repositories/contextBundles.ts";
 import { ATTENTION_INBOX_SEED_SQL, ATTENTION_RELATED_INBOX_SQL, createAttentionInboxItem, createIntakeRun, type AttentionInboxItemInput } from "../db/repositories/intakeRuns.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createActionProposal, createPiAction, createPiApprovalRequest, upsertPiGuardianAlert } from "../db/repositories/pi.ts";
-import { listPersistedAttention, persistAttentionCommand } from "../domain/attention/persistence.ts";
+import { getPersistedAttention, listPersistedAttention, persistAttentionCommand } from "../domain/attention/persistence.ts";
 import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
 import { issueIDToWorkID } from "../domain/work/issueAdapter.ts";
 import { attentionHandling, attentionIsVisible, readInboxAttention, registerCommandCenterRoutes } from "./commandCenterApi.ts";
@@ -234,5 +234,45 @@ test("complete Inbox with 200 reviews, 600 open, 30 old actions and 5000 inactiv
     const plan = (sql: string, args: string[] = []) => JSON.stringify(db.sqlite.query(`explain query plan ${sql}`).all(...args));
     expect(plan(ATTENTION_INBOX_SEED_SQL)).toContain("idx_attention_inbox_items_status");
     expect(plan(ATTENTION_RELATED_INBOX_SQL, [JSON.stringify(["issue:900000"])])).toContain("SCAN i");
+  } finally { db.close(); }
+});
+
+
+test("Attention fast lookup equals full projection field-for-field for visible, overlaid, terminal and non-canonical IDs", async () => {
+  const { db, now, inbox, oldAction } = await fixture();
+  try {
+    const ids: string[] = [];
+    for (const state of ["visible", "acknowledged", "paused", "terminal", "merged"]) {
+      const row = inbox({ status: state === "terminal" ? "ignored" : state === "merged" ? "ignored" : "new", primary_intent: "approval", schema_item: { approval_id: state } });
+      const id = `xw:attention:attention_inbox_items:${row.id}`; ids.push(id);
+      if (state === "merged") {
+        oldAction(state);
+        ids.push(`xw:attention:pi_actions:${state}`);
+      }
+      if (state === "acknowledged" || state === "paused") persistAttentionCommand(db, id, {
+        action: state === "paused" ? "snooze" : "acknowledge", expected_revision: 0,
+        ...(state === "paused" ? { snoozed_until: new Date(now.getTime() + 3600000).toISOString() } : {}),
+        audit: { actor: { id: "fixture", kind: "user" }, correlation_id: "fixture", event_id: `lookup-${state}`, gate: { authority: "human_approval", decision: "allow", policy_ref: "fixture" }, occurred_at: now.toISOString(), reason: "Fixture lookup" }
+      });
+    }
+    const group = [inbox({ status: "actioned", schema_item: { issue_id: 778 } }), inbox({ status: "ignored", schema_item: { issue_id: 778 } })];
+    ids.push(...group.map(row => `xw:attention:attention_inbox_items:${row.id}`));
+    // A terminal non-inbox target must also pull in its earlier canonical carrier.
+    const guardianCarrier = inbox({ status: "ignored", primary_intent: "error", schema_item: { issue_id: 779 } });
+    upsertPiGuardianAlert(db, { id: "terminal-guardian", alert_type: "failure", status: "resolved", issue_id: 779, severity: "high", message: "Terminal fixture" });
+    ids.push(`xw:attention:attention_inbox_items:${guardianCarrier.id}`, "xw:attention:pi_guardian_alerts:terminal-guardian");
+    const completed = createIssue(db, { project_id: "fixture", status: "done", title: "Historical" });
+    oldAction("historical-lookup", { action_type: "issue.retry", issue_id: completed.id });
+    oldAction("completed-action", { status: "completed" });
+    ids.push("xw:attention:pi_actions:historical-lookup", "xw:attention:pi_actions:completed-action", "xw:attention:attention_inbox_items:99999", "malformed");
+    for (let i = 0; i < 80; i++) inbox({ status: "ignored", schema_item: { issue_id: 900000 + i } });
+    db.sqlite.run("pragma query_only=on");
+    const full = listPersistedAttention(db, { unbounded: true });
+    for (const id of ids) expect(getPersistedAttention(db, id)).toEqual(full.find(item => item.id === id) ?? null);
+    expect(getPersistedAttention(db, ids[0])?.status).toBe("open");
+    expect(getPersistedAttention(db, ids[1])?.status).toBe("acknowledged");
+    expect(getPersistedAttention(db, ids[2])?.snoozed_until).toBeDefined();
+    expect(getPersistedAttention(db, ids[3])?.status).toBe("dismissed");
+    expect(getPersistedAttention(db, "xw:attention:pi_actions:merged")).toBeNull();
   } finally { db.close(); }
 });

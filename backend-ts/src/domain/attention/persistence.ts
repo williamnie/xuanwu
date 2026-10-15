@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../../db/database.ts";
 import {
+  getAttentionInboxItem,
   listAttentionInboxItems,
   listAttentionInboxProjectionItems,
   listRelatedAttentionInboxItems,
@@ -27,6 +28,7 @@ import {
   attentionFromInboxItem,
   attentionFromPiAction
 } from "./legacyAdapters.ts";
+import { parseDomainID } from "../../xuanwu/coreDomainContracts.ts";
 
 type AttentionCommandEvent = {
   action: AttentionCommand["action"];
@@ -38,7 +40,7 @@ type AttentionCommandEvent = {
   snoozed_until?: string;
 };
 
-type PersistedAttentionOptions = { actionLimit?: number; now?: Date; unbounded?: boolean; visibleInboxOnly?: boolean };
+type PersistedAttentionOptions = { actionLimit?: number; now?: Date; unbounded?: boolean; visibleInboxOnly?: boolean; targetID?: string };
 const ATTENTION_ACTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_ATTENTION_ACTION_LIMIT = 25;
 
@@ -52,8 +54,12 @@ export function listPersistedAttention(
 }
 
 export function getPersistedAttention(db: RunnerDatabase, id: string): AttentionRecord | null {
-  // Only display bounds are removed: source terminal states, consolidation,
-  // command overlays and all downstream decision gates remain authoritative.
+  // Include the target carrier before consolidation so even a terminal target
+  // retains its canonical identity and full related source/command projection.
+  const current = listPersistedAttention(db, { unbounded: true, visibleInboxOnly: true, targetID: id })
+    .find(record => record.id === id);
+  if (current) return current;
+  // Preserve historical and non-canonical lookup behavior through the old path.
   return listPersistedAttention(db, { unbounded: true }).find((record) => record.id === id) ?? null;
 }
 
@@ -84,6 +90,11 @@ function attentionCandidates(db: RunnerDatabase, options: PersistedAttentionOpti
   const inboxItems = options.unbounded
     ? listAttentionInboxProjectionItems(db, options.visibleInboxOnly)
     : listAttentionInboxItems(db);
+  const target = parseDomainID(options.targetID ?? "");
+  if (options.visibleInboxOnly && target?.kind === "attention" && target.authority === "attention_inbox_items") {
+    const carrier = getAttentionInboxItem(db, Number(target.local_id));
+    if (carrier && !inboxItems.some(item => item.id === carrier.id)) inboxItems.push(carrier);
+  }
   const inboxCandidate = (item: typeof inboxItems[number]) => {
     const candidate = attentionFromInboxItem(item);
     return {
@@ -103,7 +114,8 @@ function attentionCandidates(db: RunnerDatabase, options: PersistedAttentionOpti
   const candidates = [...inbox, ...guardian, ...approvals, ...actions];
   if (options.visibleInboxOnly) {
     const active = candidates.filter(item => item.source_ref.resolution === "active"
-      || item.source_ref.authority === "attention_inbox_items");
+      || item.source_ref.authority === "attention_inbox_items"
+      || (target?.kind === "attention" && item.source_ref.authority === target.authority && item.source_ref.local_id === target.local_id));
     const keys = new Set(active.map(attentionDedupeKey));
     const correlations = [...new Set(active.map(item => strongestCorrelation(item.source_ref.correlation_refs)).filter(Boolean))];
     const seedIDs = new Set(inboxItems.map(item => item.id));
