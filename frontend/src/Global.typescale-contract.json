@@ -754,6 +754,20 @@
       "property": "padding-left",
       "value": "calc(var(--button-height) + var(--space-4) * 2)",
       "reason": "Spec 4 structural geometry: existing 32px menu toggle plus its 16px left offset and 16px content clearance."
+    },
+    {
+      "file": "components/GlobalAskComposer.css",
+      "selector": ".main-content:not(:has(.prompt-editor-shell.composer)):has(~ .global-ask-composer-shell)",
+      "property": "padding-bottom",
+      "value": "calc(var(--space-8) + var(--space-4) + var(--space-4) + var(--space-2))",
+      "reason": "Spec 5.2 / 9: fixed 48px global launcher + existing 16px bottom offset + 8px clearance; keep last rows accessible."
+    },
+    {
+      "file": "components/GlobalAskComposer.css",
+      "selector": ".main-content:not(:has(.prompt-editor-shell.composer)):has(~ .global-ask-composer-shell)",
+      "property": "padding-bottom",
+      "value": "calc(var(--space-8) + var(--space-4) + max(var(--space-2), env(safe-area-inset-bottom)) + var(--space-2))",
+      "reason": "Spec 5.2 / 9: same 48px launcher + existing mobile safe-area offset + 8px clearance."
     }
   ],
   "microSpacing": [

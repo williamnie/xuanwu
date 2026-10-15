@@ -27,7 +27,7 @@ test('global composer remains reachable on mobile and respects safe areas', () =
   assert.match(css, /\.global-ask-composer-launcher/);
 });
 
-test('global composer starts as a compact launcher and expands as an overlay without reserving page height', () => {
+test('global composer starts as a compact launcher and expands as an overlay while reserving only launcher clearance', () => {
   assert.match(source, /const \[expanded, setExpanded\] = useState\(false\)/);
   assert.match(source, /className="global-ask-composer-launcher"/);
   assert.match(source, /onClick=\{\(\) => setExpanded\(true\)\}/);
@@ -42,4 +42,14 @@ test('page and portal dialog composers hide the global overlay without matching 
   assert.match(app, /<main className="main-content"[\s\S]*?<\/main>[\s\S]*?<GlobalAskComposer/);
   const editor = readFileSync(new URL('./editor/PromptEditor.jsx', import.meta.url), 'utf8');
   assert.match(editor, /prompt-editor-shell \$\{isComposer \? 'composer' : ''\}/);
+});
+
+
+test('main flex viewport reserves launcher height, bottom offset and clearance for nested scrollers', () => {
+  const selector = '.main-content:not(:has(.prompt-editor-shell.composer)):has(~ .global-ask-composer-shell)';
+  assert.equal(css.split(selector).length - 1, 2);
+  assert.match(css, /min-height: calc\(var\(--space-8\) \+ var\(--space-4\)\)/);
+  assert.match(css, /padding-bottom: calc\(var\(--space-8\) \+ var\(--space-4\) \+ var\(--space-4\) \+ var\(--space-2\)\)/);
+  assert.match(css, /padding-bottom: calc\(var\(--space-8\) \+ var\(--space-4\) \+ max\(var\(--space-2\), env\(safe-area-inset-bottom\)\) \+ var\(--space-2\)\)/);
+  assert.doesNotMatch(css, /\.settings-tab-content[^{}]*\{[^}]*padding-bottom:/);
 });

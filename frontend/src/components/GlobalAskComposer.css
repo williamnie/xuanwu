@@ -111,7 +111,7 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
   display: flex;
   gap: var(--space-2);
   max-width: min(320px, 100%);
-  min-height: 48px;
+  min-height: calc(var(--space-8) + var(--space-4));
   padding: var(--space-1-5) var(--space-2-5);
   pointer-events: auto;
   text-align: left;
@@ -261,5 +261,18 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
 
   .global-ask-composer-launcher:hover {
     transform: none;
+  }
+}
+
+/* Reserve the 48px launcher + its fixed bottom offset + an 8px gap.
+   Padding the flex viewport also lifts nested settings, task and run scrollers.
+   Pages with their own composer already hide this launcher and keep their layout. */
+.main-content:not(:has(.prompt-editor-shell.composer)):has(~ .global-ask-composer-shell) {
+  padding-bottom: calc(var(--space-8) + var(--space-4) + var(--space-4) + var(--space-2));
+}
+
+@media (max-width: 760px) {
+  .main-content:not(:has(.prompt-editor-shell.composer)):has(~ .global-ask-composer-shell) {
+    padding-bottom: calc(var(--space-8) + var(--space-4) + max(var(--space-2), env(safe-area-inset-bottom)) + var(--space-2));
   }
 }
