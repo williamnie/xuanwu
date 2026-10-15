@@ -29,7 +29,7 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--primary) 70%, white);
+  outline: 2px solid color-mix(in srgb, var(--primary) 70%, var(--bg-card));
   outline-offset: 2px;
 }
 
@@ -40,7 +40,7 @@ textarea:focus-visible {
 }
 
 .animate-fade-in {
-  animation: xuanwu-fade-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: xuanwu-fade-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes xuanwu-spin {
@@ -114,9 +114,7 @@ textarea:focus-visible {
 /* Sidebar (cohesive with screenshot) */
 .sidebar {
   width: var(--sidebar-width);
-  background:
-    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--brand-mint) 11%, transparent), transparent 30%),
-    color-mix(in srgb, var(--bg-sidebar) 96%, transparent);
+  background: var(--bg-sidebar);
   border-right: 1px solid var(--border-color);
   position: fixed;
   top: 0;
@@ -179,7 +177,6 @@ textarea:focus-visible {
 }
 
 .turtle-logo-img {
-  filter: drop-shadow(0 7px 7px rgba(15, 118, 110, 0.18));
   object-fit: contain;
   user-select: none;
 }
@@ -205,7 +202,7 @@ textarea:focus-visible {
 }
 
 .brand-lockup[data-brand-state="offline"] .turtle-logo-img {
-  filter: grayscale(1) opacity(0.72) drop-shadow(0 5px 6px rgba(71, 85, 105, 0.14));
+  filter: grayscale(1) opacity(0.72);
 }
 
 .brand-wordmark {
@@ -258,7 +255,6 @@ textarea:focus-visible {
 .api-status-dot {
   background: currentColor;
   border-radius: 50%;
-  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 13%, transparent);
   height: 6px;
   width: 6px;
 }
@@ -298,8 +294,6 @@ textarea:focus-visible {
   background: var(--bg-card-hover);
   border-color: var(--border-color-hover);
   color: var(--text-primary);
-  transform: scale(1.08);
-  box-shadow: var(--shadow-lg);
 }
 
 /* 侧边栏内部收起按钮 */
@@ -317,13 +311,10 @@ textarea:focus-visible {
 }
 
 .sidebar-collapse-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--nav-hover);
   color: var(--text-primary);
 }
 
-[data-theme="dark"] .sidebar-collapse-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
 
 .sidebar-section-title {
   font-size: 0.68rem;
@@ -380,18 +371,15 @@ textarea:focus-visible {
 }
 
 .nav-item:hover {
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--nav-hover);
   color: var(--text-primary);
 }
 
-[data-theme="dark"] .nav-item:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
 
 .nav-item.active {
-  background: var(--primary-glow);
-  color: var(--primary);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 12%, transparent);
+  background: var(--nav-active);
+  color: var(--text-primary);
+  box-shadow: none;
   font-weight: 720;
 }
 
@@ -427,10 +415,6 @@ textarea:focus-visible {
   display: none;
 }
 
-[data-theme="dark"] .nav-item.active {
-  background: var(--primary-glow);
-  color: var(--primary);
-}
 
 .nav-badge {
   font-size: 0.7rem;
@@ -461,7 +445,7 @@ textarea:focus-visible {
 
 .btn-new-issue-sidebar:hover {
   background: var(--primary);
-  color: white;
+  color: var(--button-primary-fg);
 }
 
 /* Progress bar inside sidebar */
@@ -498,14 +482,8 @@ textarea:focus-visible {
 .sidebar-theme-btn:hover {
   background: var(--bg-card);
   border-color: var(--border-color-hover) !important;
-  box-shadow: var(--shadow-sm);
-  transform: scale(1.08);
 }
 
-[data-theme="dark"] .sidebar-theme-btn:hover {
-  background: var(--bg-card);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-}
 
 /* Sub-items list (FOCUS & PROJECT) */
 .sub-filter-item {
@@ -524,19 +502,16 @@ textarea:focus-visible {
 }
 
 .sub-filter-item:hover {
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--nav-hover);
   color: var(--text-primary);
 }
 
 .sub-filter-item.active {
   color: var(--text-primary);
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--nav-active);
   font-weight: 600;
 }
 
-[data-theme="dark"] .sub-filter-item.active {
-  background: rgba(255, 255, 255, 0.05);
-}
 
 .sub-filter-dot {
   width: 6px;
@@ -624,9 +599,6 @@ textarea:focus-visible {
   background: var(--bg-secondary);
 }
 
-[data-theme="dark"] .kanban-column {
-  background: var(--bg-secondary);
-}
 
 .kanban-column-header {
   background: var(--surface-raised);
@@ -706,9 +678,7 @@ textarea:focus-visible {
 }
 
 .kanban-card:hover {
-  transform: translateY(-1px);
   border-color: var(--border-color-hover);
-  box-shadow: var(--shadow-lg);
 }
 
 .kanban-card-heading {
@@ -740,14 +710,11 @@ textarea:focus-visible {
   align-items: center;
   font-size: 0.75rem;
   color: var(--text-muted);
-  border-top: 1px solid rgba(0, 0, 0, 0.02);
+  border-top: 1px solid var(--border-light);
   gap: 8px;
   padding-top: 6px;
 }
 
-[data-theme="dark"] .kanban-card-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.03);
-}
 
 .kanban-card-project {
   display: inline-flex;
@@ -782,7 +749,7 @@ textarea:focus-visible {
   justify-content: center;
   gap: 6px;
   padding: 8px 14px;
-  border-radius: var(--radius-md);
+  border-radius: var(--button-radius);
   border: none;
   font-size: 0.85rem;
   font-weight: 680;
@@ -791,14 +758,14 @@ textarea:focus-visible {
 }
 
 .btn-primary {
-  background: var(--primary-gradient);
-  color: white;
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 18%, transparent);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-fg);
+  box-shadow: none;
 }
 
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 24px color-mix(in srgb, var(--primary) 24%, transparent);
+
+  background: var(--primary-hover);
 }
 
 .btn-secondary {
@@ -817,17 +784,14 @@ textarea:focus-visible {
 .glass-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   padding: 20px;
   box-shadow: var(--shadow-sm);
 }
 
 .auth-gate {
   align-items: center;
-  background:
-    radial-gradient(circle at 20% 12%, color-mix(in srgb, var(--brand-mint) 26%, transparent), transparent 34%),
-    radial-gradient(circle at 78% 82%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 32%),
-    var(--bg-primary);
+  background: var(--bg-primary);
   display: flex;
   justify-content: center;
   min-height: 100vh;
@@ -835,10 +799,9 @@ textarea:focus-visible {
 }
 
 .auth-card {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--bg-card) 94%, var(--brand-mint)), var(--bg-card));
-  border-radius: var(--radius-lg);
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.14), var(--shadow-sm);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -848,7 +811,7 @@ textarea:focus-visible {
 }
 
 .auth-card::before {
-  background: var(--primary-gradient);
+  background: var(--primary);
   content: '';
   height: 4px;
   left: 0;
@@ -899,7 +862,7 @@ textarea:focus-visible {
 .auth-token-guide {
   background: color-mix(in srgb, var(--primary) 7%, var(--bg-secondary));
   border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border-light));
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   display: grid;
   gap: 8px;
   padding: 13px 14px;
@@ -938,9 +901,9 @@ textarea:focus-visible {
 }
 
 .auth-token-platform code {
-  background: var(--brand-ink);
+  background: var(--terminal-bg);
   border-radius: var(--radius-md);
-  color: #f8fafc;
+  color: var(--terminal-text);
   display: block;
   font-size: 0.75rem;
   overflow-x: auto;
@@ -1063,7 +1026,8 @@ textarea:focus-visible {
 
 .form-control:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-glow);
+
+  outline: 2px solid var(--primary-glow);
 }
 
 /* Switch */
@@ -1101,7 +1065,7 @@ textarea:focus-visible {
   bottom: 3px;
   background-color: var(--text-primary);
   transition: .2s;
-  border-radius: 50%;
+  border-radius: var(--radius-xs);
 }
 
 input:checked + .slider {
@@ -1110,7 +1074,7 @@ input:checked + .slider {
 
 input:checked + .slider:before {
   transform: translateX(16px);
-  background-color: white;
+  background-color: var(--button-primary-fg);
 }
 
 /* Grid helper */
@@ -1243,7 +1207,7 @@ input:checked + .slider:before {
 .issue-supervisor-field,
 .issue-supervisor-retry,
 .issue-supervisor-history article {
-  background: rgba(0, 0, 0, 0.025);
+  background: var(--surface-raised);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   min-width: 0;
@@ -1309,13 +1273,13 @@ input:checked + .slider:before {
 
 /* Terminal Styles */
 .terminal-view {
-  background: var(--bg-terminal);
-  border: 1px solid #1e293b;
+  background: var(--terminal-bg);
+  border: 1px solid var(--terminal-border);
   border-radius: var(--radius-sm);
   padding: 16px;
   font-family: var(--font-mono);
   font-size: 0.8rem;
-  color: #cbd5e1;
+  color: var(--terminal-text);
   line-height: 1.5;
   max-height: 500px;
   max-width: 100%;
@@ -1330,17 +1294,17 @@ input:checked + .slider:before {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-.terminal-line.info { color: #60a5fa; }
-.terminal-line.success { color: #34d399; }
-.terminal-line.warning { color: #fbbf24; }
-.terminal-line.error { color: #f87171; }
-.terminal-line.output { color: #94a3b8; border-left: 2px solid #334155; padding-left: 6px; margin-left: 2px; }
-.terminal-line.header { color: #c084fc; font-weight: 600; border-bottom: 1px dashed rgba(192, 132, 252, 0.2); padding-bottom: 2px; margin-top: 10px; }
+.terminal-line.info { color: var(--terminal-info); }
+.terminal-line.success { color: var(--terminal-success); }
+.terminal-line.warning { color: var(--terminal-warning); }
+.terminal-line.error { color: var(--terminal-error); }
+.terminal-line.output { color: var(--terminal-muted); border-left: 2px solid var(--terminal-border); padding-left: 6px; margin-left: 2px; }
+.terminal-line.header { color: var(--terminal-text); font-weight: 600; border-bottom: 1px dashed var(--terminal-border); padding-bottom: 2px; margin-top: 10px; }
 
-.diff-container { background: #020617; border-radius: var(--radius-xs); margin: 4px 0; border: 1px solid #1e293b; max-width: 100%; overflow-x: auto; }
+.diff-container { background: var(--terminal-bg); border-radius: var(--radius-xs); margin: 4px 0; border: 1px solid var(--terminal-border); max-width: 100%; overflow-x: auto; }
 .diff-line { padding: 1px 6px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
-.diff-line.added { background: rgba(52, 211, 153, 0.1); color: #34d399; }
-.diff-line.removed { background: rgba(248, 113, 113, 0.1); color: #f87171; }
+.diff-line.added { background: color-mix(in srgb, var(--terminal-success) 10%, transparent); color: var(--terminal-success); }
+.diff-line.removed { background: color-mix(in srgb, var(--terminal-error) 10%, transparent); color: var(--terminal-error); }
 
 .mobile-app-header,
 .mobile-sidebar-backdrop {
@@ -1469,21 +1433,15 @@ input:checked + .slider:before {
 
 .kanban-column.drag-over {
   border-color: var(--primary) !important;
-  background: rgba(14, 165, 233, 0.08) !important;
-  box-shadow: 0 0 16px var(--primary-glow) !important;
-  transform: scale(1.01);
+  background: var(--primary-glow) !important;
+  box-shadow: none !important;
 }
 
-[data-theme="dark"] .kanban-column.drag-over {
-  background: rgba(56, 189, 248, 0.12) !important;
-  box-shadow: 0 0 20px var(--primary-glow) !important;
-}
 
 .kanban-card.dragging {
   opacity: 0.45 !important;
   border-style: dashed !important;
   border-color: var(--primary) !important;
-  transform: scale(0.98);
   box-shadow: none !important;
 }
 
@@ -1493,7 +1451,7 @@ input:checked + .slider:before {
   gap: 6px;
   color: var(--error);
   background: var(--error-bg);
-  border: 1px solid rgba(239, 68, 68, 0.16);
+  border: 1px solid color-mix(in srgb, var(--error) 16%, transparent);
   border-radius: var(--radius-md);
   padding: 6px 8px;
   font-size: 0.74rem;
@@ -1539,8 +1497,8 @@ input:checked + .slider:before {
 
 .kanban-card-runtime-pill {
   align-items: center;
-  background: rgba(15, 23, 42, 0.035);
-  border: 1px solid rgba(15, 23, 42, 0.05);
+  background: var(--nav-hover);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-xs);
   color: var(--text-muted);
   display: inline-flex;
@@ -1551,10 +1509,6 @@ input:checked + .slider:before {
   padding: 2px 6px;
 }
 
-[data-theme="dark"] .kanban-card-runtime-pill {
-  background: rgba(255, 255, 255, 0.035);
-  border-color: rgba(255, 255, 255, 0.055);
-}
 
 .kanban-card-runtime-pill.run-status {
   background: transparent;
@@ -1615,8 +1569,8 @@ input:checked + .slider:before {
 
 .kanban-card-action-btn.danger {
   color: var(--error);
-  border-color: rgba(239, 68, 68, 0.22);
-  background: rgba(239, 68, 68, 0.08);
+  border-color: color-mix(in srgb, var(--error) 22%, transparent);
+  background: var(--error-bg);
 }
 
 .kanban-card-action-btn:disabled {
@@ -1650,13 +1604,11 @@ input:checked + .slider:before {
 .kanban-card-speed-toggle.on {
   background: var(--warning-bg);
   border-color: color-mix(in srgb, var(--warning) 42%, transparent);
-  box-shadow: 0 0 0 2px var(--warning-glow);
   color: var(--warning);
 }
 
 .kanban-card-speed-toggle.on svg {
   fill: currentColor;
-  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--warning) 45%, transparent));
 }
 
 .kanban-card-speed-toggle:hover:not(:disabled),
@@ -1669,9 +1621,9 @@ input:checked + .slider:before {
 
 .kanban-card-speed-toggle.on:hover:not(:disabled),
 .kanban-card-speed-toggle.on:focus-visible {
-  background: rgba(245, 158, 11, 0.2);
-  border-color: rgba(245, 158, 11, 0.58);
-  color: #f59e0b;
+  background: var(--warning-bg);
+  border-color: color-mix(in srgb, var(--warning) 58%, transparent);
+  color: var(--warning);
 }
 
 .kanban-card-more-trigger {
