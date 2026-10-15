@@ -495,7 +495,7 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 
 尚未完成：
 
-1. **完整待处理聚合**：现有首页保留已明确的来源范围；完整分页、人工审核 / 失败任务合并去重等仍需 8.2 的只读聚合合同，不能把当前部分聚合宣称为全部待处理事项。
+1. **完整待处理聚合**：现有首页保留已明确的来源范围；完整分页、人工审核 / 失败任务合并去重等仍需 8.2 的只读聚合合同，不能把当前部分聚合宣称为全部待处理事项。合同见 8.4（E 阶段），实施中。
 
 D 阶段 D1–D4 已完成，验收见 8.3；批量创建不进 Web UI（Q12）。D 阶段与已完成的“交接任务 D”不是同一事项。
 
@@ -576,6 +576,22 @@ D4 验收记录（2026-10-15）：`f1e90820` 只新增冻结合同测试，在�
 最终前端 **788 pass / 0 fail**（184 files），lint / build / `git diff --check` 通过。全程纯前端与文档修改，后端生成旧链接及 legacyCompatibilityApi 的 canonical_route=work 保持原语义。再次核查 backend-ts（含 Pi 提示词模板）与仓库 / 已安装玄武 skills，未发现按 page_id / route_ref 的 work、command-center 值分支或匹配的消费者；历史对话标签仍同时识别新旧 ID，不改 transcript、业务 ID 或持久化偏好 key。
 
 真实页面证据 `/tmp/xuanwu-d4/`：760px 浅 / 深截图验证旧 work?workId=&runId= 打开原任务并高亮该次执行、刷新保持；旧 command-center 进入 Inbox；旧 settings section=diagnostics 与 advanced:permissions 打开并定位对应分节；连续后退 / 前进恢复任务、首页与设置；主动“返回任务”不携带未知参数。Handoff 深链带 project 和原始重复 query 保持任务及 Result Tab；本机没有真实 Handoff 记录，因此只验证真实空结果页面，有效对象与 workBoard=false 直达由冻结和专项测试覆盖，未伪造交付成功。未使用页面夹具，未点写入按钮，未导出凭据或请求头；复用现有服务，恢复原深色主题，只关闭本次标签页。
+
+### 8.4 E 阶段合同：首页完整待处理聚合（2026-10-15）
+
+补齐 8.2 “首页完整的待处理聚合”缺口，替代首页现在分开的 `TaskRequestsSection`（`needs_user` / `failed` 各取 5 条）和 `AttentionSection` 用户事项列表。E1 → E2 顺序实施，各自单独提交。实施前先对照代码核实下文“现状”，不符时先回报再动手。
+
+**现状（2026-10-15 核实）**
+- 人工审核请求没有独立表，由 `domain/review/humanReview.ts` 的 `readIssueDecisionProjection` 从任务事件重放得到；只有 `needs_user` 任务可能有 `status=open` 的请求。
+- Attention 汇总（`commandCenterApi.ts` `attentionSection`）经 `listPersistedAttention` 合并 inbox、守护告警、审批请求和助手动作，`attentionHandling` 分为 `user_action_required` / `pi_handling` / `historical`。助手动作走 `listRecentAttentionPiActions`：只取 7 天内、最多 25 条（`db/repositories/pi/actions.ts:161`），使用部分索引 `idx_pi_actions_attention_recent`。
+- 首页两块各自读取，没有统一排序、分页和去重；超出部分只提示数量。
+
+| 项 | 后端 / 前端 | 合同 | 失败与边界 |
+|---|---|---|---|
+| **E1 只读聚合接口** | 后端 | 新增 `GET /api/command-center/inbox?limit=&cursor=`（limit 1–50，默认 20；不接受其他参数，未知参数 400）。不写库、不写审计、不改动既有 `summary?sections=attention` 的输出与限额。条目来源四类，`key` = 来源类型 + 原始 ref：① `human_review:<request_id>`——`needs_user` 任务中 `owner=human` 且请求 `status=open`，返回请求的机器类型和现有字段（`kind` / `question` / `recommendation` / `consequences` 等，原样，不拼文案）及 `review_request_id` / `review_revision`；② `preparing:<work_id>`——`needs_user` 但没有打开的人工请求，标记 `actionable=false`；③ `failed_work:<work_id>`——`failed` 任务，带 `revision` 和现有 `availableActions` 同源的可用动作；④ `attention:<attention_id>`——`handling=user_action_required` 且可见（未暂停、open / waiting）的 Attention，沿用 `attentionSummary` 投影。助手动作在本接口内不受 7 天 / 25 条限制，读取全部非终态动作（仍走该部分索引），被判为 historical 的照旧隐藏。每条带关联字段 `work_id` / `attention_id` / `project_id`（可空）和 `occurred_at`。排序：可处理条目在前，`preparing` 在后；同组内按 `occurred_at` 降序、`key` 升序。游标为不透明字符串，编码最后一条的 (组, occurred_at, key) 并带合同版本；非法或版本不符的游标 400。响应含 `items`、`next_cursor`（无更多为 null）、`counts`（按来源计全集）、`total`、`complete`、`failed_sources` | 某个来源读取失败时其余来源照常返回，200 + `complete=false` + `failed_sources`；不得因单源失败返回空列表冒充“没有待处理”。同一提案经多个 Attention 来源出现时沿用 `consolidateAttentionCandidates` 已有的合并；不同来源类型的条目即使关联同一任务也不合并（同一任务可同时有人工审核和告警），只通过 `work_id` 关联。人工审核投影按 `needs_user` 任务逐个在进程内重放，禁止逐行 HTTP；需给出 200 个 `needs_user` 任务的耗时测试并在验收中报告数字，过慢则先回报再改批量读取。后端测试覆盖：四类来源、排序、跨页无重复无遗漏（含翻页之间新增条目）、游标非法 / 版本不符、单源失败、8 天前的待处理助手动作可见、historical 隐藏、数据库 query-only 下无写入、能力清单 / readApiContract 快照 |
+| **E2 首页统一列表** | 前端 | 首页“待你处理”改为单一列表，数据只来自 E1，“加载更多”按游标追加；`TaskRequestsSection` 的两次 `getWorks` 和逐条 `getWork` 去掉。每类卡片保留各自的提交逻辑，不写通用批准函数：人工审核用现有 `HumanReviewCard` / `useHumanReview`（直接用 E1 返回的请求字段，提交带 `review_request_id` + `review_revision`）；失败任务用现有 `executeWorkMove` 重试；Attention 用现有确认 / 稍后提醒 / 查看审批弹窗；`preparing` 只显示“玄武正在整理问题”和打开任务。`AttentionSection` 只保留玄武处理中、运行状况与近期历史部分，不再单独列用户事项，也不重复计数。事件刷新沿用现有防抖订阅，刷新从第一页重新读 | `complete=false` 时显示哪些来源没读到并提供重试，不显示空状态；空状态仅在 `complete=true` 且 `total=0` 时显示。提交后 409 / 已失效按来源分别提示（内容已更新 / 已在别处处理 / 已过期），并只刷新列表。加载更多期间来了刷新事件时丢弃迟到的旧页。文案用第 4 节术语；浅 / 深 × 980 / 760 / 680 检查 |
+
+E 阶段沿用 D 阶段的约束：不改认证、端口、权限默认值和已有接口语义；真实页面只浏览，需要展示审批 / 失败 / 已失效等状态时用不提交的临时前端夹具；新接口用临时数据库和后端测试验证。
 
 ## 9. 待确认事项
 
