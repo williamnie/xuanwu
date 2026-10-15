@@ -162,7 +162,7 @@
 .active-work-confirm { align-items: center; background: var(--bg-secondary); border: 1px solid var(--border-color); display: flex; flex-wrap: wrap; gap: var(--space-2-5); justify-content: space-between; margin-top: var(--space-1); padding: var(--space-2-5); }
 .active-work-confirm > span { color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.45; }
 .active-work-confirm > div { display: flex; gap: var(--space-1-5); }
-.active-work-confirm .confirm { background: var(--button-primary-bg); border-color: var(--button-primary-bg); color: var(--button-primary-fg); }
+.active-work-confirm .confirm { background: var(--button-secondary-bg); border-color: var(--border-color); color: var(--text-primary); }
 .active-work-state { align-items: center; background: var(--surface-raised); border: 1px dashed var(--border-color); color: var(--text-muted); display: flex; flex-wrap: wrap; gap: var(--space-2-5); min-height: 126px; padding: var(--space-5); }
 .active-work-state > div { display: flex; flex: 1; flex-direction: column; gap: var(--space-0-5); min-width: 180px; }
 .active-work-state span { font-size: var(--text-md); }

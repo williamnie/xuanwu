@@ -98,12 +98,13 @@
   border-color: var(--border-color);
 }
 
-.session-command-execute {
+.session-command-actions .session-command-execute {
   display: inline-flex;
   gap: var(--space-1);
   align-items: center;
-  color: var(--button-primary-fg);
-  background: var(--button-primary-bg);
+  color: var(--text-primary);
+  background: var(--button-secondary-bg);
+  border-color: var(--border-color);
 }
 
 .session-command-actions button:disabled {
@@ -153,4 +154,4 @@
 
 .session-command-cancel:hover:not(:disabled) { background: var(--nav-hover); border-color: var(--border-color-hover); }
 
-.session-command-execute:hover:not(:disabled) { background: var(--primary-hover); }
+.session-command-execute:hover:not(:disabled) { background: var(--nav-hover); border-color: var(--border-color-hover); }

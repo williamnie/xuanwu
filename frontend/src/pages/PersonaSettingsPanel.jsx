@@ -108,7 +108,7 @@ export default function PersonaSettingsPanel() {
       </details>
       <div className="persona-save-row">
         <span>{dirty ? '有未保存的修改' : '已保存'}</span>
-        <button className="btn btn-primary" disabled={saving || !dirty} type="submit"><Save size={14} />{saving ? '保存中…' : '保存表达风格'}</button>
+        <button className="btn btn-secondary" disabled={saving || !dirty} type="submit"><Save size={14} />{saving ? '保存中…' : '保存表达风格'}</button>
       </div>
     </form>
   );

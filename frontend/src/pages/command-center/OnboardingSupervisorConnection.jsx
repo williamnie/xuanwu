@@ -129,7 +129,7 @@ function OAuthFlow({ configured, state }) {
       {status?.message ? <p className={lifecycle === 'error' ? 'oauth-error' : ''}>{status.message}</p> : null}
       {status?.auth_url ? <code>{status.auth_url}</code> : null}
       <div className="first-delivery-oauth-actions">
-        <button className="btn btn-primary" disabled={state.oauthBusy} onClick={state.startPiCodexOAuthLogin} type="button">
+        <button className="btn btn-secondary" disabled={state.oauthBusy} onClick={state.startPiCodexOAuthLogin} type="button">
           {state.oauthBusy ? <Loader2 className="spin-animation" size={14} /> : <KeyRound size={14} />} {configured ? '重新授权' : '开始授权'}
         </button>
         <button className="btn btn-secondary" disabled={!status?.auth_url} onClick={state.copyPiCodexOAuthUrl} type="button"><Copy size={14} /> 复制地址</button>

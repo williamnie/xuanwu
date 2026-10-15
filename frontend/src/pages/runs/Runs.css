@@ -259,11 +259,7 @@
   resize: vertical;
 }
 
-.run-control-confirm .run-control-primary {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--button-primary-fg);
-}
+.run-control-confirm .run-control-primary { background: var(--button-secondary-bg); border-color: var(--border-color); color: var(--text-primary); }
 
 .run-surface-notice {
   align-items: center;

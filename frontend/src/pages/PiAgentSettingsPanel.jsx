@@ -463,7 +463,7 @@ function OAuthButtons({ state }) {
   const pending = state.oauthStatus?.status === 'pending' && state.oauthStatus?.auth_url;
   return (
     <div className="supervisor-oauth-controls">
-      <button className="btn btn-primary" onClick={pending ? state.openPiCodexOAuthUrl : state.startPiCodexOAuthLogin} disabled={state.oauthBusy || configured} type="button">
+      <button className="btn btn-secondary" onClick={pending ? state.openPiCodexOAuthUrl : state.startPiCodexOAuthLogin} disabled={state.oauthBusy || configured} type="button">
         {state.oauthBusy ? <Loader2 size={14} className="spin-animation" /> : <KeyRound size={14} />} {configured ? (english ? 'Signed in' : '已登录') : (english ? 'Sign in' : '登录')}
       </button>
       <details className="settings-disclosure supervisor-oauth-more">

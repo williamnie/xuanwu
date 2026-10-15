@@ -57,7 +57,7 @@
 .first-delivery-step.done { color: var(--success); }
 .first-delivery-step.current { box-shadow: inset 0 -2px 0 var(--primary); color: var(--text-primary); }
 .first-delivery-step.done > span { border-color: color-mix(in srgb, var(--success) 45%, var(--border-color)); }
-.first-delivery-step.current > span { background: var(--button-primary-bg); border-color: var(--button-primary-bg); color: var(--button-primary-fg); }
+.first-delivery-step.current > span { background: var(--primary-glow); border-color: var(--border-color); color: var(--text-primary); }
 
 .first-delivery-actions { display: grid; }
 .first-delivery-action-card { border-bottom: 1px solid var(--border-light); border-top: 1px solid var(--border-light); gap: var(--space-5); justify-content: space-between; padding: var(--space-4) 0; }

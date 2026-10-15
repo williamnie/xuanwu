@@ -194,9 +194,9 @@
 .pi-chat-bubble-header { align-items: center; display: flex; gap: var(--space-2); margin-bottom: var(--space-2); }
 .pi-chat-bubble-avatar {
   align-items: center;
-  background: var(--button-primary-bg);
-  border: 1px solid var(--button-primary-bg);
-  color: var(--button-primary-fg);
+  background: var(--primary-glow);
+  border: 1px solid var(--border-color);
+  color: var(--primary);
   display: inline-flex;
   height: 27px;
   justify-content: center;

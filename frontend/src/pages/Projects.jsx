@@ -224,7 +224,7 @@ export default function Projects() {
               <h3 className="projects-empty-title">暂无监控项目</h3>
               <p className="projects-empty-copy">添加本地项目路径，或从已有 Codex 项目中同步。</p>
             </div>
-            <button className="btn btn-primary projects-empty-primary" onClick={handleOpenCreateModal}>
+            <button className="btn btn-secondary projects-empty-primary" onClick={handleOpenCreateModal}>
               添加项目
             </button>
             <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing}>

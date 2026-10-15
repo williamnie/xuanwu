@@ -211,3 +211,20 @@
   border-color: var(--border-color-hover);
   color: var(--text-primary);
 }
+
+/* An expanded global composer also owns emphasis over custom page actions and
+   the Runs sidebar entry, which live outside the generic .btn-primary rule. */
+.main-content:has(~ .global-ask-composer-shell.expanded) .work-action-primary,
+.main-content:has(~ .global-ask-composer-shell.expanded) .work-detail-actions button.primary,
+.app-container:has(.global-ask-composer-shell.expanded) .runs-new-session-button {
+  background: var(--button-secondary-bg);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+.main-content:has(~ .global-ask-composer-shell.expanded) .work-action-primary:hover,
+.main-content:has(~ .global-ask-composer-shell.expanded) .work-detail-actions button.primary:hover,
+.app-container:has(.global-ask-composer-shell.expanded) .runs-new-session-button:hover {
+  background: var(--nav-hover);
+  border-color: var(--border-color-hover);
+  color: var(--text-primary);
+}

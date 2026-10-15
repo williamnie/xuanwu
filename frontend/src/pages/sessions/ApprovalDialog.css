@@ -146,15 +146,10 @@
   outline-offset: 2px;
 }
 
-.approval-btn.primary {
-  background: var(--button-primary-bg);
-  color: var(--button-primary-fg);
-}
-
 .approval-btn.secondary {
-  background: var(--warning-bg);
-  color: var(--warning);
-  border-color: color-mix(in srgb, var(--warning) 18%, transparent);
+  background: var(--button-secondary-bg);
+  color: var(--text-primary);
+  border-color: var(--border-color);
 }
 
 .approval-btn.ghost {
@@ -195,3 +190,5 @@
 .approval-btn:hover:not(:disabled) { background: var(--nav-hover); border-color: var(--border-color-hover); }
 
 .approval-btn.primary:hover:not(:disabled) { background: var(--primary-hover); border-color: transparent; }
+
+.approval-btn.secondary:hover:not(:disabled) { background: var(--nav-hover); border-color: var(--border-color-hover); }

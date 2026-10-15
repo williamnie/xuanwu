@@ -34,7 +34,7 @@ export default function ApprovalDialog({ request, submitting, queueCount = 0, on
           <button type="button" className="approval-btn secondary" disabled={submitting} onClick={() => onResolve('approve_session', 'session')}>
             <Clock size={15} /> 本会话允许
           </button>
-          <button type="button" className="approval-btn primary" disabled={submitting} onClick={() => onResolve('approve', 'turn')}>
+          <button type="button" className="approval-btn secondary" disabled={submitting} onClick={() => onResolve('approve', 'turn')}>
             <Check size={15} /> 允许
           </button>
         </div>

@@ -137,7 +137,7 @@ function CodeAgentRow({ agent, busy, onSaveCodexCommands, onSelectCodexBackend, 
         ) : null}
       </div>
       <button
-        className={`btn ${agent.enabled ? 'btn-secondary' : 'btn-primary'}`}
+        className="btn btn-secondary"
         disabled={busy}
         onClick={() => onToggle(agent)}
         type="button"

@@ -378,3 +378,31 @@ test('component aliases and font shorthands cannot hide literal scale values', (
     }
   }
 });
+
+test('repeated cards and expanded panels use secondary actions within their interaction layer', () => {
+  const read = file => readFileSync(new URL(file, root), 'utf8');
+  const approval = read('pages/sessions/ApprovalDialog.jsx');
+  assert.doesNotMatch(approval, /approval-btn primary/);
+  assert.match(approval, /approval-btn secondary[^\n]*onResolve\('approve', 'turn'\)/);
+  const secondaryTargets = {
+    'pages/sessions/ApprovalDialog.css': '.approval-btn.secondary',
+    'pages/sessions/SessionCommandPanel.css': '.session-command-actions .session-command-execute',
+    'pages/command-center/AttentionSection.css': '.approval-decision-target>footer button.approve',
+    'pages/command-center/ActiveWorkSection.css': '.active-work-confirm .confirm',
+    'pages/Settings.css': '.settings-advanced-sections .btn-primary',
+  };
+  for (const [file, selector] of Object.entries(secondaryTargets)) {
+    const rule = rules(styles[file]).find(rule => rule.selector === selector);
+    assert.match(rule.body, /background:\s*var\(--button-secondary-bg\)/, selector);
+    assert.match(rule.body, /border-color:\s*var\(--border-color\)/, selector);
+    assert.match(rule.body, /color:\s*var\(--text-primary\)/, selector);
+  }
+  assert.doesNotMatch(read('pages/CodeAgentsPanel.jsx'), /btn-primary/);
+  assert.match(read('pages/PiAgentSettingsPanel.jsx'), /className="btn btn-secondary" onClick=\{pending/);
+  assert.match(read('pages/command-center/OnboardingSupervisorConnection.jsx'), /className="btn btn-secondary" disabled=\{state.oauthBusy\}/);
+  const modal = rules(styles['pages/work/HumanReview.css']).find(rule => rule.selector === '.work-review-dialog button.primary');
+  assert.match(modal.body, /background: var\(--button-primary-bg\)/);
+  assert.match(spec, /2026-10-15 补充/);
+  assert.match(spec, /最上层可交互模态/);
+  assert.match(spec, /重复卡片操作统一 secondary/);
+});

@@ -178,7 +178,7 @@ function AutomationDetail({ detail, error, loading, onControl, onEdit, onRetry, 
       <div className="automation-detail-actions">
         <button className="btn btn-secondary" onClick={onEdit} type="button"><Pencil size={14} />{t('automations.edit')}</button>
         {automation.status !== 'archived' && automation.status !== 'draft' ? <button className="btn btn-secondary" disabled={Boolean(submitting)} onClick={() => onControl('status')} type="button">{automation.status === 'active' ? <CirclePause size={14} /> : <Play size={14} />}{automation.status === 'active' ? t('automations.pause') : t('automations.activate')}</button> : null}
-        <button className="btn btn-primary" disabled={automation.status !== 'active' || Boolean(submitting)} onClick={() => onControl('run')} type="button"><Play size={14} />{submitting === 'run' ? t('automations.queueing') : t('automations.runNow')}</button>
+        <button className="btn btn-secondary" disabled={automation.status !== 'active' || Boolean(submitting)} onClick={() => onControl('run')} type="button"><Play size={14} />{submitting === 'run' ? t('automations.queueing') : t('automations.runNow')}</button>
       </div>
     </header>
     <div className="automation-facts">
