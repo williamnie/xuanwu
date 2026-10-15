@@ -797,6 +797,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/projects", family: "project-scope" },
   { method: "PATCH", path: "/api/projects", family: "project-scope" },
   { method: "POST", path: "/api/projects", family: "project-scope" },
+  { method: "GET", path: "/api/projects/path-check", family: "project-scope" },
   { method: "DELETE", path: "/api/projects/:id", family: "project-scope" },
   { method: "GET", path: "/api/projects/:id", family: "project-scope" },
   { method: "PATCH", path: "/api/projects/:id", family: "project-scope" },
