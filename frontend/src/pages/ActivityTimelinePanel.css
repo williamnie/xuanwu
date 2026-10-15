@@ -157,7 +157,7 @@
 .activity-node-body {
   background: color-mix(in srgb, var(--bg-secondary) 78%, transparent);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   display: grid;
   gap: 8px;
   margin: 4px 0;

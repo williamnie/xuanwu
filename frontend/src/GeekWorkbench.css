@@ -27,9 +27,7 @@
   --triage: var(--warning);
   --triage-glow: var(--warning-bg);
   --triage-bg: var(--warning-bg);
-  --shadow-md: var(--shadow-lg);
   --shadow-glow: 0 0 0 3px var(--primary-glow);
-  --radius-xl: var(--radius-lg);
   --button-primary-hover: var(--primary-hover);
   --button-secondary-bg: transparent;
   --button-secondary-hover: var(--nav-hover);

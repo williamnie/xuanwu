@@ -614,7 +614,7 @@
 }
 
 .client-chat-area .chat-bubble-container.user .chat-bubble-body {
-  border-radius: var(--radius-xl) !important;
+  border-radius: var(--radius-lg) !important;
   padding: 12px 18px !important;
   box-shadow: none !important;
   border: 1px solid rgba(0, 0, 0, 0.03) !important;
@@ -622,7 +622,7 @@
 }
 
 [data-theme="dark"] .client-chat-area .chat-bubble-container.user .chat-bubble-body {
-  border-radius: var(--radius-xl) !important;
+  border-radius: var(--radius-lg) !important;
 }
 
 .client-chat-area .tools-collapsible-wrapper,
@@ -635,7 +635,7 @@
 .client-chat-area .diff-file-card,
 .client-chat-area .generic-tool-card,
 .client-chat-area .terminal-window {
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   box-shadow: none;
 }
 

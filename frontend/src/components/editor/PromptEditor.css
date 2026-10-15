@@ -20,7 +20,7 @@
 
 .prompt-editor-shell.composer.focused {
   border-color: color-mix(in srgb, var(--primary) 55%, var(--border-color));
-  box-shadow: 0 0 0 1px var(--primary-glow), var(--shadow-md);
+  box-shadow: 0 0 0 1px var(--primary-glow), var(--shadow-lg);
 }
 
 .prompt-toolbar {

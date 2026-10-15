@@ -48,7 +48,7 @@
 
   background: var(--bg-card);
   border: 1px solid color-mix(in srgb, var(--border-color) 82%, var(--text-muted) 18%);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   box-shadow: 0 24px 72px rgba(15, 24, 21, 0.2), 0 2px 8px rgba(15, 24, 21, 0.08);
   display: flex;
   flex-direction: column;
@@ -345,7 +345,7 @@
 .project-delete-modal {
   background: var(--bg-card);
   border: 1px solid color-mix(in srgb, var(--error) 22%, var(--border-color));
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   box-shadow: 0 24px 72px rgba(15, 24, 21, 0.2), 0 2px 8px rgba(15, 24, 21, 0.08);
   max-width: 480px;
   overflow: hidden;

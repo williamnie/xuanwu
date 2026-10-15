@@ -90,7 +90,7 @@
 | `--radius-xs` | `2px` | 徽标、选择器 chip、小标签 |
 | `--radius-sm` | `4px` | 图标按钮、列表项、Tab |
 | `--radius-md` | `6px` | 卡片、starter 卡、浮层 |
-| `--radius-lg` | `10px` | 唯一例外：对话气泡（仅气泡用） |
+| `--radius-lg` | `10px` | 仅对话气泡与输入器（Composer，见 5.2） |
 
 **禁止**：`border-radius >= 999px` 的胶囊（status-dot 圆点除外）、任何 > 10px 的圆角。
 
@@ -140,7 +140,12 @@
 - 区块之间**用 1px `--border-color` 细线分割**，不用卡片套卡片。
 - 列表项之间 `gap: 4px – 6px`；面板内部元素 `gap: 8px – 12px`。
 - 阅读宽度上限：对话正文 `--content-max-width: 900px`、消息 `--sessions-message-max-width: 1120px`；输入器最大 720–780px。
-- 阴影只允许极轻：`0 1px 2px rgba(0,0,0,.04)` 或 `0 12px 32px -18px rgba(0,0,0,.12)`；**禁止**厚重投影。
+- 阴影只允许 `--shadow-sm` 与 `--shadow-lg` 两档；组件必须引用令牌，**禁止**厚重投影。
+
+| 令牌 | 简洁（LIGHT） | 极客（DARK） |
+|---|---|---|
+| `--shadow-sm` | `0 1px 2px rgba(0, 0, 0, 0.04)` | `0 1px 2px rgba(0, 0, 0, 0.5)` |
+| `--shadow-lg` | `0 12px 32px -18px rgba(0, 0, 0, 0.12)` | `0 12px 32px -18px rgba(0, 0, 0, 0.6)` |
 
 ### 4.1 玻璃拟态（仅限三处）
 

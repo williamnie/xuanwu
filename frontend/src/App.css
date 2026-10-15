@@ -30,8 +30,8 @@
   background: color-mix(in srgb, var(--warning) 10%, var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--warning) 36%, var(--border-color));
   border-left: 4px solid var(--warning);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   display: flex;
   gap: 12px;
   padding: 12px 14px;

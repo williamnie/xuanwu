@@ -19,7 +19,7 @@
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--bg-card) 98%, var(--brand-mint)), var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--border-color) 78%, var(--primary));
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   box-shadow: 0 18px 54px rgba(8, 45, 40, 0.16), 0 2px 10px rgba(8, 45, 40, 0.07);
   max-width: 880px;
   overflow: hidden;
@@ -229,7 +229,7 @@
   }
 
   .global-ask-composer-card {
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-lg);
   }
 
   .global-ask-composer-card .session-composer {
