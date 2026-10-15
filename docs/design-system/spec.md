@@ -405,8 +405,27 @@
 - [ ] 按钮直角；组件圆角 ≤ 6px（气泡/输入器 10px）；无胶囊。
 - [ ] 所有标签/徽标/元数据为 mono + 大写 + 宽字距。
 - [ ] 页面只有一处主色实底强调；主按钮浅主题墨青底白字、深主题电光墨青底黑字；无外发光。
-- [ ] 区块分割用 1px 细线，没有色块堆叠。
+- [x] 区块分割用 1px 细线，没有色块堆叠。
 - [ ] 动效 ≤180ms 且仅 opacity/transform/颜色；loading 用转圈或脉冲点。
 - [ ] 图标全部 lucide、stroke 2、规范尺寸。
 - [ ] 明暗两主题均目检通过（对照 `examples/index.html`）。
-- [ ] 移动端 760px 下单列、几何语言不变。
+- [x] 移动端 760px 下单列、几何语言不变。
+
+
+### 11.1 验收证据与保留项（2026-10-14）
+
+以上保留原验收条文，不因测试覆盖有限而降低要求。当前自动检查为 `Global.styles.test.js`、`Sessions.styles.test.js` 及组件样式 / 交互测试；第三轮完整前端测试 735 pass / 0 fail，lint、build 和 `git diff --check` 通过。
+
+已勾选的细线分割与 760px 布局，依据会话 / 终端 / 审批 / 命令面板、任务列表 / 看板 / 详情、项目、编辑器 / Toast 的两轮截图，以及本轮项目和输入器真实页面截图。全局样式测试同时禁止渐变卡片、硬编码 CSS 颜色、>10px 圆角和未列明的圆形例外。证据目录：`/tmp/xuanwu-session-styles/`、`/tmp/xuanwu-global-styles/`、`/tmp/xuanwu-round3/`。
+
+第三轮 `projects-*`、`filtered-tasks-*`、`session-*`、`run-conversation-*`、`settings-composer-*` 各覆盖 light / dark × 980 / 760；对应 `.txt` 保存布局与发送按钮命中检测。全局浮窗在页面输入器出现时让位，在任务与设置页仍可展开，草稿跨页保留；这些通过项不等于以下全站条款全部满足。
+
+| 未勾选条款 | 当前证据及缺口 |
+|---|---|
+| 颜色 / 圆角 / 字号 / 间距全部来自变量 | CSS 颜色与令牌来源一致性已通过全局测试，但字号与间距仍大量使用数值，未满足本条“均来自变量”的完整要求；JSX 内联样式也未做全量合同扫描 |
+| 按钮直角、非气泡 / 输入器组件 ≤6px | 测试已约束最大 10px 与圆形白名单，但 `PiMemoryPanel.css` 的记忆卡和 `CodeAgentsPanel.css` 的工具选择器仍引用 `--radius-lg`；尚未完成非输入器 10px 用法核查 |
+| 所有标签 / 徽标 / 元数据 mono + 大写 + 宽字距 | 会话微标签已有样式断言；项目状态等组件仍有普通字体 / 大小写元数据，尚无全站逐项证明 |
+| 一个视口仅一处主色实底强调 | 主按钮双主题配色与无模糊外发光已验证；执行记录选中的 Coding Tool Tab 与发送按钮仍同时使用主色实底，不能勾选整条 |
+| 动效 ≤180ms 且仅规定属性 | 全局浮窗仍有 `left 0.3s` 过渡，其他组件尚未全量核查；不修改本条或第 6 节允许的场景定义来凑通过 |
+| 图标全部 lucide、stroke 2、规范尺寸 | 本轮新增链接使用 lucide 13px；已有项目操作图标仍有 `stroke-width: 2.25`，全站尺寸与描边未完整验证 |
+| 双主题目检通过并对照 examples/index.html | 真实页面浅深主题在 980 / 760 均已检查；参考页第 203 行 textarea 的 placeholder 缺少闭合引号 / 起始标签结束符，后续 footer 和主题脚本被解析进 textarea，完整组件对照尚未完成。现场证据：`/tmp/xuanwu-round3/spec-example-composer-malformed.png`、`spec-example-limitation.txt` |
