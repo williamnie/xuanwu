@@ -155,6 +155,7 @@ export default function App() {
     selectedPiConversationId,
     settingsSection,
     taskScope,
+    taskSource,
     pageContext,
     filterProject,
     focusFilter,
@@ -233,9 +234,20 @@ export default function App() {
         selectedWorkId,
         selectedRunId,
         taskScope,
+        taskSource,
       }, { replace: true });
     }
-  }, [currentPage, focusFilter, selectedIssueId, selectedWorkId, selectedRunId, taskScope, updateAppState, writeBrowserRoute]);
+  }, [currentPage, focusFilter, selectedIssueId, selectedWorkId, selectedRunId, taskScope, taskSource, updateAppState, writeBrowserRoute]);
+
+  const setTaskSource = useCallback((value) => {
+    updateAppState(draft => { draft.taskSource = value; });
+    writeBrowserRoute({ currentPage: 'work', filterProject, taskScope, taskSource: value });
+  }, [filterProject, taskScope, updateAppState, writeBrowserRoute]);
+
+  const setTaskScope = useCallback((value) => {
+    updateAppState(draft => { draft.taskScope = value; });
+    writeBrowserRoute({ currentPage: 'work', filterProject, taskScope: value, taskSource });
+  }, [filterProject, taskSource, updateAppState, writeBrowserRoute]);
 
   const setTheme = useCallback((nextTheme) => {
     updateAppState(draft => {
@@ -301,6 +313,7 @@ export default function App() {
       selectedSessionId: targetSessionId,
       selectedWorkId: targetWorkId,
       settingsSection: targetSettingsSection,
+      taskSource: resolvedPage === 'work' ? String(navigationOptions?.source || '') : '',
       taskScope: resolvedPage === 'work' && !targetWorkId ? String(navigationOptions?.scope || '') : '',
     };
     startPageTransition(() => updateAppState(draft => {
@@ -320,6 +333,7 @@ export default function App() {
       if (resolvedPage === 'work') {
         draft.selectedRunId = targetRunId;
         draft.taskScope = targetRoute.taskScope;
+        draft.taskSource = targetRoute.taskSource;
       }
       draft.filterProject = targetRoute.filterProject;
       draft.settingsSection = targetSettingsSection;
@@ -391,6 +405,7 @@ export default function App() {
         draft.settingsSection = route.settingsSection;
         draft.selectedWorkId = route.selectedWorkId;
         draft.taskScope = route.taskScope;
+        draft.taskSource = route.taskSource;
         draft.pageContext = null;
       }));
       setMobileSidebarOpen(false);
@@ -661,6 +676,9 @@ export default function App() {
                 selectedRunId={selectedRunId}
                 selectedWorkId={selectedWorkId}
                 taskScope={taskScope}
+                taskSource={taskSource}
+                onSourceChange={setTaskSource}
+                onScopeChange={setTaskScope}
               />
             ) : currentPage === 'handoffs' ? (
               <Handoffs selectedHandoffId={selectedHandoffId} />

@@ -15,9 +15,10 @@ const PAGE_SIZE = 30;
 const LIST_REFRESH_EVENT_TYPES = new Set(['issue.created', 'issue.deleted', 'issue.status_changed', 'issue.updated']);
 
 // 任务页默认视图：服务端筛选与分页；行内按钮与看板拖拽共用 workActions 的动作表。
-export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, projectId, projects, query, refreshToken = 0, scope, onScopeChange }) {
+export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, projectId, projects, query, source = '', refreshToken = 0, scope, onScopeChange }) {
   const { language, t } = useI18n();
   const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(null);
   const [nextCursor, setNextCursor] = useState('');
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -37,11 +38,13 @@ export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, pr
       const response = await workApi.getWorks({
         pageSize: PAGE_SIZE,
         projectId,
+        source,
         query: query.trim(),
         statuses: statusKey ? statusKey.split(',') : [],
       });
       if (version !== requestVersion.current) return;
       setItems(response?.items || []);
+      setTotal(response?.total ?? null);
       setNextCursor(response?.next_cursor || '');
       setHasMore(Boolean(response?.has_more));
       setError('');
@@ -50,11 +53,14 @@ export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, pr
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
-  }, [projectId, query, statusKey, t]);
+  }, [projectId, query, source, statusKey, t]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, query ? 250 : 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      requestVersion.current += 1;
+    };
   }, [load, query, refreshToken]);
 
   useEffect(() => {
@@ -83,6 +89,7 @@ export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, pr
         page: nextCursor ? 1 : Math.floor(items.length / PAGE_SIZE) + 1,
         pageSize: PAGE_SIZE,
         projectId,
+        source,
         query: query.trim(),
         statuses,
       });
@@ -127,7 +134,7 @@ export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, pr
           {TASK_SCOPES.map(item => (
             <button aria-pressed={scope === item.id} key={item.id} onClick={() => onScopeChange(item.id)} type="button">
               {item.label}
-              <span>{scopeCount(item, counts)}</span>
+              <span>{source ? (item.id === scope ? total ?? '' : '') : scopeCount(item, counts)}</span>
             </button>
           ))}
         </div>
@@ -148,7 +155,7 @@ export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, pr
       {!loading && !error && items.length === 0 ? (
         <div className="task-list-empty">
           <Inbox size={34} />
-          <p>{query || projectId ? '没有符合条件的任务' : scope === 'attention' ? '没有需要你处理的任务' : '这里还没有任务'}</p>
+          <p>{query || projectId || source ? '没有符合条件的任务' : scope === 'attention' ? '没有需要你处理的任务' : '这里还没有任务'}</p>
           <button className="btn btn-secondary" onClick={onCreate} type="button">新建任务</button>
         </div>
       ) : null}

@@ -97,6 +97,20 @@ test('Work deep links can select one Run without leaving Work Detail', () => {
   assert.equal(appRouteFromHash('#/work?runId=orphan').selectedRunId, '');
 });
 
+test('Task source links round-trip with scopes and projects and remain isolated from other pages', () => {
+  for (const source of ['github', 'manual', '']) {
+    const route = { ...DEFAULT_APP_ROUTE, currentPage: 'work', taskScope: 'attention', taskSource: source, filterProject: 'demo / one' };
+    assert.deepEqual(appRouteFromHash(appHashForRoute(route)), route);
+    assert.equal(appRouteFromHash(appHashForRoute(route)).taskSource, source);
+  }
+  assert.equal(appRouteFromHash('#/work?source=other').taskSource, '');
+  assert.equal(appRouteFromHash('#/settings?source=github').taskSource, '');
+  assert.equal(appRouteFromHash('#/issues?source=github').taskSource, 'github');
+  // A browser history entry is independently recoverable, without a retained component state.
+  const history = ['#/work?source=github', '#/work?source=manual', '#/work'];
+  assert.deepEqual([...history, ...history.slice().reverse()].map(hash => appRouteFromHash(hash).taskSource), ['github', 'manual', '', '', 'manual', 'github']);
+});
+
 test('Task list links can open a specific scope', () => {
   assert.equal(appRouteFromHash('#/work?scope=attention').taskScope, 'attention');
   assert.equal(appRouteFromHash('#/work?scope=bogus').taskScope, '');

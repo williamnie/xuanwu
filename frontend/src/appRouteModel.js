@@ -7,6 +7,7 @@ import {
 import { handoffHref, handoffRouteFromHash } from './pages/handoffPageModel.js';
 
 const FOCUS_FILTERS = new Set(['all', 'triage', 'active', 'failed', 'archive']);
+const TASK_SOURCES = new Set(['github', 'manual']);
 const TASK_SCOPES = new Set(['active', 'attention', 'done', 'all']);
 const ROUTABLE_PAGES = new Set([
   ...PRODUCT_NAV_ITEMS.map((item) => item.page),
@@ -29,6 +30,7 @@ export const DEFAULT_APP_ROUTE = Object.freeze({
   selectedWorkId: '',
   settingsSection: '',
   taskScope: '',
+  taskSource: '',
 });
 
 export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
@@ -64,6 +66,7 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
 
   if (currentPage === 'work') {
     route.filterProject = routeParam(params, 'project');
+    route.taskSource = TASK_SOURCES.has(routeParam(params, 'source')) ? routeParam(params, 'source') : '';
     route.selectedWorkId = pathEntity || routeParam(params, 'workId');
     if (requestedPage === 'issues' && !route.selectedWorkId) {
       route.selectedWorkId = workIdFromIssueParam(params);
@@ -110,6 +113,7 @@ export function appHashForRoute(route) {
     params.set('scope', route.taskScope);
   }
   if (page === 'work') {
+    if (TASK_SOURCES.has(route?.taskSource)) params.set('source', route.taskSource);
     const project = cleanRouteValue(route?.filterProject);
     if (project) params.set('project', project);
   }

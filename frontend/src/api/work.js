@@ -8,7 +8,7 @@ function appendMany(params, key, values) {
   items.forEach(value => params.append(key, value));
 }
 
-function workListParams({ cursor = '', order = 'desc', page = 1, pageSize = WORK_PAGE_SIZE, projectId = '', query = '', sort = 'updated_at', statuses = [], types = [] } = {}) {
+function workListParams({ cursor = '', order = 'desc', page = 1, pageSize = WORK_PAGE_SIZE, projectId = '', query = '', sort = 'updated_at', source = '', statuses = [], types = [] } = {}) {
   const params = new URLSearchParams({
     order,
     page: String(page),
@@ -17,6 +17,7 @@ function workListParams({ cursor = '', order = 'desc', page = 1, pageSize = WORK
   });
   if (projectId) params.set('project_id', projectId);
   if (query) params.set('q', query);
+  if (source) params.set('source', source);
   if (cursor) params.set('cursor', cursor);
   appendMany(params, 'status', statuses);
   appendMany(params, 'type', types);
@@ -29,13 +30,15 @@ function workTimelineParams({ cursor = '', limit = 50 } = {}) {
   return params;
 }
 
-function workBoardParams({ order = 'desc', pageSize = 20, projectId = '', sort = 'updated_at', statuses = [] } = {}) {
+function workBoardParams({ order = 'desc', pageSize = 20, projectId = '', query = '', source = '', sort = 'updated_at', statuses = [] } = {}) {
   const params = new URLSearchParams({
     order,
     page_size: String(pageSize),
     sort,
   });
   if (projectId) params.set('project_id', projectId);
+  if (query) params.set('q', query);
+  if (source) params.set('source', source);
   appendMany(params, 'status', statuses);
   return params;
 }

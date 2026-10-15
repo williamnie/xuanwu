@@ -72,6 +72,10 @@ describe("Xuanwu capability disposition inventory", () => {
   });
 
   test("covers every literal user API route registered by production HTTP modules", () => {
+    for (const path of ["/api/works", "/api/works/board"]) {
+      expect(API_ROUTE_DISPOSITIONS.find(route => route.method === "GET" && route.path === path))
+        .toMatchObject({ family: "work-ledger", query_parameters: { source: ["github", "manual"] } });
+    }
     const routes = productionHttpRoutes();
     const inventoried = API_ROUTE_DISPOSITIONS.map((route) => `${route.method} ${route.path}`).sort();
     expect(inventoried).toEqual(routes);

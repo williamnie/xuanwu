@@ -45,7 +45,7 @@ test('Work Board keeps the viewport fixed and scrolls each lane independently', 
 });
 
 test('Work Board opens from one grouped snapshot and loads only the scrolled lane', () => {
-  assert.match(board, /workApi\.getWorkBoard\(\{ statuses: OPERATIONAL_STATUSES \}, \{ signal: controller\.signal \}\)/);
+  assert.match(board, /workApi\.getWorkBoard\(\{\s*statuses: OPERATIONAL_STATUSES,[\s\S]*?\}, \{ signal: controller\.signal \}\)/);
   assert.match(board, /statuses: \[status\]/);
   assert.match(board, /cursor: lane\.nextCursor/);
   assert.match(board, /page: lane\.nextCursor \? 1 : lane\.page \+ 1/);
@@ -100,4 +100,20 @@ test('task project selection uses the URL-owned filter for both views and existi
   assert.match(board, /<TaskList[\s\S]*?projectId=\{projectId\}/);
   assert.match(board, /<WorkKanban[\s\S]*?projectId=\{projectId\}/);
   assert.match(list, /workApi\.getWorks\(\{\s*pageSize: PAGE_SIZE,\s*projectId,/);
+});
+
+test('task source resets list and board pagination, carries through history lanes, and avoids unfiltered counts', () => {
+  const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  const list = readFileSync(new URL('./work/TaskList.jsx', import.meta.url), 'utf8');
+  assert.match(app, /draft\.taskSource = route\.taskSource/);
+  assert.match(app, /onSourceChange=\{setTaskSource\}/);
+  assert.match(board, /<select aria-label=\{t\('board\.source'\)\}[\s\S]*value=\{source\}/);
+  assert.match(board, /<TaskList\s+key=\{`\$\{projectId\}:\$\{taskSource\}:\$\{scope\}:\$\{query\}`\}/);
+  assert.match(board, /<WorkKanban\s+key=\{`\$\{projectId\}:\$\{taskSource\}:\$\{query\}`\}/);
+  assert.equal((board.match(/source \? \{ source, projectId, query \} : \{\}/g) || []).length, 3);
+  assert.equal((list.match(/projectId,\s*source,\s*query: query\.trim\(\)/g) || []).length, 2);
+  assert.match(list, /source \? \(item\.id === scope \? total \?\? '' : ''\)/);
+  assert.match(board, /if \(source\) return;/);
+  assert.match(css, /\.work-header-source\s*\{[^}]*flex-shrink: 0;[^}]*white-space: nowrap;/);
+  assert.match(css, /@media \(max-width: 760px\)\s*\{\s*\.work-header-search \{ flex-basis: 100%; \}/);
 });

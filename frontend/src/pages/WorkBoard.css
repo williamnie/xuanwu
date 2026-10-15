@@ -351,6 +351,7 @@
 .work-board-page > .task-subview-tabs { margin-bottom: var(--space-3); }
 .work-action-icon { padding: 0; width: var(--button-height); }
 .work-header-project { font-size: var(--text-sm); max-width: 180px; }
+.work-header-source { align-items: center; display: flex; flex-shrink: 0; gap: var(--space-1-5); white-space: nowrap; }
 .work-view-toggle { border: 1px solid var(--border-color); display: inline-flex; flex-shrink: 0; }
 .work-view-toggle button {
   align-items: center;
@@ -371,12 +372,16 @@
 .is-spinning { animation: work-spin 1s linear infinite; }
 @keyframes work-spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 720px) {
+@media (max-width: 980px) {
   .work-board-page { padding-top: var(--space-4-5); }
   .work-ledger-header { align-items: start; grid-template-columns: 1fr; }
-  .work-ledger-actions { grid-row: 2; width: 100%; }
+  .work-ledger-actions { flex-wrap: wrap; grid-row: 2; width: 100%; }
   .work-header-search { flex: 1; width: auto; }
   .work-dialog-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .work-header-search { flex-basis: 100%; }
 }
 
 @media (max-width: 460px) {

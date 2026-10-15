@@ -13,7 +13,7 @@ import { READ_API_ROUTE_REGISTRY } from "./readApi.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import { registerCoreReadRoutes } from "./readApiRoutes.ts";
 import { registerRunRoutes, RUN_READ_AUTHORITY, RUN_WRITE_AUTHORITY } from "./runApi.ts";
-import type { Router } from "./router.ts";
+import { createRouter, type Router } from "./router.ts";
 import { registerWorkRoutes } from "./workApi.ts";
 import { registerTrackerEventRoutes } from "./trackerEventsApi.ts";
 
@@ -21,6 +21,16 @@ import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
 import { MEMORY_DIAGNOSTICS_CONTRACT } from "./piMemoryDiagnostics.ts";
 
 describe("read API route contracts", () => {
+  test("rejects unsupported Work source filters before reading the database", async () => {
+    const router = createRouter();
+    registerWorkRoutes(router, { database: {} as RunnerDatabase });
+    for (const path of ["/api/works", "/api/works/board"]) for (const source of ["other", "", "github,manual", "github&source=manual"]) {
+      const response = await router.handle(new Request(`http://localhost${path}?source=${source}`));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ code: "invalid_request", message: "source must be github or manual" });
+    }
+  });
+
   test("locks memory reads, lifecycle routes and bounded diagnostics", () => {
     expect(captureRoutes(registerPiMemoryRoutes)).toEqual([
       "DELETE /api/pi/memory/:id",

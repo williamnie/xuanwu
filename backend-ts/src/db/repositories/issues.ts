@@ -9,6 +9,7 @@ export type IssueFilter = {
   query?: string;
   sort?: "created_at" | "status" | "title" | "updated_at";
   sortOrder?: "asc" | "desc";
+  source?: "github" | "manual";
   sourceSessionId?: string;
   status?: string;
   statuses?: string[];
@@ -191,6 +192,18 @@ function buildIssueWhere(filter: IssueFilter): { args: Array<number | string>; w
     args.push(query);
   }
   addFilter(conditions, args, "source_session_id = ?", sourceSessionId);
+  if (filter.source) {
+    // The case points at its current task; external_links retains every earlier round.
+    // Pin the issue lookup: the covering identity index otherwise scans all GitHub links per row.
+    const githubSource = `(exists (
+      select 1 from github_issue_cases gc where gc.issue_id = issues.id
+    ) or exists (
+      select 1 from external_links el indexed by idx_external_links_issue
+      join github_issue_cases gc on gc.issue_node_id = el.external_id
+      where el.issue_id = issues.id and el.source = 'github' and el.external_type = 'github_issue'
+    ))`;
+    conditions.push(filter.source === "github" ? githubSource : `not ${githubSource}`);
+  }
   if (filter.cursorUpdatedAt !== undefined || filter.cursorIssueId !== undefined) {
     const cursorUpdatedAt = cleanOptionalString(filter.cursorUpdatedAt);
     const cursorIssueID = filter.cursorIssueId;

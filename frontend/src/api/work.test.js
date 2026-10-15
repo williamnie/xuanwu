@@ -24,6 +24,22 @@ test('Work client exposes bounded cursor pages and summary reads without an all-
   }
 });
 
+test('Work list client carries source together with status, project, search and cursor', async () => {
+  const previousFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async url => { urls.push(new URL(String(url), 'http://localhost')); return jsonResponse({ items: [] }); };
+  try {
+    for (const source of ['github', 'manual', '']) await workApi.getWorks({ source, cursor: 'next', projectId: 'demo', query: 'needle', statuses: ['todo', 'failed'] });
+    assert.deepEqual(urls.map(url => url.searchParams.get('source')), ['github', 'manual', null]);
+    for (const url of urls) {
+      assert.equal(url.searchParams.get('cursor'), 'next');
+      assert.equal(url.searchParams.get('project_id'), 'demo');
+      assert.equal(url.searchParams.get('q'), 'needle');
+      assert.deepEqual(url.searchParams.getAll('status'), ['todo', 'failed']);
+    }
+  } finally { globalThis.fetch = previousFetch; }
+});
+
 test('Work board client reads every lane through one bounded snapshot request', async () => {
   const previousFetch = globalThis.fetch;
   let requestedUrl = '';
@@ -38,6 +54,21 @@ test('Work board client reads every lane through one bounded snapshot request', 
   } finally {
     globalThis.fetch = previousFetch;
   }
+});
+
+test('source-filtered Work board keeps one request with the same project and search', async () => {
+  const previousFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async url => { urls.push(new URL(String(url), 'http://localhost')); return jsonResponse({ lanes: {} }); };
+  try {
+    await workApi.getWorkBoard({ source: 'github', projectId: 'demo', query: 'needle', statuses: ['todo', 'failed'] });
+    assert.equal(urls.length, 1);
+    assert.equal(urls[0].pathname, '/api/works/board');
+    assert.equal(urls[0].searchParams.get('source'), 'github');
+    assert.equal(urls[0].searchParams.get('project_id'), 'demo');
+    assert.equal(urls[0].searchParams.get('q'), 'needle');
+    assert.deepEqual(urls[0].searchParams.getAll('status'), ['todo', 'failed']);
+  } finally { globalThis.fetch = previousFetch; }
 });
 
 test('Work detail client preserves canonical detail, timeline, actions and Issue-backed review routes', async () => {

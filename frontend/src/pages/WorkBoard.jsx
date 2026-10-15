@@ -62,12 +62,12 @@ const BOARD_RECONCILE_EVENT_TYPES = new Set(['issue.created', 'issue.deleted', '
 const TASK_VIEW_STORAGE_KEY = 'xuanwu-task-view';
 
 // 任务页：默认列表视图，看板保留为可切换视图；两者共享搜索、项目筛选和同一套创建/编辑对话框。
-export default function WorkBoard({ filterProject: projectId = '', onProjectChange, navigateTo, onPageContextChange, selectedHandoffId = '', selectedRunId = '', selectedWorkId = '', taskScope = '' }) {
+export default function WorkBoard({ filterProject: projectId = '', onProjectChange, onSourceChange, onScopeChange, navigateTo, onPageContextChange, selectedHandoffId = '', selectedRunId = '', selectedWorkId = '', taskScope = '', taskSource = '' }) {
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
   const [view, setView] = useState(readTaskView);
   const [scope, setScope] = useState(taskScope || 'active');
-  useEffect(() => { if (taskScope) setScope(taskScope); }, [taskScope]);
+  useEffect(() => { setScope(taskScope || 'active'); }, [taskScope]);
   const [query, setQuery] = useState('');
   const [dialog, setDialog] = useState(null);
   const [refreshToken, setRefreshToken] = useState(0);
@@ -107,6 +107,7 @@ export default function WorkBoard({ filterProject: projectId = '', onProjectChan
       <WorkBoardHeader
         onCreate={() => setDialog({ mode: 'create' })}
         onProjectChange={onProjectChange}
+        onSourceChange={onSourceChange}
         onQueryChange={setQuery}
         onRefresh={refresh}
         onViewChange={changeView}
@@ -114,29 +115,34 @@ export default function WorkBoard({ filterProject: projectId = '', onProjectChan
         projects={projects}
         query={query}
         view={view}
+        source={taskSource}
       />
       {view === 'list' ? (
         <div className="work-list-scroll">
           <TaskList
-            counts={counts}
+            key={`${projectId}:${taskSource}:${scope}:${query}`}
+            counts={taskSource ? {} : counts}
             navigateTo={navigateTo}
             onCreate={() => setDialog({ mode: 'create' })}
             onEdit={work => setDialog({ mode: 'edit', work })}
-            onScopeChange={setScope}
+            onScopeChange={value => { setScope(value); onScopeChange?.(value); }}
             projectId={projectId}
             projects={projects}
             query={query}
             refreshToken={refreshToken}
             scope={scope}
+            source={taskSource}
           />
         </div>
       ) : (
         <WorkKanban
+          key={`${projectId}:${taskSource}:${query}`}
           navigateTo={navigateTo}
           onEdit={work => setDialog({ mode: 'edit', work })}
           projectId={projectId}
           query={query}
           refreshToken={refreshToken}
+          source={taskSource}
         />
       )}
       {dialog ? (
@@ -164,7 +170,7 @@ function readTaskView() {
   }
 }
 
-function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken }) {
+function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken, source }) {
   const { t } = useI18n();
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
@@ -204,11 +210,15 @@ function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken }) {
 
     const controller = new AbortController();
     boardController.current = controller;
-    const pending = workApi.getWorkBoard({ statuses: OPERATIONAL_STATUSES }, { signal: controller.signal });
+    const pending = workApi.getWorkBoard({
+      statuses: OPERATIONAL_STATUSES,
+      ...(source ? { source, projectId, query } : {}),
+    }, { signal: controller.signal });
     boardRequest.current = pending;
     try {
       const boardResponse = await pending;
-      const snapshot = normalizeBoardSnapshot(boardResponse, workSummaryRef.current);
+      if (controller.signal.aborted) return undefined;
+      const snapshot = normalizeBoardSnapshot(boardResponse, workSummaryRef.current, Boolean(source));
       setWorks(current => mergeOperationalSnapshot(current, snapshot.items));
       setLanePages(current => mergeRefreshedLanePages(current, snapshot.lanePages));
       setError('');
@@ -222,10 +232,11 @@ function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken }) {
       if (boardController.current === controller) boardController.current = null;
     }
     return undefined;
-  }, [selectedWorkId, t]);
+  }, [selectedWorkId, source, projectId, query, t]);
 
   useEffect(() => {
     workSummaryRef.current = workSummary;
+    if (source) return;
     setLanePages(current => ({
       ...current,
       ...Object.fromEntries(HISTORY_STATUSES.map(status => [status, {
@@ -234,7 +245,7 @@ function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken }) {
         total: workSummary.counts?.[status] || 0,
       }]))
     }));
-  }, [workSummary]);
+  }, [workSummary, source]);
 
   useEffect(() => {
     if (selectedWorkId) {
@@ -301,7 +312,9 @@ function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken }) {
         page: lane.nextCursor ? 1 : lane.page + 1,
         pageSize: lane.pageSize,
         statuses: [status],
+        ...(source ? { source, projectId, query } : {}),
       }, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       setWorks(current => mergeWorks(current, response?.items || []));
       const nextLane = normalizeLanePage(response, lane.pageSize, 'loaded');
       setLanePages(current => ({ ...current, [status]: nextLane }));
@@ -314,7 +327,7 @@ function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken }) {
         setLoadingMoreStatus('');
       }
     }
-  }, [lanePages, loading, selectedWorkId, t]);
+  }, [lanePages, loading, selectedWorkId, source, projectId, query, t]);
 
   const loadHistory = useCallback(async (status) => {
     if (!HISTORY_STATUSES.includes(status) || ['loading', 'loaded'].includes(lanePages[status]?.loadState)) return;
@@ -323,7 +336,7 @@ function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken }) {
       [status]: { ...current[status], loadState: 'loading' },
     }));
     try {
-      const response = await workApi.getWorks({ pageSize: 20, statuses: [status] });
+      const response = await workApi.getWorks({ pageSize: 20, statuses: [status], ...(source ? { source, projectId, query } : {}) });
       setWorks(current => mergeWorks(current, response?.items || []));
       setLanePages(current => ({
         ...current,
@@ -336,7 +349,7 @@ function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken }) {
       }));
       message.error(loadError.message || t('board.loadFailed'));
     }
-  }, [lanePages, t]);
+  }, [lanePages, source, projectId, query, t]);
 
   useEffect(() => {
     if (!filters.query.trim()) return;
@@ -477,7 +490,7 @@ function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken }) {
                   onDrop={handleDrop}
                   projectNames={projectNames}
                   status={status}
-                  total={lane?.total || 0}
+                  total={lane?.total ?? ''}
                   movingWorkId={movingWorkId}
                   works={groupedWorks.get(status) || []}
                 />
@@ -495,7 +508,7 @@ function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken }) {
   );
 }
 
-function WorkBoardHeader({ onCreate, onProjectChange, onQueryChange, onRefresh, onViewChange, projectId, projects, query, view }) {
+function WorkBoardHeader({ onCreate, onProjectChange, onSourceChange, onQueryChange, onRefresh, onViewChange, projectId, projects, query, source, view }) {
   const { t } = useI18n();
   return (
     <header className="work-ledger-header">
@@ -526,6 +539,14 @@ function WorkBoardHeader({ onCreate, onProjectChange, onQueryChange, onRefresh, 
             {projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}
           </select>
         ) : null}
+        <label className="work-header-source">
+          <span className="ds-mono-label">{t('board.source')}</span>
+          <select aria-label={t('board.source')} className="form-control work-header-project" onChange={event => onSourceChange(event.target.value)} value={source}>
+            <option value="">{t('board.sourceAll')}</option>
+            <option value="github">GitHub</option>
+            <option value="manual">{t('board.sourceManual')}</option>
+          </select>
+        </label>
         <div className="work-view-toggle" role="group" aria-label="视图">
           <button aria-label="列表视图" aria-pressed={view === 'list'} onClick={() => onViewChange('list')} title="列表" type="button"><List size={14} /></button>
           <button aria-label="看板视图" aria-pressed={view === 'board'} onClick={() => onViewChange('board')} title="看板" type="button"><Columns3 size={14} /></button>
@@ -660,7 +681,7 @@ function mergeRefreshedLanePages(current, refreshed) {
   ]));
 }
 
-function normalizeBoardSnapshot(response, summary) {
+function normalizeBoardSnapshot(response, summary, sourceFiltered = false) {
   const lanePages = {};
   const items = [];
   let total = 0;
@@ -668,10 +689,10 @@ function normalizeBoardSnapshot(response, summary) {
     const lane = response?.lanes?.[status] || {};
     const history = HISTORY_STATUSES.includes(status);
     lanePages[status] = history
-      ? normalizeLanePage({ total: summary?.counts?.[status] || 0 }, response?.page_size || 20, 'not_loaded')
+      ? normalizeLanePage({ total: sourceFiltered ? undefined : summary?.counts?.[status] || 0 }, response?.page_size || 20, 'not_loaded')
       : normalizeLanePage(lane, response?.page_size || 20, 'loaded');
     items.push(...(lane?.items || []));
-    total += lanePages[status].total;
+    total += lanePages[status].total || 0;
   });
   return { items: mergeWorks([], items), lanePages, total };
 }
@@ -683,7 +704,7 @@ function normalizeLanePage(response, fallbackPageSize, loadState = 'loaded') {
     nextCursor: String(response?.next_cursor || ''),
     page: Number(response?.page || 1),
     pageSize: Number(response?.page_size || fallbackPageSize || 20),
-    total: Number(response?.total || 0),
+    total: response?.total === undefined ? undefined : Number(response.total),
     totalPages: Number(response?.total_pages || 0),
   };
 }

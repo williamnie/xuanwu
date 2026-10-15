@@ -185,6 +185,8 @@ function validateWorkExecutionSelection(
 
 function boardResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
   const params = new URL(request.url).searchParams;
+  const source = workSourceParam(params);
+  const query = source ? optionalString(params.get("q")).toLowerCase() : "";
   const projectID = optionalString(params.get("project_id"));
   if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
   const pageSize = positiveIntegerParam(params.get("page_size"), "page_size", 20, MAX_PAGE_SIZE);
@@ -205,6 +207,8 @@ function boardResponse(db: RunnerDatabase, request: Request): Record<string, unk
       projectId: projectID,
       sort,
       sortOrder: order,
+      source,
+      query,
       statuses: [status]
     };
     const total = countIssueBackedWorks(db, filter);
@@ -247,6 +251,7 @@ function listResponse(db: RunnerDatabase, request: Request): Record<string, unkn
   if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
   const statuses = enumParams(params, "status", WORK_STATUSES);
   const types = enumParams(params, "type", WORK_TYPES);
+  const source = workSourceParam(params);
   const query = optionalString(params.get("q")).toLowerCase();
   const sort = enumParam(
     params.get("sort"),
@@ -260,7 +265,7 @@ function listResponse(db: RunnerDatabase, request: Request): Record<string, unkn
     throw workError(400, "cursor_sort_unsupported", "cursor only supports updated_at desc");
   }
   const page = pageInput(params);
-  const fingerprint = workFilterFingerprint({ projectID, query, statuses, types });
+  const fingerprint = workFilterFingerprint({ projectID, query, source, statuses, types });
   const cursor = cursorText ? decodeWorkCursor(cursorText, fingerprint) : undefined;
   const typeMatches = types.length === 0 || types.includes("engineering_task");
   const filter = {
@@ -272,6 +277,7 @@ function listResponse(db: RunnerDatabase, request: Request): Record<string, unkn
     query,
     sort,
     sortOrder: order,
+    source,
     statuses
   };
   const total = typeMatches ? countIssueBackedWorks(db, {
@@ -286,7 +292,7 @@ function listResponse(db: RunnerDatabase, request: Request): Record<string, unkn
   const hasMore = cursor ? loaded.length > page.page_size : page.page * page.page_size < total;
   const last = items.at(-1);
   return pagedItemsResponse(items, total, page, {
-    filters: { project_id: projectID, q: query, status: statuses, type: types },
+    filters: { project_id: projectID, q: query, status: statuses, type: types, ...(source ? { source } : {}) },
     has_more: hasMore,
     next_cursor: hasMore && last ? encodeWorkCursor({
       filter_fingerprint: fingerprint,
@@ -516,12 +522,14 @@ type WorkCursorV1 = {
 function workFilterFingerprint(input: {
   projectID: string;
   query: string;
+  source?: "github" | "manual";
   statuses: string[];
   types: string[];
 }): string {
   return createHash("sha256").update(JSON.stringify({
     project_id: input.projectID,
     q: input.query,
+    ...(input.source ? { source: input.source } : {}),
     status: [...input.statuses].sort(),
     type: [...input.types].sort()
   })).digest("hex");
@@ -529,6 +537,15 @@ function workFilterFingerprint(input: {
 
 function encodeWorkCursor(cursor: WorkCursorV1): string {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function workSourceParam(params: URLSearchParams): "github" | "manual" | undefined {
+  if (!params.has("source")) return undefined;
+  const values = params.getAll("source");
+  if (values.length !== 1 || !["github", "manual"].includes(values[0]!)) {
+    throw workError(400, "invalid_request", "source must be github or manual");
+  }
+  return values[0] as "github" | "manual";
 }
 
 function decodeWorkCursor(value: string, fingerprint: string): WorkCursorV1 {
