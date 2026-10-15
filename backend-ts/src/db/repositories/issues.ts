@@ -148,6 +148,13 @@ export function countIssues(db: RunnerDatabase, filter: IssueFilter = {}): numbe
   ).get(...query.args)?.count ?? 0;
 }
 
+/** Batch read of existing Issue records; no run hydration or writes. */
+export function getIssuesByIDs(db: RunnerDatabase, ids: number[]): Issue[] {
+  if (ids.length === 0) return [];
+  return db.sqlite.query<IssueRow, number[]>(`select ${ISSUE_COLUMNS} from issues where id in (${ids.map(() => "?").join(",")})`)
+    .all(...ids).map(mapIssueRow);
+}
+
 export function getIssue(db: RunnerDatabase, id: number): Issue | null {
   const issueID = positiveInteger(id, "issue id");
   const row = db.sqlite.query<IssueRow, [number]>(`

@@ -1,3 +1,4 @@
+import WorkSchedule from './work/WorkSchedule.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { workHumanReviewCopy } from './workHumanReviewCopy';
 import WorkFeedback from './work/WorkFeedback.jsx';
@@ -282,7 +283,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
 
       <section className="work-detail-panel">
         <SectionHeading eyebrow="NOW" title={t('work.sectionNow')} />
-        {blockReason ? <div className="work-block-reason" role="status"><AlertTriangle size={14} /> {blockReason}</div> : null}
+        {work.schedule ? <WorkSchedule all work={work} /> : blockReason ? <div className="work-block-reason" role="status"><AlertTriangle size={14} /> {blockReason}</div> : null}
         <WorkStateSummary status={work.status} decision={decision} />
         <WorkFeedback feedback={detail?.feedback} />
         {availableActions.review ? <HumanReviewCard disabled={submitting || review.submitting} onSelect={action => review.select(work, decision.request, action)} request={decision.request} /> : null}

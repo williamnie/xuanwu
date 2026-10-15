@@ -1,3 +1,4 @@
+import { projectCapacityAvailable } from "./queueEligibility.ts";
 import {
   projectLoopDecision,
   recordProjectLoopDecision,
@@ -72,6 +73,14 @@ export function setProjectLoopMaxParallelProjects(value: number): void {
 
 export function projectLoopMaxParallelProjects(): number {
   return maxParallelProjects;
+}
+
+/** Same-process API snapshot. Never creates/changes manager state or starts a loop. */
+export function readProjectLoopSnapshot(database: RunnerDatabase) {
+  const state = statesByDatabase.get(database);
+  return { source: "core_runtime" as const, maximum: maxParallelProjects,
+    workers: state?.workerCount ?? 0,
+    activeLockKeys: new Set(state?.activeLockKeys ?? []), forcedProjects: new Set(state?.forcedProjects ?? []) };
 }
 
 export function kickAutoRunProjects(runtime: ProjectLoopRuntime): void {
@@ -174,7 +183,7 @@ function drainQueuedWorkers(runtime: ProjectLoopRuntime): void {
 }
 
 function canStartWorker(db: RunnerDatabase, state: ProjectLoopState): boolean {
-  return state.workerCount < maxParallelProjects && countActiveExecutorWork(db) < maxParallelProjects;
+  return projectCapacityAvailable(countActiveExecutorWork(db), state.workerCount, maxParallelProjects);
 }
 
 function nextRunnableProject(runtime: ProjectLoopRuntime, state: ProjectLoopState): RunnableProject | null {

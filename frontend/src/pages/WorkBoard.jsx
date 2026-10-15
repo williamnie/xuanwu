@@ -1,3 +1,4 @@
+import WorkSchedule from './work/WorkSchedule.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -731,6 +732,7 @@ function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit
       </div>
       <h3>{work.title}</h3>
       <p>{work.goal}</p>
+      <WorkSchedule work={work} />
       <div className="work-card-project">{projectName}</div>
       <div className="work-card-footer">
         <button className="work-detail-link" onClick={() => navigateTo('tasks', work.id)} type="button">

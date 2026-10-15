@@ -1,0 +1,5 @@
+.work-schedule { display: flex; flex-direction: column; gap: var(--space-1); color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.5; min-width: 0; }
+.work-schedule-reason { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); overflow-wrap: anywhere; }
+.work-schedule-links { display: inline-flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); min-width: 0; }
+.work-schedule-links a { color: var(--primary); font-size: var(--text-sm); text-decoration: underline; overflow-wrap: anywhere; }
+.task-list-row > .work-schedule-links { grid-column: 1 / -1; padding: 0 var(--space-2-5) var(--space-1-5) var(--space-8); }

@@ -4,7 +4,7 @@ import type { RunnerDatabase } from "../database.ts";
 import { digest } from "../../domain/acceptance/executionEvidenceContext.ts";
 import { getIssue, listIssueRuns } from "./issues.ts";
 import { getProject } from "./projects.ts";
-import { listIssueEvents, recordIssueEvent } from "./issueEvents.ts";
+import { listIssueEvents, recordIssueEvent, latestIssueEventsByIssueID } from "./issueEvents.ts";
 
 export const WORKSPACE_WAIT_EVENT = "issue.workspace_wait.v1";
 // idle 是 Provider 明确报告的静止状态；仍须同时证明 Run/Attempt 已结束。
@@ -35,8 +35,16 @@ export function workspaceWaitIssueIDs(db: RunnerDatabase, projectID?: string): n
 
 export function readWorkspaceWait(db: RunnerDatabase, issueID: number): WorkspaceWait | null {
   const event = listIssueEvents(db, issueID, { types: [WORKSPACE_WAIT_EVENT], limit: 1 }).at(-1);
-  if (!event) return null;
-  const value = JSON.parse(event.payload) as WorkspaceWait;
+  return event ? parseWorkspaceWait(event.payload) : null;
+}
+
+export function readWorkspaceWaits(db: RunnerDatabase, ids: number[]): Map<number, WorkspaceWait> {
+  return new Map([...latestIssueEventsByIssueID(db, ids, WORKSPACE_WAIT_EVENT)]
+    .map(([id, event]) => [id, parseWorkspaceWait(event.payload)]));
+}
+
+function parseWorkspaceWait(payload: string): WorkspaceWait {
+  const value = JSON.parse(payload) as WorkspaceWait;
   if (!["released", "acquired", "consumed"].includes(value.state) || !value.request_id
     || !Number.isSafeInteger(value.revision) || !value.input || !value.workspace?.cwd
     || !value.workspace.head || !value.workspace.branch || !value.run_id) {

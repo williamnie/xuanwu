@@ -550,7 +550,7 @@ export const API_ROUTE_FAMILIES = [
   { id: "project-scope", disposition: "keep", target: "Project/local control-plane scope", source_of_truth: "projects and scoped settings" },
   { id: "run-session-drilldown", disposition: "merge", target: "Run with provider Session drill-down", source_of_truth: "issue_runs; agent_sessions remains a reference" },
   { id: "system-observability", disposition: "keep", target: "Local runtime observability/control", source_of_truth: "live process, config, logs and event bus" },
-  { id: "work-ledger", disposition: "keep", target: "Work ledger compatibility API", source_of_truth: "issues remains authoritative" },
+  { id: "work-ledger", disposition: "keep", target: "Work ledger compatibility API with read-only todo schedule", source_of_truth: "issues remains authoritative; schedule shares queue gates and core runtime snapshot" },
 ] as const;
 
 export const API_ROUTE_DISPOSITIONS = [
@@ -594,10 +594,10 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/runs/:id", family: "run-session-drilldown" },
   { method: "GET", path: "/api/runs/:id/transcript", family: "run-session-drilldown" },
   { method: "POST", path: "/api/runs/:id/actions/:action", family: "run-session-drilldown" },
-  { method: "GET", path: "/api/works", family: "work-ledger", query_parameters: { source: ["github", "manual"] } },
-  { method: "GET", path: "/api/works/:id", family: "work-ledger" },
+  { method: "GET", path: "/api/works", family: "work-ledger", projection: "xw.work-schedule.v1 (todo only)", query_parameters: { source: ["github", "manual"] } },
+  { method: "GET", path: "/api/works/:id", family: "work-ledger", projection: "xw.work-schedule.v1 (todo only)" },
   { method: "GET", path: "/api/works/:id/timeline", family: "work-ledger" },
-  { method: "GET", path: "/api/works/board", family: "work-ledger", query_parameters: { source: ["github", "manual"] } },
+  { method: "GET", path: "/api/works/board", family: "work-ledger", projection: "xw.work-schedule.v1 (todo only)", query_parameters: { source: ["github", "manual"] } },
   { method: "GET", path: "/api/works/summary", family: "work-ledger" },
   { method: "PATCH", path: "/api/works/:id", family: "work-ledger" },
   { method: "POST", path: "/api/works", family: "work-ledger" },

@@ -1,3 +1,4 @@
+import { attachWorkSchedules } from "./workSchedule.ts";
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getProject, ProjectNotFoundError } from "../db/repositories/projects.ts";
@@ -55,9 +56,9 @@ type PageInput = {
 export function registerWorkRoutes(router: Router, context: ReadApiContext): void {
   const readDatabase = context.readDatabase ?? context.database;
   router.get("/api/works/summary", (request) => workResponse(() => summaryResponse(readDatabase, request)));
-  router.get("/api/works", (request) => workResponse(() => listResponse(readDatabase, request)));
-  router.get("/api/works/board", (request) => workResponse(() => boardResponse(readDatabase, request)));
-  router.get("/api/works/:id", (request) => workResponse(() => detailResponse(readDatabase, request)));
+  router.get("/api/works", (request) => workResponse(() => listResponse(readDatabase, request, context)));
+  router.get("/api/works/board", (request) => workResponse(() => boardResponse(readDatabase, request, context)));
+  router.get("/api/works/:id", (request) => workResponse(() => detailResponse(readDatabase, request, context)));
   router.get("/api/works/:id/timeline", (request) => (
     workResponse(() => timelineResponse(readDatabase, request))
   ));
@@ -183,7 +184,7 @@ function validateWorkExecutionSelection(
   }
 }
 
-function boardResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
+function boardResponse(db: RunnerDatabase, request: Request, context: ReadApiContext): Record<string, unknown> {
   const params = new URL(request.url).searchParams;
   const source = workSourceParam(params);
   const query = optionalString(params.get("q")).toLowerCase();
@@ -212,7 +213,7 @@ function boardResponse(db: RunnerDatabase, request: Request): Record<string, unk
       statuses: [status]
     };
     const total = countIssueBackedWorks(db, filter);
-    return [status, pagedItemsResponse(listIssueBackedWorks(db, filter), total, page, {})];
+    return [status, pagedItemsResponse(attachWorkSchedules(context, listIssueBackedWorks(db, filter)), total, page, {})];
   }));
   return {
     lanes,
@@ -245,7 +246,7 @@ function summaryResponse(db: RunnerDatabase, request: Request): Record<string, u
   }
 }
 
-function listResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
+function listResponse(db: RunnerDatabase, request: Request, context: ReadApiContext): Record<string, unknown> {
   const params = new URL(request.url).searchParams;
   const projectID = optionalString(params.get("project_id"));
   if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
@@ -291,7 +292,7 @@ function listResponse(db: RunnerDatabase, request: Request): Record<string, unkn
   const items = cursor ? loaded.slice(0, page.page_size) : loaded;
   const hasMore = cursor ? loaded.length > page.page_size : page.page * page.page_size < total;
   const last = items.at(-1);
-  return pagedItemsResponse(items, total, page, {
+  return pagedItemsResponse(attachWorkSchedules(context, items), total, page, {
     filters: { project_id: projectID, q: query, status: statuses, type: types, ...(source ? { source } : {}) },
     has_more: hasMore,
     next_cursor: hasMore && last ? encodeWorkCursor({
@@ -304,13 +305,13 @@ function listResponse(db: RunnerDatabase, request: Request): Record<string, unkn
   });
 }
 
-function detailResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
+function detailResponse(db: RunnerDatabase, request: Request, context: ReadApiContext): Record<string, unknown> {
   const work = requireWork(db, workID(request));
   const decision = readIssueDecisionProjection(db, workIDToIssueID(work.id));
   return {
     decision,
     feedback: readHumanFeedback(db, workIDToIssueID(work.id), decision),
-    work
+    work: attachWorkSchedules(context, [work])[0]
   };
 }
 

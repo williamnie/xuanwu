@@ -1,3 +1,4 @@
+import WorkSchedule from '../work/WorkSchedule.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -202,9 +203,9 @@ export default function ActiveWorkSection({ limit = 10, navigateTo, projects = [
                 <button className="active-work-title" onClick={() => openWork(item)} type="button">{item.title}</button>
                 <div className="active-work-progress">
                   <span className="active-work-progress-label">LATEST</span>
-                  <span>{view.progressText}</span>
+                  {item.status === 'todo' && item.schedule ? <WorkSchedule work={item} /> : <span>{view.progressText}</span>}
                 </div>
-                {item.readiness && item.readiness.status !== 'not_required' ? (
+                {!item.schedule && item.readiness && item.readiness.status !== 'not_required' ? (
                   <div className="active-work-readiness" data-status={item.readiness?.status}>
                     <span>READINESS</span>
                     <strong>{item.readiness?.current_stage || 'waiting_source'}</strong>

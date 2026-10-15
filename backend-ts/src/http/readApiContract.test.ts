@@ -1,3 +1,4 @@
+import { WORK_SCHEDULE_CONTRACT } from "./workSchedule.ts";
 import { describe, expect, test } from "bun:test";
 import type { RunnerDatabase } from "../db/database.ts";
 import { AUTOMATION_API_AUTHORITY, registerAutomationRoutes } from "./automationApi.ts";
@@ -22,6 +23,33 @@ import { MEMORY_DIAGNOSTICS_CONTRACT } from "./piMemoryDiagnostics.ts";
 import { COMMAND_CENTER_INBOX_CONTRACT } from "./commandCenterInbox.ts";
 
 describe("read API route contracts", () => {
+  test("locks the read-only queue schedule contract without changing route identities", () => {
+    expect(WORK_SCHEDULE_CONTRACT).toMatchInlineSnapshot(`
+      {
+        "authority": "shared-queue-candidate-gates",
+        "capacity_source": "core_runtime",
+        "dependency_reads": "once-per-project-per-request; existing per-node readiness reads retained",
+        "priority": [
+          "project_hold",
+          "auto_run_off",
+          "dependency_waiting",
+          "dependency_failed",
+          "dependency_missing",
+          "dependency_cycle",
+          "readiness_waiting",
+          "workspace_waiting",
+          "provider_unavailable",
+          "project_busy",
+          "capacity_full",
+        ],
+        "statuses": [
+          "todo",
+        ],
+        "version": "xw.work-schedule.v1",
+        "writes": false,
+      }
+    `);
+  });
   test("rejects unsupported Work source filters before reading the database", async () => {
     const router = createRouter();
     registerWorkRoutes(router, { database: {} as RunnerDatabase });

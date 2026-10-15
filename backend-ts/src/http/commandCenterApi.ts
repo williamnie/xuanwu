@@ -1,3 +1,4 @@
+import { attachWorkSchedules, type ScheduledWork } from "./workSchedule.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { readWorkSummary } from "../db/repositories/workSummary.ts";
 import {
@@ -134,7 +135,7 @@ export function registerCommandCenterRoutes(
     return json(buildCommandCenterInbox(request, { ...defaults, ...options.inboxReaders }));
   });
   router.get("/api/command-center/summary", (request) => commandCenterResponse(() => (
-    buildCommandCenterSummary({ ...context, database: readDatabase }, request, options)
+    buildCommandCenterSummary(context, request, options)
   )));
   router.get("/api/command-center/attention/:id", (request) => attentionDetailResponse(readDatabase, request));
   router.post("/api/command-center/attention/:id/actions/:action", async (request) => (
@@ -149,7 +150,7 @@ export function buildCommandCenterSummary(
 ): CommandCenterSummary {
   const input = requestInput(request);
   const now = options.now?.() ?? new Date();
-  const defaults = commandCenterSectionReaders(context.database);
+  const defaults = commandCenterSectionReaders(context.readDatabase ?? context.database, context);
   const readers = { ...defaults, ...options.readers };
   const sections: Partial<Record<CommandCenterSectionName, CommandCenterSectionResult>> = {};
   const failedSections: CommandCenterSectionName[] = [];
@@ -169,9 +170,9 @@ export function buildCommandCenterSummary(
   };
 }
 
-export function commandCenterSectionReaders(db: RunnerDatabase): CommandCenterSectionReaders {
+export function commandCenterSectionReaders(db: RunnerDatabase, context: ReadApiContext = { database: db }): CommandCenterSectionReaders {
   return {
-    active_work: (input) => activeWorkSection(db, input),
+    active_work: (input) => activeWorkSection(db, input, context),
     attention: (input) => attentionSection(db, input),
     recent_deliveries: (input) => recentDeliveriesSection(db, input),
     system_health: (input) => systemHealthSection(db, input)
@@ -238,7 +239,7 @@ export function readInboxAttention(db: RunnerDatabase, now: Date): InboxItem[] {
     });
 }
 
-function activeWorkSection(db: RunnerDatabase, input: SectionInput): CommandCenterSectionPayload {
+function activeWorkSection(db: RunnerDatabase, input: SectionInput, context: ReadApiContext): CommandCenterSectionPayload {
   const filter = {
     limit: input.limit,
     offset: 0,
@@ -246,7 +247,7 @@ function activeWorkSection(db: RunnerDatabase, input: SectionInput): CommandCent
     sortOrder: "desc" as const,
     statuses: ACTIVE_WORK_STATUSES
   };
-  const works = listIssueBackedWorks(db, filter);
+  const works = attachWorkSchedules(context, listIssueBackedWorks(db, filter));
   const runs = listLatestRunsForWorkIDs(db, works.map((work) => work.id));
   const runByWorkID = new Map(runs.map((run) => [run.work_id, run]));
   const sourceTimestamps = works.flatMap((work) => {
@@ -590,10 +591,11 @@ function attentionUserAction(type: string): string {
   return "打开来源查看失败事实，决定重试、修改或停止。";
 }
 
-function activeWorkSummary(db: RunnerDatabase, work: WorkLedgerEntry, run: RunView | undefined): Record<string, unknown> {
+function activeWorkSummary(db: RunnerDatabase, work: ScheduledWork, run: RunView | undefined): Record<string, unknown> {
   const issueID = workIDToIssueID(work.id);
   return {
     id: work.id,
+    ...(work.schedule ? { schedule: work.schedule } : {}),
     latest_run: run ? runSummary(run) : null,
     links: {
       issue: `/api/issues/${issueID}`,

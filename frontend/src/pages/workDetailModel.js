@@ -36,7 +36,7 @@ export function defaultWorkDetailTab(status, { selectedHandoffId = '', selectedR
   return 'result';
 }
 
-// 只说明接口已提供、能可靠关联的阻塞事实；依赖与调度诊断尚无投影，不猜测。
+// 未返回 schedule 的旧响应 / 创建草稿仍显示已有项目事实；新投影由共享组件呈现。
 export function workBlockReason(work, project) {
   if (!work || !project || !['todo', 'triage'].includes(work.status)) return '';
   if (project.hold) return `项目已暂停（${holdReasonLabel(project.hold.reason)}），恢复后才会开始。`;

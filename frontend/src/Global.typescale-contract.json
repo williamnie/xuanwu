@@ -63,6 +63,7 @@
     "pages/work/TaskSubviewTabs.css",
     "pages/work/WorkDeliveryEvidence.css",
     "pages/work/WorkFeedback.css",
+    "pages/work/WorkSchedule.css",
     "pages/ActivityTimelinePanel.css",
     "pages/CodeAgentsPanel.css",
     "pages/ConnectorDiagnosticsPanel.css",

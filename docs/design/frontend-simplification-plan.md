@@ -462,7 +462,9 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 | E2 刷新修正 | 完成（`8d2e12a4`） | 集合事件白名单、500ms 固定窗口与尾随补读；自动 / 提交后刷新保留已加载条数，最多 50 条一批串行补读并原子更新；仅首次 / 手动刷新显示 loading，前端 800 项通过 |
 | F1 后端 | 完成（`3bf652f3`） | Codex 只读凭据源、core 30 分钟阈值 / 10 分钟保鲜、worker 分类失败、stored 独立登录与迁移；后端 2827，详见 8.5 |
 | F1 前端 | 完成（`238c7c1a`） | AI 连接 / 首次引导增加只读 Codex 登录来源；本地推荐、单次测试覆盖及切源失效保护；前端 806，浅深 × 980 / 760 / 680 离线组件验收，详见 8.5 |
-| F1 复核修正 | 完成（本次提交） | core 刷新未换 token 或失败后退避 5 分钟，过期立即重试；区分独立授权 / 共用 Codex 登录文案；后端专项 42、前端 807，详见 8.5 |
+| F1 复核修正 | 完成（`f4f95e03`） | core 刷新未换 token 或失败后退避 5 分钟，过期立即重试；区分独立授权 / 共用 Codex 登录文案；后端专项 42、前端 807，详见 8.5 |
+| F1 有效凭据回退 | 完成（`6079d240`） | 刷新瞬时失败时未过期凭据仍可鉴权；status 保留错误，过期与登录变更仍失败；后端专项 43，详见 8.5 |
+| F2 | 完成（本次提交，待复核） | todo 调度原因投影与四处 UI；同进程只读快照、共享纯判定、诊断按项目一次；后端 2844、前端 811，新增耗时中位 84.489ms，详见 8.5 |
 
 交接 A–F 已全部提交，以下为完成记录，不再作为待办：
 
@@ -501,7 +503,7 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 
 第三轮真实页面验证：项目链接已点击，网络请求确认 `project_id=xuanwu`；会话、执行记录内嵌会话、设置页展开的全局输入器均完成浅 / 深 × 980 / 760 检查，发送按钮命中检测全部未遮挡，页面无横向溢出。全局草稿跨页保留，任务页仍可展开全局对话，新建任务弹窗出现时浮窗让位。未发送消息、未执行审批 / 命令、未修改配置。
 
-本轮确认的 E 阶段范围已完成。F1 已按 8.5 完成；F2“任务卡住原因”待核实和补写合同，尚未开工。非真实数据验收边界：人工审核、失败任务、审批与告警、分页、部分失败及失效状态使用临时前端夹具；未对真实业务数据提交审批 / 重试 / 确认 / 提醒。新接口、命令兼容与大数据量性能由临时数据库后端测试验证，详见 8.4。
+本轮确认的 E 阶段范围已完成。F1 / F2 已按 8.5 实现并验收，F2 待复核；保留原恢复退避行为与依赖诊断内部逐节点查询的已知限制。非真实数据验收边界：人工审核、失败任务、审批与告警、分页、部分失败及失效状态使用临时前端夹具；未对真实业务数据提交审批 / 重试 / 确认 / 提醒。新接口、命令兼容与大数据量性能由临时数据库后端测试验证，详见 8.4。
 
 D 阶段 D1–D4 已完成，验收见 8.3；批量创建不进 Web UI（Q12）。D 阶段与已完成的“交接任务 D”不是同一事项。
 
@@ -543,7 +545,7 @@ D 阶段 D1–D4 已完成，验收见 8.3；批量创建不进 Web UI（Q12）�
 | 飞书来源自动识别 | D3 已支持 `POST /api/integrations/feishu/discover-source`。未命中关注策略的消息仍以 ignored 入库；现有归一化不保留姓名 / 群名，也不可靠区分历史应用 | **已补齐**。仅校验已保存凭据后读取本机最近 200 条事件，不改入库策略；候选只含用户 / 会话 ID、类型、空显示名和最近时间，勾选追加到表单，保存后才生效；界面明确历史应用范围 |
 | 玄武助手复用 Codex 登录 | F1 增加 credential_source，独立凭据默认保留 | **已补齐**。只读 Codex 登录适配器、core 主动保鲜 / worker 只读、状态 GET 无刷新；现状纠正、支持范围与验收见 8.5 |
 | “从 Codex 导入”的只读可用性检测 | 只有有副作用的 `POST /api/projects/sync/codex` | **可选增强**。没有时按钮始终显示，点击后给出明确结果 |
-| 任务阻塞原因 | `/api/works` 列表和详情**没有**依赖/调度阻塞投影；`effective_provider` 只是选择结果，不代表可运行。可以可靠关联的现有事实：① 依赖诊断——`GET /api/issues`、`/api/issues/:id` 返回 `dependency`（`ready` / `reason` / `waiting_reason` / `root_blockers` 等，`domain/work/issueDependency.ts:12–35`）；② 工具就绪——`GET /api/code-agents` 返回 `state` / `submittable` / `readiness_reason`；③ 项目暂停——`/api/projects` 的 `hold` | **部分已有**。C1 只显示上述可关联的事实，其余不编造原因；不得为取数调用 `PUT /api/works/:id/readiness-requirements`（带审计的写接口），也不逐行 N+1 查询。缺口命名为“分页任务行的统一调度/依赖诊断投影”（含执行工具冷却、项目并发、工作区占用等） |
+| 任务阻塞原因 | F2 为 todo 在列表 / 看板 / 详情 / 首页 active_work 增补 schedule，复用调度候选判定、依赖诊断和 core 快照 | **已补齐**。诊断优先级与同源性见 8.5；恢复退避不是普通 todo 门槛，未改调度行为。依赖诊断内部仍逐节点读取 readiness，已明确性能边界 |
 
 ### 8.3 D 阶段合同（2026-10-15）
 
@@ -666,24 +668,29 @@ F1 后端验收记录（2026-10-15，`3bf652f3`）：后端全量 **2827 pass / 
 
 F1 前端验收记录（2026-10-15，`238c7c1a`）：AI 连接 / 首次引导复用既有表单、状态行、按钮和令牌；已有 API / 独立 OAuth 不自动切源，首次配置只本地推荐。用户主动测试 / 获取模型才发送一次 source 覆盖；切源作废迟到结果，独立授权前不能保存切换。前端 **806 pass / 0 fail**（187 files），lint / build / diff 检查通过；后端沿用本轮完整 **2827 pass / 0 fail**。chrome-use 在 about:blank 中注入真实组件、真实状态 hook 和 CSS，API 全为内存假响应，fetch 禁用；浅/深 × 980/760/680 共 12 张主场景截图，另覆盖已有 API / 独立 OAuth、过期、API key 不支持、provider 禁用、home 不一致以及英文文案。两项交互夹具验证新用户不自动测试/保存、切源丢弃旧测试、显式发现不会留下测试 loading。无真实保存、OAuth 登录或模型请求；未启动服务。证据 `/tmp/xuanwu-f1/{RESULT.md,viewport-results.json,extra-results.json,behavior-results.json}`，截图同目录。
 
-F1 复核修正验收记录（2026-10-15，本次提交）：未换 token / 失败均退避 5 分钟，连续 10 次读取仅一次 RPC，过期绕过退避；外部换发或 transport 更换不继承旧退避。独立入口改为“单独登录 ChatGPT 账号 / 为玄武助手单独授权，与 Codex 互不影响”，复用入口说明“与 Codex 共用登录，由 Codex 负责续期”；摘要按当前表单来源显示，英文同步。后端凭据 / 数据库专项 **42 pass / 0 fail**；前端全量 **807 pass / 0 fail**，lint / build / diff 检查通过。协议的 `refreshToken:true` 请求主动刷新并走 normal refresh-token flow，不承诺每次强制换发；本轮未用真实账号验证换发。共享桌面保留给 RustDesk 实验，本次改用独立无界面的 Chrome 离线渲染真实组件：设置 / 引导 × 独立 / 复用 × 浅深 × 980/760/680 共 24 张截图，未启动服务或操作可见桌面。仅假状态，未调用真实保存 / 登录 / 模型 / 刷新。证据 `/tmp/xuanwu-f1-fix/RESULT.md`、`render-results.json` 及同目录截图。
+F1 复核修正验收记录（2026-10-15，`f4f95e03`）：未换 token / 失败均退避 5 分钟，连续 10 次读取仅一次 RPC，过期绕过退避；外部换发或 transport 更换不继承旧退避。独立入口改为“单独登录 ChatGPT 账号 / 为玄武助手单独授权，与 Codex 互不影响”，复用入口说明“与 Codex 共用登录，由 Codex 负责续期”；摘要按当前表单来源显示，英文同步。后端凭据 / 数据库专项 **42 pass / 0 fail**；前端全量 **807 pass / 0 fail**，lint / build / diff 检查通过。协议的 `refreshToken:true` 请求主动刷新并走 normal refresh-token flow，不承诺每次强制换发；本轮未用真实账号验证换发。共享桌面保留给 RustDesk 实验，本次改用独立无界面的 Chrome 离线渲染真实组件：设置 / 引导 × 独立 / 复用 × 浅深 × 980/760/680 共 24 张截图，未启动服务或操作可见桌面。仅假状态，未调用真实保存 / 登录 / 模型 / 刷新。证据 `/tmp/xuanwu-f1-fix/RESULT.md`、`render-results.json` 及同目录截图。
 
-F1 有效凭据回退修正（2026-10-15，本次提交）：瞬时刷新失败或失败退避期间，尚未过期且文件 / 绑定未变的凭据仍可读取；status 保留错误，同时 available 为 true，模型目录与 SDK 鉴权可继续使用。过期、账号变化、文件移除仍分类失败。凭据 / 数据库专项 **43 pass / 0 fail**；使用临时 CODEX_HOME，无真实模型或刷新请求。证据 `/tmp/xuanwu-f1-fallback/RESULT.md`。
+F1 有效凭据回退修正（2026-10-15，`6079d240`）：瞬时刷新失败或失败退避期间，尚未过期且文件 / 绑定未变的凭据仍可读取；status 保留错误，同时 available 为 true，模型目录与 SDK 鉴权可继续使用。过期、账号变化、文件移除仍分类失败。凭据 / 数据库专项 **43 pass / 0 fail**；使用临时 CODEX_HOME，无真实模型或刷新请求。证据 `/tmp/xuanwu-f1-fallback/RESULT.md`。
 
 #### F2 任务卡住原因
 
-**现状（待核实）**：调度入口 `runner/projectLoop.ts` 的 `projectLoopDecision` 依次判断项目暂停（`projects.hold`）、未开自动执行（`projects.auto_run`）、依赖未就绪（`peekNextReadyIssue` + `domain/work/issueDependency.ts`）、编程工具不可用（`issueProviderAvailable` → provider `runtimeStatus().ready`）；只对队首任务写 `issue.runner_scope_decision` 事件。全局并发由 `projectLoopManager.ts` 的 `maxParallelProjects` 与 `countActiveExecutorWork` 控制，单项目占用见 `hasActiveExecutorWorkForProject` / `countActiveExecutorWorkForProject`。自动重试退避在 `issues.auto_retry_next_at`。工作区等待（`domain/review/workspaceWait.ts`）作用于 `needs_user` 恢复，不属于排队任务。依赖诊断已可按项目批量读取（`readProjectIssueDependencies`）。`/api/works` 列表目前没有任何调度投影。
+**实施前已核实（2026-10-15，按 A–E 复核决定）**：排队状态仅 `todo`。`projectLoopDecision` 会跳过阻塞的队首，选择项目内第一个依赖与工具均可用的任务；原 reason 为 `project_hold` / `user_pause` / `dependency_blocker` / `provider_runtime` / `ready`，保持不变。`issueProviderAvailable` 不使用 now；`auto_retry_next_at` **不阻止 todo 被认领**，属于恢复线索，本轮不修调度行为、不投影 `retry_backoff`。恢复 cooldown 使用恢复历史时间和策略间隔，不能冒充普通队列门槛。工作区占用按 canonical cwd 共享（含目录别名），不是每项目可配置 N 个；open run、in_progress、未有效释放工作区的 needs_user 均可能占用。最新 released workspace_wait 的 todo 也被队列防御性跳过，以 `workspace_waiting` 区分。
+
+HTTP API 与 `projectLoopManager` 在 `runtime/core.ts` 的同一 core 进程：`startServer` 与 `startProjectLoop` 共用 writer database / providers。投影 SQL 走 reader，运行时快照按 writer identity 读取已有 manager 状态，不初始化或修改状态，不新增跨进程接口。容量同时核对内存 workerCount 和 DB open runs，detail.source=`core_runtime`。若未来将两者拆进程，应回退为 DB open runs 并在 detail 标注来源，不能凭空宣称知道别的进程 worker 数。
 
 | 项 | 合同 |
 |---|---|
-| 范围 | 只对“等待执行”的任务给出投影（以核实后的状态集合为准，至少包括已入队未开始的状态），其他状态不返回该字段或为 null |
-| 字段 | `/api/works` 列表项和 `/api/works/:id` 详情新增只读 `schedule`：`{ state: "runnable" \| "waiting", reasons: [{ code, detail? }] }`。`reasons` 按调度器实际判断顺序排列，可多条。code 只取下列事实：`project_hold`、`auto_run_off`、`dependency_waiting`（附 root_blockers 的 work_id / 标题 / 状态，复用依赖诊断）、`dependency_failed` / `dependency_missing` / `dependency_cycle` / `readiness_waiting`（映射依赖诊断原 reason）、`provider_unavailable`（附 provider id 与现有 readiness 原因类别）、`retry_backoff`（附 `auto_retry_next_at`）、`project_busy`（该项目已有执行中的任务）、`capacity_full`（全局并发已满）。没有任何原因时 `state=runnable`，含义是“满足调度条件、等待调度循环”，不承诺立即开始 |
-| 同源 | 判定必须复用调度器的同一批函数或抽出的纯判定函数，不能在 API 里另写一套规则；跨模块测试断言：同一夹具下，调度器对队首任务的 `projectLoopDecision.reason` 与该任务 `schedule.reasons[0]` 一致 |
-| 性能 | 每页批量计算：项目、依赖诊断按页内涉及的项目各读一次，provider 状态读一次，全局并发计数读一次；禁止逐行查询。看板接口同样带该字段时遵循相同批量规则，报告 200 条排队任务的耗时 |
-| 只读 | 不写库、不写审计、不写 `issue.runner_scope_decision`；不调用 `PUT /api/works/:id/readiness-requirements`；不触发调度 |
-| 前端 | 任务列表行、看板卡片、任务详情常驻状态区、首页“执行中”里的排队任务显示第一条原因的短文案（如“等待依赖：xxx”“项目已暂停”“编程工具未就绪”“等待重试 · 10:32”“项目已有任务在执行”“并发已满”），详情里列出全部原因；依赖原因可点击跳到阻塞任务。替换 C1 里分散的部分事实显示，不重复显示。文案用第 4 节术语 |
+| 范围 | 只对 `todo` 返回只读 `schedule`，其他状态不返回或为 null。新字段不是入队 / 执行授权，不触发调度 |
+| 字段 | `/api/works` 列表、board、详情的 Work 增加 `{ state: "runnable" \| "waiting", reasons: [{ code, detail? }] }`；首页 `summary.active_work` 复用同一函数补此投影，attention 的输出与限额不变 |
+| 诊断优先级 | `project_hold` → `auto_run_off` → `dependency_waiting` / `dependency_failed` / `dependency_missing` / `dependency_cycle` / `readiness_waiting`（沿用原依赖诊断单一 reason，附 root_blockers 的 work_id / 标题 / 状态）→ `workspace_waiting` → `provider_unavailable`（provider id / readiness 原因类别）→ `project_busy` → `capacity_full`。这是展示优先级，不声称等于所有 manager 入口的函数调用顺序；可有多个原因。没有原因时为 runnable，表示满足条件、等待调度，不承诺立即开始 |
+| 同源 | 抽共同单候选纯判定，由调度器各既有阶段和 API 共用；保留原 reason enum 与跳过队首规则。测试比较归一后的 decision 和选中 ID，外层占用 / 容量另与共享 gate 核对。`project_busy` 包含共享目录，文案“同一目录已有任务在执行”；尊重已有 forceOnce 绕过 auto_run 的语义，不能用设置页登录探测替换 runtimeStatus.ready 门槛 |
+| 性能 | 每请求对页内涉及的每项目调用一次调度器使用的 `readProjectIssueDependencies`；API 层不得逐行调用。profiles 在请求内读取一次并传给原 resolver；provider readiness 每 provider 一次，全局 open run 计数一次。**已知限制**：依赖诊断内部仍按节点查询 readiness，含 Evidence 语义与原上限，本轮不批量重构。200 条 todo 的链式依赖 + readiness 声明夹具下，列表接口新增 schedule 的耗时中位不超过 100ms，报告实测；现有单页上限 100 不改变 |
+| 只读 | 不写库、审计或 `issue.runner_scope_decision`；不调用 readiness 写接口，不启动循环、不修改配额、权限或状态。快照必须只读，不能用新 reader identity 取空 manager 状态 |
+| 前端 | 列表、看板卡、首页排队任务显示首条原因；详情常驻“现在怎样”列出全部原因；有效依赖可跳至阻塞任务。已有 C1 项目提示和 readiness 显示在新投影存在时去重。复用令牌和既有组件，文案中英配对 |
 
-验收：后端测试覆盖每个 code、多原因排序、与调度器决策一致、批量查询（无逐行查询，可用查询计数断言）、query-only 无写入、能力清单 / readApiContract 快照；前端测试覆盖文案映射与点击跳转；页面检查浅 / 深 × 980 / 760 / 680，状态用临时夹具。
+验收：覆盖每个 code、多原因诊断优先级、队首跳过与后续任务原因、同源决策、query-only / 无写入、按项目调用次数 / profiles 缓存、能力清单和 readApiContract 快照。前端覆盖文案 / 全部原因 / 深链，浅深 × 980/760/680 使用无真实业务写入的离线组件夹具。完整前后端测试、lint、build、diff 检查，证据 `/tmp/xuanwu-f2/`。实施前成本与反例见 `/tmp/xuanwu-f2-audit/RESULT.md`。
+
+F2 验收记录（2026-10-15，本次提交）：前端 **811 pass / 0 fail**（188 files），lint / build 通过；后端最终全量 **2844 pass / 0 fail**（491 files，7 snapshots），diff 检查通过。新增 12 项调度投影测试与读取合同快照，覆盖全部原因、先后顺序、物理队首跳过、共享目录、强制执行、writer / reader 身份、纯读、同一 provider map 与按项目 / profiles 计数；前端新增 4 项回归。临时库的 200 todo 链式依赖 + 每节点 readiness 声明夹具，列表按既有 100 项上限读取，基线 / 带投影中位 **17.681 / 102.232ms**，逐对增量中位 **84.489ms**（预算 ≤100ms）；原依赖诊断仍 1002 SQL / 中位 82.710ms，未批量重构、未建迁移。共享桌面留给 RustDesk，离线 headless Chrome 的真实组件 / 应用 CSS × 浅深 × 980/760/680 共 24 张截图通过，另 3 张验证英文与依赖锚点跳至正确假任务；全部为夹具，无真实业务读写或模型请求，未启动常驻服务。证据 `/tmp/xuanwu-f2/RESULT.md`、`backend-full-final.log`、`performance.json`、`render-results.json`、`extra-results.json` 及同目录截图。
 
 ## 9. 待确认事项
 

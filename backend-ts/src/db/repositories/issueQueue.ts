@@ -1,3 +1,4 @@
+import { evaluateQueueCandidate } from "../../runner/queueEligibility.ts";
 import type { RunnerDatabase } from "../database.ts";
 import { issueTimestamp } from "./issueCreate.ts";
 import { insertIssueRunRecord, type ReservedIssueRun } from "./issueRuns.ts";
@@ -157,9 +158,10 @@ function nextIssueRow(db: RunnerDatabase, projectID: string, filter: IssueClaimF
     order by priority desc, created_at asc, id asc
   `).all(projectID, STATUS_TODO);
   return rows.find((row) => {
-    if (dependencyByIssueID.get(row.id)?.ready !== true) return false;
+    const dependency = dependencyByIssueID.get(row.id);
+    if (!dependency || evaluateQueueCandidate({ dependency }).length > 0) return false;
     const issue = getIssue(db, row.id);
-    if (readWorkspaceWait(db, row.id)?.state === "released") return false;
+    if (evaluateQueueCandidate({ workspaceWaiting: readWorkspaceWait(db, row.id)?.state === "released" }).length > 0) return false;
     return issue !== null && filter(issue);
   }) ?? null;
 }

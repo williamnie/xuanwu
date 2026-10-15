@@ -146,13 +146,13 @@ export function resolveWorkflowParentIssueID(issue: Pick<Issue, "workflow_snapsh
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }
 
-export function resolveExecutorSelection(db: RunnerDatabase, project: Project, issue: Issue): AgentRecommendation {
+export function resolveExecutorSelection(db: RunnerDatabase, project: Project, issue: Issue, profiles = listAgentProfiles(db)): AgentRecommendation {
   const role = resolveIssueAgentRole(issue);
   const skills = roleSkills(role, project, issue, {});
   const selection = selectRoleProfile({
     allowStrategy: false,
     issueProfileId: issue.agent_profile_id,
-    profiles: listAgentProfiles(db),
+    profiles,
     projectDefaultProfileId: project.default_agent_profile_id,
     projectProvider: project.provider,
     requiredSkillIntents: skills.required,

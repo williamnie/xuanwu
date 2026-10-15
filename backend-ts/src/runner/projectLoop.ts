@@ -1,3 +1,4 @@
+import { evaluateQueueCandidate, providerAvailability } from "./queueEligibility.ts";
 import {
   reserveNextIssue,
   peekNextReadyIssue,
@@ -80,10 +81,11 @@ export function projectLoopDecision(input: ProjectLoopInput, forceOnce: boolean)
   const project = mustGetProject(input.database, input.projectId);
   const firstQueued = peekNextTodoIssue(input.database, project.id);
   const firstReady = peekNextReadyIssue(input.database, project.id);
-  if (project.hold) {
+  const projectReasons = evaluateQueueCandidate({ project, forceOnce });
+  if (projectReasons[0]?.code === "project_hold") {
     return decision(false, "project_holds", firstQueued, project.provider, "project_hold", `project:${project.id}`);
   }
-  if (!forceOnce && project.auto_run !== 1) {
+  if (projectReasons.some((reason) => reason.code === "auto_run_off")) {
     return decision(false, "projects.auto_run", firstQueued, project.provider, "user_pause", `project:${project.id}`);
   }
   if (!firstReady) {
@@ -216,7 +218,7 @@ function issueProviderAvailable(
   const providerID = issueProviderID(db, project, issue);
   const provider = isExecutorProviderId(providerID) ? providers[providerID] : undefined;
   void now;
-  return Boolean(provider) && provider!.capabilities.includes("issue_execution") && providerReady(provider!);
+  return evaluateQueueCandidate({ provider: providerAvailability(providerID, provider) }).length === 0;
 }
 
 function providerReady(provider: ExecutorProvider): boolean {

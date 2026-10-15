@@ -3,6 +3,20 @@ export const SUPPORTED_LANGUAGES = Object.freeze(['zh-CN', 'en-US']);
 export const LANGUAGE_STORAGE_KEY = 'xuanwu-language';
 
 const ZH_CN = Object.freeze({
+  "schedule.label": "执行条件",
+  "schedule.runnable": "满足执行条件，等待调度",
+  "schedule.project_hold": "项目已暂停",
+  "schedule.auto_run_off": "项目未开启自动执行",
+  "schedule.dependency_waiting": "等待依赖任务",
+  "schedule.dependency_failed": "依赖任务失败",
+  "schedule.dependency_missing": "依赖任务缺失",
+  "schedule.dependency_cycle": "依赖存在循环",
+  "schedule.readiness_waiting": "等待依赖交付就绪",
+  "schedule.workspace_waiting": "等待恢复工作区",
+  "schedule.provider_unavailable": "编程工具未就绪",
+  "schedule.project_busy": "同一目录已有任务在执行",
+  "schedule.capacity_full": "并发已满",
+  "schedule.unknown": "等待执行条件更新",
   "credential.reuse": "使用 Codex 的登录",
   "credential.reuseHint": "与 Codex 共用登录，由 Codex 负责续期；保存后生效。",
   "credential.storedLogin": "单独登录 ChatGPT 账号",
@@ -605,6 +619,20 @@ const ZH_CN = Object.freeze({
 });
 
 const EN_US = Object.freeze({
+  "schedule.label": "Execution conditions",
+  "schedule.runnable": "Ready for execution; waiting for the scheduler",
+  "schedule.project_hold": "Project is on hold",
+  "schedule.auto_run_off": "Automatic execution is off",
+  "schedule.dependency_waiting": "Waiting for dependencies",
+  "schedule.dependency_failed": "A dependency failed",
+  "schedule.dependency_missing": "A dependency is missing",
+  "schedule.dependency_cycle": "Dependency cycle detected",
+  "schedule.readiness_waiting": "Waiting for delivery readiness",
+  "schedule.workspace_waiting": "Waiting to restore the workspace",
+  "schedule.provider_unavailable": "Coding tool is not ready",
+  "schedule.project_busy": "Another task is using this directory",
+  "schedule.capacity_full": "Execution capacity is full",
+  "schedule.unknown": "Waiting for updated execution conditions",
   "credential.reuse": "Use Codex sign-in",
   "credential.reuseHint": "Share the Codex sign-in. Codex handles renewal; save to apply.",
   "credential.storedLogin": "Sign in to ChatGPT separately",

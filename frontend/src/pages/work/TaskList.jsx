@@ -1,3 +1,5 @@
+import { workScheduleSummary } from './workScheduleModel.js';
+import { ScheduleBlockerLinks } from './WorkSchedule.jsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ChevronDown, Inbox, LoaderCircle } from 'lucide-react';
 import { eventsApi } from '../../api/events.js';
@@ -168,7 +170,7 @@ export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, pr
             const primary = actions.find(action => action.primary);
             const secondary = actions.filter(action => action !== primary);
             const issueId = issueIdFromWorkId(work.id);
-            const detail = workBlockReason(work, project) || firstLine(work.goal);
+            const detail = workScheduleSummary(work, t) || workBlockReason(work, project) || firstLine(work.goal);
             const expanded = expandedId === work.id;
             const canEdit = work.status !== 'in_progress';
             return (
@@ -203,6 +205,7 @@ export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, pr
                     </button>
                   ) : null}
                 </div>
+                {work.status === 'todo' ? <ScheduleBlockerLinks reason={work.schedule?.reasons?.[0]} /> : null}
                 {expanded ? (
                   <div className="task-list-secondary">
                     {canEdit ? <button className="btn btn-secondary btn-sm" onClick={() => { setExpandedId(''); onEdit(work); }} type="button">{t('work.edit')}</button> : null}
