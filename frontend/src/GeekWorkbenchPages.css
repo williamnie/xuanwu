@@ -303,11 +303,8 @@
 .proposal-action-row { border-radius: var(--radius-md); }
 .settings-title-row h1 { font-size: clamp(1.4rem, 3vw, 2rem); }
 .settings-eyebrow, .activity-eyebrow, .eyebrow {
-  font-family: var(--font-mono);
   font-size: 0.56rem;
   font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
 }
 .settings-tabs { border-radius: var(--radius-md); gap: 3px; padding: 4px; }
 .settings-tab { border-radius: var(--radius-sm); font-size: 0.75rem; letter-spacing: 0.025em; text-transform: uppercase; }

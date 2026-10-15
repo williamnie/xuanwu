@@ -108,11 +108,8 @@
   color: var(--text-muted);
   margin: 12px 0 6px 8px;
   user-select: none;
-  font-family: var(--font-mono);
   font-size: 0.56rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 /* 会话与项目滚动列表区 */

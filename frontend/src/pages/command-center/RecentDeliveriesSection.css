@@ -12,7 +12,7 @@
   margin: 0 14px 14px;
 }
 .recent-deliveries-header { align-items: flex-start; display: flex; gap: 18px; justify-content: space-between; }
-.recent-deliveries-kicker { align-items: center; color: var(--success); display: flex; font-family: var(--font-mono); font-size: 0.68rem; font-weight: 750; gap: 7px; letter-spacing: 0.1em; margin-bottom: 5px; text-transform: uppercase; }
+.recent-deliveries-kicker { align-items: center; color: var(--success); display: flex; font-size: 0.68rem; font-weight: 750; gap: 7px; margin-bottom: 5px; }
 .recent-deliveries-header h3 { font-size: 1.2rem; margin: 0; }
 .recent-deliveries-header p { color: var(--text-muted); font-size: 0.78rem; line-height: 1.5; margin: 4px 0 0; }
 .recent-deliveries-header-actions { align-items: center; display: flex; gap: 7px; }
@@ -32,7 +32,7 @@
 .recent-delivery-card.red { background: var(--bg-card); border-left-color: var(--error); }
 .recent-delivery-topline { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
 .recent-delivery-project { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.06em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.recent-delivery-status { align-items: center; color: var(--text-muted); display: inline-flex; flex-shrink: 0; font-family: var(--font-mono); font-size: 0.65rem; font-weight: 750; gap: 6px; text-transform: uppercase; }
+.recent-delivery-status { align-items: center; color: var(--text-muted); display: inline-flex; flex-shrink: 0; font-size: 0.65rem; font-weight: 750; gap: 6px; }
 .recent-delivery-status i { background: currentColor; border-radius: 50%; box-shadow: none; height: 6px; width: 6px; }
 .recent-delivery-status[data-tone='green'] { color: var(--success); }
 .recent-delivery-status[data-tone='blue'] { color: var(--info); }
@@ -43,14 +43,14 @@
 .recent-delivery-summary { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: var(--text-muted); font-size: .66rem; line-height: 1.4; margin: -3px 0 0; }
 
 .recent-delivery-badges { display: flex; flex-wrap: wrap; gap: 7px; }
-.recent-delivery-badges > span { align-items: center; background: var(--surface-raised); border: 1px solid var(--border-light); color: var(--text-muted); display: inline-flex; font-family: var(--font-mono); font-size: 0.62rem; gap: 5px; padding: 4px 7px; }
+.recent-delivery-badges > span { align-items: center; background: var(--surface-raised); border: 1px solid var(--border-light); color: var(--text-muted); display: inline-flex; font-size: 0.62rem; gap: 5px; padding: 4px 7px; }
 .recent-delivery-badges .evidence.passed { background: color-mix(in srgb, var(--success) 7%, var(--surface-raised)); border-color: color-mix(in srgb, var(--success) 28%, var(--border-color)); color: var(--success); }
 .recent-delivery-badges .risk.active { background: var(--warning-bg); border-color: color-mix(in srgb, var(--warning) 32%, var(--border-color)); color: var(--warning); }
 
 .recent-delivery-status-grid { background: var(--surface-raised); border: 1px solid var(--border-light); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .recent-delivery-status-grid > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 9px 10px; }
 .recent-delivery-status-grid > div + div { border-left: 1px solid var(--border-light); }
-.recent-delivery-status-grid span { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.56rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.recent-delivery-status-grid span { color: var(--text-muted); font-size: 0.56rem; }
 .recent-delivery-status-grid strong { color: var(--text-secondary); font-size: 0.67rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recent-delivery-status-grid strong[data-state='approved'], .recent-delivery-status-grid strong[data-state='delivered'] { color: var(--success); }
 .recent-delivery-status-grid strong[data-state='pending'], .recent-delivery-status-grid strong[data-state='delivering'] { color: var(--warning); }

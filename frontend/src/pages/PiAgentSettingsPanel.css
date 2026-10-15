@@ -44,15 +44,18 @@
   display: grid;
   gap: 2px;
 }
-
-.supervisor-scope-copy > span,
-.provider-console-label {
+.supervisor-scope-copy > span {
   color: var(--primary);
   font-family: var(--font-mono);
   font-size: 0.61rem;
   font-weight: 800;
   letter-spacing: 0.09em;
   text-transform: uppercase;
+}
+.provider-console-label {
+  color: var(--primary);
+  font-size: 0.61rem;
+  font-weight: 800;
 }
 
 .supervisor-scope-copy strong {
@@ -345,7 +348,6 @@
 
 .supervisor-field-label small {
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: 0.56rem;
   font-weight: 500;
 }
@@ -775,7 +777,6 @@
 
 .persona-profile-badge {
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: 0.62rem;
 }
 

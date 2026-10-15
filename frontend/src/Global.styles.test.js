@@ -257,3 +257,22 @@ test('motion stays within 180ms and loops are limited to named loading or runnin
   }
   assert.deepEqual([...seen].sort(), Object.keys(loopingMotion).sort(), 'remove stale motion exceptions');
 });
+
+test('shared metadata roles use mono, uppercase and wide tracking', () => {
+  const metadata = styles['components/Metadata.css'];
+  assert.match(metadata, /font-family: var\(--font-mono\)/);
+  assert.match(metadata, /letter-spacing: 0\.08em/);
+  assert.match(metadata, /text-transform: uppercase/);
+  for (const selector of ['.project-status-pill', '.nav-badge', '.status-badge', '.run-context-meta', '.work-detail-meta', '.task-list-meta', '.connector-diagnostics__badge', '.session-info-label']) {
+    assert.ok(metadata.includes(`${selector},`) || metadata.includes(`${selector} {`), selector);
+  }
+  const targets = rules(metadata)[0].selector.split(', ');
+  for (const [file, css] of Object.entries(styles)) {
+    if (file === 'components/Metadata.css') continue;
+    for (const { selector, body } of rules(css)) {
+      if (selector.split(', ').some(part => targets.includes(part))) {
+        assert.doesNotMatch(body, /(?:font-family|letter-spacing|text-transform):/, `${file}: ${selector} duplicates metadata typography`);
+      }
+    }
+  }
+});

@@ -610,11 +610,8 @@
 
 .settings-entry-eyebrow {
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: 0.62rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 @media (max-width: 900px) {

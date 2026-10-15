@@ -31,12 +31,9 @@
   align-items: center;
   color: var(--text-muted);
   display: flex;
-  font-family: var(--font-mono);
   font-size: 0.6rem;
   font-weight: 800;
   gap: 7px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
 }
 
 .work-ledger-heading-row {
@@ -240,12 +237,11 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-xs);
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: 0.58rem;
   padding: 3px 6px;
 }
 
-.work-issue-label { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.58rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.work-issue-label { color: var(--text-muted); font-size: 0.58rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .work-attention-badge { align-items: center; border-color: color-mix(in srgb, var(--warning) 35%, var(--border-color)); color: var(--warning); display: inline-flex; gap: 4px; }
 .work-card h3 { font-family: var(--font-display); font-size: 0.94rem; line-height: 1.35; margin: 11px 0 6px; }
 .work-card > p { color: var(--text-secondary); display: -webkit-box; font-size: 0.72rem; -webkit-line-clamp: 3; -webkit-box-orient: vertical; line-height: 1.52; margin: 0; overflow: hidden; }

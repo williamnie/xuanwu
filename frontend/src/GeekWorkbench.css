@@ -63,7 +63,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .sidebar-brand-row { border-bottom: 1px solid var(--border-light); margin: 0 2px 14px; padding: 2px 2px 15px; }
 .brand-wordmark strong { font-family: var(--font-display); font-size: 1rem; font-weight: 700; letter-spacing: -0.015em; }
-.brand-wordmark span, .api-status, .sidebar-section-title {
+.brand-wordmark span {
   font-family: var(--font-mono);
   letter-spacing: 0.09em;
 }
@@ -90,7 +90,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .nav-item.active svg { color: var(--primary); }
 .nav-item.active::before { background: var(--primary); border-radius: var(--radius-xs); content: ''; height: 22px; left: -12px; position: absolute; top: 9px; width: 3px; }
 .nav-label { font-size: 0.84rem; font-weight: 600; }
-.nav-badge { background: color-mix(in srgb, var(--text-muted) 13%, transparent); border-radius: var(--radius-xs); font-family: var(--font-mono); }
+.nav-badge { background: color-mix(in srgb, var(--text-muted) 13%, transparent); border-radius: var(--radius-xs); }
 .sidebar-footer { border-top-color: var(--border-light); }
 .sidebar-footer-actions { gap: 4px; }
 .sidebar-footer-actions .nav-item { border-color: transparent; }
@@ -156,7 +156,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .form-control:focus { background: var(--surface-raised); }
 .modal-overlay { background: color-mix(in srgb, var(--bg-primary) 48%, transparent); backdrop-filter: blur(8px); }
 .modal-content { border-radius: var(--radius-md); }
-.status-badge, .triage-readiness-badge { border-radius: var(--radius-xs); font-family: var(--font-mono); letter-spacing: 0.035em; }
+.status-badge, .triage-readiness-badge { border-radius: var(--radius-xs); }
 .terminal-view { background: var(--terminal-bg); border: 1px solid var(--terminal-border); border-radius: var(--radius-md); box-shadow: none; color: var(--terminal-text); }
 
 /* E2B 沙盒控制台视窗 (Sandbox Console Windows) */
@@ -207,11 +207,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 
 .e2b-window-tag {
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .e2b-window-meta {
@@ -222,10 +219,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 
 .e2b-meta-code {
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
 }
 
 .guardian-alert-banner { border-radius: var(--radius-md); }

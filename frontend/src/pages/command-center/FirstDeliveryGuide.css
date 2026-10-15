@@ -30,10 +30,8 @@
 .first-delivery-icon { align-items: center; background: var(--primary-glow); color: var(--primary); display: inline-flex; padding: 9px; }
 .first-delivery-kicker {
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: .58rem;
   font-weight: 800;
-  letter-spacing: .12em;
 }
 .first-delivery-refresh {
   align-items: center;

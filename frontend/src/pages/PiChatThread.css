@@ -267,7 +267,6 @@
   color: var(--primary-strong);
   font-size: .57rem;
   font-weight: 800;
-  letter-spacing: .12em;
 }
 .pi-chat-scroll-bottom-button { align-items: center; background: var(--surface-overlay); border: 1px solid var(--border-color); bottom: 14px; color: var(--text-secondary); cursor: pointer; display: inline-flex; font-size: .68rem; gap: 5px; padding: 7px 10px; position: absolute; right: 28px; z-index: 2; }
 
@@ -289,7 +288,6 @@
   border: 0;
   color: var(--text-muted);
   display: inline-flex;
-  font-family: var(--font-mono);
   font-size: .64rem;
   font-weight: 700;
   gap: 5px;

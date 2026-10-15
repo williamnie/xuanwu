@@ -199,7 +199,6 @@
   font-size: 0.65rem;
   font-weight: 700;
   padding: 3px 7px;
-  text-transform: uppercase;
 }
 
 .run-context-status.running,
@@ -389,12 +388,9 @@
   color: var(--text-muted);
   display: flex;
   flex-shrink: 0;
-  font-family: var(--font-mono);
   font-size: 0.58rem;
   font-weight: 800;
-  letter-spacing: 0.12em;
   margin-right: 3px;
-  text-transform: uppercase;
 }
 
 .run-attempt-tabs button {

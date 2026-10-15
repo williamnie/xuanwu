@@ -1,6 +1,6 @@
 .automations-page { display:flex; flex:1; flex-direction:column; gap:18px; min-height:0; padding:24px 0; }
 .automations-hero { align-items:flex-start; display:flex; gap:24px; justify-content:space-between; }
-.automations-kicker { align-items:center; color:var(--primary); display:flex; font-family:var(--font-mono); font-size:.67rem; font-weight:750; gap:7px; letter-spacing:.1em; margin-bottom:7px; text-transform:uppercase; }
+.automations-kicker { align-items:center; color:var(--primary); display:flex; font-size:.67rem; font-weight:750; gap:7px; margin-bottom:7px; }
 .automations-hero h1 { font-size:2rem; margin:0; }.automations-hero p { color:var(--text-muted); font-size:.84rem; line-height:1.5; margin:6px 0 0; max-width:720px; }
 .automations-hero-actions,.automation-detail-actions { align-items:center; display:flex; flex-wrap:wrap; gap:8px; }
 .automations-filters { align-items:center; background:var(--surface-raised); border:1px solid var(--border-color); display:grid; gap:8px; grid-template-columns:minmax(210px,1.5fr) repeat(3,minmax(130px,.7fr)); padding:10px; }

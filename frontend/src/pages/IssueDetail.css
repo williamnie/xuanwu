@@ -112,13 +112,10 @@
   color: var(--text-muted);
   display: flex;
   flex-wrap: wrap;
-  font-family: var(--font-mono);
   font-size: 0.68rem;
   font-weight: 700;
   gap: 8px;
-  letter-spacing: 0.045em;
   margin-bottom: 13px;
-  text-transform: uppercase;
 }
 
 .issue-detail-kicker span:not(:last-child)::after {
@@ -151,11 +148,8 @@
 
 .issue-detail-status {
   flex: 0 0 auto;
-  font-family: var(--font-mono);
   font-size: 0.72rem;
-  letter-spacing: 0.04em;
   padding: 7px 11px;
-  text-transform: uppercase;
 }
 
 .issue-detail-overview-grid {
@@ -192,11 +186,8 @@
 .issue-section-eyebrow {
   color: var(--primary);
   display: block;
-  font-family: var(--font-mono);
   font-size: 0.62rem;
   font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
 }
 
 .issue-description-content {

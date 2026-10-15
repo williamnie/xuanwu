@@ -19,20 +19,13 @@
   opacity: 1;
 }
 
-.api-status-tag {
-  font-family: var(--font-mono);
-  letter-spacing: 0.08em;
-}
-
 
 
 
 
 
 .nav-badge {
-  font-family: var(--font-mono);
   font-size: 0.65rem;
-  letter-spacing: 0.06em;
   padding: 1px 6px;
   border-radius: var(--radius-xs);
 }

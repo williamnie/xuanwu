@@ -35,6 +35,7 @@ import { appHashForRoute, appRouteFromHash } from './appRouteModel.js';
 import './App.css';
 import './GeekWorkbench.css';
 import './GeekWorkbenchPages.css';
+import './components/Metadata.css';
 import { useI18n } from './i18n/context.js';
 
 // 页面仅在用户实际访问时下载，避免 Dashboard 首屏载入编辑器和会话历史等重型依赖。

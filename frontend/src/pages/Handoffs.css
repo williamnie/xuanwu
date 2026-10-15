@@ -17,12 +17,9 @@
   align-items: center;
   color: var(--primary);
   display: inline-flex;
-  font-family: var(--font-mono);
   font-size: 0.68rem;
   font-weight: 800;
   gap: 7px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
 }
 
 .handoff-header h1 {
@@ -109,7 +106,7 @@
 .handoff-list-ref { align-items: center; color: var(--text-secondary); display: flex; font-family: var(--font-mono); font-size: 0.62rem; gap: 5px; }
 .handoff-list-counts { color: var(--text-muted); font-size: 0.6rem; }
 
-.handoff-status { border: 1px solid var(--border-color); border-radius: var(--radius-xs); color: var(--text-muted); font-family: var(--font-mono); font-size: 0.56rem; font-weight: 800; padding: 3px 7px; text-transform: uppercase; }
+.handoff-status { border: 1px solid var(--border-color); border-radius: var(--radius-xs); color: var(--text-muted); font-size: 0.56rem; font-weight: 800; padding: 3px 7px; }
 .handoff-status[data-tone='green'] { border-color: color-mix(in srgb, var(--success) 35%, var(--border-color)); color: var(--success); }
 .handoff-status[data-tone='red'] { border-color: color-mix(in srgb, var(--error) 35%, var(--border-color)); color: var(--error); }
 .handoff-status[data-tone='amber'] { border-color: color-mix(in srgb, var(--warning) 35%, var(--border-color)); color: var(--warning); }

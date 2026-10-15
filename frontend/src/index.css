@@ -219,9 +219,7 @@ textarea:focus-visible {
   font-size: 0.62rem;
   font-weight: 800;
   gap: 5px;
-  letter-spacing: 0.06em;
   padding-left: 48px;
-  text-transform: uppercase;
 }
 
 .api-status.offline {
@@ -300,8 +298,6 @@ textarea:focus-visible {
   font-size: 0.68rem;
   font-weight: 700;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   margin: 24px 0 8px 12px;
   display: flex;
   justify-content: space-between;
@@ -823,9 +819,7 @@ textarea:focus-visible {
   font-size: 0.72rem;
   font-weight: 700;
   gap: 5px;
-  letter-spacing: 0.08em;
   margin-bottom: 8px;
-  text-transform: uppercase;
 }
 
 .auth-title {
@@ -1079,7 +1073,6 @@ input:checked + .slider:before {
   border-radius: var(--radius-xs);
   font-size: 0.75rem;
   font-weight: 600;
-  text-transform: uppercase;
   border: 1px solid transparent;
 }
 
@@ -1099,8 +1092,6 @@ input:checked + .slider:before {
   border: 1px solid transparent;
   font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .triage-readiness-badge.raw { background: transparent; color: var(--text-muted); border-color: var(--border-color); }

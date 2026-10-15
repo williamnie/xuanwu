@@ -155,7 +155,8 @@ test('low-frequency global panels use the same visual system without owning Sess
     assert.doesNotMatch(css, /\[data-theme=/);
   }
   assert.match(pagesCss, /\.proposal-action-row\s*\{\s*border-radius:\s*var\(--radius-md\)/);
-  assert.match(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-family:\s*var\(--font-mono\)/);
+  const metadataCss = readFileSync(new URL('./components/Metadata.css', import.meta.url), 'utf8');
+  assert.match(metadataCss, /\.settings-eyebrow,[\s\S]*\.eyebrow,[\s\S]*font-family:\s*var\(--font-mono\)/);
   assert.match(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-size:\s*0\.56rem/);
   assert.doesNotMatch(piChatCss, /\.pi-chat-runtime-pill[^}]*border-radius:\s*999px/);
   assert.doesNotMatch(pagesCss, /\.(?:sessions-client|client-chat|new-session|session-list-filter|session-info)/);

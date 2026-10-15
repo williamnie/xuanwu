@@ -3,7 +3,7 @@
 .delivery-heading { align-items: flex-start; padding-bottom: 20px; border-bottom: 1px solid var(--border-color); }
 .delivery-heading > div, .delivery-section-heading > div { min-width: 0; }
 .delivery-heading h2 { color: var(--text-primary); font-size: 1.2rem; margin: 8px 0; }
-.delivery-eyebrow { color: var(--text-muted); font-family: var(--font-mono); font-size: .56rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.delivery-eyebrow { color: var(--text-muted); font-size: .56rem; font-weight: 800; }
 .delivery-effectiveness h3 { color: var(--text-primary); font-size: 1rem; margin: 0 0 8px; }
 .delivery-effectiveness p, .delivery-effectiveness summary { color: var(--text-secondary); font-size: .78rem; line-height: 1.6; }
 .delivery-effectiveness p { margin: 0; }
