@@ -37,8 +37,16 @@ export const DEFAULT_APP_ROUTE = Object.freeze({
 export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
   const handoffRoute = handoffRouteFromHash(hash);
   if (handoffRoute) {
+    const queryIndex = String(hash).indexOf('?');
+    const params = new URLSearchParams(queryIndex < 0 ? '' : String(hash).slice(queryIndex + 1));
+    const taskContext = handoffRoute.page === 'tasks' ? {
+      filterProject: routeParam(params, 'project'),
+      taskSource: TASK_SOURCES.has(routeParam(params, 'source')) ? routeParam(params, 'source') : '',
+      selectedRunId: routeParam(params, 'runId'),
+    } : {};
     return {
       ...DEFAULT_APP_ROUTE,
+      ...taskContext,
       currentPage: handoffRoute.page,
       selectedHandoffId: handoffRoute.handoffId,
       selectedWorkId: handoffRoute.workId || '',
@@ -102,13 +110,14 @@ export function appHashForRoute(route) {
   const handoffId = cleanRouteValue(route?.selectedHandoffId);
   const workId = cleanRouteValue(route?.selectedWorkId);
 
-  if (handoffId && (page === 'handoffs' || page === 'tasks')) {
-    return handoffHref(handoffId, page === 'tasks' ? workId : '');
-  }
+  const deliveryHref = handoffId && (page === 'handoffs' || page === 'tasks')
+    ? handoffHref(handoffId, page === 'tasks' ? workId : '')
+    : '';
+  if (deliveryHref && page === 'handoffs') return deliveryHref;
 
   const params = new URLSearchParams();
   if (page === 'tasks' && workId) {
-    params.set('workId', workId);
+    if (!deliveryHref) params.set('workId', workId);
     const runId = cleanRouteValue(route?.selectedRunId);
     if (runId) params.set('runId', runId);
   } else if (page === 'tasks' && TASK_SCOPES.has(route?.taskScope)) {
@@ -142,7 +151,7 @@ export function appHashForRoute(route) {
   }
 
   const query = params.toString();
-  return `#/${encodeURIComponent(page)}${query ? `?${query}` : ''}`;
+  return `${deliveryHref || `#/${encodeURIComponent(page)}`}${query ? `?${query}` : ''}`;
 }
 
 function cleanRouteValue(value) {

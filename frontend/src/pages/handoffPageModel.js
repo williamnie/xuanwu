@@ -15,7 +15,7 @@ export function handoffHref(id, workId = '') {
 }
 
 export function handoffRouteFromHash(hash) {
-  const value = String(hash || '');
+  const value = String(hash || '').split('?', 1)[0];
   if (value.startsWith(WORK_HASH_PREFIX)) return workDeliveryRoute(value, WORK_HASH_PREFIX);
   if (value.startsWith(LEGACY_WORK_HASH_PREFIX)) return workDeliveryRoute(value, LEGACY_WORK_HASH_PREFIX);
   if (!value.startsWith(HANDOFF_HASH_PREFIX)) return null;
