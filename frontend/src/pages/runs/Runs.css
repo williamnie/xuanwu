@@ -658,7 +658,7 @@
 }
 
 .run-log-list article > span,
-.run-log-list time { color: var(--text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--text-2xs); }
+.run-log-list time { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); }
 .run-log-list p { color: var(--text-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--text-xs); line-height: 1.45; margin: 0; overflow-wrap: anywhere; }
 
 .run-event-page-footer {

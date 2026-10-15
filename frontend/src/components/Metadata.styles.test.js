@@ -40,3 +40,11 @@ test('automation field names and fact labels share metadata styling while hints 
   assert.match(css, /\.ds-mono-label \{\s*font-size: var\(--text-2xs\);\s*font-weight: 800;/);
   assert.doesNotMatch(css, /\.automation-form-field(?:,| \{)|\.automation-form-field small/);
 });
+
+
+test('semantic timestamps, fact keys and column headings are metadata without styling their values', () => {
+  for (const selector of ['time', 'dt', 'th', '.work-review-dialog > span', '.work-dialog > header > div > span', '.dashboard-env-tag']) {
+    assert.ok(css.includes(`\n${selector},`), selector);
+  }
+  assert.doesNotMatch(css, /(?:^|\n)(?:dd|td|p|small|strong|label|button)[, {]/);
+});

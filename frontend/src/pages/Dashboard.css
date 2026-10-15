@@ -3,7 +3,7 @@
 .dashboard-intro-titlegroup { display: flex; flex-direction: column; gap: var(--space-0-5); }
 .dashboard-eyebrow-row { align-items: center; display: flex; gap: var(--space-2); }
 .dashboard-eyebrow { color: var(--text-muted); font-size: var(--text-2xs); font-weight: 800; }
-.dashboard-env-tag { background: var(--success-bg); border: 1px solid color-mix(in srgb, var(--success) 28%, transparent); color: var(--success); font-size: var(--text-2xs); font-weight: 700; letter-spacing: .06em; padding: var(--space-0-5) var(--space-1-5); border-radius: var(--radius-xs); }
+.dashboard-env-tag { background: var(--success-bg); border: 1px solid color-mix(in srgb, var(--success) 28%, transparent); color: var(--success); font-size: var(--text-2xs); font-weight: 700; padding: var(--space-0-5) var(--space-1-5); border-radius: var(--radius-xs); }
 .dashboard-intro h1 { font-size: var(--text-page); font-weight: 650; letter-spacing: -.02em; margin: var(--space-1) 0 var(--space-0-5); color: var(--text-primary); }
 .dashboard-subline { color: var(--text-muted); font-size: var(--text-2xs); letter-spacing: .08em; margin: 0; text-transform: uppercase; }
 
