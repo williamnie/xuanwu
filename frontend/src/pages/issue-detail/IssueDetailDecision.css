@@ -6,20 +6,20 @@
 
 .issue-detail-decision {
   border-left: 4px solid var(--warning);
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .issue-detail-decision__heading {
   align-items: center;
   display: flex;
-  font-size: 1.05rem;
+  font-size: var(--text-xl);
   font-weight: 700;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .issue-detail-decision__description {
   color: var(--text-secondary);
-  font-size: 0.82rem;
+  font-size: var(--text-md);
   margin: 0;
 }
 
@@ -27,15 +27,15 @@
   background: var(--surface-raised);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  font-size: 0.78rem;
-  padding: 10px;
+  font-size: var(--text-md);
+  padding: var(--space-2-5);
 }
 
 .issue-detail-decision__evidence.is-question {
-  font-size: 0.82rem;
+  font-size: var(--text-md);
   font-weight: 700;
 }
 
 .issue-detail-decision__actions {
-  gap: 8px;
+  gap: var(--space-2);
 }

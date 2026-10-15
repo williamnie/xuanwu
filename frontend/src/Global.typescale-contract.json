@@ -35,7 +35,34 @@
     "pages/sessions/SessionsClient.css",
     "../../docs/design-system/components.css",
     "../../docs/design-system/examples/index.html",
-    "../../docs/design-system/examples/chat.html"
+    "../../docs/design-system/examples/chat.html",
+    "pages/Analytics.css",
+    "pages/Automations.css",
+    "pages/Dashboard.css",
+    "pages/Handoffs.css",
+    "pages/IssueCard.css",
+    "pages/IssueDetail.css",
+    "pages/Issues.css",
+    "pages/OnboardingPage.css",
+    "pages/ProjectHoldNotice.css",
+    "pages/WorkBoard.css",
+    "pages/WorkDetail.css",
+    "pages/command-center/ActiveWorkSection.css",
+    "pages/command-center/AttentionSection.css",
+    "pages/command-center/DeliveryEffectivenessSection.css",
+    "pages/command-center/FirstDeliveryGuide.css",
+    "pages/command-center/RecentDeliveriesSection.css",
+    "pages/command-center/TaskRequestsSection.css",
+    "pages/issue-detail/IssueDetailDecision.css",
+    "pages/issue-detail/IssueDetailEvidence.css",
+    "pages/issue-detail/IssueDetailRuns.css",
+    "pages/issue-detail/IssueDetailTimeline.css",
+    "pages/runs/Runs.css",
+    "pages/work/HumanReview.css",
+    "pages/work/TaskList.css",
+    "pages/work/TaskSubviewTabs.css",
+    "pages/work/WorkDeliveryEvidence.css",
+    "pages/work/WorkFeedback.css"
   ],
   "panelPadding": [
     {
@@ -343,6 +370,246 @@
       "selector": ".thread",
       "property": "padding",
       "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/Automations.css",
+      "selector": ".automation-panel-title",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/Automations.css",
+      "selector": ".automation-detail-panel",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/Automations.css",
+      "selector": ".automation-detail-header",
+      "property": "padding-bottom",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/Automations.css",
+      "selector": ".automation-editor>header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/Automations.css",
+      "selector": ".automation-editor-body",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/Dashboard.css",
+      "selector": ".dashboard-hud-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/Handoffs.css",
+      "selector": ".handoff-page",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/Handoffs.css",
+      "selector": ".handoff-detail-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/Handoffs.css",
+      "selector": ".handoff-empty",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/IssueDetail.css",
+      "selector": ".issue-notes-panel",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/IssueDetail.css",
+      "selector": ".issue-detail-hero",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/IssueDetail.css",
+      "selector": ".issue-detail-tab-panel",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/Issues.css",
+      "selector": ".issues-page__project-warning",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/Issues.css",
+      "selector": ".issues-page__source-meta",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/WorkBoard.css",
+      "selector": ".work-ledger-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/WorkBoard.css",
+      "selector": ".work-board-page",
+      "property": "padding-top",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/WorkDetail.css",
+      "selector": ".work-detail-panel",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/WorkDetail.css",
+      "selector": ".work-detail-failure",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/WorkDetail.css",
+      "selector": ".work-delivery-header",
+      "property": "padding-bottom",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/WorkDetail.css",
+      "selector": ".work-delivery-section",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/WorkDetail.css",
+      "selector": ".work-detail-page",
+      "property": "padding-top",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/WorkDetail.css",
+      "selector": ".work-detail-tabs",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/WorkDetail.css",
+      "selector": ".work-detail-tabpanel",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/WorkDetail.css",
+      "selector": ".work-detail-tabpanel-result > .work-section-empty",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/command-center/ActiveWorkSection.css",
+      "selector": ".active-work-section.e2b-terminal-window .active-work-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/command-center/ActiveWorkSection.css",
+      "selector": ".active-work-section.e2b-terminal-window .active-work-list",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/command-center/ActiveWorkSection.css",
+      "selector": ".active-work-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/command-center/AttentionSection.css",
+      "selector": ".attention-section.e2b-terminal-window .attention-section-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/command-center/AttentionSection.css",
+      "selector": ".attention-section.e2b-terminal-window .attention-priority-groups",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/command-center/AttentionSection.css",
+      "selector": ".attention-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/command-center/AttentionSection.css",
+      "selector": ".approval-detail",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/command-center/RecentDeliveriesSection.css",
+      "selector": ".recent-deliveries-section.e2b-terminal-window > .recent-deliveries-header",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/command-center/RecentDeliveriesSection.css",
+      "selector": ".recent-delivery-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/command-center/TaskRequestsSection.css",
+      "selector": ".ds-request-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/runs/Runs.css",
+      "selector": ".run-detail-section-tabs",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/runs/Runs.css",
+      "selector": ".run-attempt-summary-card, .run-cost-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/runs/Runs.css",
+      "selector": ".run-attention-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/runs/Runs.css",
+      "selector": ".run-resource-panel",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/work/HumanReview.css",
+      "selector": ".work-human-review-card",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
+    },
+    {
+      "file": "pages/work/HumanReview.css",
+      "selector": ".work-human-review-card.is-compact",
+      "property": "padding",
+      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
     }
   ],
   "structuralValues": [
@@ -387,6 +654,13 @@
       "property": "margin",
       "value": "var(--space-2) 0 var(--space-2) calc(26px + var(--space-5))",
       "reason": "Spec 5.7 26px avatar plus 20px transcript gutter."
+    },
+    {
+      "file": "pages/command-center/FirstDeliveryGuide.css",
+      "selector": ".first-delivery-api-key .form-control",
+      "property": "padding-right",
+      "value": "58px",
+      "reason": "Spec 4 structural geometry: reserve existing 58px for the absolutely positioned password visibility action and text clearance; not general spacing."
     }
   ],
   "microSpacing": [
@@ -746,6 +1020,356 @@
       "property": "padding",
       "context": "inline-code",
       "reason": "Spec 4.0.1 / approved micro-spacing correction: vertical inline-code inset."
+    },
+    {
+      "file": "pages/Dashboard.css",
+      "selector": ".dashboard-env-tag",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/Handoffs.css",
+      "selector": ".handoff-status",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/WorkBoard.css",
+      "selector": ".work-type-badge, .work-attention-badge, .work-dialog-contract span",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/issue-detail/IssueDetailRuns.css",
+      "selector": ".issue-detail-runs__status",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/runs/Runs.css",
+      "selector": ".run-context-status",
+      "property": "padding",
+      "reason": "Spec 4.0.1: 2px inset of this badge / status label / chip.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/IssueDetail.css",
+      "selector": ".issue-detail-tab em",
+      "property": "padding",
+      "reason": "Spec 4.0.1: tab count, provider/OAuth status or capability chip inset.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/command-center/FirstDeliveryGuide.css",
+      "selector": ".first-delivery-agent-list em",
+      "property": "padding",
+      "reason": "Spec 4.0.1: tab count, provider/OAuth status or capability chip inset.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/command-center/FirstDeliveryGuide.css",
+      "selector": ".first-delivery-oauth-heading > span",
+      "property": "padding",
+      "reason": "Spec 4.0.1: tab count, provider/OAuth status or capability chip inset.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/issue-detail/IssueDetailEvidence.css",
+      "selector": ".issue-mcp-requirements__capability",
+      "property": "padding",
+      "reason": "Spec 4.0.1: tab count, provider/OAuth status or capability chip inset.",
+      "context": "badge-inset"
+    },
+    {
+      "file": "pages/Automations.css",
+      "selector": ".automation-row small,.automation-row em",
+      "property": "margin-top",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/Automations.css",
+      "selector": ".automation-timeline p",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/Automations.css",
+      "selector": ".automation-form-section>header p",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/Dashboard.css",
+      "selector": ".dashboard-intro-titlegroup",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/Dashboard.css",
+      "selector": ".dashboard-intro h1",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/Handoffs.css",
+      "selector": ".handoff-error > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/IssueDetail.css",
+      "selector": ".issue-section-heading h2, .issue-tab-panel-header h2",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/IssueDetail.css",
+      "selector": ".issue-source-strip span, .issue-next-action span",
+      "property": "margin-bottom",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/IssueDetail.css",
+      "selector": ".issue-inline-alert p",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/IssueDetail.css",
+      "selector": ".issue-detail-tabs",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "pages/IssueDetail.css",
+      "selector": ".issue-notes-notice p",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/OnboardingPage.css",
+      "selector": ".onboarding-page-intro dl > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/ProjectHoldNotice.css",
+      "selector": ".project-hold-notice__text",
+      "property": "margin-top",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/ProjectHoldNotice.css",
+      "selector": ".project-hold-notice__meta, .project-hold-notice__help",
+      "property": "margin-top",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/ProjectHoldNotice.css",
+      "selector": ".project-hold-notice__meta--spaced",
+      "property": "margin-top",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/WorkBoard.css",
+      "selector": ".work-board-error > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/WorkBoard.css",
+      "selector": ".work-dialog-check > span",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/WorkDetail.css",
+      "selector": ".work-inline-confirm > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/WorkDetail.css",
+      "selector": ".work-detail-failure > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/WorkDetail.css",
+      "selector": ".work-delivery-evidence p",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/WorkDetail.css",
+      "selector": ".work-run-list-main",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/command-center/ActiveWorkSection.css",
+      "selector": ".active-work-state > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/command-center/ActiveWorkSection.css",
+      "selector": ".active-work-compatibility[open]",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/command-center/AttentionSection.css",
+      "selector": ".attention-card-next",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/command-center/AttentionSection.css",
+      "selector": ".approval-detail-grid strong",
+      "property": "margin-top",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/command-center/AttentionSection.css",
+      "selector": ".proposal-action-row",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "pages/command-center/FirstDeliveryGuide.css",
+      "selector": ".first-delivery-heading h2",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/command-center/RecentDeliveriesSection.css",
+      "selector": ".recent-delivery-summary",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/command-center/RecentDeliveriesSection.css",
+      "selector": ".recent-deliveries-state > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/command-center/RecentDeliveriesSection.css",
+      "selector": ".recent-deliveries-compatibility[open]",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/issue-detail/IssueDetailRuns.css",
+      "selector": ".issue-detail-runs__field",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/runs/Runs.css",
+      "selector": ".runs-sidebar-heading > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/runs/Runs.css",
+      "selector": ".run-detail-section-tabs",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
+    },
+    {
+      "file": "pages/runs/Runs.css",
+      "selector": ".run-section-heading > div, .run-resource-header > div",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/runs/Runs.css",
+      "selector": ".run-progress-timeline p",
+      "property": "margin",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/runs/Runs.css",
+      "selector": ".run-cost-total",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/runs/Runs.css",
+      "selector": ".run-provider-fact",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/runs/Runs.css",
+      "selector": ".run-surface-notice",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/work/TaskList.css",
+      "selector": ".task-list-text",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/work/TaskList.css",
+      "selector": ".task-list-meta",
+      "property": "gap",
+      "context": "stacked-text",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
+    },
+    {
+      "file": "pages/work/TaskList.css",
+      "selector": ".task-list-more",
+      "property": "gap",
+      "context": "compact-list",
+      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
     }
   ]
 }

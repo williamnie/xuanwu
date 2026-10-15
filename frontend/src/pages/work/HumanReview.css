@@ -1,24 +1,24 @@
-.work-review-actions { border-top: 1px solid var(--border-light); flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 12px; }
-.work-human-review-card { background: color-mix(in srgb, var(--warning) 5%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border-color)); border-radius: var(--radius-sm); margin-top: 14px; padding: 14px; }
-.work-human-review-card > span { color: var(--warning); font-family: var(--font-mono); font-size: .58rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.work-human-review-card h3 { font-size: .82rem; line-height: 1.55; margin: 7px 0 10px; }
-.work-human-review-card p, .work-human-review-card li { color: var(--text-secondary); font-size: .67rem; line-height: 1.55; }
-.work-human-review-card p { margin: 8px 0; }
-.work-human-review-card ul { margin: 5px 0 8px; padding-left: 18px; }
-.work-human-review-card div > strong { font-size: .65rem; }
-.work-review-dialog { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 12px; max-width: 560px; padding: 22px; width: calc(100vw - 34px); }
-.work-review-dialog > span { color: var(--primary); font-family: var(--font-mono); font-size: .58rem; font-weight: 800; letter-spacing: .11em; }
+.work-review-actions { border-top: 1px solid var(--border-light); flex-wrap: wrap; gap: var(--space-1-5); margin-top: var(--space-3); padding-top: var(--space-3); }
+.work-human-review-card { background: color-mix(in srgb, var(--warning) 5%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border-color)); border-radius: var(--radius-sm); margin-top: var(--space-3); padding: var(--space-3-5); }
+.work-human-review-card > span { color: var(--warning); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.work-human-review-card h3 { font-size: var(--text-md); line-height: 1.55; margin: var(--space-1-5) 0 var(--space-2-5); }
+.work-human-review-card p, .work-human-review-card li { color: var(--text-secondary); font-size: var(--text-xs); line-height: 1.55; }
+.work-human-review-card p { margin: var(--space-2) 0; }
+.work-human-review-card ul { margin: var(--space-1) 0 var(--space-2); padding-left: var(--space-4); }
+.work-human-review-card div > strong { font-size: var(--text-xs); }
+.work-review-dialog { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: var(--space-3); max-width: 560px; padding: var(--space-5); width: calc(100vw - 34px); }
+.work-review-dialog > span { color: var(--primary); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 800; letter-spacing: .11em; }
 .work-review-dialog h2, .work-review-dialog p { margin: 0; }
-.work-review-dialog p { color: var(--text-secondary); font-size: .72rem; }
-.work-review-dialog .work-review-question { background: var(--bg-secondary); border-left: 3px solid var(--primary); color: var(--text-primary); font-size: .78rem; font-weight: 750; line-height: 1.55; padding: 10px 12px; }
-.work-review-dialog label { display: flex; flex-direction: column; gap: 6px; }
-.work-review-dialog label > span { color: var(--text-muted); font-size: .6rem; }
-.work-review-dialog > div { display: flex; gap: 8px; justify-content: flex-end; }
-.work-review-dialog textarea { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font: inherit; padding: 10px; resize: vertical; }
+.work-review-dialog p { color: var(--text-secondary); font-size: var(--text-sm); }
+.work-review-dialog .work-review-question { background: var(--bg-secondary); border-left: 3px solid var(--primary); color: var(--text-primary); font-size: var(--text-md); font-weight: 750; line-height: 1.55; padding: var(--space-2-5) var(--space-3); }
+.work-review-dialog label { display: flex; flex-direction: column; gap: var(--space-1-5); }
+.work-review-dialog label > span { color: var(--text-muted); font-size: var(--text-2xs); }
+.work-review-dialog > div { display: flex; gap: var(--space-2); justify-content: flex-end; }
+.work-review-dialog textarea { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font: inherit; padding: var(--space-2-5); resize: vertical; }
 .work-review-actions, .work-review-actions button { align-items: center; display: flex; }
-.work-review-actions button { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; font-size: .72rem; font-weight: 750; gap: 6px; min-height: 34px; padding: 7px 10px; }
+.work-review-actions button { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; font-size: var(--text-sm); font-weight: 750; gap: var(--space-1-5); min-height: 34px; padding: var(--space-1-5) var(--space-2-5); }
 .work-review-actions button.danger, .work-review-dialog button.danger { color: var(--error); }
 .work-review-actions button:disabled { cursor: not-allowed; opacity: .5; }
-.work-review-dialog button { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: .68rem; font-weight: 750; padding: 7px 9px; }
+.work-review-dialog button { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: var(--text-xs); font-weight: 750; padding: var(--space-1-5) var(--space-2); }
 .work-review-dialog button.primary { background: var(--button-primary-bg); border-color: transparent; color: var(--button-primary-fg); }
-.work-human-review-card.is-compact { margin-top: 0; padding: 12px 14px; }
+.work-human-review-card.is-compact { margin-top: 0; padding: var(--space-3) var(--space-3-5); }

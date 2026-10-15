@@ -1,7 +1,7 @@
 .issue-terminal-empty {
   color: var(--terminal-muted);
   font-style: italic;
-  padding: 40px 0;
+  padding: var(--space-8) 0;
   text-align: center;
 }
 
@@ -17,8 +17,8 @@
   background: var(--terminal-bg);
   border-bottom: 1px solid var(--terminal-border);
   color: var(--terminal-info);
-  font-size: 0.75rem;
-  padding: 4px 8px;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-2);
 }
 
 .issue-terminal-patch-body {

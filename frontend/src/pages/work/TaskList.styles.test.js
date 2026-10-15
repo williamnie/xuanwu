@@ -10,7 +10,7 @@ const tokens = read('../../../../docs/design-system/tokens.css');
 
 test('task list rows are styled as distinct opaque cards with clear separation', () => {
   // Row list has gap between cards so items do not run into each other
-  assert.match(taskListCss, /\.task-list-rows\s*\{[\s\S]*gap:\s*8px;/);
+  assert.match(taskListCss, /\.task-list-rows\s*\{[\s\S]*gap:\s*var\(--space-2\);/);
 
   // Each row has a solid surface and crisp border to prevent background grid lines from bleeding through
   assert.match(taskListCss, /\.task-list-row\s*\{[\s\S]*background:\s*var\(--surface-raised\);/);

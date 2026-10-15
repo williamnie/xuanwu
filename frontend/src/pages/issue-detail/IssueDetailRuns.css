@@ -8,7 +8,7 @@
 }
 
 .issue-detail-runs {
-  gap: 14px;
+  gap: var(--space-3);
 }
 
 .issue-detail-runs__heading,
@@ -19,9 +19,9 @@
 }
 
 .issue-detail-runs__heading {
-  font-size: 1.1rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .issue-detail-runs__description,
@@ -32,27 +32,27 @@
 }
 
 .issue-detail-runs__description {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 .issue-detail-runs__empty,
 .issue-detail-runs__attempt {
-  font-size: 0.85rem;
+  font-size: var(--text-base);
 }
 
 .issue-detail-runs__list {
-  gap: 10px;
+  gap: var(--space-2-5);
 }
 
 .issue-detail-runs__card {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  gap: 8px;
-  padding: 10px;
+  gap: var(--space-2);
+  padding: var(--space-2-5);
 }
 
 .issue-detail-runs__card-header {
-  gap: 8px;
+  gap: var(--space-2);
   justify-content: space-between;
 }
 
@@ -61,35 +61,35 @@
 }
 
 .issue-detail-runs__status {
-  font-size: 0.72rem;
-  padding: 3px 8px;
+  font-size: var(--text-sm);
+  padding: var(--space-0-5) var(--space-2);
 }
 
 .issue-detail-runs__error {
   background: var(--error-bg);
   border-radius: var(--radius-md);
   color: var(--error);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
-  padding: 8px;
+  padding: var(--space-2);
 }
 
 .issue-detail-runs__actions {
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .issue-detail-runs__field {
-  gap: 3px;
+  gap: var(--space-0-5);
 }
 
 .issue-detail-runs__field-label,
 .issue-detail-runs__field-value.is-mono {
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
 }
 
 .issue-detail-runs__field-value {
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

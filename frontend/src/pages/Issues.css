@@ -7,7 +7,7 @@
 
 .issues-page__count {
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   font-weight: 500;
 }
 
@@ -21,12 +21,12 @@
 
 .issues-page__header-actions,
 .issues-page__form-actions {
-  gap: 10px;
+  gap: var(--space-2-5);
 }
 
 .issues-page__new-button {
-  font-size: 0.78rem;
-  padding: 6px 12px;
+  font-size: var(--text-md);
+  padding: var(--space-1-5) var(--space-3);
 }
 
 .kanban-column-dot.is-triage { background: var(--warning); }
@@ -38,18 +38,18 @@
 
 .issues-page__create-modal {
   max-width: 760px;
-  padding: 24px;
+  padding: var(--space-6);
 }
 
 .issues-page__modal-header {
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .issues-page__modal-title {
-  font-size: 1.05rem;
+  font-size: var(--text-xl);
   font-weight: 700;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .issues-page__modal-close {
@@ -62,15 +62,15 @@
 .issues-page__create-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-3);
 }
 
 .issues-page__form-error {
   background: var(--error-bg);
   border-radius: var(--radius-xs);
   color: var(--error);
-  font-size: 0.78rem;
-  padding: 8px 12px;
+  font-size: var(--text-md);
+  padding: var(--space-2) var(--space-3);
 }
 
 .issues-page__project-warning {
@@ -80,9 +80,9 @@
   color: var(--warning);
   display: flex;
   flex-direction: column;
-  font-size: 0.8rem;
-  gap: 4px;
-  padding: 10px 14px;
+  font-size: var(--text-md);
+  gap: var(--space-1);
+  padding: var(--space-2-5) var(--space-3-5);
 }
 
 .issues-page__project-warning strong {
@@ -94,24 +94,24 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-size: 0.78rem;
-  padding: 10px 14px;
+  font-size: var(--text-md);
+  padding: var(--space-2-5) var(--space-3-5);
 }
 
 .issues-page__field-help {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 .issues-page__form-actions {
   justify-content: flex-end;
-  margin-top: 10px;
+  margin-top: var(--space-2-5);
 }
 
 .issues-page__cancel-button {
-  padding: 6px 12px;
+  padding: var(--space-1-5) var(--space-3);
 }
 
 .issues-page__submit-button {
-  padding: 6px 16px;
+  padding: var(--space-1-5) var(--space-4);
 }

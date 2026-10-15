@@ -13,11 +13,11 @@
 }
 
 .kanban-card-footer-meta {
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .kanban-card-footer-time {
-  gap: 2px;
+  gap: var(--space-1);
 }
 
 .kanban-card-footer-icon {
