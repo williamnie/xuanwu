@@ -63,8 +63,13 @@ export function countActiveExecutorWorkForProject(
   projectID: string,
   at: Date | string = new Date()
 ): number {
-  const lock = parsedProjectExecutionLockKey(db, projectID);
   void at;
+  return activeExecutorWorkHolders(db, projectID).length;
+}
+
+/** Holders of the project's execution lock: running work, or needs_user work whose workspace is not released. */
+export function activeExecutorWorkHolders(db: RunnerDatabase, projectID: string): { id: number; running: boolean }[] {
+  const lock = parsedProjectExecutionLockKey(db, projectID);
   const rows = db.sqlite.query<{ id: number; project_id: string; cwd: string; status: string; open_run: number }, []>(`
     select i.id,i.project_id,p.cwd,i.status,
       exists(select 1 from issue_runs ir where ir.issue_id=i.id and ir.ended_at='') as open_run
@@ -74,7 +79,8 @@ export function countActiveExecutorWorkForProject(
   `).all();
   return rows.filter(row => (lock.kind === "cwd"
     ? row.cwd.trim() && canonicalWorkspace(row.cwd) === lock.value : row.project_id === lock.value)
-    && (row.open_run || row.status === STATUS_IN_PROGRESS || !isWorkspaceWaitReleased(db, row.id))).length;
+    && (row.open_run || row.status === STATUS_IN_PROGRESS || !isWorkspaceWaitReleased(db, row.id)))
+    .map(row => ({ id: row.id, running: Boolean(row.open_run) || row.status === STATUS_IN_PROGRESS }));
 }
 
 export function hasTodoIssue(db: RunnerDatabase, projectID: string): boolean {

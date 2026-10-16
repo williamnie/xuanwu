@@ -1,10 +1,10 @@
 import { getIssuesByIDs } from "../db/repositories/issues.ts";
 import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { countActiveExecutorWork, countActiveExecutorWorkForProject, projectExecutionLockKey } from "../db/repositories/issueQueue.ts";
+import { activeExecutorWorkHolders, countActiveExecutorWork, projectExecutionLockKey } from "../db/repositories/issueQueue.ts";
 import { readWorkspaceWaits } from "../db/repositories/workspaceWaits.ts";
 import { readProjectIssueDependencies } from "../domain/work/issueDependency.ts";
-import { workIDToIssueID } from "../domain/work/issueAdapter.ts";
+import { issueIDToWorkID, workIDToIssueID } from "../domain/work/issueAdapter.ts";
 import type { WorkLedgerEntry } from "../domain/work/contracts.ts";
 import { resolveExecutorSelection } from "../pi/agentOrchestration.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
@@ -40,7 +40,7 @@ export function attachWorkSchedules(context: ReadApiContext, works: WorkLedgerEn
     const project = getProject(db, id);
     if (!project) throw new Error("Queued Work project is missing");
     return [id, { project, dependency: readProjectIssueDependencies(db, id),
-      busy: countActiveExecutorWorkForProject(db, id) > 0 || runtime.activeLockKeys.has(projectExecutionLockKey(db, id)) }];
+      busy: projectBusy(activeExecutorWorkHolders(db, id), runtime.activeLockKeys.has(projectExecutionLockKey(db, id))) }];
   }));
   const openRuns = countActiveExecutorWork(db);
   const capacity = projectCapacityAvailable(openRuns, runtime.workers, runtime.maximum);
@@ -55,10 +55,17 @@ export function attachWorkSchedules(context: ReadApiContext, works: WorkLedgerEn
     const reasons = evaluateQueueCandidate({ project: facts.project, forceOnce: runtime.forcedProjects.has(facts.project.id),
       dependency: facts.dependency.get(id), workspaceWaiting: waits.get(id)?.state === "released",
       provider: availability.get(providerID) ?? providerAvailability(providerID) });
-    if (facts.busy) reasons.push({ code: "project_busy", detail: { scope: "workspace" } });
+    if (facts.busy) reasons.push({ code: "project_busy", detail: facts.busy });
     if (!capacity) reasons.push({ code: "capacity_full", detail: {
       source: runtime.source, open_runs: openRuns, workers: runtime.workers, maximum: runtime.maximum
     } });
     return { ...work, schedule: { state: reasons.length ? "waiting" : "runnable", reasons } };
   });
+}
+
+/** A needs_user holder keeps the directory until its workspace is released; it is not executing. */
+function projectBusy(holders: { id: number; running: boolean }[], lockActive: boolean): Record<string, unknown> | null {
+  if (lockActive || holders.some(holder => holder.running)) return { scope: "workspace", holder: "running" };
+  if (!holders.length) return null;
+  return { scope: "workspace", holder: "awaiting_user", holder_work_ids: holders.map(holder => issueIDToWorkID(holder.id)) };
 }

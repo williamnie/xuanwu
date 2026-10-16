@@ -103,8 +103,10 @@ test("shared canonical directory, needs_user occupancy, and global open-run capa
   const f=await fixture();mkdirSync(join(f.root,"shared"));symlinkSync(join(f.root,"shared"),join(f.root,"alias"));
   f.project("a",join(f.root,"shared"));f.project("b",join(f.root,"alias"));const active=f.issue("needs_user","a"),queued=f.issue("todo","b");
   expect(codes(f.schedule(queued.id))).toEqual(["project_busy"]);
+  expect(f.schedule(queued.id)?.reasons[0].detail).toEqual({scope:"workspace",holder:"awaiting_user",holder_work_ids:[issueIDToWorkID(active.id)]});
   f.db.sqlite.run("insert into issue_runs(id,issue_id,attempt,status,started_at) values(?,?,?,?,?)",["fixture-run",active.id,1,"in_progress",NOW]);
   expect(codes(f.schedule(queued.id))).toEqual(["project_busy","capacity_full"]);
+  expect(f.schedule(queued.id)?.reasons[0].detail).toEqual({scope:"workspace",holder:"running"});
   const own=f.issue();expect(f.schedule(own.id)?.reasons[0]).toMatchObject({code:"capacity_full",detail:{source:"core_runtime",open_runs:1,workers:0,maximum:1}});
   expect(projectCapacityAvailable(0,1,1)).toBe(false);expect(projectCapacityAvailable(1,0,1)).toBe(false);expect(projectCapacityAvailable(0,0,1)).toBe(true);
 });

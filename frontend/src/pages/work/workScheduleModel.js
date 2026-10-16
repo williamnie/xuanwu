@@ -5,7 +5,11 @@ export function workScheduleSummary(work, t) {
 }
 
 export function scheduleReasonText(reason, t) {
-  return t(`schedule.${reason?.code || 'unknown'}`);
+  const key = reason?.code === 'project_busy' && reason.detail?.holder === 'awaiting_user'
+    ? 'schedule.project_busy_awaiting_user' : `schedule.${reason?.code || 'unknown'}`;
+  const text = t(key);
+  // 后端新增的 code 在前端尚未配文案时退回通用说明，不显示原始键名。
+  return text === key ? t('schedule.unknown') : text;
 }
 
 export function scheduleBlockers(reason) {

@@ -20,8 +20,12 @@ test('every queue reason has paired human copy, runnable does not promise an imm
   const codes = ['project_hold', 'auto_run_off', 'dependency_waiting', 'dependency_failed', 'dependency_missing',
     'dependency_cycle', 'readiness_waiting', 'workspace_waiting', 'provider_unavailable', 'project_busy', 'capacity_full'];
   for (const language of ['zh-CN', 'en-US']) for (const code of codes) {
-    assert.notEqual(scheduleReasonText({ code }, key => translate(language, key)), `schedule.${code}`);
+    // 直接核对文案键存在；scheduleReasonText 对缺失键会退回 unknown，不能用来证明配对。
+    assert.notEqual(translate(language, `schedule.${code}`), `schedule.${code}`);
   }
+  assert.equal(scheduleReasonText({ code: 'future_gate' }, t), t('schedule.unknown'));
+  assert.match(scheduleReasonText({ code: 'project_busy', detail: { holder: 'awaiting_user' } }, t), /等你处理/);
+  assert.equal(scheduleReasonText({ code: 'project_busy', detail: { holder: 'running' } }, t), t('schedule.project_busy'));
   assert.equal(workScheduleSummary(work, t), '依赖任务失败');
   assert.match(workScheduleSummary({ status: 'todo', schedule: { state: 'runnable', reasons: [] } }, t), /等待调度/);
   assert.equal(workScheduleSummary({ ...work, status: 'failed' }, t), '');
