@@ -26,6 +26,7 @@ import {
 import { codexImportFailure, createFirstDeliveryConnectionCheck, projectPathFeedback } from './firstDeliverySetup.js';
 import OnboardingDeliveryReview from './OnboardingDeliveryReview.jsx';
 import OnboardingSupervisorConnection from './OnboardingSupervisorConnection.jsx';
+import { codexImportNote, codexImportVisible, useCodexImportPreview } from '../codexImportPreview.js';
 import './FirstDeliveryGuide.css';
 
 const EMPTY_SNAPSHOT = { codeAgents: [], connectionTest: null, doctor: null, evidence: [], handoffs: [], runnerSettings: null, works: [] };
@@ -38,6 +39,7 @@ const AGENT_DESCRIPTIONS = Object.freeze({
 
 export default function FirstDeliveryGuide({ checkSavedConnection, onComplete, onOpenWork, projects }) {
   const refreshData = useDataStore(selectRefreshData);
+  const [codexImport, refreshCodexImport] = useCodexImportPreview();
   const [snapshot, setSnapshot] = useState(EMPTY_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
@@ -296,7 +298,7 @@ export default function FirstDeliveryGuide({ checkSavedConnection, onComplete, o
     setError('');
     try {
       const result = await projectsApi.syncCodexProjects();
-      await refreshData(['projects', 'workSummary']);
+      await Promise.all([refreshData(['projects', 'workSummary']), refreshCodexImport()]);
       const project = result.created?.[0] || result.existing?.[0];
       if (project) setSelectedProjectID(project.id);
       message.success(project ? '工作区已导入，请确认要使用的项目' : '没有可导入的本机工作区，请直接输入项目路径');
@@ -401,10 +403,10 @@ export default function FirstDeliveryGuide({ checkSavedConnection, onComplete, o
                   </button>
                 </form>
                 <p className="first-delivery-flow-note" id="first-delivery-path-result" role="status">{!cwd.trim() ? '粘贴项目路径后自动检查，不会创建项目或执行命令。' : pathCheck.path !== cwd.trim() || pathCheck.busy ? '正在检查路径…' : pathCheck.error || projectPathFeedback(pathResult)}</p>
-                <div className="first-delivery-import">
+                {codexImportVisible(codexImport) ? <div className="first-delivery-import">
                   <button className="btn btn-secondary" disabled={Boolean(busy)} onClick={importCodex} type="button">从 Codex 导入</button>
-                  <p className="first-delivery-flow-note">读取本机 Codex Desktop 工作区；会对已有项目开启自动执行。</p>
-                </div>
+                  <p className="first-delivery-flow-note">{codexImportNote(codexImport)}</p>
+                </div> : null}
               </div>
             </ActionCard>
           ) : !state.targetWork ? (

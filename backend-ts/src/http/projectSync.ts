@@ -35,6 +35,32 @@ export function syncCodexProjects(db: RunnerDatabase): SyncResult {
   return { ...result, summary: syncSummary(discovery, result) };
 }
 
+export type CodexSyncPreview =
+  | { available: false; reason: "state_not_found" | "state_unreadable" }
+  | { available: true; summary: { discovered: number; new: number; existing: number; enable_auto_run: number; skipped: number } };
+
+/** Read-only availability for "从 Codex 导入": reads the Codex state file and existing projects, never writes. */
+export function previewCodexProjects(db: RunnerDatabase): CodexSyncPreview {
+  const source = defaultCodexStatePath();
+  if (!existsSync(source)) return { available: false, reason: "state_not_found" };
+  let discovery: ProjectDiscovery;
+  try {
+    discovery = buildDiscovery(source, JSON.parse(readFileSync(source, "utf8")) as CodexState);
+  } catch {
+    return { available: false, reason: "state_unreadable" };
+  }
+  const { byCwd } = projectIndexes(listProjects(db));
+  const existing = discovery.projects.map((candidate) => byCwd.get(candidate.cwd)).filter((project) => project !== undefined);
+  return { available: true, summary: {
+    discovered: discovery.projects.length + discovery.skipped.length,
+    new: discovery.projects.length - existing.length,
+    existing: existing.length,
+    // 与 ensureProjectAutomaticTakeover 的副作用对应：导入会为这些已有项目开启自动执行。
+    enable_auto_run: existing.filter((project) => project.auto_run !== 1).length,
+    skipped: discovery.skipped.length
+  } };
+}
+
 function discoverCodexProjects(): ProjectDiscovery {
   const source = defaultCodexStatePath();
   const body = readFileSync(source, "utf8");

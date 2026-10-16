@@ -21,6 +21,8 @@ export const projectsApi = {
     method: 'DELETE',
   }),
 
+  previewCodexImport: () => request('/api/projects/sync/codex/preview'),
+
   syncCodexProjects: () => request('/api/projects/sync/codex', {
     method: 'POST',
     body: JSON.stringify({}),

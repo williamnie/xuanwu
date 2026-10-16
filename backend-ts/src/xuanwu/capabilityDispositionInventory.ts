@@ -819,6 +819,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/projects/:id/pi/issue-state", family: "project-scope" },
   { method: "POST", path: "/api/projects/:id/pi/run-once", family: "automation" },
   { method: "GET", path: "/api/projects/:id/references/search", family: "project-scope" },
+  { method: "GET", path: "/api/projects/sync/codex/preview", family: "project-scope" },
   { method: "POST", path: "/api/projects/sync/codex", family: "project-scope" },
   { method: "GET", path: "/api/runner/settings", family: "capability-policy" },
   { method: "PUT", path: "/api/runner/settings", family: "capability-policy" },

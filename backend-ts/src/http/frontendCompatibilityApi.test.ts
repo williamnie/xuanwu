@@ -66,6 +66,41 @@ describe("Bun frontend API compatibility", () => {
     }
   });
 
+  test("previews Codex import read-only before syncing", async () => {
+    const { cwd, database } = await openFixtureDatabase();
+    const second = await tempDir("xuanwu-bun-sync-preview-");
+    const statePath = join(second, "codex-state.json");
+    const previousStatePath = Bun.env.XUANWU_CODEX_STATE;
+    try {
+      const router = createDefaultRouter({ database });
+      Bun.env.XUANWU_CODEX_STATE = join(second, "absent.json");
+      expect(await requestJSON(router, "/api/projects/sync/codex/preview", "GET"))
+        .toEqual({ available: false, reason: "state_not_found" });
+      await writeFile(statePath, "{not json");
+      Bun.env.XUANWU_CODEX_STATE = statePath;
+      expect(await requestJSON(router, "/api/projects/sync/codex/preview", "GET"))
+        .toEqual({ available: false, reason: "state_unreadable" });
+
+      await writeFile(statePath, JSON.stringify({
+        "electron-saved-workspace-roots": [cwd, second, join(second, "missing")]
+      }));
+      await requestJSON(router, "/api/projects", "POST", { id: "project", cwd }, 201);
+      database.sqlite.run("update projects set auto_run=0 where id='project'");
+      const before = database.sqlite.query("select id, auto_run, updated_at from projects order by id").all();
+      const preview = await requestJSON(router, "/api/projects/sync/codex/preview", "GET");
+      expect(preview).toEqual({ available: true, summary: { discovered: 3, new: 1, existing: 1, enable_auto_run: 1, skipped: 1 } });
+      expect(database.sqlite.query("select id, auto_run, updated_at from projects order by id").all()).toEqual(before);
+
+      await requestJSON(router, "/api/projects/sync/codex", "POST", {});
+      expect((await requestJSON(router, "/api/projects/sync/codex/preview", "GET")).summary)
+        .toEqual({ discovered: 3, new: 0, existing: 2, enable_auto_run: 0, skipped: 1 });
+    } finally {
+      if (previousStatePath === undefined) delete Bun.env.XUANWU_CODEX_STATE;
+      else Bun.env.XUANWU_CODEX_STATE = previousStatePath;
+      database.close();
+    }
+  });
+
   test("skips Codex workspace roots from TCC sensitive folders", async () => {
     const { database } = await openFixtureDatabase();
     const root = await tempDir("xuanwu-bun-sync-sensitive-");

@@ -61,7 +61,8 @@ test('path checking cancels stale requests and import is an explicit secondary a
   assert.match(guideSource, /pathCheck.path === cwd.trim\(\)/);
   assert.match(guideSource, /disabled=\{Boolean\(busy\) \|\| !validPath\}/);
   assert.match(guideSource, /className="btn btn-secondary"[^>]*onClick=\{importCodex\}/);
-  assert.match(guideSource, /会对已有项目开启自动执行/);
+  // 副作用说明由共享预览模块按实际数量生成（codexImportPreview.test.js 覆盖文案）。
+  assert.match(guideSource, /\{codexImportNote\(codexImport\)\}/);
   assert.match(projectsApiSource, /checkPath:[\s\S]*?\/api\/projects\/path-check\?/);
 });
 

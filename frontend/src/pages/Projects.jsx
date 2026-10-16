@@ -25,6 +25,7 @@ import {
 import ProjectHoldNotice from './ProjectHoldNotice';
 import ProjectSettingsEditor from './ProjectSettingsEditor';
 import ModalOverlay from '../components/ModalOverlay.jsx';
+import { codexImportNote, codexImportVisible, useCodexImportPreview } from './codexImportPreview.js';
 
 function compactPath(cwd = '') {
   const text = String(cwd || '').trim().replace(/[\\/]+$/, '');
@@ -39,6 +40,8 @@ export default function Projects() {
   const workSummary = useDataStore(selectWorkSummary);
   const backendOnline = useDataStore(selectBackendOnline);
   const refreshData = useDataStore(selectRefreshData);
+  const [codexImport, refreshCodexImport] = useCodexImportPreview();
+  const showCodexImport = codexImportVisible(codexImport);
   const [ui, updateUi] = useImmer({
     syncing: false,
     syncResult: null,
@@ -81,7 +84,7 @@ export default function Projects() {
       updateUi(draft => {
         draft.syncResult = result;
       });
-      await refreshData(['projects', 'workSummary']);
+      await Promise.all([refreshData(['projects', 'workSummary']), refreshCodexImport()]);
     } catch (err) {
       updateUi(draft => {
         draft.syncResult = { error: err.message || '同步 Codex 项目失败' };
@@ -163,12 +166,14 @@ export default function Projects() {
   return (
     <section className="glass-card settings-project-panel">
       <div className="settings-project-panel-header">
-        <p className="settings-project-panel-note">开启自动执行后，玄武会依次处理项目中排队的任务。“从 Codex 导入”会读取本机 Codex 工作区，已存在的项目会被开启自动执行。</p>
+        <p className="settings-project-panel-note">开启自动执行后，玄武会依次处理项目中排队的任务。{showCodexImport ? `“从 Codex 导入”：${codexImportNote(codexImport)}` : ''}</p>
         <div className="settings-project-panel-actions">
-          <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing} type="button">
-            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? '正在导入…' : '从 Codex 导入'}
-          </button>
+          {showCodexImport ? (
+            <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing} type="button">
+              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? '正在导入…' : '从 Codex 导入'}
+            </button>
+          ) : null}
           <button className="btn btn-primary" onClick={handleOpenCreateModal} type="button">
             <FolderPlus size={16} /> 添加项目
           </button>
@@ -222,15 +227,17 @@ export default function Projects() {
             <Folder className="projects-empty-icon" size={34} color="var(--text-muted)" />
             <div>
               <h3 className="projects-empty-title">暂无监控项目</h3>
-              <p className="projects-empty-copy">添加本地项目路径，或从已有 Codex 项目中同步。</p>
+              <p className="projects-empty-copy">{showCodexImport ? '添加本地项目路径，或从已有 Codex 项目中导入。' : '添加本地项目路径。'}</p>
             </div>
             <button className="btn btn-secondary projects-empty-primary" onClick={handleOpenCreateModal}>
               添加项目
             </button>
-            <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing}>
-              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-              {syncing ? '正在同步...' : '从 Codex 同步'}
-            </button>
+            {showCodexImport ? (
+              <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing} type="button">
+                <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+                {syncing ? '正在导入…' : '从 Codex 导入'}
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="grid-cols-3 projects-grid">

@@ -20,7 +20,7 @@ import { constrainApprovalGrantScope } from "../pi/approvalGrantScope.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError } from "./errors.ts";
 import { searchProjectReferences } from "./projectReferences.ts";
-import { syncCodexProjects } from "./projectSync.ts";
+import { previewCodexProjects, syncCodexProjects } from "./projectSync.ts";
 
 export type FrontendCompatContext = {
   bus?: EventBus;
@@ -72,7 +72,8 @@ export function createFrontendCompatHandlers(context: FrontendCompatContext) {
       resumeHold: (id: string) => clearProjectHold(context.database, id),
       setLoop: (id: string, autoRun: number) => setProjectLoop(context, id, autoRun),
       status: (id: string) => ({ status: projectLoopStatus(context.database, id) }),
-      syncCodex: () => syncCodexProjects(context.database)
+      syncCodex: () => syncCodexProjects(context.database),
+      syncCodexPreview: () => previewCodexProjects(context.database)
     },
     uploads: {
       content: (id: string) => uploadContent(context.database, id),

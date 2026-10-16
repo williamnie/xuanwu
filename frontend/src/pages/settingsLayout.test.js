@@ -57,7 +57,7 @@ test('Settings Projects owns the complete project list and editor flow; preferen
   assert.match(projectsSource, /handleOpenCreateModal/);
   assert.match(projectsSource, /handleOpenEditModal/);
   assert.match(projectsSource, /handleSyncCodexProjects/);
-  assert.match(projectsSource, /已存在的项目会被开启自动执行/);
+  assert.match(projectsSource, /“从 Codex 导入”：\$\{codexImportNote\(codexImport\)\}/);
   assert.match(projectsSource, /handleDelete/);
   assert.match(projectsSource, /<ProjectSettingsEditor/);
   assert.match(projectSettingsEditorSource, /projectsApi\.updateProject\(projectID, payload\)/);

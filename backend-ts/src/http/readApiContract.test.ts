@@ -280,6 +280,7 @@ describe("read API route contracts", () => {
         "GET /api/notifications",
         "GET /api/projects/:id/loop/status",
         "GET /api/projects/:id/references/search",
+        "GET /api/projects/sync/codex/preview",
         "GET /api/session-images",
         "GET /api/uploads/:id/content",
         "PATCH /api/agent-profiles/:id",
