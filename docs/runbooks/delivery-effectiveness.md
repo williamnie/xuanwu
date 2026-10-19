@@ -13,8 +13,11 @@
 | `from` / `to` | UTC ISO 毫秒字符串；默认近 30 天，范围有序且不超过 90 天，包含边界 |
 | `limit` | 1–100，API 默认 100，页面使用 25 |
 | `before_issue_id` | 正整数游标；取返回的 `next_before_issue_id` |
+| `scope` | 可选 `page`（默认）/ `range`；`range` 不接受 `limit` / `before_issue_id` |
 
 未知、重复、空值和非法参数返回 400。每页按 Issue id 降序扫描最多 500 个候选；日期按终态任务最新 Run 的结束时间筛选。`aggregation_scope=page`：总览、项目/类型分组与 UTC 日趋势均仅统计返回的 `samples`，不是整个范围的全集。翻页必须固定首次返回的 `since/until` 和过滤条件；`has_more=true` 的空页仍需继续。只有遍历全部页后才能比较完整范围。排序不是结束时间排序。
+
+`scope=range` 供统计页使用：直接读取筛选条件下全部终态任务（不受 500 候选与 200ms 预算限制，仍逐任务让出事件循环），`aggregation_scope=range`，总览与分组覆盖整个日期范围，`samples` 为空、`has_more=false`。超过 2,000 个任务时只汇总 Issue id 最大的 2,000 个并返回 `truncated=true`。本地 2,000 个任务约 1 秒。
 
 每个样本保留 canonical Work / Run、Handoff / Evidence 和 `audit_refs`，分组包含 `work_ids`。历史审计仍可通过既有 Work / Run / Evidence / Handoff API 和 #971 的 memory-diagnostics 分页查看。范围选择任务队列，事实读取当前持久化状态，包含这些任务后续的验收与复盘；不承诺历史时点快照或跨页事务快照。
 

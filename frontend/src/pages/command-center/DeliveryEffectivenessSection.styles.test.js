@@ -14,10 +14,8 @@ test('delivery statistics inherits both themes and confines wide tables at stand
   assert.match(css, /overflow-wrap: anywhere/);
 });
 
-test('short pages retain the report footprint and narrow controls wrap without hiding pagination', () => {
-  assert.match(css, /\.delivery-table-scroll\s*\{[^}]*height:\s*280px/);
-  assert.match(css, /\.delivery-query-status\s*\{[^}]*min-height:/);
-  assert.match(css, /\.delivery-results\s*\{[^}]*min-height:/);
-  assert.match(css, /\.delivery-pagination\s*\{[^}]*justify-content:\s*space-between/);
-  assert.match(css, /:disabled\s*\{[^}]*cursor:\s*not-allowed/);
+test('range picker follows the tab contract: neutral active surface with a 2px primary underline', () => {
+  assert.match(css, /\.delivery-range button\[aria-pressed='true'\] \{ background: var\(--bg-card\); color: var\(--text-primary\); \}/);
+  assert.match(css, /\.delivery-range button\[aria-pressed='true'\]::after \{[^}]*background: var\(--primary\)[^}]*height: 2px/);
+  assert.match(css, /:disabled \{[^}]*cursor: not-allowed/);
 });

@@ -1,9 +1,12 @@
 import type { RunnerDatabase } from '../db/database.ts';
 import { workFacts, sumKnown, FACT_LIMIT, JSON_LIMIT, type Candidate, type WorkFacts } from './deliveryEffectivenessFacts.ts';
 
-export type DeliveryQuery = { project_id?: string; task_type?: string; from?: string; to?: string; limit?: number; before_issue_id?: number };
+export type DeliveryQuery = { project_id?: string; task_type?: string; from?: string; to?: string; limit?: number; before_issue_id?: number; scope?: 'page' | 'range' };
 const CANDIDATE_LIMIT = 500;
 const TIME_BUDGET_MS = 200;
+// 整段汇总只读取终态任务，事实读取仍逐任务有界；超过上限时 truncated 明示未覆盖全部。
+const RANGE_WORK_LIMIT = 2000;
+type LatestRun = { id: string; run_id: string; started_at: string; ended_at: string };
 
 /** 只读、有界的账本投影。分组与趋势仅描述当前页；游标推进候选，空页也可继续。 */
 export function buildDeliveryEffectiveness(db: RunnerDatabase, now: Date, query: DeliveryQuery = {}) {
@@ -31,6 +34,7 @@ function* deliverySteps(db: RunnerDatabase, now: Date, query: DeliveryQuery) {
   const started = performance.now();
   const until = query.to ?? now.toISOString();
   const since = query.from ?? new Date(Date.parse(until) - 30 * 86400_000).toISOString();
+  if (query.scope === 'range') return yield* rangeSteps(db, now, query, since, until, started);
   const limit = Math.max(1, Math.min(100, query.limit ?? 100));
   const candidates = db.sqlite.query<Candidate, [number, number]>(`select i.id,i.status,i.project_id,
     coalesce(nullif(w.type,''),'engineering_task') as task_type
@@ -46,10 +50,9 @@ function* deliverySteps(db: RunnerDatabase, now: Date, query: DeliveryQuery) {
     if (!['done', 'failed', 'cancelled'].includes(candidate.status)
       || (query.project_id && candidate.project_id !== query.project_id)
       || (query.task_type && candidate.task_type !== query.task_type)) continue;
-    const latest = db.sqlite.query<{ id: string; run_id: string; started_at: string; ended_at: string }, [number]>(
+    const latest = db.sqlite.query<LatestRun, [number]>(
       'select id,run_id,started_at,ended_at from issue_runs where issue_id=? order by attempt desc limit 1').get(candidate.id);
-    if (!latest || !Number.isFinite(Date.parse(latest.ended_at))
-      || Date.parse(latest.ended_at) < Date.parse(since) || Date.parse(latest.ended_at) > Date.parse(until)) continue;
+    if (!latest || !endedInRange(latest, since, until)) continue;
     samples.push(workFacts(db, candidate, latest));
   }
   const hasMore = scanned < candidates.length;
@@ -75,6 +78,44 @@ function* deliverySteps(db: RunnerDatabase, now: Date, query: DeliveryQuery) {
       facts: 'bounded source records; limited_sources identifies incomplete facts; missing audit is unknown, not zero activity',
     },
   };
+}
+
+// 汇总日期范围内全部终态任务：总览与分组覆盖整个范围，不返回逐任务样本。
+function* rangeSteps(db: RunnerDatabase, now: Date, query: DeliveryQuery, since: string, until: string, started: number) {
+  const candidates = db.sqlite.query<Candidate & { run_pk: string | null; run_id: string | null; started_at: string | null; ended_at: string | null },
+    [string, string, string, string]>(`select i.id,i.status,i.project_id,
+    coalesce(nullif(w.type,''),'engineering_task') as task_type,
+    r.id as run_pk,r.run_id,r.started_at,r.ended_at
+    from issues i left join works w on w.id='xw:work:issues:'||i.id
+    left join issue_runs r on r.id=(select id from issue_runs where issue_id=i.id order by attempt desc limit 1)
+    where i.status in ('done','failed','cancelled') and (?='' or i.project_id=?)
+      and (?='' or coalesce(nullif(w.type,''),'engineering_task')=?)
+    order by i.id desc`).all(query.project_id ?? '', query.project_id ?? '', query.task_type ?? '', query.task_type ?? '');
+  const samples: WorkFacts[] = [];
+  let truncated = false;
+  for (const { run_pk, run_id, started_at, ended_at, ...candidate } of candidates) {
+    if (run_pk === null) continue;
+    const latest = { id: run_pk, run_id: run_id ?? '', started_at: started_at ?? '', ended_at: ended_at ?? '' };
+    if (!endedInRange(latest, since, until)) continue;
+    if (samples.length >= RANGE_WORK_LIMIT) { truncated = true; break; }
+    yield;
+    samples.push(workFacts(db, candidate, latest));
+  }
+  return {
+    contract: 'xw.delivery-effectiveness.v2', generated_at: now.toISOString(), since, until,
+    filters: { project_id: query.project_id ?? null, task_type: query.task_type ?? null },
+    sample_limit: RANGE_WORK_LIMIT, truncated, has_more: false, next_before_issue_id: null,
+    aggregation_scope: 'range', ...summarize(samples), samples: [] as WorkFacts[],
+    by_project: groups(samples, s => s.project_id), by_type: groups(samples, s => s.task_type),
+    trend: groups(samples, s => s.ended_at.slice(0, 10)),
+    query_budget: { candidate_limit: null, scanned_candidates: candidates.length, time_budget_ms: null,
+      elapsed_ms: Math.round(performance.now() - started), per_source_limit: FACT_LIMIT, max_json_bytes: JSON_LIMIT },
+  };
+}
+
+function endedInRange(run: LatestRun, since: string, until: string) {
+  const ended = Date.parse(run.ended_at);
+  return Number.isFinite(ended) && ended >= Date.parse(since) && ended <= Date.parse(until);
 }
 
 function summarize(samples: WorkFacts[]) {

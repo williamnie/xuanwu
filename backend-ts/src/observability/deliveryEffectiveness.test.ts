@@ -38,6 +38,20 @@ test('filters and paginates stable Work samples; groups and trends describe only
   } finally { db.close(); }
 });
 
+test('range scope aggregates every terminal Work in the range without pagination or samples', async () => {
+  const db = await fixture();
+  try {
+    for (let id = 1; id <= 30; id++) work(db, id, id % 3 ? 'a' : 'b');
+    work(db, 31, 'a', '2026-08-01T00:00:00Z');
+    db.sqlite.run("insert into issues(id,project_id,title,status,created_at,updated_at) values (32,'a','Open','running',?,?)", [now.toISOString(), now.toISOString()]);
+    const all = buildDeliveryEffectiveness(db, now, { scope: 'range', from: '2026-09-01T00:00:00.000Z', to: now.toISOString() });
+    expect(all).toMatchObject({ aggregation_scope: 'range', sampled_works: 30, completed_works: 30, has_more: false, truncated: false, samples: [] });
+    expect(all.by_project.map(g => [g.key, g.sampled_works])).toEqual([['a', 20], ['b', 10]]);
+    const filtered = buildDeliveryEffectiveness(db, now, { scope: 'range', project_id: 'b', from: '2026-09-01T00:00:00.000Z', to: now.toISOString() });
+    expect(filtered.sampled_works).toBe(10);
+  } finally { db.close(); }
+});
+
 test('separates missing costs, currency conflict, recorded help, injection and self-reported reuse', async () => {
   const db = await fixture();
   try {

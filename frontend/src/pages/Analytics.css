@@ -10,6 +10,4 @@
 .analytics-intro > span { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .analytics-intro h1 { font-size: var(--text-page); font-weight: 650; letter-spacing: -.02em; margin: var(--space-1-5) 0; }
 .analytics-intro p { color: var(--text-secondary); font-size: var(--text-base); line-height: 1.6; margin: 0; }
-.analytics-usage { border-top: 1px solid var(--border-color); padding-top: var(--space-4); }
-.analytics-usage > summary { color: var(--text-secondary); cursor: pointer; font-size: var(--text-md); padding-bottom: var(--space-4); }
 @media (max-width: 760px) { .analytics-page { padding-top: var(--space-4); gap: var(--space-4); } }

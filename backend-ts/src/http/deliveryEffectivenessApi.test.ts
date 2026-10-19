@@ -21,7 +21,8 @@ test('statistics read API validates ranges, dimensions and pagination, preserves
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ contract: 'xw.delivery-effectiveness.v2', sampled_works: 0,
       delivery_rate: null, has_more: false, memory: { injection_estimated_token_count: null }, cost: { by_currency: [] }, supervisor: { total_cost: null } });
-    for (const invalid of ['limit=101', 'limit=0', 'before_issue_id=-1', 'task_type=bug', 'wat=1', 'limit=1&limit=2',
+    expect(await (await get(range + '&scope=range')).json()).toMatchObject({ aggregation_scope: 'range', has_more: false });
+    for (const invalid of ['scope=all', 'scope=range&limit=10', 'scope=range&before_issue_id=3', 'limit=101', 'limit=0', 'before_issue_id=-1', 'task_type=bug', 'wat=1', 'limit=1&limit=2',
       'project_id=', 'from=2026-02-30T00:00:00.000Z', 'from=2026-01-01T00:00:00.000Z&to=2026-09-01T00:00:00.000Z',
       'from=2026-09-29T00:00:00.000Z&to=2026-09-01T00:00:00.000Z']) expect((await get(invalid)).status).toBe(400);
     expect((await get('project_id=missing')).status).toBe(404);

@@ -7,7 +7,7 @@ import { HttpError } from './errors.ts';
 const activeReads = new Set<string>();
 export async function readDeliveryEffectiveness(db: RunnerDatabase, request: Request) {
   const params = new URL(request.url).searchParams;
-  const allowed = ['project_id', 'task_type', 'from', 'to', 'limit', 'before_issue_id'];
+  const allowed = ['project_id', 'task_type', 'from', 'to', 'limit', 'before_issue_id', 'scope'];
   for (const key of params.keys()) if (!allowed.includes(key) || params.getAll(key).length !== 1) {
     throw new HttpError(400, 'unknown or repeated delivery parameter');
   }
@@ -33,6 +33,12 @@ export async function readDeliveryEffectiveness(db: RunnerDatabase, request: Req
     const raw = params.get(key)!, value = Number(raw);
     if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || value < 1 || value > (key === 'limit' ? 100 : Number.MAX_SAFE_INTEGER)) throw new HttpError(400, `invalid ${key}`);
     query[key] = value;
+  }
+  if (params.has('scope')) {
+    const scope = params.get('scope');
+    if (scope !== 'page' && scope !== 'range') throw new HttpError(400, 'invalid scope');
+    if (scope === 'range' && (params.has('limit') || params.has('before_issue_id'))) throw new HttpError(400, 'range scope does not paginate');
+    query.scope = scope;
   }
   if (activeReads.has(db.path)) throw new HttpError(429, 'delivery statistics busy; retry later');
   activeReads.add(db.path);
