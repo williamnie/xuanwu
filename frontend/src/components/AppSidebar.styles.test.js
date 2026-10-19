@@ -62,3 +62,9 @@ test('mobile navigation uses an accessible off-canvas drawer instead of an unlab
   assert.match(source, /aria-modal=\{isMobileViewport && mobileSidebarOpen/);
   assert.match(source, /inert=\{isMobileViewport && !mobileSidebarOpen/);
 });
+
+test('sidebar footer never shrinks under a long session list', () => {
+  const sidebarCss = readFileSync(new URL('./AppSidebar.css', import.meta.url), 'utf8');
+  assert.match(ruleFor('.sidebar-footer', sidebarCss), /flex-shrink:\s*0/);
+  assert.doesNotMatch(sidebarCss, /nav-item-analytics/);
+});

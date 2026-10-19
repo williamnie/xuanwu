@@ -54,8 +54,8 @@ const NAV_CODE_PREFIX = {
   tasks: '02',
   runs: '03',
   'ask-xuanwu': '04',
-  automations: '05',
-  analytics: '06',
+  analytics: '05',
+  automations: '06',
 };
 
 export default function AppSidebar({

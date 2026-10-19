@@ -120,7 +120,7 @@ export default function Automations() {
       <div>
         <div className="automations-kicker font-mono">
           <Bot size={15} />
-          <span>05 AUTOMATION_LOOPS</span>
+          <span>06 AUTOMATION_LOOPS</span>
           <span className="text-zinc-500">[DISPATCH: CRON_EVENTS]</span>
         </div>
         <h1>{t('nav.automations')}</h1>

@@ -34,7 +34,7 @@ test('product navigation has one ordered Xuanwu identity and centralized labels'
   assert.equal(new Set(PRODUCT_NAV_ITEMS.map(item => item.label)).size, PRODUCT_NAV_ITEMS.length);
   assert.deepEqual(new Set(PRODUCT_NAV_ITEMS.map(item => item.availability)), new Set(['available', 'compatibility']));
   assert.equal(PRODUCT_NAV_ITEMS.find(item => item.page === 'settings')?.placement, 'footer');
-  assert.equal(PRODUCT_NAV_ITEMS.find(item => item.page === 'analytics')?.placement, 'footer');
+  assert.equal(PRODUCT_NAV_ITEMS.find(item => item.page === 'analytics')?.placement, 'primary');
   assert.equal(PRODUCT_NAV_ITEMS.find(item => item.page === 'automations')?.placement, 'subview');
   assert.equal(productNavPageForRoute('automations'), 'tasks');
   assert.equal(productNavPageForRoute('cron'), 'tasks');
@@ -66,8 +66,8 @@ test('product navigation has one ordered Xuanwu identity and centralized labels'
   assert.match(workBoardSource, /02 WORK_LEDGER/);
   assert.match(runSidebarSource, /03 RUN_INSPECTOR/);
   assert.match(piChatSource, /04 ASK_XUANWU/);
-  assert.match(automationsSource, /05 AUTOMATION_LOOPS/);
-  assert.match(analyticsSource, /06 TELEMETRY_ANALYTICS/);
+  assert.match(automationsSource, /06 AUTOMATION_LOOPS/);
+  assert.match(analyticsSource, /05 TELEMETRY_ANALYTICS/);
 });
 
 test('feature availability hides Work when its existing compatibility flag is disabled', () => {

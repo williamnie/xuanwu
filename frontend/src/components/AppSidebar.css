@@ -73,6 +73,7 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   margin-top: auto;
   overflow: hidden;
   padding-top: var(--space-2-5);
@@ -82,19 +83,7 @@
 .sidebar-footer-actions {
   box-sizing: border-box;
   display: flex;
-  flex-wrap: wrap;
   gap: var(--space-1-5);
-  width: 100%;
-}
-
-.sidebar-footer-actions .nav-item-analytics {
-  box-sizing: border-box;
-  flex: 1 0 100%;
-  gap: var(--space-2);
-  height: 34px;
-  justify-content: flex-start;
-  min-width: 0;
-  padding: 0 var(--space-2-5);
   width: 100%;
 }
 

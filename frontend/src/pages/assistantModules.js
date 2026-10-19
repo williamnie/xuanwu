@@ -42,7 +42,7 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
     page: 'analytics',
     label: PRODUCT_NAV_LABELS.analytics,
     icon: 'analytics',
-    placement: 'footer',
+    placement: 'primary',
     availability: 'available',
   },
   {
