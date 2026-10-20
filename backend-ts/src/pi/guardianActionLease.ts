@@ -60,7 +60,7 @@ function heldResult(action: PiAction, idempotencyKey: string, leaseKey: string):
 function actionByIdempotencyKey(db: RunnerDatabase, idempotencyKey: string): PiAction | null {
   if (idempotencyKey === "") return null;
   const row = db.sqlite.query<{ id: string }, [string]>(
-    `select id from pi_actions where idempotency_key=? order by created_at asc, id asc limit 1`
+    `select id from pi_actions where idempotency_key=? and idempotency_key<>'' order by created_at asc, id asc limit 1`
   ).get(idempotencyKey);
   return row ? getPiAction(db, row.id) : null;
 }

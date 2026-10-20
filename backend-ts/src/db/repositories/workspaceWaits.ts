@@ -112,8 +112,9 @@ export function workspaceExecutionEpoch(db: RunnerDatabase, issueID: number): st
     attempts: db.sqlite.query(`select a.attempt_id,a.revision,a.status,a.ended_at,a.updated_at
       from run_attempts a join issue_runs r on r.id=a.issue_run_id
       join issues i on i.id=r.issue_id where i.project_id=? order by a.attempt_id`).all(id),
-    sessions: db.sqlite.query(`select s.session_key,s.status,s.updated_at from agent_sessions s left join issues i on i.id=s.issue_id
-      where s.project_id=? or i.project_id=? order by s.session_key`).all(id, id)
+    sessions: db.sqlite.query(`select s.session_key,s.status,s.updated_at from agent_sessions s
+      where s.project_id=? or s.issue_id in (select i.id from issues i where i.project_id=?)
+      order by s.session_key`).all(id, id)
   })));
 }
 

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../database.ts";
 import { RUN_STATUSES, type RunID, type WorkID } from "../../domain/run/contracts.ts";
-import { listLatestRunsForWorkIDs, listRuns, type RunListFilter } from "./runs.ts";
+import { countRuns, countRunsByStatus, listLatestRunsForWorkIDs, listRuns, type RunListFilter } from "./runs.ts";
 
 const tempRoots: string[] = [];
 
@@ -69,7 +69,7 @@ describe("Run list repository", () => {
     } finally { db.close(); }
   });
 
-  test("status filters and provider, status and updated-at sorting still paginate after projection", async () => {
+  test("status filters and provider, status and updated-at sorting paginate candidates with the projected order", async () => {
     const db = await openFixture();
     try {
       insertRuns(db);
@@ -84,6 +84,25 @@ describe("Run list repository", () => {
       for (const { filter, ids } of cases) {
         expect(listRuns(db, { limit: 100, offset: 0, ...filter }).map(run => run.id)).toEqual(ids.map(runID));
         expect(listRuns(db, { limit: 2, offset: 1, ...filter }).map(run => run.id)).toEqual(ids.slice(1, 3).map(runID));
+      }
+    } finally { db.close(); }
+  });
+
+  test("status counts agree with the projected unified status of every Run", async () => {
+    const db = await openFixture();
+    try {
+      insertRuns(db);
+      const projected = listRuns(db, { limit: 100, offset: 0 });
+      const expected = Object.fromEntries(RUN_STATUSES.map((status) => [
+        status, projected.filter((run) => run.status === status).length
+      ]));
+      expect(countRunsByStatus(db)).toEqual(expected as ReturnType<typeof countRunsByStatus>);
+      expect(expected).toMatchObject({ recovering: 1, running: 1, succeeded: 2 });
+      for (const scope of [{}, { project_id: "demo" }, { providers: ["qoder"] }]) {
+        for (const statuses of [["running"], ["recovering"], ["running", "recovering"], ["failed", "cancelled"], ["created"]] as const) {
+          const filter = { ...scope, statuses: [...statuses] };
+          expect(countRuns(db, filter)).toBe(listRuns(db, { ...filter, limit: 100, offset: 0 }).length);
+        }
       }
     } finally { db.close(); }
   });
@@ -147,7 +166,13 @@ describe("Run list repository", () => {
       expect(plan).toContain("MATERIALIZE selected_runs");
       expect(plan).toContain("MATERIALIZE attempt_stats");
       expect(plan.some((detail) => detail.includes("SEARCH event USING INDEX idx_issue_events_issue_type"))).toBe(true);
-      expect(plan.some((detail) => detail.includes("CORRELATED SCALAR SUBQUERY"))).toBe(false);
+      // 投影前分页的排序键只允许按 issue_run_id 点查最新 Attempt，不得扫描 Attempt 历史。
+      plan.forEach((detail, index) => {
+        if (detail.startsWith("CORRELATED SCALAR SUBQUERY")) {
+          expect(plan[index + 1]).toContain("SEARCH latest USING INDEX idx_run_attempts_issue_run_sequence (issue_run_id=?)");
+        }
+      });
+      expect(plan.some((detail) => /^SCAN (latest|attempt)\b/.test(detail))).toBe(false);
     } finally {
       fixture.close();
     }

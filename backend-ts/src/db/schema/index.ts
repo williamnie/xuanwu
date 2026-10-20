@@ -1,3 +1,4 @@
+import { hotPathReadIndexesMigration } from "./091_hot_path_read_indexes.ts";
 import { piCredentialSourceMigration } from "./090_pi_credential_source.ts";
 import { runtimeActivityIndexesMigration } from "./089_runtime_activity_indexes.ts";
 import { piMemoryReflectionsMigration } from "./088_pi_memory_reflections.ts";
@@ -184,4 +185,5 @@ export const migrations = [
   piMemoryReflectionsMigration,
   runtimeActivityIndexesMigration,
   piCredentialSourceMigration,
+  hotPathReadIndexesMigration,
 ];

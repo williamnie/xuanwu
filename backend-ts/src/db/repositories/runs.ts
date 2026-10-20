@@ -183,16 +183,14 @@ const RUN_DETAIL_COLUMNS = `
 
 export function listRuns(db: RunnerDatabase, filter: RunListFilter): RunView[] {
   const query = runBaseQuery(filter);
-  const status = runStatusFilter(filter.statuses);
-  // 创建时间与 Attempt 无关，可先取页；状态过滤和其他排序保留投影后分页。
-  const pageCandidates = filter.sort === "created_at" && status.args.length === 0;
+  // 排序键与统一状态都可在 Run 层按最新 Attempt 点查求值，先取页再做完整投影。
   return listRunSummaryRows(db, {
-    args: [...query.args, ...status.args, filter.limit, filter.offset],
-    candidatePage: pageCandidates ? `${runOrder(filter, "run")} limit ? offset ?` : "",
+    args: [...query.args, filter.limit, filter.offset],
+    candidatePage: `${candidateRunOrder(filter)} limit ? offset ?`,
     candidateWhere: query.where,
-    limit: pageCandidates ? "" : "limit ? offset ?",
+    limit: "",
     order: runOrder(filter, "run"),
-    selectedWhere: status.where
+    selectedWhere: ""
   }).map((row) => mapRunRow(db, row, "summary"));
 }
 
@@ -304,54 +302,20 @@ function listRunSummaryRows(
 
 export function countRuns(db: RunnerDatabase, filter: Omit<RunListFilter, "limit" | "offset">): number {
   const query = runBaseQuery(filter);
-  const status = runStatusFilter(filter.statuses);
-  if (status.args.length === 0) {
-    return db.sqlite.query<{ count: number }, Array<number | string>>(`
-      select count(*) as count
-      from issue_runs run
-      join issues issue on issue.id=run.issue_id
-      ${query.where}
-    `).get(...query.args)?.count ?? 0;
-  }
   return db.sqlite.query<{ count: number }, Array<number | string>>(`
-    with candidate_runs as materialized (
-      select run.id, run.status
-      from issue_runs run
-      join issues issue on issue.id=run.issue_id
-      ${query.where}
-    ),
-    attempt_stats as materialized (
-      select attempt.issue_run_id, max(attempt.sequence) as latest_sequence
-      from run_attempts attempt
-      join candidate_runs candidate on candidate.id=attempt.issue_run_id
-      group by attempt.issue_run_id
-    )
-    select count(*) as count from (
-      select ${runStatusSql("candidate", "latest")} as unified_status
-      from candidate_runs candidate
-      left join attempt_stats stats on stats.issue_run_id=candidate.id
-      left join run_attempts latest
-        on latest.issue_run_id=candidate.id and latest.sequence=stats.latest_sequence
-    ) run
-    ${status.where}
-  `).get(...query.args, ...status.args)?.count ?? 0;
+    select count(*) as count
+    from issue_runs run
+    join issues issue on issue.id=run.issue_id
+    ${query.where}
+  `).get(...query.args)?.count ?? 0;
 }
 
 export function countRunsByStatus(db: RunnerDatabase): Record<RunStatus, number> {
   const counts = Object.fromEntries(RUN_STATUSES.map((status) => [status, 0])) as Record<RunStatus, number>;
   const rows = db.sqlite.query<{ count: number; status: string | null }, []>(`
-    with attempt_stats as materialized (
-      select issue_run_id, max(sequence) as latest_sequence
-      from run_attempts
-      group by issue_run_id
-    ), grouped as (
-      select ${runStatusSql("run", "latest")} as unified_status
-      from issue_runs run
-      left join attempt_stats stats on stats.issue_run_id=run.id
-      left join run_attempts latest
-        on latest.issue_run_id=run.id and latest.sequence=stats.latest_sequence
+    select unified_status as status, count(*) as count from (
+      select ${CANDIDATE_RUN_STATUS_SQL} as unified_status from issue_runs run
     )
-    select unified_status as status, count(*) as count from grouped
     group by unified_status
   `).all();
   for (const row of rows) {
@@ -423,20 +387,51 @@ function runBaseQuery(filter: Omit<RunListFilter, "limit" | "offset">): {
   addFilter(clauses, args, "run.work_id=?", filter.work_id);
   addFilter(clauses, args, "issue.project_id=?", filter.project_id);
   addListFilter(clauses, args, "run.provider", filter.providers);
+  const statuses = unique(filter.statuses ?? []);
+  if (statuses.length > 0) {
+    // legacy 前提可走索引收窄候选，统一状态表达式再精确判定 recovering/running。
+    const legacy = legacyStatusesFor(statuses);
+    // 单值写成等式，才能命中 status='in_progress' 的部分索引。
+    clauses.push(legacy.length === 0 ? "0"
+      : legacy.length === 1 ? `run.status='${legacy[0]}'`
+        : `run.status in (${legacy.map((status) => `'${status}'`).join(", ")})`);
+    clauses.push(`${CANDIDATE_RUN_STATUS_SQL} in (${statuses.map(() => "?").join(", ")})`);
+    args.push(...statuses);
+  }
   return { args, where: clauses.length > 0 ? `where ${clauses.join(" and ")}` : "" };
 }
 
-function runStatusFilter(statuses: RunStatus[] | undefined): {
-  args: RunStatus[];
-  where: string;
-} {
-  const requested = unique(statuses ?? []);
-  return {
-    args: requested,
-    where: requested.length > 0
-      ? `where run.unified_status in (${requested.map(() => "?").join(", ")})`
-      : ""
-  };
+/** 统一状态只在 in_progress 时依赖最新 Attempt；终态直接由 legacy 状态映射，避免投影全部 Attempt 历史。 */
+const CANDIDATE_RUN_STATUS_SQL = `case
+    when run.status='in_progress' then coalesce((
+      select 'recovering' from run_attempts latest
+      where latest.issue_run_id=run.id
+        and latest.sequence=(select max(attempt.sequence) from run_attempts attempt where attempt.issue_run_id=run.id)
+        and latest.kind='recovery' and latest.status in ('created', 'failed', 'interrupted')
+    ), 'running')
+    when run.status='succeeded' then 'succeeded'
+    when run.status='failed' then 'failed'
+    when run.status='cancelled' then 'cancelled'
+    else null end`;
+
+function legacyStatusesFor(statuses: RunStatus[]): string[] {
+  const legacy = new Set<string>();
+  for (const status of statuses) {
+    if (status === "running" || status === "recovering") legacy.add("in_progress");
+    else if (status === "succeeded" || status === "failed" || status === "cancelled") legacy.add(status);
+  }
+  return [...legacy].sort();
+}
+
+/** 与 runOrder 同序，但只依赖 issue_runs 列与按 issue_run_id 点查的最新 Attempt，可在投影前分页。 */
+function candidateRunOrder(filter: Pick<RunListFilter, "order" | "sort">): string {
+  if (filter.sort === "provider" || filter.sort === "created_at") return runOrder(filter, "run");
+  const direction = filter.order === "asc" ? "asc" : "desc";
+  if (filter.sort === "status") return `order by ${CANDIDATE_RUN_STATUS_SQL} ${direction}, run.run_id asc`;
+  return `order by coalesce(nullif(run.ended_at, ''), (
+    select latest.updated_at from run_attempts latest
+    where latest.issue_run_id=run.id order by latest.sequence desc limit 1
+  ), run.started_at) ${direction}, run.run_id asc`;
 }
 
 function runOrder(filter: Pick<RunListFilter, "order" | "sort">, run = "run", latest = "latest"): string {

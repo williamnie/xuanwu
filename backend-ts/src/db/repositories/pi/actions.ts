@@ -276,7 +276,7 @@ export function getPiActionByIdempotencyKey(db: RunnerDatabase, idempotencyKey: 
   const key = cleanString(idempotencyKey);
   if (key === "") return null;
   const row = db.sqlite.query<Record<string, unknown>, [string]>(
-    `select ${COLUMNS} from ${TABLE} where idempotency_key=? order by created_at asc, id asc limit 1`
+    `select ${COLUMNS} from ${TABLE} where idempotency_key=? and idempotency_key<>'' order by created_at asc, id asc limit 1`
   ).get(key);
   return row ? mapPiAction(row) : null;
 }
@@ -317,7 +317,7 @@ function mustGetPiAction(db: RunnerDatabase, id: string): PiAction {
 function findExistingPiAction(db: RunnerDatabase, record: PiAction): PiAction | null {
   if (record.idempotency_key === "") return getPiAction(db, record.id);
   const row = db.sqlite.query<Record<string, unknown>, [string, string]>(
-    `select ${COLUMNS} from ${TABLE} where id=? or idempotency_key=? order by created_at asc, id asc limit 1`
+    `select ${COLUMNS} from ${TABLE} where id=? or (idempotency_key=? and idempotency_key<>'') order by created_at asc, id asc limit 1`
   ).get(record.id, record.idempotency_key);
   return row ? mapPiAction(row) : null;
 }

@@ -212,15 +212,22 @@ function projectionEventRows(db: RunnerDatabase, run: RunProjectionRow): EventRo
     order by attempt asc limit 1
   `).get(run.issue_id, run.run_sequence)?.started_at ?? "";
   const upperBound = earliestTimestamp(run.ended_at, nextStartedAt);
+  // 按 (issue_id, type, rowid) 索引倒序走到窗口上限即停，避免为排序解析该 Issue 的全部日志 JSON；
+  // 日志在写入时取时间戳，id 序与 created_at 序一致，窗口内再恢复 (created_at, id) 的稳定顺序。
   return db.sqlite.query<EventRow, [number, string, string, string]>(`
     select id, payload, created_at from issue_events
     where issue_id=? and type='issue.log' and julianday(created_at)>=julianday(?)
       and (?='' or julianday(created_at)<=julianday(?))
       and json_valid(payload)
       and json_extract(payload, '$.run_event.contract')='${NORMALIZED_RUN_EVENT_CONTRACT}'
-    order by created_at desc, id desc
+    order by id desc
     limit ${RUN_PROGRESS_SOURCE_EVENT_LIMIT + 1}
-  `).all(run.issue_id, run.started_at, upperBound, upperBound).reverse();
+  `).all(run.issue_id, run.started_at, upperBound, upperBound).sort(compareEventRows);
+}
+
+function compareEventRows(left: EventRow, right: EventRow): number {
+  if (left.created_at !== right.created_at) return left.created_at < right.created_at ? -1 : 1;
+  return left.id - right.id;
 }
 
 function parseProjectionEvents(rows: EventRow[], attempts: AttemptProjectionRow[]): ParsedEvents {

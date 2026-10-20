@@ -18,6 +18,8 @@ type OpenDatabaseOptions = {
 export const WRITER_BUSY_TIMEOUT_MS = 250;
 export const READONLY_BUSY_TIMEOUT_MS = 50;
 export const WAL_AUTOCHECKPOINT_PAGES = 1000;
+export const QUERY_PLANNER_ANALYSIS_LIMIT = 1000;
+export const QUERY_PLANNER_OPTIMIZE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 type TransactionRunner<A extends any[], T> = {
   (...args: A): T;
@@ -56,6 +58,7 @@ export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<R
       ensureDefaultPiAgent({ readonly: false, sqlite });
       ensureDefaultPiPersona({ readonly: false, sqlite });
       configureWalConnection(sqlite);
+      refreshQueryPlannerStatistics(sqlite, 0x10002);
     }
 
     const connectionRole = target.readonly ? "reader" : "writer";
@@ -63,12 +66,19 @@ export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<R
       connectionRole,
       slowThresholdMs: sqlSlowTraceThreshold()
     });
+    const optimizeTimer = target.readonly
+      ? undefined
+      : setInterval(() => refreshQueryPlannerStatistics(sqlite), QUERY_PLANNER_OPTIMIZE_INTERVAL_MS);
+    optimizeTimer?.unref?.();
     return {
       connectionRole,
       path: target.path,
       readonly: target.readonly,
       sqlite: tracedSqlite,
-      close: () => sqlite.close(),
+      close: () => {
+        if (optimizeTimer) clearInterval(optimizeTimer);
+        sqlite.close();
+      },
       transaction: (inside) => tracedSqlite.transaction(inside)
     };
   } catch (error) {
@@ -102,6 +112,19 @@ function configureWalConnection(sqlite: SQLiteDatabase): void {
   if (mode.toLowerCase() !== "wal") return;
   sqlite.run("pragma synchronous = normal");
   sqlite.run(`pragma wal_autocheckpoint = ${WAL_AUTOCHECKPOINT_PAGES}`);
+}
+
+/**
+ * 运行时从不显式 ANALYZE；长连接按 SQLite 建议在打开时与定期执行 optimize，
+ * 让规划器拿到索引选择性统计。analysis_limit 限制每张表的采样成本，失败只影响统计新鲜度。
+ */
+function refreshQueryPlannerStatistics(sqlite: SQLiteDatabase, mask?: number): void {
+  try {
+    sqlite.run(`pragma analysis_limit = ${QUERY_PLANNER_ANALYSIS_LIMIT}`);
+    sqlite.run(mask === undefined ? "pragma optimize" : `pragma optimize = ${mask}`);
+  } catch {
+    // 统计刷新是尽力而为；忙锁或只读介质不应阻断启动与业务写入。
+  }
 }
 
 type DatabaseTarget = { path: string; readonly: boolean; stateDir: string };

@@ -242,7 +242,7 @@ function mustGetImReplyDraft(db: RunnerDatabase, id: number): ImReplyDraftRecord
 
 function mustGetSyncOutboxByDraft(db: RunnerDatabase, draftID: number): SyncOutboxRecord {
   const row = db.sqlite.query<Record<string, unknown>, [number]>(
-    `select ${OUTBOX_COLUMNS} from sync_outbox where reply_draft_id=?`
+    `select ${OUTBOX_COLUMNS} from sync_outbox where reply_draft_id=? and reply_draft_id>0`
   ).get(draftID);
   if (!row) throw new Error("sync outbox missing after write");
   return mapOutbox(row);
