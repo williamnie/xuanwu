@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-07-16
 - 路线 issue：XW P04.09 / Runner #671
-- 依赖：P04.02、P04.03、P04.04、P04.05、[ADR-XW-0033](0033-evidence-policy-completion-gate.md)
+- 依赖：P04.02、P04.03、P04.04、P04.05、ADR-XW-0033
 - 可执行实现：`backend-ts/src/db/repositories/evidence.ts`、`backend-ts/src/http/evidenceApi.ts`
 - 用户界面：`frontend/src/components/EvidencePanel.jsx`
 

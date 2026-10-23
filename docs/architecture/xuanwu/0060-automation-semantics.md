@@ -3,7 +3,7 @@
 - 状态：Accepted（W2 / G4 / W3 target-primary；P11.09 exact-set schema cleanup 见
   `docs/migrations/legacy-automation-schema-drop-v1.md`）
 - 日期：2026-07-17
-- 依赖：[ADR-XW-0005](0005-capability-disposition-inventory.md)、[ADR-XW-0006](../xuanwu-migration/README.md)
+- 依赖：ADR-XW-0005、ADR-XW-0006
 - 可执行清单：`backend-ts/src/xuanwu/automationSemantics.ts`
 - 覆盖校验：`backend-ts/src/xuanwu/automationSemantics.test.ts`
 - 只读退役审计：`scripts/audit-automation-consolidation.mjs`

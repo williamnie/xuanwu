@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-07-16
 - 路线 issue：XW P04.06 / Runner #668
-- 依赖：[ADR-XW-0027](0027-evidence-domain-contract.md)、[Xuanwu migration plan](../xuanwu-migration/README.md)
+- 依赖：[ADR-XW-0027](0027-evidence-domain-contract.md)、Xuanwu migration plan
 - 可执行合同：`backend-ts/src/domain/evidence/policy.ts`
 - canonical 级别：本文与可执行合同是 Workflow Verification Policy V1 的 schema、组合规则和判定语义 source of truth
 

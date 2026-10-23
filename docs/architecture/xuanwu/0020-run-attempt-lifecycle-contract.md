@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-07-16
 - 路线 issue：XW P03.01 / Runner #656
-- 依赖：[ADR-XW-0004](0004-core-domain-objects.md)、[ADR-XW-0011](0011-work-ledger-domain-contract.md)、[Xuanwu migration plan](../xuanwu-migration/README.md)
+- 依赖：[ADR-XW-0004](0004-core-domain-objects.md)、[ADR-XW-0011](0011-work-ledger-domain-contract.md)、Xuanwu migration plan
 - 可执行合同：`backend-ts/src/domain/run/contracts.ts`
 - canonical 级别：本文是 Run / Attempt identity、生命周期、provider refs、terminal rules 和 cost fields 的 source of truth；ADR-XW-0004 仍是跨核心对象 ID 与共享 Run 状态词表的 source of truth
 

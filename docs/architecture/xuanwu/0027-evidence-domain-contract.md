@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-07-16
 - 路线 issue：XW P04.01 / Runner #663
-- 依赖：[ADR-XW-0004](0004-core-domain-objects.md)、[ADR-XW-0020](0020-run-attempt-lifecycle-contract.md)、[Xuanwu migration plan](../xuanwu-migration/README.md)
+- 依赖：[ADR-XW-0004](0004-core-domain-objects.md)、[ADR-XW-0020](0020-run-attempt-lifecycle-contract.md)、Xuanwu migration plan
 - 可执行合同：`backend-ts/src/domain/evidence/contracts.ts`
 - V0 兼容 projection：`backend-ts/src/domain/evidence/legacyAdapter.ts`
 - canonical 级别：本文与可执行合同是 Evidence semantic record、状态、来源、redaction 和完成门禁资格的 source of truth；P00.04 继续拥有跨核心对象 ID 与共享 Evidence 状态机

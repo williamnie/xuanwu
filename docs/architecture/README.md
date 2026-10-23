@@ -10,7 +10,7 @@
 1. 当前产品与工程规范只从本索引列出的 canonical 文档进入；`docs/architecture/xuanwu/` 中的编号文档按主题定义当前合同。
 2. `docs/architecture/` 顶层只保留仍被代码引用的设计文档；已完成的旧设计、评审、roadmap、research、snapshot 与 draft 只保留在 Git 历史中，不再授权新实现、schema/route 复制或 destructive migration。
 3. `.private-notes/**` 是本机私有草稿，永远不是仓库规范或迁移依赖。私有笔记引用旧 PI/OpenClaw 路线或已完成 issue 时，必须回到本索引和当前代码复核。
-4. 路线依赖、阶段门禁与 destructive precondition 的 machine-readable authority 是 [`xuanwu-migration/plan.json`](xuanwu-migration/plan.json)；说明见 [`xuanwu-migration/README.md`](xuanwu-migration/README.md)。
+4. 2026-07 的迁移路线 DAG（`xuanwu-migration/plan.json`）已完成其历史使命并从工作树删除；当前路线以 issue 与本索引为准。
 5. 文档描述合同，当前执行事实仍须以 live runtime、当前代码、迁移与审计 Evidence 复核；发现漂移时更新 canonical 文档，不得让历史记录重新成为第二 source of truth。
 
 ## 2. 当前 source of truth
@@ -29,7 +29,6 @@
 | Channel、Connector、安全、可靠性与退出迁移 | [0064 及以后](#connector-security-reliability-retirement) |
 | IM 上下文预算、工具按需加载与 PI Session 自动换代 | [0092](xuanwu/0092-im-context-budget-and-session-rollover.md) |
 | 发布、升级、回滚与操作命令 | 根 [`README.md`](../../README.md)、[`docs/runbooks/`](../runbooks/) |
-| 迁移 DAG 与门禁 | [`xuanwu-migration/README.md`](xuanwu-migration/README.md)、[`plan.json`](xuanwu-migration/plan.json) |
 
 ### Foundation
 
@@ -38,7 +37,6 @@
 - [ADR-XW-0002：玄武品牌术语与兼容标识合同](xuanwu/0002-brand-terminology.md)
 - [ADR-XW-0003：六条 Golden Journey 端到端验收合同](xuanwu/0003-golden-journey-contracts.md)
 - [ADR-XW-0004：Work、Run、Evidence、Handoff、Attention、Automation 核心对象合同](xuanwu/0004-core-domain-objects.md)
-- [ADR-XW-0005：现有能力 keep / merge / migrate / delete 清单](xuanwu/0005-capability-disposition-inventory.md)
 - [XW P01.01：`issue_events` / `issue.log` 存储审计](xuanwu/0006-issue-events-storage-audit.md)
 - [XW P01.02：事件保留、摘要、归档与删除策略](xuanwu/0007-event-retention-policy.md)
 - [XW P01.04：`issue.log` 生产端收敛与超大 payload](xuanwu/0008-issue-log-persistence.md)
@@ -54,7 +52,6 @@
 - [ADR-XW-0015：PI carrier → Work 关系兼容适配器（已退役）](xuanwu/0015-pi-work-relation-adapter.md)
 - [ADR-XW-0016：Work HTTP API 与兼容 authority](xuanwu/0016-work-http-api.md)
 - [ADR-XW-0017：Work timeline 与统一事件视图](xuanwu/0017-work-timeline.md)
-- [ADR-XW-0018：Work backfill、双读一致性审计与回滚](xuanwu/0018-work-backfill-dual-read.md)
 - [Work Board 与 Issues 兼容入口](xuanwu/0019-work-board-compatibility.md)
 
 ### Run
@@ -71,24 +68,14 @@
 ### Evidence
 
 - [ADR-XW-0027：Evidence 结构、状态和来源合同](xuanwu/0027-evidence-domain-contract.md)
-- [ADR-XW-0028：Shell / Test / Lint / Build Evidence collector](xuanwu/0028-command-evidence-collector.md)
 - [ADR-XW-0029：Git 状态、Diff 与 Revision Evidence collector](xuanwu/0029-git-evidence-collector.md)
-- [ADR-XW-0030：HTTP/API Evidence verifier](xuanwu/0030-http-api-evidence-verifier.md)
-- [ADR-XW-0031：Browser / Visual Evidence verifier](xuanwu/0031-browser-visual-evidence-verifier.md)
 - [ADR-XW-0032：Workflow Verification Policy](xuanwu/0032-workflow-verification-policy.md)
-- [ADR-XW-0033：Evidence Policy 完成门禁](xuanwu/0033-evidence-policy-completion-gate.md)
-- [ADR-XW-0034：Verifier Agent 结构化审查输出](xuanwu/0034-structured-verifier-review.md)
 - [ADR-XW-0035：Evidence API 与用户可读证据界面](xuanwu/0035-evidence-api-user-interface.md)
 
 ### Handoff
 
 - [ADR-XW-0036：Handoff 与 Delivery 状态合同](xuanwu/0036-handoff-delivery-contract.md)
 - [ADR-XW-0037：Changed Files 与 Diff Summary](xuanwu/0037-handoff-diff-summary.md)
-- [ADR-XW-0038：本地 Branch 与 Commit Handoff](xuanwu/0038-local-branch-commit-handoff.md)
-- [ADR-XW-0039：Remote Push 与 Pull Request Provider 合同](xuanwu/0039-remote-git-provider-contract.md)
-- [ADR-XW-0040：GitHub / GitLab Handoff Adapters](xuanwu/0040-github-gitlab-handoff-adapters.md)
-- [ADR-XW-0041：Tracker Update Handoff](xuanwu/0041-tracker-update-handoff.md)
-- [ADR-XW-0042：Reviewer Loop 与修改回路](xuanwu/0042-reviewer-loop.md)
 - [ADR-XW-0043：Handoff API、页面与交付通知](xuanwu/0043-handoff-api-page-notification.md)
 
 ### Supervisor, Workflow, Skill
@@ -102,7 +89,6 @@
 - [ADR-XW-0049：Workflow Manifest 与 Registry](xuanwu/0049-workflow-manifest-registry.md)
 - [玄武产品导航与兼容路由合同](xuanwu/0050-product-navigation-compatibility.md)
 - [Command Center 聚合 API 合同](xuanwu/0051-command-center-summary-api.md)
-- [ADR-XW-0052：Supervisor Planner 与 bounded Work 分解](xuanwu/0052-supervisor-work-planner.md)
 - [Supervisor Goal、Commitment 与会话连续性](xuanwu/0053-supervisor-goal-commitment.md)
 - [ADR-XW-0054：Investigate 只读调查 Workflow](xuanwu/0054-investigate-workflow.md)
 - [ADR-XW-0055：Implement 工程执行 Workflow](xuanwu/0055-implement-workflow.md)
@@ -124,8 +110,6 @@
 
 - [ADR-XW-0064：Channel 与 Connector 统一契约](xuanwu/0064-channel-connector-contract.md)
 - [ADR-XW-0065：CLI 与签名 Webhook Channel Adapter](xuanwu/0065-cli-webhook-channel-adapter.md)
-- [Supervisor 与 Workflow Evaluation Harness](xuanwu/0065-supervisor-workflow-evaluation-harness.md)
-- [ADR-XW-0068：OpenClaw Gateway 可选适配](xuanwu/0068-openclaw-gateway-adapter.md)
 - [ADR-XW-0069：重启恢复与一致性不变量](xuanwu/0069-restart-recovery-invariants.md)
 - [数据库迁移演练与兼容门禁](xuanwu/0070-db-migration-rehearsal-gate.md)
 - [ADR-XW-0071：Automation 执行接入 Work、Run、Evidence 与 Handoff](xuanwu/0071-automation-work-run-evidence.md)
@@ -153,6 +137,8 @@
 ADR-XW-0001 的“本地优先、验证优先”产品类别表述已被 [常驻无人值守的 AI 工程控制面定位](xuanwu/0088-always-on-product-positioning.md) supersede。
 
 2026-10 起，顶层历史设计、评审、roadmap、research、snapshot 与草案（PI Guardian 设计及评审、Loop L3 快照、`loop_run` ledger 草案、PI Agent 架构计划与恢复设计、CLI/Skill manifest v0、OpenConnector 调研、Bun 后端迁移计划、`docs/design.md` 等）以及各 ADR 的独立评审稿已从工作树删除；它们的替代规范见第 2 节，原文可从提交 `eedd0c70` 及更早的 Git 历史恢复。
+
+实现已删除的 ADR 一并退役：0005（能力处置清单）、0018（Work backfill 双读）、0028/0030/0031（命令、HTTP、浏览器 Evidence 采集）、0033/0034（完成门禁、Verifier 审查）、0038–0042（本地/远程 Git、GitHub/GitLab、Tracker Handoff 与 Reviewer Loop）、0052（Work Planner）、0065（Workflow Evaluation Harness）、0068（OpenClaw Gateway）。原文可从提交 `49b90897` 及更早的 Git 历史恢复。
 
 ## 4. 兼容、回滚与删除门禁
 

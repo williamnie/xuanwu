@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-07-16
 - 路线 issue：XW P02.01 / Runner #647
-- 依赖：[ADR-XW-0004](0004-core-domain-objects.md)、[ADR-XW-0006](../xuanwu-migration/README.md)
+- 依赖：[ADR-XW-0004](0004-core-domain-objects.md)、ADR-XW-0006
 - 可执行合同：`backend-ts/src/domain/work/contracts.ts`
 - canonical 级别：本文是 Work Ledger 的 type、关系、provenance、acceptance 和状态前置条件的 source of truth；ADR-XW-0004 仍是跨核心对象 ID、共享状态词表和 Work → Run → Evidence → Handoff 完成不变量的 source of truth
 
