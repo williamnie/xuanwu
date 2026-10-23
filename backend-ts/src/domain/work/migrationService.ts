@@ -25,9 +25,9 @@ import {
 
 const WORK_BACKFILL_CHECKPOINT_SCHEMA_VERSION = "xuanwu.work-backfill-checkpoint.v1" as const;
 const WORK_ROLLBACK_CHECKPOINT_SCHEMA_VERSION = "xuanwu.work-rollback-checkpoint.v1" as const;
-export const WORK_CONSISTENCY_REPORT_SCHEMA_VERSION = "xuanwu.work-consistency-report.v1" as const;
+const WORK_CONSISTENCY_REPORT_SCHEMA_VERSION = "xuanwu.work-consistency-report.v1" as const;
 
-export const WORK_MIGRATION_POLICY = {
+const WORK_MIGRATION_POLICY = {
   conflict_rule: "legacy_wins_before_G4",
   dual_read: "W1_legacy_primary_target_comparison_then_W2_target_primary_legacy_fallback",
   dual_read_deadline: "W1_and_W2_only_max_two_formal_release_windows",

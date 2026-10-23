@@ -20,7 +20,7 @@ const REMOTE_GIT_PROVIDER_ERROR_KINDS = [
   "temporary",
   "permanent"
 ] as const;
-export type RemoteGitProviderErrorKind = typeof REMOTE_GIT_PROVIDER_ERROR_KINDS[number];
+type RemoteGitProviderErrorKind = typeof REMOTE_GIT_PROVIDER_ERROR_KINDS[number];
 
 export type RemoteGitOperation =
   | "push_branch"
@@ -35,18 +35,18 @@ type RemoteGitProviderDescriptor = {
 };
 
 /** A locator for a credential managed outside provider requests and results. */
-export type RemoteGitAuthRef = {
+type RemoteGitAuthRef = {
   kind: "secret_ref";
   provider_id: string;
   ref: string;
 };
 
-export type RemoteGitRepositoryRef = {
+type RemoteGitRepositoryRef = {
   provider_id: string;
   repository_ref: string;
 };
 
-export type RemoteGitWriteContext = {
+type RemoteGitWriteContext = {
   actor: DomainActor;
   authorization: {
     authority: "deterministic_policy" | "human_approval";
@@ -60,7 +60,7 @@ export type RemoteGitWriteContext = {
   work_id: WorkID;
 };
 
-export type RemoteGitRateLimit = {
+type RemoteGitRateLimit = {
   limit?: number;
   remaining?: number;
   reset_at?: string;

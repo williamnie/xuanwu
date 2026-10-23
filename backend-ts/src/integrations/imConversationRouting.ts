@@ -51,7 +51,7 @@ export function routeImConversation(db: RunnerDatabase, input: {
   return routeView(scope, bumped, command);
 }
 
-export function parseImNewConversationCommand(prompt: string): { isNewCommand: boolean; prompt: string } {
+function parseImNewConversationCommand(prompt: string): { isNewCommand: boolean; prompt: string } {
   const match = cleanString(prompt).match(/^\/new(?:\s+([\s\S]*))?$/i);
   return match ? { isNewCommand: true, prompt: cleanString(match[1]) } : { isNewCommand: false, prompt: cleanString(prompt) };
 }

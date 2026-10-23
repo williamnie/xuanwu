@@ -44,7 +44,7 @@ const PROVIDER = "claude";
 const DEFAULT_MAX_TURNS = "50";
 const STDERR_LIMIT = 4096;
 
-export type ClaudeProcess = {
+type ClaudeProcess = {
   stdout: ReadableStream<Uint8Array> | null;
   stderr: ReadableStream<Uint8Array> | null;
   exited: Promise<number>;

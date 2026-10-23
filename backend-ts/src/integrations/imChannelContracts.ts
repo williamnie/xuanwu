@@ -16,7 +16,7 @@ import {
 
 export const IM_MESSAGE_SCHEMA_VERSION = "xuanwu.im-message.v1" as const;
 export const IM_OUTBOUND_SCHEMA_VERSION = "xuanwu.im-outbound.v1" as const;
-export const IM_DELIVERY_RECEIPT_SCHEMA_VERSION = "xuanwu.im-delivery-receipt.v1" as const;
+const IM_DELIVERY_RECEIPT_SCHEMA_VERSION = "xuanwu.im-delivery-receipt.v1" as const;
 
 /**
  * Provider-neutral capability vocabulary. `card.send` is intentionally absent:

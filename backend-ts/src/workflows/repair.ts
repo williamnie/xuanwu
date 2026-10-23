@@ -4,13 +4,11 @@ import {
   type RecoveryDiagnosisClassification
 } from "../pi/recoveryDiagnosis.ts";
 import {
-  workflowManifestRef,
   type WorkflowManifest
 } from "./manifest.ts";
 import type { WorkflowManifestRegistration } from "./registry.ts";
 
 const REPAIR_WORKFLOW_SOURCE_PATH = "builtin:workflows/repair@1" as const;
-export const REPAIR_WORKFLOW_PROJECTION_SCHEMA_VERSION = "xw.repair-workflow-projection.v1" as const;
 const REPAIR_STAGE_IDS = [
   "diagnose",
   "recovery-budget",
@@ -123,8 +121,6 @@ const REPAIR_WORKFLOW_MANIFEST: WorkflowManifest = {
     }
   ]
 };
-
-export const REPAIR_WORKFLOW_REF = workflowManifestRef(REPAIR_WORKFLOW_MANIFEST);
 
 export function repairWorkflowRegistryContributions(): {
   manifests: WorkflowManifestRegistration[];

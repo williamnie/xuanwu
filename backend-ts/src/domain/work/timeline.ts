@@ -15,7 +15,7 @@ import { queryEventSummaries, type PublicEventSummary } from "../../events/event
 import { issueIDToWorkID, workIDToIssueID } from "./issueAdapter.ts";
 import type { WorkID } from "./contracts.ts";
 
-export const WORK_TIMELINE_SCHEMA_VERSION = "xuanwu.work-timeline.v1" as const;
+const WORK_TIMELINE_SCHEMA_VERSION = "xuanwu.work-timeline.v1" as const;
 const WORK_TIMELINE_NODE_KINDS = [
   "work_event",
   "issue_event",

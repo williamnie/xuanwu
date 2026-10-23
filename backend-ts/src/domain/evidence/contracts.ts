@@ -49,8 +49,6 @@ const EVIDENCE_ASSERTION_ORIGINS = [
 ] as const;
 export type EvidenceAssertionOrigin = typeof EVIDENCE_ASSERTION_ORIGINS[number];
 
-export const EVIDENCE_ARTIFACT_KINDS = ["log", "report", "screenshot", "trace", "diff", "commit", "url", "file", "other"] as const;
-
 const requiredText = Type.String({ minLength: 1, maxLength: 4096 });
 const timestamp = Type.String({ minLength: 20, maxLength: 35 });
 const actorSchema = Type.Object({

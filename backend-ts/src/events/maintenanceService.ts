@@ -45,8 +45,8 @@ import {
   type SummaryWatermark
 } from "./retentionPolicy.ts";
 
-export const EVENT_ARCHIVE_SCHEMA_VERSION = "xuanwu.issue-events-archive.v1" as const;
-export const EVENT_DELETE_EVIDENCE_SCHEMA_VERSION = "xuanwu.event-maintenance-delete-evidence.v1" as const;
+const EVENT_ARCHIVE_SCHEMA_VERSION = "xuanwu.issue-events-archive.v1" as const;
+const EVENT_DELETE_EVIDENCE_SCHEMA_VERSION = "xuanwu.event-maintenance-delete-evidence.v1" as const;
 const EVENT_MAINTENANCE_CHECKPOINT_SCHEMA_VERSION = "xuanwu.event-maintenance-checkpoint.v1" as const;
 
 type MaintenanceActor = { actor: string; auditRef: string; reason: string };
