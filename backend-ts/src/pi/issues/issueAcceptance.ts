@@ -76,7 +76,7 @@ export async function runPiIssueAcceptance(input: {
   project: Project;
 }): Promise<PiAcceptanceRuntimeResult> {
   recordExecutorMemoryCitations(input.database, input.card.issue.id, input.card.run.id, input.card.final_message);
-  const { createPiRuntimeSession } = await import("../../http/piRuntime.ts");
+  const { createPiRuntimeSession } = await import("../../http/pi/piRuntime.ts");
   const toolNames = withOptionalJevTool(input.database, { projectID: input.project.id, issueID: input.card.issue.id, source: "pi_issue_acceptance" }, ACCEPTANCE_TOOL_NAMES);
   const runtime = await createPiRuntimeSession(input.database, {
     agent: input.agent,

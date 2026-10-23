@@ -32,5 +32,5 @@ Claude / Claude Code 在 live acceptance 完成前不得标记为 `tested` 或 p
 
 ```bash
 cd backend-ts
-bun test src/providers src/http/systemStatus.test.ts
+bun test src/providers src/http/system/systemStatus.test.ts
 ```

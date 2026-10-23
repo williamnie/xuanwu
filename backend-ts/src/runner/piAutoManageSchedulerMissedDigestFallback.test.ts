@@ -9,7 +9,7 @@ import {
   getPiGuardianAlert,
   upsertPiGuardianAlert
 } from "../db/repositories/pi.ts";
-import type { FeishuTextMessageInput, FeishuTextMessageResult } from "../integrations/feishuClient.ts";
+import type { FeishuTextMessageInput, FeishuTextMessageResult } from "../integrations/feishu/feishuClient.ts";
 import { runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
 import { useTestDatabase } from "../testing/harness.ts";
 

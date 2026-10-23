@@ -73,8 +73,8 @@ preview 的截断 envelope，而不是在 details 或 audit 中保留大对象�
 ```bash
 cd backend-ts
 bun test src/pi/supervisor/supervisorControlTools.test.ts
-bun test src/pi/tools/piRuntimeTools.test.ts src/http/piToolRegistryApi.test.ts src/pi/actions/actionEngine.test.ts
-bun test src/http/workApi.test.ts src/http/runApi.test.ts src/http/evidenceApi.test.ts src/http/handoffApi.test.ts
+bun test src/pi/tools/piRuntimeTools.test.ts src/http/pi/piToolRegistryApi.test.ts src/pi/actions/actionEngine.test.ts
+bun test src/http/work/workApi.test.ts src/http/work/runApi.test.ts src/http/work/evidenceApi.test.ts src/http/work/handoffApi.test.ts
 ```
 
 Fixtures 覆盖 schema/registry risk、实际 runtime exposure、read/write audit、越权 mutation 拒绝、exact replay、key/payload

@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-07-17
 - 依赖：[Work HTTP API](0016-work-http-api.md)、[Run progress projection](0025-run-progress-projection.md)、[Handoff API](0043-handoff-api-page-notification.md)、[产品导航合同](0050-product-navigation-compatibility.md)
-- canonical 级别：`backend-ts/src/http/commandCenterApi.ts` 的 `xw.command-center.summary.v1` 是 Command Center request-time summary 的唯一 HTTP contract；它投影既有 authority，并只通过 P07.03 的 append-only command overlay 持久化人工 acknowledge/snooze 审计
+- canonical 级别：`backend-ts/src/http/work/commandCenterApi.ts` 的 `xw.command-center.summary.v1` 是 Command Center request-time summary 的唯一 HTTP contract；它投影既有 authority，并只通过 P07.03 的 append-only command overlay 持久化人工 acknowledge/snooze 审计
 
 ## 1. HTTP 与 summary contract
 

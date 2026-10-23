@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hasPiActionDispatcher } from "../../http/piActionDispatch.ts";
+import { hasPiActionDispatcher } from "../../http/pi/piActionDispatch.ts";
 import { classifyPiActionRisk, decidePiAuthorization, type PiActionEnvelope } from "./actionGate.ts";
 import { PI_ACTION_CONTRACTS, piActionContract } from "./actionContracts.ts";
 import { hasPiActionFreshnessEvaluator } from "./actionFreshness.ts";

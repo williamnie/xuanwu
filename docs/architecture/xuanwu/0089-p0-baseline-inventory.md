@@ -18,8 +18,8 @@
 | `runner/automationRuntime.ts:113-114` | `isExecutorProviderId(selected/fallback)` | 选择回退 |
 | `runner/interrupt.ts:337` | `isExecutorProviderId(provider)` | interrupt 可用性 |
 | `runner/projectLoop.ts:83,178,197,214,269` | 多处 | 选择器 / authority / 校验 |
-| `http/sessionApi.ts:59,112,137,153` | 多处 | session list / resume / read 校验 |
-| `http/piActionDispatch.ts:412,494` | 多处 | dispatch 校验 |
+| `http/work/sessionApi.ts:59,112,137,153` | 多处 | session list / resume / read 校验 |
+| `http/pi/piActionDispatch.ts:412,494` | 多处 | dispatch 校验 |
 
 ### 1.2 前端生产代码
 
@@ -59,11 +59,11 @@
 `bunx tsc --noEmit` 基线 351 行错误，分布（top）：
 | 文件 | 错误数 | 性质 |
 | --- | --- | --- |
-| `http/sessionApi.test.ts` | 19 | 测试接口漂移 |
-| `http/piAttentionInboxApi.test.ts` | 11 | 测试接口漂移 |
+| `http/work/sessionApi.test.ts` | 19 | 测试接口漂移 |
+| `http/pi/piAttentionInboxApi.test.ts` | 11 | 测试接口漂移 |
 | `runner/interrupt.test.ts` | 9 | 测试接口漂移 |
-| `http/piActivityApi.test.ts` | 9 | 测试接口漂移 |
-| `http/piActionDispatch.test.ts` | 9 | 测试接口漂移 |
+| `http/pi/piActivityApi.test.ts` | 9 | 测试接口漂移 |
+| `http/pi/piActionDispatch.test.ts` | 9 | 测试接口漂移 |
 | `providers/codex/provider.test.ts` | 6 | `FakeCodexIssueAdapter` 缺 `listThreads/listModels` |
 | `skills/intentAudit.ts` | 5 | `*_json` 列名漂移 |
 | 其余 ~20 文件 | 各 1-5 | 历史噪音 |
@@ -91,13 +91,13 @@
 | --- | --- | --- |
 | `runtime/core.ts` Provider 装配 | migrated | registry 的 ready 实例是 Runner/HTTP/调度/关停唯一运行时投影；不再构造第二套 Codex/Claude executor map |
 | `providers/core/registry.ts` | migrated | registry authority（P2） |
-| `providers/core/catalog.ts` + `http/providersCatalogApi.ts` | migrated | /api/providers（P6） |
-| `http/systemStatus.ts` `providerStatus()` | migrated | registry 投影 + 旧 bridge（P4） |
+| `providers/core/catalog.ts` + `http/settings/providersCatalogApi.ts` | migrated | /api/providers（P6） |
+| `http/system/systemStatus.ts` `providerStatus()` | migrated | registry 投影 + 旧 bridge（P4） |
 | `runner/interrupt.ts` `providerID()` | migrated | 手写穷举删除（P5） |
 | `runner/recovery.ts` `providerID()` | migrated | 手写穷举删除（P5） |
-| `http/frontendCompatHandlers.ts` `resolveApproval` | migrated | provider 绑定路由（P5） |
+| `http/projects/frontendCompatHandlers.ts` `resolveApproval` | migrated | provider 绑定路由（P5） |
 | `frontend sessionOptions.js/issueRuns.js` | migrated | catalog 派生 + 静态 authority 删除（P6） |
-| `http/sessionApi.ts` | legacy | P6 聚合分页 cursor 合同已冻结，sessionApi 重构仍待 P6 收尾（W2） |
+| `http/work/sessionApi.ts` | legacy | P6 聚合分页 cursor 合同已冻结，sessionApi 重构仍待 P6 收尾（W2） |
 | `runner/projectLoop.ts`/`piAcceptanceApplication.ts`/`automationRuntime.ts`/`humanReview.ts`/`piActionDispatch.ts` | legacy | `isExecutorProviderId` 白名单校验（随 `ExecutorProviderId` 放宽收口） |
 
 ### 6.2 W2 观察窗与 rollback runbook
@@ -139,7 +139,7 @@
 | --- | --- | --- |
 | 静态 `EXECUTOR_PROVIDER_IDS` 闭合联合 | `providers/types.ts` | 改为 registry 驱动（P2 已完成 registry；W3 删枚举） |
 | `isExecutorProviderId` 白名单消费 | `projectLoop.ts`/`piAcceptanceApplication.ts`/`automationRuntime.ts`/`humanReview.ts`/`piActionDispatch.ts` | 改 registry.assertCapability |
-| `http/sessionApi.ts` 单页 best-effort merge | `sessionApi.ts` | 替换为聚合分页 cursor（§3.6 合同已冻结） |
+| `http/work/sessionApi.ts` 单页 best-effort merge | `sessionApi.ts` | 替换为聚合分页 cursor（§3.6 合同已冻结） |
 | 手写 codex/claude status bridge | `systemStatus.ts` `providerStatus()` | registry 投影 primary 后删除 |
 | `runtime/core.ts` 旧 executor map bridge | 已删除 | Registry ready projection 已成为唯一运行时实例来源 |
 | 前端静态 `PROVIDER_OPTIONS`/fallback | `sessionOptions.js`/`issueRuns.js` | catalog 全量消费后删除静态 authority |

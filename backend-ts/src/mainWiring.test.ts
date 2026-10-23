@@ -40,7 +40,7 @@ describe("server entrypoint wiring", () => {
     expect(core).toContain("agenticClient.runProjectCycle");
     expect(core).toContain("agenticClient.decideCommunication");
     expect(core).toContain("agenticClient.decideSupervisor");
-    expect(core).not.toContain('from "../http/piProjectControlApi.ts"');
+    expect(core).not.toContain('from "../http/pi/piProjectControlApi.ts"');
   });
 
   test("uses non-suspending physical memory and lifecycle-owned descendants off the Core HTTP loop", () => {

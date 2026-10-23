@@ -1,0 +1,132 @@
+import { describe, expect, test } from "bun:test";
+import { readFile, stat } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { buildConfig, ENV_KEYS, loadConfig } from "../../config/env.ts";
+import { type RunnerDatabase } from "../../db/database.ts";
+import { createDefaultRouter } from "../server.ts";
+import { useTestDatabase } from "../../testing/harness.ts";
+
+const BASE_URL = "http://127.0.0.1:3008";
+const openFixtureDatabase = useTestDatabase();
+
+describe("Feishu connector settings API", () => {
+  test("saves local Feishu connector settings without echoing secrets", async () => {
+    const database = await openFixtureDatabase();
+    const config = buildConfig({ dbPath: database.path, stateDir: dirname(database.path) });
+    const router = createDefaultRouter({ config, database });
+
+    const empty = await router.handle(new Request(`${BASE_URL}/api/integrations/feishu/settings`));
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toMatchObject({
+      app_id: "",
+      app_secret_configured: false,
+      default_chat_id: "",
+      default_user_id: "",
+      enabled: false,
+      verification_token_configured: false
+    });
+
+    const saved = await request(router, {
+      allowed_chat_ids: "oc_a, oc_b",
+      allowed_user_ids: ["ou_1"],
+      app_id: "cli_app_id",
+      app_secret: "app-secret-value",
+      default_chat_id: "oc_default",
+      default_user_id: "ou_default",
+      encrypt_key: "encrypt-secret-value",
+      project_mappings: "chat:oc_a=demo,user:ou_1=mobile",
+      receive_mode: "websocket",
+      verification_token: "verify-secret-value"
+    });
+
+    expect(saved.status).toBe(200);
+    const savedBody = await saved.json();
+    expect(savedBody).toMatchObject({
+      allowed_chat_ids: ["oc_a", "oc_b"],
+      allowed_user_ids: ["ou_1"],
+      app_id: "cli_app_id",
+      app_secret_configured: true,
+      default_chat_id: "oc_default",
+      default_user_id: "ou_default",
+      encrypt_key_configured: true,
+      enabled: true,
+      project_mappings: "chat:oc_a=demo,user:ou_1=mobile",
+      public_url_required: false,
+      receive_mode: "websocket",
+      verification_token_configured: true
+    });
+    expect(JSON.stringify(savedBody)).not.toContain("app-secret-value");
+    expect(JSON.stringify(savedBody)).not.toContain("encrypt-secret-value");
+    expect(JSON.stringify(savedBody)).not.toContain("verify-secret-value");
+
+    const raw = JSON.parse(await readFile(localSettingsPath(database), "utf8"));
+    expect(raw.integrations.feishu).toMatchObject({
+      allowedChatIds: ["oc_a", "oc_b"],
+      allowedUserIds: ["ou_1"],
+      appId: "cli_app_id",
+      appSecretRef: "secret://integrations/feishu/app-secret",
+      defaultChatId: "oc_default",
+      defaultUserId: "ou_default",
+      encryptKeyRef: "secret://integrations/feishu/encrypt-key",
+      projectMappings: "chat:oc_a=demo,user:ou_1=mobile",
+      receiveMode: "websocket",
+      verificationTokenRef: "secret://integrations/feishu/verification-token"
+    });
+    const secretStore = await readFile(join(dirname(database.path), "secrets", "store.json"), "utf8");
+    expect(secretStore).not.toContain("app-secret-value");
+    expect(secretStore).not.toContain("encrypt-secret-value");
+    expect(secretStore).not.toContain("verify-secret-value");
+    const mode = (await stat(localSettingsPath(database))).mode & 0o777;
+    expect(mode).toBe(0o600);
+    const reloaded = loadConfig([], { [ENV_KEYS.stateDir]: dirname(database.path) });
+    expect(reloaded.integrations.feishu).toMatchObject({
+      appSecret: "app-secret-value",
+      encryptKey: "encrypt-secret-value",
+      verificationToken: "verify-secret-value"
+    });
+  });
+
+  test("keeps existing secrets when a settings form submits blank secret fields", async () => {
+    const database = await openFixtureDatabase();
+    const config = buildConfig({ dbPath: database.path, stateDir: dirname(database.path) });
+    const router = createDefaultRouter({ config, database });
+    await request(router, {
+      app_id: "cli_app_id",
+      app_secret: "old-secret",
+      verification_token: "old-token"
+    });
+
+    const updated = await request(router, {
+      app_id: "cli_new",
+      app_secret: "",
+      verification_token: "",
+      encrypt_key: ""
+    });
+
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toMatchObject({
+      app_id: "cli_new",
+      app_secret_configured: true,
+      verification_token_configured: true
+    });
+    const raw = JSON.parse(await readFile(localSettingsPath(database), "utf8"));
+    expect(raw.integrations.feishu).toMatchObject({
+      appId: "cli_new",
+      appSecretRef: "secret://integrations/feishu/app-secret",
+      verificationTokenRef: "secret://integrations/feishu/verification-token"
+    });
+  });
+});
+
+function request(router: ReturnType<typeof createDefaultRouter>, body: Record<string, unknown>) {
+  return router.handle(new Request(`${BASE_URL}/api/integrations/feishu/settings`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" }
+  }));
+}
+
+function localSettingsPath(database: RunnerDatabase): string {
+  return join(dirname(database.path), "runner-settings.local.json");
+}

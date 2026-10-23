@@ -26,9 +26,9 @@ describe("PI-first decision boundary", () => {
     }
 
     const production = [
-      "backend-ts/src/http/piConversationApi.ts",
-      "backend-ts/src/http/piRuntime.ts",
-      "backend-ts/src/integrations/feishuAgentBridge.ts",
+      "backend-ts/src/http/pi/piConversationApi.ts",
+      "backend-ts/src/http/pi/piRuntime.ts",
+      "backend-ts/src/integrations/feishu/feishuAgentBridge.ts",
       "backend-ts/src/pi/intake/attentionRouter.ts",
       "backend-ts/src/pi/guardian/guardianDecisionActionCandidates.ts",
       "backend-ts/src/pi/heartbeat/heartbeatOrchestrator.ts",
@@ -52,7 +52,7 @@ describe("PI-first decision boundary", () => {
   });
 
   test("keeps semantic channel messages on the PI path and fails visibly when PI is unavailable", () => {
-    const bridge = source("backend-ts/src/integrations/feishuAgentBridge.ts");
+    const bridge = source("backend-ts/src/integrations/feishu/feishuAgentBridge.ts");
     expect(bridge).not.toContain("feishuIssueCommand");
     expect(bridge).not.toContain("feishuReviewCommand");
     expect(bridge).not.toContain("feishuMemoryCommands");

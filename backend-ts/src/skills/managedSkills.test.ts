@@ -7,7 +7,7 @@ import { getProject } from "../db/repositories/projects.ts";
 import { createDefaultRouter } from "../http/server.ts";
 import { createSkillLibraryTools } from "../pi/tools/skillLibraryTools.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot } from "../spikes/piSmokeSupport.ts";
-import { createPiRuntimeResourceLoader } from "../http/piRuntimeResources.ts";
+import { createPiRuntimeResourceLoader } from "../http/pi/piRuntimeResources.ts";
 import { installManagedSkill, changeManagedSkill, readSkillCatalog, currentSkillRevision, revisionPath } from "./managedStore.ts";
 import { normalizeSkillSource } from "./managedSource.ts";
 import { listSkillLibrary, verifyLibrarySkill, readLibrarySkillResource } from "./libraryService.ts";

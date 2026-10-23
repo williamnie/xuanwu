@@ -40,7 +40,7 @@
 ## 本地验证
 
 ```sh
-bun test backend-ts/src/observability backend-ts/src/http/deliveryEffectivenessApi.test.ts backend-ts/src/http/readApiContract.test.ts backend-ts/src/http/piMemoryApi.test.ts backend-ts/src/domain/handoff/firstDelivery.test.ts backend-ts/src/domain/handoff/acceptedDelivery.test.ts
+bun test backend-ts/src/observability backend-ts/src/http/work/deliveryEffectivenessApi.test.ts backend-ts/src/http/readApiContract.test.ts backend-ts/src/http/pi/piMemoryApi.test.ts backend-ts/src/domain/handoff/firstDelivery.test.ts backend-ts/src/domain/handoff/acceptedDelivery.test.ts
 node --test frontend/src/pages/command-center/*test.js
 cd frontend && npm run lint && npm run build
 cd ../backend-ts && bunx --no-install tsc --noEmit

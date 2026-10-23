@@ -8,7 +8,7 @@ import {
 import {
   resolveImNotificationConnectorID,
   resolveImNotificationTarget
-} from "../../integrations/imNotificationTargets.ts";
+} from "../../integrations/im/imNotificationTargets.ts";
 import { routeNotification } from "../../notifications/unifiedNotificationPipeline.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../../xuanwu/userFacingTerminology.ts";

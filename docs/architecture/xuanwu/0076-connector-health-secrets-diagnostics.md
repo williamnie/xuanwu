@@ -52,7 +52,7 @@ registry、第二个 outbox 或 provider writer。
 ```bash
 cd backend-ts
 bun test src/integrations/connectorDiagnostics.test.ts \
-  src/http/piConnectorHealthApi.test.ts src/pi/intake/cliConnectorHealth.test.ts src/http/systemStatus.test.ts
+  src/http/pi/piConnectorHealthApi.test.ts src/pi/intake/cliConnectorHealth.test.ts src/http/system/systemStatus.test.ts
 
 cd ../frontend
 node --test src/utils/runtimeDiagnostics.test.js src/pages/settingsLayout.test.js

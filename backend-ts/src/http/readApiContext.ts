@@ -4,8 +4,8 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { ProviderRegistry } from "../providers/core/registry.ts";
-import type { PiOpenAICodexModelDiscovery, PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
-import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
+import type { PiOpenAICodexModelDiscovery, PiOpenAICodexOAuthLogin } from "./pi/piOAuthApi.ts";
+import type { SystemRestartAuditEvent } from "./system/systemRestartApi.ts";
 
 export type ReadApiContext = {
   agenticClient?: AgenticWorkerClient;

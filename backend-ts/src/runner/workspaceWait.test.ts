@@ -15,7 +15,7 @@ import { prepareReservedIssueRun } from "../domain/run/runPreparation.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { createPiAction } from "../db/repositories/pi.ts";
-import { dispatchPiAction } from "../http/piActionDispatch.ts";
+import { dispatchPiAction } from "../http/pi/piActionDispatch.ts";
 import { recoverInProgressIssues } from "./recovery.ts";
 import { prepareRunAttempt, readRunRevision } from "../domain/run/service.ts";
 import { applyPiSemanticIssueStatus } from "./piIssueLifecycle.ts";

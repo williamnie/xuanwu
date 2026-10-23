@@ -8,7 +8,7 @@ import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { listIssues } from "../../db/repositories/issues.ts";
 import { listPiActions, type PiAction } from "../../db/repositories/pi.ts";
 import { EventBus, type AppEvent } from "../../events/bus.ts";
-import { finalPiConversationSseData } from "../../http/piConversationSse.testSupport.ts";
+import { finalPiConversationSseData } from "../../http/pi/piConversationSse.testSupport.ts";
 import { createDefaultRouter } from "../../http/server.ts";
 import { useDatabaseCleanup } from "../../testing/harness.ts";
 

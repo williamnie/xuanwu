@@ -4,7 +4,7 @@
 - 日期：2026-07-16
 - 路线 issue：XW P02.06 / Runner #652
 - 依赖：[ADR-XW-0013](0013-work-ledger-repository-service.md)、[ADR-XW-0014](0014-issue-work-compatibility-adapter.md)
-- 实现：`backend-ts/src/http/workApi.ts`
+- 实现：`backend-ts/src/http/work/workApi.ts`
 
 ## 1. HTTP contract
 

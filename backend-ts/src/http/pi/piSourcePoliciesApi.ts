@@ -1,0 +1,53 @@
+import type { RunnerDatabase } from "../../db/database.ts";
+import { getProjectPiSettings } from "../../db/repositories/pi.ts";
+import { getProject } from "../../db/repositories/projects.ts";
+import {
+  resolveSourcePolicy,
+  SOURCE_PROFILES,
+  type SourceProfile
+} from "../../pi/intake/eventRouter.ts";
+import { HttpError, json } from "../errors.ts";
+import type { Router } from "../router.ts";
+import { cleanString } from "../../util/values.ts";
+
+type JsonObject = Record<string, unknown>;
+type PiSourcePolicyContext = { database: RunnerDatabase };
+
+const LAYERS = [
+  { scope: "source_profile", owner: "eventRouter profile defaults", writable: false },
+  { scope: "project", owner: "project_pi_settings / project_pi_policies", writable: false },
+  { scope: "global", owner: "runtime safety defaults", writable: false },
+  { scope: "automation", owner: "Automation permission_policy_ref", writable: false }
+];
+
+export function registerPiSourcePolicyRoutes(router: Router, context: PiSourcePolicyContext): void {
+  router.get("/api/pi/source-policies", (request) => json(listResponse(context, request)));
+}
+
+function listResponse(context: PiSourcePolicyContext, request: Request): JsonObject {
+  const projectID = cleanString(new URL(request.url).searchParams.get("project_id"));
+  return {
+    automations: [],
+    global_policy: resolveSourcePolicy({ profile: "custom" }),
+    layers: LAYERS,
+    profiles: SOURCE_PROFILES.map(profilePolicy),
+    project_policy: projectID === "" ? null : projectPolicy(context.database, projectID)
+  };
+}
+
+function profilePolicy(profile: SourceProfile): JsonObject {
+  return { id: profile, policy: resolveSourcePolicy({ profile }) };
+}
+
+function projectPolicy(db: RunnerDatabase, projectID: string): JsonObject {
+  if (!getProject(db, projectID)) throw new HttpError(404, "project 不存在");
+  const managed = getProjectPiSettings(db, projectID) !== null;
+  return {
+    managed,
+    issue_policy: {
+      auto_create_triage_issue: managed,
+      auto_enqueue: managed
+    },
+    project_id: projectID
+  };
+}

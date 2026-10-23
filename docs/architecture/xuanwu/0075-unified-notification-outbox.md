@@ -46,10 +46,10 @@ Guardian 告警可以先写入 UI/Attention 供 PI 持续消化，但 direct Fei
 cd backend-ts
 bun test src/notifications/unifiedNotificationPipeline.test.ts \
   src/notifications/agentCommunicationGateway.test.ts \
-  src/integrations/feishuApprovalNotifications.test.ts \
-  src/integrations/feishuLifecycleNotifications.test.ts \
-  src/integrations/feishuDigestNotifications.test.ts \
-  src/http/handoffApi.test.ts
+  src/integrations/feishu/feishuApprovalNotifications.test.ts \
+  src/integrations/feishu/feishuLifecycleNotifications.test.ts \
+  src/integrations/feishu/feishuDigestNotifications.test.ts \
+  src/http/work/handoffApi.test.ts
 ```
 
 覆盖重复事件一次、多 channel fixture、失败 retry/backoff、quiet hours、Daily Digest、deep link、Approval 与 Handoff intent/outbox。

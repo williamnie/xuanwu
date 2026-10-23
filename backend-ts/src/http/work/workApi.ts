@@ -1,0 +1,709 @@
+import { attachWorkSchedules } from "./workSchedule.ts";
+import { createHash } from "node:crypto";
+import type { RunnerDatabase } from "../../db/database.ts";
+import { getProject, ProjectNotFoundError } from "../../db/repositories/projects.ts";
+import { getAgentProfile } from "../../db/repositories/agentProfiles.ts";
+import { isExecutorProviderId } from "../../providers/types.ts";
+import {
+  applyIssueWorkAction,
+  countIssueBackedWorks,
+  createIssueBackedWork,
+  getIssueBackedWork,
+  listIssueBackedWorks,
+  updateIssueBackedWork,
+  workIDToIssueID,
+  type IssueWorkAction,
+  type IssueWorkMutationResult
+} from "../../domain/work/issueAdapter.ts";
+import {
+  WORK_STATUSES,
+  WORK_TYPES,
+  type WorkLedgerEntry,
+  type WorkTransitionAudit
+} from "../../domain/work/contracts.ts";
+import { queryWorkTimeline } from "../../domain/work/timeline.ts";
+import { readIssueDecisionProjection } from "../../domain/review/humanReview.ts";
+import { readHumanFeedback } from "../../domain/review/humanFeedback.ts";
+import {
+  READINESS_STAGES,
+  declareIssueReadinessRequirements,
+  readIssueReadiness,
+  type ReadinessRequirement,
+  type ReadinessRequirementDeclaration
+} from "../../domain/readiness/contracts.ts";
+import { startProjectLoop } from "../../runner/projectLoopManager.ts";
+import { json } from "../errors.ts";
+import {
+  readWorkSummary,
+  WORK_SUMMARY_CONTRACT,
+  WorkSummaryCapacityError
+} from "../../db/repositories/workSummary.ts";
+import type { ReadApiContext } from "../readApiContext.ts";
+import type { Router } from "../router.ts";
+import { cleanString } from "../../util/values.ts";
+
+const WORK_HTTP_POLICY_REF = "xuanwu-work-http-authenticated-write-v1";
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 100;
+const MAX_CURSOR_BYTES = 2_048;
+
+export const WORK_WRITE_AUTHORITY = "issues-via-work-adapter";
+
+type PageInput = {
+  page: number;
+  page_size: number;
+};
+
+export function registerWorkRoutes(router: Router, context: ReadApiContext): void {
+  const readDatabase = context.readDatabase ?? context.database;
+  router.get("/api/works/summary", (request) => workResponse(() => summaryResponse(readDatabase, request)));
+  router.get("/api/works", (request) => workResponse(() => listResponse(readDatabase, request, context)));
+  router.get("/api/works/board", (request) => workResponse(() => boardResponse(readDatabase, request, context)));
+  router.get("/api/works/:id", (request) => workResponse(() => detailResponse(readDatabase, request, context)));
+  router.get("/api/works/:id/timeline", (request) => (
+    workResponse(() => timelineResponse(readDatabase, request))
+  ));
+  router.put("/api/works/:id/readiness-requirements", async (request) => workResponse(async () => {
+    const work = requireWork(context.database, workID(request));
+    const body = await objectBody(request);
+    assertKeys(body, ["audit", "requirements", "schema_version", "work_id"]);
+    const declaration = readinessDeclaration(body, work);
+    const result = declareIssueReadinessRequirements(context.database, workIDToIssueID(work.id), declaration);
+    kickProject(context, work);
+    return {
+      mutation: { event_id: result.event_id, replayed: result.replayed },
+      readiness: readIssueReadiness(context.database, workIDToIssueID(work.id)),
+      work
+    };
+  }));
+  router.post("/api/works", async (request) => workResponse(async () => {
+    const body = await objectBody(request);
+    assertKeys(body, ["agent_profile_id", "audit", "depends_on_issue_ids", "goal", "project_id", "status", "title", "type"]);
+    const projectID = requiredString(body.project_id, "project_id");
+    const project = getProject(context.database, projectID);
+    if (!project) throw workError(404, "project_not_found", "Project not found");
+    const agentProfileID = cleanString(body.agent_profile_id);
+    validateWorkExecutionSelection(context, project, agentProfileID);
+    const type = cleanString(body.type) || "engineering_task";
+    if (!WORK_TYPES.includes(type as typeof WORK_TYPES[number])) {
+      throw workError(400, "invalid_request", "type is invalid");
+    }
+    if (type !== "engineering_task") {
+      throw workError(
+        409,
+        "work_authority_restriction",
+        "objective Work creation is unavailable while Issues remain the write authority"
+      );
+    }
+    const status = cleanString(body.status) || "triage";
+    if (status !== "triage" && status !== "todo") {
+      throw workError(400, "invalid_request", "status must be triage or todo when creating Work");
+    }
+    const result = createIssueBackedWork(context.database, {
+      agent_profile_id: agentProfileID,
+      audit: auditInput(body.audit),
+      depends_on_issue_ids: positiveIssueIDArray(body.depends_on_issue_ids),
+      goal: requiredString(body.goal, "goal"),
+      project_id: projectID,
+      status,
+      ...(cleanString(body.title) ? { title: cleanString(body.title) } : {}),
+      type
+    });
+    kickProject(context, result.work);
+    return mutationResponse(result, 201);
+  }));
+  router.patch("/api/works/:id", async (request) => workResponse(async () => {
+    const work = requireWork(context.database, workID(request));
+    const body = await objectBody(request);
+    assertKeys(body, ["agent_profile_id", "audit", "depends_on_issue_ids", "expected_revision", "goal", "title"]);
+    const requestedAgentProfileID = Object.hasOwn(body, "agent_profile_id") ? cleanString(body.agent_profile_id) : undefined;
+    if (work.status === "in_progress" && requestedAgentProfileID !== undefined && requestedAgentProfileID !== (work.agent_profile_id ?? "")) {
+      throw workError(409, "running_work_profile_locked", "running Work agent_profile_id cannot be changed");
+    }
+    if (Object.hasOwn(body, "agent_profile_id")) {
+      const project = getProject(context.database, work.owner.project_id);
+      if (!project) throw workError(404, "project_not_found", "Project not found");
+      validateWorkExecutionSelection(context, project, requestedAgentProfileID ?? "");
+    }
+    const patch = {
+      ...(requestedAgentProfileID !== undefined ? { agent_profile_id: requestedAgentProfileID } : {}),
+      ...(Object.hasOwn(body, "depends_on_issue_ids")
+        ? { depends_on_issue_ids: positiveIssueIDArray(body.depends_on_issue_ids) ?? [] }
+        : {}),
+      ...(Object.hasOwn(body, "goal") ? { goal: requiredString(body.goal, "goal") } : {}),
+      ...(Object.hasOwn(body, "title") && cleanString(body.title) ? { title: cleanString(body.title) } : {})
+    };
+    if (Object.keys(patch).length === 0) throw workError(400, "invalid_request", "Work patch is empty");
+    const result = updateIssueBackedWork(context.database, {
+      audit: auditInput(body.audit),
+      expected_revision: revisionInput(body.expected_revision),
+      patch,
+      work_id: work.id
+    });
+    return mutationResponse(result);
+  }));
+  router.post("/api/works/:id/actions/:action", async (request) => workResponse(async () => {
+    const work = requireWork(context.database, workID(request));
+    const action = actionInput(request);
+    const body = await objectBody(request);
+    assertKeys(body, ["audit", "expected_revision"]);
+    const result = applyIssueWorkAction(context.database, {
+      action,
+      audit: auditInput(body.audit),
+      expected_revision: revisionInput(body.expected_revision),
+      work_id: work.id
+    });
+    if (result.applied) kickProject(context, result.work);
+    return mutationResponse(result);
+  }));
+}
+
+function validateWorkExecutionSelection(
+  context: ReadApiContext,
+  project: NonNullable<ReturnType<typeof getProject>>,
+  explicitProfileID: string
+): void {
+  const effectiveProfileID = explicitProfileID || project.default_agent_profile_id;
+  const profile = effectiveProfileID ? getAgentProfile(context.database, effectiveProfileID) : null;
+  if (effectiveProfileID && !profile) {
+    throw workError(400, "invalid_agent_profile", `Agent Profile "${effectiveProfileID}" was not found`);
+  }
+  const providerID = profile?.provider || project.provider;
+  if (!isExecutorProviderId(providerID)) {
+    throw workError(409, "provider_unavailable", `provider "${providerID}" is not registered`);
+  }
+  if (!context.providers) return;
+  const provider = context.providers[providerID];
+  if (!provider || !provider.capabilities.includes("issue_execution")) {
+    throw workError(409, "provider_unavailable", `provider "${providerID}" does not support issue_execution`);
+  }
+  const status = provider.runtimeStatus?.();
+  if (status?.ready === false) {
+    throw workError(409, "provider_not_ready", `provider "${providerID}" is not ready: ${status.reason || "configuration required"}`);
+  }
+}
+
+function boardResponse(db: RunnerDatabase, request: Request, context: ReadApiContext): Record<string, unknown> {
+  const params = new URL(request.url).searchParams;
+  const source = workSourceParam(params);
+  const query = cleanString(params.get("q")).toLowerCase();
+  const projectID = cleanString(params.get("project_id"));
+  if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
+  const pageSize = positiveIntegerParam(params.get("page_size"), "page_size", 20, MAX_PAGE_SIZE);
+  const sort = enumParam(
+    params.get("sort"),
+    ["created_at", "status", "title", "updated_at"] as const,
+    "updated_at",
+    "sort"
+  );
+  const order = enumParam(params.get("order"), ["asc", "desc"] as const, "desc", "order");
+  const requestedStatuses = enumParams(params, "status", WORK_STATUSES);
+  const statuses = requestedStatuses.length > 0 ? requestedStatuses : [...WORK_STATUSES];
+  const page = { page: 1, page_size: pageSize };
+  const lanes = Object.fromEntries(statuses.map((status) => {
+    const filter = {
+      limit: pageSize,
+      offset: 0,
+      projectId: projectID,
+      sort,
+      sortOrder: order,
+      source,
+      query,
+      statuses: [status]
+    };
+    const total = countIssueBackedWorks(db, filter);
+    return [status, pagedItemsResponse(attachWorkSchedules(context, listIssueBackedWorks(db, filter)), total, page, {})];
+  }));
+  return {
+    lanes,
+    page_size: pageSize,
+    project_id: projectID,
+    sort: { field: sort, order }
+  };
+}
+
+function summaryResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
+  const params = new URL(request.url).searchParams;
+  const projectID = cleanString(params.get("project_id"));
+  if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
+  const requestedIncludeProjects = booleanParam(params.get("include_projects"), "include_projects", !projectID);
+  if (projectID && requestedIncludeProjects) {
+    throw workError(400, "invalid_request", "include_projects=true is invalid with project_id");
+  }
+  try {
+    return {
+      contract: WORK_SUMMARY_CONTRACT,
+      generated_at: new Date().toISOString(),
+      read_authority: WORK_WRITE_AUTHORITY,
+      ...readWorkSummary(db, { includeProjects: requestedIncludeProjects, projectId: projectID })
+    };
+  } catch (error) {
+    if (error instanceof WorkSummaryCapacityError) {
+      throw workError(409, "project_summary_capacity_exceeded", error.message);
+    }
+    throw error;
+  }
+}
+
+function listResponse(db: RunnerDatabase, request: Request, context: ReadApiContext): Record<string, unknown> {
+  const params = new URL(request.url).searchParams;
+  const projectID = cleanString(params.get("project_id"));
+  if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
+  const statuses = enumParams(params, "status", WORK_STATUSES);
+  const types = enumParams(params, "type", WORK_TYPES);
+  const source = workSourceParam(params);
+  const query = cleanString(params.get("q")).toLowerCase();
+  const sort = enumParam(
+    params.get("sort"),
+    ["created_at", "status", "title", "updated_at"] as const,
+    "updated_at",
+    "sort"
+  );
+  const order = enumParam(params.get("order"), ["asc", "desc"] as const, "desc", "order");
+  const cursorText = cleanString(params.get("cursor"));
+  if (cursorText && (sort !== "updated_at" || order !== "desc")) {
+    throw workError(400, "cursor_sort_unsupported", "cursor only supports updated_at desc");
+  }
+  const page = pageInput(params);
+  const fingerprint = workFilterFingerprint({ projectID, query, source, statuses, types });
+  const cursor = cursorText ? decodeWorkCursor(cursorText, fingerprint) : undefined;
+  const typeMatches = types.length === 0 || types.includes("engineering_task");
+  const filter = {
+    cursorIssueId: cursor?.issue_id,
+    cursorUpdatedAt: cursor?.updated_at,
+    limit: cursor ? page.page_size + 1 : page.page_size,
+    offset: cursor ? 0 : (page.page - 1) * page.page_size,
+    projectId: projectID,
+    query,
+    sort,
+    sortOrder: order,
+    source,
+    statuses
+  };
+  const total = typeMatches ? countIssueBackedWorks(db, {
+    ...filter,
+    cursorIssueId: undefined,
+    cursorUpdatedAt: undefined,
+    limit: undefined,
+    offset: undefined
+  }) : 0;
+  const loaded = typeMatches ? listIssueBackedWorks(db, filter) : [];
+  const items = cursor ? loaded.slice(0, page.page_size) : loaded;
+  const hasMore = cursor ? loaded.length > page.page_size : page.page * page.page_size < total;
+  const last = items.at(-1);
+  return pagedItemsResponse(attachWorkSchedules(context, items), total, page, {
+    filters: { project_id: projectID, q: query, status: statuses, type: types, ...(source ? { source } : {}) },
+    has_more: hasMore,
+    next_cursor: hasMore && last ? encodeWorkCursor({
+      filter_fingerprint: fingerprint,
+      issue_id: workIDToIssueID(last.id),
+      updated_at: last.updated_at,
+      version: 1
+    }) : "",
+    sort: { field: sort, order }
+  });
+}
+
+function detailResponse(db: RunnerDatabase, request: Request, context: ReadApiContext): Record<string, unknown> {
+  const work = requireWork(db, workID(request));
+  const decision = readIssueDecisionProjection(db, workIDToIssueID(work.id));
+  return {
+    decision,
+    feedback: readHumanFeedback(db, workIDToIssueID(work.id), decision),
+    work: attachWorkSchedules(context, [work])[0]
+  };
+}
+
+function readinessDeclaration(
+  body: Record<string, unknown>,
+  work: WorkLedgerEntry
+): ReadinessRequirementDeclaration {
+  if (body.schema_version !== 1) throw workError(400, "invalid_request", "schema_version must be 1");
+  const declaredWorkID = requiredString(body.work_id, "work_id");
+  if (declaredWorkID !== work.id) throw workError(400, "invalid_request", "work_id must match the route Work");
+  if (!Array.isArray(body.requirements) || body.requirements.length === 0) {
+    throw workError(400, "invalid_request", "requirements are required");
+  }
+  return {
+    audit: readinessAudit(body.audit),
+    requirements: body.requirements.map((value, index) => readinessRequirement(value, index)),
+    schema_version: 1,
+    work_id: work.id
+  };
+}
+
+function readinessAudit(value: unknown): ReadinessRequirementDeclaration["audit"] {
+  const audit = auditInput(value);
+  return {
+    actor: audit.actor,
+    correlation_id: audit.correlation_id,
+    event_id: audit.event_id,
+    occurred_at: audit.occurred_at,
+    reason: audit.reason
+  };
+}
+
+function readinessRequirement(value: unknown, index: number): ReadinessRequirement {
+  const item = objectValue(value, `requirements[${index}]`);
+  assertKeys(item, [
+    "environment", "migration_gate", "release_window", "required_stage",
+    "runtime_revision", "source_revision", "source_work_id"
+  ]);
+  const stage = requiredString(item.required_stage, `requirements[${index}].required_stage`);
+  if (!READINESS_STAGES.includes(stage as typeof READINESS_STAGES[number])) {
+    throw workError(400, "invalid_request", `requirements[${index}].required_stage is invalid`);
+  }
+  return {
+    environment: requiredString(item.environment, `requirements[${index}].environment`),
+    ...(cleanString(item.migration_gate) ? { migration_gate: cleanString(item.migration_gate) } : {}),
+    release_window: requiredString(item.release_window, `requirements[${index}].release_window`),
+    required_stage: stage as ReadinessRequirement["required_stage"],
+    runtime_revision: requiredString(item.runtime_revision, `requirements[${index}].runtime_revision`),
+    source_revision: requiredString(item.source_revision, `requirements[${index}].source_revision`),
+    source_work_id: canonicalWorkID(requiredString(item.source_work_id, `requirements[${index}].source_work_id`))
+  };
+}
+
+function timelineResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
+  const work = requireWork(db, workID(request));
+  const params = new URL(request.url).searchParams;
+  try {
+    const result = queryWorkTimeline(db, work.id, {
+        cursor: cleanString(params.get("cursor")) || undefined,
+        limit: positiveIntegerParam(params.get("limit"), "limit", 50, 500)
+      });
+    return {
+      has_more: result.has_more,
+      items: result.items.map(compactTimelineItem),
+      next_cursor: result.next_cursor
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Work timeline cursor")) {
+      throw workError(400, "invalid_cursor", error.message);
+    }
+    throw error;
+  }
+}
+
+function mutationResponse(result: IssueWorkMutationResult, appliedStatus = 200): Response {
+  if (!result.applied) {
+    return json({
+      code: "work_mutation_rejected",
+      message: "Work mutation rejected",
+      violations: result.violations,
+      work: result.work
+    }, { status: 409 });
+  }
+  return json({
+    mutation: {
+      applied: true,
+      audit_event_id: result.audit_event_id
+    },
+    work: result.work
+  }, { status: appliedStatus });
+}
+
+function compactTimelineItem(item: ReturnType<typeof queryWorkTimeline>["items"][number]) {
+  return {
+    id: item.id,
+    kind: item.kind,
+    occurred_at: item.occurred_at,
+    status: item.status,
+    summary: item.summary,
+    title: item.title
+  };
+}
+
+function auditInput(value: unknown): WorkTransitionAudit {
+  const audit = objectValue(value, "audit");
+  assertKeys(audit, ["actor", "correlation_id", "event_id", "occurred_at", "reason"]);
+  const actor = objectValue(audit.actor, "audit.actor");
+  assertKeys(actor, ["id", "kind"]);
+  const kind = requiredString(actor.kind, "audit.actor.kind");
+  if (!["user", "supervisor", "runner", "guardian", "automation", "system"].includes(kind)) {
+    throw workError(400, "invalid_request", "audit.actor.kind is invalid");
+  }
+  const occurredAt = requiredString(audit.occurred_at, "audit.occurred_at");
+  if (!Number.isFinite(Date.parse(occurredAt))) {
+    throw workError(400, "invalid_request", "audit.occurred_at must be a timestamp");
+  }
+  return {
+    actor: { id: requiredString(actor.id, "audit.actor.id"), kind: kind as WorkTransitionAudit["actor"]["kind"] },
+    correlation_id: requiredString(audit.correlation_id, "audit.correlation_id"),
+    event_id: requiredString(audit.event_id, "audit.event_id"),
+    gate: { authority: "deterministic_policy", decision: "allow", policy_ref: WORK_HTTP_POLICY_REF },
+    occurred_at: occurredAt,
+    reason: requiredString(audit.reason, "audit.reason")
+  };
+}
+
+function actionInput(request: Request): IssueWorkAction {
+  const parts = pathParts(request);
+  const action = decodeURIComponent(parts[parts.indexOf("actions") + 1] ?? "").trim();
+  if (action !== "cancel" && action !== "enqueue" && action !== "retry") {
+    throw workError(400, "invalid_request", "Work action must be cancel, enqueue, or retry");
+  }
+  return action;
+}
+
+function requireWork(db: RunnerDatabase, id: string): WorkLedgerEntry {
+  const canonical = canonicalWorkID(id);
+  const work = getIssueBackedWork(db, canonical);
+  if (!work) throw workError(404, "work_not_found", "Work not found");
+  return work;
+}
+
+function canonicalWorkID(value: string): WorkLedgerEntry["id"] {
+  try {
+    workIDToIssueID(value);
+    return value as WorkLedgerEntry["id"];
+  } catch {
+    throw workError(400, "invalid_work_id", "Work id is invalid");
+  }
+}
+
+function workID(request: Request): string {
+  const parts = pathParts(request);
+  const raw = parts[parts.indexOf("works") + 1] ?? "";
+  if (raw === "") throw workError(400, "invalid_work_id", "Work id is invalid");
+  try {
+    return decodeURIComponent(raw).trim();
+  } catch {
+    throw workError(400, "invalid_work_id", "Work id is invalid");
+  }
+}
+
+function pathParts(request: Request): string[] {
+  return new URL(request.url).pathname.split("/").filter(Boolean);
+}
+
+function kickProject(context: ReadApiContext, work: WorkLedgerEntry): void {
+  if (work.status !== "todo" && work.status !== "cancelled") return;
+  const project = getProject(context.database, work.owner.project_id);
+  if (!project || project.auto_run !== 1) return;
+  startProjectLoop({ bus: context.bus, database: context.database, providers: context.providers }, project.id);
+}
+
+function pagedItemsResponse<T>(
+  items: T[],
+  total: number,
+  page: PageInput,
+  extra: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    ...extra,
+    items,
+    page: page.page,
+    page_size: page.page_size,
+    total,
+    total_pages: total === 0 ? 0 : Math.ceil(total / page.page_size)
+  };
+}
+
+function pageInput(params: URLSearchParams): PageInput {
+  return {
+    page: positiveIntegerParam(params.get("page"), "page", 1),
+    page_size: positiveIntegerParam(params.get("page_size"), "page_size", DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
+  };
+}
+
+type WorkCursorV1 = {
+  filter_fingerprint: string;
+  issue_id: number;
+  updated_at: string;
+  version: 1;
+};
+
+function workFilterFingerprint(input: {
+  projectID: string;
+  query: string;
+  source?: "github" | "manual";
+  statuses: string[];
+  types: string[];
+}): string {
+  return createHash("sha256").update(JSON.stringify({
+    project_id: input.projectID,
+    q: input.query,
+    ...(input.source ? { source: input.source } : {}),
+    status: [...input.statuses].sort(),
+    type: [...input.types].sort()
+  })).digest("hex");
+}
+
+function encodeWorkCursor(cursor: WorkCursorV1): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function workSourceParam(params: URLSearchParams): "github" | "manual" | undefined {
+  if (!params.has("source")) return undefined;
+  const values = params.getAll("source");
+  if (values.length !== 1 || !["github", "manual"].includes(values[0]!)) {
+    throw workError(400, "invalid_request", "source must be github or manual");
+  }
+  return values[0] as "github" | "manual";
+}
+
+function decodeWorkCursor(value: string, fingerprint: string): WorkCursorV1 {
+  if (value.length > MAX_CURSOR_BYTES || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw workError(400, "invalid_cursor", "cursor is invalid");
+  }
+  try {
+    const decoded = Buffer.from(value, "base64url").toString("utf8");
+    if (Buffer.from(decoded, "utf8").toString("base64url") !== value) throw new Error("non-canonical cursor");
+    const cursor = JSON.parse(decoded) as Record<string, unknown>;
+    const keys = Object.keys(cursor).sort();
+    if (JSON.stringify(keys) !== JSON.stringify(["filter_fingerprint", "issue_id", "updated_at", "version"])) {
+      throw new Error("cursor keys are invalid");
+    }
+    if (cursor.version !== 1 || typeof cursor.filter_fingerprint !== "string" || cursor.filter_fingerprint !== fingerprint) {
+      throw new Error("cursor scope is invalid");
+    }
+    if (!Number.isSafeInteger(cursor.issue_id) || Number(cursor.issue_id) <= 0) throw new Error("cursor issue id is invalid");
+    if (typeof cursor.updated_at !== "string" || cursor.updated_at.length === 0 || cursor.updated_at.length > 64
+      || !Number.isFinite(Date.parse(cursor.updated_at))) throw new Error("cursor timestamp is invalid");
+    return cursor as unknown as WorkCursorV1;
+  } catch {
+    throw workError(400, "invalid_cursor", "cursor is invalid or does not match the current filters");
+  }
+}
+
+function booleanParam(value: string | null, field: string, fallback: boolean): boolean {
+  const raw = cleanString(value).toLowerCase();
+  if (raw === "") return fallback;
+  if (raw === "true" || raw === "1") return true;
+  if (raw === "false" || raw === "0") return false;
+  throw workError(400, "invalid_request", `${field} must be true or false`);
+}
+
+function positiveIntegerParam(value: string | null, field: string, fallback: number, maximum?: number): number {
+  const raw = cleanString(value);
+  if (raw === "") return fallback;
+  if (!/^[0-9]+$/.test(raw)) throw workError(400, "invalid_request", `${field} must be a positive integer`);
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw workError(400, "invalid_request", `${field} must be a positive integer`);
+  }
+  if (maximum !== undefined && parsed > maximum) {
+    throw workError(400, "invalid_request", `${field} must not exceed ${maximum}`);
+  }
+  return parsed;
+}
+
+function enumParams<const T extends readonly string[]>(params: URLSearchParams, key: string, values: T): T[number][] {
+  const requested = params.getAll(key)
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const invalid = requested.filter((value) => !values.includes(value as T[number]));
+  if (invalid.length > 0) throw workError(400, "invalid_request", `${key} is invalid`);
+  return [...new Set(requested)] as T[number][];
+}
+
+function enumParam<const T extends readonly string[]>(
+  value: string | null,
+  values: T,
+  fallback: T[number],
+  field: string
+): T[number] {
+  const requested = cleanString(value);
+  if (requested === "") return fallback;
+  if (!values.includes(requested as T[number])) throw workError(400, "invalid_request", `${field} is invalid`);
+  return requested as T[number];
+}
+
+function revisionInput(value: unknown): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw workError(400, "invalid_request", "expected_revision must be a non-negative integer");
+  }
+  return value;
+}
+
+async function objectBody(request: Request): Promise<Record<string, unknown>> {
+  try {
+    const value = await request.json() as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw workError(400, "invalid_request", "Request body must be a JSON object");
+    }
+    return value as Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof WorkHttpError) throw error;
+    throw workError(400, "invalid_json", "Request body is not valid JSON");
+  }
+}
+
+function objectValue(value: unknown, field: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw workError(400, "invalid_request", `${field} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function requiredString(value: unknown, field: string): string {
+  const text = cleanString(value);
+  if (text === "") throw workError(400, "invalid_request", `${field} is required`);
+  return text;
+}
+
+function positiveIssueIDArray(value: unknown): number[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) =>
+    typeof item !== "number" || !Number.isSafeInteger(item) || item <= 0
+  )) {
+    throw workError(400, "invalid_request", "depends_on_issue_ids must be a positive integer array");
+  }
+  const ids = [...value as number[]];
+  const duplicate = ids.find((id, index) => ids.indexOf(id) !== index);
+  if (duplicate !== undefined) {
+    throw workError(400, "invalid_request", `depends_on_issue_ids cannot repeat Issue #${duplicate}`);
+  }
+  return ids.sort((left, right) => left - right);
+}
+
+function assertKeys(body: Record<string, unknown>, allowed: string[]): void {
+  const unknown = Object.keys(body).filter((key) => !allowed.includes(key));
+  if (unknown.length > 0) {
+    throw workError(400, "invalid_request", `Unsupported fields: ${unknown.sort().join(", ")}`);
+  }
+}
+
+async function workResponse(write: () => unknown | Promise<unknown>): Promise<Response> {
+  try {
+    const output = await write();
+    return output instanceof Response ? output : json(output);
+  } catch (error) {
+    return workErrorResponse(error);
+  }
+}
+
+class WorkHttpError extends Error {
+  constructor(readonly status: number, readonly code: string, message: string) {
+    super(message);
+    this.name = "WorkHttpError";
+  }
+}
+
+function workError(status: number, code: string, message: string): WorkHttpError {
+  return new WorkHttpError(status, code, message);
+}
+
+function workErrorResponse(error: unknown): Response {
+  if (error instanceof WorkHttpError) {
+    return json({ code: error.code, message: error.message }, { status: error.status });
+  }
+  if (error instanceof ProjectNotFoundError) {
+    return json({ code: "project_not_found", message: "Project not found" }, { status: 404 });
+  }
+  if (error instanceof Error && (
+    error.message.startsWith("依赖 Issue #") ||
+    error.message.startsWith("depends_on_issue_ids")
+  )) {
+    return json({ code: "invalid_request", message: error.message }, { status: 400 });
+  }
+  if (error instanceof Error && error.message.includes("conflicts with another command")) {
+    return json({
+      code: "work_event_conflict",
+      message: "Work audit event conflicts with another command"
+    }, { status: 409 });
+  }
+  return json({ code: "internal_error", message: "Internal server error" }, { status: 500 });
+}

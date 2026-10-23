@@ -4,7 +4,7 @@
 - 日期：2026-07-16
 - 路线 issue：XW P04.09 / Runner #671
 - 依赖：P04.02、P04.03、P04.04、P04.05、ADR-XW-0033
-- 可执行实现：`backend-ts/src/db/repositories/evidence.ts`、`backend-ts/src/http/evidenceApi.ts`
+- 可执行实现：`backend-ts/src/db/repositories/evidence.ts`、`backend-ts/src/http/work/evidenceApi.ts`
 - 用户界面：`frontend/src/components/EvidencePanel.jsx`
 
 ## 1. 决策
@@ -64,7 +64,7 @@ Focused gates：
 
 ```bash
 cd backend-ts
-bun test src/http/evidenceApi.test.ts src/domain/evidence/completionGate.test.ts src/http/readApiContract.test.ts src/http/runApi.test.ts
+bun test src/http/work/evidenceApi.test.ts src/domain/evidence/completionGate.test.ts src/http/readApiContract.test.ts src/http/work/runApi.test.ts
 
 cd ../frontend
 node --test src/components/evidencePresentation.test.js src/components/EvidencePanel.wiring.test.js src/pages/workBoardModel.test.js

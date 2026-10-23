@@ -101,7 +101,7 @@ README 给出的核心用法只有一句话：**列好 Issue，告诉玄武开�
 - 表单字段：
   - **项目**：默认取打开时的上下文项目，否则取上次使用的项目；只有一个项目时不显示选择器。
   - **描述**：必填。标题字段默认收起，留空时从首行自动生成（现有逻辑已支持）。
-  - **加入执行队列**：**默认不勾选**，即保持现有默认值“待确认”（`triage`，`work/workProfileRouting.js:6`；已由产品决定，Q8）。用户勾选后为 `todo`。文案**不承诺“立即开始”**：只有项目开启自动执行（`project.auto_run=1`，`backend-ts/src/http/workApi.ts:477`）且没有暂停、依赖已就绪、编程工具可用时，才会被调度（`projectLoop.ts:79–105`）。不满足时，提交后直接提示原因，例如“项目已暂停，恢复后开始”。
+  - **加入执行队列**：**默认不勾选**，即保持现有默认值“待确认”（`triage`，`work/workProfileRouting.js:6`；已由产品决定，Q8）。用户勾选后为 `todo`。文案**不承诺“立即开始”**：只有项目开启自动执行（`project.auto_run=1`，`backend-ts/src/http/work/workApi.ts:477`）且没有暂停、依赖已就绪、编程工具可用时，才会被调度（`projectLoop.ts:79–105`）。不满足时，提交后直接提示原因，例如“项目已暂停，恢复后开始”。
   - **执行预设**：收在“更多选项”，默认“跟随项目设置”（即回到项目的执行默认值，不是“不用编程工具”）。只映射到现有的 `agent_profile_id`（`workApi.ts` 白名单不接受任务级 provider/model），**不新增任务级模型覆盖**，也不通过修改项目默认值来实现单个任务的覆盖。
   - 编辑已有任务时，如果原来选中的预设现在不可用，下拉中显示为“当前选择（不可用）”的禁用项，保留原值，不隐式切换。
   - 删除 `Effective: … （Work 显式）` 预览串，改为一句中文说明“将使用：Codex · gpt-x（来自项目设置）”。
@@ -646,7 +646,7 @@ E 阶段沿用 D 阶段的约束：不改认证、端口、权限默认值和已
 
 #### F1 玄武助手复用 Codex 登录
 
-**实施前已核实**：玄武助手凭据存于 `<数据目录>/pi-runtime/agent/auth.json`；原有 `ModelRuntime.create` 创建点为 `http/piRuntime.ts`、`http/piOAuthApi.ts`、`pi/runtime/sessionTitleGenerator.ts`，另有只读记忆回放和隔离 smoke 工具。原 `codexLoginStatus` 会解析 `$CODEX_HOME/auth.json`，检查 access token 或 API key 是否存在，API key 也会得到 configured；并非仅检查文件存在。pi 0.87.1 支持自定义 `CredentialStore`，请求鉴权在到期前 5 分钟通过 `modify` 回调刷新，目录发现也有刷新路径；不能仅禁止最终写入。
+**实施前已核实**：玄武助手凭据存于 `<数据目录>/pi-runtime/agent/auth.json`；原有 `ModelRuntime.create` 创建点为 `http/pi/piRuntime.ts`、`http/pi/piOAuthApi.ts`、`pi/runtime/sessionTitleGenerator.ts`，另有只读记忆回放和隔离 smoke 工具。原 `codexLoginStatus` 会解析 `$CODEX_HOME/auth.json`，检查 access token 或 API key 是否存在，API key 也会得到 configured；并非仅检查文件存在。pi 0.87.1 支持自定义 `CredentialStore`，请求鉴权在到期前 5 分钟通过 `modify` 回调刷新，目录发现也有刷新路径；不能仅禁止最终写入。
 
 **核心边界**：Codex 是唯一刷新方。玄武不复制 refresh token、不执行 pi 的刷新回调、不写 Codex 或独立 OAuth 的凭据文件。2026-10-15 根据实施前核实确认：
 

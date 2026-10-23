@@ -8,13 +8,13 @@ import { SUPERVISOR_NOTIFICATION_PREFIX, XUANWU_USER_FACING_TERMS } from "./user
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const USER_VISIBLE_SOURCES = [
   "backend-ts/src/domain/work/timeline.ts",
-  "backend-ts/src/http/piProjectControlApi.ts",
-  "backend-ts/src/http/piRuntimeResources.ts",
-  "backend-ts/src/http/piSupervisorActionDispatch.ts",
-  "backend-ts/src/integrations/feishuAgentBridge.ts",
-  "backend-ts/src/integrations/feishuGuardianAlerts.ts",
-  "backend-ts/src/integrations/feishuNotificationFormatters.ts",
-  "backend-ts/src/integrations/feishuPiActionCards.ts",
+  "backend-ts/src/http/pi/piProjectControlApi.ts",
+  "backend-ts/src/http/pi/piRuntimeResources.ts",
+  "backend-ts/src/http/pi/piSupervisorActionDispatch.ts",
+  "backend-ts/src/integrations/feishu/feishuAgentBridge.ts",
+  "backend-ts/src/integrations/feishu/feishuGuardianAlerts.ts",
+  "backend-ts/src/integrations/feishu/feishuNotificationFormatters.ts",
+  "backend-ts/src/integrations/feishu/feishuPiActionCards.ts",
   "backend-ts/src/notifications/piNeedsUserAction.ts",
   "backend-ts/src/notifications/piNotifier.ts",
   "backend-ts/src/pi/runtime/agentOrchestrationPayloads.ts",
@@ -84,7 +84,7 @@ describe("Xuanwu user-facing terminology", () => {
 
   test("keeps canonical DB, singleton Supervisor API, CLI, runtime ID, and input alias identifiers", () => {
     expect(source("backend-ts/src/db/defaultPiAgent.ts")).toContain('DEFAULT_PI_AGENT_ID = "runner-default"');
-    expect(source("backend-ts/src/http/piApi.ts")).toContain('router.get("/api/pi/supervisor"');
+    expect(source("backend-ts/src/http/pi/piApi.ts")).toContain('router.get("/api/pi/supervisor"');
     expect(source("backend-ts/src/db/schema/003_pi_runtime.ts")).toContain("create table if not exists pi_agents");
     expect(source("backend-ts/src/db/schema/003_pi_runtime.ts")).toContain("pi_agent_id text not null");
     expect(source("backend-ts/src/providers/codex/adapter.ts")).toContain('name: "xuanwu"');

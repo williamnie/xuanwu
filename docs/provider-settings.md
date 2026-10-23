@@ -173,9 +173,9 @@ bun test --timeout 60000 \
   src/providers/claude/auth.test.ts \
   src/providers/claude/provider.test.ts \
   src/providers/claude/sdkProvider.test.ts \
-  src/http/systemStatus.test.ts \
-  src/http/sessionApi.test.ts \
-  src/http/workApi.test.ts \
+  src/http/system/systemStatus.test.ts \
+  src/http/work/sessionApi.test.ts \
+  src/http/work/workApi.test.ts \
   src/runner/interrupt.test.ts \
   src/runner/projectLoop.test.ts \
   src/runner/providerRuntime.test.ts \

@@ -14,7 +14,7 @@ import { readLibrarySkillResource, verifyLibrarySkill } from "./libraryService.t
 import { buildSkillPromptContext } from "./promptContext.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { buildIssuePromptForTest } from "../runner/projectLoop.ts";
-import { createPiRuntimeResourceLoader } from "../http/piRuntimeResources.ts";
+import { createPiRuntimeResourceLoader } from "../http/pi/piRuntimeResources.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot } from "../spikes/piSmokeSupport.ts";
 import { loadAssistantToolRegistrySnapshot } from "../pi/tools/toolRegistrySnapshot.ts";
 

@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../../db/database.ts";
 import { getPiSupervisor } from "../../db/repositories/pi.ts";
 import { getProject } from "../../db/repositories/projects.ts";
-import { createPiRuntimeSession } from "../../http/piRuntime.ts";
+import { createPiRuntimeSession } from "../../http/pi/piRuntime.ts";
 import { MEMORY_REFLECTION_WRITE_INSTRUCTIONS, reflectionAuthorization } from "./memoryReflectionTools.ts";
 import { REFLECTION_LIMITS, type MemoryReflection, type ReflectionLease } from "./memoryReflectionQueue.ts";
 import { structuredAssistantProviderError } from "../runtime/structuredAssistantOutput.ts";

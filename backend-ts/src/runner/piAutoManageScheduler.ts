@@ -51,7 +51,7 @@ import {
 } from "./automationScheduler.ts";
 import { createNativeAutomationExecutor } from "./automationRuntime.ts";
 import { runWatchAutomationsOnce } from "./watchAutomationRuntime.ts";
-import type { ImChannelRegistry } from "../integrations/imChannelContracts.ts";
+import type { ImChannelRegistry } from "../integrations/im/imChannelContracts.ts";
 import { dispatchImOutbox } from "../pi/notifications/imReplyOutboxDispatcher.ts";
 import {
   signalOpenRunTerminalProviderErrors,

@@ -20,7 +20,7 @@ import {
   imTargetUri,
   type ImInteractionActionV1,
   type ImOutboundPayloadV1
-} from "../../integrations/imChannelContracts.ts";
+} from "../../integrations/im/imChannelContracts.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
 import { cleanString, objectValue } from "../../util/values.ts";
 

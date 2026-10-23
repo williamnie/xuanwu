@@ -48,8 +48,8 @@ backend-ts/src/providers/
 | `runtime/core.ts:191-202` `executorProviders()` | 手写 codex/claude map | `core/registry.ts` `startConfigured(config)`；`core.ts` 只持有 registry 引用 |
 | `runtime/core.ts:249` `installTerminationHandlers` | `provider.stop?.()` | `registry.stopAll()`（幂等、有界并发） |
 | `runtime/core.ts:53-70` `runtimeMemoryRows()` | 只含 runner/worker/Codex ownership snapshot | `registry.collectProcessLeases()` 聚合所有 Provider lease（review 2.3） |
-| `http/systemStatus.ts:212-260` `providerStatus()` | 手写 codex/claude status | `registry.list()` 投影；systemStatus 只读消费 |
-| `http/sessionApi.ts:75,122,126,357` | Codex index/retry/fallback 分支 | 下沉到 `codex/` adapter；sessionApi 只调 facet |
+| `http/system/systemStatus.ts:212-260` `providerStatus()` | 手写 codex/claude status | `registry.list()` 投影；systemStatus 只读消费 |
+| `http/work/sessionApi.ts:75,122,126,357` | Codex index/retry/fallback 分支 | 下沉到 `codex/` adapter；sessionApi 只调 facet |
 | `runner/providerRuntime.ts` event sink | 持久化 + `SessionRef{turnId}` | 消费 `ProviderExecutionRef`；terminal 事件驱动 `onRunComplete` |
 | `runner/projectLoop.ts:92-132` `reconcileProviderOutcome()` | provider.run 返回后二次 reconcile | 与 terminal completion 合并为单一 reconciliation 路径 |
 | `runner/interrupt.ts:325-336` `sessionRef()`/`providerID()` | 硬编码 provider 枚举 | `registry.assertCapability(id,'interrupt')` + `ControlProviderFacet` |

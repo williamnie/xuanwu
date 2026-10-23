@@ -2,7 +2,7 @@ import { getPiAction, updatePiAction, createIssueSupervisorEvent, type PiAction 
 import type { RunnerDatabase } from "../../db/database.ts";
 import type { EventBus } from "../../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../../providers/types.ts";
-import { dispatchPiAction } from "../../http/piActionDispatch.ts";
+import { dispatchPiAction } from "../../http/pi/piActionDispatch.ts";
 import { createPendingPiAction, recordPiActionAuditEvent, type PiActionRequest } from "../actions/actionEngine.ts";
 import type { PiGatePolicy } from "../actions/actionGate.ts";
 import type { IssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";

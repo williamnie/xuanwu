@@ -35,7 +35,7 @@ const backendProductionRoots = backendGraphRoot ? [
     owner: 'typescript',
     purpose: 'ambient Markdown text imports used by the shared Issue planning policy',
     invocation: 'backend-ts/tsconfig.json:include src/**/*.ts',
-    test: 'backend-ts/src/http/piRuntimePrompt.test.ts',
+    test: 'backend-ts/src/http/pi/piRuntimePrompt.test.ts',
   },
   {
     path: 'backend-ts/src/providers/pi/xuanwuPolicyExtension.ts',

@@ -1107,7 +1107,7 @@ Qoder：
 - `pi/runtime/agentOrchestration.ts` 只解析 policy inheritance，不做 Provider mapping；
 - `runner/providerRuntime.ts` 在 spawn 前 resolve；
 - `runner/projectLoop.ts`、recovery、interrupt 使用 resolved policy/ref；
-- `http/sessionApi.ts`、session runtime settings 统一接线；
+- `http/work/sessionApi.ts`、session runtime settings 统一接线；
 - Attempt metadata 保存 policy evidence。
 
 ### P3：Schema/API 兼容迁移（本地 schema/API 已完成，live survey pending）

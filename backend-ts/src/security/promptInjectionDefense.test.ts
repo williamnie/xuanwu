@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase } from "../db/database.ts";
 import { listPiActions } from "../db/repositories/pi.ts";
-import { buildPiRuntimeSystemPrompt } from "../http/piRuntimePrompt.ts";
+import { buildPiRuntimeSystemPrompt } from "../http/pi/piRuntimePrompt.ts";
 import { decidePiAuthorization, type PiActionEnvelope } from "../pi/actions/actionGate.ts";
 import { executeSafePiAction } from "../pi/actions/actionEngine.ts";
 import {

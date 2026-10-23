@@ -4,7 +4,7 @@ import {
   updatePiNotificationIntent,
   type PiNotificationIntent
 } from "../../db/repositories/pi.ts";
-import { resolveImNotificationTarget } from "../../integrations/imNotificationTargets.ts";
+import { resolveImNotificationTarget } from "../../integrations/im/imNotificationTargets.ts";
 import { queueExistingNotificationIntent, type NotificationRoute } from "../../notifications/unifiedNotificationPipeline.ts";
 import { formatRunGroupDigest } from "./digestFormatter.ts";
 import { markNotificationIntentRetry } from "./notificationCoordinator.ts";

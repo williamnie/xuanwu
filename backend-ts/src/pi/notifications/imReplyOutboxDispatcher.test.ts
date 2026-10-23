@@ -15,11 +15,11 @@ import {
 import { createPiAction, createPiApprovalRequest } from "../../db/repositories/pi.ts";
 import { createExternalEvent } from "../../db/repositories/externalEvents.ts";
 import { dispatchImOutbox } from "./imReplyOutboxDispatcher.ts";
-import { dispatchFeishuOutbox } from "../../integrations/feishuOutboxDispatcherCompat.ts";
+import { dispatchFeishuOutbox } from "../../integrations/feishu/feishuOutboxDispatcherCompat.ts";
 import type { ChannelConnector, OutboundEnvelope } from "../../integrations/channelConnectorContracts.ts";
-import { FeishuClientError, type FeishuMessageClient } from "../../integrations/feishuClient.ts";
-import type { FeishuConnectorConfig } from "../../integrations/feishu.ts";
-import { FEISHU_CONNECTOR_ID } from "../../integrations/feishuChannelConnector.ts";
+import { FeishuClientError, type FeishuMessageClient } from "../../integrations/feishu/feishuClient.ts";
+import type { FeishuConnectorConfig } from "../../integrations/feishu/feishu.ts";
+import { FEISHU_CONNECTOR_ID } from "../../integrations/feishu/feishuChannelConnector.ts";
 import { useDatabaseCleanup } from "../../testing/harness.ts";
 
 const trackDatabase = useDatabaseCleanup();

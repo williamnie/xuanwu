@@ -68,7 +68,7 @@ test('CLI, singleton Supervisor API, and DB identifiers stay canonical', () => {
   assert.match(source('backend-ts/src/db/defaultPiAgent.ts'), /DEFAULT_PI_AGENT_NAME = "Xuanwu Supervisor"/);
   assert.match(source('backend-ts/src/db/schema/003_pi_runtime.ts'), /create table if not exists pi_agents/);
   assert.match(source('backend-ts/src/db/schema/003_pi_runtime.ts'), /pi_agent_id text not null/);
-  assert.match(source('backend-ts/src/http/piApi.ts'), /router\.get\("\/api\/pi\/supervisor"/);
+  assert.match(source('backend-ts/src/http/pi/piApi.ts'), /router\.get\("\/api\/pi\/supervisor"/);
   assert.match(source('backend-ts/src/providers/codex/adapter.ts'), /name: "xuanwu"/);
   assert.match(source('backend-ts/scripts/build-binary.sh'), /dist\/xuanwu/);
 });

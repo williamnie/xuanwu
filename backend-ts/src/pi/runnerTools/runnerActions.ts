@@ -77,11 +77,11 @@ import {
 import {
   readRunnerSettings,
   updateRunnerSettings as applyRunnerSettings
-} from "../../http/runnerSettingsApi.ts";
+} from "../../http/settings/runnerSettingsApi.ts";
 import {
   scheduleSystemRestart,
   type SystemRestartAuditEvent
-} from "../../http/systemRestartApi.ts";
+} from "../../http/system/systemRestartApi.ts";
 import { cleanString } from "../../util/values.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {

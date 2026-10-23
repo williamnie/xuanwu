@@ -9,10 +9,10 @@ import {
   normalizeCodexServerMode,
   type CodexServerMode
 } from "./codexServer.ts";
-import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
-import type { FeishuConfigInput, FeishuConnectorConfig, FeishuConnectorOverrides } from "../integrations/feishu.ts";
-import { buildTelegramConnectorConfig } from "../integrations/telegramConfig.ts";
-import type { TelegramConfigInput, TelegramConnectorConfig, TelegramConnectorOverrides } from "../integrations/telegramTypes.ts";
+import { buildFeishuConnectorConfig } from "../integrations/feishu/feishu.ts";
+import type { FeishuConfigInput, FeishuConnectorConfig, FeishuConnectorOverrides } from "../integrations/feishu/feishu.ts";
+import { buildTelegramConnectorConfig } from "../integrations/telegram/telegramConfig.ts";
+import type { TelegramConfigInput, TelegramConnectorConfig, TelegramConnectorOverrides } from "../integrations/telegram/telegramTypes.ts";
 import { buildGitHubConnectorConfig, type GitHubConnectorConfig, type GitHubConnectorConfigInput } from "../integrations/github/config.ts";
 import { buildGitLabConnectorConfig, type GitLabConnectorConfig, type GitLabConnectorConfigInput } from "../integrations/gitlab/config.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";

@@ -3,11 +3,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase } from "../db/database.ts";
-import { buildPiRuntimeSystemPrompt } from "./piRuntimePrompt.ts";
+import { buildPiRuntimeSystemPrompt } from "./pi/piRuntimePrompt.ts";
 import { createDefaultRouter } from "./server.ts";
 import { inferAppLanguageFromText } from "../i18n/language.ts";
 import { updatePiPersona } from "../db/repositories/pi.ts";
-import { conversationOutputLanguage } from "./piConversationApi.ts";
+import { conversationOutputLanguage } from "./pi/piConversationApi.ts";
 import { useDatabaseCleanup } from "../testing/harness.ts";
 
 const trackDatabase = useDatabaseCleanup();

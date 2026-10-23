@@ -1,5 +1,5 @@
 import type { RunnerDatabase } from "../../db/database.ts";
-import { createPiProjectTools } from "../../http/piProjectTools.ts";
+import { createPiProjectTools } from "../../http/pi/piProjectTools.ts";
 import type {
   AssistantTool,
   PiRuntimeToolPolicy,

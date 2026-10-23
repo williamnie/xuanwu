@@ -4,7 +4,7 @@
 - 日期：2026-07-17
 - 路线 issue：XW P06.01 / Runner #680
 - 硬依赖：XW P00.02 / #632、XW P00.04 / #634（均 `done`）
-- 可执行实现：`backend-ts/src/http/piRuntimePrompt.ts`
+- 可执行实现：`backend-ts/src/http/pi/piRuntimePrompt.ts`
 - 默认配置：`backend-ts/src/db/defaultPiAgent.ts`、`frontend/src/pages/piAgentSettingsState.js`
 - canonical 级别：本文与 `xuanwuSupervisorRoleContractPrompt()` 共同构成 Supervisor 角色、能力边界、决策策略和兼容 Prompt 的 source of truth
 
@@ -105,7 +105,7 @@ Agent-specific instructions 只是额外的 Engineering Chief of Staff 行为，
 
 ## 6. 验证合同
 
-`backend-ts/src/http/piRuntimePrompt.test.ts` 必须覆盖：
+`backend-ts/src/http/pi/piRuntimePrompt.test.ts` 必须覆盖：
 
 - canonical role + compatibility Prompt snapshot；
 - 问答、调查、查询、执行、自动化五类 fixture；
@@ -117,7 +117,7 @@ Agent-specific instructions 只是额外的 Engineering Chief of Staff 行为，
 
 ```bash
 cd backend-ts
-bun test src/http/piRuntimePrompt.test.ts src/http/piApi.test.ts src/db/database.test.ts
+bun test src/http/pi/piRuntimePrompt.test.ts src/http/pi/piApi.test.ts src/db/database.test.ts
 
 cd ../frontend
 node --test src/pages/piAgentSettingsPanel.test.js src/brandTerminology.test.js
@@ -174,8 +174,8 @@ Issue #966 收紧自动经验写入；正式项目启用和最终体验验收由
 本地验证：
 
 ```bash
-bun test backend-ts/src/pi/memory/memoryTools.test.ts backend-ts/src/pi/memory/memoryAutoEnable.test.ts backend-ts/src/pi/memory/memoryContext.test.ts backend-ts/src/http/piMemoryApi.test.ts
-bun test backend-ts/src/http/piProjectControlApi.test.ts backend-ts/src/pi/actions/actionEngine.test.ts backend-ts/src/pi/actions/internalReadAuthorization.test.ts
+bun test backend-ts/src/pi/memory/memoryTools.test.ts backend-ts/src/pi/memory/memoryAutoEnable.test.ts backend-ts/src/pi/memory/memoryContext.test.ts backend-ts/src/http/pi/piMemoryApi.test.ts
+bun test backend-ts/src/http/pi/piProjectControlApi.test.ts backend-ts/src/pi/actions/actionEngine.test.ts backend-ts/src/pi/actions/internalReadAuthorization.test.ts
 git diff --check
 ```
 
@@ -192,6 +192,6 @@ git diff --check
 本地定向验证覆盖双进程同 key/并发修正、重启后归属与去重、事务故障回滚、停用/遗忘不复活、显式恢复、历史查询与迁移重复执行：
 
 ```bash
-bun test backend-ts/src/pi/memory/memoryTools.test.ts backend-ts/src/pi/memory/memoryAutoEnable.test.ts backend-ts/src/http/piMemoryApi.test.ts backend-ts/src/db/reusablePiMemoryMigration.test.ts
+bun test backend-ts/src/pi/memory/memoryTools.test.ts backend-ts/src/pi/memory/memoryAutoEnable.test.ts backend-ts/src/http/pi/piMemoryApi.test.ts backend-ts/src/db/reusablePiMemoryMigration.test.ts
 git diff --check
 ```

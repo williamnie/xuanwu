@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import type { ChannelConnector, OutboundEnvelope } from "../integrations/channelConnectorContracts.ts";
-import { feishuChannelConnectorManifest } from "../integrations/feishuChannelConnector.ts";
-import { buildFeishuConnectorConfig } from "../integrations/feishuConfig.ts";
-import { telegramChannelConnectorManifest } from "../integrations/telegramChannelConnector.ts";
-import { buildTelegramConnectorConfig } from "../integrations/telegramConfig.ts";
+import { feishuChannelConnectorManifest } from "../integrations/feishu/feishuChannelConnector.ts";
+import { buildFeishuConnectorConfig } from "../integrations/feishu/feishuConfig.ts";
+import { telegramChannelConnectorManifest } from "../integrations/telegram/telegramChannelConnector.ts";
+import { buildTelegramConnectorConfig } from "../integrations/telegram/telegramConfig.ts";
 import { createReleaseUpdateMonitor } from "./releaseUpdateMonitor.ts";
 
 const roots: string[] = [];

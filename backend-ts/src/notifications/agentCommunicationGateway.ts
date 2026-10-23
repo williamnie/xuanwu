@@ -13,7 +13,7 @@ import {
   type PiNotificationIntent
 } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { createPiRuntimeSession } from "../http/piRuntime.ts";
+import { createPiRuntimeSession } from "../http/pi/piRuntime.ts";
 import {
   parseStructuredAssistantOutput,
   structuredAssistantProviderError,

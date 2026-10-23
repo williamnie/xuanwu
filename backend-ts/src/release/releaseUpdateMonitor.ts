@@ -1,9 +1,9 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { feishuConnectorStatus } from "../integrations/feishuConfig.ts";
-import type { FeishuConnectorConfig } from "../integrations/feishuTypes.ts";
+import { feishuConnectorStatus } from "../integrations/feishu/feishuConfig.ts";
+import type { FeishuConnectorConfig } from "../integrations/feishu/feishuTypes.ts";
 import type { ChannelConnector } from "../integrations/channelConnectorContracts.ts";
-import { telegramConnectorStatus } from "../integrations/telegramConfig.ts";
-import type { TelegramConnectorConfig } from "../integrations/telegramTypes.ts";
+import { telegramConnectorStatus } from "../integrations/telegram/telegramConfig.ts";
+import type { TelegramConnectorConfig } from "../integrations/telegram/telegramTypes.ts";
 import { queueNotificationOutbox } from "../notifications/notificationOutbox.ts";
 import { dispatchImOutbox } from "../pi/notifications/imReplyOutboxDispatcher.ts";
 import {

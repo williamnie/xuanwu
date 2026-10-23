@@ -5,7 +5,7 @@
 - 路线 issue：XW P06.04 / Runner #683
 - 硬依赖：XW P06.03 / #682、XW P02.06 / #652（均为 `done`）
 - 可执行实现：`backend-ts/src/pi/supervisor/supervisorContextResolver.ts`
-- Runtime 接入：`backend-ts/src/http/piConversationApi.ts`、`backend-ts/src/http/piRuntimePrompt.ts`
+- Runtime 接入：`backend-ts/src/http/pi/piConversationApi.ts`、`backend-ts/src/http/pi/piRuntimePrompt.ts`
 - canonical 级别：本文、`SUPERVISOR_CONTEXT_RESOLUTION_SCHEMA` 与 `resolveSupervisorContext()` 共同构成本阶段逐 turn target resolution、candidate scoring、歧义和 provenance 的 source of truth
 
 ## 1. 决策
@@ -73,8 +73,8 @@
 ```bash
 cd backend-ts
 bun test src/pi/supervisor/supervisorContextResolver.test.ts
-bun test src/http/piConversationMessagesApi.test.ts
-bun test src/integrations/feishuProjectContext.test.ts src/integrations/feishuAgentBridge.test.ts
+bun test src/http/pi/piConversationMessagesApi.test.ts
+bun test src/integrations/feishuProjectContext.test.ts src/integrations/feishu/feishuAgentBridge.test.ts
 ```
 
 Fixtures 必须覆盖：多项目文本、多 Work 跨项目冲突、显式 Work 覆盖当前页、one-shot 不重绑 conversation、同一稳定 conversation 的后续短回复与 action history、不同 conversation 隔离、source mapping 精确匹配与冲突，以及 audit/prompt 不保存原始输入。

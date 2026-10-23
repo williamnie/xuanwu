@@ -4,7 +4,7 @@ import { getPiSupervisor } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { HttpError } from "../http/errors.ts";
 import { createAuthTokenManager, requireBearerAuth } from "../http/auth.ts";
-import { runProjectPiCycle } from "../http/piProjectControlApi.ts";
+import { runProjectPiCycle } from "../http/pi/piProjectControlApi.ts";
 import { parseListenAddress } from "../config/listenAddress.ts";
 import { decideAgentCommunicationWithRuntime } from "../notifications/agentCommunicationGateway.ts";
 import { runPiSupervisorDecision } from "../pi/supervisor/issueSupervisorDecision.ts";

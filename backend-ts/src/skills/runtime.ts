@@ -5,7 +5,7 @@ import { createPiActionEvent } from "../db/repositories/pi.ts";
 import { invokeReadOnlyAssistantTool } from "../pi/tools/readOnlyToolInvocation.ts";
 import { createPiMcpActions } from "../pi/mcp/mcpActionTools.ts";
 import { executeSafePiAction } from "../pi/actions/actionEngine.ts";
-import { createPiProjectTools } from "../http/piProjectTools.ts";
+import { createPiProjectTools } from "../http/pi/piProjectTools.ts";
 import type { EventBus } from "../events/bus.ts";
 import { recordToolCallAuditEvent, type ToolCallAuditContext } from "../pi/actions/toolCallAudit.ts";
 import { loadAssistantToolRegistrySnapshot, type AssistantToolRegistrySnapshot } from "../pi/tools/toolRegistrySnapshot.ts";

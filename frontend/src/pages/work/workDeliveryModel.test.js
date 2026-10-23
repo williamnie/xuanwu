@@ -73,7 +73,7 @@ function fixtureDetail(overrides = {}) {
   return {
     delivery_status: { overall: 'ready' },
     handoff: {
-      changed_files: ['backend-ts/src/http/workApi.test.ts'],
+      changed_files: ['backend-ts/src/http/work/workApi.test.ts'],
       delivery: { mode: 'local_changes', working_tree_ref: 'git-snapshot:809' },
       delivery_actions: [],
       evidence_ids: ['xw:evidence:git:809', 'xw:evidence:test:809'],

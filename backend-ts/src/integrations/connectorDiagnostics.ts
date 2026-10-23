@@ -3,21 +3,21 @@ import { readLocalSettingsSync } from "../config/localSettings.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { githubConnectorStatus } from "./github/config.ts";
 import { gitlabConnectorStatus } from "./gitlab/config.ts";
-import { feishuConnectorStatus } from "./feishu.ts";
-import { gitEventConnectorManifest } from "./gitEvents.ts";
+import { feishuConnectorStatus } from "./feishu/feishu.ts";
+import { gitEventConnectorManifest } from "./git/gitEvents.ts";
 import { trackerIssueConnectorManifest } from "./tracker/issueSync.ts";
-import { WEBHOOK_CHANNEL_MANIFEST } from "../http/webhookEventsApi.ts";
+import { WEBHOOK_CHANNEL_MANIFEST } from "../http/ingress/webhookEventsApi.ts";
 import {
   type ConnectorCapability,
   type ConnectorManifest
 } from "./channelConnectorContracts.ts";
-import { feishuChannelConnectorManifest } from "./feishuChannelConnector.ts";
-import { telegramChannelConnectorManifest } from "./telegramChannelConnector.ts";
-import { createTelegramBotClient, TelegramClientError } from "./telegramClient.ts";
-import { telegramConnectorStatus } from "./telegramConfig.ts";
+import { feishuChannelConnectorManifest } from "./feishu/feishuChannelConnector.ts";
+import { telegramChannelConnectorManifest } from "./telegram/telegramChannelConnector.ts";
+import { createTelegramBotClient, TelegramClientError } from "./telegram/telegramClient.ts";
+import { telegramConnectorStatus } from "./telegram/telegramConfig.ts";
 import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
 import { redactSensitiveText } from "../util/redact.ts";
-import type { FeishuReceiverStatus } from "./feishuReceiver.ts";
+import type { FeishuReceiverStatus } from "./feishu/feishuReceiver.ts";
 import { cleanString } from "../util/values.ts";
 
 const CONNECTOR_DIAGNOSTIC_SCHEMA = "xuanwu.connector-diagnostics.v1" as const;

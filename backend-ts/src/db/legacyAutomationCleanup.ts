@@ -210,8 +210,8 @@ function cleanupGate(dbPath: string, sourceRoot: string, releaseRef: string | un
 function exactSourceConsumerAudit(sourceRoot: string) {
   const checks = [
     ["backend-ts/src/http/readApiDomain.ts", ["listCronTasks"]],
-    ["backend-ts/src/http/piGuardianStatus.ts", ["piIssueCompletionWatchCounts"]],
-    ["backend-ts/src/integrations/feishuLifecycleNotifications.ts", ["issueCompletionWatchOwnsTargetForIssue"]],
+    ["backend-ts/src/http/pi/piGuardianStatus.ts", ["piIssueCompletionWatchCounts"]],
+    ["backend-ts/src/integrations/feishu/feishuLifecycleNotifications.ts", ["issueCompletionWatchOwnsTargetForIssue"]],
     ["backend-ts/src/runner/piAutoManageScheduler.ts", ["runDueCronTasks(", "runDuePiAutomations(", "queueReadyFeishuCompletionWatchNotifications("]],
     ["backend-ts/src/main.ts", ["sweepActivePiIssueCompletionWatches"]],
     ["backend-ts/src/http/server.ts", ["attachPiIssueCompletionWatchObserver"]]

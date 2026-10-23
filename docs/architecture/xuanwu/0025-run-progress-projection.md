@@ -53,8 +53,8 @@ cd backend-ts
 bun test \
   src/events/runProgressProjector.test.ts \
   src/db/repositories/runProgress.test.ts \
-  src/http/runApi.test.ts \
-  src/http/systemStatus.test.ts
+  src/http/work/runApi.test.ts \
+  src/http/system/systemStatus.test.ts
 ```
 
 fixture 覆盖乱序/重复 replay、terminal 后迟到 progress、approval wait、20,000 条 progress 的有界聚合、

@@ -4,7 +4,7 @@
 - 日期：2026-07-16
 - 路线 issue：XW P03.05 / Runner #660
 - 依赖：[ADR-XW-0021](0021-run-attempt-relations.md)、[ADR-XW-0023](0023-run-lifecycle-command-service.md)
-- 可执行实现：`backend-ts/src/http/runApi.ts`、`backend-ts/src/db/repositories/runs.ts`
+- 可执行实现：`backend-ts/src/http/work/runApi.ts`、`backend-ts/src/db/repositories/runs.ts`
 
 ## 1. API 边界
 
@@ -60,7 +60,7 @@ SQLite immediate transaction 串行化 revision check、mutation 与 audit appen
 
 ```bash
 cd backend-ts
-bun test src/http/runApi.test.ts src/http/readApiContract.test.ts
+bun test src/http/work/runApi.test.ts src/http/readApiContract.test.ts
 ```
 
 测试覆盖 HTTP route contract、Bearer 权限、非法 actor fail-closed、125 条 Run 的分页/过滤、detail Attempts/progress/links、interrupt/resume 幂等，以及 retry/resume stale revision 并发冲突。

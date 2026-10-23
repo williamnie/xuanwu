@@ -13,7 +13,7 @@ import {
   type AutomationID
 } from "../../domain/automation/contracts.ts";
 import { INVESTIGATE_WORKFLOW_REF } from "../../workflows/investigate.ts";
-import type { ImTargetV1 } from "../../integrations/imChannelContracts.ts";
+import type { ImTargetV1 } from "../../integrations/im/imChannelContracts.ts";
 import { cleanString, nonNegativeInteger } from "../../util/values.ts";
 import { placeholders } from "../sql.ts";
 

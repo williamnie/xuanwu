@@ -75,13 +75,13 @@ Feishu wrapper，不是 carrier 或历史数据。
 cd backend-ts
 bun test src/providers/codex/approvalBroker.test.ts \
   src/notifications/unifiedNotificationPipeline.test.ts \
-  src/integrations/feishuLifecycleNotifications.test.ts \
-  src/integrations/feishuLifecycleNotificationPreferences.test.ts \
-  src/integrations/feishuDigestNotifications.test.ts \
-  src/integrations/feishuNotifications.test.ts \
-  src/integrations/feishuNotificationLifecycle.test.ts \
-  src/integrations/feishuApprovalNotifications.test.ts \
-  src/integrations/feishuPiActionCards.test.ts \
+  src/integrations/feishu/feishuLifecycleNotifications.test.ts \
+  src/integrations/feishu/feishuLifecycleNotificationPreferences.test.ts \
+  src/integrations/feishu/feishuDigestNotifications.test.ts \
+  src/integrations/feishu/feishuNotifications.test.ts \
+  src/integrations/feishu/feishuNotificationLifecycle.test.ts \
+  src/integrations/feishu/feishuApprovalNotifications.test.ts \
+  src/integrations/feishu/feishuPiActionCards.test.ts \
   src/runner/watchAutomationRuntime.test.ts
 ```
 

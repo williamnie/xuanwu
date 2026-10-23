@@ -38,7 +38,7 @@ import {
 } from "../domain/review/humanReview.ts";
 import { requestPiAcceptanceCycle } from "../runner/piAcceptanceCoordinator.ts";
 import { publishPiNeedsUserNotification } from "../notifications/piNotifier.ts";
-import { checkProjectPath } from "./projectPathCheck.ts";
+import { checkProjectPath } from "./projects/projectPathCheck.ts";
 import { cleanString } from "../util/values.ts";
 
 type IssueListFilter = {

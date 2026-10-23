@@ -12,7 +12,7 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
   {
     api_paths: ["/api/issues", "/api/runs", "/api/sessions"],
     backend_tests: [
-      "backend-ts/src/http/piIssueProposalFlow.test.ts",
+      "backend-ts/src/http/pi/piIssueProposalFlow.test.ts",
       "backend-ts/src/runner/piAcceptanceApplication.test.ts",
       "backend-ts/src/runner/piAcceptanceCoordinator.test.ts"
     ],
@@ -29,7 +29,7 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
     api_paths: ["/api/issues", "/api/issues/{issue_id}/supervisor", "/api/command-center/summary?sections=attention"],
     backend_tests: [
       "backend-ts/src/pi/supervisor/issue-supervisor-recovery.test.ts",
-      "backend-ts/src/http/piSupervisorResumeIdempotency.test.ts"
+      "backend-ts/src/http/pi/piSupervisorResumeIdempotency.test.ts"
     ],
     fixture_projects: 1,
     frontend_route: "#/tasks",
@@ -56,9 +56,9 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
   {
     api_paths: ["/api/issues", "/api/pi/actions", "/api/sync-outbox?source=feishu"],
     backend_tests: [
-      "backend-ts/src/integrations/feishuAgentBridgePiFirst.test.ts",
-      "backend-ts/src/integrations/feishuApprovalRequests.test.ts",
-      "backend-ts/src/http/piActionsAuditApi.test.ts"
+      "backend-ts/src/integrations/feishu/feishuAgentBridgePiFirst.test.ts",
+      "backend-ts/src/integrations/feishu/feishuApprovalRequests.test.ts",
+      "backend-ts/src/http/pi/piActionsAuditApi.test.ts"
     ],
     fixture_projects: 1,
     frontend_route: "#/command-center",
@@ -86,7 +86,7 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
     api_paths: ["/api/evidence", "/api/handoffs", "/api/notifications"],
     backend_tests: [
       "backend-ts/src/cli/issue.test.ts",
-      "backend-ts/src/http/handoffApi.test.ts",
+      "backend-ts/src/http/work/handoffApi.test.ts",
       "backend-ts/src/domain/handoff/firstDelivery.test.ts"
     ],
     fixture_projects: 1,

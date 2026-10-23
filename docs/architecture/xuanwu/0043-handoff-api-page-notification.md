@@ -5,7 +5,7 @@
 - 路线 issue：XW P05.08 / Runner #679
 - 硬依赖：XW P05.02 / #673、P05.03 / #674、P05.05 / #676、P05.06 / #677（均 `done`）
 - append-only repository：`backend-ts/src/db/repositories/handoffs.ts`
-- HTTP：`backend-ts/src/http/handoffApi.ts`
+- HTTP：`backend-ts/src/http/work/handoffApi.ts`
 - notification：`backend-ts/src/notifications/handoffNotifier.ts`
 - UI：`frontend/src/pages/Handoffs.jsx`
 
@@ -89,7 +89,7 @@ next step，payload 以 allowlist 携带 Handoff/work ID、branch/commit/PR ref 
 
 ```bash
 cd backend-ts
-bun test src/http/handoffApi.test.ts src/http/readApiContract.test.ts
+bun test src/http/work/handoffApi.test.ts src/http/readApiContract.test.ts
 
 cd ../frontend
 node --test src/pages/handoffPageModel.test.js

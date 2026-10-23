@@ -63,7 +63,7 @@ xuanwu system status
 
 ```bash
 cd backend-ts
-bun test src/http/feishuInboxApi.test.ts src/http/imReplyOutboxApi.test.ts src/integrations/feishu.test.ts src/http/systemStatus.test.ts
+bun test src/http/ingress/feishuInboxApi.test.ts src/http/ingress/imReplyOutboxApi.test.ts src/integrations/feishu/feishu.test.ts src/http/system/systemStatus.test.ts
 ```
 
 关键断言：

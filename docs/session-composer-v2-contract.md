@@ -4,7 +4,7 @@ Session Composer v2 负责把 UI 输入、附件、引用和运行参数组合�
 
 ## 当前边界
 
-- HTTP API 位于 Bun 后端 `backend-ts/src/http/sessionApi.ts` 等文件。
+- HTTP API 位于 Bun 后端 `backend-ts/src/http/work/sessionApi.ts` 等文件。
 - 生成内容仍走现有 prompt 文本通道。
 - 附件引用保留为 provider 输入转换层处理，避免 UI 直接耦合某个 provider 的私有协议。
 
@@ -18,5 +18,5 @@ Session Composer v2 负责把 UI 输入、附件、引用和运行参数组合�
 
 ```bash
 cd backend-ts
-bun test src/http/sessionApi.test.ts src/http/sessionInterruptApi.test.ts src/providers/codex
+bun test src/http/work/sessionApi.test.ts src/http/work/sessionInterruptApi.test.ts src/providers/codex
 ```

@@ -150,5 +150,5 @@ POST /api/pi/skill-library/templates/select
 
 ```sh
 cd backend-ts
-bun test src/skills/experienceTemplates.test.ts src/skills/managedSkills.test.ts src/http/skillConversation.test.ts
+bun test src/skills/experienceTemplates.test.ts src/skills/managedSkills.test.ts src/http/pi/skillConversation.test.ts
 ```

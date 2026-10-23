@@ -73,9 +73,9 @@ rollback artifact 和 exact non-LLM destructive approval。
 ```bash
 cd backend-ts
 bun test src/domain/attention/contracts.test.ts src/domain/attention/consolidationAudit.test.ts \
-  src/db/consolidatePiDecisionLayersMigration.test.ts src/http/commandCenterApi.test.ts \
-  src/http/piActionProposalsApi.test.ts src/http/piActionsApi.test.ts \
-  src/http/piApprovalRequestsApi.test.ts src/cli/maintenance.test.ts
+  src/db/consolidatePiDecisionLayersMigration.test.ts src/http/work/commandCenterApi.test.ts \
+  src/http/pi/piActionProposalsApi.test.ts src/http/pi/piActionsApi.test.ts \
+  src/http/pi/piApprovalRequestsApi.test.ts src/cli/maintenance.test.ts
 
 xuanwu maintenance db migration-forward --db <copy> --backup <pre-forward> \
   --report <forward.json> --actor release-operator --actor-kind user --audit-ref issue:738 \

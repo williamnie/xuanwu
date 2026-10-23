@@ -64,7 +64,7 @@ process_group_memory.top_by_rss
 cd backend-ts
 bun test \
   src/observability/processGroupMemory.test.ts \
-  src/http/systemStatus.test.ts \
+  src/http/system/systemStatus.test.ts \
   src/mainWiring.test.ts \
   src/benchmarks/xuanwuCapacity.test.ts \
   src/benchmarks/enduranceGate.test.ts

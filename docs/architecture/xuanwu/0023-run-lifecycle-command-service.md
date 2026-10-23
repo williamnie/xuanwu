@@ -100,7 +100,7 @@ cd backend-ts
 bun test src/domain/run/service.test.ts \
   src/runner/interrupt.test.ts \
   src/runner/recovery.test.ts \
-  src/http/piSupervisorResumeIdempotency.test.ts
+  src/http/pi/piSupervisorResumeIdempotency.test.ts
 ```
 
 测试覆盖重复 command 幂等、provider refs、retry/interrupt 竞态、pending intent 重启 fail-closed 与重启后继续同一 Session。

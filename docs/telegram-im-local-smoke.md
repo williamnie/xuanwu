@@ -49,14 +49,14 @@ Chat/User ID 先按 Telegram safe-integer 规则验证，再作为 opaque string
 
 ```bash
 cd backend-ts
-bun test src/integrations/telegram.test.ts \
-  src/integrations/telegramReceiver.test.ts \
-  src/integrations/imGuardianAlerts.test.ts \
+bun test src/integrations/telegram/telegram.test.ts \
+  src/integrations/telegram/telegramReceiver.test.ts \
+  src/integrations/im/imGuardianAlerts.test.ts \
   src/integrations/connectorDiagnostics.test.ts \
-  src/integrations/feishuApprovalNotifications.test.ts \
-  src/integrations/feishuNotificationLifecycle.test.ts \
+  src/integrations/feishu/feishuApprovalNotifications.test.ts \
+  src/integrations/feishu/feishuNotificationLifecycle.test.ts \
   src/runner/watchAutomationRuntime.test.ts \
-  src/http/telegramSettingsApi.test.ts
+  src/http/settings/telegramSettingsApi.test.ts
 ```
 
 这些测试使用 fake HTTP，覆盖 token 不泄露与旧明文迁移、safe-integer ID/source allowlist、匿名 sender/附件 metadata、`edited_message` inbox audit、callback 1/64/65-byte 门禁与单次稳定确认、消息/topic normalizer、cursor restart、webhook/409 冲突、plain-text 发送、按 chat 的 429 `retry_after` 暂停、Unicode 分段与部分成功后的持久分段回执、callback 最终结果经 durable outbox 投递，以及 Approval、生命周期、Guardian、Watch 到 Telegram 的通用 outbox 路由。它们不能作为真实 Bot 证据。

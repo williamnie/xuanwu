@@ -8,7 +8,7 @@ import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts
 import {
   dispatchPiAction,
   type PiActionDispatchContext
-} from "../http/piActionDispatch.ts";
+} from "../http/pi/piActionDispatch.ts";
 import { recordPiActionAuditEvent } from "../pi/actions/actionEngine.ts";
 import { errorMessage } from "../util/values.ts";
 

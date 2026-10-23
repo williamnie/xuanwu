@@ -7,7 +7,7 @@ import { createContextBundle } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
 import { listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
-import { resolvePiActionDecision } from "../http/piActionDecision.ts";
+import { resolvePiActionDecision } from "../http/pi/piActionDecision.ts";
 import { runDomainSkillAndMarkProposal } from "../pi/tools/domainSkillRun.ts";
 import type { WorkflowStage } from "../workflows/manifest.ts";
 import { DEFAULT_DOMAIN_SKILL_ID } from "./builtinDomainProposal.ts";

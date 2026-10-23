@@ -4,7 +4,7 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { RunnerDatabase } from "../../db/database.ts";
 import { createPiActionEvent } from "../../db/repositories/pi.ts";
 import type { Project } from "../../db/repositories/projects.ts";
-import { createPiProjectTools, PI_ALLOWED_TOOLS, PI_READ_ONLY_TOOLS } from "../../http/piProjectTools.ts";
+import { createPiProjectTools, PI_ALLOWED_TOOLS, PI_READ_ONLY_TOOLS } from "../../http/pi/piProjectTools.ts";
 import { RUNNER_BUILTIN_PROVIDER_ID } from "./builtinToolRegistry.ts";
 import { createReadOnlyRuntimeTools } from "./readOnlyRuntimeTools.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";

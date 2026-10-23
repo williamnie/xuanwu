@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../../db/database.ts";
 import { createPiActionEvent } from "../../db/repositories/pi.ts";
-import type { RuntimeSessionInput } from "../../http/piRuntime.ts";
+import type { RuntimeSessionInput } from "../../http/pi/piRuntime.ts";
 import { retrievePiMemoryContext } from "../memory/memoryContext.ts";
 import { listIssueRuns } from "../../db/repositories/issues.ts";
 import { projectRunMemoryContext, RUN_MEMORY_RULES } from "../memory/runMemoryContext.ts";

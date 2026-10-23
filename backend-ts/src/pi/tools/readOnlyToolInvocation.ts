@@ -1,7 +1,7 @@
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { RunnerDatabase } from "../../db/database.ts";
 import { getProject } from "../../db/repositories/projects.ts";
-import { createPiProjectTools } from "../../http/piProjectTools.ts";
+import { createPiProjectTools } from "../../http/pi/piProjectTools.ts";
 import { callBrowserTool } from "./browserToolCall.ts";
 import { callCliConnectorTool } from "../intake/cliConnectorToolCall.ts";
 import { callHttpTool } from "./httpToolCall.ts";

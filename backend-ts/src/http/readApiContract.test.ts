@@ -1,24 +1,24 @@
 import { describe, expect, test } from "bun:test";
 import type { RunnerDatabase } from "../db/database.ts";
-import { AUTOMATION_API_AUTHORITY, registerAutomationRoutes } from "./automationApi.ts";
+import { AUTOMATION_API_AUTHORITY, registerAutomationRoutes } from "./work/automationApi.ts";
 import {
   COMMAND_CENTER_COMPATIBILITY_POLICY,
   COMMAND_CENTER_SUMMARY_CONTRACT,
   registerCommandCenterRoutes
-} from "./commandCenterApi.ts";
-import { EVIDENCE_HTTP_COMPATIBILITY_POLICY, registerEvidenceRoutes } from "./evidenceApi.ts";
-import { registerHandoffRoutes } from "./handoffApi.ts";
+} from "./work/commandCenterApi.ts";
+import { EVIDENCE_HTTP_COMPATIBILITY_POLICY, registerEvidenceRoutes } from "./work/evidenceApi.ts";
+import { registerHandoffRoutes } from "./work/handoffApi.ts";
 import { READ_API_ROUTE_REGISTRY } from "./readApi.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import { registerCoreReadRoutes } from "./readApiRoutes.ts";
-import { registerRunRoutes, RUN_READ_AUTHORITY, RUN_WRITE_AUTHORITY } from "./runApi.ts";
+import { registerRunRoutes, RUN_READ_AUTHORITY, RUN_WRITE_AUTHORITY } from "./work/runApi.ts";
 import { createRouter, type Router } from "./router.ts";
-import { registerWorkRoutes } from "./workApi.ts";
-import { registerTrackerEventRoutes } from "./trackerEventsApi.ts";
+import { registerWorkRoutes } from "./work/workApi.ts";
+import { registerTrackerEventRoutes } from "./ingress/trackerEventsApi.ts";
 
-import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
-import { MEMORY_DIAGNOSTICS_CONTRACT } from "./piMemoryDiagnostics.ts";
-import { COMMAND_CENTER_INBOX_CONTRACT } from "./commandCenterInbox.ts";
+import { registerPiMemoryRoutes } from "./pi/piMemoryApi.ts";
+import { MEMORY_DIAGNOSTICS_CONTRACT } from "./pi/piMemoryDiagnostics.ts";
+import { COMMAND_CENTER_INBOX_CONTRACT } from "./work/commandCenterInbox.ts";
 
 describe("read API route contracts", () => {
   test("rejects unsupported Work source filters before reading the database", async () => {

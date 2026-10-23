@@ -11,9 +11,9 @@ import {
   listPiNotificationIntents,
   upsertPiGuardianAlert
 } from "../../db/repositories/pi.ts";
-import { buildFeishuConnectorConfig } from "../../integrations/feishu.ts";
-import type { FeishuTextMessageInput, FeishuTextMessageResult } from "../../integrations/feishuClient.ts";
-import { sendDirectFeishuGuardianAlert } from "../../integrations/feishuGuardianAlerts.ts";
+import { buildFeishuConnectorConfig } from "../../integrations/feishu/feishu.ts";
+import type { FeishuTextMessageInput, FeishuTextMessageResult } from "../../integrations/feishu/feishuClient.ts";
+import { sendDirectFeishuGuardianAlert } from "../../integrations/feishu/feishuGuardianAlerts.ts";
 import { sendMissedDigestPendingFallback } from "./guardianMissedDigestFallback.ts";
 import { runGuardianMissedIntentSweepOnce } from "./guardianMissedIntentSweep.ts";
 import { resolveRecoveredAlerts } from "./guardianWatchdogMaintenance.ts";

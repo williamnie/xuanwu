@@ -600,8 +600,8 @@ A4 的 consumer migration 以实施当日 fresh `rg '\bfeishu_message_id\b'` 结
 - `db/repositories/imReplyOutboxDispatch.ts`：dispatchable SQL、delivery preflight 与 mark-sent carrier；
 - `db/repositories/imReplyOutbox.ts`、`imReplyOutboxTypes.ts`：row/read-write contract；
 - `notifications/notificationOutbox.ts`：legacy fixture dispatcher 的 receipt 写入；
-- `integrations/feishuConversationContext.ts`：出站上下文 message ref；
-- `integrations/feishuActionTarget.ts`：action target；
+- `integrations/feishu/feishuConversationContext.ts`：出站上下文 message ref；
+- `integrations/feishu/feishuActionTarget.ts`：action target；
 - `pi/guardian/guardianWatchdog.ts`：sent/receipt 判断；
 - `pi/notifications/imReplyOutboxDispatcher.ts`：生产投递与 receipt 适配；
 - schema `024_im_reply_outbox_dispatch.ts`：legacy 列定义及兼容期注释。

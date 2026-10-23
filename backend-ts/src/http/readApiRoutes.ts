@@ -10,7 +10,7 @@ import {
   type ReadApiDomainHandlers
 } from "./readApiDomain.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
-import { readDeliveryEffectiveness } from "./deliveryEffectivenessApi.ts";
+import { readDeliveryEffectiveness } from "./work/deliveryEffectivenessApi.ts";
 import type { Router } from "./router.ts";
 import { HumanReviewConflictError } from "../domain/review/humanReview.ts";
 import { cleanString } from "../util/values.ts";

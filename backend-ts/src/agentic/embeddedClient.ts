@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getPiSupervisor } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { runProjectPiCycle } from "../http/piProjectControlApi.ts";
+import { runProjectPiCycle } from "../http/pi/piProjectControlApi.ts";
 import { decideAgentCommunicationWithRuntime } from "../notifications/agentCommunicationGateway.ts";
 import { runPiSupervisorDecision } from "../pi/supervisor/issueSupervisorDecision.ts";
 import { runPiIssueAcceptance } from "../pi/issues/issueAcceptance.ts";

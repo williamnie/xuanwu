@@ -7,7 +7,7 @@
 - 路线 issue：XW P06.03 / Runner #682
 - 硬依赖：XW P06.01 / #680（`done`）
 - 可执行实现：`backend-ts/src/pi/supervisorIntentRouter.ts`
-- Runtime 接入：`backend-ts/src/http/piConversationApi.ts`、`backend-ts/src/http/piRuntimePrompt.ts`
+- Runtime 接入：`backend-ts/src/http/pi/piConversationApi.ts`、`backend-ts/src/http/pi/piRuntimePrompt.ts`
 - canonical 级别：本文、`SUPERVISOR_INTENT_ROUTE_SCHEMA` 与 `routeSupervisorIntent()` 共同构成本阶段逐 turn intent route、source trust、低置信 fail-closed 和 routing audit 的 source of truth
 
 ## 1. 决策
@@ -71,7 +71,7 @@ SDK/tool runtime 的 `runtime_tool_registry_snapshot`、`tool_call_audit` 与 `p
 ```bash
 cd backend-ts
 bun test src/pi/supervisorIntentRouter.test.ts
-bun test src/http/piConversationMessagesApi.test.ts
+bun test src/http/pi/piConversationMessagesApi.test.ts
 ```
 
 Fixtures 必须覆盖八类意图的中文/英文表达、含糊请求的单问题、明确 multi-intent 顺序、否定 scope、恶意 prompt-like 内容、route payload 不保存原文，以及低置信情况下 LLM 主动调用写工具仍被 deterministic gate deny。

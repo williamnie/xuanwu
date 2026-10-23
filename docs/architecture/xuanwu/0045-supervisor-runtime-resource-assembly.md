@@ -4,8 +4,8 @@
 - 日期：2026-07-17
 - 路线 issue：XW P06.02 / Runner #681
 - 硬依赖：XW P06.01 / #680、XW P00.06 / #636（均 `done`）
-- 可执行实现：`backend-ts/src/http/piRuntimeResources.ts`
-- Runtime 接入：`backend-ts/src/http/piRuntime.ts`
+- 可执行实现：`backend-ts/src/http/pi/piRuntimeResources.ts`
+- Runtime 接入：`backend-ts/src/http/pi/piRuntime.ts`
 - 部署装配：`scripts/install-launchd.sh`
 - canonical 级别：本文与 `createPiRuntimeResourceLoader()` 共同构成 PI SDK agents、prompts、skills、extensions discovery、allowlist、reload、diagnostics 和 failure isolation 的 source of truth
 
@@ -71,8 +71,8 @@ Source mode 从 Runner root 读取内置 `skills/`。编译二进制部署时，
 
 ```bash
 cd backend-ts
-bun test src/http/piRuntimeResources.test.ts
-bun test src/http/piRuntimeSmoke.test.ts --test-name-pattern 'injects only authorized skill metadata'
+bun test src/http/pi/piRuntimeResources.test.ts
+bun test src/http/pi/piRuntimeSmoke.test.ts --test-name-pattern 'injects only authorized skill metadata'
 
 cd ..
 node --test scripts/install-launchd.test.mjs

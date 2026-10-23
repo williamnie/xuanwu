@@ -46,5 +46,5 @@ Bun 后端会把 provider session / turn 信息写入 SQLite，用于 issue runs
 
 ```bash
 cd backend-ts
-bun test src/http/sessionApi.test.ts src/http/sessionInterruptApi.test.ts src/providers/codex/adapter.test.ts
+bun test src/http/work/sessionApi.test.ts src/http/work/sessionInterruptApi.test.ts src/providers/codex/adapter.test.ts
 ```

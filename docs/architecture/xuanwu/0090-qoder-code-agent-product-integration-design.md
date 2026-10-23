@@ -1014,8 +1014,8 @@ backend-ts/bun.lock
 backend-ts/src/config/env.ts
 backend-ts/src/config/localSettings.ts
 backend-ts/src/runtime/core.ts
-backend-ts/src/http/codeAgentsApi.ts
-backend-ts/src/http/sessionApi.ts                 # 原则上只补通用合同，不加 Qoder shape 特例
+backend-ts/src/http/settings/codeAgentsApi.ts
+backend-ts/src/http/work/sessionApi.ts                 # 原则上只补通用合同，不加 Qoder shape 特例
 backend-ts/src/providers/qoder/factory.ts
 backend-ts/src/providers/qoder/provider.ts
 backend-ts/src/providers/qoder/sdkFacade.ts

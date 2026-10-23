@@ -12,7 +12,7 @@ import { upsertAgentSession } from "../../db/repositories/agentSessions.ts";
 import { listPiActions } from "../../db/repositories/pi.ts";
 import { createHumanReviewRequest, readIssueDecisionProjection, reviewHumanIssue } from "../../domain/review/humanReview.ts";
 import { readIssueDependency } from "../../domain/work/issueDependency.ts";
-import { PI_RUNNER_CHAT_ACTIONS } from "../../http/piRuntime.ts";
+import { PI_RUNNER_CHAT_ACTIONS } from "../../http/pi/piRuntime.ts";
 import { requestIssuePiAcceptance } from "../../runner/piAcceptanceRequest.ts";
 import { runPiAcceptanceCoordinatorOnce } from "../../runner/piAcceptanceCoordinator.ts";
 import { createPiRunnerActions } from "./runnerActions.ts";

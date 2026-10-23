@@ -57,7 +57,7 @@ export async function runPiSupervisorDecision(
   input: PiSupervisorDecisionRuntimeInput
 ): Promise<PiSupervisorDecisionRuntimeResult> {
   const language = appLanguage(input.database);
-  const { createPiRuntimeSession } = await import("../../http/piRuntime.ts");
+  const { createPiRuntimeSession } = await import("../../http/pi/piRuntime.ts");
   const toolNames = withOptionalJevTool(input.database, { projectID: input.project.id, issueID: issueID(input.context), source: "pi_supervisor_decision" }, SUPERVISOR_TOOL_NAMES);
   const runtime = await createPiRuntimeSession(input.database, {
     agent: input.agent,

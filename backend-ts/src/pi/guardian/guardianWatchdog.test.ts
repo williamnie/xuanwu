@@ -9,9 +9,9 @@ import {
   listPiNotificationIntents,
   upsertPiGuardianWatchdogStatus
 } from "../../db/repositories/pi.ts";
-import { buildFeishuConnectorConfig } from "../../integrations/feishu.ts";
-import { FeishuClientError } from "../../integrations/feishuClient.ts";
-import { sendDirectFeishuGuardianAlert } from "../../integrations/feishuGuardianAlerts.ts";
+import { buildFeishuConnectorConfig } from "../../integrations/feishu/feishu.ts";
+import { FeishuClientError } from "../../integrations/feishu/feishuClient.ts";
+import { sendDirectFeishuGuardianAlert } from "../../integrations/feishu/feishuGuardianAlerts.ts";
 import { runPiGuardianWatchdogOnce } from "./guardianWatchdog.ts";
 import { useTestDatabase } from "../../testing/harness.ts";
 

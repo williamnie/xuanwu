@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
-import { calculateFeishuCallbackSignature } from "../backend-ts/src/integrations/feishuCallback.ts";
+import { calculateFeishuCallbackSignature } from "../backend-ts/src/integrations/feishu/feishuCallback.ts";
 import { loadConfig } from "../backend-ts/src/config/env.ts";
-import { feishuConnectorStatus } from "../backend-ts/src/integrations/feishu.ts";
+import { feishuConnectorStatus } from "../backend-ts/src/integrations/feishu/feishu.ts";
 import { redactSensitiveText } from "../backend-ts/src/util/redact.ts";
 
 const DEFAULT_ADDR = "127.0.0.1:3008";

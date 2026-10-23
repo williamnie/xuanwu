@@ -10,13 +10,13 @@ import { EventBus } from "../events/bus.ts";
 import { BackgroundProjectionWorker } from "../events/projectionWorker.ts";
 import { createAuthTokenManager } from "../http/auth.ts";
 import { startServer } from "../http/server.ts";
-import { primeProviderStatus } from "../http/systemStatus.ts";
-import { createFeishuChannelModule, createBuiltinImChannelRegistry } from "../integrations/feishuChannelModule.ts";
-import { createTelegramChannelModule } from "../integrations/telegramChannelModule.ts";
-import type { ImConversationPromptProjection } from "../integrations/imConversationContext.ts";
-import { createImGuardianAlertDelivery } from "../integrations/imGuardianAlerts.ts";
-import { feishuConnectorStatus } from "../integrations/feishu.ts";
-import { createImReceiverRuntime, type ImReceiverRuntime } from "../integrations/imChannelContracts.ts";
+import { primeProviderStatus } from "../http/system/systemStatus.ts";
+import { createFeishuChannelModule, createBuiltinImChannelRegistry } from "../integrations/feishu/feishuChannelModule.ts";
+import { createTelegramChannelModule } from "../integrations/telegram/telegramChannelModule.ts";
+import type { ImConversationPromptProjection } from "../integrations/im/imConversationContext.ts";
+import { createImGuardianAlertDelivery } from "../integrations/im/imGuardianAlerts.ts";
+import { feishuConnectorStatus } from "../integrations/feishu/feishu.ts";
+import { createImReceiverRuntime, type ImReceiverRuntime } from "../integrations/im/imChannelContracts.ts";
 import {
   ProcessGroupMemoryObserver,
   resolveRecoveredProcessGroupMemoryAlerts,
@@ -134,7 +134,7 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   const runSupervisorConversation = async ({ channelContext, channelContextProjection, conversationId, prompt, targetIssueId, targetProjectId, targetProjectSource, title }: {
     channelContext: string; channelContextProjection?: ImConversationPromptProjection; conversationId: string; prompt: string; targetIssueId?: number; targetProjectId: string; targetProjectSource?: string; title: string;
   }) => {
-    const { runPiConversationPrompt } = await import("../http/piConversationApi.ts");
+    const { runPiConversationPrompt } = await import("../http/pi/piConversationApi.ts");
     const result = await runPiConversationPrompt({ bus, database, providers }, {
       channelContext,
       channelContextProjection,

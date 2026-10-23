@@ -139,7 +139,7 @@ Evidence 必须可由 API/DB/Git/fixture 重新读取验证。模型总结、toa
 当前可执行基线：
 
 ```bash
-bun test backend-ts/src/http/piIssueProposalFlow.test.ts backend-ts/src/http/piActionsApi.test.ts backend-ts/src/http/evidenceApi.test.ts
+bun test backend-ts/src/http/pi/piIssueProposalFlow.test.ts backend-ts/src/http/pi/piActionsApi.test.ts backend-ts/src/http/work/evidenceApi.test.ts
 node --test frontend/src/pages/work/taskListModel.test.js frontend/src/pages/WorkDetail.structure.test.js
 ```
 
@@ -193,7 +193,7 @@ node --test frontend/src/pages/work/taskListModel.test.js frontend/src/pages/Wor
 当前可执行基线：
 
 ```bash
-bun test backend-ts/src/pi/supervisor/issue-supervisor-recovery.test.ts backend-ts/src/http/piSupervisorResumeIdempotency.test.ts
+bun test backend-ts/src/pi/supervisor/issue-supervisor-recovery.test.ts backend-ts/src/http/pi/piSupervisorResumeIdempotency.test.ts
 node --test frontend/src/pages/command-center/attentionModel.test.js
 ```
 
@@ -301,7 +301,7 @@ node --test frontend/src/pages/sessions/projectOrder.test.js frontend/src/pages/
 当前可执行基线：
 
 ```bash
-bun test backend-ts/src/integrations/feishuAgentBridgePiFirst.test.ts backend-ts/src/integrations/feishuApprovalRequests.test.ts backend-ts/src/http/piActionsAuditApi.test.ts
+bun test backend-ts/src/integrations/feishu/feishuAgentBridgePiFirst.test.ts backend-ts/src/integrations/feishu/feishuApprovalRequests.test.ts backend-ts/src/http/pi/piActionsAuditApi.test.ts
 node --test frontend/src/pages/command-center/attentionModel.test.js
 ```
 
@@ -411,7 +411,7 @@ node --test frontend/src/pages/command-center/attentionModel.test.js frontend/sr
 当前可执行基线：
 
 ```bash
-bun test backend-ts/src/http/evidenceApi.test.ts backend-ts/src/http/issuePatchApi.test.ts backend-ts/src/cli/issue.test.ts
+bun test backend-ts/src/http/work/evidenceApi.test.ts backend-ts/src/http/work/issuePatchApi.test.ts backend-ts/src/cli/issue.test.ts
 node --test frontend/src/pages/work/workDeliveryModel.test.js frontend/src/pages/WorkDetail.structure.test.js
 ```
 

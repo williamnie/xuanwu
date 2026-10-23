@@ -1004,7 +1004,7 @@ v1 设计可以复用：
 后端：
 
 - `backend-ts/src/db/repositories/issues.ts` 或新 `workSummary.ts`：grouped summary repository；
-- `backend-ts/src/http/workApi.ts`：global/single-project summary、Project cap=128 的全量 counts、board status filter、updated-at cursor；
+- `backend-ts/src/http/work/workApi.ts`：global/single-project summary、Project cap=128 的全量 counts、board status filter、updated-at cursor；
 - contract/focused/performance tests。
 
 前端：

@@ -36,7 +36,7 @@ export async function generateSessionTitle(db: RunnerDatabase, input: CodexThrea
     conversationContent: content.slice(0, 12_000)
   };
   const sdk = await loadSmokeRuntime(resolveDefaultRepoRoot(input.cwd));
-  const { piRuntimePaths, resolvePiModel } = await import("../../http/piRuntime.ts");
+  const { piRuntimePaths, resolvePiModel } = await import("../../http/pi/piRuntime.ts");
   signal.throwIfAborted();
   const paths = piRuntimePaths(db);
   const runtime = await createPiModelRuntime(sdk.pi, {

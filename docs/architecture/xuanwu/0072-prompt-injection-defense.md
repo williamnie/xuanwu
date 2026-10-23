@@ -62,7 +62,7 @@ bun test src/security/promptInjectionDefense.test.ts \
   src/pi/tools/readOnlyToolInvocation.test.ts \
   src/pi/tools/httpToolCall.test.ts \
   src/pi/runnerTools/runnerActionTools.test.ts \
-  src/http/piRuntimePrompt.test.ts
+  src/http/pi/piRuntimePrompt.test.ts
 ```
 
 fixtures 必须覆盖恶意 prompt、HTML、repo file、MCP/tool output；并证明 marker 不授予权限、未授权 write 为 `deny|ask`、raw secret 不能通过 connector/MCP/URL egress。

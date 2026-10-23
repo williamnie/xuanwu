@@ -75,11 +75,11 @@ Focused contract：
 cd backend-ts
 bun test src/security/secrets/secrets.test.ts \
   src/cli/secrets.test.ts \
-  src/http/piProviderSettingsApi.test.ts \
-  src/http/feishuSettingsApi.test.ts \
+  src/http/pi/piProviderSettingsApi.test.ts \
+  src/http/settings/feishuSettingsApi.test.ts \
   src/config/env.test.ts \
-  src/http/systemLogs.test.ts \
-  src/http/systemStatus.test.ts
+  src/http/system/systemLogs.test.ts \
+  src/http/system/systemStatus.test.ts
 ```
 
 验证必须证明：file material at rest 不含明文；keychain argv 不含 value；API/CLI metadata 无 readback；rotation version 增长且旧值失效；revoke 后 resolve fail closed；缺 key 错误明确；历史扫描报告不含命中 value；audit 只含 ref metadata。

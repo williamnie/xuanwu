@@ -4,8 +4,8 @@
 - 日期：2026-07-18
 - 路线 issue：XW P09.02 / Runner #718
 - 硬依赖：XW P09.01 / #717、XW P08.10 / #716（均为 `done`）
-- 可执行适配器：`backend-ts/src/integrations/feishuChannelConnector.ts`
-- fixture E2E：`backend-ts/src/integrations/feishuChannelConnector.test.ts`
+- 可执行适配器：`backend-ts/src/integrations/feishu/feishuChannelConnector.ts`
+- fixture E2E：`backend-ts/src/integrations/feishu/feishuChannelConnector.test.ts`
 
 ## 根因与决策
 
@@ -35,15 +35,15 @@ callback 的 signature/token/allowlist 校验发生在 inbound normalizer **之�
 
 ```bash
 cd backend-ts
-bun test src/integrations/feishuChannelConnector.test.ts \
-  src/integrations/feishu.test.ts \
-  src/integrations/feishuCallback.test.ts \
-  src/integrations/feishuReceiver.test.ts \
-  src/integrations/feishuAgentBridge.test.ts \
-  src/integrations/feishuAgentBridgePiFirst.test.ts \
-  src/integrations/feishuGuardianAlerts.test.ts \
-  src/integrations/feishuApprovalNotifications.test.ts \
-  src/integrations/feishuLifecycleNotificationPreferences.test.ts
+bun test src/integrations/feishu/feishuChannelConnector.test.ts \
+  src/integrations/feishu/feishu.test.ts \
+  src/integrations/feishu/feishuCallback.test.ts \
+  src/integrations/feishu/feishuReceiver.test.ts \
+  src/integrations/feishu/feishuAgentBridge.test.ts \
+  src/integrations/feishu/feishuAgentBridgePiFirst.test.ts \
+  src/integrations/feishu/feishuGuardianAlerts.test.ts \
+  src/integrations/feishu/feishuApprovalNotifications.test.ts \
+  src/integrations/feishu/feishuLifecycleNotificationPreferences.test.ts
 ```
 
 覆盖 fixture inbound→external event→conversation route、重复消息、project hint、manifest conformance、text/card/reaction、LLM authority fail-closed、target permission、旧 env config，以及现有 callback 签名、receiver、聊天、Watch、Notification/approval 回归。

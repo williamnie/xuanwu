@@ -55,7 +55,7 @@ doctor、connector diagnostics 与有界 runtime log 摘要，并再次通过 P1
 
 ```bash
 cd backend-ts
-bun test src/observability/runtimeObservability.test.ts src/http/systemStatus.test.ts
+bun test src/observability/runtimeObservability.test.ts src/http/system/systemStatus.test.ts
 
 cd ../frontend
 node --test src/utils/runtimeDiagnostics.test.js src/pages/settingsLayout.test.js

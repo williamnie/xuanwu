@@ -4,7 +4,7 @@
 - 日期：2026-07-18
 - 路线 issue：XW P09.03 / Runner #719
 - 硬依赖：[ADR-XW-0016](0016-work-http-api.md)、[ADR-XW-0064](0064-channel-connector-contract.md)
-- 实现：`backend-ts/src/cli/work.ts`、`backend-ts/src/http/webhookEventsApi.ts`
+- 实现：`backend-ts/src/cli/work.ts`、`backend-ts/src/http/ingress/webhookEventsApi.ts`
 
 ## 1. Authority、回执与迁移边界
 
@@ -86,8 +86,8 @@ cd backend-ts
 bun test \
   src/integrations/channelConnectorContracts.test.ts \
   src/cli/work.test.ts \
-  src/http/workApi.test.ts \
-  src/http/webhookEventsApi.test.ts \
+  src/http/work/workApi.test.ts \
+  src/http/ingress/webhookEventsApi.test.ts \
   src/http/auth.test.ts
 ```
 
