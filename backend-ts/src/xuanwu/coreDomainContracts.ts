@@ -8,7 +8,7 @@ const CORE_OBJECT_KINDS = [
 ] as const;
 
 type CoreObjectKind = typeof CORE_OBJECT_KINDS[number];
-export type DomainID<Kind extends CoreObjectKind = CoreObjectKind> = `xw:${Kind}:${string}:${string}`;
+type DomainID<Kind extends CoreObjectKind = CoreObjectKind> = `xw:${Kind}:${string}:${string}`;
 export type WorkID = DomainID<"work">;
 export type RunID = DomainID<"run">;
 export type EvidenceID = DomainID<"evidence">;

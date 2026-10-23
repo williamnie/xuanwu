@@ -10,7 +10,6 @@ import {
 } from "../../db/repositories/issueEvents.ts";
 import { countIssues, getIssue, listIssues, type Issue, type IssueFilter } from "../../db/repositories/issues.ts";
 import { updateIssue } from "../../db/repositories/issueUpdate.ts";
-import { getWork } from "../../db/repositories/workLedger.ts";
 import { getProject } from "../../db/repositories/projects.ts";
 import { resolveExecutorSelection, type AgentRecommendation } from "../../pi/agentOrchestration.ts";
 import { makeDomainID, parseDomainID, type DomainActor } from "../../xuanwu/coreDomainContracts.ts";
@@ -22,14 +21,9 @@ import {
   type WorkStatus,
   type WorkTransitionAudit
 } from "./contracts.ts";
-import { createWork, transitionWork, updateWork } from "./service.ts";
 import { cleanString, errorMessage } from "../../util/values.ts";
 
 const ISSUE_WORK_WRITE_EVENT = "issue.work_adapter_write";
-const ISSUE_WORK_SHADOW_MISMATCH_EVENT = "issue.work_shadow_mismatch";
-const SHADOW_POLICY_REF = "xuanwu-work-shadow-v1";
-
-type IssueWorkShadowMode = "disabled" | "best_effort";
 export type IssueWorkAction = "cancel" | "enqueue" | "retry";
 
 type IssueWorkPatch = Partial<Pick<WorkLedgerEntry, "agent_profile_id" | "goal" | "title">> & {
@@ -57,7 +51,6 @@ type IssueWorkUpdateCommand = {
   audit: WorkTransitionAudit;
   expected_revision: number;
   patch: IssueWorkPatch;
-  shadow_mode?: IssueWorkShadowMode;
   work_id: WorkLedgerEntry["id"];
 };
 
@@ -65,36 +58,15 @@ type IssueWorkActionCommand = {
   action: IssueWorkAction;
   audit: WorkTransitionAudit;
   expected_revision: number;
-  shadow_mode?: IssueWorkShadowMode;
   work_id: WorkLedgerEntry["id"];
-};
-
-type IssueWorkShadowResult = {
-  error?: string;
-  mismatches: string[];
-  mode: IssueWorkShadowMode;
-  status: "created" | "disabled" | "failed" | "matched" | "mismatch" | "updated";
-  work_id: WorkLedgerEntry["id"];
-};
-
-type IssueWorkDualReadResult = {
-  authority: "issues";
-  legacy: WorkLedgerEntry;
-  mismatches: string[];
-  status: "matched" | "mismatch" | "missing_target";
-  target: WorkLedgerEntry | null;
-  work: WorkLedgerEntry;
 };
 
 export type IssueWorkMutationResult = {
   applied: boolean;
   audit_event_id: string;
-  shadow: IssueWorkShadowResult;
   violations: string[];
   work: WorkLedgerEntry;
 };
-
-type AdapterWriteOutcome = Omit<IssueWorkMutationResult, "shadow">;
 
 type StoredAdapterAudit = {
   fingerprint: string;
@@ -205,7 +177,7 @@ export function createIssueBackedWork(
   ];
   if (violations.length > 0) throw new Error([...new Set(violations)].join("; "));
   const fingerprint = createFingerprint(command);
-  const write = db.transaction((): AdapterWriteOutcome => {
+  return db.transaction((): IssueWorkMutationResult => {
     const replay = replayIssueWorkCreate(db, command.audit.event_id, fingerprint);
     if (replay) return replay;
     const issue = createIssue(db, {
@@ -235,7 +207,6 @@ export function createIssueBackedWork(
       work: projectIssueAsWork(db, issue)
     };
   }).immediate();
-  return { ...write, shadow: disabledShadow(write.work.id) };
 }
 
 export function updateIssueBackedWork(
@@ -244,7 +215,7 @@ export function updateIssueBackedWork(
 ): IssueWorkMutationResult {
   const fingerprint = mutationFingerprint("update", command);
   const issueID = workIDToIssueID(command.work_id);
-  const write = db.transaction((): AdapterWriteOutcome => {
+  return db.transaction((): IssueWorkMutationResult => {
     const replay = replayAdapterWrite(db, issueID, command.audit.event_id, fingerprint);
     if (replay) return replay;
     const before = mustGetIssueWork(db, issueID);
@@ -269,7 +240,6 @@ export function updateIssueBackedWork(
     recordAdapterWrite(db, issueID, command.audit, fingerprint, "update", "applied", [], before, after, command.patch);
     return { applied: true, audit_event_id: command.audit.event_id, violations: [], work: after };
   }).immediate();
-  return attachShadow(db, write, command.audit, command.shadow_mode);
 }
 
 export function applyIssueWorkAction(
@@ -278,7 +248,7 @@ export function applyIssueWorkAction(
 ): IssueWorkMutationResult {
   const fingerprint = mutationFingerprint("action", command);
   const issueID = workIDToIssueID(command.work_id);
-  const write = db.transaction((): AdapterWriteOutcome => {
+  return db.transaction((): IssueWorkMutationResult => {
     const replay = replayAdapterWrite(db, issueID, command.audit.event_id, fingerprint);
     if (replay) return replay;
     const before = mustGetIssueWork(db, issueID);
@@ -314,121 +284,6 @@ export function applyIssueWorkAction(
     });
     return { applied: true, audit_event_id: command.audit.event_id, violations: [], work: after };
   }).immediate();
-  return attachShadow(db, write, command.audit, command.shadow_mode);
-}
-
-export function readIssueWorkDual(
-  db: RunnerDatabase,
-  issueID: number
-): IssueWorkDualReadResult | null {
-  const legacy = getIssueAsWork(db, issueID);
-  if (!legacy) return null;
-  const target = getWork(db, legacy.id);
-  if (!target) {
-    return {
-      authority: "issues",
-      legacy,
-      mismatches: ["target_missing"],
-      status: "missing_target",
-      target: null,
-      work: legacy
-    };
-  }
-  const mismatches = issueWorkShadowMismatches(legacy, target);
-  return {
-    authority: "issues",
-    legacy,
-    mismatches,
-    status: mismatches.length > 0 ? "mismatch" : "matched",
-    target,
-    work: legacy
-  };
-}
-
-export function syncIssueWorkShadow(
-  db: RunnerDatabase,
-  issueID: number,
-  audit: WorkTransitionAudit
-): IssueWorkShadowResult {
-  const projection = mustGetIssueWork(db, issueID);
-  const gateViolations = auditViolations(audit);
-  if (gateViolations.length > 0) {
-    recordShadowMismatch(db, issueID, audit, projection.id, gateViolations);
-    return {
-      error: gateViolations.join("; "),
-      mismatches: gateViolations,
-      mode: "best_effort",
-      status: "failed",
-      work_id: projection.id
-    };
-  }
-  try {
-    let shadow = getWork(db, projection.id);
-    let changed = false;
-    let created = false;
-    if (!shadow) {
-      const createdResult = createWork(db, {
-        audit: shadowAudit(audit, "create"),
-        work: withoutPersistenceFields(projection)
-      });
-      shadow = createdResult.work;
-      changed = createdResult.applied;
-      created = createdResult.applied;
-    } else {
-      const patch = shadowPatch(projection, shadow);
-      if (Object.keys(patch).length > 0) {
-        const updated = updateWork(db, {
-          audit: shadowAudit(audit, "update"),
-          expected_revision: shadow.revision,
-          patch,
-          work_id: shadow.id
-        });
-        shadow = updated.work;
-        changed ||= updated.applied;
-      }
-      if (shadow.status !== projection.status) {
-        const transitioned = transitionWork(db, {
-          audit: shadowAudit(audit, "status"),
-          expected_revision: shadow.revision,
-          to: projection.status,
-          work_id: shadow.id
-        });
-        shadow = transitioned.work;
-        changed ||= transitioned.applied;
-      }
-    }
-    const mismatches = issueWorkShadowMismatches(projection, shadow);
-    if (mismatches.length > 0) {
-      recordShadowMismatch(db, issueID, audit, projection.id, mismatches);
-      return { mismatches, mode: "best_effort", status: "mismatch", work_id: projection.id };
-    }
-    return {
-      mismatches: [],
-      mode: "best_effort",
-      status: created ? "created" : changed ? "updated" : "matched",
-      work_id: projection.id
-    };
-  } catch (error) {
-    const message = errorMessage(error);
-    recordShadowMismatch(db, issueID, audit, projection.id, [message]);
-    return { error: message, mismatches: [message], mode: "best_effort", status: "failed", work_id: projection.id };
-  }
-}
-
-function attachShadow(
-  db: RunnerDatabase,
-  result: AdapterWriteOutcome,
-  audit: WorkTransitionAudit,
-  mode: IssueWorkShadowMode = "disabled"
-): IssueWorkMutationResult {
-  if (!result.applied || mode === "disabled") {
-    return { ...result, shadow: disabledShadow(result.work.id) };
-  }
-  return { ...result, shadow: syncIssueWorkShadow(db, workIDToIssueID(result.work.id), audit) };
-}
-
-function disabledShadow(workID: WorkLedgerEntry["id"]): IssueWorkShadowResult {
-  return { mismatches: [], mode: "disabled", status: "disabled", work_id: workID };
 }
 
 function issueProvenance(issue: Issue, createdEvent?: IssueEvent): WorkProvenance {
@@ -627,7 +482,7 @@ function replayIssueWorkCreate(
   db: RunnerDatabase,
   eventID: string,
   fingerprint: string
-): AdapterWriteOutcome | null {
+): IssueWorkMutationResult | null {
   const existing = db.sqlite.query<{ issue_id: number; payload: string }, [string]>(`
     select issue_id, payload from issue_events
     where type='issue.created'
@@ -652,7 +507,7 @@ function replayAdapterWrite(
   issueID: number,
   eventID: string,
   fingerprint: string
-): AdapterWriteOutcome | null {
+): IssueWorkMutationResult | null {
   if (!eventID.trim()) return null;
   const rows = db.sqlite.query<{ payload: string }, [number, string]>(`
     select payload from issue_events
@@ -680,7 +535,7 @@ function rejectAdapterWrite(
   operation: string,
   violations: string[],
   requested: unknown
-): AdapterWriteOutcome {
+): IssueWorkMutationResult {
   const uniqueViolations = [...new Set(violations)];
   recordAdapterWrite(db, issueID, audit, fingerprint, operation, "rejected", uniqueViolations, before, before, requested);
   return { applied: false, audit_event_id: audit.event_id, violations: uniqueViolations, work: before };
@@ -715,81 +570,6 @@ function recordAdapterWrite(
   });
 }
 
-function shadowAudit(audit: WorkTransitionAudit, operation: string): WorkTransitionAudit {
-  return {
-    ...audit,
-    event_id: `${audit.event_id}:shadow:${operation}`,
-    gate: { authority: "deterministic_policy", decision: "allow", policy_ref: SHADOW_POLICY_REF },
-    reason: `${audit.reason} (Issue-authoritative Work shadow ${operation})`
-  };
-}
-
-function shadowPatch(projection: WorkLedgerEntry, shadow: WorkLedgerEntry) {
-  return {
-    ...(projection.acceptance !== shadow.acceptance && !sameJson(projection.acceptance, shadow.acceptance)
-      ? { acceptance: projection.acceptance } : {}),
-    ...(projection.goal !== shadow.goal ? { goal: projection.goal } : {}),
-    ...(projection.provenance !== shadow.provenance && !sameJson(projection.provenance, shadow.provenance)
-      ? { provenance: projection.provenance } : {}),
-    ...(projection.title !== shadow.title ? { title: projection.title } : {}),
-    ...(projection.type !== shadow.type ? { type: projection.type } : {}),
-    ...(projection.workflow_ref !== shadow.workflow_ref ? { workflow_ref: projection.workflow_ref } : {})
-  };
-}
-
-function issueWorkShadowMismatches(projection: WorkLedgerEntry, shadow: WorkLedgerEntry): string[] {
-  const mismatches: string[] = [];
-  if (projection.id !== shadow.id) mismatches.push("id");
-  if (projection.owner.project_id !== shadow.owner.project_id) mismatches.push("owner.project_id");
-  if (projection.type !== shadow.type) mismatches.push("type");
-  if (projection.title !== shadow.title) mismatches.push("title");
-  if (projection.goal !== shadow.goal) mismatches.push("goal");
-  if (projection.status !== shadow.status) mismatches.push("status");
-  if (!sameJson(projection.acceptance, shadow.acceptance)) mismatches.push("acceptance");
-  if (!sameJson(projection.provenance, shadow.provenance)) mismatches.push("provenance");
-  if (projection.workflow_ref !== shadow.workflow_ref) mismatches.push("workflow_ref");
-  return mismatches;
-}
-
-function recordShadowMismatch(
-  db: RunnerDatabase,
-  issueID: number,
-  audit: WorkTransitionAudit,
-  workID: WorkLedgerEntry["id"],
-  mismatches: string[]
-): void {
-  try {
-    const alreadyRecorded = db.sqlite.query<{ count: number }, [number, string, string]>(`
-      select count(*) as count from issue_events
-      where issue_id=? and type=? and json_extract(payload, '$.event_id')=?
-    `).get(issueID, ISSUE_WORK_SHADOW_MISMATCH_EVENT, audit.event_id)?.count ?? 0;
-    if (alreadyRecorded > 0) return;
-    recordIssueEvent(db, issueID, ISSUE_WORK_SHADOW_MISMATCH_EVENT, {
-      actor: audit.actor,
-      correlation_id: audit.correlation_id,
-      event_id: audit.event_id,
-      mismatches,
-      reason: audit.reason,
-      work_id: workID
-    });
-  } catch {
-    // Shadow observability is best effort and must never roll back the legacy authority write.
-  }
-}
-
-function withoutPersistenceFields(work: WorkLedgerEntry): Omit<WorkLedgerEntry, "created_at" | "revision" | "updated_at"> {
-  const {
-    agent_profile_id: _agentProfileID,
-    created_at: _createdAt,
-    effective_agent_profile: _effectiveAgentProfile,
-    effective_provider: _effectiveProvider,
-    revision: _revision,
-    updated_at: _updatedAt,
-    ...input
-  } = work;
-  return input;
-}
-
 function mustGetIssueWork(db: RunnerDatabase, issueID: number): WorkLedgerEntry {
   const work = getIssueAsWork(db, issueID);
   if (!work) throw new Error(`Issue ${issueID} not found`);
@@ -813,10 +593,6 @@ function domainActor(value: unknown): DomainActor | undefined {
   const kind = cleanString(actor.kind);
   if (!id || !["user", "supervisor", "runner", "guardian", "automation", "system"].includes(kind)) return undefined;
   return { id, kind: kind as DomainActor["kind"] };
-}
-
-function sameJson(left: unknown, right: unknown): boolean {
-  return stableJson(left) === stableJson(right);
 }
 
 function stableJson(value: unknown): string {

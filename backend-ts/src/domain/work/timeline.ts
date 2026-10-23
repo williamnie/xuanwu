@@ -1,5 +1,4 @@
 import type { RunnerDatabase } from "../../db/database.ts";
-import { listWorkEvents, type WorkEvent } from "../../db/repositories/workLedger.ts";
 import { getIssue, listIssueRuns, type IssueRun } from "../../db/repositories/issues.ts";
 import {
   listPiActionEvents,
@@ -114,7 +113,6 @@ export function queryWorkTimeline(
   const cursor = input.cursor ? decodeWorkTimelineCursor(input.cursor) : undefined;
   const issueProjection = queryEventSummaries(db, { issueID });
   const candidates = dedupeNodes([
-    ...listWorkEvents(db, workID).map((event) => workEventNode(workID, issueID, event)),
     ...issueProjection.items.flatMap((event) => issueEventNodes(workID, issueID, event)),
     ...listIssueRuns(db, issueID).flatMap((run) => runNodes(workID, issueID, run)),
     ...piActionEventNodes(db, workID, issueID),
@@ -164,32 +162,6 @@ function decodeWorkTimelineCursor(value: string): CursorPosition {
   } catch {
     throw new Error("Work timeline cursor is invalid");
   }
-}
-
-function workEventNode(workID: WorkID, issueID: number, event: WorkEvent): WorkTimelineNode {
-  return timelineNode({
-    eventName: event.event_type,
-    externalID: event.event_id,
-    issueID,
-    kind: "work_event",
-    occurredAt: event.occurred_at,
-    payload: {
-      ...event.payload,
-      actor: event.actor,
-      after_revision: event.after_revision,
-      before_revision: event.before_revision,
-      correlation_id: event.correlation_id,
-      gate: event.gate,
-      outcome: event.outcome,
-      reason: event.reason
-    },
-    projection: "authority",
-    sourceAuthority: "work_events",
-    status: event.outcome,
-    summary: event.reason,
-    title: event.event_type,
-    workID
-  });
 }
 
 function issueEventNodes(workID: WorkID, issueID: number, event: PublicEventSummary): WorkTimelineNode[] {

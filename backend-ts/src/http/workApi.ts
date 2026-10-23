@@ -138,7 +138,6 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
       audit: auditInput(body.audit),
       expected_revision: revisionInput(body.expected_revision),
       patch,
-      shadow_mode: "disabled",
       work_id: work.id
     });
     return mutationResponse(result);
@@ -152,7 +151,6 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
       action,
       audit: auditInput(body.audit),
       expected_revision: revisionInput(body.expected_revision),
-      shadow_mode: "disabled",
       work_id: work.id
     });
     if (result.applied) kickProject(context, result.work);

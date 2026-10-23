@@ -6,9 +6,9 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { setFeishuConversationActiveProject } from "../db/repositories/feishuConversationState.ts";
 import {
-  resolveFeishuProjectContext,
-  resolveFeishuProjectContextFromDatabase
-} from "./feishuProjectContext.ts";
+  resolveImProjectContext,
+  resolveImProjectContextFromDatabase
+} from "./imProjectContext.ts";
 
 const PROJECTS = [
   { id: "xuanwu", name: "Xuanwu" },
@@ -25,7 +25,7 @@ afterEach(async () => {
 
 describe("Feishu PI project context resolver", () => {
   test("resolves a project from an explicit issue reference", () => {
-    const result = resolveFeishuProjectContext({
+    const result = resolveImProjectContext({
       issues: [{ id: 386, project_id: "xuanwu" }],
       projects: PROJECTS,
       text: "开始 #386"
@@ -41,7 +41,7 @@ describe("Feishu PI project context resolver", () => {
   });
 
   test("resolves a bare issue id when Chinese wording clearly marks it as an issue reference", () => {
-    const result = resolveFeishuProjectContext({
+    const result = resolveImProjectContext({
       issues: [{ id: 762, project_id: "xuanwu" }],
       projects: PROJECTS,
       text: "那就是762中的修复没修复好，内存仍然超了"
@@ -56,7 +56,7 @@ describe("Feishu PI project context resolver", () => {
   });
 
   test("resolves a project from explicit project id or name text before mapping fallback", () => {
-    const result = resolveFeishuProjectContext({
+    const result = resolveImProjectContext({
       mappings: [{ chatId: "oc_group", projectId: "demo" }],
       message: { chatId: "oc_group" },
       projects: PROJECTS,
@@ -73,7 +73,7 @@ describe("Feishu PI project context resolver", () => {
   });
 
   test("does not resolve generic issue wording as the xuanwu project", () => {
-    const result = resolveFeishuProjectContext({
+    const result = resolveImProjectContext({
       projects: PROJECTS,
       text: "开始所有issue"
     });
@@ -88,7 +88,7 @@ describe("Feishu PI project context resolver", () => {
   });
 
   test("does not treat conversation active project as IM project context", () => {
-    const result = resolveFeishuProjectContext({
+    const result = resolveImProjectContext({
       activeProject: {
         active_project_id: "xuanwu",
         active_project_source: "user_switch"
@@ -107,7 +107,7 @@ describe("Feishu PI project context resolver", () => {
   });
 
   test("returns missing without active project, issue, project, or mapping clues", () => {
-    const result = resolveFeishuProjectContext({
+    const result = resolveImProjectContext({
       projects: PROJECTS,
       text: "开始做吧"
     });
@@ -122,7 +122,7 @@ describe("Feishu PI project context resolver", () => {
   });
 
   test("uses a current-source Feishu channel mapping as a one-shot project target", () => {
-    const result = resolveFeishuProjectContext({
+    const result = resolveImProjectContext({
       mappings: [{ chatId: "oc_group", projectId: "demo" }],
       message: { chatId: "oc_group" },
       projects: PROJECTS,
@@ -139,13 +139,13 @@ describe("Feishu PI project context resolver", () => {
   });
 
   test("keeps source mappings scoped to the current chat or sender and reports conflicts", () => {
-    const missing = resolveFeishuProjectContext({
+    const missing = resolveImProjectContext({
       mappings: [{ chatId: "oc_group", projectId: "demo" }],
       message: { chatId: "oc_other", senderOpenId: "ou_other" },
       projects: PROJECTS,
       text: "开始做吧"
     });
-    const ambiguous = resolveFeishuProjectContext({
+    const ambiguous = resolveImProjectContext({
       mappings: [
         { chatId: "oc_group", projectId: "demo" },
         { projectId: "xuanwu", userId: "ou_user" }
@@ -166,7 +166,7 @@ describe("Feishu PI project context resolver", () => {
   });
 
   test("returns ambiguous when project text matches multiple projects", () => {
-    const result = resolveFeishuProjectContext({
+    const result = resolveImProjectContext({
       projects: [
         { id: "runner-api", name: "Runner" },
         { id: "runner-web", name: "Runner" }
@@ -197,7 +197,7 @@ describe("Feishu PI project context resolver", () => {
         source: "user_switch"
       }, new Date("2026-06-13T03:00:00Z"));
 
-      expect(resolveFeishuProjectContextFromDatabase(db, {
+      expect(resolveImProjectContextFromDatabase(db, {
         mappings: [{ chatId: "oc_group", projectId: "demo" }],
         message: { chatId: "oc_group" },
         scopeKey: "feishu-chat-oc_group-20260613",
@@ -208,7 +208,7 @@ describe("Feishu PI project context resolver", () => {
         source: "issue_ref",
         status: "resolved"
       });
-      expect(resolveFeishuProjectContextFromDatabase(db, {
+      expect(resolveImProjectContextFromDatabase(db, {
         mappings: [{ chatId: "oc_group", projectId: "demo" }],
         message: { chatId: "oc_group" },
         scopeKey: "feishu-chat-oc_group-20260613",

@@ -43,7 +43,6 @@ describe("Work timeline projection", () => {
         "evidence.recorded.v1",
         "attention.status_changed.v1",
         "run.status_changed.v1",
-        "work_ledger.work_updated.v1",
         "work.status_changed.v1",
         "issue.verification_report",
         "issue.comment",
@@ -52,17 +51,15 @@ describe("Work timeline projection", () => {
         "work.created.v1"
       ]);
       expect(result.items.map((item) => item.kind)).toEqual([
-        "evidence", "approval", "run", "work_event", "work_event",
+        "evidence", "approval", "run", "work_event",
         "issue_event", "issue_event", "approval", "run", "work_event"
       ]);
       expect(result.items.every((item) => item.source_links.some((link) => link.rel === "work"))).toBe(true);
       expect(result.items.find((item) => item.source.authority === "issue_events")?.source_links)
         .toEqual(expect.arrayContaining([expect.objectContaining({ rel: "source" }), expect.objectContaining({ rel: "summary" })]));
       const verification = result.items.find((item) => item.payload.issue_event_type === "issue.verification_report");
-      const ledgerEvent = result.items.find((item) => item.source.authority === "work_events");
       const actionEvidence = result.items.find((item) => item.source.authority === "pi_action_events");
       expect(verification?.payload.source_sha256).not.toBe("spoofed");
-      expect(ledgerEvent?.payload).toMatchObject({ outcome: "applied", reason: "metadata synchronized" });
       expect(actionEvidence?.payload.action_id).toBe("action-1");
       expect(new Set(result.items.map((item) => item.dedupe_key)).size).toBe(result.items.length);
     } finally {
@@ -76,6 +73,7 @@ describe("Work timeline projection", () => {
       const issueID = seedTimeline(db);
       const workID = issueIDToWorkID(issueID);
       insertIssueEvent(db, issueID, "issue.comment", { body: "same timestamp" }, "2026-01-01T00:00:06Z");
+      insertIssueEvent(db, issueID, "issue.comment", { body: "same timestamp again" }, "2026-01-01T00:00:06Z");
       projectPendingEventSummaries(db);
       const first = queryWorkTimeline(db, workID, { limit: 3 });
       expect(first.has_more).toBe(true);
@@ -179,7 +177,6 @@ function seedTimeline(db: RunnerDatabase): number {
     values (?, ?, 1, 'done', 'codex', 'thread-1', ?, ?, 'completed')`, [
     `issue-${issueID}-attempt-1`, issueID, "2026-01-01T00:00:01Z", "2026-01-01T00:00:07Z"
   ]);
-  insertWorkLedgerEvent(db, workID);
   insertApproval(db, issueID);
   db.sqlite.run(`insert into pi_action_events
     (action_id, project_id, issue_id, conversation_id, event_type, actor, decision,
@@ -213,26 +210,6 @@ function insertIssueEvent(
 ): void {
   db.sqlite.run("insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)", [
     issueID, type, JSON.stringify(payload), createdAt
-  ]);
-}
-
-function insertWorkLedgerEvent(db: RunnerDatabase, workID: string): void {
-  db.sqlite.run(`insert into works
-    (id, project_id, type, title, goal, status, acceptance_json, provenance_json,
-     workflow_ref, revision, created_at, updated_at)
-    values (?, 'demo', 'engineering_task', 'Timeline fixture', 'Build timeline', 'in_progress',
-      '{"criteria":[{"id":"tests","description":"tests","required":true}],"requires_handoff":true,"version":"v1"}',
-      '{"causes":[],"origin":{"authority":"issues","external_id":"1","kind":"issue","occurred_at":"2026-01-01T00:00:00Z","completeness":"legacy_incomplete","missing_fields":["actor","correlation_id"]}}',
-      'fixture:workflow', 1, ?, ?)`, [workID, "2026-01-01T00:00:00Z", "2026-01-01T00:00:06Z"]);
-  db.sqlite.run(`insert into work_events
-    (event_id, work_id, project_id, event_type, actor_json, reason, correlation_id,
-     gate_authority, gate_decision, gate_policy_ref, expected_revision, before_revision,
-     after_revision, outcome, payload_json, occurred_at, created_at)
-    values ('work-update-1', ?, 'demo', 'work_ledger.work_updated.v1',
-      '{"id":"runner","kind":"runner"}', 'metadata synchronized', 'correlation-1',
-      'deterministic_policy', 'allow', 'fixture-policy', 0, 0, 1, 'applied',
-      '{"outcome":"rejected","reason":"spoofed"}', ?, ?)`, [
-    workID, "2026-01-01T00:00:06Z", "2026-01-01T00:00:06Z"
   ]);
 }
 

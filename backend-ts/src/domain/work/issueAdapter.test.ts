@@ -6,7 +6,6 @@ import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { createIssue } from "../../db/repositories/issueCreate.ts";
 import { getIssue } from "../../db/repositories/issues.ts";
 import { updateIssue } from "../../db/repositories/issueUpdate.ts";
-import { getWork } from "../../db/repositories/workLedger.ts";
 import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
 import { WORK_STATUSES, type WorkTransitionAudit } from "./contracts.ts";
 import {
@@ -16,7 +15,6 @@ import {
   issueIDToWorkID,
   issueStatusToWorkStatus,
   listIssueBackedWorks,
-  syncIssueWorkShadow,
   updateIssueBackedWork,
   workIDToIssueID,
   workStatusToIssueStatus
@@ -92,7 +90,6 @@ describe("Issue-backed Work compatibility adapter", () => {
         expect(work.goal).toBe(`Deliver fixture ${work.status}`);
         expect(work.workflow_ref).toMatch(/^issues:\d+:workflow:[a-f0-9]{16}$/);
         expect(workIDToIssueID(work.id)).toBeGreaterThan(0);
-        expect(getWork(db, work.id)).toBeNull();
       }
       for (const status of WORK_STATUSES) {
         expect(workStatusToIssueStatus(issueStatusToWorkStatus(status))).toBe(status);
@@ -148,7 +145,7 @@ describe("Issue-backed Work compatibility adapter", () => {
         patch: { title: "Must not win" }
       });
 
-      expect(updated).toMatchObject({ applied: true, shadow: { mode: "disabled", status: "disabled" } });
+      expect(updated).toMatchObject({ applied: true });
       expect(updated.work).toMatchObject({ goal: "After goal", title: "After title" });
       expect(replay).toMatchObject({ applied: true, work: { title: "After title" } });
       expect(stale).toMatchObject({ applied: false, work: { title: "After title" } });
@@ -239,7 +236,6 @@ describe("Issue-backed Work compatibility adapter", () => {
       expect(legacy).toMatchObject({ description: "Legacy write", status: "done", title: "Legacy done" });
       expect(mustGetIssueWork(db, issue.id)).toMatchObject({ goal: "Legacy write", status: "done", title: "Legacy done" });
       expect(adapterAudits(db, issue.id)).toEqual([]);
-      expect(getWork(db, issueIDToWorkID(issue.id))).toBeNull();
     } finally {
       db.close();
     }
@@ -253,36 +249,28 @@ describe("Issue-backed Work compatibility adapter", () => {
         description: "Verify first",
         project_id: PROJECT_ID,
         status: "failed",
-        title: "Shadow fixture"
+        title: "Terminal fixture"
       });
-      const initial = mustGetIssueWork(db, issue.id);
-      expect(syncIssueWorkShadow(db, issue.id, audit("shadow-seed"))).toMatchObject({ status: "created" });
-      expect(getWork(db, initial.id)?.status).toBe("failed");
-
       updateIssue(db, issue.id, { status: "done" });
       const legacyDone = mustGetIssueWork(db, issue.id);
       const result = updateIssueBackedWork(db, {
-        audit: audit("shadow-conflict"),
+        audit: audit("terminal-conflict"),
         expected_revision: legacyDone.revision,
         patch: { title: "Legacy still wins" },
-        shadow_mode: "best_effort",
         work_id: legacyDone.id
       });
 
       expect(result).toMatchObject({
         applied: false,
-        shadow: { mode: "disabled", status: "disabled" },
         violations: ["title、description 和 depends_on_issue_ids 只能在未开始的 triage 或 todo Issue 上更新"],
-        work: { status: "done", title: "Shadow fixture" }
+        work: { status: "done", title: "Terminal fixture" }
       });
-      expect(getIssue(db, issue.id)).toMatchObject({ status: "done", title: "Shadow fixture" });
-      expect(getWork(db, initial.id)).toMatchObject({ status: "failed", title: "Shadow fixture" });
+      expect(getIssue(db, issue.id)).toMatchObject({ status: "done", title: "Terminal fixture" });
       expect(adapterAudits(db, issue.id)).toContainEqual(expect.objectContaining({
-        event_id: "shadow-conflict",
+        event_id: "terminal-conflict",
         operation: "update",
         outcome: "rejected"
       }));
-      expect(shadowMismatches(db, issue.id)).toEqual([]);
     } finally {
       db.close();
     }
@@ -323,10 +311,6 @@ function mustGetIssueWork(db: RunnerDatabase, issueID: number) {
 
 function adapterAudits(db: RunnerDatabase, issueID: number): Array<Record<string, unknown>> {
   return eventPayloads(db, issueID, "issue.work_adapter_write");
-}
-
-function shadowMismatches(db: RunnerDatabase, issueID: number): Array<Record<string, unknown>> {
-  return eventPayloads(db, issueID, "issue.work_shadow_mismatch");
 }
 
 function issueStatusEvents(db: RunnerDatabase, issueID: number): Array<Record<string, unknown>> {

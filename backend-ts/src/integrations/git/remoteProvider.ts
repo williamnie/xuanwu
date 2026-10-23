@@ -22,7 +22,7 @@ const REMOTE_GIT_PROVIDER_ERROR_KINDS = [
 ] as const;
 type RemoteGitProviderErrorKind = typeof REMOTE_GIT_PROVIDER_ERROR_KINDS[number];
 
-export type RemoteGitOperation =
+type RemoteGitOperation =
   | "push_branch"
   | "create_pull_request"
   | "update_pull_request"

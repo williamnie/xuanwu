@@ -1,6 +1,6 @@
 # ADR-XW-0018：Work backfill、双读一致性审计与回滚
 
-- 状态：Accepted
+- 状态：Retired（2026-10：W1/W2 窗口过期且生产从未启用 shadow；backfill/dual-read 脚手架与 `maintenance work` 命令已删除，`issues` 仍是唯一 authority）
 - 日期：2026-07-16
 - 路线 issue：XW P02.08 / Runner #654
 - 依赖：[ADR-XW-0014](0014-issue-work-compatibility-adapter.md)、[ADR-XW-0015](0015-pi-work-relation-adapter.md)、[ADR-XW-0016](0016-work-http-api.md)

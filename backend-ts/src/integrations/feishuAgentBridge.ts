@@ -1,5 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { resolveFeishuProjectContextFromDatabase, type FeishuProjectContextResult } from "./feishuProjectContext.ts";
+import { resolveImProjectContextFromDatabase, type ImProjectContextResult } from "./imProjectContext.ts";
 import { createExternalLink, listExternalLinksByExternal } from "../db/repositories/externalLinks.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { FeishuConnectorConfig, FeishuNormalizedMessageEvent } from "./feishu.ts";
@@ -57,7 +57,7 @@ const ACK_REACTION_EMOJI_TYPE = "OK";
 export function createFeishuAgentBridge(options: FeishuAgentBridgeOptions) {
   const coordinator = createImConversationCoordinator<
     FeishuBridgeHandleInput,
-    { projectContext: FeishuProjectContextResult; route: FeishuConversationRoute },
+    { projectContext: ImProjectContextResult; route: FeishuConversationRoute },
     FeishuRunnerResult
   >({
     acknowledge: (input) => sendAckReaction(options, input),
@@ -122,7 +122,7 @@ async function runnerReply(
   options: FeishuAgentBridgeOptions,
   input: FeishuBridgeHandleInput,
   route: FeishuConversationRoute,
-  projectContext: FeishuProjectContextResult
+  projectContext: ImProjectContextResult
 ): Promise<FeishuRunnerResult> {
   try {
     if (!options.runConversation) {
@@ -269,8 +269,8 @@ function projectContextForRoute(
   options: FeishuAgentBridgeOptions,
   input: FeishuBridgeHandleInput,
   route: FeishuConversationRoute
-): FeishuProjectContextResult {
-  return resolveFeishuProjectContextFromDatabase(options.database, {
+): ImProjectContextResult {
+  return resolveImProjectContextFromDatabase(options.database, {
     mappings: options.config().projectMappings,
     message: {
       chatId: input.event.chat_id,
@@ -282,7 +282,7 @@ function projectContextForRoute(
   });
 }
 
-function resolvedProjectId(context: FeishuProjectContextResult): string {
+function resolvedProjectId(context: ImProjectContextResult): string {
   return context.status === "resolved" ? context.projectId : "";
 }
 

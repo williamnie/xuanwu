@@ -1,6 +1,6 @@
 # ADR-XW-0014：Issue → Work 兼容适配器
 
-- 状态：Accepted
+- 状态：Accepted（2026-10：可选 `best_effort` shadow 写入已删除，适配器只投影 Issue 并审计 Issue 写入）
 - 日期：2026-07-16
 - 路线 issue：XW P02.04 / Runner #650
 - 依赖：[ADR-XW-0013](0013-work-ledger-repository-service.md)
