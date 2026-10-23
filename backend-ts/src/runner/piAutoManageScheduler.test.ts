@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
-import { createPiAction, createPiGuardianEvent, listIssueSupervisorEvents, listPiActions, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
+import { createPiAction, createPiGuardianEvent, getPiGuardianWatchdogStatus, listIssueSupervisorEvents, listPiActions, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
 import { listPiRecoveryAttempts } from "../db/repositories/pi/recoveryAttempts.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
@@ -127,6 +127,30 @@ describe("PI auto-manage scheduler", () => {
       await waitUntil(() => clock.timers.length === 1);
       scheduler.stop();
       expect(clock.timers[0]?.canceled).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("guardian refreshes the watchdog heartbeat immediately on start", async () => {
+    const db = await openFixtureDatabase();
+    const runner = new FakePiCycleRunner();
+    const clock = new FakeClock();
+    try {
+      const scheduler = createPiGuardianScheduler({
+        clock,
+        database: db,
+        intervalMs: 1000,
+        runProjectCycle: runner.run.bind(runner)
+      });
+
+      scheduler.start();
+      expect(clock.timers.map((timer) => timer.delayMs)).toEqual([0]);
+      await clock.runNext();
+      await waitUntil(() => clock.timers.length === 1);
+      expect(clock.timers[0]?.delayMs).toBe(1000);
+      expect(getPiGuardianWatchdogStatus(db)?.last_seen_at).toBeTruthy();
+      scheduler.stop();
     } finally {
       db.close();
     }

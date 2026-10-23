@@ -149,6 +149,9 @@ type EnabledProjectRow = { project_id: string };
 const DEFAULT_INTERVAL_MS = 30_000;
 const DEFAULT_SUPERVISOR_INTERVAL_MS = 60_000;
 export const AGENTIC_INITIAL_DELAY_MS = 15_000;
+// The watchdog heartbeat goes stale while the service is down; refresh it on boot
+// instead of showing a stale banner until the first 30s tick.
+export const GUARDIAN_INITIAL_DELAY_MS = 0;
 const activeProjectCycles = new Set<string>();
 let scheduleCycleSequence = 0;
 
@@ -170,7 +173,10 @@ export function createPiGuardianScheduler<Timer = unknown>(
   input: PiAutoManageSchedulerInput<Timer>
 ): PiAutoManageScheduler {
   const runtimeInput = withNativeAutomationExecutor(input);
-  return createCycleScheduler(input, () => runGuardianControlPlaneCycle(runtimeInput));
+  return createCycleScheduler(
+    { initialDelayMs: GUARDIAN_INITIAL_DELAY_MS, ...input },
+    () => runGuardianControlPlaneCycle(runtimeInput)
+  );
 }
 
 export function createPiAgenticScheduler<Timer = unknown>(
