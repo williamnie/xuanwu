@@ -24,18 +24,16 @@ export const RECOVERY_DIAGNOSIS_CODES = [
   "recovery_budget_exhausted"
 ] as const;
 
-export const RECOVERY_FAILURE_CLASSES = [
+const RECOVERY_FAILURE_CLASSES = [
   "none",
   "transient",
   "needs_context",
   "unsafe",
   "exhausted"
 ] as const;
-
-export type RecoveryDiagnosisCode = typeof RECOVERY_DIAGNOSIS_CODES[number];
-export type RecoveryDiagnosisSeverity = "info" | "watch" | "actionable" | "urgent";
+type RecoveryDiagnosisSeverity = "info" | "watch" | "actionable" | "urgent";
 export type RecoveryFailureClass = typeof RECOVERY_FAILURE_CLASSES[number];
-export type RecoveryDiagnosisInput = {
+type RecoveryDiagnosisInput = {
   diagnosisCode?: string;
   providerErrorCategory?: string;
   status?: string;

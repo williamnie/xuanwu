@@ -29,7 +29,7 @@ export const CLI_TOOL_ERROR_CODES = {
   unsupportedStdout: "cli_unsupported_stdout"
 } as const;
 
-export type CliToolRunRequest = {
+type CliToolRunRequest = {
   command: CliConnectorCommand | CliConnectorHealth;
   input?: Record<string, unknown>;
   invocationID: string;
@@ -85,7 +85,7 @@ export async function runCliTool(request: CliToolRunRequest): Promise<ToolResult
   }
 }
 
-export function renderCliCommand(command: CliCommandTemplate, input: Record<string, unknown>): RenderedCommand {
+function renderCliCommand(command: CliCommandTemplate, input: Record<string, unknown>): RenderedCommand {
   if (!safeExecutable(command.executable)) throw new Error("command.executable is not a safe executable path");
   return {
     executable: command.executable,

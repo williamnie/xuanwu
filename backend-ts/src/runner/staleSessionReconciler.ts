@@ -16,7 +16,7 @@ type ActiveSessionRow = {
 };
 type ActiveManagerConversationSummary = { count: number; ids: string[] };
 
-export type StaleSessionReconciliationResult = {
+type StaleSessionReconciliationResult = {
   active_owner_sessions: number;
   audit_action_id: string;
   process_reconciliation: StaleProcessReconciliation;
@@ -24,7 +24,7 @@ export type StaleSessionReconciliationResult = {
   stale_sessions_closed: number;
 };
 type StaleSessionReconciliationOptions = { reconcileManagerConversations?: boolean };
-export type StaleManagerCycleReconciliationResult = {
+type StaleManagerCycleReconciliationResult = {
   audit_action_id: string;
   stale_manager_conversations_closed: number;
 };

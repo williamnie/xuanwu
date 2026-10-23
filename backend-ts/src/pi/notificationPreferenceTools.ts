@@ -12,7 +12,7 @@ export const PI_NOTIFICATION_PREFERENCE_TOOL_NAMES = [
   "notification_preference_update"
 ] as const;
 
-export const PI_NOTIFICATION_PREFERENCE_ACTIONS = {
+const PI_NOTIFICATION_PREFERENCE_ACTIONS = {
   read: "notification.preference.read",
   update: "notification.preference.update"
 } as const;

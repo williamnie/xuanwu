@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { parseCodexTomlMcpServers, parseJsonMcpServers } from "./configParsers.ts";
 import type { McpDetector, McpDiscoveryOptions, McpDiscoveryServer, McpDiscoverySourceSummary } from "./types.ts";
 
-export function defaultMcpDiscoveryOptions(options: McpDiscoveryOptions = {}) {
+function defaultMcpDiscoveryOptions(options: McpDiscoveryOptions = {}) {
   return {
     homeDir: options.homeDir || process.env.HOME || "",
     workspaceDir: options.workspaceDir || process.cwd()

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { getIssue } from "../../db/repositories/issues.ts";
 import { createFakeTrackerIssueAdapter } from "./fakeIssueAdapter.ts";
-import { pollTrackerIssues, syncTrackerIssueEvent, trackerIssueFromPayload } from "./issueSync.ts";
+import { pollTrackerIssues, syncTrackerIssueEvent } from "./issueSync.ts";
 import { createDefaultRouter, createRequestHandler } from "../../http/server.ts";
 
 const roots: string[] = [];

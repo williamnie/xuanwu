@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { validateToolArguments } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
+import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { createProject, type Project } from "../db/repositories/projects.ts";

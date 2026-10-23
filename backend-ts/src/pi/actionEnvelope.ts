@@ -2,7 +2,7 @@ import { classifyPiActionRisk, type PiActionEnvelope, type PiRiskLevel } from ".
 
 type RiskInput = { level?: unknown; requires_confirmation?: unknown; requiresConfirmation?: unknown };
 
-export type PiActionEnvelopeInput = {
+type PiActionEnvelopeInput = {
   action_type?: unknown;
   delegation_id?: unknown;
   goal_id?: unknown;

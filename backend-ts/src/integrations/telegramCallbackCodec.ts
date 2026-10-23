@@ -1,7 +1,7 @@
 const PREFIX = "i1";
 const CALLBACK_DATA_MAX_BYTES = 64;
 
-export type TelegramCallbackData = {
+type TelegramCallbackData = {
   actionIndex: number;
   interactionId: string;
   revision: number;

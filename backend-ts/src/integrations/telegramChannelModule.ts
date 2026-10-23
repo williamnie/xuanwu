@@ -13,7 +13,7 @@ import { createTelegramBotClient, type TelegramBotClient } from "./telegramClien
 import { createTelegramReceiverManager } from "./telegramReceiver.ts";
 import type { TelegramConnectorConfig } from "./telegramTypes.ts";
 
-export type TelegramChannelModuleOptions = {
+type TelegramChannelModuleOptions = {
   bus?: EventBus;
   client?: TelegramBotClient;
   config: () => TelegramConnectorConfig;
@@ -22,7 +22,7 @@ export type TelegramChannelModuleOptions = {
   runSupervisorConversation?: TelegramSupervisorConversation;
 };
 
-export type TelegramChannelModule = ImChannelModuleInternals<TelegramConnectorConfig, TelegramBotClient> & {
+type TelegramChannelModule = ImChannelModuleInternals<TelegramConnectorConfig, TelegramBotClient> & {
   readonly agentBridge: ReturnType<typeof createTelegramAgentBridge>;
 };
 

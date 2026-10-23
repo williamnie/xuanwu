@@ -38,8 +38,8 @@ export type CodexJsonRpcProcessFactory = (options: {
   env: Record<string, string | undefined>;
 }) => CodexJsonRpcProcess;
 
-export type ServerRequestHandler = (method: string, params: unknown) => Promise<unknown> | unknown;
-export type CodexTransportOptions = {
+type ServerRequestHandler = (method: string, params: unknown) => Promise<unknown> | unknown;
+type CodexTransportOptions = {
   idleTtlMs?: number;
   onEvent?: (event: ProviderEvent) => void;
   ownershipFile?: string;
@@ -56,9 +56,9 @@ export type CodexProcessLease = {
 
 const MAX_STDERR_LINES = 50;
 const MAX_LINE_BYTES = 10 * 1024 * 1024;
-export const CODEX_APP_SERVER_RPC_TIMEOUT_MS = 90_000;
-export const CODEX_APP_SERVER_IDLE_TTL_MS = 15_000;
-export const CODEX_PROCESS_ACTIVE_REFRESH_MS = 5_000;
+const CODEX_APP_SERVER_RPC_TIMEOUT_MS = 90_000;
+const CODEX_APP_SERVER_IDLE_TTL_MS = 15_000;
+const CODEX_PROCESS_ACTIVE_REFRESH_MS = 5_000;
 const CODEX_PROCESS_STRUCTURE_EVENTS = new Set([
   "error",
   "item/completed",

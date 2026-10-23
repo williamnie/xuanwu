@@ -1,4 +1,4 @@
-import { redactedUserVisibleText, redactSensitiveText } from "../../util/redact.ts";
+import { redactedUserVisibleText } from "../../util/redact.ts";
 import type { ProviderErrorCategory } from "./errors.ts";
 import { legacyCapabilitiesFromDetail } from "./manifest.ts";
 import type { RegistryEntry, RegistryState } from "./registry.ts";
@@ -6,7 +6,7 @@ import type { RegistryEntry, RegistryState } from "./registry.ts";
 /** URL userinfo（`user:pass@`）脱敏：现有 redaction registry 不覆盖，P4 status 层补齐。 */
 const URL_USERINFO_PATTERN = /([a-z][a-z0-9+.-]*:\/\/)[^\s/:@]+(:[^\s/@]+)?@/gi;
 
-export function redactUrlUserinfo(text: string): string {
+function redactUrlUserinfo(text: string): string {
   return text.replace(URL_USERINFO_PATTERN, "$1[redacted]@");
 }
 

@@ -5,16 +5,16 @@ import { listStoredEvidence, type StoredEvidenceRecord } from "../../db/reposito
 import { canSatisfyEvidenceGate, validateEvidence, type EvidenceRecord } from "../evidence/contracts.ts";
 import type { DomainActor, WorkID } from "../../xuanwu/coreDomainContracts.ts";
 
-export const READINESS_REQUIREMENTS_EVENT_TYPE = "work.readiness_requirements.declared.v1";
+const READINESS_REQUIREMENTS_EVENT_TYPE = "work.readiness_requirements.declared.v1";
 export const READINESS_REQUIREMENTS_SCHEMA_VERSION = 1 as const;
 export const READINESS_PROJECTION_CONTRACT = "xw.delivery-readiness.projection.v1" as const;
 
 export const READINESS_STAGES = ["source_ready", "deployed", "observed", "gate_passed"] as const;
-export type ReadinessStage = typeof READINESS_STAGES[number];
-export const READINESS_EVIDENCE_EVENTS = ["deployment", "observation", "gate_pass", "rollback"] as const;
+type ReadinessStage = typeof READINESS_STAGES[number];
+const READINESS_EVIDENCE_EVENTS = ["deployment", "observation", "gate_pass", "rollback"] as const;
 export type ReadinessEvidenceEvent = typeof READINESS_EVIDENCE_EVENTS[number];
 
-export type ReadinessAudit = {
+type ReadinessAudit = {
   actor: DomainActor;
   correlation_id: string;
   event_id: string;
@@ -39,7 +39,7 @@ export type ReadinessRequirementDeclaration = {
   work_id: WorkID;
 };
 
-export type ReadinessRequirementProjection = ReadinessRequirement & {
+type ReadinessRequirementProjection = ReadinessRequirement & {
   current_stage: ReadinessStage | null;
   evidence_ids: string[];
   missing_evidence: string[];
@@ -63,7 +63,7 @@ export type ReadinessProjection = {
   work_id: WorkID;
 };
 
-export type ReadinessEvidenceFacts = {
+type ReadinessEvidenceFacts = {
   environment: string;
   event: ReadinessEvidenceEvent;
   migration_gate: string;
@@ -253,7 +253,7 @@ function missingForRequirement(
   return missing;
 }
 
-export function readinessEvidenceFacts(evidence: EvidenceRecord): ReadinessEvidenceFacts | null {
+function readinessEvidenceFacts(evidence: EvidenceRecord): ReadinessEvidenceFacts | null {
   const facts = evidence.decisive_output.facts;
   const event = textFact(facts.readiness_event) as ReadinessEvidenceEvent;
   if (!READINESS_EVIDENCE_EVENTS.includes(event)) return null;

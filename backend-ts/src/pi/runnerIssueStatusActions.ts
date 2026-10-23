@@ -25,13 +25,13 @@ export type IssueStatusUpdateInput = {
   status: WorkStatus;
 };
 
-export type IssueStatusUpdateRuntime = {
+type IssueStatusUpdateRuntime = {
   bus?: Pick<EventBus, "publish">;
   onExecutionRequested?: (projectID: string) => void;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
-export type PreparedIssueStatusUpdate = {
+type PreparedIssueStatusUpdate = {
   issues: Issue[];
   projectID: string;
   targetStatus: WorkStatus;

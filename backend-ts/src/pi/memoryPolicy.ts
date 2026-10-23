@@ -10,7 +10,7 @@ const SENSITIVE_LINE_MARKERS = [
 const SECRET_ASSIGNMENT_PATTERN = /[A-Z0-9_-]*(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY)[A-Z0-9_-]*\s*[:=]\s*[^\s,;]+/i;
 const BEARER_PATTERN = /Bearer\s+[A-Za-z0-9._~+/=-]+/i;
 
-export const REUSABLE_MEMORY_KINDS = [
+const REUSABLE_MEMORY_KINDS = [
   "user_preference",
   "project_preference",
   "decision",
@@ -20,8 +20,8 @@ export const REUSABLE_MEMORY_KINDS = [
   "constraint"
 ] as const;
 
-export type ReusableMemoryKind = (typeof REUSABLE_MEMORY_KINDS)[number];
-export type ReusableMemoryWrite = {
+type ReusableMemoryKind = (typeof REUSABLE_MEMORY_KINDS)[number];
+type ReusableMemoryWrite = {
   confidence?: string;
   content: string;
   evidenceRef?: string;
@@ -34,10 +34,6 @@ export type ReusableMemoryWrite = {
 
 export function assertMemoryContentSafe(content: string): void {
   if (containsSensitiveMemoryContent(content)) throw new Error(SENSITIVE_MEMORY_ERROR);
-}
-
-export function memoryRejectedResult(content: string): { reason: string; rejected: true } | undefined {
-  return containsSensitiveMemoryContent(content) ? { rejected: true, reason: SENSITIVE_MEMORY_ERROR } : undefined;
 }
 
 export function containsSensitiveMemoryContent(content: string): boolean {

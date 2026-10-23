@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../database.ts";
 
-export type PiMcpTransportType = "stdio" | "http" | "sse" | "streamable_http";
-export const PI_MCP_APPROVAL_MODES = ["dangerous_only", "every_write", "read_only"] as const;
+type PiMcpTransportType = "stdio" | "http" | "sse" | "streamable_http";
+const PI_MCP_APPROVAL_MODES = ["dangerous_only", "every_write", "read_only"] as const;
 export type PiMcpApprovalMode = (typeof PI_MCP_APPROVAL_MODES)[number];
 export type PiMcpServerInput = {
   approval_granted_at?: string;
@@ -28,7 +28,7 @@ export type PiMcpServerInput = {
   transport_type?: PiMcpTransportType;
   url?: string;
 };
-export type PiMcpServerPatch = Partial<Omit<PiMcpServerInput, "id" | "name">> & { name?: string };
+type PiMcpServerPatch = Partial<Omit<PiMcpServerInput, "id" | "name">> & { name?: string };
 export type PiMcpServer = Required<Omit<PiMcpServerInput,
   "diagnostics" | "enabled" | "env" | "headers" | "metadata" | "redaction"
 >> & {
@@ -137,7 +137,7 @@ function serverFromRow(row: ServerRow): PiMcpServer {
     updated_at: row.updated_at, url: row.url };
 }
 
-export function approvalMode(value: unknown): PiMcpApprovalMode {
+function approvalMode(value: unknown): PiMcpApprovalMode {
   const mode = clean(value);
   return (PI_MCP_APPROVAL_MODES as readonly string[]).includes(mode)
     ? mode as PiMcpApprovalMode

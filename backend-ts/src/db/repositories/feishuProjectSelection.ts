@@ -15,9 +15,9 @@ import {
  * as a read-only historical carrier (backfilled by 071/071a) until a separate
  * destructive migration removes it.
  */
-export const FEISHU_IM_CONNECTOR_ID = "feishu";
+const FEISHU_IM_CONNECTOR_ID = "feishu";
 
-export type FeishuProjectSelectionStatus = "pending" | "consumed";
+type FeishuProjectSelectionStatus = "pending" | "consumed";
 export type FeishuPendingProjectSelection = {
   candidates: string[];
   candidates_json: string;
@@ -35,7 +35,7 @@ export type FeishuPendingProjectSelection = {
   user_id: string;
   user_open_id: string;
 };
-export type FeishuPendingProjectSelectionInput = {
+type FeishuPendingProjectSelectionInput = {
   candidates: string[];
   chatId: string;
   conversationId: string;
@@ -47,7 +47,7 @@ export type FeishuPendingProjectSelectionInput = {
   userId: string;
   userOpenId: string;
 };
-export type FeishuProjectSelectionConsumeInput = {
+type FeishuProjectSelectionConsumeInput = {
   chatId: string;
   now: Date;
   projectId: string;
@@ -55,7 +55,7 @@ export type FeishuProjectSelectionConsumeInput = {
   userId: string;
   userOpenId: string;
 };
-export type FeishuProjectSelectionConsumeResult = {
+type FeishuProjectSelectionConsumeResult = {
   selection: FeishuPendingProjectSelection | null;
   status: "already_consumed" | "consumed" | "expired" | "invalid_project" | "missing" | "source_mismatch";
 };

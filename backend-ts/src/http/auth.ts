@@ -8,7 +8,7 @@ type AuthConfig = {
   authTokenFile?: string;
 };
 
-export type AuthTokenStatus = {
+type AuthTokenStatus = {
   configured: true;
   rotatable: boolean;
   source: "environment" | "file";

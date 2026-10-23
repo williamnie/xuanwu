@@ -3,15 +3,13 @@ import type { Issue } from "../db/repositories/issues.ts";
 import {
   addPiRunGroupItem,
   createPiRunGroup,
-  getPiRunGroup,
-  listPiRunGroupItems,
   refreshPiRunGroupCompletion,
   updatePiRunGroupItem,
   type PiRunGroup
 } from "../db/repositories/pi.ts";
 import { deriveRunGroupReportView } from "./runGroupReportStatus.ts";
 
-export type BatchRunGroupInput = {
+type BatchRunGroupInput = {
   conversationID?: string;
   issues: Issue[];
   projectID: string;
@@ -63,21 +61,6 @@ export function updateRunGroupEnqueueResult(
     report_reason: cleanString(reason)
   });
   refreshPiRunGroupCompletion(db, runGroupID);
-}
-
-export function refreshRunGroupIssueReports(db: RunnerDatabase, runGroupID: string): PiRunGroup | null {
-  const group = getPiRunGroup(db, runGroupID);
-  if (!group) return null;
-  for (const item of listPiRunGroupItems(db, group.id)) {
-    const report = deriveRunGroupReportView(item);
-    if (!report.reportable && item.enqueue_status === "completed") continue;
-    updatePiRunGroupItem(db, group.id, item.issue_id, {
-      report_bucket: report.report_bucket,
-      report_status: report.report_status,
-      status: report.status
-    });
-  }
-  return refreshPiRunGroupCompletion(db, group.id);
 }
 
 function normalizeEnqueueStatus(status: string): string {

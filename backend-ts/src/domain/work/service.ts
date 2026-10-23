@@ -31,7 +31,7 @@ export const WORK_EVENT_TYPES = {
   updated: "work_ledger.work_updated.v1"
 } as const;
 
-export type WorkMutationResult = {
+type WorkMutationResult = {
   applied: boolean;
   event: WorkEvent;
   relation?: WorkRelation;
@@ -44,50 +44,50 @@ export type CreateWorkCommand = {
   work: Omit<WorkLedgerEntry, "created_at" | "revision" | "updated_at">;
 };
 
-export type WorkUpdatePatch = Partial<Pick<
+type WorkUpdatePatch = Partial<Pick<
   WorkLedgerEntry,
   "acceptance" | "goal" | "provenance" | "title" | "type" | "workflow_ref"
 >>;
 
-export type UpdateWorkCommand = {
+type UpdateWorkCommand = {
   audit: WorkTransitionAudit;
   expected_revision: number;
   patch: WorkUpdatePatch;
   work_id: WorkLedgerEntry["id"];
 };
 
-export type AddWorkRelationCommand = {
+type AddWorkRelationCommand = {
   expected_revision: number;
   gate: WorkTransitionGate;
   relation: WorkRelation;
 };
 
-export type RemoveWorkRelationCommand = {
+type RemoveWorkRelationCommand = {
   audit: WorkTransitionAudit;
   expected_revision: number;
   relation_id: string;
   work_id: WorkLedgerEntry["id"];
 };
 
-export type TransitionWorkCommand = WorkTransitionCommand;
+type TransitionWorkCommand = WorkTransitionCommand;
 
-export type ClaimWorkCommand = Omit<TransitionWorkCommand, "to">;
+type ClaimWorkCommand = Omit<TransitionWorkCommand, "to">;
 
-export class WorkNotFoundError extends Error {
+class WorkNotFoundError extends Error {
   constructor(id: string) {
     super(`Work ${id} not found`);
     this.name = "WorkNotFoundError";
   }
 }
 
-export class WorkCommandValidationError extends Error {
+class WorkCommandValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "WorkCommandValidationError";
   }
 }
 
-export class WorkEventConflictError extends Error {
+class WorkEventConflictError extends Error {
   constructor(eventID: string) {
     super(`Work event ${eventID} is already bound to another mutation`);
     this.name = "WorkEventConflictError";

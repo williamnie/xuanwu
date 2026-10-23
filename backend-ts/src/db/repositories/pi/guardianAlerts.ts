@@ -26,7 +26,7 @@ export type PiGuardianAlertStatus = "acked" | "open" | "resolved" | "suppressed"
 export type PiGuardianAlertFilter = {
   alertType?: string; projectId?: string; status?: string;
 };
-export type PiGuardianAlertRetryInput = {
+type PiGuardianAlertRetryInput = {
   direct_feishu_error?: string; max_retry_count?: number; next_retry_at?: string;
 };
 

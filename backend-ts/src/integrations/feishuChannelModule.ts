@@ -40,7 +40,7 @@ import {
  * directly; the registry hands out only the connector/presentation surface.
  */
 
-export type FeishuChannelModuleOptions = {
+type FeishuChannelModuleOptions = {
   agentBridge?: ReturnType<typeof createFeishuAgentBridge>;
   bus?: EventBus;
   config: () => FeishuConnectorConfig;
@@ -60,7 +60,7 @@ export type FeishuChannelModuleOptions = {
   }) => Promise<{ conversationId?: string; targetProjectId?: string; text: string }>;
 };
 
-export type FeishuChannelModule = ImChannelModuleInternals<FeishuConnectorConfig, FeishuMessageClient> & {
+type FeishuChannelModule = ImChannelModuleInternals<FeishuConnectorConfig, FeishuMessageClient> & {
   /** Provider-private compatibility handle for the Feishu callback route. */
   readonly agentBridge: ReturnType<typeof createFeishuAgentBridge>;
   /** Provider-private: registered on the HTTP callback route by the server. */

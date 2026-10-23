@@ -57,7 +57,7 @@ export function normalizeTelegramMessageUpdate(input: {
   return { attention, envelope, message, prompt: telegramPrompt(message.text, input.bot.username) };
 }
 
-export function telegramImInboundMessage(
+function telegramImInboundMessage(
   updateId: number,
   source: TelegramMessage,
   bot: TelegramBotIdentity
@@ -92,7 +92,7 @@ export function telegramImInboundMessage(
   };
 }
 
-export function telegramInboundEnvelope(updateId: number, message: ImInboundMessageV1): InboundEnvelope {
+function telegramInboundEnvelope(updateId: number, message: ImInboundMessageV1): InboundEnvelope {
   const eventId = `telegram:message:${message.conversation.id}:${message.message_id}`;
   const dedupe = `telegram:update:${updateId}`;
   const envelope: InboundEnvelope = {

@@ -1,6 +1,16 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID, scryptSync } from "node:crypto";
 import {
-  chmod, copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile
+  chmod,
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -17,7 +27,7 @@ type Actor = {
   reason: string;
 };
 
-export type BackupExportInput = Actor & {
+type BackupExportInput = Actor & {
   dbPath: string;
   encrypt?: boolean;
   outputPath: string;
@@ -26,14 +36,14 @@ export type BackupExportInput = Actor & {
   stateDir: string;
 };
 
-export type BackupImportInput = Actor & {
+type BackupImportInput = Actor & {
   apply: boolean;
   inputPath: string;
   passphrase?: string;
   targetStateDir: string;
 };
 
-export type BackupVerifyInput = { inputPath: string; passphrase?: string };
+type BackupVerifyInput = { inputPath: string; passphrase?: string };
 
 type SnapshotEntry = { bytes: number; path: string; sha256: string };
 type SecretRef = { path: string; restore: string };

@@ -63,9 +63,9 @@ import {
 } from "./issueWatchdog.ts";
 
 export type PiAutoManageProjectCycleInput = { maxActions?: number; projectId: string };
-export type PiAutoManageProjectCycle = (input: PiAutoManageProjectCycleInput) => Promise<unknown>;
-export type PiAutoManageCycleResult = { projects: number; skipped: number; started: number };
-export type ScheduleTiming = {
+type PiAutoManageProjectCycle = (input: PiAutoManageProjectCycleInput) => Promise<unknown>;
+type PiAutoManageCycleResult = { projects: number; skipped: number; started: number };
+type ScheduleTiming = {
   cycle_id: string;
   cycle_kind: "agentic" | "guardian" | "legacy";
   duration_ms: number;
@@ -77,7 +77,7 @@ export type ScheduleTiming = {
   started_at: string;
   status: "failed" | "succeeded";
 };
-export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
+type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   agentCommunications: AgentCommunicationGatewayResult;
   automationCore: AutomationSchedulerResult;
   automations: { executed: number; failed: number; scanned: number; skipped: number };
@@ -96,17 +96,17 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   operationsDailyReports: GuardianOperationsDailyReportResult;
   watchdog: PiGuardianWatchdogSummary;
 };
-export type GuardianControlPlaneCycleResult = Pick<ScheduleLayerCycleResult,
+type GuardianControlPlaneCycleResult = Pick<ScheduleLayerCycleResult,
   "automationCore" | "automations" | "completionWatchNotifications" | "cron" |
   "dailyDigestNotifications" | "delegations" | "digestFlush" | "digestNotifications" |
   "guardianActionDispatch" | "guardianDecisions" | "issueWatchdog" | "missedIntentSweep" |
   "operationsDailyReports" | "providerTerminalSignals" | "watchdog"
 >;
-export type AgenticCycleResult = PiAutoManageCycleResult & Pick<ScheduleLayerCycleResult,
+type AgenticCycleResult = PiAutoManageCycleResult & Pick<ScheduleLayerCycleResult,
   "agentCommunications" | "supervisor"
 > & { acceptance: PiAcceptanceCoordinatorResult };
 
-export type PiAutoManageCycleInput = {
+type PiAutoManageCycleInput = {
   agentCommunicationDecider?: AgentCommunicationDecider;
   bus?: EventBus;
   codexSessionsDir?: string;
@@ -125,7 +125,7 @@ export type PiAutoManageCycleInput = {
   watchdogStaleAfterMs?: number;
 };
 
-export type PiAutoManageSchedulerClock<Timer = unknown> = {
+type PiAutoManageSchedulerClock<Timer = unknown> = {
   clearTimeout(timer: Timer): void;
   setTimeout(callback: () => void | Promise<void>, delayMs: number): Timer;
 };
@@ -139,7 +139,7 @@ export type PiAutoManageSchedulerInput<Timer = unknown> = PiAutoManageCycleInput
   runWithinActivity?: (operation: () => Promise<unknown>) => Promise<unknown>;
 };
 
-export type PiAutoManageScheduler = {
+type PiAutoManageScheduler = {
   start(): void;
   stop(): void;
 };
@@ -151,7 +151,7 @@ const DEFAULT_SUPERVISOR_INTERVAL_MS = 60_000;
 export const AGENTIC_INITIAL_DELAY_MS = 15_000;
 // The watchdog heartbeat goes stale while the service is down; refresh it on boot
 // instead of showing a stale banner until the first 30s tick.
-export const GUARDIAN_INITIAL_DELAY_MS = 0;
+const GUARDIAN_INITIAL_DELAY_MS = 0;
 const activeProjectCycles = new Set<string>();
 let scheduleCycleSequence = 0;
 
@@ -220,7 +220,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   return { ...guardian, ...agentic };
 }
 
-export async function runGuardianControlPlaneCycle(
+async function runGuardianControlPlaneCycle(
   input: PiAutoManageCycleInput
 ): Promise<GuardianControlPlaneCycleResult> {
   const cycleStartedAt = performance.now();
@@ -308,7 +308,7 @@ export async function runGuardianControlPlaneCycle(
   };
 }
 
-export async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<AgenticCycleResult> {
+async function runAgenticCycle(input: PiAutoManageCycleInput): Promise<AgenticCycleResult> {
   const cycleStartedAt = performance.now();
   const timing = scheduleCycleTiming(input, "agentic");
   // Ordinary project manager cycles remain explicit. PI-owned acceptance is
@@ -496,7 +496,7 @@ function shouldRunSupervisor(now: number, lastAt: number, intervalMs: number): b
   return lastAt === 0 || now - lastAt >= intervalMs;
 }
 
-export function isProjectHeartbeatPaused(db: RunnerDatabase, projectID: string): boolean {
+function isProjectHeartbeatPaused(db: RunnerDatabase, projectID: string): boolean {
   return isPiHeartbeatPaused(db, { scopeId: projectID, scopeType: "project" });
 }
 

@@ -14,12 +14,12 @@ export const PI_SUPERVISOR_DECISIONS = [
   "noop"
 ] as const;
 
-export const PI_SUPERVISOR_CONFIDENCE_LEVELS = ["low", "medium", "high"] as const;
-export const PI_SUPERVISOR_RISK_LEVELS = ["low", "medium", "high"] as const;
+const PI_SUPERVISOR_CONFIDENCE_LEVELS = ["low", "medium", "high"] as const;
+const PI_SUPERVISOR_RISK_LEVELS = ["low", "medium", "high"] as const;
 export const PI_SUPERVISOR_RATE_LIMIT_WAIT_POLICIES = ["respect_retry_after", "default_cooldown", "ask"] as const;
 
 export type PiSupervisorDiagnosisCode = typeof PI_SUPERVISOR_DIAGNOSIS_CODES[number];
-export type PiSupervisorDecision = typeof PI_SUPERVISOR_DECISIONS[number];
+type PiSupervisorDecision = typeof PI_SUPERVISOR_DECISIONS[number];
 export type PiSupervisorRateLimitWaitPolicy = typeof PI_SUPERVISOR_RATE_LIMIT_WAIT_POLICIES[number];
 
 const stringArray = Type.Array(Type.String({ minLength: 1 }));

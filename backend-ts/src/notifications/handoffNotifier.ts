@@ -9,7 +9,7 @@ import type { HandoffRecord } from "../domain/handoff/contracts.ts";
 import type { EventBus } from "../events/bus.ts";
 import { createPiNotificationIntent } from "../db/repositories/pi.ts";
 
-export type HandoffNotificationSummary = {
+type HandoffNotificationSummary = {
   branch_ref: string;
   changed_file_count: number;
   commit_ref: string;
@@ -27,7 +27,7 @@ export type HandoffNotificationSummary = {
   work_id: string;
 };
 
-export type RecordHandoffDeliveryInput = HandoffWriteContext & {
+type RecordHandoffDeliveryInput = HandoffWriteContext & {
   bus?: EventBus;
   database: RunnerDatabase;
   handoff: HandoffRecord;
@@ -119,7 +119,7 @@ export function handoffHref(handoffID: string, workID = ""): string {
     : `#/handoffs/${encodeURIComponent(handoffID)}`;
 }
 
-export function handoffNextStep(handoff: HandoffRecord): string {
+function handoffNextStep(handoff: HandoffRecord): string {
   if (handoff.status === "superseded") return "Open the replacement Handoff";
   if (handoff.status === "delivered") return "Confirm downstream delivery";
   if (handoff.review.state === "changes_requested") return "Address review findings";

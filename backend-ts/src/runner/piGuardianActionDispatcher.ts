@@ -11,7 +11,7 @@ import {
 } from "../http/piActionDispatch.ts";
 import { recordPiActionAuditEvent } from "../pi/actionEngine.ts";
 
-export type PiGuardianActionDispatchInput = {
+type PiGuardianActionDispatchInput = {
   bus?: PiActionDispatchContext["bus"];
   database: RunnerDatabase;
   limit?: number;

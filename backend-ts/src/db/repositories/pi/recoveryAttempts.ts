@@ -23,22 +23,22 @@ export type PiRecoveryAttempt = {
   result_provider_turn_id: string; run_group_id: string; run_id: string; session_id: string;
   source_decision_id: string; status: PiRecoveryAttemptStatus; updated_at: string;
 };
-export type PiRecoveryAttemptInput = PatchInput<PiRecoveryAttempt>;
+type PiRecoveryAttemptInput = PatchInput<PiRecoveryAttempt>;
 export type PiRecoveryAttemptStatus =
   "planned" | "executing" | "progress" | "no_progress" | "failed" | "cancelled" | "superseded";
-export type PiRecoveryAttemptFilter = {
+type PiRecoveryAttemptFilter = {
   actionType?: string; issueId?: number; projectId?: string; sessionId?: string; status?: string;
 };
-export type PiRecoveryResumeTurnFilter = {
+type PiRecoveryResumeTurnFilter = {
   expectedProviderTurnID: string; issueID: number; providerSessionID: string;
 };
-export type PiRecoveryAttemptCountFilter = {
+type PiRecoveryAttemptCountFilter = {
   actionType?: string; issueId?: number; projectId?: string; sessionId?: string; since: string;
   excludeWaits?: boolean;
   statuses?: PiRecoveryAttemptStatus[];
 };
-export type PiRecoveryAttemptWindowFilter = PiRecoveryAttemptCountFilter;
-export type PiRecoveryAttemptStatusPatch = {
+type PiRecoveryAttemptWindowFilter = PiRecoveryAttemptCountFilter;
+type PiRecoveryAttemptStatusPatch = {
   after_snapshot_json?: unknown; error?: string; executing_started_at?: string;
   hard_timeout_at?: string; ignored_reasons_json?: unknown; progress_detected?: number;
   progress_reasons_json?: unknown; result_provider_turn_id?: string; status: PiRecoveryAttemptStatus;
@@ -161,17 +161,6 @@ export function latestPiRecoveryAttemptInWindow(db: RunnerDatabase, filter: PiRe
     `select ${COLUMNS} from ${TABLE} where ${query.where} order by created_at desc, id desc limit 1`
   ).get(...query.args);
   return row ? mapAttempt(row) : null;
-}
-
-export function firstPiRecoveryAttemptCreatedAt(
-  db: RunnerDatabase,
-  filter: PiRecoveryAttemptWindowFilter
-): string {
-  const query = windowQuery(filter);
-  const row = db.sqlite.query<{ created_at: string }, SQLValue[]>(
-    `select created_at from ${TABLE} where ${query.where} order by created_at asc, id asc limit 1`
-  ).get(...query.args);
-  return cleanString(row?.created_at);
 }
 
 function windowQuery(filter: PiRecoveryAttemptWindowFilter): { args: SQLValue[]; where: string } {

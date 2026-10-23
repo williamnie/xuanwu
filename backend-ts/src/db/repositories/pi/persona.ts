@@ -5,9 +5,9 @@ import { createPiActionEvent } from "./actions.ts";
 
 export const PI_PERSONA_VERBOSITY = ["adaptive", "concise", "detailed"] as const;
 export const PI_PERSONA_LANGUAGE_MODES = ["system", "follow_user"] as const;
-export const PI_PERSONA_TOTAL_CHAR_LIMIT = 3_000;
-export const PI_PERSONA_PERSONALITY_CHAR_LIMIT = 1_000;
-export const PI_PERSONA_COMMUNICATION_STYLE_CHAR_LIMIT = 2_000;
+const PI_PERSONA_TOTAL_CHAR_LIMIT = 3_000;
+const PI_PERSONA_PERSONALITY_CHAR_LIMIT = 1_000;
+const PI_PERSONA_COMMUNICATION_STYLE_CHAR_LIMIT = 2_000;
 
 export type PiPersona = {
   supervisor_id: string;
@@ -21,11 +21,11 @@ export type PiPersona = {
   updated_at: string;
 };
 
-export type PiPersonaPatch = Partial<Pick<PiPersona,
+type PiPersonaPatch = Partial<Pick<PiPersona,
   "enabled" | "personality" | "communication_style" | "verbosity" | "language_mode"
 >> & { expected_revision: number };
 
-export type PiPersonaAuditInput = {
+type PiPersonaAuditInput = {
   actor: string;
   reason: string;
   requestedAt: string;

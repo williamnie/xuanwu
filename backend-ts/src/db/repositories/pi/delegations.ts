@@ -15,9 +15,9 @@ import {
 } from "./common.ts";
 import type { PiDelegation } from "./heartbeats.ts";
 
-export type PiDelegationInput = PatchInput<PiDelegation>;
-export type PiDelegationFilter = { projectId?: string; status?: string };
-export type PiDelegationStatus = "active" | "paused" | "expired";
+type PiDelegationInput = PatchInput<PiDelegation>;
+type PiDelegationFilter = { projectId?: string; status?: string };
+type PiDelegationStatus = "active" | "paused" | "expired";
 
 const TABLE = "pi_delegations";
 const COLUMNS = `id, project_id, title, status, intent_json, authorization_json,

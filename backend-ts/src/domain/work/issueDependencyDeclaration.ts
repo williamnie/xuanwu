@@ -3,7 +3,7 @@ const NEXT_HEADING = /^#{1,6}\s+/;
 const ISSUE_REFERENCE = /(?:\bIssue\s*)?#(\d+)\b/gi;
 const NO_DEPENDENCY = /^(?:[-*]\s*)?(?:无|没有|none|n\/a|not applicable)[。.\s]*$/i;
 
-export type IssueDependencyDeclaration = {
+type IssueDependencyDeclaration = {
   error: string;
   issue_ids: number[];
   present: boolean;

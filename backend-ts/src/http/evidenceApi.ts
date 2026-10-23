@@ -14,7 +14,6 @@ import {
   type StoredEvidenceRecord
 } from "../db/repositories/evidence.ts";
 import {
-  EVIDENCE_ARTIFACT_KINDS,
   EVIDENCE_STATUSES,
   type EvidenceArtifactRef,
   type EvidenceRecord
@@ -314,14 +313,6 @@ function localArtifactPath(db: RunnerDatabase, ref: string): string | null {
   return path.startsWith(`${root}${sep}`) ? path : null;
 }
 
-function matchesFilter(evidence: EvidenceRecord, filter: ParsedFilter): boolean {
-  if (filter.work_id && evidence.work_id !== filter.work_id) return false;
-  if (filter.run_ids && !filter.run_ids.includes(evidence.run_id ?? "")) return false;
-  if (filter.kinds && !filter.kinds.includes(evidence.kind)) return false;
-  if (filter.statuses && !filter.statuses.includes(evidence.status)) return false;
-  return true;
-}
-
 function evidenceIDFromRequest(request: Request): string {
   const parts = pathParts(request);
   const raw = parts[parts.indexOf("evidence") + 1] ?? "";
@@ -345,11 +336,6 @@ function artifactIndex(request: Request): number {
     throw evidenceError(400, "invalid_artifact_index", "Artifact index is invalid");
   }
   return index;
-}
-
-function sourceEventID(evidenceID: string): number | null {
-  const match = /^xw:evidence:issue_events:([1-9][0-9]*)$/.exec(evidenceID);
-  return match ? Number(match[1]) : null;
 }
 
 function issueIDFromWorkID(workID: string): number | null {
@@ -376,87 +362,11 @@ async function objectBody(request: Request): Promise<Record<string, unknown>> {
   return value as Record<string, unknown>;
 }
 
-function commandObservation(value: unknown) {
-  const observation = objectValue(value, "observation");
-  assertKeys(observation, [
-    "command", "cwd", "duration_ms", "ended_at", "exit_code", "signal", "started_at", "stderr", "stdout", "timed_out"
-  ]);
-  const exitCode = observation.exit_code;
-  if (exitCode !== null && (!Number.isSafeInteger(exitCode) || typeof exitCode !== "number")) {
-    throw evidenceError(400, "invalid_exit_code", "observation.exit_code must be an integer or null");
-  }
-  const duration = observation.duration_ms;
-  if (typeof duration !== "number" || !Number.isSafeInteger(duration) || duration < 0) {
-    throw evidenceError(400, "invalid_duration", "observation.duration_ms must be a non-negative integer");
-  }
-  return {
-    command: requiredText(observation.command, "observation.command"),
-    cwd: requiredText(observation.cwd, "observation.cwd"),
-    duration_ms: duration,
-    ended_at: canonicalTimestamp(observation.ended_at, "observation.ended_at"),
-    exit_code: exitCode as number | null,
-    signal: optionalValueText(observation.signal),
-    started_at: canonicalTimestamp(observation.started_at, "observation.started_at"),
-    stderr: optionalValueText(observation.stderr),
-    stdout: optionalValueText(observation.stdout),
-    timed_out: observation.timed_out === true
-  };
-}
-
-function artifactRefs(value: unknown): EvidenceArtifactRef[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) throw evidenceError(400, "invalid_artifact_refs", "artifact_refs must be an array");
-  return value.map((item, index) => {
-    const artifact = objectValue(item, `artifact_refs[${index}]`);
-    assertKeys(artifact, ["kind", "label", "media_type", "ref", "sha256"]);
-    const kind = requiredText(artifact.kind, `artifact_refs[${index}].kind`);
-    if (!EVIDENCE_ARTIFACT_KINDS.includes(kind as typeof EVIDENCE_ARTIFACT_KINDS[number])) {
-      throw evidenceError(400, "invalid_artifact_kind", `artifact_refs[${index}].kind is invalid`);
-    }
-    const label = optionalValueText(artifact.label);
-    const mediaType = optionalValueText(artifact.media_type);
-    const sha256 = optionalValueText(artifact.sha256);
-    return {
-      kind: kind as typeof EVIDENCE_ARTIFACT_KINDS[number],
-      ...(label ? { label } : {}),
-      ...(mediaType ? { media_type: mediaType } : {}),
-      ref: requiredText(artifact.ref, `artifact_refs[${index}].ref`),
-      ...(sha256 ? { sha256 } : {})
-    };
-  });
-}
-
-function objectValue(value: unknown, name: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw evidenceError(400, "invalid_object", `${name} must be an object`);
-  }
-  return value as Record<string, unknown>;
-}
-
 function assertKeys(value: Record<string, unknown>, allowed: readonly string[]): void {
   const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
   if (unknown.length > 0) {
     throw evidenceError(400, "unknown_fields", `Unknown fields: ${unknown.join(", ")}`);
   }
-}
-
-function requiredText(value: unknown, name: string): string {
-  const text = optionalValueText(value);
-  if (!text) throw evidenceError(400, "missing_field", `${name} is required`);
-  return text;
-}
-
-function optionalValueText(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function canonicalTimestamp(value: unknown, name: string): string {
-  const text = requiredText(value, name);
-  const time = Date.parse(text);
-  if (!Number.isFinite(time) || new Date(time).toISOString() !== text) {
-    throw evidenceError(400, "invalid_timestamp", `${name} must use canonical ISO format`);
-  }
-  return text;
 }
 
 function intersect(sets: number[][]): number[] {

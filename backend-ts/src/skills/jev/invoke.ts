@@ -29,13 +29,13 @@ function circuit(db: RunnerDatabase, config: JevSkillConfig): Circuit {
   return state;
 }
 
-export type JevInvocation = {
+type JevInvocation = {
   db: RunnerDatabase;
   context?: JevContext;
   input: Record<string, unknown>;
   invocationID?: string;
 };
-export type JevProbe = { config: JevSkillConfig; key?: string };
+type JevProbe = { config: JevSkillConfig; key?: string };
 type Dependencies = { transport?: (input: McpTransportInvokeRequest) => Promise<McpTransportInvokeResult> };
 
 /** 只有设置页的合成连接测试传 probe；模型工具入口永远使用实时宿主配置和权限。 */

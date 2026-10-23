@@ -1,6 +1,6 @@
 import type { ApprovalDecision } from "../providers/types.ts";
 
-export type ApprovalGrantScopeAudit = {
+type ApprovalGrantScopeAudit = {
   effective_decision: string;
   effective_scope: "turn" | "session";
   provider: string;
@@ -15,7 +15,7 @@ export type ApprovalGrantScopeAudit = {
   session_id: string;
 };
 
-export type ApprovalGrantScopeContext = {
+type ApprovalGrantScopeContext = {
   provider?: string;
   requestType?: string;
   sessionId?: string;
@@ -26,7 +26,7 @@ export type ScopedApprovalDecision = {
   decision: ApprovalDecision;
 };
 
-export type ApprovalGrantScopeRuleID =
+type ApprovalGrantScopeRuleID =
   | "pi_approval_scope_turn_default"
   | "pi_approval_session_grant_disabled_provider_semantics_opaque";
 

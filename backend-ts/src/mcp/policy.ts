@@ -1,4 +1,4 @@
-export type McpPolicy = {
+type McpPolicy = {
   allowed?: string[];
   recommended?: string[];
   required?: string[];

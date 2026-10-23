@@ -14,7 +14,7 @@ export type ClaimedAutomationRun = AutomationRun & {
   scheduled_for: string;
 };
 
-export type AutomationDueScanResult = {
+type AutomationDueScanResult = {
   claimed: ClaimedAutomationRun[];
   dead_lettered: number;
   skipped_misfires: number;

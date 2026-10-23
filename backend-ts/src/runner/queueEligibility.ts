@@ -2,12 +2,12 @@ import type { IssueDependencyDiagnostic } from "../domain/work/issueDependency.t
 import type { ExecutorProvider } from "../providers/types.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
-export type ScheduleCode = "project_hold" | "auto_run_off" | "dependency_waiting" | "dependency_failed"
+type ScheduleCode = "project_hold" | "auto_run_off" | "dependency_waiting" | "dependency_failed"
   | "dependency_missing" | "dependency_cycle" | "readiness_waiting" | "workspace_waiting"
   | "provider_unavailable" | "project_busy" | "capacity_full";
-export type ScheduleReason = { code: ScheduleCode; detail?: Record<string, unknown> };
+type ScheduleReason = { code: ScheduleCode; detail?: Record<string, unknown> };
 export type WorkSchedule = { state: "runnable" | "waiting"; reasons: ScheduleReason[] };
-export type ProviderAvailability = { ready: boolean; provider_id: string; category?: string; reason?: string };
+type ProviderAvailability = { ready: boolean; provider_id: string; category?: string; reason?: string };
 
 export function providerAvailability(id: string, provider?: ExecutorProvider): ProviderAvailability {
   if (!provider) return { ready: false, provider_id: id, category: "not_registered" };

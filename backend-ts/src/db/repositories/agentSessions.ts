@@ -7,10 +7,10 @@ export type AgentSession = {
   project_id: string; provider: string; provider_session_id: string;
   raw_ref: string; session_key: string; status: string; title: string; updated_at: string;
 };
-export type AgentSessionInput = Partial<Omit<AgentSession, "created_at" | "raw_ref" | "session_key" | "updated_at">> & {
+type AgentSessionInput = Partial<Omit<AgentSession, "created_at" | "raw_ref" | "session_key" | "updated_at">> & {
   provider: string; provider_session_id: string; raw_ref?: unknown;
 };
-export type AgentSessionFilter = {
+type AgentSessionFilter = {
   issueId?: number; limit?: number; projectId?: string; provider?: string; role?: string;
 };
 

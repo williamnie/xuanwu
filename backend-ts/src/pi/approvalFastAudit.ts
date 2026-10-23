@@ -5,7 +5,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { ProviderEvent } from "../providers/types.ts";
 import { parseCodexApprovalRequest } from "./approvalRequestParser.ts";
 
-export type ApprovalFastAuditContext = {
+type ApprovalFastAuditContext = {
   database?: RunnerDatabase;
   issueId: number;
   projectId: string;

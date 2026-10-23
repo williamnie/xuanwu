@@ -35,12 +35,6 @@ export const PI_LOCAL_WORKSPACE_TOOL_NAMES = [
   "workspace_write_file"
 ] as const;
 
-export const PI_LOCAL_WORKSPACE_ACTION_TYPES = [
-  "project.create",
-  "workspace.make_directory",
-  "workspace.write_file"
-] as const;
-
 const objectOptions = { additionalProperties: false };
 const requiredText = Type.String({ minLength: 1, pattern: "\\S" });
 const MAX_TEXT_CHARS = 262_144;

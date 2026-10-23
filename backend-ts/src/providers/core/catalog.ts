@@ -10,7 +10,7 @@ import type { ProviderExecutionPolicyCapabilities } from "./policyContracts.ts";
  * 不再维护静态 PROVIDER_OPTIONS/SESSION_CAPABLE_PROVIDERS 等 authority。
  */
 
-export type ProviderSessionAction = "create" | "resume" | "steer" | "fork" | "interrupt";
+type ProviderSessionAction = "create" | "resume" | "steer" | "fork" | "interrupt";
 
 export type ProviderCatalogEntry = {
   id: string;
@@ -30,7 +30,7 @@ export type ProviderCatalogEntry = {
   execution_policy?: ProviderExecutionPolicyCapabilities;
 };
 
-export function sessionActionsFromCapabilities(capabilities: ProviderCapabilities): readonly ProviderSessionAction[] {
+function sessionActionsFromCapabilities(capabilities: ProviderCapabilities): readonly ProviderSessionAction[] {
   const actions: ProviderSessionAction[] = [];
   if (capabilities.sessions?.create) actions.push("create");
   if (capabilities.sessions?.resume) actions.push("resume");

@@ -15,7 +15,7 @@ export type PiGuardianWatchdogCheck = {
   run_group_id?: string; severity?: string;
 };
 
-export type PiGuardianWatchdogProbe = {
+type PiGuardianWatchdogProbe = {
   component: PiGuardianWatchdogComponent;
   run(context: PiGuardianWatchdogContext): PiGuardianWatchdogCheck | PiGuardianWatchdogCheck[];
 };
@@ -26,14 +26,14 @@ export type PiGuardianWatchdogContext = {
   schedulerStaleAfterMs: number; staleAfterMs: number;
 };
 
-export type PiGuardianWatchdogInput = {
+type PiGuardianWatchdogInput = {
   checks?: PiGuardianWatchdogProbe[]; limit?: number; now?: Date | string;
   delivery?: GuardianAlertDelivery;
   schedulerStaleAfterMs?: number; staleAfterMs?: number;
   timingObserver?: (timing: PiGuardianWatchdogStageTiming) => void;
 };
 
-export type PiGuardianWatchdogStageTiming = {
+type PiGuardianWatchdogStageTiming = {
   duration_ms: number;
   result?: Record<string, number>;
   stage: string;

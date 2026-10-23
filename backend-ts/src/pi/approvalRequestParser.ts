@@ -1,16 +1,16 @@
 import { posix as posixPath } from "node:path";
 import { redactSensitiveText } from "../util/redact.ts";
 
-export type ApprovalRequestType = "command" | "fileChange" | "permissions" | "unknown";
-export type ApprovalParseStatus = "ok" | "ambiguous";
+type ApprovalRequestType = "command" | "fileChange" | "permissions" | "unknown";
+type ApprovalParseStatus = "ok" | "ambiguous";
 
-export type NormalizedApprovalPath = {
+type NormalizedApprovalPath = {
   in_cwd: boolean;
   normalized_path: string;
   raw_path: string;
 };
 
-export type NormalizedApprovalScope = {
+type NormalizedApprovalScope = {
   all_paths_within_cwd: boolean;
   cwd: string;
   path_count: number;
@@ -31,7 +31,7 @@ export type NormalizedApprovalRequest = {
   turn_id: string;
 };
 
-export type ParseCodexApprovalRequestInput = {
+type ParseCodexApprovalRequestInput = {
   jsonRpcId?: string | number;
   method: string;
   params: unknown;

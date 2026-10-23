@@ -4,8 +4,8 @@ import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "
 import { redactSensitiveText } from "../util/redact.ts";
 import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 
-export const DEFAULT_ISSUE_LIST_LIMIT = 50;
-export const MAX_ISSUE_LIST_LIMIT = 50;
+const DEFAULT_ISSUE_LIST_LIMIT = 50;
+const MAX_ISSUE_LIST_LIMIT = 50;
 
 type IssueScope = {
   projectId?: string;

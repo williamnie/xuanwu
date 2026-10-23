@@ -15,7 +15,7 @@ export type SystemRestartAuditEvent = {
   source: "advanced_runtime";
 };
 
-export type SystemRestartContext = {
+type SystemRestartContext = {
   audit?: (event: SystemRestartAuditEvent) => void;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   restartDelayMs?: number;

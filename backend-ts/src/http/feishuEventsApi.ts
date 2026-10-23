@@ -32,7 +32,7 @@ import {
   resolveLegacyFeishuProjectSelectionInteraction
 } from "../integrations/feishuInteractionAdapter.ts";
 
-export type FeishuEventRoutesContext = {
+type FeishuEventRoutesContext = {
   agentBridge?: ReturnType<typeof createFeishuAgentBridge>;
   bus?: EventBus;
   config: FeishuConnectorConfig;

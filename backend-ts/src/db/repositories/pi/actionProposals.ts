@@ -14,9 +14,9 @@ import {
   type ActionProposalAction
 } from "./actionProposalValidation.ts";
 
-export type ActionProposalStatus = "approved" | "proposed" | "rejected";
+type ActionProposalStatus = "approved" | "proposed" | "rejected";
 
-export type ActionProposalInput = {
+type ActionProposalInput = {
   actions: unknown[];
   approved_by?: string;
   confidence?: number;
@@ -52,7 +52,7 @@ export type ActionProposalRecord = {
   updated_at: string;
 };
 
-export type ActionProposalFilter = {
+type ActionProposalFilter = {
   skillRunId?: string;
   sourceItemId?: string;
   status?: string;

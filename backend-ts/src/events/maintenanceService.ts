@@ -47,7 +47,7 @@ import {
 
 export const EVENT_ARCHIVE_SCHEMA_VERSION = "xuanwu.issue-events-archive.v1" as const;
 export const EVENT_DELETE_EVIDENCE_SCHEMA_VERSION = "xuanwu.event-maintenance-delete-evidence.v1" as const;
-export const EVENT_MAINTENANCE_CHECKPOINT_SCHEMA_VERSION = "xuanwu.event-maintenance-checkpoint.v1" as const;
+const EVENT_MAINTENANCE_CHECKPOINT_SCHEMA_VERSION = "xuanwu.event-maintenance-checkpoint.v1" as const;
 
 type MaintenanceActor = { actor: string; auditRef: string; reason: string };
 type ArchiveChunk = {
@@ -60,12 +60,12 @@ type ArchiveChunk = {
   through_event_id: number;
 };
 
-export type ArchivedEventRow = MaintenanceEventRow & {
+type ArchivedEventRow = MaintenanceEventRow & {
   policy_id: EventRetentionPolicyID;
   row_sha256: string;
 };
 
-export type EventArchiveManifest = {
+type EventArchiveManifest = {
   archive_ref: string;
   audit: MaintenanceActor;
   chunks: ArchiveChunk[];
@@ -91,7 +91,7 @@ export type EventArchiveManifest = {
   space_preflight: { available_bytes: number; passed: boolean; required_bytes: number };
 };
 
-export type EventDeleteEvidence = {
+type EventDeleteEvidence = {
   archive_manifest_sha256: string;
   backup: { created_at: string; db_file: string; quick_check: "ok"; restored_at: string; verified_at: string };
   config: EventRetentionConfig;

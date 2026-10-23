@@ -20,11 +20,11 @@ export type PiHeartbeatRun = {
   error: string; signals_json: string; policy_json: string; action_plan_json: string;
   result_json: string; created_at: string; updated_at: string;
 };
-export type PiHeartbeatEvent = {
+type PiHeartbeatEvent = {
   id: number; heartbeat_id: string; project_id: string; delegation_id: string;
   event_type: string; message: string; payload_json: string; error: string; created_at: string;
 };
-export type PiHeartbeatControl = {
+type PiHeartbeatControl = {
   scope_type: string; scope_id: string; paused: number; reason: string; updated_at: string;
 };
 export type PiDelegation = {
@@ -35,10 +35,10 @@ export type PiDelegation = {
   created_at: string; updated_at: string;
 };
 
-export type PiHeartbeatRunInput = PatchInput<PiHeartbeatRun>;
-export type PiHeartbeatEventInput = PatchInput<PiHeartbeatEvent>;
-export type PiHeartbeatFilter = { delegationId?: string; heartbeatId?: string; kind?: string; projectId?: string; status?: string };
-export type PiHeartbeatControlScope = { reason?: string; scopeId?: string; scopeType: string };
+type PiHeartbeatRunInput = PatchInput<PiHeartbeatRun>;
+type PiHeartbeatEventInput = PatchInput<PiHeartbeatEvent>;
+type PiHeartbeatFilter = { delegationId?: string; heartbeatId?: string; kind?: string; projectId?: string; status?: string };
+type PiHeartbeatControlScope = { reason?: string; scopeId?: string; scopeType: string };
 
 const RUN_TABLE = "pi_heartbeat_runs";
 const EVENT_TABLE = "pi_heartbeat_events";
@@ -74,7 +74,7 @@ export function updatePiHeartbeatRun(db: RunnerDatabase, id: string, input: PiHe
   return mustGetPiHeartbeatRun(db, id);
 }
 
-export function getPiHeartbeatRun(db: RunnerDatabase, id: string): PiHeartbeatRun | null {
+function getPiHeartbeatRun(db: RunnerDatabase, id: string): PiHeartbeatRun | null {
   return getByID(db, RUN_TABLE, RUN_COLUMNS, id, mapHeartbeatRun);
 }
 

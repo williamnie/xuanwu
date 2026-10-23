@@ -38,7 +38,7 @@ import { appendRunMemoryPrompt, recordExecutorMemoryCitations } from "../pi/runM
 
 const LIVE_PROVIDER_PAYLOAD_MAX_BYTES = 64 * 1024;
 
-export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
+type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   agentProfileId?: string;
   agentRole?: string;
   bus?: Pick<EventBus, "publish">;
@@ -58,16 +58,16 @@ export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   executionSource?: ProviderPolicyContext["source"];
   issueRunId?: string;
 };
-export type RunnerIssueRecoveryInput = RunnerIssueExecutionInput & { session: SessionRef };
+type RunnerIssueRecoveryInput = RunnerIssueExecutionInput & { session: SessionRef };
 
-export type ProviderRuntimeStart = {
+type ProviderRuntimeStart = {
   issueId: number;
   metadata: { cwd: string };
   projectId: string;
   provider: string;
 };
 
-export type ProviderRuntimeComplete = Omit<ProviderRuntimeStart, "metadata"> & ProviderRunResult;
+type ProviderRuntimeComplete = Omit<ProviderRuntimeStart, "metadata"> & ProviderRunResult;
 
 export async function runIssueWithProvider(
   provider: Pick<ExecutorProvider, "capabilities" | "id" | "manifest" | "policyAdapter" | "run" | "runtimeStatus">,

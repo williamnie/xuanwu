@@ -4,8 +4,8 @@ import { memoryWriteIdentity } from "../db/repositories/pi/memoryHistory.ts";
 import { parseMemoryExperience } from "./memoryExperience.ts";
 import { MEMORY_TECHNICAL_LIMIT, rankMemoryCandidates, technicalMemory, type MemoryTaskContext, type MemoryScope } from "./memoryRetrieval.ts";
 
-export type PiMemorySelection = { id: string; revision: number; content_fingerprint: string; reason: string };
-export type PiMemoryPromptContextInput = MemoryTaskContext & {
+type PiMemorySelection = { id: string; revision: number; content_fingerprint: string; reason: string };
+type PiMemoryPromptContextInput = MemoryTaskContext & {
   conversationID?: string;
   inboxItemID?: number | string;
   issueID?: number;
@@ -53,7 +53,7 @@ export type PiMemoryContextItem = {
   version: string;
   selection_stage: "policy" | "text_candidate" | "pi_selected";
 };
-export type PiMemoryProvenance = {
+type PiMemoryProvenance = {
   citation_id: string;
   citation_label: string;
   citation_type: string;
@@ -63,13 +63,13 @@ export type PiMemoryProvenance = {
   source_path: string;
   source_type: string;
 };
-export type PiMemoryRetrievalLimits = {
+type PiMemoryRetrievalLimits = {
   item_limit: number;
   token_budget: number;
   token_estimate: number;
   truncated: boolean;
 };
-export type PiMemoryTruncationSummary = {
+type PiMemoryTruncationSummary = {
   omitted_by_item_limit: number;
   omitted_by_token_budget: number;
   omitted_count: number;

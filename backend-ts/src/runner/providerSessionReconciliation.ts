@@ -7,7 +7,7 @@ import type { ExecutorProvider } from "../providers/types.ts";
 import type { EventBus } from "../events/bus.ts";
 import { persistRecoveredProviderEvents } from "./providerRuntime.ts";
 
-export type ProviderTurnObservation = "unsupported" | "unavailable" | "changed" | "active" | "interrupted" | "reconciled";
+type ProviderTurnObservation = "unsupported" | "unavailable" | "changed" | "active" | "interrupted" | "reconciled";
 
 /** 恢复前读取当前回合的原始事实；不发送消息、不把完成声明直接当作 Issue 验收。 */
 export async function reconcileCurrentProviderTurn(input: {

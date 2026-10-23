@@ -2,7 +2,7 @@ import { runStdioProcess } from "../stdioProcess.ts";
 import type { PiMcpCapabilityInput } from "../../db/repositories/piMcpCapabilities.ts";
 import type { PiMcpServer } from "../../db/repositories/piMcpServers.ts";
 
-export type McpIntrospectionResult = {
+type McpIntrospectionResult = {
   capabilities: PiMcpCapabilityInput[];
   diagnostics: { code: string; message: string; severity: "warning" | "error"; details?: unknown }[];
   readiness: string;

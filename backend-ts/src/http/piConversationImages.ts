@@ -4,7 +4,7 @@ import { mustGetUpload } from "../db/repositories/uploads.ts";
 
 const ATTACHMENT_URL_PATTERN = /attachment:\/\/([A-Za-z0-9_-]+)/g;
 
-export type PiPromptImage = { data: string; mimeType: string; type: "image" };
+type PiPromptImage = { data: string; mimeType: string; type: "image" };
 
 export function piConversationPromptImages(db: RunnerDatabase, prompt: string): PiPromptImage[] {
   return attachmentIDs(prompt).map((id) => uploadImageContent(db, id));

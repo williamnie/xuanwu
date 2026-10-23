@@ -1,4 +1,4 @@
-export const CORE_OBJECT_KINDS = [
+const CORE_OBJECT_KINDS = [
   "work",
   "run",
   "evidence",
@@ -7,7 +7,7 @@ export const CORE_OBJECT_KINDS = [
   "automation"
 ] as const;
 
-export type CoreObjectKind = typeof CORE_OBJECT_KINDS[number];
+type CoreObjectKind = typeof CORE_OBJECT_KINDS[number];
 export type DomainID<Kind extends CoreObjectKind = CoreObjectKind> = `xw:${Kind}:${string}:${string}`;
 export type WorkID = DomainID<"work">;
 export type RunID = DomainID<"run">;
@@ -38,14 +38,14 @@ export const RUN_STATUSES = ["created", "running", "recovering", "succeeded", "f
 export const EVIDENCE_STATUSES = ["pending", "passed", "failed", "blocked"] as const;
 export const HANDOFF_STATUSES = ["draft", "ready", "delivered", "superseded"] as const;
 export const ATTENTION_STATUSES = ["open", "acknowledged", "waiting", "resolved", "dismissed"] as const;
-export const AUTOMATION_STATUSES = ["draft", "active", "paused", "archived"] as const;
+const AUTOMATION_STATUSES = ["draft", "active", "paused", "archived"] as const;
 
 export type WorkStatus = typeof WORK_STATUSES[number];
 export type RunStatus = typeof RUN_STATUSES[number];
 export type EvidenceStatus = typeof EVIDENCE_STATUSES[number];
 export type HandoffStatus = typeof HANDOFF_STATUSES[number];
 export type AttentionStatus = typeof ATTENTION_STATUSES[number];
-export type AutomationStatus = typeof AUTOMATION_STATUSES[number];
+type AutomationStatus = typeof AUTOMATION_STATUSES[number];
 
 export const STATUS_VALUES_BY_KIND = {
   attention: ATTENTION_STATUSES,
@@ -122,10 +122,10 @@ export const DOMAIN_EVENT_NAMES = [
 ] as const;
 
 export type DomainEventName = typeof DOMAIN_EVENT_NAMES[number];
-export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export type DomainRef<Kind extends CoreObjectKind = CoreObjectKind> = { id: DomainID<Kind>; kind: Kind };
-export type ProjectOwner = { kind: "project"; project_id: string };
-export type ControlPlaneOwner = { control_plane_id: "local"; kind: "control_plane" };
+type ProjectOwner = { kind: "project"; project_id: string };
+type ControlPlaneOwner = { control_plane_id: "local"; kind: "control_plane" };
 export type ScopeOwner = ProjectOwner | ControlPlaneOwner;
 
 type Timestamped = { created_at: string; updated_at: string };
@@ -173,7 +173,7 @@ export type Evidence = Timestamped & {
   work_id: WorkID;
 };
 
-export type DeliveryAction = {
+type DeliveryAction = {
   action: "commit" | "push" | "pull_request" | "release" | "deploy" | "tracker_update";
   after_ref?: string;
   audit_event_ref: string;
@@ -211,7 +211,7 @@ export type Attention = Timestamped & {
   summary: string;
 };
 
-export type AutomationMode = "observe" | "propose" | "execute_allowed";
+type AutomationMode = "observe" | "propose" | "execute_allowed";
 export type Automation = Timestamped & {
   id: AutomationID;
   idempotency_namespace: string;
@@ -228,7 +228,7 @@ export type DomainActor = {
   kind: "user" | "supervisor" | "runner" | "guardian" | "automation" | "system";
 };
 
-export type AuditedEffect = {
+type AuditedEffect = {
   after_ref?: string;
   before_ref?: string;
   classification: "state_change" | "external_write" | "destructive";

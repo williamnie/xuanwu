@@ -1,8 +1,8 @@
 import { isToolPermission, type ToolJsonSchema, type ToolPermission } from "./toolProviderEnvelope.ts";
 
 export type CliCommandTemplate = { executable: string; args?: string[] };
-export type CliConnectorAuth = { type: "none" | "env" | "oauth" | "custom"; env?: string[]; description?: string };
-export type CliConnectorEnvVar = { name: string; required?: boolean; secret?: boolean; description?: string };
+type CliConnectorAuth = { type: "none" | "env" | "oauth" | "custom"; env?: string[]; description?: string };
+type CliConnectorEnvVar = { name: string; required?: boolean; secret?: boolean; description?: string };
 export type CliExitCodeContract = {
   success: number[];
   retryable?: number[];
@@ -10,7 +10,7 @@ export type CliExitCodeContract = {
   usage_error?: number[];
 };
 export type CliStderrSummary = { summary: "first_line" | "last_line" | "tail" | "none"; max_bytes?: number };
-export type CliConnectorTimeout = { default_ms?: number; max_ms?: number };
+type CliConnectorTimeout = { default_ms?: number; max_ms?: number };
 export type CliConnectorHealth = {
   command: CliCommandTemplate; timeout_ms?: number; stdout: { mode: "json" }; exit_codes: CliExitCodeContract;
 };
@@ -26,8 +26,8 @@ export type CliConnectorManifest = {
   description?: string; auth?: CliConnectorAuth; env?: CliConnectorEnvVar[];
   timeout?: CliConnectorTimeout; health: CliConnectorHealth; commands: CliConnectorCommand[];
 };
-export type CliManifestValidationIssue = { path: string; message: string };
-export type CliConnectorManifestParseResult =
+type CliManifestValidationIssue = { path: string; message: string };
+type CliConnectorManifestParseResult =
   { ok: true; manifest: CliConnectorManifest } | { ok: false; issues: CliManifestValidationIssue[] };
 
 const ID_RE = /^[a-z0-9][a-z0-9._-]*$/;

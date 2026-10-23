@@ -18,8 +18,8 @@ export type PiConversation = {
   session_file: string; pi_session_id: string; created_at: string; updated_at: string;
 };
 
-export type PiConversationInput = PatchInput<PiConversation>;
-export type PiConversationFilter = {
+type PiConversationInput = PatchInput<PiConversation>;
+type PiConversationFilter = {
   includeInternal?: boolean;
   piAgentId?: string;
   projectId?: string;
@@ -62,7 +62,6 @@ export function listPiConversations(
   ], "updated_at desc, id asc"));
 }
 
-
 export function getPiConversation(db: RunnerDatabase, id: string): PiConversation | null {
   return getByID(db, TABLE, COLUMNS, id, mapPiConversation);
 }
@@ -70,7 +69,6 @@ export function getPiConversation(db: RunnerDatabase, id: string): PiConversatio
 export function deletePiConversation(db: RunnerDatabase, id: string): boolean {
   return deleteByID(db, TABLE, id);
 }
-
 
 function mustGetPiConversation(db: RunnerDatabase, id: string): PiConversation {
   const record = getPiConversation(db, id);

@@ -1,7 +1,7 @@
 export const SECRET_REF_PREFIX = "secret://";
 
 export type SecretBackendID = "file" | "keychain";
-export type SecretStatus = "active" | "revoked";
+type SecretStatus = "active" | "revoked";
 
 export type SecretMetadata = {
   backend: SecretBackendID;
@@ -23,7 +23,7 @@ export interface SecretStore {
   rotate(ref: string, value: string): SecretMetadata;
 }
 
-export type SecretMutation = {
+type SecretMutation = {
   actor: string;
   metadata: SecretMetadata;
   operation: "created" | "revoked" | "rotated";

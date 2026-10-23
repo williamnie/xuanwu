@@ -8,8 +8,8 @@ import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listPiGuardianAlerts } from "../db/repositories/pi.ts";
-import { projectLoopDecision, runProjectLoopOnce } from "./projectLoop.ts";
-import { isProjectLoopActive, kickAutoRunProjects, setProjectLoopMaxParallelProjects, startProjectLoop } from "./projectLoopManager.ts";
+import { runProjectLoopOnce } from "./projectLoop.ts";
+import { isProjectLoopActive, setProjectLoopMaxParallelProjects, startProjectLoop } from "./projectLoopManager.ts";
 import type { ExecutorProvider, ExecutorProviderId, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 
 const tempRoots: string[] = [];

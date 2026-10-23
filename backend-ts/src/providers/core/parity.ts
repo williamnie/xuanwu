@@ -11,16 +11,16 @@ import type { RegistryEntry } from "./registry.ts";
  * - rollback 不需要 DB 回填或删除事件（只读对比）。
  */
 
-export type ParityScope = "refs" | "capabilities" | "status";
+type ParityScope = "refs" | "capabilities" | "status";
 
-export type ParityDiff = {
+type ParityDiff = {
   scope: ParityScope;
   field: string;
   canonical: unknown;
   legacy: unknown;
 };
 
-export type ParityReport = {
+type ParityReport = {
   provider: string;
   ok: boolean;
   diffs: ParityDiff[];
@@ -66,12 +66,7 @@ export function legacyProjectionCompareEnabled(): boolean {
   return process.env.XUANWU_PROVIDER_LEGACY_PROJECTION_COMPARE === "1";
 }
 
-/** P9：legacy consumer runtime warning——仍走 legacy 路径的消费点清单（consumer-zero 目标）。 */
-export function legacyConsumerRuntimeWarning(consumedLegacyPaths: readonly string[]): string[] {
-  return consumedLegacyPaths.filter((path) => path !== "");
-}
-
-export type LegacyConsumerInventory = Array<{ consumer: string; status: "migrated" | "legacy" | "pending" }>;
+type LegacyConsumerInventory = Array<{ consumer: string; status: "migrated" | "legacy" | "pending" }>;
 
 export function summarizeConsumerInventory(inventory: LegacyConsumerInventory): { migrated: number; legacy: number; total: number } {
   const migrated = inventory.filter((i) => i.status === "migrated").length;

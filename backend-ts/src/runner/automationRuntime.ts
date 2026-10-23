@@ -23,7 +23,7 @@ import {
 import { prepareStandingOrderExecution } from "./standingOrderRuntime.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 
-export type NativeAutomationRuntimeOptions = {
+type NativeAutomationRuntimeOptions = {
   bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
@@ -46,7 +46,7 @@ export function createNativeAutomationExecutor(options: NativeAutomationRuntimeO
   });
 }
 
-export function createNativeWorkflowRegistry(database: RunnerDatabase): WorkflowRegistry {
+function createNativeWorkflowRegistry(database: RunnerDatabase): WorkflowRegistry {
   const contributions = [
     investigateWorkflowRegistryContributions(),
     implementWorkflowRegistryContributions(),
@@ -65,7 +65,7 @@ export function createNativeWorkflowRegistry(database: RunnerDatabase): Workflow
   });
 }
 
-export function createNativeWorkflowDispatcher(
+function createNativeWorkflowDispatcher(
   options: NativeAutomationRuntimeOptions
 ): AutomationWorkflowDispatcher {
   return async ({ automation, automation_run_id, context, run_id, work, workflow }) => {

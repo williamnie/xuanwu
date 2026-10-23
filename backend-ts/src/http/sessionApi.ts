@@ -26,7 +26,7 @@ import { parseExecutionPolicyWrite } from "../providers/core/policyPersistence.t
 import { resolveExecutionPolicy } from "../providers/core/policyResolution.ts";
 import { translateLegacyExecutionPolicy } from "../providers/core/legacyExecutionPolicy.ts";
 
-export type SessionApiContext = {
+type SessionApiContext = {
   bus?: EventBus;
   database: RunnerDatabase;
   interruptTimeoutMs?: number;

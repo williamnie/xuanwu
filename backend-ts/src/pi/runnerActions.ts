@@ -144,7 +144,7 @@ export type PiRunnerActionContext = PiActionContext & {
   supervisorManaged?: boolean;
 };
 
-export type PiRunnerSourceTurn = {
+type PiRunnerSourceTurn = {
   id?: string;
   source?: string;
   userPrompt?: string;
@@ -596,7 +596,6 @@ function requestIssueAcceptanceAction(
     };
   });
 }
-
 
 function safeListIssues(db: RunnerDatabase, context: PiRunnerActionContext, input: IssueListInput) {
   const filter = normalizeIssueFilter(input, context);

@@ -1,4 +1,4 @@
-export type GoldenJourneyScenario = {
+type GoldenJourneyScenario = {
   api_paths: string[];
   backend_tests: string[];
   fixture_projects: number;

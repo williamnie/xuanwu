@@ -48,7 +48,7 @@ export function qoderManifest(): ExecutorProviderManifest {
   };
 }
 
-export type QoderFactoryOptions = QoderExecutorProviderOptions & {
+type QoderFactoryOptions = QoderExecutorProviderOptions & {
   runtimeProbe?: (config: ProviderRuntimeConfig) => QoderRuntimeProbe;
 };
 

@@ -41,28 +41,26 @@ export type PiGuardianDecision = {
   updated_at: string;
 };
 
-export type PiGuardianDecisionInput = PatchInput<PiGuardianDecision>;
-export type PiGuardianDecisionFilter = {
+type PiGuardianDecisionInput = PatchInput<PiGuardianDecision>;
+type PiGuardianDecisionFilter = {
   decisionKind?: string;
   issueId?: number;
   projectId?: string;
   state?: string;
 };
-export type PiGuardianDecisionState =
+type PiGuardianDecisionState =
   "approved" | "completed" | "deferred" | "executing" | "failed" | "proposed" | "skipped" | "superseded";
-export type PiGuardianDecisionTransitionInput = {
+type PiGuardianDecisionTransitionInput = {
   cooldownUntil?: string;
   from?: PiGuardianDecisionState;
   rationale?: string;
   to: PiGuardianDecisionState;
 };
-export type PiGuardianDecisionLeaseInput = {
+type PiGuardianDecisionLeaseInput = {
   now?: Date;
   owner: string;
   ttlMs: number;
 };
-
-type SQLValue = string | number;
 const TABLE = "pi_guardian_decisions";
 const COLUMNS = `id, idempotency_key, source_event_id, source_event_sequence_id,
   decision_kind, authority, project_id, issue_id, run_group_id, conversation_id,

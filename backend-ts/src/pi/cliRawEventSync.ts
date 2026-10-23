@@ -9,13 +9,13 @@ type JsonObject = Record<string, unknown>;
 
 type SyncDefaults = { provider: string; source: string };
 
-export type CliRawEventSyncOptions = {
+type CliRawEventSyncOptions = {
   defaultProvider?: string;
   defaultSource?: string;
   now?: Date;
 };
 
-export type CliRawEventSyncResult = {
+type CliRawEventSyncResult = {
   events: ExternalEventRecord[];
   processed_watermark: string;
   source: string;

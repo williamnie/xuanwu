@@ -7,14 +7,14 @@ import type { QoderUsageProjection } from "./sdkFacade.ts";
 
 const PROVIDER = "qoder" as const;
 
-export type QoderEventContext = {
+type QoderEventContext = {
   interrupted?: boolean;
   invocationRef: string;
   resume?: boolean;
   usage?: QoderUsageProjection;
 };
 
-export type QoderFailureCategory =
+type QoderFailureCategory =
   | "auth"
   | "configuration"
   | "quota"

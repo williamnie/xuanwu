@@ -1,4 +1,4 @@
-export type SkillPolicy = {
+type SkillPolicy = {
   allowed?: string[];
   recommended?: string[];
   required?: string[];
@@ -31,20 +31,6 @@ export function parseSkillPolicy(value: unknown): SkillPolicy {
     recommended: parseSkillIntentList(object.recommended ?? object.recommended_skill_intents),
     required: parseSkillIntentList(object.required ?? object.required_skill_intents)
   });
-}
-
-export function skillIntentsFromPayload(payload: Record<string, unknown>): string[] {
-  return cleanList([
-    ...parseSkillIntentList(payload.skill_intents),
-    ...parseSkillIntentList(payload.required_skill_intents),
-    ...parseSkillIntentList(payload.recommended_skill_intents)
-  ]);
-}
-
-export function unauthorizedSkillIntents(payload: Record<string, unknown>, allowed: string[] | undefined): string[] {
-  if (!allowed) return [];
-  const allowlist = new Set(parseSkillIntentList(allowed));
-  return skillIntentsFromPayload(payload).filter((id) => !allowlist.has(id));
 }
 
 export function mergeSkillIntents(...values: unknown[]): string[] {

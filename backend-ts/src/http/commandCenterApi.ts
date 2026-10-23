@@ -31,7 +31,7 @@ import {
   workIDToIssueID
 } from "../domain/work/issueAdapter.ts";
 import { getIssue } from "../db/repositories/issues.ts";
-import type { WorkLedgerEntry, WorkStatus } from "../domain/work/contracts.ts";
+import type { WorkStatus } from "../domain/work/contracts.ts";
 import { readIssueReadiness } from "../domain/readiness/contracts.ts";
 import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
@@ -62,16 +62,16 @@ export const COMMAND_CENTER_COMPATIBILITY_POLICY = {
   work_read_authority: "issues-via-Work-adapter"
 } as const;
 
-export const COMMAND_CENTER_SECTIONS = [
+const COMMAND_CENTER_SECTIONS = [
   "attention",
   "active_work",
   "recent_deliveries",
   "system_health"
 ] as const;
 
-export type CommandCenterSectionName = typeof COMMAND_CENTER_SECTIONS[number];
+type CommandCenterSectionName = typeof COMMAND_CENTER_SECTIONS[number];
 
-export type CommandCenterFreshness = {
+type CommandCenterFreshness = {
   is_stale: boolean;
   queried_at: string;
   source_updated_at: string;
@@ -79,7 +79,7 @@ export type CommandCenterFreshness = {
   state: "current" | "empty" | "stale" | "unknown";
 };
 
-export type CommandCenterSectionPayload = {
+type CommandCenterSectionPayload = {
   counts: Record<string, number>;
   freshness: CommandCenterFreshness;
   operations?: Record<string, unknown>;
@@ -89,14 +89,14 @@ export type CommandCenterSectionPayload = {
   summary?: Record<string, unknown>;
 };
 
-export type CommandCenterSectionResult = (CommandCenterSectionPayload & { status: "ok" }) | {
+type CommandCenterSectionResult = (CommandCenterSectionPayload & { status: "ok" }) | {
   error: { code: "section_unavailable"; message: string };
   freshness: CommandCenterFreshness;
   links: Record<string, string>;
   status: "error";
 };
 
-export type CommandCenterSummary = {
+type CommandCenterSummary = {
   compatibility: typeof COMMAND_CENTER_COMPATIBILITY_POLICY;
   contract: typeof COMMAND_CENTER_SUMMARY_CONTRACT;
   failed_sections: CommandCenterSectionName[];
@@ -108,8 +108,8 @@ export type CommandCenterSummary = {
 };
 
 type SectionInput = { limit: number; now: Date };
-export type CommandCenterSectionReader = (input: SectionInput) => CommandCenterSectionPayload;
-export type CommandCenterSectionReaders = Record<CommandCenterSectionName, CommandCenterSectionReader>;
+type CommandCenterSectionReader = (input: SectionInput) => CommandCenterSectionPayload;
+type CommandCenterSectionReaders = Record<CommandCenterSectionName, CommandCenterSectionReader>;
 
 type CommandCenterRouteOptions = {
   now?: () => Date;
@@ -143,7 +143,7 @@ export function registerCommandCenterRoutes(
   ));
 }
 
-export function buildCommandCenterSummary(
+function buildCommandCenterSummary(
   context: ReadApiContext,
   request: Request,
   options: CommandCenterRouteOptions = {}
@@ -323,7 +323,7 @@ function systemHealthSection(db: RunnerDatabase, input: SectionInput): CommandCe
   };
 }
 
-export function attentionSummary(db: RunnerDatabase, item: AttentionRecord, now = new Date()): Record<string, unknown> {
+function attentionSummary(db: RunnerDatabase, item: AttentionRecord, now = new Date()): Record<string, unknown> {
   const primary = item.source_refs[0];
   return {
     created_at: item.created_at,

@@ -2,12 +2,11 @@ import { readFileSync } from "node:fs";
 import type { RunnerDatabase } from "../db/database.ts";
 import { listPiMcpCapabilities } from "../db/repositories/piMcpCapabilities.ts";
 import { listPiMcpServers } from "../db/repositories/piMcpServers.ts";
-import { mcpCapabilitiesFromPayload, parseMcpCapabilityList } from "./policy.ts";
 import { optionalJevMcpServers } from "../skills/jev/registry.ts";
 
 export type McpRiskLevel = "low" | "medium" | "high";
-export type McpCapabilityKind = "resource" | "tool";
-export type McpPermission = "read" | "write" | "admin";
+type McpCapabilityKind = "resource" | "tool";
+type McpPermission = "read" | "write" | "admin";
 
 export type McpCapability = {
   allowed_actions: string[];
@@ -28,7 +27,7 @@ export type McpCapability = {
   uri?: string;
 };
 
-export type McpServerTransport = {
+type McpServerTransport = {
   args: string[];
   command: string;
   type: "stdio";
@@ -64,9 +63,9 @@ export type McpRegistryDiagnostic = {
   status?: string;
 };
 
-export type McpRegistry = { diagnostics: McpRegistryDiagnostic[]; servers: McpServerRegistry[] };
-export type McpRecommendationInput = { description?: string; issue?: unknown; title?: string };
-export type McpRequirementRecommendation = McpCapability & { reason: string; score: number };
+type McpRegistry = { diagnostics: McpRegistryDiagnostic[]; servers: McpServerRegistry[] };
+type McpRecommendationInput = { description?: string; issue?: unknown; title?: string };
+type McpRequirementRecommendation = McpCapability & { reason: string; score: number };
 export type McpRegistryOptions = { database?: RunnerDatabase; registryJson?: string };
 
 type RawServer = Record<string, unknown>;
@@ -133,15 +132,6 @@ export function recommendMcpRequirements(
 export function publicMcpRegistry(options: McpRegistryOptions = {}): McpServerRegistry[] {
   return listMcpRegistry(options).map(publicServer);
 }
-
-export function mcpCapabilityIDsFromPayload(payload: Record<string, unknown>): string[] {
-  return mcpCapabilitiesFromPayload(payload);
-}
-
-export function normalizeMcpCapabilityIDs(value: unknown): string[] {
-  return parseMcpCapabilityList(value);
-}
-
 
 function managedRegistryServers(db: RunnerDatabase): RawServer[] {
   const capabilities = listPiMcpCapabilities(db).filter((capability) => capability.enabled);

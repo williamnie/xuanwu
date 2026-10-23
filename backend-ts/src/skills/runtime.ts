@@ -19,7 +19,7 @@ import type { SkillMetadata } from "./registry.ts";
 
 type JsonObject = Record<string, unknown>;
 
-export type SkillRuntimeHandlerContext = {
+type SkillRuntimeHandlerContext = {
   abortSignal: AbortSignal;
   invokeTool: (grant: string, input?: JsonObject) => Promise<unknown>;
   skillID: string;
@@ -30,7 +30,7 @@ export type SkillRuntimeHandler = (
   context: SkillRuntimeHandlerContext
 ) => Promise<unknown> | unknown;
 
-export type SkillRuntimeWorkflowContext = {
+type SkillRuntimeWorkflowContext = {
   manifest_ref: string;
   stage: WorkflowStage;
 };
@@ -63,7 +63,7 @@ export type SkillRuntimeRun = {
   workflow_stage_id: string;
 };
 
-export type SkillRuntimeResult<TOutput = unknown> = {
+type SkillRuntimeResult<TOutput = unknown> = {
   output: TOutput;
   run: SkillRuntimeRun;
 };
@@ -75,7 +75,7 @@ export class SkillRuntimeError extends Error {
   }
 }
 
-export const SKILL_RUNTIME_STARTED_EVENT = "skill_runtime.started";
+const SKILL_RUNTIME_STARTED_EVENT = "skill_runtime.started";
 export const SKILL_RUNTIME_COMPLETED_EVENT = "skill_runtime.completed";
 
 const TOOL_PERMISSIONS: ToolPermission[] = ["read", "write", "dangerous"];

@@ -40,7 +40,7 @@ import { requestPiAcceptanceCycle } from "../runner/piAcceptanceCoordinator.ts";
 import { publishPiNeedsUserNotification } from "../notifications/piNotifier.ts";
 import { checkProjectPath } from "./projectPathCheck.ts";
 
-export type IssueListFilter = {
+type IssueListFilter = {
   projectId: string;
   sourceSessionId: string;
   status: string;

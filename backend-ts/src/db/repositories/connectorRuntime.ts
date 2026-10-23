@@ -1,13 +1,13 @@
 import type { RunnerDatabase } from "../database.ts";
 
-export type ConnectorCursorRecord = {
+type ConnectorCursorRecord = {
   connector_id: string;
   position: string;
   scope: string;
   updated_at: string;
 };
 
-export type ConnectorDeliveryPart = {
+type ConnectorDeliveryPart = {
   connector_id: string;
   content_hash: string;
   created_at: string;

@@ -13,8 +13,8 @@ type ScheduleInput = Partial<PiAutomationScheduleState> & {
 };
 type TriggerLike = Record<string, unknown> & { type: string };
 
-export const DEFAULT_RETRY_BACKOFF_SECONDS = 60;
-export const DEFAULT_RUN_TIMEOUT_MS = 300_000;
+const DEFAULT_RETRY_BACKOFF_SECONDS = 60;
+const DEFAULT_RUN_TIMEOUT_MS = 300_000;
 
 export function automationScheduleState(input: ScheduleInput, trigger: TriggerLike, timestamp: Date): PiAutomationScheduleState {
   return {

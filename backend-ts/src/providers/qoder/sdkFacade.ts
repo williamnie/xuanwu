@@ -23,7 +23,7 @@ import { qoderPermissionOptions } from "./permissionBroker.ts";
 import type { ResolvedExecutionPolicy } from "../core/policyContracts.ts";
 export { QODER_VERSION_PAIR } from "./version.ts";
 
-export type QoderTerminal = "succeeded" | "failed" | "interrupted" | "cancelled";
+type QoderTerminal = "succeeded" | "failed" | "interrupted" | "cancelled";
 
 export type QoderRunOptions = {
   approvalPolicy?: string;
@@ -71,12 +71,12 @@ export type QoderUsageProjection = {
   };
 };
 
-export type QoderMessageContext = {
+type QoderMessageContext = {
   interrupted: boolean;
   usage?: QoderUsageProjection;
 };
 
-export type QoderProcessLease = {
+type QoderProcessLease = {
   commandLabel: string;
   invocationOwner: string;
   pgid?: number;
@@ -106,7 +106,7 @@ export interface QoderSdkFacade {
   close(): Promise<void>;
 }
 
-export type QoderSdkFacadeOptions = {
+type QoderSdkFacadeOptions = {
   /** Offline fake-stream seam; production uses the pinned SDK query export. */
   queryFactory?: (input: { prompt: string; options: Options }) => Query;
   /** Offline control-query seam; production starts a prompt-free SDK query. */

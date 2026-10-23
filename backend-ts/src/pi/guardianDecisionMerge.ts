@@ -3,9 +3,9 @@ import type { PiGuardianDecision, PiGuardianEvent } from "../db/repositories/pi.
 import { guardianDecisionActionsJson } from "./guardianDecisionActionCandidates.ts";
 import { classifyRecoveryDiagnosis } from "./recoveryDiagnosis.ts";
 
-export const GUARDIAN_DECISION_TERMINAL_STATES = new Set(["completed", "failed", "skipped", "superseded"]);
+const GUARDIAN_DECISION_TERMINAL_STATES = new Set(["completed", "failed", "skipped", "superseded"]);
 
-export type GuardianDecisionSeverity = "info" | "watch" | "actionable" | "urgent";
+type GuardianDecisionSeverity = "info" | "watch" | "actionable" | "urgent";
 export type GuardianDecisionCandidate = {
   action_type: string;
   actions_json: string;
@@ -32,7 +32,7 @@ export type GuardianDecisionPlan = {
   merge_key: string;
   window_ms: number;
 };
-export type GuardianDecisionMergeMeta = {
+type GuardianDecisionMergeMeta = {
   base_key: string;
   event_count: number;
   event_ids: string[];
@@ -97,7 +97,7 @@ export function guardianDecisionPlan(
   };
 }
 
-export function guardianDecisionMergeKey(candidate: GuardianDecisionCandidate): string {
+function guardianDecisionMergeKey(candidate: GuardianDecisionCandidate): string {
   return `${guardianDecisionBaseKey(candidate)}:${candidate.severity}`;
 }
 

@@ -23,8 +23,8 @@ import {
   workIDToIssueID
 } from "./issueAdapter.ts";
 
-export const WORK_BACKFILL_CHECKPOINT_SCHEMA_VERSION = "xuanwu.work-backfill-checkpoint.v1" as const;
-export const WORK_ROLLBACK_CHECKPOINT_SCHEMA_VERSION = "xuanwu.work-rollback-checkpoint.v1" as const;
+const WORK_BACKFILL_CHECKPOINT_SCHEMA_VERSION = "xuanwu.work-backfill-checkpoint.v1" as const;
+const WORK_ROLLBACK_CHECKPOINT_SCHEMA_VERSION = "xuanwu.work-rollback-checkpoint.v1" as const;
 export const WORK_CONSISTENCY_REPORT_SCHEMA_VERSION = "xuanwu.work-consistency-report.v1" as const;
 
 export const WORK_MIGRATION_POLICY = {
@@ -94,7 +94,7 @@ type RepairProposal = {
   work_id: string;
 };
 
-export type WorkConsistencyReport = {
+type WorkConsistencyReport = {
   counts: {
     issues: number;
     matched: number;
@@ -117,7 +117,7 @@ export type WorkConsistencyReport = {
   target_status_counts: Record<string, number>;
 };
 
-export type WorkBackfillInput = {
+type WorkBackfillInput = {
   actor?: string;
   actorKind?: MigrationActorKind;
   apply?: boolean;
@@ -133,7 +133,7 @@ export type WorkBackfillInput = {
   resume?: boolean;
 };
 
-export type WorkRollbackInput = Omit<WorkBackfillInput, "checkpointPath"> & {
+type WorkRollbackInput = Omit<WorkBackfillInput, "checkpointPath"> & {
   backfillCheckpointPath: string;
   checkpointPath: string;
 };

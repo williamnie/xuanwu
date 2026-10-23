@@ -3,23 +3,23 @@ export const PI_RISK_LEVELS = ["safe", "confirm", "high", "forbidden"] as const;
 export const PI_GATE_DECISIONS = ["execute", "ask", "deny", "snooze"] as const;
 
 export type PiWorkMode = typeof PI_WORK_MODES[number];
-export type PiRiskLevel = typeof PI_RISK_LEVELS[number];
+type PiRiskLevel = typeof PI_RISK_LEVELS[number];
 export type PiGateDecisionValue = typeof PI_GATE_DECISIONS[number];
 
-export type PiRiskPolicy = Record<PiRiskLevel, PiGateDecisionValue>;
-export type PiModePolicy = {
+type PiRiskPolicy = Record<PiRiskLevel, PiGateDecisionValue>;
+type PiModePolicy = {
   mode: PiWorkMode;
   riskPolicy: PiRiskPolicy;
 };
-export type PiModeResolutionSource = "explicit" | "delegation" | "project_default" | "manual";
-export type PiModeResolutionInput = {
+type PiModeResolutionSource = "explicit" | "delegation" | "project_default" | "manual";
+type PiModeResolutionInput = {
   activeDelegation?: unknown;
   now?: Date | string;
   projectDefault?: unknown;
   sessionMode?: unknown;
   taskMode?: unknown;
 };
-export type PiModeResolution = {
+type PiModeResolution = {
   mode: PiWorkMode;
   source: PiModeResolutionSource;
 };

@@ -27,7 +27,7 @@ import {
 
 export const FEISHU_CONNECTOR_ID = "feishu" as const;
 
-export type FeishuConnectorInbound = {
+type FeishuConnectorInbound = {
   envelope: InboundEnvelope;
   event: FeishuNormalizedMessageEvent;
 };
@@ -263,7 +263,7 @@ export function createFeishuChannelConnector(options: FeishuConnectorOptions): C
   };
 }
 
-export function feishuConnectorTarget(receiveID: string, receiveIDType: string): string {
+function feishuConnectorTarget(receiveID: string, receiveIDType: string): string {
   const id = requiredText(receiveID, "receiveID");
   const type = requiredText(receiveIDType, "receiveIDType");
   return `feishu://${encodeURIComponent(type)}/${encodeURIComponent(id)}`;

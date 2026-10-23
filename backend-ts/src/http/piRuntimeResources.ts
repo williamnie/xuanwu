@@ -20,7 +20,7 @@ import { resolveSkillFile } from "../skills/registry.ts";
 import { visibleManagedSkills } from "../skills/managedStore.ts";
 import { verifyLibrarySkill } from "../skills/libraryService.ts";
 
-export type PiRuntimeResourceDiagnostic = {
+type PiRuntimeResourceDiagnostic = {
   code: string;
   message: string;
   resource_type: "agent" | "extension" | "loader" | "prompt" | "skill";
@@ -37,7 +37,7 @@ export type PiRuntimeResourceSnapshot = {
   sources: string[];
 };
 
-export type ControlledPiResourceOptions = {
+type ControlledPiResourceOptions = {
   agentDir: string;
   allowedSkillIDs: string[];
   cwd: string;

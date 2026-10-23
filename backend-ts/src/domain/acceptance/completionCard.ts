@@ -37,7 +37,7 @@ export type CompletionCardCommand = {
   status: "completed" | "failed";
 };
 
-export type CompletionCardGit = {
+type CompletionCardGit = {
   baseline_revision: string;
   changed_files: string[];
   commit_count: number;
@@ -50,7 +50,7 @@ export type CompletionCardGit = {
   workspace_snapshot_ref?: string;
 };
 
-export type CompletionCardSessionItem = {
+type CompletionCardSessionItem = {
   command: string;
   exit_code: number | null;
   output_excerpt: string;
@@ -59,7 +59,7 @@ export type CompletionCardSessionItem = {
   type: string;
 };
 
-export type CompletionCardSession = {
+type CompletionCardSession = {
   current_git: CompletionCardGit | null;
   error: string;
   inspected: boolean;
@@ -72,12 +72,12 @@ export type CompletionCardSession = {
   turn_count: number;
 };
 
-export type CompletionCardSessionInput = {
+type CompletionCardSessionInput = {
   error?: string;
   summary?: Record<string, unknown>;
 };
 
-export type CompletionCardRun = {
+type CompletionCardRun = {
   attempt: number;
   ended_at: string;
   id: string;
@@ -88,7 +88,7 @@ export type CompletionCardRun = {
   status: string;
 };
 
-export type CompletionCardHumanReview = {
+type CompletionCardHumanReview = {
   action: string;
   answered_at: string;
   comment: string;
@@ -878,9 +878,4 @@ function sortValue(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value as Record<string, unknown>)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, item]) => [key, sortValue(item)]));
-}
-
-export function completionCardRunAttemptID(card: CompletionCard) {
-  const runID = makeDomainID("run", "issue_runs", card.run.id);
-  return makeRunAttemptID(runID, card.run.attempt);
 }

@@ -27,7 +27,7 @@ import { listIssueEventsAsync } from "../db/asyncIssueEvents.ts";
 import type { IssueEvent } from "../db/repositories/issueEvents.ts";
 import { diagnoseIssueState, type IssueStateDiagnostic } from "./issueStateManager.ts";
 
-export type IssueSupervisorContextOptions = {
+type IssueSupervisorContextOptions = {
   includeWorkspaceGit?: boolean;
   now?: Date;
   recentEventLimit?: number;

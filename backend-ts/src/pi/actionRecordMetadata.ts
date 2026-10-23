@@ -2,7 +2,7 @@ import type { PiActionEnvelope } from "./actionGate.ts";
 import type { PiActionContext, PiActionRequest } from "./actionEngine.ts";
 import { guardianActionLeaseKey } from "./guardianActionLease.ts";
 
-export type ActionRecordMetadata = {
+type ActionRecordMetadata = {
   before_snapshot_json: string;
   expected_state_json: string;
   idempotency_key: string;

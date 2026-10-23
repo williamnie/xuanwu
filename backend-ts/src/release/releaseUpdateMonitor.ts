@@ -19,7 +19,7 @@ const NOTIFICATION_TYPE = "release_update_available";
 
 type ImChannels = { get(id: string): { connector: ChannelConnector } };
 
-export type ReleaseUpdateMonitorOptions = {
+type ReleaseUpdateMonitorOptions = {
   checkUpdate?: () => Promise<ReleaseUpdateCheck>;
   database: RunnerDatabase;
   enabled?: boolean;

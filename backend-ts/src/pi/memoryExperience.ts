@@ -6,7 +6,7 @@ const refs = Type.Array(text, { minItems: 1, maxItems: 16, uniqueItems: true });
 const closed = { additionalProperties: false };
 
 // 复用 content 文本列保存版本化 JSON；旧文本记忆无需迁移或改写。
-export const MEMORY_EXPERIENCE_SCHEMA = Type.Object({
+const MEMORY_EXPERIENCE_SCHEMA = Type.Object({
   schema_version: Type.Literal(1),
   outcome: Type.Optional(Type.Union([Type.Literal("verified_resolution"), Type.Literal("diagnosis_only")])),
   applies_when: text,

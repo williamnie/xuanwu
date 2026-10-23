@@ -3,7 +3,7 @@ import { redactSensitiveText } from "../util/redact.ts";
 import type { FeishuConnectorConfig } from "./feishuTypes.ts";
 import { resolveImNotificationTarget } from "./imNotificationTargets.ts";
 
-export type FeishuTarget = { chatID: string; eventID: number; messageID: string; threadID: string };
+type FeishuTarget = { chatID: string; eventID: number; messageID: string; threadID: string };
 
 const FEISHU_SOURCE = "feishu";
 

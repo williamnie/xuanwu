@@ -34,8 +34,6 @@ import {
 } from "../pi/runtimeContextEnvelope.ts";
 import type { AppLanguage } from "../i18n/language.ts";
 
-export type { PiRuntimePromptProfile } from "../pi/runtimePromptProfile.ts";
-
 export type PiRuntimeResult = { piSessionId: string; sessionFile: string };
 export type PiRuntimeSession = Awaited<ReturnType<typeof createPiRuntimeSession>>;
 export type RuntimeSessionInput = {
@@ -134,7 +132,6 @@ export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
 ] as const;
 
 const PI_RUNTIME_ROOT = "pi-runtime";
-const PI_AGENT_DIR = "agent";
 const RUNNER_RUNTIME_ROOT = ".runner";
 const RUNNER_SESSIONS_DIR = "sessions";
 const RUNNER_AGENT_DIR = "runner";

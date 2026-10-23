@@ -258,7 +258,7 @@ async function assertRemoteIntakeCurrent(client: GitHubIssueClient, record: GitH
   }
 }
 
-export async function readGitHubChecks(client: GitHubIssueClient, path: string, sha: string): Promise<{ pending: boolean; failed: string[] }> {
+async function readGitHubChecks(client: GitHubIssueClient, path: string, sha: string): Promise<{ pending: boolean; failed: string[] }> {
   const runs = (await client.request(`${path}/commits/${objectID(sha)}/check-runs?per_page=100`)).data;
   const status = (await client.request(`${path}/commits/${sha}/status?per_page=100`)).data;
   if (!Array.isArray(runs.check_runs) || !Array.isArray(status.statuses) || Number(runs.total_count) > 100 || Number(status.total_count) > 100) throw new Error("GitHub CI evidence incomplete");

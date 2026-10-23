@@ -31,7 +31,7 @@ export type ImOutboxDispatchResult = {
   skipped: number;
 };
 
-export type ImOutboxDispatchOptions = {
+type ImOutboxDispatchOptions = {
   database: RunnerDatabase;
   limit?: number;
   now?: Date;

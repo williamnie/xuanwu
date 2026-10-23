@@ -11,9 +11,9 @@ import {
 import { TOOL_PERMISSIONS, type ToolPermission } from "../pi/toolProviderEnvelope.ts";
 
 export const WORKFLOW_MANIFEST_SCHEMA_VERSION = "xuanwu.workflow-manifest.v1" as const;
-export const WORKFLOW_PROJECT_OVERRIDE_SCHEMA_VERSION = "xuanwu.workflow-project-override.v1" as const;
-export const WORKFLOW_APPROVAL_MODES = ["none", "before_external_write", "before_stage"] as const;
-export type WorkflowApprovalMode = typeof WORKFLOW_APPROVAL_MODES[number];
+const WORKFLOW_PROJECT_OVERRIDE_SCHEMA_VERSION = "xuanwu.workflow-project-override.v1" as const;
+const WORKFLOW_APPROVAL_MODES = ["none", "before_external_write", "before_stage"] as const;
+type WorkflowApprovalMode = typeof WORKFLOW_APPROVAL_MODES[number];
 
 const identifier = Type.String({ minLength: 1, maxLength: 128, pattern: "^[a-z][a-z0-9._-]*$" });
 const registryID = Type.String({ minLength: 1, maxLength: 256, pattern: "^[a-z][a-z0-9._:-]*$" });
@@ -65,7 +65,7 @@ const stageSchema = Type.Object({
   handoff: handoffSchema
 }, { additionalProperties: false });
 
-export const WORKFLOW_MANIFEST_SCHEMA = Type.Object({
+const WORKFLOW_MANIFEST_SCHEMA = Type.Object({
   schema_version: Type.Literal(WORKFLOW_MANIFEST_SCHEMA_VERSION),
   id: workflowID,
   revision: Type.Integer({ minimum: 1 }),
@@ -85,7 +85,7 @@ const stageOverrideSchema = Type.Object({
   handoff_mode: Type.Optional(deliveryMode)
 }, { additionalProperties: false });
 
-export const WORKFLOW_PROJECT_OVERRIDE_SCHEMA = Type.Object({
+const WORKFLOW_PROJECT_OVERRIDE_SCHEMA = Type.Object({
   schema_version: Type.Literal(WORKFLOW_PROJECT_OVERRIDE_SCHEMA_VERSION),
   project_id: Type.String({ minLength: 1, maxLength: 256 }),
   workflow_id: workflowID,
@@ -107,8 +107,8 @@ export type WorkflowValidationIssue = {
   message: string;
   path: string;
 };
-export type WorkflowValidationResult = { issues: WorkflowValidationIssue[]; ok: boolean };
-export type WorkflowManifestParseResult =
+type WorkflowValidationResult = { issues: WorkflowValidationIssue[]; ok: boolean };
+type WorkflowManifestParseResult =
   | { manifest: WorkflowManifest; ok: true }
   | { issues: WorkflowValidationIssue[]; ok: false };
 
@@ -168,13 +168,6 @@ export function workflowManifestRef(manifest: Pick<WorkflowManifest, "id" | "rev
 
 export function parseWorkflowManifestRef(ref: string): { id: string; revision: number } | null {
   const match = /^(workflow:[a-z][a-z0-9._-]{0,127})@([1-9][0-9]*)$/.exec(ref.trim());
-  if (!match) return null;
-  const revision = Number(match[2]);
-  return Number.isSafeInteger(revision) ? { id: match[1], revision } : null;
-}
-
-export function parseVerificationPolicyRef(ref: string): { id: string; revision: number } | null {
-  const match = /^(verification-policy:[a-z][a-z0-9._-]{0,127})@([1-9][0-9]*)$/.exec(ref.trim());
   if (!match) return null;
   const revision = Number(match[2]);
   return Number.isSafeInteger(revision) ? { id: match[1], revision } : null;

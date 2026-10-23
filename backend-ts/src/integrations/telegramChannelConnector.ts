@@ -29,7 +29,7 @@ import { telegramConnectorStatus } from "./telegramConfig.ts";
 import type { TelegramConnectorConfig } from "./telegramTypes.ts";
 
 export const TELEGRAM_CONNECTOR_ID = "telegram" as const;
-export const TELEGRAM_MESSAGE_LIMIT = 4096;
+const TELEGRAM_MESSAGE_LIMIT = 4096;
 
 type Options = {
   config: TelegramConnectorConfig | (() => TelegramConnectorConfig);

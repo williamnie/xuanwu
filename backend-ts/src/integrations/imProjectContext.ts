@@ -2,17 +2,17 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { listProjects } from "../db/repositories/projects.ts";
 
-export type ImProjectMapping = { chatId?: string; projectId: string; userId?: string };
-export type ImProjectContextStatus = "resolved" | "ambiguous" | "missing";
-export type ImProjectContextSource =
+type ImProjectMapping = { chatId?: string; projectId: string; userId?: string };
+type ImProjectContextStatus = "resolved" | "ambiguous" | "missing";
+type ImProjectContextSource =
   "issue_ref" | "explicit_project" | "user_switch" | "card_select" |
   "interaction_select" | "mapping_default" | "none";
-export type ImProjectContextConfidence = "high" | "medium" | "low" | "none";
-export type ImProjectContextIssue = { id: number; project_id: string };
-export type ImProjectContextProject = { id: string; name?: string };
-export type ImProjectContextActiveProject = { active_project_id?: string; active_project_source?: string };
-export type ImProjectContextMessage = { chatId?: string; senderId?: string; senderOpenId?: string };
-export type ImProjectContextInput = {
+type ImProjectContextConfidence = "high" | "medium" | "low" | "none";
+type ImProjectContextIssue = { id: number; project_id: string };
+type ImProjectContextProject = { id: string; name?: string };
+type ImProjectContextActiveProject = { active_project_id?: string; active_project_source?: string };
+type ImProjectContextMessage = { chatId?: string; senderId?: string; senderOpenId?: string };
+type ImProjectContextInput = {
   activeProject?: ImProjectContextActiveProject | null;
   issues?: ImProjectContextIssue[];
   mappings?: ImProjectMapping[];
@@ -20,7 +20,7 @@ export type ImProjectContextInput = {
   projects?: ImProjectContextProject[];
   text: string;
 };
-export type ImProjectContextDatabaseInput =
+type ImProjectContextDatabaseInput =
   Omit<ImProjectContextInput, "activeProject" | "issues" | "projects"> & { scopeKey?: string };
 export type ImProjectContextResult = {
   candidates: string[];

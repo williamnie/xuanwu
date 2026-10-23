@@ -9,7 +9,7 @@ import {
 import { getAutomation, getAutomationTrigger } from "../db/repositories/automations.ts";
 import type { AutomationDefinition, VersionedAutomationTrigger } from "../domain/automation/contracts.ts";
 
-export type AutomationExecutionResult = { detail?: string; outcome?: "skipped" | "succeeded" } | void;
+type AutomationExecutionResult = { detail?: string; outcome?: "skipped" | "succeeded" } | void;
 export type AutomationExecutor = (input: {
   automation: AutomationDefinition;
   run: ClaimedAutomationRun;
@@ -26,7 +26,7 @@ export type AutomationSchedulerResult = {
   skipped: number;
 };
 
-export type AutomationSchedulerInput = {
+type AutomationSchedulerInput = {
   database: RunnerDatabase;
   executeAutomation?: AutomationExecutor;
   limit?: number;

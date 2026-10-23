@@ -36,7 +36,7 @@ export function loadActivityEntities(db: RunnerDatabase, filter: PiActivityFilte
   };
 }
 
-export type ActivityEntities = ReturnType<typeof loadActivityEntities>;
+type ActivityEntities = ReturnType<typeof loadActivityEntities>;
 
 type ActivityIssueRun = Pick<IssueRun, "id" | "provider" | "provider_session_id" | "started_at" | "ended_at" |
   "status" | "error" | "exit_reason" | "selection_reason">;

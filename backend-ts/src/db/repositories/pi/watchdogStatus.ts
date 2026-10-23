@@ -10,11 +10,11 @@ import {
 } from "./common.ts";
 import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
 
-export type PiGuardianWatchdogStatus = {
+type PiGuardianWatchdogStatus = {
   checked_components_json: string; last_error: string; last_seen_at: string;
   last_success_at: string; singleton_id: 1; updated_at: string;
 };
-export type PiGuardianWatchdogStatusInput = PatchInput<PiGuardianWatchdogStatus>;
+type PiGuardianWatchdogStatusInput = PatchInput<PiGuardianWatchdogStatus>;
 
 const TABLE = "pi_guardian_watchdog_status";
 const COLUMNS = `singleton_id, last_seen_at, last_success_at, last_error,

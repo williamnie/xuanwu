@@ -65,7 +65,7 @@ const EARLY_ARTIFACT_METHODS = new Set([
   "turn/diff/updated"
 ]);
 
-export type IssueLogArtifactRef = {
+type IssueLogArtifactRef = {
   bytes: number;
   encoding: "gzip+json";
   ref: string;
@@ -153,7 +153,6 @@ export function createIssueComment(db: RunnerDatabase, issueID: number, input: C
   );
   return mustGetIssueEvent(db, lastInsertID(db));
 }
-
 
 export function recordIssueEvent(db: RunnerDatabase, issueID: number, type: string, payload: unknown): IssueEvent {
   ensureIssueExists(db, issueID);

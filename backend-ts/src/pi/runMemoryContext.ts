@@ -28,7 +28,6 @@ type RunMemorySnapshot = {
 };
 
 type StoredSnapshot = RunMemorySnapshot & { snapshot_id: string; event_ref: string };
-export type RunMemoryProjection = ReturnType<typeof projectRunMemoryContext>;
 
 /** 首次调用冻结预算和内容；同一 Run 后续调用只读取，不补选新版本。 */
 export function ensureRunMemorySnapshot(

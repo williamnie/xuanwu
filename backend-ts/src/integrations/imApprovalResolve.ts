@@ -8,7 +8,7 @@ import type { ApprovalDecision, ExecutorProvider, ExecutorProviderId } from "../
 import { constrainApprovalGrantScope } from "../pi/approvalGrantScope.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
-export type ImApprovalResolveInput = {
+type ImApprovalResolveInput = {
   decision: string;
   provider?: Pick<ExecutorProvider, "resolveApproval">;
   providers?: Partial<Record<ExecutorProviderId, Pick<ExecutorProvider, "resolveApproval">>>;

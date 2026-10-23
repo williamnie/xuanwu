@@ -52,8 +52,8 @@ export type PiApprovalRequest = {
   updated_at: string;
 };
 
-export type PiApprovalRequestInput = PatchInput<PiApprovalRequest>;
-export type PiApprovalRequestFilter = {
+type PiApprovalRequestInput = PatchInput<PiApprovalRequest>;
+type PiApprovalRequestFilter = {
   issueId?: number;
   projectId?: string;
   provider?: string;

@@ -3,13 +3,13 @@ import { redactedUserVisibleText } from "../../util/redact.ts";
 
 export const REMOTE_GIT_PROVIDER_CONTRACT_VERSION = 1 as const;
 
-export const REMOTE_GIT_PULL_REQUEST_READINESS = ["draft", "ready"] as const;
-export type RemoteGitPullRequestReadiness = typeof REMOTE_GIT_PULL_REQUEST_READINESS[number];
+const REMOTE_GIT_PULL_REQUEST_READINESS = ["draft", "ready"] as const;
+type RemoteGitPullRequestReadiness = typeof REMOTE_GIT_PULL_REQUEST_READINESS[number];
 
-export const REMOTE_GIT_PULL_REQUEST_LIFECYCLES = ["open", "closed", "merged"] as const;
-export type RemoteGitPullRequestLifecycle = typeof REMOTE_GIT_PULL_REQUEST_LIFECYCLES[number];
+const REMOTE_GIT_PULL_REQUEST_LIFECYCLES = ["open", "closed", "merged"] as const;
+type RemoteGitPullRequestLifecycle = typeof REMOTE_GIT_PULL_REQUEST_LIFECYCLES[number];
 
-export const REMOTE_GIT_PROVIDER_ERROR_KINDS = [
+const REMOTE_GIT_PROVIDER_ERROR_KINDS = [
   "auth",
   "permission",
   "not_found",
@@ -28,7 +28,7 @@ export type RemoteGitOperation =
   | "update_pull_request"
   | "read_pull_request";
 
-export type RemoteGitProviderDescriptor = {
+type RemoteGitProviderDescriptor = {
   contract_version: typeof REMOTE_GIT_PROVIDER_CONTRACT_VERSION;
   display_name: string;
   provider_id: string;
@@ -114,7 +114,7 @@ export type RemoteGitCreatePullRequestRequest = {
   write: RemoteGitWriteContext;
 };
 
-export type RemoteGitPullRequestPatch = {
+type RemoteGitPullRequestPatch = {
   body?: string;
   labels?: readonly string[];
   readiness?: RemoteGitPullRequestReadiness;

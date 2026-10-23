@@ -14,7 +14,7 @@ import type {
 import { iso } from "./heartbeatOrchestratorSupport.ts";
 
 const SIGNAL_LIMIT = 8;
-export type HeartbeatSignalScope = { issueIDs?: number[] };
+type HeartbeatSignalScope = { issueIDs?: number[] };
 
 export function collectProjectHeartbeatSignals(
   db: RunnerDatabase,

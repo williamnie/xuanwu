@@ -1,10 +1,10 @@
 import type { IssueStateDiagnostic } from "./issueStateManager.ts";
 
-export type NightRunIssueSummary = Record<string, unknown> & {
+type NightRunIssueSummary = Record<string, unknown> & {
   error?: string; evidence_links?: Record<string, string>; id: number; status: string; title: string;
 };
 
-export type NightRunIssueCategories = {
+type NightRunIssueCategories = {
   blocked: NightRunIssueSummary[];
   completed: NightRunIssueSummary[];
   failed: NightRunIssueSummary[];

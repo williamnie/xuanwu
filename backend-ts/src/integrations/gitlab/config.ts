@@ -1,6 +1,5 @@
 import {
   buildRemoteGitConnectorConfig,
-  redactRemoteGitConnectorConfig,
   remoteGitConnectorStatus,
   type RemoteGitConnectorConfig,
   type RemoteGitConnectorStatus
@@ -40,8 +39,4 @@ export function buildGitLabConnectorConfig(input: GitLabConnectorConfigInput = {
 
 export function gitlabConnectorStatus(config: GitLabConnectorConfig): RemoteGitConnectorStatus {
   return remoteGitConnectorStatus(config);
-}
-
-export function redactGitLabConnectorConfig(config: GitLabConnectorConfig): GitLabConnectorConfig {
-  return redactRemoteGitConnectorConfig(config);
 }

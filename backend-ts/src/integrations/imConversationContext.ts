@@ -4,7 +4,7 @@ import { getImContextCursor } from "../db/repositories/imContextLifecycle.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { imConversationScopeKey } from "./imConversationRouting.ts";
 
-export type ImContextConversation = {
+type ImContextConversation = {
   connectorId: string;
   conversationId: string;
   currentMessageId: string;
@@ -13,7 +13,7 @@ export type ImContextConversation = {
   threadId: string;
 };
 
-export type ImConversationProjectionEvent = {
+type ImConversationProjectionEvent = {
   direction: "inbound" | "outbound";
   included: boolean;
   line: string;

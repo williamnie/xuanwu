@@ -8,7 +8,7 @@ import { createSecretService } from "../../security/secrets/service.ts";
 export const JEV_SKILL_ID = "jev-assist";
 export const JEV_CAPABILITY_ID = "jev-assist:tool:jev_classify_report";
 export const JEV_TOOL_NAME = "jev_classify_report";
-export const JEV_SCOPES = ["web", "github", "feishu", "telegram", "background"] as const;
+const JEV_SCOPES = ["web", "github", "feishu", "telegram", "background"] as const;
 export type JevScope = typeof JEV_SCOPES[number];
 export type JevSkillConfig = {
   enabled: boolean;
@@ -20,7 +20,7 @@ export type JevSkillConfig = {
   minConfidence: number;
   timeoutMs: number;
 };
-export type JevConfiguration = { config: JevSkillConfig; diagnostic: string; migrated: boolean };
+type JevConfiguration = { config: JevSkillConfig; diagnostic: string; migrated: boolean };
 const stateDirs = new WeakMap<RunnerDatabase, string>();
 
 export function configureJevStateDirectory(db: RunnerDatabase, stateDir?: string): void {
@@ -28,7 +28,7 @@ export function configureJevStateDirectory(db: RunnerDatabase, stateDir?: string
 }
 export function jevStateDirectory(db: RunnerDatabase): string { return stateDirs.get(db) ?? dirname(db.path); }
 
-export function defaultJevConfig(): JevSkillConfig {
+function defaultJevConfig(): JevSkillConfig {
   return { enabled: false, mode: "shadow", model: "jev-latest", scopes: [], apiKeyRef: "env://TYPESAFE_API_KEY",
     apiKeyEnvFile: "", minConfidence: 0.9, timeoutMs: 5000 };
 }

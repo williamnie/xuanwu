@@ -3,16 +3,16 @@ import { cleanString, recordValue } from "./feishuShared.ts";
 
 const FEISHU_SIGNATURE_MAX_SKEW_SECONDS = 300;
 
-export type FeishuCallbackParseResult = {
+type FeishuCallbackParseResult = {
   body: Record<string, unknown>;
   encrypted: boolean;
 };
 
-export type FeishuSignatureVerification =
+type FeishuSignatureVerification =
   | { ok: true }
   | { ok: false; reason: FeishuSignatureFailureReason };
 
-export type FeishuSignatureFailureReason =
+type FeishuSignatureFailureReason =
   | "invalid_signature"
   | "invalid_timestamp"
   | "missing_signature_headers"

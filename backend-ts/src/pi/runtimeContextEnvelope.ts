@@ -6,7 +6,7 @@ import { retrievePiMemoryContext } from "./memoryContext.ts";
 import { listIssueRuns } from "../db/repositories/issues.ts";
 import { projectRunMemoryContext, RUN_MEMORY_RULES } from "./runMemoryContext.ts";
 
-export const PI_RUNTIME_CONTEXT_SCHEMA_VERSION = "xw.pi-runtime-context.v1" as const;
+const PI_RUNTIME_CONTEXT_SCHEMA_VERSION = "xw.pi-runtime-context.v1" as const;
 
 export type PiRuntimeContextEnvelope = ReturnType<typeof buildPiRuntimeContextEnvelope>;
 

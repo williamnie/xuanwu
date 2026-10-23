@@ -6,18 +6,27 @@ import { getProject } from "../../db/repositories/projects.ts";
 import { updateIssue } from "../../db/repositories/issueUpdate.ts";
 import { recordIssueEvent } from "../../db/repositories/issueEvents.ts";
 import {
-  canonicalWorkspace, isWorkspaceWaitReleased, readWorkspaceWait, recordWorkspaceWait,
-  workspaceExecutionBusy, workspaceExecutionEpoch, workspaceWaitInput, workspaceWaitIssueIDs,
-  type WaitWorkspace, type WorkspaceWait
+  canonicalWorkspace,
+  isWorkspaceWaitReleased,
+  readWorkspaceWait,
+  recordWorkspaceWait,
+  workspaceExecutionBusy,
+  workspaceExecutionEpoch,
+  workspaceWaitInput,
+  workspaceWaitIssueIDs,
+  type WaitWorkspace,
+  type WorkspaceWait
 } from "../../db/repositories/workspaceWaits.ts";
 import { runGit, withGitWorkspaceObservation } from "../run/gitWorkspaceObservation.ts";
 import {
-  createHumanReviewRequest, HumanReviewConflictError, readIssueDecisionProjection,
+  createHumanReviewRequest,
+  HumanReviewConflictError,
+  readIssueDecisionProjection,
   type HumanReviewRequest
 } from "./humanReview.ts";
 
 /** 只接受仓库根目录、干净索引/工作树、无进行中 Git 操作的稳定观察。 */
-export async function observeWaitWorkspace(cwd: string): Promise<WaitWorkspace | null> {
+async function observeWaitWorkspace(cwd: string): Promise<WaitWorkspace | null> {
   return withGitWorkspaceObservation(cwd, async (directory, deadline) => {
     const text = async (...args: string[]) => {
       const result = await runGit(directory, args, deadline);

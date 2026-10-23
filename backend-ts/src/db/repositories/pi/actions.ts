@@ -35,13 +35,13 @@ export type PiActionEvent = {
 };
 
 export type PiActionInput = PatchInput<PiAction>;
-export type PiActionEventInput = PatchInput<PiActionEvent>;
+type PiActionEventInput = PatchInput<PiActionEvent>;
 export type PendingPiActionNotification = Pick<PiAction,
   "action_type" | "conversation_id" | "created_at" | "id" | "issue_id" |
   "payload_json" | "project_id" | "status">;
 export type PiActionFilter = { conversationId?: string; issueId?: number; projectId?: string; status?: string };
-export type RecentAttentionPiActionFilter = { limit: number; updatedAfter: string };
-export type PiActionEventFilter = {
+type RecentAttentionPiActionFilter = { limit: number; updatedAfter: string };
+type PiActionEventFilter = {
   actionId?: string;
   conversationId?: string;
   delegationId?: string;
@@ -238,34 +238,6 @@ export function listPiActionsReferencingIssue(db: RunnerDatabase, issueID: numbe
       )
     order by created_at asc, id asc
   `).all(...args).map(mapPiAction);
-}
-
-/**
- * Relation projections only need Action Event ids for stable Evidence refs.
- * Batch those ids instead of loading/redacting every audit payload through an
- * N+1 query loop.
- */
-export function listPiActionEventIDsByActionID(
-  db: RunnerDatabase,
-  actionIDs: string[]
-): Map<string, number[]> {
-  const ids = [...new Set(actionIDs.map(cleanString).filter(Boolean))];
-  const output = new Map<string, number[]>();
-  for (let offset = 0; offset < ids.length; offset += 500) {
-    const chunk = ids.slice(offset, offset + 500);
-    const placeholders = chunk.map(() => "?").join(", ");
-    const rows = db.sqlite.query<{ action_id: string; id: number }, string[]>(`
-      select action_id, id from ${EVENT_TABLE}
-      where action_id in (${placeholders})
-      order by action_id asc, id asc
-    `).all(...chunk);
-    for (const row of rows) {
-      const values = output.get(row.action_id) ?? [];
-      values.push(row.id);
-      output.set(row.action_id, values);
-    }
-  }
-  return output;
 }
 
 export function getPiAction(db: RunnerDatabase, id: string): PiAction | null {

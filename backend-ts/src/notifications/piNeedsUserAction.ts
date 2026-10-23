@@ -12,7 +12,7 @@ import { publishPiNeedsUserNotification } from "./piNotifier.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 import { applyPiSemanticIssueStatus } from "../runner/piIssueLifecycle.ts";
 
-export type PiNeedsUserActionContext = {
+type PiNeedsUserActionContext = {
   bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
 };

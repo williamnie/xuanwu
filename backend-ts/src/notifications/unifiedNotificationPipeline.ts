@@ -15,9 +15,9 @@ import {
 import { applyNotificationSpeaker, notificationPresentation } from "./notificationPresentation.ts";
 
 export type NotificationRoute = NotificationOutboxTarget & { channel: string };
-export type NotificationDecision = "aggregate" | "send_now" | "suppress";
+type NotificationDecision = "aggregate" | "send_now" | "suppress";
 
-export type UnifiedNotificationInput = {
+type UnifiedNotificationInput = {
   approvalActionID?: string;
   content: string;
   conversationID?: string;
@@ -41,7 +41,7 @@ export type UnifiedNotificationInput = {
   summary: string;
 };
 
-export type UnifiedNotificationRouteResult = {
+type UnifiedNotificationRouteResult = {
   decision: NotificationDecision;
   intent: PiNotificationIntent;
   outboxID: number;

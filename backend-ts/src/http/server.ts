@@ -256,7 +256,7 @@ export function registerSystemStatusRoute(
   router.get("/api/system/doctor", () => json(buildRuntimeDoctor(statusContext)));
 }
 
-export function registerControlledBlockRoute(router: Router, blockMs: number): void {
+function registerControlledBlockRoute(router: Router, blockMs: number): void {
   if (!Number.isInteger(blockMs) || blockMs <= 0) return;
   const boundedMs = Math.min(blockMs, 30_000);
   router.get(CONTROLLED_BLOCK_PATH, () => {

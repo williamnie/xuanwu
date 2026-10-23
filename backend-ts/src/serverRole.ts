@@ -1,4 +1,4 @@
-export type ServerRole = "agentic" | "all" | "core" | "web";
+type ServerRole = "agentic" | "all" | "core" | "web";
 
 type Env = Record<string, string | undefined>;
 

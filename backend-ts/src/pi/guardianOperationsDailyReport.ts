@@ -11,7 +11,7 @@ import { routeNotification, type NotificationRoute } from "../notifications/unif
 import { guardianAlertPresentation } from "./guardianAlertPresentation.ts";
 import { resolvePiNotificationPreference } from "./notificationPreferenceResolver.ts";
 
-export type GuardianOperationsSummary = {
+type GuardianOperationsSummary = {
   active_pi_handling: number;
   active_user_action_required: number;
   alerts_detected: number;
@@ -20,7 +20,7 @@ export type GuardianOperationsSummary = {
   session_recoveries: number;
 };
 
-export type GuardianOperationsSnapshot = {
+type GuardianOperationsSnapshot = {
   generated_at: string;
   incidents: Array<Record<string, unknown>>;
   project_id: string;

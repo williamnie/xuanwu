@@ -3,7 +3,7 @@ import { listPiMemoryItems } from "../db/repositories/pi.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { ProjectFindingCategory } from "./projectFindings.ts";
 
-export type FailurePatternMatch = {
+type FailurePatternMatch = {
   category: ProjectFindingCategory;
   recommendation: string;
 };

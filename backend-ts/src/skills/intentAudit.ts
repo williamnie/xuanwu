@@ -4,7 +4,7 @@ import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { getProject, ProjectNotFoundError } from "../db/repositories/projects.ts";
 import { mergeSkillIntents, parseSkillIntentList, parseSkillPolicy } from "./intents.ts";
 
-export type SkillIntentAudit = {
+type SkillIntentAudit = {
   allowed_skill_intents: string[];
   created_at: string;
   expected_skill_intents: string[];
@@ -17,8 +17,8 @@ export type SkillIntentAudit = {
   used_skill_intents: string[];
 };
 
-export type SkillIntentAuditInput = { issueRunID?: string; usedSkillIntents?: string[] };
-export type SkillIntentAuditFilter = { issueID?: number; issueRunID?: string };
+type SkillIntentAuditInput = { issueRunID?: string; usedSkillIntents?: string[] };
+type SkillIntentAuditFilter = { issueID?: number; issueRunID?: string };
 
 type AuditRow = Record<keyof SkillIntentAudit, unknown>;
 const COLUMNS = `id, issue_id, issue_run_id, expected_skill_intents_json, used_skill_intents_json,

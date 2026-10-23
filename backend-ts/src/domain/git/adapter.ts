@@ -3,18 +3,18 @@ import { spawn } from "node:child_process";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { redactEvidenceText } from "../evidence/contracts.ts";
 
-export type LocalGitCommandResult = {
+type LocalGitCommandResult = {
   code: number;
   stderr: Buffer;
   stdout: Buffer;
 };
 
-export type LocalGitIdentity = {
+type LocalGitIdentity = {
   email: string;
   name: string;
 };
 
-export type LocalGitRunInput = {
+type LocalGitRunInput = {
   allowed_exit_codes?: readonly number[];
   args: readonly string[];
   identity?: LocalGitIdentity;
@@ -22,11 +22,11 @@ export type LocalGitRunInput = {
   repository_path: string;
 };
 
-export interface LocalGitAdapter {
+interface LocalGitAdapter {
   run(input: LocalGitRunInput): Promise<LocalGitCommandResult>;
 }
 
-export type LocalGitAdapterOptions = {
+type LocalGitAdapterOptions = {
   git_binary?: string;
   max_output_bytes?: number;
 };

@@ -13,7 +13,7 @@ export type NotificationOutboxTarget = {
   threadID?: string;
 };
 
-export type QueueNotificationOutboxInput = {
+type QueueNotificationOutboxInput = {
   approvalActionID?: string;
   channel: string;
   content: string;
@@ -25,30 +25,10 @@ export type QueueNotificationOutboxInput = {
   target: NotificationOutboxTarget;
 };
 
-export type QueueNotificationOutboxResult = {
+type QueueNotificationOutboxResult = {
   outboxID: number;
   queued: boolean;
   reason: "duplicate" | "queued";
-};
-
-export class NotificationChannelError extends Error {
-  readonly retryAfterSeconds?: number;
-  readonly retryable: boolean;
-
-  constructor(message: string, options: { retryAfterSeconds?: number; retryable?: boolean } = {}) {
-    super(message);
-    this.name = "NotificationChannelError";
-    this.retryAfterSeconds = options.retryAfterSeconds;
-    this.retryable = options.retryable !== false;
-  }
-}
-
-export type NotificationOutboxDispatchResult = {
-  failed: number;
-  processed: number;
-  retry: number;
-  sent: number;
-  skipped: number;
 };
 
 // The production delivery authority for `operation_kind='im_reply'` rows is

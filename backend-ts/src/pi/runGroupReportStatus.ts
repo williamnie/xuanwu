@@ -1,4 +1,4 @@
-export type RunGroupReportInput = {
+type RunGroupReportInput = {
   enqueue_status?: unknown;
   final_issue_status?: unknown;
   report_bucket?: unknown;
@@ -6,7 +6,7 @@ export type RunGroupReportInput = {
   status?: unknown;
 };
 
-export type RunGroupReportView = {
+type RunGroupReportView = {
   report_bucket: string;
   report_status: string;
   reportable: boolean;
@@ -50,7 +50,7 @@ export function lifecycleReport(status: string): RunGroupReportView | null {
   return null;
 }
 
-export function enqueueReport(status: string): RunGroupReportView | null {
+function enqueueReport(status: string): RunGroupReportView | null {
   if (status === "failed") return reportable("enqueue_failed", "skipped");
   if (status === "skipped") return reportable("skipped", "skipped");
   if (status === "pending_approval") return reportable("enqueue_pending_approval", "needs_user");

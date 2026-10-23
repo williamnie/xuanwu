@@ -15,7 +15,9 @@ import {
 } from "../../providers/types.ts";
 import { requestIssuePiAcceptance } from "../../runner/piAcceptanceRequest.ts";
 import {
-  assertWorkspaceReacquisition, commitWorkspaceReacquisition, prepareWorkspaceReacquisition,
+  assertWorkspaceReacquisition,
+  commitWorkspaceReacquisition,
+  prepareWorkspaceReacquisition,
   type WorkspaceReacquisition
 } from "./workspaceWait.ts";
 import {
@@ -75,7 +77,7 @@ export type CreateHumanReviewRequestInput = {
   recommendation?: unknown;
 };
 
-export type ReopenIncorrectAcceptanceInput = CreateHumanReviewRequestInput & {
+type ReopenIncorrectAcceptanceInput = CreateHumanReviewRequestInput & {
   recovery_reason?: unknown;
   reopen_accepted_request_id?: unknown;
   reopen_accepted_revision?: unknown;

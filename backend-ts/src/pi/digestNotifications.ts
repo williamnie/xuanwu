@@ -9,7 +9,7 @@ import { queueExistingNotificationIntent, type NotificationRoute } from "../noti
 import { formatRunGroupDigest } from "./digestFormatter.ts";
 import { markNotificationIntentRetry } from "./notificationCoordinator.ts";
 
-export type DigestNotificationQueueResult = { failed: number; queued: number; scanned: number; skipped: number };
+type DigestNotificationQueueResult = { failed: number; queued: number; scanned: number; skipped: number };
 export type DigestNotificationQueueOptions = { limit?: number; now?: Date };
 type DigestNotificationProjection = {
   channel?: string;

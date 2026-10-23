@@ -6,14 +6,14 @@ import type { ProjectLoopStarter } from "../http/piActionDispatch.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { recordPiActionAuditEvent } from "../pi/actionEngine.ts";
 
-export type ImPiActionResolveContext = {
+type ImPiActionResolveContext = {
   bus?: EventBus;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   startProjectLoop?: ProjectLoopStarter;
 };
 
-export type ImPiActionResolveInput = {
+type ImPiActionResolveInput = {
   actionID?: string;
   actor: string;
   comment?: string;

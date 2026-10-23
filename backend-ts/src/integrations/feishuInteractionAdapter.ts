@@ -24,7 +24,7 @@ import {
   type ImInteractionHandleResult
 } from "./imInteractionService.ts";
 
-export type FeishuImInteraction = {
+type FeishuImInteraction = {
   callback: ImInteractionCallback;
   chatID: string;
   messageID: string;
@@ -32,7 +32,7 @@ export type FeishuImInteraction = {
   userOpenID: string;
 };
 
-export type FeishuImInteractionContext = {
+type FeishuImInteractionContext = {
   agentBridge?: ReturnType<typeof createFeishuAgentBridge>;
   bus?: EventBus;
   config: FeishuConnectorConfig;

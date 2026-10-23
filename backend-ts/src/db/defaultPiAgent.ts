@@ -1,9 +1,9 @@
 import type { Database as SQLiteDatabase } from "bun:sqlite";
 
 export const DEFAULT_PI_AGENT_ID = "runner-default";
-export const DEFAULT_PI_AGENT_NAME = "Xuanwu Supervisor";
+const DEFAULT_PI_AGENT_NAME = "Xuanwu Supervisor";
 
-export const DEFAULT_PI_AGENT_INSTRUCTIONS = "先回答用户真正关心的问题，再补必要理由；说人话，避免不必要的内部术语和流程播报。";
+const DEFAULT_PI_AGENT_INSTRUCTIONS = "先回答用户真正关心的问题，再补必要理由；说人话，避免不必要的内部术语和流程播报。";
 
 type PiAgentBootstrapDatabase = {
   readonly: boolean;

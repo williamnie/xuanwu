@@ -7,7 +7,6 @@ import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts
 import { recordPiActionAuditEvent } from "../pi/actionEngine.ts";
 import type { FeishuPiActionCardAction } from "./feishuPiActionCards.ts";
 export { resolvePiActionFromIm } from "./imPiActionResolve.ts";
-export type { ImPiActionResolveInput } from "./imPiActionResolve.ts";
 
 type ResolveContext = {
   bus?: EventBus;

@@ -27,7 +27,7 @@ import { startProjectLoop } from "./projectLoopManager.ts";
 
 export type PiIssueAcceptanceRunner = (card: CompletionCard) => Promise<PiAcceptanceRuntimeResult>;
 
-export type PiAcceptanceCoordinatorInput = {
+type PiAcceptanceCoordinatorInput = {
   bus?: Pick<EventBus, "publish">;
   cooldownMs?: number;
   database: RunnerDatabase;

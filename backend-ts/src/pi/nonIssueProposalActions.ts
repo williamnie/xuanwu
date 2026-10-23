@@ -193,16 +193,6 @@ function slug(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "action";
 }
 
-function traceFilter(action: PiAction, payload: JsonObject): JsonObject {
-  return cleanObject({
-    action_id: action.id,
-    conversation_id: action.conversation_id,
-    project_id: action.project_id,
-    proposal_id: cleanString(payload.proposal_id),
-    source_item_ids: stringList(payload.source_item_ids)
-  });
-}
-
 function memoryScopeID(action: PiAction, payload: JsonObject): string {
   return firstString(
     payload.scope_id,

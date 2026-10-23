@@ -19,7 +19,7 @@ import {
 } from "../core/sessionView.ts";
 
 const PROVIDER = "qoder" as const;
-export const QODER_HISTORY_PAGE_SIZE = 100;
+const QODER_HISTORY_PAGE_SIZE = 100;
 export const QODER_HISTORY_MESSAGE_LIMIT = 500;
 
 export type QoderSessionFunctions = {
@@ -34,7 +34,7 @@ export const defaultQoderSessionFunctions: QoderSessionFunctions = {
   listSessions: sdkListSessions
 };
 
-export type QoderHistoryPage = {
+type QoderHistoryPage = {
   messages: SessionMessage[];
   truncated: boolean;
 };

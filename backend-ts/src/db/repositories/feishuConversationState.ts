@@ -19,7 +19,7 @@ import {
  * The physical `feishu_conversation_state` table stays as a read-only
  * historical carrier; a separate destructive migration removes it.
  */
-export const FEISHU_IM_CONNECTOR_ID = "feishu";
+const FEISHU_IM_CONNECTOR_ID = "feishu";
 
 export type FeishuConversationState = {
   active_conversation_id: string;
@@ -33,22 +33,22 @@ export type FeishuConversationState = {
   updated_at: string;
 };
 
-export type FeishuActiveProjectSource =
+type FeishuActiveProjectSource =
   "explicit_project" | "issue_ref" | "user_switch" | "card_select" | "mapping_default";
 
-export type FeishuConversationEpochInput = {
+type FeishuConversationEpochInput = {
   baseConversationId: string;
   scopeKey: string;
 };
 
-export type FeishuConversationActiveProjectInput = {
+type FeishuConversationActiveProjectInput = {
   activeConversationId?: string;
   activeProjectId: string;
   scopeKey: string;
   source: FeishuActiveProjectSource;
 };
 
-export type FeishuConversationAdoptionInput = {
+type FeishuConversationAdoptionInput = {
   activeConversationId: string;
   /** @deprecated Ignored — active project is never persisted. */
   activeProjectId?: string;

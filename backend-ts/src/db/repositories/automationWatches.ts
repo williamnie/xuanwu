@@ -15,15 +15,15 @@ import {
 import { INVESTIGATE_WORKFLOW_REF } from "../../workflows/investigate.ts";
 import type { ImTargetV1 } from "../../integrations/imChannelContracts.ts";
 
-export type AutomationWatchStatus = "watching" | "satisfied" | "notified" | "expired" | "cancelled" | "failed";
+type AutomationWatchStatus = "watching" | "satisfied" | "notified" | "expired" | "cancelled" | "failed";
 export type AutomationWatchOutcome = "" | "completion" | "failure" | "cancelled" | "thread_event" | "timeout";
-export type AutomationWatchCondition =
+type AutomationWatchCondition =
   | { match: "all" | "any"; metadata?: Record<string, unknown>; statuses: string[]; type: "issue_status" }
   | { event_types: string[]; metadata?: Record<string, unknown>; type: "external_thread_event" };
-export type AutomationWatchSubject =
+type AutomationWatchSubject =
   | { issue_ids: number[]; kind: "issues" }
   | { kind: "external_thread"; provider: string; thread_id: string };
-export type AutomationWatchNotificationTarget = Pick<ImTargetV1, "connector_id" | "conversation_id"> & {
+type AutomationWatchNotificationTarget = Pick<ImTargetV1, "connector_id" | "conversation_id"> & {
   reply_to_message_id: string;
   thread_id: string;
 };
@@ -65,7 +65,7 @@ export type CreateAutomationWatchInput = {
   project_id: string;
   subject: AutomationWatchSubject;
 };
-export type LegacyWatchMigrationResult = {
+type LegacyWatchMigrationResult = {
   created: number;
   refreshed: number;
   scanned: number;

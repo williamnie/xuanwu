@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
-import { createIssueSupervisorEvent, listIssueSupervisorEvents, listPiActions, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
+import { listIssueSupervisorEvents, listPiActions, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
 import { getPiRecoveryAttempt, listPiRecoveryAttempts, recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import { EventBus, type AppEvent } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";

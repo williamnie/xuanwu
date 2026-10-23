@@ -20,7 +20,7 @@ export const HANDOFF_RECORD_EVENT_TYPES = [
   "handoff.superseded.v1"
 ] as const;
 
-export type HandoffRecordEventType = typeof HANDOFF_RECORD_EVENT_TYPES[number];
+type HandoffRecordEventType = typeof HANDOFF_RECORD_EVENT_TYPES[number];
 
 export type StoredHandoffRecord = {
   event_id: number;
@@ -32,7 +32,7 @@ export type StoredHandoffRecord = {
   source: string;
 };
 
-export type HandoffListFilter = {
+type HandoffListFilter = {
   before_event_id?: number;
   delivery_modes?: string[];
   limit: number;
@@ -41,7 +41,7 @@ export type HandoffListFilter = {
   work_id?: string;
 };
 
-export type HandoffListPage = {
+type HandoffListPage = {
   has_more: boolean;
   items: StoredHandoffRecord[];
   next_before_event_id?: number;

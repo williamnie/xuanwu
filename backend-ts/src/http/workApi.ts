@@ -485,11 +485,6 @@ function kickProject(context: ReadApiContext, work: WorkLedgerEntry): void {
   startProjectLoop({ bus: context.bus, database: context.database, providers: context.providers }, project.id);
 }
 
-function pageResponse<T>(items: T[], page: PageInput, extra: Record<string, unknown>): Record<string, unknown> {
-  const start = (page.page - 1) * page.page_size;
-  return pagedItemsResponse(items.slice(start, start + page.page_size), items.length, page, extra);
-}
-
 function pagedItemsResponse<T>(
   items: T[],
   total: number,

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
-import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
+import { getIssue } from "../db/repositories/issues.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listPiGuardianAlerts } from "../db/repositories/pi.ts";
 import { getIssueAsWork, issueIDToWorkID } from "../domain/work/issueAdapter.ts";
@@ -382,10 +382,6 @@ function ensureWork(db: RunnerDatabase, issueID: number): void {
   if (!work) throw new Error(`missing fixture issue ${issueID}`);
   if (db.sqlite.query("select id from works where id=?").get(work.id)) return;
   insertWorkRecord(db, work);
-}
-
-function loopInput(db: RunnerDatabase, provider: FixtureProvider, now: Date) {
-  return { database: db, now, projectId: "demo", providers: { [provider.id]: provider } };
 }
 
 function watchdog(db: RunnerDatabase, provider: FixtureProvider, now: Date, escalateAfterMs = 60_000) {

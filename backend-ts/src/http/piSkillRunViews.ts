@@ -36,7 +36,7 @@ export function redactedJsonObject(value: unknown): JsonObject {
   return redacted && typeof redacted === "object" && !Array.isArray(redacted) ? redacted as JsonObject : {};
 }
 
-export function redactedJsonValue(value: unknown): unknown {
+function redactedJsonValue(value: unknown): unknown {
   try {
     return JSON.parse(redactAuditJsonText(JSON.stringify(value ?? {}))) as unknown;
   } catch {

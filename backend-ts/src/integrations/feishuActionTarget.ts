@@ -3,7 +3,7 @@ import { getIssue } from "../db/repositories/issues.ts";
 import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
 
-export type FeishuActionTarget = {
+type FeishuActionTarget = {
   issueID: number;
   projectID: string;
   source: "none" | "replied_notification" | "single_open_actionable_notification";

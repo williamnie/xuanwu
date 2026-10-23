@@ -2,7 +2,7 @@ import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
 import { recordValue } from "./feishuShared.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
-export type FeishuProjectSelectionProject = { id: string; name?: string };
+type FeishuProjectSelectionProject = { id: string; name?: string };
 export type FeishuProjectSelectionAction = {
   action_id: string;
   chat_id: string;
@@ -12,7 +12,7 @@ export type FeishuProjectSelectionAction = {
   user_id: string;
   user_open_id: string;
 };
-export type FeishuProjectSelectionCardInput = {
+type FeishuProjectSelectionCardInput = {
   candidates: FeishuProjectSelectionProject[];
   originalPrompt: string;
   selectionId: string;
@@ -67,18 +67,6 @@ export function normalizeFeishuProjectSelectionAction(raw: unknown): FeishuProje
     user_id: cleanString(operatorID.user_id || operatorID.userId),
     user_open_id: cleanString(operatorID.open_id || operatorID.openId)
   };
-}
-
-export function selectionChatIdFromEvent(event: FeishuNormalizedMessageEvent): string {
-  return event.chat_id;
-}
-
-export function selectionUserIdFromEvent(event: FeishuNormalizedMessageEvent): string {
-  return event.sender.id;
-}
-
-export function selectionUserOpenIdFromEvent(event: FeishuNormalizedMessageEvent): string {
-  return event.sender.open_id;
 }
 
 function selectedValue(action: Record<string, unknown>): Record<string, unknown> {

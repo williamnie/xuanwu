@@ -57,7 +57,7 @@ export function codexManifest(): ExecutorProviderManifest {
   };
 }
 
-export type CodexFactoryOptions = {
+type CodexFactoryOptions = {
   appEventSink?: CodexAppEventSink;
   ownershipFile?: string;
   generateTitle?: CodexThreadTitleGenerator;

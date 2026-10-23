@@ -3,7 +3,7 @@ import type { Project } from "../db/repositories/projects.ts";
 import { parseMcpCapabilityList, parseMcpPolicy } from "./policy.ts";
 import { readMcpCapability } from "./registry.ts";
 
-export type McpRequirementDiagnostic = {
+type McpRequirementDiagnostic = {
   capability_id: string;
   code: "mcp_capability_unregistered";
   message: string;

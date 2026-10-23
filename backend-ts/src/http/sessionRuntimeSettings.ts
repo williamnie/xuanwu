@@ -5,7 +5,7 @@ import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import type { SessionCreateInput, SessionMessageInput } from "../providers/types.ts";
 import { executionPolicyRequest, type ExecutionPolicyRequest } from "../providers/core/policyContracts.ts";
 
-export type RuntimeSettings = {
+type RuntimeSettings = {
   approval_policy?: string;
   model?: string;
   reasoning_effort?: string;

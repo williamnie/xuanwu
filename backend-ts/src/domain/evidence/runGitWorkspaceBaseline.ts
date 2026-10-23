@@ -23,7 +23,7 @@ type WorkspaceBaseline = CapturedGitWorkspaceBaseline & {
   run_id: string;
 };
 
-export type IssueRunGitDeliveryScope = {
+type IssueRunGitDeliveryScope = {
   base_revision: string;
   pathspecs: string[];
   uncertainty_reasons: string[];
@@ -166,10 +166,6 @@ export function issueRunGitDeliveryScope(
       ? [`Pre-existing workspace paths changed during the Run and were excluded as unattributable: ${[...uncertainPaths].sort().join(", ")}`]
       : []
   };
-}
-
-export function gitPathspecFingerprint(pathspecs: readonly string[]): string {
-  return createHash("sha256").update(`${JSON.stringify([...pathspecs].sort())}\n`).digest("hex");
 }
 
 function workspaceBaseline(input: {

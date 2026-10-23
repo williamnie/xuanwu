@@ -46,7 +46,6 @@ class Semaphore {
   }
 }
 
-
 const OBSERVATION_DEADLINE_MS = 15_000;
 const CHILD_TIMEOUT_MS = 10_000;
 const OUTPUT_LIMIT_BYTES = 8 * 1024 * 1024;
@@ -54,7 +53,7 @@ const globalSemaphore = new Semaphore(2);
 const cwdSemaphores = new Map<string, Semaphore>();
 const counters = new Map<string, number>();
 
-export type GitWorkspaceObservationInput = {
+type GitWorkspaceObservationInput = {
   project_cwd: string;
   run_id: string;
 };
@@ -101,10 +100,6 @@ export async function withGitWorkspaceObservation<T>(
     releaseGlobal();
     if (cwdSemaphore.idle) cwdSemaphores.delete(cwd);
   }
-}
-
-export function gitWorkspaceObservationMetrics(): Record<string, number> {
-  return Object.fromEntries([...counters.entries()].sort(([left], [right]) => left.localeCompare(right)));
 }
 
 /** 仅在 withGitWorkspaceObservation 的并发与时限边界内调用。 */
@@ -158,7 +153,6 @@ export async function runGit(cwd: string, args: string[], deadline: number): Pro
   });
   return result.status === 0 && !result.error ? { stdout: Buffer.from(result.stdout) } : null;
 }
-
 
 async function canonicalCwd(value: string): Promise<string> {
   const path = value.trim();

@@ -1,8 +1,8 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 
-export type StructuredAssistantOutputSource = "none" | "text" | "thinking_compat";
+type StructuredAssistantOutputSource = "none" | "text" | "thinking_compat";
 
-export type StructuredAssistantOutput<T> = {
+type StructuredAssistantOutput<T> = {
   raw: string;
   source: StructuredAssistantOutputSource;
   value: T | null;

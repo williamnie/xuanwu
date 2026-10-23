@@ -16,7 +16,7 @@ export type ImConversationRoute = {
   scopeKey: string;
 };
 
-export type ImConversationAdopter = (input: {
+type ImConversationAdopter = (input: {
   baseConversationId: string;
   now: Date;
   scopeKey: string;

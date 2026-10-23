@@ -33,7 +33,7 @@ export type ImInteractionCallback = {
   scopeKey: string;
 };
 
-export type ImInteractionResolutionContext = {
+type ImInteractionResolutionContext = {
   action: ImInteractionBinding["actions"][number];
   actor: ImInteractionCallback["actor"];
   binding: ImInteractionBinding;
@@ -42,12 +42,12 @@ export type ImInteractionResolutionContext = {
   now: Date;
 };
 
-export type ImInteractionResolveResult = {
+type ImInteractionResolveResult = {
   ok: boolean;
   status: string;
 };
 
-export type ImInteractionResolvers = {
+type ImInteractionResolvers = {
   approval?: (context: ImInteractionResolutionContext) => Promise<ImInteractionResolveResult>;
   piAction?: (context: ImInteractionResolutionContext) => Promise<ImInteractionResolveResult>;
   projectSelection?: (context: ImInteractionResolutionContext) => Promise<ImInteractionResolveResult>;
@@ -76,7 +76,7 @@ const ACTION_KIND_RESOLVER_KEYS = {
   project_selection: "projectSelection"
 } as const;
 
-export type ImInteractionServiceOptions = {
+type ImInteractionServiceOptions = {
   clock?: { now(): Date };
   database: RunnerDatabase;
   leaseMs?: number;
@@ -89,7 +89,7 @@ export function createImInteractionService(options: ImInteractionServiceOptions)
   };
 }
 
-export async function handleImInteraction(
+async function handleImInteraction(
   options: ImInteractionServiceOptions,
   callback: ImInteractionCallback
 ): Promise<ImInteractionHandleResult> {
@@ -177,7 +177,7 @@ function mapClaimFailure(status: string): ImInteractionHandleResult["reason"] {
   return "missing_binding";
 }
 
-export function safeInteractionError(error: unknown): string {
+function safeInteractionError(error: unknown): string {
   return redactSensitiveText(error instanceof Error ? error.message : String(error))
     .replace(/(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g, "[redacted-path]");
 }

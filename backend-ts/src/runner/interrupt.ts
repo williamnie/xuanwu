@@ -20,13 +20,13 @@ import { redactSensitiveText } from "../util/redact.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 import { asProviderId, type ExecutorProvider, type ExecutorProviderId, type InterruptInput, type SessionRef } from "../providers/types.ts";
 
-export type InterruptRuntime = {
+type InterruptRuntime = {
   bus?: Pick<EventBus, "publish">;
   interruptTimeoutMs?: number;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
-export type SessionInterruptResult = {
+type SessionInterruptResult = {
   interrupted: boolean;
   issue?: Issue;
 };

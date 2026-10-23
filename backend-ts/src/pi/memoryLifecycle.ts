@@ -6,7 +6,7 @@ import {
 } from "../db/repositories/pi.ts";
 
 export type PiMemoryBatchAction = "disable" | "enable" | "forget" | "pin";
-export type PiMemoryBatchInput = { action: PiMemoryBatchAction; ids: string[] };
+type PiMemoryBatchInput = { action: PiMemoryBatchAction; ids: string[] };
 
 export function applyPiMemoryBatchAction(db: RunnerDatabase, input: PiMemoryBatchInput) {
   const ids = uniqueIDs(input.ids);

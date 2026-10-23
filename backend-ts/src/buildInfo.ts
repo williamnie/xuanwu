@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 const DEFAULT_VERSION = "unknown";
 const ARTIFACT_NAME = "xuanwu";
 
-export type BunBuildInfo = {
+type BunBuildInfo = {
   artifact: string;
   bun_version: string;
   stamp: string;

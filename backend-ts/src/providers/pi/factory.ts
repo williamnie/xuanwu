@@ -49,7 +49,7 @@ export function piManifest(): ExecutorProviderManifest {
   };
 }
 
-export type PiFactoryOptions = PiExecutorProviderOptions & { command?: string };
+type PiFactoryOptions = PiExecutorProviderOptions & { command?: string };
 
 export function piFactory(options: PiFactoryOptions = {}): ProviderFactory {
   const manifest = piManifest();
@@ -76,7 +76,7 @@ export function piFactory(options: PiFactoryOptions = {}): ProviderFactory {
   };
 }
 
-export function defaultPiPolicyExtensionPath(): string {
+function defaultPiPolicyExtensionPath(): string {
   const configured = process.env.XUANWU_PI_POLICY_EXTENSION?.trim();
   if (configured) return configured;
   const adjacent = `${process.execPath}.pi-policy-extension.ts`;

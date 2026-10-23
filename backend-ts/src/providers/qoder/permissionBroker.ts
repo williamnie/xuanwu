@@ -12,10 +12,10 @@ const READ_TOOLS = ["Read", "Grep", "Glob"] as const;
 const WRITE_TOOLS = new Set(["Edit", "Write"]);
 const BLOCKED_TOOLS = ["Agent", "Bash", "NotebookEdit"] as const;
 
-export type QoderApprovalPolicy = "never" | "danger-only" | "always";
-export type QoderSandbox = "danger-full-access" | "read-only" | "workspace-write";
+type QoderApprovalPolicy = "never" | "danger-only" | "always";
+type QoderSandbox = "danger-full-access" | "read-only" | "workspace-write";
 
-export type QoderPermissionContext = {
+type QoderPermissionContext = {
   approvalPolicy?: string;
   cwd: string;
   invocationRef: string;
@@ -36,7 +36,7 @@ type PendingPermission = {
   toolName: string;
 };
 
-export type QoderPermissionBrokerOptions = {
+type QoderPermissionBrokerOptions = {
   timeoutMs?: number;
 };
 

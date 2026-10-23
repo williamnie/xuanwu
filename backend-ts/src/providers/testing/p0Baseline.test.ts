@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { createIssueRun } from "../../db/repositories/issueRuns.ts";
 import { runIssueWithProvider } from "../../runner/providerRuntime.ts";
-import { EXECUTOR_PROVIDER_IDS, type ExecutorProvider, type ProviderRunInput, type ProviderRunResult } from "../types.ts";
+import { EXECUTOR_PROVIDER_IDS } from "../types.ts";
 import { CONFORMANCE_FIXTURES, ExecutionOnlyProvider, ResumableSessionProvider } from "./conformanceFixtures.ts";
 
 const tempRoots: string[] = [];

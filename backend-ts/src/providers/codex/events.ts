@@ -3,7 +3,7 @@ import { normalizedRunEvent, providerEventSourceRef, providerRunCost, unknownRun
 import type { NormalizedRunEvent, ProviderEvent, SessionRef } from "../types.ts";
 import { codexDynamicExecObservation } from "./dynamicExec.ts";
 
-export type CodexWireNotification = { method: string; params?: unknown };
+type CodexWireNotification = { method: string; params?: unknown };
 
 export function normalizeCodexEvent(notification: CodexWireNotification): ProviderEvent {
   const method = notification.method.trim();
@@ -211,7 +211,6 @@ function applyItemLifecycleFields(event: ProviderEvent, method: string, raw: Rec
     }
   }
 }
-
 
 function threadLifecycleStatus(raw: Record<string, unknown>): string {
   const status = recordField(raw, "status");

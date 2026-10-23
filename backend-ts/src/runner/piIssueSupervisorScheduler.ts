@@ -35,7 +35,7 @@ export type PiIssueSupervisorSchedulerInput = {
   runDecision?: (context: IssueSupervisorRecoveryContext) => Promise<PiSupervisorDecisionRuntimeResult>;
   staleAfterSeconds?: number;
 };
-export type PiIssueSupervisorSchedulerResult = {
+type PiIssueSupervisorSchedulerResult = {
   decisions: number;
   failed: number;
   scanned: number;

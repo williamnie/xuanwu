@@ -1,6 +1,5 @@
 import {
   buildRemoteGitConnectorConfig,
-  redactRemoteGitConnectorConfig,
   remoteGitConnectorStatus,
   type RemoteGitConnectorConfig,
   type RemoteGitConnectorStatus
@@ -53,10 +52,6 @@ function cleanServerURL(value: string | undefined): string {
 
 export function githubConnectorStatus(config: GitHubConnectorConfig): RemoteGitConnectorStatus & { graphql_base_url: string } {
   return { ...remoteGitConnectorStatus(config), graphql_base_url: config.graphql_base_url };
-}
-
-export function redactGitHubConnectorConfig(config: GitHubConnectorConfig): GitHubConnectorConfig {
-  return { ...redactRemoteGitConnectorConfig(config), graphql_base_url: config.graphql_base_url, issueSync: structuredClone(config.issueSync) };
 }
 
 function cleanGraphqlURL(value: string | undefined, apiBaseURL: string): string {

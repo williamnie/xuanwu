@@ -2,7 +2,7 @@ import type { AssistantTool, ToolJsonSchema, ToolProvider } from "./toolProvider
 
 export const HTTP_READONLY_PROVIDER_ID = "http-readonly";
 export const URL_FETCH_TOOL_NAME = "url_fetch";
-export const HTTP_URL_FETCH_TIMEOUT_MS = 10_000;
+const HTTP_URL_FETCH_TIMEOUT_MS = 10_000;
 
 export function listHttpToolProviders(): ToolProvider[] {
   return [{

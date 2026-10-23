@@ -15,7 +15,7 @@ import type { AutomationExecutor } from "./automationScheduler.ts";
 import type { WorkflowRegistry, WorkflowResolution } from "../workflows/registry.ts";
 import { requestIssuePiAcceptance } from "./piAcceptanceRequest.ts";
 
-export type AutomationWorkflowDispatchResult = {
+type AutomationWorkflowDispatchResult = {
   detail?: string;
   outcome: "succeeded" | "skipped";
 };
@@ -40,7 +40,7 @@ export type AutomationExecutionPreparationInput = Parameters<AutomationExecutor>
   existing_link: AutomationExecutionLink | null;
 };
 
-export type AutomationWorkRunExecutorOptions = {
+type AutomationWorkRunExecutorOptions = {
   dispatch: AutomationWorkflowDispatcher;
   prepare?: (input: AutomationExecutionPreparationInput) => AutomationExecutionPreparation | Promise<AutomationExecutionPreparation>;
   workflow_registry: Pick<WorkflowRegistry, "resolve">;

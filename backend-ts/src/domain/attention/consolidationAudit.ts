@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 type CountRow = { count: number };
 type ProposalRow = { actions_json: string; id: string; source_item_ids_json: string; status: string };
 
-export const PI_DECISION_CONSOLIDATION_CONTRACT = "xw.pi-decision-consolidation.v1" as const;
+const PI_DECISION_CONSOLIDATION_CONTRACT = "xw.pi-decision-consolidation.v1" as const;
 
 export function auditPiDecisionConsolidation(input: { dbPath: string; reportPath: string }): Record<string, unknown> {
   const dbPath = resolve(required(input.dbPath, "dbPath"));

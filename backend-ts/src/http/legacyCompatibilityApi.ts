@@ -3,7 +3,7 @@ import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
 export const LEGACY_COMPATIBILITY_CONTRACT = "xw.legacy-issues-sessions.compat.v1";
-export const LEGACY_COMPATIBILITY_SUNSET = "Fri, 01 Jan 2027 00:00:00 GMT";
+const LEGACY_COMPATIBILITY_SUNSET = "Fri, 01 Jan 2027 00:00:00 GMT";
 export const LEGACY_COMPATIBILITY_REMOVAL_VERSION = "v0.4.0";
 
 const LEGACY_USAGE_EVENT = "compatibility.legacy_used.v1";

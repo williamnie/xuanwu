@@ -11,10 +11,10 @@ import { redactSensitiveText } from "../util/redact.ts";
 import type { RuntimeSessionInput } from "./piRuntime.ts";
 import type { PiRuntimeResourceSnapshot } from "./piRuntimeResources.ts";
 
-export const PI_CONTEXT_BUDGET_OBSERVATION_SCHEMA = "xw.pi-context-budget-observation.v1" as const;
+const PI_CONTEXT_BUDGET_OBSERVATION_SCHEMA = "xw.pi-context-budget-observation.v1" as const;
 export const PI_CONTEXT_BUDGET_OBSERVATION_EVENT = "runtime_context_budget_observed" as const;
 
-export type PiRuntimeSurface = "feishu" | "internal" | "runner_chat" | "telegram";
+type PiRuntimeSurface = "feishu" | "internal" | "runner_chat" | "telegram";
 
 type ObservationInput = Pick<RuntimeSessionInput,
   "conversationID" | "delegationID" | "heartbeatID" | "issueID" | "promptProfile" |
@@ -107,7 +107,7 @@ export function buildPiCompactionObservation(
   };
 }
 
-export function buildPiContextBudgetPreflight(
+function buildPiContextBudgetPreflight(
   input: ObservationInput,
   options: {
     baseSystemPrompt: string;
@@ -204,7 +204,7 @@ export function buildPiContextBudgetPreflight(
   };
 }
 
-export function buildPiContextBudgetPostflight(
+function buildPiContextBudgetPostflight(
   preflight: PreflightObservation,
   event: Extract<AgentSessionEvent, { type: "message_end" }>,
   providerCallIndex: number

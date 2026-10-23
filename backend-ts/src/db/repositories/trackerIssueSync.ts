@@ -2,10 +2,10 @@ import type { RunnerDatabase } from "../database.ts";
 import { getIssue } from "./issues.ts";
 import { getProject } from "./projects.ts";
 
-export const TRACKER_ISSUE_PROVIDERS = ["fake", "github", "gitlab", "linear"] as const;
+const TRACKER_ISSUE_PROVIDERS = ["fake", "github", "gitlab", "linear"] as const;
 export type TrackerIssueProvider = typeof TRACKER_ISSUE_PROVIDERS[number];
 
-export type TrackerProjectMapping = {
+type TrackerProjectMapping = {
   created_at: string;
   project_id: string;
   provider: TrackerIssueProvider;
@@ -13,7 +13,7 @@ export type TrackerProjectMapping = {
   updated_at: string;
 };
 
-export type TrackerIssueLink = {
+type TrackerIssueLink = {
   created_at: string;
   external_id: string;
   issue_id: number;
@@ -24,7 +24,7 @@ export type TrackerIssueLink = {
   updated_at: string;
 };
 
-export type TrackerSyncAudit = {
+type TrackerSyncAudit = {
   action: string;
   correlation_id: string;
   detail?: Record<string, unknown>;

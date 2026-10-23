@@ -40,6 +40,6 @@ export type AgenticWorkerClient = {
   runProjectCycle(input: AgenticProjectCycleRequest): Promise<AgenticProjectCycleResult>;
 };
 
-export type AgenticRpcError = { error: string; ok: false };
-export type AgenticRpcSuccess<T> = { ok: true; result: T };
+type AgenticRpcError = { error: string; ok: false };
+type AgenticRpcSuccess<T> = { ok: true; result: T };
 export type AgenticRpcResponse<T> = AgenticRpcError | AgenticRpcSuccess<T>;

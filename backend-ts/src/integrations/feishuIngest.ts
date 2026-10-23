@@ -12,13 +12,13 @@ import {
 import { feishuInboundEnvelopeForEvent } from "./feishuChannelConnector.ts";
 import { ingestImInboundEnvelope } from "./imInboundService.ts";
 
-export type FeishuIngestContext = {
+type FeishuIngestContext = {
   bus?: EventBus;
   config: FeishuConnectorConfig;
   database?: RunnerDatabase;
 };
 
-export type FeishuIngestMeta = {
+type FeishuIngestMeta = {
   encrypted?: boolean;
   rawPayloadRef?: string;
   transport: "callback" | "websocket";

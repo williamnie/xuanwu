@@ -12,7 +12,7 @@ import { libraryRegistryOptions, managedSkillPolicy } from "./libraryContext.ts"
 import { visibleManagedSkills } from "./managedStore.ts";
 import { dirname } from "node:path";
 
-export type SkillPromptContextInput = {
+type SkillPromptContextInput = {
   authorization?: PiGatePolicy;
   conversationID?: string;
   delegationID?: string;
@@ -22,12 +22,12 @@ export type SkillPromptContextInput = {
   source?: string;
 };
 
-export type SkillPromptContext = {
+type SkillPromptContext = {
   audit: SkillPromptContextAudit;
   promptSection: string;
 };
 
-export type SkillPromptContextAudit = {
+type SkillPromptContextAudit = {
   authorization_sources: string[];
   conversation_id: string;
   delegation_id: string;

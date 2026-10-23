@@ -15,10 +15,10 @@ import {
 import { createNotification } from "../db/repositories/notifications.ts";
 import { getIssueAsWork } from "../domain/work/issueAdapter.ts";
 
-export const SUPERVISOR_COMMITMENT_SCHEMA_VERSION = "xw.supervisor-commitment.v1" as const;
+const SUPERVISOR_COMMITMENT_SCHEMA_VERSION = "xw.supervisor-commitment.v1" as const;
 export const SUPERVISOR_COMMITMENT_RETENTION = "operational_not_memory" as const;
 
-export type SupervisorCommitmentStatus =
+type SupervisorCommitmentStatus =
   | "active"
   | "cancelled"
   | "completed"
@@ -26,13 +26,13 @@ export type SupervisorCommitmentStatus =
   | "failed"
   | "forgotten";
 
-export type SupervisorGoal = {
+type SupervisorGoal = {
   id: string;
   statements: string[];
   work_ids: string[];
 };
 
-export type SupervisorCommitment = {
+type SupervisorCommitment = {
   completion_notification: {
     intent_ids: string[];
     state: "not_ready" | "pending" | "sent" | "failed";
@@ -58,12 +58,12 @@ export type SupervisorCommitment = {
   work_statuses: Array<{ status: string; work_id: string }>;
 };
 
-export type SupervisorCommitmentMutationResult = {
+type SupervisorCommitmentMutationResult = {
   commitment: SupervisorCommitment;
   watch: PiIssueCompletionWatch;
 };
 
-export type SupervisorCommitmentListInput = {
+type SupervisorCommitmentListInput = {
   conversationID?: string;
   limit?: number;
   projectID?: string;
@@ -140,7 +140,7 @@ export function cancelSupervisorCommitment(
   return write.immediate();
 }
 
-export function resumeSupervisorCommitment(
+function resumeSupervisorCommitment(
   db: RunnerDatabase,
   watchID: string,
   input: { actor?: string; conversationID: string; reason?: string }
@@ -188,7 +188,7 @@ export function linkSupervisorCommitmentsForConversation(
   return linked;
 }
 
-export function expireSupervisorCommitmentIfDue(
+function expireSupervisorCommitmentIfDue(
   db: RunnerDatabase,
   watchID: string,
   currentTime = new Date()
@@ -260,7 +260,7 @@ export function listSupervisorCommitments(
     .slice(0, limit);
 }
 
-export function projectSupervisorCommitment(
+function projectSupervisorCommitment(
   db: RunnerDatabase,
   watch: PiIssueCompletionWatch
 ): SupervisorCommitment {

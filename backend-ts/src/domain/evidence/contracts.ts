@@ -14,7 +14,7 @@ import {
 } from "../../xuanwu/coreDomainContracts.ts";
 import type { RunAttemptID } from "../run/contracts.ts";
 
-export { EVIDENCE_STATUSES, type EvidenceID, type EvidenceStatus, type RunID, type RunAttemptID, type WorkID };
+export { EVIDENCE_STATUSES, type EvidenceID, type RunID, type RunAttemptID, type WorkID };
 
 export const EVIDENCE_SCHEMA_VERSION = 1 as const;
 
@@ -22,11 +22,11 @@ export const EVIDENCE_SCHEMA_VERSION = 1 as const;
 export const EVIDENCE_STATE_TRANSITIONS = STATE_TRANSITIONS.evidence;
 
 export const EVIDENCE_KINDS = ["shell", "test", "lint", "build", "git", "http", "browser", "human"] as const;
-export type KnownEvidenceKind = typeof EVIDENCE_KINDS[number];
+type KnownEvidenceKind = typeof EVIDENCE_KINDS[number];
 // Well-formed future kinds remain readable. A verification policy must explicitly register them before they can pass a gate.
 export type EvidenceKind = KnownEvidenceKind | (string & {});
 
-export const EVIDENCE_SOURCE_KINDS = [
+const EVIDENCE_SOURCE_KINDS = [
   "command_execution",
   "test_runner",
   "linter",
@@ -40,7 +40,7 @@ export const EVIDENCE_SOURCE_KINDS = [
 ] as const;
 export type EvidenceSourceKind = typeof EVIDENCE_SOURCE_KINDS[number];
 
-export const EVIDENCE_ASSERTION_ORIGINS = [
+const EVIDENCE_ASSERTION_ORIGINS = [
   "tool_result",
   "system_observation",
   "human_attestation",
@@ -50,10 +50,6 @@ export const EVIDENCE_ASSERTION_ORIGINS = [
 export type EvidenceAssertionOrigin = typeof EVIDENCE_ASSERTION_ORIGINS[number];
 
 export const EVIDENCE_ARTIFACT_KINDS = ["log", "report", "screenshot", "trace", "diff", "commit", "url", "file", "other"] as const;
-export type EvidenceArtifactKind = typeof EVIDENCE_ARTIFACT_KINDS[number];
-
-export const EVIDENCE_REDACTION_STATUSES = ["not_required", "applied"] as const;
-export type EvidenceRedactionStatus = typeof EVIDENCE_REDACTION_STATUSES[number];
 
 const requiredText = Type.String({ minLength: 1, maxLength: 4096 });
 const timestamp = Type.String({ minLength: 20, maxLength: 35 });
@@ -153,18 +149,15 @@ export type EvidenceRecord = Omit<EvidenceSchemaValue, "attempt_id" | "id" | "ki
   work_id: WorkID;
 };
 export type EvidenceArtifactRef = EvidenceRecord["artifact_refs"][number];
-export type EvidenceDecisiveOutput = EvidenceRecord["decisive_output"];
-export type EvidenceProvenance = EvidenceRecord["provenance"];
-export type EvidenceRedaction = EvidenceRecord["redaction"];
-export type EvidenceValidationResult = { errors: string[]; known_kind: boolean; ok: boolean };
+type EvidenceValidationResult = { errors: string[]; known_kind: boolean; ok: boolean };
 
-export type EvidenceTransitionGate = {
+type EvidenceTransitionGate = {
   authority: "deterministic_policy" | "human_approval";
   decision: "allow" | "deny" | "ask";
   policy_ref: string;
 };
 
-export type EvidenceTransitionAudit = {
+type EvidenceTransitionAudit = {
   actor: DomainActor;
   correlation_id: string;
   event_id: string;
@@ -181,7 +174,7 @@ export type EvidenceTransitionCommand = {
   to: Exclude<EvidenceStatus, "pending">;
 };
 
-export type EvidenceTransitionDecision = { allowed: boolean; violations: string[] };
+type EvidenceTransitionDecision = { allowed: boolean; violations: string[] };
 
 const TRUSTED_ASSERTION_ORIGINS = new Set<EvidenceAssertionOrigin>([
   "tool_result",

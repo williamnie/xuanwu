@@ -12,7 +12,7 @@ const EVIDENCE_TYPES = ['evidence.recorded.v1', 'issue.verification_human_eviden
 type Event = { id: number; type: string; payload: string | null };
 type Run = { id: string; run_id: string; started_at: string; ended_at: string };
 export type Candidate = { id: number; status: string; project_id: string; task_type: string };
-export type Money = { status: 'known' | 'unknown'; reason: string | null; currency: string | null; amount_micros: number | null };
+type Money = { status: 'known' | 'unknown'; reason: string | null; currency: string | null; amount_micros: number | null };
 export function object(value: unknown): Record<string, unknown> {
   if (typeof value === 'string') { try { return object(JSON.parse(value)); } catch { return {}; } }
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -25,7 +25,7 @@ export function sumKnown(values: (number | null)[]): number | null {
 }
 function elapsed(start: string, end: string): number | null { return number(Date.parse(end) - Date.parse(start)); }
 const unknownMoney = (reason: string): Money => ({ status: 'unknown', reason, currency: null, amount_micros: null });
-export function completeCost(rows: { cost_json: string | null }[], truncated: boolean): Money {
+function completeCost(rows: { cost_json: string | null }[], truncated: boolean): Money {
   if (truncated) return unknownMoney('query_budget');
   if (!rows.length) return unknownMoney('missing_attempt');
   let currency = '', amount = 0;

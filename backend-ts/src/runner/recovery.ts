@@ -8,12 +8,12 @@ import { requestIssuePiAcceptance } from "./piAcceptanceRequest.ts";
 import { reconcileProviderOutcome, type ProviderReportedOutcome } from "./providerOutcome.ts";
 import { restoreUnstartedWorkspaceWait } from "../domain/review/workspaceWait.ts";
 
-export type RecoveryInput = {
+type RecoveryInput = {
   database: RunnerDatabase;
   now?: Date;
 };
 
-export type RecoveryResult = { reconciled: number; requeued: number; signaled: number };
+type RecoveryResult = { reconciled: number; requeued: number; signaled: number };
 
 /**
  * 启动恢复只修复机械事实，不替 PI 做恢复决策：

@@ -4,7 +4,7 @@ export function splitList(value: unknown): string[] {
   return uniqueCleanStrings(value.split(/[;,]/));
 }
 
-export function uniqueCleanStrings(values: unknown[]): string[] {
+function uniqueCleanStrings(values: unknown[]): string[] {
   return [...new Set(values.map(cleanString).filter((item) => item !== ""))];
 }
 

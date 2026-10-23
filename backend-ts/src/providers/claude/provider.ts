@@ -28,7 +28,6 @@ import {
   inspectClaudeCliAuth,
   type ClaudeCliAuthInspection,
   type ClaudeCliProviderOptions,
-  type ClaudeProcess,
   type ClaudeProcessFactory
 } from "./cliProvider.ts";
 import { claudeAuthenticationStatus, claudeProcessEnvironment } from "./auth.ts";
@@ -60,7 +59,7 @@ import {
 } from "../types.ts";
 import { ClaudePermissionBroker } from "./permissionBroker.ts";
 
-export type { ClaudeProcess, ClaudeProcessFactory };
+export type { ClaudeProcessFactory };
 
 const PROVIDER = "claude" as const;
 const DEFAULT_MAX_TURNS = 50;
@@ -73,13 +72,13 @@ export type ClaudeQuery = AsyncIterable<unknown> & {
 };
 export type ClaudeQueryFactory = (input: QueryInput) => ClaudeQuery;
 
-export type ClaudeSessionFunctions = {
+type ClaudeSessionFunctions = {
   getSessionInfo(sessionId: string, options?: { dir?: string }): Promise<SDKSessionInfo | undefined>;
   getSessionMessages(sessionId: string, options?: GetSessionMessagesOptions): Promise<SessionMessage[]>;
   listSessions(options?: { dir?: string; limit?: number; offset?: number }): Promise<SDKSessionInfo[]>;
 };
 
-export type ClaudeSdkProviderOptions = {
+type ClaudeSdkProviderOptions = {
   authInspector?: (config: ProviderRuntimeConfig) => ClaudeCliAuthInspection;
   eventSink?: (event: ProviderEvent) => void;
   queryFactory?: ClaudeQueryFactory;
@@ -88,7 +87,7 @@ export type ClaudeSdkProviderOptions = {
   skipReadinessCheck?: boolean;
 };
 
-export type ClaudeProviderOptions = ClaudeSdkProviderOptions & ClaudeCliProviderOptions;
+type ClaudeProviderOptions = ClaudeSdkProviderOptions & ClaudeCliProviderOptions;
 
 type ActiveQuery = {
   aliases: Set<string>;

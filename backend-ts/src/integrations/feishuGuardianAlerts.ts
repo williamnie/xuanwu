@@ -12,7 +12,7 @@ import {
   shouldAttemptGuardianAlertFeishu
 } from "../pi/guardianAlertRetryPolicy.ts";
 import {
-  guardianAlertPresentation,
+  guardianAlertPresentation
 } from "../pi/guardianAlertPresentation.ts";
 import type { FeishuConnectorConfig } from "./feishu.ts";
 import {
@@ -26,7 +26,7 @@ import type { ChannelConnector } from "./channelConnectorContracts.ts";
 import { deliverImOutboundNow } from "./imOutboundDelivery.ts";
 import { notificationPresentation } from "../notifications/notificationPresentation.ts";
 
-export type PiGuardianDirectFeishuOptions = {
+type PiGuardianDirectFeishuOptions = {
   config: FeishuConnectorConfig;
   connector?: ChannelConnector;
   formatText?: (alert: PiGuardianAlert) => string;

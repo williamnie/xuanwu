@@ -1,9 +1,9 @@
-export type ScheduleParseOptions = {
+type ScheduleParseOptions = {
   base?: Date;
   timezone?: string;
 };
 
-export type ParsedSchedule = {
+type ParsedSchedule = {
   mode: string; next_run_at: string; time_of_day: string; timezone: string; working_hours_json: string;
 };
 

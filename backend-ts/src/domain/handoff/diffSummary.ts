@@ -9,9 +9,9 @@ import {
 } from "../evidence/contracts.ts";
 import type { GitChangedFileDetail } from "../evidence/gitCollector.ts";
 
-export const HANDOFF_DIFF_SUMMARY_SCHEMA_VERSION = 1 as const;
+const HANDOFF_DIFF_SUMMARY_SCHEMA_VERSION = 1 as const;
 export const HANDOFF_LARGE_FILE_THRESHOLD_BYTES = 5 * 1024 * 1024;
-export const HANDOFF_GENERATED_PATH_RULE_REF = "handoff-generated-path:v1" as const;
+const HANDOFF_GENERATED_PATH_RULE_REF = "handoff-generated-path:v1" as const;
 
 const pathText = Type.String({ minLength: 1, maxLength: 4096 });
 const count = Type.Integer({ minimum: 0 });
@@ -73,12 +73,12 @@ export type HandoffDiffSummary = Omit<HandoffDiffSummarySchemaValue, "source_evi
   source_evidence_id: EvidenceID;
 };
 
-export type GitSnapshotArtifactInput = {
+type GitSnapshotArtifactInput = {
   content: string;
   ref: string;
 };
 
-export type BuildHandoffDiffSummaryInput = {
+type BuildHandoffDiffSummaryInput = {
   git_evidence: EvidenceRecord;
   snapshot_artifact?: GitSnapshotArtifactInput;
 };

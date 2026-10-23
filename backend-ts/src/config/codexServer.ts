@@ -8,7 +8,7 @@ const DEFAULT_CLI_COMMAND = "codex app-server --listen stdio://";
 const FALLBACK_APP_CODEX_PATH = "/Applications/Codex.app/Contents/Resources/codex";
 const NATIVE_HOSTS_V2 = "chrome-native-hosts-v2.json";
 
-export type CodexNativeHostEntry = {
+type CodexNativeHostEntry = {
   appVersion?: string;
   channel?: string;
   cliVersion?: string;
@@ -24,7 +24,7 @@ export type CodexNativeHostEntry = {
   updatedAt?: string;
 };
 
-export type CodexAppIntegrationStatus = {
+type CodexAppIntegrationStatus = {
   command: string;
   installed: boolean;
   native_host_configured: boolean;
@@ -36,7 +36,7 @@ export type CodexAppIntegrationStatus = {
   warning?: string;
 };
 
-export type CodexCommandStatus = {
+type CodexCommandStatus = {
   available: boolean;
   command: string;
   error?: string;
@@ -104,7 +104,7 @@ export function codexCommandStatus(command: string): CodexCommandStatus {
   return { available: true, command, path, ...(version ? { version } : {}) };
 }
 
-export function latestNativeHostEntry(): CodexNativeHostEntry | undefined {
+function latestNativeHostEntry(): CodexNativeHostEntry | undefined {
   const entries = readNativeHostsV2().entries ?? [];
   return entries.sort((left, right) => (right.updatedAt || "").localeCompare(left.updatedAt || ""))[0];
 }
@@ -139,7 +139,7 @@ function defaultNodeModuleDirs(resourcesPath: string): string[] {
   return [`${resourcesPath}/cua_node/lib/node_modules`];
 }
 
-export function defaultCodexHome(): string {
+function defaultCodexHome(): string {
   return Bun.env.CODEX_HOME?.trim() || `${Bun.env.HOME || ""}/.codex`;
 }
 

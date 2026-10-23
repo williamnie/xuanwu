@@ -7,8 +7,8 @@ import { registerSecretForRedaction } from "../../security/redactionRegistry.ts"
 import type { FetchLike } from "../git/adapterSupport.ts";
 
 export type GitHubObject = Record<string, unknown>;
-export type GitHubPage<T> = { items: T[]; next: string | null; etag: string; notModified: boolean };
-export type GitHubResponse<T> = { data: T; headers: Headers; status: number };
+type GitHubPage<T> = { items: T[]; next: string | null; etag: string; notModified: boolean };
+type GitHubResponse<T> = { data: T; headers: Headers; status: number };
 
 export class GitHubIssueApiError extends Error {
   constructor(readonly status: number, readonly retryAfterSeconds = 0) {
@@ -159,7 +159,7 @@ function githubAppJWT(config: GitHubConnectorConfig, stateDir: string): string {
   return `${header}.${claims}.${signature}`;
 }
 
-export async function boundedResponseText(response: Response, maximumBytes: number): Promise<string> {
+async function boundedResponseText(response: Response, maximumBytes: number): Promise<string> {
   if (Number(response.headers.get("content-length")) > maximumBytes) {
     await response.body?.cancel();
     throw new Error("Response too large");

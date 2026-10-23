@@ -6,7 +6,7 @@ import { getIssue, listIssueRuns } from "./issues.ts";
 import { getProject } from "./projects.ts";
 import { listIssueEvents, recordIssueEvent, latestIssueEventsByIssueID } from "./issueEvents.ts";
 
-export const WORKSPACE_WAIT_EVENT = "issue.workspace_wait.v1";
+const WORKSPACE_WAIT_EVENT = "issue.workspace_wait.v1";
 // idle 是 Provider 明确报告的静止状态；仍须同时证明 Run/Attempt 已结束。
 const QUIESCENT_SESSION_STATUSES_SQL = "'completed','succeeded','failed','cancelled','interrupted','closed','idle'";
 export type WaitWorkspace = { cwd: string; head: string; branch: string };

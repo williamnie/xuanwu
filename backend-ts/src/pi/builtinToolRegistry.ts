@@ -170,7 +170,7 @@ function primitiveReadTools(): AssistantTool[] {
   }));
 }
 
-export function builtinToolPermission(name: string): ToolPermission {
+function builtinToolPermission(name: string): ToolPermission {
   if (DANGEROUS_TOOL_NAMES.has(name)) return "dangerous";
   return READ_TOOL_NAMES.has(name) ? "read" : "write";
 }

@@ -23,10 +23,10 @@ import {
 } from "../../events/runProgressProjector.ts";
 
 export const RUN_PROGRESS_STALLED_AFTER_MS = 15 * 60 * 1000;
-export const RUN_PROGRESS_SOURCE_EVENT_LIMIT = 5000;
-export const RUN_PROGRESS_STATUS_RUN_LIMIT = 32;
+const RUN_PROGRESS_SOURCE_EVENT_LIMIT = 5000;
+const RUN_PROGRESS_STATUS_RUN_LIMIT = 32;
 
-export type RunProgressStalledSignal = {
+type RunProgressStalledSignal = {
   detected: boolean;
   evaluated_at: string;
   reason: "" | "no_progress_for_threshold" | "waiting_approval";
@@ -179,7 +179,7 @@ export function runProgressProjectionStatus(db: RunnerDatabase, now = new Date()
   };
 }
 
-export function authoritativeRunPhase(run: RunProjectionRow, latest: AttemptProjectionRow | undefined): RunStatus | null {
+function authoritativeRunPhase(run: RunProjectionRow, latest: AttemptProjectionRow | undefined): RunStatus | null {
   const status = run.legacy_status === "in_progress" && latest?.kind === "recovery" &&
     ["created", "failed", "interrupted"].includes(latest.status ?? "")
     ? "recovering"

@@ -4,7 +4,7 @@ import { buildPiActivityScope, loadPiActivityRows } from "./activityTimelineScop
 import type { PiActivityFilter, PiActivityTimeline } from "./activityTimelineTypes.ts";
 import { compareNodes, inWindow, publicFilters, resultLimit } from "./activityTimelineSupport.ts";
 
-export type { PiActivityFilter, PiActivityNode, PiActivityTimeline } from "./activityTimelineTypes.ts";
+export type { PiActivityNode } from "./activityTimelineTypes.ts";
 
 export function listPiActivityTimeline(db: RunnerDatabase, filter: PiActivityFilter = {}): PiActivityTimeline {
   const rows = loadPiActivityRows(db, filter);

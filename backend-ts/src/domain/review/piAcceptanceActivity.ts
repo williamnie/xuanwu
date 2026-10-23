@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../../db/database.ts";
 import { listIssueEvents, recordIssueEvent } from "../../db/repositories/issueEvents.ts";
 
-export const PI_ACCEPTANCE_ACTIVITY_EVENT_TYPES = {
+const PI_ACCEPTANCE_ACTIVITY_EVENT_TYPES = {
   queued: "issue.pi_acceptance_queued.v1",
   running: "issue.pi_acceptance_started.v1",
   waiting: "issue.pi_acceptance_waiting.v1",
@@ -9,7 +9,7 @@ export const PI_ACCEPTANCE_ACTIVITY_EVENT_TYPES = {
   failed: "issue.pi_acceptance_failed.v1"
 } as const;
 
-export type PiAcceptanceActivityStatus =
+type PiAcceptanceActivityStatus =
   | "queued"
   | "running"
   | "waiting"

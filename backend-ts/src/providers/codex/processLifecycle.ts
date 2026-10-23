@@ -3,20 +3,20 @@ import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { dirname } from "node:path";
 
 export const CODEX_PROCESS_OWNERSHIP_CONTRACT = "codex-process-group-ownership.v1" as const;
-export const DEFAULT_CODEX_PROCESS_STOP_GRACE_MS = 1_000;
-export const DEFAULT_CODEX_PROCESS_MIN_SCAN_INTERVAL_MS = 1_000;
+const DEFAULT_CODEX_PROCESS_STOP_GRACE_MS = 1_000;
+const DEFAULT_CODEX_PROCESS_MIN_SCAN_INTERVAL_MS = 1_000;
 const PROCESS_TABLE_MAX_BYTES = 8 * 1024 * 1024;
 const PROCESS_TABLE_TIMEOUT_MS = 5_000;
 
 export type ProcessSignal = "SIGKILL" | "SIGTERM";
 export type ProcessTreeEntry = { command: string; pgid: number; pid: number; ppid: number; rss_bytes: number };
-export type ProcessInspectionFailureReason = "exit_nonzero" | "output_too_large" | "parse_failed" | "spawn_failed";
-export type ProcessInspectionResult =
+type ProcessInspectionFailureReason = "exit_nonzero" | "output_too_large" | "parse_failed" | "spawn_failed";
+type ProcessInspectionResult =
   | { ok: true; rows: ProcessTreeEntry[] }
   | { ok: false; reason_code: ProcessInspectionFailureReason };
-export type ProcessRefreshMode = "coalesced" | "force";
-export type ProcessRefreshOptions = { mode?: ProcessRefreshMode; reason?: string };
-export type ProcessLifecycleMetrics = {
+type ProcessRefreshMode = "coalesced" | "force";
+type ProcessRefreshOptions = { mode?: ProcessRefreshMode; reason?: string };
+type ProcessLifecycleMetrics = {
   last_scan_age_ms: number;
   ownership_persisted_total: number;
   scan_executed_total: number;
@@ -340,7 +340,7 @@ export async function reconcileStaleCodexProcessOwnership(
   return { ...base, action: "killed", killed_process_groups: groups };
 }
 
-export async function inspectProcessTable(): Promise<ProcessInspectionResult> {
+async function inspectProcessTable(): Promise<ProcessInspectionResult> {
   let process: ReturnType<typeof Bun.spawn>;
   try {
     process = Bun.spawn(["ps", "-axo", "pid=,ppid=,pgid=,rss=,command="], { stderr: "ignore", stdout: "pipe" });

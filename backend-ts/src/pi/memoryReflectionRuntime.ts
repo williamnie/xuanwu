@@ -25,7 +25,7 @@ export async function runMemoryReflectionRuntime(db: RunnerDatabase, request: Me
 }
 
 // 隔离回放复用同一提示、预算和错误检查；会话资源与鉴权由调用方显式绑定。
-export async function promptMemoryReflectionSession(
+async function promptMemoryReflectionSession(
   session: Awaited<ReturnType<typeof createPiRuntimeSession>>["session"],
   signal: AbortSignal,
   usage = unknownReflectionUsage()

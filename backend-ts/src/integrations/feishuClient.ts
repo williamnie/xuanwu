@@ -1,11 +1,11 @@
 import type { FeishuConnectorConfig } from "./feishu.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
-export type FeishuReceiveIdType = "chat_id" | "email" | "open_id" | "union_id" | "user_id";
+type FeishuReceiveIdType = "chat_id" | "email" | "open_id" | "union_id" | "user_id";
 export type FeishuTextMessageInput = { receiveId: string; receiveIdType: FeishuReceiveIdType | string; text: string };
-export type FeishuInteractiveCardInput = { card: Record<string, unknown>; receiveId: string; receiveIdType: FeishuReceiveIdType | string };
+type FeishuInteractiveCardInput = { card: Record<string, unknown>; receiveId: string; receiveIdType: FeishuReceiveIdType | string };
 export type FeishuReactionInput = { emojiType: string; messageId: string };
-export type FeishuReactionResult = { reactionId: string };
+type FeishuReactionResult = { reactionId: string };
 export type FeishuTextMessageResult = { messageId: string };
 export type FeishuMessageClient = {
   addMessageReaction?(input: FeishuReactionInput): Promise<FeishuReactionResult>;

@@ -24,7 +24,7 @@ type StandingOrderContextItem = {
   updated_at: string;
 };
 
-export type StandingOrderContext = {
+type StandingOrderContext = {
   automation_id: string;
   budget: { consumed: number; limit: number };
   heartbeat_summary: {

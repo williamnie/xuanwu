@@ -140,7 +140,7 @@ function applyMappedStatus(db: RunnerDatabase, link: ReturnType<typeof getTracke
   return { action: issue.status === nextStatus ? "status_unchanged" : "status_applied", conflict: false };
 }
 
-export function normalizeTrackerIssueEvent(input: TrackerIssueEvent): TrackerIssueEvent {
+function normalizeTrackerIssueEvent(input: TrackerIssueEvent): TrackerIssueEvent {
   const provider = trackerIssueProvider(input.provider);
   const scope = trackerScope(input.scope);
   const externalID = required(input.external_id, "external_id");

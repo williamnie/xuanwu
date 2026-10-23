@@ -19,7 +19,7 @@ type RuntimeLogFile = {
 
 type RuntimeLogPath = { path: string; readPath: string; source: string };
 
-export type RuntimeLogsSummary = {
+type RuntimeLogsSummary = {
   generated_at: string;
   line_limit: number;
   logs: RuntimeLogFile[];

@@ -22,9 +22,9 @@ import {
 } from "./manifest.ts";
 import type { WorkflowManifestRegistration } from "./registry.ts";
 
-export const RELEASE_WORKFLOW_SOURCE_PATH = "builtin:workflows/release@1" as const;
-export const RESEARCH_WORKFLOW_SOURCE_PATH = "builtin:workflows/research@1" as const;
-export const MIGRATE_WORKFLOW_SOURCE_PATH = "builtin:workflows/migrate@1" as const;
+const RELEASE_WORKFLOW_SOURCE_PATH = "builtin:workflows/release@1" as const;
+const RESEARCH_WORKFLOW_SOURCE_PATH = "builtin:workflows/research@1" as const;
+const MIGRATE_WORKFLOW_SOURCE_PATH = "builtin:workflows/migrate@1" as const;
 
 export const RELEASE_VERIFICATION_POLICY: WorkflowVerificationPolicy = {
   schema_version: 1,
@@ -237,8 +237,8 @@ const evidenceID = Type.String({
 const handoffID = Type.String({ pattern: "^xw:handoff:derived:[A-Za-z0-9._~%-]+$" });
 const identifier = Type.String({ minLength: 1, maxLength: 128, pattern: "^[a-z][a-z0-9._-]*$" });
 
-export const RESEARCH_WORKFLOW_REPORT_SCHEMA_VERSION = "xw.research-workflow-report.v1" as const;
-export const RESEARCH_WORKFLOW_REPORT_SCHEMA = Type.Object({
+const RESEARCH_WORKFLOW_REPORT_SCHEMA_VERSION = "xw.research-workflow-report.v1" as const;
+const RESEARCH_WORKFLOW_REPORT_SCHEMA = Type.Object({
   schema_version: Type.Literal(RESEARCH_WORKFLOW_REPORT_SCHEMA_VERSION),
   workflow_ref: Type.Literal(RESEARCH_WORKFLOW_REF),
   project_id: Type.String({ minLength: 1, maxLength: 256 }),
@@ -294,8 +294,8 @@ const authorizedMutationSchema = Type.Object({
   rollback_ref: requiredText
 }, { additionalProperties: false });
 
-export const MIGRATE_WORKFLOW_EXECUTION_SCHEMA_VERSION = "xw.migrate-workflow-execution.v1" as const;
-export const MIGRATE_WORKFLOW_EXECUTION_SCHEMA = Type.Object({
+const MIGRATE_WORKFLOW_EXECUTION_SCHEMA_VERSION = "xw.migrate-workflow-execution.v1" as const;
+const MIGRATE_WORKFLOW_EXECUTION_SCHEMA = Type.Object({
   schema_version: Type.Literal(MIGRATE_WORKFLOW_EXECUTION_SCHEMA_VERSION),
   workflow_ref: Type.Literal(MIGRATE_WORKFLOW_REF),
   project_id: Type.String({ minLength: 1, maxLength: 256 }),
@@ -342,9 +342,9 @@ export type WorkflowRuntimeContext = {
   now: string;
   runs: Array<{ id: RunID; work_id: WorkID }>;
 };
-export type WorkflowValidation = { errors: string[]; ok: boolean };
+type WorkflowValidation = { errors: string[]; ok: boolean };
 
-export type ReleaseWorkflowProjection = {
+type ReleaseWorkflowProjection = {
   evidence_ids: string[];
   handoff_id: HandoffRecord["id"];
   release_ref: string;

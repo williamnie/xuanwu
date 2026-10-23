@@ -27,7 +27,7 @@ export type ProviderSessionDetailView = ProviderSessionView & {
   turns: ProviderSessionTurn[];
 };
 
-export type ProviderSessionViewCandidate = {
+type ProviderSessionViewCandidate = {
   sessionRef: string;
   name?: string;
   preview?: string;

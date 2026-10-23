@@ -7,7 +7,7 @@ import { runMigrations, type SqlMigration } from "./migrations.ts";
 import { migrations as currentMigrations } from "./schema/index.ts";
 
 export const STORAGE_COMPAT_VERSION = "xuanwu.storage-compat.v1" as const;
-export const MIGRATION_REHEARSAL_REPORT_SCHEMA_VERSION = "xuanwu.db-migration-rehearsal-report.v1" as const;
+const MIGRATION_REHEARSAL_REPORT_SCHEMA_VERSION = "xuanwu.db-migration-rehearsal-report.v1" as const;
 
 type Authorization = {
   actor: string;
@@ -16,7 +16,7 @@ type Authorization = {
   reason: string;
 };
 
-export type MigrationRehearsalInput = {
+type MigrationRehearsalInput = {
   actor?: string;
   actorKind?: "automation" | "system" | "user";
   apply?: boolean;

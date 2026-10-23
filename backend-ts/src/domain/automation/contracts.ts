@@ -1,9 +1,9 @@
 import { parseWorkflowManifestRef } from "../../workflows/manifest.ts";
 
-export const AUTOMATION_TRIGGER_TYPES = ["cron", "manual", "webhook", "continuous"] as const;
-export const AUTOMATION_STATUSES = ["draft", "active", "paused", "archived"] as const;
-export const AUTOMATION_MODES = ["observe", "propose", "execute_allowed"] as const;
-export const AUTOMATION_RUN_STATUSES = ["queued", "running", "succeeded", "failed", "skipped"] as const;
+const AUTOMATION_TRIGGER_TYPES = ["cron", "manual", "webhook", "continuous"] as const;
+const AUTOMATION_STATUSES = ["draft", "active", "paused", "archived"] as const;
+const AUTOMATION_MODES = ["observe", "propose", "execute_allowed"] as const;
+const AUTOMATION_RUN_STATUSES = ["queued", "running", "succeeded", "failed", "skipped"] as const;
 
 export type AutomationTriggerType = typeof AUTOMATION_TRIGGER_TYPES[number];
 export type AutomationStatus = typeof AUTOMATION_STATUSES[number];
@@ -14,10 +14,10 @@ export type AutomationScope =
   | { kind: "project"; project_id: string }
   | { control_plane_id: "local"; kind: "control_plane" };
 
-export type CronTriggerConfig = { expression: string; timezone: string };
-export type ManualTriggerConfig = { target_issue_id?: number };
-export type WebhookTriggerConfig = { event_type: string; secret_ref?: string };
-export type ContinuousTriggerConfig = { poll_interval_seconds: number };
+type CronTriggerConfig = { expression: string; timezone: string };
+type ManualTriggerConfig = { target_issue_id?: number };
+type WebhookTriggerConfig = { event_type: string; secret_ref?: string };
+type ContinuousTriggerConfig = { poll_interval_seconds: number };
 export type AutomationTriggerConfig =
   | { config: CronTriggerConfig; type: "cron" }
   | { config: ManualTriggerConfig; type: "manual" }
@@ -77,7 +77,7 @@ const STATUS_TRANSITIONS: Record<AutomationStatus, readonly AutomationStatus[]> 
   archived: []
 };
 
-export function validateAutomationDefinition(definition: AutomationDefinition): string[] {
+function validateAutomationDefinition(definition: AutomationDefinition): string[] {
   const errors: string[] = [];
   if (!/^automation:[a-z][a-z0-9._-]{0,127}$/.test(definition.id)) errors.push("automation id is invalid");
   if (!definition.name.trim()) errors.push("automation name is required");

@@ -5,7 +5,7 @@ import {
 } from "./policyContracts.ts";
 import { translateLegacyExecutionPolicy } from "./legacyExecutionPolicy.ts";
 
-export type StoredExecutionPolicy = {
+type StoredExecutionPolicy = {
   policy?: ExecutionPolicyRequest;
   source: "default" | "legacy" | "profile" | "project" | "inherit";
   warnings: string[];

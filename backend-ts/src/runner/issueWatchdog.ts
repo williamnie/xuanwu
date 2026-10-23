@@ -33,7 +33,7 @@ export type IssueWatchdogSummary = {
   waiting: number;
 };
 
-export type IssueWatchdogInput = {
+type IssueWatchdogInput = {
   bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
   escalateAfterMs?: number;

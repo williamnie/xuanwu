@@ -309,13 +309,6 @@ function post(router: ReturnType<typeof createDefaultRouter>, path: string): Pro
     headers: { "content-type": "application/json" }
   }));
 }
-async function nextEvent(events: ReturnType<EventBus["subscribe"]>, type: string) {
-  for (let index = 0; index < 20; index += 1) {
-    const event = await events.next();
-    if (!event || event.type === type) return event;
-  }
-  return undefined;
-}
 function insertFauxAgent(db: RunnerDatabase, provider = "pi-control-faux"): void {
   db.sqlite.run(
     `update pi_agents

@@ -8,7 +8,7 @@ import { createFeishuChannelConnector } from "./feishuChannelConnector.ts";
 import type { FeishuMessageClient } from "./feishuClient.ts";
 
 export type FeishuMessageSender = FeishuMessageClient;
-export type FeishuOutboxDispatchResult = ImOutboxDispatchResult;
+type FeishuOutboxDispatchResult = ImOutboxDispatchResult;
 
 /** Bounded W1 adapter; all claim/send/receipt work stays in dispatchImOutbox. */
 export function dispatchFeishuOutbox(options: {

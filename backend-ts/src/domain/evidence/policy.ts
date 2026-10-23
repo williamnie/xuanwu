@@ -13,7 +13,7 @@ import {
 
 export const VERIFICATION_POLICY_SCHEMA_VERSION = 1 as const;
 export const VERIFICATION_PROJECT_OVERRIDE_SCHEMA_VERSION = 1 as const;
-export const VERIFICATION_RISK_LEVELS = ["safe", "confirm", "high", "forbidden"] as const;
+const VERIFICATION_RISK_LEVELS = ["safe", "confirm", "high", "forbidden"] as const;
 export type VerificationRiskLevel = typeof VERIFICATION_RISK_LEVELS[number];
 
 const id = Type.String({ minLength: 1, maxLength: 128, pattern: "^[a-z][a-z0-9._-]*$" });
@@ -116,15 +116,15 @@ export const PROJECT_VERIFICATION_OVERRIDE_SCHEMA = Type.Object({
 
 type VerificationPolicySchemaValue = Static<typeof VERIFICATION_POLICY_SCHEMA>;
 type ProjectVerificationOverrideSchemaValue = Static<typeof PROJECT_VERIFICATION_OVERRIDE_SCHEMA>;
-export type EvidenceFactAssertion = Static<typeof factAssertionSchema>;
+type EvidenceFactAssertion = Static<typeof factAssertionSchema>;
 export type EvidenceRequirement = Omit<Static<typeof evidenceRequirementSchema>, "evidence_kinds"> & {
   evidence_kinds: EvidenceKind[];
 };
-export type EvidenceRequirementGroup = Omit<Static<typeof evidenceGroupSchema>, "requirements"> & {
+type EvidenceRequirementGroup = Omit<Static<typeof evidenceGroupSchema>, "requirements"> & {
   requirements: EvidenceRequirement[];
 };
-export type VerificationKindRule = Omit<Static<typeof kindRuleSchema>, "kind"> & { kind: EvidenceKind };
-export type VerificationRiskOverride = Omit<Static<typeof riskOverrideSchema>, "additional_required_groups"> & {
+type VerificationKindRule = Omit<Static<typeof kindRuleSchema>, "kind"> & { kind: EvidenceKind };
+type VerificationRiskOverride = Omit<Static<typeof riskOverrideSchema>, "additional_required_groups"> & {
   additional_required_groups: EvidenceRequirementGroup[];
 };
 export type WorkflowVerificationPolicy = Omit<
@@ -141,7 +141,7 @@ export type ProjectVerificationOverride = Omit<
   "additional_required_groups"
 > & { additional_required_groups: EvidenceRequirementGroup[] };
 
-export type VerificationSkipDecision = {
+type VerificationSkipDecision = {
   audit_event_ref: string;
   human_evidence_id: EvidenceID;
   reason: string;
@@ -149,13 +149,13 @@ export type VerificationSkipDecision = {
   requirement_id: string;
 };
 
-export type VerificationManualOverride = {
+type VerificationManualOverride = {
   audit_event_ref: string;
   human_evidence_id: EvidenceID;
   reason: string;
 };
 
-export type VerificationEvaluationContext = {
+type VerificationEvaluationContext = {
   attempt_id?: RunAttemptID;
   now: string;
   project_id: string;
@@ -164,7 +164,7 @@ export type VerificationEvaluationContext = {
   work_id: WorkID;
 };
 
-export type EvaluateVerificationPolicyInput = {
+type EvaluateVerificationPolicyInput = {
   artifact_availability?: Readonly<Record<string, boolean>>;
   context: VerificationEvaluationContext;
   evidence: readonly EvidenceRecord[];
@@ -175,25 +175,25 @@ export type EvaluateVerificationPolicyInput = {
 };
 
 export type VerificationRequirementStatus = "passed" | "skipped" | "missing" | "pending" | "failed";
-export type VerificationRequirementResult = {
+type VerificationRequirementResult = {
   evidence_id?: EvidenceID;
   reason: string;
   requirement_id: string;
   status: VerificationRequirementStatus;
 };
-export type VerificationGroupResult = {
+type VerificationGroupResult = {
   group_id: string;
   operator: "all" | "any";
   requirements: VerificationRequirementResult[];
   status: "passed" | "pending" | "failed";
 };
-export type VerificationOverrideResult = {
+type VerificationOverrideResult = {
   applied: boolean;
   evidence_id?: EvidenceID;
   reasons: string[];
 };
 export type VerificationPolicyDecision = "passed" | "pending" | "failed" | "overridden" | "invalid";
-export type VerificationPolicyEvaluation = {
+type VerificationPolicyEvaluation = {
   applied_project_override: boolean;
   applied_risk_override: boolean;
   decision: VerificationPolicyDecision;
@@ -204,7 +204,7 @@ export type VerificationPolicyEvaluation = {
   policy_ref: string;
   satisfied: boolean;
 };
-export type VerificationContractValidation = { errors: string[]; ok: boolean };
+type VerificationContractValidation = { errors: string[]; ok: boolean };
 
 type EffectivePolicy = {
   groups: EvidenceRequirementGroup[];

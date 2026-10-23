@@ -6,7 +6,7 @@ import {
 import { projectPendingEventSummaries } from "./eventSummaryProjector.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
-export const BACKGROUND_PROJECTION_POLICY = {
+const BACKGROUND_PROJECTION_POLICY = {
   batch_size: 100,
   backpressure_delay_ms: 25,
   idle_delay_ms: 1000,
@@ -15,7 +15,7 @@ export const BACKGROUND_PROJECTION_POLICY = {
   source_of_truth: "issue_events"
 } as const;
 
-export type ProjectionWorkerSnapshot = {
+type ProjectionWorkerSnapshot = {
   backpressure: boolean;
   completed_batches: number;
   completed_rows: number;

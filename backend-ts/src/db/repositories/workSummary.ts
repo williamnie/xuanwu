@@ -2,24 +2,24 @@ import type { RunnerDatabase } from "../database.ts";
 import { WORK_STATUSES, type WorkStatus } from "../../domain/work/contracts.ts";
 
 export const WORK_SUMMARY_CONTRACT = "xuanwu.work-summary.v1" as const;
-export const WORK_SUMMARY_PROJECT_CAP = 128;
-export const OPERATIONAL_WORK_STATUSES = ["triage", "todo", "in_progress", "needs_user", "failed"] as const;
-export const HISTORY_WORK_STATUSES = ["done", "cancelled"] as const;
+const WORK_SUMMARY_PROJECT_CAP = 128;
+const OPERATIONAL_WORK_STATUSES = ["triage", "todo", "in_progress", "needs_user", "failed"] as const;
+const HISTORY_WORK_STATUSES = ["done", "cancelled"] as const;
 
-export type WorkStatusCounts = Record<WorkStatus, number> & {
+type WorkStatusCounts = Record<WorkStatus, number> & {
   history: number;
   operational: number;
   total: number;
   unknown_status_count: number;
 };
-export type WorkSummary = {
+type WorkSummary = {
   activity: { guarding: number };
   counts: WorkStatusCounts;
   project_count: number;
   project_counts?: Array<{ counts: WorkStatusCounts; project_id: string }>;
   scope: { project_id: string };
 };
-export type WorkSummaryInput = { includeProjects: boolean; projectId?: string };
+type WorkSummaryInput = { includeProjects: boolean; projectId?: string };
 
 type SummaryRow = { guarding: unknown; normalized_status: unknown; project_id: unknown; total: unknown };
 
@@ -92,7 +92,7 @@ export function readWorkSummary(db: RunnerDatabase, input: WorkSummaryInput): Wo
   };
 }
 
-export function emptyWorkStatusCounts(): WorkStatusCounts {
+function emptyWorkStatusCounts(): WorkStatusCounts {
   return {
     cancelled: 0,
     done: 0,

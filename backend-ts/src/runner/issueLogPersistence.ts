@@ -1,10 +1,10 @@
 import type { ProviderEvent } from "../providers/types.ts";
 import { codexDynamicExecObservation } from "../providers/codex/dynamicExec.ts";
 
-export const ISSUE_LOG_CHUNK_EVENT_LIMIT = 64;
-export const ISSUE_LOG_CHUNK_TEXT_BYTES = 32 * 1024;
+const ISSUE_LOG_CHUNK_EVENT_LIMIT = 64;
+const ISSUE_LOG_CHUNK_TEXT_BYTES = 32 * 1024;
 export const ISSUE_LOG_DELTA_ROWS_PER_METHOD = 64;
-export const ISSUE_LOG_DELTA_TEXT_BYTES_PER_METHOD = 2 * 1024 * 1024;
+const ISSUE_LOG_DELTA_TEXT_BYTES_PER_METHOD = 2 * 1024 * 1024;
 export const ISSUE_LOG_SAMPLE_ROWS_PER_METHOD = 64;
 export const ISSUE_LOG_LIFECYCLE_ROWS_PER_TYPE = 256;
 export const ISSUE_LOG_PROTECTED_ROWS_PER_METHOD = 1024;
@@ -50,7 +50,7 @@ type DeltaBudget = { omittedBytes: number; omittedEvents: number; rows: number; 
 type SampleBudget = { omittedEvents: number; rows: number };
 type DirectBudget = { markerWritten: boolean; omittedEvents: number; rows: number };
 
-export type IssueLogPersistence = {
+type IssueLogPersistence = {
   flush(): void;
   push(event: ProviderEvent): void;
 };

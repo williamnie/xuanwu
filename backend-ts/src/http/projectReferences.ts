@@ -1,7 +1,7 @@
 import { opendir, readFile, stat } from "node:fs/promises";
 import { basename, join, relative, resolve } from "node:path";
 
-export type ProjectReferenceSearchResult = { files: ProjectPathReference[]; folders: ProjectPathReference[] };
+type ProjectReferenceSearchResult = { files: ProjectPathReference[]; folders: ProjectPathReference[] };
 type ProjectPathReference = { file_count?: number; path: string; size_bytes?: number; type: "file" | "folder" };
 type SearchFilter = { limit?: number; query?: string; type?: string };
 type ScanBudget = { remaining: number; deadline: number; incomplete?: boolean };

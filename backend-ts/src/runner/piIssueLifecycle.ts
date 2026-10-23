@@ -3,9 +3,9 @@ import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 
-export const PI_ISSUE_DECISION_EVENT = "issue.pi_lifecycle_decision.v1";
+const PI_ISSUE_DECISION_EVENT = "issue.pi_lifecycle_decision.v1";
 
-export type PiSemanticIssueStatus = "done" | "failed" | "needs_user";
+type PiSemanticIssueStatus = "done" | "failed" | "needs_user";
 
 /**
  * Issue 的语义终态只能从这个 Host 写入口落库。Provider 和巡检器只记录事实；

@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../database.ts";
 
-export type ImContextDirection = "inbound" | "outbound";
-export type ImContextProjectionEvent = {
+type ImContextDirection = "inbound" | "outbound";
+type ImContextProjectionEvent = {
   direction: ImContextDirection;
   included: boolean;
   messageRef: string;
@@ -16,7 +16,7 @@ export type ImContextProjectionReservation = {
   scopeKey: string;
   turnID: string;
 };
-export type ImContextCursor = {
+type ImContextCursor = {
   connector_id: string;
   conversation_id: string;
   inbound_event_id: number;
@@ -24,7 +24,7 @@ export type ImContextCursor = {
   scope_key: string;
   updated_at: string;
 };
-export type ImContextRollover = {
+type ImContextRollover = {
   activated_at: string;
   capsule_json: string;
   child_conversation_id: string;
@@ -214,7 +214,7 @@ export function activateImContextRollover(
   return activate.immediate();
 }
 
-export function getImContextRollover(db: RunnerDatabase, id: string): ImContextRollover | null {
+function getImContextRollover(db: RunnerDatabase, id: string): ImContextRollover | null {
   const row = db.sqlite.query<Record<string, unknown>, [string]>(`
     select id, connector_id, scope_key, parent_conversation_id, child_conversation_id,
       parent_epoch, child_epoch, trigger, status, capsule_json, expected_active_conversation_id,

@@ -7,15 +7,13 @@ import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts
 import { redactSensitiveText } from "../util/redact.ts";
 import { type FeishuApprovalAction } from "./feishuApprovalCards.ts";
 import { resolvePiApprovalRequestFromIm } from "./imApprovalResolve.ts";
-export { resolvePiApprovalRequestFromIm } from "./imApprovalResolve.ts";
-export type { ImApprovalResolveInput } from "./imApprovalResolve.ts";
 
-export type FeishuApprovalResolveInput = FeishuApprovalAction & {
+type FeishuApprovalResolveInput = FeishuApprovalAction & {
   provider?: Pick<ExecutorProvider, "resolveApproval">;
   providers?: Partial<Record<ExecutorProviderId, Pick<ExecutorProvider, "resolveApproval">>>;
 };
 
-export type ParsedApproval = {
+type ParsedApproval = {
   command: string;
   id: string;
   method: string;

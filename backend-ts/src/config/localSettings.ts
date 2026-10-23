@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
-import { chmod, mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
-export const LOCAL_SETTINGS_FILENAME = "runner-settings.local.json";
+const LOCAL_SETTINGS_FILENAME = "runner-settings.local.json";
 
 type PiLocalSettings = {
   command?: string;
@@ -11,7 +11,7 @@ type PiLocalSettings = {
   timeoutMs?: number;
 };
 
-export type QoderLocalSettings = {
+type QoderLocalSettings = {
   authMode?: "pat-env" | "pat-secret-ref" | "service-account-secret-ref" | "local-cli";
   command?: string;
   configDir?: string;
@@ -70,7 +70,7 @@ export async function readLocalSettingsFile(path: string): Promise<RunnerLocalSe
   }
 }
 
-export async function writeLocalSettingsFile(path: string, value: RunnerLocalSettings): Promise<void> {
+async function writeLocalSettingsFile(path: string, value: RunnerLocalSettings): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.${crypto.randomUUID()}.tmp`;
   try {

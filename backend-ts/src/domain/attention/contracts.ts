@@ -1,6 +1,5 @@
 import {
   ATTENTION_STATUSES,
-  STATE_TRANSITIONS,
   canTransition,
   makeDomainID,
   parseDomainID,
@@ -11,12 +10,9 @@ import {
   type ScopeOwner
 } from "../../xuanwu/coreDomainContracts.ts";
 
-export { ATTENTION_STATUSES, type AttentionID, type AttentionStatus };
+export { type AttentionStatus };
 
-// P00.04 remains the single source for the shared Attention status vocabulary and edge table.
-export const ATTENTION_STATE_TRANSITIONS = STATE_TRANSITIONS.attention;
-
-export const ATTENTION_TYPES = [
+const ATTENTION_TYPES = [
   "blocker",
   "failure",
   "approval_required",
@@ -26,23 +22,23 @@ export const ATTENTION_TYPES = [
 ] as const;
 export type AttentionType = typeof ATTENTION_TYPES[number];
 
-export const ATTENTION_PRIORITIES = ["p0", "p1", "p2", "p3"] as const;
-export type AttentionPriority = typeof ATTENTION_PRIORITIES[number];
+const ATTENTION_PRIORITIES = ["p0", "p1", "p2", "p3"] as const;
+type AttentionPriority = typeof ATTENTION_PRIORITIES[number];
 
-export const ATTENTION_SEVERITIES = ["critical", "high", "medium", "low"] as const;
+const ATTENTION_SEVERITIES = ["critical", "high", "medium", "low"] as const;
 export type AttentionSeverity = typeof ATTENTION_SEVERITIES[number];
 
-export const ATTENTION_SOURCE_AUTHORITIES = [
+const ATTENTION_SOURCE_AUTHORITIES = [
   "attention_inbox_items",
   "pi_guardian_alerts",
   "pi_approval_requests",
   "pi_actions",
   "issues"
 ] as const;
-export type AttentionSourceAuthority = typeof ATTENTION_SOURCE_AUTHORITIES[number];
+type AttentionSourceAuthority = typeof ATTENTION_SOURCE_AUTHORITIES[number];
 
-export const ATTENTION_SOURCE_RESOLUTIONS = ["active", "resolved", "dismissed"] as const;
-export type AttentionSourceResolution = typeof ATTENTION_SOURCE_RESOLUTIONS[number];
+const ATTENTION_SOURCE_RESOLUTIONS = ["active", "resolved", "dismissed"] as const;
+type AttentionSourceResolution = typeof ATTENTION_SOURCE_RESOLUTIONS[number];
 
 export const ATTENTION_PRIORITY_TABLE = {
   blocker: { critical: "p0", high: "p1", medium: "p1", low: "p2" },
@@ -53,7 +49,7 @@ export const ATTENTION_PRIORITY_TABLE = {
   connection_issue: { critical: "p0", high: "p1", medium: "p1", low: "p2" }
 } as const satisfies Record<AttentionType, Record<AttentionSeverity, AttentionPriority>>;
 
-export const ATTENTION_ESCALATION_AFTER_MS = {
+const ATTENTION_ESCALATION_AFTER_MS = {
   p0: null,
   p1: 60 * 60 * 1000,
   p2: 4 * 60 * 60 * 1000,
@@ -85,7 +81,7 @@ export type AttentionCandidate = {
   updated_at: string;
 };
 
-export type AttentionEscalation = {
+type AttentionEscalation = {
   count: number;
   last_escalated_at?: string;
 };
@@ -113,7 +109,7 @@ export type AttentionRecord = {
   updated_at: string;
 };
 
-export type AttentionTransitionGate = {
+type AttentionTransitionGate = {
   authority: "deterministic_policy" | "human_approval";
   decision: "allow" | "deny" | "ask";
   policy_ref: string;
@@ -251,7 +247,7 @@ export function escalateAttentionIfDue(
   });
 }
 
-export function isAttentionEscalationDue(current: AttentionRecord, now: string): boolean {
+function isAttentionEscalationDue(current: AttentionRecord, now: string): boolean {
   assertAttentionRecord(current);
   const nowMs = timestampMs(now, "now");
   if (TERMINAL_ATTENTION_STATUSES.has(current.status) || current.priority === "p0") return false;

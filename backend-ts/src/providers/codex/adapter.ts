@@ -30,25 +30,11 @@ import type {
 } from "./threadLifecycle.ts";
 
 export { CodexThreadLifecycleError } from "./threadLifecycle.ts";
-export type {
-  ThreadLifecycleErrorDetail,
-  ThreadListInput,
-  ThreadListResult,
-  ThreadReadInput,
-  ThreadStartInput,
-  ThreadStartResult,
-  ThreadSummary,
-  ThreadTurnsListInput,
-  ThreadTurnsListResult,
-  TurnInterruptResult,
-  TurnStartOptions,
-  TurnStartResult
-} from "./threadLifecycle.ts";
+export type { ThreadStartInput, ThreadStartResult, ThreadSummary, TurnStartOptions, TurnStartResult } from "./threadLifecycle.ts";
 
 const CLIENT_INFO = { name: "xuanwu", version: "0.1.0" } as const;
-const PROVIDER_CODEX = "codex";
 
-export type CodexRpcClient = {
+type CodexRpcClient = {
   request(method: string, params?: JsonRpcParams): Promise<unknown>;
   generation?(): number;
   resolveApprovalRequest?(requestID: string, decision: ApprovalDecision): Promise<unknown>;
@@ -60,8 +46,8 @@ export type CodexInitializeResult = {
   serverInfo?: { name: string; version: string };
 };
 
-export type ModelListInput = { includeHidden?: boolean };
-export type ModelListResult = { data: Model[]; nextCursor?: string };
+type ModelListInput = { includeHidden?: boolean };
+type ModelListResult = { data: Model[]; nextCursor?: string };
 export type Model = {
   additionalSpeedTiers: string[];
   defaultReasoningEffort: string;
@@ -76,8 +62,8 @@ export type Model = {
   serviceTiers: ModelServiceTier[];
   supportedReasoningEfforts: ReasoningEffortOption[];
 };
-export type ReasoningEffortOption = { description: string; reasoningEffort: string };
-export type ModelServiceTier = { description: string; id: string; name: string };
+type ReasoningEffortOption = { description: string; reasoningEffort: string };
+type ModelServiceTier = { description: string; id: string; name: string };
 export type ApprovalDecision = { decision: string; scope?: string };
 
 export class CodexAdapter {

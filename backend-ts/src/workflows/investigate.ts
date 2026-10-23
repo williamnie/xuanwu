@@ -14,11 +14,11 @@ import type {
   WorkflowManifestRegistration
 } from "./registry.ts";
 
-export const INVESTIGATE_WORKFLOW_SOURCE_PATH = "builtin:workflows/investigate@1" as const;
-export const INVESTIGATE_READ_ONLY_POLICY_REF = "workflow-policy:investigate-read-only@1" as const;
-export const INVESTIGATE_HANDOFF_REPORT_SCHEMA_VERSION = "xw.investigate-handoff-report.v1" as const;
+const INVESTIGATE_WORKFLOW_SOURCE_PATH = "builtin:workflows/investigate@1" as const;
+const INVESTIGATE_READ_ONLY_POLICY_REF = "workflow-policy:investigate-read-only@1" as const;
+const INVESTIGATE_HANDOFF_REPORT_SCHEMA_VERSION = "xw.investigate-handoff-report.v1" as const;
 export const INVESTIGATE_STAGE_IDS = ["scope", "reproduce", "root-cause", "report"] as const;
-export type InvestigateStageID = typeof INVESTIGATE_STAGE_IDS[number];
+type InvestigateStageID = typeof INVESTIGATE_STAGE_IDS[number];
 
 export const INVESTIGATE_VERIFICATION_POLICY: WorkflowVerificationPolicy = {
   schema_version: 1,
@@ -101,7 +101,7 @@ const workID = Type.String({ pattern: "^xw:work:issues:[A-Za-z0-9._~%-]+$" });
 const stageID = Type.Union(INVESTIGATE_STAGE_IDS.map((id) => Type.Literal(id)));
 const emptyOperationList = () => Type.Array(reference, { maxItems: 0 });
 
-export const INVESTIGATE_HANDOFF_REPORT_SCHEMA = Type.Object({
+const INVESTIGATE_HANDOFF_REPORT_SCHEMA = Type.Object({
   schema_version: Type.Literal(INVESTIGATE_HANDOFF_REPORT_SCHEMA_VERSION),
   workflow_ref: Type.Literal(INVESTIGATE_WORKFLOW_REF),
   work_id: workID,
@@ -158,7 +158,7 @@ export const INVESTIGATE_HANDOFF_REPORT_SCHEMA = Type.Object({
 }, { additionalProperties: false });
 
 export type InvestigateHandoffReport = Static<typeof INVESTIGATE_HANDOFF_REPORT_SCHEMA>;
-export type InvestigateHandoffValidation = { errors: string[]; ok: boolean };
+type InvestigateHandoffValidation = { errors: string[]; ok: boolean };
 
 export function investigateWorkflowRegistryContributions(): {
   manifests: WorkflowManifestRegistration[];
@@ -171,22 +171,6 @@ export function investigateWorkflowRegistryContributions(): {
     }],
     verification_policies: [structuredClone(INVESTIGATE_VERIFICATION_POLICY)]
   };
-}
-
-export function parseInvestigateHandoffReportJSON(
-  text: string,
-  evidence?: readonly EvidenceRecord[]
-): { ok: true; report: InvestigateHandoffReport } | { errors: string[]; ok: false } {
-  let value: unknown;
-  try {
-    value = JSON.parse(text) as unknown;
-  } catch (error) {
-    return { errors: [error instanceof Error ? error.message : "invalid JSON"], ok: false };
-  }
-  const validation = validateInvestigateHandoffReport(value, evidence);
-  return validation.ok
-    ? { ok: true, report: value as InvestigateHandoffReport }
-    : { errors: validation.errors, ok: false };
 }
 
 export function validateInvestigateHandoffReport(

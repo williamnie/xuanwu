@@ -294,10 +294,6 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
   }
 }
 
-export function createClaudeCliExecutorProvider(config: ProviderRuntimeConfig): ClaudeCliExecutorProvider {
-  return new ClaudeCliExecutorProvider(config);
-}
-
 export function inspectClaudeCliAuth(config: ProviderRuntimeConfig): ClaudeCliAuthInspection {
   const executable = splitCommand(config.command)[0] ?? "";
   if (!claudeCommandAvailable(executable)) return { checked: false, logged_in: false };

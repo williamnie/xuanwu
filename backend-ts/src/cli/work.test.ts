@@ -6,8 +6,6 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter, createRequestHandler } from "../http/server.ts";
 import { runCli } from "./command.ts";
 import type { Fetcher } from "./types.ts";
-
-const BASE_URL = "http://127.0.0.1:3008";
 const TOKEN = "cli-work-token";
 const roots: string[] = [];
 

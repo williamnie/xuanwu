@@ -1,9 +1,9 @@
-export type PiActionRiskContract = "safe" | "confirm" | "high";
-export type PiActionTargetContract = "issue" | "issue_batch" | "project" | "run" | "session" | "work";
-export type PiActionResolutionContract = "dispatch" | "inline_current_turn";
-export type PiActionFreshnessContract = "required" | "domain" | "ttl_only";
+type PiActionRiskContract = "safe" | "confirm" | "high";
+type PiActionTargetContract = "issue" | "issue_batch" | "project" | "run" | "session" | "work";
+type PiActionResolutionContract = "dispatch" | "inline_current_turn";
+type PiActionFreshnessContract = "required" | "domain" | "ttl_only";
 
-export type PiActionContract = {
+type PiActionContract = {
   action_type: string;
   freshness: PiActionFreshnessContract;
   resolution: PiActionResolutionContract;

@@ -5,7 +5,7 @@ import type { ProjectFinding } from "../pi/projectFindings.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
 
-export type PiNeedsUserNotificationPayload = {
+type PiNeedsUserNotificationPayload = {
   action_id?: string;
   composer?: string;
   diagnosis?: string;
@@ -23,7 +23,7 @@ export type PiNeedsUserNotificationPayload = {
   user_facing_message?: string;
 };
 
-export type PublishPiNeedsUserNotificationInput = {
+type PublishPiNeedsUserNotificationInput = {
   actionID?: string;
   bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
@@ -37,7 +37,7 @@ export type PublishPiNeedsUserNotificationInput = {
   userFacingMessage?: string;
 };
 
-export type PublishNeedsUserFindingNotificationsInput = {
+type PublishNeedsUserFindingNotificationsInput = {
   bus?: EventBus;
   database?: RunnerDatabase;
   findings: ProjectFinding[];

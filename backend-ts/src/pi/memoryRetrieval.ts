@@ -5,8 +5,8 @@ import { containsSensitiveMemoryContent, retrievableMemoryContent, retrievableMe
 
 // 利用已有 scope 索引取有界窗口，不扫描 history、不建第二套索引或存储。
 export const MEMORY_SCAN_LIMIT = 512;
-export const MEMORY_CANDIDATE_LIMIT = 24;
-export const MEMORY_SCOPE_LIMIT = 10;
+const MEMORY_CANDIDATE_LIMIT = 24;
+const MEMORY_SCOPE_LIMIT = 10;
 export const MEMORY_TECHNICAL_LIMIT = 3;
 const MAX_CONTENT_CHARS = 16384;
 const MAX_QUERY_CHARS = 4096;
@@ -21,7 +21,7 @@ export type MemoryTaskContext = {
   kind?: string;
 };
 export type MemoryScope = { scope: string; scopeId?: string };
-export type RankedMemory = { item: PiMemoryItem; score: number; reason: string };
+type RankedMemory = { item: PiMemoryItem; score: number; reason: string };
 
 // 小型词汇归一化用于候选召回；复杂适用性由同一 Pi 会话再筛选。
 const SYNONYMS = [
@@ -43,7 +43,7 @@ export function technicalMemory(item: Pick<PiMemoryItem, "kind" | "authority"> &
     Boolean(item.content && parseMemoryExperience(item.content));
 }
 
-export function memoryTaskText(input: MemoryTaskContext): string {
+function memoryTaskText(input: MemoryTaskContext): string {
   return [input.query, input.errorText, ...(input.filePaths ?? []).slice(0, 8), input.taskDescription]
     .filter((value): value is string => typeof value === "string").map((value) => value.slice(0, MAX_QUERY_CHARS))
     .join("\n").slice(0, MAX_QUERY_CHARS);

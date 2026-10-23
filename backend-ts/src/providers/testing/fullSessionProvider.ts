@@ -3,7 +3,6 @@ import type {
   ExecutorCapability,
   ExecutorProvider,
   InterruptInput,
-  ProviderEvent,
   ProviderRecoveryInput,
   ProviderRunInput,
   ProviderRunResult,

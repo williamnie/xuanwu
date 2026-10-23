@@ -21,14 +21,14 @@ import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 
 type JsonObject = Record<string, unknown>;
 
-export type DomainSkillRunResult = {
+type DomainSkillRunResult = {
   action: PiAction;
   output: DomainSkillOutput;
   proposal: ActionProposalRecord;
   runtime: SkillRuntimeRun;
 };
 
-export type DomainSkillRunOptions = {
+type DomainSkillRunOptions = {
   cliConnectorDirs?: string[];
   env?: Record<string, string | undefined>;
   handlers?: ExecuteSkillRuntimeInput["handlers"];
@@ -36,7 +36,7 @@ export type DomainSkillRunOptions = {
   toolSnapshot?: ExecuteSkillRuntimeInput["toolSnapshot"];
 };
 
-export async function createDomainSkillProposal(
+async function createDomainSkillProposal(
   db: RunnerDatabase,
   item: AttentionInboxItemRecord,
   skillID = DEFAULT_DOMAIN_SKILL_ID,

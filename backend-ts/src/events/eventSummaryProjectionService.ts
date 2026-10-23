@@ -13,7 +13,7 @@ import {
   projectPendingEventSummaries
 } from "./eventSummaryProjector.ts";
 
-export type RebuildEventSummaryProjectionInput = {
+type RebuildEventSummaryProjectionInput = {
   actor: string;
   actorKind: "retention_worker" | "system" | "user";
   auditRef: string;

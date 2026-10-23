@@ -23,14 +23,14 @@ export type IssueSupervisorActionInput = {
   recordDecision?: boolean;
 };
 
-export type IssueSupervisorActionSummary = {
+type IssueSupervisorActionSummary = {
   action_id: string;
   action_type: string;
   decision: string;
   status: string;
 };
 
-export type IssueSupervisorActionResult = {
+type IssueSupervisorActionResult = {
   actions: IssueSupervisorActionSummary[];
   executed_actions: string[];
 };

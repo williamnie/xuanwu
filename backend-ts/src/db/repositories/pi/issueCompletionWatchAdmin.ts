@@ -4,7 +4,7 @@ import { getPiIssueCompletionWatch, type PiIssueCompletionWatch } from "./issueC
 import { getPiNotificationIntent, type PiNotificationIntent } from "./notificationIntents.ts";
 import { cleanString, integerInput } from "./common.ts";
 
-export type PiIssueCompletionWatchListFilter = {
+type PiIssueCompletionWatchListFilter = {
   limit?: number;
   projectId?: string;
   status?: string;
@@ -13,7 +13,7 @@ export type PiIssueCompletionWatchNotification = {
   intent: PiNotificationIntent;
   outbox: SyncOutboxRecord | null;
 };
-export type PiIssueCompletionWatchCounts = {
+type PiIssueCompletionWatchCounts = {
   active_watches: number;
   failed_notification: number;
   satisfied_pending_notification: number;

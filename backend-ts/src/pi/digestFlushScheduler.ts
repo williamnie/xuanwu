@@ -18,9 +18,9 @@ import {
 import { lifecycleReport } from "./runGroupReportStatus.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
-export type DigestFlushSchedulerResult = { flushed: number; scanned: number; skipped: number };
-export type DigestFlushSchedulerInput = { limit?: number; now?: Date | string };
-export type ManualDigestFlushInput = { now?: Date | string; runGroupID: string };
+type DigestFlushSchedulerResult = { flushed: number; scanned: number; skipped: number };
+type DigestFlushSchedulerInput = { limit?: number; now?: Date | string };
+type ManualDigestFlushInput = { now?: Date | string; runGroupID: string };
 
 type FlushReason = "completed" | "manual" | "partial_deadline" | "partial_interval";
 type DigestCounts = {

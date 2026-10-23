@@ -11,7 +11,7 @@ import {
   type ProviderErrorSignal
 } from "../pi/providerErrorParser.ts";
 
-export type ProviderTerminalSignalInput = {
+type ProviderTerminalSignalInput = {
   activeRunID: string;
   database: RunnerDatabase;
   event: ProviderEvent;
@@ -20,7 +20,7 @@ export type ProviderTerminalSignalInput = {
   projectID: string;
   now?: Date;
 };
-export type ProviderTerminalBackfillOptions = { limit?: number; now?: Date };
+type ProviderTerminalBackfillOptions = { limit?: number; now?: Date };
 export type ProviderTerminalBackfillSummary = { scanned: number; signaled: number; skipped: number };
 
 const PROVIDER_TERMINAL_ACTIONS = ["session.resume_followup", "issue.retry", "issue.retry_after", "needs_user.escalate"];

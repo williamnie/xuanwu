@@ -5,7 +5,7 @@ import { retrievePiMemoryContext, type PiMemoryRetrievalResult } from "./memoryC
 
 type JsonObject = Record<string, unknown>;
 
-export type IntakeSkillAttachmentInput = {
+type IntakeSkillAttachmentInput = {
   evidence_ref: string;
   kind: string;
   mime_type: string;
@@ -14,7 +14,7 @@ export type IntakeSkillAttachmentInput = {
   vision_summary: string;
 };
 
-export type IntakeSkillEventInput = {
+type IntakeSkillEventInput = {
   actor: string;
   attachment_refs: string[];
   attachments: IntakeSkillAttachmentInput[];

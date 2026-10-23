@@ -8,8 +8,8 @@ import {
   type GuardianSignalSeverity
 } from "./guardianFailureClassifier.ts";
 
-export type GuardianSignalSource = "heartbeat" | "supervisor";
-export type GuardianSignal = {
+type GuardianSignalSource = "heartbeat" | "supervisor";
+type GuardianSignal = {
   action_type: string;
   classification?: GuardianFailureClassification;
   diagnosis_code?: string;
@@ -22,7 +22,7 @@ export type GuardianSignal = {
   source: GuardianSignalSource;
   source_event_id: string;
 };
-export type GuardianSignalWriteSummary = {
+type GuardianSignalWriteSummary = {
   action_id: string;
   action_type: string;
   event_id: string;
@@ -30,7 +30,7 @@ export type GuardianSignalWriteSummary = {
   signal_id: string;
   status: "signaled";
 };
-export type GuardianSignalContext = { heartbeatID?: string; now: Date; projectID: string };
+type GuardianSignalContext = { heartbeatID?: string; now: Date; projectID: string };
 
 export function guardianSignalsFromHeartbeatActions(
   actions: HeartbeatActionCandidate[],
@@ -50,7 +50,7 @@ export function writeGuardianSignals(db: RunnerDatabase, signals: GuardianSignal
   return signals.map((signal) => summaryFromEvent(signal, writeGuardianSignal(db, signal)));
 }
 
-export function writeGuardianSignal(db: RunnerDatabase, signal: GuardianSignal): PiGuardianEvent {
+function writeGuardianSignal(db: RunnerDatabase, signal: GuardianSignal): PiGuardianEvent {
   return ingestPiGuardianEvent(db, {
     eventType: signal.event_type,
     idempotencyKey: signal.idempotency_key,

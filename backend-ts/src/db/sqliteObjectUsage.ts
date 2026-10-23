@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 
-export type SQLiteObjectUsage = {
+type SQLiteObjectUsage = {
   bytes: number;
   name: string;
 };

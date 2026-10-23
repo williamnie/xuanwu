@@ -18,7 +18,7 @@ export type IssueSupervisorEvent = {
   provider_session_id: string; provider_turn_id: string; retry_after_at: string; run_id: string;
 };
 export type IssueSupervisorEventInput = PatchInput<IssueSupervisorEvent>;
-export type IssueSupervisorEventFilter = {
+type IssueSupervisorEventFilter = {
   actionId?: string;
   createdAfter?: string;
   createdBefore?: string;
@@ -29,7 +29,7 @@ export type IssueSupervisorEventFilter = {
   projectId?: string;
   retryAfterOnly?: boolean;
 };
-export type IssueSupervisorEventSummary = {
+type IssueSupervisorEventSummary = {
   actions: number;
   decisions: number;
   exhausted_recoveries: number;

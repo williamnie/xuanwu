@@ -8,7 +8,7 @@ import type { Router } from "./router.ts";
 import { updatePiCredential } from "./piCredentialFile.ts";
 import { diagnosePiOAuthFailure, type PiOAuthFailureDiagnostic, type PiOAuthPhase } from "./piOAuthDiagnostics.ts";
 
-export type PiOAuthLoginCallbacks = {
+type PiOAuthLoginCallbacks = {
   onAuth: (info: OAuthAuthInfo) => void;
   onProgress?: (message: string) => void;
   onPrompt: (prompt: OAuthPrompt) => Promise<string>;

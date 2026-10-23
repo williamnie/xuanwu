@@ -8,23 +8,15 @@ import {
   type DomainActor,
   type EvidenceID,
   type EvidenceStatus,
-  type Handoff as CoreHandoff,
   type HandoffID,
   type HandoffStatus,
   type RunID,
   type WorkID
 } from "../../xuanwu/coreDomainContracts.ts";
 
-export {
-  HANDOFF_STATUSES,
-  type EvidenceID,
-  type HandoffID,
-  type HandoffStatus,
-  type RunID,
-  type WorkID
-};
+export { HANDOFF_STATUSES, type EvidenceID, type RunID, type WorkID };
 
-export const HANDOFF_SCHEMA_VERSION = 1 as const;
+const HANDOFF_SCHEMA_VERSION = 1 as const;
 
 // P00.04 remains the single source for the shared Handoff status vocabulary and edge table.
 export const HANDOFF_STATE_TRANSITIONS = STATE_TRANSITIONS.handoff;
@@ -47,9 +39,8 @@ export const REVIEW_STATES = [
   "changes_requested",
   "not_applicable"
 ] as const;
-export type ReviewState = typeof REVIEW_STATES[number];
 
-export const DELIVERY_ACTIONS = [
+const DELIVERY_ACTIONS = [
   "commit",
   "push",
   "pull_request",
@@ -57,13 +48,11 @@ export const DELIVERY_ACTIONS = [
   "release",
   "tracker_update"
 ] as const;
-export type DeliveryActionKind = typeof DELIVERY_ACTIONS[number];
+type DeliveryActionKind = typeof DELIVERY_ACTIONS[number];
 
-export const RISK_SEVERITIES = ["low", "medium", "high", "critical"] as const;
-export type RiskSeverity = typeof RISK_SEVERITIES[number];
+const RISK_SEVERITIES = ["low", "medium", "high", "critical"] as const;
 
-export const ROLLBACK_AVAILABILITIES = ["not_required", "available", "blocked"] as const;
-export type RollbackAvailability = typeof ROLLBACK_AVAILABILITIES[number];
+const ROLLBACK_AVAILABILITIES = ["not_required", "available", "blocked"] as const;
 
 const requiredText = Type.String({ minLength: 1, maxLength: 4096 });
 const referenceText = Type.String({ minLength: 1, maxLength: 8192 });
@@ -74,18 +63,6 @@ const evidenceIDSchema = Type.String({
   pattern: "^xw:evidence:(issue_events|pi_action_events|issue_supervisor_events|git):[A-Za-z0-9._~%-]+$"
 });
 const handoffIDSchema = Type.String({ pattern: "^xw:handoff:derived:[A-Za-z0-9._~%-]+$" });
-
-const actorSchema = Type.Object({
-  id: requiredText,
-  kind: Type.Union([
-    Type.Literal("user"),
-    Type.Literal("supervisor"),
-    Type.Literal("runner"),
-    Type.Literal("guardian"),
-    Type.Literal("automation"),
-    Type.Literal("system")
-  ])
-}, { additionalProperties: false });
 
 const branchSchema = {
   branch_ref: referenceText,
@@ -221,27 +198,21 @@ export type HandoffRecord = Omit<
 };
 export type HandoffDelivery = HandoffRecord["delivery"];
 export type HandoffDeliveryAction = HandoffRecord["delivery_actions"][number];
-export type HandoffRisk = HandoffRecord["risks"][number];
-export type HandoffRollback = HandoffRecord["rollback"];
-export type HandoffReview = HandoffRecord["review"];
-
-// The detailed P05 record remains assignable to the P00.04 cross-object skeleton.
-export const HANDOFF_REFINES_CORE_CONTRACT: HandoffRecord extends CoreHandoff ? true : never = true;
 
 export type HandoffLinkContext = {
   evidence: Array<{ id: EvidenceID; status: EvidenceStatus; work_id: WorkID }>;
   runs: Array<{ id: RunID; work_id: WorkID }>;
 };
 
-export type HandoffValidationResult = { errors: string[]; ok: boolean };
+type HandoffValidationResult = { errors: string[]; ok: boolean };
 
-export type HandoffTransitionGate = {
+type HandoffTransitionGate = {
   authority: "deterministic_policy" | "human_approval";
   decision: "allow" | "deny" | "ask";
   policy_ref: string;
 };
 
-export type HandoffTransitionAudit = {
+type HandoffTransitionAudit = {
   actor: DomainActor;
   correlation_id: string;
   event_id: string;
@@ -258,7 +229,7 @@ export type HandoffTransitionCommand = {
   to: Exclude<HandoffStatus, "draft">;
 };
 
-export type HandoffTransitionDecision = { allowed: boolean; violations: string[] };
+type HandoffTransitionDecision = { allowed: boolean; violations: string[] };
 
 const REQUIRED_ACTIONS_BY_MODE: Readonly<Record<DeliveryMode, readonly DeliveryActionKind[]>> = {
   local_changes: [],

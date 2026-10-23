@@ -32,7 +32,7 @@ import {
 } from "./imNotificationTargets.ts";
 
 export type QueueResult = { queued: boolean; reason: string };
-export type DigestQueueResult = { failed: number; queued: number; scanned: number; skipped: number };
+type DigestQueueResult = { failed: number; queued: number; scanned: number; skipped: number };
 
 const ISSUE_STATUS_NOTIFY_TYPE = "feishu_issue_status_notification";
 const DIGEST_NOTIFY_TYPE = "feishu_run_group_digest_notification";

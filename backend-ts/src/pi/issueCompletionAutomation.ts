@@ -7,8 +7,6 @@ import {
   createAutomationWatch,
   getAutomationWatch,
   listAutomationIssueWatches,
-  markAutomationWatchNotified,
-  markAutomationWatchTerminal,
   type AutomationWatch
 } from "../db/repositories/automationWatches.ts";
 import type {
@@ -19,7 +17,7 @@ import type {
 import type { PiIssueCompletionWatchNotification } from "../db/repositories/pi/issueCompletionWatchAdmin.ts";
 import type { AutomationAudit, AutomationID } from "../domain/automation/contracts.ts";
 
-export const ISSUE_COMPLETION_TERMINAL_STATUSES = new Set([
+const ISSUE_COMPLETION_TERMINAL_STATUSES = new Set([
   "done", "failed", "cancelled"
 ]);
 
@@ -108,26 +106,6 @@ export function cancelIssueCompletionAutomation(
   return projectIssueCompletionAutomation(db, getAutomationWatch(db, watch.automation_id)!);
 }
 
-export function markIssueCompletionAutomationSatisfied(db: RunnerDatabase, id: string, error = ""): PiIssueCompletionWatch {
-  const current = requireNativeWatch(db, id);
-  const watch = markAutomationWatchTerminal(db, current, {
-    matchedRef: current.subject.kind === "issues" ? current.subject.issue_ids.join(",") : current.automation_id,
-    outcome: error ? "failure" : "completion",
-    status: "satisfied"
-  }, automationWatchAudit("satisfied", current.automation_id, error));
-  if (error) db.sqlite.run("update automation_watches set error=? where automation_id=?", [clean(error), watch.automation_id]);
-  return projectIssueCompletionAutomation(db, getAutomationWatch(db, watch.automation_id)!);
-}
-
-export function markIssueCompletionAutomationNotified(db: RunnerDatabase, id: string): PiIssueCompletionWatch {
-  const current = requireNativeWatch(db, id);
-  return projectIssueCompletionAutomation(db, markAutomationWatchNotified(
-    db,
-    current,
-    automationWatchAudit("notified", current.automation_id)
-  ));
-}
-
 export function listIssueCompletionAutomationNotifications(
   db: RunnerDatabase,
   id: string
@@ -170,7 +148,7 @@ export function issueCompletionAutomationCounts(db: RunnerDatabase): {
   };
 }
 
-export function projectIssueCompletionAutomation(db: RunnerDatabase, watch: AutomationWatch): PiIssueCompletionWatch {
+function projectIssueCompletionAutomation(db: RunnerDatabase, watch: AutomationWatch): PiIssueCompletionWatch {
   if (watch.subject.kind !== "issues") throw new Error(`automation watch ${watch.automation_id} is not issue-based`);
   const definition = db.sqlite.query<{ scope_id: string }, [string]>(
     "select scope_id from automation_definitions where id=?"
@@ -233,12 +211,6 @@ function legacyStatus(watch: AutomationWatch): PiIssueCompletionWatch["status"] 
 
 function requireWatch(db: RunnerDatabase, id: string): PiIssueCompletionWatch {
   const watch = getIssueCompletionAutomation(db, id);
-  if (!watch) throw new Error(`Automation issue completion watch ${clean(id)} not found`);
-  return watch;
-}
-
-function requireNativeWatch(db: RunnerDatabase, id: string): AutomationWatch {
-  const watch = getAutomationWatch(db, automationWatchID(id));
   if (!watch) throw new Error(`Automation issue completion watch ${clean(id)} not found`);
   return watch;
 }

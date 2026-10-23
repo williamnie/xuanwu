@@ -140,7 +140,7 @@ export type ProviderRuntimeConfig = {
   configDir?: string;
 };
 
-export type QoderAuthMode = "pat-env" | "pat-secret-ref" | "service-account-secret-ref" | "local-cli";
+type QoderAuthMode = "pat-env" | "pat-secret-ref" | "service-account-secret-ref" | "local-cli";
 
 export type CodexServerConfig = {
   appCommand: string;
@@ -153,7 +153,7 @@ export type RunnerConcurrencyConfig = {
   maxParallelProjects: number;
 };
 
-export type CliConnectorConfig = {
+type CliConnectorConfig = {
   manifestDirs: string[];
 };
 
@@ -632,7 +632,7 @@ function buildClaudeRuntimeConfig(overrides: ProviderRuntimeOverrides): Provider
   };
 }
 
-export function buildPiRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
+function buildPiRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
   return {
     ...buildProviderRuntimeConfig({
       command: overrides.piCommand,
@@ -645,7 +645,7 @@ export function buildPiRuntimeConfig(overrides: ProviderRuntimeOverrides): Provi
   };
 }
 
-export function buildQoderRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
+function buildQoderRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
   const authMode = normalizeQoderAuthMode(overrides.qoderAuthMode);
   const credentialRef = cleanValue(overrides.qoderCredentialRef) ?? "";
   const credential = cleanValue(overrides.qoderCredential) ?? "";
@@ -745,7 +745,7 @@ function joinClaudeApiBase(baseValue: string, path: string): string {
   return `${base}${path}`;
 }
 
-export function buildRunnerConcurrencyConfig(input: { maxParallelProjects?: unknown } = {}): RunnerConcurrencyConfig {
+function buildRunnerConcurrencyConfig(input: { maxParallelProjects?: unknown } = {}): RunnerConcurrencyConfig {
   return {
     maxParallelProjects: normalizeMaxParallelProjects(input.maxParallelProjects, DEFAULT_MAX_PARALLEL_PROJECTS)
   };
@@ -766,7 +766,7 @@ function buildProviderRuntimeConfig(input: {
   };
 }
 
-export function normalizeCodexCommand(command: string): string {
+function normalizeCodexCommand(command: string): string {
   const parts = splitCommand(command);
   return parts.includes("app-server") ? command : `${command} app-server --listen stdio://`;
 }
@@ -811,7 +811,7 @@ function parseBoolean(value: boolean | string | undefined, fallback: boolean): b
   return fallback;
 }
 
-export function normalizeMaxParallelProjects(value: unknown, fallback: number): number {
+function normalizeMaxParallelProjects(value: unknown, fallback: number): number {
   const parsed = parsePositiveIntegerValue(value);
   if (parsed === undefined) return fallback;
   return Math.min(parsed, MAX_PARALLEL_PROJECTS_LIMIT);

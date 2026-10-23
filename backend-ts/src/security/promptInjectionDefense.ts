@@ -1,7 +1,7 @@
 import { redactSensitiveText } from "../util/redact.ts";
 import { containsSecretLikeValue, isSensitiveFieldName } from "./redactionRegistry.ts";
 
-export const PROMPT_TRUST_MARKER_VERSION = "xw.untrusted-data.v1" as const;
+const PROMPT_TRUST_MARKER_VERSION = "xw.untrusted-data.v1" as const;
 
 export type UntrustedContentSource =
   | "external_message"
@@ -12,13 +12,12 @@ export type UntrustedContentSource =
   | "tool_output"
   | "web";
 
-export type DataEgressDecision = {
+type DataEgressDecision = {
   allowed: boolean;
   code: "allowed" | "secret_key" | "secret_value";
   path: string;
   reason: string;
 };
-
 
 const EXTERNAL_ACTION = /(?:^mcp\.tool\.call$|^message\.reply_send$|(?:^|\.)(?:deploy|deliver|external_write|publish|push|send|tracker_update|upload)$)/i;
 const REDACTED_VALUES = new Set(["", "[redacted]", "[redacted sensitive line]", "***", "<redacted>"]);

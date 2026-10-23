@@ -10,7 +10,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildConfig } from "../../config/env.ts";
-import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
+import { openDatabase } from "../../db/database.ts";
 import { getAgentProfile } from "../../db/repositories/agentProfiles.ts";
 import { getAgentSession } from "../../db/repositories/agentSessions.ts";
 import { listIssueEvents } from "../../db/repositories/issueEvents.ts";

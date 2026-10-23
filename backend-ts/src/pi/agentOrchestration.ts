@@ -1,4 +1,4 @@
-import { EXECUTION_AGENT_ROLES, isExecutionAgentRole, normalizeExecutionAgentRole, type ExecutionAgentRole } from "../agents/roles.ts";
+import { isExecutionAgentRole, normalizeExecutionAgentRole, type ExecutionAgentRole } from "../agents/roles.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { AgentProfile } from "../db/repositories/agentProfiles.ts";
 import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
@@ -8,8 +8,6 @@ import { mergeSkillIntents, parseSkillPolicy } from "../skills/intents.ts";
 import { needsUserComment, workflowIssuePayload } from "./agentOrchestrationPayloads.ts";
 import { selectRoleProfile, type RoleProfileSelection } from "./roleProfileSelector.ts";
 import type { ExecutionPolicyRequest } from "../providers/core/policyContracts.ts";
-
-export const AGENT_ROLES = EXECUTION_AGENT_ROLES;
 export type AgentRole = ExecutionAgentRole;
 
 export type AgentRecommendationInput = {
@@ -36,7 +34,7 @@ export type ExecutorAssignmentInput = AgentRecommendationInput & {
   required_skill_intents?: string[];
 };
 export type NeedsUserEscalationInput = { issue_id: number; reason: string; requested_action?: string };
-export type AgentOrchestrationProposal = {
+type AgentOrchestrationProposal = {
   actionType: string;
   goalID?: string;
   issueID?: number;
@@ -135,15 +133,10 @@ export function createNeedsUserEscalationProposal(
   };
 }
 
-export function resolveIssueAgentRole(issue: Pick<Issue, "workflow_snapshot_json">): AgentRole {
+function resolveIssueAgentRole(issue: Pick<Issue, "workflow_snapshot_json">): AgentRole {
   const snapshot = parseWorkflowSnapshot(issue.workflow_snapshot_json);
   const value = cleanString(snapshot.agent_role ?? snapshot.role);
   return isAgentRole(value) ? value : "executor";
-}
-
-export function resolveWorkflowParentIssueID(issue: Pick<Issue, "workflow_snapshot_json">): number {
-  const value = parseWorkflowSnapshot(issue.workflow_snapshot_json).parent_issue_id;
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }
 
 export function resolveExecutorSelection(db: RunnerDatabase, project: Project, issue: Issue, profiles = listAgentProfiles(db)): AgentRecommendation {

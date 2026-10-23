@@ -225,7 +225,7 @@ export function createFeishuReceiverManager(options: FeishuReceiverManagerOption
   return { restart, status: currentStatus, stop };
 }
 
-export const defaultFeishuWsFactory: FeishuWsFactory = async (input) => {
+const defaultFeishuWsFactory: FeishuWsFactory = async (input) => {
   const Lark = await import("@larksuiteoapi/node-sdk");
   const dispatcher = new Lark.EventDispatcher({}).register({
     "card.action.trigger": async (data: unknown) => input.onCardAction(data),

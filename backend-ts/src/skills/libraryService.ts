@@ -19,7 +19,7 @@ export function libraryProject(db: RunnerDatabase, projectID?: string): Project 
   return project;
 }
 
-export function libraryTools(db: RunnerDatabase) {
+function libraryTools(db: RunnerDatabase) {
   return loadAssistantToolRegistrySnapshot(db).tools.map(tool => ({
     aliases: typeof tool.metadata?.capability_id === "string" ? [tool.metadata.capability_id] : [],
     name: tool.name, permission: tool.permission, provider_id: tool.provider_id

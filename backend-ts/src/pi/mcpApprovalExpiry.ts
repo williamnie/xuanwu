@@ -1,18 +1,13 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent, updatePiAction } from "../db/repositories/pi.ts";
 
-export const PI_ACTION_APPROVAL_TTL_MS = 24 * 60 * 60 * 1000;
-export const MCP_APPROVAL_TTL_MS = PI_ACTION_APPROVAL_TTL_MS;
+const PI_ACTION_APPROVAL_TTL_MS = 24 * 60 * 60 * 1000;
 
 export function piActionApprovalExpiresAt(createdAt: string, existing = ""): string {
   if (existing.trim() !== "") return existing.trim();
   const created = Date.parse(createdAt);
   const anchor = Number.isFinite(created) ? created : Date.now();
   return new Date(anchor + PI_ACTION_APPROVAL_TTL_MS).toISOString();
-}
-
-export function mcpApprovalExpiresAt(actionType: string, createdAt: string, existing = ""): string {
-  return actionType === "mcp.tool.call" ? piActionApprovalExpiresAt(createdAt, existing) : existing.trim();
 }
 
 export function expirePendingPiActionApprovals(db: RunnerDatabase, now = new Date()): number {

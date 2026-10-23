@@ -1,4 +1,4 @@
-export type CodexDynamicExecObservation = {
+type CodexDynamicExecObservation = {
   aggregatedOutput: string;
   command: string;
   cwd: string;

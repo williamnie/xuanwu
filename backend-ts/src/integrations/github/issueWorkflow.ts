@@ -44,7 +44,7 @@ export type GitHubWorkReport = {
   duplicate_of?: number;
 };
 
-export function parseGitHubWorkReport(finalMessage: string): GitHubWorkReport | null {
+function parseGitHubWorkReport(finalMessage: string): GitHubWorkReport | null {
   const lines = finalMessage.split(/\r?\n/).filter(line => line.trimStart().startsWith(GITHUB_REPORT_MARKER));
   if (lines.length !== 1) return null;
   try {

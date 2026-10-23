@@ -18,9 +18,9 @@ type JsonObject = Record<string, unknown>;
 
 export const SOURCE_PROFILES = ["company_chat", "personal_chat", "ops_chat", "private_dm", "email", "github", "custom"] as const;
 export type SourceProfile = typeof SOURCE_PROFILES[number];
-export type ActionMode = "observe_only" | "draft_only" | "propose_actions" | "auto_low_risk";
-export type InboxRouteDecision = "no_action" | "draft" | "proposal" | "ask_user" | "auto_low_risk";
-export type EventRouteStatus = "routed" | "skipped";
+type ActionMode = "observe_only" | "draft_only" | "propose_actions" | "auto_low_risk";
+type InboxRouteDecision = "no_action" | "draft" | "proposal" | "ask_user" | "auto_low_risk";
+type EventRouteStatus = "routed" | "skipped";
 
 export type EventRouterSourcePolicy = IntakeSourcePolicy & {
   action_mode?: ActionMode;
@@ -30,7 +30,7 @@ export type EventRouterSourcePolicy = IntakeSourcePolicy & {
   reply_policy?: JsonObject;
 };
 
-export type ProjectRouteState = {
+type ProjectRouteState = {
   project_confirmed?: boolean;
   project_id?: string;
   require_project_confirmation?: boolean;

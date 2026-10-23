@@ -15,7 +15,7 @@ export type AssistantToolRegistrySnapshot = {
   tools: AssistantTool[];
 };
 
-export type AssistantToolRegistrySnapshotOptions = {
+type AssistantToolRegistrySnapshotOptions = {
   cliConnectorDirs?: string[];
   env?: Record<string, string | undefined>;
 };

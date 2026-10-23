@@ -39,8 +39,8 @@ type ToolRow = {
   updated_at: string;
 };
 
-export type StoredToolProvider = ToolProvider & { created_at: string; updated_at: string };
-export type StoredAssistantTool = AssistantTool & { created_at: string; updated_at: string };
+type StoredToolProvider = ToolProvider & { created_at: string; updated_at: string };
+type StoredAssistantTool = AssistantTool & { created_at: string; updated_at: string };
 
 export function listStoredToolProviders(db: RunnerDatabase): StoredToolProvider[] {
   return db.sqlite.query<ProviderRow, []>(

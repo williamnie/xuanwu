@@ -5,14 +5,14 @@ import {
   type ExecutionPolicyRequest
 } from "./policyContracts.ts";
 
-export type LegacyExecutionPolicyInput = {
+type LegacyExecutionPolicyInput = {
   sandbox?: unknown;
   approvalPolicy?: unknown;
   inherited?: ExecutionPolicyRequest;
   scope: "project" | "profile";
 };
 
-export type LegacyExecutionPolicyResult = {
+type LegacyExecutionPolicyResult = {
   policy?: ExecutionPolicyRequest;
   source: "legacy" | "inherit";
   warnings: string[];

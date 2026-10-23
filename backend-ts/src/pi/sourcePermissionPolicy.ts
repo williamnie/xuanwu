@@ -1,6 +1,6 @@
 type JsonObject = Record<string, unknown>;
 
-export type AssistantSourceProfile =
+type AssistantSourceProfile =
   | "company_chat"
   | "personal_chat"
   | "ops_chat"
@@ -8,24 +8,24 @@ export type AssistantSourceProfile =
   | "email"
   | "github"
   | "custom";
-export type AssistantIntakeMode = "manual_only" | "mention_only" | "scheduled_llm_triage" | "continuous_llm_triage";
-export type AssistantActionMode = "observe_only" | "draft_only" | "propose_actions" | "auto_low_risk";
-export type AssistantActionRisk = "low" | "medium" | "high";
+type AssistantIntakeMode = "manual_only" | "mention_only" | "scheduled_llm_triage" | "continuous_llm_triage";
+type AssistantActionMode = "observe_only" | "draft_only" | "propose_actions" | "auto_low_risk";
+type AssistantActionRisk = "low" | "medium" | "high";
 
-export type AssistantReplyPolicy = {
+type AssistantReplyPolicy = {
   allowed_chats?: string[];
   allowed_people?: string[];
   auto_reply_enabled?: boolean;
   require_approval_for_external_reply?: boolean;
 };
 
-export type AssistantIssuePolicy = {
+type AssistantIssuePolicy = {
   auto_create_triage_issue?: boolean;
   auto_enqueue?: boolean;
   require_project_confirmation?: boolean;
 };
 
-export type AssistantSourcePolicy = {
+type AssistantSourcePolicy = {
   action_mode?: AssistantActionMode;
   collect_raw_events?: boolean;
   intake_mode?: AssistantIntakeMode;
@@ -34,7 +34,7 @@ export type AssistantSourcePolicy = {
   reply_policy?: AssistantReplyPolicy;
 };
 
-export type SourcePermissionInput = {
+type SourcePermissionInput = {
   actionRisk: AssistantActionRisk;
   actionType: string;
   actor?: string;
@@ -80,7 +80,7 @@ export function decideSourcePermission(input: SourcePermissionInput): SourcePerm
   };
 }
 
-export function resolvedIssuePolicy(input: SourcePermissionInput): Required<AssistantIssuePolicy> {
+function resolvedIssuePolicy(input: SourcePermissionInput): Required<AssistantIssuePolicy> {
   const sourcePolicy = objectValue(input.sourcePolicy);
   const sourceIssue = objectValue(sourcePolicy.issue_policy);
   const directIssue = objectValue(input.issuePolicy);
@@ -93,7 +93,7 @@ export function resolvedIssuePolicy(input: SourcePermissionInput): Required<Assi
   };
 }
 
-export function resolvedReplyPolicy(input: SourcePermissionInput): Required<AssistantReplyPolicy> {
+function resolvedReplyPolicy(input: SourcePermissionInput): Required<AssistantReplyPolicy> {
   const sourcePolicy = objectValue(input.sourcePolicy);
   const sourceReply = objectValue(sourcePolicy.reply_policy);
   const directReply = objectValue(input.replyPolicy);

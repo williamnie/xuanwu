@@ -21,8 +21,8 @@ export type PiGuardianEvent = {
   sequence_id: number; severity: string; source: string; source_event_id: string;
   source_sequence: number; status: string; updated_at: string;
 };
-export type PiGuardianEventInput = PatchInput<PiGuardianEvent>;
-export type PiGuardianEventFilter = {
+type PiGuardianEventInput = PatchInput<PiGuardianEvent>;
+type PiGuardianEventFilter = {
   issueId?: number; projectId?: string; runGroupId?: string; source?: string; status?: string;
 };
 

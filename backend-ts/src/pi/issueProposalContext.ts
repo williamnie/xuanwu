@@ -19,8 +19,8 @@ export type IssueProposalContextFields = {
   validation?: unknown;
 };
 
-export type IssueProposalContextRenderOptions = { description?: string };
-export type IssueProposalContextProject = { project?: Project; projectID: string };
+type IssueProposalContextRenderOptions = { description?: string };
+type IssueProposalContextProject = { project?: Project; projectID: string };
 
 export function renderIssueCreateProposalDescription(
   input: IssueProposalContextFields & { description?: unknown; title?: unknown },

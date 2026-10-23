@@ -30,9 +30,9 @@ export type PiActionDecisionContext = {
   supervisorManaged?: boolean;
 };
 
-export type PiActionResolveDecision = "approve" | "approve_always" | "reject" | "request_changes" | "snooze";
+type PiActionResolveDecision = "approve" | "approve_always" | "reject" | "request_changes" | "snooze";
 
-export type PiActionResolveInput = {
+type PiActionResolveInput = {
   actionID: string;
   actor?: string;
   comment?: string;

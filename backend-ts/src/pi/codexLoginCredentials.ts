@@ -8,7 +8,7 @@ export const CODEX_REFRESH_BACKOFF_MS = 5 * 60_000;
 export class CodexLoginError extends Error {
   constructor(readonly code: string) { super(code); this.name = "CodexLoginError"; }
 }
-export type CodexLoginBinding = {
+type CodexLoginBinding = {
   home: string;
   managedHome: string;
   unavailable?: string;

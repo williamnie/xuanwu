@@ -2,14 +2,14 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAction } from "../db/repositories/pi.ts";
 import { evaluatePiActionFreshness } from "./actionFreshness.ts";
 
-export type PiGateLayer =
+type PiGateLayer =
   | "action_gate"
   | "completion_gate"
   | "mcp_policy"
   | "provider_execution_policy"
   | "source_policy";
 
-export type PiActionGateDiagnostic = {
+type PiActionGateDiagnostic = {
   authorization_source: string;
   blocked_layer: PiGateLayer;
   can_approve: boolean;

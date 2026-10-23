@@ -3,7 +3,6 @@ import { redactedUserVisibleText } from "../util/redact.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 
 const SUMMARY_LIMIT = 180;
-const WATCH_ISSUE_LIMIT = 20;
 
 export function formatIssueStatusNotification(issue: Issue): string {
   const title = safeSummary(issue.title || "任务", 80);
@@ -64,19 +63,6 @@ export function formatPiNeedsUserNotification(input: {
   ].join("\n");
 }
 
-export function formatIssueCompletionWatchNotification(payload: Record<string, unknown>): string {
-  const stats = record(payload.stats);
-  const issues = watchIssues(payload.issues);
-  const total = numberField(stats.total) || issues.length;
-  return [
-    `${SUPERVISOR_NOTIFICATION_PREFIX}：你关注的 ${total} 个任务都结束了。`,
-    watchStatsLine(stats),
-    "结果如下：",
-    ...watchIssueLines(issues),
-    watchNextStep(stats)
-  ].join("\n");
-}
-
 function startText(issueID: number, title: string, status: string): string {
   return [
     `${SUPERVISOR_NOTIFICATION_PREFIX}：#${issueID}「${title}」${status}。`,
@@ -109,32 +95,6 @@ function failedText(issue: Issue, title: string): string {
   ].join("\n");
 }
 
-function watchStatsLine(stats: Record<string, unknown>): string {
-  return [
-    `完成 ${numberField(stats.done)}`,
-    `失败 ${numberField(stats.failed)}`,
-    `取消 ${numberField(stats.cancelled)}`,
-    `需要你处理 ${numberField(stats.needs_user)}`
-  ].join("，");
-}
-
-function watchIssueLines(issues: Array<Record<string, unknown>>): string[] {
-  if (issues.length === 0) return ["- （无 issue 明细）"];
-  return issues.slice(0, WATCH_ISSUE_LIMIT).map((issue) => {
-    const id = numberField(issue.id);
-    const title = safeSummary(textField(issue.title) || "未命名 issue", 80);
-    const status = safeSummary(textField(issue.status) || "unknown", 40);
-    return `- #${id} ${title} — ${status}`;
-  });
-}
-
-function watchNextStep(stats: Record<string, unknown>): string {
-  if (numberField(stats.failed) + numberField(stats.cancelled) > 0) {
-    return "有任务失败或取消，请先查看这些任务，再决定是否继续。";
-  }
-  return "这些任务都已经结束，可以开始下一阶段。";
-}
-
 function safeSummary(value: unknown, maxRunes: number): string {
   const safe = redactedUserVisibleText(cleanString(value));
   const runes = [...safe];
@@ -148,24 +108,6 @@ function safeMultiline(value: unknown, maxRunes: number): string {
   const safe = lines.join("\n");
   const runes = [...safe];
   return runes.length <= maxRunes ? safe : `${runes.slice(0, maxRunes - 1).join("")}…`;
-}
-
-function watchIssues(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? value.map(record).filter((item) => numberField(item.id) > 0) : [];
-}
-
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function numberField(value: unknown): number {
-  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
-  const parsed = Number.parseInt(cleanString(value), 10);
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
-}
-
-function textField(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function cleanString(value: unknown): string {

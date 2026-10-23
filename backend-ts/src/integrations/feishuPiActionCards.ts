@@ -1,4 +1,4 @@
-export type FeishuPiActionDecision = "approve" | "approve_always" | "reject" | "request_changes" | "snooze";
+type FeishuPiActionDecision = "approve" | "approve_always" | "reject" | "request_changes" | "snooze";
 
 export type FeishuPiActionCardAction = {
   actionID?: string;
@@ -12,36 +12,6 @@ export type FeishuPiActionCardAction = {
 };
 
 const PI_ACTION_CARD_ACTION = "pi_action_resolve";
-
-export function buildFeishuPiActionCard(input: {
-  actionID: string;
-  actionType?: string;
-  issueID?: number;
-  text: string;
-}): Record<string, unknown> {
-  return {
-    config: { wide_screen_mode: true },
-    elements: [
-      { tag: "markdown", content: input.text },
-      {
-        tag: "action",
-        actions: [
-          piActionButton(input.actionID, "approve", "批准执行", "primary"),
-          ...(input.actionType === "mcp.tool.call"
-            ? [piActionButton(input.actionID, "approve_always", "当前项目始终允许", "default")]
-            : []),
-          piActionButton(input.actionID, "reject", "拒绝", "danger"),
-          piActionButton(input.actionID, "request_changes", "要求修改", "default"),
-          piActionButton(input.actionID, "snooze", "暂缓 30 分钟", "default", { snooze_minutes: 30 })
-        ]
-      }
-    ],
-    header: {
-      template: "orange",
-      title: { tag: "plain_text", content: input.issueID ? `Issue #${input.issueID} 等待 Supervisor 动作确认` : "Supervisor 动作等待确认" }
-    }
-  };
-}
 
 export function normalizeFeishuPiActionCardAction(raw: unknown): FeishuPiActionCardAction | null {
   const root = recordValue(raw);
@@ -74,21 +44,6 @@ export function piActionApprovalActionID(actionID: string): string {
 export function piActionIDFromApprovalActionID(value: string): string {
   const text = cleanString(value);
   return text.startsWith("pi_action:") ? cleanString(text.slice("pi_action:".length)) : "";
-}
-
-function piActionButton(
-  actionID: string,
-  decision: FeishuPiActionDecision,
-  label: string,
-  type: string,
-  extra: Record<string, unknown> = {}
-): Record<string, unknown> {
-  return {
-    tag: "button",
-    text: { tag: "plain_text", content: label },
-    type,
-    value: { action: PI_ACTION_CARD_ACTION, pi_action_id: actionID, decision, ...extra }
-  };
 }
 
 function normalizeDecision(value: string): FeishuPiActionDecision | null {

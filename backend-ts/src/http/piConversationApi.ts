@@ -20,7 +20,6 @@ import {
   getPiConversation,
   getPiPersona,
   getPiSupervisor,
-  listPiActionEvents,
   listPiConversations,
   updatePiConversation,
   type PiAgent,
@@ -80,7 +79,7 @@ type PiConversationContext = {
   restartProcess?: () => void;
   supervisorManaged?: boolean;
 };
-export type PiConversationPromptInput = {
+type PiConversationPromptInput = {
   channelContext?: string;
   channelContextProjection?: ImConversationPromptProjection;
   continuationContext?: string;

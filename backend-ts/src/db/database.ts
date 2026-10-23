@@ -18,8 +18,8 @@ type OpenDatabaseOptions = {
 export const WRITER_BUSY_TIMEOUT_MS = 250;
 export const READONLY_BUSY_TIMEOUT_MS = 50;
 export const WAL_AUTOCHECKPOINT_PAGES = 1000;
-export const QUERY_PLANNER_ANALYSIS_LIMIT = 1000;
-export const QUERY_PLANNER_OPTIMIZE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const QUERY_PLANNER_ANALYSIS_LIMIT = 1000;
+const QUERY_PLANNER_OPTIMIZE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 type TransactionRunner<A extends any[], T> = {
   (...args: A): T;
@@ -144,8 +144,4 @@ async function createRuntimeDirectories(stateDir: string, dbPath: string): Promi
 function cleanPath(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed === "" ? undefined : trimmed;
-}
-
-function normalizedSlashes(path: string): string {
-  return path.replaceAll("\\", "/");
 }

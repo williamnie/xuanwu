@@ -6,13 +6,13 @@ import {
   BROWSER_SNAPSHOT_ENV
 } from "./browserToolProvider.ts";
 import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
-export type BrowserToolCallInput = {
+type BrowserToolCallInput = {
   env?: Record<string, string | undefined>;
   input?: Record<string, unknown>;
   invocationID?: string;
   toolName: string;
 };
-export type BrowserSnapshotDiagnostic = {
+type BrowserSnapshotDiagnostic = {
   authorized: boolean;
   code: BrowserSnapshotDiagnosticCode;
   env_configured: boolean;

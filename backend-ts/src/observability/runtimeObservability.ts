@@ -8,8 +8,8 @@ import {
   listEventSummaryProjectionForRead
 } from "../db/repositories/compactEventSummaryProjection.ts";
 
-export const RUNTIME_OBSERVABILITY_SCHEMA_VERSION = "xuanwu.runtime-observability.v1" as const;
-export const RUNTIME_OBSERVABILITY_CACHE_TTL_MS = 15_000;
+const RUNTIME_OBSERVABILITY_SCHEMA_VERSION = "xuanwu.runtime-observability.v1" as const;
+const RUNTIME_OBSERVABILITY_CACHE_TTL_MS = 15_000;
 const runtimeObservabilityCache = new Map<string, {
   expiresAt: number;
   refreshing?: Promise<void>;

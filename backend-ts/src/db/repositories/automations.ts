@@ -17,7 +17,7 @@ import {
 
 type Row = Record<string, unknown>;
 
-export type CreateAutomationInput = Omit<AutomationDefinition, "active_trigger_version" | "created_at" | "revision" | "updated_at"> & {
+type CreateAutomationInput = Omit<AutomationDefinition, "active_trigger_version" | "created_at" | "revision" | "updated_at"> & {
   next_run_at?: string | null;
   trigger: AutomationTriggerConfig;
   trigger_created_by: string;
@@ -27,7 +27,7 @@ export type AutomationDefinitionPatch = Partial<Pick<AutomationDefinition,
   "mode" | "name" | "next_run_at" | "permission_policy_ref" | "workflow_ref"
 >>;
 
-export type AutomationEvent = {
+type AutomationEvent = {
   actor_id: string;
   actor_kind: AutomationAudit["actor_kind"];
   after_revision: number;

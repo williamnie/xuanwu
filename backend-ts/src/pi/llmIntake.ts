@@ -15,7 +15,7 @@ import { buildIntakeSkillInput, buildIntakeSkillPrompt, type IntakeSkillInput } 
 
 type JsonObject = Record<string, unknown>;
 
-export type AssistantModelPolicy = {
+type AssistantModelPolicy = {
   domain_model?: string;
   fallback_model?: string;
   intake_model?: string;
@@ -23,7 +23,7 @@ export type AssistantModelPolicy = {
   vision_model?: string;
 };
 
-export type IntakeSkillRuntime = {
+type IntakeSkillRuntime = {
   id?: string;
   input_object?: string;
   kind?: string;
@@ -101,12 +101,12 @@ const itemSchema = Type.Object({
   urgency: Type.Optional(literalUnion(URGENCY_LEVELS))
 }, objectOptions);
 
-export const LLM_INTAKE_OUTPUT_SCHEMA = Type.Object({
+const LLM_INTAKE_OUTPUT_SCHEMA = Type.Object({
   ignored_groups: Type.Array(ignoredSchema),
   inbox_items: Type.Array(itemSchema)
 }, objectOptions);
 
-export type LlmIntakeOutput = Static<typeof LLM_INTAKE_OUTPUT_SCHEMA>;
+type LlmIntakeOutput = Static<typeof LLM_INTAKE_OUTPUT_SCHEMA>;
 
 export async function runLlmIntake(
   db: RunnerDatabase,
@@ -140,18 +140,6 @@ export async function runIntakeSkill(
     updateIntakeRun(db, run.id, { error: redactAuditText(errorMessage(error)), status: "failed" });
     throw error;
   }
-}
-
-export function buildIntakePrompt(bundle: ContextBundleRecord): string {
-  return [
-    "You are the Xuanwu Supervisor LLM intake skill.",
-    "Read the context bundle and return only JSON matching the provided schema.",
-    "Create attention items for matters needing attention, reply, follow-up, tracking, or handling.",
-    "If there are no attention items, return inbox_items=[] and at least one ignored_groups reason.",
-    "Do not rely on keyword rules; judge the user's intent from the full context and evidence.",
-    "Every item must include evidence_refs and confidence.",
-    JSON.stringify(inputSummary(bundle), null, 2)
-  ].join("\n");
 }
 
 function persistIntakeSuccess(
@@ -254,22 +242,6 @@ function modelPolicyId(options: LlmIntakeOptions, skill: IntakeSkillRuntime): st
 
 function arrayValue(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
-}
-
-function inputSummary(bundle: ContextBundleRecord): JsonObject {
-  return {
-    attachment_refs: bundle.attachment_refs,
-    bundle_id: bundle.id,
-    context: bundle.context,
-    created_by: bundle.created_by,
-    event_refs: bundle.event_refs,
-    evidence_refs: bundle.evidence_refs,
-    reason: bundle.reason,
-    source: bundle.source,
-    token_budget: bundle.token_budget,
-    trigger: bundle.trigger,
-    window: bundle.window
-  };
 }
 
 function extractJson(raw: string): string {

@@ -48,7 +48,7 @@ export function claudeManifest(): ExecutorProviderManifest {
   };
 }
 
-export type ClaudeFactoryOptions = {
+type ClaudeFactoryOptions = {
   eventSink?: (event: ProviderEvent) => void;
 };
 

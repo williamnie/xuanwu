@@ -10,32 +10,6 @@ export type FeishuApprovalAction = {
 
 const APPROVAL_ACTION = "pi_approval_resolve";
 
-export function buildFeishuApprovalCard(input: {
-  approvalID: string;
-  issueID?: number;
-  text: string;
-}): Record<string, unknown> {
-  return {
-    config: { wide_screen_mode: true },
-    elements: [
-      { tag: "markdown", content: input.text },
-      {
-        tag: "action",
-        actions: [
-          approvalButton(input.approvalID, "approve", "turn", "批准一次", "primary"),
-          approvalButton(input.approvalID, "approve_session", "session", "本 session 批准", "primary"),
-          approvalButton(input.approvalID, "deny", "turn", "拒绝", "danger"),
-          approvalButton(input.approvalID, "defer", "turn", "暂缓", "default")
-        ]
-      }
-    ],
-    header: {
-      template: "orange",
-      title: { tag: "plain_text", content: input.issueID ? `Issue #${input.issueID} 等待授权` : "Codex 等待授权" }
-    }
-  };
-}
-
 export function normalizeFeishuApprovalAction(raw: unknown): FeishuApprovalAction | null {
   const root = recordValue(raw);
   if (cleanString(recordValue(root.header).event_type) !== "card.action.trigger") return null;
@@ -56,21 +30,6 @@ export function normalizeFeishuApprovalAction(raw: unknown): FeishuApprovalActio
     scope: cleanString(value.scope),
     userID: cleanString(operatorID.user_id || operatorID.userId),
     userOpenID: cleanString(operatorID.open_id || operatorID.openId)
-  };
-}
-
-function approvalButton(
-  approvalID: string,
-  decision: string,
-  scope: string,
-  label: string,
-  type: string
-): Record<string, unknown> {
-  return {
-    tag: "button",
-    text: { tag: "plain_text", content: label },
-    type,
-    value: { action: APPROVAL_ACTION, approval_id: approvalID, decision, scope }
   };
 }
 

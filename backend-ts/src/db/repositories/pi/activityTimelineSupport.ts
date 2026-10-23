@@ -2,7 +2,7 @@ import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
 import type { PiActivityFilter, PiActivityNode, PiActivityScope } from "./activityTimelineTypes.ts";
 
 export const DEFAULT_ACTIVITY_LIMIT = 100;
-export const MAX_ACTIVITY_LIMIT = 500;
+const MAX_ACTIVITY_LIMIT = 500;
 
 export function addActivityRef(scope: PiActivityScope, ref: { id: number | string; kind: string }): void {
   if (ref.kind === "external_event") scope.rawEventIds.add(Number(ref.id));
@@ -110,7 +110,7 @@ export function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
   });
 }
 
-export function cleanRefs(refs: Record<string, unknown>): Record<string, unknown> {
+function cleanRefs(refs: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(refs).filter(([, value]) => value !== undefined && value !== "" && value !== 0));
 }
 

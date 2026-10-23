@@ -12,7 +12,7 @@ import {
 
 export type ProjectWriteInput = Partial<Record<keyof NormalizedProjectWrite | "execution_policy", unknown>>;
 export type ProjectPatchInput = ProjectWriteInput;
-export type NormalizedProjectPatch = Partial<NormalizedProjectWrite>;
+type NormalizedProjectPatch = Partial<NormalizedProjectWrite>;
 
 export type NormalizedProjectWrite = {
   approval_policy: string;
@@ -109,13 +109,13 @@ export function normalizeProjectModel(value: unknown, provider = "codex"): strin
   return model;
 }
 
-export function projectNameFromCWD(cwd: string): string {
+function projectNameFromCWD(cwd: string): string {
   const trimmed = cleanString(cwd).replace(new RegExp(`${escapeRegExp(sep)}+$`), "");
   const name = basename(trimmed);
   return name === "." || name === sep || name === "" ? "project" : name;
 }
 
-export function cleanString(value: unknown): string {
+function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 

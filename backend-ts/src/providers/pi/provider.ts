@@ -13,8 +13,7 @@ import {
   type SessionCreateInput,
   type SessionCreateResult,
   type SessionMessageInput,
-  type SessionMessageResult,
-  type SessionRef
+  type SessionMessageResult
 } from "../types.ts";
 import { isAbsolute, relative, resolve } from "node:path";
 import { PiRpcTransport, type PiRpcEvent } from "./rpcTransport.ts";

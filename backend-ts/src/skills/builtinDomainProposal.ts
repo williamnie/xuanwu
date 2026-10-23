@@ -3,7 +3,7 @@ import type { AttentionInboxItemRecord } from "../db/repositories/intakeRuns.ts"
 type JsonObject = Record<string, unknown>;
 type ActionRisk = "low" | "medium" | "high";
 
-export type DomainSkillActionType =
+type DomainSkillActionType =
   | "ask_user"
   | "issue.create"
   | "issue.enqueue"
@@ -15,7 +15,7 @@ export type DomainSkillActionType =
   | "reminder.create"
   | "watch_thread";
 
-export type DomainSkillActionProposal = {
+type DomainSkillActionProposal = {
   evidence_refs: string[];
   id: string;
   payload: JsonObject;

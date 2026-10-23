@@ -12,7 +12,7 @@ export async function runSystem(args: string[], env: EnvReader, fetcher: Fetcher
   throw new Error(`unknown system command: ${command}`);
 }
 
-export async function getSystemStatus(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
+async function getSystemStatus(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
   return await getSystemPayload(args, env, fetcher, "/api/system/status");
 }
 

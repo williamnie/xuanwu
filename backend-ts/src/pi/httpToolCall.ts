@@ -3,7 +3,7 @@ import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "./httpToolProvid
 import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
 import { unsafeUrlEgressReason } from "../security/promptInjectionDefense.ts";
 
-export type HttpToolCallInput = {
+type HttpToolCallInput = {
   input?: Record<string, unknown>;
   invocationID?: string;
   timeoutMs?: number;

@@ -13,10 +13,10 @@ import { publicManagedSkill, requireManagedSkill, verifyLibrarySkill } from "./l
 import { EXPERIENCE_TEMPLATE_MARKER } from "./experienceTemplateFormat.ts";
 import { SkillLibraryError, skillID, type ManagedSkill } from "./managedTypes.ts";
 
-export type ExperienceTemplateInput = {
+type ExperienceTemplateInput = {
   id: string; project_id: string; memory_id: string; expected_memory_revision: number;
 };
-export type ExperienceTemplateChoice = ExperienceTemplateInput & {
+type ExperienceTemplateChoice = ExperienceTemplateInput & {
   template_revision: string; choice: "save" | "save_and_enable" | "enable" | "rollback";
   key?: string; expected_revision?: string; revision?: string;
 };

@@ -8,12 +8,12 @@ import { redactSensitiveText } from "../util/redact.ts";
 import { issueStateSnapshot, type IssueStateSnapshot } from "./issueStateSnapshot.ts";
 export { applyIssueStateRepair } from "./issueStateRepairExecutor.ts";
 
-export type IssueStateEvidence = {
+type IssueStateEvidence = {
   ref: string; source: "event" | "issue" | "policy" | "project" | "run" | "session"; summary: string; timestamp: string;
 };
 export type IssueStateRepairOperation = "comment" | "enqueue" | "request_pi_decision";
-export type IssueStateSuggestedOperation = "enqueue" | "kick_project_loop";
-export type IssueStateAction = {
+type IssueStateSuggestedOperation = "enqueue" | "kick_project_loop";
+type IssueStateAction = {
   action_type: "issue.state_repair"; evidence_refs: string[]; issue_id: number;
   operation: IssueStateRepairOperation; patch?: Record<string, string>; rationale: string;
   suggested_operation?: IssueStateSuggestedOperation; expected_state: IssueStateSnapshot;
@@ -23,13 +23,13 @@ export type IssueStateDiagnostic = {
   recommended_actions: IssueStateAction[]; severity: "blocked" | "needs_user" | "repair" | "watch";
   status: string; title: string;
 };
-export type IssueStateBatchTarget = { deadline_at?: string; issue_ids: number[]; label: string; status?: string };
-export type IssueStateManagerOptions = {
+type IssueStateBatchTarget = { deadline_at?: string; issue_ids: number[]; label: string; status?: string };
+type IssueStateManagerOptions = {
   batchTarget?: IssueStateBatchTarget; batchTargets?: IssueStateBatchTarget[]; includeDoneIssues?: boolean; issueIDs?: number[];
   maxRetries?: number; now?: Date; pendingVerificationTimeoutMs?: number; projectID?: string; retryCooldownMs?: number; staleAfterMs?: number;
 };
-export type IssueStateManagerResult = { batch_targets: IssueStateBatchProgress[]; diagnostics: IssueStateDiagnostic[]; generated_at: string };
-export type IssueStateBatchProgress = {
+type IssueStateManagerResult = { batch_targets: IssueStateBatchProgress[]; diagnostics: IssueStateDiagnostic[]; generated_at: string };
+type IssueStateBatchProgress = {
   deadline_at: string; done: number; label: string; off_track_issue_ids: number[]; target: number; target_status: string;
 };
 
@@ -188,7 +188,6 @@ function batchProgress(issues: Issue[], targets: IssueStateBatchTarget[]): Issue
 function normalizedBatchTargets(options: IssueStateManagerOptions): IssueStateBatchTarget[] {
   return [...(options.batchTargets ?? []), ...(options.batchTarget ? [options.batchTarget] : [])];
 }
-
 
 function issueEvidence(issue: Issue, summary: string): IssueStateEvidence {
   return { ref: `issue:${issue.id}`, source: "issue", summary: safeText(summary), timestamp: issue.updated_at };

@@ -21,10 +21,6 @@ export function resolvePiChatToolMode(
     : "full";
 }
 
-export function isInternalPiRuntimePromptProfile(profile: PiRuntimePromptProfile): boolean {
-  return profile !== "chat";
-}
-
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }

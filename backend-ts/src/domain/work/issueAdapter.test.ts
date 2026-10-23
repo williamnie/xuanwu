@@ -6,7 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { createIssue } from "../../db/repositories/issueCreate.ts";
 import { getIssue } from "../../db/repositories/issues.ts";
 import { updateIssue } from "../../db/repositories/issueUpdate.ts";
-import { getWork, listWorkEvents } from "../../db/repositories/workLedger.ts";
+import { getWork } from "../../db/repositories/workLedger.ts";
 import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
 import { WORK_STATUSES, type WorkTransitionAudit } from "./contracts.ts";
 import {

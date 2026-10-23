@@ -2,7 +2,7 @@ import type { AgentProfile } from "../db/repositories/agentProfiles.ts";
 import { parseSkillIntentList } from "../skills/intents.ts";
 import type { AgentRole } from "./agentOrchestration.ts";
 
-export type RoleProfileSelectorInput = {
+type RoleProfileSelectorInput = {
   allowStrategy?: boolean;
   explicitProfileId?: string;
   issueProfileId?: string;

@@ -15,7 +15,7 @@ export type ProjectPiSettings = {
   created_at: string; updated_at: string;
 };
 
-export type ProjectPiSettingsInput = PatchInput<ProjectPiSettings>;
+type ProjectPiSettingsInput = PatchInput<ProjectPiSettings>;
 
 const TABLE = "project_pi_settings";
 const COLUMNS = "project_id, created_at, updated_at";

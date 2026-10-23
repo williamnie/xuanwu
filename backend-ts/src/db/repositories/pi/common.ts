@@ -1,6 +1,6 @@
 import type { RunnerDatabase } from "../../database.ts";
 
-export type Mapper<T> = (row: Record<string, unknown>) => T;
+type Mapper<T> = (row: Record<string, unknown>) => T;
 export type PatchInput<T> = Partial<Record<keyof T, unknown>>;
 type SQLValue = string | number | boolean | null;
 

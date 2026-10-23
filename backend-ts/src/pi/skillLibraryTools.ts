@@ -18,16 +18,16 @@ export { SKILL_LIBRARY_TOOL_NAMES, SKILL_LIBRARY_READ_TOOLS } from "./skillLibra
 const text = Type.String({ minLength: 1 });
 const optionalText = Type.Optional(text);
 const objectOptions = { additionalProperties: false };
-export const skillSourceSchema = Type.Object({
+const skillSourceSchema = Type.Object({
   kind: Type.Union([Type.Literal("local"), Type.Literal("git"), Type.Literal("inline")]),
   location: optionalText, ref: optionalText, subdirectory: optionalText, content: Type.Optional(Type.String({ maxLength: 131072 }))
 }, objectOptions);
-export const skillInstallSchema = Type.Object({
+const skillInstallSchema = Type.Object({
   id: Type.String({ pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$", maxLength: 64 }),
   scope: Type.Union([Type.Literal("instance"), Type.Literal("project")]),
   project_id: optionalText, source: skillSourceSchema, enabled: Type.Optional(Type.Boolean())
 }, objectOptions);
-export const skillManageSchema = Type.Object({
+const skillManageSchema = Type.Object({
   key: text, expected_revision: text,
   operation: Type.Union(["enable", "disable", "update", "rollback", "uninstall"].map(value => Type.Literal(value))),
   source: Type.Optional(skillSourceSchema), revision: optionalText
@@ -86,7 +86,7 @@ function tool<T extends TSchema>(name: string, label: string, description: strin
   } };
 }
 
-export function skillActionContext(context: PiActionContext, actionType: string, projectID: string): PiActionContext {
+function skillActionContext(context: PiActionContext, actionType: string, projectID: string): PiActionContext {
   if (projectID) return scopedRunnerChatActionContext(context, actionType, { projectID });
   if (!isRunnerChatSource(context.source) || !["skill.install", "skill.enable", "skill.disable", "skill.update", "skill.rollback", "skill.uninstall"].includes(actionType)) return context;
   if (context.authorization && context.authorization.askOnMissingAuthorization !== true && context.authorization.ask_on_missing_authorization !== true) return context;

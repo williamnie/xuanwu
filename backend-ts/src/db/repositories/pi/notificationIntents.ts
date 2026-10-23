@@ -24,11 +24,11 @@ export type PiNotificationIntent = {
   target_channel: string; target_chat_id: string; target_message_id: string;
   target_thread_id: string; updated_at: string;
 };
-export type PiNotificationIntentInput = PatchInput<PiNotificationIntent>;
-export type PiNotificationIntentFilter = {
+type PiNotificationIntentInput = PatchInput<PiNotificationIntent>;
+type PiNotificationIntentFilter = {
   issueId?: number; kind?: string; projectId?: string; runGroupId?: string; state?: string;
 };
-export type PiNotificationIntentState = Pick<PiNotificationIntent, "source_event_id" | "state">;
+type PiNotificationIntentState = Pick<PiNotificationIntent, "source_event_id" | "state">;
 
 type SQLValue = string | number;
 const TABLE = "pi_notification_intents";
@@ -103,21 +103,6 @@ export function listReadyPiDigestNotificationIntents(
       ${channel ? "and (target_channel=? or target_channel='')" : ""}
     order by created_at asc, flush_sequence asc, id asc limit ?
   `).all(input.now.toISOString(), ...(channel ? [channel] : []), limit).map(mapIntent);
-}
-
-export function listPiNotificationIntentStatesByKind(
-  db: RunnerDatabase,
-  kind: string
-): PiNotificationIntentState[] {
-  const value = cleanString(kind);
-  if (value === "") return [];
-  return db.sqlite.query<Record<string, unknown>, [string]>(`
-    select source_event_id, state from ${TABLE} indexed by idx_pi_notification_intents_kind_source
-    where kind=? order by source_event_id asc, created_at asc, id asc
-  `).all(value).map((row) => ({
-    source_event_id: optionalString(row.source_event_id),
-    state: requiredString(row.state, `${TABLE}.state`)
-  }));
 }
 
 /** 只读取本轮候选 action 的最终通知状态，保持旧 Map 的最后一条优先语义。 */

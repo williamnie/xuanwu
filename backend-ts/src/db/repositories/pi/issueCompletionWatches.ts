@@ -10,7 +10,7 @@ import {
   requiredString
 } from "./common.ts";
 
-export type PiIssueCompletionWatchStatus = "active" | "satisfied" | "notified" | "cancelled" | "failed";
+type PiIssueCompletionWatchStatus = "active" | "satisfied" | "notified" | "cancelled" | "failed";
 export type PiIssueCompletionWatch = {
   completed_at: string; condition: string; created_at: string; error: string; id: string;
   idempotency_key: string; items: PiIssueCompletionWatchItem[]; notified_at: string;
@@ -38,7 +38,7 @@ const WATCH_COLUMNS = `id, idempotency_key, project_id, origin_conversation_id,
   created_at, updated_at, completed_at, notified_at, error`;
 const ITEM_COLUMNS = `watch_id, issue_id, project_id, initial_status, last_status,
   terminal_at, created_at, updated_at`;
-export const ISSUE_COMPLETION_TERMINAL_STATUSES = new Set([
+const ISSUE_COMPLETION_TERMINAL_STATUSES = new Set([
   "done", "failed", "cancelled"
 ]);
 const DEFAULT_CONDITION = JSON.stringify({
@@ -290,17 +290,6 @@ function terminalStatus(status: string, condition: unknown): boolean {
   const value = cleanString(status);
   void condition;
   return ISSUE_COMPLETION_TERMINAL_STATUSES.has(value);
-}
-
-function conditionObject(value: unknown): Record<string, unknown> {
-  if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
-  if (typeof value !== "string" || value.trim() === "") return {};
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
-  } catch {
-    return {};
-  }
 }
 
 function watchStatus(value: unknown): PiIssueCompletionWatchStatus {

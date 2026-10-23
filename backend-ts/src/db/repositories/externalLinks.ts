@@ -20,9 +20,9 @@ export type ExternalLinkRecord = {
   updated_at: string;
 };
 
-export type ExternalLinkInput = Partial<Omit<ExternalLinkRecord, "created_at" | "id" | "updated_at">>;
+type ExternalLinkInput = Partial<Omit<ExternalLinkRecord, "created_at" | "id" | "updated_at">>;
 
-export type ExternalLinkExternalFilter = {
+type ExternalLinkExternalFilter = {
   externalID?: string;
   externalType?: string;
   limit?: number;

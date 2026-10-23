@@ -25,7 +25,7 @@ export type TelegramConnectorOverrides = {
   telegramProjectMappings?: string | TelegramProjectMapping[];
 };
 
-export type TelegramEnvInput = {
+type TelegramEnvInput = {
   TELEGRAM_ALLOWED_CHAT_IDS?: string;
   TELEGRAM_ALLOWED_USER_IDS?: string;
   TELEGRAM_BOT_TOKEN?: string;
@@ -47,7 +47,7 @@ export type TelegramUser = {
   username?: string;
 };
 
-export type TelegramChat = {
+type TelegramChat = {
   id: number | string;
   title?: string;
   type: "channel" | "group" | "private" | "supergroup" | string;

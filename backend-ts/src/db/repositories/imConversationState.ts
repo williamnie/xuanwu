@@ -22,13 +22,13 @@ export type ImConversationState = {
   updated_at: string;
 };
 
-export type ImConversationEpochInput = {
+type ImConversationEpochInput = {
   baseConversationId: string;
   connectorId: string;
   scopeKey: string;
 };
 
-export type ImConversationAdoptionInput = {
+type ImConversationAdoptionInput = {
   activeConversationId: string;
   baseConversationId: string;
   connectorId: string;

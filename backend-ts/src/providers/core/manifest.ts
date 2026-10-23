@@ -22,23 +22,23 @@ export type ProviderCapabilities = {
   usage?: { tokens?: "attempt" | "session-total"; money?: "provider-reported" | "derived" };
 };
 
-export type ProviderSupportLevel = "experimental" | "preview" | "tested";
+type ProviderSupportLevel = "experimental" | "preview" | "tested";
 
 export type ProviderTransport = "rpc" | "stdio-json" | "stream-json" | "sdk" | "acp";
 
-export type ProviderProcessObservability = "none" | "lease";
+type ProviderProcessObservability = "none" | "lease";
 
 /** P6：首版 setting descriptor——仅 string/enum/boolean/secret-ref（计划 §25.4 决策 6）。 */
-export type ProviderSettingDescriptor =
+type ProviderSettingDescriptor =
   | { kind: "string"; key: string; label: string; placeholder?: string; secret?: false }
   | { kind: "enum"; key: string; label: string; options: Array<{ value: string; label: string }> }
   | { kind: "boolean"; key: string; label: string }
   | { kind: "secret-ref"; key: string; label: string };
 
-export type ProviderSettingsDescriptor = { settings: readonly ProviderSettingDescriptor[] };
+type ProviderSettingsDescriptor = { settings: readonly ProviderSettingDescriptor[] };
 
 /** P6：native action（如 Codex "Open in Codex App"）经 manifest action 提供，非通用 capability。 */
-export type ProviderNativeAction = {
+type ProviderNativeAction = {
   id: string;
   label: string;
   kind: "open-in-app" | "link";
@@ -69,7 +69,7 @@ export type ExecutorProviderManifest = {
 };
 
 /** P2：capability 声明 → 校验方法名 的确定性投影（conformance 用）。 */
-export type CapabilityMethodCheck = {
+type CapabilityMethodCheck = {
   capability: string;
   required: boolean;
   method: string;
@@ -90,26 +90,6 @@ export function capabilityMethodChecks(capabilities: ProviderCapabilities): read
   const models = capabilities.models;
   if (models?.list) checks.push({ capability: "models.list", required: true, method: "listModels" });
   return checks;
-}
-
-/** P2：legacy `ExecutorCapability[]` → 结构化 detail 的确定性投影（兼容窗口用）。 */
-export function capabilityDetailFromLegacy(legacy: readonly string[]): ProviderCapabilities {
-  const has = (c: string) => legacy.includes(c);
-  return {
-    issueExecution: true,
-    sessions: {
-      create: has("sessions"),
-      list: has("sessions"),
-      read: has("sessions"),
-      resume: has("resume_session"),
-      steerWhileRunning: false,
-      fork: false,
-      export: false
-    },
-    control: { interrupt: has("interrupt"), approvals: has("approvals") ? "host-callback" : "none" },
-    models: { list: has("model_list"), switchDuringSession: false },
-    usage: { tokens: "attempt", money: "provider-reported" }
-  };
 }
 
 /** P4：结构化 detail → legacy `ExecutorCapability[]` 的确定性投影（§8.4，兼容窗口用）。 */

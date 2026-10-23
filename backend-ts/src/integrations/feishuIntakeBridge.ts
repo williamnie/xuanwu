@@ -21,7 +21,7 @@ export type FeishuGenericIntakeOptions = {
   skillId?: string;
 };
 
-export type FeishuGenericIntakeResult = {
+type FeishuGenericIntakeResult = {
   domain_routes: DomainRouteResult[];
   intake_route?: IntakeRouteResult;
   reason: string;

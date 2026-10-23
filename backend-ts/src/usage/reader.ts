@@ -9,7 +9,7 @@ import {
 } from "./usageIndex.ts";
 import type { UsageBucket, UsageRecord } from "./types.ts";
 
-export type UsageSnapshot = {
+type UsageSnapshot = {
   buckets: UsageBucket[];
   cache: UsageIndexMetrics;
   freshness: {
@@ -25,7 +25,7 @@ export type UsageSnapshot = {
   recent: UsageRecord[];
 };
 
-export type UsageReaderOptions = {
+type UsageReaderOptions = {
   backgroundRefresh?: boolean;
   indexPath?: string;
 };
@@ -78,12 +78,6 @@ export async function readUsageSnapshot(
 
 export function defaultUsageIndexPath(root: string): string {
   return join(root, ".codex-usage-index-v1.sqlite");
-}
-
-export async function rebuildUsageIndex(root: string, indexPath = defaultUsageIndexPath(root)): Promise<UsageIndexMetrics> {
-  const state = stateFor(indexPath, root);
-  await runRefresh(root, indexPath, state, true);
-  return queryUsageIndex(indexPath, root, 0, { refreshing: false }).cache;
 }
 
 export function resetUsageReaderState(): void {

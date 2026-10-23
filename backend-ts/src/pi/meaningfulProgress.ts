@@ -1,4 +1,4 @@
-export type ProgressStatePoint = {
+type ProgressStatePoint = {
   status?: string;
   updated_at?: string;
 };
@@ -10,18 +10,18 @@ export type ProgressSnapshot = {
   session?: ProgressStatePoint;
 };
 
-export type ProgressEvent = {
+type ProgressEvent = {
   payload?: unknown;
   type: string;
 };
 
-export type MeaningfulProgressInput = {
+type MeaningfulProgressInput = {
   baseline?: ProgressSnapshot;
   current?: ProgressSnapshot;
   events?: ProgressEvent[];
 };
 
-export type MeaningfulProgressResult = {
+type MeaningfulProgressResult = {
   has_progress: boolean;
   ignored_reasons: string[];
   reasons: string[];

@@ -19,7 +19,7 @@ import {
   parseIssueDependencyDeclaration
 } from "../../domain/work/issueDependencyDeclaration.ts";
 
-export type UpdateIssueInput = Partial<Record<keyof NormalizedIssuePatch, unknown>> & {
+type UpdateIssueInput = Partial<Record<keyof NormalizedIssuePatch, unknown>> & {
   depends_on_issue_ids?: unknown;
 };
 
@@ -433,8 +433,4 @@ function patchStatusExitReason(status: string): string {
   if (status === "done" || status === "needs_user") return "pi_semantic_decision";
   if (status === "failed" || status === "cancelled") return status;
   return "status_changed";
-}
-
-function isTerminalStatus(status: string): boolean {
-  return status === "done" || status === "failed" || status === "cancelled" || status === "needs_user";
 }

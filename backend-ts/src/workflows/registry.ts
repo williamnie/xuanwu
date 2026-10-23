@@ -18,8 +18,8 @@ import {
 } from "./manifest.ts";
 
 export type WorkflowManifestRegistration = { manifest: unknown; source_path: string };
-export type WorkflowProjectOverrideRegistration = { override: unknown; source_path: string };
-export type WorkflowRegistrySkill = Pick<
+type WorkflowProjectOverrideRegistration = { override: unknown; source_path: string };
+type WorkflowRegistrySkill = Pick<
   SkillMetadata,
   "id" | "name" | "permissions" | "required_tools"
 >;
@@ -33,7 +33,7 @@ export type WorkflowRegistryOptions = {
   verification_policies: readonly WorkflowVerificationPolicy[];
 };
 
-export type WorkflowRegistryDiagnostic = {
+type WorkflowRegistryDiagnostic = {
   code:
     | "duplicate_manifest"
     | "duplicate_project_override"
@@ -55,7 +55,7 @@ export type WorkflowRegistryDiagnostic = {
   workflow_ref?: string;
 };
 
-export type WorkflowRegistryItem = {
+type WorkflowRegistryItem = {
   manifest: WorkflowManifest;
   ready: boolean;
   ref: string;
@@ -72,7 +72,7 @@ export type WorkflowResolution = {
   verification_overrides: ProjectVerificationOverride[];
 };
 
-export type WorkflowResolutionResult =
+type WorkflowResolutionResult =
   | { ok: true; resolution: WorkflowResolution }
   | { diagnostics: WorkflowRegistryDiagnostic[]; ok: false };
 

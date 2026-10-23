@@ -1,4 +1,4 @@
-export type ListenAddress = { hostname: string; port: number };
+type ListenAddress = { hostname: string; port: number };
 
 export function parseListenAddress(addr: string): ListenAddress {
   const trimmed = addr.trim();

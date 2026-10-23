@@ -8,11 +8,11 @@ import {
   normalizeIssueDependencyDeclaration
 } from "../../domain/work/issueDependencyDeclaration.ts";
 
-export type CreateIssueInput = Partial<Record<keyof NormalizedIssueWrite, unknown>> & {
+type CreateIssueInput = Partial<Record<keyof NormalizedIssueWrite, unknown>> & {
   depends_on_issue_ids?: unknown;
 };
 
-export type CreateIssueOptions = {
+type CreateIssueOptions = {
   createdEventPayload?: Record<string, unknown>;
 };
 
@@ -249,7 +249,7 @@ export function normalizeIdentifier(value: unknown): string {
   return out.replace(/^-+|-+$/g, "");
 }
 
-export function deriveIssueTitle(content: string): string {
+function deriveIssueTitle(content: string): string {
   const line = content.split("\n").map((item) => item.trim()).find(Boolean) ?? "";
   return truncateRunes(line, ISSUE_TITLE_MAX_RUNES);
 }

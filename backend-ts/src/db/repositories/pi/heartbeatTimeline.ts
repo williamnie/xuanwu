@@ -2,12 +2,12 @@ import type { RunnerDatabase } from "../../database.ts";
 import { integerInput, integerValue, optionalString } from "./common.ts";
 import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
 
-export type PiHeartbeatTimelineFilter = { issueId?: number; limit?: number; projectId?: string };
-export type PiHeartbeatTimelineStage =
+type PiHeartbeatTimelineFilter = { issueId?: number; limit?: number; projectId?: string };
+type PiHeartbeatTimelineStage =
   "action" | "decision" | "result" | "signal" |
   "supervisor_action" | "supervisor_decision" | "supervisor_result" | "supervisor_signal";
-export type PiHeartbeatTimelineSource = "action" | "heartbeat" | "supervisor";
-export type PiHeartbeatTimelineItem = {
+type PiHeartbeatTimelineSource = "action" | "heartbeat" | "supervisor";
+type PiHeartbeatTimelineItem = {
   id: string; row_id: number; source: PiHeartbeatTimelineSource; stage: PiHeartbeatTimelineStage;
   event_type: string; created_at: string; project_id: string; issue_id: number;
   heartbeat_id: string; action_id: string; delegation_id: string; actor: string;

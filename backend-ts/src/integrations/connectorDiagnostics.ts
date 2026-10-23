@@ -19,9 +19,9 @@ import { createDatabaseSecretService, type SecretService } from "../security/sec
 import { redactSensitiveText } from "../util/redact.ts";
 import type { FeishuReceiverStatus } from "./feishuReceiver.ts";
 
-export const CONNECTOR_DIAGNOSTIC_SCHEMA = "xuanwu.connector-diagnostics.v1" as const;
+const CONNECTOR_DIAGNOSTIC_SCHEMA = "xuanwu.connector-diagnostics.v1" as const;
 
-export type ConnectorDiagnosticState =
+type ConnectorDiagnosticState =
   | "unconfigured"
   | "unknown"
   | "healthy"

@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../database.ts";
 import { hydrateStoredIssueLogPayload } from "./issueEvents.ts";
 
-export const EVENT_SUMMARY_PROJECTION_ID = "issue_events_summary_v1";
+const EVENT_SUMMARY_PROJECTION_ID = "issue_events_summary_v1";
 export const EVENT_SUMMARY_SOURCE = "issue_events";
 
 export type SourceIssueEvent = {

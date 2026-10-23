@@ -20,11 +20,11 @@ export type PiNotificationPreference = {
   source_event_id: string; source_event_sequence_id: number; source_message_id: string;
   status: string; updated_at: string; version: number;
 };
-export type PiNotificationPreferenceInput = PatchInput<PiNotificationPreference>;
-export type PiNotificationPreferenceFilter = {
+type PiNotificationPreferenceInput = PatchInput<PiNotificationPreference>;
+type PiNotificationPreferenceFilter = {
   conversationId?: string; projectId?: string; runGroupId?: string; scope?: string; status?: string;
 };
-export type ActivePiNotificationPreferenceFilter = PiNotificationPreferenceFilter & {
+type ActivePiNotificationPreferenceFilter = PiNotificationPreferenceFilter & {
   eventSequence?: number; referenceTime?: string;
 };
 

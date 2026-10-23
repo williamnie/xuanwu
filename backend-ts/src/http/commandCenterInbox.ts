@@ -5,7 +5,7 @@ import type { WorkLedgerEntry } from "../domain/work/contracts.ts";
 import { HttpError } from "./errors.ts";
 
 export const COMMAND_CENTER_INBOX_CONTRACT = "xw.command-center.inbox.v1";
-export const INBOX_SOURCES = ["human_review", "preparing", "failed_work", "attention"] as const;
+const INBOX_SOURCES = ["human_review", "preparing", "failed_work", "attention"] as const;
 export type InboxSource = typeof INBOX_SOURCES[number];
 export type InboxItem = {
   key: string;

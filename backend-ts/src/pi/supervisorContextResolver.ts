@@ -7,7 +7,7 @@ import { listProjects, type Project } from "../db/repositories/projects.ts";
 import { getIssueAsWork } from "../domain/work/issueAdapter.ts";
 import type { WorkLedgerEntry } from "../domain/work/contracts.ts";
 
-export const SUPERVISOR_CONTEXT_CANDIDATE_SOURCES = [
+const SUPERVISOR_CONTEXT_CANDIDATE_SOURCES = [
   "work_reference",
   "one_shot_work",
   "one_shot_target",
@@ -78,9 +78,9 @@ export const SUPERVISOR_CONTEXT_RESOLUTION_SCHEMA = Type.Object({
 }, objectOptions);
 
 export type SupervisorContextResolution = Static<typeof SUPERVISOR_CONTEXT_RESOLUTION_SCHEMA>;
-export type SupervisorContextCandidateSourceKind =
+type SupervisorContextCandidateSourceKind =
   (typeof SUPERVISOR_CONTEXT_CANDIDATE_SOURCES)[number];
-export type SupervisorContextResolverInput = {
+type SupervisorContextResolverInput = {
   conversationID?: string;
   conversationProjectID?: string;
   oneShotProjectID?: string;
@@ -89,7 +89,7 @@ export type SupervisorContextResolverInput = {
   prompt: string;
   source?: string;
 };
-export type SupervisorContextAuditInput = {
+type SupervisorContextAuditInput = {
   conversationID: string;
   turnID: string;
 };

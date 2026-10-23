@@ -16,7 +16,7 @@ import { issueIDToWorkID, workIDToIssueID } from "./issueAdapter.ts";
 import type { WorkID } from "./contracts.ts";
 
 export const WORK_TIMELINE_SCHEMA_VERSION = "xuanwu.work-timeline.v1" as const;
-export const WORK_TIMELINE_NODE_KINDS = [
+const WORK_TIMELINE_NODE_KINDS = [
   "work_event",
   "issue_event",
   "run",
@@ -25,15 +25,15 @@ export const WORK_TIMELINE_NODE_KINDS = [
   "approval"
 ] as const;
 
-export type WorkTimelineNodeKind = typeof WORK_TIMELINE_NODE_KINDS[number];
-export type WorkTimelineSourceAuthority =
+type WorkTimelineNodeKind = typeof WORK_TIMELINE_NODE_KINDS[number];
+type WorkTimelineSourceAuthority =
   | "work_events"
   | "issue_events"
   | "issue_runs"
   | "pi_action_events"
   | "pi_approval_requests";
 
-export type WorkTimelineSourceLink = {
+type WorkTimelineSourceLink = {
   href: string;
   rel: "work" | "issue" | "run" | "session" | "source" | "summary";
 };
@@ -57,12 +57,12 @@ export type WorkTimelineNode = {
   work_id: WorkID;
 };
 
-export type WorkTimelineQuery = {
+type WorkTimelineQuery = {
   cursor?: string;
   limit?: number;
 };
 
-export type WorkTimelineResult = {
+type WorkTimelineResult = {
   has_more: boolean;
   items: WorkTimelineNode[];
   limit: number;
@@ -144,12 +144,12 @@ export function queryWorkTimeline(
   };
 }
 
-export function encodeWorkTimelineCursor(node: Pick<WorkTimelineNode, "id" | "occurred_at">): string {
+function encodeWorkTimelineCursor(node: Pick<WorkTimelineNode, "id" | "occurred_at">): string {
   const position: CursorPosition = { at: canonicalTimestamp(node.occurred_at), id: node.id, version: 1 };
   return Buffer.from(JSON.stringify(position)).toString("base64url");
 }
 
-export function decodeWorkTimelineCursor(value: string): CursorPosition {
+function decodeWorkTimelineCursor(value: string): CursorPosition {
   if (typeof value !== "string" || value.trim() === "" || value.length > 2048) {
     throw new Error("Work timeline cursor is invalid");
   }

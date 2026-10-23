@@ -9,7 +9,7 @@ import type { RunnerDatabase } from "../database.ts";
  * CAS transition so duplicate/concurrent callbacks execute at most once.
  */
 
-export type ImInteractionBindingStatus = "pending" | "executing" | "consumed";
+type ImInteractionBindingStatus = "pending" | "executing" | "consumed";
 
 export type ImInteractionBindingAction = {
   action_id: string;
@@ -41,7 +41,7 @@ export type ImInteractionBinding = {
   updated_at: string;
 };
 
-export type ImInteractionBindingInput = {
+type ImInteractionBindingInput = {
   actionKind: string;
   actionRef: string;
   actions: ImInteractionBindingAction[];
@@ -55,7 +55,7 @@ export type ImInteractionBindingInput = {
   sourceMessageId?: string;
 };
 
-export type ImInteractionConsumeResult = {
+type ImInteractionConsumeResult = {
   binding: ImInteractionBinding | null;
   status:
     | "action_mismatch"
@@ -68,7 +68,7 @@ export type ImInteractionConsumeResult = {
     | "source_mismatch";
 };
 
-export type ImInteractionClaimResult = {
+type ImInteractionClaimResult = {
   binding: ImInteractionBinding | null;
   leaseId: string;
   status: ImInteractionConsumeResult["status"] | "claimed" | "resolution_in_progress";

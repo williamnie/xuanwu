@@ -17,7 +17,7 @@ import {
   isTransientRecoveryDiagnosis
 } from "./recoveryDiagnosis.ts";
 
-export type SupervisorSignalCollectorOptions = {
+type SupervisorSignalCollectorOptions = {
   issueIDs?: number[];
   limit?: number;
   staleAfterSeconds?: number;
@@ -160,7 +160,6 @@ function staleDiagnosticSignal(context: IssueSupervisorRecoveryContext): Heartbe
     updated_at: clean(context.session.updated_at)
   };
 }
-
 
 function stoppedContextSession(context: IssueSupervisorRecoveryContext): boolean {
   const statuses = [clean(context.session.raw_status), clean(context.session.status)];

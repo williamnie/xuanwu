@@ -33,7 +33,7 @@ export type PublicEventSummary = {
   type: string;
 };
 
-export type EventSummaryQueryResult = {
+type EventSummaryQueryResult = {
   items: PublicEventSummary[];
   schema_version: typeof EVENT_SUMMARY_QUERY_SCHEMA_VERSION;
   source_of_truth: "issue_events";

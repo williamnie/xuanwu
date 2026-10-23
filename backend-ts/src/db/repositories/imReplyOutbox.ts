@@ -18,7 +18,7 @@ import type {
   SyncOutboxRecord
 } from "./imReplyOutboxTypes.ts";
 
-export type { ImReplyDraftFilter, ImReplyDraftInput, ImReplyDraftRecord, SyncOutboxRecord };
+export type { SyncOutboxRecord };
 
 type ReplyPatch = Partial<Omit<ImReplyDraftRecord, "created_at" | "id" | "updated_at">>;
 const DRAFT_COLUMNS = `id, source, external_event_id, issue_id, target_chat_id,

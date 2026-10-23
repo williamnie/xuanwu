@@ -9,8 +9,7 @@ import {
   createPiGuardianEvent,
   createPiNotificationPreference,
   createProjectPiSettings,
-  listPiNotificationIntents,
-  upsertProjectPiPolicy
+  listPiNotificationIntents
 } from "../db/repositories/pi.ts";
 import { coordinateIssueLifecycleNotification } from "./notificationCoordinator.ts";
 

@@ -1,10 +1,10 @@
 import type { RunnerDatabase } from "../database.ts";
 import { getProject } from "./projects.ts";
 
-export const GIT_EVENT_PROVIDERS = ["github", "gitlab"] as const;
+const GIT_EVENT_PROVIDERS = ["github", "gitlab"] as const;
 export type GitEventProvider = typeof GIT_EVENT_PROVIDERS[number];
 
-export type GitRepoMapping = {
+type GitRepoMapping = {
   created_at: string;
   project_id: string;
   provider: GitEventProvider;
@@ -12,7 +12,7 @@ export type GitRepoMapping = {
   updated_at: string;
 };
 
-export type GitRepoMappingAudit = {
+type GitRepoMappingAudit = {
   actor: string;
   correlation_id: string;
   event_id: string;

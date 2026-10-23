@@ -1,6 +1,6 @@
 import type { PiGuardianAlert } from "../db/repositories/pi/guardianAlerts.ts";
 
-export type GuardianAlertHandling = "historical" | "pi_handling" | "user_action_required";
+type GuardianAlertHandling = "historical" | "pi_handling" | "user_action_required";
 
 export type GuardianAlertPresentation = {
   active: boolean;

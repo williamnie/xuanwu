@@ -37,7 +37,7 @@ export type ExternalEventRecord = {
 type BaseExternalEventInput = Partial<Omit<ExternalEventRecord, "attachments" | "id" | "normalized_message" | "raw_json" | "summary">>;
 export type ExternalEventInput = BaseExternalEventInput & { attachments?: ExternalEventAttachmentInput[]; normalized_message?: JsonObject; raw_json?: unknown; summary?: JsonObject };
 
-export type ExternalEventListFilter = {
+type ExternalEventListFilter = {
   dedupeKey?: string;
   limit?: number;
   source?: string;

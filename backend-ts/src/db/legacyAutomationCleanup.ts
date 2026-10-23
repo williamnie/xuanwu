@@ -1,6 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
-  copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -13,8 +20,8 @@ import {
   LEGACY_AUTOMATION_DROP_TABLES
 } from "./schema/053_drop_legacy_automation_tables.ts";
 
-export const LEGACY_AUTOMATION_ARCHIVE_CONTRACT = "xw.legacy-automation-archive.v1";
-export const LEGACY_AUTOMATION_CLEANUP_REPORT_CONTRACT = "xw.legacy-automation-cleanup-report.v1";
+const LEGACY_AUTOMATION_ARCHIVE_CONTRACT = "xw.legacy-automation-archive.v1";
+const LEGACY_AUTOMATION_CLEANUP_REPORT_CONTRACT = "xw.legacy-automation-cleanup-report.v1";
 
 type Authorization = {
   actor: string;
@@ -23,7 +30,7 @@ type Authorization = {
   reason: string;
 };
 
-export type LegacyAutomationCleanupInput = {
+type LegacyAutomationCleanupInput = {
   actor?: string;
   actorKind?: Authorization["actorKind"];
   apply?: boolean;

@@ -28,7 +28,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
   }
 }
 
-export function buildPiChatSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
+function buildPiChatSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
   const promptProject = input.toolProject ?? input.project;
   const promptInput = { ...input, project: promptProject };
   const skillContext = buildSkillPromptContext(db, promptInput);
@@ -71,7 +71,7 @@ export function buildPiChatSystemPrompt(input: RuntimeSessionInput, db: RunnerDa
   ].filter(Boolean).join("\n");
 }
 
-export function buildPiInternalSystemPrompt(
+function buildPiInternalSystemPrompt(
   input: RuntimeSessionInput,
   db: RunnerDatabase
 ): string {
@@ -88,7 +88,7 @@ export function buildPiInternalSystemPrompt(
   ].join("\n");
 }
 
-export function buildPiManagerCycleSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
+function buildPiManagerCycleSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
   const promptProject = input.toolProject ?? input.project;
   const promptInput = { ...input, project: promptProject };
   const skillContext = buildSkillPromptContext(db, promptInput);

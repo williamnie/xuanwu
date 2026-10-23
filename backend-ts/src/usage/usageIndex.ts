@@ -7,7 +7,7 @@ import { basename } from "node:path";
 import { clean, dayKey, timestamp, timestampMs, tokenUsage } from "./helpers.ts";
 import type { RateLimits, TokenEvent, TokenInfo, TokenUsage, UsageBucket, UsageMeta, UsageRecord } from "./types.ts";
 
-export const USAGE_INDEX_VERSION = 1;
+const USAGE_INDEX_VERSION = 1;
 const TAIL_BYTES = 4096;
 const MAX_LINE_BYTES = 64 * 1024 * 1024;
 const READ_CHUNK_BYTES = 64 * 1024;

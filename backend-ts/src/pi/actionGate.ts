@@ -9,14 +9,14 @@ import {
 import { assessDataEgress, isExternalEgressAction } from "../security/promptInjectionDefense.ts";
 import { piActionContract } from "./actionContracts.ts";
 
-export type PiRiskGate = "safe" | "confirm" | "high";
+type PiRiskGate = "safe" | "confirm" | "high";
 export type PiRiskLevel = "low" | "medium" | "high";
-export type PiRiskClassification = {
+type PiRiskClassification = {
   gate: PiRiskGate;
   requiresConfirmation: boolean;
   riskLevel: PiRiskLevel;
 };
-export type PiActionEnvelopeRisk = {
+type PiActionEnvelopeRisk = {
   gate: PiRiskGate | "forbidden";
   level: PiRiskLevel;
   requires_confirmation: boolean;

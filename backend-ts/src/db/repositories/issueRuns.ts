@@ -8,7 +8,7 @@ import { issueTimestamp } from "./issueCreate.ts";
 import { listIssueRuns, type IssueRun } from "./issues.ts";
 import { assertWorkspaceWaitCanStart, readWorkspaceWait } from "./workspaceWaits.ts";
 
-export type IssueRunRuntimeInput = {
+type IssueRunRuntimeInput = {
   agent_profile_id?: string;
   capability_summary?: string;
   issue_run_id?: string;

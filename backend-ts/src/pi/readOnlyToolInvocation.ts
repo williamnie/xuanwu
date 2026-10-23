@@ -13,7 +13,7 @@ import { assessDataEgress } from "../security/promptInjectionDefense.ts";
 import type { PiGatePolicy } from "./actionGate.ts";
 import { JEV_CAPABILITY_ID, JEV_TOOL_NAME } from "../skills/jev/config.ts";
 
-export type ReadOnlyToolInvocationInput = {
+type ReadOnlyToolInvocationInput = {
   authorization?: PiGatePolicy;
   auditContext?: Partial<ToolCallAuditContext>;
   db: RunnerDatabase;

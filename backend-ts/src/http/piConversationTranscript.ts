@@ -6,10 +6,10 @@ import { redactSensitiveText } from "../util/redact.ts";
 
 const LEGACY_APP_SUPPORT_SEGMENT = "/codex-issue-runner-bun-live/";
 const XUANWU_APP_SUPPORT_SEGMENT = "/xuanwu-bun-live/";
-export const PI_CONVERSATION_TEXT_BYTES = 32 * 1024 * 1024;
+const PI_CONVERSATION_TEXT_BYTES = 32 * 1024 * 1024;
 export const PI_CONVERSATION_MESSAGE_LIMIT = 10_000;
 
-export type PiConversationTranscriptItem = {
+type PiConversationTranscriptItem = {
   created_at: string;
   id: string;
   meta: { conversation_id: string; pi_session_id: string };

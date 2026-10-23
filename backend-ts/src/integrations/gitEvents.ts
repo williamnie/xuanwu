@@ -17,8 +17,8 @@ import {
 } from "./channelConnectorContracts.ts";
 
 type JsonObject = Record<string, unknown>;
-export const GIT_EVENT_TYPES = ["push", "pull_request", "review", "check", "deployment"] as const;
-export type GitEventType = typeof GIT_EVENT_TYPES[number];
+const GIT_EVENT_TYPES = ["push", "pull_request", "review", "check", "deployment"] as const;
+type GitEventType = typeof GIT_EVENT_TYPES[number];
 
 export function gitEventConnectorManifest(provider: GitEventProvider): ConnectorManifest {
   return {
@@ -31,7 +31,7 @@ export function gitEventConnectorManifest(provider: GitEventProvider): Connector
   };
 }
 
-export type GitEventSyncInput = {
+type GitEventSyncInput = {
   delivery_id?: string;
   event_name: string;
   payload: JsonObject;
@@ -39,7 +39,7 @@ export type GitEventSyncInput = {
   trigger?: "manual" | "webhook";
 };
 
-export type GitEventSyncResult = {
+type GitEventSyncResult = {
   attention_id?: number;
   event: ExternalEventRecord;
   linked: boolean;
@@ -112,7 +112,7 @@ export function syncGitProviderEvent(db: RunnerDatabase, input: GitEventSyncInpu
   return { ...transaction.immediate(), replayed: previous !== null, repository: normalized.repository };
 }
 
-export function normalizeGitProviderEvent(input: GitEventSyncInput): NormalizedGitEvent {
+function normalizeGitProviderEvent(input: GitEventSyncInput): NormalizedGitEvent {
   const provider = gitEventProvider(input.provider);
   const payload = objectValue(input.payload);
   const repository = repositoryFromPayload(provider, payload);

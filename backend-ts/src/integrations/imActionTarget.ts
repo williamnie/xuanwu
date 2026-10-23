@@ -2,7 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 
-export type ImActionTarget = {
+type ImActionTarget = {
   issueID: number;
   projectID: string;
   source: "none" | "replied_notification" | "single_open_actionable_notification";

@@ -12,7 +12,7 @@ import type { ExecutorProviderManifest } from "./manifest.ts";
 export type ProviderRuntimeConfig = { enabled?: boolean } & Record<string, unknown>;
 
 /** P2：factory 创建实例时的依赖注入点；P4 起填入 bus/db 等。 */
-export type ProviderDeps = Record<string, never>;
+type ProviderDeps = Record<string, never>;
 
 /** P2：编译期内置 factory（设计 §2.6）。 */
 export interface ProviderFactory {
@@ -59,7 +59,7 @@ export type ProviderProcessLease = {
   commandLabel: string;
 };
 
-export type Disposable = { dispose(): void };
+type Disposable = { dispose(): void };
 
 export interface ProviderRegistry {
   registerFactory(factory: ProviderFactory): void;

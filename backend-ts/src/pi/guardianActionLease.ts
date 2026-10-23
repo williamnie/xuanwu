@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getPiAction, type PiAction } from "../db/repositories/pi.ts";
 
-export type GuardianActionLeaseInput = {
+type GuardianActionLeaseInput = {
   actionType: string;
   idempotencyKey: string;
   issueID?: number;
@@ -12,7 +12,7 @@ export type GuardianActionLeaseInput = {
   ttlMs?: number;
 };
 
-export type GuardianActionLeaseResult =
+type GuardianActionLeaseResult =
   | { action?: PiAction; idempotency_key: string; lease_key: string; status: "acquired" | "idempotent_replay"; until: string }
   | { action?: PiAction; idempotency_key: string; lease_key: string; status: "held"; until: string };
 

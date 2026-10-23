@@ -2,11 +2,11 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { json } from "./errors.ts";
 import type { Router } from "./router.ts";
 
-export const AUTOMATION_COMPATIBILITY_CONTRACT = "xw.automation-target-primary.v1";
-export const AUTOMATION_COMPATIBILITY_SUNSET = "Fri, 01 Jan 2027 00:00:00 GMT";
+const AUTOMATION_COMPATIBILITY_CONTRACT = "xw.automation-target-primary.v1";
+const AUTOMATION_COMPATIBILITY_SUNSET = "Fri, 01 Jan 2027 00:00:00 GMT";
 
 const COLLECTION = "/api/automations";
-export const AUTOMATION_LEGACY_REDIRECT_ROUTES = [
+const AUTOMATION_LEGACY_REDIRECT_ROUTES = [
   ["GET", "/api/cron-tasks"],
   ["POST", "/api/cron-tasks"],
   ["PATCH", "/api/cron-tasks/:id"],

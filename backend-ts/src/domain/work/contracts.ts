@@ -15,9 +15,9 @@ export { WORK_STATUSES, type WorkID, type WorkStatus };
 export const WORK_STATE_TRANSITIONS = STATE_TRANSITIONS.work;
 
 export const WORK_TYPES = ["objective", "engineering_task"] as const;
-export type WorkType = typeof WORK_TYPES[number];
+type WorkType = typeof WORK_TYPES[number];
 
-export const WORK_SOURCE_KINDS = [
+const WORK_SOURCE_KINDS = [
   "user_request",
   "issue",
   "supervisor_proposal",
@@ -25,9 +25,9 @@ export const WORK_SOURCE_KINDS = [
   "guardian_remediation",
   "import"
 ] as const;
-export type WorkSourceKind = typeof WORK_SOURCE_KINDS[number];
+type WorkSourceKind = typeof WORK_SOURCE_KINDS[number];
 
-export type CompleteWorkSource = {
+type CompleteWorkSource = {
   actor: DomainActor;
   authority: string;
   completeness: "complete";
@@ -38,7 +38,7 @@ export type CompleteWorkSource = {
   source_event_id?: string;
 };
 
-export type LegacyIncompleteWorkSource = {
+type LegacyIncompleteWorkSource = {
   actor?: DomainActor;
   authority: string;
   completeness: "legacy_incomplete";
@@ -50,14 +50,14 @@ export type LegacyIncompleteWorkSource = {
   source_event_id?: string;
 };
 
-export type WorkSource = CompleteWorkSource | LegacyIncompleteWorkSource;
+type WorkSource = CompleteWorkSource | LegacyIncompleteWorkSource;
 
 export type WorkProvenance = {
   causes: WorkSource[];
   origin: WorkSource;
 };
 
-export type WorkAcceptanceCriterion = {
+type WorkAcceptanceCriterion = {
   description: string;
   id: string;
   required: boolean;
@@ -86,7 +86,7 @@ export type WorkLedgerEntry = Omit<CoreWork, "acceptance_criteria" | "source_ref
   type: WorkType;
 };
 
-export type WorkRelationAudit = {
+type WorkRelationAudit = {
   actor: DomainActor;
   audit_event_ref: string;
   correlation_id: string;
@@ -94,7 +94,7 @@ export type WorkRelationAudit = {
   reason: string;
 };
 
-export type ParentChildRelation = WorkRelationAudit & {
+type ParentChildRelation = WorkRelationAudit & {
   child_work_id: WorkID;
   kind: "parent_child";
   parent_work_id: WorkID;
@@ -137,7 +137,7 @@ export type WorkTransitionCommand = {
   work_id: WorkID;
 };
 
-export type WorkTransitionDecision = {
+type WorkTransitionDecision = {
   allowed: boolean;
   violations: string[];
 };

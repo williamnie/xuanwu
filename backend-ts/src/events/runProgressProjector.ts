@@ -58,7 +58,7 @@ export type RunProgressTimelineItem = RunProgressLatest & {
   first_occurred_at: string;
 };
 
-export type AttemptProgressProjection = {
+type AttemptProgressProjection = {
   current_phase: RunProgressPhase;
   duplicate_event_count: number;
   ignored_event_count: number;

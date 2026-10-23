@@ -23,8 +23,8 @@ import {
   type IssueLogPayloadExternalizationPlan
 } from "../db/repositories/issueEvents.ts";
 
-export const ISSUE_LOG_COMPACTION_SCHEMA_VERSION = "xuanwu.issue-log-payload-compaction.v1" as const;
-export const DEFAULT_ISSUE_LOG_COMPACTION_MINIMUM_SAVINGS_BYTES = 4096;
+const ISSUE_LOG_COMPACTION_SCHEMA_VERSION = "xuanwu.issue-log-payload-compaction.v1" as const;
+const DEFAULT_ISSUE_LOG_COMPACTION_MINIMUM_SAVINGS_BYTES = 4096;
 
 type MaintenanceActor = { actor: string; auditRef: string; reason: string };
 type PayloadRow = { id: number; payload: string };

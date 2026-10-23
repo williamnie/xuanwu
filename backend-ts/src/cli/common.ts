@@ -10,18 +10,18 @@ export type CommonFlags = {
   token: string;
 };
 
-export type ParsedCommonArgs = {
+type ParsedCommonArgs = {
   flags: CommonFlags;
   rest: string[];
 };
 
-export type FlagSpec = {
+type FlagSpec = {
   boolean?: boolean;
   name: string;
   required?: boolean;
 };
 
-export type ParsedCommandArgs = {
+type ParsedCommandArgs = {
   common: CommonFlags;
   values: Record<string, string>;
 };

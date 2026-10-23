@@ -6,7 +6,7 @@ import type { PiSessionSnapshot } from "./sessionHistory.ts";
 export class PiHistoryLimitError extends Error {}
 
 const CHUNK_BYTES = 64 * 1024;
-export const PI_HISTORY_LINE_BYTES = 16 * 1024 * 1024;
+const PI_HISTORY_LINE_BYTES = 16 * 1024 * 1024;
 const PAGE_BYTES = 32 * 1024 * 1024;
 const INDEX_CACHE_ENTRIES = 50_000;
 const MAX_INDEX_ENTRIES = 100_000;

@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildConfig } from "../config/env.ts";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { openDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { createProject } from "../db/repositories/projects.ts";

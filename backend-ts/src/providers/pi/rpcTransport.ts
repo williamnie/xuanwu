@@ -21,7 +21,7 @@ export type PiRpcCommand =
   | { id?: string; type: "switch_session"; sessionPath: string }
   | { id?: string; type: "set_thinking_level"; level: string };
 
-export type PiRpcResponse = {
+type PiRpcResponse = {
   id?: string;
   type: "response";
   command: string;
@@ -32,11 +32,11 @@ export type PiRpcResponse = {
 
 export type PiRpcEvent = { type: string; [key: string]: unknown };
 
-export type PiRpcEventSink = (event: PiRpcEvent) => void;
+type PiRpcEventSink = (event: PiRpcEvent) => void;
 
 const RESPONSE_PATTERN = /^\{.*"type"\s*:\s*"response"/;
 
-export type PiRpcTransportOptions = {
+type PiRpcTransportOptions = {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;

@@ -4,7 +4,7 @@ import { loadCliConnectorRegistry, findCliConnectorToolRef } from "./cliConnecto
 import { runCliTool } from "./cliToolRunner.ts";
 import type { ToolPermission, ToolResult } from "./toolProviderEnvelope.ts";
 
-export type CliConnectorToolCallInput = {
+type CliConnectorToolCallInput = {
   auditContext?: Partial<ToolCallAuditContext>;
   db: RunnerDatabase;
   env?: Record<string, string | undefined>;

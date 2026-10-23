@@ -43,7 +43,7 @@ export type GitHubIssueCase = {
   updated_at: string;
 };
 
-export type GitHubWriteCommand = {
+type GitHubWriteCommand = {
   kind: "progress" | "comment" | "close";
   repository: string;
   issueNumber: number;

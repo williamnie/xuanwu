@@ -10,7 +10,7 @@ import { untrustedSourceReference } from "../security/promptInjectionDefense.ts"
 
 type JsonObject = Record<string, unknown>;
 
-export type ContextBundleBuilderOptions = {
+type ContextBundleBuilderOptions = {
   anchorEventId?: number;
   createdBy: ContextBundleCreatedBy;
   maxEvents?: number;
@@ -28,7 +28,7 @@ export type ManualContextBundleRequest = {
   trigger: "manual";
 };
 
-export type ManualContextBundleRequestOptions = {
+type ManualContextBundleRequestOptions = {
   defaultLookbackMinutes?: number;
   limit?: number;
   now?: Date;

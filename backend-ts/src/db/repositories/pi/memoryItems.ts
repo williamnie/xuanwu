@@ -1,7 +1,15 @@
 import type { RunnerDatabase } from "../../database.ts";
 import {
-  assertAutomaticMemoryCorrection, assertMemoryRevision, clearMemorySuppression, memorySuppression, memoryWriteIdentity, PiMemoryWriteError,
-  recordMemoryHistory, recordMemoryReceipt, suppressMemory, type PiMemoryWriteOptions
+  assertAutomaticMemoryCorrection,
+  assertMemoryRevision,
+  clearMemorySuppression,
+  memorySuppression,
+  memoryWriteIdentity,
+  PiMemoryWriteError,
+  recordMemoryHistory,
+  recordMemoryReceipt,
+  suppressMemory,
+  type PiMemoryWriteOptions
 } from "./memoryHistory.ts";
 export { listPiMemoryHistory } from "./memoryHistory.ts";
 import {
@@ -40,13 +48,13 @@ export type PiMemoryItemFilter = {
   scope?: string;
   scopeId?: string;
 };
-export type PiMemoryType = (typeof PI_MEMORY_TYPES)[number];
-export type PiMemoryLayer = (typeof PI_MEMORY_LAYERS)[number];
-export type PiMemoryAuthority = (typeof PI_MEMORY_AUTHORITIES)[number];
+type PiMemoryType = (typeof PI_MEMORY_TYPES)[number];
+type PiMemoryLayer = (typeof PI_MEMORY_LAYERS)[number];
+type PiMemoryAuthority = (typeof PI_MEMORY_AUTHORITIES)[number];
 
-export const PI_MEMORY_TYPES = ["user", "project", "inbox", "source", "skill"] as const;
-export const PI_MEMORY_LAYERS = ["ephemeral", "working", "long_term"] as const;
-export const PI_MEMORY_AUTHORITIES = ["advisory", "user_explicit", "evidence_backed"] as const;
+const PI_MEMORY_TYPES = ["user", "project", "inbox", "source", "skill"] as const;
+const PI_MEMORY_LAYERS = ["ephemeral", "working", "long_term"] as const;
+const PI_MEMORY_AUTHORITIES = ["advisory", "user_explicit", "evidence_backed"] as const;
 
 const TABLE = "pi_memory_items";
 const COLUMNS = `id, scope, scope_id, kind, content, source_type, source_id,

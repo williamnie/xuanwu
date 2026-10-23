@@ -11,7 +11,7 @@ import { mcpToolProviderID } from "./mcpToolProvider.ts";
 import { recordToolCallAuditEvent, type ToolCallAuditContext } from "./toolCallAudit.ts";
 import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
 
-export type McpResourceReadAdapterInput = {
+type McpResourceReadAdapterInput = {
   auditContext?: Partial<ToolCallAuditContext>;
   capabilityID: string;
   db: RunnerDatabase;

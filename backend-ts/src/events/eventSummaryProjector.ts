@@ -21,7 +21,7 @@ const LOG_SUMMARY_FIELD_LIMIT = 16 * 1024;
 const SUMMARY_TEXT_LIMIT = 1000;
 const LOG_FIELDS = ["type", "provider", "raw_method", "text", "command", "path", "status", "error"] as const;
 
-export type EventSummaryProjectionRun = {
+type EventSummaryProjectionRun = {
   batches: number;
   paused: boolean;
   projected_rows: number;

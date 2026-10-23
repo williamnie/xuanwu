@@ -30,9 +30,9 @@ export const IM_CAPABILITY_IDS = [
   "interaction.receive",
   "thread.reply"
 ] as const;
-export type ImCapabilityId = typeof IM_CAPABILITY_IDS[number];
+type ImCapabilityId = typeof IM_CAPABILITY_IDS[number];
 
-export type ImConversationKind = "direct" | "group" | "channel" | "unknown";
+type ImConversationKind = "direct" | "group" | "channel" | "unknown";
 
 /**
  * Canonical inbound message. Every provider id is an opaque string; core code
@@ -92,7 +92,7 @@ export type ImInteractionV1 = {
   revision: number;
 };
 
-export type ImOutboundOperation = "message.reply" | "reaction.add" | "interaction.send";
+type ImOutboundOperation = "message.reply" | "reaction.add" | "interaction.send";
 
 /**
  * The only canonical outbound payload, carried inside the P09.01
@@ -111,7 +111,7 @@ export type ImOutboundPayloadV1 = {
   refs?: Record<string, string>;
 };
 
-export type ImDeliveryReceiptV1 = ConnectorDeliveryReceipt & {
+type ImDeliveryReceiptV1 = ConnectorDeliveryReceipt & {
   schema_version: typeof IM_DELIVERY_RECEIPT_SCHEMA_VERSION;
   connector_id: string;
   provider_message_refs: string[];
@@ -139,7 +139,7 @@ export interface ImReceiverAdapter {
  * sends via the module-private connector. Application code never receives the
  * provider client.
  */
-export interface ImPresentationAdapter {
+interface ImPresentationAdapter {
   deliver(envelope: OutboundEnvelope): Promise<ConnectorDeliveryReceipt>;
 }
 
@@ -148,7 +148,7 @@ export interface ImPresentationAdapter {
  * sender factory into the module at assembly time, and the module hands it to
  * its own connector. The registry never exposes senders.
  */
-export type ImSenderFactory<TConfig, TSender> = (config: TConfig) => TSender;
+type ImSenderFactory<TConfig, TSender> = (config: TConfig) => TSender;
 
 export interface ImChannelModule {
   readonly callback?: {
@@ -247,7 +247,7 @@ export function validateImTarget(value: unknown): Conformance {
   return result(errors);
 }
 
-export function validateImInteraction(value: unknown): Conformance {
+function validateImInteraction(value: unknown): Conformance {
   const errors: string[] = [];
   const interaction = record(value, "im interaction", errors);
   if (!interaction) return result(errors);
@@ -299,7 +299,7 @@ export function validateImOutboundPayload(value: unknown): Conformance {
 }
 
 /** Fail closed before handing a canonical payload to a channel module. */
-export function assertImOutboundPayload(value: unknown): asserts value is ImOutboundPayloadV1 {
+function assertImOutboundPayload(value: unknown): asserts value is ImOutboundPayloadV1 {
   const validation = validateImOutboundPayload(value);
   if (!validation.ok) throw new Error(`invalid im outbound payload: ${validation.errors.join("; ")}`);
 }

@@ -17,7 +17,7 @@ import {
   statusCodeFromText
 } from "./providerErrorParserSupport.ts";
 
-export const PROVIDER_ERROR_CATEGORIES = [
+const PROVIDER_ERROR_CATEGORIES = [
   "stream_disconnect",
   "rate_limit",
   "network",
@@ -29,9 +29,9 @@ export const PROVIDER_ERROR_CATEGORIES = [
 ] as const;
 
 export type ProviderErrorCategory = typeof PROVIDER_ERROR_CATEGORIES[number];
-export type ProviderErrorParserOptions = { now?: Date };
+type ProviderErrorParserOptions = { now?: Date };
 
-export type ProviderErrorParserInput = {
+type ProviderErrorParserInput = {
   headers?: Record<string, unknown>;
   issueEventPayload?: unknown;
   providerEvent?: Partial<ProviderEvent>;

@@ -1,4 +1,4 @@
-export const RUNNER_MANAGED_EXECUTION_ENV = "XUANWU_MANAGED_EXECUTION";
+const RUNNER_MANAGED_EXECUTION_ENV = "XUANWU_MANAGED_EXECUTION";
 
 export function managedExecutionEnvironment(
   environment: Record<string, string | undefined>

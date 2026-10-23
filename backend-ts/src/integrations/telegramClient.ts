@@ -9,7 +9,7 @@ import type {
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 type JsonObject = Record<string, unknown>;
 
-export type TelegramInlineButton = { callback_data: string; text: string };
+type TelegramInlineButton = { callback_data: string; text: string };
 export type TelegramInlineKeyboard = { inline_keyboard: TelegramInlineButton[][] };
 
 export type TelegramBotClient = {

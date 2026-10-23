@@ -4,7 +4,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { ProviderEvent } from "../providers/types.ts";
 import { recordApprovalFastAudit } from "../pi/approvalFastAudit.ts";
 
-export type ApprovalRuntimeContext = {
+type ApprovalRuntimeContext = {
   database?: RunnerDatabase;
   issueId: number;
   projectId: string;

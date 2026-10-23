@@ -20,7 +20,7 @@ import {
 type ToolContext = NonNullable<Parameters<typeof createPiProjectTools>[2]>;
 type ToolSource = "registry";
 
-export type PiRuntimeToolRegistryAudit = {
+type PiRuntimeToolRegistryAudit = {
   counts: { custom_tools: number; sdk_tools: number; skipped_tools: number };
   custom_tool_names: string[];
   provider_ids: string[];
@@ -37,7 +37,7 @@ export type PiRuntimeToolAuditTarget = {
   providerID: string;
 };
 
-export type PiRuntimeToolKit = {
+type PiRuntimeToolKit = {
   audit: PiRuntimeToolRegistryAudit;
   auditTargets: Record<string, PiRuntimeToolAuditTarget>;
   customTools: ToolDefinition[];
@@ -46,7 +46,7 @@ export type PiRuntimeToolKit = {
   tools: string[];
 };
 
-export type PiRuntimeToolAuditInput = {
+type PiRuntimeToolAuditInput = {
   conversationID: string;
   delegationID?: string;
   heartbeatID?: string;
@@ -54,7 +54,7 @@ export type PiRuntimeToolAuditInput = {
   projectID?: string;
 };
 
-export type PiRuntimeToolSelection = {
+type PiRuntimeToolSelection = {
   chatToolMode?: PiChatToolMode;
   promptProfile: PiRuntimePromptProfile;
   memoryReflection?: ReflectionLease;

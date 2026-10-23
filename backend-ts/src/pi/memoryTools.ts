@@ -81,7 +81,7 @@ export function createPiMemoryTools(db: RunnerDatabase, context: MemoryContext =
 }
 
 // 同步写入口供复盘租约事务复用；始终经过敏感数据保护、Action Gate 和来源校验。
-export type PiMemoryRememberInput = Static<typeof memoryWriteCandidateParams>;
+type PiMemoryRememberInput = Static<typeof memoryWriteCandidateParams>;
 export function executePiMemoryRemember(db: RunnerDatabase, context: MemoryContext, params: PiMemoryRememberInput) {
   if (containsSensitiveMemoryContent(JSON.stringify(params))) {
     return { rejected: true, reason: "memory content contains sensitive data" };

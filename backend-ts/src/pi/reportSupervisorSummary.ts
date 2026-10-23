@@ -5,17 +5,17 @@ import {
   type PiActionEvent
 } from "../db/repositories/pi.ts";
 
-export type SupervisorReportScope = {
+type SupervisorReportScope = {
   delegationID: string;
   heartbeatID: string;
 };
 
-export type SupervisorReportWindow = {
+type SupervisorReportWindow = {
   since: string;
   until: string;
 };
 
-export type SupervisorReportSummary = {
+type SupervisorReportSummary = {
   exhausted_recoveries: number;
   exhausted_recovery_issues: Array<Record<string, unknown>>;
   needs_user_escalation_issues: Array<Record<string, unknown>>;

@@ -3,7 +3,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getActivePiMcpApprovalGrant } from "../db/repositories/pi.ts";
 import type { McpCapability, McpRiskLevel, McpServerRegistry } from "./registry.ts";
 
-export type McpInvocationApproval = {
+type McpInvocationApproval = {
   approvalMode: McpServerRegistry["approval_mode"];
   capabilityFingerprint: string;
   grantID: string;

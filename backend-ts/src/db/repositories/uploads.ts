@@ -5,7 +5,7 @@ import type { RunnerDatabase } from "../database.ts";
 import { issueTimestamp } from "./issueCreate.ts";
 import { ProjectNotFoundError } from "./projects.ts";
 
-export type Upload = {
+type Upload = {
   created_at: string; id: string; mime_type: string; original_name: string;
   sha256: string; size_bytes: number; storage_path: string; url: string;
 };

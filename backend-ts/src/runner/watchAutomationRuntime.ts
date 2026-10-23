@@ -19,7 +19,7 @@ import { redactSensitiveText } from "../util/redact.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 import { recordSupervisorCommitmentTerminalOutcome } from "../pi/supervisorCommitments.ts";
 
-export type WatchAutomationCycleResult = {
+type WatchAutomationCycleResult = {
   cursor_advanced: number;
   delivered: number;
   expired: number;

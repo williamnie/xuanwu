@@ -21,13 +21,13 @@ import { issueReportSummary } from "./reportIssueSummary.ts";
 import { listReportSupervisorEvents, supervisorReportSummary } from "./reportSupervisorSummary.ts";
 import { buildUsageCostSummary } from "./reportUsage.ts";
 
-export type PiReportInput = {
+type PiReportInput = {
   bus?: Pick<EventBus, "publish">; codexSessionsDir?: string; database: RunnerDatabase;
   delegationID?: string; heartbeatID?: string; now?: Date; projectID?: string;
   providerStatuses?: Array<Record<string, unknown>>;
   since?: string; source?: string; type?: string; until?: string;
 };
-export type PiReport = Record<string, unknown> & {
+type PiReport = Record<string, unknown> & {
   delegation_id: string; generated_at: string; heartbeat_ids: string[]; issue_ids: number[];
   project_id: string; source: string; status: string; summary: Record<string, number>;
   type: string; usage_cost: Record<string, unknown>; window: { since: string; until: string };

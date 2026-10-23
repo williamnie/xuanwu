@@ -4,7 +4,7 @@ import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.t
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 
-export type PiAcceptanceRequestInput = {
+type PiAcceptanceRequestInput = {
   reason?: string;
   source: string;
 };

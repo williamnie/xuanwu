@@ -6,13 +6,13 @@ import { redactSensitiveText } from "../util/redact.ts";
  */
 export const CHANNEL_CONNECTOR_CONTRACT_VERSION = 1 as const;
 
-export const CONNECTOR_KINDS = ["channel", "event_source", "tool_provider", "external_target"] as const;
-export type ConnectorKind = typeof CONNECTOR_KINDS[number];
+const CONNECTOR_KINDS = ["channel", "event_source", "tool_provider", "external_target"] as const;
+type ConnectorKind = typeof CONNECTOR_KINDS[number];
 
-export const CONNECTOR_HEALTH_STATES = ["disabled", "healthy", "degraded", "disconnected", "failed"] as const;
-export type ConnectorHealthState = typeof CONNECTOR_HEALTH_STATES[number];
+const CONNECTOR_HEALTH_STATES = ["disabled", "healthy", "degraded", "disconnected", "failed"] as const;
+type ConnectorHealthState = typeof CONNECTOR_HEALTH_STATES[number];
 
-export type ConnectorAuthRef = {
+type ConnectorAuthRef = {
   kind: "secret_ref";
   ref: string;
 };
@@ -39,20 +39,20 @@ export type ConnectorHealth = {
   state: ConnectorHealthState;
 };
 
-export type ConnectorCursor = {
+type ConnectorCursor = {
   connector_id: string;
   position: string;
   scope: string;
 };
 
-export type ConnectorRateLimit = {
+type ConnectorRateLimit = {
   limit?: number;
   remaining?: number;
   reset_at?: string;
   retry_after_seconds?: number;
 };
 
-export type ConnectorAudit = {
+type ConnectorAudit = {
   action_id: string;
   correlation_id: string;
   event_ref: string;
@@ -101,9 +101,9 @@ export interface ChannelConnector {
   deliver?(envelope: OutboundEnvelope): Promise<ConnectorDeliveryReceipt>;
 }
 
-export type ConnectorConformanceResult = { errors: string[]; ok: boolean };
+type ConnectorConformanceResult = { errors: string[]; ok: boolean };
 
-export function validateConnectorManifest(value: unknown): ConnectorConformanceResult {
+function validateConnectorManifest(value: unknown): ConnectorConformanceResult {
   const errors: string[] = [];
   const manifest = record(value, "manifest", errors);
   if (!manifest) return result(errors);

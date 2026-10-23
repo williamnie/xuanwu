@@ -13,16 +13,16 @@ export const EVENT_RETENTION_POLICY_IDS = [
 ] as const;
 
 export type EventRetentionPolicyID = typeof EVENT_RETENTION_POLICY_IDS[number];
-export type EventRetentionTier = "R0_DERIVED" | "R1_OPERATIONAL" | "R2_DURABLE" | "R3_AUDIT" | "REVIEW_REQUIRED";
-export type EventRetentionClass = "raw_log" | "state_event" | "audit_event" | "delivery_evidence" | "review_required";
-export type EventRetentionSource =
+type EventRetentionTier = "R0_DERIVED" | "R1_OPERATIONAL" | "R2_DURABLE" | "R3_AUDIT" | "REVIEW_REQUIRED";
+type EventRetentionClass = "raw_log" | "state_event" | "audit_event" | "delivery_evidence" | "review_required";
+type EventRetentionSource =
   | "issue_events"
   | "pi_action_events"
   | "issue_supervisor_events"
   | "external_events"
   | "sync_outbox";
 
-export type EventRetentionPolicy = {
+type EventRetentionPolicy = {
   archive_after_days: number | null;
   archive_minimum_days: number | null;
   event_class: EventRetentionClass;
@@ -131,7 +131,7 @@ export type RetainedEvent = {
   source: EventRetentionSource;
 };
 
-export type EventRetentionClassification = {
+type EventRetentionClassification = {
   event_class: EventRetentionClass;
   policy_id: EventRetentionPolicyID;
   tier: EventRetentionTier;
@@ -208,12 +208,12 @@ export type RetentionReferenceState = {
   unresolved_refs: string[];
 };
 
-export type RetentionRunState = {
+type RetentionRunState = {
   id: string;
   status: string;
 };
 
-export const RETENTION_BLOCKER_CODES = [
+const RETENTION_BLOCKER_CODES = [
   "invalid_event_timestamp",
   "review_required",
   "source_deletion_disabled",
@@ -239,8 +239,8 @@ export const RETENTION_BLOCKER_CODES = [
   "destructive_gate_invalid"
 ] as const;
 
-export type RetentionBlockerCode = typeof RETENTION_BLOCKER_CODES[number];
-export type RetentionEvaluation = {
+type RetentionBlockerCode = typeof RETENTION_BLOCKER_CODES[number];
+type RetentionEvaluation = {
   action: "keep" | "archive" | "delete_candidate";
   blockers: RetentionBlockerCode[];
   can_execute_delete: boolean;
@@ -249,7 +249,7 @@ export type RetentionEvaluation = {
   policy: EventRetentionPolicy;
 };
 
-export type RetentionEvaluationInput = {
+type RetentionEvaluationInput = {
   archive_receipt?: ArchiveReceipt;
   config?: EventRetentionConfig;
   destructive_gate?: DestructiveGate;
@@ -294,7 +294,7 @@ const AUDIT_EVENT_TYPES = new Set([
 const ACTIVE_RUN_STATUSES = new Set(["created", "in_progress", "recovering", "running"]);
 const SUCCESSFUL_RUN_STATUSES = new Set(["completed", "done", "succeeded", "success"]);
 
-export function classifyIssueLogRetentionTier(rawMethod: string): EventRetentionTier {
+function classifyIssueLogRetentionTier(rawMethod: string): EventRetentionTier {
   if (AUDIT_METHOD.test(rawMethod)) return "R3_AUDIT";
   if (DURABLE_METHOD.test(rawMethod)) return "R2_DURABLE";
   if (OPERATIONAL_METHOD.test(rawMethod)) return "R1_OPERATIONAL";

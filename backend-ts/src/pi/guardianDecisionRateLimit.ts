@@ -12,7 +12,7 @@ import {
   type GuardianDecisionCandidate
 } from "./guardianDecisionMerge.ts";
 
-export type GuardianDecisionRateLimitResult =
+type GuardianDecisionRateLimitResult =
   | { allowed: true }
   | {
     allowed: false;
@@ -21,7 +21,7 @@ export type GuardianDecisionRateLimitResult =
     scope: "global" | "project" | "recovery" | "run_group";
     window_ms: number;
   };
-export type DeferredGuardianDecisionInput = {
+type DeferredGuardianDecisionInput = {
   candidate: GuardianDecisionCandidate;
   db: RunnerDatabase;
   plan: GuardianDecisionPlan;
@@ -54,7 +54,7 @@ export function guardianDecisionRateLimit(
     { allowed: true };
 }
 
-export function guardianDecisionRateLimitEvidence(
+function guardianDecisionRateLimitEvidence(
   result: Exclude<GuardianDecisionRateLimitResult, { allowed: true }>
 ): Record<string, unknown> {
   return {

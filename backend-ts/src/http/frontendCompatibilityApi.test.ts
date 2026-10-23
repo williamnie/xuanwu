@@ -354,15 +354,6 @@ async function requestJSON(
   return await response.json();
 }
 
-async function requestError(
-  router: ReturnType<typeof createDefaultRouter>,
-  path: string,
-  method: string,
-  body?: Record<string, unknown>
-): Promise<any> {
-  return await requestJSON(router, path, method, body, 400);
-}
-
 function approvalProvider(resolutions: Array<{ decision: string; id: string; scope: string }>): ExecutorProvider {
   return {
     capabilities: ["approvals"],

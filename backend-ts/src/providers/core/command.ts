@@ -1,6 +1,6 @@
 import { statSync } from "node:fs";
 
-export type CommandDetection = {
+type CommandDetection = {
   installed: boolean;
   path?: string;
   reason?: string;

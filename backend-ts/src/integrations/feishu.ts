@@ -18,19 +18,14 @@ export {
   createFeishuChannelConnector,
   createFeishuOutboundEnvelope,
   feishuChannelConnectorManifest,
-  feishuConnectorTarget,
   feishuInboundEnvelopeForEvent,
   migrateLegacyFeishuOutboxEnvelope,
-  normalizeFeishuInboundEnvelope,
-  type FeishuConnectorInbound
+  normalizeFeishuInboundEnvelope
 } from "./feishuChannelConnector.ts";
 export {
   FeishuCallbackPayloadError,
   calculateFeishuCallbackSignature,
   decryptFeishuCallbackPayload,
   parseFeishuCallbackPayload,
-  verifyFeishuCallbackSignature,
-  type FeishuCallbackParseResult,
-  type FeishuSignatureFailureReason,
-  type FeishuSignatureVerification
+  verifyFeishuCallbackSignature
 } from "./feishuCallback.ts";

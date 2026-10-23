@@ -17,7 +17,7 @@ import { kickAutoRunProjects, setProjectLoopMaxParallelProjects, type ProjectLoo
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
-export type RunnerSettingsContext = ProjectLoopRuntime & {
+type RunnerSettingsContext = ProjectLoopRuntime & {
   config?: RunnerConfig;
 };
 

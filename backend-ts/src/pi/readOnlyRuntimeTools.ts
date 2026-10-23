@@ -7,7 +7,7 @@ import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense
 import type { PiGatePolicy } from "./actionGate.ts";
 import { jevAvailableForContext } from "../skills/jev/policy.ts";
 
-export type RuntimeReadOnlyToolContext = {
+type RuntimeReadOnlyToolContext = {
   authorization?: PiGatePolicy;
   cliConnectorDirs?: string[];
   conversationID?: string;
@@ -18,7 +18,7 @@ export type RuntimeReadOnlyToolContext = {
   source?: string;
 };
 
-export type RuntimeReadOnlyToolKit = {
+type RuntimeReadOnlyToolKit = {
   providerIDs: string[];
   tools: ToolDefinition[];
 };

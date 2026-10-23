@@ -15,12 +15,12 @@ import {
   projectSourceIssueEvent
 } from "../../events/eventSummaryProjector.ts";
 
-export const COMPACT_EVENT_SUMMARY_PROJECTION_ID = "issue_events_summary_v2";
-export const COMPACT_EVENT_SUMMARY_PROJECTOR_VERSION = "xuanwu.event-summary-projector.v2";
+const COMPACT_EVENT_SUMMARY_PROJECTION_ID = "issue_events_summary_v2";
+const COMPACT_EVENT_SUMMARY_PROJECTOR_VERSION = "xuanwu.event-summary-projector.v2";
 const SWITCH_ID = "issue_events_summary";
 const DEFAULT_BATCH_SIZE = 500;
 
-export type EventSummaryProjectionSwitch = {
+type EventSummaryProjectionSwitch = {
   cutover_at: string;
   observation_expires_at: string;
   observation_started_at: string;

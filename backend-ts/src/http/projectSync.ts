@@ -35,7 +35,7 @@ export function syncCodexProjects(db: RunnerDatabase): SyncResult {
   return { ...result, summary: syncSummary(discovery, result) };
 }
 
-export type CodexSyncPreview =
+type CodexSyncPreview =
   | { available: false; reason: "state_not_found" | "state_unreadable" }
   | { available: true; summary: { discovered: number; new: number; existing: number; enable_auto_run: number; skipped: number } };
 

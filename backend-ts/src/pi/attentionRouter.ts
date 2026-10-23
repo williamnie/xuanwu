@@ -1,7 +1,7 @@
-export type PiAttentionDecisionValue =
+type PiAttentionDecisionValue =
   "ignore" | "inbox_only" | "propose_issue" | "ask_clarification" | "blocked_by_policy";
 
-export type PiAttentionEvidence = {
+type PiAttentionEvidence = {
   kind: "mention" | "policy";
   reason: string;
   value: string;
@@ -18,7 +18,7 @@ export type PiAttentionDecision = {
   signals: string[];
 };
 
-export type PiAttentionMessage = {
+type PiAttentionMessage = {
   attachments?: unknown[];
   chat_id?: string;
   mentions?: Array<{ id?: string; name?: string }>;
@@ -28,14 +28,14 @@ export type PiAttentionMessage = {
   text?: string;
 };
 
-export type PiAttentionProject = { id: string; name?: string };
-export type PiAttentionProjectMapping = { chatId?: string; projectId: string; userId?: string };
-export type PiAttentionPolicy = {
+type PiAttentionProject = { id: string; name?: string };
+type PiAttentionProjectMapping = { chatId?: string; projectId: string; userId?: string };
+type PiAttentionPolicy = {
   allowedChatIds?: string[];
   allowedUserIds?: string[];
   projectMappings?: PiAttentionProjectMapping[];
 };
-export type PiAttentionInput = {
+type PiAttentionInput = {
   message: PiAttentionMessage;
   policy?: PiAttentionPolicy;
   projects?: PiAttentionProject[];

@@ -1,4 +1,4 @@
-export type BatchTriageScopeKind = "all" | "issue_refs";
+type BatchTriageScopeKind = "all" | "issue_refs";
 export type BatchTriageScope = {
   issueIds: number[];
   kind: BatchTriageScopeKind;

@@ -5,7 +5,7 @@ import {
   type PiRecoveryAttemptStatus
 } from "../db/repositories/pi/recoveryAttempts.ts";
 
-export type PiRecoveryBudgetInput = {
+type PiRecoveryBudgetInput = {
   actionType: string;
   issueID: number;
   issueLimit?: number;
@@ -15,7 +15,7 @@ export type PiRecoveryBudgetInput = {
   sessionID?: string;
   sessionResumeLimit?: number;
 };
-export type PiRecoveryBudgetStatus =
+type PiRecoveryBudgetStatus =
   "allow" | "issue_budget_exhausted" | "session_resume_exhausted" | "project_budget_exhausted";
 export type PiRecoveryBudgetDecision = {
   diagnosis_code: "recovery_budget_exhausted" | "session_recovery_exhausted" | "";
@@ -41,8 +41,8 @@ export type PiRecoveryBudgetDecision = {
   status: PiRecoveryBudgetStatus;
 };
 
-export type RecoveryHistoryBudgetInput = Record<string, unknown>;
-export type RecoveryBudgetCandidate = {
+type RecoveryHistoryBudgetInput = Record<string, unknown>;
+type RecoveryBudgetCandidate = {
   diagnosis_code: "recovery_budget_exhausted" | "session_recovery_exhausted";
   evidence_refs: ["recovery_budget"];
   exhausted: true;

@@ -9,11 +9,10 @@ import type {
   AssistantTool,
   ToolAuditMetadata,
   ToolEnvelopeMetadata,
-  ToolPermission,
   ToolProvider
 } from "./toolProviderEnvelope.ts";
 
-export type CliConnectorRegistryOptions = {
+type CliConnectorRegistryOptions = {
   env?: Record<string, string | undefined>;
   manifestDirs?: string[];
 };
@@ -25,7 +24,7 @@ export type CliConnectorDiagnostic = {
   provider_id?: string;
 };
 
-export type CliConnectorToolRef = {
+type CliConnectorToolRef = {
   command: CliConnectorCommand;
   envNames: string[];
   manifest: CliConnectorManifest;
@@ -46,7 +45,7 @@ export type CliConnectorRef = {
   secretEnvNames: string[];
 };
 
-export type CliConnectorRegistry = {
+type CliConnectorRegistry = {
   connectors: CliConnectorRef[];
   diagnostics: CliConnectorDiagnostic[];
   providers: ToolProvider[];

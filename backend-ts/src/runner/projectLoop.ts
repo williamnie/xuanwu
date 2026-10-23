@@ -43,7 +43,7 @@ export type ProjectLoopInput = {
   providers: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
-export type ProjectLoopResult =
+type ProjectLoopResult =
   | { claimed: false }
   | { claimed: true; issue: Issue; run: ProviderRunResult };
 
@@ -221,10 +221,6 @@ function issueProviderAvailable(
   return evaluateQueueCandidate({ provider: providerAvailability(providerID, provider) }).length === 0;
 }
 
-function providerReady(provider: ExecutorProvider): boolean {
-  return provider.runtimeStatus?.().ready !== false;
-}
-
 function assertProviderReady(provider: ExecutorProvider, projectID: string): void {
   const status = provider.runtimeStatus?.();
   if (status?.ready !== false) return;
@@ -272,10 +268,6 @@ function issueExecutionNoLongerCurrent(db: RunnerDatabase, issueID: number, runI
   if (!issue || CLOSED_ISSUE_STATUSES.has(issue.status)) return true;
   const run = listIssueRuns(db, issueID).find((item) => item.id === runID);
   return !run || run.ended_at !== "";
-}
-
-function openIssueRunID(db: RunnerDatabase, issueID: number): string {
-  return listIssueRuns(db, issueID).filter((run) => run.ended_at === "").at(-1)?.id ?? "";
 }
 
 const CLOSED_ISSUE_STATUSES = new Set(["done", "failed", "cancelled", "needs_user"]);

@@ -74,7 +74,7 @@ export type ThreadSummary = Record<string, unknown> & {
   sessionId: string;
 };
 
-export type ThreadLifecycleErrorDetail = {
+type ThreadLifecycleErrorDetail = {
   code: string;
   message: string;
   method: string;

@@ -7,7 +7,7 @@ import type { RunnerDatabase } from "../database.ts";
  * table stays as a read-only historical carrier (backfilled by 071/071a).
  */
 
-export type ImProjectSelectionStatus = "pending" | "consumed";
+type ImProjectSelectionStatus = "pending" | "consumed";
 
 export type ImProjectSelection = {
   candidates: string[];
@@ -29,7 +29,7 @@ export type ImProjectSelection = {
   user_open_id: string;
 };
 
-export type ImProjectSelectionInput = {
+type ImProjectSelectionInput = {
   candidates: string[];
   chatId: string;
   connectorId: string;
@@ -43,7 +43,7 @@ export type ImProjectSelectionInput = {
   userOpenId: string;
 };
 
-export type ImProjectSelectionConsumeInput = {
+type ImProjectSelectionConsumeInput = {
   chatId: string;
   connectorId: string;
   now: Date;
@@ -53,7 +53,7 @@ export type ImProjectSelectionConsumeInput = {
   userOpenId: string;
 };
 
-export type ImProjectSelectionConsumeResult = {
+type ImProjectSelectionConsumeResult = {
   selection: ImProjectSelection | null;
   status: "already_consumed" | "consumed" | "expired" | "invalid_project" | "missing" | "source_mismatch";
 };

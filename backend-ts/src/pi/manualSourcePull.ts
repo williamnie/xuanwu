@@ -15,7 +15,7 @@ export type ManualSourcePullOptions = {
   env?: Record<string, string | undefined>;
 };
 
-export type ManualSourcePullInput = {
+type ManualSourcePullInput = {
   attachmentKinds?: string[];
   cursor?: string;
   limit?: number;

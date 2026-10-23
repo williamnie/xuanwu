@@ -9,7 +9,7 @@ export const ISSUE_DEPENDENCY_COMPATIBILITY = {
   work_id_adapter: "xw:work:issues:<issue_id>"
 } as const;
 
-export type IssueDependencyReason =
+type IssueDependencyReason =
   | "ready"
   | "waiting_dependency"
   | "failed_dependency"
@@ -17,7 +17,7 @@ export type IssueDependencyReason =
   | "dependency_cycle"
   | "waiting_readiness";
 
-export type IssueDependencyRef = {
+type IssueDependencyRef = {
   issue_id: number | null;
   status: string;
   title: string;

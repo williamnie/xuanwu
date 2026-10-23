@@ -26,7 +26,7 @@ import {
   type GuardianMissedOutageWindow
 } from "./guardianMissedIntentDigest.ts";
 
-export type GuardianMissedIntentSweepInput = {
+type GuardianMissedIntentSweepInput = {
   fallbackConnectorID?: string;
   limit?: number;
   now?: Date | string;

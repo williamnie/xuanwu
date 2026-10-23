@@ -105,7 +105,7 @@ export function publicClaudeSessionDetail(
   });
 }
 
-export function claudeSessionModel(messages: SessionMessage[]): string {
+function claudeSessionModel(messages: SessionMessage[]): string {
   let model = "";
   for (const entry of messages) {
     const record = objectValue(entry);
@@ -133,7 +133,7 @@ export function assertClaudeSessionHistoryIdentity(
   }
 }
 
-export function claudeTranscriptTurns(messages: SessionMessage[]): ProviderSessionTurn[] {
+function claudeTranscriptTurns(messages: SessionMessage[]): ProviderSessionTurn[] {
   const turns: ProviderSessionTurn[] = [];
   for (const entry of messages) {
     const items = transcriptItems(entry);

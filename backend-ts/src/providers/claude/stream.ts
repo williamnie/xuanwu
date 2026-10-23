@@ -5,8 +5,8 @@ import type { NormalizedRunEvent, ProviderEvent, SessionRef } from "../types.ts"
 const PROVIDER = "claude";
 const RAW_LIMIT = 240;
 
-export type ClaudeStreamParseOptions = { runId: string; secrets?: string[]; sessionId?: string };
-export type ClaudeStreamParseResult = {
+type ClaudeStreamParseOptions = { runId: string; secrets?: string[]; sessionId?: string };
+type ClaudeStreamParseResult = {
   completed: boolean;
   diagnostic?: string;
   error?: string;

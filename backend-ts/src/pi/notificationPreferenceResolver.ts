@@ -4,7 +4,7 @@ import {
   type PiNotificationPreference
 } from "../db/repositories/pi.ts";
 
-export type PiNotificationPreferenceResolveContext = {
+type PiNotificationPreferenceResolveContext = {
   conversationID?: string;
   eventSequence?: number;
   projectID?: string;
@@ -12,7 +12,7 @@ export type PiNotificationPreferenceResolveContext = {
   runGroupID?: string;
 };
 
-export type PiNotificationPreferenceSource =
+type PiNotificationPreferenceSource =
   | "admin_enforced"
   | "conversation"
   | "global"
@@ -20,7 +20,7 @@ export type PiNotificationPreferenceSource =
   | "run_group"
   | "system_default";
 
-export type PiNotificationPreferenceReason =
+type PiNotificationPreferenceReason =
   | "admin_enforced_override"
   | "matched_conversation"
   | "matched_global"
@@ -36,7 +36,7 @@ export type ResolvedPiNotificationPreference = {
   source: PiNotificationPreferenceSource;
 };
 
-export type ResolvedPiNotificationPreferencePolicy = {
+type ResolvedPiNotificationPreferencePolicy = {
   digest_policy: Record<string, unknown>;
   mode: string;
   notify_on: string[];

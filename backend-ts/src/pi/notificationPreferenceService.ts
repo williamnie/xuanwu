@@ -11,8 +11,8 @@ export class PiNotificationPreferenceValidationError extends Error {
   }
 }
 
-export type PiNotificationPreferenceCandidate = Record<string, unknown>;
-export type PiNotificationPreferenceWriteResult = {
+type PiNotificationPreferenceCandidate = Record<string, unknown>;
+type PiNotificationPreferenceWriteResult = {
   confirmation_text: string;
   preference: PiNotificationPreference;
 };

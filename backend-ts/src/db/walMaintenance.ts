@@ -8,7 +8,7 @@ export const WAL_MAINTENANCE_SCHEMA = "xuanwu.sqlite-wal-maintenance.v1" as cons
 
 type WalOperation = "apply" | "dry-run" | "rollback" | "verify";
 
-export type WalMaintenanceInput = {
+type WalMaintenanceInput = {
   actor?: string;
   actorKind?: "automation" | "system" | "user";
   apply?: boolean;

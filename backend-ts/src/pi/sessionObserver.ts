@@ -8,9 +8,9 @@ import { hydrateStoredIssueLogPayload } from "../db/repositories/issueEvents.ts"
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
-export type SessionProgressState = "active" | "done" | "error" | "unknown";
+type SessionProgressState = "active" | "done" | "error" | "unknown";
 
-export type SessionProgressEvent = {
+type SessionProgressEvent = {
   created_at: string;
   issue_id: number;
   source: "issue_event" | "issue_run";
@@ -35,7 +35,7 @@ export type SessionProgressSummary = {
   updated_at: string;
 };
 
-export type SessionObserverOptions = { limit?: number };
+type SessionObserverOptions = { limit?: number };
 
 type RunRow = {
   attempt: unknown; ended_at: unknown; error: unknown; exit_reason: unknown; id: unknown;

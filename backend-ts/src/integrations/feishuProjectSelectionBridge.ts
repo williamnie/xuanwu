@@ -19,7 +19,7 @@ import type { FeishuProjectSelectionAction } from "./feishuProjectSelection.ts";
 import type { ChannelConnector } from "./channelConnectorContracts.ts";
 import { deliverImOutboundNow } from "./imOutboundDelivery.ts";
 
-export type FeishuProjectSelectionBridgeOptions = {
+type FeishuProjectSelectionBridgeOptions = {
   clock?: FeishuConversationClock;
   config: () => FeishuConnectorConfig;
   connector?: ChannelConnector;
@@ -68,7 +68,6 @@ function selectionFailureText(status: string, selectedProjectID = ""): string {
   if (status === "invalid_project") return "这个项目不在本次候选列表中，请重新发送请求并写明项目名或 issue id。";
   return "没有找到这次项目选择，请重新发送原请求。";
 }
-
 
 async function continuePendingPrompt(
   options: FeishuProjectSelectionBridgeOptions,

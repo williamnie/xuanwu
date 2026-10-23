@@ -11,12 +11,12 @@ import { redactSensitiveText } from "../util/redact.ts";
 import { collectDarwinPhysicalFootprints } from "./darwinProcessMemory.ts";
 
 export const PROCESS_GROUP_MEMORY_CONTRACT = "runner-process-group-memory.v1" as const;
-export const PROCESS_GROUP_MEMORY_SAMPLE_INTERVAL_MS = 1_000;
-export const PROCESS_GROUP_MEMORY_FRESHNESS_MS = 5_000;
+const PROCESS_GROUP_MEMORY_SAMPLE_INTERVAL_MS = 1_000;
+const PROCESS_GROUP_MEMORY_FRESHNESS_MS = 5_000;
 export const PROCESS_GROUP_MEMORY_AGENTIC_IDLE_GRACE_MS = 90_000;
 export const PROCESS_GROUP_MEMORY_MAINTENANCE_IDLE_GRACE_MS = 5_000;
 export const PROCESS_GROUP_MEMORY_RECLAIM_MIN_INTERVAL_MS = 5 * 60_000;
-export const PROCESS_GROUP_MEMORY_METRIC_DEFINITIONS = {
+const PROCESS_GROUP_MEMORY_METRIC_DEFINITIONS = {
   footprint_bytes: "macOS footprint (phys_footprint) from non-suspending proc_pid_rusage, summed per observed PID",
   process_rss_bytes: "process.memoryUsage().rss for the runner main process only",
   ps_rss_bytes: "resident set reported by macOS ps for each runner descendant; process-group values are summed",
@@ -32,15 +32,15 @@ export const PROCESS_GROUP_MEMORY_BUDGETS = {
   soak_drift_bytes: { hard: 128 * 1024 * 1024, soft: 96 * 1024 * 1024 }
 } as const;
 
-export type ProcessMemoryPhase = "idle" | "run" | "usage";
-export type ProcessMemoryBudgetLevel = "hard" | "soft";
+type ProcessMemoryPhase = "idle" | "run" | "usage";
+type ProcessMemoryBudgetLevel = "hard" | "soft";
 export type ProcessMemoryBudgetAlert = {
   budget: Record<string, unknown>;
   level: ProcessMemoryBudgetLevel;
   phase: ProcessMemoryPhase;
   sample: Record<string, unknown>;
 };
-export type ProcessMemoryBudgetRecovery = {
+type ProcessMemoryBudgetRecovery = {
   budget: Record<string, unknown>;
   phase: ProcessMemoryPhase;
   sampled_at: string;
@@ -623,7 +623,7 @@ export function resolveRecoveredProcessGroupMemoryAlerts(
   return resolved;
 }
 
-export function inspectMemoryProcessTable(): ProcessTreeEntry[] {
+function inspectMemoryProcessTable(): ProcessTreeEntry[] {
   const result = Bun.spawnSync(["ps", "-axo", "pid=,ppid=,pgid=,rss=,lstart=,command="], { stderr: "ignore", stdout: "pipe" });
   if (result.exitCode !== 0) return [];
   return new TextDecoder().decode(result.stdout).split("\n").map(parseMemoryProcessRow).filter(isProcessRow);

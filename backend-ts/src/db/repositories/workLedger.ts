@@ -57,7 +57,7 @@ type WorkEventRow = {
   work_id: unknown;
 };
 
-export type WorkEventOutcome = "applied" | "rejected";
+type WorkEventOutcome = "applied" | "rejected";
 
 export type WorkEvent = {
   actor: DomainActor;

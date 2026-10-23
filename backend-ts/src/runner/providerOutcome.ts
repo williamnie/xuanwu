@@ -15,7 +15,7 @@ export type ProviderReportedOutcome = {
   reason: string;
 };
 
-export type ReconcileProviderOutcomeInput = {
+type ReconcileProviderOutcomeInput = {
   bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
   issueID: number;

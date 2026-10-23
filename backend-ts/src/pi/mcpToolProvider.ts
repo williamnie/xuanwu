@@ -15,7 +15,7 @@ import type {
   ToolProvider
 } from "./toolProviderEnvelope.ts";
 
-export type McpToolProviderRegistry = {
+type McpToolProviderRegistry = {
   diagnostics: McpRegistryDiagnostic[];
   providers: ToolProvider[];
   tools: AssistantTool[];

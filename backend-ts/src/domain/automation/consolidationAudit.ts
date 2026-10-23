@@ -20,7 +20,7 @@ const AUTOMATION_TARGET_TABLES = [
 
 type CountRow = { count: number };
 
-export const AUTOMATION_CONSOLIDATION_AUDIT_CONTRACT = "xw.automation-consolidation-audit.v1" as const;
+const AUTOMATION_CONSOLIDATION_AUDIT_CONTRACT = "xw.automation-consolidation-audit.v1" as const;
 
 export function auditAutomationConsolidation(input: {
   dbPath: string;

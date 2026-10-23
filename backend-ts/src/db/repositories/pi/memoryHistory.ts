@@ -3,13 +3,13 @@ import type { RunnerDatabase } from "../../database.ts";
 import { parseMemoryExperience } from "../../../pi/memoryExperience.ts";
 import type { PiMemoryItem } from "./memoryItems.ts";
 
-export type PiMemoryCorrection = { expected_revision: number; disposition: "narrow" | "disable"; reason: string };
+type PiMemoryCorrection = { expected_revision: number; disposition: "narrow" | "disable"; reason: string };
 export type PiMemoryWriteOptions = {
   reenable?: boolean;
   expectedRevision?: number;
   correction?: PiMemoryCorrection;
 };
-export type PiMemoryHistoryEntry = {
+type PiMemoryHistoryEntry = {
   memory_id: string; revision: number; operation: string; snapshot: Partial<PiMemoryItem>;
   correction: Partial<PiMemoryCorrection>; recorded_at: string;
 };

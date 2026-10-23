@@ -18,7 +18,7 @@ type PendingActionRow = {
   source: string;
 };
 
-export type StalePendingAction = {
+type StalePendingAction = {
   action_id: string;
   action_type: string;
   issue_id: number;
@@ -29,7 +29,7 @@ export type StalePendingAction = {
   source: string;
 };
 
-export type StalePendingActionCleanupResult = {
+type StalePendingActionCleanupResult = {
   actions: StalePendingAction[];
   applied: boolean;
   audit_event_type: string;

@@ -7,9 +7,9 @@ import {
 import { normalizeSkillIntentList } from "../../../skills/intents.ts";
 import { cleanString, getByID, now, requiredString } from "./common.ts";
 
-export type ProjectPiRetryPolicy = { enabled: boolean; max_attempts: number; backoff_minutes: number[] };
-export type ProjectPiConcurrencyPolicy = { max_parallel_issues: number; max_parallel_pi_cycles: number };
-export type ProjectPiPolicy = {
+type ProjectPiRetryPolicy = { enabled: boolean; max_attempts: number; backoff_minutes: number[] };
+type ProjectPiConcurrencyPolicy = { max_parallel_issues: number; max_parallel_pi_cycles: number };
+type ProjectPiPolicy = {
   project_id: string;
   allowed_actions_json: string;
   allowed_mcp_capabilities_json: string;
@@ -27,7 +27,7 @@ export type ProjectPiPolicy = {
   created_at: string;
   updated_at: string;
 };
-export type ProjectPiPolicyInput = Partial<Record<keyof ProjectPiPolicy, unknown>>;
+type ProjectPiPolicyInput = Partial<Record<keyof ProjectPiPolicy, unknown>>;
 
 // project_pi_settings 的记录存在即表示 PI 全自动接管；本表只承载安全与资源 policy。
 const TABLE = "project_pi_policies";

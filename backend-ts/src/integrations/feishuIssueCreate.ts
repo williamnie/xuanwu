@@ -11,13 +11,13 @@ import { redactSensitiveText } from "../util/redact.ts";
 
 type JsonObject = Record<string, unknown>;
 
-export type FeishuIssueCreateInput = {
+type FeishuIssueCreateInput = {
   acceptance_criteria?: unknown;
   project_id?: unknown;
   validation?: unknown;
 };
 
-export type FeishuIssueCreateResult = {
+type FeishuIssueCreateResult = {
   created: boolean;
   external_link: ExternalLinkRecord;
   issue: Issue;

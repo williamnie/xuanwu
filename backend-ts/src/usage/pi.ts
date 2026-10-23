@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import { addUsage, dayKey, isoWeekKey, monthKey, zeroUsage } from "./helpers.ts";
 import type { TokenUsage } from "./types.ts";
 
-export type PiUsageSessionRef = {
+type PiUsageSessionRef = {
   conversation_id: string;
   project_id: string;
   session_file: string;

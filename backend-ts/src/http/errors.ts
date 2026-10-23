@@ -15,7 +15,7 @@ export class HttpError extends Error {
   }
 }
 
-export class JsonBodyParseError extends HttpError {
+class JsonBodyParseError extends HttpError {
   constructor() {
     super(400, "invalid json body");
     this.name = "JsonBodyParseError";

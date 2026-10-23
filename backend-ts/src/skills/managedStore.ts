@@ -8,8 +8,8 @@ import { digestSkillTree, normalizeSkillSource, stageSkillSource, within } from 
 import { SkillLibraryError, skillID, type ManagedSkill, type SkillCatalog, type SkillRevision, type SkillScope, type SkillSource } from "./managedTypes.ts";
 import { assertExperienceTemplateScope, assertExperienceTemplateSelection, isExperienceTemplate, type ExperienceTemplateSelection } from "./experienceTemplateFormat.ts";
 
-export type InstallSkillInput = { id: string; scope: SkillScope; project_id?: string; source: SkillSource; enabled?: boolean };
-export type ChangeSkillInput = { key: string; expected_revision: string; operation: "enable" | "disable" | "update" | "rollback" | "uninstall"; source?: SkillSource; revision?: string };
+type InstallSkillInput = { id: string; scope: SkillScope; project_id?: string; source: SkillSource; enabled?: boolean };
+type ChangeSkillInput = { key: string; expected_revision: string; operation: "enable" | "disable" | "update" | "rollback" | "uninstall"; source?: SkillSource; revision?: string };
 export const skillStoreRoot = (stateDir: string) => join(stateDir, "skill-library");
 const catalogPath = (stateDir: string) => join(skillStoreRoot(stateDir), "catalog.json");
 

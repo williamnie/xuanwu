@@ -2,7 +2,7 @@ import type { PiActionEnvelope, PiAuthorizationScope, PiGatePolicy } from "./act
 import { piActionContract } from "./actionContracts.ts";
 import { SUPERVISOR_CONTROL_READ_ACTION_TYPES } from "./supervisorControlContracts.ts";
 
-export type PiAuthorizationScopeMatch = { matched: boolean; reason: string };
+type PiAuthorizationScopeMatch = { matched: boolean; reason: string };
 
 export function matchPiAuthorizationPolicyScope(
   envelope: PiActionEnvelope,

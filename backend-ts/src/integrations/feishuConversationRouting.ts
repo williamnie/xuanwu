@@ -6,10 +6,10 @@ import {
 import { getImConversationState } from "../db/repositories/imConversationState.ts";
 import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
 import { feishuImInboundMessage } from "./feishuChannelConnector.ts";
-import { parseImNewConversationCommand, routeImConversation } from "./imConversationRouting.ts";
+import { routeImConversation } from "./imConversationRouting.ts";
 
 export type FeishuConversationClock = { now(): Date };
-export type FeishuConversationRouteInput = {
+type FeishuConversationRouteInput = {
   clock?: FeishuConversationClock;
   event: FeishuNormalizedMessageEvent;
   prompt: string;
@@ -24,8 +24,6 @@ export type FeishuConversationRoute = {
 };
 type ScopeRoute = { baseConversationId: string; persist: boolean; scopeKey: string };
 
-export type FeishuNewConversationCommand = { isNewCommand: boolean; prompt: string };
-
 type LegacyConversationState = {
   active_conversation_id: string;
   epoch: number;
@@ -33,10 +31,6 @@ type LegacyConversationState = {
   started_at: string;
   updated_at: string;
 };
-
-export function parseFeishuNewConversationCommand(prompt: string): FeishuNewConversationCommand {
-  return parseImNewConversationCommand(prompt);
-}
 
 export function routeFeishuConversation(
   db: RunnerDatabase,

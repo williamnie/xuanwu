@@ -1,11 +1,11 @@
 import { redactSensitiveText } from "../util/redact.ts";
 
-export type RepoContextPackConfidence = "low" | "medium" | "high";
-export type RepoContextEvidenceSourceKind = "code" | "doc" | "issue" | "memory" | "message" | "project" | "session" | "tool" | "unknown";
-export type RepoContextPackSourceKind = "api" | "im" | "issue" | "manual" | "runner" | "session";
+type RepoContextPackConfidence = "low" | "medium" | "high";
+type RepoContextEvidenceSourceKind = "code" | "doc" | "issue" | "memory" | "message" | "project" | "session" | "tool" | "unknown";
+type RepoContextPackSourceKind = "api" | "im" | "issue" | "manual" | "runner" | "session";
 
-export type RepoContextPackProject = { cwd: string; id: string; name: string };
-export type RepoContextPackSource = {
+type RepoContextPackProject = { cwd: string; id: string; name: string };
+type RepoContextPackSource = {
   channel: string;
   kind: RepoContextPackSourceKind;
   message_id: string;
@@ -48,7 +48,7 @@ export type RepoContextPackInput = Omit<Partial<RepoContextPack>,
   source?: Partial<RepoContextPackSource>;
 };
 
-export const REPO_CONTEXT_PACK_VERSION = 1;
+const REPO_CONTEXT_PACK_VERSION = 1;
 export const REPO_CONTEXT_PACK_NOTICE =
   "Supervisor repo_context_pack 是只读代码/上下文后的初步上下文，不是 executor 的强制指令；executor 需要复核运行态和代码后再实现、测试、提交。";
 

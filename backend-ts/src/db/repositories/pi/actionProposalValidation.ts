@@ -8,7 +8,7 @@ import {
   type JsonObject
 } from "../intakeRunSupport.ts";
 
-export type ActionProposalRisk = "low" | "medium" | "high";
+type ActionProposalRisk = "low" | "medium" | "high";
 
 export type ActionProposalAction = {
   confidence: number;

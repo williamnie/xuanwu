@@ -26,10 +26,10 @@ import {
   type WorkID
 } from "./contracts.ts";
 
-export const GIT_UNTRACKED_POLICIES = ["include_all", "exclude"] as const;
-export type GitUntrackedPolicy = typeof GIT_UNTRACKED_POLICIES[number];
+const GIT_UNTRACKED_POLICIES = ["include_all", "exclude"] as const;
+type GitUntrackedPolicy = typeof GIT_UNTRACKED_POLICIES[number];
 
-export type GitEvidenceContext = {
+type GitEvidenceContext = {
   attempt_id?: RunAttemptID;
   audit_event_ref: string;
   collected_at?: string;
@@ -49,7 +49,7 @@ export type CollectGitEvidenceInput = {
   untracked_policy?: GitUntrackedPolicy;
 };
 
-export type GitSnapshotArtifactWrite = {
+type GitSnapshotArtifactWrite = {
   audit_event_ref: string;
   bytes: number;
   content: string;
@@ -58,7 +58,7 @@ export type GitSnapshotArtifactWrite = {
   source_ref: string;
 };
 
-export interface GitEvidenceArtifactStore {
+interface GitEvidenceArtifactStore {
   writeGitSnapshot(input: GitSnapshotArtifactWrite): Promise<EvidenceArtifactRef> | EvidenceArtifactRef;
 }
 
@@ -66,7 +66,7 @@ export interface GitEvidenceCollector {
   collect(input: CollectGitEvidenceInput): Promise<EvidenceRecord>;
 }
 
-export type GitEvidenceCollectorOptions = {
+type GitEvidenceCollectorOptions = {
   artifact_store?: GitEvidenceArtifactStore;
   git_binary?: string;
   max_git_output_bytes?: number;

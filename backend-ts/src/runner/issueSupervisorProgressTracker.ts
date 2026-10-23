@@ -17,7 +17,7 @@ const DEFAULT_STALE_SECONDS = 5 * 60;
 const FINAL_OUTCOMES = new Set(["failed", "no_progress", "progress", "queued", "recorded", "scheduled"]);
 const RECOVERY_ACTIONS = new Set(["session.resume_followup", "session.steer", "issue.retry"]);
 
-export type SupervisorProgressRefreshOutcome = "no_progress" | "progress";
+type SupervisorProgressRefreshOutcome = "no_progress" | "progress";
 
 export function refreshSupervisorProgressResult(input: {
   context: IssueSupervisorRecoveryContext;

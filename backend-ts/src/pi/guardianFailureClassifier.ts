@@ -2,16 +2,14 @@ import type { ProviderErrorCategory } from "./providerErrorParser.ts";
 import type { PiSupervisorDiagnosisCode } from "./issueSupervisorRecovery.ts";
 import {
   classifyRecoveryDiagnosis,
-  isTransientRecoveryDiagnosis,
   type RecoveryFailureClass
 } from "./recoveryDiagnosis.ts";
 
-export const GUARDIAN_SIGNAL_SEVERITIES = ["info", "watch", "actionable", "urgent"] as const;
-export const GUARDIAN_FAILURE_CLASSES = ["none", "transient", "needs_context", "unsafe", "exhausted"] as const;
+const GUARDIAN_SIGNAL_SEVERITIES = ["info", "watch", "actionable", "urgent"] as const;
 
 export type GuardianSignalSeverity = typeof GUARDIAN_SIGNAL_SEVERITIES[number];
-export type GuardianFailureClass = RecoveryFailureClass;
-export type GuardianFailureClassifierInput = {
+type GuardianFailureClass = RecoveryFailureClass;
+type GuardianFailureClassifierInput = {
   diagnosisCode?: string;
   message?: string;
   providerErrorCategory?: ProviderErrorCategory | string;
@@ -53,10 +51,6 @@ export function resolveDeterministicSeverity(
 ): GuardianSignalSeverity {
   const candidate = severityValue(suggested) ?? deterministic;
   return SEVERITY_RANK[candidate] > SEVERITY_RANK[deterministic] ? candidate : deterministic;
-}
-
-export function isTransientGuardianDiagnosis(value: string | PiSupervisorDiagnosisCode | undefined): boolean {
-  return isTransientRecoveryDiagnosis(clean(value));
 }
 
 function severityValue(value: unknown): GuardianSignalSeverity | undefined {

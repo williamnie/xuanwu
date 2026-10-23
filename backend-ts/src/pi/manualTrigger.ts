@@ -38,7 +38,7 @@ export type ManualContextIntakeInput = {
   user_prompt?: string;
 };
 
-export type ManualContextIntakeResult = {
+type ManualContextIntakeResult = {
   bundle?: ContextBundleRecord;
   reason: string;
   request?: ManualContextBundleRequest;

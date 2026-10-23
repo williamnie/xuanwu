@@ -30,7 +30,7 @@ import {
   executeReadyDecisionActions
 } from "./guardianDecisionActions.ts";
 
-export type GuardianDecisionOrchestratorOptions = {
+type GuardianDecisionOrchestratorOptions = {
   limit?: number;
   now?: Date;
 };
@@ -273,10 +273,6 @@ function addSummary(
   total.merged += next.merged;
   total.rescheduled += next.rescheduled;
   total.scanned += next.scanned;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function iso(value: Date): string {

@@ -1,6 +1,6 @@
-export const TOOL_PROVIDER_KINDS = ["builtin", "cli", "mcp", "http", "browser"] as const;
+const TOOL_PROVIDER_KINDS = ["builtin", "cli", "mcp", "http", "browser"] as const;
 export const TOOL_PERMISSIONS = ["read", "write", "dangerous"] as const;
-export const TOOL_RESULT_STATUSES = ["succeeded", "failed", "timeout", "denied"] as const;
+const TOOL_RESULT_STATUSES = ["succeeded", "failed", "timeout", "denied"] as const;
 
 export type ToolProviderKind = (typeof TOOL_PROVIDER_KINDS)[number];
 export type ToolPermission = (typeof TOOL_PERMISSIONS)[number];
@@ -8,7 +8,7 @@ export type ToolResultStatus = (typeof TOOL_RESULT_STATUSES)[number];
 export type ToolJsonSchema = Record<string, unknown>;
 export type ToolEnvelopeMetadata = Record<string, unknown>;
 
-export const PI_RUNTIME_TOOL_PROFILES = [
+const PI_RUNTIME_TOOL_PROFILES = [
   "chat",
   "review",
   "acceptance",
@@ -73,18 +73,6 @@ export function assistantToolRuntimePolicy(tool: Pick<AssistantTool, "metadata" 
   };
 }
 
-export type ToolInvocation = {
-  id: string;
-  tool_name: string;
-  provider_id: string;
-  input: ToolEnvelopeMetadata;
-  permission: ToolPermission;
-  timeout_ms?: number;
-  requested_at?: string;
-  audit?: ToolAuditMetadata;
-  metadata?: ToolEnvelopeMetadata;
-};
-
 export type ToolResult = {
   invocation_id: string;
   status: ToolResultStatus;
@@ -103,7 +91,7 @@ export type ToolResultError = {
   details?: unknown;
 };
 
-export type ToolEnvelopeValidationIssue = { path: string; message: string };
+type ToolEnvelopeValidationIssue = { path: string; message: string };
 
 export function isToolProviderKind(value: unknown): value is ToolProviderKind {
   return typeof value === "string" && (TOOL_PROVIDER_KINDS as readonly string[]).includes(value);
@@ -113,7 +101,7 @@ export function isToolPermission(value: unknown): value is ToolPermission {
   return typeof value === "string" && (TOOL_PERMISSIONS as readonly string[]).includes(value);
 }
 
-export function isToolResultStatus(value: unknown): value is ToolResultStatus {
+function isToolResultStatus(value: unknown): value is ToolResultStatus {
   return typeof value === "string" && (TOOL_RESULT_STATUSES as readonly string[]).includes(value);
 }
 

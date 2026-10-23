@@ -20,10 +20,10 @@ export type PiMcpCapabilityInput = {
   timeout_ms?: number;
   uri?: string;
 };
-export type PiMcpCapabilityPatch = Partial<Pick<PiMcpCapabilityInput,
+type PiMcpCapabilityPatch = Partial<Pick<PiMcpCapabilityInput,
   "enabled" | "permission" | "read_only" | "requires_confirmation" | "risk_level" | "timeout_ms"
 >>;
-export type PiMcpCapability = Required<Omit<PiMcpCapabilityInput,
+type PiMcpCapability = Required<Omit<PiMcpCapabilityInput,
   "diagnostics" | "enabled" | "input_schema" | "metadata" | "output_schema" | "read_only" | "requires_confirmation" | "timeout_ms"
 >> & {
   diagnostics: unknown[];

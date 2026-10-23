@@ -17,7 +17,7 @@ export type PiAgent = {
   enabled: number; created_at: string; updated_at: string;
 };
 
-export type PiAgentInput = PatchInput<PiAgent>;
+type PiAgentInput = PatchInput<PiAgent>;
 
 const TABLE = "pi_agents";
 const COLUMNS = `id, name, provider, model_provider, model_id, thinking_level,

@@ -16,7 +16,7 @@ import {
   type StructuredOutputSession
 } from "./structuredAssistantOutput.ts";
 
-export const PI_ACCEPTANCE_DECISIONS = [
+const PI_ACCEPTANCE_DECISIONS = [
   "accept",
   "continue_same_session",
   "retry",
@@ -24,7 +24,7 @@ export const PI_ACCEPTANCE_DECISIONS = [
   "failed"
 ] as const;
 
-export const PI_ACCEPTANCE_DECISION_SCHEMA = Type.Object({
+const PI_ACCEPTANCE_DECISION_SCHEMA = Type.Object({
   decision: Type.Union(PI_ACCEPTANCE_DECISIONS.map((value) => Type.Literal(value))),
   confidence: Type.Union([Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")]),
   rationale: Type.String({ minLength: 1, maxLength: 8_000 }),

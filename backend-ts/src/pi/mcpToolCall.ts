@@ -15,7 +15,7 @@ import type { PiGatePolicy } from "./actionGate.ts";
 import { JEV_CAPABILITY_ID } from "../skills/jev/config.ts";
 import { invokeJevSkill } from "../skills/jev/invoke.ts";
 
-export const MCP_TOOL_ERROR_CODES = {
+const MCP_TOOL_ERROR_CODES = {
   capabilityNotTool: "mcp_capability_not_tool",
   permissionDenied: "permission_denied",
   schemaMismatch: "mcp_schema_mismatch",
@@ -26,7 +26,7 @@ export const MCP_TOOL_ERROR_CODES = {
   timeout: "mcp_timeout"
 } as const;
 
-export type McpToolCallInput = {
+type McpToolCallInput = {
   authorization?: PiGatePolicy;
   auditContext?: Partial<ToolCallAuditContext>;
   auditProviderID?: string;

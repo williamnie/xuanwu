@@ -9,7 +9,7 @@ import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { getPiApprovalRequest } from "../db/repositories/pi/approvalRequests.ts";
 import { listNotifications, markNotificationRead } from "../db/repositories/notifications.ts";
 import { clearProjectHold, deleteProject, reorderProjects } from "../db/repositories/projectsExtra.ts";
-import { getProject, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
+import { getProject, updateProject } from "../db/repositories/projects.ts";
 import { createImageUpload, mustGetUpload } from "../db/repositories/uploads.ts";
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { listSkillRegistry } from "../skills/registry.ts";

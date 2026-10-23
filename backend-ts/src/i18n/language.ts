@@ -3,8 +3,8 @@ import type { RunnerDatabase } from "../db/database.ts";
 export const APP_LANGUAGES = ["zh-CN", "en-US"] as const;
 export type AppLanguage = typeof APP_LANGUAGES[number];
 
-export const DEFAULT_APP_LANGUAGE: AppLanguage = "zh-CN";
-export const APP_LANGUAGE_PREFERENCE_KEY = "app.language";
+const DEFAULT_APP_LANGUAGE: AppLanguage = "zh-CN";
+const APP_LANGUAGE_PREFERENCE_KEY = "app.language";
 
 export function appLanguage(db: RunnerDatabase): AppLanguage {
   const row = db.sqlite.query<{ value: unknown }, [string]>(
@@ -23,7 +23,7 @@ export function saveAppLanguage(db: RunnerDatabase, value: unknown, now = new Da
   return language;
 }
 
-export function normalizeAppLanguage(value: unknown): AppLanguage {
+function normalizeAppLanguage(value: unknown): AppLanguage {
   const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (normalized === "en" || normalized.startsWith("en-")) return "en-US";
   if (normalized === "zh" || normalized.startsWith("zh-")) return "zh-CN";

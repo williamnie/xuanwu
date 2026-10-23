@@ -2,7 +2,7 @@ import type { AgentSession } from "../db/repositories/agentSessions.ts";
 import type { Issue, IssueRun } from "../db/repositories/issues.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
 
-export type PiNeedsUserMessageInput = {
+type PiNeedsUserMessageInput = {
   diagnosis: string;
   issue: Issue;
   message: string;

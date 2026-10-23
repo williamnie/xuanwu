@@ -23,7 +23,7 @@ import {
   structuredAssistantProviderError
 } from "./structuredAssistantOutput.ts";
 
-export type PiSupervisorDecisionRuntimeInput = {
+type PiSupervisorDecisionRuntimeInput = {
   agent: PiAgent;
   context: IssueSupervisorRecoveryContext;
   database: RunnerDatabase;

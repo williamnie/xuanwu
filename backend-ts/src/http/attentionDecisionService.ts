@@ -16,7 +16,7 @@ import { approveAndExecuteActionProposal } from "./piActionProposalExecution.ts"
 import type { ProjectLoopStarter } from "./piActionDispatch.ts";
 import { HttpError } from "./errors.ts";
 
-export type AttentionDecisionContext = {
+type AttentionDecisionContext = {
   bus?: EventBus;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;

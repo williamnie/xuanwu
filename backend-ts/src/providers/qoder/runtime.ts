@@ -8,7 +8,7 @@ import { QODER_VERSION_PAIR } from "./version.ts";
 
 const LOCAL_AUTH_MARKERS = ["oauth_creds.json", "qoder-credentials.json"] as const;
 
-export type QoderAuthenticationStatus = {
+type QoderAuthenticationStatus = {
   configured: boolean;
   mode: "pat-env" | "pat-secret-ref" | "service-account-secret-ref" | "local-cli";
   source: "environment" | "secret_ref" | "service_account_secret_ref" | "local_cli" | "none";
@@ -22,12 +22,12 @@ export type QoderRuntimeProbe = {
   status: ProviderRuntimeStatus;
 };
 
-export type QoderRuntimeProbeOptions = {
+type QoderRuntimeProbeOptions = {
   inspectAuth?: (config: ProviderRuntimeConfig) => QoderAuthenticationStatus;
   inspectCli?: (command: string, env: Record<string, string>) => { installed: boolean; version?: string; reason?: string };
 };
 
-export type QoderAuthenticationProbeOptions = {
+type QoderAuthenticationProbeOptions = {
   inspectLocalLogin?: (config: ProviderRuntimeConfig) => boolean;
 };
 

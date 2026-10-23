@@ -14,7 +14,7 @@ export type McpDiscoveryServer = {
   transport: McpDiscoveryTransport;
 };
 
-export type McpDiscoveryDiagnostic = {
+type McpDiscoveryDiagnostic = {
   code: string;
   message: string;
   severity: "info" | "warning" | "error";

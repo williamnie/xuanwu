@@ -31,7 +31,7 @@ export const WEBHOOK_CHANNEL_MANIFEST: ConnectorManifest = {
   kind: "channel"
 };
 
-export type WebhookEventRoutesContext = {
+type WebhookEventRoutesContext = {
   database: RunnerDatabase;
   now?: () => Date;
   signingSecret?: string;

@@ -4,15 +4,15 @@ import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { withIssueBodyDependencies } from "./issuePlanningBody.ts";
 
-export const ISSUE_BATCH_MAX_ITEMS = 40;
+const ISSUE_BATCH_MAX_ITEMS = 40;
 
-export type IssueBatchMaterializedItem = {
+type IssueBatchMaterializedItem = {
   id: number;
   ref: string;
   title: string;
 };
 
-export type IssueBatchPayloadItem = {
+type IssueBatchPayloadItem = {
   description: string;
   depends_on_refs: string[];
   recommended_mcp_capabilities: string[];
@@ -23,7 +23,7 @@ export type IssueBatchPayloadItem = {
   title: string;
 };
 
-export type IssueBatchPayload = {
+type IssueBatchPayload = {
   batch_items: IssueBatchPayloadItem[];
   project_id: string;
   status: "triage";

@@ -29,24 +29,24 @@ export type ApprovalFastDecision =
       rule_id: ApprovalSafetyRuleID | ApprovalUnknownRuleID;
     };
 
-export type ApprovalFastInput = ApprovalSafetyInput & {
+type ApprovalFastInput = ApprovalSafetyInput & {
   jsonRpcId?: string | number;
   policyCache?: ApprovalPolicyCacheSnapshot;
 };
 
-export type ApprovalAllowRuleID =
+type ApprovalAllowRuleID =
   | "pi_approval_allow_current_repo_file_change_once"
   | "pi_approval_allow_current_repo_git_read_once"
   | "pi_approval_allow_current_repo_read_only_once"
   | "pi_approval_allow_current_repo_validation_once";
 
-export type ApprovalUnknownRuleID =
+type ApprovalUnknownRuleID =
   | "pi_approval_deny_ambiguous_request"
   | "pi_approval_deny_allowlist_miss"
   | "pi_approval_deny_policy_cache_unavailable";
 
 type AllowMatch = { reason: string; rule_id: ApprovalAllowRuleID };
-export type ApprovalFastSessionGrant = {
+type ApprovalFastSessionGrant = {
   enabled: false;
   expires_at: "";
   reason: string;

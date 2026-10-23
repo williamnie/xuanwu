@@ -279,7 +279,7 @@ export class GitHubIssueSyncRuntime {
   }
 }
 
-export function normalizeGitHubSource(repository: GitHubObject, raw: GitHubObject): GitHubIssueSource {
+function normalizeGitHubSource(repository: GitHubObject, raw: GitHubObject): GitHubIssueSource {
   if (raw.pull_request || typeof raw.node_id !== "string" || typeof repository.full_name !== "string" || !["open", "closed"].includes(String(raw.state))) throw new Error("Invalid GitHub Issue snapshot");
   const url = new URL(String(raw.html_url));
   if (url.protocol !== "https:" || url.username || url.password) throw new Error("Invalid GitHub Issue URL");

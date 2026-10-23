@@ -36,11 +36,11 @@ export type SkillRegistryDiagnostic = {
   source_path: string;
 };
 
-export type SkillRegistry = { diagnostics: SkillRegistryDiagnostic[]; items: SkillMetadata[] };
-export type SkillRegistryRoot = { label?: string; path: string; prefix?: string; boundary?: string };
+type SkillRegistry = { diagnostics: SkillRegistryDiagnostic[]; items: SkillMetadata[] };
+type SkillRegistryRoot = { label?: string; path: string; prefix?: string; boundary?: string };
 export type SkillRegistryOptions = { availableTools?: SkillRegistryTool[]; roots?: SkillRegistryRoot[]; additionalRoots?: SkillRegistryRoot[]; cwd?: string; agentDir?: string };
-export type SkillRecommendationInput = { description?: string; title?: string };
-export type SkillRecommendation = SkillMetadata & { reason: string; score: number };
+type SkillRecommendationInput = { description?: string; title?: string };
+type SkillRecommendation = SkillMetadata & { reason: string; score: number };
 
 const MAX_DEPTH = 6;
 const MAX_SKILLS = 160;
@@ -80,7 +80,7 @@ export function recommendSkillIntents(
     .slice(0, 8);
 }
 
-export function registryRoots(options: SkillRegistryOptions = {}): SkillRegistryRoot[] {
+function registryRoots(options: SkillRegistryOptions = {}): SkillRegistryRoot[] {
   if (options.roots?.length) return options.roots;
   const home = Bun.env.CODEX_HOME?.trim() || join(homedir(), ".codex");
   const packageDir = Bun.env.PI_PACKAGE_DIR?.trim();

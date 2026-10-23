@@ -3,16 +3,16 @@ import { loadCliConnectorRegistry, type CliConnectorDiagnostic, type CliConnecto
 import { runCliTool } from "./cliToolRunner.ts";
 import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
 
-export type CliConnectorHealthState = "configured" | "disabled" | "misconfigured" | "error";
+type CliConnectorHealthState = "configured" | "disabled" | "misconfigured" | "error";
 
-export type CliConnectorHealthOptions = {
+type CliConnectorHealthOptions = {
   connectorID?: string;
   env?: Record<string, string | undefined>;
   manifestDirs?: string[];
   probe?: boolean;
 };
 
-export type CliConnectorHealthReport = {
+type CliConnectorHealthReport = {
   connectors: Array<Record<string, unknown>>;
   diagnostics: CliConnectorDiagnostic[];
 };

@@ -34,7 +34,7 @@ const SECRET_VALUE_PATTERNS = [
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/
 ] as const;
 
-export type RedactionFinding = { kind: "field" | "value"; path: string };
+type RedactionFinding = { kind: "field" | "value"; path: string };
 
 export class RedactionRegistry {
   private readonly values = new Set<string>();

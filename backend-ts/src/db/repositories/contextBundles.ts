@@ -13,7 +13,7 @@ export type ContextBundleTrigger =
   | "retry";
 
 export type ContextBundleCreatedBy = "user" | "automation" | "system";
-export type ContextBundleWindow = { from: string; to: string };
+type ContextBundleWindow = { from: string; to: string };
 export type ContextBundleSourceQuery = JsonObject;
 
 export type ContextBundleEvidenceSummary = {

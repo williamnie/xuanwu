@@ -68,13 +68,13 @@ export type PreparedProviderMutation = {
   should_invoke: boolean;
 };
 
-export type ProviderAttemptStart = {
+type ProviderAttemptStart = {
   invocation_ref: string;
   provider_session_id?: string;
   provider_turn_id?: string;
 };
 
-export type NewRunRequestResult = {
+type NewRunRequestResult = {
   applied: boolean;
   event_id: string;
   issue_id: number;
@@ -84,7 +84,7 @@ export type NewRunRequestResult = {
   violations: string[];
 };
 
-export type PendingRunCreation = {
+type PendingRunCreation = {
   event_id: string;
   issue_id: number;
   operation: NewRunCommand["operation"];
@@ -140,7 +140,6 @@ type LifecyclePayload = {
 };
 
 const TERMINAL_RUN_STATUSES = new Set(["succeeded", "failed", "cancelled"]);
-const TERMINAL_ATTEMPT_STATUSES = new Set(["succeeded", "failed", "cancelled", "interrupted"]);
 
 export class RunCommandValidationError extends Error {
   constructor(message: string) {

@@ -11,8 +11,8 @@ const STATUS_IN_PROGRESS = "in_progress";
 type ClaimedIssueRow = { id: number };
 type CountRow = { count: number };
 type ProjectCwdRow = { cwd: string };
-export type IssueClaimFilter = (issue: Issue) => boolean;
-export type ReservedIssueClaim = { issue: Issue; reservation: ReservedIssueRun };
+type IssueClaimFilter = (issue: Issue) => boolean;
+type ReservedIssueClaim = { issue: Issue; reservation: ReservedIssueRun };
 
 export function claimNextIssue(
   db: RunnerDatabase,
@@ -58,7 +58,7 @@ export function hasActiveExecutorWorkForProject(
   return countActiveExecutorWorkForProject(db, projectID, at) > 0;
 }
 
-export function countActiveExecutorWorkForProject(
+function countActiveExecutorWorkForProject(
   db: RunnerDatabase,
   projectID: string,
   at: Date | string = new Date()
@@ -81,23 +81,6 @@ export function activeExecutorWorkHolders(db: RunnerDatabase, projectID: string)
     ? row.cwd.trim() && canonicalWorkspace(row.cwd) === lock.value : row.project_id === lock.value)
     && (row.open_run || row.status === STATUS_IN_PROGRESS || !isWorkspaceWaitReleased(db, row.id)))
     .map(row => ({ id: row.id, running: Boolean(row.open_run) || row.status === STATUS_IN_PROGRESS }));
-}
-
-export function hasTodoIssue(db: RunnerDatabase, projectID: string): boolean {
-  const cleanProjectID = projectID.trim();
-  if (cleanProjectID === "") return false;
-  const sql = "select count(*) as count from issues where project_id=? and status=?";
-  return countRows(db, sql, [cleanProjectID, STATUS_TODO]) > 0;
-}
-
-export function hasReadyIssue(
-  db: RunnerDatabase,
-  projectID: string,
-  filter: IssueClaimFilter = () => true
-): boolean {
-  const cleanProjectID = projectID.trim();
-  if (cleanProjectID === "") return false;
-  return nextIssueRow(db, cleanProjectID, filter) !== null;
 }
 
 export function peekNextReadyIssue(
@@ -182,10 +165,4 @@ function recordClaimEvent(db: RunnerDatabase, issueID: number, timestamp: string
 function countRows(db: RunnerDatabase, sql: string, params: string[] = []): number {
   return db.sqlite.query<CountRow, string[]>(sql).all(...params)
     .reduce((sum, row) => sum + row.count, 0);
-}
-
-function timestamp(value: Date | string): string {
-  if (value instanceof Date) return value.toISOString();
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
 }

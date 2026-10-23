@@ -21,7 +21,7 @@ type SQLValue = number | string;
 
 export type IntakeRunStatus = "running" | "succeeded" | "failed";
 
-export type IntakeRunInput = {
+type IntakeRunInput = {
   bundle_id: number;
   error?: string;
   ignored_groups?: JsonObject[];
@@ -43,8 +43,8 @@ export type IntakeRunRecord = Required<IntakeRunInput> & {
   updated_at: string;
 };
 
-export type IntakeRunPatch = Partial<Omit<IntakeRunInput, "bundle_id" | "skill_id">>;
-export type IntakeRunFilter = { bundleId?: number; limit?: number; status?: IntakeRunStatus };
+type IntakeRunPatch = Partial<Omit<IntakeRunInput, "bundle_id" | "skill_id">>;
+type IntakeRunFilter = { bundleId?: number; limit?: number; status?: IntakeRunStatus };
 
 export type AttentionInboxItemInput = {
   actor_refs?: string[];
@@ -78,7 +78,7 @@ export type AttentionInboxItemRecord = Required<AttentionInboxItemInput> & {
 };
 
 export type AttentionInboxItemStatus = "new" | "triaged" | "proposal_created" | "actioned" | "ignored" | "failed";
-export type AttentionInboxItemFilter = {
+type AttentionInboxItemFilter = {
   intakeRunId?: number;
   limit?: number;
   source?: string;
@@ -208,16 +208,6 @@ export function listRelatedAttentionInboxItems(db: RunnerDatabase, correlations:
   if (correlations.length === 0) return [];
   return db.sqlite.query<Record<string, unknown>, [string]>(ATTENTION_RELATED_INBOX_SQL)
     .all(JSON.stringify(correlations)).map(mapItem);
-}
-
-export function countAttentionInboxItems(
-  db: RunnerDatabase,
-  filter: Omit<AttentionInboxItemFilter, "limit"> = {}
-): number {
-  const query = itemWhere(filter);
-  return db.sqlite.query<{ count: number }, SQLValue[]>(
-    `select count(*) as count from attention_inbox_items${query.where}`
-  ).get(...query.args)?.count ?? 0;
 }
 
 export function getAttentionInboxItem(db: RunnerDatabase, id: number): AttentionInboxItemRecord | null {

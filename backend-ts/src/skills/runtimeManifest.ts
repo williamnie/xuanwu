@@ -2,12 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 
 import type { SkillRegistryDiagnostic } from "./registry.ts";
 
-export type SkillRuntimeKind = "intake" | "domain";
-export type SkillRuntimeSandbox = "capability";
-export type SkillInputObject = "context_bundle" | "inbox_item";
-export type SkillOutputObject = "inbox_items" | "ignored_groups" | "action_proposals";
-export type SkillToolPermission = "read" | "write" | "dangerous";
-export type SkillPrimaryIntent =
+type SkillRuntimeKind = "intake" | "domain";
+type SkillRuntimeSandbox = "capability";
+type SkillInputObject = "context_bundle" | "inbox_item";
+type SkillOutputObject = "inbox_items" | "ignored_groups" | "action_proposals";
+type SkillToolPermission = "read" | "write" | "dangerous";
+type SkillPrimaryIntent =
   | "bug_report"
   | "status_question"
   | "reply_needed"
@@ -26,7 +26,7 @@ export type SkillRegistryTool = {
   provider_id?: string;
 };
 
-export type SkillRuntimeExecution = {
+type SkillRuntimeExecution = {
   adapter: "builtin";
   handler: string;
   sandbox: SkillRuntimeSandbox;

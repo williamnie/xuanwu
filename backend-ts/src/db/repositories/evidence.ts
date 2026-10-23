@@ -5,7 +5,7 @@ import { recordIssueEvent } from "./issueEvents.ts";
 export const EVIDENCE_RECORDED_EVENT_TYPE = "evidence.recorded.v1";
 export const LEGACY_HUMAN_EVIDENCE_EVENT_TYPE = "issue.verification_human_evidence.v1";
 
-export type EvidenceStorageSource = "structured" | "legacy_human";
+type EvidenceStorageSource = "structured" | "legacy_human";
 
 export type StoredEvidenceRecord = {
   evidence: EvidenceRecord;
@@ -15,7 +15,7 @@ export type StoredEvidenceRecord = {
   storage_source: EvidenceStorageSource;
 };
 
-export type EvidenceListFilter = {
+type EvidenceListFilter = {
   before_event_id?: number;
   issue_ids?: number[];
   kinds?: string[];
@@ -27,7 +27,7 @@ export type EvidenceListFilter = {
   work_id?: string;
 };
 
-export type EvidenceListPage = {
+type EvidenceListPage = {
   has_more: boolean;
   items: StoredEvidenceRecord[];
   next_before_event_id?: number;
@@ -128,12 +128,6 @@ export function getStoredEvidence(db: RunnerDatabase, evidenceID: string): Store
     if (stored) return stored;
   }
   return null;
-}
-
-export function issueIDForEvidenceSourceEvent(db: RunnerDatabase, eventID: number): number | null {
-  return db.sqlite.query<{ issue_id: number }, [number]>(
-    "select issue_id from issue_events where id=?"
-  ).get(eventID)?.issue_id ?? null;
 }
 
 export function issueIDsForRun(db: RunnerDatabase, runID: string): number[] {

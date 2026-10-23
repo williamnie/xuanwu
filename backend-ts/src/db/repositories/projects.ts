@@ -36,7 +36,7 @@ export type CreateProjectInput = ProjectWriteInput;
 
 export type UpdateProjectInput = ProjectPatchInput;
 
-export type ProjectHold = { reason: string; message: string; hold_since: string; next_check_at: string; last_check_at: string; last_check_error: string };
+type ProjectHold = { reason: string; message: string; hold_since: string; next_check_at: string; last_check_at: string; last_check_error: string };
 
 export type Project = {
   approval_policy: string;
@@ -72,7 +72,6 @@ const PROJECT_COLUMNS = `p.id, p.name, p.cwd, p.provider, p.provider_config_json
   p.created_at, p.updated_at, h.reason, h.message, h.hold_since, h.next_check_at,
   h.last_check_at, h.last_check_error,
   case when exists(select 1 from project_pi_settings s where s.project_id=p.id) then 1 else 0 end as pi_managed`;
-
 
 export function createProject(db: RunnerDatabase, input: CreateProjectInput): Project {
   const project = normalizeProjectForWrite(input);

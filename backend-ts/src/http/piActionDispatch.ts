@@ -75,7 +75,7 @@ export type PiActionDispatchContext = {
   supervisorManaged?: boolean;
 };
 
-export const PI_ACTION_DISPATCH_TYPES = new Set([
+const PI_ACTION_DISPATCH_TYPES = new Set([
   "agent.executor_assign",
   "agent.workflow_request",
   "human_review.respond",

@@ -22,8 +22,8 @@ import {
 } from "./manifest.ts";
 import type { WorkflowManifestRegistration } from "./registry.ts";
 
-export const IMPLEMENT_WORKFLOW_SOURCE_PATH = "builtin:workflows/implement@1" as const;
-export const IMPLEMENT_WORKFLOW_RUN_SCHEMA_VERSION = "xw.implement-workflow-run.v1" as const;
+const IMPLEMENT_WORKFLOW_SOURCE_PATH = "builtin:workflows/implement@1" as const;
+const IMPLEMENT_WORKFLOW_RUN_SCHEMA_VERSION = "xw.implement-workflow-run.v1" as const;
 export const IMPLEMENT_STAGE_IDS = [
   "confirm-target",
   "modify",
@@ -31,8 +31,8 @@ export const IMPLEMENT_STAGE_IDS = [
   "regression",
   "handoff"
 ] as const;
-export type ImplementStageID = typeof IMPLEMENT_STAGE_IDS[number];
-export type ImplementStageTarget = ImplementStageID | "completed";
+type ImplementStageID = typeof IMPLEMENT_STAGE_IDS[number];
+type ImplementStageTarget = ImplementStageID | "completed";
 
 export const IMPLEMENT_TARGET_CONFIRMATION_POLICY: WorkflowVerificationPolicy = {
   schema_version: 1,
@@ -203,7 +203,7 @@ const gateSchema = Type.Object({
   policy_ref: reference
 }, { additionalProperties: false });
 
-export const IMPLEMENT_STAGE_TRANSITION_SCHEMA = Type.Object({
+const IMPLEMENT_STAGE_TRANSITION_SCHEMA = Type.Object({
   from: stageID,
   to: stageTarget,
   signal: Type.Union([Type.Literal("passed"), Type.Literal("failed"), Type.Literal("blocked")]),
@@ -252,7 +252,7 @@ const mutationAuditSchema = Type.Object({
   rollback_ref: Type.Optional(reference)
 }, { additionalProperties: false });
 
-export const IMPLEMENT_WORKFLOW_RUN_SCHEMA = Type.Object({
+const IMPLEMENT_WORKFLOW_RUN_SCHEMA = Type.Object({
   schema_version: Type.Literal(IMPLEMENT_WORKFLOW_RUN_SCHEMA_VERSION),
   workflow_ref: Type.Literal(IMPLEMENT_WORKFLOW_REF),
   project_id: Type.String({ minLength: 1, maxLength: 256 }),
@@ -294,9 +294,9 @@ export const IMPLEMENT_WORKFLOW_RUN_SCHEMA = Type.Object({
   }, { additionalProperties: false }))
 }, { additionalProperties: false });
 
-export type ImplementStageTransition = Static<typeof IMPLEMENT_STAGE_TRANSITION_SCHEMA>;
+type ImplementStageTransition = Static<typeof IMPLEMENT_STAGE_TRANSITION_SCHEMA>;
 export type ImplementWorkflowRun = Static<typeof IMPLEMENT_WORKFLOW_RUN_SCHEMA>;
-export type ImplementWorkflowValidation = { errors: string[]; ok: boolean };
+type ImplementWorkflowValidation = { errors: string[]; ok: boolean };
 export type ImplementWorkflowValidationContext = {
   evidence: readonly EvidenceRecord[];
   handoff?: HandoffRecord;
@@ -318,22 +318,6 @@ export function implementWorkflowRegistryContributions(): {
       structuredClone(IMPLEMENT_VERIFICATION_POLICY)
     ]
   };
-}
-
-export function parseImplementWorkflowRunJSON(
-  text: string,
-  context?: ImplementWorkflowValidationContext
-): { ok: true; run: ImplementWorkflowRun } | { errors: string[]; ok: false } {
-  let value: unknown;
-  try {
-    value = JSON.parse(text) as unknown;
-  } catch (error) {
-    return { errors: [error instanceof Error ? error.message : "invalid JSON"], ok: false };
-  }
-  const validation = validateImplementWorkflowRun(value, context);
-  return validation.ok
-    ? { ok: true, run: value as ImplementWorkflowRun }
-    : { errors: validation.errors, ok: false };
 }
 
 export function evaluateImplementStageTransition(

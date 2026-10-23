@@ -6,7 +6,7 @@ import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import type { ProviderErrorSignal } from "./providerErrorParser.ts";
 import type { SupervisorCandidate } from "./issueSupervisorContextSupport.ts";
 
-export type ProviderOutageDiagnosisInput = {
+type ProviderOutageDiagnosisInput = {
   events: IssueEvent[];
   latestRun: IssueRun | null;
   now: Date;

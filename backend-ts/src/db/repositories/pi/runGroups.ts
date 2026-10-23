@@ -12,7 +12,8 @@ import {
   type PatchInput
 } from "./common.ts";
 import {
-  deriveRunGroupReportView, isRunGroupItemReportable
+  deriveRunGroupReportView,
+  isRunGroupItemReportable
 } from "../../../pi/runGroupReportStatus.ts";
 
 export type PiRunGroup = {
@@ -29,9 +30,9 @@ export type PiRunGroupItem = {
   report_reason: string; report_status: string; reportable_at: string; run_group_id: string;
   status: string; updated_at: string;
 };
-export type PiRunGroupInput = PatchInput<PiRunGroup>;
-export type PiRunGroupItemInput = PatchInput<PiRunGroupItem>;
-export type PiRunGroupFilter = { projectId?: string; status?: string };
+type PiRunGroupInput = PatchInput<PiRunGroup>;
+type PiRunGroupItemInput = PatchInput<PiRunGroupItem>;
+type PiRunGroupFilter = { projectId?: string; status?: string };
 
 type SQLValue = string | number;
 const GROUP_TABLE = "pi_run_groups";

@@ -10,12 +10,12 @@ import {
 } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 
-export type ResumeAttemptPreparation =
+type ResumeAttemptPreparation =
   | { attempt: PiRecoveryAttempt; skip: false }
   | ResumeAttemptSkip;
-export type ResumeAttemptSkip = { result: Record<string, unknown>; skip: true };
+type ResumeAttemptSkip = { result: Record<string, unknown>; skip: true };
 
-export type ResumeAttemptInput = {
+type ResumeAttemptInput = {
   action: PiAction;
   issueID: number;
   payload: Record<string, unknown>;

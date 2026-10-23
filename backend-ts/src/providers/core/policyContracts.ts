@@ -33,10 +33,10 @@ export const DEFAULT_EXECUTION_POLICY: ExecutionPolicyRequest = Object.freeze({
   approval: "unattended"
 });
 
-export type ProviderIsolationKind = "os-sandbox" | "tool-policy" | "tool-selection" | "none";
-export type ProviderPolicySupport = "native" | "adapter" | "unsupported";
+type ProviderIsolationKind = "os-sandbox" | "tool-policy" | "tool-selection" | "none";
+type ProviderPolicySupport = "native" | "adapter" | "unsupported";
 
-export type ProviderPolicyCombination = {
+type ProviderPolicyCombination = {
   access: ExecutionAccess;
   approval: ExecutionApproval;
   support: ProviderPolicySupport;
@@ -44,7 +44,7 @@ export type ProviderPolicyCombination = {
   reason?: string;
 };
 
-export type ProviderPolicyProofCapabilities = {
+type ProviderPolicyProofCapabilities = {
   nativeMode: "provider-observed" | "argument-passed" | "documented-only";
   toolDecision: "adapter-enforced" | "provider-observed" | "argument-passed" | "none";
 };
@@ -77,13 +77,13 @@ export type ResolvedPolicyEffectSet = {
   network: { allowedEffects: string[] };
 };
 
-export type PolicyProof = {
+type PolicyProof = {
   kind: "provider-native" | "adapter-callback" | "tool-selection" | "action-gate";
   strength: "provider-observed" | "adapter-enforced" | "argument-passed" | "documented-only";
   ref: string;
 };
 
-export type NativePolicySummaryValue = boolean | number | string | string[];
+type NativePolicySummaryValue = boolean | number | string | string[];
 
 export type ResolvedExecutionPolicy = {
   contract: typeof RESOLVED_EXECUTION_POLICY_CONTRACT;
@@ -109,11 +109,11 @@ export interface ProviderPolicyAdapter {
   resolvePolicy(request: ExecutionPolicyRequest, context: ProviderPolicyContext): ResolvedExecutionPolicy;
 }
 
-export function isExecutionAccess(value: unknown): value is ExecutionAccess {
+function isExecutionAccess(value: unknown): value is ExecutionAccess {
   return typeof value === "string" && (EXECUTION_ACCESS_VALUES as readonly string[]).includes(value);
 }
 
-export function isExecutionApproval(value: unknown): value is ExecutionApproval {
+function isExecutionApproval(value: unknown): value is ExecutionApproval {
   return typeof value === "string" && (EXECUTION_APPROVAL_VALUES as readonly string[]).includes(value);
 }
 
@@ -146,7 +146,7 @@ export function allPolicyCombinations(
   })));
 }
 
-export type ExecutionPolicyErrorCode =
+type ExecutionPolicyErrorCode =
   | "policy_invalid"
   | "policy_combination_unsupported"
   | "policy_mapping_unsafe"

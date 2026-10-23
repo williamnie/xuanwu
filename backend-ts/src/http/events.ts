@@ -4,7 +4,7 @@ import { createBoundedEventStream } from "./boundedEventStream.ts";
 
 const DEFAULT_HEARTBEAT_MS = 5000;
 
-export type EventRoutesContext = {
+type EventRoutesContext = {
   bus: EventBus;
   heartbeatMs?: number;
   maxBufferBytes?: number;

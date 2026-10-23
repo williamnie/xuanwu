@@ -7,7 +7,7 @@ import type { ImTargetV1 } from "./imChannelContracts.ts";
 import { findImConversationStateByConversationID } from "../db/repositories/imConversationState.ts";
 
 export type ResolvedImNotificationTarget = ImTargetV1 & { external_event_id: number };
-export type ResolveImNotificationTargetInput = {
+type ResolveImNotificationTargetInput = {
   connectorID: string;
   conversationID?: string;
   issueID?: number;

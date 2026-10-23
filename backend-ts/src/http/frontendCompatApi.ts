@@ -157,7 +157,6 @@ function projectReferenceFilter(request: Request): { limit: number; query: strin
 
 function approvalID(request: Request): string { return pathPart(request, 2); }
 function uploadID(request: Request): string { return pathPart(request, 1); }
-function issueID(request: Request): number { return numericPathPart(request, 1, "issue id 不合法"); }
 function notificationID(request: Request): number { return numericPathPart(request, 1, "notification id 不合法"); }
 function numericPathPart(request: Request, index: number, message: string): number {
   const id = Number(pathPart(request, index));
@@ -188,5 +187,3 @@ function notificationFilter(request: Request): { projectID: string; unreadOnly: 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
-
-export type { FrontendCompatContext } from "./frontendCompatHandlers.ts";

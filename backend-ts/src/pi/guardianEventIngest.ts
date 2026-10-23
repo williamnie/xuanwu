@@ -3,13 +3,13 @@ import type { Issue } from "../db/repositories/issues.ts";
 import { createPiGuardianEvent, type PiGuardianEvent } from "../db/repositories/pi/guardianEvents.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
-export type IssueLifecycleEventInput = {
+type IssueLifecycleEventInput = {
   conversationID?: string;
   eventType?: string;
   issue: Issue;
   runGroupID?: string;
 };
-export type PiGuardianEventIngestInput = {
+type PiGuardianEventIngestInput = {
   conversationID?: string; createdAt?: string; error?: string; eventType: string;
   id?: string; idempotencyKey?: string; issueID?: number; normalizedPayload?: unknown;
   projectID?: string; redactionProfile?: string; runGroupID?: string;

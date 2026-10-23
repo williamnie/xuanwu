@@ -23,16 +23,7 @@ import {
   SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_TOKENS
 } from "./supervisorControlContracts.ts";
 
-export {
-  SUPERVISOR_CONTROL_DANGEROUS_TOOL_NAMES,
-  SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES,
-  SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES,
-  SUPERVISOR_CONTROL_READ_ACTION_TYPES,
-  SUPERVISOR_CONTROL_READ_TOOL_NAMES,
-  SUPERVISOR_CONTROL_TOOL_NAMES,
-  SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS,
-  SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_TOKENS
-} from "./supervisorControlContracts.ts";
+export { SUPERVISOR_CONTROL_DANGEROUS_TOOL_NAMES, SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES, SUPERVISOR_CONTROL_READ_TOOL_NAMES, SUPERVISOR_CONTROL_TOOL_NAMES, SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS, SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_TOKENS } from "./supervisorControlContracts.ts";
 
 type SupervisorControlToolName = typeof SUPERVISOR_CONTROL_TOOL_NAMES[number];
 type ToolExecutor<TParams extends TSchema> = (params: Static<TParams>) => Promise<unknown> | unknown;
@@ -722,7 +713,6 @@ function limit(value: unknown): number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? Math.min(value, 20) : 10;
 }
 
-
 function boundedText(value: unknown, max: number): string {
   const text = cleanString(value);
   return text.length <= max ? text : `${text.slice(0, Math.max(0, max - 1))}…`;
@@ -751,10 +741,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function numberValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function booleanValue(value: unknown): boolean {
-  return value === true || value === 1;
 }
 
 function cleanString(value: unknown): string {

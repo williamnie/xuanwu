@@ -212,7 +212,7 @@ function codexStatus(config: RunnerConfig): Record<string, unknown> {
   };
 }
 
-export type ProviderStatus = {
+type ProviderStatus = {
   available: boolean;
   capabilities: string[];
   cli: Record<string, unknown>;

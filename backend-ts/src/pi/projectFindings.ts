@@ -4,7 +4,7 @@ import { matchFailurePattern } from "./failurePatterns.ts";
 
 export type ProjectFindingCategory = "blocked" | "needs_user";
 
-export type ProjectFindingNotification = {
+type ProjectFindingNotification = {
   message: string;
   type: "pi.issue_ready_for_acceptance" | "pi.needs_user" | "pi.project_blocked";
 };
@@ -22,7 +22,7 @@ export type ProjectFinding = {
   updated_at: string;
 };
 
-export type ProjectFindingScanOptions = { limit?: number; now?: Date; staleAfterMs?: number };
+type ProjectFindingScanOptions = { limit?: number; now?: Date; staleAfterMs?: number };
 
 type IssueFindingRow = { codex_thread_id: unknown; error: unknown; id: unknown;
   project_id: unknown; status: unknown; title: unknown; updated_at: unknown };
@@ -31,7 +31,6 @@ type StaleIssueRow = IssueFindingRow & {
 };
 type HoldFindingRow = { hold_since: unknown; last_check_error: unknown; message: unknown;
   project_id: unknown; reason: unknown; updated_at: unknown };
-type IssueFindingContext = { now: Date };
 
 const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
 const PROJECT_HOLD_ISSUE_ID = 0;

@@ -50,7 +50,7 @@ type CodexIssueAdapter = {
   resolveApproval?(requestId: string, decision: ApprovalDecision): Promise<unknown>;
 };
 export type CodexEventHandler = (event: ProviderEvent) => void;
-export type CodexEventSource = { subscribe(handler: CodexEventHandler): () => void };
+type CodexEventSource = { subscribe(handler: CodexEventHandler): () => void };
 export type CodexAppEventSink = (event: AppEvent) => void;
 type CodexRuntimeControl = {
   acquire(owner: string): CodexProcessLease;
@@ -351,7 +351,7 @@ export function createCodexExecutorProvider(
   return new CodexExecutorProvider(new CodexAdapter(transport), DEFAULT_DEVELOPER_INSTRUCTIONS, events, transport, options.generateTitle, effectiveCodexHome(config));
 }
 
-export function codexProviderAppEvent(event: ProviderEvent): AppEvent {
+function codexProviderAppEvent(event: ProviderEvent): AppEvent {
   const rawPayload = payloadText(event.raw?.payload);
   return compactAppEvent({
     type: "codex.event",
@@ -370,7 +370,6 @@ export function codexProviderAppEvent(event: ProviderEvent): AppEvent {
     error: event.error
   });
 }
-
 
 function isApprovalProviderEvent(event: ProviderEvent): boolean {
   return event.raw?.method === "approval/requested" ||

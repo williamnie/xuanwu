@@ -40,7 +40,7 @@ export type FeishuConnectorOverrides = {
   feishuVerificationToken?: string;
 };
 
-export type FeishuEnvInput = {
+type FeishuEnvInput = {
   FEISHU_ALLOWED_CHAT_IDS?: string;
   FEISHU_ALLOWED_USER_IDS?: string;
   FEISHU_APP_ID?: string;

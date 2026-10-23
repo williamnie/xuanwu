@@ -6,7 +6,7 @@ import type {
   SessionRef
 } from "../types.ts";
 
-export type ProviderSessionStartedOptions = {
+type ProviderSessionStartedOptions = {
   metadata?: Record<string, ProviderMetadataValue | null | undefined>;
   method: string;
   status?: string;

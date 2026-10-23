@@ -9,7 +9,7 @@ export type ApprovalPolicyCacheSnapshot = {
   unavailable_reason?: string;
 };
 
-export const APPROVAL_SMALL_FILE_CHANGE_MAX_PATHS = 10;
+const APPROVAL_SMALL_FILE_CHANGE_MAX_PATHS = 10;
 
 const DEFAULT_APPROVAL_POLICY_CACHE: ApprovalPolicyCacheSnapshot = {
   available: true,

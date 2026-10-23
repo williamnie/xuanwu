@@ -17,7 +17,7 @@ import {
 } from "./notificationPreferenceResolver.ts";
 import { quietHoursResumeAt } from "../schedule/cronSchedule.ts";
 
-export type LifecycleIntentDecision = "aggregate" | "send_now" | "suppress";
+type LifecycleIntentDecision = "aggregate" | "send_now" | "suppress";
 export type LifecycleIntentResult = {
   decision: LifecycleIntentDecision;
   intent: PiNotificationIntent;
@@ -64,26 +64,6 @@ function autonomousFailureRecoveryPending(db: RunnerDatabase, issue: Issue): boo
   return issue.status === "failed" && getProjectPiSettings(db, issue.project_id) !== null;
 }
 
-export function markLifecycleIntentSent(
-  db: RunnerDatabase,
-  intent: PiNotificationIntent,
-  sentOutboxID: number
-): PiNotificationIntent {
-  return markNotificationIntentSent(db, intent, sentOutboxID);
-}
-
-export function markNotificationIntentSent(
-  db: RunnerDatabase,
-  intent: PiNotificationIntent,
-  sentOutboxID: number
-): PiNotificationIntent {
-  return updatePiNotificationIntent(db, intent.id, {
-    sent_at: new Date().toISOString(),
-    sent_outbox_id: sentOutboxID,
-    state: "sent"
-  });
-}
-
 export function markNotificationIntentRetry(
   db: RunnerDatabase,
   intent: PiNotificationIntent,
@@ -109,7 +89,7 @@ export function suppressLifecycleIntent(
   });
 }
 
-export type LifecycleTarget = { connectorID: string; chatID: string; messageID: string; threadID: string };
+type LifecycleTarget = { connectorID: string; chatID: string; messageID: string; threadID: string };
 
 function latestRunGroupItemForIssue(db: RunnerDatabase, issueID: number): PiRunGroupItem | null {
   const row = db.sqlite.query<{ run_group_id: string }, [number]>(

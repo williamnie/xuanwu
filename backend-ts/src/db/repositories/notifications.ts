@@ -12,7 +12,7 @@ export type NotificationRecord = {
   title: string;
 };
 
-export type NotificationWrite = {
+type NotificationWrite = {
   event: string;
   issueID?: number;
   message: string;
@@ -21,7 +21,7 @@ export type NotificationWrite = {
   title: string;
 };
 
-export type NotificationListFilter = {
+type NotificationListFilter = {
   projectID?: string;
   unreadOnly?: boolean;
 };

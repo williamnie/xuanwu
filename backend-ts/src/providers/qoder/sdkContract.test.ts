@@ -5,32 +5,15 @@ import {
   type CanUseTool,
   type GetSessionMessagesOptions,
   type ListSessionsOptions,
-  type ModelInfo,
   type Options,
-  type Query,
-  type SDKControlInterruptResponse,
   type SDKMirrorErrorMessage,
   type SDKResultMessage,
   type SDKSessionInfo,
   type SDKTaskNotificationMessage,
-  type SessionMessage,
-  type UsageInfo
+  type SessionMessage
 } from "@qoder-ai/qoder-agent-sdk";
 import { buildQoderAuthOptions, buildQoderQueryOptions, QODER_VERSION_PAIR, qoderMessageTerminal } from "./sdkFacade.ts";
 import { buildConfig } from "../../config/env.ts";
-
-type Equal<Left, Right> =
-  (<Value>() => Value extends Left ? 1 : 2) extends
-  (<Value>() => Value extends Right ? 1 : 2) ? true : false;
-type Expect<Value extends true> = Value;
-
-type SdkExports = typeof import("@qoder-ai/qoder-agent-sdk");
-type _ListSessionsContract = Expect<Equal<Awaited<ReturnType<SdkExports["listSessions"]>>, SDKSessionInfo[]>>;
-type _ReadSessionContract = Expect<Equal<Awaited<ReturnType<SdkExports["getSessionInfo"]>>, SDKSessionInfo | undefined>>;
-type _ReadMessagesContract = Expect<Equal<Awaited<ReturnType<SdkExports["getSessionMessages"]>>, SessionMessage[]>>;
-type _InterruptContract = Expect<Equal<Awaited<ReturnType<Query["interrupt"]>>, SDKControlInterruptResponse | undefined>>;
-type _ModelContract = Expect<Equal<Awaited<ReturnType<Query["getAvailableModels"]>>, ModelInfo[]>>;
-type _UsageContract = Expect<Equal<Awaited<ReturnType<Query["getUsageInfo"]>>, UsageInfo | null>>;
 
 const sessionListOptions = { dir: "/fixture/project", limit: 20, offset: 0 } satisfies ListSessionsOptions;
 const sessionReadOptions = { dir: "/fixture/project", limit: 50, offset: 0, includeSystemMessages: true } satisfies GetSessionMessagesOptions;

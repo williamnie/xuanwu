@@ -24,7 +24,6 @@ import {
 import {
   RUN_STATUSES,
   type RunID,
-  type RunStatus,
   type RunTransitionAudit,
   type WorkID
 } from "../domain/run/contracts.ts";

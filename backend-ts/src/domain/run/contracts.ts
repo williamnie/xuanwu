@@ -15,13 +15,13 @@ export { RUN_STATUSES, type RunID, type RunStatus, type WorkID };
 // P00.04 remains the single source for the shared Run vocabulary and edge table.
 export const RUN_STATE_TRANSITIONS = STATE_TRANSITIONS.run;
 
-export const RUN_TERMINAL_STATUSES = ["succeeded", "failed", "cancelled"] as const;
-export type RunTerminalStatus = typeof RUN_TERMINAL_STATUSES[number];
+const RUN_TERMINAL_STATUSES = ["succeeded", "failed", "cancelled"] as const;
+type RunTerminalStatus = typeof RUN_TERMINAL_STATUSES[number];
 
 export const ATTEMPT_STATUSES = ["created", "running", "succeeded", "failed", "cancelled", "interrupted"] as const;
 export type AttemptStatus = typeof ATTEMPT_STATUSES[number];
 
-export const ATTEMPT_TERMINAL_STATUSES = ["succeeded", "failed", "cancelled", "interrupted"] as const;
+const ATTEMPT_TERMINAL_STATUSES = ["succeeded", "failed", "cancelled", "interrupted"] as const;
 export type AttemptTerminalStatus = typeof ATTEMPT_TERMINAL_STATUSES[number];
 
 export const ATTEMPT_STATE_TRANSITIONS = {
@@ -50,7 +50,7 @@ export type CostUsage = {
   total_tokens: number | null;
 };
 
-export type MonetaryCost = {
+type MonetaryCost = {
   amount_micros: number | null;
   basis: "unavailable" | "provider_reported" | "pricing_derived";
   currency: string;
@@ -72,7 +72,7 @@ export type ProviderAttemptRef = {
   turn_ref?: string;
 };
 
-export type TerminalRecord = {
+type TerminalRecord = {
   reason: string;
   source_ref: string;
 };
@@ -119,7 +119,7 @@ export type RunLifecycleSnapshot = {
   run: RunLedgerEntry;
 };
 
-export type RunTransitionGate = {
+type RunTransitionGate = {
   authority: "deterministic_policy" | "human_approval";
   decision: "allow" | "deny" | "ask";
   policy_ref: string;
@@ -134,14 +134,14 @@ export type RunTransitionAudit = {
   reason: string;
 };
 
-export type RunTransitionCommand = {
+type RunTransitionCommand = {
   audit: RunTransitionAudit;
   expected_revision: number;
   run_id: RunID;
   to: RunStatus;
 };
 
-export type AttemptTransitionCommand = {
+type AttemptTransitionCommand = {
   attempt_id: RunAttemptID;
   audit: RunTransitionAudit;
   expected_revision: number;
@@ -149,12 +149,12 @@ export type AttemptTransitionCommand = {
   to: AttemptStatus;
 };
 
-export type LifecycleTransitionDecision = {
+type LifecycleTransitionDecision = {
   allowed: boolean;
   violations: string[];
 };
 
-export type LegacyProviderRuntimeRef = {
+type LegacyProviderRuntimeRef = {
   provider: string;
   provider_run_id: string;
   provider_session_id?: string;
@@ -363,15 +363,15 @@ export function evaluateAttemptTransition(
   return decision(violations);
 }
 
-export function canAttemptTransition(from: AttemptStatus, to: AttemptStatus): boolean {
+function canAttemptTransition(from: AttemptStatus, to: AttemptStatus): boolean {
   return ATTEMPT_STATE_TRANSITIONS[from].includes(to as never);
 }
 
-export function isRunTerminal(status: RunStatus): status is RunTerminalStatus {
+function isRunTerminal(status: RunStatus): status is RunTerminalStatus {
   return RUN_TERMINAL_STATUSES.includes(status as RunTerminalStatus);
 }
 
-export function isAttemptTerminal(status: AttemptStatus): status is AttemptTerminalStatus {
+function isAttemptTerminal(status: AttemptStatus): status is AttemptTerminalStatus {
   return ATTEMPT_TERMINAL_STATUSES.includes(status as AttemptTerminalStatus);
 }
 

@@ -7,7 +7,7 @@ import { readRunRevision } from "../domain/run/service.ts";
 import type { RunID } from "../domain/run/contracts.ts";
 import { getIssueAsWork, workIDToIssueID } from "../domain/work/issueAdapter.ts";
 
-export type PiActionFreshness =
+type PiActionFreshness =
   | { fresh: true }
   | { fresh: false; reason: string; supersededBy?: string };
 

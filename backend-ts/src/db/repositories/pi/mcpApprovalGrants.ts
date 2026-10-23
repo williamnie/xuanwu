@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../../database.ts";
 import { cleanString, now, requiredString } from "./common.ts";
 
-export type PiMcpApprovalGrant = {
+type PiMcpApprovalGrant = {
   capability_fingerprint: string;
   capability_id: string;
   created_at: string;

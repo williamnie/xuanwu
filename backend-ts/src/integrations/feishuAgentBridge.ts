@@ -23,7 +23,7 @@ import { deliverImOutboundNow } from "./imOutboundDelivery.ts";
 import { notificationPresentation } from "../notifications/notificationPresentation.ts";
 
 export type FeishuConversationRunner = (input: FeishuRunnerInput) => Promise<FeishuRunnerResult>;
-export type FeishuRunnerInput = {
+type FeishuRunnerInput = {
   conversationId: string;
   event: FeishuNormalizedMessageEvent;
   prompt: string;
@@ -32,7 +32,7 @@ export type FeishuRunnerInput = {
   targetProjectSource?: string;
   targetIssueId?: number;
 };
-export type FeishuRunnerResult = {
+type FeishuRunnerResult = {
   conversationId?: string;
   projectId?: string;
   targetProjectId?: string;
@@ -46,7 +46,7 @@ type FeishuAgentBridgeOptions = {
   runConversation?: FeishuConversationRunner;
   sender?: FeishuMessageClient;
 };
-export type FeishuBridgeHandleInput = { event: FeishuNormalizedMessageEvent; ingest: FeishuIngestResult };
+type FeishuBridgeHandleInput = { event: FeishuNormalizedMessageEvent; ingest: FeishuIngestResult };
 export type FeishuBridgeHandleResult = { reason: string; replied: boolean };
 
 const REPLY_LINK_TYPE = "feishu_agent_reply", REPLY_RELATIONSHIP = "agent_reply";

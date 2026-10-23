@@ -18,7 +18,7 @@ import type { Router } from "./router.ts";
 const execFileAsync = promisify(execFile);
 const CHECK_TTL_MS = 5 * 60 * 1000;
 
-export type ReleaseUpdateContext = {
+type ReleaseUpdateContext = {
   checkUpdate?: () => Promise<ReleaseUpdateCheck>;
   jobID?: () => string;
   now?: () => Date;
@@ -51,7 +51,7 @@ export function registerReleaseUpdateRoutes(router: Router, input: ReleaseUpdate
   });
 }
 
-export class ReleaseUpdateController {
+class ReleaseUpdateController {
   private readonly context: Required<Pick<ReleaseUpdateContext, "jobID" | "now">> & ReleaseUpdateContext;
   private cachedCheck: ReleaseUpdateCheck | null = null;
   private checkedAt = "";

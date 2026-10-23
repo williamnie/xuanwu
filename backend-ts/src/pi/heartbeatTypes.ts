@@ -5,7 +5,7 @@ import type { PiGatePolicy } from "./actionGate.ts";
 import type { PiMemoryContextItem } from "./memoryContext.ts";
 import type { ProjectStatusSnapshot } from "./projectSnapshot.ts";
 
-export type HeartbeatKind = "project" | "delegation" | "session_watchdog" | "cron" | "provider_health" | "daily_summary";
+type HeartbeatKind = "project" | "delegation" | "session_watchdog" | "cron" | "provider_health" | "daily_summary";
 export type HeartbeatActionCandidate = PiActionEnvelope;
 export type HeartbeatIssueRunSignal = {
   attempt: number;

@@ -2,13 +2,13 @@ import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 
-export const CLAUDE_ENVIRONMENT_AUTH_KEYS = [
+const CLAUDE_ENVIRONMENT_AUTH_KEYS = [
   "ANTHROPIC_API_KEY",
   "ANTHROPIC_AUTH_TOKEN",
   "CLAUDE_CODE_OAUTH_TOKEN"
 ] as const;
 
-export type ClaudeAuthenticationStatus = {
+type ClaudeAuthenticationStatus = {
   configured: boolean;
   mode: "environment" | "local-cli" | "platform-profile";
   source: "api_key" | "auth_token" | "claude_oauth_token" | "local_cli" | "none" | "platform_profile";

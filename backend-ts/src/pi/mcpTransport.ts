@@ -2,7 +2,7 @@ import { runStdioProcess, type StdioProcessResult } from "../mcp/stdioProcess.ts
 import type { McpCapability, McpServerRegistry } from "../mcp/registry.ts";
 import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
 
-export const MCP_TRANSPORT_ERROR_CODES = {
+const MCP_TRANSPORT_ERROR_CODES = {
   schemaMismatch: "mcp_schema_mismatch",
   serverUnavailable: "mcp_server_unavailable",
   spawnError: "mcp_spawn_error",
@@ -10,7 +10,7 @@ export const MCP_TRANSPORT_ERROR_CODES = {
   toolError: "mcp_tool_error"
 } as const;
 
-export type McpTransportOperation = "resource.read" | "tool.call";
+type McpTransportOperation = "resource.read" | "tool.call";
 export type McpTransportInvokeRequest = {
   beforeStart?: () => boolean;
   capability: McpCapability;

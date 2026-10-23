@@ -1,41 +1,26 @@
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../database.ts";
 import {
-  createAutomation,
   getAutomation,
-  getAutomationTrigger,
-  recordAutomationEvent,
-  reviseAutomationTrigger,
-  updateAutomationDefinition
+  getAutomationTrigger
 } from "./automations.ts";
 import {
   automationIntervalMs
 } from "./piAutomationScheduleState.ts";
 import { getPiAutomation, type PiAutomationRecord } from "./piAutomations.ts";
 import type {
-  AutomationAudit,
   AutomationDefinition,
   AutomationID,
   AutomationTriggerConfig
 } from "../../domain/automation/contracts.ts";
 
-export const PI_AUTOMATION_SHADOW_WORKFLOW_REF = "workflow:legacy-pi-shadow@1";
-export const PI_AUTOMATION_SHADOW_EVENT = "automation.legacy_pi_shadow_mapped.v1";
-
-export type PiAutomationShadowDisposition = "created" | "refreshed" | "unchanged";
-export type PiAutomationShadowDrift = {
+const PI_AUTOMATION_SHADOW_WORKFLOW_REF = "workflow:legacy-pi-shadow@1";
+const PI_AUTOMATION_SHADOW_EVENT = "automation.legacy_pi_shadow_mapped.v1";
+type PiAutomationShadowDrift = {
   axis: "definition" | "provenance" | "trigger";
   automation_id: AutomationID;
   detail: string;
   legacy_id?: number;
-};
-export type PiAutomationShadowBackfillResult = {
-  created: number;
-  drift: PiAutomationShadowDrift[];
-  parity_checksum: string;
-  refreshed: number;
-  scanned: number;
-  unchanged: number;
 };
 
 type ShadowProjection = {
@@ -62,12 +47,12 @@ type ShadowPayload = {
   target_checksum: string;
 };
 
-export function piAutomationShadowID(id: number): AutomationID {
+function piAutomationShadowID(id: number): AutomationID {
   if (!Number.isSafeInteger(id) || id < 1) throw new Error("legacy pi automation id is invalid");
   return `automation:legacy-pi-${id}`;
 }
 
-export function mapPiAutomationShadow(legacy: PiAutomationRecord): {
+function mapPiAutomationShadow(legacy: PiAutomationRecord): {
   payload: ShadowPayload;
   projection: ShadowProjection;
 } {
@@ -97,45 +82,6 @@ export function mapPiAutomationShadow(legacy: PiAutomationRecord): {
     },
     projection
   };
-}
-
-export function upsertPiAutomationShadow(
-  db: RunnerDatabase,
-  legacy: PiAutomationRecord,
-  audit: AutomationAudit
-): PiAutomationShadowDisposition {
-  assertAllowedAudit(audit);
-  const desired = mapPiAutomationShadow(legacy);
-  const current = getAutomation(db, desired.projection.definition.id);
-  const provenance = latestProvenance(db, desired.projection.definition.id);
-  if (!current) {
-    if (provenance) throw new Error("automation shadow provenance exists without its definition");
-    const write = db.transaction(() => {
-      createAutomation(db, {
-        ...desired.projection.definition,
-        trigger: desired.projection.trigger,
-        trigger_created_by: audit.actor_id
-      }, audit.occurred_at, derivedAudit(audit, legacy.id, "created"));
-      recordProvenance(db, desired, derivedAudit(audit, legacy.id, "mapped"));
-    });
-    write.immediate();
-    return "created";
-  }
-  if (!provenance) throw new Error("automation shadow definition has no migration provenance");
-  assertStoredProjection(db, desired.projection.definition.id, provenance);
-  if (provenance.source_checksum === desired.payload.source_checksum) {
-    if (provenance.target_checksum !== desired.payload.target_checksum) {
-      throw new Error("automation shadow mapping changed without a mapping version change");
-    }
-    return "unchanged";
-  }
-  const write = db.transaction(() => {
-    refreshDefinition(db, current, desired.projection, derivedAudit(audit, legacy.id, "definition"));
-    refreshTrigger(db, desired.projection, derivedAudit(audit, legacy.id, "trigger"));
-    recordProvenance(db, desired, derivedAudit(audit, legacy.id, "mapped"));
-  });
-  write.immediate();
-  return "refreshed";
 }
 
 export function comparePiAutomationShadows(db: RunnerDatabase): {
@@ -184,83 +130,11 @@ export function comparePiAutomationShadows(db: RunnerDatabase): {
   };
 }
 
-export function backfillPiAutomationShadows(
-  db: RunnerDatabase,
-  options: { apply: boolean; audit: AutomationAudit }
-): PiAutomationShadowBackfillResult {
-  assertAllowedAudit(options.audit);
-  const legacy = allPiAutomations(db);
-  const counts = { created: 0, refreshed: 0, unchanged: 0 };
-  if (options.apply) {
-    const write = db.transaction(() => {
-      for (const item of legacy) counts[upsertPiAutomationShadow(db, item, options.audit)] += 1;
-      const parity = comparePiAutomationShadows(db);
-      if (parity.drift.length > 0) throw new Error(`automation shadow parity drift: ${stableJson(parity.drift)}`);
-    });
-    write.immediate();
-  } else {
-    for (const item of legacy) {
-      const desired = mapPiAutomationShadow(item);
-      const current = getAutomation(db, desired.projection.definition.id);
-      if (!current) counts.created += 1;
-      else {
-        const provenance = latestProvenance(db, desired.projection.definition.id);
-        if (provenance?.source_checksum === desired.payload.source_checksum) counts.unchanged += 1;
-        else counts.refreshed += 1;
-      }
-    }
-  }
-  const parity = comparePiAutomationShadows(db);
-  return {
-    ...counts,
-    drift: parity.drift,
-    parity_checksum: parity.checksum,
-    scanned: legacy.length
-  };
-}
-
-function refreshDefinition(
-  db: RunnerDatabase,
-  current: AutomationDefinition,
-  projection: ShadowProjection,
-  audit: AutomationAudit
-): void {
-  if (current.status !== "draft") throw new Error("W1 shadow definition must remain draft");
-  const patch = projection.definition;
-  const changed = current.name !== patch.name || current.mode !== patch.mode ||
-    current.workflow_ref !== patch.workflow_ref || current.permission_policy_ref !== patch.permission_policy_ref ||
-    current.next_run_at !== null;
-  if (!changed) return;
-  updateAutomationDefinition(db, current.id, {
-    mode: patch.mode,
-    name: patch.name,
-    next_run_at: null,
-    permission_policy_ref: patch.permission_policy_ref,
-    workflow_ref: patch.workflow_ref
-  }, current.revision, audit);
-}
-
 function allPiAutomations(db: RunnerDatabase): PiAutomationRecord[] {
   return db.sqlite.query<{ id: number }, []>("select id from pi_automations order by id")
     .all()
     .map((row) => getPiAutomation(db, row.id))
     .filter((item): item is PiAutomationRecord => item !== null);
-}
-
-function refreshTrigger(db: RunnerDatabase, projection: ShadowProjection, audit: AutomationAudit): void {
-  const current = getAutomation(db, projection.definition.id);
-  const trigger = getAutomationTrigger(db, projection.definition.id);
-  if (!current || !trigger) throw new Error("automation shadow trigger is unavailable");
-  if (stableJson({ type: trigger.type, config: trigger.config }) === stableJson(projection.trigger)) return;
-  reviseAutomationTrigger(db, current.id, projection.trigger, audit, null, current.revision);
-}
-
-function recordProvenance(
-  db: RunnerDatabase,
-  desired: ReturnType<typeof mapPiAutomationShadow>,
-  audit: AutomationAudit
-): void {
-  recordAutomationEvent(db, desired.projection.definition.id, PI_AUTOMATION_SHADOW_EVENT, audit, desired.payload);
 }
 
 function latestProvenance(db: RunnerDatabase, id: AutomationID): ShadowPayload | null {
@@ -273,13 +147,6 @@ function latestProvenance(db: RunnerDatabase, id: AutomationID): ShadowPayload |
     throw new Error("automation shadow provenance payload is invalid");
   }
   return payload as ShadowPayload;
-}
-
-function assertStoredProjection(db: RunnerDatabase, id: AutomationID, provenance: ShadowPayload): void {
-  const actual = actualProjection(db, id);
-  if (!actual || checksum(actual) !== provenance.target_checksum) {
-    throw new Error("automation shadow target drifted from its last provenance event");
-  }
 }
 
 function actualProjection(db: RunnerDatabase, id: AutomationID): ShadowProjection | null {
@@ -364,26 +231,6 @@ function mapMode(mode: PiAutomationRecord["mode"]): AutomationDefinition["mode"]
   if (mode === "dry_run") return "observe";
   if (mode === "auto") return "execute_allowed";
   return "propose";
-}
-
-function derivedAudit(audit: AutomationAudit, legacyID: number, operation: string): AutomationAudit {
-  const suffix = `${legacyID}:${operation}`;
-  return {
-    ...audit,
-    correlation_id: `${audit.correlation_id}:legacy-pi:${legacyID}`,
-    event_id: `${audit.event_id}:${suffix}`,
-    reason: `${audit.reason}; legacy pi automation ${suffix}`
-  };
-}
-
-function assertAllowedAudit(audit: AutomationAudit): void {
-  if (audit.gate.authority !== "deterministic_policy" || audit.gate.decision !== "allow") {
-    throw new Error("W1 automation shadow requires an allowed deterministic policy gate");
-  }
-  if (!audit.actor_id.trim() || audit.actor_id.trim().toLowerCase() === "llm" || !audit.correlation_id.trim() ||
-      !audit.event_id.trim() || !audit.reason.trim() || !audit.gate.policy_ref.trim()) {
-    throw new Error("W1 automation shadow audit identity, non-LLM actor, correlation, reason, and policy are required");
-  }
 }
 
 function checksum(value: unknown): string {

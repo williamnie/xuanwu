@@ -12,14 +12,14 @@ import {
   type PatchInput
 } from "./common.ts";
 
-export type PiReportRecord = {
+type PiReportRecord = {
   id: number; project_id: string; type: string; status: string; source: string;
   since_at: string; until_at: string; delegation_id: string; heartbeat_id: string;
   issue_ids_json: string; summary_json: string; body_json: string;
   generated_at: string; created_at: string; updated_at: string;
 };
-export type PiReportInput = PatchInput<PiReportRecord>;
-export type PiReportFilter = {
+type PiReportInput = PatchInput<PiReportRecord>;
+type PiReportFilter = {
   delegationId?: string; heartbeatId?: string; projectId?: string; source?: string; status?: string; type?: string;
 };
 
