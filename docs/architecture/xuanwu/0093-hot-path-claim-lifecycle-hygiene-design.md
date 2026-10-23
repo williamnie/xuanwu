@@ -5,7 +5,6 @@
 - 目标：消除常驻全量 Issue 读取、SQLite writer transaction 内 Git I/O、Codex lifecycle 同步全进程扫描，以及 Release 未执行 repository hygiene 的风险
 - 相关 canonical 合同：[Issues/Sessions 用户路由退役与 compat v1](0081-issues-sessions-route-retirement.md)、[Issue event 写预算与有界 artifact](0084-issue-event-write-budgets.md)、[事件保留、摘要、归档与删除策略](0007-event-retention-policy.md)、[Restart Recovery Invariants](0069-restart-recovery-invariants.md)
 - 当前实现入口：`frontend/src/{App.jsx,store/dataStore.js,components/AppSidebar.jsx,pages/Issues.jsx,pages/WorkBoard.jsx}`、`frontend/src/api/work.js`、`backend-ts/src/http/{workApi.ts,readApiRoutes.ts,readApiDomain.ts}`、`backend-ts/src/db/repositories/{issues.ts,issueQueue.ts,issueRuns.ts}`、`backend-ts/src/domain/evidence/runGitWorkspaceBaseline.ts`、`backend-ts/src/providers/codex/{jsonRpc.ts,processLifecycle.ts}`、`scripts/repository-hygiene-audit.mjs`、`.github/workflows/{ci.yml,release.yml}`
-- 独立 review：[`0093-hot-path-claim-lifecycle-hygiene-design-review.md`](0093-hot-path-claim-lifecycle-hygiene-design-review.md)
 - 本文性质：可 review 的详细技术设计；不授权删除 live 数据、修改 schema、部署、发布或将状态改为 Accepted
 
 ## 0. 文档版本记录

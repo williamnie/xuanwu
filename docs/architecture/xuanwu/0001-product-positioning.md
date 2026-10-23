@@ -100,9 +100,6 @@ flowchart LR
 
 相关现状和工程边界见：
 
-- [PI Agent 独立架构计划](../pi-agent-architecture-plan.md)
-- [PI Assistant Runtime Roadmap](../2026-07-06-pi-assistant-runtime-roadmap.md)
-- [Loop L3 架构快照](../2026-06-30-loop-l3-architecture-snapshot.md)
 - [Agent Execution Contract](../../agent-execution-contract.md)
 
 这些文档仍可解释当前实现或保留历史设计证据；若它们在产品定位、核心用户或非目标上与本 ADR 冲突，以本 ADR 为准。

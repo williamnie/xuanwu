@@ -4,7 +4,7 @@
 - 日期：2026-08-04
 - 目标版本：Provider Core v2
 - 依赖：[ADR-XW-0004](0004-core-domain-objects.md)、[ADR-XW-0020](0020-run-attempt-lifecycle-contract.md)、[ADR-XW-0022](0022-provider-run-event-contract.md)、[ADR-XW-0023](0023-run-lifecycle-command-service.md)、[ADR-XW-0049](0049-workflow-manifest-registry.md)、[ADR-XW-0059](0059-provider-presets-connections.md)、[ADR-XW-0063](0063-approval-action-gate.md)、[ADR-XW-0069](0069-restart-recovery-invariants.md)、[ADR-XW-0070](0070-db-migration-rehearsal-gate.md)、[ADR-XW-0073](0073-secret-lifecycle-redaction.md)
-- 独立评审：[0089 Provider Core 重构方案 Review](0089-provider-core-multi-code-agent-refactor-review.md)；2026-08-04 的意见已纳入本文
+- 独立评审：2026-08-04 的意见已纳入本文
 - 当前实现入口：`backend-ts/src/providers/types.ts`、`backend-ts/src/runtime/core.ts`、`backend-ts/src/runner/providerRuntime.ts`、`backend-ts/src/http/sessionApi.ts`
 - 决策范围：Executor Provider 注册、能力协商、Run/Session 引用、事件归一化、配置与认证、HTTP/UI 投影、兼容迁移、适配器验收
 - 本文性质：实施计划与目标合同；在对应工作包完成并通过门禁前，不改变现有运行时 authority

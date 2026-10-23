@@ -1,7 +1,6 @@
 # ADR-XW-0089：Provider Core 多 Coding Agent 重构 — 架构设计（落地版 v2）
 
 - 关联计划：[0089 Provider Core 多 Coding Agent 重构计划](0089-provider-core-multi-code-agent-refactor-plan.md)
-- 关联评审：[0089 Provider Core 重构方案 Review](0089-provider-core-multi-code-agent-refactor-review.md)（计划评审）、[0089 架构设计 Review](0089-provider-core-multi-code-agent-refactor-design-review.md)（设计评审）
 - 版本说明：v2 按设计 Review 的 11 条意见（3 高 + 6 中 + 2 轻）修订：补两阶段执行合同、policy effect-set 模型、ProcessProviderFacet、Registry 两级生命周期、事件归一化职责边界、恢复计划原始 DAG、Session composite cursor、raw_ref versioned envelope 等；并修正 v1 中 "deno lint" 表述（仓库为 Bun）。
 - 设计来源：architect 只读架构设计（2026-08-04）+ 设计 Review 意见，主代理整合修订；关键引用已抽查复核
 - 状态：设计稿 v2，待 §10 的 blocking decisions 定案后再冻结 P1/P2 合同

@@ -548,7 +548,7 @@
   border-bottom-color: var(--border-color);
 }
 
-/* Provider transcript fidelity: mirrors docs/ui-mockups/chat/run-provider-chat.html. */
+/* Provider transcript fidelity. */
 .client-chat-area .turn-container {
   gap: var(--space-5);
 }

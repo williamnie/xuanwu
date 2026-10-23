@@ -6,7 +6,7 @@
 >
 > 范围：先把现有 Feishu IM 运行链收敛为通用 IM 模块，再以 Telegram 作为第一个新增渠道验证抽象；为后续 QQ 等渠道保留明确扩展边界
 >
-> Review 对账：已吸收 [DeepSeek review](./2026-08-02-generic-im-channel-telegram-design-review.md) 中的 sender 单一路径、callback、receipt、迁移与 Telegram 协议建议。批量 cursor 采用 review 修正版的“按序连续前缀提交”，不要求整批单事务。
+> Review 对账：已吸收 DeepSeek review 中的 sender 单一路径、callback、receipt、迁移与 Telegram 协议建议。批量 cursor 采用 review 修正版的“按序连续前缀提交”，不要求整批单事务。
 >
 > 当前 canonical 依赖：
 > [Channel / Connector 统一契约](./xuanwu/0064-channel-connector-contract.md)、

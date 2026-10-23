@@ -8,7 +8,7 @@
 ## 1. 使用规则
 
 1. 当前产品与工程规范只从本索引列出的 canonical 文档进入；`docs/architecture/xuanwu/` 中的编号文档按主题定义当前合同。
-2. `docs/architecture/` 顶层旧设计、评审、roadmap、research、snapshot、draft 和 completed migration plan 均为历史记录。它们保留决策 provenance，但不再授权新实现、schema/route 复制或 destructive migration。
+2. `docs/architecture/` 顶层只保留仍被代码引用的设计文档；已完成的旧设计、评审、roadmap、research、snapshot 与 draft 只保留在 Git 历史中，不再授权新实现、schema/route 复制或 destructive migration。
 3. `.private-notes/**` 是本机私有草稿，永远不是仓库规范或迁移依赖。私有笔记引用旧 PI/OpenClaw 路线或已完成 issue 时，必须回到本索引和当前代码复核。
 4. 路线依赖、阶段门禁与 destructive precondition 的 machine-readable authority 是 [`xuanwu-migration/plan.json`](xuanwu-migration/plan.json)；说明见 [`xuanwu-migration/README.md`](xuanwu-migration/README.md)。
 5. 文档描述合同，当前执行事实仍须以 live runtime、当前代码、迁移与审计 Evidence 复核；发现漂移时更新 canonical 文档，不得让历史记录重新成为第二 source of truth。
@@ -148,27 +148,15 @@
 - [ADR-XW-0092：IM 上下文预算、增量投影与 PI Session 换代（Accepted v8，Phase 0–3 已部署并完成 live acceptance）](xuanwu/0092-im-context-budget-and-session-rollover.md)
 - [ADR-XW-0095：Supervisor 通知表达层与自然语言边界](xuanwu/0095-notification-presentation-profile.md)
 
-## 3. 历史归档与 superseded 映射
+## 3. 历史归档
 
-这些文件保留原路径，避免破坏旧 issue、commit 和审计记录中的引用；其页首 banner 与下表指向替代规范。
+ADR-XW-0001 的“本地优先、验证优先”产品类别表述已被 [常驻无人值守的 AI 工程控制面定位](xuanwu/0088-always-on-product-positioning.md) supersede。
 
-| 历史记录 | 当前规范 |
-| --- | --- |
-| [ADR-XW-0001 的“本地优先、验证优先”产品类别表述](xuanwu/0001-product-positioning.md) | [常驻无人值守的 AI 工程控制面定位](xuanwu/0088-always-on-product-positioning.md) |
-| [PI Guardian 完整技术设计](2026-06-17-pi-guardian-notification-supervisor-design.md) 与 [v1](2026-06-17-pi-guardian-design-review.md) / [v2](2026-06-17-pi-guardian-design-review-v2.md) 评审 | [Automation 语义](xuanwu/0060-automation-semantics.md)、[Approval / Action Gate](xuanwu/0063-approval-action-gate.md)、[通知 Outbox](xuanwu/0075-unified-notification-outbox.md)、[决策层收敛](xuanwu/0079-pi-decision-layer-consolidation.md) |
-| [PI Guardian 通知路由边界](2026-06-23-pi-guardian-notification-routing.md) | [统一通知 Outbox](xuanwu/0075-unified-notification-outbox.md)、[Feishu Connector 迁移](xuanwu/0077-feishu-channel-connector-migration.md) |
-| [provider worker outage 回归说明](2026-06-23-pi-provider-worker-outage-regression.md) | [Run 生命周期](xuanwu/0020-run-attempt-lifecycle-contract.md)、[provider event contract](xuanwu/0022-provider-run-event-contract.md)、[重启恢复不变量](xuanwu/0069-restart-recovery-invariants.md) |
-| [Loop L3 架构快照](2026-06-30-loop-l3-architecture-snapshot.md)、[`loop_run` ledger v0 草案](2026-06-30-loop-run-ledger-v0.md) | [核心对象](xuanwu/0004-core-domain-objects.md)、[Run lifecycle](xuanwu/0020-run-attempt-lifecycle-contract.md)、[运行可观测性](xuanwu/0078-runtime-observability-diagnostics.md) |
-| [PI Assistant Runtime Roadmap](2026-07-06-pi-assistant-runtime-roadmap.md)、[PI Agent 独立架构计划](pi-agent-architecture-plan.md) | [产品定位](xuanwu/0001-product-positioning.md)、[Supervisor 角色合同](xuanwu/0044-supervisor-role-prompt-contract.md)、[产品导航](xuanwu/0050-product-navigation-compatibility.md) |
-| [PI Agent Issue Supervisor Recovery 设计](pi-agent-issue-supervisor-recovery-design.md) | [Run lifecycle](xuanwu/0020-run-attempt-lifecycle-contract.md)、[Run command service](xuanwu/0023-run-lifecycle-command-service.md)、[重启恢复不变量](xuanwu/0069-restart-recovery-invariants.md) |
-| [PI CLI Connector Manifest v0](2026-07-07-pi-cli-connector-manifest-v0.md) | [Channel / Connector contract](xuanwu/0064-channel-connector-contract.md)、[CLI / Webhook adapter](xuanwu/0065-cli-webhook-channel-adapter.md)、[Connector diagnostics](xuanwu/0076-connector-health-secrets-diagnostics.md) |
-| [PI Skill Manifest v0](2026-07-07-pi-skill-manifest-v0.md) | [Workflow Registry](xuanwu/0049-workflow-manifest-registry.md)、[可执行 Skill Runtime](xuanwu/0058-executable-skill-runtime.md)、[生产 fixture 退出](xuanwu/0077-production-fixture-retirement.md) |
-| [OpenConnector 接入调研](2026-07-09-openconnector-inbox-integration-research.md) | [Provider / Connections](xuanwu/0059-provider-presets-connections.md)、[Channel / Connector contract](xuanwu/0064-channel-connector-contract.md)、[Connector diagnostics](xuanwu/0076-connector-health-secrets-diagnostics.md) |
-| [Bun/TypeScript Backend Migration](bun-ts-backend-rewrite-plan.md)、[`docs/design.md`](../design.md) | 根 [README](../../README.md)、[发布/升级/回滚 runbook](../runbooks/release-upgrade-rollback.md)、[运行可观测性](xuanwu/0078-runtime-observability-diagnostics.md) |
+2026-10 起，顶层历史设计、评审、roadmap、research、snapshot 与草案（PI Guardian 设计及评审、Loop L3 快照、`loop_run` ledger 草案、PI Agent 架构计划与恢复设计、CLI/Skill manifest v0、OpenConnector 调研、Bun 后端迁移计划、`docs/design.md` 等）以及各 ADR 的独立评审稿已从工作树删除；它们的替代规范见第 2 节，原文可从提交 `eedd0c70` 及更早的 Git 历史恢复。
 
 ## 4. 兼容、回滚与删除门禁
 
 - 本次仅建立文档 authority：不改 runtime、public schema、route、状态机或 provider adapter，双读=0、双写=0。
-- 历史文件继续原路径只读保留，兼容旧链接；新实现不得从这些文件复制 contract。回滚只需恢复 banner、索引和 README 入口，不涉及数据回填。
-- 物理删除历史文件前，必须证明仓库内和 live 生成配置的 consumer/reference 为 0，保留可恢复 Git/备份 Evidence，通过断链检查，并由独立清理 issue 的非 LLM 审批记录授权。本 issue 不执行物理删除。
+- 历史文件只存在于 Git 历史；新实现不得从这些文件复制 contract。
+- 删除文档前必须证明仓库内 reference 为 0 并通过断链检查；删除以独立提交进入人工评审的 PR，Git 历史即恢复路径。
 - 新 canonical 文档若 supersede 既有文档，必须同时更新本索引、在旧页增加指向新 source of truth 的 banner，并保持旧审计链接可访问。

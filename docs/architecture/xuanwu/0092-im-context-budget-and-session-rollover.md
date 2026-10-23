@@ -4,7 +4,6 @@
 - 日期：2026-08-18
 - 适用范围：Feishu、Telegram 及后续接入统一 `ImChannelModule` 的面向人对话通道
 - 相关 canonical 合同：ADR-XW-0045、0047、0063、0064、0069、0072、0073、0075、0077、0078、0085
-- 独立 review：`0092-im-context-budget-and-session-rollover-design-review.md`
 - 当前实现入口：`imConversationRouting.ts`、`imConversationContext.ts`、`piConversationApi.ts`、`piRuntime.ts`、`piRuntimeTools.ts`
 - 本文性质：优化设计、实施门禁与 live acceptance 记录；本轮修复不新增 schema
 

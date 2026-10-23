@@ -4,7 +4,6 @@
 - 日期：2026-08-13
 - 范围：Codex、Claude、Pi Coding Agent、Qoder 的 Project/Profile/Issue/Session 执行策略解析、Provider 原生映射、运行时审批与兼容迁移
 - 依赖：[ADR-XW-0063 Approval Action Gate](0063-approval-action-gate.md)、[ADR-XW-0089 Provider Core 架构](0089-provider-core-multi-code-agent-refactor-design.md)、[ADR-XW-0090 Qoder 产品集成](0090-qoder-code-agent-product-integration-design.md)
-- Review：[ADR-XW-0091 Review 问题清单](0091-provider-execution-policy-adapter-design-review.md)
 - 事实基线：分支 `codex/qoder-code-agent-integration`，基线 HEAD `bc3d17160a71`。本地实现位于未提交工作区。Qoder SDK 固定为 1.0.20，发布运行时固定携带 Qoder CLI 1.1.18；用户全局安装的 Qoder CLI 1.1.20 不作为该 SDK 的执行配对。
 - 本文定义 Provider Execution Policy 的产品语义、核心合同、适配责任和迁移边界。本文不授权部署、真实 Provider 调用或历史数据破坏性迁移。
 
@@ -1260,4 +1259,4 @@ XUANWU_PROVIDER_POLICY_V1_AUTHORITY=0
 - 本仓库 Claude SDK/CLI mapping：`backend-ts/src/providers/claude/provider.ts`、`backend-ts/src/providers/claude/cliProvider.ts`
 - 本仓库 Pi RPC/Provider：`backend-ts/src/providers/pi/rpcTransport.ts`、`backend-ts/src/providers/pi/provider.ts`
 - 本仓库 Qoder SDK/permission：`backend-ts/src/providers/qoder/sdkFacade.ts`、`backend-ts/src/providers/qoder/permissionBroker.ts`
-- Provider Core effect-set 设计来源：`0089-provider-core-multi-code-agent-refactor-design-review.md`
+- Provider Core effect-set 设计来源：0089 设计评审（见 Git 历史）
