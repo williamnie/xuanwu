@@ -24,7 +24,6 @@ test('sidebar project list fills remaining menu height', () => {
 
 test('collapsed sidebar navigation keeps accessible names when labels are visually hidden', () => {
   assert.match(source, /aria-label=\{navLabel\(item\)\}/);
-  assert.match(source, /productNavigationItems\(\{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
   assert.match(source, /aria-label=\{theme === 'dark' \? t\('sidebar\.lightTheme'\) : t\('sidebar\.darkTheme'\)\}/);
 });
 

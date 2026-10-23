@@ -45,7 +45,7 @@ compat contract 是 `xw.legacy-issues-sessions.compat.v1`。它覆盖到 `v0.3.x
   domain/adapter，不新增双写、双读或 shadow。本 issue 不宣称 Work storage 已切换。
 - **Run：** `issue_runs + run_attempts` 是 lifecycle authority；`agent_sessions` 与 provider transcript 只作
   observation。旧 Session create/message 能力不写 Run lifecycle。
-- **回滚：** 恢复前一 release artifact，或关闭 `VITE_WORK_BOARD_ENABLED` 重新构建前端。DB、event、Issue、Run、
+- **回滚：** 恢复前一 release artifact。DB、event、Issue、Run、
   Session 都无需反向迁移；telemetry 是 append-only audit，可保留。
 - **CLI：** `issue` 子命令在 compat v1 内保持 status、required fields、exit code 与 JSON body 语义；已有
   `work create/status/result/timeline` 可迁移的调用应优先迁移。没有 Work 等价命令的 final-status/retry/cancel

@@ -30,23 +30,19 @@ export function isGlobalAskComposerVisible(page, pageContext = null) {
 export function buildGlobalComposerPageReference(route = {}, works = []) {
   const pageId = clean(route.currentPage) || 'inbox';
   const live = route.pageContext?.page_id === pageId ? route.pageContext : {};
-  const issueId = positiveInteger(route.selectedIssueId);
-  const issueWorkId = issueId ? `xw:work:issues:${issueId}` : '';
-  const workId = clean(live.work_id) || issueWorkId;
+  const workId = clean(live.work_id);
   const work = workItems(works).find(item => item.id === workId);
-  const projectId = clean(live.project_id)
-    || clean(work?.owner?.project_id)
-    || (pageId === 'issues' ? clean(route.filterProject) : '');
+  const projectId = clean(live.project_id) || clean(work?.owner?.project_id);
   const runId = clean(live.run_id) || (pageId === 'runs' ? clean(route.selectedRunId) : '');
   const sessionId = clean(live.session_id) || (pageId === 'runs' ? clean(route.selectedSessionId) : '');
   const handoffId = clean(live.handoff_id)
     || (pageId === 'handoffs' || pageId === 'work' || pageId === 'tasks' ? clean(route.selectedHandoffId) : '');
-  const routeRef = routeReference({ handoffId, issueId, pageId, projectId, runId, sessionId, workId });
+  const routeRef = routeReference({ handoffId, pageId, projectId, runId, sessionId, workId });
 
   return {
     id: routeRef,
     key: `page:${routeRef}`,
-    label: pageContextLabel(pageId, { handoffId, issueId, projectId, runId, sessionId, workId }),
+    label: pageContextLabel(pageId, { handoffId, projectId, runId, sessionId, workId }),
     metadata: {
       page_id: pageId,
       project_id: projectId,
@@ -248,10 +244,9 @@ function referenceKey(reference) {
   return reference.key || `${reference.type || ''}:${reference.id || ''}`;
 }
 
-function routeReference({ handoffId, issueId, pageId, projectId, runId, sessionId, workId }) {
+function routeReference({ handoffId, pageId, projectId, runId, sessionId, workId }) {
   return [
     pageId,
-    issueId ? `issue:${issueId}` : '',
     workId ? `work:${workId}` : '',
     runId ? `run:${runId}` : '',
     sessionId ? `session:${sessionId}` : '',
@@ -264,7 +259,6 @@ function pageContextLabel(pageId, context) {
   const base = PAGE_LABELS[pageId] || pageId;
   if (context.runId) return `${base} · ${compactId(context.runId)}`;
   if (context.workId) return `${base} · ${compactId(context.workId)}`;
-  if (context.issueId) return `${base} · #${context.issueId}`;
   if (context.handoffId) return `${base} · ${compactId(context.handoffId)}`;
   if (context.sessionId) return `${base} · ${compactId(context.sessionId)}`;
   if (context.projectId) return `${base} · @${context.projectId}`;
@@ -279,11 +273,6 @@ function issueIdFromWorkId(value) {
 function compactId(value) {
   const text = clean(value);
   return text.length > 26 ? `${text.slice(0, 12)}…${text.slice(-8)}` : text;
-}
-
-function positiveInteger(value) {
-  const number = Number(value);
-  return Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
 function cleanContextValue(value) {

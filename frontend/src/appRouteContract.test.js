@@ -62,13 +62,11 @@ test('D4 baseline 1: legacy Work, issue conversion and both Handoff deep links r
     assert.equal(appRouteFromHash(appHashForRoute(route)).selectedWorkId, workId);
   }
   for (const hash of ['#/command-center', '#/dashboard', '#/pi-inbox', '#/attention-inbox', '#/pi-approvals']) assertPage(appRouteFromHash(hash), 'inbox');
-  for (const workBoardEnabled of [true, false]) {
-    const route = appRouteFromHash(deliveryPath, { workBoardEnabled });
-    assertPage(route, 'tasks'); // Existing delivery access intentionally bypasses the list feature flag.
-    assert.equal(route.selectedWorkId, workId);
-    assert.equal(route.selectedHandoffId, handoffId);
-    assert.equal(appRouteFromHash(appHashForRoute(route)).selectedHandoffId, handoffId);
-  }
+  const delivery = appRouteFromHash(deliveryPath);
+  assertPage(delivery, 'tasks');
+  assert.equal(delivery.selectedWorkId, workId);
+  assert.equal(delivery.selectedHandoffId, handoffId);
+  assert.equal(appRouteFromHash(appHashForRoute(delivery)).selectedHandoffId, handoffId);
   const standalone = appRouteFromHash(`#/handoffs/${encodeURIComponent(handoffId)}`);
   assertPage(standalone, 'handoffs');
   assert.equal(standalone.selectedHandoffId, handoffId);
@@ -97,7 +95,7 @@ test('D4 baseline 2: Run wins over session and unresolved or standalone executio
   assert.match(source, /runDetail \? \([\s\S]*<RunDetail[\s\S]*run-provider-empty/);
 });
 
-test('D4 baseline 3: conversation, project/source/scope and flag-off issue filters survive round trips', () => {
+test('D4 baseline 3: conversation and project/source/scope filters survive round trips', () => {
   const conversation = appRouteFromHash('#/pi-chat?conversationId=chat%2F42');
   assertPage(conversation, 'ask-xuanwu');
   assert.equal(conversation.selectedPiConversationId, 'chat/42');
@@ -109,14 +107,6 @@ test('D4 baseline 3: conversation, project/source/scope and flag-off issue filte
     assert.equal(route.taskSource, source);
     assert.equal(route.taskScope, 'attention');
     assert.deepEqual(appRouteFromHash(appHashForRoute(route)), route);
-  }
-  for (const hash of ['#/issues?issueId=42&project=demo&focus=failed', `#/work?workId=${encodeURIComponent(workId)}&project=demo&focus=failed`]) {
-    const route = appRouteFromHash(hash, { workBoardEnabled: false });
-    assertPage(route, 'issues');
-    assert.equal(route.selectedIssueId, 42);
-    assert.equal(route.filterProject, 'demo');
-    assert.equal(route.focusFilter, 'failed');
-    assert.deepEqual(appRouteFromHash(appHashForRoute(route), { workBoardEnabled: false }), route);
   }
 });
 

@@ -174,7 +174,7 @@ test('Xuanwu product sidebar removes the PI section and keeps internal config be
   assert.doesNotMatch(modulesSource, /page: 'projects'/);
   assert.match(modulesSource, /projects: 'settings'/);
   assert.doesNotMatch(modulesSource, /page: 'handoffs'/);
-  assert.match(sidebarSource, /productNavigationItems/);
+  assert.match(sidebarSource, /PRODUCT_NAV_ITEMS/);
   assert.match(sidebarSource, /primaryNavItems\.map/);
   assert.match(sidebarSource, /footerNavItems\.map/);
   assert.doesNotMatch(sidebarSource, /PI Assistant/);

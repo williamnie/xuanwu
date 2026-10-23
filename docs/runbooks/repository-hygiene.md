@@ -39,7 +39,7 @@ node scripts/repository-hygiene-audit.mjs --json
 | 迁移前测试断言 | Automations cron slice、Issue deep-link、静态 `main-content` 三项断言 | 当前 canonical source 已分别使用 project labels、Work detail 和动态 main class；更新断言而不改 runtime |
 | 仓库运行产物 | `output/architecture/*` | 全仓零引用；PNG/SVG/generator 共 3,459,065 bytes，目录改为 ignore-only output root |
 
-`client.events.test.js` 与 `client.piDelegation.test.js` 虽沿用历史文件名，但直接验证当前 domain client，仍有有效覆盖，因此保留。`Issues.jsx`/`IssueDetail.jsx` 是 Work feature flag 的 rollback surface，不能作为普通 dead code 删除。
+`client.events.test.js` 与 `client.piDelegation.test.js` 虽沿用历史文件名，但直接验证当前 domain client，仍有有效覆盖，因此保留。旧 `Issues.jsx`/`IssueDetail.jsx` rollback surface 已随 Work feature flag 一并删除，`#/issues` 仅保留重定向。
 
 ## Live reference 与迁移证据
 

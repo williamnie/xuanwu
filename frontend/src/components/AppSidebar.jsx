@@ -17,15 +17,9 @@ import { useRunnerBrandState } from './useRunnerBrandState.js';
 import {
   selectBackendConnectionState,
   selectAutomations,
-  selectProjects,
-  selectWorkSummary,
   useDataStore,
 } from '../store/dataStore';
-import {
-  productNavigationItems,
-  productNavPageForRoute,
-} from '../pages/assistantModules';
-import { WORK_BOARD_ENABLED } from '../pages/workBoardModel.js';
+import { PRODUCT_NAV_ITEMS, productNavPageForRoute } from '../pages/assistantModules';
 import { useI18n } from '../i18n/context.js';
 import './AppSidebar.css';
 
@@ -60,12 +54,7 @@ const NAV_CODE_PREFIX = {
 
 export default function AppSidebar({
   currentPage,
-  filterProject,
-  focusFilter,
-  handleOpenNewIssue,
   navigateTo,
-  setFilterProject,
-  setFocusFilter,
   theme,
   toggleTheme,
   toggleSidebar,
@@ -77,9 +66,8 @@ export default function AppSidebar({
   const { t } = useI18n();
   const brandState = useRunnerBrandState();
   const activeNavPage = productNavPageForRoute(currentPage);
-  const navItems = productNavigationItems({ workBoardEnabled: WORK_BOARD_ENABLED });
-  const primaryNavItems = navItems.filter(item => item.placement === 'primary');
-  const footerNavItems = navItems.filter(item => item.placement === 'footer');
+  const primaryNavItems = PRODUCT_NAV_ITEMS.filter(item => item.placement === 'primary');
+  const footerNavItems = PRODUCT_NAV_ITEMS.filter(item => item.placement === 'footer');
   const navLabel = (item) => t(NAV_TRANSLATION_KEYS[item.page] || item.label);
   const closeMobileDrawer = () => {
     if (isMobileViewport) onMobileClose?.();
@@ -129,17 +117,6 @@ export default function AppSidebar({
           </button>
         ))}
       </div>
-
-      {currentPage === 'issues' && (
-        <IssuesSidebarFilters
-          filterProject={filterProject}
-          focusFilter={focusFilter}
-          handleOpenNewIssue={handleOpenNewIssue}
-          setFilterProject={setFilterProject}
-          setFocusFilter={setFocusFilter}
-          onMobileAction={closeMobileDrawer}
-        />
-      )}
 
       {(currentPage === 'runs' || currentPage === 'ask-xuanwu') && (
         <div id="sessions-app-sidebar-slot" className="sessions-app-sidebar-slot" />
@@ -218,103 +195,3 @@ function AutomationCountBadge({ active }) {
     </span>
   );
 }
-
-function IssuesSidebarFilters({
-  filterProject,
-  focusFilter,
-  handleOpenNewIssue,
-  setFilterProject,
-  setFocusFilter,
-  onMobileAction,
-}) {
-  const projects = useDataStore(selectProjects);
-  const workSummary = useDataStore(selectWorkSummary);
-  const selectedCounts = filterProject
-    ? workSummary.project_counts?.find(item => item.project_id === filterProject)?.counts || EMPTY_COUNTS
-    : workSummary.counts || EMPTY_COUNTS;
-  const triageCount = selectedCounts.triage;
-  const activeCount = selectedCounts.todo + selectedCounts.in_progress;
-  const failedCount = selectedCounts.failed;
-  const archiveCount = selectedCounts.history;
-  const allCount = selectedCounts.total;
-  const activeLoops = projects.filter(p => p.loop_status === 'running' || p.auto_run === 1).length;
-  const totalProjects = projects.length;
-
-  return (
-    <>
-      <div className="sidebar-section-title">
-        <span>— Issues • {workSummary.counts?.total || 0}</span>
-      </div>
-
-      <button className="btn-new-issue-sidebar" onClick={() => { handleOpenNewIssue('todo'); onMobileAction?.(); }}>
-        <span>+ New issue</span>
-        <span className="sidebar-new-issue-shortcut">c</span>
-      </button>
-
-      <div className="sidebar-loop-progress">
-        <div className="sidebar-loop-progress__label">
-          <span>LOOP AUTO</span>
-          <span>{activeLoops} / {totalProjects}</span>
-        </div>
-        <div className="sidebar-progress">
-          <div className="sidebar-progress-fill" style={{ width: `${totalProjects > 0 ? (activeLoops / totalProjects) * 100 : 0}%` }}></div>
-        </div>
-      </div>
-
-      <div className="sidebar-section-title">Focus</div>
-      <div className="sidebar-focus-list">
-        <button className={`sub-filter-item ${focusFilter === 'all' ? 'active' : ''}`} onClick={() => { setFocusFilter('all'); onMobileAction?.(); }}>
-          <span>All columns</span>
-          <span>{allCount}</span>
-        </button>
-
-        <button className={`sub-filter-item ${focusFilter === 'triage' ? 'active' : ''}`} onClick={() => { setFocusFilter('triage'); onMobileAction?.(); }}>
-          <span><span className="sub-filter-dot is-triage"></span>Just Triage</span>
-          <span>{triageCount}</span>
-        </button>
-
-        <button className={`sub-filter-item ${focusFilter === 'active' ? 'active' : ''}`} onClick={() => { setFocusFilter('active'); onMobileAction?.(); }}>
-          <span><span className="sub-filter-dot is-active"></span>Active only</span>
-          <span>{activeCount}</span>
-        </button>
-
-        <button className={`sub-filter-item ${focusFilter === 'failed' ? 'active' : ''}`} onClick={() => { setFocusFilter('failed'); onMobileAction?.(); }}>
-          <span><span className="sub-filter-dot is-failed"></span>Failed</span>
-          <span>{failedCount}</span>
-        </button>
-
-        <button className={`sub-filter-item ${focusFilter === 'archive' ? 'active' : ''}`} onClick={() => { setFocusFilter('archive'); onMobileAction?.(); }}>
-          <span><span className="sub-filter-dot is-archive"></span>Archive</span>
-          <span>{archiveCount}</span>
-        </button>
-      </div>
-
-      <div className="sidebar-section-title">Project</div>
-      <div className="sidebar-project-list">
-        <button className={`sub-filter-item ${filterProject === '' ? 'active' : ''}`} onClick={() => { setFilterProject(''); onMobileAction?.(); }}>
-          <span>All projects</span>
-          <span>{workSummary.counts?.total || 0}</span>
-        </button>
-
-        {projects.map(proj => {
-          const count = workSummary.project_counts?.find(item => item.project_id === proj.id)?.counts?.total || 0;
-          return (
-            <button key={proj.id} className={`sub-filter-item ${filterProject === proj.id ? 'active' : ''}`} onClick={() => { setFilterProject(proj.id); onMobileAction?.(); }}>
-              <span><span className="sub-filter-dot is-project"></span>{proj.name}</span>
-              <span>{count}</span>
-            </button>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-const EMPTY_COUNTS = Object.freeze({
-  failed: 0,
-  history: 0,
-  in_progress: 0,
-  todo: 0,
-  total: 0,
-  triage: 0,
-});

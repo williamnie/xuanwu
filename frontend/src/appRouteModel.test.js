@@ -54,17 +54,7 @@ test('keeps existing plain Work deep links compatible', () => {
   });
 });
 
-test('preserves legacy route redirects and issue filters when Work board is disabled', () => {
-  assert.deepEqual(
-    appRouteFromHash('#/issues?issueId=42&project=demo&focus=active', { workBoardEnabled: false }),
-    {
-      ...DEFAULT_APP_ROUTE,
-      currentPage: 'issues',
-      filterProject: 'demo',
-      focusFilter: 'active',
-      selectedIssueId: 42,
-    },
-  );
+test('preserves legacy route redirects', () => {
   assert.deepEqual(appRouteFromHash('#/issues?issueId=42'), {
     ...DEFAULT_APP_ROUTE,
     currentPage: 'tasks',

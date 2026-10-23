@@ -14,7 +14,6 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
     icon: 'work',
     placement: 'primary',
     availability: 'compatibility',
-    featureFlag: 'workBoard',
   },
   {
     page: 'runs',
@@ -73,14 +72,8 @@ export const PRODUCT_COMPAT_ROUTE_REDIRECTS = Object.freeze({
   projects: 'settings',
 });
 
-export function productNavigationItems({ workBoardEnabled = true } = {}) {
-  return PRODUCT_NAV_ITEMS.filter(item => item.featureFlag !== 'workBoard' || workBoardEnabled);
-}
-
-export function resolveProductPage(page, { workBoardEnabled = true } = {}) {
-  const resolvedPage = PRODUCT_COMPAT_ROUTE_REDIRECTS[page] || page;
-  if (resolvedPage === 'tasks' && !workBoardEnabled) return 'issues';
-  return resolvedPage;
+export function resolveProductPage(page) {
+  return PRODUCT_COMPAT_ROUTE_REDIRECTS[page] || page;
 }
 
 export function productNavPageForRoute(page) {

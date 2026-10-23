@@ -439,7 +439,7 @@ GET /api/issues/:id/runs
 | `system-observability` | `dashboard` | **keep** | Local runtime observability/control | `Dashboard.jsx` |
 | `work-ledger` | `issues`, `issue-detail`, `work-board`, `work-detail` | **keep** | Work ledger compatibility API | `IssueCard.jsx`, `IssueCardMoreActions.jsx`, `IssueDetail.jsx`, `Issues.jsx`, `IssueSupervisorPanel.jsx`, `WorkBoard.jsx`, `WorkDetail.jsx` |
 
-页面迁移规则：`Issues`/`IssueDetail` 保留为 Work feature flag 的 rollback surface；`Sessions` 归入 Run drill-down，不创建独立 Run ledger；`cron`/`pi-automations` page id 统一投影到 `Automations`；`pi-inbox`/`attention-inbox` page id 统一投影到 Command Center。兼容 page id 不再拥有独立 JSX/CSS。
+页面迁移规则：`Issues`/`IssueDetail` 已删除（`#/issues` 重定向到 Work）；`Sessions` 归入 Run drill-down，不创建独立 Run ledger；`cron`/`pi-automations` page id 统一投影到 `Automations`；`pi-inbox`/`attention-inbox` page id 统一投影到 Command Center。兼容 page id 不再拥有独立 JSX/CSS。
 
 ## 7. 后台调度器清单
 

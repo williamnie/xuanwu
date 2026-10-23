@@ -5,11 +5,9 @@ import test from 'node:test';
 
 const SRC_ROOT = new URL('.', import.meta.url).pathname;
 const ALLOWED_RUNTIME_INLINE_STYLES = {
-  'components/AppSidebar.jsx': 1,
   'components/CodexUsageBreakdown.jsx': 1,
   'components/CodexUsagePanel.jsx': 1,
   'components/editor/PromptEditor.jsx': 2,
-  'pages/IssueCardMoreActions.jsx': 1,
   'pages/WorkBoard.jsx': 1,
 };
 

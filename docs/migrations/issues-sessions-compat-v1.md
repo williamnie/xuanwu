@@ -11,7 +11,7 @@
 | `navigateTo('issues', 740)` | `navigateTo('work', 'xw:work:issues:740')` |
 | `navigateTo('sessions', null, sessionRef)` | `navigateTo('runs', null, runId)`；只有 provider observation 没有 Run 时才保留旧 session ref drill-down |
 
-旧 route 不会 404：Work flag 开启时 redirect 并显示 warning；关闭时恢复旧 Issues rollback surface。
+旧 route 不会 404：统一 redirect 到 Work 并显示 warning。
 
 ## HTTP client
 

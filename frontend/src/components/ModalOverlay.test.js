@@ -5,13 +5,9 @@ import test from 'node:test';
 const component = readFileSync(new URL('./ModalOverlay.jsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
 const consumers = [
-  './IssueEditModal.jsx',
-  '../pages/Issues.jsx',
   '../pages/Projects.jsx',
   '../pages/WorkBoard.jsx',
   '../pages/work/HumanReview.jsx',
-  '../pages/issue-detail/IssueDetailActions.jsx',
-  '../pages/issue-detail/IssueDetailDecision.jsx',
   '../pages/work/WorkEditorDialog.jsx',
 ].map(path => readFileSync(new URL(path, import.meta.url), 'utf8'));
 

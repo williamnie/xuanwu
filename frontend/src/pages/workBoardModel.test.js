@@ -6,8 +6,6 @@ import {
   filterWorkBoardItems,
   issueIdFromWorkId,
   laneScrollDecision,
-  resolveWorkBoardPage,
-  workBoardEnabled,
   workDeliveryStage,
   workDropOperation,
   workNeedsAttention,
@@ -19,13 +17,6 @@ const works = [
   work('xw:work:issues:12', 'done', 'beta', 'engineering_task'),
   work('xw:work:issues:13', 'in_progress', 'alpha', 'objective'),
 ];
-test('feature flag falls back from Work to the legacy Issues route', () => {
-  assert.equal(workBoardEnabled({}), true);
-  assert.equal(workBoardEnabled({ VITE_WORK_BOARD_ENABLED: 'false' }), false);
-  assert.equal(resolveWorkBoardPage('work', false), 'issues');
-  assert.equal(resolveWorkBoardPage('issues', false), 'issues');
-});
-
 test('Issue-backed Work IDs produce stable Issues deep links', () => {
   assert.equal(issueIdFromWorkId('xw:work:issues:655'), 655);
   assert.equal(issueIdFromWorkId('xw:work:external:655'), null);
@@ -116,7 +107,7 @@ test('Work stays primary while Issues route redirects and compatibility APIs kee
   assert.match(app, /currentPage === 'tasks'/);
   assert.match(app, /selectedWorkId=\{selectedWorkId\}/);
   assert.match(app, /resolveProductPage/);
-  assert.match(sidebar, /productNavigationItems/);
+  assert.match(sidebar, /PRODUCT_NAV_ITEMS/);
   assert.match(navigation, /issues:\s*'tasks'/);
   assert.doesNotMatch(sidebar, /aria-label="Issues"/);
   assert.match(client, /request\('\/api\/works'/);

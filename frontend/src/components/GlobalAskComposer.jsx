@@ -29,12 +29,10 @@ const GLOBAL_COMPOSER_SETTINGS = {
 
 export default function GlobalAskComposer({
   currentPage,
-  filterProject = '',
   onConversationReady,
   onOpenAskXuanwu,
   pageContext = null,
   selectedHandoffId = '',
-  selectedIssueId = null,
   selectedRunId = '',
   selectedSessionId = '',
 }) {
@@ -47,18 +45,14 @@ export default function GlobalAskComposer({
   const visible = isGlobalAskComposerVisible(currentPage, pageContext);
   const pageReference = useMemo(() => buildGlobalComposerPageReference({
     currentPage,
-    filterProject,
     pageContext,
     selectedHandoffId,
-    selectedIssueId,
     selectedRunId,
     selectedSessionId,
   }, works), [
     currentPage,
-    filterProject,
     pageContext,
     selectedHandoffId,
-    selectedIssueId,
     selectedRunId,
     selectedSessionId,
     works,

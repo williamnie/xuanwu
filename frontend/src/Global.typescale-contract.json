@@ -8,7 +8,6 @@
     "components/CodexUsagePanel.details.css",
     "components/EvidencePanel.css",
     "components/GlobalAskComposer.css",
-    "components/IssueEditModal.css",
     "components/Metadata.css",
     "components/ReleaseUpdateDialog.css",
     "components/RuntimeHealthStrip.css",
@@ -40,9 +39,6 @@
     "pages/Automations.css",
     "pages/Dashboard.css",
     "pages/Handoffs.css",
-    "pages/IssueCard.css",
-    "pages/IssueDetail.css",
-    "pages/Issues.css",
     "pages/OnboardingPage.css",
     "pages/ProjectHoldNotice.css",
     "pages/WorkBoard.css",
@@ -53,10 +49,6 @@
     "pages/command-center/FirstDeliveryGuide.css",
     "pages/command-center/RecentDeliveriesSection.css",
     "pages/command-center/TaskRequestsSection.css",
-    "pages/issue-detail/IssueDetailDecision.css",
-    "pages/issue-detail/IssueDetailEvidence.css",
-    "pages/issue-detail/IssueDetailRuns.css",
-    "pages/issue-detail/IssueDetailTimeline.css",
     "pages/runs/Runs.css",
     "pages/work/HumanReview.css",
     "pages/work/TaskList.css",
@@ -429,36 +421,6 @@
     {
       "file": "pages/Handoffs.css",
       "selector": ".handoff-empty",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "pages/IssueDetail.css",
-      "selector": ".issue-notes-panel",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "pages/IssueDetail.css",
-      "selector": ".issue-detail-hero",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "pages/IssueDetail.css",
-      "selector": ".issue-detail-tab-panel",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "pages/Issues.css",
-      "selector": ".issues-page__project-warning",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "pages/Issues.css",
-      "selector": ".issues-page__source-meta",
       "property": "padding",
       "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
     },
@@ -1151,24 +1113,10 @@
       "context": "badge-inset"
     },
     {
-      "file": "pages/issue-detail/IssueDetailRuns.css",
-      "selector": ".issue-detail-runs__status",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / chip.",
-      "context": "badge-inset"
-    },
-    {
       "file": "pages/runs/Runs.css",
       "selector": ".run-context-status",
       "property": "padding",
       "reason": "Spec 4.0.1: 2px inset of this badge / status label / chip.",
-      "context": "badge-inset"
-    },
-    {
-      "file": "pages/IssueDetail.css",
-      "selector": ".issue-detail-tab em",
-      "property": "padding",
-      "reason": "Spec 4.0.1: tab count, provider/OAuth status or capability chip inset.",
       "context": "badge-inset"
     },
     {
@@ -1181,13 +1129,6 @@
     {
       "file": "pages/command-center/FirstDeliveryGuide.css",
       "selector": ".first-delivery-oauth-heading > span",
-      "property": "padding",
-      "reason": "Spec 4.0.1: tab count, provider/OAuth status or capability chip inset.",
-      "context": "badge-inset"
-    },
-    {
-      "file": "pages/issue-detail/IssueDetailEvidence.css",
-      "selector": ".issue-mcp-requirements__capability",
       "property": "padding",
       "reason": "Spec 4.0.1: tab count, provider/OAuth status or capability chip inset.",
       "context": "badge-inset"
@@ -1231,41 +1172,6 @@
       "file": "pages/Handoffs.css",
       "selector": ".handoff-error > div",
       "property": "gap",
-      "context": "stacked-text",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
-    },
-    {
-      "file": "pages/IssueDetail.css",
-      "selector": ".issue-section-heading h2, .issue-tab-panel-header h2",
-      "property": "margin",
-      "context": "stacked-text",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
-    },
-    {
-      "file": "pages/IssueDetail.css",
-      "selector": ".issue-source-strip span, .issue-next-action span",
-      "property": "margin-bottom",
-      "context": "stacked-text",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
-    },
-    {
-      "file": "pages/IssueDetail.css",
-      "selector": ".issue-inline-alert p",
-      "property": "margin",
-      "context": "stacked-text",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
-    },
-    {
-      "file": "pages/IssueDetail.css",
-      "selector": ".issue-detail-tabs",
-      "property": "gap",
-      "context": "compact-list",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
-    },
-    {
-      "file": "pages/IssueDetail.css",
-      "selector": ".issue-notes-notice p",
-      "property": "margin",
       "context": "stacked-text",
       "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
     },
@@ -1398,13 +1304,6 @@
     {
       "file": "pages/command-center/RecentDeliveriesSection.css",
       "selector": ".recent-deliveries-compatibility[open]",
-      "property": "gap",
-      "context": "stacked-text",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
-    },
-    {
-      "file": "pages/issue-detail/IssueDetailRuns.css",
-      "selector": ".issue-detail-runs__field",
       "property": "gap",
       "context": "stacked-text",
       "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."

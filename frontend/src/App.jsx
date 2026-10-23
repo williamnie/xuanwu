@@ -32,7 +32,7 @@ import { Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
 import { message as toast } from './store/toastStore';
 import AuthGate from './components/AuthGate';
-import { issueIdFromWorkId, workIdFromIssueId, WORK_BOARD_ENABLED } from './pages/workBoardModel.js';
+import { workIdFromIssueId } from './pages/workBoardModel.js';
 import { appHashForRoute, appRouteFromHash } from './appRouteModel.js';
 import { watchCanonicalAppHash } from './appRouteCanonicalization.js';
 import './App.css';
@@ -46,8 +46,6 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const WorkBoard = lazy(() => import('./pages/WorkBoard'));
 const TaskSubviewTabs = lazy(() => import('./pages/work/TaskSubviewTabs.jsx'));
-const Issues = lazy(() => import('./pages/Issues'));
-const IssueDetail = lazy(() => import('./pages/IssueDetail'));
 const Runs = lazy(() => import('./pages/Runs'));
 const Handoffs = lazy(() => import('./pages/Handoffs'));
 const PiChat = lazy(() => import('./pages/PiChat'));
@@ -76,7 +74,6 @@ const PAGE_DATA_SLICES = {
   analytics: ['workSummary'],
   automations: ['projects'],
   'inbox': ['projects', 'workSummary'],
-  issues: ['projects', 'workSummary'],
   settings: ['projects', 'workSummary'],
   tasks: ['projects', 'workSummary'],
   handoffs: ['projects'],
@@ -92,9 +89,7 @@ const MOBILE_PAGE_TITLE_KEYS = {
   tasks: 'nav.work',
 };
 
-function getReconcileSlices(currentPage, selectedIssueId) {
-  // IssueDetail 自己读取单条 issue；不要在详情页额外轮询整张 issues 列表。
-  if (currentPage === 'issues' && selectedIssueId) return [];
+function getReconcileSlices(currentPage) {
   return PAGE_DATA_SLICES[currentPage] || [];
 }
 
@@ -115,16 +110,11 @@ export default function App() {
   const mobileMenuButtonRef = useRef(null);
   const mainContentRef = useRef(null);
   const sidebarRef = useRef(null);
-  const initialRoute = appRouteFromHash(globalThis.location?.hash, { workBoardEnabled: WORK_BOARD_ENABLED });
+  const initialRoute = appRouteFromHash(globalThis.location?.hash);
   const [appState, updateAppState] = useImmer(() => ({
     // 路由与过滤状态
     ...initialRoute,
     pageContext: null,
-
-    // 新增 Issue 弹窗的全局状态（可以从侧边栏 + 看板列头触发）
-    isNewIssueOpen: false,
-    prefilledStatus: 'triage',
-    newIssueSource: null,
 
     // 主题状态（默认 E2B 极客暗黑主题，支持一键切换）
     theme: localStorage.getItem('codex-theme') || 'dark',
@@ -149,7 +139,6 @@ export default function App() {
 
   const {
     currentPage,
-    selectedIssueId,
     selectedWorkId,
     selectedRunId,
     selectedSessionId,
@@ -160,10 +149,6 @@ export default function App() {
     taskSource,
     pageContext,
     filterProject,
-    focusFilter,
-    isNewIssueOpen,
-    prefilledStatus,
-    newIssueSource,
     theme,
     sidebarCollapsed,
     authReady,
@@ -193,53 +178,23 @@ export default function App() {
     globalThis.history[replace ? 'replaceState' : 'pushState'](null, '', href);
   }, []);
 
-  const setIsNewIssueOpen = useCallback((open) => {
-    updateAppState(draft => {
-      const nextOpen = typeof open === 'function' ? open(draft.isNewIssueOpen) : open;
-      if (draft.isNewIssueOpen !== nextOpen) {
-        draft.isNewIssueOpen = nextOpen;
-      }
-      if (!nextOpen) {
-        draft.newIssueSource = null;
-      }
-    });
-  }, [updateAppState]);
-
-  const setFocusFilter = useCallback((value) => {
-    updateAppState(draft => {
-      if (draft.focusFilter !== value) {
-        draft.focusFilter = value;
-      }
-    });
-    if (currentPage === 'issues') {
-      writeBrowserRoute({
-        currentPage,
-        filterProject,
-        focusFilter: value,
-        selectedIssueId,
-      }, { replace: true });
-    }
-  }, [currentPage, filterProject, selectedIssueId, updateAppState, writeBrowserRoute]);
-
   const setFilterProject = useCallback((value) => {
     updateAppState(draft => {
       if (draft.filterProject !== value) {
         draft.filterProject = value;
       }
     });
-    if (currentPage === 'issues' || currentPage === 'tasks') {
+    if (currentPage === 'tasks') {
       writeBrowserRoute({
         currentPage,
         filterProject: value,
-        focusFilter,
-        selectedIssueId,
         selectedWorkId,
         selectedRunId,
         taskScope,
         taskSource,
       }, { replace: true });
     }
-  }, [currentPage, focusFilter, selectedIssueId, selectedWorkId, selectedRunId, taskScope, taskSource, updateAppState, writeBrowserRoute]);
+  }, [currentPage, selectedWorkId, selectedRunId, taskScope, taskSource, updateAppState, writeBrowserRoute]);
 
   const setTaskSource = useCallback((value) => {
     updateAppState(draft => { draft.taskSource = value; });
@@ -277,8 +232,8 @@ export default function App() {
     });
   }, [updateAppState]);
 
-  const navigateTo = useCallback((page, issueId = null, sessionId = '', handoffId = '', navigationOptions = {}) => {
-    const resolvedPage = resolveProductPage(page, { workBoardEnabled: WORK_BOARD_ENABLED });
+  const navigateTo = useCallback((page, entityId = null, sessionId = '', handoffId = '', navigationOptions = {}) => {
+    const resolvedPage = resolveProductPage(page);
     const internalProviderSessionId = String(navigationOptions?.sessionId || '').trim();
     const suppressLegacyWarning = navigationOptions?.suppressLegacyWarning === true;
     if ((page === 'issues' || page === 'sessions') && resolvedPage !== page && !suppressLegacyWarning) {
@@ -289,11 +244,8 @@ export default function App() {
       );
     }
     const targetHandoffId = resolvedPage === 'handoffs' || resolvedPage === 'tasks' ? handoffId || '' : '';
-    const targetIssueId = resolvedPage === 'issues'
-      ? page === 'work' || page === 'tasks' ? issueIdFromWorkId(issueId) : issueId
-      : null;
     const targetWorkId = resolvedPage === 'tasks'
-      ? page === 'issues' ? workIdFromIssueId(issueId) : String(issueId || '')
+      ? page === 'issues' ? workIdFromIssueId(entityId) : String(entityId || '')
       : '';
     const compatSessionRoute = resolvedPage === 'runs' && (page === 'sessions' || Boolean(internalProviderSessionId));
     const targetRunId = resolvedPage === 'runs' && !compatSessionRoute
@@ -309,7 +261,6 @@ export default function App() {
       currentPage: resolvedPage,
       filterProject: String(navigationOptions?.project || '').trim(),
       selectedHandoffId: targetHandoffId,
-      selectedIssueId: targetIssueId,
       selectedPiConversationId: resolvedPage === 'ask-xuanwu' ? selectedPiConversationId : '',
       selectedRunId: targetRunId,
       selectedSessionId: targetSessionId,
@@ -321,9 +272,6 @@ export default function App() {
     startPageTransition(() => updateAppState(draft => {
       if (draft.currentPage !== resolvedPage) {
         draft.currentPage = resolvedPage;
-      }
-      if (draft.selectedIssueId !== targetIssueId) {
-        draft.selectedIssueId = targetIssueId;
       }
       if (draft.selectedWorkId !== targetWorkId) {
         draft.selectedWorkId = targetWorkId;
@@ -369,7 +317,6 @@ export default function App() {
     startPageTransition(() => updateAppState(draft => {
       draft.selectedPiConversationId = targetConversationId;
       draft.currentPage = 'ask-xuanwu';
-      draft.selectedIssueId = null;
       draft.selectedWorkId = '';
       draft.pageContext = null;
     }));
@@ -394,13 +341,11 @@ export default function App() {
   useEffect(() => {
     if (!globalThis.addEventListener) return undefined;
     const syncBrowserRoute = () => {
-      const route = appRouteFromHash(globalThis.location?.hash, { workBoardEnabled: WORK_BOARD_ENABLED });
+      const route = appRouteFromHash(globalThis.location?.hash);
       startPageTransition(() => updateAppState(draft => {
         draft.currentPage = route.currentPage;
         draft.filterProject = route.filterProject;
-        draft.focusFilter = route.focusFilter;
         draft.selectedHandoffId = route.selectedHandoffId;
-        draft.selectedIssueId = route.selectedIssueId;
         draft.selectedPiConversationId = route.selectedPiConversationId;
         draft.selectedRunId = route.selectedRunId;
         draft.selectedSessionId = route.selectedSessionId;
@@ -468,24 +413,22 @@ export default function App() {
   }, [closeMobileSidebar, isMobileViewport, mobileSidebarOpen]);
 
   const refreshVisibleData = useCallback(() => {
-    refreshData(getReconcileSlices(currentPage, selectedIssueId));
-  }, [currentPage, refreshData, selectedIssueId]);
+    refreshData(getReconcileSlices(currentPage));
+  }, [currentPage, refreshData]);
 
   const refreshVisibleWorkSummary = useCallback(() => {
-    const slices = getReconcileSlices(currentPage, selectedIssueId);
-    if (slices.includes('workSummary')) refreshData(['workSummary']);
-  }, [currentPage, refreshData, selectedIssueId]);
+    if (getReconcileSlices(currentPage).includes('workSummary')) refreshData(['workSummary']);
+  }, [currentPage, refreshData]);
 
   useEffect(() => {
     if (!authReady) return undefined;
     refreshVisibleData();
     // SSE 是主通道；低频 reconcile 只兜底补偿断线期间错过的事件。
-    const slices = getReconcileSlices(currentPage, selectedIssueId);
-    if (slices.length === 0) return undefined;
+    if (getReconcileSlices(currentPage).length === 0) return undefined;
 
     const interval = setInterval(refreshVisibleData, RECONCILE_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [authReady, currentPage, refreshVisibleData, selectedIssueId]);
+  }, [authReady, currentPage, refreshVisibleData]);
 
   useEffect(() => {
     if (!authReady || loading || !backendOnline || firstRunOnboarding !== 'pending') return;
@@ -532,18 +475,6 @@ export default function App() {
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
-
-  const handleOpenNewIssue = (status = 'triage', source = null) => {
-    updateAppState(draft => {
-      draft.prefilledStatus = status;
-      draft.newIssueSource = source || null;
-      draft.isNewIssueOpen = true;
-      draft.currentPage = 'issues';
-      draft.selectedIssueId = null;
-      draft.selectedWorkId = '';
-    });
-    writeBrowserRoute({ currentPage: 'issues' });
   };
 
   const completeFirstRunOnboarding = () => {
@@ -638,12 +569,7 @@ export default function App() {
 
       <AppSidebar
         currentPage={currentPage}
-        filterProject={filterProject}
-        focusFilter={focusFilter}
-        handleOpenNewIssue={handleOpenNewIssue}
         navigateTo={navigateTo}
-        setFilterProject={setFilterProject}
-        setFocusFilter={setFocusFilter}
         theme={theme}
         toggleTheme={toggleTheme}
         toggleSidebar={toggleSidebar}
@@ -684,19 +610,6 @@ export default function App() {
               />
             ) : currentPage === 'handoffs' ? (
               <Handoffs selectedHandoffId={selectedHandoffId} />
-            ) : currentPage === 'issues' && selectedIssueId ? (
-              <IssueDetail issueId={selectedIssueId} navigateTo={navigateTo} />
-            ) : currentPage === 'issues' ? (
-              <Issues
-                filterProject={filterProject}
-                focusFilter={focusFilter}
-                isNewIssueOpen={isNewIssueOpen}
-                setIsNewIssueOpen={setIsNewIssueOpen}
-                prefilledStatus={prefilledStatus}
-                sourceMetadata={newIssueSource}
-                handleOpenNewIssue={handleOpenNewIssue}
-                navigateTo={navigateTo}
-              />
             ) : currentPage === 'runs' ? (
               <Runs
                 navigateTo={navigateTo}
@@ -729,12 +642,10 @@ export default function App() {
       <Suspense fallback={null}>
         <GlobalAskComposer
           currentPage={currentPage}
-          filterProject={filterProject}
           onConversationReady={openSupervisorConversation}
           onOpenAskXuanwu={() => navigateTo('ask-xuanwu')}
           pageContext={pageContext}
           selectedHandoffId={selectedHandoffId}
-          selectedIssueId={selectedIssueId}
           selectedRunId={selectedRunId}
           selectedSessionId={selectedSessionId}
         />

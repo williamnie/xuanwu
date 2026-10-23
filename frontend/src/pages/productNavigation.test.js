@@ -6,7 +6,6 @@ import { PRODUCT_NAV_LABELS } from '../brand.js';
 import {
   PRODUCT_COMPAT_ROUTE_REDIRECTS,
   PRODUCT_NAV_ITEMS,
-  productNavigationItems,
   productNavPageForRoute,
   resolveProductPage,
 } from './assistantModules.js';
@@ -70,12 +69,6 @@ test('product navigation has one ordered Xuanwu identity and centralized labels'
   assert.match(analyticsSource, /05 TELEMETRY_ANALYTICS/);
 });
 
-test('feature availability hides Work when its existing compatibility flag is disabled', () => {
-  assert.deepEqual(productNavigationItems({ workBoardEnabled: false }).map(item => item.page), EXPECTED_PAGES.filter(page => page !== 'tasks'));
-  assert.equal(resolveProductPage('work', { workBoardEnabled: false }), 'issues');
-  assert.equal(resolveProductPage('work', { workBoardEnabled: true }), 'tasks');
-});
-
 test('legacy page ids redirect into canonical product routes without replacing hidden detail routes', () => {
   assert.deepEqual(PRODUCT_COMPAT_ROUTE_REDIRECTS, {
     'command-center': 'inbox',
@@ -107,12 +100,12 @@ test('legacy page ids redirect into canonical product routes without replacing h
 });
 
 test('App routes canonical pages to the currently verified compatibility surfaces', () => {
-  assert.match(appSource, /appRouteFromHash\(globalThis\.location\?\.hash, \{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
+  assert.match(appSource, /appRouteFromHash\(globalThis\.location\?\.hash\)/);
   assert.match(appSource, /history\[replace \? 'replaceState' : 'pushState'\]/);
   assert.match(appSource, /addEventListener\('popstate', syncBrowserRoute\)/);
-  assert.match(appSource, /resolveProductPage\(page, \{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
+  assert.match(appSource, /resolveProductPage\(page\)/);
   assert.match(appSource, /recordLegacyRoute\(\{ family: page, target: resolvedPage \}\)/);
-  assert.match(appSource, /workIdFromIssueId\(issueId\)/);
+  assert.match(appSource, /workIdFromIssueId\(entityId\)/);
   assert.match(appSource, /currentPage === 'inbox'[\s\S]*<Dashboard navigateTo=\{navigateTo\} \/>/);
   assert.match(appSource, /currentPage === 'ask-xuanwu'[\s\S]*<PiChat[\s\S]*initialConversationId=\{selectedPiConversationId\}[\s\S]*onConversationChange=\{rememberPiConversation\}/);
   assert.match(appSource, /currentPage === 'automations'[\s\S]*<TaskSubviewTabs active="automations"[\s\S]*<Automations \/>/);

@@ -17,10 +17,10 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
       "backend-ts/src/runner/piAcceptanceCoordinator.test.ts"
     ],
     fixture_projects: 1,
-    frontend_route: "#/issues",
+    frontend_route: "#/tasks",
     frontend_tests: [
-      "frontend/src/utils/issueExecutionSummary.test.js",
-      "frontend/src/pages/IssueDetail.structure.test.js"
+      "frontend/src/pages/work/taskListModel.test.js",
+      "frontend/src/pages/WorkDetail.structure.test.js"
     ],
     id: "GJ-01",
     name: "一句话交付"
@@ -32,8 +32,8 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
       "backend-ts/src/http/piSupervisorResumeIdempotency.test.ts"
     ],
     fixture_projects: 1,
-    frontend_route: "#/issues",
-    frontend_tests: ["frontend/src/pages/issue-supervisor-panel.test.js"],
+    frontend_route: "#/tasks",
+    frontend_tests: ["frontend/src/pages/command-center/attentionModel.test.js"],
     id: "GJ-02",
     name: "失败恢复"
   },
@@ -92,8 +92,8 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
     fixture_projects: 1,
     frontend_route: "#/work/:work_id/delivery/:handoff_id",
     frontend_tests: [
-      "frontend/src/utils/issueExecutionSummary.test.js",
-      "frontend/src/pages/IssueDetail.structure.test.js",
+      "frontend/src/pages/work/workDeliveryModel.test.js",
+      "frontend/src/pages/WorkDetail.structure.test.js",
       "frontend/src/pages/handoffPageModel.test.js"
     ],
     id: "GJ-06",

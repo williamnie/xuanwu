@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { appHashForRoute, appRouteFromHash } from '../appRouteModel.js';
-import { productNavigationItems } from './assistantModules.js';
+import { PRODUCT_NAV_ITEMS } from './assistantModules.js';
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 test('analytics can be opened, bookmarked and restored without falling back to home', () => {
   assert.equal(appRouteFromHash('#/analytics').currentPage, 'analytics');
   assert.equal(appHashForRoute({ currentPage: 'analytics' }), '#/analytics');
-  assert.ok(productNavigationItems().some(item => item.page === 'analytics'));
+  assert.ok(PRODUCT_NAV_ITEMS.some(item => item.page === 'analytics'));
 });
 
 test('home prioritizes action and progress without querying diagnostic or usage feeds', () => {

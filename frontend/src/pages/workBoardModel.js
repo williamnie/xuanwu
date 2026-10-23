@@ -1,5 +1,3 @@
-import { PRODUCT_ROUTE_ALIASES } from './assistantModules.js';
-
 export const WORK_BOARD_STATUSES = [
   'triage',
   'todo',
@@ -21,18 +19,6 @@ export function laneScrollDecision({ armed, clientHeight, scrollHeight, scrollTo
 }
 
 const ATTENTION_STATUSES = new Set(['triage', 'needs_user', 'failed']);
-
-export function workBoardEnabled(env = {}) {
-  const value = String(env?.VITE_WORK_BOARD_ENABLED ?? 'true').trim().toLowerCase();
-  return !['0', 'false', 'off'].includes(value);
-}
-
-export const WORK_BOARD_ENABLED = workBoardEnabled(import.meta.env);
-
-export function resolveWorkBoardPage(page, enabled = WORK_BOARD_ENABLED) {
-  const canonicalPage = PRODUCT_ROUTE_ALIASES[page] || page;
-  return canonicalPage === 'tasks' && !enabled ? 'issues' : canonicalPage;
-}
 
 export function issueIdFromWorkId(workId) {
   const match = /^xw:work:issues:([1-9]\d*)$/.exec(String(workId || ''));

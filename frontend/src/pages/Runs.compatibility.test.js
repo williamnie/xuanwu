@@ -12,7 +12,7 @@ const clientSource = readFileSync(new URL('../api/runs.js', import.meta.url), 'u
 
 test('Runs is the canonical page while old Sessions navigation remains a deep-link adapter', () => {
   assert.match(appSource, /lazy\(\(\) => import\('\.\/pages\/Runs'\)\)/);
-  assert.match(appSource, /resolveProductPage\(page, \{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
+  assert.match(appSource, /resolveProductPage\(page\)/);
   assert.match(appSource, /const compatSessionRoute = resolvedPage === 'runs' && \(page === 'sessions'/);
   assert.match(appSource, /currentPage === 'runs'/);
   assert.match(modulesSource, /page: 'runs',[\s\S]*label: PRODUCT_NAV_LABELS\.runs/);

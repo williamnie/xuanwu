@@ -7,7 +7,6 @@ import {
 } from './pages/assistantModules.js';
 import { handoffHref, handoffRouteFromHash } from './pages/handoffPageModel.js';
 
-const FOCUS_FILTERS = new Set(['all', 'triage', 'active', 'failed', 'archive']);
 const TASK_SOURCES = new Set(['github', 'manual']);
 const TASK_SCOPES = new Set(['active', 'attention', 'done', 'all']);
 const ROUTABLE_PAGES = new Set([
@@ -16,15 +15,12 @@ const ROUTABLE_PAGES = new Set([
   ...Object.keys(PRODUCT_COMPAT_ROUTE_REDIRECTS),
   ...Object.values(PRODUCT_COMPAT_ROUTE_REDIRECTS),
   'handoffs',
-  'issues',
 ]);
 
 export const DEFAULT_APP_ROUTE = Object.freeze({
   currentPage: 'inbox',
   filterProject: '',
-  focusFilter: 'all',
   selectedHandoffId: '',
-  selectedIssueId: null,
   selectedPiConversationId: '',
   selectedRunId: '',
   selectedSessionId: '',
@@ -34,7 +30,7 @@ export const DEFAULT_APP_ROUTE = Object.freeze({
   taskSource: '',
 });
 
-export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
+export function appRouteFromHash(hash) {
   const handoffRoute = handoffRouteFromHash(hash);
   if (handoffRoute) {
     const queryIndex = String(hash).indexOf('?');
@@ -66,7 +62,7 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
     return { ...DEFAULT_APP_ROUTE };
   }
 
-  const currentPage = resolveProductPage(requestedPage, { workBoardEnabled });
+  const currentPage = resolveProductPage(requestedPage);
   const params = new URLSearchParams(rawQuery);
   const route = {
     ...DEFAULT_APP_ROUTE,
@@ -82,13 +78,6 @@ export function appRouteFromHash(hash, { workBoardEnabled = true } = {}) {
     }
     if (route.selectedWorkId) route.selectedRunId = routeParam(params, 'runId');
     else route.taskScope = TASK_SCOPES.has(routeParam(params, 'scope')) ? routeParam(params, 'scope') : '';
-  }
-  if (currentPage === 'issues') {
-    route.selectedIssueId = (requestedPage === 'work' || requestedPage === 'tasks')
-      ? issueIdFromWorkRoute(pathEntity || routeParam(params, 'workId'))
-      : positiveIntegerParam(params, 'issueId');
-    route.filterProject = routeParam(params, 'project');
-    route.focusFilter = focusFilterParam(params);
   }
   if (currentPage === 'runs') {
     route.selectedRunId = routeParam(params, 'runId');
@@ -127,13 +116,6 @@ export function appHashForRoute(route) {
     if (TASK_SOURCES.has(route?.taskSource)) params.set('source', route.taskSource);
     const project = cleanRouteValue(route?.filterProject);
     if (project) params.set('project', project);
-  }
-  if (page === 'issues') {
-    if (positiveInteger(route?.selectedIssueId)) params.set('issueId', String(route.selectedIssueId));
-    const project = cleanRouteValue(route?.filterProject);
-    const focus = FOCUS_FILTERS.has(route?.focusFilter) ? route.focusFilter : 'all';
-    if (project) params.set('project', project);
-    if (focus !== 'all') params.set('focus', focus);
   }
   if (page === 'runs') {
     const runId = cleanRouteValue(route?.selectedRunId);
@@ -182,14 +164,4 @@ function positiveIntegerParam(params, name) {
 function workIdFromIssueParam(params) {
   const issueId = positiveIntegerParam(params, 'issueId');
   return issueId ? `xw:work:issues:${issueId}` : '';
-}
-
-function issueIdFromWorkRoute(workId) {
-  const match = /^xw:work:issues:([1-9]\d*)$/.exec(cleanRouteValue(workId));
-  return match ? positiveInteger(match[1]) : null;
-}
-
-function focusFilterParam(params) {
-  const value = routeParam(params, 'focus');
-  return FOCUS_FILTERS.has(value) ? value : 'all';
 }

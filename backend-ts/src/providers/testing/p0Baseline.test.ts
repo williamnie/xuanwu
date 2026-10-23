@@ -95,7 +95,6 @@ describe("P0 baseline: conformance fixtures 集合", () => {
 
 describe("P0 baseline: 自动检测前后端 provider/capability drift", () => {
   const frontendSessionOptionsPath = resolve(import.meta.dir, "../../../../frontend/src/pages/sessions/sessionOptions.js");
-  const frontendIssueRunsPath = resolve(import.meta.dir, "../../../../frontend/src/utils/issueRuns.js");
 
   test("前端可提交 provider option 均在后端 EXECUTOR_PROVIDER_IDS 内（未注册 provider 不得进入可提交 option）", async () => {
     const source = await readFile(frontendSessionOptionsPath, "utf8");
@@ -128,17 +127,6 @@ describe("P0 baseline: 自动检测前后端 provider/capability drift", () => {
     expect(frontendCapabilities).not.toContain("transcript_export");
     const knownFrontendOnly = frontendCapabilities.filter((c) => !["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"].includes(c));
     expect(knownFrontendOnly).toEqual([]);
-  });
-
-  test("前端 issueRuns.js：P6 后静态 authority 删除，session 能力由 catalog capability 投影", async () => {
-    const source = await readFile(frontendIssueRunsPath, "utf8");
-    // P6：静态 SESSION_CAPABLE_PROVIDERS authority 已删除，改为 catalog 派生（fallback 命名仅兼容）
-    expect(source).not.toMatch(/SESSION_CAPABLE_PROVIDERS\s*=\s*new Set\(\['codex', 'claude'\]\)/);
-    expect(source).toMatch(/sessionCapableFromCatalog/);
-    expect(source).toMatch(/isSessionCapableProvider/);
-    // opencode/kimicode 不再进入 label switch（roadmap 只留文档）
-    expect(source).not.toMatch(/case\s+'opencode'/);
-    expect(source).not.toMatch(/case\s+'kimicode'/);
   });
 });
 
